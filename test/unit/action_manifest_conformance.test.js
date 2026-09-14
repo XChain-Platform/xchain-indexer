@@ -44,6 +44,49 @@ function localIndexerSet() {
     return names.filter(n => n !== 'UNKNOWN').sort(); // UNKNOWN is the catch-all sentinel, not an action
 }
 
+const Actions = require('../../src/actions/index.js');
+const denied  = Actions.getFeeQuoteDenylist();
+const exempt  = Actions.getFeeQuoteExempt();
+
+// A case (a) asserting only that the classifier returned one of
+// denied/exempt/quotable, which classifyFeeQuoteAction can never fail to do - a
+// tautology that passed for a dispatched action nobody classified. The sibling cases
+// do not close it either: (d)/(e) pin the DENIED and STATIC sets exactly, but EXEMPT is
+// constrained only by disjointness (b) and no-orphans (c), so a fee-bearing action added
+// to FEE_QUOTE_EXEMPT, or a new VM/compound action left out of FEE_QUOTE_DENYLIST and
+// defaulting to `quotable`, passed every check. The second re-opens the unauthenticated
+// VM-compute-under-mutex the denylist comment (src/actions/index.js) exists to close.
+//
+// EXPECTED is a hand-written literal on purpose. Deriving it from
+// getFeeQuoteDenylist()/getFeeQuoteExempt() would compare the sets against themselves
+// and rebuild the same tautology; an independent second opinion is the whole point.
+const EXPECTED_FEE_QUOTE_CLASS = {
+    // Run caller-supplied code in the VM (or smuggle something that does), so the
+    // public feequote refuses to dry-run them.
+    BATCH: 'denied', DEPLOY: 'denied', EXECUTE: 'denied', XEXEC: 'denied',
+
+    // Settlement/lifecycle legs that stage no wallet-priceable fee, plus ATTEST.
+    ATTEST: 'exempt', BET_EXPIRE: 'exempt', COINPAY: 'exempt', COINPAY_EXPIRE: 'exempt',
+    CROSS_SETTLE: 'exempt', DISPENSE: 'exempt', DISPENSER_CLOSE: 'exempt',
+    DISPENSER_EXPIRE: 'exempt', ORDER_EXPIRE: 'exempt', ORDER_MATCH: 'exempt',
+    SWAP_EXPIRE: 'exempt', SWAP_MATCH: 'exempt', XCALL: 'exempt',
+
+    // Everything else is wallet-broadcast and safely dry-runnable for a quote.
+    ADDRESS: 'quotable', AIRDROP: 'quotable', ANCHOR: 'quotable', BET: 'quotable',
+    BROADCAST: 'quotable', CALLBACK: 'quotable', COLLECT: 'quotable', DELEGATE: 'quotable',
+    DEPOSIT: 'quotable', DESTROY: 'quotable', DISPENSER: 'quotable', DIVIDEND: 'quotable',
+    FILE: 'quotable', ISSUE: 'quotable', LINK: 'quotable', LIST: 'quotable',
+    MESSAGE: 'quotable', MINT: 'quotable', NODEPROOF: 'quotable', ORDER: 'quotable',
+    PRICE: 'quotable', ROLLCALL: 'quotable', SEND: 'quotable', SLASH: 'quotable',
+    SLEEP: 'quotable',
+    STAKE: 'quotable', SWAP: 'quotable', SWEEP: 'quotable', UNSTAKE: 'quotable',
+    VOTE: 'quotable', WITHDRAW: 'quotable',
+    // A user-broadcast lock or burn stages an ordinary XBRIDGE_BASE fee and runs no
+    // caller code, so the public feequote may dry-run it; the injected settle legs
+    // (v2, v5) are refused before any fee is staged and pay none.
+    XBRIDGE: 'quotable',
+};
+
 describe('ACTION manifest conformance: indexer indexerHandled set @regression', function () {
     it('the action dispatch switch exactly equals the manifest indexerHandled slice', function () {
         const expected = manifestSlice('indexerHandled');
@@ -91,54 +134,13 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
                 'xchain-documentation/protocol/action-manifest.json and re-vendor all copies.');
         });
     });
+});
 
-    // Bind the module-private FEE_QUOTE_DENYLIST / FEE_QUOTE_EXEMPT sets to the dispatch
-    // table via the exported classifier, so a name added to either set (or removed from dispatch)
-    // cannot drift silently. Reuses localIndexerSet() as the dispatch-scraper.
+// Bind the module-private FEE_QUOTE_DENYLIST / FEE_QUOTE_EXEMPT sets to the dispatch
+// table via the exported classifier, so a name added to either set (or removed from dispatch)
+// cannot drift silently. Reuses localIndexerSet() as the dispatch-scraper.
+describe('ACTION manifest conformance: indexer indexerHandled set @regression', function () {
     describe('fee-quote classification conformance @regression', function () {
-        const Actions = require('../../src/actions/index.js');
-        const denied  = Actions.getFeeQuoteDenylist();
-        const exempt  = Actions.getFeeQuoteExempt();
-
-        // A case (a) asserting only that the classifier returned one of
-        // denied/exempt/quotable, which classifyFeeQuoteAction can never fail to do - a
-        // tautology that passed for a dispatched action nobody classified. The sibling cases
-        // do not close it either: (d)/(e) pin the DENIED and STATIC sets exactly, but EXEMPT is
-        // constrained only by disjointness (b) and no-orphans (c), so a fee-bearing action added
-        // to FEE_QUOTE_EXEMPT, or a new VM/compound action left out of FEE_QUOTE_DENYLIST and
-        // defaulting to `quotable`, passed every check. The second re-opens the unauthenticated
-        // VM-compute-under-mutex the denylist comment (src/actions/index.js) exists to close.
-        //
-        // EXPECTED is a hand-written literal on purpose. Deriving it from
-        // getFeeQuoteDenylist()/getFeeQuoteExempt() would compare the sets against themselves
-        // and rebuild the same tautology; an independent second opinion is the whole point.
-        const EXPECTED_FEE_QUOTE_CLASS = {
-            // Run caller-supplied code in the VM (or smuggle something that does), so the
-            // public feequote refuses to dry-run them.
-            BATCH: 'denied', DEPLOY: 'denied', EXECUTE: 'denied', XEXEC: 'denied',
-
-            // Settlement/lifecycle legs that stage no wallet-priceable fee, plus ATTEST.
-            ATTEST: 'exempt', BET_EXPIRE: 'exempt', COINPAY: 'exempt', COINPAY_EXPIRE: 'exempt',
-            CROSS_SETTLE: 'exempt', DISPENSE: 'exempt', DISPENSER_CLOSE: 'exempt',
-            DISPENSER_EXPIRE: 'exempt', ORDER_EXPIRE: 'exempt', ORDER_MATCH: 'exempt',
-            SWAP_EXPIRE: 'exempt', SWAP_MATCH: 'exempt', XCALL: 'exempt',
-
-            // Everything else is wallet-broadcast and safely dry-runnable for a quote.
-            ADDRESS: 'quotable', AIRDROP: 'quotable', ANCHOR: 'quotable', BET: 'quotable',
-            BROADCAST: 'quotable', CALLBACK: 'quotable', COLLECT: 'quotable', DELEGATE: 'quotable',
-            DEPOSIT: 'quotable', DESTROY: 'quotable', DISPENSER: 'quotable', DIVIDEND: 'quotable',
-            FILE: 'quotable', ISSUE: 'quotable', LINK: 'quotable', LIST: 'quotable',
-            MESSAGE: 'quotable', MINT: 'quotable', NODEPROOF: 'quotable', ORDER: 'quotable',
-            PRICE: 'quotable', ROLLCALL: 'quotable', SEND: 'quotable', SLASH: 'quotable',
-            SLEEP: 'quotable',
-            STAKE: 'quotable', SWAP: 'quotable', SWEEP: 'quotable', UNSTAKE: 'quotable',
-            VOTE: 'quotable', WITHDRAW: 'quotable',
-            // A user-broadcast lock or burn stages an ordinary XBRIDGE_BASE fee and runs no
-            // caller code, so the public feequote may dry-run it; the injected settle legs
-            // (v2, v5) are refused before any fee is staged and pay none.
-            XBRIDGE: 'quotable',
-        };
-
         it('(a1) every dispatched action carries an explicit expected fee-quote class', function () {
             const unclassified = localIndexerSet().filter(
                 a => !Object.prototype.hasOwnProperty.call(EXPECTED_FEE_QUOTE_CLASS, a));
@@ -171,7 +173,11 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
                 'This map classifies actions src/actions/index.js no longer dispatches, so the entries are dead ' +
                 'weight that would silently re-waive (a1) if a name were ever reused: ' + JSON.stringify(orphans));
         });
+    });
+});
 
+describe('ACTION manifest conformance: indexer indexerHandled set @regression', function () {
+    describe('fee-quote classification conformance @regression', function () {
         it('(b) denied and exempt sets are disjoint', function () {
             const overlap = [...denied].filter(a => exempt.has(a));
             assert.deepStrictEqual(overlap, [], 'denied/exempt overlap: ' + JSON.stringify(overlap));
@@ -201,15 +207,15 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
             }
         });
     });
+});
 
-    const Actions = require('../../src/actions/index.js');
-
-    // Spec row 46: the BATCH pre-flight dispatches REAL sub-handlers on an unauthenticated
-    // read-only surface while the dry-run holds the block-loop transaction mutex, so every
-    // dispatched sub-action is a decision about whether a caller may run it there. Bind that
-    // decision to the dispatch table for the same reason the fee-quote classes are bound: a
-    // NEW action defaults to ALLOWED, and an action with a VM reach that nobody classified
-    // re-opens the compute primitive FEE_QUOTE_DENYLIST exists to close.
+// Spec row 46: the BATCH pre-flight dispatches REAL sub-handlers on an unauthenticated
+// read-only surface while the dry-run holds the block-loop transaction mutex, so every
+// dispatched sub-action is a decision about whether a caller may run it there. Bind that
+// decision to the dispatch table for the same reason the fee-quote classes are bound: a
+// NEW action defaults to ALLOWED, and an action with a VM reach that nobody classified
+// re-opens the compute primitive FEE_QUOTE_DENYLIST exists to close.
+describe('ACTION manifest conformance: indexer indexerHandled set @regression', function () {
     describe('BATCH probe sub-action policy conformance @regression', function () {
         // Hand-written, like EXPECTED_FEE_QUOTE_CLASS above and for the same reason: deriving
         // it from getFeeQuoteDenylist()/getProbeVmReachingActions() would compare the policy
@@ -267,7 +273,9 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
                 'dead entries would silently re-waive (f1) if a name were reused: ' + JSON.stringify(orphans));
         });
     });
+});
 
+describe('ACTION manifest conformance: indexer indexerHandled set @regression', function () {
     describe('BATCH probe sub-action policy conformance @regression', function () {
         it('(f4) the refusal is a SUPERSET of the fee-quote denylist', function () {
             // The denylist is not a statement about VM reach (BATCH is on it because it can
