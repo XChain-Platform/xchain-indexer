@@ -111,10 +111,21 @@ function build(height, map, network) {
     return armed.ed.buildPriceV0Payload(ROUND, TIME, pairs(), network || NETWORK, height, map);
 }
 
-describe('PRICE v0 canonical: the admission field on the indexer verifier', function () {
-
+function useArmedTwins() {
     before(function () { armed = armTwins(); });
     after(function () { if (armed) armed.restore(); armed = null; });
+}
+
+function hubOrSkip(ctx) {
+    if (armed.hub) return armed.hub;
+    // A refused hub twin skips, or fails naming the reason under strict.
+    if (armed.hubVerdict) skipOrFail(ctx, armed.hubVerdict, 'the PRICE v0 hub twin parity');
+    else ctx.skip();
+    return null;
+}
+
+describe('PRICE v0 canonical: the admission field on the indexer verifier', function () {
+    useArmedTwins();
 
     it('is ARMED for this suite, so neither era case is vacuous', function () {
         assert.strictEqual(armed.act.isMirrorAdmissionProducerActive('BTC', NETWORK, ADMIT_AT), true);
@@ -163,17 +174,11 @@ describe('PRICE v0 canonical: the admission field on the indexer verifier', func
             assert.throws(() => build(ADMIT_AT, bad),
                 /canonically spelled|closed vocabulary|EMPTY admission map/, JSON.stringify(bad));
     });
+});
 
+describe('PRICE v0 canonical: the admission field on the indexer verifier', function () {
+    useArmedTwins();
     describe('against the hub producer and its ingest verifier', function () {
-
-        function hubOrSkip(ctx) {
-            if (armed.hub) return armed.hub;
-            // A refused hub twin skips, or fails naming the reason under strict.
-            if (armed.hubVerdict) skipOrFail(ctx, armed.hubVerdict, 'the PRICE v0 hub twin parity');
-            else ctx.skip();
-            return null;
-        }
-
         it('all three twins emit the identical canonical for an admission-era round', function () {
             const hub = hubOrSkip(this);
             if (!hub) return;
@@ -191,7 +196,12 @@ describe('PRICE v0 canonical: the admission field on the indexer verifier', func
             assert.strictEqual(hub.producer._buildPriceV0Payload(ROUND, TIME, pairs(), LEGACY_AT, undefined), expected);
             assert.strictEqual(hub.ingest._buildPriceV0Payload(ROUND, TIME, pairs(), LEGACY_AT, undefined), expected);
         });
+    });
+});
 
+describe('PRICE v0 canonical: the admission field on the indexer verifier', function () {
+    useArmedTwins();
+    describe('against the hub producer and its ingest verifier', function () {
         it('all three refuse the same two wrong-era builds', function () {
             const hub = hubOrSkip(this);
             if (!hub) return;
