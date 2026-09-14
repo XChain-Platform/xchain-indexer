@@ -56,7 +56,7 @@ const decoderProbeMethods       = require('./XChainIndexer/decoder_probes.js');
 const backgroundJobMethods      = require('./XChainIndexer/background_jobs.js');
 
 const { getLogger } = require('./observability/index.js');
-const { CONFIG_ENV } = require('./config.js');
+const { CONFIG_ENV, readEnvNow } = require('./config.js');
 // Hub->indexer config poll cadence (ms). This is the sole staleness / propagation bound for the
 // live-polled governance overlay: nothing else refreshes it, so an overlay older than a small
 // multiple of this interval means the hub is unreachable. Overridable via
@@ -69,9 +69,10 @@ const DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS = 60000;
 // CALL time and is deliberately not hoisted to module load, nor folded into config.js's
 // load-time CONFIG_ENV snapshot: any consumer that requires this module before running its own
 // dotenv.config() would then miss HUB_CONFIG_POLL_INTERVAL_MS from the documented `.env` and
-// silently revert the knob to the 60s default.
+// silently revert the knob to the 60s default. So it goes through readEnvNow, the config home's
+// call-time accessor, which keeps the environment read inside config.js without snapshotting it.
 function effectiveHubConfigPollIntervalMs(){
-    return parseInt(process.env.HUB_CONFIG_POLL_INTERVAL_MS, 10) || DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS;
+    return parseInt(readEnvNow('HUB_CONFIG_POLL_INTERVAL_MS'), 10) || DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS;
 }
 // An overlay older than this is reported `stale`. Three poll intervals tolerates a couple of
 // missed/slow polls before flagging: a purely operational outage-observability margin.
