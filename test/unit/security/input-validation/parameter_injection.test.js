@@ -66,13 +66,13 @@ function makeIssueParams(overrides = {}) {
         m.MEMO];
 }
 
+let indexer, actionsCtx;
+
 // ---------------------------------------------------------------------------
 // Suite
 // ---------------------------------------------------------------------------
 
 describe('Security: malformed parameter injection @regression @tier4', function () {
-    let indexer, actionsCtx;
-
     beforeEach(function () {
         indexer     = createMockIndexer();
         actionsCtx = makeActionsCtx(indexer);
@@ -118,6 +118,22 @@ describe('Security: malformed parameter injection @regression @tier4', function 
         await handler.parse(params, data, null);
 
         assert.ok(data.STATUS.startsWith('invalid'), `expected invalid but got: ${data.STATUS}`);
+    });
+});
+
+describe('Security: malformed parameter injection @regression @tier4', function () {
+    beforeEach(function () {
+        indexer     = createMockIndexer();
+        actionsCtx = makeActionsCtx(indexer);
+
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', DECIMALS: 0 }));
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
+    });
+
+    afterEach(function () {
+        sinon.restore();
     });
 
     it('SEC-16: ISSUE with TICK containing pipe delimiter → handled safely', async function () {
