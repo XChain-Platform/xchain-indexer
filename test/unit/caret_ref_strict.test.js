@@ -178,55 +178,54 @@ describe('db.resolveAddressRefChecked @regression @tier1', function () {
     });
 });
 
+const Mint = require('../../src/actions/mint.js');
+
+// Drive Mint.parse with the real utility and a stubbed DB layer (same shape as
+// gas_mint_network_gate.test.js), so this runs with no MariaDB. `strict` switches
+// the mock's checked resolver between the two eras: pre-flag-day it never rejects
+// (the handler must fall through to its own format check), post-flag-day an
+// unresolvable caret comes back unchanged AND rejected.
+async function runMint({ destination, strict }){
+    const util = new Utility();
+    util.processTransactionLedgerChanges = async () => {};
+
+    const tokenInfo = {
+        BLOCK_INDEX: 1, SUPPLY: 0, DECIMALS: 0, MAX_SUPPLY: 1000000,
+        MAX_MINT: 0, MINT_ADDRESS_MAX: 0, MINT_START_BLOCK: 0,
+        MINT_STOP_BLOCK: 0, LOCK_MINT: 0
+    };
+    const captured = {};
+    const indexerDb = {
+        getTokenInfo:                async () => tokenInfo,
+        resolveAddressRef:           async (v) => v,
+        resolveAddressRefChecked:    async (v) => ({ value: v, rejected: strict && isUnresolvedCaretRef(v) }),
+        getActionCreditDebitAmount:  async () => 0,
+        getSelfMintedAmount:         async () => 0,
+        validTickerBeforeTxIndex:    async () => true,
+        isActionAllowed:             async () => true,
+        createMint:                  async (m) => { captured.status = m['STATUS']; },
+        updateBalances:              async () => {},
+        updateTokens:                async () => {},
+        getAddressBalances:                  async () => [],
+        getTickerId:                         async () => null,
+        getEffectiveTokenControllerForGuard: async () => null
+    };
+    const action = {
+        config: { GAS: 'XCHAIN', NETWORK: 'regtest', ADDRESS: { GAS: REAL_ADDR }, MAX_MEMO_LENGTH: 255 },
+        decoderDb: null, indexerDb, util,
+        mapper: { createMappings: async () => {} },
+        protocolChanges: { isEnabled: async () => true }
+    };
+    const mint = new Mint(action);
+    const params = ('0|TESTTOKEN|1|' + destination).split('|');
+    await mint.parse(params, {
+        FORMAT: util.getFormatVersion(params[0]),
+        SOURCE: REAL_ADDR, BLOCK_INDEX: 100, ACTION_INDEX: 100
+    }, null);
+    return captured.status;
+}
+
 describe('handler-level hard reject @regression @tier1', function () {
-
-    const Mint = require('../../src/actions/mint.js');
-
-    // Drive Mint.parse with the real utility and a stubbed DB layer (same shape as
-    // gas_mint_network_gate.test.js), so this runs with no MariaDB. `strict` switches
-    // the mock's checked resolver between the two eras: pre-flag-day it never rejects
-    // (the handler must fall through to its own format check), post-flag-day an
-    // unresolvable caret comes back unchanged AND rejected.
-    async function runMint({ destination, strict }){
-        const util = new Utility();
-        util.processTransactionLedgerChanges = async () => {};
-
-        const tokenInfo = {
-            BLOCK_INDEX: 1, SUPPLY: 0, DECIMALS: 0, MAX_SUPPLY: 1000000,
-            MAX_MINT: 0, MINT_ADDRESS_MAX: 0, MINT_START_BLOCK: 0,
-            MINT_STOP_BLOCK: 0, LOCK_MINT: 0
-        };
-        const captured = {};
-        const indexerDb = {
-            getTokenInfo:                async () => tokenInfo,
-            resolveAddressRef:           async (v) => v,
-            resolveAddressRefChecked:    async (v) => ({ value: v, rejected: strict && isUnresolvedCaretRef(v) }),
-            getActionCreditDebitAmount:  async () => 0,
-            getSelfMintedAmount:         async () => 0,
-            validTickerBeforeTxIndex:    async () => true,
-            isActionAllowed:             async () => true,
-            createMint:                  async (m) => { captured.status = m['STATUS']; },
-            updateBalances:              async () => {},
-            updateTokens:                async () => {},
-            getAddressBalances:                  async () => [],
-            getTickerId:                         async () => null,
-            getEffectiveTokenControllerForGuard: async () => null
-        };
-        const action = {
-            config: { GAS: 'XCHAIN', NETWORK: 'regtest', ADDRESS: { GAS: REAL_ADDR }, MAX_MEMO_LENGTH: 255 },
-            decoderDb: null, indexerDb, util,
-            mapper: { createMappings: async () => {} },
-            protocolChanges: { isEnabled: async () => true }
-        };
-        const mint = new Mint(action);
-        const params = ('0|TESTTOKEN|1|' + destination).split('|');
-        await mint.parse(params, {
-            FORMAT: util.getFormatVersion(params[0]),
-            SOURCE: REAL_ADDR, BLOCK_INDEX: 100, ACTION_INDEX: 100
-        }, null);
-        return captured.status;
-    }
-
     it('MINT: at/after the flag-day a dangling ^<id> DESTINATION is a named unresolvable-reference reject', async function () {
         assert.strictEqual(await runMint({ destination: '^999999', strict: true }),
             'invalid: DESTINATION (unresolvable ^id)');
@@ -236,7 +235,9 @@ describe('handler-level hard reject @regression @tier1', function () {
         assert.strictEqual(await runMint({ destination: '^007', strict: true }),
             'invalid: DESTINATION (unresolvable ^id)');
     });
+});
 
+describe('handler-level hard reject @regression @tier1', function () {
     it('MINT: below the flag-day the SAME action keeps its legacy format verdict verbatim', async function () {
         // Replay byte-identity: nothing about the pre-flag-day outcome may move.
         assert.strictEqual(await runMint({ destination: '^999999', strict: false }),

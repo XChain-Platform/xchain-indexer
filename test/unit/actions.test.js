@@ -169,6 +169,12 @@ describe('Actions.processTransaction() @regression @tier3', function () {
         await actions.processTransaction(makeTx({ data: 'BATCH|0|cmd1;cmd2' }));
         assert.ok(stubs.actionBatch.calledOnce);
     });
+});
+
+describe('Actions.processTransaction() @regression @tier3', function () {
+    afterEach(function () {
+        sinon.restore();
+    });
 
     it('routes CALLBACK to actionCallback.parse', async function () {
         const { actions, stubs } = buildActions();
@@ -223,6 +229,12 @@ describe('Actions.processTransaction() @regression @tier3', function () {
         await actions.processTransaction(makeTx({ data: 'SLEEP|0|200' }));
         assert.ok(stubs.actionSleep.calledOnce);
     });
+});
+
+describe('Actions.processTransaction() @regression @tier3', function () {
+    afterEach(function () {
+        sinon.restore();
+    });
 
     it('routes SWAP to actionSwap.parse', async function () {
         const { actions, stubs } = buildActions();
@@ -276,6 +288,12 @@ describe('Actions.processTransaction() @regression @tier3', function () {
         await actions.processTransaction(makeTx({ data: 'ADDR|0|opt|val' }));
         assert.ok(stubs.actionAddress.calledOnce, 'ADDR should route to actionAddress.parse');
     });
+});
+
+describe('Actions.processTransaction() @regression @tier3', function () {
+    afterEach(function () {
+        sinon.restore();
+    });
 
     it('resolves DROP alias to AIRDROP', async function () {
         const { actions, stubs } = buildActions();
@@ -325,6 +343,12 @@ describe('Actions.processTransaction() @regression @tier3', function () {
         assert.strictEqual(data.FORMAT, 0);
         assert.strictEqual(params[1], 'TEST');
     });
+});
+
+describe('Actions.processTransaction() @regression @tier3', function () {
+    afterEach(function () {
+        sinon.restore();
+    });
 
     it('does NOT insert extra version for non-legacy SEND with numeric version', async function () {
         const { actions, stubs } = buildActions();
@@ -373,6 +397,12 @@ describe('Actions.processTransaction() @regression @tier3', function () {
         const { actions, stubs } = buildActions({ defined: true, enabled: false });
         await actions.processTransaction(makeTx({ data: 'SEND|0|TEST|100|addr' }));
         assert.ok(stubs.actionSend.calledOnce);
+    });
+});
+
+describe('Actions.processTransaction() @regression @tier3', function () {
+    afterEach(function () {
+        sinon.restore();
     });
 
     // ── data object construction ──────────────────────────────────────────
@@ -429,6 +459,12 @@ describe('Actions.processTransaction() @regression @tier3', function () {
         await actions.processTransaction(tx);
         assert.ok(indexer.indexerDb.createAddress.called);
     });
+});
+
+describe('Actions.processTransaction() @regression @tier3', function () {
+    afterEach(function () {
+        sinon.restore();
+    });
 
     it('calls createTransaction with tx_hash before processing', async function () {
         const { actions, indexer } = buildActions();
@@ -454,14 +490,18 @@ describe('Actions.processTransaction() @regression @tier3', function () {
     });
 });
 
+let actions;
+let stubs;
+let util;
+
+async function call(action, params = [], data = {}, error = false) {
+    return actions.processAction(action, params, data, error);
+}
+
 // ---------------------------------------------------------------------------
 // describe: processAction : handler dispatch + resetLists
 // ---------------------------------------------------------------------------
 describe('Actions.processAction() @regression @tier3', function () {
-    let actions;
-    let stubs;
-    let util;
-
     beforeEach(function () {
         const built = buildActions();
         actions = built.actions;
@@ -474,10 +514,6 @@ describe('Actions.processAction() @regression @tier3', function () {
         sinon.restore();
         await shutdownPendingVms();
     });
-
-    async function call(action, params = [], data = {}, error = false) {
-        return actions.processAction(action, params, data, error);
-    }
 
     it('calls util.resetLists() before dispatching', async function () {
         await call('SEND');
@@ -522,6 +558,20 @@ describe('Actions.processAction() @regression @tier3', function () {
     it('dispatches DISPENSER to actionDispenser.parse', async function () {
         await call('DISPENSER');
         assert.ok(stubs.actionDispenser.calledOnce);
+    });
+});
+
+describe('Actions.processAction() @regression @tier3', function () {
+    beforeEach(function () {
+        const built = buildActions();
+        actions = built.actions;
+        stubs   = built.stubs;
+        util    = built.indexer.util;
+        sinon.spy(util, 'resetLists');
+    });
+
+    afterEach(function () {
+        sinon.restore();
     });
 
     it('dispatches DISPENSER_CLOSE to actionDispenserClose.parse', async function () {
@@ -568,6 +618,20 @@ describe('Actions.processAction() @regression @tier3', function () {
         await call('MINT');
         assert.ok(stubs.actionMint.calledOnce);
     });
+});
+
+describe('Actions.processAction() @regression @tier3', function () {
+    beforeEach(function () {
+        const built = buildActions();
+        actions = built.actions;
+        stubs   = built.stubs;
+        util    = built.indexer.util;
+        sinon.spy(util, 'resetLists');
+    });
+
+    afterEach(function () {
+        sinon.restore();
+    });
 
     it('dispatches MESSAGE to actionMessage.parse', async function () {
         await call('MESSAGE');
@@ -612,6 +676,20 @@ describe('Actions.processAction() @regression @tier3', function () {
     it('dispatches SWAP_MATCH to actionSwapMatch.parse', async function () {
         await call('SWAP_MATCH');
         assert.ok(stubs.actionSwapMatch.calledOnce);
+    });
+});
+
+describe('Actions.processAction() @regression @tier3', function () {
+    beforeEach(function () {
+        const built = buildActions();
+        actions = built.actions;
+        stubs   = built.stubs;
+        util    = built.indexer.util;
+        sinon.spy(util, 'resetLists');
+    });
+
+    afterEach(function () {
+        sinon.restore();
     });
 
     it('dispatches SWEEP to actionSweep.parse', async function () {

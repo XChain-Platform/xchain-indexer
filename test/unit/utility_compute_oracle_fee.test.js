@@ -39,12 +39,12 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert  = require('assert');
 const Utility = require('../../src/utility.js');
 
+let util;
+
+const fee = (...a) => String(util.computeOracleFee(...a));
+
 describe('Utility.computeOracleFee() - PRICE v1 oracle usage fee @regression', function () {
-    let util;
-
     beforeEach(function () { util = new Utility(); });
-
-    const fee = (...a) => String(util.computeOracleFee(...a));
 
     it('computes FEE percent of the escrow\'s projected coin proceeds', function () {
         // 1000 PEPECASH escrowed at $0.05 each = $50 projected.
@@ -100,6 +100,10 @@ describe('Utility.computeOracleFee() - PRICE v1 oracle usage fee @regression', f
         // proving the intermediate was not the thing that lost it.
         assert.strictEqual(fee('0.00000001', '100000000000', '50000', '0.01'), '0.0002');
     });
+});
+
+describe('Utility.computeOracleFee() - PRICE v1 oracle usage fee @regression', function () {
+    beforeEach(function () { util = new Utility(); });
 
     it('returns a satoshi-precision result', function () {
         // 8 decimals, matching computeNativeFeeBand, so an output can pay it exactly.

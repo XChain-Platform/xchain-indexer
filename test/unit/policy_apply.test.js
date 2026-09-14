@@ -168,7 +168,6 @@ function makeCtx(opts){
 }
 
 describe('policy apply: token-policy inheritance onto a bridged copy', function(){
-
     describe('the membership hash', function(){
 
         it('is the canonical text, with "-" for an ABSENT list and "0" for an EMPTY one', function(){
@@ -218,7 +217,9 @@ describe('policy apply: token-policy inheritance onto a bridged copy', function(
             assert.strictEqual(differing.length, 1, 'sleeping must reach the canonical only through policy_hash');
         });
     });
+});
 
+describe('policy apply: token-policy inheritance onto a bridged copy', function(){
     describe('the signed canonical', function(){
 
         it('is the spec field order, wrapped by the EQUIV header under the POLICY tag', function(){
@@ -255,9 +256,10 @@ describe('policy apply: token-policy inheritance onto a bridged copy', function(
             assert.deepStrictEqual(state.settlements, []);
         });
     });
+});
 
+describe('policy apply: token-policy inheritance onto a bridged copy', function(){
     describe('terminal versus carried', function(){
-
         // GUARD: the policy_hash recomputation.
         it('is TERMINAL and injects nothing when the membership does not match policy_hash', async function(){
             const keys = [makeKey(), makeKey(), makeKey()];
@@ -309,7 +311,11 @@ describe('policy apply: token-policy inheritance onto a bridged copy', function(
             assert.strictEqual(foreignChain.terminal, true);
             assert.strictEqual(foreignChain.reason, BS.SETTLE_REASON.CHAIN_ID);
         });
+    });
+});
 
+describe('policy apply: token-policy inheritance onto a bridged copy', function(){
+    describe('terminal versus carried', function(){
         it('CARRIES a snapshot whose effective_time has not been reached', async function(){
             const keys = [makeKey(), makeKey(), makeKey()];
             const row  = makeSnapshot(keys, { row: { effective_time: 999999 } });
@@ -364,9 +370,10 @@ describe('policy apply: token-policy inheritance onto a bridged copy', function(
             assert.deepStrictEqual(state.injected, []);
         });
     });
+});
 
+describe('policy apply: token-policy inheritance onto a bridged copy', function(){
     describe('the injected legs', function(){
-
         it('creates both lists, points the row at them, at the PINNED ordinals', async function(){
             const keys = [makeKey(), makeKey(), makeKey()];
             const row  = makeSnapshot(keys, { allow: [ADDR_A, ADDR_B], block: [ADDR_C] });
@@ -422,7 +429,11 @@ describe('policy apply: token-policy inheritance onto a bridged copy', function(
             // No ISSUE 5: an edit writes under its own index and never moves the pointer.
             assert.ok(!state.injected.some(t => /^ISSUE\|/.test(t.data)));
         });
+    });
+});
 
+describe('policy apply: token-policy inheritance onto a bridged copy', function(){
+    describe('the injected legs', function(){
         it('injects SLEEP only when the state would change, at its pinned ordinal', async function(){
             const keys = [makeKey(), makeKey(), makeKey()];
             // Origin says sleeping, the copy is awake: one SLEEP leg with resume_block -1.
@@ -468,7 +479,11 @@ describe('policy apply: token-policy inheritance onto a bridged copy', function(
             assert.strictEqual(again.reason, BS.SETTLE_REASON.ALREADY_APPLIED);
             assert.strictEqual(state.injected.length, before);
         });
+    });
+});
 
+describe('policy apply: token-policy inheritance onto a bridged copy', function(){
+    describe('the injected legs', function(){
         it('CARRIES a refused leg when nothing landed at all, since a retry duplicates nothing', async function(){
             const keys = [makeKey(), makeKey(), makeKey()];
             const row  = makeSnapshot(keys, { allow: [ADDR_A] });
@@ -492,7 +507,9 @@ describe('policy apply: token-policy inheritance onto a bridged copy', function(
             assert.deepStrictEqual(state.injected, []);
         });
     });
+});
 
+describe('policy apply: token-policy inheritance onto a bridged copy', function(){
     describe('idempotency, keyed on (id, kind)', function(){
 
         // GUARD: the idempotency filter.
@@ -530,7 +547,9 @@ describe('policy apply: token-policy inheritance onto a bridged copy', function(
                 'the record must anchor to an action a reorg can drop');
         });
     });
+});
 
+describe('policy apply: token-policy inheritance onto a bridged copy', function(){
     describe('the due set: order and the per-block cap', function(){
 
         function snapshotRow(id, block, tick, seq){

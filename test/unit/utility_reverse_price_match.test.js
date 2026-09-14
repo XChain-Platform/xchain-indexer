@@ -56,7 +56,6 @@ describe('Utility FIAT dispenser price matching @regression', function () {
     });
 
     describe('reversePriceMatch() - Mode A, validator snapshot', function () {
-
         it('floors the multiplier and absorbs the remainder as a tip', async function () {
             // FIAT_AMOUNT 100 at 50000/coin => 0.002 coin per unit.
             // 0.011 coin / 0.002 = 5.5 => 5 units, 0.001 coin kept.
@@ -111,7 +110,9 @@ describe('Utility FIAT dispenser price matching @regression', function () {
                 coinPair: 'BTC/USD', startTime: NOW - WINDOW, endTime: NOW
             });
         });
+    });
 
+    describe('reversePriceMatch() - Mode A, validator snapshot', function () {
         it('never matches a snapshot newer than the block being processed', async function () {
             // Causality: a node replaying an old block must not see a price that
             // did not exist yet, or it diverges from the node that processed it live.
@@ -133,7 +134,6 @@ describe('Utility FIAT dispenser price matching @regression', function () {
     });
 
     describe('reverseOraclePriceMatch() - Mode B, user oracle', function () {
-
         it('cross-converts through the shared fiat currency', async function () {
             // 1 PEPECASH = JPY 7.50, 1 BTC = JPY 15,000,000, pays 0.001 BTC.
             // (0.001 * 15000000) / 7.50 = 2000 tokens.
@@ -183,7 +183,9 @@ describe('Utility FIAT dispenser price matching @regression', function () {
             assert.strictEqual(db.calls.prices[0].startTime, NOW - 2 * WINDOW);
             assert.strictEqual(db.calls.prices[0].endTime, NOW);
         });
+    });
 
+    describe('reverseOraclePriceMatch() - Mode B, user oracle', function () {
         it('skips an oracle row that has no validator price behind it', async function () {
             // First (newest) oracle row has no coin price in its own window; the
             // loop must continue rather than failing the whole dispense. The batched
@@ -238,7 +240,9 @@ describe('Utility FIAT dispenser price matching @regression', function () {
             assert.strictEqual(db.calls.oracle[0].startTime, NOW - WINDOW);
             assert.strictEqual(db.calls.oracle[0].endTime, NOW);
         });
+    });
 
+    describe('reverseOraclePriceMatch() - Mode B, user oracle', function () {
         it('returns null when the oracle published nothing in the window', async function () {
             const db = fakeDb([snap('15000000', NOW - 600)], []);
             const r = await util.reverseOraclePriceMatch(

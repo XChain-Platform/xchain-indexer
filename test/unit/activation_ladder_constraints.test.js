@@ -131,7 +131,6 @@ function c4Violations(bridgeMap) {
 }
 
 describe('activation ladder fork-avoiding constraints (the bridge train cut)', function () {
-
     describe('C3: train boundary < bridge height, same clock (against the shipped maps)', function () {
         const trainRow = TRAIN_ACTIVATION[BRIDGE_TRAIN_VERSION];
 
@@ -168,7 +167,9 @@ describe('activation ladder fork-avoiding constraints (the bridge train cut)', f
             }
         });
     });
+});
 
+describe('activation ladder fork-avoiding constraints (the bridge train cut)', function () {
     describe('C3: comparison logic falsified on a local fixture (never the shipped maps)', function () {
         it('holds on a synthetic post-cut fixture built from a worked bridge ladder', function () {
             const fixtureTrain = { mainnet: 9999999999, testnet: 152162, regtest: 0 };
@@ -196,7 +197,9 @@ describe('activation ladder fork-avoiding constraints (the bridge train cut)', f
                 .test(violations[0]), 'expected the violation to name both heights, got: ' + violations[0]);
         });
     });
+});
 
+describe('activation ladder fork-avoiding constraints (the bridge train cut)', function () {
     describe('C4: destination bridge height at or before the BTC origin\'s, same network (against the shipped maps)', function () {
         it('today: every mainnet/testnet slot is the sentinel, so C4 degenerates to sentinel === sentinel', function () {
             const violations = c4Violations(BRIDGE);
@@ -231,7 +234,9 @@ describe('activation ladder fork-avoiding constraints (the bridge train cut)', f
             }
         });
     });
+});
 
+describe('activation ladder fork-avoiding constraints (the bridge train cut)', function () {
     describe('C4: comparison logic falsified on a local fixture (never the shipped maps)', function () {
         // The worked ladder's raw heights are NOT comparable across chains (LTC and DOGE heights
         // vastly exceed BTC's regardless of arming order; see the file header), so c4Violations

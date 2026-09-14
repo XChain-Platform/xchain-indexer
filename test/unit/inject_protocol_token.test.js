@@ -171,7 +171,6 @@ describe('genesis.injectProtocolToken and the bridged row creation @regression',
     });
 
     describe('the existing-row rules (token bridge section 6)', function () {
-
         it('refuses the leg when the root is owned by anyone but the bridge role address', async function () {
             const h = harness({ BTC: lock({ OWNER: 'a-squatter' }) });
             const out = await h.genesis.injectBridgedToken(
@@ -223,7 +222,9 @@ describe('genesis.injectProtocolToken and the bridged row creation @regression',
             await b.genesis.injectBridgedToken({ origin: 'BTC', name: 'FUFU', decimals: 6, owner: BRIDGE_OWNER }, CTX);
             assert.notStrictEqual(a.sent[0].tx.tx_hash, b.sent[0].tx.tx_hash);
         });
+    });
 
+    describe('the existing-row rules (token bridge section 6)', function () {
         it('refuses and injects nothing when the decimals differ and supply exists', async function () {
             const h = harness({ BTC: lock(), 'BTC.FUFU': lock({ TICK: 'BTC.FUFU', DECIMALS: 2, SUPPLY: '0.00000001' }) });
             const out = await h.genesis.injectBridgedToken(

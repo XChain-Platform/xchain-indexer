@@ -121,7 +121,6 @@ function escrowEntries() {
 }
 
 describe('XBRIDGE escrow keylessness (consensus)', function () {
-
     it('ships an escrow literal for every ordered coin pair on every network', function () {
         // 3 coins x 2 destinations x 3 networks; a missing one would silently make
         // the loops below vacuous.
@@ -172,7 +171,9 @@ describe('XBRIDGE escrow keylessness (consensus)', function () {
         }
         assert.strictEqual(checked, 9);
     });
+});
 
+describe('XBRIDGE escrow keylessness (consensus)', function () {
     it('pins the hash160 of every shipped escrow literal', function () {
         const seen = new Set();
         for (const e of escrowEntries()) {

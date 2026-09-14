@@ -96,13 +96,14 @@ describe('Utility @regression @tier1', function () {
         });
     });
 
+    const COIN = 'BTC', NETWORK = 'regtest';
+    const CAP = require('../../src/actions/xcall/index.js').XCALL_MAX_CALLS_PER_BLOCK;
+    let actions, db, processAction, processResult;
+
+    let resultSuppressesExpiry;
+
     // ─── Cross-chain call orchestration (the block loop's three deterministic passes) ──
     describe('processCrossChainCalls()', function () {
-        const COIN = 'BTC', NETWORK = 'regtest';
-        const CAP = require('../../src/actions/xcall/index.js').XCALL_MAX_CALLS_PER_BLOCK;
-        let actions, db, processAction, processResult;
-
-        let resultSuppressesExpiry;
         beforeEach(function () {
             processAction = sinon.stub().resolves();
             processResult = sinon.stub().resolves();
@@ -158,6 +159,22 @@ describe('Utility @regression @tier1', function () {
             assert.ok(db.getExpiredCrossChainCallRequests.calledWith(100, CAP),
                 'expiry pass must bind the per-block cap (block_index, cap)');
         });
+    });
+
+    describe('processCrossChainCalls()', function () {
+        beforeEach(function () {
+            processAction = sinon.stub().resolves();
+            processResult = sinon.stub().resolves();
+            // Default: a present result row is verified-deliverable (honest-majority path).
+            resultSuppressesExpiry = sinon.stub().resolves(true);
+            actions = { processAction, actionXcall: { processResult, resultSuppressesExpiry } };
+            db = {
+                config: { COIN, NETWORK },
+                getEffectiveUndispatchedCalls:      sinon.stub().resolves([]),
+                getEffectiveUnprocessedCallResults: sinon.stub().resolves([]),
+                getExpiredCrossChainCallRequests:   sinon.stub().resolves([]),
+            };
+        });
 
         it('fetches the full effective result set and delivers at most the cap', async function () {
             // Results are fetched uncapped (so the expiry pass can see requests that are
@@ -203,6 +220,22 @@ describe('Utility @regression @tier1', function () {
             assert.strictEqual(processAction.getCalls().filter(c => c.args[0] === 'XCALL').length, expired.length,
                 'every expired request in the capped set must still be synthesized');
         });
+    });
+
+    describe('processCrossChainCalls()', function () {
+        beforeEach(function () {
+            processAction = sinon.stub().resolves();
+            processResult = sinon.stub().resolves();
+            // Default: a present result row is verified-deliverable (honest-majority path).
+            resultSuppressesExpiry = sinon.stub().resolves(true);
+            actions = { processAction, actionXcall: { processResult, resultSuppressesExpiry } };
+            db = {
+                config: { COIN, NETWORK },
+                getEffectiveUndispatchedCalls:      sinon.stub().resolves([]),
+                getEffectiveUnprocessedCallResults: sinon.stub().resolves([]),
+                getExpiredCrossChainCallRequests:   sinon.stub().resolves([]),
+            };
+        });
 
         it('does NOT expire a past-deadline request whose result is deliverable this block (cap-deferred)', async function () {
             // The overflow request has both a quorum-signed result (beyond the cap slice) and a
@@ -242,6 +275,22 @@ describe('Utility @regression @tier1', function () {
             db.getExpiredCrossChainCallRequests.resolves([{ call_id: 'e'.repeat(64) }]);
             await util.processCrossChainCalls(actions, db, 100, 1700000000);
             assert.ok(processAction.calledWith('XCALL', [2, 'e'.repeat(64)]));
+        });
+    });
+
+    describe('processCrossChainCalls()', function () {
+        beforeEach(function () {
+            processAction = sinon.stub().resolves();
+            processResult = sinon.stub().resolves();
+            // Default: a present result row is verified-deliverable (honest-majority path).
+            resultSuppressesExpiry = sinon.stub().resolves(true);
+            actions = { processAction, actionXcall: { processResult, resultSuppressesExpiry } };
+            db = {
+                config: { COIN, NETWORK },
+                getEffectiveUndispatchedCalls:      sinon.stub().resolves([]),
+                getEffectiveUnprocessedCallResults: sinon.stub().resolves([]),
+                getExpiredCrossChainCallRequests:   sinon.stub().resolves([]),
+            };
         });
 
         it('runs the three passes in order: inject → deliver → expire', async function () {

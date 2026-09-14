@@ -143,7 +143,9 @@ describe('UtxoTracker', function(){
                 /UTXO tracker RPC error/
             );
         });
+    });
 
+    describe('_call()', function(){
         it('propagates fetch network error (fetch rejects)', async function(){
             let t = new UtxoTracker('localhost', 3005);
             global.fetch = sinon.stub().rejects(new Error('ECONNREFUSED'));
@@ -311,7 +313,6 @@ describe('UtxoTracker', function(){
     // halted tracker is distinguishable from an address that never appeared; the
     // dispenser freshness verdict itself stays on the frozen getFirstSeen.
     describe('getFirstSeenStatus()', function(){
-
         it('calls get_first_seen_status and returns both halves', async function(){
             let t = new UtxoTracker('localhost', 3005);
             let stub = makeFetch({ jsonrpc: '2.0', id: 1, result: {
@@ -364,7 +365,9 @@ describe('UtxoTracker', function(){
             let r = await t.getFirstSeenStatus('bc1qtest');
             assert.strictEqual(r.firstSeen, null);
         });
+    });
 
+    describe('getFirstSeenStatus()', function(){
         it('reports sync as null when the tracker answered without one', async function(){
             let t = new UtxoTracker('localhost', 3005);
             global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: { first_seen: { height: 7 } } });

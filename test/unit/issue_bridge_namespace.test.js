@@ -125,7 +125,6 @@ function tokenRow(tick){
 }
 
 describe('ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus', function(){
-
     afterEach(function(){ sinon.restore(); });
 
     describe('RESERVED_FUTURE_ROOTS (AT6)', function(){
@@ -161,6 +160,10 @@ describe('ISSUE tick namespace: the four-character floor and the reserved future
             assert.notStrictEqual(await run({ params: create('BASE'), active: false }), 'invalid: TICK (reserved)');
         });
     });
+});
+
+describe('ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus', function(){
+    afterEach(function(){ sinon.restore(); });
 
     describe('the four-character floor (AT6)', function(){
 
@@ -208,6 +211,10 @@ describe('ISSUE tick namespace: the four-character floor and the reserved future
             assert.strictEqual(await run({ params: edit('ETH'), existing: null }), 'invalid: TICK (reserved)');
         });
     });
+});
+
+describe('ISSUE tick namespace: the four-character floor and the reserved future roots @regression @consensus', function(){
+    afterEach(function(){ sinon.restore(); });
 
     describe('system-injected creation', function(){
 

@@ -145,7 +145,6 @@ describe('consensus_rules_digest: a broken carrier is not an absent one', functi
 // the indexer's own instance of the same guard, so a one-sided edit here cannot pass by
 // running only on the other repo.
 describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', function () {
-
     it('is sorted, has 33 entries, and contains the gates the last three trains append', function () {
         const keys = crd.knownGateKeys();
         assert.strictEqual(keys.length, 33, 'SHARED_GATES total entry count moved; re-derive this floor before changing it');
@@ -174,7 +173,9 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
             'mirror_admission_activation.admissionCanonicalField'
         ]) assert.ok(keys.includes(k), 'missing ' + k);
     });
+});
 
+describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', function () {
     // The deploy-wave alarm, pinned to a value rather than only to itself. Cross-repo
     // equality alone cannot see a move both repos make together, which is exactly what a
     // one-train edit to a shared gate looks like, and the digest an un-upgraded peer
@@ -208,7 +209,9 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
             else process.env.XC_MIRROR_ADMISSION_ACTIVATION = env;
         }
     });
+});
 
+describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', function () {
     // The append is at the END, and this is what "at the end" has to mean operationally: the
     // preimage of every gate that was already registered is byte-for-byte where it was, so an
     // old build and a new build disagree ONLY about the rows the new build added. An insertion
@@ -263,7 +266,9 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
             require.cache[CRD]  = realCrd;
         }
     });
+});
 
+describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', function () {
     it('includes the gates this wave armed at genesis on mainnet, from block 0', function () {
         // The 2026-09-09 ruling: identity on the indexed mainnet history.
         for (const k of [
@@ -299,6 +304,28 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
     });
 });
 
+const KEY  = 'xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION';
+const GATE = require.resolve('../../src/xchain_bridge_activation.js');
+const CRD  = require.resolve('../../src/consensus_rules_digest.js');
+
+// Re-require the digest over a stubbed activation map. The digest memoizes gate values,
+// so its module cache entry must be dropped for the stub to be seen.
+function withMap(map, body) {
+    const real    = require.cache[GATE];
+    const realCrd = require.cache[CRD];
+    try {
+        const stub = Object.create(Object.getPrototypeOf(real));
+        Object.assign(stub, real);
+        stub.exports = Object.assign({}, real.exports, { XCHAIN_BRIDGE_ACTIVATION: map });
+        require.cache[GATE] = stub;
+        delete require.cache[CRD];
+        body(require('../../src/consensus_rules_digest.js'));
+    } finally {
+        require.cache[GATE] = real;
+        require.cache[CRD]  = realCrd;
+    }
+}
+
 // XCHAIN_BRIDGE_ACTIVATION is the first COIN-KEYED gate in SHARED_GATES: it keys
 // '<COIN>:<network>' with the bare network key as fallback, because one testnet height
 // cannot serve TBTC, TLTC and TDOGE. That gives activeGatesAt two answers to get right,
@@ -308,29 +335,6 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
 // forever, because an arming train sizes one height per chain and leaves the bare fallback
 // on the sentinel.
 describe('consensus_rules_digest: the coin-keyed bridge gate', function () {
-
-    const KEY  = 'xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION';
-    const GATE = require.resolve('../../src/xchain_bridge_activation.js');
-    const CRD  = require.resolve('../../src/consensus_rules_digest.js');
-
-    // Re-require the digest over a stubbed activation map. The digest memoizes gate values,
-    // so its module cache entry must be dropped for the stub to be seen.
-    function withMap(map, body) {
-        const real    = require.cache[GATE];
-        const realCrd = require.cache[CRD];
-        try {
-            const stub = Object.create(Object.getPrototypeOf(real));
-            Object.assign(stub, real);
-            stub.exports = Object.assign({}, real.exports, { XCHAIN_BRIDGE_ACTIVATION: map });
-            require.cache[GATE] = stub;
-            delete require.cache[CRD];
-            body(require('../../src/consensus_rules_digest.js'));
-        } finally {
-            require.cache[GATE] = real;
-            require.cache[CRD]  = realCrd;
-        }
-    }
-
     it('is a shared gate the ROLLCALL GATES field carries, and resolves to a value', function () {
         assert.ok(crd.knownGateKeys().includes(KEY), 'the bridge flag day must be on the wire');
         assert.notStrictEqual(crd.computeConsensusRulesDigest().gates[KEY], crd.ABSENT);
@@ -370,7 +374,9 @@ describe('consensus_rules_digest: the coin-keyed bridge gate', function () {
                 'an unlisted chain inherits the fallback and stays inert');
         });
     });
+});
 
+describe('consensus_rules_digest: the coin-keyed bridge gate', function () {
     // The DANGEROUS direction, and the one shape the cases above cannot reach: a coin whose
     // own slot is still the far-future SENTINEL while a sibling chain on the same network has
     // armed. The arming train sizes one dated instant per chain, so this is the live state of

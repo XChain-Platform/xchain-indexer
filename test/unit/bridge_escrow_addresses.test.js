@@ -42,7 +42,6 @@ const NETWORKS = ['mainnet', 'testnet', 'regtest'];
 const OTHER_ROLES = ['BURN', 'GAS', 'DONATE1', 'DONATE2', 'FEE_DESTINATION', 'REWARD', 'EXPLORER'];
 
 describe('XBRIDGE escrow constants (consensus)', function () {
-
     const util = new Utility();
 
     it('carries BRIDGE_<COIN> for every other coin, and none for itself, on every network', function () {
@@ -82,7 +81,9 @@ describe('XBRIDGE escrow constants (consensus)', function () {
             }
         }
     });
+});
 
+describe('XBRIDGE escrow constants (consensus)', function () {
     it('no escrow literal collides with another protocol role on the same chain', function () {
         for (const coin of COINS) {
             const cfg = require('../../src/coins/to_indexer_config.js');
@@ -138,7 +139,9 @@ describe('XBRIDGE escrow constants (consensus)', function () {
             }
         }
     });
+});
 
+describe('XBRIDGE escrow constants (consensus)', function () {
     it('prices XBRIDGE_BASE identically on every chain', function () {
         for (const coin of COINS) {
             for (const network of NETWORKS) {

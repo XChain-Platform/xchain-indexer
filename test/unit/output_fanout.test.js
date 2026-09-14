@@ -43,7 +43,6 @@ function row(tx_hash, data, vout, destination){
 }
 
 describe('output_fanout.collapseOutputFanout() @regression @tier1', function(){
-
     it('collapses a data-bearing SEND that paid a dispenser + fee output to ONE row (fix active)', function(){
         // SEND tx with two native outputs (dispenser payment + fee destination) => 2 rows.
         const input = [ row('sendtx', 'SEND|0|TOKEN|100', 0), row('sendtx', 'SEND|0|TOKEN|100', 1) ];
@@ -93,7 +92,9 @@ describe('output_fanout.collapseOutputFanout() @regression @tier1', function(){
         const out = collapseOutputFanout(input, true);
         assert.deepStrictEqual(out.map(r => r.tx_hash), ['a', 'b', 'c', 'c']);
     });
+});
 
+describe('output_fanout.collapseOutputFanout() @regression @tier1', function(){
     it('aborts (throws) on a multi-row data-bearing tx BELOW activation instead of double-executing', function(){
         const input = [ row('sendtx', 'SEND|0|TOKEN|100', 0), row('sendtx', 'SEND|0|TOKEN|100', 1) ];
         let logged = null;

@@ -41,7 +41,6 @@ function makeDb() {
 // ---------------------------------------------------------------------------
 
 describe('Database.updateAddressBalance @unit @regression', function () {
-
     it('issues UPSERT (not SELECT + INSERT/UPDATE) for a non-zero balance', async function () {
         const db = makeDb();
         db.getAddressBalances.resolves({ 10: '100.000000000000000000' });
@@ -97,7 +96,9 @@ describe('Database.updateAddressBalance @unit @regression', function () {
         assert.strictEqual(upsertCall[1][2], '0.00000003',
             'amount must be stored in normal decimal notation, not exponential');
     });
+});
 
+describe('Database.updateAddressBalance @unit @regression', function () {
     it('issues DELETE (not UPSERT) for a zero balance', async function () {
         const db = makeDb();
         db.getAddressBalances.resolves({ 10: 0 });
@@ -150,7 +151,9 @@ describe('Database.updateAddressBalance @unit @regression', function () {
         const deletedTickIds = deleteCalls.map(a => String(a[1][1]));
         assert.ok(deletedTickIds.includes('11'), 'tick 11 deleted via rollback orphan path');
     });
+});
 
+describe('Database.updateAddressBalance @unit @regression', function () {
     it('rollback: does NOT delete old_balances entries that still have a non-zero balance', async function () {
         const db = makeDb();
         db.getAddressBalances.resolves({ 10: '100.000000000000000000' });
@@ -168,7 +171,6 @@ describe('Database.updateAddressBalance @unit @regression', function () {
 // ---------------------------------------------------------------------------
 
 describe('Database.updateBalances (parallelized) @unit @regression', function () {
-
     it('calls updateAddressBalance for each address in the array', async function () {
         const db = makeDb();
         db.updateAddressBalance = sinon.stub().resolves();
@@ -207,7 +209,9 @@ describe('Database.updateBalances (parallelized) @unit @regression', function ()
         assert.strictEqual(db.updateAddressBalance.callCount, 1);
         assert.ok(db.updateAddressBalance.calledWith('addr1', false));
     });
+});
 
+describe('Database.updateBalances (parallelized) @unit @regression', function () {
     it('runs address updates sequentially (one fully completes before the next starts)', async function () {
         // updateBalances intentionally serializes per-address updates: the shared
         // MariaDB connection cannot serve concurrent queries, and a Promise.all

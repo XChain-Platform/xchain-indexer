@@ -169,7 +169,9 @@ describe('ProtocolChanges @regression @tier3', function () {
             // 0.2.0 > 0.1.0 → disabled (minor version too high)
             assert.strictEqual(enabled, false);
         });
+    });
 
+    describe('isEnabled()', function () {
         it('should enable when current version exceeds required', async function () {
             // Recreate with an explicit consensus version (the pin means the
             // environment no longer supplies one).
@@ -441,6 +443,12 @@ describe('ProtocolChanges @regression @tier3', function () {
         });
     });
 
+    function pcFor(network, version = '2.0.0') {
+        // Shipping consensus version passed explicitly (compiled pin).
+        indexer.config.NETWORK = network; // constructor reads network from the validated config
+        return new ProtocolChanges(indexer, version);
+    }
+
     // ─── CONTROLLER_GUARD: the consensus anti-fork gate ─────────────────────
     // The programmable-policy controller guard. Below activation the bound controller's
     // `guard` method is NEVER run; every SEND/ORDER/SWAP/DISPENSER/DESTROY on a controlled
@@ -456,12 +464,6 @@ describe('ProtocolChanges @regression @tier3', function () {
     // that gate depends on. Keep in lockstep with protocol_changes.js.
     describe('CONTROLLER_GUARD activation gate (consensus)', function () {
         const MAINNET_FLAG_DAY = 1786060800; // 2026-08-07 00:00:00 UTC, CONFIRMED 2026-07-07 (see protocol_changes.js)
-
-        function pcFor(network, version = '2.0.0') {
-            // Shipping consensus version passed explicitly (compiled pin).
-            indexer.config.NETWORK = network; // constructor reads network from the validated config
-            return new ProtocolChanges(indexer, version);
-        }
 
         it('is registered as a v2.0.0 change keyed on block_time, not block_index', function () {
             const change = pcFor('regtest').changes['CONTROLLER_GUARD'];
@@ -509,7 +511,9 @@ describe('ProtocolChanges @regression @tier3', function () {
             indexer.decoderDb.getBlockTime.resolves(MAINNET_FLAG_DAY + 86400);
             assert.strictEqual(await pc2.isEnabled('CONTROLLER_GUARD', 100), true);
         });
+    });
 
+    describe('CONTROLLER_GUARD activation gate (consensus)', function () {
         it('a pre-guard (v1.x) node treats it as not-yet-active; guard stays off', async function () {
             const pc1 = pcFor('regtest', '0.1.9');
             indexer.decoderDb.getBlockTime.resolves(1);

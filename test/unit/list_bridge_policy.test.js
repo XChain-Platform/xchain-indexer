@@ -102,7 +102,6 @@ async function runEdit(indexer, { source = OWNER, items = [BTC_MAINNET], isGenes
 }
 
 describe('LIST bridge policy rules @regression @consensus', function(){
-
     afterEach(function(){ sinon.restore(); });
 
     describe('any-coin items (TOKEN_POLICY_INHERITANCE_ACTIVATION)', function(){
@@ -141,6 +140,10 @@ describe('LIST bridge policy rules @regression @consensus', function(){
             assert.strictEqual(indexer.indexerDb.createListItem.callCount, 0);
         });
     });
+});
+
+describe('LIST bridge policy rules @regression @consensus', function(){
+    afterEach(function(){ sinon.restore(); });
 
     describe('bridge-owned edit refusal (unconditional)', function(){
 
@@ -177,6 +180,10 @@ describe('LIST bridge policy rules @regression @consensus', function(){
                 'the source read must be of the resolved root create, not the wire index');
         });
     });
+});
+
+describe('LIST bridge policy rules @regression @consensus', function(){
+    afterEach(function(){ sinon.restore(); });
 
     describe('owner check (LIST_OWNER_ACTIVATION)', function(){
 

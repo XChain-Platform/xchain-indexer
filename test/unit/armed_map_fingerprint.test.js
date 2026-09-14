@@ -21,7 +21,6 @@ const path   = require('path');
 const { computeArmedMapFingerprint } = require('../../src/armedMapFingerprint');
 
 describe('armedMapFingerprint', function () {
-
     it('covers every *_activation.js gate file plus the fixed carriers', function () {
         const { files } = computeArmedMapFingerprint();
         const srcDir = path.resolve(__dirname, '..', '..', 'src');
@@ -75,7 +74,9 @@ describe('armedMapFingerprint', function () {
         const h = crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
         assert.strictEqual(files['stateHash.js'], h);
     });
+});
 
+describe('armedMapFingerprint', function () {
     it('fingerprint is a stable 64-hex string (memoized per process)', function () {
         const a = computeArmedMapFingerprint();
         const b = computeArmedMapFingerprint();

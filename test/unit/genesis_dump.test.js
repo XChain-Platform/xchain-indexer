@@ -85,7 +85,6 @@ const GOOD = [
 ];
 
 describe('GenesisDump.read @regression', function () {
-
     afterEach(function () {
         // best-effort temp cleanup
         for (const f of fs.readdirSync(os.tmpdir()))
@@ -134,6 +133,15 @@ describe('GenesisDump.read @regression', function () {
         const { file } = buildDump(bad);
         const gd = new GenesisDump(mockDb(HASHES), util, { GENESIS_BLOCK: 100, GENESIS_DUMP_HASH: null });
         await assert.rejects(() => gd.read(file), /missing columns/);
+    });
+});
+
+describe('GenesisDump.read @regression', function () {
+    afterEach(function () {
+        // best-effort temp cleanup
+        for (const f of fs.readdirSync(os.tmpdir()))
+            if (f.startsWith(`xchain-gd-unit-${process.pid}-`))
+                try { fs.unlinkSync(path.join(os.tmpdir(), f)); } catch (_) {}
     });
 
     it('rejects a row that precedes any table header (no unbounded buffering)', async function () {

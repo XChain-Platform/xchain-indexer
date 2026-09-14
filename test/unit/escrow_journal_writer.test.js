@@ -259,7 +259,6 @@ describe('escrow journal writer: attribution exhaustiveness @regression', functi
 });
 
 describe('escrow journal writer: attribution vectors @regression', function(){
-
     it('self-attributing rows resolve to the row address with no lookups', async function(){
         for(const name of ['ORDER', 'COINPAY', 'COINPAY_EXPIRE', 'BET', 'SWEEP']){
             const locker = await W.attributeRow(makeDb({}), { action_index: 1, action_name: name, address: SO, tick: T1, tick_id: 1, amount: '5' });
@@ -306,7 +305,9 @@ describe('escrow journal writer: attribution vectors @regression', function(){
                 { action_index: 800, action_name: 'EXECUTE', address: STAKER, tick: T1, tick_id: 1, amount: '-40' }),
             /is not a contract-slash release/);
     });
+});
 
+describe('escrow journal writer: attribution vectors @regression', function(){
     it('ORDER_MATCH is CROSSED: give-tick row -> get side locker, get-tick row -> give side locker', async function(){
         // createOrderMatch stores ticks from the STANDING ORDER's perspective and
         // give_action_index = the INCOMING MATCH. The release in the order's give
@@ -363,7 +364,9 @@ describe('escrow journal writer: attribution vectors @regression', function(){
             await W.attributeRow(db, { action_index: 502, action_name: 'DISPENSER_EDIT', address: REFILLER, tick: T1, tick_id: 1, amount: '9' }),
             SO, 'the locked position belongs to whoever gets it back');
     });
+});
 
+describe('escrow journal writer: attribution vectors @regression', function(){
     it('a dispenser lock and its release land on ONE key even when a third party refilled', async function(){
         // End to end: create (owner) + refill (GET_ADDRESS) + expire (owner)
         // nets to zero on the owner's key and never touches the refiller's.
@@ -450,7 +453,6 @@ describe('escrow journal writer: the COINPAY lifecycle, both directions @regress
 });
 
 describe('escrow journal writer: change-log semantics @regression', function(){
-
     it('a lock fully released in the SAME block nets to zero and writes nothing', async function(){
         const db = makeDb({
             escrows: [
@@ -502,7 +504,9 @@ describe('escrow journal writer: change-log semantics @regression', function(){
         await assert.rejects(() => W.writeEscrowJournal(db, 100), /no index row for address/);
         assert.strictEqual(db.inserted.length, 0, 'an unresolvable key must not reach the INSERT');
     });
+});
 
+describe('escrow journal writer: change-log semantics @regression', function(){
     it('a tick with no index row throws by name too', async function(){
         const db = makeDb({
             escrows:   [ esc(10, 'ORDER', SO, T1, 1, '5', 100) ],

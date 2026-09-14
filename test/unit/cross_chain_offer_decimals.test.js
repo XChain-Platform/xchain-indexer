@@ -59,7 +59,6 @@ function makeDb(tokens) {
 const offer = (give_tick) => ({ action_index: 1, give_tick, give_amount: '10' });
 
 describe('cross-chain book give_decimals stamping (#3145/#3146) @regression @tier1', function () {
-
     it('reports the token DECIMALS getTokenInfo resolves', async function () {
         const db = makeDb({ LTCT: 8, NFT: 0, ODD: 3 });
         const offers = [offer('LTCT'), offer('NFT'), offer('ODD')];
@@ -116,7 +115,9 @@ describe('cross-chain book give_decimals stamping (#3145/#3146) @regression @tie
         assert.strictEqual(db.tokenCalls.length, 2, 'one lookup per DISTINCT tick');
         assert.strictEqual(db.tickerCalls.length, 2);
     });
+});
 
+describe('cross-chain book give_decimals stamping (#3145/#3146) @regression @tier1', function () {
     it('resolves at the tip the response is pinned to', async function () {
         // Every other field in the response reflects `latest`; a grid read at a
         // different height would describe a different view of the same book.

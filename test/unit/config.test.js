@@ -716,6 +716,21 @@ describe('XChainIndexer hub config overlay', function () {
         });
     });
 
+    const KEY = 'XCHAIN_COINPAY_EXPIRATION_S';
+
+    function loadOn(network, value) {
+        process.env.INDEXER_COIN = 'BTC';
+        process.env.INDEXER_NETWORK = network;
+        if(value === undefined) delete process.env[KEY]; else process.env[KEY] = value;
+        delete require.cache[require.resolve('../../src/config.js')];
+        return require('../../src/config.js').getConfig();
+    }
+
+    // These cases are the only ones in this file that load config for a network
+    // OTHER than regtest, so they restore INDEXER_NETWORK as well as the key.
+    // Leaving 'mainnet' behind would silently re-point every later loader.
+    let savedNetwork;
+
     // COINPAY_EXPIRATION is a consensus input: it is added to a match's BLOCK_TIME
     // and stored as the obligation deadline, so a per-node value expires the same
     // escrow at a different block and forks the ledger. The override is therefore
@@ -723,17 +738,7 @@ describe('XChainIndexer hub config overlay', function () {
     // strict on regtest because a NaN deadline compares false against every block
     // time and would leave every obligation pending forever.
     describe('resolveCoinpayExpiration (COINPAY_EXPIRATION)', function () {
-
-        const KEY = 'XCHAIN_COINPAY_EXPIRATION_S';
         const FROZEN = 7200;
-
-        function loadOn(network, value) {
-            process.env.INDEXER_COIN = 'BTC';
-            process.env.INDEXER_NETWORK = network;
-            if(value === undefined) delete process.env[KEY]; else process.env[KEY] = value;
-            delete require.cache[require.resolve('../../src/config.js')];
-            return require('../../src/config.js').getConfig();
-        }
 
         // Capture the one-sided warning without letting it clutter the run.
         function loadCapturingWarning(network, value) {
@@ -743,11 +748,6 @@ describe('XChainIndexer hub config overlay', function () {
             try { return { config: loadOn(network, value), warned }; }
             finally { console.log = real; }
         }
-
-        // These cases are the only ones in this file that load config for a network
-        // OTHER than regtest, so they restore INDEXER_NETWORK as well as the key.
-        // Leaving 'mainnet' behind would silently re-point every later loader.
-        let savedNetwork;
         beforeEach(function () { savedNetwork = process.env.INDEXER_NETWORK; });
         afterEach(function () {
             delete process.env[KEY];
@@ -780,6 +780,15 @@ describe('XChainIndexer hub config overlay', function () {
             const { config, warned } = loadCapturingWarning('mainnet', String(FROZEN));
             assert.strictEqual(config.COINPAY_EXPIRATION, FROZEN);
             assert.strictEqual(warned, false, 'a matching override is not a misconfiguration');
+        });
+    });
+
+    describe('resolveCoinpayExpiration (COINPAY_EXPIRATION)', function () {
+        beforeEach(function () { savedNetwork = process.env.INDEXER_NETWORK; });
+        afterEach(function () {
+            delete process.env[KEY];
+            if(savedNetwork === undefined) delete process.env.INDEXER_NETWORK;
+            else process.env.INDEXER_NETWORK = savedNetwork;
         });
 
         it('THROWS on regtest for a value that is not a positive integer', function () {

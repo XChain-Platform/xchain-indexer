@@ -53,8 +53,18 @@ function emittableActionsFromBuildParams(){
     return [...new Set(cases)];
 }
 
-describe('Emission amount truncation (item 5346) @regression @tier1', function(){
+const util = new Utility();
 
+// Stub indexerDb: every tick resolves to a fixed id; decimals come from a table.
+function makeExecute(decimalsByTick){
+    const indexerDb = {
+        getTickerId: async (tick) => (tick in decimalsByTick ? 1 : null),
+        getTokenDecimalPrecision: async (/*tickId*/) => decimalsByTick.__d,
+    };
+    return new Execute({ config:{}, decoderDb:{}, indexerDb, util, mapper:{} });
+}
+
+describe('Emission amount truncation (item 5346) @regression @tier1', function(){
     describe('coverage: every amount-bearing emittable action is mapped', function(){
         const MAP = Execute.EMISSION_AMOUNT_FIELDS;
         const emittable = emittableActionsFromBuildParams();
@@ -83,19 +93,10 @@ describe('Emission amount truncation (item 5346) @regression @tier1', function()
                     `EMISSION_AMOUNT_FIELDS has ${action} but buildActionParams cannot emit it`);
         });
     });
+});
 
+describe('Emission amount truncation (item 5346) @regression @tier1', function(){
     describe('behavior: amounts normalized to tick decimals (== ledger bcadd)', function(){
-        const util = new Utility();
-
-        // Stub indexerDb: every tick resolves to a fixed id; decimals come from a table.
-        function makeExecute(decimalsByTick){
-            const indexerDb = {
-                getTickerId: async (tick) => (tick in decimalsByTick ? 1 : null),
-                getTokenDecimalPrecision: async (/*tickId*/) => decimalsByTick.__d,
-            };
-            return new Execute({ config:{}, decoderDb:{}, indexerDb, util, mapper:{} });
-        }
-
         it('SEND quantity is rounded to the tick decimals, matching bcadd', async function(){
             const ex = makeExecute({ TKN:true, __d:8 });
             const params = { tick:'TKN', destination:'addr', quantity:'3.333333333333333' };
@@ -150,7 +151,11 @@ describe('Emission amount truncation (item 5346) @regression @tier1', function()
             assert.strictEqual(params.giveAmount, String(util.bcadd('1.123456789', 0, 8)));
             assert.strictEqual(params.getAmount, '9.999999999', 'foreign-tick leg must be left as-is');
         });
+    });
+});
 
+describe('Emission amount truncation (item 5346) @regression @tier1', function(){
+    describe('behavior: amounts normalized to tick decimals (== ledger bcadd)', function(){
         it('skips null/empty amount fields', async function(){
             const ex = makeExecute({ TKN:true, __d:8 });
             const params = { tick:'TKN', destination:'addr', quantity:'' };

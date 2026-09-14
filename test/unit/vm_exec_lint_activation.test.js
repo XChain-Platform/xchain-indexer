@@ -36,7 +36,6 @@ const { isVmExecLintActive, VM_EXEC_LINT_ACTIVATION } =
     require('../../src/vm_exec_lint_activation.js');
 
 describe('VM execute-time lint activation predicate @regression @tier1', function () {
-
     it('mainnet is ARMED AT GENESIS for every coin: active at every height', function () {
         for (const coin of ['BTC', 'LTC', 'DOGE']) {
             assert.strictEqual(isVmExecLintActive(0, 'mainnet', coin), true);
@@ -90,7 +89,9 @@ describe('VM execute-time lint activation predicate @regression @tier1', functio
         assert.strictEqual(isVmExecLintActive(0, 'mainnet', 'LTC'), true);
         assert.strictEqual(isVmExecLintActive(0, 'mainnet', 'DOGE'), true);
     });
+});
 
+describe('VM execute-time lint activation predicate @regression @tier1', function () {
     it('the map EQUALS the VM EXEC_LINT_ACTIVATION (the twinned pair cannot arm one-sided)', function () {
         // xchain-vm resolves this gate itself at execute time (it derives the coin from
         // the C:<COIN>:<idx> address it is already passed), so this module is the

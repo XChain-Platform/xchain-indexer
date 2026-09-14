@@ -80,7 +80,6 @@ function row(overrides = {}) {
 }
 
 describe('getRelayedAttestationRequests @regression @tier1', function () {
-
     afterEach(function () { sinon.restore(); });
 
     it('binds exactly as many arguments as the statement has placeholders', async function () {
@@ -134,6 +133,10 @@ describe('getRelayedAttestationRequests @regression @tier1', function () {
         const whereClause = sql.slice(sql.indexOf('WHERE'));
         assert.ok(!/resp\./.test(whereClause), 'no response predicate may sit in the WHERE clause');
     });
+});
+
+describe('getRelayedAttestationRequests @regression @tier1', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('selects only requests whose origin chain is some OTHER chain', async function () {
         const db = makeDb();

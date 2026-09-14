@@ -210,7 +210,6 @@ function resolveVmConsensus(){
 }
 
 describe('consensus parameters are frozen (track 8 guard) @regression', function(){
-
     it('GAS_SCHEDULE + GAS_PRICE equal the golden on every chain (identical across BTC/LTC/DOGE)', function(){
         for(const coin of ['BTC', 'LTC', 'DOGE']){
             const cfg = require('../../src/coins/to_indexer_config.js').toIndexerConfig(coin, 'regtest');
@@ -245,7 +244,9 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
             assert.strictEqual(cfg.STAKING.COOLDOWN_BLOCKS, g.COOLDOWN_BLOCKS, coin + ' STAKING.COOLDOWN_BLOCKS drifted');
         }
     });
+});
 
+describe('consensus parameters are frozen (track 8 guard) @regression', function(){
     it('hub config overlay does NOT live-poll consensus params (soft-fork guard)', function(){
         // The overlay (mergeHubParams) must ignore hub-pushed values for any param that
         // feeds block-hashed state. If a future edit re-adds one of NON_POLLED_CONSENSUS_PARAMS
@@ -299,7 +300,9 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
         assert.strictEqual(installedMathjs, GOLDEN_MATHJS_VERSION,
             'installed mathjs drifted from the frozen pin (overrides["mathjs"] must equal ' + GOLDEN_MATHJS_VERSION + ')');
     });
+});
 
+describe('consensus parameters are frozen (track 8 guard) @regression', function(){
     it('vmFailureStatus maps every VM error into the frozen closed token set', function(){
         const util = new Utility();
         const cases = [
@@ -320,7 +323,9 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
             assert.ok(FROZEN_STATUS_TOKENS.includes(got), 'token outside frozen set: ' + got);
         }
     });
+});
 
+describe('consensus parameters are frozen (track 8 guard) @regression', function(){
     it('the bundled VM agrees on the consensus version + status vocabulary (cross-repo coupling)', function(){
         const { vm, full, pkgErr, refused } = resolveVmConsensus();
         // A package load failure caused by the VM's own frozen-export guard
@@ -370,7 +375,9 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
                 'VM SafeMath member whitelist drifted from the indexer expectation (update goldens in both repos in lockstep)');
         }
     });
+});
 
+describe('consensus parameters are frozen (track 8 guard) @regression', function(){
     it('the VM async/binary flag-day timestamps match the indexer protocol_changes (cross-repo byte-gate)', function(){
         const { vm, full, pkgErr, refused } = resolveVmConsensus();
         // Under the required-siblings lane a stale/absent vendored VM (the exact
@@ -427,7 +434,9 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
         assert.strictEqual(pc.NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME, pc.VM_BANNED_ASYNC_MAINNET_TIME,
             'NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME drifted from the coordinated 2.0.0 flag-day timestamp');
     });
+});
 
+describe('consensus parameters are frozen (track 8 guard) @regression', function(){
     it('the DISPENSE_CANCELLING_MATCH_ACTIVATION flag-day stays in lockstep with the 2.0.0 flag-day (VM_BANNED_ASYNC_MAINNET_TIME)', function(){
         // db.findMatchingDispensers flips its cancelling-dispenser correlation at this
         // mainnet time. The module documents it as part of the coordinated 2.0.0 cohort (same

@@ -104,7 +104,6 @@ async function runPass(gateOn, backlog){
 }
 
 describe('CROSS_SETTLE per-block cap flag day @regression @tier1', function(){
-
     afterEach(() => sinon.restore());
 
     describe('registration', function(){
@@ -152,6 +151,10 @@ describe('CROSS_SETTLE per-block cap flag day @regression @tier1', function(){
             }
         });
     });
+});
+
+describe('CROSS_SETTLE per-block cap flag day @regression @tier1', function(){
+    afterEach(() => sinon.restore());
 
     describe('the pass honours the gate', function(){
 

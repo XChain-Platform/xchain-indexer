@@ -108,7 +108,6 @@ function makeCtx(db, processTransaction){
 }
 
 describe('the fee-quote dry run drops the SMT name memos it poisoned @regression', function(){
-
     afterEach(() => sinon.restore());
 
     it('a quoted ISSUE leaves neither memo behind', async function(){
@@ -150,6 +149,10 @@ describe('the fee-quote dry run drops the SMT name memos it poisoned @regression
         assert.match(String(r.error), /injected handler fault/);
         assert.strictEqual(db._smtTickNameCache, null);
     });
+});
+
+describe('the fee-quote dry run drops the SMT name memos it poisoned @regression', function(){
+    afterEach(() => sinon.restore());
 
     it('end to end: quote a tick, abandon it, then MINT another onto its id', async function(){
         // The venue sequence, through the real dry-run engine and the real ledger
@@ -190,6 +193,10 @@ describe('the fee-quote dry run drops the SMT name memos it poisoned @regression
             ' out of the memo here is what made the touched-set guard refuse LTC block 5204 ' +
             'and every retry of it');
     });
+});
+
+describe('the fee-quote dry run drops the SMT name memos it poisoned @regression', function(){
+    afterEach(() => sinon.restore());
 
     it('the dry run leaves the memos usable, not permanently disabled', async function(){
         // Clearing has to be an invalidation, not a kill switch: the memo exists

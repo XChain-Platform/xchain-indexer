@@ -23,7 +23,6 @@ function realObservability(){
 }
 
 describe('indexer poll-freshness heartbeat metric (item 9bee49e8)', function () {
-
     // The observability registry is process-wide (one process is one service),
     // so a case asserting a series is ABSENT has to start from a clean registry
     // rather than inheriting the previous case's series.
@@ -77,6 +76,13 @@ describe('indexer poll-freshness heartbeat metric (item 9bee49e8)', function () 
         assert.match(observability.registry.render(),
             /xchain_indexer_last_poll_timestamp_seconds 1754870460\b/);
     });
+});
+
+describe('indexer poll-freshness heartbeat metric (item 9bee49e8)', function () {
+    // The observability registry is process-wide (one process is one service),
+    // so a case asserting a series is ABSENT has to start from a clean registry
+    // rather than inheriting the previous case's series.
+    afterEach(function () { require('../../src/observability')._resetObservability(); });
 
     it('advances the heartbeat while the commit stamp stands still, which is the whole point', function () {
         // A caught-up indexer on a quiet chain: nothing to commit, loop iterating. Read

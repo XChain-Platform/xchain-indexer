@@ -78,10 +78,9 @@ const XC104_TS_GATES = [
     'VM_LINT_HARDENING',
 ];
 
+const pcSource = fs.readFileSync(path.join(SRC, 'protocol_changes.js'), 'utf8');
+
 describe('flag-day placeholder guard @regression @tier1', function () {
-
-    const pcSource = fs.readFileSync(path.join(SRC, 'protocol_changes.js'), 'utf8');
-
     it('the timestamp gates are armed on the ratified 2026-08-07 anchor', function () {
         for (const gate of XC104_TS_GATES) {
             const m = pcSource.match(new RegExp(
@@ -134,7 +133,9 @@ describe('flag-day placeholder guard @regression @tier1', function () {
         assert.strictEqual(mod.isRetractionSigningActive(RATIFIED_BTC_HEIGHT - 1, 'mainnet'), false);
         assert.strictEqual(mod.isRetractionSigningActive(RATIFIED_BTC_HEIGHT, 'mainnet'), true);
     });
+});
 
+describe('flag-day placeholder guard @regression @tier1', function () {
     // the whole BTC-height half moves together or not at all.
     //
     // The two named tests above pin ARCHIVE_REWARD and RETRACTION_SIGNING because
@@ -187,7 +188,9 @@ describe('flag-day placeholder guard @regression @tier1', function () {
             'the ratified height cohort (' + RATIFIED_BTC_HEIGHT + ') is at or below the already-crossed ' +
             CROSSED + ' boundary, which arms it retroactively');
     });
+});
 
+describe('flag-day placeholder guard @regression @tier1', function () {
     it('SLASH_BURNS_PENDING_STAKE mainnet_block equals EQUIV_HEADER_ACTIVATION.mainnet (no duplicated-constant drift, #3134)', function () {
         // The gate is deliberately anchored to the EQUIV flag-day HEIGHT, but the literal
         // 961000 is duplicated in protocol_changes.js rather than derived from the shared map.
@@ -212,7 +215,9 @@ describe('flag-day placeholder guard @regression @tier1', function () {
         assert.strictEqual(parseInt(m[1]), equivMainnet,
             'SLASH_ORACLE_ROUND_DISCRIMINATED mainnet_block must equal EQUIV_HEADER_ACTIVATION.mainnet');
     });
+});
 
+describe('flag-day placeholder guard @regression @tier1', function () {
     // Cross-service sweep: resolved by monorepo-relative path, so this only runs in the
     // monorepo/aggregator checkout; standalone single-repo CI skips (unless a required-
     // sibling job sets XCHAIN_REQUIRE_SIBLINGS=1, where a missing sibling hard-fails).
@@ -265,7 +270,11 @@ describe('flag-day placeholder guard @regression @tier1', function () {
             assert.deepStrictEqual(local, canon.RETRACTION_SIGNING_ACTIVATION,
                 'the vendored retraction_signing_activation.js map drifted from the canonical constants.js map');
         });
+    });
+});
 
+describe('flag-day placeholder guard @regression @tier1', function () {
+    describe('sibling copies carry no placeholder regression', function () {
         // same reasoning: the PRICE v0 signature-tally gate is armed to the
         // ratified 963000 anchor, so it belongs to the height cohort this file guards.
         // A substring check on the docs file is vacuous here (several maps carry that
@@ -323,7 +332,9 @@ describe('flag-day placeholder guard @regression @tier1', function () {
             assert.strictEqual(parseInt(m[3]), 0, 'GOV_SNAPSHOT_ACTIVATION.regtest must be genesis-active');
         });
     });
+});
 
+describe('flag-day placeholder guard @regression @tier1', function () {
     // retraction_signing_activation.js is a fork-relevant flag-day twin that
     // exists in three byte-identical copies (hub, indexer, explorer). It decides
     // whether a mirror REFUSES an unsigned quorum-class retraction, so a one-sided edit

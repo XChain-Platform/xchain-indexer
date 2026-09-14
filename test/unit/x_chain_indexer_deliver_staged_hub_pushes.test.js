@@ -47,7 +47,6 @@ function makeIndexer(staged, hubClientOpts){
 }
 
 describe('XChainIndexer._deliverStagedHubPushes()', function(){
-
     afterEach(function(){
         sinon.restore();
     });
@@ -101,6 +100,12 @@ describe('XChainIndexer._deliverStagedHubPushes()', function(){
         assert.strictEqual(indexer.hubClient.pushPriceBatch.calledOnce, true);
         assert.strictEqual(indexer.hubClient.pushPriceBatch.firstCall.args[0], payload);
         assert.strictEqual(indexer.indexerDb.markHubPushDelivered.calledWith(3), true);
+    });
+});
+
+describe('XChainIndexer._deliverStagedHubPushes()', function(){
+    afterEach(function(){
+        sinon.restore();
     });
 
     it('leaves the durable row alone (never marks delivered) when pushPriceBatch live delivery fails', async function(){

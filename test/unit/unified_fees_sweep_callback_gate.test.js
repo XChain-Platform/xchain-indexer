@@ -67,9 +67,7 @@ function pcFor(network){
 }
 
 describe('SWEEP/CALLBACK unified-fee flag day @regression @tier1', function(){
-
     describe('registration', function(){
-
         it('is a time-keyed 0.2.0 change, genesis-active on regtest', function(){
             const change = pcFor('regtest').pc.changes[GATE];
             assert.ok(change, GATE + ' must be registered');
@@ -118,7 +116,11 @@ describe('SWEEP/CALLBACK unified-fee flag day @regression @tier1', function(){
             assert.ok(instant > TESTNET_LAUNCH,
                 'the testnet instant must be after the public launch, never inside committed history');
         });
+    });
+});
 
+describe('SWEEP/CALLBACK unified-fee flag day @regression @tier1', function(){
+    describe('registration', function(){
         it('the testnet instant is never backdated', function(){
             // An activation already in the past is not a flag day at all. This is a
             // wall-clock assertion on purpose: it starts failing the moment the pinned
@@ -157,7 +159,9 @@ describe('SWEEP/CALLBACK unified-fee flag day @regression @tier1', function(){
             }
         });
     });
+});
 
+describe('SWEEP/CALLBACK unified-fee flag day @regression @tier1', function(){
     describe('relationship to the fee gates it sits beside', function(){
 
         // LEGACY_FEE_NUMERIC_DBHITS only has meaning while the legacy branch is still the

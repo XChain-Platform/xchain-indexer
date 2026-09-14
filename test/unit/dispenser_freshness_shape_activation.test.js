@@ -28,7 +28,6 @@ const { isDispenserFreshnessShapeStrict, DISPENSER_FRESHNESS_SHAPE_ACTIVATION } 
     require('../../src/dispenser_freshness_shape_activation.js');
 
 describe('dispenser freshness oracle-shape activation predicate @regression @tier1', function () {
-
     // The whole point of shipping unarmed: no mainnet DISPENSER already in hashed
     // history changes verdict, at any height, on any coin of the train.
     it('mainnet is UNARMED for every coin at every height', function () {
@@ -86,7 +85,9 @@ describe('dispenser freshness oracle-shape activation predicate @regression @tie
             else delete map['BTC:regtest'];
         }
     });
+});
 
+describe('dispenser freshness oracle-shape activation predicate @regression @tier1', function () {
     it('an armed threshold is a boundary, inert one block below it', function () {
         const map  = DISPENSER_FRESHNESS_SHAPE_ACTIVATION;
         const orig = Object.getOwnPropertyDescriptor(map, 'BTC:mainnet');

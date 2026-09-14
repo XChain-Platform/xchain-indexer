@@ -85,8 +85,48 @@ function tokenInfoWithUnsetLocks(overrides = {}) {
 }
 
 
-describe('LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
+const util = new Utility();
 
+const SOURCE = createBaseData().SOURCE;
+
+// The exact wire the wallet's Lock screen composed for action 1157:
+// ISSUE|3|S20ADM|||1  ->  VERSION|TICK|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION
+const REPRO_PARAMS = ['3', 'S20ADM', '', '', '1'];
+
+function makeHandler(gateActive) {
+    const indexer = createMockIndexer();
+    indexer.indexerDb.getTokenInfo.resolves(
+        tokenInfoWithUnsetLocks({ TICK: 'S20ADM', OWNER: SOURCE, SUPPLY: '0', MAX_SUPPLY: '1000' }));
+    indexer.indexerDb.isActionAllowed.resolves(true);
+    indexer.indexerDb.isDistributed.resolves(false);
+    indexer.indexerDb.isOwnershipEscrowed.resolves(false);
+    indexer.indexerDb.getAddressBalances.resolves({});
+    indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+    indexer.indexerDb.getTokenSupply.resolves('0');
+
+    const actionsCtx = {
+        config:    indexer.config,
+        util:      indexer.util,
+        mapper:    indexer.mapper,
+        decoderDb: indexer.decoderDb,
+        indexerDb: indexer.indexerDb,
+        protocolChanges: {
+            isDefined: sinon.stub().returns(true),
+            // ISSUANCE_FEE is block-gated (mainnet 862633); mirror that so the
+            // sub-activation test block skips the fee. LOCK_NULL_PRIOR_UNSET is the
+            // gate under test; everything else is on.
+            isEnabled: sinon.stub().callsFake(async (name, block) => {
+                if (name === 'ISSUANCE_FEE') return Number(block) >= 862633;
+                if (name === 'LOCK_NULL_PRIOR_UNSET') return gateActive;
+                return true;
+            }),
+        },
+        processAction: sinon.stub().resolves(),
+    };
+    return { handler: new Issue(actionsCtx), indexer };
+}
+
+describe('LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
     /*****************************************************************
      * 1. Root cause: NULL lock columns replay to an ABSENT key
      ****************************************************************/
@@ -144,15 +184,14 @@ describe('LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
             assert.strictEqual(info.LOCK_DESCRIPTION, 0);
         });
     });
+});
 
+describe('LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
     /*****************************************************************
      * 2. isValidLock semantics on both sides of the gate
      ****************************************************************/
 
     describe('isValidLock()', function () {
-
-        const util = new Utility();
-
         // Both shapes an "unset" prior can take: `undefined` (getTokenInfo's replay skip,
         // the shape that actually reaches the consensus path) and an explicit `null` (a
         // caller reading the raw column). Neither may be read as "locked".
@@ -198,7 +237,11 @@ describe('LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
             // consensus rule.
             assert.strictEqual(util.isValidLock({ LOCK_MINT: undefined }, { LOCK_MINT: '1' }, 'LOCK_MINT'), false);
         });
+    });
+});
 
+describe('LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
+    describe('isValidLock()', function () {
         it('the gate does not disturb the priors that already worked', function () {
             for (const active of [false, true]) {
                 assert.strictEqual(util.isValidLock(null, { LOCK_MINT: '1' }, 'LOCK_MINT', active), true,
@@ -218,46 +261,6 @@ describe('LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
      ****************************************************************/
 
     describe('ISSUE format 3 against a token issued without create-time locks', function () {
-
-        const SOURCE = createBaseData().SOURCE;
-
-        // The exact wire the wallet's Lock screen composed for action 1157:
-        // ISSUE|3|S20ADM|||1  ->  VERSION|TICK|LOCK_MAX_SUPPLY|LOCK_MAX_MINT|LOCK_DESCRIPTION
-        const REPRO_PARAMS = ['3', 'S20ADM', '', '', '1'];
-
-        function makeHandler(gateActive) {
-            const indexer = createMockIndexer();
-            indexer.indexerDb.getTokenInfo.resolves(
-                tokenInfoWithUnsetLocks({ TICK: 'S20ADM', OWNER: SOURCE, SUPPLY: '0', MAX_SUPPLY: '1000' }));
-            indexer.indexerDb.isActionAllowed.resolves(true);
-            indexer.indexerDb.isDistributed.resolves(false);
-            indexer.indexerDb.isOwnershipEscrowed.resolves(false);
-            indexer.indexerDb.getAddressBalances.resolves({});
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            indexer.indexerDb.getTokenSupply.resolves('0');
-
-            const actionsCtx = {
-                config:    indexer.config,
-                util:      indexer.util,
-                mapper:    indexer.mapper,
-                decoderDb: indexer.decoderDb,
-                indexerDb: indexer.indexerDb,
-                protocolChanges: {
-                    isDefined: sinon.stub().returns(true),
-                    // ISSUANCE_FEE is block-gated (mainnet 862633); mirror that so the
-                    // sub-activation test block skips the fee. LOCK_NULL_PRIOR_UNSET is the
-                    // gate under test; everything else is on.
-                    isEnabled: sinon.stub().callsFake(async (name, block) => {
-                        if (name === 'ISSUANCE_FEE') return Number(block) >= 862633;
-                        if (name === 'LOCK_NULL_PRIOR_UNSET') return gateActive;
-                        return true;
-                    }),
-                },
-                processAction: sinon.stub().resolves(),
-            };
-            return { handler: new Issue(actionsCtx), indexer };
-        }
-
         afterEach(function () { sinon.restore(); });
 
         // The registration is UNGATED on every network, so the gate-off branch is
@@ -278,6 +281,12 @@ describe('LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
             await handler.parse(REPRO_PARAMS, data, null);
             assert.strictEqual(data.STATUS, 'valid', 'expected valid but got: ' + data.STATUS);
         });
+    });
+});
+
+describe('LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
+    describe('ISSUE format 3 against a token issued without create-time locks', function () {
+        afterEach(function () { sinon.restore(); });
 
         it('gate ON (shipped rule): the flag actually flips (LOCK_DESCRIPTION rides through as 1)', async function () {
             const { handler } = makeHandler(true);
@@ -312,7 +321,9 @@ describe('LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
                 'the gate must be evaluated against the processing block, never a wall clock');
         });
     });
+});
 
+describe('LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
     /*****************************************************************
      * 4. Flag-day registration
      ****************************************************************/

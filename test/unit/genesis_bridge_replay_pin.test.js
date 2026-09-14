@@ -48,7 +48,6 @@ function harness(coin){
 }
 
 describe('genesis gas-token replay pin (bridge row-4 helper) @regression', function () {
-
     it('_injectGasToken synthesizes the pre-refactor transaction byte for byte on BTC', async function () {
         const h = harness('BTC');
         await h.genesis.injectGasToken('BTC-gas-address', 800000, 1700000000);
@@ -106,7 +105,9 @@ describe('genesis gas-token replay pin (bridge row-4 helper) @regression', funct
         assert.deepStrictEqual(res, { created: false, tick: 'XCHAIN' });
         assert.strictEqual(h.sent.length, 0, 'nothing injected when the row is already there');
     });
+});
 
+describe('genesis gas-token replay pin (bridge row-4 helper) @regression', function () {
     it('the genesis pass reads no database at all, exactly as before the refactor', async function () {
         // The gas token is the FIRST action of the genesis block, so the row cannot be there
         // and the idempotency probe the bridge needs would only add a read to the one block

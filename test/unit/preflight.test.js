@@ -197,7 +197,6 @@ describe('public pre-flight (computePreflight) @regression @tier1', function () 
     // payer's XCHAIN balance. A payer holding zero XCHAIN got valid:true, signed, paid a miner
     // fee, and the chain then indexed the action `invalid: insufficient funds (FEE)`.
     describe('fee settlement mode + payer balance', function () {
-
         it('BTC defaults to the XCHAIN debit: no probe output, so the handler checks the balance', async function () {
             let { ctx, calls } = makeCtx(makeUtil('BTC', FEE_DEST));
             let r = await ctx.computePreflight({ action: 'ISSUE', params: '0|NEWTICK', source: 'payer' });
@@ -255,7 +254,9 @@ describe('public pre-flight (computePreflight) @regression @tier1', function () 
             assert.strictEqual(calls.lastArgs.feeBalanceTick, 'XCHAIN');
             assert.strictEqual(r.feeTick, 'XCHAIN');
         });
+    });
 
+    describe('fee settlement mode + payer balance', function () {
         it('reports the payer balance beside the fee, 8dp, with affordability', async function () {
             let { ctx } = makeCtx(makeUtil('BTC', FEE_DEST), { dryRun: { xchainFee: '0.5', sourceFeeBalance: '0' } });
             let r = await ctx.computePreflight({ action: 'ISSUE', params: '0|NEWTICK', source: 'brokePayer' });

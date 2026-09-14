@@ -26,7 +26,6 @@ const cmsh = require('../../src/capability_min_stake_history.js');
 const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 describe('capability MIN_STAKE as-of-block reconstruction @regression @tier2', function () {
-
     describe('the frozen activation table', function () {
 
         it('is INERT on every network, so the effective bar is the genesis floor', function () {
@@ -48,9 +47,10 @@ describe('capability MIN_STAKE as-of-block reconstruction @regression @tier2', f
                     assert.strictEqual(cmsh.minStakeAt(cap, 900000, net, '5000.00000000'), '5000.00000000');
         });
     });
+});
 
+describe('capability MIN_STAKE as-of-block reconstruction @regression @tier2', function () {
     describe('minStakeAt', function () {
-
         // The shape xchain-hub CapabilityRegistry.minStakeHistory carries: ascending
         // { activation_block, value }, each in force until the next one.
         const HIST = { cross_chain: [{ activation_block: 0,    value: '100' },
@@ -102,7 +102,11 @@ describe('capability MIN_STAKE as-of-block reconstruction @regression @tier2', f
                                     { activation_block: 20, value: null }] };
             assert.strictEqual(cmsh.minStakeAt('cross_chain', 50, 'mainnet', '1', h), '100');
         });
+    });
+});
 
+describe('capability MIN_STAKE as-of-block reconstruction @regression @tier2', function () {
+    describe('minStakeAt', function () {
         it('an override wins over the frozen table, and only an OPERATOR may supply one', function () {
             // db.js honours a caller-supplied threshold verbatim for the same reason: local
             // config drifts between independently-operated indexers. What must never reach it
@@ -151,7 +155,9 @@ describe('capability MIN_STAKE as-of-block reconstruction @regression @tier2', f
             assert.strictEqual(cmsh.amountsEqual(null, null), false);
         });
     });
+});
 
+describe('capability MIN_STAKE as-of-block reconstruction @regression @tier2', function () {
     describe('hub parity', function () {
 
         it('resolves the same rule the hub CapabilityRegistry does', function () {

@@ -44,7 +44,6 @@ function makeDb(hubDb) {
 }
 
 describe('cross-chain call_id case-insensitive dedup', function () {
-
     afterEach(() => sinon.restore());
 
     it('getEffectiveUndispatchedCalls: uppercase mirror call_id filtered by lowercase executions row', async function () {
@@ -97,6 +96,10 @@ describe('cross-chain call_id case-insensitive dedup', function () {
         assert.strictEqual(expiryCalls.length, 0,
             'a deliverable (verified) result must suppress expiry despite the case mismatch');
     });
+});
+
+describe('cross-chain call_id case-insensitive dedup', function () {
+    afterEach(() => sinon.restore());
 
     it('processCrossChainCalls: with no matching result the lowercase request still expires (control)', async function () {
         const util = new Utility();

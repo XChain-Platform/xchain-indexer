@@ -78,7 +78,6 @@ const FORMATS = loadFormats();
 const TOKEN = /^([A-Z][A-Z0-9_]*(\.\.\.)?|\.\.\.)$/;
 
 describe('Action field-format contract', function () {
-
     it('discovers format templates from many action handlers', function () {
         const names = Object.keys(FORMATS);
         assert.ok(names.length >= 10, 'expected to load formats from many actions, got ' + names.length);
@@ -124,7 +123,9 @@ describe('Action field-format contract', function () {
                 'an embedded pipe must split into an extra param (so fields cannot contain "|")');
         });
     });
+});
 
+describe('Action field-format contract', function () {
     describe('SEND golden wire vectors (pin the canonical v0–v3 layouts)', function () {
         const send = FORMATS['send'];
 

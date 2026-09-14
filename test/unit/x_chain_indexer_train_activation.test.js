@@ -90,7 +90,6 @@ describe('train activation: resolution @regression', function () {
 });
 
 describe('train activation: the halt boundary @regression', function () {
-
     it('is CLEAR when nothing requires a rule set the build does not implement', function () {
         assert.strictEqual(ta.evaluateTrainActivation({
             height: 970001, network: 'mainnet', manifest: manifest(undefined), activation: FLOOR
@@ -141,7 +140,9 @@ describe('train activation: the halt boundary @regression', function () {
         assert.strictEqual(v.status, 'halt');
         assert.match(v.reason, /no BTC height to compare against/);
     });
+});
 
+describe('train activation: the halt boundary @regression', function () {
     it('HALTS when the manifest names no activation height for this network', function () {
         const v = ta.evaluateTrainActivation({
             height: 10, network: 'regtest', activation: FLOOR,
@@ -212,7 +213,6 @@ function trainEventsDb(queries, o){
 const check = (self, block) => XChainIndexer.prototype.checkTrainActivation.call(self, block);
 
 describe('train activation: the indexer pre-apply gate @regression', function () {
-
     it('applies the block and reports nothing when the manifest requires nothing', function () {
         const self = fakeIndexer({ required: null });
         return check(self, 900000).then((stop) => {
@@ -265,7 +265,9 @@ describe('train activation: the indexer pre-apply gate @regression', function ()
             assert.strictEqual(stop, true, 'the refusal to advance must not depend on an INSERT');
         });
     });
+});
 
+describe('train activation: the indexer pre-apply gate @regression', function () {
     it('halts an off-BTC indexer, which has no BTC height to prove the boundary is ahead', function () {
         const self = fakeIndexer({ coin: 'DOGE', required: armed('9.0.0', { mainnet: 970000 }) });
         return check(self, 5000000).then((stop) => {
@@ -318,7 +320,9 @@ describe('train activation: the indexer pre-apply gate @regression', function ()
             fs.unlinkSync(file);
         }
     });
+});
 
+describe('train activation: the indexer pre-apply gate @regression', function () {
     it('treats an unparseable manifest as a halt, and does not cache the fault', function () {
         const file = path.join(__dirname, 'fixtures-train-activation-broken.json');
         const fs = require('fs');

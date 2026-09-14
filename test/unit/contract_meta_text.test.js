@@ -42,9 +42,7 @@ function report(meta, overrides = {}) {
 const GOOD = { name: 'Escrow', description: 'Two-party escrow with an arbiter', version: '1.0.0' };
 
 describe('contract_meta text grammar (CONTRACT_META_REQUIRED) @regression @tier1', function () {
-
     describe('isValidMetaText', function () {
-
         it('accepts a plain ASCII name inside the cap', function () {
             assert.strictEqual(cm.isValidMetaText('Escrow', 64, false), true);
         });
@@ -80,7 +78,11 @@ describe('contract_meta text grammar (CONTRACT_META_REQUIRED) @regression @tier1
         it('accepts a paired surrogate (an astral character is one code point)', function () {
             assert.strictEqual(cm.isValidMetaText('Escrow \u{1F510}', 64, false), true);
         });
+    });
+});
 
+describe('contract_meta text grammar (CONTRACT_META_REQUIRED) @regression @tier1', function () {
+    describe('isValidMetaText', function () {
         it('rejects every banned class anywhere in the string', function () {
             const banned = {
                 'NUL':          '\u0000',
@@ -134,7 +136,11 @@ describe('contract_meta text grammar (CONTRACT_META_REQUIRED) @regression @tier1
                 assert.strictEqual(cm.isValidMetaText('Es' + ch + 'crow', 64, false), true,  'interior ' + label);
             }
         });
+    });
+});
 
+describe('contract_meta text grammar (CONTRACT_META_REQUIRED) @regression @tier1', function () {
+    describe('isValidMetaText', function () {
         it('does NOT normalise or repair: a conforming value is returned as valid, a non-conforming one is refused outright', function () {
             // The rule rejects; nothing anywhere trims, so the stored bytes are the author's.
             assert.strictEqual(cm.isValidMetaText(' Escrow ', 64, false), false);
@@ -146,9 +152,10 @@ describe('contract_meta text grammar (CONTRACT_META_REQUIRED) @regression @tier1
         });
 
     });
+});
 
+describe('contract_meta text grammar (CONTRACT_META_REQUIRED) @regression @tier1', function () {
     describe('evaluateContractMeta ladder', function () {
-
         it('row 1: a null/undefined read, success:false or manifest:null is (manifest read failed)', function () {
             assert.strictEqual(cm.evaluateContractMeta(null).error, cm.VERDICTS.READ_FAILED);
             assert.strictEqual(cm.evaluateContractMeta(undefined).error, cm.VERDICTS.READ_FAILED);
@@ -203,7 +210,11 @@ describe('contract_meta text grammar (CONTRACT_META_REQUIRED) @regression @tier1
             assert.strictEqual(r.manifest.metaOversize, true);
             assert.strictEqual(cm.evaluateContractMeta(r).error, cm.VERDICTS.OVERSIZE);
         });
+    });
+});
 
+describe('contract_meta text grammar (CONTRACT_META_REQUIRED) @regression @tier1', function () {
+    describe('evaluateContractMeta ladder', function () {
         it('row 5: name missing, non-string, oversize, banned or untrimmed is the name string', function () {
             const vectors = [
                 { description: 'no name at all' },
@@ -257,7 +268,11 @@ describe('contract_meta text grammar (CONTRACT_META_REQUIRED) @regression @tier1
             assert.strictEqual(out.error, null);
             assert.strictEqual(out.meta.version, null);
         });
+    });
+});
 
+describe('contract_meta text grammar (CONTRACT_META_REQUIRED) @regression @tier1', function () {
+    describe('evaluateContractMeta ladder', function () {
         it('first failure wins: a vector bad on rows 5 AND 6 reports the NAME string', function () {
             const out = cm.evaluateContractMeta(report({ name: '', description: '' }));
             assert.strictEqual(out.error, cm.VERDICTS.NAME);
@@ -310,7 +325,9 @@ describe('contract_meta text grammar (CONTRACT_META_REQUIRED) @regression @tier1
         });
 
     });
+});
 
+describe('contract_meta text grammar (CONTRACT_META_REQUIRED) @regression @tier1', function () {
     describe('the seven strings are frozen consensus tokens', function () {
 
         it('each verdict string is byte-exact to the spec', function () {

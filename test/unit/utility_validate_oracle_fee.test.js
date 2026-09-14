@@ -99,7 +99,6 @@ describe('Utility.validateOracleFee() - @regression @tier1', function () {
     });
 
     describe('the output must be present and sufficient', function () {
-
         it('accepts an exact payment to the oracle address', async function () {
             const r = await util.validateOracleFee(
                 withOutputs([{ address: ORACLE_ADDR, value: '0.00001' }]),
@@ -156,7 +155,9 @@ describe('Utility.validateOracleFee() - @regression @tier1', function () {
                 dispenserFields(), fakeDb());
             assert.strictEqual(under.valid, false);
         });
+    });
 
+    describe('the output must be present and sufficient', function () {
         it('matches scriptPubKey_address as well as address', async function () {
             // Decoder-shaped outputs use either key; the native fee path accepts both.
             const r = await util.validateOracleFee(

@@ -82,7 +82,6 @@ async function runCreate(Handler, action, getCoin, legs, royaltyEnabled) {
 }
 
 describe('Cross-chain royalty create-side gate @regression @tier1', function () {
-
     afterEach(function () {
         sinon.restore();
     });
@@ -125,6 +124,12 @@ describe('Cross-chain royalty create-side gate @regression @tier1', function () 
             });
         });
     }
+});
+
+describe('Cross-chain royalty create-side gate @regression @tier1', function () {
+    afterEach(function () {
+        sinon.restore();
+    });
 
     describe('CROSS_CHAIN_ROYALTY protocol change registration', function () {
         it('is defined, mainnet flag-day is AFTER CONTROLLER_GUARD, regtest/testnet genesis', function () {

@@ -53,7 +53,6 @@ function nonCrossingTally() {
 }
 
 describe('early-decide tally watermark', function () {
-
     afterEach(() => sinon.restore());
 
     it('skips the full re-tally when no input row landed since the last tally', async function () {
@@ -101,6 +100,10 @@ describe('early-decide tally watermark', function () {
         assert.strictEqual(getPollTally.callCount, 2, 'time_weighted poll tallies every block');
         assert.strictEqual(doQuery.callCount, 0, 'no watermark probe for time_weighted polls');
     });
+});
+
+describe('early-decide tally watermark', function () {
+    afterEach(() => sinon.restore());
 
     it('clears the watermark entry when a poll early-decides so a reused index cannot rehydrate it', async function () {
         const { db, util } = makeDb();

@@ -85,25 +85,25 @@ describe('dispenser Mode B oracle-price activation predicate @regression @tier1'
     });
 });
 
+let indexer, actionsCtx, dispenser;
+
+const OWNER_ADDR  = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+const ORACLE_ADDR = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
+const BLOCK_TIME  = 1700000000;
+const EXPIRATION  = BLOCK_TIME + 86400 * 30;
+
+// GIVE_OWNERSHIP=1 => GIVE_AMOUNT and GIVE_ESCROW are both empty, which is exactly
+// the shape the fee path's GIVE_ESCROW>0 gate could never see.
+const ownershipParams = () => String(
+    `0|BTC|JDOG||1||BTC||0.01|${OWNER_ADDR}|USD||${ORACLE_ADDR}|${EXPIRATION}|||Ownership Mode B`
+).split('|');
+
+const modeBData = () => createBaseData(
+    { ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
 // The rule the gate arms, exercised through the real create path. Regtest is
 // genesis-active, so these run above the gate unless the predicate is stubbed off.
 describe('Mode B create requires an effective oracle price @regression @tier2', function () {
-    let indexer, actionsCtx, dispenser;
-
-    const OWNER_ADDR  = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-    const ORACLE_ADDR = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
-    const BLOCK_TIME  = 1700000000;
-    const EXPIRATION  = BLOCK_TIME + 86400 * 30;
-
-    // GIVE_OWNERSHIP=1 => GIVE_AMOUNT and GIVE_ESCROW are both empty, which is exactly
-    // the shape the fee path's GIVE_ESCROW>0 gate could never see.
-    const ownershipParams = () => String(
-        `0|BTC|JDOG||1||BTC||0.01|${OWNER_ADDR}|USD||${ORACLE_ADDR}|${EXPIRATION}|||Ownership Mode B`
-    ).split('|');
-
-    const modeBData = () => createBaseData(
-        { ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
-
     beforeEach(function () {
         indexer    = createMockIndexer();
         actionsCtx = {
@@ -155,6 +155,46 @@ describe('Mode B create requires an effective oracle price @regression @tier2', 
         assert.strictEqual(data['STATUS'], 'invalid: ORACLE_ADDRESS (no effective oracle price)');
         sinon.assert.notCalled(indexer.indexerDb.setTokenEscrow);
     });
+});
+
+describe('Mode B create requires an effective oracle price @regression @tier2', function () {
+    beforeEach(function () {
+        indexer    = createMockIndexer();
+        actionsCtx = {
+            config:          indexer.config,
+            util:            indexer.util,
+            mapper:          indexer.mapper,
+            decoderDb:       indexer.decoderDb,
+            indexerDb:       indexer.indexerDb,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
+            processAction: sinon.stub().resolves(),
+        };
+        dispenser = new Dispenser(actionsCtx);
+
+        indexer.indexerDb.getTokenInfo
+            .withArgs('JDOG', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'JDOG', TICK_ID: 10, DECIMALS: 0,
+                ALLOW_LIST: null, BLOCK_LIST: null, OWNER: OWNER_ADDR }));
+        indexer.indexerDb.getTokenInfo
+            .withArgs('', sinon.match.any, sinon.match.any).resolves(null);
+        indexer.indexerDb.getTokenInfo
+            .withArgs(null, sinon.match.any, sinon.match.any).resolves(null);
+        indexer.indexerDb.getTokenInfo
+            .withArgs(undefined, sinon.match.any, sinon.match.any).resolves(null);
+
+        indexer.indexerDb.getAddressBalances.resolves({ 10: '0', 99: '999999999' });
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.getTickerId.resolves(99);
+        indexer.indexerDb.isOwnershipEscrowed.resolves(false);
+        indexer.indexerDb.setTokenEscrow = sinon.stub().resolves();
+        indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000' }]);
+    });
+
+    afterEach(function () { sinon.restore(); });
 
     it('still accepts that same create BELOW the gate (replay stays byte-identical)', async function () {
         // Historical blocks must re-evaluate exactly as they did, so below the flag-day
@@ -169,6 +209,46 @@ describe('Mode B create requires an effective oracle price @regression @tier2', 
         assert.strictEqual(data['STATUS'], 'valid', data['STATUS']);
         sinon.assert.calledOnce(indexer.indexerDb.setTokenEscrow);
     });
+});
+
+describe('Mode B create requires an effective oracle price @regression @tier2', function () {
+    beforeEach(function () {
+        indexer    = createMockIndexer();
+        actionsCtx = {
+            config:          indexer.config,
+            util:            indexer.util,
+            mapper:          indexer.mapper,
+            decoderDb:       indexer.decoderDb,
+            indexerDb:       indexer.indexerDb,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
+            processAction: sinon.stub().resolves(),
+        };
+        dispenser = new Dispenser(actionsCtx);
+
+        indexer.indexerDb.getTokenInfo
+            .withArgs('JDOG', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'JDOG', TICK_ID: 10, DECIMALS: 0,
+                ALLOW_LIST: null, BLOCK_LIST: null, OWNER: OWNER_ADDR }));
+        indexer.indexerDb.getTokenInfo
+            .withArgs('', sinon.match.any, sinon.match.any).resolves(null);
+        indexer.indexerDb.getTokenInfo
+            .withArgs(null, sinon.match.any, sinon.match.any).resolves(null);
+        indexer.indexerDb.getTokenInfo
+            .withArgs(undefined, sinon.match.any, sinon.match.any).resolves(null);
+
+        indexer.indexerDb.getAddressBalances.resolves({ 10: '0', 99: '999999999' });
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.getTickerId.resolves(99);
+        indexer.indexerDb.isOwnershipEscrowed.resolves(false);
+        indexer.indexerDb.setTokenEscrow = sinon.stub().resolves();
+        indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000' }]);
+    });
+
+    afterEach(function () { sinon.restore(); });
 
     it('an ownership create against a priced oracle opens and owes no fee output', async function () {
         // The precondition is a validity rule, not a fee: the fee base is
@@ -183,6 +263,46 @@ describe('Mode B create requires an effective oracle price @regression @tier2', 
         sinon.assert.calledOnce(indexer.indexerDb.setTokenEscrow);
         sinon.assert.called(indexer.indexerDb.getOraclePrice);
     });
+});
+
+describe('Mode B create requires an effective oracle price @regression @tier2', function () {
+    beforeEach(function () {
+        indexer    = createMockIndexer();
+        actionsCtx = {
+            config:          indexer.config,
+            util:            indexer.util,
+            mapper:          indexer.mapper,
+            decoderDb:       indexer.decoderDb,
+            indexerDb:       indexer.indexerDb,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
+            processAction: sinon.stub().resolves(),
+        };
+        dispenser = new Dispenser(actionsCtx);
+
+        indexer.indexerDb.getTokenInfo
+            .withArgs('JDOG', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'JDOG', TICK_ID: 10, DECIMALS: 0,
+                ALLOW_LIST: null, BLOCK_LIST: null, OWNER: OWNER_ADDR }));
+        indexer.indexerDb.getTokenInfo
+            .withArgs('', sinon.match.any, sinon.match.any).resolves(null);
+        indexer.indexerDb.getTokenInfo
+            .withArgs(null, sinon.match.any, sinon.match.any).resolves(null);
+        indexer.indexerDb.getTokenInfo
+            .withArgs(undefined, sinon.match.any, sinon.match.any).resolves(null);
+
+        indexer.indexerDb.getAddressBalances.resolves({ 10: '0', 99: '999999999' });
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.getTickerId.resolves(99);
+        indexer.indexerDb.isOwnershipEscrowed.resolves(false);
+        indexer.indexerDb.setTokenEscrow = sinon.stub().resolves();
+        indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000' }]);
+    });
+
+    afterEach(function () { sinon.restore(); });
 
     it('covers a zero-escrow balance create too, not just ownership', async function () {
         // Open-now-refill-later: GIVE_AMOUNT positive, GIVE_ESCROW empty. The fee path
@@ -199,6 +319,46 @@ describe('Mode B create requires an effective oracle price @regression @tier2', 
 
         assert.strictEqual(data['STATUS'], 'invalid: ORACLE_ADDRESS (no effective oracle price)');
     });
+});
+
+describe('Mode B create requires an effective oracle price @regression @tier2', function () {
+    beforeEach(function () {
+        indexer    = createMockIndexer();
+        actionsCtx = {
+            config:          indexer.config,
+            util:            indexer.util,
+            mapper:          indexer.mapper,
+            decoderDb:       indexer.decoderDb,
+            indexerDb:       indexer.indexerDb,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
+            processAction: sinon.stub().resolves(),
+        };
+        dispenser = new Dispenser(actionsCtx);
+
+        indexer.indexerDb.getTokenInfo
+            .withArgs('JDOG', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'JDOG', TICK_ID: 10, DECIMALS: 0,
+                ALLOW_LIST: null, BLOCK_LIST: null, OWNER: OWNER_ADDR }));
+        indexer.indexerDb.getTokenInfo
+            .withArgs('', sinon.match.any, sinon.match.any).resolves(null);
+        indexer.indexerDb.getTokenInfo
+            .withArgs(null, sinon.match.any, sinon.match.any).resolves(null);
+        indexer.indexerDb.getTokenInfo
+            .withArgs(undefined, sinon.match.any, sinon.match.any).resolves(null);
+
+        indexer.indexerDb.getAddressBalances.resolves({ 10: '0', 99: '999999999' });
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.getTickerId.resolves(99);
+        indexer.indexerDb.isOwnershipEscrowed.resolves(false);
+        indexer.indexerDb.setTokenEscrow = sinon.stub().resolves();
+        indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000' }]);
+    });
+
+    afterEach(function () { sinon.restore(); });
 
     it('leaves Mode A alone: no oracle named, no lookup attempted', async function () {
         const getOraclePrice = sinon.stub().resolves({ value: '0.05', fee: '0.01' });

@@ -119,7 +119,6 @@ describe('ISSUE token-bridge opt-in and policy exclusion @regression @consensus'
     afterEach(function(){ sinon.restore(); });
 
     describe('format 7 admission', function(){
-
         it('does not exist below TOKEN_BRIDGE_ACTIVATION', async function(){
             const { status } = await run({ params: format7({ BRIDGE_CHAINS: 'DOGE' }), token: tokenRow(), bridge: false });
             assert.strictEqual(status, 'invalid: VERSION (unknown)');
@@ -175,7 +174,9 @@ describe('ISSUE token-bridge opt-in and policy exclusion @regression @consensus'
             });
             assert.strictEqual(status, 'invalid: MIN_DEPTH (locked)');
         });
+    });
 
+    describe('format 7 admission', function(){
         it('refuses unsetting LOCK_BRIDGE through the shared lock rule', async function(){
             const { status } = await run({
                 params: format7({ LOCK_BRIDGE: '0' }),
@@ -185,14 +186,13 @@ describe('ISSUE token-bridge opt-in and policy exclusion @regression @consensus'
         });
     });
 
+    const SUBASSET = 'invalid: TICK (subassets are not bridgeable yet)';
+
     // Dotted native names are refused. A bridged row lives one level under its origin chain's
     // root (BTC.PEPECASH on DOGE), so a DOTTED native name would need a rooted copy of its
     // own parent and the bridge creates exactly one level. The opt-in is refused as well as
     // the v3 lock, so such a token is never advertised as bridgeable in the first place.
     describe('subassets are not bridgeable in milestone 1', function(){
-
-        const SUBASSET = 'invalid: TICK (subassets are not bridgeable yet)';
-
         it('refuses the opt-in of a dotted native tick', async function(){
             const { status } = await run({
                 params: format7({ TICK: 'FUFU.SUB', BRIDGE_CHAINS: 'DOGE', MEMO: 'memo' }),
@@ -245,7 +245,9 @@ describe('ISSUE token-bridge opt-in and policy exclusion @regression @consensus'
             });
             assert.strictEqual(status, 'valid');
         });
+    });
 
+    describe('subassets are not bridgeable in milestone 1', function(){
         // Inert below TOKEN_BRIDGE_ACTIVATION with every other format-7 verdict: the whole
         // format falls through to the string an unknown version has always produced.
         it('is inert below TOKEN_BRIDGE_ACTIVATION', async function(){
@@ -288,7 +290,6 @@ describe('ISSUE token-bridge opt-in and policy exclusion @regression @consensus'
     });
 
     describe('milestone-1 policy exclusion, opt-in direction', function(){
-
         it('refuses opting a BLOCK_LIST-bound token in', async function(){
             const { status } = await run({ params: format7({ BRIDGE_CHAINS: 'DOGE' }), token: tokenRow({ BLOCK_LIST: 42 }) });
             assert.strictEqual(status, 'invalid: TICK (policy-bound tokens are not bridgeable yet)');
@@ -338,7 +339,9 @@ describe('ISSUE token-bridge opt-in and policy exclusion @regression @consensus'
             });
             assert.strictEqual(status, 'invalid: TICK (policy list exceeds XPOLICY_MAX_MEMBERS)');
         });
+    });
 
+    describe('milestone-1 policy exclusion, opt-in direction', function(){
         it('accepts a list exactly at the ceiling', async function(){
             const { XPOLICY_MAX_MEMBERS } = require('../../src/protocol/constants.js');
             const { status } = await run({

@@ -87,32 +87,31 @@ describe('XChainIndexer#isPollSilent()', function () {
     });
 });
 
+function makeIndexer(overrides = {}){
+    return Object.assign({
+        decoderDb:            { circuitState: 'closed' },
+        indexerDb:            { circuitState: 'closed' },
+        lastDecoderBlock:     200,
+        lastHubConfigFetchAt: null,
+        stallReason:          null,
+        lastBlockCommittedAt: null,
+        lastPollAt:           0,
+        isSynced:             () => true,
+        isPollSilent:         () => false
+    }, overrides);
+}
+
+function call(indexer, opts = {}){
+    return buildHealthResponse(Object.assign({
+        indexer,
+        indexerRunning:   true,
+        indexerError:     null,
+        lastIndexedBlock: 200,
+        now:              1_000_000
+    }, opts));
+}
+
 describe('health payload carries loop liveness as its own axis', function () {
-
-    function makeIndexer(overrides = {}){
-        return Object.assign({
-            decoderDb:            { circuitState: 'closed' },
-            indexerDb:            { circuitState: 'closed' },
-            lastDecoderBlock:     200,
-            lastHubConfigFetchAt: null,
-            stallReason:          null,
-            lastBlockCommittedAt: null,
-            lastPollAt:           0,
-            isSynced:             () => true,
-            isPollSilent:         () => false
-        }, overrides);
-    }
-
-    function call(indexer, opts = {}){
-        return buildHealthResponse(Object.assign({
-            indexer,
-            indexerRunning:   true,
-            indexerError:     null,
-            lastIndexedBlock: 200,
-            now:              1_000_000
-        }, opts));
-    }
-
     it('publishes pollSilent and the last iteration stamp', async function () {
         const res = await call(makeIndexer({ lastPollAt: 1754870460000 }));
         assert.strictEqual(res.pollSilent, false);
@@ -145,7 +144,9 @@ describe('health payload carries loop liveness as its own axis', function () {
         assert.strictEqual(res.pollSilent, false);
         assert.strictEqual(res.lastPollAt, null);
     });
+});
 
+describe('health payload carries loop liveness as its own axis', function () {
     it('does not fold loop liveness into status, which drives container restarts', async function () {
         // Deliberate: /status 503 is the xchain-node http_get healthcheck, and a single
         // iteration can hold across several sequential barrier waits. Restarting a

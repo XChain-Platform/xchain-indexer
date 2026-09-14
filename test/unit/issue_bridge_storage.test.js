@@ -78,7 +78,6 @@ function issueRow(o = {}){
 }
 
 describe('token-bridge opt-in storage @regression @consensus', function(){
-
     afterEach(function(){ sinon.restore(); });
 
     describe('createIssue (issues, raw wire strings)', function(){
@@ -112,6 +111,10 @@ describe('token-bridge opt-in storage @regression @consensus', function(){
                 assert.ok(args[columns.indexOf(col)] == null, col + ' must bind as NULL when the action omits it');
         });
     });
+});
+
+describe('token-bridge opt-in storage @regression @consensus', function(){
+    afterEach(function(){ sinon.restore(); });
 
     describe('createToken (tokens, parsed state)', function(){
 
@@ -147,9 +150,12 @@ describe('token-bridge opt-in storage @regression @consensus', function(){
             assert.ok(!/\bbridged\b/.test(sql), 'createToken must not write the bridged bit');
         });
     });
+});
+
+describe('token-bridge opt-in storage @regression @consensus', function(){
+    afterEach(function(){ sinon.restore(); });
 
     describe('getTokenInfo projection fold', function(){
-
         it('replays the three fields off the issues rows', async function(){
             const db = makeDb();
             db.doQuery.resolves([issueRow({ bridge_chains: 'DOGE', min_depth: '3', lock_bridge: '1' })]);
@@ -200,7 +206,13 @@ describe('token-bridge opt-in storage @regression @consensus', function(){
             info = await db.getTokenInfo('FUFU', 100, 999);
             assert.strictEqual(info['BRIDGED'], 0);
         });
+    });
+});
 
+describe('token-bridge opt-in storage @regression @consensus', function(){
+    afterEach(function(){ sinon.restore(); });
+
+    describe('getTokenInfo projection fold', function(){
         it('asks for the new columns in the query it actually runs', async function(){
             const db = makeDb();
             db.doQuery.resolves([issueRow()]);

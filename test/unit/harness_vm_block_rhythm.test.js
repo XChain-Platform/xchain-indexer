@@ -89,7 +89,6 @@ function makeStubIndexer(opts = {}){
 }
 
 describe('integration harness VM block rhythm', function(){
-
     it('installs and clears the per-block compilation cache once per block', async function(){
         // The indexer DB is empty, so processing starts at the first decoder block:
         // blocks 100 and 101 both run.
@@ -145,7 +144,9 @@ describe('integration harness VM block rhythm', function(){
         assert.strictEqual(indexer.calls.filter(c => c === 'vm.endBlock').length, 1,
             'endBlock precedes createBlock, so it still ran before the throw');
     });
+});
 
+describe('integration harness VM block rhythm', function(){
     it('is a no-op when the VM runtime is unavailable', async function(){
         // xchain-vm is optional (it fails to load on macOS/off-pin Node), and
         // actions.vm is null then. The harness must not throw on that path.

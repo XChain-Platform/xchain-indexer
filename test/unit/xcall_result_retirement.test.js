@@ -107,7 +107,6 @@ function recorded(indexer) {
 }
 
 describe('XCALL undeliverable result retirement @regression', function () {
-
     afterEach(() => sinon.restore());
 
     describe('no matching local request', function () {
@@ -164,6 +163,10 @@ describe('XCALL undeliverable result retirement @regression', function () {
             assert.strictEqual(recorded(indexer), null);
         });
     });
+});
+
+describe('XCALL undeliverable result retirement @regression', function () {
+    afterEach(() => sinon.restore());
 
     describe('routing mismatch (request exists, target_chain differs)', function () {
 
@@ -190,6 +193,10 @@ describe('XCALL undeliverable result retirement @regression', function () {
                 'a live request keeps its own exact clock; the orphan grace must not shorten it');
         });
     });
+});
+
+describe('XCALL undeliverable result retirement @regression', function () {
+    afterEach(() => sinon.restore());
 
     describe('quorum verdicts', function () {
 
@@ -233,6 +240,10 @@ describe('XCALL undeliverable result retirement @regression', function () {
             assert.strictEqual(indexer.indexerDb.getCrossChainCallRequestById.callCount, 0);
         });
     });
+});
+
+describe('XCALL undeliverable result retirement @regression', function () {
+    afterEach(() => sinon.restore());
 
     describe('delivery is unaffected', function () {
 

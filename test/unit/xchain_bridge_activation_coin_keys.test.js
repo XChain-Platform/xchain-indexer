@@ -49,7 +49,6 @@ const SENTINEL = 9999999999;
 const COINS    = ['BTC', 'LTC', 'DOGE'];
 
 describe('XCHAIN_BRIDGE_ACTIVATION coin-keyed flag day @regression', function () {
-
     describe('the shipped map', function () {
 
         it('declares a slot per coin for mainnet and for testnet, plus the bare fallback', function () {
@@ -80,7 +79,9 @@ describe('XCHAIN_BRIDGE_ACTIVATION coin-keyed flag day @regression', function ()
                     'regtest is deliberately bare: one regtest number fits every chain');
         });
     });
+});
 
+describe('XCHAIN_BRIDGE_ACTIVATION coin-keyed flag day @regression', function () {
     describe('resolution', function () {
 
         // The shipped map answers differently per network at one height, which is the
@@ -133,7 +134,9 @@ describe('XCHAIN_BRIDGE_ACTIVATION coin-keyed flag day @regression', function ()
                             net + ' ' + coin + ' at ' + block + ' is armed; no pre-activation verdict may move');
         });
     });
+});
 
+describe('XCHAIN_BRIDGE_ACTIVATION coin-keyed flag day @regression', function () {
     describe('fail-closed', function () {
 
         it('refuses an unknown network whatever the coin', function () {

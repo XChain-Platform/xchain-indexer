@@ -17,9 +17,9 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../fixtu
 
 const Mapper = require('../../src/chain/mapper.js');
 
-describe('Mapper @regression @tier3', function () {
-    let indexer, mapper;
+let indexer, mapper;
 
+describe('Mapper @regression @tier3', function () {
     beforeEach(function () {
         indexer = createMockIndexer();
         mapper  = new Mapper(indexer);
@@ -75,6 +75,14 @@ describe('Mapper @regression @tier3', function () {
         assert.strictEqual(addressCalls.length, 1);
         assert.deepStrictEqual(addressCalls[0][2], ['1AddrAAAAAAAAAAAAAAAAAAAAAAAAAAAAA']);
     });
+});
+
+describe('Mapper @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        mapper  = new Mapper(indexer);
+        indexer.util.resetLists();
+    });
 
     it('does not include duplicate ticks in the batched call', async function () {
         // Adding the same tick for two different addresses should only produce one tick mapping
@@ -104,6 +112,14 @@ describe('Mapper @regression @tier3', function () {
         assert.ok(indexer.indexerDb.createActionMappings.calledWith(1, 'address', []));
         assert.ok(indexer.indexerDb.createActionMappings.calledWith(1, 'tick', []));
         assert.ok(indexer.indexerDb.createActionMapping.notCalled);
+    });
+});
+
+describe('Mapper @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        mapper  = new Mapper(indexer);
+        indexer.util.resetLists();
     });
 
     // ─── LINK FILE→TICK mapping ───────────────────────────────────────
@@ -147,6 +163,14 @@ describe('Mapper @regression @tier3', function () {
         });
         await mapper.createMappings(data);
         assert.ok(indexer.indexerDb.createFileMapping.notCalled);
+    });
+});
+
+describe('Mapper @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        mapper  = new Mapper(indexer);
+        indexer.util.resetLists();
     });
 
     it('does NOT create FILE→TICK mapping when SOURCE does not own the token', async function () {
@@ -193,6 +217,14 @@ describe('Mapper @regression @tier3', function () {
         await mapper.createMappings(data);
         assert.ok(indexer.indexerDb.getActionData.neverCalledWith(5)); // LTC leg never fetched locally
         assert.ok(indexer.indexerDb.createFileMapping.notCalled);
+    });
+});
+
+describe('Mapper @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        mapper  = new Mapper(indexer);
+        indexer.util.resetLists();
     });
 
     it('creates the FILE→TICK mapping when the ISSUE/FILE legs are in reversed order', async function () {

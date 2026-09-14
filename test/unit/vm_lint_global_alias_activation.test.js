@@ -38,7 +38,6 @@ const { isVmLintGlobalAliasActive, VM_LINT_GLOBAL_ALIAS_ACTIVATION } =
     require('../../src/vm_lint_global_alias_activation.js');
 
 describe('VM deploy-lint global-alias activation predicate @regression @tier1', function () {
-
     it('mainnet is ARMED AT GENESIS for every coin: active at every height', function () {
         for (const coin of ['BTC', 'LTC', 'DOGE']) {
             assert.strictEqual(isVmLintGlobalAliasActive(0, 'mainnet', coin), true);
@@ -82,7 +81,9 @@ describe('VM deploy-lint global-alias activation predicate @regression @tier1', 
         assert.strictEqual(VM_LINT_GLOBAL_ALIAS_ACTIVATION['regtest'], 0);
         assert.strictEqual(isVmLintGlobalAliasActive(961000, 'mainnet', 'XYZ'), false);
     });
+});
 
+describe('VM deploy-lint global-alias activation predicate @regression @tier1', function () {
     it('the map EQUALS the VM LINT_GLOBAL_ALIAS_ACTIVATION (the twinned pair cannot arm one-sided)', function () {
         // xchain-vm resolves the same gate at execute time (it derives the coin from the
         // C:<COIN>:<idx> address it is already passed), so this module is the indexer's

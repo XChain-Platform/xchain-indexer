@@ -108,7 +108,6 @@ function armed(fn) {
 }
 
 describe('getblockhashes: state_root_version is derived at the row height @regression', function () {
-
     it('reports version 1 below the REAL armed height, and 2 at or above it', function () {
         // This chain (BTC:regtest) is armed at 10000 for real, so the surface
         // that mints the version must show the boundary rather than a constant.
@@ -162,7 +161,9 @@ describe('getblockhashes: state_root_version is derived at the row height @regre
             assert.strictEqual(out.block_merkle_version, null);
         });
     });
+});
 
+describe('getblockhashes: state_root_version is derived at the row height @regression', function () {
     it('does not report the static merkle constant for an armed height', function () {
         // Kept as a distinct assertion because it is the one that fails loudly if
         // someone "simplifies" the derivation back to the constant.

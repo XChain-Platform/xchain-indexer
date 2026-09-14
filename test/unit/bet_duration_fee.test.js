@@ -26,7 +26,6 @@ const util = new Utility();
 const T0 = 1800000000;
 
 describe('BET decision-F fee arithmetic @regression @tier2', function () {
-
     it('shares the ORDER duration arithmetic exactly across the free-window boundary', function () {
         for (const days of [1, 14, 44, 89, 90, 90.4, 90.5, 90.6, 91, 120, 365, 730]) {
             const until = T0 + Math.round(days * 86400);
@@ -71,7 +70,9 @@ describe('BET decision-F fee arithmetic @regression @tier2', function () {
             assert.strictEqual(String(r.fee), fee, days + 'd fee');
         }
     });
+});
 
+describe('BET decision-F fee arithmetic @regression @tier2', function () {
     describe('bcmuldivfloor (parimutuel payout primitive)', function () {
 
         it('computes the worked-example payouts exactly', function () {

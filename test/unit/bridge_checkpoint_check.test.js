@@ -222,7 +222,6 @@ describe('bridge_checkpoint_check: D2 escrow cross-check', function(){
     });
 
     describe('falsification: one broken binding at a time applies nothing', function(){
-
         it('refuses a forged balances_root (the root the balance is proven under is not the signed one)', function(){
             // The forger builds its own tree with a fat escrow and swaps in its root, keeping
             // the checkpoint the quorum actually signed.
@@ -277,7 +276,9 @@ describe('bridge_checkpoint_check: D2 escrow cross-check', function(){
             assert.strictEqual(out.ok, false, 'a checkpoint that predates the lock proves nothing');
             assert.strictEqual(out.reason, R.CHECKPOINT_STALE);
         });
+    });
 
+    describe('falsification: one broken binding at a time applies nothing', function(){
         it('refuses roots taken from a different height than the checkpoint commits', function(){
             const proof = buildProof('12.34567890');
             proof.block_index = CP_HEIGHT - 1;
@@ -330,7 +331,9 @@ describe('bridge_checkpoint_check: D2 escrow cross-check', function(){
             assert.strictEqual(out.ok, false);
             assert.strictEqual(out.reason, R.CHECKPOINT_ROOTLESS);
         });
+    });
 
+    describe('falsification: one broken binding at a time applies nothing', function(){
         it('refuses a state_root version this node does not derive at that height', function(){
             const proof = buildProof('12.34567890');
             proof.checkpoint.state_root_version = SUB.stateRootVersion(CP_HEIGHT, NETWORK, ORIGIN) + 1;
@@ -369,7 +372,6 @@ describe('bridge_checkpoint_check: D2 escrow cross-check', function(){
     });
 
     describe('state_root_version is the version DERIVED at the checkpoint height', function(){
-
         // This block exists because a static comparison against merkle.STATE_ROOT_VERSION
         // reads as correct on any fixture cut below a chain's first sub-tree flag day, and
         // refuses every checkpoint above one. The maps are the authority on where those days
@@ -421,7 +423,9 @@ describe('bridge_checkpoint_check: D2 escrow cross-check', function(){
             assert.strictEqual(out.ok, true, 'a genuine testnet checkpoint must verify: ' + out.reason);
             assert.strictEqual(out.reason, R.VERIFIED);
         });
+    });
 
+    describe('state_root_version is the version DERIVED at the checkpoint height', function(){
         it('accepts a testnet checkpoint at genesis, where the boundary itself sits', function(){
             const proof = buildProof('12.34567890', { network: 'testnet', cpHeight: 0 });
             const out = CHK.verifyEscrowAgainstCheckpoint(
@@ -479,7 +483,9 @@ describe('bridge_checkpoint_check: D2 escrow cross-check', function(){
             assert.strictEqual(out.ok, false);
             assert.strictEqual(out.reason, R.ROOT_VERSION);
         });
+    });
 
+    describe('state_root_version is the version DERIVED at the checkpoint height', function(){
         it('refuses a version field that is not a version, rather than coercing it to one', function(){
             // At this height the derived version is 1, which is exactly what a bare Number()
             // turns true into, and what an unwary parse turns '1abc' or 1.0000001 into. Each
@@ -566,7 +572,6 @@ describe('bridge_checkpoint_check: D2 escrow cross-check', function(){
     });
 
     describe('leg and row guards', function(){
-
         it('passes the OUT leg through: the escrow is a local balance on this chain', function(){
             // BTC applying the release of an escrow it holds itself, from a burn on DOGE. No
             // remote checkpoint can add anything, and the would-go-negative refusal in the
@@ -621,7 +626,9 @@ describe('bridge_checkpoint_check: D2 escrow cross-check', function(){
             assert.strictEqual(out.ok, false);
             assert.strictEqual(out.reason, R.ROW_FIELDS);
         });
+    });
 
+    describe('leg and row guards', function(){
         it('refuses a zero or negative amount rather than passing it vacuously', function(){
             const proof = buildProof('12.34567890');
             for(const bad of ['0', '0.00000000', '-1', 'abc', null]){

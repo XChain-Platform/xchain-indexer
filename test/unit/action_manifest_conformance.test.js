@@ -202,6 +202,8 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
         });
     });
 
+    const Actions = require('../../src/actions/index.js');
+
     // Spec row 46: the BATCH pre-flight dispatches REAL sub-handlers on an unauthenticated
     // read-only surface while the dry-run holds the block-loop transaction mutex, so every
     // dispatched sub-action is a decision about whether a caller may run it there. Bind that
@@ -209,8 +211,6 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
     // NEW action defaults to ALLOWED, and an action with a VM reach that nobody classified
     // re-opens the compute primitive FEE_QUOTE_DENYLIST exists to close.
     describe('BATCH probe sub-action policy conformance @regression', function () {
-        const Actions = require('../../src/actions/index.js');
-
         // Hand-written, like EXPECTED_FEE_QUOTE_CLASS above and for the same reason: deriving
         // it from getFeeQuoteDenylist()/getProbeVmReachingActions() would compare the policy
         // against itself. `true` means "the public BATCH pre-flight must never dispatch it".
@@ -266,7 +266,9 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
             assert.deepStrictEqual(orphans, [],
                 'dead entries would silently re-waive (f1) if a name were reused: ' + JSON.stringify(orphans));
         });
+    });
 
+    describe('BATCH probe sub-action policy conformance @regression', function () {
         it('(f4) the refusal is a SUPERSET of the fee-quote denylist', function () {
             // The denylist is not a statement about VM reach (BATCH is on it because it can
             // SMUGGLE one), so the probe policy must never be narrower than it.

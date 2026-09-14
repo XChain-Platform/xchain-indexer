@@ -67,9 +67,9 @@ function supplyIdOf(db, action_index){
     return r.length ? r[0].transfer_supply_id : undefined;
 }
 
-describe('backfill issues.transfer_supply_id @regression @tier1', function () {
+let db;
 
-    let db;
+describe('backfill issues.transfer_supply_id @regression @tier1', function () {
     beforeEach(function(){ db = freshDb(); });
     afterEach(function(){ db.close(); });
 
@@ -120,6 +120,11 @@ describe('backfill issues.transfer_supply_id @regression @tier1', function () {
 
         assert.strictEqual(supplyIdOf(db, 351), null);
     });
+});
+
+describe('backfill issues.transfer_supply_id @regression @tier1', function () {
+    beforeEach(function(){ db = freshDb(); });
+    afterEach(function(){ db.close(); });
 
     it('never mistakes the fee destination for the recipient when the ISSUE tick IS the fee tick', function () {
         // Re-ISSUE of the gas token with METHOD > 1: the donation credit lands in the
@@ -169,6 +174,11 @@ describe('backfill issues.transfer_supply_id @regression @tier1', function () {
 
         assert.strictEqual(supplyIdOf(db, 355), DST);
     });
+});
+
+describe('backfill issues.transfer_supply_id @regression @tier1', function () {
+    beforeEach(function(){ db = freshDb(); });
+    afterEach(function(){ db.close(); });
 
     it('does not touch a row on another action, and is idempotent', function () {
         issue(db, { action_index: 360, transfer_supply_id: null });

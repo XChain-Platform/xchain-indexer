@@ -199,9 +199,46 @@ function ddlTimeline(sql) {
     return ev;
 }
 
+const legacy  = readSqlFiles(LEGACY_DIR);
+const tracked = readSqlFiles(TRACKED_DIR);
+
+    // Tracked DROP INDEX statements as exact `table.index` keys. The index-name
+    // namespace is per table (`source_id` exists on several), so unlike the older
+    // name-only rules above these two match on the pair or a drop on some other
+    // table would satisfy the check.
+    const trackedIndexDrops = new Set(
+        tracked.flatMap((t) => extractConvergenceDdl(t.text).indexDrops).map((d) => `${d.table}.${d.index}`)
+    );
+
+// ── the DROP direction, for TRACKED migrations ─────────────────────────────
+//
+// Every rule above (and both sql-schema-*-parity suites) runs in the ADD
+// direction: definition declares it, so the ledger must too. The inverse is
+// unguarded and is NOT inert, because the boot reconcilers actively undo it.
+// A tracked migration that DROPs an index while src/sql/<table>.sql still
+// declares it is re-created by reconcileTableIndexes (db.js, "Schema drift on
+// <table>: missing index ... Adding.") at EVERY startup, and the column twin is
+// re-added by alterTableForDrift. A replay-only replica never runs verifyTables,
+// so it keeps the object dropped, and the two paths diverge permanently with
+// nothing asserting anything. balances.address_id is the shape: it has bitten
+// twice, caught reactively both times.
+//
+// Last-writer-wins over the tracked ledger, in filename (date) order and, within
+// one file, in byte order: a drop-then-recreate in one ALTER (destroys.action_index,
+// capability_snapshots.uq_cap_snap) ends on the ADD, so the definition is expected
+// to keep declaring it. Only a TERMINAL drop obliges the definition to be silent.
+const terminalDdlState = (function () {
+    const state = new Map();   // 'index:table.name' | 'column:table.name' -> { act, file }
+    // Filenames are date-prefixed, so lexical order IS ledger order. readSqlFiles
+    // leans on readdir order, which is not guaranteed; sort explicitly or the
+    // last-writer rule reads the ledger in whatever order the filesystem hands back.
+    const ordered = tracked.slice().sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
+    for (const { file, text } of ordered)
+        for (const ev of ddlTimeline(text)) state.set(ev.kind + ':' + ev.key, { act: ev.act, file });
+    return state;
+})();
+
 describe('legacy migrations/ DDL is ported to the tracked ledger', function () {
-    const legacy  = readSqlFiles(LEGACY_DIR);
-    const tracked = readSqlFiles(TRACKED_DIR);
     const trackedText = tracked.map((t) => stripComments(t.text).toLowerCase()).join('\n');
 
     it('every legacy DROP COLUMN has a tracked counterpart naming the same table + column', function () {
@@ -229,14 +266,6 @@ describe('legacy migrations/ DDL is ported to the tracked ledger', function () {
         }
     });
 
-    // Tracked DROP INDEX statements as exact `table.index` keys. The index-name
-    // namespace is per table (`source_id` exists on several), so unlike the older
-    // name-only rules above these two match on the pair or a drop on some other
-    // table would satisfy the check.
-    const trackedIndexDrops = new Set(
-        tracked.flatMap((t) => extractConvergenceDdl(t.text).indexDrops).map((d) => `${d.table}.${d.index}`)
-    );
-
     it('every legacy DROP INDEX has a tracked counterpart naming the same index', function () {
         for (const { file, text } of legacy) {
             for (const { table, index } of extractConvergenceDdl(text).indexDrops) {
@@ -249,7 +278,9 @@ describe('legacy migrations/ DDL is ported to the tracked ledger', function () {
             }
         }
     });
+});
 
+describe('legacy migrations/ DDL is ported to the tracked ledger', function () {
     it('every legacy-added index retired from its definition has a tracked DROP INDEX', function () {
         // The removal path a static definition-vs-ledger diff cannot see: once an
         // index is deleted from src/sql/<table>.sql it leaves no trace there, so
@@ -286,34 +317,6 @@ describe('legacy migrations/ DDL is ported to the tracked ledger', function () {
         assert.ok(iadd.includes('actions.source_id'), `expected legacy actions.source_id index add, saw: ${iadd.join(', ')}`);
     });
 
-    // ── the DROP direction, for TRACKED migrations ─────────────────────────────
-    //
-    // Every rule above (and both sql-schema-*-parity suites) runs in the ADD
-    // direction: definition declares it, so the ledger must too. The inverse is
-    // unguarded and is NOT inert, because the boot reconcilers actively undo it.
-    // A tracked migration that DROPs an index while src/sql/<table>.sql still
-    // declares it is re-created by reconcileTableIndexes (db.js, "Schema drift on
-    // <table>: missing index ... Adding.") at EVERY startup, and the column twin is
-    // re-added by alterTableForDrift. A replay-only replica never runs verifyTables,
-    // so it keeps the object dropped, and the two paths diverge permanently with
-    // nothing asserting anything. balances.address_id is the shape: it has bitten
-    // twice, caught reactively both times.
-    //
-    // Last-writer-wins over the tracked ledger, in filename (date) order and, within
-    // one file, in byte order: a drop-then-recreate in one ALTER (destroys.action_index,
-    // capability_snapshots.uq_cap_snap) ends on the ADD, so the definition is expected
-    // to keep declaring it. Only a TERMINAL drop obliges the definition to be silent.
-    const terminalDdlState = (function () {
-        const state = new Map();   // 'index:table.name' | 'column:table.name' -> { act, file }
-        // Filenames are date-prefixed, so lexical order IS ledger order. readSqlFiles
-        // leans on readdir order, which is not guaranteed; sort explicitly or the
-        // last-writer rule reads the ledger in whatever order the filesystem hands back.
-        const ordered = tracked.slice().sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
-        for (const { file, text } of ordered)
-            for (const ev of ddlTimeline(text)) state.set(ev.kind + ':' + ev.key, { act: ev.act, file });
-        return state;
-    })();
-
     it('no tracked DROP INDEX leaves the index still declared in its definition', function () {
         const declared = declaredIndexesByTable(DEFN_DIR);
         let checked = 0;
@@ -331,7 +334,9 @@ describe('legacy migrations/ DDL is ported to the tracked ledger', function () {
         // an empty set. A parser change that returned nothing would pass silently.
         assert.ok(checked >= 5, `expected the ledger to carry terminal index drops; saw ${checked}`);
     });
+});
 
+describe('legacy migrations/ DDL is ported to the tracked ledger', function () {
     it('no tracked DROP COLUMN leaves the column still declared in its definition', function () {
         const declared = declaredColumnsByTable(DEFN_DIR);
         let checked = 0;

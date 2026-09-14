@@ -70,7 +70,6 @@ const EXPLORER = 'https://explorer.xchain.io'
 const HOSTILE  = 'https://evil.example'
 
 describe('CORS_ORIGIN allowlist parsing', function () {
-
     describe('parseCorsOrigin', function () {
 
         it('disables CORS when the var is unset, empty, blank, or only separators', function () {
@@ -94,9 +93,10 @@ describe('CORS_ORIGIN allowlist parsing', function () {
             assert.deepStrictEqual(parseCorsOrigin(`${IOS},,${EXPLORER}`), [IOS, EXPLORER])
         })
     })
+})
 
+describe('CORS_ORIGIN allowlist parsing', function () {
     describe('what a caller actually receives', function () {
-
         // Behaviour preservation, not a new grant: the pre-fix mount also named
         // http://localhost to every caller when the var was unset.
         it('keeps the unset default at http://localhost', async function () {
@@ -150,7 +150,11 @@ describe('CORS_ORIGIN allowlist parsing', function () {
                     'ACAO must never contain a comma')
             }
         })
+    })
+})
 
+describe('CORS_ORIGIN allowlist parsing', function () {
+    describe('what a caller actually receives', function () {
         it('fails CLOSED on `*` mixed with real origins rather than silently opening up', async function () {
             const acao = await acaoFor(`*,${EXPLORER}`, [EXPLORER, HOSTILE])
             assert.strictEqual(acao[EXPLORER], EXPLORER)

@@ -276,8 +276,45 @@ function makeCtx(opts){
     return { ctx, state, config };
 }
 
-describe('bridge_settle: the XBRIDGE settle pass', function(){
+// Two finalized rows for ONE source leg: different transfer_id AND different
+// snapshot_block, which is the shape measured on the rail (eleven finalized rows for
+// seven source actions, 120 minted against 80 locked). The id-keyed idempotency filter
+// cannot see it, because snapshot_block is inside transfer_id by design,
+// so both rows are legitimately-signed, distinct, unapplied rows to every earlier guard.
+function duplicatePair(keys, overrides){
+    const base = Object.assign({}, overrides || {});
+    return [makeTransfer(keys, Object.assign({}, base, { transfer_id: '1'.repeat(64), snapshot_block: SNAPSHOT })),
+            makeTransfer(keys, Object.assign({}, base, { transfer_id: '2'.repeat(64), snapshot_block: SNAPSHOT + 1 }))];
+}
 
+function selectorCtx(anchorRows, mirrorRows){
+    const { ctx } = makeCtx({ coin: 'DOGE' });
+    ctx.indexerDb.doQuery = async (sql) => (/FROM anchor_actions/.test(sql) ? anchorRows : []);
+    ctx.indexerDb.mirrorDb = () => bindSettlementReads({ doQuery: async () => mirrorRows });
+    // The two reads are the real db mixin methods over those stubs, not stubs of their
+    // own, so the anchor leg still has to issue SQL naming anchor_actions to see a row
+    // and the mirrored leg still has to route through mirrorDb() to see one.
+    const anchorsMixin = require('../../src/db/anchors');
+    ctx.indexerDb.getEarliestValidAnchorCheckpoint =
+        anchorsMixin.getEarliestValidAnchorCheckpoint.bind(ctx.indexerDb);
+    ctx.indexerDb.getMirroredStateCheckpointCandidates =
+        anchorsMixin.getMirroredStateCheckpointCandidates.bind(ctx.indexerDb);
+    return ctx;
+}
+
+// Every method the module reaches goes through console.log/console.warn, never through
+// a logger object, so capturing both globals for the duration of fn() is the only way to
+// read what a settle pass actually printed. Always restored, even if fn() throws.
+async function captureConsole(fn){
+    const lines = [];
+    const origLog = console.log, origWarn = console.warn;
+    console.log  = (...a) => lines.push(a.join(' '));
+    console.warn = (...a) => lines.push(a.join(' '));
+    try { await fn(); } finally { console.log = origLog; console.warn = origWarn; }
+    return lines;
+}
+
+describe('bridge_settle: the XBRIDGE settle pass', function(){
     describe('the signed canonical', function(){
 
         it('is the spec field order, byte for byte, wrapped by the EQUIV header', function(){
@@ -309,7 +346,9 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
                                BS.transferCanonical(makeTransfer([], {})), 'NULL columns are the legacy row');
         });
     });
+});
 
+describe('bridge_settle: the XBRIDGE settle pass', function(){
     describe('quorum verification (the CROSS_SETTLE rule)', function(){
 
         it('accepts a fully signed set and reports the count', async function(){
@@ -359,7 +398,9 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             assert.strictEqual(q.met, false);
         });
     });
+});
 
+describe('bridge_settle: the XBRIDGE settle pass', function(){
     describe('the IN leg (this chain mints)', function(){
 
         it('credits the destination at the signed decimals and records the settlement', async function(){
@@ -401,7 +442,9 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             assert.strictEqual(state.actions[0].FORMAT, 5);
         });
     });
+});
 
+describe('bridge_settle: the XBRIDGE settle pass', function(){
     describe('the OUT leg (this chain releases escrow)', function(){
 
         it('debits the escrow role address and credits the destination', async function(){
@@ -439,9 +482,10 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             assert.deepStrictEqual(state.actions, [], 'a refused row must mint no action index');
         });
     });
+});
 
+describe('bridge_settle: the XBRIDGE settle pass', function(){
     describe('the refusal and deferral paths', function(){
-
         // GUARD 2 of 4: the idempotency filter.
         it('applies NOTHING for an id already recorded in bridge_settlements', async function(){
             const keys = [makeKey(), makeKey(), makeKey()];
@@ -498,7 +542,11 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             assert.deepStrictEqual(state.actions, [], 'a refused row must mint no action index');
             assert.deepStrictEqual(state.settlements, []);
         });
+    });
+});
 
+describe('bridge_settle: the XBRIDGE settle pass', function(){
+    describe('the refusal and deferral paths', function(){
         it('carries a row whose effective_time is ahead of this block protocol time', async function(){
             const keys = [makeKey(), makeKey(), makeKey()];
             const row  = makeTransfer(keys, { effective_time: 999999 });
@@ -555,20 +603,10 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             assert.deepStrictEqual(state.actions, []);
         });
     });
+});
 
+describe('bridge_settle: the XBRIDGE settle pass', function(){
     describe('one settlement per SOURCE LEG (the ledger of record refusal)', function(){
-
-        // Two finalized rows for ONE source leg: different transfer_id AND different
-        // snapshot_block, which is the shape measured on the rail (eleven finalized rows for
-        // seven source actions, 120 minted against 80 locked). The id-keyed idempotency filter
-        // cannot see it, because snapshot_block is inside transfer_id by design,
-        // so both rows are legitimately-signed, distinct, unapplied rows to every earlier guard.
-        function duplicatePair(keys, overrides){
-            const base = Object.assign({}, overrides || {});
-            return [makeTransfer(keys, Object.assign({}, base, { transfer_id: '1'.repeat(64), snapshot_block: SNAPSHOT })),
-                    makeTransfer(keys, Object.assign({}, base, { transfer_id: '2'.repeat(64), snapshot_block: SNAPSHOT + 1 }))];
-        }
-
         it('refuses a second IN-leg row naming a lock this chain already minted for', async function(){
             const keys = [makeKey(), makeKey(), makeKey()];
             const pair = duplicatePair(keys);
@@ -610,7 +648,11 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             assert.deepStrictEqual(state.credits, [['XCHAIN', '10.00000000', DEST_ADDR]]);
             assert.strictEqual(state.settlements.length, 1);
         });
+    });
+});
 
+describe('bridge_settle: the XBRIDGE settle pass', function(){
+    describe('one settlement per SOURCE LEG (the ledger of record refusal)', function(){
         it('still applies a second row naming a DIFFERENT lock on the same chain', async function(){
             const keys = [makeKey(), makeKey(), makeKey()];
             const first  = makeTransfer(keys, { transfer_id: '3'.repeat(64), src_action_index: 4242 });
@@ -666,7 +708,11 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             assert.deepStrictEqual(state.credits, []);
             assert.deepStrictEqual(state.actions, [], 'a refused row must mint no action index');
         });
+    });
+});
 
+describe('bridge_settle: the XBRIDGE settle pass', function(){
+    describe('one settlement per SOURCE LEG (the ledger of record refusal)', function(){
         it('drops a settled leg from the due set, so a duplicate cannot hold a cap slot forever', async function(){
             const rows = [
                 { transfer_id: '1'.repeat(64), snapshot_block: 1, dest_chain: 'DOGE', network: NETWORK,
@@ -709,7 +755,9 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             assert.strictEqual(await BS.isSourceLegSettled(ctx.indexerDb, 'BTC', null), false);
         });
     });
+});
 
+describe('bridge_settle: the XBRIDGE settle pass', function(){
     describe('the due set: order and the per-block cap', function(){
 
         // GUARD 4 of 4: the per-block cap.
@@ -748,7 +796,9 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
                 [String(1).padStart(64, '0'), String(3).padStart(64, '0')]);
         });
     });
+});
 
+describe('bridge_settle: the XBRIDGE settle pass', function(){
     describe('the proof transport: a missing checkpoint STALLS, it never refuses', function(){
 
         it('raises BridgeProofUnavailableError when no checkpoint at or after snapshot_block is held', async function(){
@@ -787,24 +837,10 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             assert.strictEqual(await BS.fetchProofForTransfer(row, ctx), null);
         });
     });
+});
 
+describe('bridge_settle: the XBRIDGE settle pass', function(){
     describe('deterministic checkpoint selection', function(){
-
-        function selectorCtx(anchorRows, mirrorRows){
-            const { ctx } = makeCtx({ coin: 'DOGE' });
-            ctx.indexerDb.doQuery = async (sql) => (/FROM anchor_actions/.test(sql) ? anchorRows : []);
-            ctx.indexerDb.mirrorDb = () => bindSettlementReads({ doQuery: async () => mirrorRows });
-            // The two reads are the real db mixin methods over those stubs, not stubs of their
-            // own, so the anchor leg still has to issue SQL naming anchor_actions to see a row
-            // and the mirrored leg still has to route through mirrorDb() to see one.
-            const anchorsMixin = require('../../src/db/anchors');
-            ctx.indexerDb.getEarliestValidAnchorCheckpoint =
-                anchorsMixin.getEarliestValidAnchorCheckpoint.bind(ctx.indexerDb);
-            ctx.indexerDb.getMirroredStateCheckpointCandidates =
-                anchorsMixin.getMirroredStateCheckpointCandidates.bind(ctx.indexerDb);
-            return ctx;
-        }
-
         it('takes the LOWEST height at or after snapshot_block, and the highest seq at it', async function(){
             const row = makeTransfer([], {});
             // The SQL does the ordering on a real database; the merge across sources is what
@@ -833,7 +869,11 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             const picked = await PC.selectCheckpoint(row, ctx);
             assert.strictEqual(picked.block_index, 1500);
         });
+    });
+});
 
+describe('bridge_settle: the XBRIDGE settle pass', function(){
+    describe('deterministic checkpoint selection', function(){
         it('admits a mirrored row only once its own quorum re-verifies', async function(){
             const keys = [makeKey(), makeKey(), makeKey()];
             const cp = { chain: 'BTC', network: NETWORK, block_index: 1210, checkpoint_seq: 2,
@@ -878,9 +918,10 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             }
         });
     });
+});
 
+describe('bridge_settle: the XBRIDGE settle pass', function(){
     describe('SLASH: the bridge engines are a slashable family', function(){
-
         // Driven through the real handler, not read off a map: ENGINE_CAPABILITY is
         // module-private, so the observable behaviour IS the test. The capability lookup sits
         // BEFORE the signature check in parse(), so a deliberately invalid signature is enough
@@ -932,7 +973,11 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
                                                     'XBRIDGE|a|1200|X', 'XBRIDGE|a|1300|Y', false);
             assert.ok(mismatched.error, 'a height mismatch must not resolve a slot');
         });
+    });
+});
 
+describe('bridge_settle: the XBRIDGE settle pass', function(){
+    describe('SLASH: the bridge engines are a slashable family', function(){
         it('reads the height out of the canonical this module actually builds', function(){
             // The field index is only right if the canonical really carries snapshot_block
             // third. Read it back off the module's own builders rather than off a literal.
@@ -968,21 +1013,10 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             assert.strictEqual('proof' in ctx, false);
         });
     });
+});
 
+describe('bridge_settle: the XBRIDGE settle pass', function(){
     describe('refusal logging: once per row, not once per pass', function(){
-
-        // Every method the module reaches goes through console.log/console.warn, never through
-        // a logger object, so capturing both globals for the duration of fn() is the only way to
-        // read what a settle pass actually printed. Always restored, even if fn() throws.
-        async function captureConsole(fn){
-            const lines = [];
-            const origLog = console.log, origWarn = console.warn;
-            console.log  = (...a) => lines.push(a.join(' '));
-            console.warn = (...a) => lines.push(a.join(' '));
-            try { await fn(); } finally { console.log = origLog; console.warn = origWarn; }
-            return lines;
-        }
-
         // The memo is per-process (module-level), so a prior test's refusals under a reused
         // transfer_id would otherwise leak into these counts. Each test below also picks its own
         // id, but resetting first keeps this suite independent of run order.
@@ -1016,6 +1050,15 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
                 'three passes over one terminally refused row must log the refusal exactly once, got:\n' +
                 lines.join('\n'));
         });
+    });
+});
+
+describe('bridge_settle: the XBRIDGE settle pass', function(){
+    describe('refusal logging: once per row, not once per pass', function(){
+        // The memo is per-process (module-level), so a prior test's refusals under a reused
+        // transfer_id would otherwise leak into these counts. Each test below also picks its own
+        // id, but resetting first keeps this suite independent of run order.
+        beforeEach(function(){ BS.resetRefusalMemo(); });
 
         it('logs again exactly once when the refusal reason for the same id changes', async function(){
             const id = 'e'.repeat(64);
@@ -1068,6 +1111,15 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
                 'a deferral is retried every pass on purpose (the snapshot may arrive by the next one), ' +
                 'so it is a different class from a terminal refusal and stays per-pass');
         });
+    });
+});
+
+describe('bridge_settle: the XBRIDGE settle pass', function(){
+    describe('refusal logging: once per row, not once per pass', function(){
+        // The memo is per-process (module-level), so a prior test's refusals under a reused
+        // transfer_id would otherwise leak into these counts. Each test below also picks its own
+        // id, but resetting first keeps this suite independent of run order.
+        beforeEach(function(){ BS.resetRefusalMemo(); });
 
         it('bounds the memo so a long-running process cannot grow it without limit', function(){
             BS.resetRefusalMemo();

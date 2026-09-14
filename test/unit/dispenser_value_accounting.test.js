@@ -171,7 +171,6 @@ function getAmounts(calls){
  * ------------------------------------------------------------------ */
 
 describe('dispense value accounting: recorded GET_AMOUNT @regression @tier1', function () {
-
     it('inside a batch each sub-command records the fill it bought, not the whole payment', async function () {
         let { dispense, calls } = makeVenue();
         // 3 coin pays for three 1-coin fills across three sub-commands.
@@ -225,7 +224,9 @@ describe('dispense value accounting: recorded GET_AMOUNT @regression @tier1', fu
             'the legacy record shape must replay byte-identically below the flag');
         assert.strictEqual(data['BATCH_VALUE_LEDGER'], undefined);
     });
+});
 
+describe('dispense value accounting: recorded GET_AMOUNT @regression @tier1', function () {
     it('an INVALID dispense attributes nothing and keeps the legacy figure', async function () {
         // Payment below one fill: nothing settles, so nothing is attributed and the row
         // still records what was paid at the failed attempt.
@@ -283,14 +284,13 @@ describe('dispense value accounting: recorded GET_AMOUNT @regression @tier1', fu
     });
 });
 
+const THREE = { dispenserIds: [500, 501, 502] };
+
 /* ------------------------------------------------------------------ *
  *  Row 19: one payment, N dispensers, OUTSIDE a batch
  * ------------------------------------------------------------------ */
 
 describe('dispense value accounting: multi-dispenser payment outside a batch @regression @tier1', function () {
-
-    const THREE = { dispenserIds: [500, 501, 502] };
-
     it('one fill\'s worth behind THREE dispensers fills exactly ONE', async function () {
         let { dispense, calls } = makeVenue(THREE);
         let data = dispenseData({ COIN_AMOUNT: '1.00000000' });
@@ -338,7 +338,9 @@ describe('dispense value accounting: multi-dispenser payment outside a batch @re
         assert.strictEqual(data['BATCH_VALUE_LEDGER'], undefined);
         assert.ok(!Object.prototype.hasOwnProperty.call(data, 'BATCH_VALUE_LEDGER'));
     });
+});
 
+describe('dispense value accounting: multi-dispenser payment outside a batch @regression @tier1', function () {
     it('the tally is scoped to ONE action: a second DISPENSE gets a fresh payment', async function () {
         // Outside a batch, one parse() IS one transaction. Two of them are two payments,
         // and the second must not be starved by the first.

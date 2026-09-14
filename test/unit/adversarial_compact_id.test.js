@@ -63,7 +63,6 @@ function makeDb(onQuery) {
 afterEach(function () { sinon.restore(); });
 
 describe('Adversarial ^<id> resolution: dangling / malformed references @adversarial @tier1', function () {
-
     // ---- (A) Existence-checked: a well-formed caret-id is verified against a real row ----
 
     it('getAddressId existence-checks a canonical ^<id>: dangling -> null (no phantom)', async function () {
@@ -117,7 +116,9 @@ describe('Adversarial ^<id> resolution: dangling / malformed references @adversa
         const db = makeDb(() => []);
         assert.strictEqual(await db.getAddressId('^-1'), null);
     });
+});
 
+describe('Adversarial ^<id> resolution: dangling / malformed references @adversarial @tier1', function () {
     it('an OUT-OF-RANGE huge ^<id> is matched as a digit string, not coerced to a float', async function () {
         const big = '^' + '9'.repeat(38); // ~1e38, BIGINT UNSIGNED max ~1.8e19
         let captured;

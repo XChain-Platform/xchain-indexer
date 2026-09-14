@@ -48,7 +48,6 @@ function utilFor(coin){
 }
 
 describe('utility.parseBridgedTick: the origin-rooted bridged-tick reader @regression @tier1', function(){
-
     it('splits a foreign-rooted tick into its origin and its native name', function(){
         const doge = utilFor('DOGE');
         assert.deepStrictEqual(doge.parseBridgedTick('BTC.PEPECASH'), { origin: 'BTC', name: 'PEPECASH' });
@@ -104,7 +103,9 @@ describe('utility.parseBridgedTick: the origin-rooted bridged-tick reader @regre
     it('returns the name verbatim, because that is the string the row is looked up by', function(){
         assert.deepStrictEqual(utilFor('DOGE').parseBridgedTick('BTC.pEpE'), { origin: 'BTC', name: 'pEpE' });
     });
+});
 
+describe('utility.parseBridgedTick: the origin-rooted bridged-tick reader @regression @tier1', function(){
     it('takes an explicit local coin, the isCryptoAddress convention', function(){
         // A reader working on behalf of another chain (an explorer panel, a mirror check)
         // passes that chain's coin rather than re-instantiating Utility.

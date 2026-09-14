@@ -75,7 +75,6 @@ function pcFor(network){
 }
 
 describe('protocol-change registry is prototype-free @regression @tier1', function(){
-
     describe('the registry itself', function(){
 
         it('has a null prototype, so no inherited member is reachable by name', function(){
@@ -131,7 +130,9 @@ describe('protocol-change registry is prototype-free @regression @tier1', functi
             });
         }
     });
+});
 
+describe('protocol-change registry is prototype-free @regression @tier1', function(){
     describe('addChange uniqueness is not confused by an inherited member', function(){
 
         it('accepts a change whose name collides with a prototype member', function(){

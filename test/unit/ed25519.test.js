@@ -25,7 +25,6 @@ function sign(payload, privateKey) {
 }
 
 describe('ed25519 @crypto @regression', function () {
-
     describe('pubkeyFromHex()', function () {
         it('reconstructs a verifiable KeyObject from a 64-hex raw pubkey', function () {
             const { pubHex } = realKey();
@@ -37,7 +36,9 @@ describe('ed25519 @crypto @regression', function () {
             assert.throws(() => ed.pubkeyFromHex(''), /Invalid pubkey hex length/);
         });
     });
+});
 
+describe('ed25519 @crypto @regression', function () {
     describe('verify()', function () {
         it('accepts a genuine signature over the payload', function () {
             const { privateKey, pubHex } = realKey();
@@ -85,7 +86,9 @@ describe('ed25519 @crypto @regression', function () {
             assert.strictEqual(ed.verify('msg', sig, 'f'.repeat(64)), false);
         });
     });
+});
 
+describe('ed25519 @crypto @regression', function () {
     describe('buildPriceV0Payload()', function () {
         it('is deterministic and sorts pairs by pair id regardless of input order', function () {
             const a = ed.buildPriceV0Payload(5, 1000, [{ pair: 'BTC_USD', p: '1' }, { pair: 'AAA_USD', p: '2' }]);

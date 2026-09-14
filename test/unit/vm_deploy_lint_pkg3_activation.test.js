@@ -29,7 +29,6 @@ const { isVmDeployLintPkg3Active, VM_DEPLOY_LINT_PKG3_ACTIVATION } =
     require('../../src/vm_deploy_lint_pkg3_activation.js');
 
 describe('VM deploy-lint Pkg 3 activation predicate (generator + wasm bans) @regression @tier1', function () {
-
     it('mainnet is armed per coin: inert below the height, active at/after it', function () {
         assert.strictEqual(isVmDeployLintPkg3Active(960999, 'mainnet', 'BTC'), false);
         assert.strictEqual(isVmDeployLintPkg3Active(961000, 'mainnet', 'BTC'), true);
@@ -71,7 +70,9 @@ describe('VM deploy-lint Pkg 3 activation predicate (generator + wasm bans) @reg
         assert.strictEqual(VM_DEPLOY_LINT_PKG3_ACTIVATION['testnet'], 0);
         assert.strictEqual(VM_DEPLOY_LINT_PKG3_ACTIVATION['regtest'], 0);
     });
+});
 
+describe('VM deploy-lint Pkg 3 activation predicate (generator + wasm bans) @regression @tier1', function () {
     it('heights EQUAL the VM PKG3_SANDBOX_ACTIVATION (deploy-lint gate cannot drift from the runtime strip)', function () {
         // The deploy-lint bans (this module) and the VM runtime strips (WebAssembly
         // global delete, etc.) are the two halves of ONE Package 3 bundle; if they

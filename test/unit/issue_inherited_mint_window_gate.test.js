@@ -62,45 +62,45 @@ function makeReissueParams(overrides = {}) {
     ];
 }
 
+let indexer, handler, gateOn;
+
+function makeActionsCtx() {
+    return {
+        config:          indexer.config,
+        util:            indexer.util,
+        mapper:          indexer.mapper,
+        decoderDb:       indexer.decoderDb,
+        indexerDb:       indexer.indexerDb,
+        protocolChanges: {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().callsFake(async (name, block) => {
+                if (name === 'ISSUANCE_FEE') return Number(block) >= 862633;
+                if (name === 'ISSUE_INHERITED_MINT_WINDOW') return gateOn;
+                return true;
+            }),
+        },
+        processAction: sinon.stub().resolves(),
+    };
+}
+
+// Existing token whose mint window OPENED at 50 (and closed at 150 where a
+// stop block is set); every test issues at block 200, past both.
+function stubExistingToken(overrides = {}) {
+    indexer.indexerDb.getTokenInfo.resolves(createTokenInfo(Object.assign({
+        TICK: 'TEST', OWNER: SOURCE, SUPPLY: '0',
+        MAX_SUPPLY: '1000', MAX_MINT: '100',
+        MINT_START_BLOCK: '50', MINT_STOP_BLOCK: null,
+    }, overrides)));
+}
+
+async function parseReissue(paramOverrides = {}) {
+    const params = makeReissueParams(paramOverrides);
+    const data   = createBaseData({ ACTION: 'ISSUE', FORMAT: 0, BLOCK_INDEX: 200, SOURCE });
+    await handler.parse(params, data, null);
+    return data;
+}
+
 describe('ISSUE_INHERITED_MINT_WINDOW gate @regression @tier2', function () {
-    let indexer, handler, gateOn;
-
-    function makeActionsCtx() {
-        return {
-            config:          indexer.config,
-            util:            indexer.util,
-            mapper:          indexer.mapper,
-            decoderDb:       indexer.decoderDb,
-            indexerDb:       indexer.indexerDb,
-            protocolChanges: {
-                isDefined: sinon.stub().returns(true),
-                isEnabled: sinon.stub().callsFake(async (name, block) => {
-                    if (name === 'ISSUANCE_FEE') return Number(block) >= 862633;
-                    if (name === 'ISSUE_INHERITED_MINT_WINDOW') return gateOn;
-                    return true;
-                }),
-            },
-            processAction: sinon.stub().resolves(),
-        };
-    }
-
-    // Existing token whose mint window OPENED at 50 (and closed at 150 where a
-    // stop block is set); every test issues at block 200, past both.
-    function stubExistingToken(overrides = {}) {
-        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo(Object.assign({
-            TICK: 'TEST', OWNER: SOURCE, SUPPLY: '0',
-            MAX_SUPPLY: '1000', MAX_MINT: '100',
-            MINT_START_BLOCK: '50', MINT_STOP_BLOCK: null,
-        }, overrides)));
-    }
-
-    async function parseReissue(paramOverrides = {}) {
-        const params = makeReissueParams(paramOverrides);
-        const data   = createBaseData({ ACTION: 'ISSUE', FORMAT: 0, BLOCK_INDEX: 200, SOURCE });
-        await handler.parse(params, data, null);
-        return data;
-    }
-
     beforeEach(function () {
         indexer = createMockIndexer();
         gateOn  = true;
@@ -137,6 +137,21 @@ describe('ISSUE_INHERITED_MINT_WINDOW gate @regression @tier2', function () {
         const data = await parseReissue({ MINT_STOP_BLOCK: '150' });
         assert.strictEqual(data.STATUS, 'invalid: MINT_STOP_BLOCK < BLOCK_INDEX');
     });
+});
+
+describe('ISSUE_INHERITED_MINT_WINDOW gate @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        gateOn  = true;
+        handler = new Issue(makeActionsCtx());
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.isDistributed.resolves(false);
+        indexer.indexerDb.getAddressBalances.resolves({});
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.getTokenSupply.resolves('0');
+    });
+
+    afterEach(function () { sinon.restore(); });
 
     it('gate ON: an explicit FUTURE window still validates', async function () {
         stubExistingToken();

@@ -62,7 +62,6 @@ function matches(n, from){
 }
 
 describe('cross-chain settlement per-block cap', function(){
-
     afterEach(() => sinon.restore());
 
     it('exports a cap alongside the XCALL and ATTEST siblings', function(){
@@ -103,6 +102,10 @@ describe('cross-chain settlement per-block cap', function(){
         assert.strictEqual(res.length, 10, 'only 10 unsettled matches exist');
         assert.deepStrictEqual(res.map(m => m.match_id), all.slice(30).map(m => m.match_id));
     });
+});
+
+describe('cross-chain settlement per-block cap', function(){
+    afterEach(() => sinon.restore());
 
     it('processCrossChainSettlements passes the protocol cap and carries the overflow forward', async function(){
         const util  = new Utility();

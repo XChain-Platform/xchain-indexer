@@ -123,7 +123,6 @@ describe('Issue: caret-dot TICK rejection and ticker-intern gating @regression @
     });
 
     describe('Defect A: caret TICK containing "." (at/above the flag)', function(){
-
         // "^12.5" trips the parent/child split too (it contains a '.'), so the parent
         // "^12" must resolve and be owned by SOURCE for the ISSUE to reach the caret-id
         // check at all - exactly the coincidence worth naming ("also looks like a
@@ -179,7 +178,9 @@ describe('Issue: caret-dot TICK rejection and ticker-intern gating @regression @
 
             assert.strictEqual(data.STATUS, 'valid');
         });
+    });
 
+    describe('Defect A: caret TICK containing "." (at/above the flag)', function(){
         it('"^12" (no dot) is still accepted when the flag is active', async function(){
             indexer.indexerDb.getTokenInfo.resolves(null); // brand-new tick, no parent split (no '.')
             const handler = new Issue(makeActionsCtx(indexer, { batchLimitsActive: true }));

@@ -164,6 +164,18 @@ describe('static fee quote <-> handler acceptance fee parity @regression @tier1'
         });
     });
 
+    const SITES = [
+        path.join('actions', 'index.js'),
+        path.join('actions', 'deploy', 'index.js'),
+        path.join('actions', 'deploy', 'deploy_chunk.js'),
+        path.join('actions', 'execute', 'index.js')
+    ];
+    const GAS_KEY = /VM_DEPLOY_BASE|VM_DEPLOY_PER_BYTE|VM_EXECUTE_BASE/;
+
+    function stripComments(src){
+        return src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
+    }
+
     /* The re-duplication guard, which is the half that survives this commit.
      *
      * Parity fixtures prove the numbers agree today; they say nothing about a future edit that
@@ -172,18 +184,6 @@ describe('static fee quote <-> handler acceptance fee parity @regression @tier1'
      * arithmetic split again and the quote can silently under-size the required output.
      */
     describe('no site recomputes the VM gas arithmetic', function () {
-        const SITES = [
-            path.join('actions', 'index.js'),
-            path.join('actions', 'deploy', 'index.js'),
-            path.join('actions', 'deploy', 'deploy_chunk.js'),
-            path.join('actions', 'execute', 'index.js')
-        ];
-        const GAS_KEY = /VM_DEPLOY_BASE|VM_DEPLOY_PER_BYTE|VM_EXECUTE_BASE/;
-
-        function stripComments(src){
-            return src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
-        }
-
         for(const site of SITES){
             it(site + ' reads no gas-schedule key outside util.vmGasCost', function () {
                 const code = stripComments(fs.readFileSync(path.join(SRC, site), 'utf8'));
@@ -193,7 +193,9 @@ describe('static fee quote <-> handler acceptance fee parity @regression @tier1'
                     + '\n  Route it through this.util.vmGasCost so the static quote moves with it.');
             });
         }
+    });
 
+    describe('no site recomputes the VM gas arithmetic', function () {
         // Every .js under src/, relative to it. The SITES list above is the set of files that
         // charge the fee TODAY; it cannot see a fifth handler added tomorrow, and a list that
         // silently covers less than the tree is the same green-by-omission this suite exists

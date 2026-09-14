@@ -35,10 +35,13 @@ const AIRDROP_ENV = {
 const COINS    = ['BTC', 'LTC', 'DOGE'];
 const NETWORKS = ['mainnet', 'testnet', 'regtest'];
 
+const saved = {};
+
+function load(coin, network){
+    return require('../../src/config.js').getConfig(coin, network);
+}
+
 describe('genesis airdrop config pinning @regression', function () {
-
-    const saved = {};
-
     beforeEach(function () {
         for(const [k, v] of Object.entries(AIRDROP_ENV)){
             saved[k] = process.env[k];
@@ -54,10 +57,6 @@ describe('genesis airdrop config pinning @regression', function () {
         }
         delete require.cache[require.resolve('../../src/config.js')];
     });
-
-    function load(coin, network){
-        return require('../../src/config.js').getConfig(coin, network);
-    }
 
     for(const network of ['mainnet', 'testnet']){
         it(`ignores the airdrop env on ${network}, for every coin`, function () {
@@ -91,6 +90,24 @@ describe('genesis airdrop config pinning @regression', function () {
         const c = load('BTC', 'regtest');
         assert.deepStrictEqual(c.GENESIS_AIRDROP_HASHES, ['', 'bb']);
         assert.strictEqual(c.GENESIS_AIRDROP_PATHS.length, c.GENESIS_AIRDROP_HASHES.length);
+    });
+});
+
+describe('genesis airdrop config pinning @regression', function () {
+    beforeEach(function () {
+        for(const [k, v] of Object.entries(AIRDROP_ENV)){
+            saved[k] = process.env[k];
+            process.env[k] = v;
+        }
+        delete require.cache[require.resolve('../../src/config.js')];
+    });
+
+    afterEach(function () {
+        for(const k of Object.keys(AIRDROP_ENV)){
+            if(saved[k] === undefined) delete process.env[k];
+            else process.env[k] = saved[k];
+        }
+        delete require.cache[require.resolve('../../src/config.js')];
     });
 
     it('leaves the airdrop disabled everywhere when the env is unset', function () {
