@@ -64,23 +64,22 @@
  *   TEST_DB_HOST=127.0.0.1 TEST_DB_PORT=... TEST_DB_USER=... TEST_DB_PASS=... \
  *   npx mocha --no-config --timeout 120000 \
  *     test/integration/scenarios/18_fullnode_reward_determinism.test.js
+ *
+ * The signed NODEPROOF and PRICE wire builders are in
+ * 18_fullnode_reward_determinism.test/helpers/signed_wires.js.
  ********************************************************************/
 
 'use strict';
 
 const assert = require('assert');
-const crypto = require('crypto');
 const { decoderQuery, indexerQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
 const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
-const ed25519 = require('../../../src/consensus/ed25519.js');
-const eq      = require('../../../src/equivocation_header.js');
+const { genKey, buildNodeproofWire, buildPriceBatchWire } = require('./18_fullnode_reward_determinism.test/helpers/signed_wires');
 
 process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
-
-const NETWORK = 'regtest';
 
 // Regtest FULLNODE knobs (read live at config-build time by configs/BTC.js). A short
 // cadence so epoch boundaries land inside the seeded corpus; REWARD_SHARE>0 activates the
@@ -114,7 +113,6 @@ const STAKE_AMT = '2500.00000000';   // > full_node MIN_STAKE (2000) and > price
 // nobody for that epoch and every per-source count comes back one short.
 const EPOCHS    = [120, 125];
 const REORG_BUF = 6;                  // CANONICAL_REORG_BUFFER (snapshot_reorg_buffer.js)
-const DEPTH     = 2;                  // FULLNODE_CONFIRM_DEPTH
 const STAKE_BLK = 101;                // V5's stake block (activation 107)
 const UNSTAKE_BLK = 115;              // V5 unstakes here, so its stake deactivates at 121:
                                       // inside (125 - 6, 125], i.e. active at the buried
@@ -125,189 +123,218 @@ const V120_BLK  = 127, V125_BLK = 128;  // verdict blocks (within VERDICT_ACCEPT
 const PRICE_BLK = 130;                // PRICE batch block, and the batch's own BTC anchor
 const ROUND     = 1;                  // single-round window, so FIRST_ROUND == LAST_ROUND
 
-// Deterministic Ed25519 identity: { privateKey (KeyObject), pub (raw 64-hex, lowercase) }.
-function genKey() {
-    const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
-    const der = publicKey.export({ format: 'der', type: 'spki' });
-    return { privateKey, pub: Buffer.from(der.slice(-32)).toString('hex').toLowerCase() };
-}
-const signHex = (priv, buf) => crypto.sign(null, buf, priv).toString('hex');
+// One clean-DB run: seed gas + stake + (derived) NODEPROOF verdicts + a signed PRICE
+// batch, drive the REAL indexer, and read back the reward rows + consensus hash chain.
+// `keys` carries the five validator identities and the genesis verifiers, which are fixed
+// once per suite and reused across BOTH runs.
+async function runCorpus(keys) {
+    await resetDecoderDb();
+    await resetIndexerDb();
+    const seeder = new DecoderSeeder(decoderQuery);
+    await seedCorpusChain(seeder, keys);
 
-// Build a NODEPROOF v0 wire action for `epoch`, signed by the genesis verifiers, exactly
-// as nodeproof.js reconstructs + verifies it. challenge_id binds to the epoch's stored
-// ledger hash (passed in), so the corpus is a function of earlier on-chain state.
-function buildNodeproofWire(epoch, ledgerHash, passKeys, verifiers) {
-    const target      = epoch - DEPTH;
-    const preimage    = NETWORK + ':' + epoch + ':' + String(ledgerHash) + ':' + target;
-    const challengeId = crypto.createHash('sha256').update(preimage).digest('hex');
-    const passSorted  = passKeys.map(p => p.pub.toLowerCase()).sort();
-
-    let canonRaw = challengeId + '|' + epoch + '|' + passSorted.join(',');
-    if (eq.isEquivHeaderActive(epoch, NETWORK))
-        canonRaw = eq.buildEquivCanonical(eq.ENGINE_TAGS.NODEPROOF, challengeId, 0, canonRaw);
-    const canonical = Buffer.from(canonRaw, 'utf8');
-
-    const sigFields = [];
-    for (const v of verifiers) { sigFields.push(v.pub, signHex(v.privateKey, canonical)); }
-
-    return ['NODEPROOF', '0', challengeId, String(epoch),
-            String(passSorted.length), ...passSorted,
-            String(verifiers.length), ...sigFields].join('|');
+    const indexer = await initIndexer();
+    try {
+        // Phase A - process through the filler block so the epoch ledger hashes exist.
+        await processBlocks(indexer);
+        await sealVerdicts(indexer, seeder, keys);
+        await landPriceBatch(indexer, seeder, keys);
+        return await readCorpusState(indexer);
+    } finally {
+        await destroyIndexer(indexer);
+    }
 }
 
-// Build a signed PRICE batch wire action (version 0) carrying a single round body, over
-// the canonical buildPriceBatchPayload applies (it wraps the ORACLE_BATCH equiv header
-// itself, unconditionally, unlike the retired per-round builder's height gate).
-// Wire: PRICE|0|FIRST_ROUND|LAST_ROUND|BTC_BLOCK_HEIGHT|ROUND_COUNT|
-//         ROUND|TIMESTAMP|ANCHOR_HEIGHT|PAIR_COUNT|pair|price|...  |SIG_COUNT|PUBKEY|SIG|...
-//
-// One round is enough: the window bounds collapse to that round and its anchor equals the
-// header anchor, which is what the parser requires and what keeps the batch off both
-// straddle rules. A wider window would exercise batching, not the reward rule under test.
-function buildPriceBatchWire(round, timestamp, pairs, signers, btcHeight) {
-    const rounds  = [{ round: round, timestamp: timestamp, btcBlockHeight: btcHeight, pairs: pairs }];
-    const payload = Buffer.from(ed25519.buildPriceBatchPayload(round, round, btcHeight, rounds), 'utf8');
-    const pairFields = [];
-    for (const p of pairs) pairFields.push(p.pair, p.price);
-    const sigFields = [];
-    for (const s of signers) { sigFields.push(s.pub, signHex(s.privateKey, payload)); }
-    return ['PRICE', '0', String(round), String(round), String(btcHeight), '1',
-            String(round), String(timestamp), String(btcHeight),
-            String(pairs.length), ...pairFields,
-            String(signers.length), ...sigFields].join('|');
+// The on-chain preamble every run replays: gas, the five stakes, V5's unstake and a filler.
+async function seedCorpusChain(seeder, { V1, V2, V3, V4, V5 }) {
+    // Block 99 - gas bootstrap (issuing/minting the gas tick is fee-exempt).
+    await seeder.seedBlock(99, T - 600, [
+        { source: FUNDER, data: 'ISSUE|0|XCHAIN|21000000|1000000|8|Gas bootstrap' },
+        { source: A1,     data: 'MINT|0|XCHAIN|12000' },
+        { source: A2,     data: 'MINT|0|XCHAIN|8000'  },
+        { source: A3,     data: 'MINT|0|XCHAIN|8000'  },
+        { source: A4,     data: 'MINT|0|XCHAIN|8000'  },
+    ]);
+    // Blocks 100/101 - stake the five validators (V1+V2 share source A1).
+    await seeder.seedBlock(100, T, [
+        { source: A1, data: 'STAKE|1|' + STAKE_AMT + '|' + V1.pub },
+        { source: A1, data: 'STAKE|1|' + STAKE_AMT + '|' + V2.pub },
+    ]);
+    await seeder.seedBlock(STAKE_BLK, T + 600, [
+        { source: A2, data: 'STAKE|1|' + STAKE_AMT + '|' + V3.pub },
+        { source: A3, data: 'STAKE|1|' + STAKE_AMT + '|' + V4.pub },
+        { source: A4, data: 'STAKE|1|' + STAKE_AMT + '|' + V5.pub },
+    ]);
+    // Block 115 - V5 unstakes. The stake rows deactivate at 115 + 6 = 121, which is
+    // inside the second epoch's buried window (119, 125]: V5 is a full_node at the
+    // height the hub locked its claimant universe at, so the hub challenges it and a
+    // quorum attests it, but it holds no active stake at the raw epoch or at the
+    // verdict block. Reading either of those heights loses the epoch for source A4.
+    await seeder.seedBlock(UNSTAKE_BLK, T + 900, [
+        { source: A4, data: 'UNSTAKE|0|' + V5.pub },
+    ]);
+    // A trivial tx so the decoder tip clears both epochs; the blocks between (incl.
+    // the two epoch heights) are processed as empty blocks and each gets a stored
+    // ledger hash.
+    await seeder.seedBlock(FILL_BLK, T + 1200, [
+        { source: A1, destination: A2, data: 'SEND|0|XCHAIN|0.00000001|' + A2 },
+    ]);
+}
+
+// Phase B - derive each epoch's challenge from its stored ledger hash, build +
+// sign the NODEPROOF verdicts. V1,V2,V3 pass both epochs; V4 passes only the
+// first (pass rate 50% < 70%); V5 passes both, having unstaked in between.
+async function sealVerdicts(indexer, seeder, { V1, V2, V3, V4, V5, verifiers }) {
+    const passByEpoch = {
+        [EPOCHS[0]]: [V1, V2, V3, V4, V5],
+        [EPOCHS[1]]: [V1, V2, V3, V5],
+    };
+    const verdictBlk  = { [EPOCHS[0]]: V120_BLK, [EPOCHS[1]]: V125_BLK };
+    for (const epoch of EPOCHS) {
+        const hashes = await indexer.indexerDb.getStoredBlockHashes(epoch);
+        assert.ok(hashes && hashes.ledger_hash, 'epoch ' + epoch + ' must have a stored ledger hash');
+        const wire = buildNodeproofWire(epoch, hashes.ledger_hash, passByEpoch[epoch], verifiers);
+        await seeder.seedBlock(verdictBlk[epoch], T + 1800 + epoch,
+            [{ source: A1, data: wire }]);
+    }
+    await processBlocks(indexer);   // process the verdict blocks → full_node_verifications
+}
+
+// Phase C - a signed PRICE batch all four sign. It must land VALID for the
+// zero-reward pin to mean anything: an invalid action pays nothing for the
+// uninteresting reason.
+async function landPriceBatch(indexer, seeder, { V1, V2, V3, V4 }) {
+    const priceWire = buildPriceBatchWire(ROUND, T + 3600,
+        [{ pair: 'BTC/USD', price: '50000' }], [V1, V2, V3, V4], PRICE_BLK);
+    await seeder.seedBlock(PRICE_BLK, T + 3600, [{ source: A1, data: priceWire }]);
+    await processBlocks(indexer);
+}
+
+// What the run is judged on: the consensus hash chain, every reward row, the batch's own
+// validation status and the per-source participation rollup.
+async function readCorpusState(indexer) {
+    const chain = await indexerQuery(
+        `SELECT b.block_index, t1.hash AS ledger, t2.hash AS actions
+         FROM blocks b
+         LEFT JOIN index_transactions t1 ON t1.id = b.ledger_hash_id
+         LEFT JOIN index_transactions t2 ON t2.id = b.actions_hash_id
+         ORDER BY b.block_index ASC`);
+    const rewards = await indexerQuery(
+        `SELECT vr.reward_type, ip.pubkey AS pubkey, ia.address AS source,
+                vr.amount, vr.round_reference, vr.block_index
+         FROM validator_rewards vr
+         JOIN index_pubkeys   ip ON ip.id = vr.signing_pubkey_id
+         JOIN index_addresses ia ON ia.id = vr.source_id
+         ORDER BY vr.reward_type, ip.pubkey`);
+    // Batch status. round_number carries FIRST_ROUND on a batch row, which for this
+    // single-round window is ROUND.
+    const priceStatus = await indexerQuery(
+        `SELECT validation_status AS status FROM prices
+         WHERE round_number = ? LIMIT 1`, [ROUND]);
+    // DISTINCT passing epochs per source - the participation numerator the gate reads.
+    const participation = await indexerQuery(
+        `SELECT ia.address AS source, COUNT(DISTINCT fv.epoch_height) AS epochs
+         FROM full_node_verifications fv
+         JOIN index_addresses ia ON ia.id = fv.source_id
+         WHERE fv.passed = 1
+         GROUP BY ia.address ORDER BY ia.address`);
+    return {
+        chain: chain.map(r => ({ block_index: Number(r.block_index), ledger: r.ledger, actions: r.actions })),
+        rewards: rewards.map(r => ({
+            reward_type: r.reward_type, pubkey: String(r.pubkey).toLowerCase(),
+            source: String(r.source), amount: String(r.amount),
+            round_reference: Number(r.round_reference), block_index: Number(r.block_index),
+        })),
+        priceStatus: priceStatus.length ? String(priceStatus[0].status) : null,
+        participation: participation.map(r => ({ source: String(r.source), epochs: Number(r.epochs) })),
+    };
+}
+
+function assertParticipationPerSource(firstRun) {
+    assert.strictEqual(firstRun.priceStatus, 'valid',
+        'the PRICE batch must land VALID, or the zero-reward pin below proves nothing');
+    // Per SOURCE, not per signer: A1 funded two validators (V1+V2) and still counts as
+    // one source, which is the shape any future participation rail has to read.
+    const part = new Map(firstRun.participation.map(p => [p.source, p.epochs]));
+    assert.strictEqual(part.get(A1), 2, 'source A1 (V1+V2) passed both epochs');
+    assert.strictEqual(part.get(A2), 2, 'source A2 (V3) passed both epochs');
+    assert.strictEqual(part.get(A3), 1, 'source A3 (V4) passed only one epoch (50% < 70%)');
+}
+
+// The attribution height, stated as behaviour. V5 was a full_node at 119, the height
+// the producing hub locks its claimant universe at for epoch 125 (every
+// CapabilitySnapshot read subtracts CANONICAL_REORG_BUFFER), so the hub challenged it
+// and the quorum attested it; its stake then deactivated at 121, before the raw epoch
+// and well before the verdict block. Both attribution reads have to resolve at the
+// buried height for the row to exist: the capability GATE in the handler and the
+// SOURCE resolution in the writer. Resolve either one at the raw epoch or at the
+// verdict block and source A4 comes back with one epoch instead of two, silently, for
+// participation the federation already signed off on.
+function assertBuriedWindowCredit(firstRun) {
+    const part = new Map(firstRun.participation.map(p => [p.source, p.epochs]));
+    assert.strictEqual(EPOCHS[1] - REORG_BUF, 119,
+        'the buried height this case turns on must be what the fixture assumes');
+    assert.strictEqual(part.get(A4), 2,
+        'source A4 (V5) was a claimant at the buried height for BOTH epochs and must be credited for both');
+    // And the row is booked to the staking source, not dropped to some other address
+    // or left sourceless: A4 appears exactly once in the per-source rollup.
+    assert.strictEqual(firstRun.participation.filter(p => p.source === A4).length, 1,
+        'V5 participation must roll up under its own staking source');
+}
+
+// The ruled behavior after the batch collapse. Every condition the retired per-round
+// derivation needed is satisfied here and it still must not pay: the action is valid,
+// it landed on BTC (the only chain that derivation ever fired on), four capable
+// validators signed it, FULLNODE_REWARD_SHARE is non-zero, and real challenge
+// participation exists in the DB for it to have read. Nothing pays it because the
+// derivation is gone, not because the setup fell short.
+function assertNoBatchRewards(firstRun) {
+    // The retired tranche types first, so a reintroduced split reports as itself rather
+    // than as a generic non-empty table.
+    assert.deepStrictEqual(firstRun.rewards.filter(r => r.reward_type === 'oracle_base' ||
+                                                   r.reward_type === 'oracle_full_node'), [],
+        'the oracle tranche reward types are unreachable and must stay unreachable');
+    // Catch-all: no reward of ANY type is derived from a batch, so a new type added later
+    // cannot start paying here unnoticed.
+    assert.deepStrictEqual(firstRun.rewards, [],
+        'the validator batch derives no rewards; a non-empty table means a derivation came back');
+}
+
+function assertIdenticalReplay(second, firstRun) {
+    assert.deepStrictEqual(second.rewards, firstRun.rewards,
+        'reward rows differ for the same input - fork risk');
+    // The load-bearing one now that the reward table is empty: the hash chain covers
+    // the whole corpus, batch and verdicts included, so a divergence anywhere in block
+    // processing surfaces here.
+    assert.deepStrictEqual(second.chain, firstRun.chain,
+        'block processing produced different consensus hashes for the same input - fork risk');
+    assert.deepStrictEqual(second.participation, firstRun.participation,
+        'challenge participation replayed differently from a clean DB - fork risk');
 }
 
 describe('Integration: full-node participation determinism and the batch zero-reward rule @regression @tier1', function () {
     this.timeout(180000);
 
-    let V1, V2, V3, V4, V5, verifiers, firstRun;
-
-    // One clean-DB run: seed gas + stake + (derived) NODEPROOF verdicts + a signed PRICE
-    // batch, drive the REAL indexer, and read back the reward rows + consensus hash chain.
-    async function runCorpus() {
-        await resetDecoderDb();
-        await resetIndexerDb();
-        const seeder = new DecoderSeeder(decoderQuery);
-
-        // Block 99 - gas bootstrap (issuing/minting the gas tick is fee-exempt).
-        await seeder.seedBlock(99, T - 600, [
-            { source: FUNDER, data: 'ISSUE|0|XCHAIN|21000000|1000000|8|Gas bootstrap' },
-            { source: A1,     data: 'MINT|0|XCHAIN|12000' },
-            { source: A2,     data: 'MINT|0|XCHAIN|8000'  },
-            { source: A3,     data: 'MINT|0|XCHAIN|8000'  },
-            { source: A4,     data: 'MINT|0|XCHAIN|8000'  },
-        ]);
-        // Blocks 100/101 - stake the five validators (V1+V2 share source A1).
-        await seeder.seedBlock(100, T, [
-            { source: A1, data: 'STAKE|1|' + STAKE_AMT + '|' + V1.pub },
-            { source: A1, data: 'STAKE|1|' + STAKE_AMT + '|' + V2.pub },
-        ]);
-        await seeder.seedBlock(STAKE_BLK, T + 600, [
-            { source: A2, data: 'STAKE|1|' + STAKE_AMT + '|' + V3.pub },
-            { source: A3, data: 'STAKE|1|' + STAKE_AMT + '|' + V4.pub },
-            { source: A4, data: 'STAKE|1|' + STAKE_AMT + '|' + V5.pub },
-        ]);
-        // Block 115 - V5 unstakes. The stake rows deactivate at 115 + 6 = 121, which is
-        // inside the second epoch's buried window (119, 125]: V5 is a full_node at the
-        // height the hub locked its claimant universe at, so the hub challenges it and a
-        // quorum attests it, but it holds no active stake at the raw epoch or at the
-        // verdict block. Reading either of those heights loses the epoch for source A4.
-        await seeder.seedBlock(UNSTAKE_BLK, T + 900, [
-            { source: A4, data: 'UNSTAKE|0|' + V5.pub },
-        ]);
-        // A trivial tx so the decoder tip clears both epochs; the blocks between (incl.
-        // the two epoch heights) are processed as empty blocks and each gets a stored
-        // ledger hash.
-        await seeder.seedBlock(FILL_BLK, T + 1200, [
-            { source: A1, destination: A2, data: 'SEND|0|XCHAIN|0.00000001|' + A2 },
-        ]);
-
-        const indexer = await initIndexer();
-        try {
-            // Phase A - process through the filler block so the epoch ledger hashes exist.
-            await processBlocks(indexer);
-
-            // Phase B - derive each epoch's challenge from its stored ledger hash, build +
-            // sign the NODEPROOF verdicts. V1,V2,V3 pass both epochs; V4 passes only the
-            // first (pass rate 50% < 70%); V5 passes both, having unstaked in between.
-            const passByEpoch = {
-                [EPOCHS[0]]: [V1, V2, V3, V4, V5],
-                [EPOCHS[1]]: [V1, V2, V3, V5],
-            };
-            const verdictBlk  = { [EPOCHS[0]]: V120_BLK, [EPOCHS[1]]: V125_BLK };
-            for (const epoch of EPOCHS) {
-                const hashes = await indexer.indexerDb.getStoredBlockHashes(epoch);
-                assert.ok(hashes && hashes.ledger_hash, 'epoch ' + epoch + ' must have a stored ledger hash');
-                const wire = buildNodeproofWire(epoch, hashes.ledger_hash, passByEpoch[epoch], verifiers);
-                await seeder.seedBlock(verdictBlk[epoch], T + 1800 + epoch,
-                    [{ source: A1, data: wire }]);
-            }
-            await processBlocks(indexer);   // process the verdict blocks → full_node_verifications
-
-            // Phase C - a signed PRICE batch all four sign. It must land VALID for the
-            // zero-reward pin to mean anything: an invalid action pays nothing for the
-            // uninteresting reason.
-            const priceWire = buildPriceBatchWire(ROUND, T + 3600,
-                [{ pair: 'BTC/USD', price: '50000' }], [V1, V2, V3, V4], PRICE_BLK);
-            await seeder.seedBlock(PRICE_BLK, T + 3600, [{ source: A1, data: priceWire }]);
-            await processBlocks(indexer);
-
-            const chain = await indexerQuery(
-                `SELECT b.block_index, t1.hash AS ledger, t2.hash AS actions
-                 FROM blocks b
-                 LEFT JOIN index_transactions t1 ON t1.id = b.ledger_hash_id
-                 LEFT JOIN index_transactions t2 ON t2.id = b.actions_hash_id
-                 ORDER BY b.block_index ASC`);
-            const rewards = await indexerQuery(
-                `SELECT vr.reward_type, ip.pubkey AS pubkey, ia.address AS source,
-                        vr.amount, vr.round_reference, vr.block_index
-                 FROM validator_rewards vr
-                 JOIN index_pubkeys   ip ON ip.id = vr.signing_pubkey_id
-                 JOIN index_addresses ia ON ia.id = vr.source_id
-                 ORDER BY vr.reward_type, ip.pubkey`);
-            // Batch status. round_number carries FIRST_ROUND on a batch row, which for this
-            // single-round window is ROUND.
-            const priceStatus = await indexerQuery(
-                `SELECT validation_status AS status FROM prices
-                 WHERE round_number = ? LIMIT 1`, [ROUND]);
-            // DISTINCT passing epochs per source - the participation numerator the gate reads.
-            const participation = await indexerQuery(
-                `SELECT ia.address AS source, COUNT(DISTINCT fv.epoch_height) AS epochs
-                 FROM full_node_verifications fv
-                 JOIN index_addresses ia ON ia.id = fv.source_id
-                 WHERE fv.passed = 1
-                 GROUP BY ia.address ORDER BY ia.address`);
-            return {
-                chain: chain.map(r => ({ block_index: Number(r.block_index), ledger: r.ledger, actions: r.actions })),
-                rewards: rewards.map(r => ({
-                    reward_type: r.reward_type, pubkey: String(r.pubkey).toLowerCase(),
-                    source: String(r.source), amount: String(r.amount),
-                    round_reference: Number(r.round_reference), block_index: Number(r.block_index),
-                })),
-                priceStatus: priceStatus.length ? String(priceStatus[0].status) : null,
-                participation: participation.map(r => ({ source: String(r.source), epochs: Number(r.epochs) })),
-            };
-        } finally {
-            await destroyIndexer(indexer);
-        }
-    }
+    let keys, firstRun;
 
     before(async function () {
         // One fixed set of keys, reused across BOTH runs (the genesis verifiers can't be
         // random - the indexer's FULLNODE_GENESIS_VERIFIERS must name them). Regenerate
         // until V1<V2 lexically so the per-source representative is deterministically V1.
+        let V1, V2;
         do { V1 = genKey(); V2 = genKey(); } while (!(V1.pub < V2.pub));
-        V3 = genKey(); V4 = genKey(); V5 = genKey();
-        verifiers = [V1, V2, V3];   // genesis verifiers (quorum = floor(2*3/3)+1 = 3)
+        const V3 = genKey();
+        const verifiers = [V1, V2, V3];   // genesis verifiers (quorum = floor(2*3/3)+1 = 3)
+        keys = { V1, V2, V3, V4: genKey(), V5: genKey(), verifiers };
 
         // Scope the FULLNODE knobs + genesis verifiers to this suite only.
         const env = Object.assign({}, FULLNODE_ENV,
-            { FULLNODE_GENESIS_VERIFIERS: verifiers.map(v => v.pub).join(',') });
+            { FULLNODE_GENESIS_VERIFIERS: keys.verifiers.map(v => v.pub).join(',') });
         for (const k of Object.keys(env)) { _savedEnv[k] = process.env[k]; process.env[k] = env[k]; }
 
         await createDatabases(__filename);
         await createDecoderSchema();
-        firstRun = await runCorpus();
+        firstRun = await runCorpus(keys);
     });
 
     after(async function () {
@@ -320,65 +347,18 @@ describe('Integration: full-node participation determinism and the batch zero-re
     });
 
     it('the batch validated and the challenge participation accrued per SOURCE', function () {
-        assert.strictEqual(firstRun.priceStatus, 'valid',
-            'the PRICE batch must land VALID, or the zero-reward pin below proves nothing');
-        // Per SOURCE, not per signer: A1 funded two validators (V1+V2) and still counts as
-        // one source, which is the shape any future participation rail has to read.
-        const part = new Map(firstRun.participation.map(p => [p.source, p.epochs]));
-        assert.strictEqual(part.get(A1), 2, 'source A1 (V1+V2) passed both epochs');
-        assert.strictEqual(part.get(A2), 2, 'source A2 (V3) passed both epochs');
-        assert.strictEqual(part.get(A3), 1, 'source A3 (V4) passed only one epoch (50% < 70%)');
+        assertParticipationPerSource(firstRun);
     });
 
-    // The attribution height, stated as behaviour. V5 was a full_node at 119, the height
-    // the producing hub locks its claimant universe at for epoch 125 (every
-    // CapabilitySnapshot read subtracts CANONICAL_REORG_BUFFER), so the hub challenged it
-    // and the quorum attested it; its stake then deactivated at 121, before the raw epoch
-    // and well before the verdict block. Both attribution reads have to resolve at the
-    // buried height for the row to exist: the capability GATE in the handler and the
-    // SOURCE resolution in the writer. Resolve either one at the raw epoch or at the
-    // verdict block and source A4 comes back with one epoch instead of two, silently, for
-    // participation the federation already signed off on.
     it('credits an epoch whose staker unstaked inside the buried snapshot window', function () {
-        const part = new Map(firstRun.participation.map(p => [p.source, p.epochs]));
-        assert.strictEqual(EPOCHS[1] - REORG_BUF, 119,
-            'the buried height this case turns on must be what the fixture assumes');
-        assert.strictEqual(part.get(A4), 2,
-            'source A4 (V5) was a claimant at the buried height for BOTH epochs and must be credited for both');
-        // And the row is booked to the staking source, not dropped to some other address
-        // or left sourceless: A4 appears exactly once in the per-source rollup.
-        assert.strictEqual(firstRun.participation.filter(p => p.source === A4).length, 1,
-            'V5 participation must roll up under its own staking source');
+        assertBuriedWindowCredit(firstRun);
     });
 
     it('a VALID BTC-landed PRICE batch writes ZERO validator_rewards rows', function () {
-        // The ruled behavior after the batch collapse. Every condition the retired per-round
-        // derivation needed is satisfied here and it still must not pay: the action is valid,
-        // it landed on BTC (the only chain that derivation ever fired on), four capable
-        // validators signed it, FULLNODE_REWARD_SHARE is non-zero, and real challenge
-        // participation exists in the DB for it to have read. Nothing pays it because the
-        // derivation is gone, not because the setup fell short.
-        // The retired tranche types first, so a reintroduced split reports as itself rather
-        // than as a generic non-empty table.
-        assert.deepStrictEqual(firstRun.rewards.filter(r => r.reward_type === 'oracle_base' ||
-                                                           r.reward_type === 'oracle_full_node'), [],
-            'the oracle tranche reward types are unreachable and must stay unreachable');
-        // Catch-all: no reward of ANY type is derived from a batch, so a new type added later
-        // cannot start paying here unnoticed.
-        assert.deepStrictEqual(firstRun.rewards, [],
-            'the validator batch derives no rewards; a non-empty table means a derivation came back');
+        assertNoBatchRewards(firstRun);
     });
 
     it('re-deriving from a clean DB yields IDENTICAL reward rows + hash chain (determinism = no fork)', async function () {
-        const second = await runCorpus();
-        assert.deepStrictEqual(second.rewards, firstRun.rewards,
-            'reward rows differ for the same input - fork risk');
-        // The load-bearing one now that the reward table is empty: the hash chain covers
-        // the whole corpus, batch and verdicts included, so a divergence anywhere in block
-        // processing surfaces here.
-        assert.deepStrictEqual(second.chain, firstRun.chain,
-            'block processing produced different consensus hashes for the same input - fork risk');
-        assert.deepStrictEqual(second.participation, firstRun.participation,
-            'challenge participation replayed differently from a clean DB - fork risk');
+        assertIdenticalReplay(await runCorpus(keys), firstRun);
     });
 });
