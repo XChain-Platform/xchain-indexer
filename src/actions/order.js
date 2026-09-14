@@ -206,7 +206,7 @@ class Order {
         if(!error && format==0 && !isCrossChain && !this.util.isNull(data['GET_AMOUNT']) && !this.util.isValidAmountFormat(getDecimals, data['GET_AMOUNT'], data['BLOCK_TIME']))
             error = "invalid: GET_AMOUNT (format)";
 
-        // Require a strictly-positive GET_AMOUNT (ORDER-AMT-1 hardening). An empty or zero
+        // Require a strictly-positive GET_AMOUNT (a maker-side hardening). An empty or zero
         // ask lets the maker escrow a positive GIVE for effectively nothing, a UX footgun.
         // Skip ownership-GET orders (GET_AMOUNT must be empty, validated below) and
         // cross-chain orders (the GET amount is validated by the xchain-hub federation).

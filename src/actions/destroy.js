@@ -195,7 +195,7 @@ class Destroy {
             // permanent surplus nobody can redeem. Both refusals name the action that DOES
             // have a counterpart leg: XBRIDGE v1 for XCHAIN, v4 for a bridged copy.
             //
-            // UNCONDITIONAL, not activation-keyed (base spec D62). Neither refusal can move a
+            // UNCONDITIONAL, not activation-keyed. Neither refusal can move a
             // historical verdict: no off-BTC XCHAIN row exists to destroy (every broadcast
             // ISSUE of the gas tick off BTC is refused), and no `<ORIGIN>.<NAME>` row can
             // exist before the bridge creates one, because the parent gate refuses any child

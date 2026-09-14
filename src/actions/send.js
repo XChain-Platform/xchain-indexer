@@ -174,7 +174,7 @@ class Send {
         for(let key in keys)
             sends.push(keys[key]);
 
-        // PC-29 rule 3: the destination's PRE-SEND balance, snapshotted once here,
+        // Gated-file handoff rule: the destination's PRE-SEND balance, snapshotted once here,
         // before any leg of this action settles. Scoping by (BLOCK_INDEX, ACTION_INDEX)
         // is what makes the snapshot base right: it includes every preceding
         // transaction in the block AND every preceding action in this transaction, so
@@ -337,7 +337,7 @@ class Send {
             if(!error){
                 let packs = gatedPacks[send['TICK']] || [];
                 if(packs.length > 0){
-                    // PC-29 rule 3-5: the handoff is CONDITIONAL. A gated FILE on a tick does
+                    // Gated-file handoff rule: the handoff is CONDITIONAL. A gated FILE on a tick does
                     // NOT make every send of it require a handoff; a pack only compels
                     // one when the recipient will actually end up able to unlock it, judged on
                     // POST-SEND balance (pre-send balance + everything this action sends them),

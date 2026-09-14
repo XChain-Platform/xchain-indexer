@@ -75,18 +75,18 @@ const tokenBridgeActivation = require('../token_bridge_activation.js');
 const tokenPolicyActivation = require('../token_policy_activation.js');
 const tickNamespaceActivation = require('../tick_namespace_activation.js');
 
-// R2 ceiling on the membership of a list a bridged token may carry. Not a hash input:
+// Ceiling on the membership of a list a bridged token may carry. Not a hash input:
 // enforced here and by the hub's refusal to sign a larger snapshot.
 const { XPOLICY_MAX_MEMBERS } = require('../protocol/constants.js');
 
-// Chain tickers held for roots XChain has not integrated yet (R8). The membership test is
-// taken from the module rather than re-derived here, so the case folding it applies (D13)
+// Chain tickers held for roots XChain has not integrated yet. The membership test is
+// taken from the module rather than re-derived here, so the case folding it applies
 // lives with the list it folds. A name leaves the list only by moving into COINS, and both
 // refuse identically, so nothing re-verdicts on the move.
 const { isReservedFutureRoot } = require('../consensus/reservedRoots.js');
 
 const { getLogger } = require('../observability/index.js');
-// The floor on a NEW top-level name at/above TICK_NAMESPACE_ACTIVATION (R8 (c)). Measured
+// The floor on a NEW top-level name at/above TICK_NAMESPACE_ACTIVATION. Measured
 // on the FULL tick, so a child such as ABCD.X passes on its own length. Creation only:
 // every one-to-three character row issued before the flag keeps its owner, its supply and
 // its admin surface, which is why the guard below probes for an existing row first.
@@ -162,13 +162,13 @@ class Issue {
         return !str.includes('.');
     }
 
-    // BATCH_ISSUANCE_LIMITS, R6/F11: the intern-gating wrapper for the TICK and
+    // BATCH_ISSUANCE_LIMITS: the intern-gating wrapper for the TICK and
     // CALLBACK_TICK lookups (the parent lookup has its own wrapper below, for a reason
     // spelled out there).
     // getTokenInfo interns any unseen name into index_tickers via createTicker BEFORE this
     // action's validity is known. Once `error` is already set the ISSUE cannot land valid
     // no matter what tokenInfo comes back, so minting a fresh dense ticker id for it is
-    // pure waste an attacker can spend for free - R1's dotted-child exemption lets one
+    // pure waste an attacker can spend for free - batch.js's dotted-child exemption lets one
     // BATCH repeat this up to ~250 times (one per child TICK string).
     //
     // indexerDb.suppressIndexIdCreation is the existing resolve-only lever (see the db.js
@@ -251,8 +251,8 @@ class Issue {
         // parsed, never on a transfer's snapshot_block.
         let tokenBridgeActive = tokenBridgeActivation.isTokenBridgeActive(data['BLOCK_INDEX'], this.config['NETWORK']);
         let policyInheritance = tokenPolicyActivation.isTokenPolicyInheritanceActive(data['BLOCK_INDEX'], this.config['NETWORK']);
-        // The tick-namespace flag day (R8) has its OWN constant, not the bridge's: the
-        // bridge arms after the base spec's D2 cross-check, and the namespace has to close
+        // The tick-namespace flag day has its OWN constant, not the bridge's: the
+        // bridge arms only after its own cross-check, and the namespace has to close
         // before anyone squats a future chain root, not after.
         let namespaceActive   = tickNamespaceActivation.isTickNamespaceActive(data['BLOCK_INDEX'], this.config['NETWORK']);
 
@@ -315,8 +315,8 @@ class Issue {
         // Create the fees object
         let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
 
-        // BATCH_ISSUANCE_LIMITS: governs both the caret-dot TICK rejection below (R6) and
-        // the ticker-intern gating on every getTokenInfo call in this action (R6/F11 -
+        // BATCH_ISSUANCE_LIMITS: governs both the caret-dot TICK rejection below and
+        // the ticker-intern gating on every getTokenInfo call in this action (for the latter,
         // see gatedGetTokenInfo). Computed once, early, so every consumer below sees the
         // same activation state for this action's BLOCK_INDEX.
         // Both are consensus tightenings: below the flag every historical verdict
@@ -370,7 +370,7 @@ class Issue {
         if(!error && str.substring(0,1)=='^' && !this.util.isNumeric(tid))
             error = 'invalid: TICK (id)';
 
-        // R6 caret rule (review F4): isNumeric() is parseFloat-based, so a caret
+        // Caret rule: isNumeric() is parseFloat-based, so a caret
         // tail containing '.' (e.g. "^12.5" or "^1.0") reads as a number and slips past the
         // check above, landing a status=valid ISSUE with a NULL ticker id (createTicker
         // never inserts a literal "^..." row - see db.js createTicker). Because the TICK
@@ -399,22 +399,22 @@ class Issue {
 
         // Verify TICK is not on RESERVED_TICKS list.
         //
-        // CASE-FOLDED (token-bridge D13). The list is matched against the UPPER-CASED tick.
+        // CASE-FOLDED. The list is matched against the UPPER-CASED tick.
         // An exact-case indexOf over a platform where every ticker lookup is LOWER(tick)
         // (db.js) would let `ISSUE btc` through, and getTokenInfo('BTC') would then resolve
         // the squatter's row: one fee could block a whole origin-rooted
-        // bridge namespace. Unconditional rather than activation-keyed, on the base spec's
-        // D62 reasoning: measured 2026-09-11 as zero rows for every case variant of the
+        // bridge namespace. Unconditional rather than activation-keyed, because no replay can
+        // notice it: measured 2026-09-11 as zero rows for every case variant of the
         // three coin roots on all six live chains and zero in either genesis manifest, so
         // no replayed verdict moves.
         //
-        // THE REGTEST EXEMPTION IS THE GAS TICK ALONE. Regtest is the only venue the
-        // token bridge's milestone 1 runs on, and the bridge creates the `<ORIGIN>` root
+        // THE REGTEST EXEMPTION IS THE GAS TICK ALONE. Regtest is the venue the
+        // token bridge is first proven on, and the bridge creates the `<ORIGIN>` root
         // row itself, so a coin root squatted on regtest would break the drill the
-        // milestone is proven by. The one exemption is the e2e harness's play-money gas
+        // bridge is proven by. The one exemption is the e2e harness's play-money gas
         // self-seed.
         //
-        // IS_GENESIS IS EXEMPT (token spec section 6): the injected creation of a bridge
+        // IS_GENESIS IS EXEMPT: the injected creation of a bridge
         // root row (`BTC` on DOGE) is system-issued through processTransaction(tx, true),
         // the same flag the BTC genesis pass uses. No broadcast action ever carries it, so
         // no historical verdict moves.
@@ -433,28 +433,28 @@ class Issue {
         // token but exists as a real, balance-bearing token only on the BTC ledger; on
         // DOGE/LTC fees settle in native coin (XCHAIN is only a unit of account for sizing).
         //
-        // BRIDGE-OWNED OFF BTC (base spec section 4, D62). Once the bridge exists, every
+        // BRIDGE-OWNED OFF BTC. Once the bridge exists, every
         // XCHAIN unit on a non-BTC chain is the shadow of an escrow balance held on BTC, so
         // the only thing allowed to create supply there is the mirror's XBRIDGE v2 in-leg.
-        // The refusal is therefore now UNCONDITIONAL off BTC: from every source including
+        // The refusal is therefore UNCONDITIONAL off BTC: from every source including
         // the GAS address, on every network INCLUDING regtest, and it is not keyed on
-        // XCHAIN_BRIDGE_ACTIVATION. No off-BTC XCHAIN history exists to replay (the old
-        // form already refused every broadcast off BTC outside regtest), so the
+        // XCHAIN_BRIDGE_ACTIVATION. No off-BTC XCHAIN history exists to replay (outside regtest
+        // every broadcast off BTC is refused below the bridge flag as well), so the
         // unconditional rule moves no hash, needs no second activation read, and cannot be
         // mis-ordered against the lazy creation of the off-BTC row.
         //
-        // The verdict string is REUSED, not renamed (D64): renaming it to something like
+        // The verdict string is REUSED, not renamed: renaming it to something like
         // 'TICK (bridge-owned)' would change the STATUS of historical refused broadcasts on
         // DOGE and LTC testnet on replay.
         //
-        // IS_GENESIS IS EXEMPT (D63): the off-BTC row is created lazily by the first v2
+        // IS_GENESIS IS EXEMPT: the off-BTC row is created lazily by the first v2
         // in-leg through processTransaction(tx, true), which is system-injected and is the
         // one creation path the bridge itself owns. The e2e harness's play-money self-seed
-        // moves to a GAS-key ISSUE on BTC regtest plus an XBRIDGE v0 lock.
+        // is a GAS-key ISSUE on BTC regtest plus an XBRIDGE v0 lock.
         if(!error && !data['IS_GENESIS'] && isGasTick && this.config['COIN']!='BTC')
             error = 'invalid: TICK (BTC-only)';
 
-        // TICK NAMESPACE (R8, ruled 2026-09-11). Two rules, one activation.
+        // TICK NAMESPACE (ruled 2026-09-11). Two rules, one activation.
         //
         // WHY THEY EXIST: a chain XChain integrates later needs its root free on every
         // ledger that exists by then, and today a squatter can take it for one issuance
@@ -464,11 +464,11 @@ class Issue {
         //
         //  1. A FOUR-CHARACTER FLOOR on a new top-level name, refused with the EXISTING
         //     'invalid: TICK (length)' string so nothing new appears in the verdict set.
-        //  2. RESERVED_FUTURE_ROOTS joined to the guard's COINS + GAS, case-folded per D13,
+        //  2. RESERVED_FUTURE_ROOTS joined to the guard's COINS + GAS, case-folded like RESERVED_TICKS,
         //     verdict 'invalid: TICK (reserved)' reused. It matters the day the floor is
         //     lowered, and for the four-plus-letter chain codes the floor does not cover.
         //
-        // CREATION ONLY (R8 (c), D50). An edit of a row that already exists is untouched:
+        // CREATION ONLY. An edit of a row that already exists is untouched:
         // every one-to-three character token and each of the six reclaimed four-letter rows
         // keeps its owner, its supply and its admin surface, and the six leave through the
         // genesis manifest edit, not through a guard that would strand them. That
@@ -478,14 +478,14 @@ class Issue {
         // listed, never on the common path.
         //
         // RESERVED WINS OVER SHORT when a name is both (ETH is three characters AND a
-        // listed chain code): the reserved verdict says WHY the name is held, and AT6 pins
+        // listed chain code): the reserved verdict says WHY the name is held, and a test pins
         // 'ISSUE ETH' to 'invalid: TICK (reserved)'.
         //
-        // ACTIVATION-KEYED, unlike D13's case folding, and the difference is not a
+        // ACTIVATION-KEYED, unlike the RESERVED_TICKS case folding, and the difference is not a
         // preference: the reserved and length checks run BEFORE the fee and budget checks,
         // so a mined ISSUE of a short or listed name that was refused on fee would flip its
         // STATUS string on replay, and no explorer probe can rule that out because only
-        // valid rows are served (D49). Below the flag this whole block is inert and the
+        // valid rows are served. Below the flag this whole block is inert and the
         // handler is byte-for-byte today's.
         //
         // Reserving a root reserves its whole ROOT.* subtree through the parent gate
@@ -837,7 +837,7 @@ class Issue {
         //
         // The LIST half of the exclusion lifts at TOKEN_POLICY_INHERITANCE_ACTIVATION, when
         // a signed per-token policy snapshot carries the origin's lists to every bridged
-        // copy. The CONTROLLER half never lifts here (policy spec R1, ruled a): a binding
+        // copy. The CONTROLLER half never lifts here: a binding
         // names a contract deployed in THIS chain's VM, and no snapshot can carry a contract
         // to another chain, so a controller-bound token stays unbridgeable and a bridged
         // token stays unbindable until a controller-portability milestone.
@@ -849,7 +849,7 @@ class Issue {
             if(!error && format === 7 && !tokenInfo)
                 error = 'invalid: TICK (unknown)';
 
-            // SUBASSETS ARE NOT BRIDGEABLE IN MILESTONE 1 (token spec section 3, D15).
+            // SUBASSETS ARE NOT BRIDGEABLE YET.
             //
             // The bridged row lives under its origin chain's root, so BTC.PEPECASH on DOGE is
             // a child of the root row BTC that the bridge creates itself. A DOTTED native name
@@ -858,8 +858,8 @@ class Issue {
             // gate ('invalid: TICK (parent unknown)') AFTER the origin escrow had already been
             // debited. Refusing the OPT-IN, not just the lock, is what stops such a token from
             // ever being advertised as bridgeable: the v3 refusal (xbridge.js, same verdict
-            // string) is the second line, not the first. Token row 12's prefix walk lifts both
-            // on its own flag day.
+            // string) is the second line, not the first. A later flag day that walks the name
+            // prefix can lift both.
             //
             // THE REFUSAL IS ON THE WHOLE FORMAT, not only on a non-empty BRIDGE_CHAINS: a
             // dotted row can never carry a value in these fields (every path that would set
@@ -879,7 +879,7 @@ class Issue {
             // BRIDGE_CHAINS is a comma list of destination coins other than this chain, or
             // the sentinel '-' for none. EMPTY MEANS UNCHANGED, the rule every ISSUE field
             // follows through the populate-empty-params merge above, which is exactly why
-            // "none" needs a sentinel and cannot be spelled as an empty field (D9).
+            // "none" needs a sentinel and cannot be spelled as an empty field.
             if(!error && format === 7 && !this.util.isNull(issue['BRIDGE_CHAINS']) && String(issue['BRIDGE_CHAINS']) !== '-'){
                 for(let chain of String(issue['BRIDGE_CHAINS']).split(',')){
                     let c = String(chain).toUpperCase();
@@ -915,7 +915,7 @@ class Issue {
             // OPT-IN DIRECTION. A token whose policy lives in chain-local state cannot be
             // bridged while nothing carries that policy to the copy: a regulated issuer's
             // block on BTC has to hold on DOGE. A list can never be cleared (format 5
-            // back-fills, D34), so a token that has ever set one stays unbridgeable until
+            // back-fills), so a token that has ever set one stays unbridgeable until
             // policy inheritance arms.
             if(!error && format === 7 && bridgeChainsSet && tokenInfo){
                 let hasAllow    = !this.util.isNull(tokenInfo['ALLOW_LIST']);
@@ -926,7 +926,7 @@ class Issue {
                 else if(!policyInheritance && (hasAllow || hasBlock))
                     error = 'invalid: TICK (policy-bound tokens are not bridgeable yet)';
                 else if(policyInheritance){
-                    // R2 ceiling. Every snapshot carries the FULL membership as transport and
+                    // LIST CEILING. Every snapshot carries the FULL membership as transport and
                     // every destination rewrites it into list_items on apply, so the origin's
                     // list length is write amplification on every chain holding a copy. Not a
                     // hash input anywhere: enforced here and by the hub's refusal to sign a
@@ -943,7 +943,7 @@ class Issue {
 
             // POLICY DIRECTION. The mirror of the rule above: a token that is bridgeable or
             // already bridged cannot take on a policy the copies do not carry. The `bridged`
-            // bit is set by the first applied v3 lock and is never cleared in milestone 1,
+            // bit is set by the first applied v3 lock and no current rule clears it,
             // so emptying BRIDGE_CHAINS after bridging does not reopen the door while copies
             // are outstanding. Format 0's list fields are read off the WIRE snapshot, not
             // the merged data, because the merge back-fills the row's own list indexes into

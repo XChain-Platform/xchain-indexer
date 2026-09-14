@@ -57,7 +57,7 @@ class Batch {
 
         // Per-BATCH usage cap for each ACTION (0 = disallowed inside a BATCH).
         // MINT's 1 is re-read at/after BATCH_ISSUANCE_LIMITS as "1 per DISTINCT token"
-        // rather than "1 per batch" (spec decision D7); the number itself does not move,
+        // rather than "1 per batch" (the per-distinct-token MINT rule); the number itself does not move,
         // only what it is counted over. See maxMintsPerDistinctTick.
         this.actionLimits = {};
         this.actionLimits['BATCH'] = 0;
@@ -68,8 +68,8 @@ class Batch {
         // own table so the pre-flag one above stays byte-identical below the flag: adding a
         // row to actionLimits would apply it retroactively and fork a replay.
         //
-        // DEPLOY = 1 (spec decision D5, operator 2026-08-13). The chain never capped DEPLOY at
-        // all; only the SDK builder and the wallet refused it, which is a client-side line and
+        // DEPLOY = 1 (at most one DEPLOY per batch). Below the flag the chain does not cap DEPLOY at
+        // all; only the SDK builder and the wallet refuse it, which is a client-side line and
         // not a protocol rule, while deploy.js (~536-541) DELIBERATELY supports a DEPLOY inside
         // a BATCH, carrying the sub-command position into the constructor's root discriminator.
         // THE CAP IS NOT ABOUT SIZE. "Too large for BATCH" was a legacy-lane fact (8192 bytes)
@@ -84,8 +84,9 @@ class Batch {
         this.gatedActionLimits = {};
         this.gatedActionLimits['DEPLOY'] = 1;
 
-        // Distinctness bucket for a MINT TICK that resolves to NO ticker id (D7). A Symbol, so
-        // it can never collide with a real id key however a wire tick is spelled.
+        // Distinctness bucket for a MINT TICK that resolves to NO ticker id, under the per-token
+        // MINT cap. A Symbol, so it can never collide with a real id key however a wire tick is
+        // spelled.
         this.unresolvedTickKey = Symbol('BATCH_UNRESOLVED_TICK');
 
         // Global per-BATCH command cap (BATCH_ISSUANCE_LIMITS). Every parse-valid
@@ -156,7 +157,7 @@ class Batch {
         this.commandWeights['AIRDROP']  = 25;
         this.commandWeights['DIVIDEND'] = 25;
 
-        // VM actions (D8 for EXECUTE/XEXEC, D5's cost half for DEPLOY). RATIFIED AT 30 BY THE
+        // VM actions (EXECUTE and XEXEC, and the cost half of the DEPLOY cap). RATIFIED AT 30 BY THE
         // OPERATOR ON 2026-08-15, on the measurement in bin/measure-batch-execute-cost.js and
         // the 2026-08-14 batch-execute cost-measurement report in the platform tree. This is a consensus
         // constant: it decides verdicts, so it may only move behind a flag day.
@@ -168,7 +169,7 @@ class Batch {
         // 250 ordinary ones AT EVERY RATIO OBSERVED: it admits 8 per batch, and 8 x 27.4 is 219
         // ordinary-equivalents. Weight 25 admits 10, which is 274 at the same ratio, over by 10%.
         // The pooled parity floor is 19, so 30 is above every ratio measured and far below the
-        // 250 the spec's original table proposed for DEPLOY.
+        // 250 the first proposed weight table gave DEPLOY.
         //
         // TWO PROPERTIES OF THE MEASUREMENT THAT MUST TRAVEL WITH THE NUMBER:
         //  - the cost curve is LINEAR from N=1 to N=50 (r^2 0.9987 / 0.9994), because
@@ -191,9 +192,9 @@ class Batch {
         // same contract code an EXECUTE does; leaving it at the default 1 would leave the VM
         // class bounded for one spelling and unbounded for the other.
         //
-        // DEPLOY IS WEIGHED, AND IT ALSO KEEPS ITS CAP OF 1 (gatedActionLimits above). The spec
-        // claimed D5 would be "subsumed with IDENTICAL behavior" by weighing DEPLOY at the whole
-        // budget; that claim is FALSE, and the proof is short enough to keep here. Today's rule
+        // DEPLOY IS WEIGHED, AND IT ALSO KEEPS ITS CAP OF 1 (gatedActionLimits above). Weighing DEPLOY
+        // at the whole budget looks as if it would reproduce that cap with IDENTICAL behavior; it
+        // does not, and the proof is short enough to keep here. Today's rule
         // is a CONJUNCTION of two independent caps (count <= 250 AND deploys <= 1). For a DEPLOY
         // weight w, refusing two DEPLOYs needs 2w > 250, i.e. w >= 126, while keeping the
         // valid-today "1 DEPLOY + 249 SENDs" valid needs w + 249 <= 250, i.e. w <= 1. The two are
@@ -205,15 +206,15 @@ class Batch {
         //
         // CHUNKED DEPLOY (deploy.js format 4) IS DISCOUNTED TO THE DEFAULT WEIGHT OF 1
         // (operator ruling 2026-08-20; subCommandWeight below). Before DEPLOY_DEFERRED_ASSEMBLY
-        // a chunk carrier never ran a constructor (deploy.js short-circuits format 4 into
-        // DeployChunk.parse() before the VM path), so it was really a row write and 30 charged
-        // VM cost for work that had none. At/after that activation the carrier that completes a
-        // group DOES run the constructor (deploy_chunk.js, R1 of the chunked-deploy spec), and
+        // a chunk carrier never runs a constructor (deploy.js short-circuits format 4 into
+        // DeployChunk.parse() before the VM path), so it is really a row write and 30 would charge
+        // VM cost for work that has none. At/after that activation the carrier that completes a
+        // group DOES run the constructor (deploy_chunk.js assembles and deploys it), and
         // the discount's real bound is the per-name cap of ONE DEPLOY per batch (the
         // 'invalid: DEPLOY (limit)' loop above): a batch can buy at most the one constructor its
         // weight-30 seat already permits, whichever piece completes the group, and a
-        // non-completing carrier is not over-charged for work it never does (spec D20).
-        // The drift objection that first kept it over-charged does not hold up: the format is
+        // non-completing carrier is not over-charged for work it never does.
+        // A format-drift objection to the discount does not hold up: the format is
         // read with the SAME util.getFormatVersion(params[0]) call the dispatcher (actions/index.js)
         // uses to set data['FORMAT'], one shared derivation rather than a second one, and
         // DEPLOY is outside normalizeSubAction's legacy VERSION injection so params[0] is
@@ -224,8 +225,8 @@ class Batch {
         this.commandWeights['EXECUTE'] = 30;
         this.commandWeights['XEXEC']   = 30;
 
-        // DURATION-METERED CREATE actions whose nominal fee the R4 spam collapse can price
-        // from the WIRE ALONE (D10, gated on BATCH_COST_WEIGHTING - see isGasProvablyUnaffordable).
+        // DURATION-METERED CREATE actions whose nominal fee the batch spam collapse can price
+        // from the WIRE ALONE (gated on BATCH_COST_WEIGHTING - see isGasProvablyUnaffordable).
         //
         // All three charge one and the same creation fee: getUnifiedExpirationFee's format-0
         // branch, which is getUnifiedDurationFee(EXPIRATION, BLOCK_TIME, 'EXPIRATION_PER_DAY'),
@@ -233,7 +234,7 @@ class Batch {
         // read, no handler state, so pricing them here costs nothing and cannot drift into the
         // O(commands x reads) work the pre-check exists to avoid.
         //
-        // The three actions the spec's D10 sentence ALSO named are deliberately absent, each
+        // Three more actions a reader might expect to find here are deliberately absent, each
         // for a measured reason rather than an oversight:
         //  - MINT is FREE. mint.js calls neither getUnifiedTransactionFee nor
         //    validateNativeCoinFee; its only gas is an optional controller guardFee defined by
@@ -248,12 +249,12 @@ class Batch {
         //    path (nominalIssueFee), not positionally.
         this.durationFeeActions = ['ORDER', 'SWAP', 'DISPENSER'];
 
-        // VM actions whose ACCEPTANCE fee is a schedule CONSTANT, so the R4 spam collapse can
-        // price them without parsing a single param (D10, gated on BATCH_COST_WEIGHTING - see
+        // VM actions whose ACCEPTANCE fee is a schedule CONSTANT, so the batch spam collapse can
+        // price them without parsing a single param (gated on BATCH_COST_WEIGHTING - see
         // isGasProvablyUnaffordable and nominalExecuteFee).
         //
-        // THE FLOOR IS VERIFIED, NOT ASSUMED, and the earlier reading of this code that said
-        // EXECUTE had no knowable floor was wrong in a way worth writing down. execute.js
+        // THE FLOOR IS VERIFIED, NOT ASSUMED, because EXECUTE is easy to misread as having no
+        // knowable floor at all, so the proof is written down here. execute.js
         // (~209-243) computes `fee = vmGasCost(schedule,'EXECUTE',0) * GAS_PRICE` BEFORE the VM
         // runs, i.e. VM_EXECUTE_BASE priced through the one arithmetic the static quote also
         // uses, and refuses the sub-command with 'invalid: insufficient funds (GAS)' when the
@@ -338,11 +339,11 @@ class Batch {
         }
     }
 
-    // Read a TICK's token info WITHOUT interning the tick (BATCH_ISSUANCE_LIMITS / R4).
+    // Read a TICK's token info WITHOUT interning the tick (BATCH_ISSUANCE_LIMITS gas pre-check).
     //
     // getTokenInfo resolves its argument through createTicker, which INSERTS an unseen name
-    // into index_tickers - the same free consumption of dense id space R6 closed on the ISSUE
-    // path. A pre-check that probes up to 250 unseen ticks per BATCH would re-open it at 250x,
+    // into index_tickers - the same free consumption of dense id space the ISSUE path's gating
+    // closes. A pre-check probing up to 250 unseen ticks per BATCH would re-open it at 250x,
     // and would do it before validity is decided, so every probe here runs under db.js's
     // existing resolve-only lever. A not-yet-interned tick then resolves to a null tick_id and
     // the token query finds no row: the SAME answer an interned-but-tokenless tick gives, so
@@ -358,7 +359,7 @@ class Batch {
         }
     }
 
-    // Read the TICK a sub-command's handler will parse (BATCH_ISSUANCE_LIMITS / D7).
+    // Read the TICK a sub-command's handler will parse (BATCH_ISSUANCE_LIMITS per-token MINT cap).
     //
     // TICK sits at params[1] in ALL SEVEN ISSUE formats and in MINT's SINGLE format
     // (VERSION|TICK|AMOUNT|DESTINATION|MEMO, mint.js:41), so positional extraction is not
@@ -370,12 +371,12 @@ class Batch {
     // Runs on a PRIVATE split copy because normalizeSubAction splices params in place and must
     // never reach the caller's array. Returns '' when there is no TICK at all, which callers
     // read as "no positive evidence", never as a token named the empty string. The trim mirrors
-    // the R4 probe: an untrimmed spelling the executor would reject can only COLLAPSE into a
-    // real tick's bucket here, which is the safe direction (it rejects, never admits). Never
-    // throws, because a classifier crash here would halt block processing.
+    // the gas pre-check's probe: an untrimmed spelling the executor would reject can only
+    // COLLAPSE into a real tick's bucket here, which is the safe direction (it rejects, never
+    // admits). Never throws, because a classifier crash here would halt block processing.
     //
-    // classifyLimitAction above predates this helper and deliberately keeps its own copy of the
-    // extraction: it is landed consensus code already driven green on chain, so it is not
+    // classifyLimitAction above deliberately keeps its own copy of the extraction rather than
+    // calling this helper: it is consensus code already driven green on chain, so it is not
     // re-derived through a new shared path just for tidiness.
     subCommandTick(action, command, normalize){
         try {
@@ -391,7 +392,7 @@ class Batch {
         }
     }
 
-    // Resolve a TICK to its ticker id WITHOUT interning it (BATCH_ISSUANCE_LIMITS / D7).
+    // Resolve a TICK to its ticker id WITHOUT interning it (BATCH_ISSUANCE_LIMITS per-token MINT cap).
     //
     // Same resolve-only discipline as probeTokenInfo above, for the same reason: this runs over
     // untrusted wire ticks, before validity is decided, up to the 250-command cap. getTickerId
@@ -411,9 +412,9 @@ class Batch {
     }
 
     // Largest number of MINT sub-commands in this BATCH naming the SAME token
-    // (BATCH_ISSUANCE_LIMITS / spec decision D7, operator 2026-08-13).
+    // (the per-token MINT cap that arrives with BATCH_ISSUANCE_LIMITS).
     //
-    // D7 replaces the flat "one MINT per BATCH" with "one MINT per DISTINCT token, any number
+    // The flag replaces the flat "one MINT per BATCH" with "one MINT per DISTINCT token, any number
     // of tokens". The flat cap protected FAIRNESS, not cost: a fair-mint token's supply is
     // contended, and 100 MINTs of one tick in one transaction beat 100 separate transactions on
     // both fee and in-block ordering, while minting twelve DIFFERENT tokens takes nothing from
@@ -478,11 +479,11 @@ class Batch {
         return child ? this.config['ISSUANCE_FEE_SUBTOKEN'] : this.config['ISSUANCE_FEE_TOKEN'];
     }
 
-    // Nominal creation fee of ONE duration-metered sub-command (D10, BATCH_COST_WEIGHTING).
+    // Nominal creation fee of ONE duration-metered sub-command (gated on BATCH_COST_WEIGHTING).
     //
     // Returns a fee AMOUNT (which may legitimately be 0, meaning "free and therefore always
     // affordable"), or null meaning THE COST IS NOT POSITIVELY KNOWN. The caller must treat
-    // null as "let the batch through": R4 collapses on positive price evidence only.
+    // null as "let the batch through": the gas pre-check collapses on positive price evidence only.
     //
     // WHY IT IS A LOWER BOUND, AND WHY THAT IS THE ONLY SAFE DIRECTION. The handler's real
     // fee for a create is the expiration fee PLUS, on some shapes, an ownership-escrow premium
@@ -542,7 +543,7 @@ class Batch {
         }
     }
 
-    // Nominal ACCEPTANCE fee of ONE EXECUTE sub-command (D10, BATCH_COST_WEIGHTING).
+    // Nominal ACCEPTANCE fee of ONE EXECUTE sub-command (gated on BATCH_COST_WEIGHTING).
     //
     // Returns a fee AMOUNT (0 is a legitimate positive answer meaning "free, therefore always
     // affordable"), or null meaning THE COST IS NOT POSITIVELY KNOWN, which the caller must
@@ -566,7 +567,7 @@ class Batch {
     // No param is read at all, which is why EXECUTE needs no positional seam: the floor does
     // not depend on the contract, the method or the arguments. A DETERMINISTIC failure never
     // throws, for the same reason its siblings do not - a crash there would halt block
-    // processing - and the fallback is null, which is the pre-D10 verdict.
+    // processing - and the fallback is null, which is the verdict below BATCH_COST_WEIGHTING.
     //
     // AN INFRASTRUCTURE FAULT IS NOT A DETERMINISTIC FAILURE, and the catch must not treat it
     // as one. The probe below is a DB read (indexerDb.getTokenInfo), so a deadlock (1213),
@@ -591,7 +592,7 @@ class Batch {
         }
     }
 
-    // Aggregate gas pre-check (BATCH_ISSUANCE_LIMITS / R4, spec decision D3 2026-08-13).
+    // Aggregate gas pre-check (BATCH_ISSUANCE_LIMITS, ruled 2026-08-13).
     //
     // WHAT IT IS: a conservative LOWER-BOUND collapse of the no-gas spam case. True only when
     // EVERY sub-command is provably fee-bearing at a positively-known price and the SOURCE
@@ -600,22 +601,22 @@ class Batch {
     // whenever it returns false the batch proceeds untouched and every sub-command bills itself
     // exactly as it does today.
     //
-    // WHY THE CHEAPEST AND NOT THE SUM (deviation from the spec's R4 sentence, reported to the
-    // frontier): gas debits are batch-cumulative, so the sub-commands are billed GREEDILY in
+    // WHY THE CHEAPEST AND NOT THE SUM (a deliberate choice over summing every sub-command's
+    // cost): gas debits are batch-cumulative, so the sub-commands are billed GREEDILY in
     // list order against one running budget. A source holding gas for K of N therefore lands
-    // exactly K valid commands - which is what acceptance test A6 pins. Rejecting on
+    // exactly K valid commands, which the batch gas tests pin. Rejecting on
     // balance < SUM would kill those K, i.e. reject work that really would have succeeded, the
     // one failure mode this check may never have. Zero sub-commands can be paid if and only if
     // the balance is below the MINIMUM cost, so that predicate is both safe AND the strongest
     // safe one: the sum can only add false positives, never extra collapses.
     //
     // WHAT IS COVERED: ISSUE of a non-caret TICK that does not already exist, and - at/after
-    // BATCH_COST_WEIGHTING only (D10) - a duration-metered CREATE of an ORDER, SWAP or
+    // BATCH_COST_WEIGHTING only - a duration-metered CREATE of an ORDER, SWAP or
     // DISPENSER, priced by nominalDurationFee from EXPIRATION and BLOCK_TIME with no database
     // read, plus EXECUTE at its schedule-constant acceptance floor (nominalExecuteFee, one
-    // memoized read for the whole batch). EXECUTE is the case the whole weighting spec exists
-    // for: it runs VM code, it is capped at nothing, and an attacker who cannot pay for one of
-    // them currently buys N invalid rows for free. Everything else returns false (let it
+    // memoized read for the whole batch). EXECUTE is the case the cost weighting exists
+    // for: it runs VM code, it is capped at nothing, and without this check an attacker who
+    // cannot pay for one buys N invalid rows for free. Everything else returns false (let it
     // through) on FIRST sight, because its nominal cost is not knowable here:
     //  - non-ISSUE actions BELOW the weighting flag: unchanged, every one of them exits here,
     //    which is what keeps this predicate byte-identical on a pre-flag replay. The widening
@@ -628,7 +629,7 @@ class Batch {
     //    that can be.
     //  - XEXEC is system-injected and fee-less on this chain (xexec.js:213/:221), so pricing it
     //    would be an over-estimate; see vmBaseFeeActions.
-    //  - caret TICKs (^<id>): an id reference, resolved (not interned) by db.js, and R6 rejects
+    //  - caret TICKs (^<id>): an id reference, resolved (not interned) by db.js, and ISSUE rejects
     //    the caret-dot form outright; no positive price evidence, so no evidence of cost.
     //  - the GAS tick itself: its genesis issuance is fee-exempt (chicken-and-egg).
     //  - a TICK that already has a valid issuance: a re-issue is FREE, so that sub-command can
@@ -640,10 +641,10 @@ class Batch {
     //    a new issuance. Memoized per TICK, so N copies cost ONE read.
     //
     // Scope gates before any of that: the whole check applies only to the XCHAIN-balance
-    // settlement lane. In native-coin mode the fee never touches this balance (R5's ledger owns
-    // that lane) and in 'rejected' mode the failure has nothing to do with gas, so both return
-    // false. IS_GENESIS/IS_EMISSION and an inactive ISSUANCE_FEE flag are fee-exempt outright.
-    // All of these are TRANSACTION-level, so one verdict covers the whole batch.
+    // settlement lane. In native-coin mode the fee never touches this balance (the native fee
+    // ledger owns that lane) and in 'rejected' mode the failure has nothing to do with gas, so
+    // both return false. IS_GENESIS/IS_EMISSION and an inactive ISSUANCE_FEE flag are fee-exempt
+    // outright. All of these are TRANSACTION-level, so one verdict covers the whole batch.
     //
     // Reads are as-of (BLOCK_INDEX, the BATCH's own ACTION_INDEX) - the budget and the token
     // set exactly as they stand before the first sub-command runs - and are read-only. The
@@ -653,7 +654,7 @@ class Batch {
     // `weightsActive` is the BATCH_COST_WEIGHTING verdict parse() already resolved once for
     // this batch. It is a PARAMETER rather than a second isEnabled call so every gated site in
     // this file reads ONE verdict, and it defaults to false so any caller written against the
-    // pre-D10 signature keeps exactly the pre-D10 behaviour.
+    // signature without it keeps exactly the behaviour below the flag.
     async isGasProvablyUnaffordable(commands, data, normalize, weightsActive = false){
         if(data['IS_GENESIS'] || data['IS_EMISSION'])
             return false;
@@ -698,13 +699,13 @@ class Batch {
                 }
                 cost = priced[tick];
             } else if(weightsActive && this.durationFeeActions.includes(action)){
-                // D10. null means "not positively known" (an edit, a cancel, an unparseable
-                // EXPIRATION), which is a bail-out exactly like an unknown action.
+                // Duration-metered create. null means "not positively known" (an edit, a cancel,
+                // an unparseable EXPIRATION), which is a bail-out exactly like an unknown action.
                 cost = this.nominalDurationFee(action, parts, data, unified);
                 if(cost === null)
                     return false;
             } else if(weightsActive && this.vmBaseFeeActions.includes(action)){
-                // D10, the VM floor. Params are not read at all: the acceptance fee is a
+                // The VM floor. Params are not read at all: the acceptance fee is a
                 // schedule constant, so every EXECUTE in the batch quotes the same number and
                 // one probe answers for all of them.
                 if(vmFloor === undefined)
@@ -734,7 +735,7 @@ class Batch {
         return !this.util.hasBalance(balances, tickId, cheapest);
     }
 
-    // Cost weight of ONE sub-command (BATCH_COST_WEIGHTING / R7).
+    // Cost weight of ONE sub-command (BATCH_COST_WEIGHTING).
     //
     // THE INVARIANT, and every future weight class must preserve it: the return is an integer
     // >= 1. It is what makes the cheap count pre-filter in parse() a sound bound on this scan
@@ -777,7 +778,7 @@ class Batch {
         }
     }
 
-    // Total cost weight of a BATCH (BATCH_COST_WEIGHTING / R7).
+    // Total cost weight of a BATCH (BATCH_COST_WEIGHTING).
     //
     // Plain integer arithmetic, not the bc* helpers: these are small counts, not token amounts,
     // and the surrounding cap logic has always compared counts with `>`. The loop is bounded by
@@ -800,7 +801,7 @@ class Batch {
     // Handle parsing the BATCH transaction
     async parse(params, data, error){
         // BATCH_SUBACTION_NORMALIZATION flag-day: when active, sub-actions get the same
-        // alias rewrite + legacy VERSION-0 injection as top-level actions. Resolved once
+        // alias rewrite + legacy VERSION 0 injection as top-level actions. Resolved once
         // per BATCH so every scan below gates identically.
         let normalize = await this.protocolChanges.isEnabled('BATCH_SUBACTION_NORMALIZATION', data['BLOCK_INDEX']);
         // BATCH_ISSUANCE_LIMITS flag-day: the global command cap, the dotted-TICK
@@ -823,20 +824,20 @@ class Batch {
         let actions = {};
 
         // The DISTINCT keys of `actions`, in the order their FIRST sub-command appears in the
-        // command list. R2b DECLARES that order: among per-ACTION caps, a batch breaking two of
+        // command list. That order is DECLARED: among per-ACTION caps, a batch breaking two of
         // them reports the action whose first sub-command comes earliest, and that string is
         // consensus. It is kept as its own list rather than read back off `actions` because the
         // tally is a plain object whose iteration order is a property of key INSERTION (and of
         // integer-like keys, which an unknown ACTION can produce), not a stated rule: a later
         // tidy-up to a Map, a sort, or a second counting pass would silently move a consensus
-        // string. First-appearance was chosen precisely because it is what this loop and the SDK
-        // mirror already did, so declaring it moves no verdict; do not "simplify" the cap loop
+        // string. First-appearance is the order this loop and the SDK mirror both produce, so
+        // declaring it moves no verdict; do not "simplify" the cap loop
         // below back into an iteration over the tally.
         let actionOrder = [];
 
         // TICKs of this batch's MINT sub-commands, in list order, collected in the SAME pass
         // that counts them so the two can never disagree about which commands are MINTs
-        // (D7 caps MINTs per DISTINCT token, so the count alone is no longer the whole story).
+        // (MINTs are capped per DISTINCT token, so the count alone is not the whole story).
         // Populated only under the flag: below it nothing reads it and no work is done.
         let mintTicks = [];
 
@@ -905,7 +906,7 @@ class Batch {
             if(this.util.isNull(actions[action])){
                 actions[action] = 0;
                 // First sighting, and this IS the list walk, so pushing here is what makes the
-                // cap loop's order list-driven (R2b) rather than tally-driven.
+                // cap loop's order list-driven rather than tally-driven.
                 actionOrder.push(action);
             }
             actions[action]++;
@@ -927,19 +928,19 @@ class Batch {
 
         // Per-ACTION caps in force for THIS batch. Below the flag this IS the pre-flag table,
         // by identity, so nothing about an old batch can move; at/after it the gated caps
-        // (DEPLOY, D5) are merged into a COPY, never into either stored table.
+        // (the DEPLOY cap) are merged into a COPY, never into either stored table.
         let actionLimits = limitsActive ? Object.assign({}, this.actionLimits, this.gatedActionLimits) : this.actionLimits;
 
-        // Walked in first-appearance order (R2b), which is why `actionOrder` exists: the action
+        // Walked in first-appearance order, which is why `actionOrder` exists: the action
         // that names the error must be decided by the command LIST, never by however the tally
         // object happens to enumerate.
         for(let action of actionOrder){
             let count = actions[action];
-            // D7: MINT is capped per DISTINCT TOKEN rather than per batch, so what the cap is
+            // MINT is capped per DISTINCT TOKEN rather than per batch, so what the cap is
             // compared against is the largest number of MINTs naming ONE token, not the raw
             // occurrence count. Guarded by !error because it is the only branch in this loop
             // that touches the database: an already-invalid batch keeps its cheaper verdict
-            // and pays for no reads, exactly as the R4 pre-check below does.
+            // and pays for no reads, exactly as the gas pre-check below does.
             if(!error && limitsActive && action === 'MINT')
                 count = await this.maxMintsPerDistinctTick(mintTicks);
             // Verify ACTION command limits
@@ -951,19 +952,19 @@ class Batch {
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
-        // Aggregate gas pre-check (BATCH_ISSUANCE_LIMITS / R4, spec decision D3 2026-08-13).
+        // Aggregate gas pre-check (BATCH_ISSUANCE_LIMITS, ruled 2026-08-13).
         // LAST of the checks by design: it is the only one that costs database reads (one per
         // DISTINCT new TICK plus one balance read), so every cheaper verdict above short-circuits
         // it through `!error`, and the 250-command cap - still the FIRST check - is what bounds
-        // its loop. Precedence therefore stays exactly as R2/F7 pinned it: a batch that breaks
+        // its loop. Precedence therefore stays exactly as the error-order tests pin it: a batch that breaks
         // the cap, the per-ACTION limits or the activation scan reports THAT error, never this
         // one. See isGasProvablyUnaffordable for why the predicate is the cheapest sub-command
         // and not the sum.
         //
-        // `weightsActive` is threaded in for D10: at/after BATCH_COST_WEIGHTING the predicate
+        // `weightsActive` is threaded in so that at/after BATCH_COST_WEIGHTING the predicate
         // can also price an ORDER/SWAP/DISPENSER create, so an all-ORDER no-gas batch collapses
-        // to one invalid record the same way an all-ISSUE one already does. Below that flag the
-        // argument is false and the predicate is byte-identical to its pre-D10 self.
+        // to one invalid record the same way an all-ISSUE one does. Below that flag the
+        // argument is false and the predicate is byte-identical to its unweighted form.
         if(!error && limitsActive && await this.isGasProvablyUnaffordable(commands, data, normalize, weightsActive))
             error = 'invalid: GAS (insufficient)';
 
@@ -1074,7 +1075,7 @@ class Batch {
                 let action = String(params.shift()).toUpperCase();
 
                 // Normalize the sub-action like a top-level action would be
-                // (alias rewrite + legacy VERSION-0 injection) so FORMAT
+                // (alias rewrite + legacy VERSION 0 injection) so FORMAT
                 // derivation and handler dispatch below see canonical input.
                 if(normalize)
                     action = this.normalizeSubAction(action, params);

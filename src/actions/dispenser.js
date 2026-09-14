@@ -307,7 +307,7 @@ class Dispenser {
             error = "invalid: GET_AMOUNT (format)";
 
         // Require a strictly-positive GET_AMOUNT on a dispenser that names its own price,
-        // mirroring the ORDER-AMT-1 rule at order.js. Skipped for FIAT and oracle
+        // mirroring the same positive-amount rule at order.js. Skipped for FIAT and oracle
         // dispensers, where the price comes from FIAT_AMOUNT or the oracle round and an
         // empty GET_AMOUNT is legitimate. Gated for the same reason as the rule above.
         if(!error && format==0 && getAmountPositivity &&
