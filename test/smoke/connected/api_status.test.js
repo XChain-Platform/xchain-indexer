@@ -19,141 +19,25 @@
  * Does NOT start the indexer loop or connect to any database.
  *
  * Covers: GET /status exposes quantitative indexer→decoder lag
+ *
+ * The route, the stub-indexer listener and the GET helper live in
+ * api_status.test/helpers/status_app.js; the hubMirror cases of the same route
+ * run from api_status.test/hub_mirror.test.js.
  */
 
 'use strict';
 
 const assert     = require('assert');
-const http       = require('http');
-const express    = require('express');
-const helmet     = require('helmet');
-
-// Standalone copy of src/XChainIndexer.js stallWedged (the smoke harness deliberately
-// reconstructs the route rather than importing the module, which pulls in native DB
-// deps). The canonical function is unit-tested in test/unit/stall_health.test.js.
-function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null){
-    if(!stallReason) return false;
-    if(lastBlockCommittedAt == null) return false;
-    if(Number.isFinite(stallClearsAtMs) && now < stallClearsAtMs) return false;
-    return (now - lastBlockCommittedAt) > graceMs;
-}
-
-// Standalone copies of the status discriminators, same rationale as above; the
-// canonical functions are unit-tested in test/unit/stall_health.test.js.
-function waitingOnFutureBlock(stallReason, stallClearsAtMs, now){
-    if(!stallReason) return false;
-    if(!Number.isFinite(stallClearsAtMs)) return false;
-    return now < stallClearsAtMs;
-}
-
-function stallClassOf(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null){
-    if(!stallReason) return 'none';
-    if(waitingOnFutureBlock(stallReason, stallClearsAtMs, now)) return 'future_block_wait';
-    if(stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs)) return 'wedged';
-    return 'barrier_defer';
-}
-
-function atProcessableTip(isSynced, stallReason, stallClearsAtMs, now){
-    return !!isSynced || waitingOnFutureBlock(stallReason, stallClearsAtMs, now);
-}
-
-// ---------------------------------------------------------------------------
-// Helper: GET a path and return { status, body }
-// ---------------------------------------------------------------------------
-function getJson(port, path) {
-    return new Promise((resolve, reject) => {
-        const req = http.request({
-            hostname: '127.0.0.1',
-            port,
-            path,
-            method: 'GET',
-        }, (res) => {
-            let data = '';
-            res.on('data', chunk => { data += chunk; });
-            res.on('end',  () => {
-                try {
-                    resolve({ status: res.statusCode, body: JSON.parse(data) });
-                } catch (e) {
-                    reject(new Error('Failed to parse response JSON: ' + data));
-                }
-            });
-        });
-        req.on('error', reject);
-        req.end();
-    });
-}
-
-// Build an app mounting the same /status handler as src/api.js against the
-// supplied stub indexer. Mirrors the api.js route logic (the smoke harness
-// reconstructs the route rather than importing api.js, which auto-starts).
-function buildApp(indexer) {
-    const app = express();
-    app.use(helmet());
-    app.get('/status', async (req, res) => {
-        let indexerBlock = null;
-        let indexerDbUnreachable = false;
-        try {
-            if(indexer.indexerDb)
-                indexerBlock = await indexer.indexerDb.getLatestBlockIndex();
-        } catch (err) {
-            // Database unreachable; leave indexerBlock null so lag stays null.
-            indexerDbUnreachable = true;
-        }
-        let decoderBlock = (indexer.lastDecoderBlock != null) ? Number(indexer.lastDecoderBlock) : null;
-        // Same status-code contract as api.js: 503 on DB-unreachable/wedge so the
-        // http_get container healthcheck can observe unhealthy; a not-synced catch-up
-        // AND a stalled-but-still-advancing barrier defer (degraded) both stay 200.
-        let now       = Date.now();
-        let stalled   = !!indexer.stallReason;
-        let wedged    = stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
-                                    indexer.healthStallGraceMs, now, indexer.stallClearsAt);
-        // Hub mirror connectivity (row 48, attest-response-mirror spec), mirroring api.js:
-        // absent hubDbSync (single-host deployment) or a throwing snapshot both degrade to
-        // the same honest disabled shape rather than fail the whole probe or claim connected.
-        let hubMirror;
-        try {
-            hubMirror = indexer.hubDbSync
-                ? indexer.hubDbSync.mirrorStatus()
-                : { configured: false, connected: false, bootstrapped: false, streamWatermark: null, tables: {} };
-        } catch (err) {
-            hubMirror = { configured: false, connected: false, bootstrapped: false, streamWatermark: null, tables: {} };
-        }
-        let unhealthy = indexerDbUnreachable || wedged;
-        res.status(unhealthy ? 503 : 200).json({
-            indexerBlock: indexerBlock,
-            decoderBlock: decoderBlock,
-            lag:          (decoderBlock != null && indexerBlock != null)
-                            ? decoderBlock - indexerBlock
-                            : null,
-            isSynced:     indexer.isSynced(),
-            atProcessableTip: atProcessableTip(indexer.isSynced(), indexer.stallReason,
-                                               indexer.stallClearsAt, now),
-            stallReason:  indexer.stallReason || null,
-            stallClearsAt: indexer.stallClearsAt || null,
-            degraded:     stalled && !wedged,
-            waitingOnFutureBlock: waitingOnFutureBlock(indexer.stallReason, indexer.stallClearsAt, now),
-            stallClass:   stallClassOf(indexer.stallReason, indexer.lastBlockCommittedAt,
-                                       indexer.healthStallGraceMs, now, indexer.stallClearsAt),
-            lastBlockCommittedAt: indexer.lastBlockCommittedAt || null,
-            hubMirror:    hubMirror
-        });
-    });
-    return app;
-}
+const { getJson, listen } = require('./api_status.test/helpers/status_app.js');
 
 // ---------------------------------------------------------------------------
 // Test suite
 // ---------------------------------------------------------------------------
+// Consecutive sibling blocks under one suite title, each carrying the suite's
+// timeout, so every full test title is the one the suite has always reported
+// while no describe callback outgrows the structure limit.
 describe('Smoke: REST /status', function () {
     this.timeout(5000);
-
-    function listen(indexer) {
-        return new Promise((resolve) => {
-            const server = buildApp(indexer).listen(0, '127.0.0.1', () => {
-                resolve({ server, port: server.address().port });
-            });
-        });
-    }
 
     // -------------------------------------------------------------------------
     // Lag is computable from the public API surface
@@ -197,6 +81,10 @@ describe('Smoke: REST /status', function () {
             server.close();
         }
     });
+});
+
+describe('Smoke: REST /status', function () {
+    this.timeout(5000);
 
     // -------------------------------------------------------------------------
     // Healthcheck status-code contract. The xchain-node
@@ -243,6 +131,10 @@ describe('Smoke: REST /status', function () {
             server.close();
         }
     });
+});
+
+describe('Smoke: REST /status', function () {
+    this.timeout(5000);
 
     it('SM-05e: GET /status stays 200 with degraded:true when stalled but still advancing', async function () {
         // The BTC-mainnet steady state: the price-sync barrier is deferring the newest block
@@ -265,6 +157,10 @@ describe('Smoke: REST /status', function () {
             server.close();
         }
     });
+});
+
+describe('Smoke: REST /status', function () {
+    this.timeout(5000);
 
     // -------------------------------------------------------------------------
     // The testnet4 future-stamped-block steady state. A miner
@@ -303,6 +199,10 @@ describe('Smoke: REST /status', function () {
             server.close();
         }
     });
+});
+
+describe('Smoke: REST /status', function () {
+    this.timeout(5000);
 
     it('SM-05h: a real barrier defer is NOT reported as a future-stamp wait', async function () {
         const now = Date.now();
@@ -336,80 +236,6 @@ describe('Smoke: REST /status', function () {
             const { status, body } = await getJson(port, '/status');
             assert.strictEqual(status, 200, `Expected HTTP 200 during catch-up but got ${status}`);
             assert.strictEqual(body.degraded, false, 'a plain catch-up is not degraded');
-        } finally {
-            server.close();
-        }
-    });
-
-    // -------------------------------------------------------------------------
-    // Hub mirror connectivity (row 48). connected/disconnected snapshots, the
-    // unconfigured (no hubDbSync at all) case, and a throwing snapshot: none of
-    // these may claim connected or fail the whole probe.
-    // -------------------------------------------------------------------------
-    it('SM-05i: GET /status surfaces hubMirror connected from a live mirror snapshot', async function () {
-        const snapshot = { configured: true, connected: true, bootstrapped: true,
-                            streamWatermark: 1700000000, tables: { attestation_responses: 1700000000 } };
-        const { server, port } = await listen({
-            indexerDb: { async getLatestBlockIndex() { return 100; } },
-            lastDecoderBlock: 100,
-            isSynced() { return true; },
-            hubDbSync: { mirrorStatus() { return snapshot; } },
-        });
-        try {
-            const { status, body } = await getJson(port, '/status');
-            assert.strictEqual(status, 200);
-            assert.deepStrictEqual(body.hubMirror, snapshot);
-        } finally {
-            server.close();
-        }
-    });
-
-    it('SM-05j: GET /status surfaces hubMirror disconnected without claiming connected', async function () {
-        const { server, port } = await listen({
-            indexerDb: { async getLatestBlockIndex() { return 100; } },
-            lastDecoderBlock: 100,
-            isSynced() { return true; },
-            hubDbSync: { mirrorStatus() { return { configured: true, connected: false, bootstrapped: false,
-                                                    streamWatermark: 0, tables: {} }; } },
-        });
-        try {
-            const { body } = await getJson(port, '/status');
-            assert.strictEqual(body.hubMirror.configured, true);
-            assert.strictEqual(body.hubMirror.connected, false);
-        } finally {
-            server.close();
-        }
-    });
-
-    it('SM-05k: GET /status reports hubMirror as unconfigured, never throwing, when the mirror is absent', async function () {
-        const { server, port } = await listen({
-            indexerDb: { async getLatestBlockIndex() { return 100; } },
-            lastDecoderBlock: 100,
-            isSynced() { return true; },
-            // no hubDbSync at all: single-host deployment, HUB_DB_SYNC_ENABLED unset
-        });
-        try {
-            const { status, body } = await getJson(port, '/status');
-            assert.strictEqual(status, 200);
-            assert.deepStrictEqual(body.hubMirror,
-                { configured: false, connected: false, bootstrapped: false, streamWatermark: null, tables: {} });
-        } finally {
-            server.close();
-        }
-    });
-
-    it('SM-05l: GET /status degrades to the disabled hubMirror shape when the snapshot call throws', async function () {
-        const { server, port } = await listen({
-            indexerDb: { async getLatestBlockIndex() { return 100; } },
-            lastDecoderBlock: 100,
-            isSynced() { return true; },
-            hubDbSync: { mirrorStatus() { throw new Error('boom'); } },
-        });
-        try {
-            const { status, body } = await getJson(port, '/status');
-            assert.strictEqual(status, 200, 'a mirror snapshot failure must not fail the whole probe');
-            assert.strictEqual(body.hubMirror.connected, false, 'a throw must never read as connected');
-            assert.strictEqual(body.hubMirror.configured, false);
         } finally {
             server.close();
         }
