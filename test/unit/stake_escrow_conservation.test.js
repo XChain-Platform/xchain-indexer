@@ -51,16 +51,30 @@ describe('a contract stake locks tokens rather than destroying them', function()
     // Read the shipped sources. These are ledger-shape invariants spread across three
     // files that must agree with each other; a stub-driven unit test of any one of them
     // in isolation would pass while the trio disagreed.
-    const stakeSrc   = fs.readFileSync(path.join(SRC, 'actions/stake.js'), 'utf8');
+    // The STAKE handler is an entry plus parts: stake.js keeps the class, the capability
+    // path lives in stake/capability_stake.js and the contract path in
+    // stake/contract_stake.js. Reading the entry alone would find neither ledger block,
+    // so the entry and every part are read as one text, parts in name order, which puts
+    // the capability block first and the contract block last.
+    const STAKE_PARTS = path.join(SRC, 'actions', 'stake');
+    const stakeSrc   = [path.join(SRC, 'actions/stake.js')]
+        .concat(fs.readdirSync(STAKE_PARTS).filter(f => f.endsWith('.js')).sort()
+            .map(f => path.join(STAKE_PARTS, f)))
+        .map(f => fs.readFileSync(f, 'utf8')).join('\n');
     const utilSrc    = fs.readFileSync(path.join(SRC, 'utility.js'), 'utf8');
     const journalSrc = fs.readFileSync(path.join(SRC, 'consensus', 'escrowJournalWriter.js'), 'utf8');
 
     // The contract-stake handler's ledger block: from its `let credits` through the
-    // processTransactionLedgerChanges call that consumes it.
+    // processTransactionLedgerChanges call that consumes it, and on through the end of
+    // planContractStakeLedger, the helper that call site hands the debit and escrow
+    // arrays to. A renamed helper leaves only the call site in the block, so the
+    // assertions below go red rather than pass on less code.
     const contractBlock = (() => {
         const i = stakeSrc.lastIndexOf('let credits = []');
         const j = stakeSrc.indexOf('processTransactionLedgerChanges', i);
-        return stakeSrc.slice(i, j + 200);
+        const plan = stakeSrc.indexOf('function planContractStakeLedger', i);
+        const planEnd = plan < 0 ? -1 : stakeSrc.indexOf('\n}', plan);
+        return stakeSrc.slice(i, Math.max(j + 200, planEnd));
     })();
 
     it('pairs the stake debit with an escrow row for the same tick, amount and address', function(){
