@@ -47,7 +47,7 @@ const sinon  = require('sinon');
 
 const { createMockIndexer } = require('../fixtures/mocks');
 const Rollback              = require('../../src/rollback.js');
-const lifecycle             = require('../../src/hub/tableLifecycle.js');
+const lifecycle             = require('../../src/hub/table_lifecycle.js');
 // Decides whether a sync twin path may be trusted before the reciprocal guard reads it.
 const { siblingCheckout }   = require('../helpers/sibling_checkout.js');
 
@@ -173,7 +173,7 @@ describe('Rollback coverage guard @regression', function () {
             missing,
             [],
             missing.length
-                ? `\n\nThese src/sql tables have NO entry in src/hub/tableLifecycle.js:\n` +
+                ? `\n\nThese src/sql tables have NO entry in src/hub/table_lifecycle.js:\n` +
                   missing.map(t => `    - ${t}`).join('\n') +
                   `\n\nEvery table must declare its replication, rollback, and hash-coverage\n` +
                   `lifecycle in the registry (see its header for field definitions), then be\n` +
@@ -188,7 +188,7 @@ describe('Rollback coverage guard @regression', function () {
             .filter(t => t.owner === 'indexer' && !universeSet.has(t.table))
             .map(t => t.table);
         assert.deepStrictEqual(stale, [],
-            stale.length ? `tableLifecycle.js entries with no src/sql definition (typo or dropped table): ${stale.join(', ')}` : undefined);
+            stale.length ? `table_lifecycle.js entries with no src/sql definition (typo or dropped table): ${stale.join(', ')}` : undefined);
     });
 
     it('every registry entry declares all three lifecycle dimensions with valid values', function () {
@@ -279,7 +279,7 @@ describe('Rollback coverage guard @regression', function () {
                                        ['state_commitment_activation.js', 'state_commitment_activation.js'],
                                        ['swq_source_cap_activation.js', 'swq_source_cap_activation.js'],
                                        ['state_key_collation_activation.js', 'state_key_collation_activation.js'],
-                                       ['hub/tableLifecycle.js', 'tableLifecycle.js']]){
+                                       ['hub/table_lifecycle.js', 'table_lifecycle.js']]){
             it(twin + ' is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)', function(){
                 const syncPath = path.join(SYNC_ROOT, 'src', syncTwin);
                 // Refuses an absent sibling and a lane symlink into a live main checkout alike.

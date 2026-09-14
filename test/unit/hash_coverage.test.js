@@ -37,7 +37,7 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
-const lifecycle = require('../../src/hub/tableLifecycle.js');
+const lifecycle = require('../../src/hub/table_lifecycle.js');
 const stateHash = require('../../src/stateHash.js');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '../..', rel), 'utf8');
@@ -111,7 +111,7 @@ describe('Hash coverage guard @regression', function () {
         assert.deepStrictEqual(
             lifecycle.hashClassTables('state_hash').sort(),
             [...fromCode].sort(),
-            'state_hash declarations in tableLifecycle.js and the classes gathered by stateHash.js have drifted; ' +
+            'state_hash declarations in table_lifecycle.js and the classes gathered by stateHash.js have drifted; ' +
             'a new in-place mutation class must land in BOTH (and in the updated_rows forward channel + both rollbacks)'
         );
     });
@@ -139,7 +139,7 @@ describe('Hash coverage guard @regression', function () {
         const note = lifecycle.entry('attests').hashed.note;
         for (const name of methods) {
             assert.ok(note.includes(name),
-                `db.js ${name} mutates attests in place but the attests registry note in src/hub/tableLifecycle.js ` +
+                `db.js ${name} mutates attests in place but the attests registry note in src/hub/table_lifecycle.js ` +
                 `does not name it; state its hash / updated_rows / rollback coverage there (and copy to the sync twin)`);
         }
     });
@@ -178,9 +178,9 @@ describe('Hash coverage guard @regression', function () {
         // journal is only consensus-visible because escrowLeafSubtree.js reads it into
         // balances_root, and stateCommitment.js applies that behind
         // ESCROW_LOCKED_LEAF_ACTIVATION. If either half moves, the declaration is stale.
-        const leaf = read('src/consensus/escrowLeafSubtree.js');
+        const leaf = read('src/consensus/escrow_leaf_subtree.js');
         assert.ok(/FROM escrow_leaf_journal j/.test(leaf),
-            'escrowLeafSubtree.js no longer reads escrow_leaf_journal; its state_commitment declaration is stale');
+            'escrow_leaf_subtree.js no longer reads escrow_leaf_journal; its state_commitment declaration is stale');
         const commit = read('src/stateCommitment.js');
         assert.ok(commit.indexOf('applyEscrowLeaves') !== -1,
             'stateCommitment.js no longer applies the escrow leaves into balances_root');

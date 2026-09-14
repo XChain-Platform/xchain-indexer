@@ -108,7 +108,7 @@ describe('bin/reachability.js', function () {
         const report = reach.analyse({ siblings: true, siblingsRoot: SIBLINGS_ROOT });
 
         it('clears a file another repo keeps a maintained copy of', () => {
-            const price = report.files['src/consensus/xchainPrice.js'];
+            const price = report.files['src/consensus/xchain_price.js'];
             assert.strictEqual(price.reachableFromIndexerRuntime, false);
             assert.ok(price.twinCopies.length > 0 || price.referencedBySiblings.length > 0,
                 'a twinned module is held by the platform even with no runtime path here');
@@ -132,8 +132,8 @@ describe('bin/reachability.js', function () {
             // path, so moving a module into a feature directory moves its row.
             assert.deepStrictEqual(withheld, [
                 'src/chain/utf8mb4_columns.js',
-                'src/consensus/xchainPrice.js',
-                'src/consensus/xchainPriceQuery.js',
+                'src/consensus/xchain_price.js',
+                'src/consensus/xchain_price_query.js',
                 'src/vm_exec_lint_activation.js',
             ], 'the four test-only modules are candidates that only the sibling sweep clears');
         });
