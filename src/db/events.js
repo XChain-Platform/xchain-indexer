@@ -25,6 +25,9 @@ const path    = require('path');
 // requires of its own), so no cycle.
 const reorgHistoryQuery = require('../api/reorg_history_query');
 
+// The fail-loud cursor checks getReorgsSince runs before and after its REORG read.
+const cursorGuards = require('./events/reorg_cursor_guards.js');
+
 const { getLogger } = require('../observability/index.js');
 module.exports = {
 
@@ -53,29 +56,10 @@ module.exports = {
             query = `SELECT id, data FROM events WHERE code='REORG' AND id > ? ORDER BY id ASC`;
             args  = [Number(afterId)];
         }
-        // #2735 (witness the cursor row): closes the UNDER-cursor silent skip that the
-        // length===0 && maxId<afterId guard below cannot see. BEFORE the id>afterId select,
-        // confirm the exact decoder REORG event the cursor points at still exists; and, for a
-        // marker recorded WITH a witness, that its live time + payload hash still match what we
-        // recorded. A rebuilt decoder whose fresh id space overtook a stranded cursor returns
-        // non-empty id>afterId results, so without this it would silently drop new-incarnation
-        // REORG events at/below the cursor. Additive: a legacy (null-witness) marker keeps only
-        // the old over-cursor guard so upgrades are unaffected.
-        if(afterId !== null && afterId !== undefined){
-            let witnessRows = await this.doQueryStrict(
-                `SELECT time, data FROM events WHERE id = ? AND code='REORG'`, [Number(afterId)]);
-            if(witnessRows.length === 0)
-                throw this.reorgCursorIncoherentError('indexer cursor decoder_event_id=' + afterId +
-                    ' points at no live decoder REORG event (the cursor row is gone).');
-            if(cursorWitness && cursorWitness.time != null && cursorWitness.hash != null){
-                let live     = witnessRows[0];
-                let liveHash = this.hashReorgData(live.data);
-                if(String(live.time) !== String(cursorWitness.time) || liveHash !== String(cursorWitness.hash))
-                    throw this.reorgCursorIncoherentError('indexer cursor decoder_event_id=' + afterId +
-                        ' witness mismatch (the live decoder REORG event at that id has a different ' +
-                        'time/payload than when it was recorded).');
-            }
-        }
+        // #2735: before the id>afterId select, the cursor's own decoder REORG row must still
+        // exist and, for a witnessed marker, still match (the guard's header says why).
+        if(afterId !== null && afterId !== undefined)
+            await cursorGuards.assertCursorWitness(this, afterId, cursorWitness);
         // doQueryStrict (not doQuery): this runs on decoderDb, which never opens a
         // transaction, so doQuery would collapse any read fault to [] - indistinguishable
         // from "no unprocessed reorgs". That silently suppresses the rollback trigger and
@@ -83,21 +67,10 @@ module.exports = {
         // state. Throwing instead aborts the pass with no block committed; the loop retries
         // on the next tick. Mirrors the throwing sibling read on the indexer side.
         let results = await this.doQueryStrict(query, args);
-        // Incarnation guard (/ RE-1): the cursor is a decoder events.id, and the
-        // decoder never deletes events rows, so a cursor ABOVE the decoder's newest REORG
-        // id can only mean the decoder DB was rebuilt or restored out-of-band (AUTO_INCREMENT
-        // reset). With the old behavior that stranded cursor made this query return [] forever,
-        // silently disabling every future rollback while the indexer kept committing blocks.
-        // Fail loud instead: the throw aborts the pass with no block committed (same contract
-        // as a read fault above), so the incoherence pages the operator rather than rotting.
-        if(afterId !== null && afterId !== undefined && results.length === 0){
-            let maxRow = await this.doQueryStrict(`SELECT MAX(id) AS max_id FROM events WHERE code='REORG'`);
-            let maxId  = (maxRow.length > 0) ? maxRow[0]["max_id"] : null;
-            if(maxId === null || Number(maxId) < Number(afterId)){
-                throw this.reorgCursorIncoherentError('indexer cursor decoder_event_id=' + afterId +
-                    ' exceeds the decoder\'s newest REORG event id (' + maxId + ').');
-            }
-        }
+        // Incarnation guard (/ RE-1): an empty read under a cursor above the decoder's newest
+        // REORG id means an out-of-band decoder rebuild, and it throws (see the guard's header).
+        if(afterId !== null && afterId !== undefined && results.length === 0)
+            await cursorGuards.assertCursorNotAboveNewest(this, afterId);
         let reorgs = [];
         for(let row of results){
             // ONE decoder for the decoder's REORG payload, shared with the getreorghistory
