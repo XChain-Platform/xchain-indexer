@@ -41,6 +41,7 @@ const jsonRouter    = require('express-json-rpc-router');
 const { buildHealthResponse, committedView, inFlightBlockIndex } = require('./api/health');
 const { createShutdown, createIndexerDrain } = require('./api/shutdown');
 const { getStakeSourceByPubkey } = require('./api/stake_source');
+const capabilityValidators = require('./api/capability_validators');
 const anchorActionQuery = require('./actions/anchor/anchor_action_query');
 const priceBatchQuery   = require('./api/price_batch_query');
 const reorgHistoryQuery = require('./api/reorg_history_query');
@@ -780,28 +781,18 @@ async function startApi(){
         // threshold so the validator set doesn't depend on this indexer's local
         // config. Omitted → indexer falls back to its local config (back-compat).
         async getcapabilityvalidators({capability, block_index, min_stake}){
-            if(!capability || typeof capability !== 'string')
-                return { error: 'capability is required' };
-            if(block_index === undefined || block_index === null)
-                return { error: 'block_index is required' };
-            let blk = Number(block_index);
-            if(!Number.isInteger(blk) || blk < 0)
-                return { error: 'block_index must be a non-negative integer' };
+            let parsed = capabilityValidators.parseCapabilityRequest({capability, block_index});
+            if(parsed.error) return parsed;
+            let blk = parsed.blk;
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
             // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
-            // A capability absent from this indexer's STAKING.CAPABILITIES config would
-            // otherwise produce an empty validator set indistinguishable from "no
-            // qualified validators at this block". Surface it as an error so the hub's
-            // CapabilitySnapshot treats it as a null snapshot (degraded mode) and the
-            // operator gets a signal of config drift instead of a silent attestation drop.
-            if(!db.isCapabilityConfigured(capability))
-                return { error: 'capability not configured: ' + capability };
+            let configuredError = capabilityValidators.unconfiguredCapabilityError(db, capability);
+            if(configuredError) return configuredError;
             try {
-                let latestBlock = await db.getLatestBlockIndex();
-                if(blk > latestBlock)
-                    return { error: 'block_index ' + blk + ' not yet indexed (latest: ' + latestBlock + ')' };
+                let indexingError = await capabilityValidators.notYetIndexedError(db, blk);
+                if(indexingError) return indexingError;
                 let validators = await db.getValidatorsByCapability(capability, blk, min_stake);
                 // VALIDATOR_QUERY_LIMIT flag rides on the array itself, so read it
                 // BEFORE the rules filter below hands back a fresh array.
@@ -831,18 +822,10 @@ async function startApi(){
                         db, validators, requestBlock: blk + srb.CANONICAL_REORG_BUFFER,
                         network: indexer.config['NETWORK'], stats: gatesStats
                     });
-                    let line = gatesFilter.formatGatesFilterStats(gatesStats);
-                    if(line) getLogger().info('getcapabilityvalidators: ' + line);
+                    capabilityValidators.logGatesFilterStats(gatesStats);
                 }
-                // Confirm which threshold this snapshot actually filtered by, so a
-                // hub↔indexer MIN_STAKE mismatch is visible in the indexer log
-                // rather than surfacing only as a silently-divergent quorum N.
-                let thresholdSource = (min_stake !== undefined && min_stake !== null)
-                    ? String(min_stake) + ' (caller-supplied)'
-                    : 'local-config';
-                getLogger().info('getcapabilityvalidators: capability=' + capability +
-                    ' block=' + blk + ' min_stake=' + thresholdSource +
-                    ' validators=' + validators.length);
+                capabilityValidators.logSnapshotThreshold(
+                    capability, blk, min_stake, validators.length);
                 return {
                     capability:  capability,
                     block_index: blk,
