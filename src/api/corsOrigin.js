@@ -33,7 +33,7 @@
  * rather than silently opening the service to everyone.
  *
  * Identical by intent to xchain-encoder/src/corsOrigin.js, xchain-hub's
- * src/lib/corsOrigin.js, and xchain-utxo-tracker/src/api/corsOrigin.js; keep the
+ * src/lib/corsOrigin.js, and xchain-utxo-tracker/src/server/cors_origin.js; keep the
  * four in step.
  *
  * @param {string|undefined|null} raw - the raw CORS_ORIGIN value
