@@ -17,6 +17,45 @@
       "test/integration/attest_relay_identity.test/attest_relay_identity_request_id.test.js",
       "test/integration/attest_relay_identity.test/attest_relay_identity_migration.test.js"
     ],
+    "test/integration/scenarios/02_issue_mint_send.test.js": [
+      "test/integration/scenarios/02_issue_mint_send.test.js",
+      "test/integration/scenarios/02_issue_mint_send.test/destroy.test.js",
+      "test/integration/scenarios/02_issue_mint_send.test/mint.test.js",
+      "test/integration/scenarios/02_issue_mint_send.test/send.test.js"
+    ],
+    "test/integration/scenarios/03_order_dispenser.test.js": [
+      "test/integration/scenarios/03_order_dispenser.test.js",
+      "test/integration/scenarios/03_order_dispenser.test/dispenser.test.js"
+    ],
+    "test/integration/scenarios/04_complex_actions.test.js": [
+      "test/integration/scenarios/04_complex_actions.test.js",
+      "test/integration/scenarios/04_complex_actions.test/list_airdrop.test.js",
+      "test/integration/scenarios/04_complex_actions.test/sweep_destroy.test.js"
+    ],
+    "test/integration/scenarios/05_reorg.test.js": [
+      "test/integration/scenarios/05_reorg.test.js",
+      "test/integration/scenarios/05_reorg.test/reindex_integrity.test.js",
+      "test/integration/scenarios/05_reorg.test/successive_and_partial.test.js"
+    ],
+    "test/mutation/suites/tier1_action_mutations.test.js": [
+      "test/mutation/suites/tier1_action_mutations.test.js",
+      "test/mutation/suites/tier1_action_mutations.test/destroy_handler.test.js",
+      "test/mutation/suites/tier1_action_mutations.test/issue_handler.test.js",
+      "test/mutation/suites/tier1_action_mutations.test/send_value_mutations.test.js"
+    ],
+    "test/mutation/suites/tier1_math_mutations.test.js": [
+      "test/mutation/suites/tier1_math_mutations.test.js",
+      "test/mutation/suites/tier1_math_mutations.test/compound_and_format.test.js",
+      "test/mutation/suites/tier1_math_mutations.test/reorder_return_error.test.js"
+    ],
+    "test/mutation/suites/tier1_validation_mutations.test.js": [
+      "test/mutation/suites/tier1_validation_mutations.test.js",
+      "test/mutation/suites/tier1_validation_mutations.test/value_deletion_return.test.js"
+    ],
+    "test/mutation/suites/tier2_balance_mutations.test.js": [
+      "test/mutation/suites/tier2_balance_mutations.test.js",
+      "test/mutation/suites/tier2_balance_mutations.test/returns_and_sql_filters.test.js"
+    ],
     "test/security/http-surface/auth_gate.test.js": [
       "test/security/http-surface/auth_gate.test.js",
       "test/security/http-surface/auth_gate.test/rate_limit_headers.test.js"
@@ -102,6 +141,12 @@
       "test/unit/actions/bet.test/place_and_cancel.test.js",
       "test/unit/actions/bet.test/resolve.test.js",
       "test/unit/actions/bet.test/leg_rows.test.js"
+    ],
+    "test/unit/actions/callback.test.js": [
+      "test/unit/actions/callback.test.js",
+      "test/unit/actions/callback.test/holder_list_filtering.test.js",
+      "test/unit/actions/callback.test/native_fee_payment.test.js",
+      "test/unit/actions/callback.test/validation_guards.test.js"
     ],
     "test/unit/actions/coinpay.test.js": [
       "test/unit/actions/coinpay.test.js",
@@ -256,6 +301,12 @@
       "test/unit/actions/unstake.test/contract_targeted.test.js",
       "test/unit/actions/unstake.test/partial.test.js"
     ],
+    "test/unit/actions/vote_invariants.test.js": [
+      "test/unit/actions/vote_invariants.test.js",
+      "test/unit/actions/vote_invariants.test/binding_minimums.test.js",
+      "test/unit/actions/vote_invariants.test/callback_timelock.test.js",
+      "test/unit/actions/vote_invariants.test/poll_tick_visible.test.js"
+    ],
     "test/unit/actions/withdraw.test.js": [
       "test/unit/actions/withdraw.test.js",
       "test/unit/actions/withdraw.test/amount_and_ledger.test.js"
@@ -267,6 +318,13 @@
       "test/unit/actions/xbridge.test/v3_lock.test.js",
       "test/unit/actions/xbridge.test/v4_burn.test.js"
     ],
+    "test/unit/actions/xcall.test.js": [
+      "test/unit/actions/xcall.test.js",
+      "test/unit/actions/xcall.test/process_result.test.js",
+      "test/unit/actions/xcall.test/result_suppresses_expiry.test.js",
+      "test/unit/actions/xcall.test/v0_request_validation.test.js",
+      "test/unit/actions/xcall.test/v2_expire.test.js"
+    ],
     "test/unit/activation_constants_parity.test.js": [
       "test/unit/activation_constants_parity.test.js",
       "test/unit/activation_constants_parity.test/height_ordering.test.js"
@@ -277,6 +335,11 @@
       "test/unit/admission_binding.test/mirrored_selects.test.js",
       "test/unit/admission_binding.test/attest_bind_predicate.test.js",
       "test/unit/admission_binding.test/call_presence.test.js"
+    ],
+    "test/unit/boundary/amounts/supply_limits.test.js": [
+      "test/unit/boundary/amounts/supply_limits.test.js",
+      "test/unit/boundary/amounts/supply_limits.test/mint_supply.test.js",
+      "test/unit/boundary/amounts/supply_limits.test/send_and_destroy.test.js"
     ],
     "test/unit/bridge_settle.test.js": [
       "test/unit/bridge_settle.test.js",
@@ -324,6 +387,10 @@
       "test/unit/dispenser_value_accounting.test.js",
       "test/unit/dispenser_value_accounting.test/multi_dispenser.test.js",
       "test/unit/dispenser_value_accounting.test/send_triggered.test.js"
+    ],
+    "test/unit/emission_issuance_limits.test.js": [
+      "test/unit/emission_issuance_limits.test.js",
+      "test/unit/emission_issuance_limits.test/issue_budget.test.js"
     ],
     "test/unit/escrow_journal_writer.test.js": [
       "test/unit/escrow_journal_writer.test.js",
