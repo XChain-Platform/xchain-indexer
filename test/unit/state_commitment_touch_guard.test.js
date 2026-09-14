@@ -161,12 +161,8 @@ const HEIGHT  = 500;
 // commit-time resolution that answered zero for a key whose authoritative net is
 // not zero. That is the shape no set comparison can see, because the key is
 // present in `applied` the whole time.
-function makeBlockMockDb({ ledgerKeys, touched, nets, seedLeaves }){
-    const nodes     = new Map();
-    const persisted = {};
-    const calls     = { netReads: 0, descents: 0 };
-
-    const route = async (sql, params) => {
+function makeBlockRoute({ nodes, persisted, calls, ledgerKeys, nets, priorRoot }){
+    return async (sql, params) => {
         if(/FROM state_tree_nodes/.test(sql)){
             calls.descents++;
             const v = nodes.get(params[0]);
@@ -195,14 +191,22 @@ function makeBlockMockDb({ ledgerKeys, touched, nets, seedLeaves }){
         if(/UNION ALL/.test(sql) && /credits/.test(sql))
             return [];   // full-recompute scan: unused, this suite is incremental only
         if(/SELECT balances_root FROM state_tree_roots/.test(sql))
-            return [{ balances_root: priorRoot }];
+            return [{ balances_root: priorRoot() }];
         if(/INSERT INTO\s+state_tree_roots/.test(sql)){
             persisted.balances_root = params[3];
             return [];
         }
         return [];
     };
+}
 
+function makeBlockMockDb({ ledgerKeys, touched, nets, seedLeaves }){
+    const nodes     = new Map();
+    const persisted = {};
+    const calls     = { netReads: 0, descents: 0 };
+    let priorRoot = SC.EMPTY_ROOT_HEX;
+    const route = makeBlockRoute({ nodes, persisted, calls, ledgerKeys, nets,
+        priorRoot: () => priorRoot });
     const db = {
         _smtTouched:      new Set(touched || []),
         config:           {},
@@ -211,11 +215,9 @@ function makeBlockMockDb({ ledgerKeys, touched, nets, seedLeaves }){
         doQuery:          route,
         doQueryStrict:    route
     };
-
     // Seed the prior root so the assertion descends a real tree rather than
     // short-circuiting at an empty root: an absent-leaf check that only ever ran
     // against EMPTY would prove nothing about a populated chain.
-    let priorRoot = SC.EMPTY_ROOT_HEX;
     const smt = new SC.PersistentSMT(new SC.DbNodeStore(db));
     const seed = async () => {
         for(const [address, tick, amount] of (seedLeaves || []))

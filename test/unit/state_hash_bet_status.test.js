@@ -57,77 +57,100 @@ async function withArmed(height, fn){
     try { return await fn(); } finally { BET_STATUS_STATE_HASH_ACTIVATION.regtest = prev; }
 }
 
-describe('state_hash BET status-flip class (P4) @regression', function(){
-
-    // Isolate from the sibling armed-on-regtest classes (their query slots
-    // would shift the canned call order; their keys would break the shape
-    // assertions). The BET class itself is disarmed suite-locally too, so the
-    // inert tests exercise the below-threshold shape; withArmed re-arms.
+describe('state_hash BET status-flip class (P4) @regression', () => {
     let pollPrev, tokenPrev, indexPrev, betPrev;
     before(function(){
-        pollPrev  = POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest;
-        tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest;
-        indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;
-        betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;
-        POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = 999999999;
-        TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest  = 999999999;
-        INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = 999999999;
-        BET_STATUS_STATE_HASH_ACTIVATION.regtest    = 999999999;
+    pollPrev  = POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest;
+    tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest;
+    indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;
+    betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;
+    POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = 999999999;
+    TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest  = 999999999;
+    INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = 999999999;
+    BET_STATUS_STATE_HASH_ACTIVATION.regtest    = 999999999;
     });
     after(function(){
-        POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = pollPrev;
-        TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest  = tokenPrev;
-        INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = indexPrev;
-        BET_STATUS_STATE_HASH_ACTIVATION.regtest    = betPrev;
+    POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = pollPrev;
+    TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest  = tokenPrev;
+    INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = indexPrev;
+    BET_STATUS_STATE_HASH_ACTIVATION.regtest    = betPrev;
     });
 
     it('gate: below/at/above threshold, coin-keyed first, unknown network inert', function(){
-        assert.strictEqual(isBetStatusStateHashActive(999999998, 'regtest', 'BTC'), false);
-        assert.strictEqual(isBetStatusStateHashActive(999999999, 'regtest', 'BTC'), true);
-        assert.strictEqual(isBetStatusStateHashActive(1, 'nonet', 'BTC'), false);
-        // Per-chain mainnet keys resolve via '<COIN>:<network>'
-        assert.strictEqual(isBetStatusStateHashActive(BET_STATUS_STATE_HASH_ACTIVATION['BTC:mainnet'], 'mainnet', 'BTC'), true);
-        assert.strictEqual(isBetStatusStateHashActive(BET_STATUS_STATE_HASH_ACTIVATION['BTC:mainnet'] - 1, 'mainnet', 'BTC'), false);
-        // A coin-less mainnet lookup finds no key and stays inert
-        assert.strictEqual(isBetStatusStateHashActive(999999999, 'mainnet', null), false);
+    assert.strictEqual(isBetStatusStateHashActive(999999998, 'regtest', 'BTC'), false);
+    assert.strictEqual(isBetStatusStateHashActive(999999999, 'regtest', 'BTC'), true);
+    assert.strictEqual(isBetStatusStateHashActive(1, 'nonet', 'BTC'), false);
+    // Per-chain mainnet keys resolve via '<COIN>:<network>'
+    assert.strictEqual(isBetStatusStateHashActive(BET_STATUS_STATE_HASH_ACTIVATION['BTC:mainnet'], 'mainnet', 'BTC'), true);
+    assert.strictEqual(isBetStatusStateHashActive(BET_STATUS_STATE_HASH_ACTIVATION['BTC:mainnet'] - 1, 'mainnet', 'BTC'), false);
+    // A coin-less mainnet lookup finds no key and stays inert
+    assert.strictEqual(isBetStatusStateHashActive(999999999, 'mainnet', null), false);
     });
 
     it('inert default: preimage keeps the pre-feature shape and is blind to bet flips', async function(){
-        const opts = { activationDelay: null, network: 'regtest', coin: 'BTC' };
-        const a = await build(opts);
-        assert.deepStrictEqual(Object.keys(a.data), PREFEATURE_KEYS);
-        // Same 9 base slots; a latch the class would have seen changes nothing
-        const b = await build(opts, baseResults()); // mock rows never reached: queries not issued
-        assert.strictEqual(a.hash, b.hash);
+    const opts = { activationDelay: null, network: 'regtest', coin: 'BTC' };
+    const a = await build(opts);
+    assert.deepStrictEqual(Object.keys(a.data), PREFEATURE_KEYS);
+    // Same 9 base slots; a latch the class would have seen changes nothing
+    const b = await build(opts, baseResults()); // mock rows never reached: queries not issued
+    assert.strictEqual(a.hash, b.hash);
     });
 
     it('armed: the flips fold in and a dropped latch yields a DIFFERENT hash (follower halts)', async function(){
-        const opts = { activationDelay: null, network: 'regtest', coin: 'BTC' };
-        await withArmed(0, async () => {
-            const latched = baseResults().concat([
-                [{ action_index: 5, feed_status: 'closed', closed_block: 7, terminal_block: null }],
-                [],
-            ]);
-            const dropped = baseResults().concat([[], []]);
-            const a = await build(opts, latched);
-            const b = await build(opts, dropped);
-            assert.ok(Object.keys(a.data).includes('bet_feed_status'));
-            assert.ok(Object.keys(a.data).includes('bet_status'));
-            assert.notStrictEqual(a.hash, b.hash, 'a follower that dropped the latch must diverge and halt');
-        });
+    const opts = { activationDelay: null, network: 'regtest', coin: 'BTC' };
+    await withArmed(0, async () => {
+    const latched = baseResults().concat([
+    [{ action_index: 5, feed_status: 'closed', closed_block: 7, terminal_block: null }],
+    [],
+    ]);
+    const dropped = baseResults().concat([[], []]);
+    const a = await build(opts, latched);
+    const b = await build(opts, dropped);
+    assert.ok(Object.keys(a.data).includes('bet_feed_status'));
+    assert.ok(Object.keys(a.data).includes('bet_status'));
+    assert.notStrictEqual(a.hash, b.hash, 'a follower that dropped the latch must diverge and halt');
+    });
+    });
+});
+
+describe('state_hash BET status-flip class (P4) @regression', () => {
+    let pollPrev, tokenPrev, indexPrev, betPrev;
+    before(function(){
+    pollPrev  = POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest;
+    tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest;
+    indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;
+    betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;
+    POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = 999999999;
+    TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest  = 999999999;
+    INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = 999999999;
+    BET_STATUS_STATE_HASH_ACTIVATION.regtest    = 999999999;
+    });
+    after(function(){
+    POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = pollPrev;
+    TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest  = tokenPrev;
+    INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = indexPrev;
+    BET_STATUS_STATE_HASH_ACTIVATION.regtest    = betPrev;
     });
 
     it('armed: a settlement flip folds into bet_status and changes the hash', async function(){
-        const opts = { activationDelay: null, network: 'regtest', coin: 'BTC' };
-        await withArmed(0, async () => {
-            const settled = baseResults().concat([
-                [],
-                [{ action_index: 12, bet_status: 'won', settled_block: 7 }],
-            ]);
-            const empty = baseResults().concat([[], []]);
-            const a = await build(opts, settled);
-            const b = await build(opts, empty);
-            assert.notStrictEqual(a.hash, b.hash);
-        });
+    const opts = { activationDelay: null, network: 'regtest', coin: 'BTC' };
+    await withArmed(0, async () => {
+    const settled = baseResults().concat([
+    [],
+    [{ action_index: 12, bet_status: 'won', settled_block: 7 }],
+    ]);
+    const empty = baseResults().concat([[], []]);
+    const a = await build(opts, settled);
+    const b = await build(opts, empty);
+    assert.notStrictEqual(a.hash, b.hash);
     });
-});
+    });
+});;
+
+// Isolate from the sibling armed-on-regtest classes (their query slots
+
+// would shift the canned call order; their keys would break the shape
+
+// assertions). The BET class itself is disarmed suite-locally too, so the
+
+// inert tests exercise the below-threshold shape; withArmed re-arms.

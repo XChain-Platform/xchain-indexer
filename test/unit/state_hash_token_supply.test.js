@@ -106,19 +106,16 @@ describe('state_hash token-supply class (F-1 closure, armed) @regression', funct
         // the supply upsert still has the row, with the OLD supply value.
         const source = baseResults().concat([[{ tick: 'TOKA', supply: '1500' }]]);
         const stale  = baseResults().concat([[{ tick: 'TOKA', supply: '1000' }]]);
-
         const s = await build(source);
         assert.deepStrictEqual(Object.keys(s.data),
             ['deactivations', 'slashes', 'request_status', 'cooldown', 'credits', 'anchor_invalid',
              'token_supply', 'block_index', 'state_hash_version'],
             'active preimage inserts token_supply before block_index');
         assert.deepStrictEqual(s.data.token_supply, [{ tick: 'TOKA', supply: '1500' }]);
-
         const st = await build(stale);
         assert.notStrictEqual(st.hash, s.hash,
             'a stale supply on the follower MUST change state_hash so it halts instead of serving the old supply');
     });
-
     it('active: an IDENTICAL supply set hashes the same (no false halt)', async function(){
         const rows = () => baseResults().concat([[{ tick: 'TOKA', supply: '1500' }, { tick: 'TOKB', supply: '7' }]]);
         const a = await build(rows());

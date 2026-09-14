@@ -78,88 +78,106 @@ function flipRow(over){
     }, over || {});
 }
 
-describe('state_hash poll-finalize class (VOTE flag-day, armed) @regression', function(){
-
-    // Isolate this suite from the token_supply class (also armed on regtest):
-    // its query slot would shift the canned call-order mock.
+describe('state_hash poll-finalize class (VOTE flag-day, armed) @regression', () => {
     let tokenPrev;
-    // (index-map likewise: armed on regtest since 2026-07-16)
     let indexPrev;
     let betPrev;
     before(function(){
-        tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest; TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest = 999999999;
-        indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;    INDEX_MAP_STATE_HASH_ACTIVATION.regtest    = 999999999;
-        betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;   BET_STATUS_STATE_HASH_ACTIVATION.regtest   = 999999999;
+    tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest; TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest = 999999999;
+    indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;    INDEX_MAP_STATE_HASH_ACTIVATION.regtest    = 999999999;
+    betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;   BET_STATUS_STATE_HASH_ACTIVATION.regtest   = 999999999;
     });
     after(function(){
-        TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest = tokenPrev;
-        INDEX_MAP_STATE_HASH_ACTIVATION.regtest    = indexPrev;
-        BET_STATUS_STATE_HASH_ACTIVATION.regtest   = betPrev;
+    TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest = tokenPrev;
+    INDEX_MAP_STATE_HASH_ACTIVATION.regtest    = indexPrev;
+    BET_STATUS_STATE_HASH_ACTIVATION.regtest   = betPrev;
     });
 
     it('gate: regtest armed from genesis; mainnet/testnet armed per chain at real heights; coin-less lookup fail-inert', function(){
-        assert.strictEqual(isPollFinalizeStateHashActive(0, 'regtest'), true, 'regtest armed at 0 (fresh stacks exercise the class)');
-        // Per-chain armed heights exist, are finite, and are real (mid-chain: above 1000).
-        for(const key of ['BTC:mainnet', 'LTC:mainnet', 'DOGE:mainnet', 'BTC:testnet', 'LTC:testnet', 'DOGE:testnet']){
-            const h = POLL_FINALIZE_STATE_HASH_ACTIVATION[key];
-            assert.ok(Number.isFinite(h) && h > 1000 && h < 999999999, `${key} must carry a real armed height, got ${h}`);
-        }
-        // Boundary semantics on a per-chain key.
-        const h = POLL_FINALIZE_STATE_HASH_ACTIVATION['BTC:mainnet'];
-        assert.strictEqual(isPollFinalizeStateHashActive(h - 1, 'mainnet', 'BTC'), false, 'below threshold');
-        assert.strictEqual(isPollFinalizeStateHashActive(h, 'mainnet', 'BTC'), true, 'at threshold');
-        // Coin-less lookup on a per-chain-keyed network finds no key -> inert (safe only
-        // for coin-less fixture harnesses; both production callers pass coin).
-        assert.strictEqual(isPollFinalizeStateHashActive(h + 1, 'mainnet'), false, 'coin-less mainnet lookup stays inert');
-        assert.strictEqual(isPollFinalizeStateHashActive(7, 'nonexistent', 'BTC'), false, 'unknown network -> off (safe)');
-        assert.strictEqual(isPollFinalizeStateHashActive(7, null, 'BTC'), false);
+    assert.strictEqual(isPollFinalizeStateHashActive(0, 'regtest'), true, 'regtest armed at 0 (fresh stacks exercise the class)');
+    // Per-chain armed heights exist, are finite, and are real (mid-chain: above 1000).
+    for(const key of ['BTC:mainnet', 'LTC:mainnet', 'DOGE:mainnet', 'BTC:testnet', 'LTC:testnet', 'DOGE:testnet']){
+    const h = POLL_FINALIZE_STATE_HASH_ACTIVATION[key];
+    assert.ok(Number.isFinite(h) && h > 1000 && h < 999999999, `${key} must carry a real armed height, got ${h}`);
+    }
+    // Boundary semantics on a per-chain key.
+    const h = POLL_FINALIZE_STATE_HASH_ACTIVATION['BTC:mainnet'];
+    assert.strictEqual(isPollFinalizeStateHashActive(h - 1, 'mainnet', 'BTC'), false, 'below threshold');
+    assert.strictEqual(isPollFinalizeStateHashActive(h, 'mainnet', 'BTC'), true, 'at threshold');
+    // Coin-less lookup on a per-chain-keyed network finds no key -> inert (safe only
+    // for coin-less fixture harnesses; both production callers pass coin).
+    assert.strictEqual(isPollFinalizeStateHashActive(h + 1, 'mainnet'), false, 'coin-less mainnet lookup stays inert');
+    assert.strictEqual(isPollFinalizeStateHashActive(7, 'nonexistent', 'BTC'), false, 'unknown network -> off (safe)');
+    assert.strictEqual(isPollFinalizeStateHashActive(7, null, 'BTC'), false);
     });
 
     it('below threshold: preimage is byte-identical to the pre-feature shape (no poll_finalize key)', async function(){
-        await withRegtestHeight(999999999, async () => {
-            const { data } = await build();
-            assert.deepStrictEqual(Object.keys(data), PREFEATURE_KEYS,
-                'no poll_finalize key below the activation height');
-        });
+    await withRegtestHeight(999999999, async () => {
+    const { data } = await build();
+    assert.deepStrictEqual(Object.keys(data), PREFEATURE_KEYS,
+    'no poll_finalize key below the activation height');
+    });
     });
 
     it('below threshold: state_hash is BLIND to the flip (the polls table is never even queried)', async function(){
-        await withRegtestHeight(999999999, async () => {
-            const a = await build(baseResults());
-            const b = await build(baseResults());
-            assert.strictEqual(a.hash, b.hash);
-        });
+    await withRegtestHeight(999999999, async () => {
+    const a = await build(baseResults());
+    const b = await build(baseResults());
+    assert.strictEqual(a.hash, b.hash);
+    });
+    });
+});
+
+describe('state_hash poll-finalize class (VOTE flag-day, armed) @regression', () => {
+    let tokenPrev;
+    let indexPrev;
+    let betPrev;
+    before(function(){
+    tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest; TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest = 999999999;
+    indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;    INDEX_MAP_STATE_HASH_ACTIVATION.regtest    = 999999999;
+    betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;   BET_STATUS_STATE_HASH_ACTIVATION.regtest   = 999999999;
+    });
+    after(function(){
+    TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest = tokenPrev;
+    INDEX_MAP_STATE_HASH_ACTIVATION.regtest    = indexPrev;
+    BET_STATUS_STATE_HASH_ACTIVATION.regtest   = betPrev;
     });
 
     it('active: the flip is folded in, and a dropped/divergent finalization HALTS (different hash)', async function(){
-        const source    = baseResults().concat([[flipRow()]]);
-        const dropped   = baseResults().concat([[]]);                                  // follower silently lost the flip upsert
-        const divergent = baseResults().concat([[flipRow({ winning_option: 2 })]]);    // follower derived a different winner
+    const source    = baseResults().concat([[flipRow()]]);
+    const dropped   = baseResults().concat([[]]);                                  // follower silently lost the flip upsert
+    const divergent = baseResults().concat([[flipRow({ winning_option: 2 })]]);    // follower derived a different winner
 
-        const s = await build(source);
-        assert.deepStrictEqual(Object.keys(s.data),
-            ['deactivations', 'slashes', 'request_status', 'cooldown', 'credits', 'anchor_invalid',
-             'poll_finalize', 'block_index', 'state_hash_version'],
-            'active preimage inserts poll_finalize before block_index');
-        assert.strictEqual(s.data.poll_finalize[0].winning_option, 1);
+    const s = await build(source);
+    assert.deepStrictEqual(Object.keys(s.data),
+    ['deactivations', 'slashes', 'request_status', 'cooldown', 'credits', 'anchor_invalid',
+    'poll_finalize', 'block_index', 'state_hash_version'],
+    'active preimage inserts poll_finalize before block_index');
+    assert.strictEqual(s.data.poll_finalize[0].winning_option, 1);
 
-        const d = await build(dropped);
-        const w = await build(divergent);
-        assert.notStrictEqual(d.hash, s.hash, 'a dropped finalization flip MUST change state_hash so the follower halts');
-        assert.notStrictEqual(w.hash, s.hash, 'a divergent tally outcome MUST change state_hash so the follower halts');
+    const d = await build(dropped);
+    const w = await build(divergent);
+    assert.notStrictEqual(d.hash, s.hash, 'a dropped finalization flip MUST change state_hash so the follower halts');
+    assert.notStrictEqual(w.hash, s.hash, 'a divergent tally outcome MUST change state_hash so the follower halts');
     });
 
     it('active: an IDENTICAL flip hashes the same (no false halt)', async function(){
-        const a = await build(baseResults().concat([[flipRow()]]));
-        const b = await build(baseResults().concat([[flipRow()]]));
-        assert.strictEqual(a.hash, b.hash);
+    const a = await build(baseResults().concat([[flipRow()]]));
+    const b = await build(baseResults().concat([[flipRow()]]));
+    assert.strictEqual(a.hash, b.hash);
     });
 
     it('the poll and token activation maps carry identical heights (the two classes flip together)', function(){
-        // This suite disarms the token map's regtest key in before(); compare
-        // against the saved original so the isolation shim can't mask real drift.
-        const tokenMap = Object.assign({}, TOKEN_SUPPLY_STATE_HASH_ACTIVATION, { regtest: tokenPrev });
-        assert.deepStrictEqual(tokenMap, POLL_FINALIZE_STATE_HASH_ACTIVATION,
-            'POLL_FINALIZE and TOKEN_SUPPLY activation maps drifted; they were armed as one decision and must flip together');
+    // This suite disarms the token map's regtest key in before(); compare
+    // against the saved original so the isolation shim can't mask real drift.
+    const tokenMap = Object.assign({}, TOKEN_SUPPLY_STATE_HASH_ACTIVATION, { regtest: tokenPrev });
+    assert.deepStrictEqual(tokenMap, POLL_FINALIZE_STATE_HASH_ACTIVATION,
+    'POLL_FINALIZE and TOKEN_SUPPLY activation maps drifted; they were armed as one decision and must flip together');
     });
-});
+});;
+
+// Isolate this suite from the token_supply class (also armed on regtest):
+
+// its query slot would shift the canned call-order mock.
+
+// (index-map likewise: armed on regtest since 2026-07-16)
