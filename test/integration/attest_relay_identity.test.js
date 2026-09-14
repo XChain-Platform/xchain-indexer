@@ -42,15 +42,24 @@
  *   7. The dated migration's DDL executes, is idempotent, and produces an index
  *      byte-identical in shape to the one src/sql/attests.sql declares.
  *
- * The same file now also covers getRelayRequestById, the request_id plane of the
+ * The same suite now also covers getRelayRequestById, the request_id plane of the
  * SAME v3 admission. It was the cheaper of the two attacks and it shipped counting
  * rejected rows: request_id rides the wire and is public before the federation
  * broadcasts, so one malformed v3 at a pending id was stored as rejected and then
  * answered the guard for the real relay, permanently, for one transaction fee. It is
- * a second raw predicate with the same stub-shaped blind spot, and its cases below
- * pin the same seven properties plus one more: the SHARED lookup
- * (getAttestationRequestById, four consensus callers) still returns the rejected row
- * the narrow one hides, which is the ruling's actual constraint.
+ * a second raw predicate with the same stub-shaped blind spot, and its cases in
+ * attest_relay_identity_request_id.test.js pin the same seven properties plus one
+ * more: the SHARED lookup (getAttestationRequestById, four consensus callers) still
+ * returns the rejected row the narrow one hides, which is the ruling's actual
+ * constraint.
+ *
+ * WHERE EACH PART LIVES. This file holds properties 1 to 6 for the origin lookup;
+ * attest_relay_identity_request_id.test.js holds the request_id plane and
+ * attest_relay_identity_migration.test.js holds property 7. All three keep the one
+ * suite title below, so every full test title reads as it did when they were one
+ * file, and they share the schema, hooks and row writer in
+ * test/helpers/relay_identity_db.js. Each describe block below is one or two
+ * numbered properties with its own copy of the hooks.
  *
  * Self-skips when TEST_DB_PASS is unset, matching the other DB-backed files here.
  * Run it with bin/run-db-tiers.sh.
@@ -61,96 +70,16 @@
 process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
-const assert  = require('assert');
-const fs      = require('fs');
-const path    = require('path');
-const mariadb = require('mariadb');
+const assert = require('assert');
 
-const { getTestConfig } = require('../fixtures/config');
-const Utility  = require('../../src/utility');
-const Database = require('../../src/db');
+const { ORIGIN, OTHER, IDX, BIG, relayDbName, useRelayIdentityDb } = require('../helpers/relay_identity_db');
 
-const DB_HOST = process.env.TEST_DB_HOST || '127.0.0.1';
-const DB_PORT = parseInt(process.env.TEST_DB_PORT) || 3306;
-const DB_USER = process.env.TEST_DB_USER || 'root';
-const DB_PASS = process.env.TEST_DB_PASS;            // undefined => self-skip
-const DB_NAME = process.env.TEST_ATTEST_RELAY_DB || 'xchain_attest_relay_identity';
-
-const SQL_DIR = path.join(__dirname, '../../src/sql');
-const MIGRATION = path.join(SQL_DIR, 'migrations', '2026-08-11-attests-relay-identity-index.sql');
-// Strip `--` line comments with the PRODUCT's own stripper, for the reason
-// recovery_id_determinism.test.js documents: the licence banner starts `--***` with
-// no whitespace, which MySQL does not treat as a comment, so a verbatim send is
-// errno 1064 on the first line.
-const stripSqlLineComments = Database.prototype.stripSqlLineComments;
-const ATTESTS_SQL = stripSqlLineComments(fs.readFileSync(path.join(SQL_DIR, 'attests.sql'), 'utf8'));
-
-const ORIGIN = 'LTC';
-const OTHER  = 'DOGE';
-const IDX    = 4242;
-// The top of the range src/db.js's `bigIntAsNumber: true` comment declares safe
-// ("all indexer BIGINT columns are within Number.MAX_SAFE_INTEGER for any realistic
-// chain"). Testing AT the boundary rather than below it is the point: this is the
-// largest value for which the Number binding is required to be exact.
-const BIG    = Number.MAX_SAFE_INTEGER;              // 9007199254740991
-
-function makeDb() {
-    const config = getTestConfig();
-    const util   = new Utility();
-    return new Database(DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS, { config, util });
-}
+const DB_NAME = relayDbName('');
 
 describe('relay-identity lookup against a real MariaDB @tier3', function () {
     this.timeout(60000);
-
-    let db;
-
-    before(async function () {
-        if (!DB_PASS) this.skip();
-        const admin = await mariadb.createConnection({
-            host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS, multipleStatements: true });
-        await admin.query('DROP DATABASE IF EXISTS ' + DB_NAME + '; CREATE DATABASE ' + DB_NAME + ';');
-        await admin.query('USE ' + DB_NAME + '; ' + ATTESTS_SQL);
-        // A stand-in for the one table getAttestationRequestById LEFT JOINs. The
-        // request_id comparison case needs the SHARED lookup to actually run against
-        // this schema, and without the join target its query is a 1146 that doQuery
-        // swallows into [] - which would make the shared lookup look like it excludes
-        // rejected rows when it does not. Columns are only what the join reads.
-        await admin.query('USE ' + DB_NAME +
-            '; CREATE TABLE IF NOT EXISTS index_addresses (' +
-            ' id BIGINT UNSIGNED NOT NULL PRIMARY KEY, address VARCHAR(128) NULL)');
-        await admin.end();
-
-        db = makeDb();
-    });
-
-    after(async function () {
-        if (db && db.pool) await db.pool.end();
-    });
-
-    beforeEach(async function () {
-        await conn(c => c.query('DELETE FROM attests'));
-    });
-
-    async function conn(fn) {
-        const c = await db.getConnection();
-        try { return await fn(c); } finally { await c.release(); }
-    }
-
-    /**
-     * Write one attests row the way the writer does for a relay leg. `actionIndex`
-     * doubles as the row identity, so a case can assert WHICH row came back.
-     */
-    function row({ actionIndex, version = 0, requestId, status = 'pending',
-                   originChain = ORIGIN, originActionIndex = IDX }) {
-        return conn(c => c.query(
-            `INSERT INTO attests
-                 (action_index, version, request_id, provider_id, request_status,
-                  origin_chain, origin_action_index, block_index)
-             VALUES (?, ?, ?, 'http_get', ?, ?, ?, 900000)`,
-            [actionIndex, version, requestId || String(actionIndex).padStart(64, '0'),
-             status, originChain, originActionIndex]));
-    }
+    const fx = useRelayIdentityDb(DB_NAME);
+    const { row } = fx;
 
     // ── 1. the predicate itself ──────────────────────────────────────────────
 
@@ -159,7 +88,7 @@ describe('relay-identity lookup against a real MariaDB @tier3', function () {
         // the four stubbed unit references cannot make at all.
         await row({ actionIndex: 10 });
 
-        const hit = await db.getRelayRequestByOrigin(ORIGIN, IDX);
+        const hit = await fx.db.getRelayRequestByOrigin(ORIGIN, IDX);
         assert.ok(hit, 'a materialized relay identity must be found');
         assert.strictEqual(Number(hit.action_index), 10);
         assert.strictEqual(hit.request_status, 'pending');
@@ -168,9 +97,9 @@ describe('relay-identity lookup against a real MariaDB @tier3', function () {
     it('returns null for a relay identity this chain has never materialized', async function () {
         await row({ actionIndex: 10 });
 
-        assert.strictEqual(await db.getRelayRequestByOrigin(ORIGIN, IDX + 1), null,
+        assert.strictEqual(await fx.db.getRelayRequestByOrigin(ORIGIN, IDX + 1), null,
             'a different origin action index is a different identity');
-        assert.strictEqual(await db.getRelayRequestByOrigin(OTHER, IDX), null,
+        assert.strictEqual(await fx.db.getRelayRequestByOrigin(OTHER, IDX), null,
             'the identity is the PAIR: the same index on another origin chain is free');
     });
 
@@ -179,8 +108,8 @@ describe('relay-identity lookup against a real MariaDB @tier3', function () {
         // "by accident" is exactly what a schema change can take away silently.
         await row({ actionIndex: 10, originChain: null, originActionIndex: null });
 
-        assert.strictEqual(await db.getRelayRequestByOrigin(ORIGIN, IDX), null);
-        assert.strictEqual(await db.getRelayRequestByOrigin('', 0), null);
+        assert.strictEqual(await fx.db.getRelayRequestByOrigin(ORIGIN, IDX), null);
+        assert.strictEqual(await fx.db.getRelayRequestByOrigin('', 0), null);
     });
 
     // ── 2. version = 0 ───────────────────────────────────────────────────────
@@ -192,9 +121,15 @@ describe('relay-identity lookup against a real MariaDB @tier3', function () {
         // not decoration.
         await row({ actionIndex: 11, version: 1, status: null });
 
-        assert.strictEqual(await db.getRelayRequestByOrigin(ORIGIN, IDX), null,
+        assert.strictEqual(await fx.db.getRelayRequestByOrigin(ORIGIN, IDX), null,
             'only a v0 request row consumes the exactly-once slot');
     });
+});
+
+describe('relay-identity lookup against a real MariaDB @tier3', function () {
+    this.timeout(60000);
+    const fx = useRelayIdentityDb(DB_NAME);
+    const { conn, row } = fx;
 
     // ── 3. request_status <> 'rejected' (the novel clause) ───────────────────
 
@@ -205,7 +140,7 @@ describe('relay-identity lookup against a real MariaDB @tier3', function () {
         // single malformed v3 naming the same origin action.
         await row({ actionIndex: 12, status: 'rejected' });
 
-        assert.strictEqual(await db.getRelayRequestByOrigin(ORIGIN, IDX), null,
+        assert.strictEqual(await fx.db.getRelayRequestByOrigin(ORIGIN, IDX), null,
             'a rejected row consumed no slot');
     });
 
@@ -218,7 +153,7 @@ describe('relay-identity lookup against a real MariaDB @tier3', function () {
             await conn(c => c.query('DELETE FROM attests'));
             await row({ actionIndex: 13, status });
 
-            const hit = await db.getRelayRequestByOrigin(ORIGIN, IDX);
+            const hit = await fx.db.getRelayRequestByOrigin(ORIGIN, IDX);
             assert.ok(hit, 'a ' + status + ' request already spent its materialization');
             assert.strictEqual(hit.request_status, status);
         }
@@ -228,113 +163,9 @@ describe('relay-identity lookup against a real MariaDB @tier3', function () {
         await row({ actionIndex: 14, status: 'rejected' });
         await row({ actionIndex: 15, status: 'pending' });
 
-        const hit = await db.getRelayRequestByOrigin(ORIGIN, IDX);
+        const hit = await fx.db.getRelayRequestByOrigin(ORIGIN, IDX);
         assert.ok(hit);
         assert.strictEqual(Number(hit.action_index), 15);
-    });
-
-    // ── 3b. the request_id plane (getRelayRequestById) ───────────────────────
-    //
-    // The sibling guard, and the one that shipped counting rejected rows. It runs on
-    // the SAME wire action, one line above the origin-identity check, and it is the
-    // cheaper attack of the two: request_id rides the wire and is derivable in public
-    // from the origin chain's v0, so a watcher does not even need a reorg. Everything
-    // below is the SQL half, which the unit tier reaches only through a stub.
-
-    describe('the request_id admission lookup', function () {
-        const RID   = 'a'.repeat(64);
-        const OTHER_RID = 'b'.repeat(64);
-
-        it('finds the admitted v0 row holding the id', async function () {
-            await row({ actionIndex: 50, requestId: RID });
-
-            const hit = await db.getRelayRequestById(RID);
-            assert.ok(hit, 'an admitted request_id must be found');
-            assert.strictEqual(Number(hit.action_index), 50);
-            assert.strictEqual(hit.request_status, 'pending');
-        });
-
-        it('returns null for an id this chain has never admitted', async function () {
-            await row({ actionIndex: 50, requestId: RID });
-            assert.strictEqual(await db.getRelayRequestById(OTHER_RID), null);
-        });
-
-        it('lower-cases the id, which arrives from the wire in any case', async function () {
-            await row({ actionIndex: 50, requestId: RID });
-            assert.ok(await db.getRelayRequestById(RID.toUpperCase()),
-                'the column is stored lower-case; an upper-case wire value must still match');
-        });
-
-        it('excludes a REJECTED row, so one malformed v3 cannot burn the id', async function () {
-            // The defect, driven against real SQL. A refused v3 is still written down
-            // with its request_id; if that audit row answered the guard, anyone could
-            // watch an origin chain, take the request_id of a request the federation is
-            // about to relay, and spend one transaction fee to make it permanently
-            // unservable.
-            await row({ actionIndex: 51, requestId: RID, status: 'rejected' });
-
-            assert.strictEqual(await db.getRelayRequestById(RID), null,
-                'a rejected verdict escrowed nothing and materialized nothing');
-        });
-
-        it('sees past the front-run to the real materialization behind it', async function () {
-            await row({ actionIndex: 51, requestId: RID, status: 'rejected' });
-            await row({ actionIndex: 52, requestId: RID, status: 'pending' });
-
-            const hit = await db.getRelayRequestById(RID);
-            assert.ok(hit);
-            assert.strictEqual(Number(hit.action_index), 52);
-        });
-
-        it('counts every NON-rejected lifecycle state, terminal ones included', async function () {
-            // The dangerous half of `<> 'rejected'`: a fulfilled or expired request DID
-            // materialize, so it must keep the id. Written this way rather than
-            // `= 'pending'` so a later tightening cannot re-open double materialization.
-            for (const status of ['fulfilled', 'expired', 'errored']) {
-                await conn(c => c.query('DELETE FROM attests'));
-                await row({ actionIndex: 53, requestId: RID, status });
-
-                const hit = await db.getRelayRequestById(RID);
-                assert.ok(hit, 'a ' + status + ' request already spent the id');
-                assert.strictEqual(hit.request_status, status);
-            }
-        });
-
-        it('excludes the v1 response row that carries the same request_id', async function () {
-            await row({ actionIndex: 54, version: 1, requestId: RID, status: null });
-
-            assert.strictEqual(await db.getRelayRequestById(RID), null,
-                'only a v0 request row consumes the id');
-        });
-
-        it('returns the FIRST admission when two rows share the id', async function () {
-            await row({ actionIndex: 56, requestId: RID, originActionIndex: IDX + 1 });
-            await row({ actionIndex: 55, requestId: RID });
-
-            assert.strictEqual(Number((await db.getRelayRequestById(RID)).action_index), 55);
-        });
-
-        it('THROWS on a query fault instead of reading as "the id is free"', async function () {
-            // Same consensus property as the origin lookup: null here ADMITS the v3.
-            await conn(c => c.query('RENAME TABLE attests TO attests_parked'));
-            try {
-                await assert.rejects(() => db.getRelayRequestById(RID), /attests/);
-            } finally {
-                await conn(c => c.query('RENAME TABLE attests_parked TO attests'));
-            }
-        });
-
-        it('leaves the shared row lookup answering for rejected rows', async function () {
-            // getAttestationRequestById keeps four consensus callers that need to see
-            // every stored row. The narrow query exists precisely so their behaviour did
-            // not have to change, and this is that promise asked of real SQL.
-            await row({ actionIndex: 57, requestId: RID, status: 'rejected' });
-
-            assert.ok(await db.getAttestationRequestById(RID),
-                'the shared lookup still returns the rejected row');
-            assert.strictEqual(await db.getRelayRequestById(RID), null,
-                'and the admission guard still does not');
-        });
     });
 
     // ── 4. ORDER BY action_index ─────────────────────────────────────────────
@@ -346,10 +177,16 @@ describe('relay-identity lookup against a real MariaDB @tier3', function () {
         await row({ actionIndex: 21, requestId: 'b'.repeat(64) });
         await row({ actionIndex: 20, requestId: 'a'.repeat(64) });
 
-        const hit = await db.getRelayRequestByOrigin(ORIGIN, IDX);
+        const hit = await fx.db.getRelayRequestByOrigin(ORIGIN, IDX);
         assert.strictEqual(Number(hit.action_index), 20);
         assert.strictEqual(hit.request_id, 'a'.repeat(64));
     });
+});
+
+describe('relay-identity lookup against a real MariaDB @tier3', function () {
+    this.timeout(60000);
+    const fx = useRelayIdentityDb(DB_NAME);
+    const { conn, row } = fx;
 
     // ── 5. Number() -> BIGINT UNSIGNED binding ───────────────────────────────
 
@@ -361,13 +198,13 @@ describe('relay-identity lookup against a real MariaDB @tier3', function () {
         // produced by a lossy comparison.
         await row({ actionIndex: 30, originActionIndex: BIG });
 
-        const hit = await db.getRelayRequestByOrigin(ORIGIN, BIG);
+        const hit = await fx.db.getRelayRequestByOrigin(ORIGIN, BIG);
         assert.ok(hit, 'the largest safely representable index must round-trip');
         assert.strictEqual(Number(hit.action_index), 30);
 
-        assert.strictEqual(await db.getRelayRequestByOrigin(ORIGIN, BIG - 1), null,
+        assert.strictEqual(await fx.db.getRelayRequestByOrigin(ORIGIN, BIG - 1), null,
             'the value below must NOT match: that is what proves no rounding happened');
-        assert.strictEqual(await db.getRelayRequestByOrigin(ORIGIN, BIG - 2), null);
+        assert.strictEqual(await fx.db.getRelayRequestByOrigin(ORIGIN, BIG - 2), null);
 
         // And the stored column is byte-exact, read back as a string so the assertion
         // does not launder the value through the same Number path it is testing.
@@ -393,10 +230,16 @@ describe('relay-identity lookup against a real MariaDB @tier3', function () {
              VALUES (31, 0, ?, 'http_get', 'pending', ?, ${beyond}, 900000)`,
             ['c'.repeat(64), ORIGIN]));
 
-        assert.strictEqual(await db.getRelayRequestByOrigin(ORIGIN, Number(beyond)), null,
+        assert.strictEqual(await fx.db.getRelayRequestByOrigin(ORIGIN, Number(beyond)), null,
             'beyond the safe range the lookup misses; the origin index is bounded by the ' +
             'origin chain action count, which is why this is a documented limit not a defect');
     });
+});
+
+describe('relay-identity lookup against a real MariaDB @tier3', function () {
+    this.timeout(60000);
+    const fx = useRelayIdentityDb(DB_NAME);
+    const { conn } = fx;
 
     // ── 6. doQueryStrict: a DB fault must not read as "no prior materialization" ──
 
@@ -410,92 +253,11 @@ describe('relay-identity lookup against a real MariaDB @tier3', function () {
         await conn(c => c.query('RENAME TABLE attests TO attests_parked'));
         try {
             await assert.rejects(
-                () => db.getRelayRequestByOrigin(ORIGIN, IDX),
+                () => fx.db.getRelayRequestByOrigin(ORIGIN, IDX),
                 /attests/,
                 'a DB fault must surface, never collapse into a null the guard trusts');
         } finally {
             await conn(c => c.query('RENAME TABLE attests_parked TO attests'));
         }
-    });
-
-    // ── 7. the dated migration ───────────────────────────────────────────────
-
-    describe('the origin_relay_identity migration', function () {
-        const NAME = 'origin_relay_identity';
-
-        async function indexShape() {
-            const rows = await conn(c => c.query(
-                'SHOW INDEX FROM attests WHERE Key_name = ?', [NAME]));
-            if (!rows.length) return null;
-            return {
-                unique:  Number(rows[0].Non_unique) === 0,
-                columns: rows.sort((a, b) => Number(a.Seq_in_index) - Number(b.Seq_in_index))
-                             .map(r => r.Column_name)
-            };
-        }
-
-        async function applyMigration() {
-            const sql = stripSqlLineComments(fs.readFileSync(MIGRATION, 'utf8'));
-            for (const stmt of sql.split(';').map(s => s.trim()).filter(Boolean))
-                await conn(c => c.query(stmt));
-        }
-
-        it('creates the index the definition declares, with the same shape', async function () {
-            // The ledger path and the definition path must converge. The unit-tier
-            // sql-schema-index-parity guard compares the two files LEXICALLY; this asks
-            // the engine what it actually built.
-            await conn(c => c.query('DROP INDEX ' + NAME + ' ON attests'));
-            assert.strictEqual(await indexShape(), null, 'precondition: the index is gone');
-
-            await applyMigration();
-
-            assert.deepStrictEqual(await indexShape(),
-                { unique: false, columns: ['origin_chain', 'origin_action_index'] },
-                'NON-UNIQUE, in this column order: uniqueness is enforced in code as a ' +
-                'stored verdict, because a constraint violation would throw mid-block');
-        });
-
-        it('is idempotent, so a converged DB replays it as a no-op', async function () {
-            // Every node auto-applies `mode=auto` migrations at startup and the
-            // schema_migrations ledger keeps them from re-running; IF NOT EXISTS is the
-            // second belt, for a DB that already carries the index from a fresh install
-            // off src/sql/attests.sql.
-            const before = await indexShape();
-            assert.ok(before, 'precondition: the index is present');
-
-            await applyMigration();
-            await applyMigration();
-
-            assert.deepStrictEqual(await indexShape(), before);
-        });
-
-        it('applies to a POPULATED table without touching a row', async function () {
-            // The safe-on-populated-table claim, asked of the engine rather than asserted
-            // in a comment. Additive index-only DDL: no column, no row, no validation
-            // outcome changes, only the access path.
-            await row({ actionIndex: 40, originActionIndex: 401 });
-            await row({ actionIndex: 41, originActionIndex: 402, status: 'rejected' });
-            await row({ actionIndex: 42, originActionIndex: 403, originChain: OTHER });
-            const snapshot = await conn(c => c.query(
-                'SELECT action_index, origin_chain, origin_action_index, request_status ' +
-                'FROM attests ORDER BY action_index'));
-
-            await conn(c => c.query('DROP INDEX ' + NAME + ' ON attests'));
-            await applyMigration();
-
-            const after = await conn(c => c.query(
-                'SELECT action_index, origin_chain, origin_action_index, request_status ' +
-                'FROM attests ORDER BY action_index'));
-            assert.strictEqual(after.length, snapshot.length);
-            for (let i = 0; i < after.length; i++)
-                assert.deepStrictEqual(JSON.parse(JSON.stringify(after[i])),
-                                       JSON.parse(JSON.stringify(snapshot[i])));
-
-            // ...and the lookup it exists to serve still answers the same way over the
-            // populated table, which is the only thing the index is for.
-            assert.strictEqual(Number((await db.getRelayRequestByOrigin(ORIGIN, 401)).action_index), 40);
-            assert.strictEqual(await db.getRelayRequestByOrigin(ORIGIN, 402), null);
-            assert.strictEqual(Number((await db.getRelayRequestByOrigin(OTHER, 403)).action_index), 42);
-        });
     });
 });
