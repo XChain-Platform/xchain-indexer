@@ -46,7 +46,7 @@ const url     = require('url');
 const crypto  = require('crypto');
 const fs      = require('fs');
 const path    = require('path');
-const rca     = require('../rollcall_activation.js');
+const { decideReply } = require('./rollcall_proof_client/reply_decision.js');
 
 const { getLogger } = require('../observability/index.js');
 const { CONFIG_ENV } = require('../config.js');
@@ -146,62 +146,11 @@ class RollcallProofClient {
             return { decided: false, reason: 'DOGE indexer unreachable: ' + (e && e.message) };
         }
 
-        // (2) malformed.
-        if(!result || result.error || typeof result !== 'object'
-           || typeof result.signers !== 'object' || result.signers === null)
-            return { decided: false, reason: 'malformed getrollcallsigners reply' };
-
-        // (5) peer software-version signal, checked BEFORE the emptiness of the
-        // answer can be mistaken for information.
-        let ours = this.manifestHash();
-        if(ours === null || String(result.manifest_hash || '') !== String(ours))
-            return { decided: false, reason: 'DOGE indexer action-manifest hash mismatch (stale decoder?)' };
-
-        let hcut     = (result.hcut === null || result.hcut === undefined) ? null : parseInt(result.hcut);
-        let tipIndex = parseInt(result.tip_block_index);
-        let tipTime  = parseInt(result.tip_block_time);
-
-        // (3) no cut exists yet. A null hcut, or a DOGE tip whose stamp has not yet
-        // passed the window end, means the window is still open over there.
-        if(hcut === null || !Number.isFinite(hcut))
-            return { decided: false, reason: 'no DOGE window cut yet for epoch ' + epochHeight };
-        if(!Number.isFinite(tipTime) || tipTime <= parseInt(maxBlockTime))
-            return { decided: false, reason: 'DOGE tip has not passed the window end for epoch ' + epochHeight };
-
-        // (4) the cut is not buried. This is what bounds the accepted residual: a
-        // DOGE reorg deeper than the maturity that removes a counted signature
-        // after the BTC close cannot be undone from BTC, because nothing there
-        // observes it and no un-evict rail exists.
-        let maturity = rca.ROLLCALL_DOGE_MATURITY[network];
-        if(!Number.isFinite(parseInt(maturity)))
-            return { decided: false, reason: 'unknown network for ROLLCALL_DOGE_MATURITY: ' + network };
-        if(!Number.isFinite(tipIndex) || tipIndex < hcut + maturity)
-            return { decided: false, reason: 'DOGE cut not buried yet (tip ' + tipIndex + ' < ' + (hcut + maturity) + ')' };
-
-        // The signer map, normalized on one field only: ROLLCALL v1's GATES, as
-        // carried. A peer that predates v1 answers rows without the key at all, and
-        // the close reads the difference between "no gates" and "these gates" to
-        // choose which canonical it verifies against, so absence is spelled here as
-        // an explicit null rather than left as undefined for the close to guess. A
-        // row that is not an object cannot be a signature and reads as absent, which
-        // the close already treats as one; every other field is passed through.
-        let signers = {};
-        for(let k of Object.keys(result.signers)){
-            let row = result.signers[k];
-            if(!row || typeof row !== 'object'){ signers[k] = null; continue; }
-            signers[k] = Object.assign({}, row, {
-                gates: (row.gates === undefined || row.gates === null) ? null : String(row.gates)
-            });
-        }
-
-        let decided = {
-            decided:    true,
-            hcut:       hcut,
-            signers:    signers,
-            publishers: (result.publishers && typeof result.publishers === 'object') ? result.publishers : {}
-        };
-        this._memo.set(memoKey, decided);
-        return decided;
+        // Conditions (2) to (5) and the signer-map normalization live in
+        // rollcall_proof_client/reply_decision.js. Only a decided answer is memoized.
+        let answer = decideReply(this, result, {epochHeight, maxBlockTime, network});
+        if(answer.decided) this._memo.set(memoKey, answer);
+        return answer;
     }
 
     // Cache key for a DECIDED answer: every field the getrollcallsigners params carry,
