@@ -116,9 +116,7 @@ function syncFor(db) {
 
 afterEach(function () { sinon.restore(); });
 
-describe('capability_snapshots BTC re-derivation fence @regression @tier2', function () {
-
-    describe('a contradiction the node can prove is refused', function () {
+describe('capability_snapshots BTC re-derivation fence @regression @tier2', function () { describe('a contradiction the node can prove is refused', function () {
 
         // The refusal is deliberately loud on the real path; keep the suite readable.
         beforeEach(function () { sinon.stub(console, 'error'); });
@@ -170,9 +168,9 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
             assert.strictEqual(applied, false);
             assert.strictEqual(inserted.length, 0);
         });
-    });
+}); });
 
-    describe('everything the node cannot disprove still mirrors', function () {
+describe('capability_snapshots BTC re-derivation fence @regression @tier2', function () { describe('everything the node cannot disprove still mirrors', function () {
         it('applies an honest row', async function () {
             const { db }             = dbFor('BTC');
             const { sync, inserted } = syncFor(db);
@@ -230,9 +228,9 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
             assert.strictEqual(inserted.length, 1);
             assert.strictEqual(seen.stakeQueries.length, 0, 'no local stake read is even attempted off BTC');
         });
-    });
+}); });
 
-    describe('everything the node cannot disprove still mirrors', function () {
+describe('capability_snapshots BTC re-derivation fence @regression @tier2', function () { describe('everything the node cannot disprove still mirrors', function () {
         it('applies rows when no authoritative stake db is wired', async function () {
             // The explorer's vendored display mirror: no indexer db, no re-derivation.
             const { sync, inserted } = syncFor(null);
@@ -265,9 +263,9 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
 
             assert.strictEqual(seen.stakeQueries.length, 0);
         });
-    });
+}); });
 
-    describe('the verdict itself', function () {
+describe('capability_snapshots BTC re-derivation fence @regression @tier2', function () { describe('the verdict itself', function () {
 
         it('reports verified / refused / unknown, never a bare boolean', async function () {
             const { db } = dbFor('BTC');
@@ -317,5 +315,4 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
                 snapshotRow({ signing_pubkey: 'AA11', source: 'SRC1' }));
             assert.strictEqual(v.verdict, 'verified');
         });
-    });
-});
+}); });

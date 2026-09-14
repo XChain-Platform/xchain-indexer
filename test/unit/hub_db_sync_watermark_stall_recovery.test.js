@@ -57,10 +57,12 @@ function armStalled(sync, { hubTip = 2000, watermark = 1000 } = {}) {
     return sync;
 }
 
-describe('HubDbSync stream-watermark stall recovery @regression @tier1', function () {
 
-    // ── the verdict itself ────────────────────────────────────────────────────
-    describe('watermarkStallVerdict', function () {
+let clock, errStub;
+
+
+// ── the verdict itself ────────────────────────────────────────────────────
+function registerWatermarkStallGroup1() { describe('watermarkStallVerdict', function () {
         const base = {
             stallMs: STALL_MS, exitMs: EXIT_MS,
             pollMode: false, schemaMismatch: false,
@@ -101,10 +103,10 @@ describe('HubDbSync stream-watermark stall recovery @regression @tier1', functio
             assert.strictEqual(at(STALL_MS * 10, { stallMs: 0 }), 'ok');
             assert.strictEqual(at(STALL_MS * 10, { exitMs: 0, resyncAt: STALL_MS }), 'ok');
         });
-    });
+}); }
 
-    // ── the window resolver ───────────────────────────────────────────────────
-    describe('resolveWatermarkStallMs', function () {
+// ── the window resolver ───────────────────────────────────────────────────
+function registerWatermarkStallGroup2() { describe('resolveWatermarkStallMs', function () {
         const KEY = 'HUB_SYNC_WATERMARK_STALL_S';
         let saved;
         beforeEach(function () { saved = process.env[KEY]; delete process.env[KEY]; });
@@ -136,12 +138,10 @@ describe('HubDbSync stream-watermark stall recovery @regression @tier1', functio
                 assert.strictEqual(log.callCount, 3, 'each bad value warns');
             } finally { log.restore(); }
         });
-    });
+}); }
 
-    let clock, errStub;
-
-    // ── the wiring, on fake timers ────────────────────────────────────────────
-    describe('_checkWatermarkStall wiring', function () {
+// ── the wiring, on fake timers ────────────────────────────────────────────
+function registerWatermarkStallGroup3() { describe('_checkWatermarkStall wiring', function () {
         beforeEach(function () {
             clock   = sinon.useFakeTimers({ now: 1_700_000_000_000, toFake: ['Date', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] });
             errStub = sinon.stub(console, 'error');
@@ -199,9 +199,9 @@ describe('HubDbSync stream-watermark stall recovery @regression @tier1', functio
             assert.ok(/HUB_SYNC_WATERMARK_STALL_EXIT_S/.test(reason),
                 'the reason names the knob that timed it: ' + reason);
         });
-    });
+}); }
 
-    describe('_checkWatermarkStall wiring', function () {
+function registerWatermarkStallGroup4() { describe('_checkWatermarkStall wiring', function () {
         beforeEach(function () {
             clock   = sinon.useFakeTimers({ now: 1_700_000_000_000, toFake: ['Date', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] });
             errStub = sinon.stub(console, 'error');
@@ -246,9 +246,9 @@ describe('HubDbSync stream-watermark stall recovery @regression @tier1', functio
                 'no exit: the recovery is what the whole detector exists to produce');
             assert.strictEqual(fatal.callCount, 0);
         });
-    });
+}); }
 
-    describe('_checkWatermarkStall wiring', function () {
+function registerWatermarkStallGroup5() { describe('_checkWatermarkStall wiring', function () {
         beforeEach(function () {
             clock   = sinon.useFakeTimers({ now: 1_700_000_000_000, toFake: ['Date', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] });
             errStub = sinon.stub(console, 'error');
@@ -297,9 +297,9 @@ describe('HubDbSync stream-watermark stall recovery @regression @tier1', functio
             assert.strictEqual(sync.checkWatermarkStall(), 'ok');
             assert.strictEqual(drive.callCount, 0);
         });
-    });
+}); }
 
-    describe('_checkWatermarkStall wiring', function () {
+function registerWatermarkStallGroup6() { describe('_checkWatermarkStall wiring', function () {
         beforeEach(function () {
             clock   = sinon.useFakeTimers({ now: 1_700_000_000_000, toFake: ['Date', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] });
             errStub = sinon.stub(console, 'error');
@@ -329,10 +329,10 @@ describe('HubDbSync stream-watermark stall recovery @regression @tier1', functio
             sync.startStallDetector();
             assert.strictEqual(sync._stallTimer, null);
         });
-    });
+}); }
 
-    // ── the evidence the detector runs on ─────────────────────────────────────
-    describe('hub tip recording', function () {
+// ── the evidence the detector runs on ─────────────────────────────────────
+function registerWatermarkStallGroup7() { describe('hub tip recording', function () {
         it('_noteHubTip keeps the newest tip and ignores junk and regressions', function () {
             const sync = makeSync();
             sync.noteHubTip(1000);
@@ -364,10 +364,10 @@ describe('HubDbSync stream-watermark stall recovery @regression @tier1', functio
             assert.strictEqual(status.streamWatermark, 1000);
             assert.strictEqual(typeof status.watermarkFrozenMs, 'number');
         });
-    });
+}); }
 
-    // ── the remedy must not be throttled away ─────────────────────────────────
-    describe('_driveResync is reachable past requestResync throttling', function () {
+// ── the remedy must not be throttled away ─────────────────────────────────
+function registerWatermarkStallGroup8() { describe('_driveResync is reachable past requestResync throttling', function () {
         it('a block-loop resync inside the ceiling window cannot swallow the stall remedy', function () {
             const sync = armStalled(makeSync());
             const warn = sinon.stub(console, 'warn');
@@ -387,5 +387,14 @@ describe('HubDbSync stream-watermark stall recovery @regression @tier1', functio
                 assert.strictEqual(sync.forcedResyncCount, before + 1, 'the resync really ran');
             } finally { warn.restore(); err.restore(); }
         });
-    });
+}); }
+describe('HubDbSync stream-watermark stall recovery @regression @tier1', function () {
+    registerWatermarkStallGroup1();
+    registerWatermarkStallGroup2();
+    registerWatermarkStallGroup3();
+    registerWatermarkStallGroup4();
+    registerWatermarkStallGroup5();
+    registerWatermarkStallGroup6();
+    registerWatermarkStallGroup7();
+    registerWatermarkStallGroup8();
 });

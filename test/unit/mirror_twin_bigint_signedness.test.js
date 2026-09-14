@@ -99,17 +99,12 @@ function parseBigintColumns(dir, table) {
     return out;
 }
 
-describe('mirror-twin BIGINT signedness conformance @regression', function () {
 
-    // Refuses an absent hub sql dir and a lane symlink into a live main checkout alike.
-    const hubCheckout = siblingCheckout(__dirname, HUB_SQL_DIR);
-    const hubPresent = hubCheckout.usable;
+// Refuses an absent hub sql dir and a lane symlink into a live main checkout alike.
+const hubCheckout = siblingCheckout(__dirname, HUB_SQL_DIR);
+const hubPresent = hubCheckout.usable;
 
-    before(function () {
-        if (!hubPresent)
-            return skipOrFail(this, hubCheckout, 'the mirror-twin BIGINT signedness guard against xchain-hub/src/sql');
-    });
-
+function registerMirrorTwinInventoryTests() {
     // landed anchor_reward_attestations into HUB_STATE_TABLES without adding it
     // here, so its field shape went unguarded on a money rail for a full release cycle.
     // The inventory above is hand-written; this joins it back to the registries that
@@ -143,7 +138,9 @@ describe('mirror-twin BIGINT signedness conformance @regression', function () {
             assert.ok(fs.existsSync(path.join(HUB_SQL_DIR, table + '.sql')), 'missing hub twin DDL: ' + table);
         }
     });
+}
 
+function registerMirrorTwinColumnTests() {
     for (const table of MIRROR_TWINS) {
         it(table + ': every shared BIGINT column matches the hub UNSIGNED declaration', function () {
             const local = parseBigintColumns(LOCAL_SQL_DIR, table);
@@ -166,4 +163,15 @@ describe('mirror-twin BIGINT signedness conformance @regression', function () {
                 'src/sql/migrations ALTER for deployed mirrors):\n' + drifted.join('\n'));
         });
     }
+}
+
+describe('mirror-twin BIGINT signedness conformance @regression', function () {
+
+    before(function () {
+        if (!hubPresent)
+            return skipOrFail(this, hubCheckout, 'the mirror-twin BIGINT signedness guard against xchain-hub/src/sql');
+    });
+
+    registerMirrorTwinInventoryTests();
+    registerMirrorTwinColumnTests();
 });
