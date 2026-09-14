@@ -35,6 +35,7 @@
 'use strict';
 
 const assert = require('assert');
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 const M   = require('../../src/consensus/merkle.js');
 const SC  = require('../../src/stateCommitment.js');
 const SUB = require('../../src/state_subtree_activation.js');
@@ -419,6 +420,16 @@ describe('XCHAIN_ESC locked leaf: the §7 shadow thread @regression', function()
         const fs = require('fs'), path = require('path');
         for(const p of ['../../src/stateCommitment.js', '../../../xchain-sync/src/stateCommitment.js']){
             let src;
+            // The sync candidate is a sibling reference: an absent sibling still
+            // falls through to the catch below, as it always has, but a present
+            // one reached through a lane symlink into a live main checkout is
+            // refused instead of read (the local candidate is this repo's own
+            // file, never a sibling, so it keeps the plain read untouched).
+            if(p.indexOf('xchain-sync') !== -1){
+                const verdict = siblingCheckout(__dirname, p);
+                if(!verdict.usable && fs.existsSync(verdict.path))
+                    return skipOrFail(this, verdict, 'the shadow-value source pin against xchain-sync/src/stateCommitment.js');
+            }
             try { src = fs.readFileSync(path.resolve(__dirname, p), 'utf8'); }
             catch(e){ continue; }                       // standalone checkout
             // The only consumer of the resolved shadow value is the INSERT's
