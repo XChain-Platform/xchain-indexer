@@ -127,25 +127,37 @@ class GenesisDump {
     // Throws (halting the node) on any mismatch. Returns { rowsImported, expectedHashes }.
     async read(file){
         let pinned = this.config['GENESIS_DUMP_HASH'];
+        await this.verifyDumpContentHash(file, pinned);
+        let { meta, rowsImported } = await this.importDumpRows(file);
+        this.verifyDumpMeta(meta, file);
+        await this.verifyImportedBlockHashes(meta);
+        return { rowsImported, expectedHashes: meta.expectedHashes };
+    }
 
-        // Verify-then-import. When a content hash is pinned, prove the artifact
-        // matches it BEFORE a single row touches the DB. This makes "trust
-        // reduces to the pinned GENESIS_DUMP_HASH" literal: a tampered dump is
-        // rejected up front and never reaches the insert path (so it can neither
-        // do DB work nor exercise the identifier handling below). Previously the
-        // content hash was checked only AFTER streaming every row into the block
-        // transaction, leaving safety resting entirely on that transaction
-        // rolling back. Unpinned dev/regtest dumps (no pin) skip this gate and
-        // rely on the post-import block-hash recompute as their only check.
-        if(!this.util.isNull(pinned)){
-            let fileHash = await this.hashFile(file);
-            if(fileHash !== String(pinned).toLowerCase()){
-                getLogger().error('GENESIS FATAL: dump content hash mismatch for ' + file +
-                    ' (expected ' + pinned + ', got ' + fileHash + '). Halting.');
-                throw new Error('Genesis dump hash mismatch');
-            }
+    // Verify-then-import. When a content hash is pinned, prove the artifact
+    // matches it BEFORE a single row touches the DB. This makes "trust
+    // reduces to the pinned GENESIS_DUMP_HASH" literal: a tampered dump is
+    // rejected up front and never reaches the insert path (so it can neither
+    // do DB work nor exercise the identifier handling below). Checking the
+    // content hash only AFTER streaming every row into the block
+    // transaction would leave safety resting entirely on that
+    // transaction rolling back, so the check runs first. Unpinned dev/regtest dumps (no pin) skip this gate and
+    // rely on the post-import block-hash recompute as their only check.
+    async verifyDumpContentHash(file, pinned){
+        if(this.util.isNull(pinned))
+            return;
+        let fileHash = await this.hashFile(file);
+        if(fileHash !== String(pinned).toLowerCase()){
+            getLogger().error('GENESIS FATAL: dump content hash mismatch for ' + file +
+                ' (expected ' + pinned + ', got ' + fileHash + '). Halting.');
+            throw new Error('Genesis dump hash mismatch');
         }
+    }
 
+    // Stream the NDJSON dump into the DB in batches: this owns the table/row parsing and
+    // the insert loop alone, returning the parsed meta header plus the row count for the
+    // caller's post-import checks.
+    async importDumpRows(file){
         let meta   = null;
         let curTable = null, curCols = null, batch = [], rowsImported = 0;
 
@@ -191,17 +203,24 @@ class GenesisDump {
             }
         }
         await flush();
+        return { meta, rowsImported };
+    }
 
+    // Reject a dump with no meta header, or one generated for a different
+    // GENESIS_BLOCK.
+    verifyDumpMeta(meta, file){
         if(meta === null)
             throw new Error('Genesis dump missing meta header: ' + file);
         // The dump pins the rows to the block it was generated at; importing them at a
         // different GENESIS_BLOCK would leave block_index out of step with createBlock.
         if(Number(meta.genesisBlock) !== Number(this.config['GENESIS_BLOCK']))
             throw new Error('Genesis dump block ' + meta.genesisBlock + ' != configured GENESIS_BLOCK ' + this.config['GENESIS_BLOCK']);
+    }
 
-        // Load-integrity + consensus check: recompute the genesis block hashes from the
-        // imported rows and require they equal what the dump recorded. Catches a truncated
-        // or partial import and any drift between the dump and this node's hasher.
+    // Load-integrity + consensus check: recompute the genesis block hashes from the
+    // imported rows and require they equal what the dump recorded. Catches a truncated
+    // or partial import and any drift between the dump and this node's hasher.
+    async verifyImportedBlockHashes(meta){
         let got = await this.blockHashes(meta.genesisBlock);
         for(let k of ['ledger', 'actions', 'state', 'contracts']){
             if(got[k] !== meta.expectedHashes[k]){
@@ -210,7 +229,6 @@ class GenesisDump {
                 throw new Error('Genesis dump hash verification failed (' + k + ')');
             }
         }
-        return { rowsImported, expectedHashes: meta.expectedHashes };
     }
 
     // --- helpers ----------------------------------------------------------------
