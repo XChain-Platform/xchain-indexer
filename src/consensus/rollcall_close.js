@@ -44,13 +44,14 @@
  ********************************************************************/
 
 const crypto  = require('crypto');
-const ed25519 = require('./ed25519.js');
 const rca     = require('../rollcall_activation.js');
-const rcc     = require('../actions/rollcall/rollcall_canonical.js');
-const rga     = require('../rollcall_gates_activation.js');
 const swq     = require('../stake_weighted_quorum.js');
 const srb     = require('../snapshot_reorg_buffer.js');
-const { RollcallProofUnavailableError } = require('./rollcall_proof_client.js');
+// The close's steps live beside it in rollcall_close/: the inputs (responsible set,
+// window cut, ledger hash, peer answer), the signer verification, and the absence streak.
+const { indexResponsible, readEpochHashes, askSigners } = require('./rollcall_close/epoch_inputs.js');
+const { verifySigners, formatDropped } = require('./rollcall_close/signer_verify.js');
+const { pinnedSources, measureAbsences } = require('./rollcall_close/absence_streak.js');
 
 const { getLogger } = require('../observability/index.js');
 // Deterministic ordering, byte-identical to StateAnchorPublisher.hashOrder in
@@ -69,20 +70,6 @@ function hashOrder(key, pubkeys){
 // carries its own domain tag, so the two elections are independent.
 function electionKey(network, epochHeight){
     return 'XROLLCALL|' + network + '|' + String(epochHeight);
-}
-
-// Parse a pinned responsible set back into a Set of source addresses. A row whose
-// JSON is missing or unparseable yields null, and the caller must then treat that
-// epoch as one it cannot judge membership at rather than as an empty set: an
-// empty set would silently make every source "not in R" and skip the epoch,
-// quietly shortening every streak.
-function pinnedSources(row){
-    if(!row || row.responsible_set_json === null || row.responsible_set_json === undefined) return null;
-    try {
-        let parsed = JSON.parse(row.responsible_set_json);
-        if(!Array.isArray(parsed)) return null;
-        return new Set(parsed.map((s) => String(s)));
-    } catch(e){ return null; }
 }
 
 /**
@@ -126,120 +113,47 @@ async function closeRollcallEpochs(indexerDb, config, blockIndex, proof, util){
         return 1;
     }
 
-    let keys       = responsible.map((r) => String(r.pubkey).toLowerCase());
-    let sourceOf   = new Map();               // effective key -> its source address
-    let allSources = new Set();
-    for(let r of responsible){
-        sourceOf.set(String(r.pubkey).toLowerCase(), String(r.source));
-        allSources.add(String(r.source));
-    }
+    let { keys, sourceOf, allSources } = indexResponsible(responsible);
 
-    // (2) The window cut basis: the RAW header stamp at E + ACCEPT_WINDOW. Raw,
-    // because it must be the same number on every BTC indexer; a derived protocol
-    // time is a median over a window and would drift between nodes.
-    let windowEnd = rca.rollcallWindowEndHeight(epochHeight, network);
-    let windowRow = await indexerDb.getStoredBlockHashes(windowEnd);
-    if(!windowRow || windowRow.block_time === null || windowRow.block_time === undefined)
-        throw new RollcallProofUnavailableError(
-            'window-end block ' + windowEnd + ' has no stored block_time for epoch ' + epochHeight);
-    let maxBlockTime = parseInt(windowRow.block_time);
-
-    // This indexer's OWN ledger_hash for the epoch block. Every signature is
-    // verified against this, never against the hash the action carried.
-    let epochRow = await indexerDb.getStoredBlockHashes(epochHeight);
-    if(!epochRow || !epochRow.ledger_hash)
-        throw new RollcallProofUnavailableError(
-            'epoch block ' + epochHeight + ' has no stored ledger_hash');
-    let ledgerHash = String(epochRow.ledger_hash).toLowerCase();
+    // (2) The window cut basis and this indexer's OWN ledger_hash for the epoch block
+    // (epoch_inputs.js). Every signature is verified against that hash, never against
+    // the hash the action carried.
+    let { maxBlockTime, ledgerHash } = await readEpochHashes(indexerDb, network, epochHeight);
 
     let leader = hashOrder(electionKey(network, epochHeight), keys)[0] || null;
 
     // (3) Ask the DOGE peer, bounded by the keys we can name.
-    let answer = await proof.fetchSigners({
-        epochHeight:  epochHeight,
-        maxBlockTime: maxBlockTime,
-        pubkeys:      keys,
-        publishers:   leader ? [leader] : []
-    });
-    if(!answer || !answer.decided)
-        throw new RollcallProofUnavailableError(
-            'epoch ' + epochHeight + ' undecidable: ' + ((answer && answer.reason) || 'no answer'));
+    let answer = await askSigners(proof, epochHeight, maxBlockTime, keys, leader);
 
-    // (4) Verify. A row counts only if it carries THIS indexer's ledger_hash and
-    // its signature verifies over the canonical rebuilt here.
-    //
-    // Which canonical is decided by the EPOCH, not by the row: at or above
-    // ROLLCALL_GATES_ACTIVATION every roll call is ROLLCALL v1 and its canonical
-    // commits to sha256(GATES), below it every roll call is v0 and there is no
-    // gates field at all. So a row whose form disagrees with its epoch is not a
-    // valid signer, the same way a row bound to another ledger_hash is not: a v0
-    // row at a v1 epoch was signed by a build that does not know the gates rule,
-    // and a v1 row at a v0 epoch is a form that epoch cannot carry.
-    let gatesActive = rga.isRollcallGatesActive(epochHeight, network);
-    let v0Canonical = Buffer.from(
-        rcc.buildRollcallCanonical({ network: network, epochHeight: epochHeight, ledgerHash: ledgerHash }), 'utf8');
-
-    let presentKeys    = [];
-    let presentSources = new Set();
-    let gatesRows      = [];
-    // Why a key was NOT counted, tallied per reason and printed on the close line.
-    // Every drop below is deliberate and consensus-neutral, but a silent one is
-    // indistinguishable from an absence: a whole federation dropped on the form
-    // test read as "present 0/N" with nothing to say a v1 canonical was ever
-    // involved, and the operator went looking at the venue instead of the close.
-    let dropped = { no_row: 0, ledger_hash: 0, form: 0, sig: 0 };
-    for(let key of keys){
-        let row = answer.signers ? answer.signers[key] : null;
-        if(!row || !row.sig){ dropped.no_row++; continue; }
-        // The carried hash must be ours. A signature bound to a different epoch
-        // block is a signature about a chain this node is not on.
-        if(String(row.ledger_hash).toLowerCase() !== ledgerHash){ dropped.ledger_hash++; continue; }
-
-        // An empty GATES reads as ABSENT, never as a v1 row with an empty list.
-        // The column defaults to NULL, but a default of '' anywhere upstream would
-        // otherwise turn every honest v0 signer into an absence, and two absences
-        // evict. A real v1 list is never empty: knownGateKeys() has entries at
-        // every build that can publish one.
-        let gates = (row.gates === undefined || row.gates === null || String(row.gates) === '')
-                    ? null : String(row.gates);
-        if(gatesActive !== (gates !== null)){ dropped.form++; continue; }
-
-        let canonical = gatesActive
-            ? Buffer.from(rcc.buildRollcallCanonical(
-                  { network: network, epochHeight: epochHeight, ledgerHash: ledgerHash, gates: gates }), 'utf8')
-            : v0Canonical;
-        if(!ed25519.verify(canonical, String(row.sig).toLowerCase(), key)){ dropped.sig++; continue; }
-
-        presentKeys.push(key);
-        presentSources.add(sourceOf.get(key));
-        // Signers sign over the PUBLISHER's list, so in practice every verified row
-        // at one epoch carries the same string and this loop records it once per
-        // key. Storing it PER KEY rather than once per epoch is what keeps the
-        // filter honest if that ever stops being true: the filter's question is
-        // "what did THIS key accept", and a per-epoch list would answer a different
-        // one. Written only after the epoch is decided ROLLED, below.
-        if(gatesActive) gatesRows.push({ pubkey: key, gates: gates.split(',') });
-    }
+    // (4) Verify each key's row against the canonical its EPOCH calls for (signer_verify.js).
+    let verified = verifySigners(answer, keys, sourceOf, ledgerHash, network, epochHeight);
 
     // (5) Quorum over the WHOLE federation, not over who answered. An epoch that
     // does not reach it counts for nobody, so a partition or a fee spike can never
     // evict anyone.
-    let rolled = swq.meetsStakeThreshold(responsible, presentKeys);
+    let rolled = swq.meetsStakeThreshold(responsible, verified.presentKeys);
 
+    return recordEpochOutcome(indexerDb, config, util, {
+        epochHeight, snapshotBlock, closeBlock, rolled, allSources, leader, answer, verified
+    });
+}
+
+// Write the closed epoch's outcome: the rollcall row always, and for a ROLLED epoch the
+// gate lists, the absences, the leader's reward and the evictions. `c` carries what
+// closeRollcallEpochs measured. Returns 1, the one epoch closed.
+async function recordEpochOutcome(indexerDb, config, util, c){
+    let { epochHeight, closeBlock, leader, answer, verified } = c;
     // Order by UTF-8 bytes, the house comparator, not a bare .sort(): this sequence pins
     // responsible_set_json, the absence row order and the eviction order, so it is consensus.
-    let sortedSources = Array.from(allSources).sort(
+    let sortedSources = Array.from(c.allSources).sort(
         (a, b) => Buffer.compare(Buffer.from(String(a), 'utf8'), Buffer.from(String(b), 'utf8')));
-    await indexerDb.insertRollcall(epochHeight, snapshotBlock, closeBlock, rolled ? 1 : 0,
-                                  rolled ? sortedSources : null);
+    await indexerDb.insertRollcall(epochHeight, c.snapshotBlock, closeBlock, c.rolled ? 1 : 0,
+                                  c.rolled ? sortedSources : null);
 
-    let droppedNote = (dropped.no_row + dropped.ledger_hash + dropped.form + dropped.sig > 0)
-        ? ' dropped[no_row=' + dropped.no_row + ' ledger_hash=' + dropped.ledger_hash +
-          ' form=' + dropped.form + ' sig=' + dropped.sig + ' ' + (gatesActive ? 'v1' : 'v0') + ' epoch]'
-        : '';
-    if(!rolled){
+    let droppedNote = formatDropped(verified.dropped, verified.gatesActive);
+    if(!c.rolled){
         getLogger().info('\t ROLLCALL close : epoch=' + epochHeight + ' UNROLLED (present ' +
-                    presentSources.size + '/' + allSources.size + ' sources, below threshold)' + droppedNote);
+                    verified.presentSources.size + '/' + c.allSources.size + ' sources, below threshold)' + droppedNote);
         return 1;
     }
 
@@ -248,50 +162,13 @@ async function closeRollcallEpochs(indexerDb, config, blockIndex, proof, util){
     // and recording its lists would let a partition's partial answer become the
     // set the attestation filter reads. Same block transaction as every other close
     // write, so a deferred or reorged block leaves no half-written epoch behind.
-    if(gatesActive && gatesRows.length > 0)
-        await indexerDb.insertRollcallGates(epochHeight, closeBlock, gatesRows);
+    if(verified.gatesActive && verified.gatesRows.length > 0)
+        await indexerDb.insertRollcallGates(epochHeight, closeBlock, verified.gatesRows);
 
-    // (7) Absences, pinned against the set at S and never re-derived.
-    let absentSources = sortedSources.filter((s) => !presentSources.has(s));
-
-    // (8) The K-streak, over the pinned lookback window. The window includes this
-    // epoch's own row, which was written above.
-    let lookback = await indexerDb.getRolledRollcallEpochs(epochHeight, rca.ROLLCALL_STREAK_LOOKBACK);
-    let evictedSources = [];
-    let absenceRows    = [];
-
-    for(let source of absentSources){
-        let priorAbsences = new Set(
-            await indexerDb.getRollcallAbsenceEpochsForSource(source, lookback.map((r) => parseInt(r.epoch_height))));
-
-        let streak = 0;
-        for(let row of lookback){                       // newest first
-            let eh = parseInt(row.epoch_height);
-
-            // This epoch: absence is what we just measured, membership is given.
-            if(eh === epochHeight){ streak++; if(streak >= rca.ROLLCALL_EVICT_MISSES) break; continue; }
-
-            // Epochs the source was not responsible for are SKIPPED: not counted and
-            // not streak-ending. That is what stops a source resetting its streak by
-            // dipping under the capability floor for one epoch with a partial UNSTAKE.
-            // An unreadable pin is treated as "cannot judge membership", which ends
-            // the walk rather than silently skipping and over-counting the streak.
-            let pinned = pinnedSources(row);
-            if(pinned === null) break;
-            if(!pinned.has(source)) continue;
-
-            if(!priorAbsences.has(eh)) break;           // present: the streak ends
-            streak++;
-            if(streak >= rca.ROLLCALL_EVICT_MISSES) break;
-        }
-
-        let evicted = (streak >= rca.ROLLCALL_EVICT_MISSES);
-        if(evicted) evictedSources.push(source);
-        absenceRows.push({ epoch_height: epochHeight, source: source, close_block: closeBlock, evicted: evicted });
-    }
-
-    if(absenceRows.length > 0)
-        await indexerDb.insertRollcallAbsences(absenceRows);
+    // (7) and (8): the absences and each one's K-streak (absence_streak.js), which also
+    // writes the absence rows.
+    let { absentSources, evictedSources } =
+        await measureAbsences(indexerDb, epochHeight, closeBlock, sortedSources, verified.presentSources);
 
     // (9) The publish reward, to the ELECTED leader only. Never to whoever
     // published first: that would be a fee-bidding race no hub can bump.
@@ -312,7 +189,7 @@ async function closeRollcallEpochs(indexerDb, config, blockIndex, proof, util){
         await evictSource(indexerDb, config, util, source, closeBlock);
 
     getLogger().info('\t ROLLCALL close : epoch=' + epochHeight + ' ROLLED (present ' +
-                presentSources.size + '/' + allSources.size + ' sources, ' +
+                verified.presentSources.size + '/' + c.allSources.size + ' sources, ' +
                 absentSources.length + ' absent, ' + evictedSources.length + ' evicted)' +
                 (leader ? ' leader=' + leader.substring(0, 16) + '...' : '') + droppedNote);
     return 1;
