@@ -55,8 +55,16 @@ const NETWORK   = 'regtest';
 
 // Every module in this repo that closes over the activation: the parser reads the era to
 // decide whether a round has a slot, so it is armed with the twin or it never reads one.
-const ARMED_MODULES = ['../../src/mirror_admission_activation.js', '../../src/consensus/ed25519.js',
-                       '../../src/actions/price/index.js', '../../src/actions/price/v0.js'];
+// The PRICE handler is an entry plus parts, and a part holds whatever it required when it
+// first loaded: batch_signatures.js keeps the ed25519 module it was handed, so a part left
+// in the cache by an earlier suite calls the UNARMED canonical builder, which refuses a
+// round map as legacy-era. That failure only shows in the full tier, never alone, so every
+// file under src/actions/price/ is re-required, not just the parts named when this list
+// was written.
+const PRICE_DIR = __dirname + '/../../src/actions/price';
+const ARMED_MODULES = ['../../src/mirror_admission_activation.js', '../../src/consensus/ed25519.js']
+    .concat(fs.readdirSync(PRICE_DIR, { recursive: true }).filter(f => f.endsWith('.js')).sort()
+        .map(f => '../../src/actions/price/' + f));
 // The hub's verifier twin, so the round trip is driven across the repo boundary the wire
 // actually crosses rather than inside one repo's own idea of the bytes.
 const HUB_MODULES = [
