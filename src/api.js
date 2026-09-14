@@ -91,11 +91,12 @@ const { patchConsole } = require('./observability');
 const { getLogger } = require('./observability/index.js');
 const fs   = require('fs');
 const path = require('path');
+const { CONFIG_ENV } = require('./config.js');
 patchConsole({
     service: 'xchain-indexer',
     version: require('../package.json').version,
-    coin:    process.env.INDEXER_COIN || '',
-    network: process.env.INDEXER_NETWORK || ''
+    coin:    CONFIG_ENV.INDEXER_COIN || '',
+    network: CONFIG_ENV.INDEXER_NETWORK || ''
 });
 
 // Validate required environment variables
@@ -111,33 +112,33 @@ for(const key of REQUIRED_ENV){
 }
 
 // Parse in the environmental variables
-const INDEXER_API_PORT = process.env.INDEXER_API_PORT;
-const INDEXER_NETWORK  = process.env.INDEXER_NETWORK;
+const INDEXER_API_PORT = CONFIG_ENV.INDEXER_API_PORT;
+const INDEXER_NETWORK  = CONFIG_ENV.INDEXER_NETWORK;
 
 // xchain-utxo-tracker config (optional, required by DISPENSER fresh-address check)
-const UTXO_TRACKER_URL      = process.env.UTXO_TRACKER_URL || '';
-const UTXO_TRACKER_API_PORT = process.env.UTXO_TRACKER_API_PORT || '';
+const UTXO_TRACKER_URL      = CONFIG_ENV.UTXO_TRACKER_URL || '';
+const UTXO_TRACKER_API_PORT = CONFIG_ENV.UTXO_TRACKER_API_PORT || '';
 
 // Decoder database config
-const DECODER_DB_HOST  = process.env.DECODER_DB_HOST;
-const DECODER_DB_PORT  = process.env.DECODER_DB_PORT;
-const DECODER_DB_NAME  = process.env.DECODER_DB_NAME;
-const DECODER_DB_USER  = process.env.DECODER_DB_USER;
-const DECODER_DB_PASS  = process.env.DECODER_DB_PASS;
+const DECODER_DB_HOST  = CONFIG_ENV.DECODER_DB_HOST;
+const DECODER_DB_PORT  = CONFIG_ENV.DECODER_DB_PORT;
+const DECODER_DB_NAME  = CONFIG_ENV.DECODER_DB_NAME;
+const DECODER_DB_USER  = CONFIG_ENV.DECODER_DB_USER;
+const DECODER_DB_PASS  = CONFIG_ENV.DECODER_DB_PASS;
 
 // Indexer database config
-const INDEXER_DB_HOST  = process.env.INDEXER_DB_HOST;
-const INDEXER_DB_PORT  = process.env.INDEXER_DB_PORT;
-const INDEXER_DB_NAME  = process.env.INDEXER_DB_NAME;
-const INDEXER_DB_USER  = process.env.INDEXER_DB_USER;
-const INDEXER_DB_PASS  = process.env.INDEXER_DB_PASS;
+const INDEXER_DB_HOST  = CONFIG_ENV.INDEXER_DB_HOST;
+const INDEXER_DB_PORT  = CONFIG_ENV.INDEXER_DB_PORT;
+const INDEXER_DB_NAME  = CONFIG_ENV.INDEXER_DB_NAME;
+const INDEXER_DB_USER  = CONFIG_ENV.INDEXER_DB_USER;
+const INDEXER_DB_PASS  = CONFIG_ENV.INDEXER_DB_PASS;
 
 // Hub database config (optional, local read-only copy of cross-chain data)
-const HUB_DB_HOST = process.env.HUB_DB_HOST || '';
-const HUB_DB_PORT = process.env.HUB_DB_PORT || '';
-const HUB_DB_NAME = process.env.HUB_DB_NAME || '';
-const HUB_DB_USER = process.env.HUB_DB_USER || '';
-const HUB_DB_PASS = process.env.HUB_DB_PASS || '';
+const HUB_DB_HOST = CONFIG_ENV.HUB_DB_HOST || '';
+const HUB_DB_PORT = CONFIG_ENV.HUB_DB_PORT || '';
+const HUB_DB_NAME = CONFIG_ENV.HUB_DB_NAME || '';
+const HUB_DB_USER = CONFIG_ENV.HUB_DB_USER || '';
+const HUB_DB_PASS = CONFIG_ENV.HUB_DB_PASS || '';
 
 // API key for write + federation read methods (e.g. hub→indexer reward pushes).
 // Optional, matching .env.example: unset disables the gate (single-host /
@@ -145,7 +146,7 @@ const HUB_DB_PASS = process.env.HUB_DB_PASS || '';
 // valid key. Hard-requiring it at boot crash-looped every xchain-node-managed
 // deployment (ConfigService injects no such var); the same over-tightening
 // that took down the encoder pre-launch (see xchain-encoder e2bf7c4).
-const INDEXER_API_KEY = process.env.INDEXER_API_KEY || '';
+const INDEXER_API_KEY = CONFIG_ENV.INDEXER_API_KEY || '';
 
 // Explicit escape hatch for keyless single-host / regtest nodes. When no API
 // key is configured the gated methods (validator-reward writes, federation
@@ -153,7 +154,7 @@ const INDEXER_API_KEY = process.env.INDEXER_API_KEY || '';
 // the old keyless pass-through. A blind hard-fail would 401 every keyless
 // xchain-node-managed indexer fleet-wide, so the escape hatch keeps that an
 // opt-in operator decision rather than a silent breakage.
-const ALLOW_UNAUTHED = (process.env.INDEXER_ALLOW_UNAUTHENTICATED === 'true');
+const ALLOW_UNAUTHED = (CONFIG_ENV.INDEXER_ALLOW_UNAUTHENTICATED === 'true');
 if(!INDEXER_API_KEY && ALLOW_UNAUTHED)
     getLogger().warn('WARNING: INDEXER_API_KEY is not set and INDEXER_ALLOW_UNAUTHENTICATED=true; write and federation-read methods are UNAUTHENTICATED. Never use this in production.');
 else if(!INDEXER_API_KEY)
@@ -171,7 +172,7 @@ else if(!INDEXER_API_KEY)
 // Anywhere else the method is removed entirely (calls get method-not-found), so it can
 // never ship silently public on a shared/mainnet node.
 const ENABLE_DRYRUN = INDEXER_NETWORK === 'regtest'
-    && (process.env.INDEXER_ENABLE_DRYRUN === 'true' || process.env.INDEXER_ENABLE_DRYRUN === '1');
+    && (CONFIG_ENV.INDEXER_ENABLE_DRYRUN === 'true' || CONFIG_ENV.INDEXER_ENABLE_DRYRUN === '1');
 
 // Set of write methods that require the API key when one is configured.
 //
@@ -285,7 +286,7 @@ async function startApi(){
     // header no browser accepts, so every listed origin is blocked while the
     // header reads as configured. See src/api/corsOrigin.js.
     app.use(cors({
-        origin: parseCorsOrigin(process.env.CORS_ORIGIN || 'http://localhost'),
+        origin: parseCorsOrigin(CONFIG_ENV.CORS_ORIGIN || 'http://localhost'),
         methods: ['POST']
     }));
 
@@ -295,7 +296,7 @@ async function startApi(){
     // per hit, so the perimeter assumption is no longer the only guard.
     app.use(rateLimit({
         windowMs: 60 * 1000,
-        limit: parseInt(process.env.INDEXER_RATE_LIMIT_RPM) || 600,
+        limit: parseInt(CONFIG_ENV.INDEXER_RATE_LIMIT_RPM) || 600,
         standardHeaders: true,
         legacyHeaders: false
     }));
@@ -310,7 +311,7 @@ async function startApi(){
     const observability = installObservability(app, {
         service: 'xchain-indexer',
         version: indexerVersion,
-        coin:    process.env.INDEXER_COIN || '',
+        coin:    CONFIG_ENV.INDEXER_COIN || '',
         network: INDEXER_NETWORK || ''
     });
 

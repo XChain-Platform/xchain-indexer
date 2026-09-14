@@ -49,6 +49,7 @@
 const assert = require('assert')
 const path   = require('path')
 const Module = require('module')
+const { requireWithFreshConfig } = require('../../helpers/fresh_config.js')
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..')
 const API_PATH  = path.join(REPO_ROOT, 'src', 'api.js')
@@ -119,8 +120,9 @@ function installHook () {
  * Boot the real API on an ephemeral port under the given environment.
  *
  * The gate's key and escape hatch are module-level consts in api.js, read once
- * at evaluation, so a scenario that changes them must re-evaluate the module:
- * the cache entry is dropped before every boot.
+ * at evaluation from src/config.js's load-time CONFIG_ENV snapshot, so a scenario
+ * that changes them must re-evaluate both: every boot loads api.js together with
+ * a fresh config.js.
  */
 async function bootApi (env = {}) {
     for (const key of OWNED_ENV) delete process.env[key]
@@ -129,8 +131,7 @@ async function bootApi (env = {}) {
     for (const [key, value] of Object.entries(env)) process.env[key] = value
 
     captured = {}
-    delete require.cache[require.resolve(API_PATH)]
-    require(API_PATH)
+    requireWithFreshConfig(API_PATH)
 
     const deadline = Date.now() + 4000
     while (!captured.server) {

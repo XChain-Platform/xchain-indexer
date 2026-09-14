@@ -58,6 +58,7 @@ const { blockMayReadPrice }    = require('./chain/price_read_predicate.js');
 const trainActivation          = require('./train_activation.js');
 
 const { getLogger } = require('./observability/index.js');
+const { CONFIG_ENV } = require('./config.js');
 // Hub->indexer config poll cadence (ms). This is the sole staleness / propagation bound for the
 // live-polled governance overlay: nothing else refreshes it, so an overlay older than a small
 // multiple of this interval means the hub is unreachable. Overridable via
@@ -67,9 +68,10 @@ const DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS = 60000;
 // boundary below, so the two interval contracts cannot disagree: deriving the boundary from the
 // DEFAULT while the timer honoured the override made a 10s poll report fresh until 180s instead
 // of 30s, and a 10-minute poll report stale after three minutes. The read stays at
-// CALL time and is deliberately not hoisted to module load: api.js requires this module before
-// running its own dotenv.config(), so a load-time read cannot see HUB_CONFIG_POLL_INTERVAL_MS
-// from the documented `.env` and would silently revert the knob to the 60s default.
+// CALL time and is deliberately not hoisted to module load, nor folded into config.js's
+// load-time CONFIG_ENV snapshot: any consumer that requires this module before running its own
+// dotenv.config() would then miss HUB_CONFIG_POLL_INTERVAL_MS from the documented `.env` and
+// silently revert the knob to the 60s default.
 function effectiveHubConfigPollIntervalMs(){
     return parseInt(process.env.HUB_CONFIG_POLL_INTERVAL_MS, 10) || DEFAULT_HUB_CONFIG_POLL_INTERVAL_MS;
 }
@@ -252,8 +254,8 @@ class XChainIndexer {
         // "undefined vundefined". Fall back to the package.json this process
         // actually loaded, the same source src/api.js:220 already reports from.
         // Env stays first so the test launchers that pin it keep deciding.
-        this.version = process.env.npm_package_version || require('../package.json').version;
-        this.name    = process.env.npm_package_name    || require('../package.json').name;
+        this.version = CONFIG_ENV.npm_package_version || require('../package.json').version;
+        this.name    = CONFIG_ENV.npm_package_name    || require('../package.json').name;
 
         // Decoder database config
         this.decoderDbHost = decoderDbHost;
@@ -374,7 +376,7 @@ class XChainIndexer {
         // its local price mirror to catch up to that block height so native-coin fee
         // validation is deterministic across operators. On timeout the block is deferred and
         // retried rather than validated against a stale price copy.
-        this.priceSyncTimeoutMs = parseInt(process.env.HUB_PRICE_SYNC_TIMEOUT_MS || '60000');
+        this.priceSyncTimeoutMs = parseInt(CONFIG_ENV.HUB_PRICE_SYNC_TIMEOUT_MS || '60000');
 
         // Mirror-barrier hold ceiling. priceSyncTimeoutMs above bounds ONE barrier attempt;
         // this bounds the whole hold across retries, a quantity nothing else here bounds at
@@ -410,7 +412,7 @@ class XChainIndexer {
         // genuinely wedged indexer (mirror down, host fault) trips 503 once it exceeds the window.
         // Defaults to comfortably more than one barrier-timeout cycle so a single legitimate defer
         // never flaps the healthcheck. Purely operational, NOT a consensus parameter.
-        this.healthStallGraceMs = parseInt(process.env.INDEXER_HEALTH_STALL_GRACE_MS
+        this.healthStallGraceMs = parseInt(CONFIG_ENV.INDEXER_HEALTH_STALL_GRACE_MS
                                            || String(Math.max(2 * this.priceSyncTimeoutMs, 120000)), 10);
 
         // Window (ms) the block-poll loop may go without completing an ITERATION before
@@ -420,7 +422,7 @@ class XChainIndexer {
         // never fire on a block that is merely slow. It measures loop LIVENESS, never chain
         // progress, so unlike stallWedged it has nothing to do with commits. Purely
         // operational, NOT a consensus parameter.
-        this.pollSilentMs = parseInt(process.env.INDEXER_POLL_SILENT_MS
+        this.pollSilentMs = parseInt(CONFIG_ENV.INDEXER_POLL_SILENT_MS
                                      || String(2 * this.healthStallGraceMs), 10);
 
         // Direct-hub-DB call-presence barrier timeout (ms). In single-host / direct-hub-DB
@@ -430,7 +432,7 @@ class XChainIndexer {
         // (bounded) for any in-flight hub write to land, so a live node and a replaying node
         // inject at the same block. The hub-side relay margin is the primary guarantee; this
         // is defense-in-depth. See _waitForDirectCallPresence.
-        this.callPresenceTimeoutMs = parseInt(process.env.XCALL_DIRECT_PRESENCE_TIMEOUT_MS || '10000');
+        this.callPresenceTimeoutMs = parseInt(CONFIG_ENV.XCALL_DIRECT_PRESENCE_TIMEOUT_MS || '10000');
 
         // Grace (seconds) for the direct-hub-DB barrier's hub-clock escape hatch. Resolved in
         // start() from the SAME frozen constant the HubDbSync call barrier uses
@@ -992,7 +994,7 @@ class XChainIndexer {
             // the indexer is on a different host from the hub. For single-host deployments, the
             // local hub DB is the hub's MariaDB itself, so sync is not needed.
             // Enable by setting HUB_DB_SYNC_ENABLED=true (default off).
-            if(process.env.HUB_DB_SYNC_ENABLED === 'true'){
+            if(CONFIG_ENV.HUB_DB_SYNC_ENABLED === 'true'){
                 this.hubDbSync = new HubDbSync(this.hubDb, {
                     coin: this.config['COIN'],
                     // Signed retractions: keys the RETRACTION_SIGNING flag-day
@@ -1037,7 +1039,7 @@ class XChainIndexer {
             // is intended (single-host) before booting. This mirrors the INDEXER_ALLOW_UNAUTHENTICATED
             // escape hatch in api.js. testnet/regtest keep the non-fatal warning, since single-host
             // is the norm there and there is no canonical fleet to diverge from.
-            let allowLocal = process.env.INDEXER_ALLOW_LOCAL_PRICE_SOURCE === 'true';
+            let allowLocal = CONFIG_ENV.INDEXER_ALLOW_LOCAL_PRICE_SOURCE === 'true';
             if(this.config['NETWORK'] === 'mainnet' && !allowLocal){
                 this.util.throwError('HUB_DB_HOST / HUB_DB_NAME are not set on a mainnet node. Native-coin ' +
                     'fee validation and price reads would fall back to the local indexer DB, which on a ' +
@@ -2613,7 +2615,7 @@ class XChainIndexer {
     // Interval STATE_TREE_METRIC_INTERVAL_MS (default 4h; 0 disables).
     startStateTreeMetric(){
         if(this._stateTreeMetricTimer) return;
-        const raw = parseInt(process.env.STATE_TREE_METRIC_INTERVAL_MS, 10);
+        const raw = parseInt(CONFIG_ENV.STATE_TREE_METRIC_INTERVAL_MS, 10);
         const intervalMs = Number.isFinite(raw) ? raw : (4 * 60 * 60 * 1000);
         if(intervalMs === 0) return;   // explicitly disabled
         this._stateTreeMetricRunning = false;

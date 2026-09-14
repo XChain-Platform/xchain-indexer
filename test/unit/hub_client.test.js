@@ -17,6 +17,8 @@ const http      = require('http');
 const https     = require('https');
 const EventEmitter = require('events');
 const HubClient = require('../../src/hub/hub_client.js');
+const { requireWithFreshConfig } = require('../helpers/fresh_config.js');
+const HUB_CLIENT_PATH = require.resolve('../../src/hub/hub_client.js');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -75,10 +77,13 @@ describe('HubClient', function(){
             assert.strictEqual(c.apiKey, 'key1');
         });
 
+        // The env fallbacks read src/config.js's load-time CONFIG_ENV snapshot, so each
+        // case that sets env loads a fresh HubClient after writing it.
         it('falls back to env vars when constructor args missing', function(){
             process.env.HUB_API_URL = 'http://env-hub.example.com';
             process.env.HUB_API_KEY = 'envkey';
-            let c = new HubClient();
+            const FreshHubClient = requireWithFreshConfig(HUB_CLIENT_PATH);
+            let c = new FreshHubClient();
             assert.strictEqual(c.hubUrl, 'http://env-hub.example.com');
             assert.strictEqual(c.apiKey, 'envkey');
             assert.strictEqual(c.enabled, true);
@@ -91,7 +96,8 @@ describe('HubClient', function(){
 
         it('marks enabled=false when url is empty string from env', function(){
             process.env.HUB_API_URL = '';
-            let c = new HubClient();
+            const FreshHubClient = requireWithFreshConfig(HUB_CLIENT_PATH);
+            let c = new FreshHubClient();
             assert.strictEqual(c.enabled, false);
         });
 
@@ -105,7 +111,8 @@ describe('HubClient', function(){
         it('separates the config endpoint from the feed endpoint via env', function(){
             process.env.HUB_CONFIG_URL     = 'http://private-hub.example.com:10000';
             process.env.HUB_CONFIG_API_KEY = 'privatekey';
-            let c = new HubClient('http://validator01.example.com:10002', 'feedkey');
+            const FreshHubClient = requireWithFreshConfig(HUB_CLIENT_PATH);
+            let c = new FreshHubClient('http://validator01.example.com:10002', 'feedkey');
             assert.strictEqual(c.hubUrl, 'http://validator01.example.com:10002');
             assert.strictEqual(c.apiKey, 'feedkey');
             assert.strictEqual(c.configUrl, 'http://private-hub.example.com:10000');
@@ -119,7 +126,8 @@ describe('HubClient', function(){
 
         it('marks configEnabled=true from HUB_CONFIG_URL alone, with no feed url', function(){
             process.env.HUB_CONFIG_URL = 'http://private-hub.example.com:10000';
-            let c = new HubClient('', '');
+            const FreshHubClient = requireWithFreshConfig(HUB_CLIENT_PATH);
+            let c = new FreshHubClient('', '');
             assert.strictEqual(c.enabled, false);
             assert.strictEqual(c.configEnabled, true);
         });

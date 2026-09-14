@@ -16,6 +16,8 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const Utility = require('../../src/utility.js');
 const Actions = require('../../src/actions/index.js');
+const { requireWithFreshConfig } = require('../helpers/fresh_config.js');
+const ACTIONS_PATH = require.resolve('../../src/actions/index.js');
 
 const FEE_DEST    = 'feeDestinationAddr111111111111111';
 const PLACEHOLDER = 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
@@ -54,7 +56,7 @@ function makeDb({ prices = {}, blockIndex = 100, blockTime = 1000 } = {}){
 // Actions-like context exposing the REAL computeFeeQuote/_priceFeeQuote prototype methods
 // with the dry-run engine stubbed (the engine itself is unit-tested in fee_quote_dry_run.test.js).
 // dryRun defaults to a valid run whose handler staged a 1.0 XCHAIN fee.
-function makeCtx(util, indexerDb, { dryRun, base64CodeEra = true } = {}){
+function makeCtx(util, indexerDb, { dryRun, base64CodeEra = true, actions = Actions } = {}){
     let calls = { dryRunArgs: null, dryRuns: 0 };
     let ctx = {
         config:    util.config,
@@ -63,18 +65,18 @@ function makeCtx(util, indexerDb, { dryRun, base64CodeEra = true } = {}){
         _calls:    calls,
         // DEPLOY_BASE64_CODE is the only flag-day the quote path reads (inline code decode).
         protocolChanges: { isEnabled: async (name) => (name === 'DEPLOY_BASE64_CODE' ? base64CodeEra : true) },
-        nativeFeeMandatory:     Actions.prototype.nativeFeeMandatory,
-        decodeDeployCodeBytes:  Actions.prototype.decodeDeployCodeBytes,
-        staticProtocolFee:      Actions.prototype.staticProtocolFee,
-        staticFeeQuote:         Actions.prototype.staticFeeQuote,
+        nativeFeeMandatory:     actions.prototype.nativeFeeMandatory,
+        decodeDeployCodeBytes:  actions.prototype.decodeDeployCodeBytes,
+        staticProtocolFee:      actions.prototype.staticProtocolFee,
+        staticFeeQuote:         actions.prototype.staticFeeQuote,
         dryRunAction: async (args) => {
             calls.dryRuns++;
             calls.dryRunArgs = args;
             if(dryRun && dryRun.throws) throw new Error('engine boom');
             return Object.assign({ blockIndex: 100, blockTime: 1000, status: 'valid', error: null, xchainFee: '1.00000000' }, dryRun || {});
         },
-        priceFeeQuote:  Actions.prototype.priceFeeQuote,
-        computeFeeQuote: Actions.prototype.computeFeeQuote
+        priceFeeQuote:  actions.prototype.priceFeeQuote,
+        computeFeeQuote: actions.prototype.computeFeeQuote
     };
     return { ctx, calls };
 }
@@ -668,8 +670,11 @@ describe('native coin fee quote @regression @tier1', function () {
             process.env.INDEXER_FEEQUOTE_MAX_PENDING = '2';
             process.env.INDEXER_FEEQUOTE_TIMEOUT_MS  = '2500';
             try {
+                // Both overrides are read from src/config.js's load-time CONFIG_ENV snapshot,
+                // so the quote methods come from an Actions loaded after the env write.
+                const FreshActions = requireWithFreshConfig(ACTIONS_PATH);
                 let util = makeUtil('BTC', FEE_DEST);
-                let { ctx, calls } = makeCtx(util, makeDb({ prices: BTC_PRICES }));
+                let { ctx, calls } = makeCtx(util, makeDb({ prices: BTC_PRICES }), { actions: FreshActions });
                 ctx._feeQuotePending = 2;
                 let q = await ctx.computeFeeQuote.call(ctx, { action: 'ISSUE', params: ['0', 'X'], source: 'src' });
                 assert.strictEqual(q.busy, true, 'cap override respected');

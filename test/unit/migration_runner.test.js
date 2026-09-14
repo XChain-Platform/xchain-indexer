@@ -27,6 +27,8 @@ const fs     = require('fs');
 const path   = require('path');
 
 const Database = require('../../src/db');
+const { requireWithFreshConfig } = require('../helpers/fresh_config.js');
+const DB_PATH = require.resolve('../../src/db');
 
 // _migrationMode is a pure string function : bind it to a bare object.
 const modeOf = Database.prototype.migrationMode.bind({});
@@ -1233,7 +1235,10 @@ describe('runMigrations() backdated-migration guard @regression @tier1', functio
     const EARLY_MANUAL = allFiles().find(f =>
         modeOf(fs.readFileSync(path.join(MIG_DIR, f), 'utf8')) === 'manual');
 
-    async function runAgainst(ledger, opts) {
+    // `DatabaseClass` lets a case that sets env run the runner from a Database loaded
+    // after the write: the strict-checksum switch is read from src/config.js's
+    // load-time CONFIG_ENV snapshot, not from process.env at call time.
+    async function runAgainst(ledger, opts, DatabaseClass = Database) {
         const logged = [];
         const applied = [];
         const conn = {
@@ -1254,18 +1259,18 @@ describe('runMigrations() backdated-migration guard @regression @tier1', functio
             transactionConnection: null,
             getConnection: async () => conn,
             ensureMigrationsLedger: async () => {},
-            runMigrationsInner: Database.prototype.runMigrationsInner,
-            migrationMode: Database.prototype.migrationMode,
-            migrationPreconditionSkip: Database.prototype.migrationPreconditionSkip,
-            splitSqlStatements: Database.prototype.splitSqlStatements,
-            stripSqlLineComments: Database.prototype.stripSqlLineComments,
-            destructiveAutoStatement: Database.prototype.destructiveAutoStatement,
-            isIdRepairUpdate: Database.prototype.isIdRepairUpdate,
+            runMigrationsInner: DatabaseClass.prototype.runMigrationsInner,
+            migrationMode: DatabaseClass.prototype.migrationMode,
+            migrationPreconditionSkip: DatabaseClass.prototype.migrationPreconditionSkip,
+            splitSqlStatements: DatabaseClass.prototype.splitSqlStatements,
+            stripSqlLineComments: DatabaseClass.prototype.stripSqlLineComments,
+            destructiveAutoStatement: DatabaseClass.prototype.destructiveAutoStatement,
+            isIdRepairUpdate: DatabaseClass.prototype.isIdRepairUpdate,
         };
         const realLog = console.log, realErr = console.error, realWarn = console.warn;
         console.log = console.error = console.warn = (...a) => { logged.push(a.join(' ')); };
         try {
-            const r = await Database.prototype.runMigrationsInner.call(db, opts || {});
+            const r = await DatabaseClass.prototype.runMigrationsInner.call(db, opts || {});
             return { logged, applied, result: r, threw: null };
         } catch (err) {
             return { logged, applied, result: null, threw: err };
@@ -1295,7 +1300,7 @@ describe('runMigrations() backdated-migration guard @regression @tier1', functio
         const prev = process.env.MIGRATION_STRICT_CHECKSUM;
         process.env.MIGRATION_STRICT_CHECKSUM = '1';
         try {
-            const { threw } = await runAgainst(ledger, {});
+            const { threw } = await runAgainst(ledger, {}, requireWithFreshConfig(DB_PATH));
             assert.ok(threw && /dated BEFORE already-applied migration/.test(threw.message));
         } finally {
             if (prev === undefined) delete process.env.MIGRATION_STRICT_CHECKSUM;

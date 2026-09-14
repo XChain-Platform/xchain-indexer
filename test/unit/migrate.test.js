@@ -25,6 +25,7 @@ const MIGRATE = path.join(__dirname, '..', '..', 'src', 'migrate.js');
 const DB_PATH      = require.resolve('../../src/db');
 const MIGRATE_PATH = require.resolve('../../src/migrate.js');
 const DOTENV_PATH  = require.resolve('dotenv');
+const { requireWithFreshConfig } = require('../helpers/fresh_config.js');
 
 // Run migrate.js with the DB environment deliberately absent. cwd is a temp
 // dir so dotenv.config() finds no .env, and env carries only PATH.
@@ -126,7 +127,9 @@ describe('migrate CLI --file targeting @regression', function () {
             id: DOTENV_PATH, filename: DOTENV_PATH, loaded: true,
             exports: { config: () => ({ parsed: {} }) }
         };
-        require(MIGRATE_PATH);
+        // migrate.js reads INDEXER_DB_* from src/config.js's load-time CONFIG_ENV
+        // snapshot, so config.js is re-evaluated after beforeEach pins them.
+        requireWithFreshConfig(MIGRATE_PATH);
     }
 
     it('--file scopes the run to the named migration (passes opts.only)', async function () {

@@ -51,6 +51,7 @@ const https = require('https');
 const url   = require('url');
 
 const { getLogger } = require('../observability/index.js');
+const { CONFIG_ENV } = require('../config.js');
 // Attestation-bearing ANCHOR versions. A reward exists only for these; anything else on
 // the txid is a different anchor and cannot stand in as proof of this one.
 //
@@ -167,10 +168,10 @@ class AnchorProofClient {
     constructor(config, opts){
         let o = opts || {};
         this.config    = config || {};
-        this.url       = String(o.url || process.env.DOGE_INDEXER_API_URL || process.env.DOGE_INDEXER_URL
+        this.url       = String(o.url || CONFIG_ENV.DOGE_INDEXER_API_URL || CONFIG_ENV.DOGE_INDEXER_URL
                                 || this.config['DOGE_INDEXER_URL'] || '');
-        this.apiKey    = String(o.apiKey || process.env.DOGE_INDEXER_API_KEY || this.config['DOGE_INDEXER_API_KEY'] || '');
-        this.timeoutMs = parseInt(o.timeoutMs || process.env.ANCHOR_PROOF_TIMEOUT_MS || '15000', 10);
+        this.apiKey    = String(o.apiKey || CONFIG_ENV.DOGE_INDEXER_API_KEY || this.config['DOGE_INDEXER_API_KEY'] || '');
+        this.timeoutMs = parseInt(o.timeoutMs || CONFIG_ENV.ANCHOR_PROOF_TIMEOUT_MS || '15000', 10);
         // Per-REWARD-TUPLE verdict memo (see _memoKey; NOT per-txid, which let one tuple's
         // verdict answer for a different tuple naming the same txid). A confirmed anchor is
         // immutable chain data and a block can be re-attempted many times behind a barrier,

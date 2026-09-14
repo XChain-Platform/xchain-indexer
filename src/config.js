@@ -89,7 +89,80 @@ function resolveCoinpayExpiration(frozen, envKey, network){
 // cross-service drift guard asserts this and the SDK co-signer's mirror equal it.
 const GAS_TICK = require('./protocol/constants.js').GAS_TICK;
 
+// Every environment variable this service reads outside this file, captured
+// ONCE at module load and frozen. CODE-STYLE "Module shape" says environment
+// is read in config.js only, and D21 rules the shape: a plain frozen object,
+// no getters, because a getter re-reads lazily and a process that changed its
+// own env mid-run would then see two different configurations.
+//
+// Raw values only. A default or a coercion stays at the READ site, where it
+// already lives, so this fold cannot move the point at which a default is
+// decided.
+const CONFIG_ENV = Object.freeze({
+    ANCHOR_PROOF_TIMEOUT_MS: process.env.ANCHOR_PROOF_TIMEOUT_MS,
+    BRIDGE_PROOF_TIMEOUT_MS: process.env.BRIDGE_PROOF_TIMEOUT_MS,
+    CORS_ORIGIN: process.env.CORS_ORIGIN,
+    DB_ACQUIRE_TIMEOUT: process.env.DB_ACQUIRE_TIMEOUT,
+    DB_CONNECT_TIMEOUT: process.env.DB_CONNECT_TIMEOUT,
+    DB_QUERY_TIMEOUT: process.env.DB_QUERY_TIMEOUT,
+    DECODER_DB_HOST: process.env.DECODER_DB_HOST,
+    DECODER_DB_NAME: process.env.DECODER_DB_NAME,
+    DECODER_DB_PASS: process.env.DECODER_DB_PASS,
+    DECODER_DB_PORT: process.env.DECODER_DB_PORT,
+    DECODER_DB_USER: process.env.DECODER_DB_USER,
+    DOGE_INDEXER_API_KEY: process.env.DOGE_INDEXER_API_KEY,
+    DOGE_INDEXER_API_URL: process.env.DOGE_INDEXER_API_URL,
+    DOGE_INDEXER_URL: process.env.DOGE_INDEXER_URL,
+    HUB_API_KEY: process.env.HUB_API_KEY,
+    HUB_API_URL: process.env.HUB_API_URL,
+    HUB_CALL_DEADLINE_MS: process.env.HUB_CALL_DEADLINE_MS,
+    HUB_CONFIG_API_KEY: process.env.HUB_CONFIG_API_KEY,
+    HUB_CONFIG_URL: process.env.HUB_CONFIG_URL,
+    HUB_DB_HOST: process.env.HUB_DB_HOST,
+    HUB_DB_NAME: process.env.HUB_DB_NAME,
+    HUB_DB_PASS: process.env.HUB_DB_PASS,
+    HUB_DB_PORT: process.env.HUB_DB_PORT,
+    HUB_DB_SYNC_ENABLED: process.env.HUB_DB_SYNC_ENABLED,
+    HUB_DB_USER: process.env.HUB_DB_USER,
+    HUB_PRICE_SYNC_TIMEOUT_MS: process.env.HUB_PRICE_SYNC_TIMEOUT_MS,
+    HUB_PUSH_FAILED_RETENTION_SECONDS: process.env.HUB_PUSH_FAILED_RETENTION_SECONDS,
+    HUB_PUSH_MAX_ATTEMPTS: process.env.HUB_PUSH_MAX_ATTEMPTS,
+    HUB_PUSH_PRUNE_INTERVAL_MS: process.env.HUB_PUSH_PRUNE_INTERVAL_MS,
+    HUB_PUSH_RETRY_BASE_MS: process.env.HUB_PUSH_RETRY_BASE_MS,
+    HUB_PUSH_RETRY_INTERVAL_MS: process.env.HUB_PUSH_RETRY_INTERVAL_MS,
+    HUB_PUSH_RETRY_MAX_MS: process.env.HUB_PUSH_RETRY_MAX_MS,
+    HUB_REORG_API_KEY: process.env.HUB_REORG_API_KEY,
+    INDEXER_ALLOW_LOCAL_PRICE_SOURCE: process.env.INDEXER_ALLOW_LOCAL_PRICE_SOURCE,
+    INDEXER_ALLOW_UNAUTHENTICATED: process.env.INDEXER_ALLOW_UNAUTHENTICATED,
+    INDEXER_API_KEY: process.env.INDEXER_API_KEY,
+    INDEXER_API_PORT: process.env.INDEXER_API_PORT,
+    INDEXER_COIN: process.env.INDEXER_COIN,
+    INDEXER_DB_HOST: process.env.INDEXER_DB_HOST,
+    INDEXER_DB_NAME: process.env.INDEXER_DB_NAME,
+    INDEXER_DB_PASS: process.env.INDEXER_DB_PASS,
+    INDEXER_DB_PORT: process.env.INDEXER_DB_PORT,
+    INDEXER_DB_USER: process.env.INDEXER_DB_USER,
+    INDEXER_ENABLE_DRYRUN: process.env.INDEXER_ENABLE_DRYRUN,
+    INDEXER_FEEQUOTE_ACQUIRE_TIMEOUT_MS: process.env.INDEXER_FEEQUOTE_ACQUIRE_TIMEOUT_MS,
+    INDEXER_FEEQUOTE_MAX_PENDING: process.env.INDEXER_FEEQUOTE_MAX_PENDING,
+    INDEXER_FEEQUOTE_TIMEOUT_MS: process.env.INDEXER_FEEQUOTE_TIMEOUT_MS,
+    INDEXER_HEALTH_STALL_GRACE_MS: process.env.INDEXER_HEALTH_STALL_GRACE_MS,
+    INDEXER_NETWORK: process.env.INDEXER_NETWORK,
+    INDEXER_POLL_SILENT_MS: process.env.INDEXER_POLL_SILENT_MS,
+    INDEXER_PREFLIGHT_MEMO_MAX: process.env.INDEXER_PREFLIGHT_MEMO_MAX,
+    INDEXER_RATE_LIMIT_RPM: process.env.INDEXER_RATE_LIMIT_RPM,
+    MIGRATION_STRICT_CHECKSUM: process.env.MIGRATION_STRICT_CHECKSUM,
+    STATE_TREE_METRIC_INTERVAL_MS: process.env.STATE_TREE_METRIC_INTERVAL_MS,
+    UTXO_TRACKER_API_PORT: process.env.UTXO_TRACKER_API_PORT,
+    UTXO_TRACKER_URL: process.env.UTXO_TRACKER_URL,
+    XCALL_DIRECT_PRESENCE_TIMEOUT_MS: process.env.XCALL_DIRECT_PRESENCE_TIMEOUT_MS,
+    npm_package_name: process.env.npm_package_name,
+    npm_package_version: process.env.npm_package_version,
+});
+
 module.exports = {
+    CONFIG_ENV,
+
 
     GAS_TICK,
 

@@ -23,6 +23,8 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 const Utility  = require('../../src/utility.js');
 const Actions  = require('../../src/actions/index.js');
 const Database = require('../../src/db');
+const { requireWithFreshConfig } = require('../helpers/fresh_config.js');
+const ACTIONS_PATH = require.resolve('../../src/actions/index.js');
 // Fixed-delay helper: one case schedules a release, another settles a window to
 // assert an unbounded waiter did NOT give up — neither has an event to poll.
 const { sleep } = require('../helpers/wait.js');
@@ -45,7 +47,7 @@ function busyError(){
 
 // Actions-like context exposing the real computeFeeQuote / computePreflight with the dry-run
 // engine stubbed to whatever the test needs (the engine itself lives in fee_quote_dry_run.test.js).
-function makeQuoteCtx({ dryRunThrows = null } = {}){
+function makeQuoteCtx({ dryRunThrows = null, actions = Actions } = {}){
     let util = new Utility();
     util.config['COIN']                         = 'BTC';
     util.config['ADDRESS']                      = Object.assign({}, util.config['ADDRESS'] || {}, { FEE_DESTINATION: FEE_DEST });
@@ -77,11 +79,11 @@ function makeQuoteCtx({ dryRunThrows = null } = {}){
             if(dryRunThrows) throw dryRunThrows();
             return { blockIndex: 100, blockTime: 1000, status: 'valid', error: null, xchainFee: '0', sourceFeeBalance: null };
         },
-        nativeFeeMandatory: Actions.prototype.nativeFeeMandatory,
-        priceFeeQuote:      Actions.prototype.priceFeeQuote,
-        staticFeeQuote:     Actions.prototype.staticFeeQuote,
-        computeFeeQuote:     Actions.prototype.computeFeeQuote,
-        computePreflight:    Actions.prototype.computePreflight
+        nativeFeeMandatory: actions.prototype.nativeFeeMandatory,
+        priceFeeQuote:      actions.prototype.priceFeeQuote,
+        staticFeeQuote:     actions.prototype.staticFeeQuote,
+        computeFeeQuote:     actions.prototype.computeFeeQuote,
+        computePreflight:    actions.prototype.computePreflight
     };
     return { ctx, calls };
 }
@@ -217,7 +219,10 @@ describe('fee-quote transaction-lock budget', function () {
             let prev = process.env.INDEXER_FEEQUOTE_ACQUIRE_TIMEOUT_MS;
             process.env.INDEXER_FEEQUOTE_ACQUIRE_TIMEOUT_MS = '750';
             try {
-                let { ctx, calls } = makeQuoteCtx();
+                // The budget is read from src/config.js's load-time CONFIG_ENV snapshot,
+                // so the quote methods come from an Actions loaded after the env write.
+                const FreshActions = requireWithFreshConfig(ACTIONS_PATH);
+                let { ctx, calls } = makeQuoteCtx({ actions: FreshActions });
                 await ctx.computeFeeQuote.call(ctx, { action: 'ISSUE', params: '0|NEWTOK' });
                 assert.strictEqual(calls.dryRunArgs.acquireTimeoutMs, 750);
             } finally {

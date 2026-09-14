@@ -49,6 +49,7 @@ const path    = require('path');
 const rca     = require('../rollcall_activation.js');
 
 const { getLogger } = require('../observability/index.js');
+const { CONFIG_ENV } = require('../config.js');
 // Raised by the epoch close when the DOGE side cannot be believed yet. Its own
 // class, deliberately NOT AnchorProofUnavailableError, so an operator reading a
 // stalled indexer can tell the two cross-chain rails apart at a glance.
@@ -64,13 +65,13 @@ class RollcallProofClient {
     constructor(config, opts){
         let o = opts || {};
         this.config    = config || {};
-        this.url       = String(o.url || process.env.DOGE_INDEXER_API_URL || process.env.DOGE_INDEXER_URL
+        this.url       = String(o.url || CONFIG_ENV.DOGE_INDEXER_API_URL || CONFIG_ENV.DOGE_INDEXER_URL
                                 || this.config['DOGE_INDEXER_URL'] || '');
-        this.apiKey    = String(o.apiKey || process.env.DOGE_INDEXER_API_KEY || this.config['DOGE_INDEXER_API_KEY'] || '');
+        this.apiKey    = String(o.apiKey || CONFIG_ENV.DOGE_INDEXER_API_KEY || this.config['DOGE_INDEXER_API_KEY'] || '');
         // Shares ANCHOR_PROOF_TIMEOUT_MS on purpose: it is the same peer, the same
         // transport and the same "a timeout is 'cannot tell', never 'not mined'"
         // reading. A second knob would be a second thing to misconfigure.
-        this.timeoutMs = parseInt(o.timeoutMs || process.env.ANCHOR_PROOF_TIMEOUT_MS || '15000', 10);
+        this.timeoutMs = parseInt(o.timeoutMs || CONFIG_ENV.ANCHOR_PROOF_TIMEOUT_MS || '15000', 10);
         // Decided answers only. A closed epoch past the maturity is immutable chain
         // data and a block may be re-attempted many times behind a barrier, so
         // re-asking is pure load. 'unknown' is NEVER memoized: it is precisely the
