@@ -26,7 +26,7 @@
  * the block loop. So, matching the reconstruction pattern already used by
  * test/unit/api_auth_batch.test.js, the security middleware chain is rebuilt
  * from the same pieces the app uses. The CORS leg imports the REAL
- * src/api/corsOrigin.js (parseCorsOrigin), so a regression in that module fails
+ * src/api/cors_origin.js (parseCorsOrigin), so a regression in that module fails
  * this suite. The auth gate mirrors the guard in src/api.js and MUST be kept
  * in sync with it; the method sets below are an exact copy of that guard's.
  *
@@ -43,7 +43,7 @@ const rateLimit = require('express-rate-limit');
 const crypto  = require('crypto');
 
 // REAL source under test for the CORS leg.
-const { parseCorsOrigin } = require('../../src/api/corsOrigin.js');
+const { parseCorsOrigin } = require('../../src/api/cors_origin.js');
 
 // ---- Exact copy of the gated-method sets in src/api.js (keep in sync). ------
 // WRITE_METHODS is empty upstream: the PUSH-ANCHOR endgame retired

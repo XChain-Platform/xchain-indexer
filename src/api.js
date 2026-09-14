@@ -52,7 +52,7 @@ const gatesFilter   = require('./actions/attest/rollcall_gates_filter.js');     
 const crypto        = require('crypto');
 const { installObservability } = require('./observability');   // default-off /metrics + structured log shim
 const { installIndexerMetrics } = require('./api/indexer_metrics');  // poll-freshness heartbeat gauge
-const { parseCorsOrigin } = require('./api/corsOrigin.js');
+const { parseCorsOrigin } = require('./api/cors_origin.js');
 const { installCrashHandlers } = require('./actions/anchor/diagnostic_events.js');
 const { chainBlockHash } = require('./api/chain_block_hash');           // decoder-side hash for the block-hash triple
 const { tipBlockTime }   = require('./api/tip_block_time');            // expiry filter clock for the open book
@@ -285,7 +285,7 @@ async function startApi(){
     // CORS_ORIGIN is comma-separated, not a single origin: handing `cors` the raw
     // string makes it echo that string verbatim to every caller, a multi-value
     // header no browser accepts, so every listed origin is blocked while the
-    // header reads as configured. See src/api/corsOrigin.js.
+    // header reads as configured. See src/api/cors_origin.js.
     app.use(cors({
         origin: parseCorsOrigin(CONFIG_ENV.CORS_ORIGIN || 'http://localhost'),
         methods: ['POST']
