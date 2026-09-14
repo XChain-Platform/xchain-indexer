@@ -336,7 +336,7 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
     describe('party 4: the SDK light client', function () {
         let light = null;
         before(function () {
-            light = requireSibling(SDK_DIR, 'src/light.js');
+            light = requireSibling(SDK_DIR, 'src/protocol/light_client.js');
             if(!light) this.skip();
         });
 

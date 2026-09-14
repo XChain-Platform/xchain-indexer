@@ -51,7 +51,7 @@ function resolveSdkUtilityPath() {
         path.join(__dirname, '..', '..', '..', '..', 'xchain-sdk'),
     ].filter(Boolean);
     for (const root of candidates) {
-        const p = path.join(root, 'src', 'utility.js');
+        const p = path.join(root, 'src', 'utils', 'utility.js');
         if (fs.existsSync(p)) return p;
     }
     throw new Error(

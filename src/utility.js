@@ -724,7 +724,7 @@ class Utility {
         // timestamp (amount_representability_activation.js): below the threshold this is
         // inert and historical replay is byte-identical. Placed FIRST and as an early
         // return false so the gate can only ever reject more than the legacy body, never
-        // accept more. NOT yet mirrored in xchain-sdk/src/utility.js, on purpose: a client
+        // accept more. NOT yet mirrored in xchain-sdk/src/utils/utility.js, on purpose: a client
         // stricter than consensus forks the acceptance set. See the module header.
         if(!this.isNull(blockTime) &&
            amountRepresentability.isAmountRepresentabilityActive(blockTime, this.config['NETWORK']) &&
@@ -746,7 +746,7 @@ class Utility {
         // int="1"/sats="2" and clears the divisible branch below, handing a non-numeric
         // string to the bignumber ledger math. The non-divisible branch already catches it
         // via its int==amount round trip; this guards the divisible one. Mirrored in
-        // xchain-sdk/src/utility.js (parity cases in the 15-sdk-parity integration suite).
+        // xchain-sdk/src/utils/utility.js (parity cases in the 15-sdk-parity integration suite).
         if(parts.length > 2)
             return false;
         //</MULTI-DOT-REJECT>
@@ -759,7 +759,7 @@ class Utility {
         // rounded ledger row (a supply-reconciliation desync). Contract-EMITTED amounts are
         // pre-truncated to the tick decimals in execute.js processEmission before they reach
         // this validator, so this rejects only over-precise user/wire input. Mirrored in
-        // xchain-sdk/src/utility.js (parity test in test/unit/utility.test.js).
+        // xchain-sdk/src/utils/utility.js (parity test in test/unit/utility.test.js).
         if(divisible && this.isNumeric(int) && (this.isNull(sats) || this.isNumeric(sats))){
             if(!this.isNull(sats) && String(sats).length > parseInt(decimals))
                 return false;

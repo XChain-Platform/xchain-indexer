@@ -433,7 +433,7 @@ describe('bin/sibling-reference-map.js: the idioms in the real tree', function (
     });
 
     it('sees the sdk parity guard that reaches in through an env-var root', () => {
-        const file = path.join(PLATFORM_ROOT, 'xchain-sdk', 'test', 'unit', 'addressRefFields.test.js');
+        const file = path.join(PLATFORM_ROOT, 'xchain-sdk', 'test', 'unit', 'address_ref_fields.test.js');
         const found = refs.scanIndirectIdioms(fs.readFileSync(file, 'utf8'), { shell: false }).found;
         assert.strictEqual(found.length, 1, 'the guard pins exactly one indexer file');
         assert.ok(/^src\/.*addressRefFields\.js$/.test(found[0].path),

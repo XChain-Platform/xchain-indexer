@@ -138,7 +138,7 @@ function resolveSdkRoot() {
         path.join(__dirname, '..', '..', '..', '..', 'xchain-sdk'),
     ].filter(Boolean);
     for (const root of candidates) {
-        if (fs.existsSync(path.join(root, 'src', 'actions.js')))
+        if (fs.existsSync(path.join(root, 'src', 'actions', 'index.js')))
             return root;
     }
     return null;
@@ -172,8 +172,8 @@ describe('Action round-trip golden – indexer parser byte-layout contract', fun
                 return;
             }
             const sdkConfig = require(path.join(sdkRoot, 'src', 'config.js'));
-            const SdkUtil   = require(path.join(sdkRoot, 'src', 'utility.js'));
-            const Actions   = require(path.join(sdkRoot, 'src', 'actions.js'));
+            const SdkUtil   = require(path.join(sdkRoot, 'src', 'utils', 'utility.js'));
+            const Actions   = require(path.join(sdkRoot, 'src', 'actions', 'index.js'));
             makeActions = () => new Actions({ config: sdkConfig.getConfig(), util: new SdkUtil() });
         });
 
