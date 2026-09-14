@@ -83,38 +83,40 @@ function v1HeadParams(f) {
 }
 
 const ARCHIVE_JSON = JSON.stringify({ v: 1, network: 'regtest', batch_seq: 9, matches: [{ match_id: 'm1' }], capability_snapshots: [] });
+let indexer, handler, verifyStub, swqStub;
+let b64, headSlice, chunk1, chunk2;
+
+function addAnchorDbStubs(db) {
+    db.getValidatorsByCapability  = sinon.stub().resolves([{ pubkey: PUBKEY_A, amount: '1' }]);
+    db.getMaxAnchorCheckpointSeq  = sinon.stub().resolves(null);
+    db.getArchiveReplayWatermarks = sinon.stub().resolves({ batchSeq: null, checkpointSeq: null });
+    db.createAnchorAction         = sinon.stub().resolves();
+    db.getAnchorV1ByBatchSeq      = sinon.stub().resolves(null);
+    db.getAnchorChunks            = sinon.stub().resolves([]);
+    db.setAnchorArchiveStatus     = sinon.stub().resolves();
+    db.createValidatorReward      = sinon.stub().resolves(true);
+    db.reconcileAnchorRewardWinner= sinon.stub().resolves(0);
+}
+
+function setupHeadReassembly() {
+    indexer = createMockIndexer();
+    indexer.config = Object.assign({}, indexer.config, { COIN: 'DOGE', NETWORK: 'regtest' });
+    addAnchorDbStubs(indexer.indexerDb);
+    handler = new Anchor(indexer);
+    verifyStub = sinon.stub(ed25519, 'verify').returns(true);
+    swqStub = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+    b64       = gz64(ARCHIVE_JSON);
+    let cut1  = Math.ceil(b64.length / 3), cut2 = 2 * cut1;
+    headSlice = b64.slice(0, cut1);
+    chunk1    = { chunk_index: 1, archive_b64: b64.slice(cut1, cut2) };
+    chunk2    = { chunk_index: 2, archive_b64: b64.slice(cut2) };
+}
+
+function restoreAnchorStubs() { verifyStub.restore(); swqStub.restore(); }
 
 describe('Anchor head-side reassembly gate @regression', function () {
-    let indexer, handler, verifyStub, swqStub;
-    let b64, headSlice, chunk1, chunk2;
-
-    function addAnchorDbStubs(db) {
-        db.getValidatorsByCapability  = sinon.stub().resolves([{ pubkey: PUBKEY_A, amount: '1' }]);
-        db.getMaxAnchorCheckpointSeq  = sinon.stub().resolves(null);
-        db.getArchiveReplayWatermarks = sinon.stub().resolves({ batchSeq: null, checkpointSeq: null });
-        db.createAnchorAction         = sinon.stub().resolves();
-        db.getAnchorV1ByBatchSeq      = sinon.stub().resolves(null);
-        db.getAnchorChunks            = sinon.stub().resolves([]);
-        db.setAnchorArchiveStatus     = sinon.stub().resolves();
-        db.createValidatorReward      = sinon.stub().resolves(true);
-        db.reconcileAnchorRewardWinner= sinon.stub().resolves(0);
-    }
-
-    beforeEach(function () {
-        indexer = createMockIndexer();
-        indexer.config = Object.assign({}, indexer.config, { COIN: 'DOGE', NETWORK: 'regtest' });
-        addAnchorDbStubs(indexer.indexerDb);
-        handler = new Anchor(indexer);
-        verifyStub = sinon.stub(ed25519, 'verify').returns(true);
-        swqStub = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
-
-        b64       = gz64(ARCHIVE_JSON);
-        let cut1  = Math.ceil(b64.length / 3), cut2 = 2 * cut1;
-        headSlice = b64.slice(0, cut1);
-        chunk1    = { chunk_index: 1, archive_b64: b64.slice(cut1, cut2) };
-        chunk2    = { chunk_index: 2, archive_b64: b64.slice(cut2) };
-    });
-    afterEach(function () { verifyStub.restore(); swqStub.restore(); });
+    beforeEach(setupHeadReassembly);
+    afterEach(restoreAnchorStubs);
 
     it('chunks-before-head, corrupt blob: head-side gate flags the head invalid_archive', async function () {
         // Both continuation chunks already stored (as orphans) before the head lands.
@@ -142,13 +144,17 @@ describe('Anchor head-side reassembly gate @regression', function () {
         assert.ok(indexer.indexerDb.setAnchorArchiveStatus.notCalled,
             'with the completing chunks not yet present the chunk-side gate (not the head) owns the check');
     });
+});
 
-    // Status axis: a node with no mirrored oracle_publish snapshot stores every v1
-    // head 'unverified' (oracleN === 0). The chunk-side path runs regardless of the
-    // parent head's status, so the head-side gate must too, or head-last ordering skips
-    // the CRC check on exactly those nodes and re-opens the ordering nondeterminism.
-    // These two run on regtest, where the widening's flag day is ARMED at 0; the
-    // flag-day axis (inert -> deployed 'valid'-only rule) is its own describe below.
+// Status axis: a node with no mirrored oracle_publish snapshot stores every v1
+// head 'unverified' (oracleN === 0). The chunk-side path runs regardless of the
+// parent head's status, so the head-side gate must too, or head-last ordering skips
+// the CRC check on exactly those nodes and re-opens the ordering nondeterminism.
+// These two run on regtest, where the widening's flag day is ARMED at 0; the
+// flag-day axis (inert -> deployed 'valid'-only rule) is its own describe below.
+describe('Anchor head-side reassembly gate @regression', function () {
+    beforeEach(setupHeadReassembly);
+    afterEach(restoreAnchorStubs);
     it('unverified head (snapshot-less node), chunks-before-head, corrupt blob: still flags invalid_archive', async function () {
         indexer.indexerDb.getValidatorsByCapability.resolves([]); // no snapshot -> head stored 'unverified'
         indexer.indexerDb.getAnchorChunks.resolves([chunk1, chunk2]);
@@ -194,21 +200,6 @@ describe('Anchor head-side reassembly gate @regression', function () {
             'a complete in-range set must be verified even when an extra out-of-range chunk is present');
     });
 });
-
-let indexer, handler, verifyStub, swqStub;
-let headSlice, chunk1, chunk2;
-
-function addAnchorDbStubs(db) {
-    db.getValidatorsByCapability  = sinon.stub().resolves([{ pubkey: PUBKEY_A, amount: '1' }]);
-    db.getMaxAnchorCheckpointSeq  = sinon.stub().resolves(null);
-    db.getArchiveReplayWatermarks = sinon.stub().resolves({ batchSeq: null, checkpointSeq: null });
-    db.createAnchorAction         = sinon.stub().resolves();
-    db.getAnchorV1ByBatchSeq      = sinon.stub().resolves(null);
-    db.getAnchorChunks            = sinon.stub().resolves([]);
-    db.setAnchorArchiveStatus     = sinon.stub().resolves();
-    db.createValidatorReward      = sinon.stub().resolves(true);
-    db.reconcileAnchorRewardWinner= sinon.stub().resolves(0);
-}
 
 // Build a handler bound to `network`, with the archive chunks already stored.
 function handlerFor(network) {

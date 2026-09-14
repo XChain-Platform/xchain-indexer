@@ -60,79 +60,90 @@ const SOURCE      = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const DESTINATION = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
 const HOLDER1     = 'mmqFL1hiu2RDuyS69KS9ko6uaMryhANwsz';
 const HOLDER2     = 'mk7MdP3qzVkgyjaYNR2sUY8Ggn4DWxt2KS';
+let indexer, actionsCtx, feeSpy, legacyStub;
+
+function setupUnifiedFee() {
+    indexer = createMockIndexer();
+    // getAddressEscrows is not in the shared mock-db surface; the sibling suites
+    // attach it the same way.
+    indexer.indexerDb.getAddressEscrows = sinon.stub().resolves([]);
+    indexer.indexerDb.getAddressOwnerships.resolves([]);
+    indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+    indexer.indexerDb.isActionAllowed.resolves(true);
+    indexer.indexerDb.getList.resolves([]);
+    indexer.indexerDb.getTicker.resolves('XCHAIN');
+    actionsCtx = {
+        config:          indexer.config,
+        util:            indexer.util,
+        mapper:          indexer.mapper,
+        decoderDb:       indexer.decoderDb,
+        indexerDb:       indexer.indexerDb,
+        protocolChanges: {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        },
+        processAction:   sinon.stub().resolves(),
+    };
+    // feeForAction receives the fully computed per-tx fee from BOTH branches, so one
+    // spy reads the priced amount whichever branch ran.
+    feeSpy     = sinon.spy(indexer.util, 'feeForAction');
+    legacyStub = sinon.spy(indexer.util, 'getTransactionFee');
+    indexer.util.resetLists();
+}
+
+function restoreUnifiedFee() { sinon.restore(); }
+
+// The unified price, expressed the way the coin bundle expresses it, so the test
+// reads the schedule rather than restating a literal that could drift from it.
+function expectedFee(baseKey, perItemKey, items) {
+    const s = indexer.config['GAS_SCHEDULE'];
+    const gas = s[baseKey] + (items * s[perItemKey]);
+    return { gas, fee: indexer.util.bcmul(gas, indexer.config['GAS_PRICE'], 8) };
+}
+
+function pricedFee() {
+    assert.ok(feeSpy.called, 'feeForAction was never called: no fee was priced');
+    return String(feeSpy.firstCall.args[0]);
+}
+
+async function runSweep(params, opts = {}) {
+    indexer.indexerDb.getAddressBalances.resolves(opts.balances || { 1: '1000' });
+    const handler = new Sweep(actionsCtx);
+    const data = createBaseData({ ACTION: 'SWEEP', FORMAT: 0, SOURCE });
+    await handler.parse(params, data, null);
+    return data;
+}
+
+async function runCallback(opts = {}) {
+    const tokenInfo = createTokenInfo({
+        TICK: 'TEST', TICK_ID: 1, OWNER: SOURCE, DECIMALS: 0,
+        LOCK_CALLBACK: 0, CALLBACK_BLOCK: 90, CALLBACK_TICK: 'CBTEST', CALLBACK_AMOUNT: '1',
+    });
+    const cbTokenInfo = createTokenInfo({ TICK: 'CBTEST', TICK_ID: 2, DECIMALS: 0, ALLOW_LIST: null, BLOCK_LIST: null });
+    indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(tokenInfo);
+    indexer.indexerDb.getTokenInfo.withArgs('CBTEST').resolves(cbTokenInfo);
+    indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
+    indexer.indexerDb.getHolders.resolves(opts.holders || { [HOLDER1]: '10', [HOLDER2]: '20' });
+    const handler = new Callback(actionsCtx);
+    const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE, BLOCK_INDEX: 100 });
+    await handler.parse(['0', 'TEST', 'memo'], data, null);
+    return data;
+}
+
+function nativeSats(xchainFee, coinUsd, xchainUsd) {
+    const band = indexer.util.computeNativeFeeBand(
+        String(xchainFee), String(xchainUsd), String(coinUsd),
+        indexer.config['FEE_TOLERANCE_MIN'], indexer.config['FEE_TOLERANCE_MAX']);
+    return Number(indexer.util.bcmul(band.expectedNative, '100000000', 0));
+}
+
+// Litecoin's own pinned dust threshold, read from the coin bundle rather than
+// restated, so a change to it moves this test with it.
+const LTC_DUST = coins.getCoinConfig('LTC', 'mainnet').net.dustThreshold;
 
 describe('SWEEP / CALLBACK unified gas-schedule fee @regression @tier3', function () {
-    let indexer, actionsCtx, feeSpy, legacyStub;
-
-    beforeEach(function () {
-        indexer = createMockIndexer();
-        // getAddressEscrows is not in the shared mock-db surface; the sibling suites
-        // attach it the same way.
-        indexer.indexerDb.getAddressEscrows = sinon.stub().resolves([]);
-        indexer.indexerDb.getAddressOwnerships.resolves([]);
-        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-        indexer.indexerDb.isActionAllowed.resolves(true);
-        indexer.indexerDb.getList.resolves([]);
-        indexer.indexerDb.getTicker.resolves('XCHAIN');
-        actionsCtx = {
-            config:          indexer.config,
-            util:            indexer.util,
-            mapper:          indexer.mapper,
-            decoderDb:       indexer.decoderDb,
-            indexerDb:       indexer.indexerDb,
-            protocolChanges: {
-                isDefined: sinon.stub().returns(true),
-                isEnabled: sinon.stub().resolves(true),
-            },
-            processAction:   sinon.stub().resolves(),
-        };
-        // feeForAction receives the fully computed per-tx fee from BOTH branches, so one
-        // spy reads the priced amount whichever branch ran.
-        feeSpy     = sinon.spy(indexer.util, 'feeForAction');
-        legacyStub = sinon.spy(indexer.util, 'getTransactionFee');
-        indexer.util.resetLists();
-    });
-
-    afterEach(function () {
-        sinon.restore();
-    });
-
-    // The unified price, expressed the way the coin bundle expresses it, so the test
-    // reads the schedule rather than restating a literal that could drift from it.
-    function expectedFee(baseKey, perItemKey, items) {
-        const s = indexer.config['GAS_SCHEDULE'];
-        const gas = s[baseKey] + (items * s[perItemKey]);
-        return { gas, fee: indexer.util.bcmul(gas, indexer.config['GAS_PRICE'], 8) };
-    }
-
-    function pricedFee() {
-        assert.ok(feeSpy.called, 'feeForAction was never called: no fee was priced');
-        return String(feeSpy.firstCall.args[0]);
-    }
-
-    async function runSweep(params, opts = {}) {
-        indexer.indexerDb.getAddressBalances.resolves(opts.balances || { 1: '1000' });
-        const handler = new Sweep(actionsCtx);
-        const data = createBaseData({ ACTION: 'SWEEP', FORMAT: 0, SOURCE });
-        await handler.parse(params, data, null);
-        return data;
-    }
-
-    async function runCallback(opts = {}) {
-        const tokenInfo = createTokenInfo({
-            TICK: 'TEST', TICK_ID: 1, OWNER: SOURCE, DECIMALS: 0,
-            LOCK_CALLBACK: 0, CALLBACK_BLOCK: 90, CALLBACK_TICK: 'CBTEST', CALLBACK_AMOUNT: '1',
-        });
-        const cbTokenInfo = createTokenInfo({ TICK: 'CBTEST', TICK_ID: 2, DECIMALS: 0, ALLOW_LIST: null, BLOCK_LIST: null });
-        indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(tokenInfo);
-        indexer.indexerDb.getTokenInfo.withArgs('CBTEST').resolves(cbTokenInfo);
-        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000' });
-        indexer.indexerDb.getHolders.resolves(opts.holders || { [HOLDER1]: '10', [HOLDER2]: '20' });
-        const handler = new Callback(actionsCtx);
-        const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE, BLOCK_INDEX: 100 });
-        await handler.parse(['0', 'TEST', 'memo'], data, null);
-        return data;
-    }
+    beforeEach(setupUnifiedFee);
+    afterEach(restoreUnifiedFee);
 
     describe('at or above the flag day', function () {
         it('SWEEP prices SWEEP_BASE + items * SWEEP_PER_ITEM and never touches the legacy model', async function () {
@@ -173,7 +184,13 @@ describe('SWEEP / CALLBACK unified gas-schedule fee @regression @tier3', functio
             const { fee } = expectedFee('SWEEP_BASE', 'SWEEP_PER_ITEM', 0);
             assert.strictEqual(pricedFee(), String(fee));
         });
+    });
+});
 
+describe('SWEEP / CALLBACK unified gas-schedule fee @regression @tier3', function () {
+    beforeEach(setupUnifiedFee);
+    afterEach(restoreUnifiedFee);
+    describe('at or above the flag day', function () {
         it('CALLBACK prices CALLBACK_BASE + recipients * CALLBACK_PER_RECIPIENT', async function () {
             const data = await runCallback();
             assert.strictEqual(data['STATUS'], 'valid');
@@ -188,7 +205,11 @@ describe('SWEEP / CALLBACK unified gas-schedule fee @regression @tier3', functio
             assert.strictEqual(pricedFee(), String(fee));
         });
     });
+});
 
+describe('SWEEP / CALLBACK unified gas-schedule fee @regression @tier3', function () {
+    beforeEach(setupUnifiedFee);
+    afterEach(restoreUnifiedFee);
     describe('at or above the flag day', function () {
         it('an emitted (VM-synthesized) SWEEP still pays no per-tx fee', async function () {
             indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
@@ -222,7 +243,11 @@ describe('SWEEP / CALLBACK unified gas-schedule fee @regression @tier3', functio
             assert.strictEqual(pricedFee(), String(indexer.util.getTransactionFee(10)));
         });
     });
+});
 
+describe('SWEEP / CALLBACK unified gas-schedule fee @regression @tier3', function () {
+    beforeEach(setupUnifiedFee);
+    afterEach(restoreUnifiedFee);
     describe('the dust property this change exists for', function () {
 
         // A native-fee chain can only carry a protocol fee as a real output, so the fee
@@ -231,17 +256,6 @@ describe('SWEEP / CALLBACK unified gas-schedule fee @regression @tier3', functio
         // whether a submitted fee output is acceptable and computeFeeQuote uses to tell a
         // wallet how large to make it - called here rather than restated, so the test
         // cannot agree with itself while disagreeing with the consensus check.
-        function nativeSats(xchainFee, coinUsd, xchainUsd) {
-            const band = indexer.util.computeNativeFeeBand(
-                String(xchainFee), String(xchainUsd), String(coinUsd),
-                indexer.config['FEE_TOLERANCE_MIN'], indexer.config['FEE_TOLERANCE_MAX']);
-            return Number(indexer.util.bcmul(band.expectedNative, '100000000', 0));
-        }
-
-        // Litecoin's own pinned dust threshold, read from the coin bundle rather than
-        // restated, so a change to it moves this test with it.
-        const LTC_DUST = coins.getCoinConfig('LTC', 'mainnet').net.dustThreshold;
-
         it('the exact SWEEP the wallet refused now clears dust at the venue price', async function () {
             // The measured refusal: a Litecoin SWEEP quoted 0.00000600 LTC (600 litoshi)
             // against the 5460 floor, at the regtest venue's seeded LTC $30 / XCHAIN $2.
@@ -280,7 +294,11 @@ describe('SWEEP / CALLBACK unified gas-schedule fee @regression @tier3', functio
             }
         });
     });
+});
 
+describe('SWEEP / CALLBACK unified gas-schedule fee @regression @tier3', function () {
+    beforeEach(setupUnifiedFee);
+    afterEach(restoreUnifiedFee);
     describe('gas-schedule keys resolve strictly', function () {
 
         it('every key this change introduces is present in all three coin bundles', function () {

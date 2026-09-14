@@ -16,35 +16,34 @@ const sinon = require('sinon');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
 
 const Sleep = require('../../../src/actions/sleep.js');
+const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+const OWNER  = SOURCE;
+const OTHER  = '1OtherAddressXXXXXXXXXXXXXXXXVtKwXp';
+let indexer, actionsCtx, handler;
+
+function setupSleep() {
+    indexer = createMockIndexer();
+    actionsCtx = {
+        config:          indexer.config,
+        util:            indexer.util,
+        mapper:          indexer.mapper,
+        decoderDb:       indexer.decoderDb,
+        indexerDb:       indexer.indexerDb,
+        protocolChanges: {
+            isDefined:  sinon.stub().returns(true),
+            isEnabled:  sinon.stub().resolves(true),
+        },
+        processAction:   sinon.stub().resolves(),
+    };
+    handler = new Sleep(actionsCtx);
+    indexer.util.resetLists();
+}
+
+function restoreSleep() { sinon.restore(); }
 
 describe('Sleep @regression @tier3', function () {
-    let indexer, actionsCtx, handler;
-
-    const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-    const OWNER  = SOURCE;
-    const OTHER  = '1OtherAddressXXXXXXXXXXXXXXXXVtKwXp';
-
-    beforeEach(function () {
-        indexer = createMockIndexer();
-        actionsCtx = {
-            config:          indexer.config,
-            util:            indexer.util,
-            mapper:          indexer.mapper,
-            decoderDb:       indexer.decoderDb,
-            indexerDb:       indexer.indexerDb,
-            protocolChanges: {
-                isDefined:  sinon.stub().returns(true),
-                isEnabled:  sinon.stub().resolves(true),
-            },
-            processAction:   sinon.stub().resolves(),
-        };
-        handler = new Sleep(actionsCtx);
-        indexer.util.resetLists();
-    });
-
-    afterEach(function () {
-        sinon.restore();
-    });
+    beforeEach(setupSleep);
+    afterEach(restoreSleep);
 
     // ─── Format 0: Sleep ADDRESS ──────────────────────────────────────
 
@@ -98,7 +97,11 @@ describe('Sleep @regression @tier3', function () {
             assert.strictEqual(data['STATUS'], 'valid');
         });
     });
+});
 
+describe('Sleep @regression @tier3', function () {
+    beforeEach(setupSleep);
+    afterEach(restoreSleep);
     describe('format 0: sleep ADDRESS', function () {
         it('RESUME_BLOCK < BLOCK_INDEX and not in immediate methods → invalid', async function () {
             indexer.indexerDb.getTokenInfo.resolves(null);
@@ -138,9 +141,13 @@ describe('Sleep @regression @tier3', function () {
         });
 
     });
+});
 
-    // ─── Format 1: Sleep TICK ─────────────────────────────────────────
+// ─── Format 1: Sleep TICK ─────────────────────────────────────────
 
+describe('Sleep @regression @tier3', function () {
+    beforeEach(setupSleep);
+    afterEach(restoreSleep);
     describe('format 1: sleep TICK', function () {
         it('valid tick sleep by owner: createSleep called with valid status', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, OWNER });
@@ -168,7 +175,13 @@ describe('Sleep @regression @tier3', function () {
 
             assert.ok(data['STATUS'].includes('invalid'));
         });
+    });
+});
 
+describe('Sleep @regression @tier3', function () {
+    beforeEach(setupSleep);
+    afterEach(restoreSleep);
+    describe('format 1: sleep TICK', function () {
         // Sleep lock: a LOCK_SLEEP=1 token carries an immutable "cannot be paused" guarantee.
         it('LOCK_SLEEP=1 token cannot be slept even by its owner → invalid (flag on)', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, OWNER, LOCK_SLEEP: 1 });
@@ -197,7 +210,11 @@ describe('Sleep @regression @tier3', function () {
             assert.strictEqual(data['STATUS'], 'valid');
         });
     });
+});
 
+describe('Sleep @regression @tier3', function () {
+    beforeEach(setupSleep);
+    afterEach(restoreSleep);
     describe('format 1: sleep TICK', function () {
         it('pre-flag-day (flag off) LOCK_SLEEP is not yet enforced → valid', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, OWNER, LOCK_SLEEP: 1 });
@@ -240,9 +257,13 @@ describe('Sleep @regression @tier3', function () {
         });
 
     });
+});
 
-    // ─── SOURCE sleeping ─────────────────────────────────────────────
+// ─── SOURCE sleeping ─────────────────────────────────────────────
 
+describe('Sleep @regression @tier3', function () {
+    beforeEach(setupSleep);
+    afterEach(restoreSleep);
     describe('SOURCE sleeping', function () {
 
         it('SOURCE sleeping → invalid', async function () {
@@ -261,9 +282,13 @@ describe('Sleep @regression @tier3', function () {
         });
 
     });
+});
 
-    // ─── MEMO validations ────────────────────────────────────────────
+// ─── MEMO validations ────────────────────────────────────────────
 
+describe('Sleep @regression @tier3', function () {
+    beforeEach(setupSleep);
+    afterEach(restoreSleep);
     describe('MEMO validations', function () {
 
         it('MEMO with pipe → invalid', async function () {
@@ -291,9 +316,13 @@ describe('Sleep @regression @tier3', function () {
         });
 
     });
+});
 
-    // ─── Record creation ─────────────────────────────────────────────
+// ─── Record creation ─────────────────────────────────────────────
 
+describe('Sleep @regression @tier3', function () {
+    beforeEach(setupSleep);
+    afterEach(restoreSleep);
     describe('record creation', function () {
 
         it('createSleep called even on invalid', async function () {

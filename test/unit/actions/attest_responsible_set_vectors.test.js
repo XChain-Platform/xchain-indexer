@@ -62,6 +62,27 @@ if (!vecRefused) { try { vec = require(VEC_PATH); } catch (e) { vecErr = e; } }
 // `weighted` flag the only thing choosing the branch.
 const BLOCK = 100;
 
+// Build a handler whose ONLY inputs are the vector's: the capability lookups return
+// the vector's validators verbatim, and the provider registry returns the vector's
+// floor for whatever provider id is asked about.
+function handlerFor(c) {
+    const ix = createMockIndexer();
+    ix.config.COIN    = 'BTC';
+    ix.config.NETWORK = c.weighted ? 'regtest' : 'mainnet';
+    const db = ix.indexerDb;
+    db.getStakeWeightsByCapability = sinon.stub().resolves(c.validators);
+    db.getValidatorsByCapability   = sinon.stub().resolves(c.validators);
+    const handler = new Attest({
+        config: ix.config, util: ix.util, mapper: ix.mapper,
+        decoderDb: ix.decoderDb, indexerDb: db,
+        protocolChanges: { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) }
+    });
+    handler.providerRegistry = {
+        getMinStake: () => (c.minStake === undefined ? null : c.minStake)
+    };
+    return handler;
+}
+
 describe('ATTEST responsible-set canonical-vector conformance @regression @tier1', function () {
 
     // A standalone `it`, not one of the vector-driven cases below: mocha skips a
@@ -80,33 +101,16 @@ describe('ATTEST responsible-set canonical-vector conformance @regression @tier1
 
     afterEach(() => sinon.restore());
 
-    // Build a handler whose ONLY inputs are the vector's: the capability lookups return
-    // the vector's validators verbatim, and the provider registry returns the vector's
-    // floor for whatever provider id is asked about.
-    function handlerFor(c) {
-        const ix = createMockIndexer();
-        ix.config.COIN    = 'BTC';
-        ix.config.NETWORK = c.weighted ? 'regtest' : 'mainnet';
-        const db = ix.indexerDb;
-        db.getStakeWeightsByCapability = sinon.stub().resolves(c.validators);
-        db.getValidatorsByCapability   = sinon.stub().resolves(c.validators);
-        const handler = new Attest({
-            config: ix.config, util: ix.util, mapper: ix.mapper,
-            decoderDb: ix.decoderDb, indexerDb: db,
-            protocolChanges: { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) }
-        });
-        handler.providerRegistry = {
-            getMinStake: () => (c.minStake === undefined ? null : c.minStake)
-        };
-        return handler;
-    }
-
     (vec ? vec.computeResponsibleSet : []).forEach(function (c) {
         it(c.name, async function () {
             const got = await handlerFor(c).computeResponsibleSet(c.requestId, c.redundancy, BLOCK, 'http_get');
             assert.deepStrictEqual(got, c.expected);
         });
     });
+});
+
+describe('ATTEST responsible-set canonical-vector conformance @regression @tier1', function () {
+    afterEach(() => sinon.restore());
 
     // The reorg recompute is a FOURTH copy of the same rule and is not reachable
     // through computeResponsibleSet, so run the vectors through it too rather than

@@ -17,45 +17,51 @@ const sinon  = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Collect = require('../../../src/actions/collect.js');
+const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+let indexer, actionsCtx, handler;
+
+function addCollectDbStubs(db) {
+    db.getActiveStakeBySource  = sinon.stub().resolves({ stake_index: 1 });
+    db.getUnclaimedRewardTotal = sinon.stub().resolves('100');
+    db.createRewardClaim       = sinon.stub().resolves();
+    // Reward pool is paid by debit, not minting: the guard reads the gas-tick id and the
+    // pool's balance. Default to a well-funded pool so the happy path stays valid.
+    db.getTokenInfo            = sinon.stub().resolves({ TICK_ID: 1 });
+    db.getAddressBalances      = sinon.stub().resolves({ 1: '1000000' });
+}
+
+function setupCollect() {
+    indexer = createMockIndexer();
+    addCollectDbStubs(indexer.indexerDb);
+    indexer.indexerDb.isActionAllowed.resolves(true);
+    actionsCtx = {
+        config:    indexer.config,
+        util:      indexer.util,
+        mapper:    indexer.mapper,
+        decoderDb: indexer.decoderDb,
+        indexerDb: indexer.indexerDb,
+    };
+    handler = new Collect(actionsCtx);
+    indexer.util.resetLists();
+}
+
+function collectData(overrides = {}) {
+    return createBaseData({ ACTION: 'COLLECT', FORMAT: 0, COIN: 'BTC', SOURCE, ...overrides });
+}
+
+function setGate(enabled) {
+    actionsCtx.protocolChanges = {
+        isDefined: sinon.stub().returns(true),
+        isEnabled: sinon.stub().callsFake(async (name) =>
+            name === 'PARTIAL_UNSTAKE_COLLECT' ? enabled : true),
+    };
+}
+
+function restoreCollect() { sinon.restore(); }
 
 describe('Collect (COLLECT) @regression @tier3', function () {
-    let indexer, actionsCtx, handler;
-
-    const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-
-    function addCollectDbStubs(db) {
-        db.getActiveStakeBySource  = sinon.stub().resolves({ stake_index: 1 });
-        db.getUnclaimedRewardTotal = sinon.stub().resolves('100');
-        db.createRewardClaim       = sinon.stub().resolves();
-        // Reward pool is paid by debit, not minting: the guard reads the gas-tick id and the
-        // pool's balance. Default to a well-funded pool so the happy path stays valid.
-        db.getTokenInfo            = sinon.stub().resolves({ TICK_ID: 1 });
-        db.getAddressBalances      = sinon.stub().resolves({ 1: '1000000' });
-    }
-
-    beforeEach(function () {
-        indexer = createMockIndexer();
-        addCollectDbStubs(indexer.indexerDb);
-        indexer.indexerDb.isActionAllowed.resolves(true);
-
-        actionsCtx = {
-            config:    indexer.config,
-            util:      indexer.util,
-            mapper:    indexer.mapper,
-            decoderDb: indexer.decoderDb,
-            indexerDb: indexer.indexerDb,
-        };
-        handler = new Collect(actionsCtx);
-        indexer.util.resetLists();
-    });
-
-    afterEach(function () {
-        sinon.restore();
-    });
-
-    function collectData(overrides = {}) {
-        return createBaseData({ ACTION: 'COLLECT', FORMAT: 0, COIN: 'BTC', SOURCE, ...overrides });
-    }
+    beforeEach(setupCollect);
+    afterEach(restoreCollect);
 
     it('valid collect → STATUS valid, reward recorded as AMOUNT', async function () {
         const data = collectData();
@@ -97,7 +103,11 @@ describe('Collect (COLLECT) @regression @tier3', function () {
         await handler.parse(['0'], data, null);
         assert.ok(String(data['STATUS']).includes('no unclaimed rewards'));
     });
+});
 
+describe('Collect (COLLECT) @regression @tier3', function () {
+    beforeEach(setupCollect);
+    afterEach(restoreCollect);
     it('scopes the unclaimed-reward sum to the COLLECT\'s own block (replay determinism)', async function () {
         const data = collectData();
         await handler.parse(['0'], data, null);
@@ -136,7 +146,11 @@ describe('Collect (COLLECT) @regression @tier3', function () {
         assert.strictEqual(creditAmt, '100');
         assert.strictEqual(creditAddr, SOURCE);
     });
+});
 
+describe('Collect (COLLECT) @regression @tier3', function () {
+    beforeEach(setupCollect);
+    afterEach(restoreCollect);
     it('rejects when the reward pool cannot cover the claim, leaving it unclaimed', async function () {
         // Pool holds less than the 100 owed
         indexer.indexerDb.getAddressBalances.resolves({ 1: '50' });
@@ -167,19 +181,15 @@ describe('Collect (COLLECT) @regression @tier3', function () {
         assert.strictEqual(second['STATUS'], 'valid');
         assert.strictEqual(second['AMOUNT'], '100');
     });
+});
 
-    function setGate(enabled) {
-        actionsCtx.protocolChanges = {
-            isDefined: sinon.stub().returns(true),
-            isEnabled: sinon.stub().callsFake(async (name) =>
-                name === 'PARTIAL_UNSTAKE_COLLECT' ? enabled : true),
-        };
-    }
+// -----------------------------------------------------------------------
+// partial claim (trailing optional AMOUNT, PARTIAL_UNSTAKE_COLLECT)
+// -----------------------------------------------------------------------
 
-    // -----------------------------------------------------------------------
-    // partial claim (trailing optional AMOUNT, PARTIAL_UNSTAKE_COLLECT)
-    // -----------------------------------------------------------------------
-
+describe('Collect (COLLECT) @regression @tier3', function () {
+    beforeEach(setupCollect);
+    afterEach(restoreCollect);
     describe('partial claim', function () {
         beforeEach(function () {
             setGate(true);
@@ -235,7 +245,11 @@ describe('Collect (COLLECT) @regression @tier3', function () {
             }
         });
     });
+});
 
+describe('Collect (COLLECT) @regression @tier3', function () {
+    beforeEach(setupCollect);
+    afterEach(restoreCollect);
     describe('partial claim', function () {
         beforeEach(function () {
             setGate(true);

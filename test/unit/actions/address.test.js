@@ -16,38 +16,44 @@ const sinon = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Address = require('../../../src/actions/address.js');
+let indexer, actionsCtx, handler;
+
+function setupAddress(){
+    indexer = createMockIndexer();
+    actionsCtx = {
+        config: indexer.config,
+        util: indexer.util,
+        mapper: indexer.mapper,
+        decoderDb: indexer.decoderDb,
+        indexerDb: indexer.indexerDb,
+        protocolChanges: {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        },
+        processAction: sinon.stub().resolves(),
+    };
+    handler = new Address(actionsCtx);
+    // Reset util lists between tests
+    indexer.util.resetLists();
+}
+
+function makeParams(feePreference, requireMemo, memo, dispenserPreference) {
+    return [
+        '0',
+        String(feePreference),
+        String(requireMemo),
+        dispenserPreference !== undefined ? String(dispenserPreference) : '',
+        memo !== undefined ? memo : '',
+    ];
+}
+
+// VERSION|CONTROLLER|ACTION_CLASS|COOLDOWN_BLOCKS|UNBIND|MEMO
+function bindParams({ controller = '1500', actionClass = 'transfer', cooldown = '144', unbind = '', memo = '' } = {}) {
+    return ['1', String(controller), String(actionClass), String(cooldown), String(unbind), memo];
+}
 
 describe('Address action handler @regression @tier3', function () {
-    let indexer, actionsCtx, handler;
-
-    beforeEach(function () {
-        indexer = createMockIndexer();
-        actionsCtx = {
-            config: indexer.config,
-            util: indexer.util,
-            mapper: indexer.mapper,
-            decoderDb: indexer.decoderDb,
-            indexerDb: indexer.indexerDb,
-            protocolChanges: {
-                isDefined: sinon.stub().returns(true),
-                isEnabled: sinon.stub().resolves(true),
-            },
-            processAction: sinon.stub().resolves(),
-        };
-        handler = new Address(actionsCtx);
-        // Reset util lists between tests
-        indexer.util.resetLists();
-    });
-
-    function makeParams(feePreference, requireMemo, memo, dispenserPreference) {
-        return [
-            '0',
-            String(feePreference),
-            String(requireMemo),
-            dispenserPreference !== undefined ? String(dispenserPreference) : '',
-            memo !== undefined ? memo : '',
-        ];
-    }
+    beforeEach(setupAddress);
 
     // ─── FEE_PREFERENCE validations ──────────────────────────────────
 
@@ -81,7 +87,10 @@ describe('Address action handler @regression @tier3', function () {
         await handler.parse(params, data, null);
         assert.ok(data['STATUS'].includes('FEE_PREFERENCE'), `Expected FEE_PREFERENCE error, got: ${data['STATUS']}`);
     });
+});
 
+describe('Address action handler @regression @tier3', function () {
+    beforeEach(setupAddress);
     // ─── REQUIRE_MEMO validations ─────────────────────────────────────
 
     it('accepts REQUIRE_MEMO=0', async function () {
@@ -101,7 +110,10 @@ describe('Address action handler @regression @tier3', function () {
         await handler.parse(makeParams(0, 2, ''), data, null);
         assert.ok(data['STATUS'].includes('REQUIRE_MEMO'), `Expected REQUIRE_MEMO error, got: ${data['STATUS']}`);
     });
+});
 
+describe('Address action handler @regression @tier3', function () {
+    beforeEach(setupAddress);
     // ─── DISPENSER_PREFERENCE validations ─────────────────────────────
 
     it('accepts DISPENSER_PREFERENCE=1', async function () {
@@ -140,7 +152,10 @@ describe('Address action handler @regression @tier3', function () {
         await handler.parse(makeParams(0, 0, ''), data, null);
         assert.strictEqual(data['STATUS'], 'valid');
     });
+});
 
+describe('Address action handler @regression @tier3', function () {
+    beforeEach(setupAddress);
     // ─── MEMO validations ─────────────────────────────────────────────
 
     it('rejects MEMO containing a pipe character', async function () {
@@ -184,23 +199,21 @@ describe('Address action handler @regression @tier3', function () {
         await handler.parse(makeParams(0, 0, ''), data, null);
         assert.ok(indexer.mapper.createMappings.calledOnce);
     });
+});
 
-    // VERSION|CONTROLLER|ACTION_CLASS|COOLDOWN_BLOCKS|UNBIND|MEMO
-    function bindParams({ controller = '1500', actionClass = 'transfer', cooldown = '144', unbind = '', memo = '' } = {}) {
-        return ['1', String(controller), String(actionClass), String(cooldown), String(unbind), memo];
-    }
-
-    /*****************************************************************
-     * A REFUSED format 1 (controller bind) was silent.
-     *
-     * Format 1 used to persist nothing but the address_controllers event, and that
-     * write only runs when the action is valid, so a refused bind wrote no row
-     * anywhere and its verdict existed solely in a console.log line: by every
-     * client it was indistinguishable from an action not yet processed. Format 1
-     * now writes the same `addresses` audit row every other ADDRESS writes (the
-     * contract issue.js has always had), while the enforcement log still takes
-     * valid events only.
-     ****************************************************************/
+/*****************************************************************
+ * A REFUSED format 1 (controller bind) was silent.
+ *
+ * A format 1 that persists only the address_controllers event is silent on a
+ * refusal. That write runs only when the action is valid, so a refused bind
+ * wrote no row anywhere and its verdict existed solely in a console.log line:
+ * by every client it was indistinguishable from an action not yet processed.
+ * Format 1 now writes the same `addresses` audit row every other ADDRESS
+ * writes (the contract issue.js has always had), while the enforcement log
+ * still takes valid events only.
+ ****************************************************************/
+describe('Address action handler @regression @tier3', function () {
+    beforeEach(setupAddress);
     describe('format 1 : controller bind persistence', function () {
         beforeEach(function () {
             // A bind validates its CONTROLLER against an existing, active contract.
@@ -254,7 +267,10 @@ describe('Address action handler @regression @tier3', function () {
                 'the enforcement log must never carry a refused bind');
         });
     });
+});
 
+describe('Address action handler @regression @tier3', function () {
+    beforeEach(setupAddress);
     describe('format 1 : controller bind persistence', function () {
         beforeEach(function () {
             // A bind validates its CONTROLLER against an existing, active contract.

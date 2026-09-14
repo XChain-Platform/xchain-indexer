@@ -16,38 +16,55 @@ const sinon = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Dispenser_Close = require('../../../src/actions/dispenser_close.js');
+const ocg      = require('../../../src/dispenser_ownership_cancel_activation.js');
+const FLAG_DAY = ocg.DISPENSER_OWNERSHIP_CANCEL_ACTIVATION.mainnet; // 1786060800
+const SOURCE   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+const GET_ADDR = 'mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp'; // != SOURCE, and the canceller
+const SWEEP    = 'mzMsvKm5N4vmAWKFDbwjc7hqCkGwANhCwn';
+let indexer, actionsCtx, handler;
+
+function makeDispenser(overrides) {
+    return {
+        ACTION_INDEX: 50,
+        SOURCE,
+        GIVE_TICK: 'TEST',
+        GIVE_REMAINING: '200',
+        GET_ADDRESS: SOURCE,
+        ...overrides,
+    };
+}
+
+function setupDispenserClose() {
+    indexer = createMockIndexer();
+    actionsCtx = {
+        config: indexer.config,
+        util: indexer.util,
+        mapper: indexer.mapper,
+        decoderDb: indexer.decoderDb,
+        indexerDb: indexer.indexerDb,
+        protocolChanges: {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        },
+        processAction: sinon.stub().resolves(),
+    };
+    handler = new Dispenser_Close(actionsCtx);
+    indexer.util.resetLists();
+}
+
+// A GET_ADDRESS-cancelled ownership dispenser: no sweep, canceller = GET_ADDRESS.
+function cancelSetup() {
+    const dispenser = makeDispenser({ GIVE_OWNERSHIP: 1, ACTION_INDEX: 50, SOURCE, GET_ADDRESS: GET_ADDR });
+    indexer.indexerDb.getDispenserInfo.resolves(dispenser);
+    indexer.indexerDb.getSweepDestination.resolves(null);
+    indexer.indexerDb.getDispenserCanceller.resolves(GET_ADDR);
+    indexer.indexerDb.getTokenEscrow = sinon.stub().resolves(50); // matches ACTION_INDEX
+    indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
+    sinon.stub(indexer.util, 'transferTokenOwnership').resolves();
+}
 
 describe('Dispenser_Close action handler @regression @tier2', function () {
-    let indexer, actionsCtx, handler;
-
-    function makeDispenser(overrides) {
-        return {
-            ACTION_INDEX: 50,
-            SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
-            GIVE_TICK: 'TEST',
-            GIVE_REMAINING: '200',
-            GET_ADDRESS: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
-            ...overrides,
-        };
-    }
-
-    beforeEach(function () {
-        indexer = createMockIndexer();
-        actionsCtx = {
-            config: indexer.config,
-            util: indexer.util,
-            mapper: indexer.mapper,
-            decoderDb: indexer.decoderDb,
-            indexerDb: indexer.indexerDb,
-            protocolChanges: {
-                isDefined: sinon.stub().returns(true),
-                isEnabled: sinon.stub().resolves(true),
-            },
-            processAction: sinon.stub().resolves(),
-        };
-        handler = new Dispenser_Close(actionsCtx);
-        indexer.util.resetLists();
-    });
+    beforeEach(setupDispenserClose);
 
     it('does nothing when dispenser is not found', async function () {
         indexer.indexerDb.getDispenserInfo.resolves(null);
@@ -71,7 +88,10 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
         await handler.parse(null, data, null);
         assert.ok(indexer.indexerDb.createDispenserStatus.calledOnce);
     });
+});
 
+describe('Dispenser_Close action handler @regression @tier2', function () {
+    beforeEach(setupDispenserClose);
     it('credits remaining tokens to SOURCE when no sweep destination', async function () {
         const dispenser = makeDispenser({ GIVE_REMAINING: '150' });
         indexer.indexerDb.getDispenserInfo.resolves(dispenser);
@@ -108,9 +128,12 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
         await handler.parse(null, data, null);
         assert.ok(indexer.mapper.createMappings.calledOnce);
     });
+});
 
-    // ─── Ownership dispenser closure paths (lines 77-89) ──────────────────────
+// ─── Ownership dispenser closure paths (lines 77-89) ──────────────────────
 
+describe('Dispenser_Close action handler @regression @tier2', function () {
+    beforeEach(setupDispenserClose);
     it('ownership dispenser: clearTokenEscrow when escrow matches and destination is SOURCE', async function () {
         const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
         const dispenser = makeDispenser({ GIVE_OWNERSHIP: 1, ACTION_INDEX: 50, SOURCE });
@@ -144,7 +167,10 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
         sinon.assert.calledOnce(indexer.util.transferTokenOwnership);
         sinon.assert.notCalled(indexer.indexerDb.clearTokenEscrow);
     });
+});
 
+describe('Dispenser_Close action handler @regression @tier2', function () {
+    beforeEach(setupDispenserClose);
     it('ownership dispenser: no action when escrow does not match (already cleared by DISPENSE)', async function () {
         const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
         const dispenser = makeDispenser({ GIVE_OWNERSHIP: 1, ACTION_INDEX: 50, SOURCE });
@@ -195,32 +221,17 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
         assert.strictEqual(String(escrows[0][1]), '-' + REMAINING, 'escrow return keeps all 18 decimals');
         assert.notStrictEqual(String(escrows[0][1]), String(-Number(REMAINING)), 'not the truncated JS-float negation');
     });
+});
 
-    const ocg      = require('../../../src/dispenser_ownership_cancel_activation.js');
-    const FLAG_DAY = ocg.DISPENSER_OWNERSHIP_CANCEL_ACTIVATION.mainnet; // 1786060800
-
-    // ── 1678: ownership cancel/expire routing flag-day ────────────────────────
-    // Cancelling an OWNERSHIP dispenser must NOT hand the canceller (which may be
-    // GET_ADDRESS) the token's issuer rights. Per DISPENSER.md:122 only a SWEEP
-    // delivers ownership to a non-SOURCE destination; cancel/expire leave it with
-    // SOURCE. Gated (dispenser_ownership_cancel_activation.js) so historical replay
-    // stays byte-identical below the flag-day.
+// ── 1678: ownership cancel/expire routing flag-day ────────────────────────
+// Cancelling an OWNERSHIP dispenser must NOT hand the canceller (which may be
+// GET_ADDRESS) the token's issuer rights. Per DISPENSER.md:122 only a SWEEP
+// delivers ownership to a non-SOURCE destination; cancel/expire leave it with
+// SOURCE. Gated (dispenser_ownership_cancel_activation.js) so historical replay
+// stays byte-identical below the flag-day.
+describe('Dispenser_Close action handler @regression @tier2', function () {
+    beforeEach(setupDispenserClose);
     describe('1678 ownership cancel/expire routing gate @regression @tier1', function () {
-        const SOURCE   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-        const GET_ADDR = 'mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp'; // != SOURCE, and the canceller
-        const SWEEP    = 'mzMsvKm5N4vmAWKFDbwjc7hqCkGwANhCwn';
-
-        // A GET_ADDRESS-cancelled ownership dispenser: no sweep, canceller = GET_ADDRESS.
-        function cancelSetup() {
-            const dispenser = makeDispenser({ GIVE_OWNERSHIP: 1, ACTION_INDEX: 50, SOURCE, GET_ADDRESS: GET_ADDR });
-            indexer.indexerDb.getDispenserInfo.resolves(dispenser);
-            indexer.indexerDb.getSweepDestination.resolves(null);
-            indexer.indexerDb.getDispenserCanceller.resolves(GET_ADDR);
-            indexer.indexerDb.getTokenEscrow = sinon.stub().resolves(50); // matches ACTION_INDEX
-            indexer.indexerDb.clearTokenEscrow = sinon.stub().resolves();
-            sinon.stub(indexer.util, 'transferTokenOwnership').resolves();
-        }
-
         it('mainnet below the flag-day keeps legacy routing (canceller acquires ownership) for byte-identical replay', async function () {
             actionsCtx.config.NETWORK = 'mainnet';
             cancelSetup();
@@ -239,7 +250,12 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
             sinon.assert.notCalled(indexer.util.transferTokenOwnership);
             sinon.assert.calledOnce(indexer.indexerDb.clearTokenEscrow);
         });
+    });
+});
 
+describe('Dispenser_Close action handler @regression @tier2', function () {
+    beforeEach(setupDispenserClose);
+    describe('1678 ownership cancel/expire routing gate @regression @tier1', function () {
         it('at/after the flag-day a SWEEP still transfers ownership to the sweep destination', async function () {
             actionsCtx.config.NETWORK = 'mainnet';
             const dispenser = makeDispenser({ GIVE_OWNERSHIP: 1, ACTION_INDEX: 50, SOURCE, GET_ADDRESS: GET_ADDR });
