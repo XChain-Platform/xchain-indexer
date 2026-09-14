@@ -84,118 +84,114 @@ const LATEST_DOGE_BLOCK = 1000000;
 // A DOGE txid, lowercase hex, matching TXID_RE in anchor_action_query.js.
 const TXID = 'ab'.repeat(32);
 const OTHER_TXID = 'cd'.repeat(32);
-
-describe('getanchorconfirmations anchor-by-txid pagination against a real MariaDB @tier3', function () {
-    this.timeout(60000);
-
-    let admin, pool;
-
-    before(async function () {
-        if (!DB_PASS) this.skip();
-        admin = await mariadb.createConnection({
-            host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS, multipleStatements: true });
-        await admin.query('DROP DATABASE IF EXISTS ' + DB_NAME + '; CREATE DATABASE ' + DB_NAME + ';');
-        await admin.query('USE ' + DB_NAME + '; ' + SCHEMA);
-        pool = mariadb.createPool({
-            host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS,
-            database: DB_NAME, connectionLimit: 5, insertIdAsNumber: true });
+let admin, pool;
+async function setupDatabase() {
+    if (!DB_PASS) this.skip();
+    admin = await mariadb.createConnection({
+        host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS, multipleStatements: true });
+    await admin.query('DROP DATABASE IF EXISTS ' + DB_NAME + '; CREATE DATABASE ' + DB_NAME + ';');
+    await admin.query('USE ' + DB_NAME + '; ' + SCHEMA);
+    pool = mariadb.createPool({
+        host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS,
+        database: DB_NAME, connectionLimit: 5, insertIdAsNumber: true });
+}
+async function closeDatabase() {
+    if (pool) await pool.end();
+    if (admin) await admin.end();
+    pool = admin = null;
+}
+async function conn(fn) {
+    const c = await pool.getConnection();
+    try { return await fn(c); } finally { c.release(); }
+}
+async function reset() {
+    await conn(async c => {
+        for (const t of ['anchor_actions', 'actions', 'transactions', 'index_transactions', 'index_statuses'])
+            await c.query('DELETE FROM ' + t);
     });
-
-    after(async function () {
-        if (pool) await pool.end();
-        if (admin) await admin.end();
+}
+/** Insert (or reuse) a status row and return its id. */
+async function statusId(status) {
+    return conn(async c => {
+        await c.query('INSERT IGNORE INTO index_statuses (status) VALUES (?)', [status]);
+        const rows = await c.query('SELECT id FROM index_statuses WHERE status = ?', [status]);
+        return Number(rows[0].id);
     });
+}
+/** Insert (or reuse) an index_transactions row for `hash` and return its id. */
+async function txHashId(hash) {
+    return conn(async c => {
+        await c.query('INSERT IGNORE INTO index_transactions (hash) VALUES (?)', [hash]);
+        const rows = await c.query('SELECT id FROM index_transactions WHERE hash = ?', [hash]);
+        return Number(rows[0].id);
+    });
+}
+/** Insert a transactions row and return its tx_index. */
+async function insertTransaction(txIndex, blockIndex, hashId) {
+    await conn(c => c.query(
+        `INSERT INTO transactions (tx_index, block_index, tx_hash_id) VALUES (?, ?, ?)`,
+        [txIndex, blockIndex, hashId]));
+    return txIndex;
+}
+/** Insert an actions row (action_id/action_format are arbitrary; not read by this query). */
+async function insertAction(actionIndex, blockIndex, txIndex) {
+    await conn(c => c.query(
+        `INSERT INTO actions (action_index, block_index, tx_index, action_id, action_format)
+         VALUES (?, ?, ?, 1, 1)`,
+        [actionIndex, blockIndex, txIndex]));
+}
+/** Insert an anchor_actions row bound to `actionIndex` (one DOGE ANCHOR action carried by TXID). */
+async function insertAnchor(actionIndex, sectionIndex, statusIdVal, dogeBlock) {
+    await conn(c => c.query(
+        `INSERT INTO anchor_actions
+             (action_index, section_index, version, chain, network, block_index,
+              checkpoint_seq, status_id, block_index_doge)
+         VALUES (?, ?, 0, 'BTC', 'regtest', ?, ?, ?, ?)`,
+        [actionIndex, sectionIndex, actionIndex, actionIndex, statusIdVal, dogeBlock]));
+}
+/** Run the two production SQL statements directly, exactly as api.js's getanchorconfirmations does. */
+async function fetchPage(txid, after) {
+    return conn(c => (after === null)
+        ? c.query(ANCHOR_BY_TXID_SQL, [txid])
+        : c.query(ANCHOR_BY_TXID_AFTER_SQL, [txid, after]));
+}
 
-    beforeEach(reset);
-
-    async function conn(fn) {
-        const c = await pool.getConnection();
-        try { return await fn(c); } finally { c.release(); }
-    }
-
-    async function reset() {
-        await conn(async c => {
-            for (const t of ['anchor_actions', 'actions', 'transactions', 'index_transactions', 'index_statuses'])
-                await c.query('DELETE FROM ' + t);
-        });
-    }
-
-    /** Insert (or reuse) a status row and return its id. */
-    async function statusId(status) {
-        return conn(async c => {
-            await c.query('INSERT IGNORE INTO index_statuses (status) VALUES (?)', [status]);
-            const rows = await c.query('SELECT id FROM index_statuses WHERE status = ?', [status]);
-            return Number(rows[0].id);
-        });
-    }
-
-    /** Insert (or reuse) an index_transactions row for `hash` and return its id. */
-    async function txHashId(hash) {
-        return conn(async c => {
-            await c.query('INSERT IGNORE INTO index_transactions (hash) VALUES (?)', [hash]);
-            const rows = await c.query('SELECT id FROM index_transactions WHERE hash = ?', [hash]);
-            return Number(rows[0].id);
-        });
-    }
-
-    /** Insert a transactions row and return its tx_index. */
-    async function insertTransaction(txIndex, blockIndex, hashId) {
-        await conn(c => c.query(
-            `INSERT INTO transactions (tx_index, block_index, tx_hash_id) VALUES (?, ?, ?)`,
-            [txIndex, blockIndex, hashId]));
-        return txIndex;
-    }
-
-    /** Insert an actions row (action_id/action_format are arbitrary; not read by this query). */
-    async function insertAction(actionIndex, blockIndex, txIndex) {
-        await conn(c => c.query(
-            `INSERT INTO actions (action_index, block_index, tx_index, action_id, action_format)
-             VALUES (?, ?, ?, 1, 1)`,
-            [actionIndex, blockIndex, txIndex]));
-    }
-
-    /** Insert an anchor_actions row bound to `actionIndex` (one DOGE ANCHOR action carried by TXID). */
-    async function insertAnchor(actionIndex, sectionIndex, statusIdVal, dogeBlock) {
-        await conn(c => c.query(
-            `INSERT INTO anchor_actions
-                 (action_index, section_index, version, chain, network, block_index,
-                  checkpoint_seq, status_id, block_index_doge)
-             VALUES (?, ?, 0, 'BTC', 'regtest', ?, ?, ?, ?)`,
-            [actionIndex, sectionIndex, actionIndex, actionIndex, statusIdVal, dogeBlock]));
-    }
-
-    /** Run the two production SQL statements directly, exactly as api.js's getanchorconfirmations does. */
-    async function fetchPage(txid, after) {
-        return conn(c => (after === null)
-            ? c.query(ANCHOR_BY_TXID_SQL, [txid])
-            : c.query(ANCHOR_BY_TXID_AFTER_SQL, [txid, after]));
-    }
-
-    /** Walk every page for `txid` the way anchor_proof_client.proveMined does, returning the
-     *  concatenated `anchors` list plus how many response pages the walk took. */
-    async function walkAllPages(txid) {
-        let after = null;
-        let anchors = [];
-        let pages = 0;
-        for (;;) {
-            const rows = await fetchPage(txid, after);
-            const resp = buildAnchorConfirmationsResponse(CONFIG, LATEST_DOGE_BLOCK, rows);
-            pages++;
-            assert.ok(resp.anchors.length <= ANCHOR_ROW_LIMIT,
+/** Walk every page for `txid` the way anchor_proof_client.proveMined does, returning the
+ *  concatenated `anchors` list plus how many response pages the walk took. */
+async function walkAllPages(txid) {
+    let after = null;
+    let anchors = [];
+    let pages = 0;
+    for (;;) {
+        const rows = await fetchPage(txid, after);
+        const resp = buildAnchorConfirmationsResponse(CONFIG, LATEST_DOGE_BLOCK, rows);
+        pages++;
+        assert.ok(resp.anchors.length <= ANCHOR_ROW_LIMIT,
                 `page ${pages} returned ${resp.anchors.length} anchors, over ANCHOR_ROW_LIMIT (${ANCHOR_ROW_LIMIT})`);
-            anchors = anchors.concat(resp.anchors);
-            if (!resp.truncated) return { anchors, pages };
-            assert.ok(resp.next_after_action_index !== null, 'a truncated page must carry a resume cursor');
-            assert.ok(resp.next_after_action_index > (after === null ? -1 : after),
+        anchors = anchors.concat(resp.anchors);
+        if (!resp.truncated) return { anchors, pages };
+        assert.ok(resp.next_after_action_index !== null, 'a truncated page must carry a resume cursor');
+        assert.ok(resp.next_after_action_index > (after === null ? -1 : after),
                 'the resume cursor must move strictly forward, or the walk never terminates');
-            after = resp.next_after_action_index;
-            // Guard the test itself against an infinite loop if the production code regresses.
-            assert.ok(pages < 100, 'walk did not terminate within 100 pages');
-        }
+        after = resp.next_after_action_index;
+        // Guard the test itself against an infinite loop if the production code regresses.
+        assert.ok(pages < 100, 'walk did not terminate within 100 pages');
     }
+}
 
-    // ── (a) more than ANCHOR_ROW_LIMIT rows, one per action_index ────────────────────
+function defineAnchorSuite(registerTests) {
+    describe('getanchorconfirmations anchor-by-txid pagination against a real MariaDB @tier3', function () {
+        this.timeout(60000);
+        before(setupDatabase);
+        after(closeDatabase);
+        beforeEach(reset);
+        registerTests();
+    });
+}
 
+// ── (a) more than ANCHOR_ROW_LIMIT rows, one per action_index ────────────────────
+
+defineAnchorSuite(function () {
     it('partitions a set of ANCHOR_ROW_LIMIT * 2 + 3 rows across pages with no gap and no overlap', async function () {
         const statusValid = await statusId('valid');
         const hashId = await txHashId(TXID);
@@ -239,10 +235,12 @@ describe('getanchorconfirmations anchor-by-txid pagination against a real MariaD
         const first = anchors.find(a => a.action_index === 1000);
         assert.strictEqual(first.confirmations, LATEST_DOGE_BLOCK - 500000 + 1);
     });
+});
 
-    // ── (b) a bundle (multiple section_index rows on one action_index) straddling the
-    //        LIMIT+1 probe boundary must not be split mid-action ─────────────────────
+// ── (b) a bundle (multiple section_index rows on one action_index) straddling the
+//        LIMIT+1 probe boundary must not be split mid-action ─────────────────────
 
+defineAnchorSuite(function () {
     it('never ends a page inside a bundle: a multi-section action at the boundary moves whole to the next page', async function () {
         const statusValid = await statusId('valid');
         const hashId = await txHashId(TXID);

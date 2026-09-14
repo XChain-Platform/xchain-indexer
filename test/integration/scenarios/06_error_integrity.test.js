@@ -41,43 +41,64 @@ const ADDR3 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi';
 // Base block time and spacing
 const T0  = 1700100000;
 const BLK = 600;
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('06 – Error Handling and Integrity @regression @tier3', function () {
-    this.timeout(60000);
-
-    before(async function () {
-        this.timeout(30000);
-        await createDatabases(__filename);
-        await createDecoderSchema();
+async function runAndGetHashes() {
+    const seeder = new DecoderSeeder(decoderQuery);
+    // Use explicit txHash so the seeded data is byte-for-byte identical
+    // Fee era: the ISSUE below needs gas
+    await seedGas(seeder, { blockIndex: 99, addresses: [ADDR1, ADDR2, ADDR3] });
+    await seeder.seedBlock(100, T0, [
+        { source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|DETX|200000|200|0|Determinism', txHash: 'a'.repeat(56) + '00000001' },
+    ]);
+    await seeder.seedBlock(101, T0 + BLK, [
+        { source: ADDR1, destination: null, amount: '0', data: 'MINT|0|DETX|200', txHash: 'a'.repeat(56) + '00000002' },
+    ]);
+    const indexer = await initIndexer();
+    await processBlocks(indexer);
+    await destroyIndexer(indexer);
+    // Collect hash IDs from the blocks table
+    const rows = await indexerQuery(
+        'SELECT block_index, ledger_hash_id, actions_hash_id FROM blocks ORDER BY block_index ASC'
+    );
+    return rows.map(r => ({
+        block: Number(r.block_index),
+        ledger: r.ledger_hash_id,
+        actions: r.actions_hash_id,
+    }));
+}
+function defineErrorIntegritySuite(registerTests) {
+    describe('06 – Error Handling and Integrity @regression @tier3', function () {
+        this.timeout(60000);
+        before(async function () {
+            this.timeout(30000);
+            await createDatabases(__filename);
+            await createDecoderSchema();
+        });
+        after(async function () {
+            await destroyFileIndexers(__filename);
+            await closeAll();
+        });
+        beforeEach(async function () {
+            this.timeout(15000);
+            await resetDecoderDb();
+            await resetIndexerDb();
+        });
+        registerTests();
     });
-
-    after(async function () {
-        await destroyFileIndexers(__filename);
-        await closeAll();
-    });
-
-    beforeEach(async function () {
-        this.timeout(15000);
-        await resetDecoderDb();
-        await resetIndexerDb();
-    });
-
+}
+defineErrorIntegritySuite(function () {
     // -----------------------------------------------------------------------
     // 1. Empty block: no transactions, block record still created
     // -----------------------------------------------------------------------
     it('1. empty block processes without error and creates a block record', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
-
         await seeder.seedBlock(100, T0, []); // no transactions
-
         const indexer = await initIndexer();
         const processed = await processBlocks(indexer);
         await destroyIndexer(indexer);
-
         assert.strictEqual(processed, 1, 'Should process 1 block');
         await helpers.assertBlockCount(indexerQuery, 1);
 
@@ -91,7 +112,6 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
     // -----------------------------------------------------------------------
     it('2. malformed action data is recorded as an UNKNOWN action', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
-
         await seeder.seedBlock(100, T0, [
             { source: ADDR1, destination: null, amount: '0', data: '!@#$GARBAGE_NOT_AN_ACTION!@#$' },
         ]);
@@ -110,13 +130,14 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
         // The block must also be recorded
         await helpers.assertBlockCount(indexerQuery, 1);
     });
+});
 
+defineErrorIntegritySuite(function () {
     // -----------------------------------------------------------------------
     // 3. Unknown action type: 'FOOBAR|0|param1' processed as UNKNOWN
     // -----------------------------------------------------------------------
     it('3. unknown action type creates a record with invalid status', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
-
         await seeder.seedBlock(100, T0, [
             { source: ADDR1, destination: null, amount: '0', data: 'FOOBAR|0|param1|param2' },
         ]);
@@ -138,9 +159,7 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
     // -----------------------------------------------------------------------
     it('4. sanity check passes after ISSUE + MINT + SEND sequence', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
-
         // Fee era: the ISSUE below needs gas
-
         await seedGas(seeder, { blockIndex: 99, addresses: [ADDR1, ADDR2, ADDR3] });
 
         await seeder.seedBlock(100, T0,           [{ source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|SANE|1000000|500|0|Sanity test' }]);
@@ -161,13 +180,14 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
         // Full ledger sanity
         await helpers.assertSanity(indexerQuery, 'SANE');
     });
+});
 
+defineErrorIntegritySuite(function () {
     // -----------------------------------------------------------------------
     // 5. Block hash integrity: all blocks have non-null hash IDs
     // -----------------------------------------------------------------------
     it('5. all processed blocks have non-null ledger and actions hash IDs', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
-
         // Fee era: the ISSUE below needs gas
 
         await seedGas(seeder, { blockIndex: 99, addresses: [ADDR1, ADDR2, ADDR3] });
@@ -190,34 +210,6 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
     it('6. processing the same data twice produces identical block hashes', async function () {
         this.timeout(90000);
 
-        async function runAndGetHashes() {
-            const seeder = new DecoderSeeder(decoderQuery);
-
-            // Use explicit txHash so the seeded data is byte-for-byte identical
-            // Fee era: the ISSUE below needs gas
-            await seedGas(seeder, { blockIndex: 99, addresses: [ADDR1, ADDR2, ADDR3] });
-            await seeder.seedBlock(100, T0, [
-                { source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|DETX|200000|200|0|Determinism', txHash: 'a'.repeat(56) + '00000001' },
-            ]);
-            await seeder.seedBlock(101, T0 + BLK, [
-                { source: ADDR1, destination: null, amount: '0', data: 'MINT|0|DETX|200', txHash: 'a'.repeat(56) + '00000002' },
-            ]);
-
-            const indexer = await initIndexer();
-            await processBlocks(indexer);
-            await destroyIndexer(indexer);
-
-            // Collect hash IDs from the blocks table
-            const rows = await indexerQuery(
-                'SELECT block_index, ledger_hash_id, actions_hash_id FROM blocks ORDER BY block_index ASC'
-            );
-            return rows.map(r => ({
-                block: Number(r.block_index),
-                ledger: r.ledger_hash_id,
-                actions: r.actions_hash_id,
-            }));
-        }
-
         // First run
         const run1 = await runAndGetHashes();
 
@@ -235,7 +227,9 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
                 `Block ${run1[i].block}: actions_hash_id differs between runs`);
         }
     });
+});
 
+defineErrorIntegritySuite(function () {
     // -----------------------------------------------------------------------
     // 7. Zero-balance cleanup: after full SEND, source balance row deleted
     // -----------------------------------------------------------------------
@@ -265,7 +259,9 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
         await helpers.assertTokenSupply(indexerQuery, 'ZERO', '100');
         await helpers.assertSanity(indexerQuery, 'ZERO');
     });
+});
 
+defineErrorIntegritySuite(function () {
     // -----------------------------------------------------------------------
     // 8. Multiple actions in same block: all processed correctly
     // -----------------------------------------------------------------------
@@ -303,7 +299,9 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
         const actionCount = await helpers.countRows(indexerQuery, 'actions');
         assert.strictEqual(actionCount, 10, 'Should have 10 action records across both blocks');
     });
+});
 
+defineErrorIntegritySuite(function () {
     // -----------------------------------------------------------------------
     // 9. Action index monotonicity: strictly increasing across blocks
     // -----------------------------------------------------------------------
@@ -337,7 +335,9 @@ describe('06 – Error Handling and Integrity @regression @tier3', function () {
                 `action_index not strictly increasing: ${prev} then ${curr}`);
         }
     });
+});
 
+defineErrorIntegritySuite(function () {
     // -----------------------------------------------------------------------
     // 10. Invalid SEND (insufficient balance) is recorded with invalid status
     // -----------------------------------------------------------------------

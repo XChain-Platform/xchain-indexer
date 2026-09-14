@@ -131,94 +131,93 @@ function corpus(coin) {
     ];
 }
 const CORPUS_BLOCKS = 9; // gas preamble + 100..107
-
-describe('14 – Multi-chain full-state parity @regression @tier1', function () {
-    this.timeout(180000);
-
-    const states = {};
-    const chains = {};
-
-    // Normalize the five documented per-chain artifacts (see header) so the
-    // remaining comparison is exhaustive. `stateHashes` is this run's set of
-    // per-block state-hash strings, read from the hash chain before capture;
-    // `gasTxHashes` the synthetic tx hashes the gas preamble injected.
-    function normalizeState(state, coin, specialAddresses, stateHashes, gasTxHashes) {
-        const out = { ...state };
-        // Re-sort each transformed table: captures are sorted canonical
-        // strings, and replacement can change the order.
-        out.transactions = state.transactions.map(s =>
-            s.split('|' + coin + '|').join('|<COIN>|')).sort();
-        out.index_coins = state.index_coins.map(s =>
-            s.replace('"' + coin + '"', '"<COIN>"')).sort();
-        out.bridge_settlements = (state.bridge_settlements || []).map(s =>
-            s.replace('"dest_chain":"' + coin + '"', '"dest_chain":"<COIN>"')).sort();
-        out.index_addresses = state.index_addresses.map(s => {
-            // The injected gas row is owned by the chain's own GAS address, which
-            // the special-address pass below folds into <GAS> on every coin alike.
-            for (const [key, addr] of Object.entries(specialAddresses)) {
-                s = s.replace('"' + addr + '"', '"<' + key + '>"');
-            }
-            return s;
-        }).sort();
-        // Artifact 4: blocks.state_hash_id points at an index_transactions row whose
-        // `hash` IS the state hash, so the coin-bound digest surfaces here as a differing
-        // row. Normalize the VALUE and keep the row's id, so the interning POSITION is
-        // still compared byte-wise (that is the part that must match across coins) while
-        // the coin-bound digest itself is not. Only state hashes are rewritten: the
-        // ledger/actions/contract hash rows in the same table stay raw.
-        // Artifact 5 rides the same rule: the gas preamble's synthetic tx hash carries
-        // the coin literal, so its VALUE is normalized and its position kept.
-        out.index_transactions = state.index_transactions.map(s => {
-            for (const h of stateHashes) {
-                if (s.includes('"' + h + '"')) return s.split('"' + h + '"').join('"<STATE_HASH>"');
-            }
-            for (const h of gasTxHashes) {
-                if (s.includes('"' + h + '"')) return s.split('"' + h + '"').join('"<GAS_TX_HASH>"');
-            }
-            return s;
-        }).sort();
-        return out;
-    }
-
-    // The synthetic tx hashes the bridge-shaped gas preamble injected on this run.
-    async function injectedGasTxHashes() {
-        const rows = await indexerQuery(
-            'SELECT hash FROM index_transactions WHERE hash LIKE ?', [BRIDGE_TX_PREFIX + '%']);
-        return rows.map(r => String(r.hash));
-    }
-
-    before(async function () {
-        await createDatabases(__filename);
-        await createDecoderSchema();
-
-        for (const coin of COINS) {
-            // xchainFeeMode pins every coin to the xchain-balance fee path (see header).
-            await withCoin(coin, 'regtest', async ({ seeder, indexer }) => {
-                // Artifact 5 (header): the bridge in-leg shape on every chain, so the
-                // corpus starts from an identical ledger on all three.
-                await seedGas(seeder, { addresses: [ADDR1, ADDR2, ADDR3], system: true });
-                for (const b of corpus(coin)) await seeder.seedBlock(b.block, b.time, b.txs);
-                const processed = await processBlocks(indexer);
-                assert.strictEqual(processed, CORPUS_BLOCKS,
-                    `${coin}: expected ${CORPUS_BLOCKS} blocks, processed ${processed}`);
-                await assertStateInvariants(indexerQuery);
-                // Read the hash chain FIRST: its resolved state-hash strings are what
-                // normalizeState needs to find the interned state-hash rows.
-                chains[coin] = await readHashChain(indexerQuery);
-                states[coin] = normalizeState(
-                    await captureDbState(indexerQuery), coin,
-                    (indexer.config && indexer.config.ADDRESS) || {},
-                    new Set(chains[coin].map(b => b.state).filter(Boolean)),
-                    await injectedGasTxHashes());
-            }, { xchainFeeMode: true });
+const states = {};
+const chains = {};
+// Normalize the five documented per-chain artifacts (see header) so the
+// remaining comparison is exhaustive. `stateHashes` is this run's set of
+// per-block state-hash strings, read from the hash chain before capture;
+// `gasTxHashes` the synthetic tx hashes the gas preamble injected.
+function normalizeState(state, coin, specialAddresses, stateHashes, gasTxHashes) {
+    const out = { ...state };
+    // Re-sort each transformed table: captures are sorted canonical
+    // strings, and replacement can change the order.
+    out.transactions = state.transactions.map(s =>
+        s.split('|' + coin + '|').join('|<COIN>|')).sort();
+    out.index_coins = state.index_coins.map(s =>
+        s.replace('"' + coin + '"', '"<COIN>"')).sort();
+    out.bridge_settlements = (state.bridge_settlements || []).map(s =>
+        s.replace('"dest_chain":"' + coin + '"', '"dest_chain":"<COIN>"')).sort();
+    out.index_addresses = state.index_addresses.map(s => {
+        // The injected gas row is owned by the chain's own GAS address, which
+        // the special-address pass below folds into <GAS> on every coin alike.
+        for (const [key, addr] of Object.entries(specialAddresses)) {
+            s = s.replace('"' + addr + '"', '"<' + key + '>"');
         }
+        return s;
+    }).sort();
+    // Artifact 4: blocks.state_hash_id points at an index_transactions row whose
+    // `hash` IS the state hash, so the coin-bound digest surfaces here as a differing
+    // row. Normalize the VALUE and keep the row's id, so the interning POSITION is
+    // still compared byte-wise (that is the part that must match across coins) while
+    // the coin-bound digest itself is not. Only state hashes are rewritten: the
+    // ledger/actions/contract hash rows in the same table stay raw.
+    // Artifact 5 rides the same rule: the gas preamble's synthetic tx hash carries
+    // the coin literal, so its VALUE is normalized and its position kept.
+    out.index_transactions = state.index_transactions.map(s => {
+        for (const h of stateHashes) {
+            if (s.includes('"' + h + '"')) return s.split('"' + h + '"').join('"<STATE_HASH>"');
+        }
+        for (const h of gasTxHashes) {
+            if (s.includes('"' + h + '"')) return s.split('"' + h + '"').join('"<GAS_TX_HASH>"');
+        }
+        return s;
+    }).sort();
+    return out;
+}
+// The synthetic tx hashes the bridge-shaped gas preamble injected on this run.
+async function injectedGasTxHashes() {
+    const rows = await indexerQuery(
+        'SELECT hash FROM index_transactions WHERE hash LIKE ?', [BRIDGE_TX_PREFIX + '%']);
+    return rows.map(r => String(r.hash));
+}
+async function prepareParityState() {
+    await createDatabases(__filename);
+    await createDecoderSchema();
+    for (const coin of COINS) {
+        // xchainFeeMode pins every coin to the xchain-balance fee path (see header).
+        await withCoin(coin, 'regtest', async ({ seeder, indexer }) => {
+            // Artifact 5 (header): the bridge in-leg shape on every chain, so the
+            // corpus starts from an identical ledger on all three.
+            await seedGas(seeder, { addresses: [ADDR1, ADDR2, ADDR3], system: true });
+            for (const b of corpus(coin)) await seeder.seedBlock(b.block, b.time, b.txs);
+            const processed = await processBlocks(indexer);
+            assert.strictEqual(processed, CORPUS_BLOCKS,
+                    `${coin}: expected ${CORPUS_BLOCKS} blocks, processed ${processed}`);
+            await assertStateInvariants(indexerQuery);
+            // Read the hash chain FIRST: its resolved state-hash strings are what
+            // normalizeState needs to find the interned state-hash rows.
+            chains[coin] = await readHashChain(indexerQuery);
+            states[coin] = normalizeState(
+                await captureDbState(indexerQuery), coin,
+                (indexer.config && indexer.config.ADDRESS) || {},
+                new Set(chains[coin].map(b => b.state).filter(Boolean)),
+                await injectedGasTxHashes());
+        }, { xchainFeeMode: true });
+    }
+}
+async function cleanParityState() {
+    await destroyFileIndexers(__filename);
+    await closeAll();
+}
+function defineParitySuite(registerTests) {
+    describe('14 – Multi-chain full-state parity @regression @tier1', function () {
+        this.timeout(180000);
+        before(prepareParityState);
+        after(cleanParityState);
+        registerTests();
     });
-
-    after(async function () {
-        await destroyFileIndexers(__filename);
-        await closeAll();
-    });
-
+}
+defineParitySuite(function () {
     it('the corpus exercised matches, expiries and escrows on every chain', function () {
         for (const coin of COINS) {
             const actions = states[coin].index_actions.join(' ');
@@ -264,11 +263,12 @@ describe('14 – Multi-chain full-state parity @regression @tier1', function () 
         assertHashChainsEqual(chains.BTC, chains.LTC,  'BTC', 'LTC',  { skipStateHash: true });
         assertHashChainsEqual(chains.BTC, chains.DOGE, 'BTC', 'DOGE', { skipStateHash: true });
     });
-
-    // The state hash is not compared across coins (above), so pin it as a per-chain
-    // property instead: every block must still commit a well-formed state hash on every
-    // chain. Without this a regression that stopped writing state_hash entirely (or wrote
-    // it NULL) would pass silently now that the cross-coin value assertion is gone.
+});
+// The state hash is not compared across coins (above), so pin it as a per-chain
+// property instead: every block must still commit a well-formed state hash on every
+// chain. Without this a regression that stopped writing state_hash entirely (or wrote
+// it NULL) would pass silently now that the cross-coin value assertion is gone.
+defineParitySuite(function () {
     it('every block still commits a well-formed state hash on every chain', function () {
         for (const coin of COINS) {
             assert.ok(chains[coin].length > 0, `${coin}: no blocks in the hash chain`);

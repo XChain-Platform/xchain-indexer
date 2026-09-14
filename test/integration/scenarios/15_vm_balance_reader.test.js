@@ -50,29 +50,29 @@ const NOBODY = 'mvQLUzhdrR1gGQmHLkMy62Y86o6ahgRo8h'; // never holds anything
 const T0  = 1700000000;
 const BLK = 600;
 const HIGH_ACTION = 999999999; // action_index ceiling: `< ?` includes every prior action
-
-describe('VM ledger-read loader: buildVmBalancesAndTokenInfo @regression @tier2', function () {
-    this.timeout(240000); // cold-DB schema creation (verifyTables builds ~60 tables) needs headroom
-
-    before(async function () {
-        this.timeout(30000);
-        process.env.INDEXER_COIN    = 'BTC';
-        process.env.INDEXER_NETWORK = 'regtest';
-        await createDatabases(__filename);
-        await createDecoderSchema();
+function defineVmBalanceSuite(registerTests) {
+    describe('VM ledger-read loader: buildVmBalancesAndTokenInfo @regression @tier2', function () {
+        this.timeout(240000); // cold-DB schema creation (verifyTables builds ~60 tables) needs headroom
+        before(async function () {
+            this.timeout(30000);
+            process.env.INDEXER_COIN    = 'BTC';
+            process.env.INDEXER_NETWORK = 'regtest';
+            await createDatabases(__filename);
+            await createDecoderSchema();
+        });
+        after(async function () {
+            await destroyFileIndexers(__filename);
+            await closeAll();
+        });
+        beforeEach(async function () {
+            this.timeout(15000);
+            await resetDecoderDb();
+            await resetIndexerDb();
+        });
+        registerTests();
     });
-
-    after(async function () {
-        await destroyFileIndexers(__filename);
-        await closeAll();
-    });
-
-    beforeEach(async function () {
-        this.timeout(15000);
-        await resetDecoderDb();
-        await resetIndexerDb();
-    });
-
+}
+defineVmBalanceSuite(function () {
     it('re-keys to nested symbol-keyed balances + loads tokenInfo, bounded by action_index', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
 

@@ -87,12 +87,10 @@ function baseCorpus() {
     ];
 }
 const BASE_BLOCKS = 9; // gas preamble + 100..107
-
 async function seedBaseCorpus(seeder) {
     await seedGas(seeder, { blockIndex: 99, addresses: [ADDR1, ADDR2, ADDR3] });
     for (const b of baseCorpus()) await seeder.seedBlock(b.block, b.time, b.txs);
 }
-
 /** Delete decoder blocks >= blockIndex (same pattern as scenario 05). */
 async function deleteDecoderBlocksFrom(blockIndex) {
     await decoderQuery(
@@ -102,7 +100,6 @@ async function deleteDecoderBlocksFrom(blockIndex) {
     await decoderQuery('DELETE FROM transactions WHERE block_index >= ?', [blockIndex]);
     await decoderQuery('DELETE FROM blocks WHERE block_index >= ?', [blockIndex]);
 }
-
 /** Run a fresh node B over the current decoder DB and return its hash chain. */
 async function runNodeB() {
     const nodeB = await initIndexer({ indexerName: indexerDbNameB() });
@@ -113,32 +110,32 @@ async function runNodeB() {
         await destroyIndexer(nodeB);
     }
 }
-
-describe('13 – Cross-node equivalence @regression @tier1', function () {
-    this.timeout(180000);
-
-    before(async function () {
-        process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
-        process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
-        await createDatabases(__filename);
-        await createDecoderSchema();
+function defineCrossNodeSuite(registerTests) {
+    describe('13 – Cross-node equivalence @regression @tier1', function () {
+        this.timeout(180000);
+        before(async function () {
+            process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
+            process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
+            await createDatabases(__filename);
+            await createDecoderSchema();
+        });
+        after(async function () {
+            await destroyFileIndexers(__filename);
+            await closeAll();
+        });
+        beforeEach(async function () {
+            this.timeout(60000);
+            await resetDecoderDb();
+            await resetIndexerDb();
+            await resetIndexerDbB();
+        });
+        registerTests();
     });
-
-    after(async function () {
-        await destroyFileIndexers(__filename);
-        await closeAll();
-    });
-
-    beforeEach(async function () {
-        this.timeout(60000);
-        await resetDecoderDb();
-        await resetIndexerDb();
-        await resetIndexerDbB();
-    });
-
-    // -----------------------------------------------------------------------
-    // 1. Two independent nodes over identical history -> byte-identical DBs
-    // -----------------------------------------------------------------------
+}
+// -----------------------------------------------------------------------
+// 1. Two independent nodes over identical history -> byte-identical DBs
+// -----------------------------------------------------------------------
+defineCrossNodeSuite(function () {
     it('1. two nodes over the same decoder DB are byte-identical (ids included)', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
         await seedBaseCorpus(seeder);
@@ -156,10 +153,11 @@ describe('13 – Cross-node equivalence @regression @tier1', function () {
         await assertStateInvariants(indexerQuery);
         await assertStateInvariants(indexerBQuery);
     });
-
-    // -----------------------------------------------------------------------
-    // 2. Live-follower vs catch-up node: processing SCHEDULE is irrelevant
-    // -----------------------------------------------------------------------
+});
+// -----------------------------------------------------------------------
+// 2. Live-follower vs catch-up node: processing SCHEDULE is irrelevant
+// -----------------------------------------------------------------------
+defineCrossNodeSuite(function () {
     it('2. a block-by-block follower equals a single catch-up pass', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
 
@@ -184,10 +182,11 @@ describe('13 – Cross-node equivalence @regression @tier1', function () {
         await assertIndexerDbsEquivalent(indexerQuery, indexerBQuery,
             { mode: 'strict', labelA: 'follower', labelB: 'catch-up' });
     });
-
-    // -----------------------------------------------------------------------
-    // 3. Reorg survivor vs fresh resync: replacement reuses known entities
-    // -----------------------------------------------------------------------
+});
+// -----------------------------------------------------------------------
+// 3. Reorg survivor vs fresh resync: replacement reuses known entities
+// -----------------------------------------------------------------------
+defineCrossNodeSuite(function () {
     it('3. a reorg survivor equals a fresh re-parse (replacement reuses known entities)', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
         await seedBaseCorpus(seeder);
@@ -221,30 +220,31 @@ describe('13 – Cross-node equivalence @regression @tier1', function () {
         await assertStateInvariants(indexerQuery);
         await assertStateInvariants(indexerBQuery);
     });
-
-    // -----------------------------------------------------------------------
-    // 4. Reorg survivor vs fresh resync: ORPHANS introduced novel entities
-    //
-    // The orphaned block ISSUEs a token (ORPH) that the surviving chain never
-    // has. The survivor's index_tickers retains the ORPH row as residue; the
-    // post-reorg history then ISSUEs another NEW token (POST). If dedup-id
-    // assignment is not history-independent, POST gets a different tick_id on
-    // the survivor than on a fresh resync, the ids are folded into the ledger
-    // hash, and the two nodes FORK. A resynced validator could then never
-    // rejoin, and ANCHOR's recover-from-chain-parse promise breaks.
-    //
-    // This is the seam that most directly detects silent consensus forking:
-    // it asserts cross-node ledger-hash equivalence after a reorg whose
-    // orphaned branch minted novel entities. The fork it guards against: if
-    // getBlockHashes folded raw index_* ids into the hash while rollback left
-    // index_* rows behind, a survivor would keep an orphan's index_* row, the
-    // next new entity would take the id after it, and a fresh resync would
-    // give that same entity a lower id, so the two nodes would hash different
-    // ledgers from the same chain. getBlockHashes hashes the RESOLVED
-    // address/ticker strings and rollback.js block-scope-deletes
-    // index_addresses/index_tickers, which keeps the two nodes equal; this
-    // test holds them to it.
-    // -----------------------------------------------------------------------
+});
+// -----------------------------------------------------------------------
+// 4. Reorg survivor vs fresh resync: ORPHANS introduced novel entities
+//
+// The orphaned block ISSUEs a token (ORPH) that the surviving chain never
+// has. The survivor's index_tickers retains the ORPH row as residue; the
+// post-reorg history then ISSUEs another NEW token (POST). If dedup-id
+// assignment is not history-independent, POST gets a different tick_id on
+// the survivor than on a fresh resync, the ids are folded into the ledger
+// hash, and the two nodes FORK. A resynced validator could then never
+// rejoin, and ANCHOR's recover-from-chain-parse promise breaks.
+//
+// This is the seam that most directly detects silent consensus forking:
+// it asserts cross-node ledger-hash equivalence after a reorg whose
+// orphaned branch minted novel entities. The fork it guards against: if
+// getBlockHashes folded raw index_* ids into the hash while rollback left
+// index_* rows behind, a survivor would keep an orphan's index_* row, the
+// next new entity would take the id after it, and a fresh resync would
+// give that same entity a lower id, so the two nodes would hash different
+// ledgers from the same chain. getBlockHashes hashes the RESOLVED
+// address/ticker strings and rollback.js block-scope-deletes
+// index_addresses/index_tickers, which keeps the two nodes equal; this
+// test holds them to it.
+// -----------------------------------------------------------------------
+defineCrossNodeSuite(function () {
     it('4. survivor equals resync even when ORPHANED blocks introduced novel entities', async function () {
         const seeder = new DecoderSeeder(decoderQuery);
         await seedBaseCorpus(seeder);
