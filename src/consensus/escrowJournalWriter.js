@@ -330,7 +330,7 @@ async function priorTotals(db, keys){
 
 // Append one row per key whose total actually CHANGED. Runs on the SOURCE inside
 // the block transaction, before the commitment hook, so the derivation in
-// escrowLeafSubtree.js sees this block's rows.
+// escrow_leaf_subtree.js sees this block's rows.
 //
 // `opts.full` makes this the ARMING PASS: it attributes the ENTIRE escrows
 // ledger (a from-genesis replay) instead of this block's rows, and change-logs

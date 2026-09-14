@@ -540,13 +540,13 @@ class Dispense {
             // otherwise the whole payment exactly as before. That makes the flag the gate
             // for the record shape too: below it, or on a dispense that settled nothing,
             // nothing is attributed and the legacy figure stands. The column is not a hash
-            // preimage anywhere (tableLifecycle.js classes `dispenses` as a derived
+            // preimage anywhere (table_lifecycle.js classes `dispenses` as a derived
             // projection, and getBlockHashes covers credits/debits/escrows/actions/
             // contracts only), so this is a record correction rather than a consensus
             // change. It is gated regardless: replicas mirror these rows verbatim and no
             // hash would catch a fleet writing two different values, and get_amount is the
             // coin leg of the XCHAIN/BTC price derivation over realized dispense fills
-            // (xchainPriceQuery.js DISPENSE_FILLS_SQL), which is built to feed native fee
+            // (xchain_price_query.js DISPENSE_FILLS_SQL), which is built to feed native fee
             // bands. An ungated record change is a silent divergence there.
             dispenses.push({
                 DISPENSER_ACTION_INDEX: action_index,

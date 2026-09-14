@@ -487,7 +487,7 @@ async function getNetBalance(db, address, tick){
 // to the recipient, so SUM(escrows) per (address, tick) does NOT net per key
 // and only the per-tick GLOBAL sum nets to zero. The journal writer
 // (escrowJournalWriter.js) re-keys those rows to their locker at write time;
-// escrowLeafSubtree.js derives the leaves from the journal, applied inside
+// escrow_leaf_subtree.js derives the leaves from the journal, applied inside
 // balances_root when ESCROW_LOCKED_LEAF_ACTIVATION arms a height (and into
 // the shadow column while ESCROW_LOCKED_LEAF_SHADOW does). Until then
 // balances_root commits ONLY the net-spendable leaf, byte-identical to v1.

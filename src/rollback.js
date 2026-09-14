@@ -102,7 +102,7 @@ class Rollback {
         // is the only reading a re-derivation can make without inventing a height.
 
         // Generic rollback table lists, generated from the table-lifecycle
-        // registry (src/hub/tableLifecycle.js): dataTables are deleted by
+        // registry (src/hub/table_lifecycle.js): dataTables are deleted by
         // action_index, blockTables by block_index, indexTables are the two
         // wire-^<id> consensus lookups deleted by their own block_index. Per-
         // table rationale (why a table is generic vs recomputed vs bespoke vs

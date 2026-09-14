@@ -1,0 +1,29 @@
+{
+  "note": "The declared delta between the suite title map as pinned at AT1 and the map after the snake_case rename of the indexer's consensus twins (src/consensus/contractStateSubtree.js, escrowLeafSubtree.js, xchainPrice.js, xchainPriceQuery.js and src/hub/tableLifecycle.js to their snake_case names, each byte-identical to its old blob). It follows m4-title-delta.json and is read the same way: every difference the compare reports is listed here or in an earlier milestone delta, so a difference that is not listed is a regression rather than a restructure. The rename moves no collected test FILE, so renames stays empty and the compare's --rename-map is still m4's. The one title below moves because rollback_coverage.test.js builds its reciprocal twin loop title from the indexer-side path.",
+  "milestone": "M5",
+  "rows": [],
+  "date": "2026-09-14",
+  "renames": {},
+  "compare_totals": {
+    "differences_against_the_cf776e32_title_map": 8,
+    "declared_here": 8,
+    "undeclared": 0,
+    "how_counted": "node bin/suite-title-map.js --out, taken once at indexer cf776e32 and once on the renamed tree in the same checkout with the same siblings, then compared map to map with suite-title-map.js compare(): one dropped and one added title in test/unit/rollback_coverage.test.js under each of the four scripts that collect it, and no other difference."
+  },
+  "no_test_was_lost": "The dropped title and its added twin differ only in the indexer-side path the loop entry names (hub/tableLifecycle.js to hub/table_lifecycle.js); the test body still byte-compares the same indexer registry against xchain-sync's copy.",
+  "titleDeltas": [
+    {
+      "rows": [],
+      "file": "test/unit/rollback_coverage.test.js",
+      "scripts": ["test", "test:integration", "test:regression", "test:regression:full"],
+      "differences": 8,
+      "dropped": [
+        "Rollback coverage guard @regression indexer<->sync twin byte-identity (reciprocal guard) hub/tableLifecycle.js is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)"
+      ],
+      "added": [
+        "Rollback coverage guard @regression indexer<->sync twin byte-identity (reciprocal guard) hub/table_lifecycle.js is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)"
+      ],
+      "why": "the reciprocal twin loop is generated from its [indexer path, sync path] pairs and the title carries the indexer path, so renaming src/hub/tableLifecycle.js to src/hub/table_lifecycle.js renames this one title. m3-title-delta.json declared the hub/tableLifecycle.js spelling this replaces."
+    }
+  ]
+}
