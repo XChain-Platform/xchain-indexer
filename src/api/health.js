@@ -32,6 +32,7 @@ const { computeConsensusRulesDigest } = require('../consensus_rules_digest');
 const { barrierHoldMs, barrierCeilingExceeded } = require('../XChainIndexer');
 // Field groups assembled in the parts under ./health/; each is placed at the
 // position its fields always held, so the payload keeps its key order.
+const { syncFields }                  = require('./health/sync_fields');
 const { stallFields }                 = require('./health/stall_fields');
 const { advanceFields }               = require('./health/advance_fields');
 const { hubFields }                   = require('./health/hub_fields');
@@ -68,32 +69,15 @@ function inFlightBlockIndex(db){
 }
 
 async function buildHealthResponse({ indexer, indexerRunning, indexerError, lastIndexedBlock, inFlightBlock, now, reorgStats }){
-    let decoderDbCircuit = indexer.decoderDb ? indexer.decoderDb.circuitState : null;
-    let indexerDbCircuit = indexer.indexerDb ? indexer.indexerDb.circuitState : null;
-    let circuitOpen = decoderDbCircuit === 'open' || indexerDbCircuit === 'open';
-
     // The one awaited read (the hub push queue's stats) still happens BEFORE the
     // payload is assembled, so every field below is taken from a single view of
     // the indexer rather than from either side of a yield.
     let hub = await hubFields(indexer, now);
 
     return {
-        status:           (indexerRunning && !circuitOpen) ? "healthy" : "unhealthy",
-        running:          indexerRunning,
-        synced:           indexer.isSynced(),
-        // COMMITTED height only: read through apiView(), the same
-        // committed-only pooled connection every federation query guard uses, so
-        // a client may poll health and immediately query AT this height. The
-        // block being parsed right now is reported separately as inFlightBlock;
-        // it is not indexed yet and a reorg may mean it never is.
-        lastIndexedBlock: lastIndexedBlock,
-        inFlightBlock:    (inFlightBlock === undefined) ? null : inFlightBlock,
-        decoderBlock:     indexer.lastDecoderBlock,
-        lag:              (indexer.lastDecoderBlock != null && lastIndexedBlock != null)
-                            ? indexer.lastDecoderBlock - lastIndexedBlock
-                            : null,
-        decoderDbCircuit: decoderDbCircuit,
-        indexerDbCircuit: indexerDbCircuit,
+        // Serving verdict, committed position and the two database circuit
+        // breakers: status through indexerDbCircuit.
+        ...syncFields(indexer, { indexerRunning, lastIndexedBlock, inFlightBlock }),
         // Why this node is not advancing, and whether it is still on the fleet's
         // rule set: stallReason, decoderReorgHalted, train_activation.
         ...stallFields(indexer),
