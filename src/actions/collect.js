@@ -33,6 +33,10 @@ const { getLogger } = require('../observability/index.js');
  *
  ********************************************************************/
 
+// The handler's phases, grouped by concern and installed onto Collect.prototype below
+const validatePart = require('./collect/validate.js');
+const settlePart   = require('./collect/settle.js');
+
 class Collect {
 
     // Handle constructing a class instance
@@ -62,75 +66,12 @@ class Collect {
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        /*****************************************************************
-         * Chain Restriction
-         ****************************************************************/
+        // Chain restriction and stake existence (collect/validate.js)
+        error = await this.validateCollector(data, error);
 
-        // COLLECT is BTC-only
-        if(!error && data['COIN'] !== 'BTC')
-            error = 'invalid: ACTION (BTC only)';
-
-        /*****************************************************************
-         * Stake Existence Validations
-         ****************************************************************/
-
-        // Verify SOURCE has an active stake (any tier, gated by activation delay)
-        if(!error){
-            let activeStake = await this.indexerDb.getActiveStakeBySource(data['SOURCE'], data['BLOCK_INDEX']);
-            if(!activeStake)
-                error = 'invalid: no active stake';
-        }
-
-        // Verify SOURCE is not sleeping
-        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
-            error = 'invalid: SOURCE (sleeping)';
-
-        /*****************************************************************
-         * Reward Calculation
-         ****************************************************************/
-
-        // Get unclaimed reward total for SOURCE, scoped to rewards earned at or
-        // before this COLLECT's block. The scope makes the claim replayable: on a
-        // reindex (or ANCHOR full-parse recovery, which bulk-restores pushed
-        // reward rows) this COLLECT must see exactly the rewards that were
-        // visible when it confirmed, not rewards earned later (CONSENSUS).
-        let rewardAmount = '0';
-        if(!error){
-            rewardAmount = await this.indexerDb.getUnclaimedRewardTotal(data['SOURCE'], data['BLOCK_INDEX']);
-            if(this.util.bclte(rewardAmount, '0'))
-                error = 'invalid: no unclaimed rewards';
-        }
-
-        // Optional partial AMOUNT, gated by PARTIAL_UNSTAKE_COLLECT. A
-        // present-but-full amount falls through untouched so the resulting state is
-        // byte-identical to the absent form. Over-ask and malformed amounts REJECT
-        // (never clamp). Below the flag-day the field is never read, preserving the
-        // legacy ignore-extra-params behavior exactly.
-        if(!error && params.length > 1 && await this.actions.protocolChanges.isEnabled('PARTIAL_UNSTAKE_COLLECT', data['BLOCK_INDEX'])){
-            let amountStr = String(params[1]);
-            if(!/^[0-9]+(\.[0-9]{1,8})?$/.test(amountStr))
-                error = 'invalid: AMOUNT (format)';
-            else if(!this.util.bcgt(amountStr, '0'))
-                error = 'invalid: AMOUNT (must be greater than 0)';
-            else if(this.util.bcgt(amountStr, rewardAmount))
-                error = 'invalid: AMOUNT (exceeds unclaimed rewards)';
-            else if(this.util.bclt(amountStr, rewardAmount))
-                rewardAmount = this.util.bcformat(amountStr, 8);
-        }
-
-        // Verify the reward pool can cover this claim. Rewards are paid by debiting the
-        // pre-funded REWARD address (never minted), so a claim that would overdraw the pool
-        // is rejected here. Because this sets `error` before STATUS is computed below, the
-        // claim is recorded as invalid and getUnclaimedRewardTotal() keeps it unclaimed.
-        // The validator can COLLECT again once the pool is topped up. The balance is read at
-        // (BLOCK_INDEX, ACTION_INDEX) so accept/reject is identical across all validators.
-        if(!error){
-            let rewardPool = this.config['ADDRESS']['REWARD'];
-            let tokenInfo  = await this.indexerDb.getTokenInfo(this.config['GAS'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
-            let poolBal    = await this.indexerDb.getAddressBalances(rewardPool, null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
-            if(!tokenInfo || !this.util.hasBalance(poolBal, tokenInfo['TICK_ID'], rewardAmount))
-                error = 'invalid: insufficient reward pool';
-        }
+        // Reward calculation, the optional partial AMOUNT and the pool's cover (collect/validate.js)
+        let rewardAmount;
+        ({ error, rewardAmount } = await this.validateRewardClaim(params, data, error));
 
         data['AMOUNT'] = rewardAmount;
 
@@ -144,37 +85,19 @@ class Collect {
         // Create record in reward_claims table
         await this.indexerDb.createRewardClaim(data);
 
-        // Store the SOURCE, GAS tick, and reward pool in addresses list
-        let gas        = this.config['GAS'];
-        let rewardPool = this.config['ADDRESS']['REWARD'];
-        this.util.addAddressTicker(data['SOURCE'], gas);
-        this.util.addAddressTicker(rewardPool, gas);
-
-        // Array of credits and debits
-        let credits = [],
-            debits  = [];
-
-        // Pay the reward by debiting the pre-funded pool and crediting SOURCE
-        // (no minting; total XCHAIN supply is unchanged by COLLECT)
-        if(status === 'valid'){
-            debits.push([gas, rewardAmount, rewardPool]);
-            credits.push([gas, rewardAmount, data['SOURCE']]);
-        }
-
-        // Process any transaction ledger changes (credits / debits)
-        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
-
-        // Get a list of tickers & addresses
-        let tickers   = this.util.getTickersList(),
-            addresses = Object.keys(this.util.getAddressesList());
-
-        // Update address balances and token supply
-        await this.indexerDb.updateBalances(addresses);
-        await this.indexerDb.updateTokens(tickers);
-
-        // Create action mappings
-        await this.mapper.createMappings(data);
+        // Pay the reward out of the pool and post the ledger changes (collect/settle.js)
+        await this.payReward(data, status, rewardAmount);
     }
+}
+
+// Install the phase methods from collect/ NON-ENUMERABLE, the shape the class body they came
+// from produced: parse() reaches them as this.<method>, suites can stub them through
+// Collect.prototype, and for-in over a handler stays empty. Same install as db/index.js uses
+// for its query mixins.
+for(const part of [validatePart, settlePart]){
+    const descriptors = Object.getOwnPropertyDescriptors(part);
+    for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;
+    Object.defineProperties(Collect.prototype, descriptors);
 }
 
 module.exports = Collect;
