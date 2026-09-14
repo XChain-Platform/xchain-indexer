@@ -76,20 +76,7 @@ class Bet_Expire {
             debits  = [],
             escrows = [];
 
-        // Refund every open bet in full (the normative bet_status='open' predicate;
-        // rows another terminal path already moved are never selected). Terminal
-        // credits are unconditional: they bypass sleeping and token-list checks,
-        // nothing may wedge exit or escrow strands
-        let openBets = await this.indexerDb.getOpenBetsByFeed(feedInfo['ACTION_INDEX']);
-        for(let betRow of openBets){
-            // Release escrow and credit the stake back to the ORIGINAL bettor
-            // (BigNumber-space negation, not JS unary minus)
-            escrows.push([feedInfo['TICK'], this.util.bcsub(0, betRow['AMOUNT'], 64), betRow['SOURCE']]);
-            credits.push([feedInfo['TICK'], betRow['AMOUNT'], betRow['SOURCE']]);
-            this.util.addAddressTicker(betRow['SOURCE'], feedInfo['TICK']);
-            await this.indexerDb.setBetSettled(betRow['ACTION_INDEX'], 'refunded', data['BLOCK_INDEX']);
-            await this.indexerDb.createBetStatus(data['ACTION_INDEX'], betRow['ACTION_INDEX'], 'refunded');
-        }
+        await this.refundOpenBets(data, feedInfo, credits, escrows);
 
         // Feed terminal flip: current-status column + terminal_block stamp + history
         // row (caused by this BET_EXPIRE's minted action row)
@@ -109,6 +96,23 @@ class Bet_Expire {
 
         // Create action mappings
         await this.mapper.createMappings(data);
+    }
+
+    // Refund every open bet in full (the normative bet_status='open' predicate;
+    // rows another terminal path already moved are never selected). Terminal
+    // credits are unconditional: they bypass sleeping and token-list checks,
+    // nothing may wedge exit or escrow strands
+    async refundOpenBets(data, feedInfo, credits, escrows){
+        let openBets = await this.indexerDb.getOpenBetsByFeed(feedInfo['ACTION_INDEX']);
+        for(let betRow of openBets){
+            // Release escrow and credit the stake back to the ORIGINAL bettor
+            // (BigNumber-space negation, not JS unary minus)
+            escrows.push([feedInfo['TICK'], this.util.bcsub(0, betRow['AMOUNT'], 64), betRow['SOURCE']]);
+            credits.push([feedInfo['TICK'], betRow['AMOUNT'], betRow['SOURCE']]);
+            this.util.addAddressTicker(betRow['SOURCE'], feedInfo['TICK']);
+            await this.indexerDb.setBetSettled(betRow['ACTION_INDEX'], 'refunded', data['BLOCK_INDEX']);
+            await this.indexerDb.createBetStatus(data['ACTION_INDEX'], betRow['ACTION_INDEX'], 'refunded');
+        }
     }
 }
 

@@ -68,48 +68,28 @@ class Coinpay_Expire {
         // offerer = the party whose GIVE_TICK is null/empty) is preserved byte-for-byte; at/after
         // it the split keys on which side actually GIVES native coin, reading BOTH orders, and
         // refuses to settle an ambiguous shape (which order_match no longer creates once active).
-        let sellerOrder, coinOrder;
-        if(await this.actions.protocolChanges.isEnabled('COINPAY_NATIVE_RECIPROCITY', data['BLOCK_INDEX'])){
-            let giveIsCoin = this.util.isNull(giveOrderInfo['GIVE_TICK']) || giveOrderInfo['GIVE_TICK'] == this.config['COIN'];
-            let getIsCoin  = this.util.isNull(getOrderInfo['GIVE_TICK'])  || getOrderInfo['GIVE_TICK']  == this.config['COIN'];
-            if(giveIsCoin && !getIsCoin){
-                coinOrder   = giveOrderInfo;
-                sellerOrder = getOrderInfo;
-            } else if(getIsCoin && !giveIsCoin){
-                coinOrder   = getOrderInfo;
-                sellerOrder = giveOrderInfo;
-            } else {
-                getLogger().info("\t COINPAY_EXPIRE (skip): ambiguous native roles for match " + obligationInfo['ACTION_INDEX']);
-                return;
-            }
-        } else if(this.util.isNull(giveOrderInfo['GIVE_TICK']) || giveOrderInfo['GIVE_TICK'] == this.config['COIN']){
-            // giveOrder is offering native coin
-            coinOrder   = giveOrderInfo;
-            sellerOrder = getOrderInfo;
-        } else {
-            // getOrder is offering native coin
-            coinOrder   = getOrderInfo;
-            sellerOrder = giveOrderInfo;
-        }
+        let roles = await this.resolveOrderRoles(data, obligationInfo, giveOrderInfo, getOrderInfo);
+        if(!roles)
+            return;
+        let sellerOrder = roles.sellerOrder;
 
-        // Determine the SELLER's escrowed token leg for this match. The obligation's
-        // COIN_AMOUNT is the BUYER's native-coin leg (a different asset), so releasing
-        // it as a token quantity over/under-releases the seller's escrow. Derive the
-        // token leg from order_matches exactly as the fulfill path (coinpay.js) does:
-        // if the seller is the original (get) order the token side is give_amount, else
-        // it is get_amount. Gated by COINPAY_EXPIRE_TOKEN_AMOUNT so the corrected release
-        // switches over at a coordinated flag-day; below it the legacy COIN_AMOUNT is
-        // preserved byte-for-byte for from-genesis replay and heterogeneous-fleet safety.
-        let useTokenAmount = await this.actions.protocolChanges.isEnabled('COINPAY_EXPIRE_TOKEN_AMOUNT', data['BLOCK_INDEX']);
-        let releaseAmount  = obligationInfo['COIN_AMOUNT'];
-        if(useTokenAmount){
-            let matchQuery = await this.indexerDb.getOrderMatchAmounts(obligationInfo['ACTION_INDEX']);
-            if(matchQuery){
-                releaseAmount = (sellerOrder['ACTION_INDEX'] == matchQuery.get_action_index)
-                    ? matchQuery.give_amount
-                    : matchQuery.get_amount;
-            }
-        }
+        let releaseAmount = await this.deriveReleaseAmount(data, obligationInfo, sellerOrder);
+
+        let sweepDest = await this.openExpireAction(data, obligationInfo, sellerOrder);
+
+        // Array of credits, debits, and escrows
+        let credits = [],
+            debits  = [],
+            escrows = [];
+
+        await this.releaseSellerEscrow(data, sellerOrder, sweepDest, releaseAmount, credits, escrows);
+
+        await this.settleExpire(data, obligationInfo, sellerOrder, sweepDest, credits, debits, escrows);
+    }
+
+    // Mint this COINPAY_EXPIRE's own action row and resolve where residual escrow is routed:
+    // a sweep DESTINATION when a SWEEP put the seller's order into 'cancelling', else null.
+    async openExpireAction(data, obligationInfo, sellerOrder){
 
         // Add addresses to the addresses list
         this.util.addAddressTicker(sellerOrder['SOURCE'], sellerOrder['GIVE_TICK']);
@@ -128,24 +108,74 @@ class Coinpay_Expire {
         // Print status message
         getLogger().info("\t COINPAY_EXPIRE : " + this.config['COIN'] + ':' + obligationInfo['ACTION_INDEX'] + ' : ' + data['STATUS']);
 
-        // Array of credits, debits, and escrows
-        let credits = [],
-            debits  = [],
-            escrows = [];
-
         // If the seller's order was put into 'cancelling' by a SWEEP with ORDERS=1,
         // residual escrow / ownership must route to the sweep's DESTINATION rather
         // than back to the seller. Lookup is a no-op (returns null) for non-sweep
         // cancellations and for orders never sweep-cancelled.
-        let sweepDest = (sellerOrder['ORDER_STATUS'] == 'cancelling')
+        return (sellerOrder['ORDER_STATUS'] == 'cancelling')
             ? await this.indexerDb.getOrderSweepDestination(sellerOrder['ACTION_INDEX'])
             : null;
+    }
 
-        // Release escrowed tokens back to the seller's order, or to the sweep
-        // DESTINATION when applicable. For balance orders this restores the seller's
-        // GIVE_REMAINING via a ledger credit. For ownership orders there's nothing
-        // in the balance ledger: either release the escrow gate back to the seller,
-        // or atomically transfer ownership to the sweep DESTINATION.
+    // Decide which order is the token seller and which offers native coin, or null when the
+    // match's shape is ambiguous and the expiry must be skipped.
+    async resolveOrderRoles(data, obligationInfo, giveOrderInfo, getOrderInfo){
+        let sellerOrder, coinOrder;
+        if(await this.actions.protocolChanges.isEnabled('COINPAY_NATIVE_RECIPROCITY', data['BLOCK_INDEX'])){
+            let giveIsCoin = this.util.isNull(giveOrderInfo['GIVE_TICK']) || giveOrderInfo['GIVE_TICK'] == this.config['COIN'];
+            let getIsCoin  = this.util.isNull(getOrderInfo['GIVE_TICK'])  || getOrderInfo['GIVE_TICK']  == this.config['COIN'];
+            if(giveIsCoin && !getIsCoin){
+                coinOrder   = giveOrderInfo;
+                sellerOrder = getOrderInfo;
+            } else if(getIsCoin && !giveIsCoin){
+                coinOrder   = getOrderInfo;
+                sellerOrder = giveOrderInfo;
+            } else {
+                getLogger().info("\t COINPAY_EXPIRE (skip): ambiguous native roles for match " + obligationInfo['ACTION_INDEX']);
+                return null;
+            }
+        } else if(this.util.isNull(giveOrderInfo['GIVE_TICK']) || giveOrderInfo['GIVE_TICK'] == this.config['COIN']){
+            // giveOrder is offering native coin
+            coinOrder   = giveOrderInfo;
+            sellerOrder = getOrderInfo;
+        } else {
+            // getOrder is offering native coin
+            coinOrder   = getOrderInfo;
+            sellerOrder = giveOrderInfo;
+        }
+
+        return { sellerOrder, coinOrder };
+    }
+
+    // Determine the SELLER's escrowed token leg for this match. The obligation's
+    // COIN_AMOUNT is the BUYER's native-coin leg (a different asset), so releasing
+    // it as a token quantity over/under-releases the seller's escrow. Derive the
+    // token leg from order_matches exactly as the fulfill path (coinpay.js) does:
+    // if the seller is the original (get) order the token side is give_amount, else
+    // it is get_amount. Gated by COINPAY_EXPIRE_TOKEN_AMOUNT so the corrected release
+    // switches over at a coordinated flag-day; below it the legacy COIN_AMOUNT is
+    // preserved byte-for-byte for from-genesis replay and heterogeneous-fleet safety.
+    async deriveReleaseAmount(data, obligationInfo, sellerOrder){
+        let useTokenAmount = await this.actions.protocolChanges.isEnabled('COINPAY_EXPIRE_TOKEN_AMOUNT', data['BLOCK_INDEX']);
+        let releaseAmount  = obligationInfo['COIN_AMOUNT'];
+        if(useTokenAmount){
+            let matchQuery = await this.indexerDb.getOrderMatchAmounts(obligationInfo['ACTION_INDEX']);
+            if(matchQuery){
+                releaseAmount = (sellerOrder['ACTION_INDEX'] == matchQuery.get_action_index)
+                    ? matchQuery.give_amount
+                    : matchQuery.get_amount;
+            }
+        }
+
+        return releaseAmount;
+    }
+
+    // Release escrowed tokens back to the seller's order, or to the sweep
+    // DESTINATION when applicable. For balance orders this restores the seller's
+    // GIVE_REMAINING via a ledger credit. For ownership orders there's nothing
+    // in the balance ledger: either release the escrow gate back to the seller,
+    // or atomically transfer ownership to the sweep DESTINATION.
+    async releaseSellerEscrow(data, sellerOrder, sweepDest, releaseAmount, credits, escrows){
         if(Number(sellerOrder['GIVE_OWNERSHIP']||0) == 1){
             if(sweepDest){
                 await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, sellerOrder['GIVE_TICK'], sellerOrder['SOURCE'], sweepDest);
@@ -159,6 +189,11 @@ class Coinpay_Expire {
             escrows.push([sellerOrder['GIVE_TICK'], this.util.bcsub(0, releaseAmount, 64), sellerOrder['SOURCE']]);
             credits.push([sellerOrder['GIVE_TICK'],  releaseAmount, refundTo]);
         }
+    }
+
+    // Record the expiry, move the match and obligation to 'expired', finalize the seller's
+    // order when nothing is still pending on it, and apply the resulting ledger changes
+    async settleExpire(data, obligationInfo, sellerOrder, sweepDest, credits, debits, escrows){
 
         // Create record in the coinpay_expires table
         await this.indexerDb.createCoinpayExpire(data['ACTION_INDEX'], obligationInfo['ACTION_INDEX'], data['STATUS']);
