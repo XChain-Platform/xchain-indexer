@@ -31,10 +31,16 @@
  *
  ********************************************************************/
 
-const { rethrowIfInfraFault } = require('../consensus/fault_guard.js');
-const { buildInjectedExecContext, SYNTH_EXEC_TX_HASH, SYNTH_TAGS } = require('../consensus/exec_context.js');
-
 const { getLogger } = require('../observability/index.js');
+
+// The phases of this handler, in ./vote/. Each part is called with the handler as its
+// receiver (fn.call(this, ...)), so the parts read this.indexerDb / this.util /
+// this.actions unchanged. What the rest of the indexer and the suites reach through the
+// handler (parse, the per-version phases, settleDeposit, processDueCallbacks and
+// injectCallbackExecute) stays a real method on Vote.prototype.
+const validate        = require('./vote/validate.js');
+const bindingCallback = require('./vote/binding_callback.js');
+const settle          = require('./vote/settle.js');
 class Vote {
 
     // Handle constructing a class instance
@@ -85,343 +91,33 @@ class Vote {
         if(this.util.isNull(data['TALLY_MODE']))     data['TALLY_MODE']     = 'approval';
         if(this.util.isNull(data['WEIGHT_MODE']))    data['WEIGHT_MODE']    = 'balance';
 
-        let block_index  = parseInt(data['BLOCK_INDEX']);
-        let action_index = data['ACTION_INDEX'];
+        error = await validate.validateCreateSource.call(this, data, error);
+        error = validate.validateCreatePollRules.call(this, data, error);
+        error = validate.validateCreateThresholds.call(this, data, error);
 
-        // Reject a sleeping SOURCE (v0 moves GAS into escrow while the address is
-        // supposedly frozen). Flag-day gated: see VOTE_RESPECTS_SLEEP in
-        // protocol_changes.js for why this validity tightening is gated.
-        if(!error && await this.actions.protocolChanges.isEnabled('VOTE_RESPECTS_SLEEP', data['BLOCK_INDEX'])
-                  && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
-            error = 'invalid: SOURCE (sleeping)';
+        let depositCheck = await validate.validateCreateDeposit.call(this, data, error);
+        error = depositCheck.error;
 
-        // TICK must be a real, issued token (the electorate + weight basis)
-        let tokenInfo = null;
-        if(!error){
-            if(this.util.isNull(data['TICK']))
-                error = 'invalid: TICK (missing)';
-            else {
-                tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], block_index, action_index);
-                if(this.util.isNull(tokenInfo))
-                    error = 'invalid: TICK (unknown)';
-            }
-        }
+        let callbackCheck = await bindingCallback.validateCreateCallback.call(this, data, error, depositCheck.deposit);
+        error = callbackCheck.error;
 
-        // Anti-spam: the creator must hold a non-zero balance of TICK at creation.
-        // Stops an address with no stake from spamming polls / faking governance.
-        if(!error){
-            let tick_id  = await this.indexerDb.createTicker(data['TICK']);
-            let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, block_index, action_index);
-            let bal      = balances[tick_id];
-            if(this.util.isNull(bal) || !this.util.bcgt(bal, 0))
-                error = 'invalid: SOURCE (must hold TICK to create poll)';
-        }
-
-        // END_BLOCK must be a future block
-        if(!error){
-            if(!this.util.isNumeric(data['END_BLOCK']) || parseInt(data['END_BLOCK']) <= block_index)
-                error = 'invalid: END_BLOCK (must be a future block)';
-        }
-
-        // OPTIONS: comma-delimited list, at least two non-empty entries
-        let optionCount = 0;
-        if(!error){
-            let opts = String(data['OPTIONS']).split(',').map(o => o.trim()).filter(o => o.length > 0);
-            optionCount = opts.length;
-            if(optionCount < 2)
-                error = 'invalid: OPTIONS (need at least 2)';
-        }
-
-        // MAX_SELECTIONS: positive integer, no more than the option count
-        if(!error){
-            let ms = Number(data['MAX_SELECTIONS']);
-            if(!Number.isInteger(ms) || ms < 1 || ms > optionCount)
-                error = 'invalid: MAX_SELECTIONS (range)';
-        }
-
-        // TALLY_MODE: approval (full weight per option) or split (divided by shares)
-        if(!error && !['approval','split'].includes(data['TALLY_MODE']))
-            error = 'invalid: TALLY_MODE (value)';
-
-        // WEIGHT_MODE: balance (close holdings), flat (one-address-one-vote),
-        // quadratic (sqrt of close balance, anti-whale), time_weighted (windowed
-        // average holdings). 'stake' remains reserved for a later phase.
-        if(!error && !['balance','flat','quadratic','time_weighted'].includes(data['WEIGHT_MODE']))
-            error = 'invalid: WEIGHT_MODE (value)';
-
-        // quadratic REQUIRES a dust floor: sqrt(a)+sqrt(b) > sqrt(a+b), so without
-        // a per-voter floor a holder could split across addresses to inflate total
-        // quadratic weight. MIN_VOTE_BALANCE raises the cost of that sybil split.
-        // Sybil-resistant, not sybil-proof (documented).
-        if(!error && data['WEIGHT_MODE'] === 'quadratic'){
-            if(this.util.isNull(data['MIN_VOTE_BALANCE']) || !this.util.bcgt(data['MIN_VOTE_BALANCE'], 0))
-                error = 'invalid: quadratic WEIGHT_MODE requires MIN_VOTE_BALANCE > 0';
-        }
-
-        // QUORUM (optional): fraction of supply, 0 < q <= 1
-        if(!error && !this.util.isNull(data['QUORUM'])){
-            let q = Number(data['QUORUM']);
-            if(!this.util.isNumeric(data['QUORUM']) || q <= 0 || q > 1)
-                error = 'invalid: QUORUM (fraction 0-1)';
-        }
-
-        // MIN_VOTERS (optional): non-negative integer
-        if(!error && !this.util.isNull(data['MIN_VOTERS'])){
-            let mv = Number(data['MIN_VOTERS']);
-            if(!Number.isInteger(mv) || mv < 0)
-                error = 'invalid: MIN_VOTERS (non-negative integer)';
-        }
-
-        // MIN_VOTE_BALANCE (optional): non-negative amount
-        if(!error && !this.util.isNull(data['MIN_VOTE_BALANCE'])){
-            if(!this.util.isNumeric(data['MIN_VOTE_BALANCE']) || this.util.bclt(data['MIN_VOTE_BALANCE'], 0))
-                error = 'invalid: MIN_VOTE_BALANCE (non-negative amount)';
-        }
-
-        // DECIDE_THRESHOLD (optional, acted on in Phase 2): fraction of supply, 0 < d <= 1
-        if(!error && !this.util.isNull(data['DECIDE_THRESHOLD'])){
-            let d = Number(data['DECIDE_THRESHOLD']);
-            if(!this.util.isNumeric(data['DECIDE_THRESHOLD']) || d <= 0 || d > 1)
-                error = 'invalid: DECIDE_THRESHOLD (fraction 0-1)';
-        }
-
-        // QUESTION (optional) shares the MAX_MESSAGE_LENGTH ceiling with every other free-text
-        // field, because all of them ride the one compiled action string.
-        if(!error && !this.util.isNull(data['QUESTION']) && String(data['QUESTION']).length > this.config['MAX_MESSAGE_LENGTH'])
-            error = 'invalid: QUESTION (length)';
-
-        // DEPOSIT (optional anti-spam escrow): GAS the creator locks at
-        // creation, refunded on 'finalized' or forfeited to the DONATE1 treasury on
-        // 'failed_quorum' (released by VOTE v2). Normalize to a numeric string ('0'
-        // = none) and enforce the POLL_DEPOSIT_MIN floor. The actual escrow happens
-        // after the poll row is written, only when valid.
-        let gas        = this.config['GAS'];
-        let depositMin = this.config['POLL_DEPOSIT_MIN'] || '0';
-        let deposit    = this.util.isNull(data['DEPOSIT']) ? '0' : String(data['DEPOSIT']).trim();
-        if(!error){
-            if(!this.util.isNumeric(deposit) || this.util.bclt(deposit, 0))
-                error = 'invalid: DEPOSIT (non-negative amount)';
-            else if(this.util.bclt(deposit, depositMin))
-                error = 'invalid: DEPOSIT (below POLL_DEPOSIT_MIN ' + depositMin + ')';
-        }
-        // Funding check: SOURCE must hold the DEPOSIT in GAS, read at
-        // (block, action) so accept/reject is identical across validators.
-        if(!error && this.util.bcgt(deposit, 0)){
-            let gasInfo  = await this.indexerDb.getTokenInfo(gas, block_index, action_index);
-            let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, block_index, action_index);
-            if(!gasInfo || !this.util.hasBalance(balances, gasInfo['TICK_ID'], deposit))
-                error = 'invalid: insufficient funds (DEPOSIT)';
-        }
-        // Carry the normalized deposit so createPoll stores a clean '0' when absent.
-        data['DEPOSIT'] = deposit;
-
-        // Binding poll / callback-on-finalize (optional): a poll may name
-        // a contract method that v2 finalization invokes with the result. Blank
-        // CALLBACK_CONTRACT = a signaling poll. When set, the method + firing rule are
-        // validated here; GAS_ESCROW (optional XCHAIN) is escrowed below alongside the
-        // deposit. Mirrors ATTEST's callback_method / gas_escrow.
-        let binding   = !error && !this.util.isNull(data['CALLBACK_CONTRACT']) && String(data['CALLBACK_CONTRACT']).trim() !== '';
-        let gasEscrow = '0';
-        if(!error && binding){
-            // CALLBACK_CONTRACT names a contract by its numeric index, not an address, and
-            // the contract has to exist now: a poll cannot bind to something deployed later.
-            if(!this.util.isNumeric(data['CALLBACK_CONTRACT'])){
-                error = 'invalid: CALLBACK_CONTRACT (format)';
-            } else {
-                let contract = await this.indexerDb.getContract(parseInt(data['CALLBACK_CONTRACT']));
-                if(this.util.isNull(contract))
-                    error = 'invalid: CALLBACK_CONTRACT (unknown contract)';
-            }
-            // CALLBACK_METHOD required and bounded (matches ATTEST's 64-char cap).
-            if(!error && (this.util.isNull(data['CALLBACK_METHOD']) || String(data['CALLBACK_METHOD']).trim() === ''))
-                error = 'invalid: CALLBACK_METHOD (required for a binding poll)';
-            // The 64-character cap: CALLBACK_METHOD is stored on the poll row and replayed
-            // verbatim into the injected EXECUTE, so it has to fit that action's method field.
-            if(!error && String(data['CALLBACK_METHOD']).length > 64)
-                error = 'invalid: CALLBACK_METHOD (length)';
-            // CALLBACK_ON: default 'pass' (fire only on a finalized win); 'always'
-            // fires on every finalization including failed_quorum.
-            if(this.util.isNull(data['CALLBACK_ON'])) data['CALLBACK_ON'] = 'pass';
-            // Only the two documented triggers are accepted. An unknown value would have to
-            // be given a meaning at finalize time, and two nodes could choose differently.
-            if(!error && !['pass','always'].includes(data['CALLBACK_ON']))
-                error = 'invalid: CALLBACK_ON (pass|always)';
-            // At/after the VOTE_BINDING_MINIMUMS flag-day a binding poll must set its
-            // own turnout floor (closes a low-turnout-hijack class of guard). QUORUM and
-            // MIN_VOTERS >= 1 are required so a callback that can move
-            // contract-held value can never finalize off a handful of ballots
-            // by omission; their magnitudes stay the creator's policy call.
-            // Signaling polls are unaffected. See protocol_changes.js for why
-            // the requirement is gated (validity tightening).
-            if(!error && await this.actions.protocolChanges.isEnabled('VOTE_BINDING_MINIMUMS', data['BLOCK_INDEX'])){
-                if(this.util.isNull(data['QUORUM']))
-                    error = 'invalid: QUORUM (required for a binding poll)';
-                else if(this.util.isNull(data['MIN_VOTERS']) || Number(data['MIN_VOTERS']) < 1)
-                    error = 'invalid: MIN_VOTERS (>= 1 required for a binding poll)';
-            }
-            // CALLBACK_DELAY_BLOCKS (optional timelock). Honored only
-            // at/after the VOTE_CALLBACK_TIMELOCK flag-day; below it the field
-            // is nulled so acceptance and callback timing match a legacy node,
-            // whose parser drops params beyond its format. See
-            // protocol_changes.js for the fork rationale.
-            if(await this.actions.protocolChanges.isEnabled('VOTE_CALLBACK_TIMELOCK', data['BLOCK_INDEX'])){
-                if(!error && !this.util.isNull(data['CALLBACK_DELAY_BLOCKS'])){
-                    let cbd = Number(data['CALLBACK_DELAY_BLOCKS']);
-                    // The delay is added to the resolve block to stamp callback_due_block, so a
-                    // fractional or negative value would put the due block in the past or off-grid.
-                    if(!Number.isInteger(cbd) || cbd < 0)
-                        error = 'invalid: CALLBACK_DELAY_BLOCKS (non-negative integer)';
-                }
-            } else {
-                data['CALLBACK_DELAY_BLOCKS'] = null;
-            }
-            // CALLBACK_PARAMS (optional): must be a JSON array if present.
-            if(!error && !this.util.isNull(data['CALLBACK_PARAMS']) && String(data['CALLBACK_PARAMS']).trim() !== ''){
-                let ok = false;
-                try { ok = Array.isArray(JSON.parse(data['CALLBACK_PARAMS'])); } catch(e){ ok = false; }
-                // CALLBACK_PARAMS is handed to the contract as positional EXECUTE arguments, so it
-                // must be an array; an object or a bare scalar has no positional reading.
-                if(!ok) error = 'invalid: CALLBACK_PARAMS (must be a JSON array)';
-            }
-            // GAS_ESCROW (optional): XCHAIN the creator locks to back the callback
-            // EXECUTE. Refunded to the creator at finalization (precise gas-cost
-            // metering from the escrow is deferred, mirroring ATTEST gas_escrow).
-            gasEscrow = this.util.isNull(data['GAS_ESCROW']) ? '0' : String(data['GAS_ESCROW']).trim();
-            // Verify GAS_ESCROW is a non-negative amount
-            if(!error && (!this.util.isNumeric(gasEscrow) || this.util.bclt(gasEscrow, 0)))
-                error = 'invalid: GAS_ESCROW (non-negative amount)';
-            // Funding check covers DEPOSIT + GAS_ESCROW together (both in GAS).
-            if(!error && this.util.bcgt(gasEscrow, 0)){
-                let need     = this.util.bcadd(deposit, gasEscrow, 8);
-                let gasInfo  = await this.indexerDb.getTokenInfo(gas, block_index, action_index);
-                let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, block_index, action_index);
-                // GAS_ESCROW is locked at creation, so this funding read is taken at
-                // (block, action) for the same reason the DEPOSIT read above is: two validators
-                // reading at different points would disagree on accept/reject.
-                if(!gasInfo || !this.util.hasBalance(balances, gasInfo['TICK_ID'], need))
-                    error = 'invalid: insufficient funds (GAS_ESCROW)';
-            }
-        }
         // A non-binding poll must not carry callback fields with content.
-        if(!error && !binding && !this.util.isNull(data['GAS_ESCROW']) && this.util.bcgt(String(data['GAS_ESCROW']).trim() || '0', 0))
+        if(!error && !callbackCheck.binding && !this.util.isNull(data['GAS_ESCROW']) && this.util.bcgt(String(data['GAS_ESCROW']).trim() || '0', 0))
             error = 'invalid: GAS_ESCROW (set without CALLBACK_CONTRACT)';
-        data['GAS_ESCROW']       = binding ? gasEscrow : '0';
-        data['IS_BINDING']       = binding;
+        data['GAS_ESCROW']       = callbackCheck.binding ? callbackCheck.gasEscrow : '0';
+        data['IS_BINDING']       = callbackCheck.binding;
 
-        // Determine final status
-        let status = (error) ? error : 'valid';
-        data['STATUS'] = status;
-
-        getLogger().info("\t VOTE create : " + data['TICK'] + ' : ' + data['STATUS']);
-
-        // Persist the poll only when valid; an invalid create writes no poll row
-        // (the action itself is still recorded in `actions` with its status)
-        if(!error)
-            await this.indexerDb.createPoll(data);
-
-        // Escrow the creator's locked GAS (deposit + any binding-poll gas_escrow)
-        // at this v0 action_index; released by VOTE v2 finalize. One combined escrow
-        // row (both are GAS from SOURCE); v2 routes the credits per kind. Same generic
-        // ledger path as ATTEST's fee escrow, so rollback deletes by action_index.
-        let lockTotal = this.util.bcadd(deposit, data['GAS_ESCROW'], 8);
-        if(!error && this.util.bcgt(lockTotal, 0)){
-            this.util.addAddressTicker(data['SOURCE'], gas);
-            let debits  = [[gas, lockTotal, data['SOURCE']]];
-            let escrows = [[gas, lockTotal, data['SOURCE']]];
-            await this.util.processTransactionLedgerChanges(this.indexerDb, data, [], debits, escrows);
-            let tickers   = this.util.getTickersList(),
-                addresses = Object.keys(this.util.getAddressesList());
-            await this.indexerDb.updateBalances(addresses);
-            await this.indexerDb.updateTokens(tickers);
-        }
-
-        // Store the SOURCE/TICK in addresses+tickers list, create action mappings
-        this.util.addAddressTicker(data['SOURCE'], data['TICK']);
-        await this.mapper.createMappings(data);
+        await settle.settleCreatePoll.call(this, data, error, depositCheck.deposit);
     }
 
     // VOTE v1 - cast ballot
     async parseBallot(data, error){
-        let block_index  = parseInt(data['BLOCK_INDEX']);
-        let action_index = data['ACTION_INDEX'];
-        let selections   = [];
+        let pollCheck = await validate.validateBallotPoll.call(this, data, error);
+        error = pollCheck.error;
 
-        // Reject a sleeping SOURCE (a frozen address must not cast or mutate
-        // ballots). Flag-day gated: see VOTE_RESPECTS_SLEEP in protocol_changes.js.
-        if(!error && await this.actions.protocolChanges.isEnabled('VOTE_RESPECTS_SLEEP', data['BLOCK_INDEX'])
-                  && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
-            error = 'invalid: SOURCE (sleeping)';
-
-        // POLL_REF must reference an existing poll
-        let poll = null;
-        if(!error){
-            // POLL_REF is a poll's own action_index, so a ballot for a poll that does not exist
-            // is rejected rather than parked: there is nothing to attach the vote to.
-            if(!this.util.isNumeric(data['POLL_REF']))
-                error = 'invalid: POLL_REF (format)';
-            else {
-                poll = await this.indexerDb.getPoll(parseInt(data['POLL_REF']));
-                if(this.util.isNull(poll))
-                    error = 'invalid: POLL_REF (unknown poll)';
-            }
-        }
-
-        // Voting window: ballots accepted while cast_block <= end_block
-        if(!error && block_index > Number(poll.end_block))
-            error = 'invalid: poll closed';
-
-        // Hold-to-vote gate (cast time, protocol level): voter must hold TICK now
-        if(!error){
-            let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, block_index, action_index);
-            let bal      = balances[poll.tick_id];
-            if(this.util.isNull(bal) || !this.util.bcgt(bal, 0))
-                error = 'invalid: SOURCE (must hold TICK to vote)';
-        }
-
-        // Parse and validate the BALLOT (one or more OPTION or OPTION:SHARE entries)
-        if(!error){
-            let options     = JSON.parse(poll.options || '[]');
-            let optionCount = options.length;
-            let tally_mode  = poll.tally_mode || 'approval';
-            let entries     = String(data['BALLOT']).split(',').map(e => e.trim()).filter(e => e.length > 0);
-            let seen        = {};
-
-            if(entries.length === 0)
-                error = 'invalid: BALLOT (empty)';
-            // Verify the ballot does not select more options than MAX_SELECTIONS allows
-            if(!error && entries.length > Number(poll.max_selections))
-                error = 'invalid: BALLOT (exceeds MAX_SELECTIONS)';
-
-            for(let i = 0; !error && i < entries.length; i++){
-                let parts  = entries[i].split(':');
-                let choice = Number(parts[0]);
-                let share  = (parts.length > 1) ? String(parts[1]).trim() : '1';
-                // Option indexes are positions in the poll's stored OPTIONS array, so anything
-                // outside it would tally a vote for an option the poll never offered.
-                if(!Number.isInteger(choice) || choice < 0 || choice >= optionCount){
-                    error = 'invalid: BALLOT (option index out of range)';
-                    break;
-                }
-                // One entry per option: a repeated option would count the voter's weight twice
-                // in approval mode and let a split ballot exceed its own share total.
-                if(seen[choice]){
-                    error = 'invalid: BALLOT (duplicate option)';
-                    break;
-                }
-                seen[choice] = true;
-                // In split mode a positive share is required; in approval mode the
-                // share is ignored (stored as '1')
-                if(tally_mode === 'split'){
-                    if(!this.util.isNumeric(share) || !this.util.bcgt(share, 0)){
-                        error = 'invalid: BALLOT (share must be > 0 in split mode)';
-                        break;
-                    }
-                } else {
-                    share = '1';
-                }
-                selections.push({ choice: choice, share: share });
-            }
-        }
+        let ballotCheck = validate.parseBallotSelections.call(this, pollCheck.poll, data, error);
+        error = ballotCheck.error;
+        let selections = ballotCheck.selections;
 
         // MEMO (optional): bounded length
         if(!error && !this.util.isNull(data['MEMO']) && String(data['MEMO']).length > this.config['MAX_MESSAGE_LENGTH'])
@@ -482,30 +178,7 @@ class Vote {
         if(result)
             await this.settleDeposit(poll, data, result.poll_status);
 
-        // Binding poll: fire the contract callback when its CALLBACK_ON
-        // gate is met - 'always' on any finalization, 'pass' only on a finalized win.
-        // A failed callback does NOT un-finalize the poll (see injectCallbackExecute).
-        if(result && !this.util.isNull(poll.callback_contract_index)){
-            let fires = (poll.callback_on === 'always') ||
-                        (result.poll_status === 'finalized' && !this.util.isNull(result.winning_option));
-            if(fires){
-                // Timelock: a poll created with CALLBACK_DELAY_BLOCKS > 0
-                // (only storable at/after the VOTE_CALLBACK_TIMELOCK flag-day)
-                // freezes its tally and settles its deposit now, but the callback
-                // EXECUTE is deferred to this block + delay; the per-block sweep
-                // (processDueCallbacks) fires it there. State-driven, so replay is
-                // deterministic without re-evaluating the gate here.
-                let cbDelay = Number(poll.callback_delay_blocks || 0);
-                if(Number.isInteger(cbDelay) && cbDelay > 0){
-                    let dueBlock = parseInt(data['BLOCK_INDEX']) + cbDelay;
-                    await this.indexerDb.setPollCallbackDue(poll.action_index, dueBlock);
-                    getLogger().info("\t VOTE callback : poll " + poll.action_index + ' timelocked, due at block ' + dueBlock);
-                } else {
-                    let cbIndex = await this.injectCallbackExecute(poll, data, result);
-                    if(cbIndex) await this.indexerDb.setPollCallbackIndex(poll.action_index, cbIndex);
-                }
-            }
-        }
+        await bindingCallback.fireBindingCallback.call(this, poll, data, result);
 
         let summary = result
             ? (result.poll_status + (result.fail_reason ? '/' + result.fail_reason : '') +
@@ -518,52 +191,11 @@ class Vote {
         await this.mapper.createMappings(data);
     }
 
-    // Release a poll's creation deposit at finalization. Refunds the escrowed GAS to
-    // the creator on a real outcome ('finalized'), or forfeits it to the DONATE1
-    // treasury when the poll dies for lack of participation ('failed_quorum'). A
-    // negative escrow row releases the hold (the order_expire / attest_settle
-    // idiom); the matching credit routes the funds. No-op when the poll carried no
-    // deposit. deposit_resolved records the outcome so a reprocessed finalize
-    // cannot double-release.
+    // Release a poll's creation deposit at finalization (body, and the refund or forfeit
+    // rule, in ./vote/settle.js). It stays a method because the finalize path reaches it
+    // through the handler.
     async settleDeposit(poll, data, terminalStatus){
-        let deposit   = String((poll && poll.deposit_amount) || '0');
-        let gasEscrow = String((poll && poll.gas_escrow) || '0');
-        let held      = this.util.bcadd(deposit, gasEscrow, 8); // combined v0 escrow
-        if(!this.util.bcgt(held, '0')) return;
-        if(!this.util.isNull(poll.deposit_resolved)) return; // already released
-
-        let creator = await this.indexerDb.getAddressById(poll.deposit_address_id);
-        if(this.util.isNull(creator)){
-            getLogger().warn('\t VOTE escrow : missing creator for poll ' + poll.action_index + ', escrow left held');
-            return;
-        }
-
-        let gas       = this.config['GAS'];
-        let refunded  = (terminalStatus !== 'failed_quorum');
-        // Release the whole v0 hold (one negative escrow row) and route the credits:
-        // the deposit refunds the creator on a finalized win or forfeits to DONATE1 on
-        // failed_quorum; the gas_escrow ALWAYS refunds the creator (the callback's
-        // backing, not at risk). Precise gas-cost metering is deferred (ATTEST parity).
-        let escrows = [[gas, this.util.bcmul(held, '-1', 8), creator]];
-        let credits = [];
-        this.util.addAddressTicker(creator, gas);
-        if(this.util.bcgt(deposit, '0')){
-            let depTarget = refunded ? creator : this.config['ADDRESS']['DONATE1'];
-            this.util.addAddressTicker(depTarget, gas);
-            credits.push([gas, deposit, depTarget]);
-        }
-        if(this.util.bcgt(gasEscrow, '0'))
-            credits.push([gas, gasEscrow, creator]);
-
-        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, [], escrows);
-        let tickers   = this.util.getTickersList(),
-            addresses = Object.keys(this.util.getAddressesList());
-        await this.indexerDb.updateBalances(addresses);
-        await this.indexerDb.updateTokens(tickers);
-        await this.indexerDb.setPollDepositResolved(poll.action_index, refunded ? 'refunded' : 'forfeited');
-
-        getLogger().info("\t VOTE escrow : poll " + poll.action_index + ' released ' + held + ' ' + gas +
-                    ' (deposit ' + deposit + (refunded ? ' refund' : ' forfeit') + ', gas_escrow ' + gasEscrow + ' refund)');
+        return settle.settleDeposit.call(this, poll, data, terminalStatus);
     }
 
     // Timelock: fire deferred binding callbacks that come due at this block. Called
@@ -614,45 +246,7 @@ class Vote {
     async injectCallbackExecute(poll, data, result){
         if(!this.actions.actionExecute) return null;
 
-        let callbackParams = [];
-        if(poll.callback_params){
-            try { let parsed = JSON.parse(poll.callback_params); if(Array.isArray(parsed)) callbackParams = parsed; }
-            catch(e){ callbackParams = []; }
-        }
-
-        // At/after the VOTE_POLL_TICK_VISIBLE flag-day the poll's
-        // electorate TICK is delivered to the callback (inserted after
-        // min_voters_met, before the developer params) so a binding-poll
-        // contract can verify WHICH token decided it (e.g. treasury.arm()
-        // pins poll.tick === govTick). Below the flag-day the signature is
-        // byte-identical to the pre-flag layout (no tick slot). The tick is
-        // NOT visible via xchain.getPollResult inside the callback (the
-        // visibility gate is resolved_block < block and this fires AT the
-        // finalization block), which is exactly why it rides the positional
-        // params like the rest of the result.
-        let tickVisible = await this.actions.protocolChanges.isEnabled('VOTE_POLL_TICK_VISIBLE', data['BLOCK_INDEX']);
-        let tickArg = [];
-        if(tickVisible){
-            let tick = this.util.isNull(poll.tick_id) ? '' : await this.indexerDb.getTicker(poll.tick_id);
-            tickArg = [String(this.util.isNull(tick) ? '' : tick)];
-        }
-
-        // Callback signature: [pollIndex, status, winning_option, total_weight,
-        // total_voters, quorum_met, min_voters_met, (tick,)? ...originalCallbackParams].
-        let callbackArgs = [
-            String(poll.action_index),
-            String(result.poll_status),
-            this.util.isNull(result.winning_option) ? '' : String(result.winning_option),
-            String(this.util.isNull(result.total_counted_weight) ? '0' : result.total_counted_weight),
-            String(this.util.isNull(result.total_voters) ? '0' : result.total_voters),
-            result.quorum_met ? '1' : '0',
-            result.min_voters_met ? '1' : '0',
-            ...tickArg,
-            ...callbackParams.map(String)
-        ];
-
-        // Positional EXECUTE format: VERSION|CONTRACT_ACTION_INDEX|METHOD|PARAMS...
-        let actionParams = [0, poll.callback_contract_index, poll.callback_method, ...callbackArgs];
+        let actionParams = await bindingCallback.buildCallbackParams.call(this, poll, data, result);
 
         let chain = this.config['CHAIN'];
         let emissionActionIndex = await this.indexerDb.createActionIndex({
@@ -662,48 +256,9 @@ class Vote {
             SOURCE:      'C:' + chain + ':' + poll.callback_contract_index
         }, true);
 
-        // The finalize/timelock callback has no real tx behind it (VOTE v2
-        // is system-synthesized). Post-SYNTH_EXEC_TX_HASH the context gets a
-        // deterministic synthetic TX_HASH (namespaced by the poll's action_index,
-        // unique per poll since the callback fires exactly once), so an ATTEST/XCALL
-        // the callback emits derives a resolvable id instead of being billed and
-        // hard-rejected. Below the flag-day the legacy hashless context is
-        // reproduced byte-identically (consensus replay safety).
-        let synthActive = await this.actions.protocolChanges.isEnabled(SYNTH_EXEC_TX_HASH, data['BLOCK_INDEX']);
-        let emissionData = buildInjectedExecContext({
-            chain:         chain,
-            network:       this.config['NETWORK'],
-            contractIndex: poll.callback_contract_index,
-            actionIndex:   emissionActionIndex,
-            blockIndex:    data['BLOCK_INDEX'],
-            blockTime:     data['BLOCK_TIME'],
-            emitter:       data['ACTION_INDEX'],
-            synthTag:      SYNTH_TAGS.VOTE_CALLBACK,
-            synthId:       poll.action_index,
-            includeTxHash: synthActive
-        });
+        let emissionData = await bindingCallback.buildCallbackContext.call(this, poll, data, chain, emissionActionIndex);
 
-        let savepoint = await this.indexerDb.createSavepoint('vote_callback_' + parseInt(poll.action_index));
-        try {
-            await this.actions.actionExecute.parse(actionParams, emissionData, null);
-            if(emissionData['STATUS'] && emissionData['STATUS'] !== 'valid')
-                getLogger().warn('\t VOTE callback : execute non-valid (' + emissionData['STATUS'] + '), poll result stands');
-            await this.indexerDb.releaseSavepoint(savepoint);
-            getLogger().info("\t VOTE callback : poll " + poll.action_index + ' -> contract ' +
-                        poll.callback_contract_index + '.' + poll.callback_method + ' (execute ' + emissionActionIndex + ')');
-            return emissionActionIndex;
-        } catch(e){
-            // A throwing callback must not brick the finalized result: roll back only
-            // the callback's effects and keep the poll terminal.
-            await this.indexerDb.rollbackToSavepoint(savepoint);
-            // An infrastructure fault (VM host fault, transient DB error) is not a
-            // callback outcome: halt so the block rolls back and retries rather than
-            // committing this validator's poll with a silently-dropped callback while
-            // healthy peers apply it. A deterministic callback failure still stands.
-            rethrowIfInfraFault(e);
-            getLogger().warn('\t VOTE callback : execute threw (' + e.message + '), poll result stands');
-            return null;
-        }
+        return await bindingCallback.runCallbackExecute.call(this, poll, actionParams, emissionData, emissionActionIndex);
     }
 
     // VOTE v3 - set/clear vote delegation (liquid democracy). A standing, per-token
