@@ -16,7 +16,7 @@
  * Prove that the migrations pending against a DEPLOYED ref are additive and
  * old-code-compatible, before they are applied to anything that matters.
  *
- * The migration-compatibility gate (spec §7) requires: "every pre-window migration
+ * The migration-compatibility gate requires: "every pre-window migration
  * proven additive and old-code-compatible (old suite green against the migrated
  * schema)". Driven by bin/check-migration-old-code-compat.sh, which provisions
  * the throwaway database; this file is the assertions.
@@ -29,7 +29,7 @@
  * migration did. The gate's wording describes the intent; this is the operation
  * that actually has the property.
  *
- * WHAT IT SIMULATES: §8 step 2, exactly
+ * WHAT IT SIMULATES: the rollout's migrate step, exactly
  * -------------------------------------
  *   1. build the schema for the affected tables AT THE DEPLOYED REF and populate
  *      it, so pre-existing rows are in the picture,
@@ -39,7 +39,7 @@
  *      same code path src/migrate.js drives, and
  *   4. run OLD code's statements against the migrated schema.
  *
- * Step 4 is the point. Between §8 step 2 (migrate) and step 4 (halt), the
+ * Step 4 is the point. Between the rollout's migrate step and its halt step, the
  * migrated schema is being served by code that predates it, so old statements
  * are the deployed reality and the thing that must not break.
  *
@@ -389,8 +389,8 @@ async function main(){
         }
         if(affected.includes('state_checkpoints')){
             // One checkpoint per seq is what old code writes in normal operation. It
-            // must still be accepted, because §3.5 abort resumes old code against this
-            // schema after the fence has been applied in §8 step 4a.
+            // must still be accepted, because an aborted rollout resumes old code against this
+            // schema after the fence has been applied at the rollout's halt step.
             await raw(OLD_STATEMENTS.state_checkpoints.insert,
                       ['BTC', 'regtest', 501, 'h2', 'l2', 'a2', 'c2', 900001, 900001]);
             notes.push('state_checkpoints: one row per seq still accepted (abort path writes normally)');

@@ -826,7 +826,7 @@ async function main() {
     console.log('  TALLY indexed by type:      ' + JSON.stringify(refTypes));
     const fraction = refActions > 0 ? replayed.ON / refActions : null;
 
-    // ---- G3 ---------------------------------------------------------------
+    // ---- consensus hash chain ---------------------------------------------------------------
     section('G3: consensus hash chain OLD vs ON, from genesis');
     const eq = require(path.join(REPO, 'test', 'integration', 'setup', 'equivalence.js'));
     const chainOLD = await eq.readHashChain(q.OLD);

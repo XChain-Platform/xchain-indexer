@@ -87,7 +87,7 @@
  *
  * S9 is the DEPLOY conjunction: a weighted sum cannot express "at most one DEPLOY", so
  * the cap survives beside the weight and must keep reporting its own string.
- * S10-S13 are the D10 half of this flag. Without them the run would measure the budget
+ * S10-S13 are the spam-collapse half of this flag. Without them the run would measure the budget
  * and leave the widened spam collapse - the other consensus change riding this same
  * gate - entirely unmeasured, and pass anyway.
  *
@@ -261,7 +261,7 @@ function parseArgs() {
 // wherever an address is validated.
 const A1 = 'mq7tVfobimRUPxPNnyd5mKn11SVmTiLxtu';   // issuer / deployer, funded with gas
 const A2 = 'n4nbVcRRR5sEHyp2VYuLUvCyDmQmBoonoK';   // counterparty, funded with gas
-const A4 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi';   // deliberately holds NO gas (D10)
+const A4 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi';   // deliberately holds NO gas (for the spam-collapse shapes)
 
 const T0    = 1700000000;
 const STEP  = 60;
@@ -279,7 +279,7 @@ const contractCode = tag =>
 const NO_SUCH_CONTRACT = 999999;
 
 // Far enough out to be chargeable: the unified expiration fee is free for the first 90
-// days, so a 200-day ORDER owes a real duration fee and D10 can price it.
+// days, so a 200-day ORDER owes a real duration fee and the widened collapse can price it.
 const ORDER_EXP = T0 + 86400 * 200;
 
 const order   = () => `ORDER|0|BTC|${TOK}|10|0|BTC|${TOK}|20|0|${A1}|${ORDER_EXP}|||`;
@@ -579,7 +579,7 @@ async function main() {
         const { seedGas } = require(path.join(REPO, 'test/integration/setup/gas-seeder.js'));
         await dbc.createDecoderSchema();
         const seeder = new Seeder(dbc.decoderQuery);
-        // A4 is deliberately absent: D10's shapes need a source that provably cannot pay.
+        // A4 is deliberately absent: the spam-collapse shapes need a source that provably cannot pay.
         await seedGas(seeder, { blockIndex: GAS_B, blockTime: T0 - STEP, addresses: [A1, A2], amount: '1000' });
         const blocks = corpus();
         for (const b of blocks) await seeder.seedBlock(b.block, b.time, b.txs);
@@ -677,7 +677,7 @@ async function main() {
             'S12 2 EXECUTEs from a gasless source: OLD has no VM-floor collapse', wOld.shape('S12'));
     }
 
-    // ---- the A6 assertion -------------------------------------------------
+    // ---- the replay-equivalence assertion -------------------------------------------------
     section('A6: OLD vs HEAD-with-the-flag-unarmed');
     const eq = require(path.join(REPO, 'test/integration/setup/equivalence.js'));
     const stateOLD = await eq.captureDbState(q.OLD, { mode: 'strict' });

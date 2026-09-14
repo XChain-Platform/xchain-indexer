@@ -12,7 +12,7 @@
  **********************************************************************
  *
  * Verify a STAGE B (escrow locked-balance leaf) ARMING BOUNDARY against a
- * chain's own committed rows (SPV sub-tree spec §7).
+ * chain's own committed rows (SPV sub-tree Stage B).
  *
  * WHY THIS EXISTS, AND WHY IT IS A SECOND TOOL RATHER THAN A FLAG ON THE FIRST.
  * `bin/verify-arming-boundary.js` cannot serve Stage B:
@@ -24,8 +24,8 @@
  * Stage B arming at 11200 was therefore verified by hand, which is exactly the
  * situation the Stage A tool was written to end.
  *
- * THE HARD PART, AND WHY THE OBVIOUS CHECK IS NOT AVAILABLE. The arming was
- * originally proved by rebuilding `balances_root` with and without the locked
+ * THE HARD PART, AND WHY THE OBVIOUS CHECK IS NOT AVAILABLE. The arming is
+ * proved at the arming height by rebuilding `balances_root` with and without the locked
  * leaves and showing the armed root equalled the first while the pre-arming
  * root equalled the second. That check CANNOT be re-run later:
  * `buildFullBalancesRoot` reads the credits/debits ledger as it stands NOW,
@@ -79,7 +79,7 @@
  *
  * EXIT: 0 all assertions hold, 1 an assertion failed, 2 cannot run (no armed
  * height for this chain, the chain has not reached it, or the historical tree
- * is no longer retained).
+ * is not retained).
  *
  *********************************************************************/
 
@@ -152,7 +152,7 @@ function note(label, detail){ console.log('  NOTE  ' + label + (detail ? '   ' +
 
     const done = async (code) => { if(db.close) await db.close(); process.exit(code); };
 
-    // Only contract_state_root has a COLUMN today (§6), so name it explicitly
+    // Only contract_state_root has a COLUMN today, so name it explicitly
     // rather than selecting the whole RESERVED_SUBTREES list, which would fail
     // with errno 1054 on the two slots that have no column yet.
     const rows = await db.doQueryStrict(

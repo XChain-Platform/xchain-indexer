@@ -11,7 +11,7 @@
  *
  **********************************************************************
  *
- * Arming-block cost for contract_state_root (SPV sub-tree spec §3 Stage A item 6).
+ * Arming-block cost for contract_state_root (the first block that commits its sub-tree root).
  *
  * WHAT IS BEING MEASURED AND WHY IT MATTERS. The first block at an armed height
  * runs buildFullContractStateRoot over the WHOLE live contract-state set, on the
@@ -43,7 +43,7 @@
  * a synthetic number that looks comfortable proves nothing about a real arming
  * block.
  *
- * WHY THE SCRATCH MODE EXISTS, since the spec originally deferred this figure to a
+ * WHY THE SCRATCH MODE EXISTS, since this figure would otherwise wait on a
  * venue that does not exist. The storage term is a function of the KEY COUNT alone:
  * every key is the same 256-level copy-on-write descent whatever value hangs off it.
  * So "how much does a real node store cost per key" does NOT need a venue carrying

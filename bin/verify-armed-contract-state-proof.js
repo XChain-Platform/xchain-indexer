@@ -12,7 +12,7 @@
  **********************************************************************
  *
  * End-to-end contract-state proof against an ARMED chain's real committed data
- * (SPV sub-tree spec §3 Stage A items 4-5).
+ * (the contract-state half of the SPV state sub-tree).
  *
  * WHAT THIS PROVES, and it is the last link the unit suites cannot close: that
  * the explorer's proof server, running over a REAL armed chain's

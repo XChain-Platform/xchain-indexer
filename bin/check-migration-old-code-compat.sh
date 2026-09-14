@@ -18,7 +18,7 @@
 # old-code-compatible, against a throwaway MariaDB. The assertions live in
 # bin/check-migration-old-code-compat.js; this script is the venue.
 #
-# The migration-compatibility gate (spec §7) requires "every pre-window migration
+# The migration-compatibility gate requires "every pre-window migration
 # proven additive and old-code-compatible". The gate is per HOST, not per repo,
 # because mainnet indexers deliberately do not run the latest commit, so each
 # host's pending set is whatever it is behind by. Run this once per distinct
