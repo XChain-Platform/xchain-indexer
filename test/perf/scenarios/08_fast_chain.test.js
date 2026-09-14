@@ -98,70 +98,73 @@ function median(values) {
     return (sorted.length % 2 === 0) ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
+const reporter = new ReportGenerator();
+let stats = null;
+let timings = [];   // measured blocks, in chain order
+let validSends = 0;
+const priorEnv = { coin: process.env.INDEXER_COIN, network: process.env.INDEXER_NETWORK };
+
+async function runFastChain() {
+    process.env.INDEXER_COIN    = COIN;
+    process.env.INDEXER_NETWORK = NETWORK;
+
+    await createDatabases(__filename);
+    await createDecoderSchema();
+    await resetDecoderDb();
+    await resetIndexerDb();
+
+    const gen = new DataGenerator(decoderQuery);
+    const indexer = await initIndexer();
+    // Pin the fee path to xchain-balance, the same way the integration parity
+    // suites do. DOGE regtest ships a real FEE_DESTINATION, so the native-coin
+    // fee rule applies and every action wants a coin output paying it -- but the
+    // decoder fixture seeds action rows, not coin outputs, so the bootstrap
+    // issuances would fail "insufficient fee (native coin output required)",
+    // TOKENA would never exist, and the whole run would be timing REJECTIONS.
+    // (The valid-sends assertion below is what catches that if it ever recurs.)
+    forceXchainFeeMode(indexer);
+    const collector = new MetricsCollector({ name: 'fast-chain', warmupBlocks: WARMUP_BLOCKS });
+
+    // Seed the WHOLE chain before starting the clock. A live fast-chain node is
+    // never waiting on its source (that is the definition of falling behind), so
+    // seeding inline would measure the fixture, not the indexer.
+    const bootstrapEnd = await gen.bootstrap(1, BASE_TIME);
+    await gen.generateBlocks(BLOCKS, TXS_PER_BLOCK, 'send-only', bootstrapEnd,
+        BASE_TIME + bootstrapEnd * BLOCK_SPACING_SEC,
+        { spacingSeconds: BLOCK_SPACING_SEC, bulk: true });
+
+    collector.start();
+    await processBlocksInstrumented(indexer, collector);
+    collector.stop();
+
+    stats = collector.getStats();
+    timings = collector.blockTimings.slice(WARMUP_BLOCKS).map(b => b.totalMs);
+    const rows = await indexerQuery(
+        `SELECT COUNT(*) AS c FROM sends
+              WHERE status_id = (SELECT id FROM index_statuses WHERE status='valid')`);
+    validSends = Number(rows[0].c);
+
+    reporter.generateAll(stats, '08-fast-chain');
+    console.log(` Regime           : ${COIN} ${NETWORK}, ${BLOCK_SPACING_SEC}s blocks, ${TXS_PER_BLOCK} tx/block, ` +
+                `target ${TARGET_BLOCKS_SEC} blocks/s (${BUDGET_MS.toFixed(1)} ms/block budget)`);
+    console.log(` Median block     : ${median(timings).toFixed(2)} ms ` +
+                `(${(BUDGET_MS / median(timings)).toFixed(1)}x headroom)`);
+
+    await destroyIndexer(indexer);
+}
+
+async function cleanupFastChain() {
+    // Sweep an indexer a failed before hook left live: each forks a VM worker subprocess that outlives the suite otherwise.
+    await destroyFileIndexers(__filename);
+    restoreEnv(priorEnv);
+    await closeAll();
+}
+
 describe('08 Fast Chain (DOGE cadence, 10 blocks/s)', function () {
     this.timeout(0); // size controlled by PERF_FASTCHAIN_BLOCKS
 
-    const reporter = new ReportGenerator();
-    let stats = null;
-    let timings = [];   // measured blocks, in chain order
-    let validSends = 0;
-    const priorEnv = { coin: process.env.INDEXER_COIN, network: process.env.INDEXER_NETWORK };
-
-    before(async function () {
-        process.env.INDEXER_COIN    = COIN;
-        process.env.INDEXER_NETWORK = NETWORK;
-
-        await createDatabases(__filename);
-        await createDecoderSchema();
-        await resetDecoderDb();
-        await resetIndexerDb();
-
-        const gen = new DataGenerator(decoderQuery);
-        const indexer = await initIndexer();
-        // Pin the fee path to xchain-balance, the same way the integration parity
-        // suites do. DOGE regtest ships a real FEE_DESTINATION, so the native-coin
-        // fee rule applies and every action wants a coin output paying it -- but the
-        // decoder fixture seeds action rows, not coin outputs, so the bootstrap
-        // issuances would fail "insufficient fee (native coin output required)",
-        // TOKENA would never exist, and the whole run would be timing REJECTIONS.
-        // (The valid-sends assertion below is what catches that if it ever recurs.)
-        forceXchainFeeMode(indexer);
-        const collector = new MetricsCollector({ name: 'fast-chain', warmupBlocks: WARMUP_BLOCKS });
-
-        // Seed the WHOLE chain before starting the clock. A live fast-chain node is
-        // never waiting on its source (that is the definition of falling behind), so
-        // seeding inline would measure the fixture, not the indexer.
-        const bootstrapEnd = await gen.bootstrap(1, BASE_TIME);
-        await gen.generateBlocks(BLOCKS, TXS_PER_BLOCK, 'send-only', bootstrapEnd,
-            BASE_TIME + bootstrapEnd * BLOCK_SPACING_SEC,
-            { spacingSeconds: BLOCK_SPACING_SEC, bulk: true });
-
-        collector.start();
-        await processBlocksInstrumented(indexer, collector);
-        collector.stop();
-
-        stats = collector.getStats();
-        timings = collector.blockTimings.slice(WARMUP_BLOCKS).map(b => b.totalMs);
-        const rows = await indexerQuery(
-            `SELECT COUNT(*) AS c FROM sends
-              WHERE status_id = (SELECT id FROM index_statuses WHERE status='valid')`);
-        validSends = Number(rows[0].c);
-
-        reporter.generateAll(stats, '08-fast-chain');
-        console.log(` Regime           : ${COIN} ${NETWORK}, ${BLOCK_SPACING_SEC}s blocks, ${TXS_PER_BLOCK} tx/block, ` +
-                    `target ${TARGET_BLOCKS_SEC} blocks/s (${BUDGET_MS.toFixed(1)} ms/block budget)`);
-        console.log(` Median block     : ${median(timings).toFixed(2)} ms ` +
-                    `(${(BUDGET_MS / median(timings)).toFixed(1)}x headroom)`);
-
-        await destroyIndexer(indexer);
-    });
-
-    after(async function () {
-        // Sweep an indexer a failed before hook left live: each forks a VM worker subprocess that outlives the suite otherwise.
-        await destroyFileIndexers(__filename);
-        restoreEnv(priorEnv);
-        await closeAll();
-    });
+    before(runFastChain);
+    after(cleanupFastChain);
 
     it('processes the fast chain without errors', function () {
         assert.strictEqual(stats.errors.length, 0,

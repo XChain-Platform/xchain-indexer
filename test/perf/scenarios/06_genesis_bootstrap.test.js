@@ -71,44 +71,47 @@ function ancestorCount(ticks) {
     return ancestors.size;
 }
 
+let seeder, indexer, rowCount, ancestors, timeoutMs;
+
+async function setupGenesisBootstrap() {
+    assert.ok(fs.existsSync(LEDGER_PATH),
+        'bundled manifest missing: ' + LEDGER_PATH + ' (copy from snapshot/<source>/ledger.csv)');
+    const ticks = manifestTicks(LEDGER_PATH);
+    rowCount  = ticks.length;
+    ancestors = ancestorCount(ticks);
+
+    // Pin genesis to a current regtest block + the full production manifest.
+    // Config (regtest branch) reads these at initIndexer time.
+    process.env.XCHAIN_GENESIS_BLOCK = String(GENESIS_BLOCK);
+    process.env.GENESIS_LEDGER_PATH  = LEDGER_PATH;
+
+    await createDatabases(__filename);
+    await createDecoderSchema();
+    await resetDecoderDb();
+    await resetIndexerDb();
+
+    seeder = new DecoderSeeder(decoderQuery);
+    // One empty block at the genesis height: the injector runs before the
+    // (here empty) real-transaction loop, so the whole block is genesis work.
+    await seeder.seedBlock(GENESIS_BLOCK, BASE_TIME, []);
+    indexer = await initIndexer();
+    timeoutMs = indexer.config['GENESIS_BLOCK_TIMEOUT_MS'];
+}
+
+async function cleanupGenesisBootstrap() {
+    delete process.env.XCHAIN_GENESIS_BLOCK;
+    delete process.env.GENESIS_LEDGER_PATH;
+    await destroyIndexer(indexer);
+    // Sweep an indexer a partial init left live: each forks a VM worker subprocess that outlives the suite otherwise.
+    await destroyFileIndexers(__filename);
+    await closeAll();
+}
+
 describe('06 Genesis Bootstrap (full-scale)', function () {
     this.timeout(0); // run under `npm run test:perf` (mocha --timeout 0)
 
-    let seeder, indexer, rowCount, ancestors, timeoutMs;
-
-    before(async function () {
-        assert.ok(fs.existsSync(LEDGER_PATH),
-            'bundled manifest missing: ' + LEDGER_PATH + ' (copy from snapshot/<source>/ledger.csv)');
-        const ticks = manifestTicks(LEDGER_PATH);
-        rowCount  = ticks.length;
-        ancestors = ancestorCount(ticks);
-
-        // Pin genesis to a current regtest block + the full production manifest.
-        // Config (regtest branch) reads these at initIndexer time.
-        process.env.XCHAIN_GENESIS_BLOCK = String(GENESIS_BLOCK);
-        process.env.GENESIS_LEDGER_PATH  = LEDGER_PATH;
-
-        await createDatabases(__filename);
-        await createDecoderSchema();
-        await resetDecoderDb();
-        await resetIndexerDb();
-
-        seeder = new DecoderSeeder(decoderQuery);
-        // One empty block at the genesis height: the injector runs before the
-        // (here empty) real-transaction loop, so the whole block is genesis work.
-        await seeder.seedBlock(GENESIS_BLOCK, BASE_TIME, []);
-        indexer = await initIndexer();
-        timeoutMs = indexer.config['GENESIS_BLOCK_TIMEOUT_MS'];
-    });
-
-    after(async function () {
-        delete process.env.XCHAIN_GENESIS_BLOCK;
-        delete process.env.GENESIS_LEDGER_PATH;
-        await destroyIndexer(indexer);
-        // Sweep an indexer a partial init left live: each forks a VM worker subprocess that outlives the suite otherwise.
-        await destroyFileIndexers(__filename);
-        await closeAll();
-    });
+    before(setupGenesisBootstrap);
+    after(cleanupGenesisBootstrap);
 
     it('injects the full manifest within the genesis watchdog window', async function () {
         const t0 = process.hrtime.bigint();
