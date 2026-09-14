@@ -276,7 +276,7 @@ class AnchorRecovery {
         // real on-chain BTC stakes. Fabricated sets cannot survive this.
         if(this.verifyStakes && this.btcDb) await this._verifyStakes(snaps, v1.network);
 
-        // Key-binding (REC-BIND-1): existence alone accepts an archive whose signing key
+        // Key-binding: existence alone accepts an archive whose signing key
         // is real but attributed to SOMEONE ELSE'S staking source. Under weighted quorum
         // the source carries the weight and stake_weighted_quorum derives pubkey->source
         // from the archive itself, so swapping an attacker key onto an honest source's row
@@ -284,7 +284,7 @@ class AnchorRecovery {
         // Needs no resolver, so it runs on a bare doQuery handle too.
         if(this.verifyStakes && this.btcDb) await this.verifyKeySourceBinding(snaps, v1.network);
 
-        // Completeness (REC-SUBSET-1): existence alone (above) accepts a real-but-
+        // Completeness: existence alone (above) accepts a real-but-
         // PROPER-SUBSET snapshot - a single small-but-real staker could omit the honest
         // high-stake sources so the under-counted S lets its minority clear the 2/3 bar,
         // forging a match/call the wrapper quorum then authenticates. Re-resolve the FULL
@@ -356,7 +356,7 @@ class AnchorRecovery {
         return [...groups.values()];
     }
 
-    // REC-EXIST-1: every archived snapshot pubkey must be a real on-chain signer for its
+    // Existence check: every archived snapshot pubkey must be a real on-chain signer for its
     // capability at its block. The probe runs in two stages and the ORDER is the fix:
     //
     //   1. the direct-stake query (_hasDirectStake) answers first, byte-unchanged. It is the
@@ -383,7 +383,7 @@ class AnchorRecovery {
     // false-reject an honest archive, while at '0' the source still resolves.
     //
     // Truncation at VALIDATOR_QUERY_LIMIT cannot prove a key ABSENT, so it fails closed
-    // (mirrors _verifyCompleteness + XHUB-TRUNC-2). That cap binds only on stage 2, whose
+    // (mirrors _verifyCompleteness and the hub's truncation rule). That cap binds only on stage 2, whose
     // input is keys stage 1 has already rejected: a truncated resolution therefore turns a
     // certain rejection into one that names the cap, and can never reject a key stage 1 admitted.
     //
@@ -457,7 +457,7 @@ class AnchorRecovery {
         return !!(rows && rows.length > 0);
     }
 
-    // REC-BIND-1: bind every archived signing key to the staking SOURCE the archive claims
+    // Key-binding check: bind every archived signing key to the staking SOURCE the archive claims
     // for it. _verifyStakes answers "does this key hold stake somewhere" and
     // _verifyWeightedCompleteness reduces the archive to source -> amount before it looks,
     // so signing-key identity leaves the weighted path entirely: an attacker holding any
@@ -535,7 +535,7 @@ class AnchorRecovery {
         return !!(rows && rows.length > 0);
     }
 
-    // REC-SUBSET-1: every SOURCE that qualifies for a capability at the snapshot_block
+    // Completeness check: every SOURCE that qualifies for a capability at the snapshot_block
     // must appear in the archived snapshot for that (capability, block); a dropped
     // qualifying source under-counts S and lets an evicted minority clear quorum.
     //
@@ -545,7 +545,7 @@ class AnchorRecovery {
     // sources the archive kept, and resolved ⊆ archived passes while the dropped sources are
     // missing from the stake denominator S. That vector stays closed: nothing archive-derived
     // reaches the threshold. A truncated resolution cannot be trusted complete, so it fails
-    // closed (mirrors meetsStakeThreshold + XHUB-TRUNC-2).
+    // closed (mirrors meetsStakeThreshold and the hub's truncation rule).
     //
     // This replaces an interim bar (this node's LOCAL coin-config MIN_STAKE, applied by
     // db/stakes.js when no override is passed) with an AS-OF-BLOCK reconstruction of the two
@@ -620,7 +620,7 @@ class AnchorRecovery {
         }
     }
 
-    // Stake-weighted half of REC-SUBSET-1, at as-of-block weights. Two checks, in
+    // Stake-weighted half of the completeness check, at as-of-block weights. Two checks, in
     // this order because the second is only meaningful on sources the first admitted:
     //
     //   1. every source the re-resolution reports must be in the archive (the original
@@ -952,10 +952,10 @@ class AnchorRecovery {
         // then BTC reward restore (this), then BTC reindex.
         if(rewards.length > 0){
             // The missing-btcDb guard is hoisted into _rebuild so it fires before any write.
-            // F1a id-determinism fix: do NOT assign index ids at restore time. The old path
-            // called createAddress/getOrCreatePubkeyId here, OUTSIDE a block tx, which seeded
+            // Id determinism: do NOT assign index ids at restore time. Calling
+            // createAddress/getOrCreatePubkeyId here, OUTSIDE a block tx, would seed
             // low AUTO_INCREMENT ids that offset every subsequent in-block deterministic id
-            // (getNextAddressId is MAX(id)+1 over ALL rows). A recovered node then built a
+            // (getNextAddressId is MAX(id)+1 over ALL rows). A recovered node would then build a
             // different index_addresses map than a from-genesis node, forking ^id resolution
             // and breaking validator_rewards parity across the recovery boundary.
             //
@@ -1064,7 +1064,7 @@ class AnchorRecovery {
                 // Rebuild under the ORIGINAL hub-assigned id as provenance only.
                 // Injection order is (snapshot_block, call_id), so replay does not
                 // depend on this value; keeping it preserves archive byte-parity.
-                // finalizing_view is signed into the EQUIV canonical (WI-2 bump 2):
+                // finalizing_view is signed into the EQUIV canonical (the equivocation header):
                 // the indexer rebuilds the XCALL signing canonical from this column
                 // to re-verify the hub's 2f+1 sigs. Omitting it lets the NOT NULL
                 // DEFAULT 0 land every recovered row at view 0, so any call finalized
@@ -1092,7 +1092,7 @@ class AnchorRecovery {
     // ── Canonicals (byte-identical to their producers) ──────────────────────────
 
     // Hub StateCheckpointEngine canonical + the v1 archive extension (anchor.js).
-    // v1 ROUND_ID appends batch_seq (distinct from the v0 per-block key, the R-4 fix);
+    // v1 ROUND_ID appends batch_seq (distinct from the v0 per-block key, so each batch in a block signs its own round);
     // gated on the BTC snapshot_block + network, VIEW=0. Must byte-match anchor._canonical.
     wrapperCanonical(v1){
         let raw = ['XCHECKPOINT', v1.chain, v1.network, String(v1.block_index), v1.block_hash,
@@ -1120,7 +1120,7 @@ class AnchorRecovery {
         // flag-day; below it the canonical is byte-identical to the legacy format.
         if(ccr.isCrossChainRoyaltyActive(m.snapshot_block, m.network))
             raw += '|' + String(m.a_payout_legs || '') + '|' + String(m.b_payout_legs || '');
-        // EQUIV (WI-2 bump 2): VIEW = the archived row's finalizing_view (serialized into
+        // EQUIV header: VIEW = the archived row's finalizing_view (serialized into
         // the archive by StateAnchorPublisher.MATCH_KEYS). TAG=XDEX, ROUND_ID=match_id.
         if(eq.isEquivHeaderActive(m.snapshot_block, m.network))
             return eq.buildEquivCanonical(eq.ENGINE_TAGS.DEX, m.match_id, (m.finalizing_view != null ? m.finalizing_view : 0), raw);
@@ -1148,7 +1148,7 @@ class AnchorRecovery {
                 String(c.gas_limit), String(c.cross_hops), String(c.effective_time)
             ].join('|');
         }
-        // EQUIV (WI-2 bump 2): TAG=XCALL, ROUND_ID = sha256('XCALLROUND|'+phase+'|'+call_id),
+        // EQUIV header: TAG=XCALL, ROUND_ID = sha256('XCALLROUND|'+phase+'|'+call_id),
         // VIEW = the archived row's finalizing_view. Byte-matches hub + xexec/xcall twins.
         if(eq.isEquivHeaderActive(c.snapshot_block, c.network))
             return eq.buildEquivCanonical(eq.ENGINE_TAGS.XCALL, sha('XCALLROUND|' + phase + '|' + c.call_id), (c.finalizing_view != null ? c.finalizing_view : 0), raw);
@@ -1252,7 +1252,7 @@ if(require.main === module){
         const btcName = process.env.BTC_INDEXER_DB_NAME;
         if(btcName){
             // BTC-scoped config so getStakeWeightsByCapability/getValidatorsByCapability
-            // resolve capability stakes from the BTC stakes tables (the REC-SUBSET-1
+            // resolve capability stakes from the BTC stakes tables (the stake-set
             // completeness cross-check), instead of the non-BTC short-circuit that reads
             // the mirrored capability_snapshots recovery itself is rebuilding. The raw
             // reward-restore + _verifyStakes queries are column-based, so the coin scope

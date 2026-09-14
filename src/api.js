@@ -66,11 +66,11 @@ function keyEquals(provided, expected){
     return crypto.timingSafeEqual(a, b);
 }
 
-// The XPOLICY canonical membership hash (the token bridge policy spec
-// section 5): sha256 over ALLOW|<n or ->|<addr>|...|BLOCK|<m or ->|<addr>|...|SLEEP|<0 or 1>.
+// The XPOLICY canonical membership hash for a bridged token's allow and block
+// lists: sha256 over ALLOW|<n or ->|<addr>|...|BLOCK|<m or ->|<addr>|...|SLEEP|<0 or 1>.
 // `-` means the origin row carries no such list AT ALL, distinct from `0`, an existing but
-// empty one (D7). Addresses arrive from db.getListAtBlock already in utf8_bin ascending
-// order (D5); this function never re-sorts them, so a caller that changed that ordering
+// empty one. Addresses arrive from db.getListAtBlock already in utf8_bin ascending
+// order; this function never re-sorts them, so a caller that changed that ordering
 // would move the hash here, not silently mask it.
 function bridgePolicyHash(allowList, blockList, sleeping){
     function section(tag, list){
@@ -529,8 +529,8 @@ async function startApi(){
                     ledger_hash:   stored.ledger_hash   || null,
                     actions_hash:  stored.actions_hash  || null,
                     contract_hash: stored.contract_hash || null,
-                    // Additive light-client roots (SPV spec §4/§5): null before the
-                    // STATE_COMMITMENT flag-day, present after. Phase 2's checkpoint
+                    // Additive light-client roots: null before the
+                    // STATE_COMMITMENT flag-day, present after. The hub's checkpoint
                     // engine signs over state_root + block_merkle_root. The version
                     // bytes travel WITH their root (the scheme version under which
                     // the stored root was computed) so the hub signs root+version as
@@ -807,7 +807,7 @@ async function startApi(){
                 // VALIDATOR_QUERY_LIMIT flag rides on the array itself, so read it
                 // BEFORE the rules filter below hands back a fresh array.
                 let truncated  = validators.truncated === true;
-                // RULES-AWARE FILTER, `attestation` only (spec §7.4, D16, D86). The
+                // RULES-AWARE FILTER, `attestation` only. The
                 // indexer, not the hub, owns this: the hub's CapabilitySnapshot carries
                 // no twin, and adding a height parameter to this RPC would let a caller
                 // choose the height its own set is judged at, which is precisely the
@@ -1060,7 +1060,7 @@ async function startApi(){
                 // deferred retraction fences by generation and a re-published order at a recycled
                 // action_index (higher generation) survives. Per-COIN, so one read covers the book.
                 //
-                // Read the generation BEFORE the rows (HUB-RETRACT-1): a concurrent rollback bumps the
+                // Read the generation BEFORE the rows: a concurrent rollback bumps the
                 // generation atomically with deleting the orphaned rows (rollback.js, in-transaction).
                 // Reading the generation first guarantees safety wherever that commit lands - gen G
                 // then rows are pre-commit orphans (stamped G, which the fence <= G covers) or already
@@ -1068,7 +1068,7 @@ async function startApi(){
                 // reverse order (rows then generation) could read orphaned rows pre-commit and stamp
                 // them with the post-commit G+1, letting them escape the fence permanently.
                 let pushGeneration = await db.getPushGeneration(indexer.config['COIN']);
-                // Effective expiration filter (XCC-2): drop offers already past their (edit-
+                // Effective expiration filter: drop offers already past their (edit-
                 // overlaid) expiration relative to the tip's block_time, so a stale 'open' offer
                 // awaiting its next block-loop expiry pass cannot occupy a bounded slot. A missing
                 // block_time (older-schema gap) yields a non-finite value → the filter is skipped
@@ -1079,8 +1079,8 @@ async function startApi(){
                 let rawBlockTime = await db.getBlockTime(latest);
                 let blockTime = (rawBlockTime !== false && Number.isFinite(Number(rawBlockTime)))
                     ? Number(rawBlockTime) : null;
-                // Unified cross-chain book (XCC-2): SWAP (Phase A, exact single-fill) + ORDER
-                // (Phase B, price-time partial fills) drawn in one UNION ALL so a single global
+                // Unified cross-chain book: SWAP (exact single-fill) + ORDER
+                // (price-time partial fills) drawn in one UNION ALL so a single global
                 // LIMIT + keyset cursor bounds the whole book. Each offer is tagged `kind`; the
                 // returned array carries .truncated + .next_cursor out-of-band.
                 let merged = await db.getOpenCrossChainOffers(max, after_action_index, to_coin, blockTime);
@@ -1109,7 +1109,7 @@ async function startApi(){
             }
         },
 
-        // BET parimutuel betting reads (betting spec section 8: raw reads for ops
+        // BET parimutuel betting reads (raw reads for ops
         // tooling and e2e; the PUBLIC surface is the explorer REST layer). Paged
         // listing of betting feeds.
         // Body: { status?, source?, tick?, limit?, after_action_index? }
@@ -1223,7 +1223,7 @@ async function startApi(){
          */
 
         // Pending XBRIDGE locks (v0/v3) and burns (v1/v4) on THIS chain, for the hub's
-        // CrossChainBridgeEngine poll (base spec section 12). Open read: not in
+        // CrossChainBridgeEngine poll. Open read: not in
         // WRITE_METHODS, GATED_EXEC_METHODS or FEDERATION_READ_METHODS. Returns the
         // PendingBridgeTransfer shape above; confirmation-gating and dedup against the
         // hub's own bridge_transfers table are the hub's job, the getpendingcrosschaincalls
@@ -1240,7 +1240,7 @@ async function startApi(){
             try {
                 let latest = await db.getLatestBlockIndex();
                 // Source-chain reorg fence, the getpendingcrosschaincalls convention: read
-                // the generation BEFORE the rows (HUB-RETRACT-1) so a rollback that lands
+                // the generation BEFORE the rows so a rollback that lands
                 // between the two reads cannot stamp a pre-commit orphan with the post-commit
                 // generation and let it escape the retraction fence.
                 let pushGeneration = await db.getPushGeneration(indexer.config['COIN']);
@@ -1302,7 +1302,7 @@ async function startApi(){
             }
         },
 
-        // The chain-state read getbridgeinvariant needs (base spec section 13; the hub's
+        // The chain-state read getbridgeinvariant needs (the hub's
         // CrossChainBridgeEngine._readBridgeBalances is the caller). Open read. Answers for
         // ONE tick at a time: { supply, escrow: { <COIN>: balance } }, escrow keyed by the
         // bare coin (the hub's _escrowFor accepts either spelling).
@@ -1321,7 +1321,7 @@ async function startApi(){
             }
         },
 
-        // The D2 proof envelope (base spec section 12, D2/D70): bridge_checkpoint_check.js's
+        // The escrow proof envelope: bridge_checkpoint_check.js's
         // header documents the exact shape and verifyEscrowAgainstCheckpoint verifies it.
         // Producer-side only: this reports what THIS chain committed at block_index and lets
         // the caller (the bridge settle pass) bind its own already-verified checkpoint to it.
@@ -1347,7 +1347,7 @@ async function startApi(){
             }
         },
 
-        // The origin-chain policy read (token-bridge-policy spec section 3, D3, D15): the
+        // The origin-chain policy read: the
         // token's policy AS OF origin_block. Open read (in no gating set). A tick with no
         // native row on this chain (this is not its origin) answers { error } rather than
         // throwing.
@@ -1385,8 +1385,8 @@ async function startApi(){
             }
         },
 
-        // The destination-chain applied-policy read (token-bridge-policy spec section 6,
-        // D25): the current local materialized state for a bridged row, plus the applied
+        // The destination-chain applied-policy read:
+        // the current local materialized state for a bridged row, plus the applied
         // snapshot's identity when one has landed here. Open read. A tick with no local row
         // on this chain answers { error } rather than throwing.
         // Body: { tick }
@@ -1440,7 +1440,7 @@ async function startApi(){
                 // Source-chain reorg fence: stamp each call with this chain's current
                 // push generation. The hub copies it onto the dispatch row (and the result row
                 // inherits it), so a source-keyed deferred retraction fences by generation. Per-COIN.
-                // Read the generation BEFORE the rows (HUB-RETRACT-1): the rollback bumps the
+                // Read the generation BEFORE the rows: the rollback bumps the
                 // generation atomically with deleting the orphaned rows, so gen-first is safe wherever
                 // that commit lands, while rows-then-gen could stamp a pre-commit orphan with the
                 // post-commit generation and let it escape the fence. See getopencrosschainorders.
@@ -1481,7 +1481,7 @@ async function startApi(){
                 // rollback on this chain bumped the generation - after that no honest follower
                 // could ever co-sign a dispatch again.
                 //
-                // Read the generation BEFORE the row (HUB-RETRACT-1), same ordering and for the
+                // Read the generation BEFORE the row, same ordering and for the
                 // same reason as getopencrosschainorders / getpendingcrosschaincalls above.
                 let pushGeneration = await db.getPushGeneration(indexer.config['COIN']);
                 let row    = await db.getCrossChainCallRequestById(String(call_id));
@@ -1530,7 +1530,7 @@ async function startApi(){
                 let row    = await db.getCrossChainCallExecutionById(String(call_id));
                 if(!row){
                     let res = { exists: false, network: indexer.config['NETWORK'], latest_block_index: latest };
-                    // Surface refusal diagnostics (XDISP-1): a quorum-starved dispatch has
+                    // Surface refusal diagnostics: a quorum-starved dispatch has
                     // no execution row, but the injection pass records WHY it keeps being
                     // refused. Node-local advisory only (never quorum-verified relay data).
                     let rejection = await db.getCrossChainCallRejectionById(String(call_id));
@@ -1647,7 +1647,7 @@ async function startApi(){
         // transaction rather than "the newest anchor for this checkpoint". Without
         // them the answer is only "this checkpoint is anchored at depth", which a
         // Byzantine ELECTED publisher can satisfy while announcing a never-mined or
-        // real-but-different txid (XANC-ELECTED-FORGE-1). `checkpoint_anchored` is
+        // real-but-different txid. `checkpoint_anchored` is
         // returned alongside `exists` so a filtering caller can distinguish a benign
         // not-yet-anchored checkpoint from a positively-detected txid forge.
         //
@@ -1859,7 +1859,7 @@ async function startApi(){
         // Reorg history WITH the orphaned block hashes, from the decoder's `events`
         // table (code='REORG', data = [{block_index, block_hash}]).
         //
-        // Serves xchain-hub's ReorgHandler (REORG-OLDHASH-UNVERIFIED-1): the handler
+        // Serves xchain-hub's ReorgHandler: the handler
         // can confirm the announced NEW hash is what its own node serves at the reorg
         // height, but nothing today proves the announced OLD hash was ever canonical
         // there, so one Byzantine validator can drive a fake-reorg rollback with a

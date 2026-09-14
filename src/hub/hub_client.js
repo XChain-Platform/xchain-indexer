@@ -292,7 +292,7 @@ class HubClient {
 
     // Notify the hub that a reorg un-landed an ATTEST v5/v6 batch this chain carried, so
     // it can clear the batch link that landing stamped on every response the batch
-    // carried (spec §6.3, frontier row 55).
+    // carried.
     //
     // NOT A RANGE, and not a delete. The other three retractions above name a rolled-back
     // action range and the hub removes what that range seeded; this one names ONE batch,
@@ -304,9 +304,9 @@ class HubClient {
     //
     // The batch is named by its key AND by the signed window bounds that key is derived
     // from, so the hub re-derives the key rather than trusting it, plus the action index
-    // the landing push carried (the HEAD's, per row 52), which is the value stamped on
+    // the landing push carried (the HEAD's), which is the value stamped on
     // the rows. No generation fence: the mirror table has no push_generation column and
-    // the link is cosmetic by construction (D78).
+    // the link is cosmetic by construction.
     async retractAttestBatch(sourceChain, retraction){
         if(!this.enabled) return;
         let params = {

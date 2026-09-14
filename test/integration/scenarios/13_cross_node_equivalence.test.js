@@ -235,16 +235,15 @@ describe('13 – Cross-node equivalence @regression @tier1', function () {
     //
     // This is the seam that most directly detects silent consensus forking:
     // it asserts cross-node ledger-hash equivalence after a reorg whose
-    // orphaned branch minted novel entities. It was skipped 2026-06-12 as a
-    // CONFIRMED CONSENSUS FORK (getBlockHashes folded raw
-    // index_* ids into the hash while rollback never deleted index_* rows,
-    // so a survivor kept an orphan's index_* row, the next new entity took
-    // the id after it, and a fresh resync gave that same entity a lower id;
-    // the two nodes then hashed different ledgers from the same chain). Both
-    // consensus-side fixes have since landed - getBlockHashes hashes the
-    // RESOLVED address/ticker strings, and rollback.js block-scope-deletes
-    // index_addresses/index_tickers - so the guard is live again (re-enabled
-    // 2026-07-09 after a green run against the fixed code).
+    // orphaned branch minted novel entities. The fork it guards against: if
+    // getBlockHashes folded raw index_* ids into the hash while rollback left
+    // index_* rows behind, a survivor would keep an orphan's index_* row, the
+    // next new entity would take the id after it, and a fresh resync would
+    // give that same entity a lower id, so the two nodes would hash different
+    // ledgers from the same chain. getBlockHashes hashes the RESOLVED
+    // address/ticker strings and rollback.js block-scope-deletes
+    // index_addresses/index_tickers, which keeps the two nodes equal; this
+    // test holds them to it.
     // -----------------------------------------------------------------------
     it('4. survivor equals resync even when ORPHANED blocks introduced novel entities', async function () {
         const seeder = new DecoderSeeder(decoderQuery);

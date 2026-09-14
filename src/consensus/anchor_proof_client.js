@@ -77,7 +77,7 @@ const ATTESTED_VERSIONS = [0, 1, 4, 5, 6, 7];
 // convenience, so a wire version added later gets a family here or proves nothing.
 //
 // The per-chain family is gone with the per-chain wires: those rewards were attested before
-// the version restart, are already recorded, and are never re-derived (spec D9).
+// the version restart, are already recorded, and are never re-derived.
 //
 // Each family also admits its PRE-RESTART wire byte. The restart renumbered the same two
 // shapes rather than defining new ones - anchor.js's own dispatch reads wire byte 6

@@ -91,7 +91,7 @@ const GAS_TICK = require('./protocol/constants.js').GAS_TICK;
 
 // Every environment variable this service reads outside this file, captured
 // ONCE at module load and frozen. CODE-STYLE "Module shape" says environment
-// is read in config.js only, and D21 rules the shape: a plain frozen object,
+// is read in config.js only, and the shape is fixed: a plain frozen object,
 // no getters, because a getter re-reads lazily and a process that changed its
 // own env mid-run would then see two different configurations.
 //

@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * XChain Platform - D2 proof TRANSPORT: the client half of the escrow cross-check.
+ * XChain Platform - bridge escrow proof TRANSPORT: the client half of the escrow cross-check.
  *
  * WHAT THIS IS. bridge_checkpoint_check.js proves an origin-chain escrow balance against a
  * quorum-signed state checkpoint, and is deliberately synchronous and pure: it chooses no
@@ -51,10 +51,8 @@
  * selection rule removes the case that actually forks: two nodes holding the SAME set never
  * pick differently, and a node holding NO qualifying checkpoint stalls instead of deciding.
  *
- * THE PROOF IS TRANSPORT, NEVER A CANONICAL FIELD (D19). Nothing in here is signed, nothing
+ * THE PROOF IS TRANSPORT, NEVER A CANONICAL FIELD. Nothing in here is signed, nothing
  * in here is written, and nothing in here reads or writes a signed field.
- *
- * Spec: the base bridge spec sections 5, 8, 12 and work row 17; D2, D19, D46.
  *
  ********************************************************************/
 
@@ -178,7 +176,7 @@ function rpc(endpoint, method, params, timeoutMs){
  * Rebuild the XCHECKPOINT v0 canonical for a mirrored state_checkpoints row. MUST byte-match
  * actions/anchor.js `_canonical` (FORMAT 0) and the hub's StateCheckpointEngine, which is why
  * the root suffix is appended UNCONDITIONALLY here too: anchor.js does it alone among the four
- * builders, deliberately, and recorded as D41 of the anchor-bundle spec. A gated suffix here
+ * builders, deliberately. A gated suffix here
  * would reject every genuine mirrored checkpoint the fleet has signed.
  *
  * @param {Object} cp - a state_checkpoints row

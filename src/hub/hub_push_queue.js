@@ -93,7 +93,7 @@ class HubPushQueue {
         this.paused   = false;
     }
 
-    // Pause the queue and WAIT for any in-flight drain to finish (HUB-RETRACT-3). Setting `paused`
+    // Pause the queue and WAIT for any in-flight drain to finish. Setting `paused`
     // stops any NEW drain tick, but a drain already mid-batch holds a pre-fetched set of rows in
     // memory and could deliver a stale forward push AFTER the caller's retraction runs, re-creating
     // an orphaned hub row the fence can no longer delete. Awaiting `_drainDone` closes that race: by
@@ -146,7 +146,7 @@ class HubPushQueue {
         // throttled queue costs one clock read per tick, not a DB round trip.
         if(this._throttledUntilMs && Date.now() < this._throttledUntilMs) return;
         this.draining = true;
-        // Publish a completion promise so pause() can await this in-flight drain (HUB-RETRACT-3).
+        // Publish a completion promise so pause() can await this in-flight drain.
         let resolveDone;
         this._drainDone = new Promise(resolve => { resolveDone = resolve; });
         try {

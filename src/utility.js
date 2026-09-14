@@ -528,7 +528,7 @@ class Utility {
 
     // floor(A * B / C) at d decimal places, entirely in decimal.js space. Backs the
     // BET parimutuel payout (stake * pot / winning-pool, floored to the tick's
-    // decimals, betting spec section 7): floor keeps
+    // decimals): floor keeps
     // sum(payouts) <= pot exactly, so the escrow-conservation invariant holds and
     // rounding remainders land in the oracle's dust credit rather than minting.
     // Determinism: the product and quotient are computed at the house-wide mathjs
@@ -1093,7 +1093,7 @@ class Utility {
     // namespace), so `BTC.PEPECASH` read on DOGE is PEPECASH, native to BTC. Returns
     // { origin, name }, else null when any of these fails:
     //   - the tick carries EXACTLY one dot, so a dotted native name (`BTC.PEPE.CASH`) never
-    //     parses as a bridged row; milestone 1 refuses those at lock time instead,
+    //     parses as a bridged row; lock-time validation refuses those instead,
     //   - the prefix names a supported coin (config COINS),
     //   - that coin is NOT this chain's coin, because a row rooted at the local coin is a
     //     subasset of the local reserved root, never a bridged copy.
@@ -1260,7 +1260,7 @@ class Utility {
     // a source holding no XCHAIN would flip from valid to 'invalid: insufficient funds (guard
     // gas)' at the block the row appears, with no flag day naming the change. Key the rule on
     // the coin instead of on the row's existence, so the row can be created without moving one
-    // verdict: the reservation is BTC-only until milestone 2's XCHAIN_FEE_MODE_ALL_CHAINS flag
+    // verdict: the reservation is BTC-only until the XCHAIN_FEE_MODE_ALL_CHAINS flag
     // day widens XCHAIN-balance fees to every chain, and this predicate is the one line that
     // widens with it. Off BTC this is byte-identical to the behaviour before the bridge, so no
     // replayed verdict moves on any chain and no pre-activation hash moves.
@@ -1443,7 +1443,7 @@ class Utility {
     // dispenser must reference an oracle that has prices set. Oracle operators are a
     // separate, ongoing service from dispenser operators, so the normal path is to point
     // at an established feed whose price is already effective; only someone standing up
-    // their own oracle for their own dispenser meets the 24h activation delay (§5.4), and
+    // their own oracle for their own dispenser meets the 24h activation delay, and
     // waiting is correct for them. Accepting the create with no effective price instead
     // would be a free-oracle-usage loophole: publish, create immediately, never pay.
     //
@@ -2084,7 +2084,7 @@ class Utility {
     // Returns { error, guardFee, payoutLegs }:
     //   - error      : non-null = DENY (caller leaves status as 'invalid: '+error, writes no ledger)
     //   - guardFee   : GAS to debit from SOURCE when the action proceeds (metered guard gas)
-    //   - payoutLegs : reserved for the at-create royalty/fee split (Phase D; null here)
+    //   - payoutLegs : reserved for the at-create royalty/fee split (null here)
     // No controller, an unmapped class, or a self guard-of-guard emission → { null, 0, null }.
     async maybeRunControllerGuard(actions, db, opts){
         let none = { error: null, guardFee: 0, payoutLegs: null };
@@ -2285,7 +2285,7 @@ class Utility {
     // Process any ATTEST v0 requests whose DEADLINE_BLOCK has passed without a
     // fulfilled response. Synthesizes one ATTEST v2 action per stale row; the
     // handler flips the request status to 'expired' and fires the callback with
-    // status='expired' per framework spec §11.
+    // status='expired'.
     //
     // Driven by block_index (not block_time) because attestation deadlines are
     // measured in blocks, matching the wire format DEADLINE_BLOCKS.
@@ -2308,7 +2308,7 @@ class Utility {
         }
     }
 
-    // §4.1 of the ATTEST response-mirror design, as a pure function: which mirrored
+    // The ATTEST response-mirror binding rule, as a pure function: which mirrored
     // responses BIND at block B, and in what order.
     //
     // It is a function rather than SQL because the mirror may be a separate database
@@ -2331,7 +2331,7 @@ class Utility {
     //
     // A row whose first satisfying block is past the deadline never binds (the
     // `B <= deadline_block` clause), the expiry sweep flips the request to 'expired'
-    // at deadline+1, and the expired callback stands (AT3). A row satisfied exactly AT
+    // at deadline+1, and the expired callback stands. A row satisfied exactly AT
     // the deadline block binds: the sweep's own predicate is deadline_block < B.
     //
     // ORDER is the local request row's (block_index, action_index), never the mirror
@@ -2346,21 +2346,21 @@ class Utility {
     // block and this same call selects it there; the constant's own comment carries the
     // carry-forward rule in full.
     //
-    // ABOVE THE ZERO-CONF HEIGHT (zero-confirmation-flip spec §5, keyed per request on
-    // the request's OWN block, D38) the item additionally carries `candidates`: every
+    // ABOVE THE ZERO-CONF HEIGHT (keyed per request on
+    // the request's OWN block) the item additionally carries `candidates`: every
     // eligible mirror row for that request, sorted (effective_time ASC, response_hash
     // ASC), with `response` the head of that list. The read has no ORDER BY of its own,
-    // so this sort is the only order there is (D35). It is still ONE item per request
-    // and the cap still counts requests (D34): what changed is that the applier can try
+    // so this sort is the only order there is. It is still ONE item per request
+    // and the cap still counts requests; the difference is that the applier can try
     // the second row when the first turns out to be inert, instead of re-selecting the
     // same inert row every block until the deadline. Below the height the item is the
     // single choice above and carries no `candidates` key at all, so a mixed fleet
-    // agrees byte for byte on every request below it (D11).
+    // agrees byte for byte on every request below it.
     //
     // ABOVE THE MIRROR-ADMISSION CONSUMER ACTIVATION for (coin, network) at B, the first
-    // clause is re-keyed (barrier family section 5.5): a row binds when its signed admission
+    // clause is re-keyed: a row binds when its signed admission
     // height for this chain is at or below B, and a row with NO admission height binds by
-    // effective_time <= t(B) exactly as today, at every height (C33, C38). Attest responses
+    // effective_time <= t(B) exactly as today, at every height. Attest responses
     // are read by BTC alone (the call-site guard in XChainIndexer), so the one column the hub
     // stamps and this reads is admit_block_btc. Everything else in the predicate, the deadline
     // clause, the pending and mirror-era clauses, the tie-break, the total order and the cap,
@@ -2385,13 +2385,13 @@ class Utility {
         for(let req of (requestRows || [])){
             if(String(req.request_status) !== 'pending')                    continue;
             if(!(block <= Number(req.deadline_block)))                      continue;
-            // The flag day is keyed on the REQUEST's own block (§7.1), read from the
+            // The flag day is keyed on the REQUEST's own block, read from the
             // local row. attest.js's isMirrorEraRequest is the same module: the applier
-            // re-checks it as its own gate, and row 18's chain-side gate calls it too.
+            // re-checks it as its own gate, and the chain-side gate calls it too.
             if(!attestResponseMirror.isResponseMirrorActive(req.block_index, network)) continue;
             let reqId = String(req.request_id).toLowerCase();
             byId.set(reqId, req);
-            // Evaluated HERE, beside the mirror-era check and off the same field (D38):
+            // Evaluated HERE, beside the mirror-era check and off the same field:
             // both eras are properties of the request, never of the applying block, so a
             // node that catches up late reaches the same verdict for the same request.
             if(attestZeroConf.isZeroConfActive(req.block_index, network)) fallThroughIds.add(reqId);
@@ -2420,8 +2420,8 @@ class Utility {
             }
             if(fallThroughIds.has(id)){
                 // Above the height nothing is discarded here: the loser of the tie-break
-                // is the FALL-THROUGH candidate, and discarding it is exactly the bug
-                // §5 removes. The head is picked by the sort below, not by this pass.
+                // is the FALL-THROUGH candidate, and discarding it would strand the request on
+                // an inert row. The head is picked by the sort below, not by this pass.
                 let list = candidatesById.get(id);
                 if(!list) candidatesById.set(id, list = []);
                 list.push(row);
@@ -2472,8 +2472,8 @@ class Utility {
         return out.slice(0, cap);
     }
 
-    // Per-block hub-mirror ATTEST response applier pass (the response-mirror design
-    // §4.1/§4.4). Runs at a PINNED pipeline position (immediately after
+    // Per-block hub-mirror ATTEST response applier pass.
+    // Runs at a PINNED pipeline position (immediately after
     // processCrossChainCalls, before processAttestationExpirations) because the VM's
     // attestation snapshot is inclusive of the current block: with this position no
     // EXECUTE inside B sees a response bound at B and every EXECUTE in B+1 does, on
@@ -2488,13 +2488,13 @@ class Utility {
         let cap     = require('./actions/attest/index.js').ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK;
 
         // BOUNDED READ. The per-block cap bounds the callbacks; this bounds the two reads
-        // that feed them. Both are walked one page at a time in the §4.1 order and the
+        // that feed them. Both are walked one page at a time in the binding order and the
         // walk stops as soon as the cap is filled, so a block that binds ten responses
         // reads about one page instead of every pending request and then every one of
         // their mirror rows.
         //
         // THE SELECTED SET IS UNCHANGED, which is the only thing that matters here: the
-        // read's ORDER BY is already the §4.1 total order, the selector re-sorts on the
+        // read's ORDER BY is already the binding rule's total order, the selector re-sorts on the
         // same key, and pages are disjoint consecutive slices of that order taken in
         // order. So the sequence of applicable pairs this builds is the sequence the
         // unpaged read built, and the first `cap` of it is the same prefix. A node paging
@@ -2581,7 +2581,7 @@ class Utility {
                 // injected callback context carries it too.
                 data['BLOCK_TIME']   = block_time;
                 // No transaction is behind a mirror-applied response. That is the entire
-                // point of the design, and it is what AT1 asserts on the resulting action.
+                // point of the design, and the tests assert it on the resulting action.
                 data['TX_INDEX']     = null;
                 data['TX_VOUT']      = null;
                 data['IS_SYNTHETIC'] = true;
@@ -2595,7 +2595,7 @@ class Utility {
                 // handler reads the row, not these params; they exist so the action looks
                 // like every other synthesized one.
                 await actions.processAction('ATTEST', [1, candidate.request_id], data, null);
-                // THE BIND SIGNAL (D89). _applyMirroredResponse sets STATUS 'valid' only
+                // THE BIND SIGNAL. _applyMirroredResponse sets STATUS 'valid' only
                 // after the row verified; every skip path returns before it, leaving the
                 // key unset. Stopping here is what makes the request bind exactly once:
                 // a bound request must never see a second candidate, and each skip has
@@ -2737,7 +2737,7 @@ class Utility {
         if(!sweep || sweep.credits.length === 0) return;
         let addressesToRebalance = new Set();
         let ticksToRebalance     = new Set();
-        // Consensus attribution of the return credit (F-21, activation-gated). The credit is
+        // Consensus attribution of the return credit (activation-gated). The credit is
         // applied at THIS block (the cooldown-expiry block), but the block-hash query buckets
         // every ledger row by its action's block_index. Before UNSTAKE_COOLDOWN_COMPLETION_ACTION
         // the credit reused the UNSTAKE's own action_index, whose block_index is the earlier
@@ -2838,7 +2838,7 @@ class Utility {
     }
 
     // BET end-of-block pass: latch feeds closed at DEADLINE, expire feeds at
-    // expire_at (betting spec sections 4/6). Runs
+    // expire_at. Runs
     // AFTER all user txs in the block (call site next to processExpirations),
     // inside the block's atomic write. A deliberate BOUNDED sibling of
     // processExpirations, NOT an extension of it: that pass scans its whole due
@@ -3252,16 +3252,16 @@ class Utility {
     // Handle creating and updating DEX market information.
     //
     // Split into two paths so per-block cost tracks blocks that actually touched a market rather
-    // than the total active-market count (previously getMarkets(update=true) refreshed EVERY market
-    // pair with a valid open order older than 24h - effectively all active markets - on every block):
+    // than the total active-market count (a getMarkets(update=true) refresh of EVERY market pair
+    // with a valid open order older than 24h would touch effectively all active markets each block):
     //   (1) Touched-this-block refresh: refresh only the pairs traded in THIS block. createMarket
     //       assigns a NEW markets-row id only for a genuinely new pair, which can only appear from an
     //       order/match in this touched set (an aged pair already has its row), so the deterministic
-    //       serial id-assignment order the old code guarded is fully preserved.
+    //       serial id-assignment order is fully preserved.
     //   (2) Throttled 24h rolling-stats ageing sweep: refresh a bounded batch of the most-stale
     //       existing market rows so the 24h window still ages out without recomputing all markets
     //       every block. The `markets` table is unhashed / snapshot-replicated with no consensus
-    //       reader (rollback.js IDX-2), so a node-local sweep cadence never diverges block state.
+    //       reader (see rollback.js), so a node-local sweep cadence never diverges block state.
     async processMarketUpdates(db, block_index, block_time){
         // (1) Refresh only the pairs touched by an order action in this block (update=false ->
         // WHERE b1.block_index=?), processed serially to pin new-pair id assignment to iteration order.

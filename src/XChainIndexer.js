@@ -338,7 +338,7 @@ class XChainIndexer {
         this.decoderReorgHalted   = false;
         this._reorgHaltLogTick    = 0;
         // The platform-train consensus activation verdict for the block the loop is about
-        // to apply (src/train_activation.js, release-management section 13), or null before
+        // to apply (src/train_activation.js), or null before
         // the first evaluation. `pending` means the signed release manifest names a rule set
         // this build does not implement and the boundary is still ahead, which health reports
         // and the monitor alerts on so the halt is ANNOUNCED before it fires; `halt` means
@@ -621,7 +621,7 @@ class XChainIndexer {
     // added to un-stall. The grace field is passed by NAME so _barrierClearsAt stays the only
     // reader of a grace and the barrier-to-grace wiring scan still sees which one this is.
     anchorBarrierClearsAt(blockTime, horizonBound, blockHeight, graceField){
-        // Height-keyed above the activation: no clock instant exists, so null, per C8.
+        // Height-keyed above the activation: no clock instant exists, so null.
         if(this.mirrorAdmissionActiveAt(blockHeight)) return null;
         blockTime = Number(blockTime);
         if(!Number.isFinite(blockTime)) return null;
@@ -740,7 +740,7 @@ class XChainIndexer {
     // _barrierClearsAt, which cannot serve this path because it returns null without a
     // HubDbSync. Health verdict only: it gates no wait, no read and no write.
     //
-    // Null above the mirror-admission activation at `blockHeight` (C8): the barrier is then
+    // Null above the mirror-admission activation at `blockHeight`: the barrier is then
     // height-keyed and no clock instant opens it, so a hold accumulates and the 900 s ceiling
     // can fire exactly as it does for the mirrored twins. A caller that passes no height gets
     // today's clock verdict, which keeps the existing one-argument shape meaningful.
@@ -757,7 +757,7 @@ class XChainIndexer {
         return (blockTime + graceS) * 1000;
     }
 
-    // Two forms, chosen by the mirror-admission consumer activation at `blockHeight` (C9):
+    // Two forms, chosen by the mirror-admission consumer activation at `blockHeight`:
     //
     //   BELOW it, today's clock form byte for byte: the local hub mirror covers block_time
     //   (its highest finalized effective_time over calls touching THIS coin is at/after it),
@@ -802,7 +802,7 @@ class XChainIndexer {
             : null;
         // The height tail every log line below carries ABOVE the activation, in the shape
         // hub_db_sync._heightTail gives the mirrored twins; each line's prefix is untouched
-        // (C27), because a unit test and an operator's grep match on it.
+        // because a unit test and an operator's grep match on it.
         let heightTail = (floor) => ' (admission height cross_chain_calls.' + (chain === '' ? 'unknown' : chain) +
                                     ' at ' + (floor === null ? 'none' : floor) + ', needs ' + target + ')';
         // Grace for the hub-clock escape below. Resolved at startup (start()); the frozen
@@ -904,7 +904,7 @@ class XChainIndexer {
             // Mirror is behind. Defer the block rather than proceed with a partial set: once the
             // bound is exhausted, throw so the caller retries this block from the top of the loop.
             // The message keeps its byte-identical prefix and gains the height form only above
-            // the activation (C27), where the clock readings it names are simply never taken.
+            // the activation, where the clock readings it names are simply never taken.
             if(Date.now() >= deadline)
                 this.util.throwError('direct call-presence barrier timed out after ' + timeoutMs +
                     'ms waiting for block_time ' + blockTime + ' (call mirror at ' + lastTs +
@@ -1141,7 +1141,7 @@ class XChainIndexer {
             // clean genesis reindex drives this to zero.
             await this.indexerDb.warnOnOrphanIndexIds();
             // Warn if the reorg cursor is all-legacy (would replay the full decoder reorg history on
-            // the next reorg detection - REORG-4). Surfaced, not auto-fixed; operator does a reindex.
+            // the next reorg detection). Surfaced, not auto-fixed; operator does a reindex.
             await this.indexerDb.warnOnLegacyReorgCursor();
             // Surface a pre-existing decoder REORG_HALT at startup (loud) so a node booting
             // behind a halted decoder is not silently mistaken for a slow catch-up.
@@ -1193,7 +1193,7 @@ class XChainIndexer {
         let lastDecoderBlock      = null;
 
         // Pool-direct view for the reorg-driver's indexerDb reads + the createReorg marker WRITE
-        // (REORG-1). These run outside any transaction the driver holds, and getConnection() adopts
+        // These run outside any transaction the driver holds, and getConnection() adopts
         // whatever transactionConnection is open - so during a concurrent public feequote dry-run (an
         // indexerDb transaction held up to 10s that always rolls back) an un-viewed read would see the
         // dry-run's dirty uncommitted state and the createReorg INSERT would be silently discarded when
@@ -1205,14 +1205,14 @@ class XChainIndexer {
         // always defines apiView(), so against a live indexer the raw-db branch is unreachable; a
         // production handle without it is a wiring bug to fix, not a case to serve. Do not spread this
         // shape to the federation READ sites in api.js and stake_source.js: there a silent raw-db
-        // fallback would re-open exactly the dirty read REORG-1 and federation READ isolation exist
+        // fallback would re-open exactly the dirty read this view and federation READ isolation exist
         // to prevent. When a
         // test double trips over a missing apiView, the fix belongs to the DOUBLE (give it
         // `apiView(){ return this }`), never to the call site. Same reading applies to the two other
         // guarded sites, rollback.js and health.js, which point back here.
         let indexerReorgView = (typeof this.indexerDb.apiView === 'function') ? this.indexerDb.apiView() : this.indexerDb;
 
-        // How often the inner catch-up loop re-checks for a mid-catch-up decoder reorg (REORG-6).
+        // How often the inner catch-up loop re-checks for a mid-catch-up decoder reorg.
         let REORG_RECHECK_BLOCKS = Number(this.config['REORG_RECHECK_BLOCKS']) || 50;
 
         while (true){
@@ -1287,7 +1287,7 @@ class XChainIndexer {
                 for(let reorg of unprocessedReorgs){
                     // Capture the decoder event's time + payload hash as the marker
                     // witness, so a later out-of-band decoder rebuild that reuses this id for a
-                    // different event is caught (fail-loud RE-1) instead of silently skipped.
+                    // different event is caught (the fail-loud reorg-cursor-incoherent error) instead of silently skipped.
                     let witness = await this.decoderDb.getReorgEventWitness(reorg.id);
                     await indexerReorgView.createReorg(reorg.block_index, reorg.id,
                         witness ? witness.time : null, witness ? witness.hash : null);
@@ -1295,7 +1295,7 @@ class XChainIndexer {
 
                 // Refresh the local cursor to the durable value just advanced by createReorg.
                 // lastProcessedReorgId was read once at the top of the outer loop and is never
-                // otherwise updated, so the mid-catch-up REORG-6 recheck below would call
+                // otherwise updated, so the mid-catch-up reorg recheck below would call
                 // getReorgsSince() with the stale pre-processing id, re-select the reorg(s) we
                 // just recorded (their event ids are all > the stale id), and break to the outer
                 // loop once per processed reorg. Re-reading the newest recorded marker id (rather
@@ -1337,7 +1337,7 @@ class XChainIndexer {
                 // Set flag to indicate not fully synced
                 this.synced = false;
 
-                // Bounded reorg-detection latency during long catch-up (REORG-6). Reorg events are
+                // Bounded reorg-detection latency during long catch-up. Reorg events are
                 // otherwise fetched only at the top of the OUTER loop, and the per-block decoder-tip
                 // refresh keeps this inner loop running as long as the tip moves - so a decoder reorg
                 // that lands mid-catch-up is not detected until the node is fully caught up, and until
@@ -1366,7 +1366,7 @@ class XChainIndexer {
                 // than silently skipped.
                 let blockToParse = Number(lastIndexerBlock) + 1;
 
-                // PLATFORM-TRAIN ACTIVATION GATE (release-management section 13.4). Runs
+                // PLATFORM-TRAIN ACTIVATION GATE. Runs
                 // BEFORE anything about this block is read, because the decision is "may this
                 // node apply block N at all", not "what does block N contain". A node whose
                 // code carries no entry for the rule set its signed release manifest requires
@@ -1483,7 +1483,7 @@ class XChainIndexer {
                 // reversePriceMatch floors a different unit count, and the dispense credits a
                 // different amount: a fork. A fresh resync is the worst case, because its mirror
                 // holds every one of those rounds while the live node that first processed H
-                // held none of them. That is exactly the live-node-vs-resync divergence the §8.4
+                // held none of them. That is exactly the live-node-vs-resync divergence the
                 // mirror barriers exist to close, and the height-keyed one does not close it.
                 //
                 // The height barrier is RETAINED rather than replaced: below the
@@ -1650,7 +1650,7 @@ class XChainIndexer {
                 // never injects a partial call set, while the already-current single-shared-DB
                 // (regtest) case clears on the first query with no added latency. Above the
                 // mirror-admission activation the same wait is keyed on the hub's persisted
-                // height watermark for this chain instead (C9), so blockToParse rides along.
+                // height watermark for this chain instead, so blockToParse rides along.
                 if(!this.hubDbSync && this.hubDb){
                     try {
                         await this.waitForDirectCallPresence(blockTime, blockToParse);
@@ -1740,7 +1740,7 @@ class XChainIndexer {
                 // AUTO_INCREMENT) warns if it ever runs after this point, since an out-of-band
                 // insert would bump MAX(id) and silently offset the dense counter.
                 this.indexerDb.deterministicIndexingStarted = true;
-                // Light-client state commitment (SPV spec §4): when active, install a
+                // Light-client state commitment: when active, install a
                 // fresh per-block touched-key set so the ledger choke point
                 // (db.createLedgerChangeRecord) records every (address, tick) mutated
                 // this block; cleared/null when inactive so the hook is inert.
@@ -1815,7 +1815,7 @@ class XChainIndexer {
                         // (themselves behind the snapshot barrier), so the mirror rows and the
                         // capability rows the quorum is verified against are already present.
                         //
-                        // Throws BridgeProofUnavailableError when the D2 escrow cross-check
+                        // Throws BridgeProofUnavailableError when the bridge escrow cross-check
                         // cannot be supplied a proof yet; the catch below defers the block
                         // rather than letting an absence read as a refusal.
                         await bridgeSettle.processBridgeSettlePass({
@@ -1873,7 +1873,7 @@ class XChainIndexer {
                         // deriving a set this node's peers would not.
                         await anchorRewardDerive.deriveAnchorRewards(this.indexerDb, this.config, blockToParse, this.anchorProof);
 
-                        // ROLLCALL epoch close (validator liveness eviction, §3.4). BTC-only and
+                        // ROLLCALL epoch close (validator liveness eviction). BTC-only and
                         // gated on ROLLCALL_ACTIVATION, so below the gate (or off-BTC) this is a
                         // no-op and legacy behavior stays byte-identical. Sits HERE, before the
                         // cooldown sweep below, because an eviction mints real `unstakes` rows at
@@ -1923,7 +1923,7 @@ class XChainIndexer {
                         // Do a sanity check to verify that token supplies match data in credits/debits/escrows/balances tables
                         await this.indexerDb.sanityCheck(blockToParse);
 
-                        // Light-client state commitment (SPV spec §4/§5): compute + persist
+                        // Light-client state commitment: compute + persist
                         // the additive state_root + block_merkle_root atomically with the
                         // block, after sanityCheck and before commit. Gated by the flag-day;
                         // a throw here rolls the whole block back like any other failure.
@@ -2074,7 +2074,7 @@ class XChainIndexer {
                         this.stallReason = 'anchor_reward_proof_unavailable';
                         this.stallClearsAt = null;          // clears when DOGE visibility returns, not on a clock
                     } else if(error && error.name === 'BridgeProofUnavailableError'){
-                        // The D2 escrow cross-check could not be handed a proof from HERE: no
+                        // The bridge escrow cross-check could not be handed a proof from HERE: no
                         // quorum-established checkpoint at or after the transfer's
                         // snapshot_block is held locally, or the origin chain's indexer served
                         // none. That is a property of THIS node's mirror and network, not of
@@ -2609,7 +2609,7 @@ class XChainIndexer {
     }
 
     // Periodically emit a read-only orphan-count metric for the COW state_tree_nodes store so
-    // its unbounded growth is observable (SPV spec §4.3). Runs on an unref'd interval (never holds
+    // its unbounded growth is observable. Runs on an unref'd interval (never holds
     // the process open), guarded against self-overlap, and reads on a POOLED connection so it never
     // touches the block-processing transaction. No deletion: see stateCommitment.reportOrphanStats.
     // Interval STATE_TREE_METRIC_INTERVAL_MS (default 4h; 0 disables).

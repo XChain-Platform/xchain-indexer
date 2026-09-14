@@ -498,7 +498,7 @@ class Actions {
 
         this.vm = new XChainVM({
             // Run every contract in a forked worker process. A contract that
-            // aborts V8 (process-wide SIGABRT, e.g. a bulk allocation that
+            // aborts the V8 engine (process-wide SIGABRT, e.g. a bulk allocation that
             // bypasses the isolate memory limit) then crashes only the worker,
             // never this indexer; the executor returns a deterministic
             // resource-failure result (gasUsed = ceiling) and respawns, so the
@@ -860,7 +860,7 @@ class Actions {
     // handler-order assignment (still reorg-safe via the explicit index-id counter).
     // Also the public name of this map, so a caller OUTSIDE this class can ask the same
     // question the address pre-pass asks: "does this ACTION have a fixed positional wire
-    // layout I may read a field out of?" batch.js's D10 fee pre-check (nominalDurationFee)
+    // layout I may read a field out of?" batch.js's duration-fee pre-check (nominalDurationFee)
     // is the caller: it reads EXPIRATION's index out of the handler's own format string
     // instead of hardcoding a position, so a format change moves the pre-check with it.
     // This was a private map behind a same-named public delegator until the underscore
@@ -1587,10 +1587,10 @@ class Actions {
     // FEE SETTLEMENT MODE. The verdict is only truthful if the dry-run settles the
     // protocol fee the way the payer's real transaction will. computeFeeQuote always injects
     // the probe fee output (it is pricing a NATIVE output, so native mode is the question it
-    // asks), and pre-flight used to copy that unconditionally - which silently exempted every
-    // quote from the XCHAIN balance debit and made "payer holds zero XCHAIN" invisible: the
-    // endpoint answered valid, the wallet signed, the miner fee was spent, and the chain
-    // indexed `invalid: insufficient funds (FEE)`. So the mode is chosen here:
+    // asks). Copying that unconditionally into pre-flight would silently exempt every
+    // quote from the XCHAIN balance debit and make "payer holds zero XCHAIN" invisible: the
+    // endpoint would answer valid, the wallet would sign, the miner fee would be spent, and
+    // the chain would index `invalid: insufficient funds (FEE)`. So the mode is chosen here:
     //   - `feeMode: 'native'`  injects the probe output (fee settles from a coin output).
     //   - `feeMode: 'xchain'`  injects nothing, so detectFeePaymentMode picks the XCHAIN
     //                          balance debit and the handler checks the payer's balance.
@@ -1598,7 +1598,7 @@ class Actions {
     //     exists), 'xchain' everywhere else - which is the mode a BTC wallet composes by
     //     default. A configured-but-unusable FEE_DESTINATION falls back to 'xchain'.
     // The mode is part of the memo key, so the two answers can never be served for each other.
-    // Native-fee OUTPUT SIZING is still out of scope here (spec §4.3): this surface prices
+    // Native-fee OUTPUT SIZING is still out of scope here: this surface prices
     // nothing, and the SDK Tier-1 keeps native-fee-output aspects `unverified` regardless.
     async computePreflight({ action, params, source, feeMode }){
         let coin           = this.config['COIN'];
