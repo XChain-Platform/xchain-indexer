@@ -50,8 +50,10 @@
  *   node bin/verify-armed-locked-balance-proof.js --db XChain_BTC_Regtest_Indexer \
  *        --chain BTC --network regtest --height 11200
  *
- * It loads the explorer's proofServer.js and the SDK's light.js from the
- * sibling repos; `--modules <dir>` overrides that for a staged container.
+ * It loads the explorer's http/proof_server.js and the SDK's light.js from the
+ * sibling repos; `--modules <dir>` overrides that for a staged container, whose
+ * directory is laid out like each repo's src/ (http/proof_server.js beside the
+ * merkle.js it requires one level up).
  *
  *********************************************************************/
 
@@ -84,7 +86,7 @@ function parseArgs(argv){
     const dir = opts.modules;
     const req = (sib, file) => require(dir ? path.resolve(dir, file)
                                            : path.resolve(__dirname, '..', '..', sib, 'src', file));
-    const ProofServer = req('xchain-explorer', 'proofServer.js');
+    const ProofServer = req('xchain-explorer', 'http/proof_server.js');
     const light       = req('xchain-sdk',      'light.js');
     const SUB         = require('../src/state_subtree_activation.js');
     const mariadb     = require('mariadb');
