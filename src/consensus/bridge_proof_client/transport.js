@@ -26,6 +26,12 @@ const http    = require('http');
 const https   = require('https');
 const urllib  = require('url');
 
+// Env reaches this module only through the declared config home. The key is computed
+// from the coin symbol, so the frozen CONFIG_ENV map (which spells its keys literally)
+// cannot serve it; readEnvNow is the config home's call-time accessor for exactly that
+// case, and it keeps a variable rewired after start visible to the next proof call.
+const { readEnvNow } = require('../../config.js');
+
 /**
  * The origin chain's indexer endpoint, resolved with the SAME three-tier idiom
  * anchor_proof_client.js and the hub use for their per-coin indexer calls, so a fleet already
@@ -41,9 +47,9 @@ function resolveOriginEndpoint(chain, config){
     const conf = config || {};
     if(!/^[A-Z]{2,10}$/.test(c)) return { url: '', apiKey: '' };
     return {
-        url: String(process.env[c + '_INDEXER_API_URL'] || process.env[c + '_INDEXER_URL']
+        url: String(readEnvNow(c + '_INDEXER_API_URL') || readEnvNow(c + '_INDEXER_URL')
                     || conf[c + '_INDEXER_URL'] || ''),
-        apiKey: String(process.env[c + '_INDEXER_API_KEY'] || conf[c + '_INDEXER_API_KEY'] || '')
+        apiKey: String(readEnvNow(c + '_INDEXER_API_KEY') || conf[c + '_INDEXER_API_KEY'] || '')
     };
 }
 
