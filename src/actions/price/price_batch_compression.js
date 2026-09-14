@@ -42,7 +42,7 @@
  * Never compare, hash, or sign compressed bytes.
  *
  * THE CAPS BELOW ARE CONSENSUS, unlike the encoder's FILE compression. That
- * mechanism (xchain-encoder/src/compression.js) compresses FILE's separate
+ * mechanism (xchain-encoder/src/build/compression.js) compresses FILE's separate
  * binary rawData sidecar, records the codec in a FILE-only COMPRESSION field,
  * and GUARD 1 at compression.js:165 refuses every other action outright; its
  * ratio cap is declared presentational-never-consensus because FILE validity
@@ -82,7 +82,7 @@ const zlib = require('zlib');
 const PRICE_BATCH_COMPRESSION_MARKER = 'Z';
 
 // PRICE wire ceiling. LOCAL COPY: must equal MAX_DATA_BYTES in
-// xchain-encoder/src/validator.js, the same value and the same name already
+// xchain-encoder/src/common/validator.js, the same value and the same name already
 // carried by OraclePublisher.js, AttestationPublisher.js and AttestationRelay.js.
 // The vendored twin cannot require across repo boundaries, so the value is
 // pinned by test instead: the parity tests read the declaration out of
