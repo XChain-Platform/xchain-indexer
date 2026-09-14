@@ -14,7 +14,7 @@
  * test/unit/hash_coverage.test.js
  *
  * Hash-coverage guard: binds the per-table `hashed` declarations in the
- * table-lifecycle registry (src/hub/tableLifecycle.js) to the code that actually
+ * table-lifecycle registry (src/hub/table_lifecycle.js) to the code that actually
  * computes each hash. The registry is where a new table DECLARES which
  * integrity hash would catch a divergence in it; these tests make that
  * declaration verifiable in both directions:
@@ -175,7 +175,7 @@ describe('Hash coverage guard @regression', function () {
     it('escrow_leaf_journal state_commitment class: the leaf builder reads it behind the arming gate', function () {
         // Structural binding for the escrow_leaf_journal declaration, mirroring the
         // gated-class bindings above (poll_finalize / token_supply / bet_status): the
-        // journal is only consensus-visible because escrowLeafSubtree.js reads it into
+        // journal is only consensus-visible because escrow_leaf_subtree.js reads it into
         // balances_root, and stateCommitment.js applies that behind
         // ESCROW_LOCKED_LEAF_ACTIVATION. If either half moves, the declaration is stale.
         const leaf = read('src/consensus/escrow_leaf_subtree.js');

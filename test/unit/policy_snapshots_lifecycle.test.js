@@ -26,8 +26,8 @@
  * bridge_settlements row keyed kind='policy' goes with them, so replay re-applies the
  * snapshot from the surviving mirrored row.
  *
- * The registry ships as two byte-identical twins (xchain-indexer/src/hub/tableLifecycle.js
- * and xchain-sync/src/tableLifecycle.js), and rollback_coverage.test.js already locks
+ * The registry ships as two byte-identical twins (xchain-indexer/src/hub/table_lifecycle.js
+ * and xchain-sync/src/table_lifecycle.js), and rollback_coverage.test.js already locks
  * those two files byte-identical. This guard is deliberately NOT that check: it reads
  * each copy's OWN registry and pins the two fields, so a twin edit that moves both files
  * in lockstep (the shape byte-identity cannot see) still fails here. Source and replica

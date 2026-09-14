@@ -28,7 +28,7 @@
  * classifies fails here instead of shipping.
  *
  * To satisfy this test, a new table needs ONE entry in the table-lifecycle
- * registry (src/hub/tableLifecycle.js) declaring its replication, rollback, and
+ * registry (src/hub/table_lifecycle.js) declaring its replication, rollback, and
  * hash-coverage classification; the rollback buckets checked here (generic
  * lists, RECOMPUTED, SPECIAL_CASE, ROLLBACK_EXEMPT, inert lookups) are all
  * derived from that registry. Classify by understanding the table, not by
@@ -162,7 +162,7 @@ describe('Rollback coverage guard @regression', function () {
     });
 
     // ── Table-lifecycle registry gates ──────────────────────────────────
-    // The registry (src/hub/tableLifecycle.js) is the single place a new table is
+    // The registry (src/hub/table_lifecycle.js) is the single place a new table is
     // classified for replication, rollback, and hash coverage. These tests make
     // "forgot to classify" impossible in each direction.
 
