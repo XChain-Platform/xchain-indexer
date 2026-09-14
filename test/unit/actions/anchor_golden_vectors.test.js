@@ -86,60 +86,63 @@ describe('Anchor canonical vectors byte-identity to xchain-documentation @regres
     });
 });
 
+let indexer, handler, verifyStub, swqStub, deriveGateStub;
+
+function setupAnchorFixture() {
+    indexer = createMockIndexer();
+    indexer.config = Object.assign({}, indexer.config, { COIN: 'DOGE', NETWORK: 'regtest' });
+    indexer.indexerDb.getValidatorsByCapability  = sinon.stub().resolves(
+        SIGNERS.map(pubkey => ({ pubkey, amount: '1' })));
+    indexer.indexerDb.hasCapability              = sinon.stub().resolves(true);
+    indexer.indexerDb.getMaxAnchorCheckpointSeq  = sinon.stub().resolves(null);
+    indexer.indexerDb.getArchiveReplayWatermarks = sinon.stub().resolves({ batchSeq: null, checkpointSeq: null });
+    indexer.indexerDb.createAnchorAction         = sinon.stub().resolves();
+    indexer.indexerDb.getAnchorV1ByBatchSeq      = sinon.stub().resolves(null);
+    indexer.indexerDb.getAnchorChunks            = sinon.stub().resolves([]);
+    indexer.indexerDb.setAnchorArchiveStatus     = sinon.stub().resolves();
+    indexer.indexerDb.createValidatorReward      = sinon.stub().resolves(true);
+    indexer.indexerDb.reconcileAnchorRewardWinner= sinon.stub().resolves(0);
+    handler = new Anchor(indexer);
+    verifyStub = sinon.stub(ed25519, 'verify').returns(true);
+    // Pin the legacy COUNT quorum path (regtest stake-weighted quorum is active at
+    // every block); the fixture sigs carry no source/weight.
+    swqStub = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+    // pin the derive-relocation gate OFF so these vectors exercise the DOGE-side
+    // reward write (the below-gate / mainnet behavior). The live regtest/testnet
+    // path skips that write; its own case is in anchor.test.js.
+    deriveGateStub = sinon.stub(arMod, 'isAnchorRewardDeriveActive').returns(false);
+}
+
+function restoreAnchorFixture() { verifyStub.restore(); swqStub.restore(); deriveGateStub.restore(); }
+function writtenRows() { return indexer.indexerDb.createAnchorAction.getCalls().map(c => c.args[0]); }
+
+// The wire string the encoder/decoder hands the action framework has the leading
+// 'ANCHOR' keyword stripped, so params[0] = VERSION.
+function wireToParams(vector) {
+    const parts = vector.split('|');
+    assert.strictEqual(parts[0], 'ANCHOR', 'golden vector must begin with the ANCHOR keyword');
+    return parts.slice(1);
+}
+
+async function parseV0() {
+    const data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
+    await handler.parse(wireToParams(GOLDEN.vectors.v0), data, null);
+    return data;
+}
+
+// The params index of section `n`'s first slot (its CHAIN), walked the same way the
+// parser walks it: 13 fixed slots then 2*SIG_COUNT signature slots. Derived from the
+// frozen bytes rather than hard-coded, so a hostile variant below is built out of the
+// real wire instead of a hand-written imitation of it.
+function sectionStart(params, n) {
+    let cursor = 4;
+    for (let i = 0; i < n; i++) cursor += 13 + 2 * parseInt(params[cursor + 12]);
+    return cursor;
+}
+
 describe('Anchor frozen canonical wire vectors (parser side) @regression', function () {
-    let indexer, handler, verifyStub, swqStub, deriveGateStub;
-
-    beforeEach(function () {
-        indexer = createMockIndexer();
-        indexer.config = Object.assign({}, indexer.config, { COIN: 'DOGE', NETWORK: 'regtest' });
-        indexer.indexerDb.getValidatorsByCapability  = sinon.stub().resolves(
-            SIGNERS.map(pubkey => ({ pubkey, amount: '1' })));
-        indexer.indexerDb.hasCapability              = sinon.stub().resolves(true);
-        indexer.indexerDb.getMaxAnchorCheckpointSeq  = sinon.stub().resolves(null);
-        indexer.indexerDb.getArchiveReplayWatermarks = sinon.stub().resolves({ batchSeq: null, checkpointSeq: null });
-        indexer.indexerDb.createAnchorAction         = sinon.stub().resolves();
-        indexer.indexerDb.getAnchorV1ByBatchSeq      = sinon.stub().resolves(null);
-        indexer.indexerDb.getAnchorChunks            = sinon.stub().resolves([]);
-        indexer.indexerDb.setAnchorArchiveStatus     = sinon.stub().resolves();
-        indexer.indexerDb.createValidatorReward      = sinon.stub().resolves(true);
-        indexer.indexerDb.reconcileAnchorRewardWinner= sinon.stub().resolves(0);
-        handler = new Anchor(indexer);
-        verifyStub = sinon.stub(ed25519, 'verify').returns(true);
-        // Pin the legacy COUNT quorum path (regtest stake-weighted quorum is active at
-        // every block); the fixture sigs carry no source/weight.
-        swqStub = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
-        // pin the derive-relocation gate OFF so these vectors exercise the DOGE-side
-        // reward write (the below-gate / mainnet behavior). The live regtest/testnet
-        // path skips that write; its own case is in anchor.test.js.
-        deriveGateStub = sinon.stub(arMod, 'isAnchorRewardDeriveActive').returns(false);
-    });
-    afterEach(function () { verifyStub.restore(); swqStub.restore(); deriveGateStub.restore(); });
-
-    function writtenRows() { return indexer.indexerDb.createAnchorAction.getCalls().map(c => c.args[0]); }
-
-    // The wire string the encoder/decoder hands the action framework has the leading
-    // 'ANCHOR' keyword stripped, so params[0] = VERSION.
-    function wireToParams(vector) {
-        const parts = vector.split('|');
-        assert.strictEqual(parts[0], 'ANCHOR', 'golden vector must begin with the ANCHOR keyword');
-        return parts.slice(1);
-    }
-
-    async function parseV0() {
-        const data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
-        await handler.parse(wireToParams(GOLDEN.vectors.v0), data, null);
-        return data;
-    }
-
-    // The params index of section `n`'s first slot (its CHAIN), walked the same way the
-    // parser walks it: 13 fixed slots then 2*SIG_COUNT signature slots. Derived from the
-    // frozen bytes rather than hard-coded, so a hostile variant below is built out of the
-    // real wire instead of a hand-written imitation of it.
-    function sectionStart(params, n) {
-        let cursor = 4;
-        for (let i = 0; i < n; i++) cursor += 13 + 2 * parseInt(params[cursor + 12]);
-        return cursor;
-    }
+    beforeEach(setupAnchorFixture);
+    afterEach(restoreAnchorFixture);
 
     it('v0: the frozen bytes parse to one valid row per section, in wire order', async function () {
         const data = await parseV0();
@@ -179,6 +182,12 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
             WIRE_SECTIONS.map(s => s.chain));
     });
 
+});
+
+describe('Anchor frozen canonical wire vectors (parser side) @regression', function () {
+    beforeEach(setupAnchorFixture);
+    afterEach(restoreAnchorFixture);
+
     it('v0: a bundle naming the same CHAIN twice is invalid as a WHOLE, with zero rewards (D39)', async function () {
         // Built out of the frozen bytes: rewrite the LAST section's CHAIN to repeat the
         // first one's. The hub's selector groups by (chain, network) and can only produce
@@ -216,6 +225,12 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
             assert.ok(row['BLOCK_INDEX_CHECKPOINTED'] != null, 'every section carries its own block_index');
         }
     });
+
+});
+
+describe('Anchor frozen canonical wire vectors (parser side) @regression', function () {
+    beforeEach(setupAnchorFixture);
+    afterEach(restoreAnchorFixture);
 
     it('v0: publisher and publisher_attestations are written on every section row', async function () {
         const data = await parseV0();
@@ -265,6 +280,12 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
         assert.strictEqual(canonical, expected,
             'the bundle XANCPUB canonical drifted from the frozen six-field layout');
     });
+
+});
+
+describe('Anchor frozen canonical wire vectors (parser side) @regression', function () {
+    beforeEach(setupAnchorFixture);
+    afterEach(restoreAnchorFixture);
 
     it('v0: each section canonical is rebuilt with the HEADER network, at the section\'s own block', async function () {
         await parseV0();

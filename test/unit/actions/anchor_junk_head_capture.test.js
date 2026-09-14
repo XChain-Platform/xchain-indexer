@@ -111,39 +111,41 @@ function makeStore(indexer, heads, chunks) {
     });
 }
 
+let indexer, handler, heads, chunks;
+
+function setupCaptureFixture() {
+    indexer = createMockIndexer();
+    indexer.config = Object.assign({}, indexer.config, { COIN: 'DOGE', NETWORK: 'regtest' });
+    indexer.indexerDb.createAnchorAction     = sinon.stub().resolves();
+    indexer.indexerDb.setAnchorArchiveStatus = sinon.stub().resolves();
+    // Enough of the checkpoint surface for a v1 head to parse (the head-lands-last case).
+    indexer.indexerDb.getValidatorsByCapability  = sinon.stub().resolves([{ pubkey: PUBKEY_A, amount: '1' }]);
+    indexer.indexerDb.hasCapability              = sinon.stub().resolves(true);
+    indexer.indexerDb.getMaxAnchorCheckpointSeq  = sinon.stub().resolves(null);
+    indexer.indexerDb.getArchiveReplayWatermarks = sinon.stub().resolves({ batchSeq: null, checkpointSeq: null });
+    indexer.indexerDb.createValidatorReward      = sinon.stub().resolves(true);
+    indexer.indexerDb.reconcileAnchorRewardWinner= sinon.stub().resolves(0);
+    heads  = [];
+    chunks = [];
+    makeStore(indexer, heads, chunks);
+    handler = new Anchor(indexer);
+    sinon.stub(ed25519, 'verify').returns(true);
+    sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+}
+
+// The attack: a junk head lands FIRST (lower action_index) for the batch seq the
+// real publisher is about to use. Its signatures do not verify, so it is stored
+// 'invalid: ...', which the head pick cannot look at.
+function seedJunkHeadAheadOfTheRealOne(totalChunks) {
+    heads.push({ action_index: 1, match_batch_seq: 9, version: 1, block_index_doge: ARMED_BLOCK,
+                 total_chunks: 99, archive_b64: 'JUNK', batch_crc32: 'deadbeef', source: ATTACKER });
+    heads.push({ action_index: 2, match_batch_seq: 9, version: 1, block_index_doge: ARMED_BLOCK,
+                 total_chunks: totalChunks, archive_b64: 'AAA', batch_crc32: 'deadbeef', source: PUBLISHER });
+}
+
 describe('ANCHOR archive batch capture by a junk head @regression @tier1', function () {
-    let indexer, handler, heads, chunks;
-
-    beforeEach(function () {
-        indexer = createMockIndexer();
-        indexer.config = Object.assign({}, indexer.config, { COIN: 'DOGE', NETWORK: 'regtest' });
-        indexer.indexerDb.createAnchorAction     = sinon.stub().resolves();
-        indexer.indexerDb.setAnchorArchiveStatus = sinon.stub().resolves();
-        // Enough of the checkpoint surface for a v1 head to parse (the head-lands-last case).
-        indexer.indexerDb.getValidatorsByCapability  = sinon.stub().resolves([{ pubkey: PUBKEY_A, amount: '1' }]);
-        indexer.indexerDb.hasCapability              = sinon.stub().resolves(true);
-        indexer.indexerDb.getMaxAnchorCheckpointSeq  = sinon.stub().resolves(null);
-        indexer.indexerDb.getArchiveReplayWatermarks = sinon.stub().resolves({ batchSeq: null, checkpointSeq: null });
-        indexer.indexerDb.createValidatorReward      = sinon.stub().resolves(true);
-        indexer.indexerDb.reconcileAnchorRewardWinner= sinon.stub().resolves(0);
-        heads  = [];
-        chunks = [];
-        makeStore(indexer, heads, chunks);
-        handler = new Anchor(indexer);
-        sinon.stub(ed25519, 'verify').returns(true);
-        sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
-    });
+    beforeEach(setupCaptureFixture);
     afterEach(function () { sinon.restore(); });
-
-    // The attack: a junk head lands FIRST (lower action_index) for the batch seq the
-    // real publisher is about to use. Its signatures do not verify, so it is stored
-    // 'invalid: ...', which the head pick cannot look at.
-    function seedJunkHeadAheadOfTheRealOne(totalChunks) {
-        heads.push({ action_index: 1, match_batch_seq: 9, version: 1, block_index_doge: ARMED_BLOCK,
-                     total_chunks: 99, archive_b64: 'JUNK', batch_crc32: 'deadbeef', source: ATTACKER });
-        heads.push({ action_index: 2, match_batch_seq: 9, version: 1, block_index_doge: ARMED_BLOCK,
-                     total_chunks: totalChunks, archive_b64: 'AAA', batch_crc32: 'deadbeef', source: PUBLISHER });
-    }
 
     it('the real publisher\'s chunk survives a junk head that squats the batch seq', async function () {
         seedJunkHeadAheadOfTheRealOne(3);
@@ -180,6 +182,12 @@ describe('ANCHOR archive batch capture by a junk head @regression @tier1', funct
         assert.strictEqual(real['STATUS'], 'valid',
             'an attacker chunk stored under its own head must not occupy the real publisher\'s slot');
     });
+
+});
+
+describe('ANCHOR archive batch capture by a junk head @regression @tier1', function () {
+    beforeEach(setupCaptureFixture);
+    afterEach(function () { sinon.restore(); });
 
     it('reassembly binds to the batch\'s own head CRC, not the junk head\'s', async function () {
         let json = JSON.stringify({ v: 1, network: 'regtest', batch_seq: 9, matches: [{ match_id: 'm1' }] });
@@ -232,6 +240,12 @@ describe('ANCHOR archive batch capture by a junk head @regression @tier1', funct
             'no author means no head of its own to authenticate against: fail closed, do not borrow one');
     });
 
+});
+
+describe('ANCHOR archive batch capture by a junk head @regression @tier1', function () {
+    beforeEach(setupCaptureFixture);
+    afterEach(function () { sinon.restore(); });
+
     it('a single-publisher batch is unaffected: the head is its own canonical head', async function () {
         heads.push({ action_index: 1, match_batch_seq: 9, version: 1, block_index_doge: ARMED_BLOCK,
                      total_chunks: 3, archive_b64: 'AAA', batch_crc32: 'deadbeef', source: PUBLISHER });
@@ -259,6 +273,12 @@ describe('ANCHOR archive batch capture by a junk head @regression @tier1', funct
         assert.strictEqual(data['STATUS'], 'invalid: TOTAL_CHUNKS (does not match parent v1)',
             'below the flag day the pre-existing (capturable) verdict must be reproduced byte for byte');
     });
+
+});
+
+describe('ANCHOR archive batch capture by a junk head @regression @tier1', function () {
+    beforeEach(setupCaptureFixture);
+    afterEach(function () { sinon.restore(); });
 
     // ── Read-path SQL pins ───────────────────────────────────────────────────────
     // The author-scoped chunk set is the half that decides what actually reassembles
