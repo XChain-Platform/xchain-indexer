@@ -54,7 +54,6 @@ function makeActionsCtx(indexer) {
 }
 
 describe('Smoke: handler instantiation and basic action processing', function () {
-
     afterEach(function () {
         sinon.restore();
     });
@@ -87,6 +86,12 @@ describe('Smoke: handler instantiation and basic action processing', function ()
             // and from tests").
             await actionsInstance.vm.shutdown();
         }
+    });
+});
+
+describe('Smoke: handler instantiation and basic action processing', function () {
+    afterEach(function () {
+        sinon.restore();
     });
 
     it('SM-11: Basic ISSUE processes validly', async function () {
