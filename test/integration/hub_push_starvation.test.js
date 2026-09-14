@@ -15,7 +15,7 @@
  *
  * getPendingHubPushes used to fetch the oldest `limit` pending rows with no
  * due-time predicate, applying exponential backoff ONLY afterward in JS
- * (HubPushQueue._isDue). During a hub outage that parks more than `limit`
+ * (HubPushQueue.isDue). During a hub outage that parks more than `limit`
  * rows in backoff, every drain tick re-fetched the same oldest not-due rows
  * and a newer DUE row (id beyond the oldest batch) was never even fetched -
  * head-of-line blocking. The fix pushes the backoff due-time predicate into

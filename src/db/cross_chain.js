@@ -33,13 +33,13 @@ module.exports = {
 
     async getEffectiveUnsettledMatches(coin, block_time, limit, block_index){
         // network filter: a match only settles on the indexer of the network it was matched
-        // + signed on (also bound into the signed canonical - see cross_settle._canonical).
+        // + signed on (also bound into the signed canonical - see cross_settle.canonical).
         // ORDER BY (snapshot_block, match_id) - quorum-agreed row content, so the
         // settlement order is identical no matter which hub DB this indexer mirrors
         // (the hub-assigned id is per-hub AUTO_INCREMENT and MUST NOT order consensus
         // state).
         // Bound by the clock below the admission activation and by this chain's signed
-        // admission height above it (_mirrorBindClause); `block_index` is that key.
+        // admission height above it (mirrorBindClause); `block_index` is that key.
         let network = this.config['NETWORK'];
         let bind    = this.mirrorBindClause(block_time, block_index);
         // doQueryStrict (not doQuery): a CONSENSUS input read on the hub mirror, which never
@@ -86,14 +86,14 @@ module.exports = {
     },
 
     // Effective, unexecuted dispatch rows targeting THIS chain - drives the XEXEC
-    // injection pass. cross_chain_calls is hub-mirrored (read via _mirrorDb) while
+    // injection pass. cross_chain_calls is hub-mirrored (read via mirrorDb) while
     // cross_chain_call_executions is local, so the exclusion is filtered in JS.
     // ORDER BY (snapshot_block, call_id) - both quorum-agreed row content, so the
     // injection order is identical no matter which hub DB this indexer mirrors
     // (the hub-assigned id is per-hub AUTO_INCREMENT and MUST NOT order consensus
     // state). Cap per block (overflow carries forward; never dropped).
     async getEffectiveUndispatchedCalls(coin, network, block_time, limit, block_index){
-        // Clock-bound below the admission activation, height-bound above it (_mirrorBindClause).
+        // Clock-bound below the admission activation, height-bound above it (mirrorBindClause).
         let bind  = this.mirrorBindClause(block_time, block_index);
         // doQueryStrict (not doQuery): a CONSENSUS input read on the hub mirror, which never
         // holds a transaction, so doQuery turns a transient DB fault into an empty dispatch set
@@ -122,7 +122,7 @@ module.exports = {
     // Effective, unprocessed result rows for requests THIS chain originated -
     // drives the callback delivery pass. Same mirror/local split and ordering.
     //
-    // cross_chain_calls is hub-mirrored (read via _mirrorDb) while the
+    // cross_chain_calls is hub-mirrored (read via mirrorDb) while the
     // cross_chain_call_callbacks idempotency table is local. When the mirror IS the
     // local DB (the hub / single-DB deployments, including the test + regtest env) we
     // push the already-processed exclusion, the deterministic ordering, and the cap

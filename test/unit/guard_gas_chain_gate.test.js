@@ -14,7 +14,7 @@
  * The controller-guard gas reservation is keyed on the CHAIN, not on whether
  * an XCHAIN row happens to exist on it.
  *
- * Today the reservation at utility._invokeController is skipped off BTC only
+ * Today the reservation at utility.invokeController is skipped off BTC only
  * as an accident of state: getTokenInfo('XCHAIN') returns null on LTC and
  * DOGE, so every caller passes gasInfo = null and the balance comparison is
  * never reached. The bridge creates a real XCHAIN row on those chains the
@@ -48,7 +48,7 @@ function configFor(coin){
     return cfg;
 }
 
-// Minimal stand-ins for the two collaborators _invokeController reaches: the
+// Minimal stand-ins for the two collaborators invokeController reaches: the
 // flag-day reader and the VM guard runner. Both succeed, so the ONLY thing that
 // can produce a refusal in these tests is the gas reservation under test.
 function actionsStub(guard){

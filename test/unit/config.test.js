@@ -217,7 +217,7 @@ describe('Config @regression @tier3', function () {
 });
 
 // ---------------------------------------------------------------------------
-// Hub config overlay (_applyHubConfigOverlay)
+// Hub config overlay (applyHubConfigOverlay)
 // ---------------------------------------------------------------------------
 
 describe('XChainIndexer hub config overlay', function () {
@@ -404,7 +404,7 @@ describe('XChainIndexer hub config overlay', function () {
     });
 
     // A getallconfigs call outrunning the interval must not stack
-    // overlapping in-flight polls (mirrors _startStateTreeMetric's guard),
+    // overlapping in-flight polls (mirrors startStateTreeMetric's guard),
     // and the guard must release in finally so one slow poll never wedges
     // all future polls.
     it('poll ticks landing while a slow poll is in flight are skipped, and polling resumes after it settles', async function () {

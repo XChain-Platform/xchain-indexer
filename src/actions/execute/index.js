@@ -237,7 +237,7 @@ class Execute {
 
         // Validate gas fee payment (native coin or XCHAIN balance).
         // System-injected EXECUTEs (e.g. attestation callbacks injected by
-        // attest.js:_injectCallbackExecute) skip fee accounting: those run against
+        // attest.js:injectCallbackExecute) skip fee accounting: those run against
         // the request's gas_escrow, not the synthetic SOURCE's wallet. Fee deduction
         // from gas_escrow on the request row is not currently wired.
         let feePaymentMode = 2; // default: xchain balance
@@ -1086,7 +1086,7 @@ class Execute {
         // poll creation (which then fails the create-only "must hold TICK" gate).
         // Only v0/v1 are emittable: v2 (finalize) is system-injected-only and v3
         // (delegate) has no emission param mapping, so buildActionParams would hand
-        // _parseDelegate a mis-mapped v0 layout. The VM gateway already rejects both
+        // parseDelegate a mis-mapped v0 layout. The VM gateway already rejects both
         // at emit time; re-check host-side as defense in depth against an older
         // bundled VM, matching the guard-emission checks above.
         if(action === 'VOTE' && Number(params.version) > 1)

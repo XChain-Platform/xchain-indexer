@@ -18,7 +18,7 @@
  * The row write and the credit were rounded SEPARATELY at the tick's decimals, and
  * util.bcsub / util.bcadd round HALF-UP there. With a decimals=0 tick, a stake row of
  * '1' and a slash of '0.5': bcsub('1','0.5',0) is '1', so the row is written back
- * UNCHANGED, while bcadd('0','0.5',0) is '1', so _processSlashEmission releases a full
+ * UNCHANGED, while bcadd('0','0.5',0) is '1', so processSlashEmission releases a full
  * unit of escrow and credits a full unit against a stake that was never debited. The
  * stake stays slashable again and withdrawable.
  *

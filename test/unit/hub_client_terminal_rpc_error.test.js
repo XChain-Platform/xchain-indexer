@@ -12,8 +12,8 @@
 // that arrives inside the result.
 //
 // The hub's four durable push handlers now refuse an unknown chain by throwing -32602
-// instead of describing the refusal in a result field. _call rejects on a top-level
-// envelope `error`, which happens BEFORE _requireHubAccepted ever sees a payload, so the
+// instead of describing the refusal in a result field. call rejects on a top-level
+// envelope `error`, which happens BEFORE requireHubAccepted ever sees a payload, so the
 // in-result patterns cannot reach it. Unclassified, that rejection reads as a transport
 // failure: the durable push types (oracle_price, price_batch, attest_batch and the
 // retractions) carry no attempt cap, and the queued row replays the same source_chain into
@@ -30,7 +30,7 @@ const sinon        = require('sinon');
 const HubClient    = require('../../src/hub/hub_client.js');
 const HubPushQueue = require('../../src/hub/hub_push_queue.js');
 
-// The rejection _call builds from a hub envelope carrying { code, message }.
+// The rejection call builds from a hub envelope carrying { code, message }.
 function rpcError(code, message){
     let err = new Error(message);
     err.rpcCode = code;
@@ -83,7 +83,7 @@ describe('HubClient: a thrown hub rejection is classified like an in-result one'
                 /pushoracleprice rejected terminally by the hub \(chain must be one of: BTC, LTC, DOGE\); dropping the queued row/);
         });
 
-        // The hub stamps `code` on the error it throws; _call re-homes it as `rpcCode` so it
+        // The hub stamps `code` on the error it throws; call re-homes it as `rpcCode` so it
         // cannot collide with Node's own string `code` on a socket error. A numeric `code` is
         // honoured too, for a caller handing back the hub's error object as the hub stamped it.
         it('honours a numeric `code` when `rpcCode` is absent', async function(){

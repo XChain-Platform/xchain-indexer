@@ -14,7 +14,7 @@
 //
 // The v0 wire is the one price entry point with no bound on a price's scale or
 // length: the v1 push path caps the decimal side at 8 places, the producers
-// normalize with bcformat(price, 8), and _parseV0 accepts any number of digits.
+// normalize with bcformat(price, 8), and parseV0 accepts any number of digits.
 // So a quorum-signed round can carry a value every other lane refuses, and it
 // reaches price_snapshots.price either truncated or as a hard insert failure
 // depending on the database's sql_mode.

@@ -48,7 +48,7 @@ describe('getEffectiveUnprocessedCallResults', function () {
     afterEach(() => sinon.restore());
 
     it('same-DB deployment: one SQL statement pushes NOT EXISTS + ORDER BY + LIMIT', async function () {
-        const db  = makeDb(null); // no hubDb -> _mirrorDb() === this
+        const db  = makeDb(null); // no hubDb -> mirrorDb() === this
         const out = [{ call_id: 'a1', snapshot_block: 5 }];
         const doQueryStrict = sinon.stub(db, 'doQueryStrict').resolves(out);
         const doQuery       = sinon.stub(db, 'doQuery').resolves([]);

@@ -51,7 +51,7 @@ function makeDb(){
         calls: []
     };
     // The sweep reaches the store through the db/state_tree mixin, and that mixin runs
-    // every statement on _poolQuery rather than doQuery, so THIS is the method the double
+    // every statement on poolQuery rather than doQuery, so THIS is the method the double
     // has to answer. Binding the real mixin methods over it keeps the fake honest: the SQL
     // matched below is the SQL that ships, and a mixin that reached for doQuery instead
     // (and so joined the block's open transaction) would find nothing here and throw.

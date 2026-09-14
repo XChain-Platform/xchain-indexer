@@ -16,9 +16,9 @@
  * CONSENSUS REGRESSION GUARD for db.getAnchorV1ByBatchSeq() head-selection determinism.
  *
  * match_batch_seq is NOT unique on anchor_actions: the replay guard in anchor.js
- * _parseCheckpoint accepts an EQUAL MATCH_BATCH_SEQ, so a permissionless re-broadcast or a
+ * parseCheckpoint accepts an EQUAL MATCH_BATCH_SEQ, so a permissionless re-broadcast or a
  * failover double-publish stores a SECOND v1/v6 row for the same batch. The returned parent
- * feeds a consensus-visible verdict in anchor.js _parseContinuation (TOTAL_CHUNKS geometry
+ * feeds a consensus-visible verdict in anchor.js parseContinuation (TOTAL_CHUNKS geometry
  * gate + batch_crc32 reassembly, which stamps setAnchorArchiveStatus(parent.action_index,
  * 'invalid_archive')). The pre-fix query was `... match_batch_seq = ? LIMIT 1` with NO
  * ORDER BY, so two honest nodes could select different parents and persist divergent

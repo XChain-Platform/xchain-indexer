@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Unit: XChainIndexer._priceMirrorHorizon()
+ * Unit: XChainIndexer.priceMirrorHorizon()
  *
  * The consumer half of the hub price-mirror bound. It answers ONE question -
  * how far back can a price read of any block this node will process reach -

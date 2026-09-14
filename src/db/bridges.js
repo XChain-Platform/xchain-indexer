@@ -40,7 +40,7 @@ module.exports = {
     // A RETRACTED transfer (its source leg reorged) must NOT exclude the leg, or a lock
     // re-mined at the same action_index could never be re-signed.
     //
-    // The mirror may be a SEPARATE connection (_mirrorDb, a node following a remote hub
+    // The mirror may be a SEPARATE connection (mirrorDb, a node following a remote hub
     // database), so the exclusion cannot always be one join. Same connection: NOT EXISTS
     // inside the statement, so the LIMIT counts only rows still in flight. Separate
     // mirror: the local legs are paged by keyset and the mirror is asked which of each

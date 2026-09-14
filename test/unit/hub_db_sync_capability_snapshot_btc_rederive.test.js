@@ -48,7 +48,7 @@ const HubDbSync         = require('../../src/hub/hub_db_sync.js');
 const SNAP_BLOCK = 961234;
 
 // This node's own authoritative stake rows at SNAP_BLOCK, in the shape
-// _stakeWeightsWithCap reads them (weight = the SOURCE aggregate, carried on every
+// stakeWeightsWithCap reads them (weight = the SOURCE aggregate, carried on every
 // effective key of that source; `_sr` is the source rank the capped branch ranks on).
 const LOCAL_STAKES = [
     { pubkey: 'aa11', source: 'src1', weight: '5000.00000000', _sr: 1 },

@@ -108,7 +108,7 @@ describe('federation READ connection isolation @regression @tier1', function () 
     }
 
     // The handler's own comment claims its eligibility rule is byte-identical to
-    // actions/nodeproof.js `_eligibleVerifierSet`, and the hub sizes quorum off this RPC.
+    // actions/nodeproof.js `eligibleVerifierSet`, and the hub sizes quorum off this RPC.
     // Both now resolve the capability side through ONE getValidatorsByCapability read,
     // re-probing per pubkey only on a truncated result. Guarded as a pair so the api
     // copy cannot drift back to a per-pubkey loop while nodeproof.js stays batched.

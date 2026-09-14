@@ -19,7 +19,7 @@
  * bumps fulfilled_count / missed_count / slashed_count on a (validator_pubkey,
  * provider_id) row that carries no block FK, so neither generic rollback delete
  * loop can touch it. A blanket delete would also wipe increments earned in
- * surviving blocks. Rollback._recomputeAttestationValidatorStats() therefore
+ * surviving blocks. Rollback.recomputeAttestationValidatorStats() therefore
  * drops only the rows whose most-recent touch is in the orphaned range and
  * rebuilds them from the surviving ledger (verified signatures on STATUS='ok'
  * responses + responsible-set members of expired requests), matching exactly
@@ -239,7 +239,7 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
 
     // The fallback re-derive must resolve the capability set at the DECLARED height
     // BURIED by CANONICAL_REORG_BUFFER, exactly as actions/attest.js
-    // _computeResponsibleSet does, while the STAKE_WEIGHTED_QUORUM flag-day stays on
+    // computeResponsibleSet does, while the STAKE_WEIGHTED_QUORUM flag-day stays on
     // the raw declared height. Resolving the SET at the raw height selects a different
     // responsible set whenever a validator's capability stake activates or deactivates
     // inside (declared - 6, declared], so the recompute charges missed_count to a

@@ -515,7 +515,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
     // v1: Response (validator broadcast). The security-critical path.
     //
     // NOTE on quorum: ATTEST v1 quorum is REDUNDANCY-based; a response is valid
-    // when validSigs >= request.redundancy (attest.js _parseResponse). The
+    // when validSigs >= request.redundancy (attest.js parseResponse). The
     // 2f+1 PBFT formula lives in PRICE v0, not here; see price.test.js.
     // ───────────────────────────────────────────────────────────────────────
     describe('v1: response', function () {
@@ -565,9 +565,9 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
 
         // The REQUEST_ID format check accepts either case, but the hub signs the
-        // LOWERCASE rid. _parseResponse normalizes once, up front, so the canonical
+        // LOWERCASE rid. parseResponse normalizes once, up front, so the canonical
         // it verifies against is byte-identical to the hub's signed bytes no matter
-        // what case a producer puts on the wire (the byte-identity used to rest on
+        // what case a producer puts on the wire (the byte-identity does not rest on
         // AttestationPublisher lowercasing, an invariant outside this handler).
         it('normalizes a mixed-case REQUEST_ID: canonical, lookup, and stored row', async function () {
             indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
@@ -830,7 +830,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             it('a TRUNCATED weighted read is used as it stands, never re-probed per signer', async function () {
                 // hasCapability sums per signing_pubkey_id, the pubkey aggregate again, so a
                 // per-signer fallback would reinstate the bug exactly where the federation is
-                // largest. _computeResponsibleSet reads the same truncated set at the same
+                // largest. computeResponsibleSet reads the same truncated set at the same
                 // block, so eligibility still covers it.
                 swq.isStakeWeightedQuorumActive.returns(true);
                 indexer.indexerDb.getValidatorsByCapability.resolves([]);
@@ -862,7 +862,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             it('off BTC the BTC-anchored gate is never evaluated against a local height', async function () {
                 // isStakeWeightedQuorumActive compares against a BTC height; an LTC/DOGE
                 // local height is already past it, so consulting the gate there resolves
-                // TRUE out of band. _computeResponsibleSet returns [] off BTC for the same
+                // TRUE out of band. computeResponsibleSet returns [] off BTC for the same
                 // reason, so the two stay on one plane.
                 swq.isStakeWeightedQuorumActive.returns(true);
                 indexer.config['COIN'] = 'LTC';
@@ -878,12 +878,12 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         //
         // Quorum requires signers from the request's deterministic responsible
         // set: top-REDUNDANCY validators ranked by SHA256(request_id || pubkey),
-        // the same set _parseExpire charges missed_count to. Capability + a valid
+        // the same set parseExpire charges missed_count to. Capability + a valid
         // sig is necessary but not sufficient: otherwise any capable coalition
         // could assemble a valid v1 (first-lands-wins, non-deterministic) and
         // fulfilled_count would drift from missed_count.
 
-        // Rank a universe of pubkeys exactly as _computeResponsibleSet does, so the
+        // Rank a universe of pubkeys exactly as computeResponsibleSet does, so the
         // tests can pick in-set vs out-of-set coalitions without hard-coding hashes.
         const PUBKEY_OUT1 = 'c'.repeat(64);
         const PUBKEY_OUT2 = 'e'.repeat(64);
@@ -1336,7 +1336,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 ]);
                 indexer.indexerDb.getAttestationRequestById.resolves(
                     feeRequestRow({ redundancy: 3, fee_amount: '1.00000001' }));
-                // _settleRequestFee reads gasDecimals to compute feeCap = min(8, gasDecimals).
+                // settleRequestFee reads gasDecimals to compute feeCap = min(8, gasDecimals).
                 // Production XCHAIN genesis is 8 dp; floor each share to 8 dp.
                 indexer.indexerDb.getTokenDecimalPrecision.resolves(8);
                 const data = v1FeeData();
@@ -1597,7 +1597,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
     });
 
     // ───────────────────────────────────────────────────────────────────────
-    // _injectCallbackExecute internal branches
+    // injectCallbackExecute internal branches
     // ───────────────────────────────────────────────────────────────────────
     describe('_injectCallbackExecute internal branches', function () {
 
@@ -1620,7 +1620,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
 
         it('null actionExecute in actionsCtx → callback injection is silently skipped (line 397)', async function () {
-            // Remove actionExecute so _injectCallbackExecute returns null immediately (line 397)
+            // Remove actionExecute so injectCallbackExecute returns null immediately (line 397)
             actionsCtx.actionExecute = null;
             handler = new Attest(actionsCtx);
 
@@ -1636,7 +1636,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
 
         it('callback_params_json with invalid JSON → catch branch fires, callbackParams stays []', async function () {
             // Provide a request with malformed callback_params_json; the JSON.parse try/catch
-            // in _injectCallbackExecute (lines 404-406) must fire without throwing.
+            // in injectCallbackExecute (lines 404-406) must fire without throwing.
             indexer.indexerDb.getAttestationRequestById.resolves(
                 makeRequestRow({ redundancy: 1, callback_params_json: '<<<invalid json>>>' })
             );
@@ -1664,7 +1664,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
 
         it('execute.parse throws → rollbackToSavepoint called and exception swallowed by caller (lines 460-462)', async function () {
-            // _parseResponse wraps _injectCallbackExecute in try/catch and swallows the error
+            // parseResponse wraps injectCallbackExecute in try/catch and swallows the error
             executeStub.parse.rejects(new Error('callback-exploded'));
             indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
             const data = v1Data();
@@ -1673,14 +1673,14 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             await assert.doesNotReject(
                 () => handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null)
             );
-            // rollbackToSavepoint called inside _injectCallbackExecute before re-throw
+            // rollbackToSavepoint called inside injectCallbackExecute before re-throw
             assert.ok(indexer.indexerDb.rollbackToSavepoint.calledOnce,
                 'rollbackToSavepoint must be called when execute.parse throws');
         });
 
         it('null RESPONSE_PAYLOAD in callback arg uses empty string fallback (line 414)', async function () {
             // Pass null for the payload param (params[3]) so RESPONSE_PAYLOAD ends up null/empty.
-            // The `responseData['RESPONSE_PAYLOAD'] || ''` guard fires inside _injectCallbackExecute.
+            // The `responseData['RESPONSE_PAYLOAD'] || ''` guard fires inside injectCallbackExecute.
             indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
             const data = v1Data();
             // null payload → responseBodyBytes from Buffer.from('', 'base64') = empty → responsePayload=''
@@ -1705,7 +1705,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
     });
 
     // ───────────────────────────────────────────────────────────────────────
-    // _injectExpiredCallback internal branches (v2 expire path)
+    // injectExpiredCallback internal branches (v2 expire path)
     // ───────────────────────────────────────────────────────────────────────
     describe('_injectExpiredCallback internal branches', function () {
 
@@ -1775,8 +1775,8 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
 
         it('getValidatorsByCapability throws → missed_count catch block fires, expire still succeeds (lines 367-368)', async function () {
-            // Make getValidatorsByCapability throw so _computeResponsibleSet propagates and
-            // the outer try/catch in _parseExpire (lines 357-368) fires the warning path.
+            // Make getValidatorsByCapability throw so computeResponsibleSet propagates and
+            // the outer try/catch in parseExpire (lines 357-368) fires the warning path.
             indexer.indexerDb.getValidatorsByCapability.rejects(new Error('db-fault'));
             indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ request_status: 'pending' }));
             const data = v2Data();
@@ -2293,7 +2293,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
 
         it('NEVER resolves a per-row responsible set on the batch rail', async function () {
-            // Structural, not incidental: _computeResponsibleSet returns [] off BTC, so a
+            // Structural, not incidental: computeResponsibleSet returns [] off BTC, so a
             // batch that tried to verify rows here would refuse every honest one. Per-row
             // verification happens on the BTC indexer after the hub re-serves the row.
             const { handler: h } = batchHandler('DOGE');
@@ -2744,7 +2744,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
  * the responsible-set SWQ gate is BTC-ANCHORED.
  *
  * isStakeWeightedQuorumActive() compares against 961000, a BTC height. But
- * _computeResponsibleSet was handed the ATTEST action's LOCAL height, and ATTEST
+ * computeResponsibleSet was handed the ATTEST action's LOCAL height, and ATTEST
  * is registered on all three chains. LTC and DOGE sit at ~3.16M and ~6.3M local,
  * so a non-BTC indexer resolved `weighted` TRUE out of band, long before the
  * anchor, while xchain-hub's AttestationRound resolved it FALSE from a real BTC

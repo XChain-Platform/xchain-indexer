@@ -225,7 +225,7 @@ class Genesis {
     // names it as a parent prefix (e.g. "A" and "A.B" make "A" an ancestor). Each tick's
     // own strict prefixes are added only when they are themselves present in the manifest,
     // so the set contains real reserved names that gate at least one descendant's creation.
-    // The parent-before-child invariant is already asserted in _loadRows.
+    // The parent-before-child invariant is already asserted in loadRows.
     ancestorSet(rows){
         let present   = new Set(rows.map(r => r.tick));
         let ancestors = new Set();
@@ -349,7 +349,7 @@ class Genesis {
     }
 
     // sha256 over the canonical `name:hash:amount` line per bucket, newline-joined, in the
-    // canonical (name-sorted) bucket order _airdropBuckets returns. The line format is the
+    // canonical (name-sorted) bucket order airdropBuckets returns. The line format is the
     // pinned wire form: changing it changes every armed pin, so it is fixed here and mirrored
     // in the arming runbook. An unpinned bucket contributes the literal 'unpinned', so an
     // unpinned set and a pinned one never collide.
@@ -402,7 +402,7 @@ class Genesis {
         return buckets;
     }
 
-    // sha256-pin check for one airdrop snapshot, mirroring _verifyManifest: a null pin skips
+    // sha256-pin check for one airdrop snapshot, mirroring verifyManifest: a null pin skips
     // (pre-pin dev/regtest), a mismatch halts the node, and a missing file always halts (an
     // armed bucket without its snapshot must never silently skip the whole allocation).
     verifyAirdropFile(bucket){
@@ -418,7 +418,7 @@ class Genesis {
     }
 
     // Read one snapshot CSV (address,quantity). Addresses never contain a comma, so the
-    // LAST comma splits the fields (symmetric with _loadRows). Duplicate addresses sum
+    // LAST comma splits the fields (symmetric with loadRows). Duplicate addresses sum
     // (first-seen position wins for ordering, keeping the injection order pinned to the
     // hash-pinned file order); non-numeric or non-positive quantities are skipped + logged.
     // CP/DP quantities carry at most 8 decimals, matching the bcadd precision here.
@@ -609,7 +609,7 @@ class Genesis {
      * pass's hash; `salt` distinguishes two injections for the SAME tick in the same family
      * (the decimals re-parameterization below, where the new precision is the salt).
      *
-     * @param {string[]} fields - from _issueFields
+     * @param {string[]} fields - from issueFields
      * @param {string} tick     - the tick, which is the hash preimage's identity component
      * @param {string} source   - the injecting address
      * @param {Object} ctx      - { blockIndex, blockTime, txHashPrefix, txHashFamily, txHashSalt }
@@ -656,18 +656,18 @@ class Genesis {
 
     /**
      * SEAM. The shared token-row creation helper, factored OUT of
-     * _injectGasToken so one code path creates a token row from a parameter set, whether the
+     * injectGasToken so one code path creates a token row from a parameter set, whether the
      * caller is the BTC genesis pass or a bridge settle leg on another chain.
      *
      * WHY A HELPER AT ALL. The XCHAIN row on DOGE and LTC must be byte-for-byte the row
-     * _injectGasToken writes on BTC, and a general bridged row must be created the same way.
+     * injectGasToken writes on BTC, and a general bridged row must be created the same way.
      * Two independent creation paths would drift, and a drifted parameter is a different
      * token row on two chains, which is a different ledger hash.
      *
-     * THE XCHAIN CALL SITE PASSES THE BYTE-IDENTICAL _injectGasToken SET. That is the whole
+     * THE XCHAIN CALL SITE PASSES THE BYTE-IDENTICAL injectGasToken SET. That is the whole
      * contract of this refactor and it is a hard obligation, not a preference: genesis must
      * be byte-identical before and after on every chain, which the replay pin test asserts.
-     * _injectGasToken itself is NOT rewritten by this seam.
+     * injectGasToken itself is NOT rewritten by this seam.
      *
      * ROUTED THROUGH processTransaction(tx, true), so the row is ACTION-DERIVED: its
      * index_tickers id is assigned at a consensus action index and it enters the hashes for
@@ -723,7 +723,7 @@ class Genesis {
         // Idempotent by design: the first in-leg on a chain creates the row and every later
         // leg finds it. An existing row is a no-op and NOT an error, so a settle pass never
         // has to know whether it is the first one. ctx.skipExistsProbe is for the one caller
-        // that already knows the row cannot be there (see _injectGasToken).
+        // that already knows the row cannot be there (see injectGasToken).
         if(!ctx.skipExistsProbe){
             let existing = await this.tokenRow(tick);
             if(existing)

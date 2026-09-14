@@ -17,7 +17,7 @@
  * Why this module exists: the writer below was a private method on
  * actions/execute, and actions/deploy ran a constructor's SLASH emissions
  * through it by reaching into the live Execute instance
- * (this.actions.actionExecute._processSlashEmission). That made one action
+ * (this.actions.actionExecute.processSlashEmission). That made one action
  * depend on another action's private surface, so a change inside execute
  * could break deploy with nothing naming the coupling. The writer is protocol
  * behaviour shared by the two VM entry points (a top-level EXECUTE and a

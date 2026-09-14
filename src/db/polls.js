@@ -43,7 +43,7 @@ module.exports = {
         let min_vote_balance = data['MIN_VOTE_BALANCE'];
         let decide_threshold = data['DECIDE_THRESHOLD'];
         let question         = data['QUESTION'];
-        // Creation deposit (anti-spam): _parseCreate normalizes DEPOSIT to a numeric
+        // Creation deposit (anti-spam): parseCreate normalizes DEPOSIT to a numeric
         // string ('0' when none). Store the amount and the creator address id (the
         // refund target) so VOTE v2 can release the escrow without re-deriving SOURCE.
         let deposit_amount   = this.util.isNull(data['DEPOSIT']) ? '0' : String(data['DEPOSIT']);
@@ -55,7 +55,7 @@ module.exports = {
         let cb_params        = binding ? (this.util.isNull(data['CALLBACK_PARAMS']) ? null : String(data['CALLBACK_PARAMS'])) : null;
         let cb_on            = binding ? (data['CALLBACK_ON'] || 'pass') : null;
         let gas_escrow       = binding ? (this.util.isNull(data['GAS_ESCROW']) ? '0' : String(data['GAS_ESCROW'])) : null;
-        // CALLBACK_DELAY_BLOCKS timelock: _parseCreate nulls the field below
+        // CALLBACK_DELAY_BLOCKS timelock: parseCreate nulls the field below
         // the VOTE_CALLBACK_TIMELOCK flag-day, so a stored value is always gate-legal.
         let cb_delay         = (binding && !this.util.isNull(data['CALLBACK_DELAY_BLOCKS'])) ? parseInt(data['CALLBACK_DELAY_BLOCKS']) : null;
         // deposit_address_id is the escrow PAYER (= creator), stored whenever any GAS

@@ -32,7 +32,7 @@
  * A mirrored result row that can never deliver here (no local request, a routing
  * mismatch, or signatures that miss the cross_chain quorum) is RETIRED once it has
  * aged out, rather than being re-rejected on every block forever: see
- * _retireUndeliverableResult. Retirement is consensus-visible and
+ * retireUndeliverableResult. Retirement is consensus-visible and
  * flag-day gated.
  *
  * Spec: xchain-documentation/protocol/actions/XCALL.md
@@ -68,7 +68,7 @@ const XCALL_RESULT_ORPHAN_GRACE_SECONDS = PROTO.XCALL_RESULT_ORPHAN_GRACE_SECOND
 const ALLOWED_CHAINS = ['BTC', 'LTC', 'DOGE'];
 
 // Flag-day gating the retirement of undeliverable result rows. See the
-// registration in src/protocol_changes.js and _retireUndeliverableResult below.
+// registration in src/protocol_changes.js and retireUndeliverableResult below.
 const ORPHAN_RETIREMENT_GATE = 'XCALL_RESULT_ORPHAN_RETIREMENT';
 
 // call_id preimage fields, in preimage order. This list is the single in-file
@@ -508,7 +508,7 @@ class Xcall {
     // in a capped per-block pass, which decides which block a real callback EXECUTE
     // lands in; a node-local retirement would fork the delivered set against a node that
     // kept the row. So it is flag-day gated (ORPHAN_RETIREMENT_GATE), decided purely
-    // from consensus inputs (_resultAgedOut), and written against a rollback-able
+    // from consensus inputs (resultAgedOut), and written against a rollback-able
     // action_index like every other cross-chain bookkeeping row, so a source-chain reorg
     // that restores the missing request also erases the retirement and lets the result
     // deliver normally on the branch that carries the request.

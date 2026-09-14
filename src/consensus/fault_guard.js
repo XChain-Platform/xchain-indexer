@@ -59,7 +59,7 @@ function rethrowIfInfraFault(e){
     // stranding the assert exists to prevent. Deterministic on every node running
     // the same code, so halting is loud, not forking.
     if(e && e.code === 'EXEC_CONTEXT_TX_HASH_MISSING') throw e;
-    // Price-barrier deferral: db._assertPriceBarrierNotSkipped() fires when this
+    // Price-barrier deferral: db.assertPriceBarrierNotSkipped() fires when this
     // block skipped the hub price-mirror barrier and then read the mirror anyway. It is a
     // node-local coverage verdict, not a contract outcome, and its whole contract is that
     // the block rolls back and retries with the barrier enforced. Swallowing it commits an

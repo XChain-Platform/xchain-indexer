@@ -347,10 +347,10 @@ class Utility {
 
     /* Price the pre-VM protocol fee for a VM action, in gas units.
      *
-     * Single-sources arithmetic that used to live at four sites: the three acceptance
+     * Single-sources the arithmetic shared by four sites: the three acceptance
      * handlers (deploy.js, deploy_chunk.js, execute.js) and the static quote that sizes
-     * the native fee output for them (actions._staticProtocolFee). Those four agreed by
-     * inspection only, so a term added to one and not the others would have quoted a
+     * the native fee output for them (actions.staticProtocolFee). Kept apart, those four agree by
+     * inspection only, so a term added to one and not the others would quote a
      * client an output the handler then refuses, and no check could see it.
      *
      * Returns the schedule value uncoerced, so a schedule missing a key still yields the
@@ -2144,7 +2144,7 @@ class Utility {
         // unmetered VM-compute primitive - the exact class FEE_QUOTE_DENYLIST blocks for
         // DEPLOY/EXECUTE. Refuse at this single shared chokepoint (covering both token- and
         // address-controller guards, all guarded action classes) ONLY when a guard would truly run:
-        // the caller reaches _invokeController only after an effective controller resolved, so
+        // the caller reaches invokeController only after an effective controller resolved, so
         // uncontrolled tokens never hit this line and stay fully quotable, and a new guarded action
         // inherits the refusal for free. GUARD_INERT is set only on computeFeeQuote's synthetic tx
         // (never a decoded block tx, never the API-key-gated feequotedryrun), so this branch is dead
@@ -2576,7 +2576,7 @@ class Utility {
                 data['ACTION']       = 'ATTEST';
                 data['FORMAT']       = 1;
                 data['BLOCK_INDEX']  = block_index;
-                // Load-bearing, not decoration: _settleRequestFee reaches the broadcast-fee
+                // Load-bearing, not decoration: settleRequestFee reaches the broadcast-fee
                 // reimbursement, which reads BLOCK_TIME for its fee-oracle lookup, and the
                 // injected callback context carries it too.
                 data['BLOCK_TIME']   = block_time;
@@ -2595,7 +2595,7 @@ class Utility {
                 // handler reads the row, not these params; they exist so the action looks
                 // like every other synthesized one.
                 await actions.processAction('ATTEST', [1, candidate.request_id], data, null);
-                // THE BIND SIGNAL. _applyMirroredResponse sets STATUS 'valid' only
+                // THE BIND SIGNAL. applyMirroredResponse sets STATUS 'valid' only
                 // after the row verified; every skip path returns before it, leaving the
                 // key unset. Stopping here is what makes the request bind exactly once:
                 // a bound request must never see a second candidate, and each skip has
@@ -2920,7 +2920,7 @@ class Utility {
         // protocol cap, which would silently gate-bypass in the ON direction.
         let cap     = capped ? require('./protocol/constants.js').CROSS_SETTLE_MAX_PER_BLOCK
                              : Number.MAX_SAFE_INTEGER;
-        // block_index is the admission-era binding key (db._mirrorBindClause); below the
+        // block_index is the admission-era binding key (db.mirrorBindClause); below the
         // activation the read ignores it and binds on block_time exactly as before.
         let matches = await db.getEffectiveUnsettledMatches(coin, block_time, cap, block_index);
         for(let m of matches){
@@ -2953,7 +2953,7 @@ class Utility {
         let cap     = require('./actions/xcall/index.js').XCALL_MAX_CALLS_PER_BLOCK;
 
         // 1. Inject executions for dispatches targeting this chain.
-        // block_index keys the admission era in both call reads (db._mirrorBindClause).
+        // block_index keys the admission era in both call reads (db.mirrorBindClause).
         let dispatches = await db.getEffectiveUndispatchedCalls(coin, network, block_time, cap, block_index);
         for(let c of dispatches){
             let data = {};
@@ -3006,7 +3006,7 @@ class Utility {
         // out, so if mere presence suppressed expiry the request would stall for that whole window
         // and indexers mirroring different hubs would diverge on whether the
         // v2 expiry action exists. (Such a row is no longer immortal:
-        // _retireUndeliverableResult records a 'retired:' callback once _resultAgedOut is true, and
+        // retireUndeliverableResult records a 'retired:' callback once resultAgedOut is true, and
         // getEffectiveUnprocessedCallResults excludes any call_id with a recorded callback, so it
         // then leaves the set. That bounds the backlog to the grace window; it does not make
         // presence a safe suppression signal, which is what this paragraph is about.)

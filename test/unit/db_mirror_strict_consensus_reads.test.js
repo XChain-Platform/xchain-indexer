@@ -14,7 +14,7 @@
  * The hub-mirrored reads are consensus INPUTS and must fail loudly.
  *
  * Database.doQuery catches a driver error and returns [] whenever the instance
- * holds no transaction connection. Every read routed through _mirrorDb() runs on
+ * holds no transaction connection. Every read routed through mirrorDb() runs on
  * the hub-DB instance, which XChainIndexer builds read-only and which therefore
  * never opens a transaction, so a transient fault comes back as "no rows" and is
  * indistinguishable from a genuinely empty mirror. One node then omits the XEXEC,

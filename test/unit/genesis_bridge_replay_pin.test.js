@@ -10,7 +10,7 @@
 
 // Genesis replay pin for the bridge's shared token-row helper, frozen byte for byte.
 //
-// _injectGasToken routes through Genesis.injectProtocolToken so the BTC genesis row and
+// injectGasToken routes through Genesis.injectProtocolToken so the BTC genesis row and
 // the row the bridge creates off BTC come out of ONE code path, rather than building the
 // gas token's wire string and synthetic tx hash inline. Genesis is block-keyed and replays from
 // height 0 on every node, so the transaction it synthesizes is a consensus artifact: if its
@@ -110,7 +110,7 @@ describe('genesis gas-token replay pin (bridge row-4 helper) @regression', funct
     it('the genesis pass reads no database at all, exactly as before the refactor', async function () {
         // The gas token is the FIRST action of the genesis block, so the row cannot be there
         // and the idempotency probe the bridge needs would only add a read to the one block
-        // every node replays. _injectGasToken must keep the read count it had: zero.
+        // every node replays. injectGasToken must keep the read count it had: zero.
         const h = harness('BTC');
         let reads = 0;
         h.genesis.indexerDb.getTickerId  = async () => { reads++; return null; };

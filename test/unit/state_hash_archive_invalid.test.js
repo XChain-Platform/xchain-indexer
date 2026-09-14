@@ -26,7 +26,7 @@
  *
  *   CHUNK-HEIGHT KEY. It scoped the completing chunk with `c.block_index`, a
  *   column NO v2 continuation row ever populates: `block_index` carries
- *   BLOCK_INDEX_CHECKPOINTED, assigned only in anchor.js `_parseCheckpoint`, and
+ *   BLOCK_INDEX_CHECKPOINTED, assigned only in anchor.js `parseCheckpoint`, and
  *   db.js binds it NULL when the key is absent. `NULL BETWEEN B AND B` is never
  *   true, so the class selected ZERO rows on every node from the day it landed.
  *   Repaired to `block_index_doge` behind ARCHIVE_INVALID_HEIGHT_KEY (mainnet and
@@ -70,7 +70,7 @@ const B = 7;
 // stamped 'invalid_archive' in an earlier block, and its completing v2 chunk landing
 // at block B. `headVersion` picks v1 (legacy) or v6 (publisher-bearing).
 // block_index is deliberately LEFT UNSET on the chunk, which is exactly what
-// anchor.js `_parseContinuation` + db.js `createAnchorAction` produce in production.
+// anchor.js `parseContinuation` + db.js `createAnchorAction` produce in production.
 function seedFailedBatch(db, { headVersion = 1, batchSeq = 7, headActionIndex = 100, chunkActionIndex = 301 } = {}){
     const validId   = db.status('valid');
     const invalidId = db.status('invalid_archive');

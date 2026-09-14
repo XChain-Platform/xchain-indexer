@@ -16,7 +16,7 @@
  * Schema migration runner: pure-logic contract tests (no live DB).
  *
  * Covers the gate that decides whether a migration runs unattended at startup:
- * _migrationMode() header parsing, and the invariant that every committed migration
+ * migrationMode() header parsing, and the invariant that every committed migration
  * declares its intent explicitly so a destructive file can never default-silently
  * into the auto-apply path on a validator fleet.
  *
@@ -30,11 +30,11 @@ const Database = require('../../src/db');
 const { requireWithFreshConfig } = require('../helpers/fresh_config.js');
 const DB_PATH = require.resolve('../../src/db');
 
-// _migrationMode is a pure string function : bind it to a bare object.
+// migrationMode is a pure string function : bind it to a bare object.
 const modeOf = Database.prototype.migrationMode.bind({});
 
 // Destructive-DDL guard helpers: same comment-strip + quote-aware split runMigrations uses.
-// Bind to the prototype so _destructiveAutoStatement can reach _isIdRepairUpdate and
+// Bind to the prototype so destructiveAutoStatement can reach isIdRepairUpdate and
 // splitSqlStatements can reach stripSqlLineComments (both pure, no instance state).
 const stripComments = Database.prototype.stripSqlLineComments.bind({});
 const destructiveOf = Database.prototype.destructiveAutoStatement.bind(Database.prototype);
@@ -45,7 +45,7 @@ const statementsOf  = (raw) => Database.prototype.splitSqlStatements.call(Databa
 // width, the stake-weight collation and the reward-key assertions all read
 // information_schema.columns/statistics and pass through on an empty answer, because an
 // absent column is a fresh install rather than drift - which is why a bare fake conn that
-// returns [] has always satisfied them. _assertBridgeTablesPresent reads
+// returns [] has always satisfied them. assertBridgeTablesPresent reads
 // information_schema.TABLES, where an empty answer is NOT ambiguous: zero rows means the
 // three tables really are gone, and halting is the whole point of the guard.
 //
@@ -116,7 +116,7 @@ describe('committed migrations declare intent @regression @tier1', function () {
         it(file + ': carries an explicit `-- xchain:migration mode=auto|manual` tag the runner sees', function () {
             const raw = fs.readFileSync(path.join(MIG_DIR, file), 'utf8');
             // Match the tag ANYWHERE in the file, then assert the runner's prologue-anchored
-            // _migrationMode actually resolves it to that declared value. This asserts the runner
+            // migrationMode actually resolves it to that declared value. This asserts the runner
             // and the declared intent agree, so a tag the runner cannot see (e.g. below the first
             // SQL statement) fails CI instead of default-landing as `manual` while looking tagged
             // (the dead-tag gap this test exists to catch).
@@ -1217,7 +1217,7 @@ describe('runMigrations() checksum heal branch @regression @tier1', function () 
 // Backdating guard in the apply loop. Apply order is lexical, so a migration committed
 // with a date EARLIER than one the fleet already applied runs in its date slot on a
 // fresh DB and after the frontier on an aged one, diverging the schemas. Driven through
-// the real _runMigrationsInner against the real migrations dir: seeding the ledger with
+// the real runMigrationsInner against the real migrations dir: seeding the ledger with
 // every file EXCEPT an early auto one reproduces exactly the aged-DB shape.
 describe('runMigrations() backdated-migration guard @regression @tier1', function () {
 

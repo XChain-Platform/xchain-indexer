@@ -10,10 +10,10 @@
 
 /* Binds the static native-fee quote to the acceptance fee the handlers charge.
  *
- * The pre-VM protocol fee used to be computed at four independent sites: deploy.js,
- * deploy_chunk.js, execute.js, and actions._staticProtocolFee (which sizes the native output
- * a client must build). They agreed by inspection only, and nothing failed if one gained a
- * term the others did not - the SDK would have quoted an output the handler then refuses.
+ * The pre-VM protocol fee is charged or quoted at four independent sites: deploy.js,
+ * deploy_chunk.js, execute.js, and actions.staticProtocolFee (which sizes the native output
+ * a client must build). Computed separately, they agree by inspection only, and nothing fails if one gains a
+ * term the others do not - the SDK would quote an output the handler then refuses.
  * The pre-flight drift gate cannot see this class at all: it compares list membership and
  * GAS_SCHEDULE values, never arithmetic.
  *
@@ -44,7 +44,7 @@ function makeUtil(){
     return util;
 }
 
-// The static-quote path with the VM engine and the DB absent: _staticProtocolFee reads only
+// The static-quote path with the VM engine and the DB absent: staticProtocolFee reads only
 // the schedule, the format version and (for inline DEPLOY) the decoded code bytes.
 function makeCtx(util, { base64CodeEra = true } = {}){
     return {
@@ -76,7 +76,7 @@ describe('static fee quote <-> handler acceptance fee parity @regression @tier1'
 
         it('never substitutes a default for a missing schedule key', function () {
             // A silent 0 here would price a VM action at nothing. Callers guard on the
-            // non-finite result instead (_staticProtocolFee returns null, no quote).
+            // non-finite result instead (staticProtocolFee returns null, no quote).
             assert.ok(!Number.isFinite(Number(util.vmGasCost({}, 'EXECUTE', 0))));
             assert.ok(!Number.isFinite(Number(util.vmGasCost({}, 'DEPLOY_INLINE', 1))));
             assert.ok(!Number.isFinite(Number(util.vmGasCost({}, 'DEPLOY_CHUNKED', 0))));

@@ -763,7 +763,7 @@ describe('admission binding: the attest-response bind predicate', function () {
 });
 
 // ---------------------------------------------------------------------------
-// The direct-hub-DB call-presence member (XChainIndexer._waitForDirectCallPresence).
+// The direct-hub-DB call-presence member (XChainIndexer.waitForDirectCallPresence).
 // ---------------------------------------------------------------------------
 
 describe('admission binding: the direct-hub-DB call-presence member', function () {

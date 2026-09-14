@@ -36,7 +36,7 @@
  *
  * FORMATS:
  *   v0 - the per-network checkpoint BUNDLE: one header, SECTION_COUNT per-chain
- *        sections, one publisher-attestation tail (see _parseBundle)
+ *        sections, one publisher-attestation tail (see parseBundle)
  *   v1 - VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|MATCH_BATCH_SEQ|MATCH_COUNT|BATCH_CRC32|TOTAL_CHUNKS|ARCHIVE_B64|SIG_COUNT|PUBKEY|SIG|...|PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|...
  *   v2 - VERSION|MATCH_BATCH_SEQ|CHUNK_INDEX|TOTAL_CHUNKS|ARCHIVE_B64_CHUNK
  *
@@ -97,7 +97,7 @@ class Anchor {
         // SECTION_COUNT stands for SECTION_COUNT sections, each
         // CHAIN|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ
         // |SECTION_SNAPSHOT_BLOCK|STATE_ROOT|STATE_ROOT_VERSION|BLOCK_MERKLE_ROOT
-        // |BLOCK_MERKLE_VERSION|SIG_COUNT|(PUBKEY|SIG)..., walked positionally by _parseBundle.
+        // |BLOCK_MERKLE_VERSION|SIG_COUNT|(PUBKEY|SIG)..., walked positionally by parseBundle.
         this.formats[0] = 'VERSION|NETWORK|SNAPSHOT_BLOCK|SECTION_COUNT|...|PUBLISHER|ATTEST_SIG_COUNT|...';
         // v1 (archive head): the checkpoint wrapper carrying the match-archive segment,
         // PLUS the elected archive-leader PUBLISHER pubkey and an oracle_publish
@@ -125,7 +125,7 @@ class Anchor {
             // Archive head: rootless checkpoint base + archive extension. Byte-matches the
             // hub's archiveCanonical, which nests the bare rawCanonicalCheckpoint; the
             // wrapper sigs are produced over the SAME archive canonical (the publisher tail
-            // is attested separately via _rewardCanonical).
+            // is attested separately via rewardCanonical).
             base += '|' + String(d['MATCH_BATCH_SEQ']) + '|' + String(d['MATCH_COUNT']) + '|' +
                     d['BATCH_CRC32'] + '|' + String(d['TOTAL_CHUNKS']);
             roundId += '|' + d['MATCH_BATCH_SEQ'];
@@ -468,7 +468,7 @@ class Anchor {
                 // replay-guard comment above describes as restarting across a wipe-and-replay
                 // rebase, so it alone does not identify the reward: two genuinely distinct
                 // archive anchors can carry a reissued seq. The qualifier is the snapshot
-                // block that already distinguishes them in the SIGNED tuple (_rewardCanonical
+                // block that already distinguishes them in the SIGNED tuple (rewardCanonical
                 // puts SNAPSHOT_BLOCK in the archive XANCPUB canonical), carried into the
                 // ledger key so both real publishes survive the upsert and the reconcile.
                 let rewardQual  = arKey.rewardRoundQualifier(rewardType, data['SNAPSHOT_BLOCK']);
@@ -519,7 +519,7 @@ class Anchor {
 
         await this.indexerDb.createAnchorAction(data);
 
-        // Head-side archive reassembly gate: the chunk-side gate in _parseContinuation only
+        // Head-side archive reassembly gate: the chunk-side gate in parseContinuation only
         // fires when the parent archive head already exists, so when the completing
         // continuation chunk is broadcast BEFORE its head every stored chunk is 'orphan' and
         // the reassembly CRC is never checked. Re-run the completeness + CRC check here when
@@ -1020,7 +1020,7 @@ class Anchor {
         // parent v1's signed CRC and flag the parent if the blob doesn't bind. Status
         // handling and completeness are IDENTICAL to the head-side gate above (via
         // aaq.archiveChunkCoverage): the completing chunk's own status is 'valid' here (a
-        // chunk is never stored 'unverified', since only _parseCheckpoint's snapshot-less
+        // chunk is never stored 'unverified', since only parseCheckpoint's snapshot-less
         // branch assigns that status, so the '|| unverified' term is unreachable on this
         // path and carries no flag day of its own; the head-side twin's 'unverified' term
         // IS gated, see archive_head_unverified_gate_activation.js, because there it is

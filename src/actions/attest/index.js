@@ -109,13 +109,13 @@ const ALLOWED_ORIGIN_CHAINS = ['LTC', 'DOGE'];
 const BATCH_CHAIN = 'DOGE';
 
 // Marker appended to the verdict a COMPLETING v6 continuation stamps on a surviving
-// v5 head (_absorbCompletedBatch). It exists for the reorg reset in rollback.js and
+// v5 head (absorbCompletedBatch). It exists for the reorg reset in rollback.js and
 // for nothing else.
 //
 // WHY A MARKER AND NOT A BLANKET RESTORE. The stamp is an in-place write on a row
 // that landed in an EARLIER block, so a reorg taking the completing chunk deletes the
 // chunk and cannot undo the stamp: the head stays terminal, drops out of
-// getAttestBatchChunks (which reads status 'valid' only), and _canonicalBatchHead then
+// getAttestBatchChunks (which reads status 'valid' only), and canonicalBatchHead then
 // resolves NOTHING on replay, so the re-mined chunk rejoins a batch with no head and
 // the window is dead on this node while a from-genesis replay has it live. The obvious
 // remedy - reset every non-valid head joined to an orphaned chunk back to 'valid' - is
@@ -126,7 +126,7 @@ const BATCH_CHAIN = 'DOGE';
 //
 // A marker separates the two classes with no ambiguity at all: only the post-hoc stamp
 // carries it, and a row carrying it was, by construction, 'valid' immediately before
-// (the head reached _absorbCompletedBatch only by coming back from the status='valid'
+// (the head reached absorbCompletedBatch only by coming back from the status='valid'
 // chunk read). So the pre-flip status the reset restores is not a guess, it is the one
 // value the flip could possibly have overwritten.
 //
@@ -428,7 +428,7 @@ class Attest {
         // derives from block-anchored stake state every validator replays alike.
         // The computed set is reused as the pinned RESPONSIBLE_SET_JSON below.
         // Cross-chain relay: the origin-side half of the cross-chain relay.
-        // On LTC/DOGE _computeResponsibleSet returns [] by construction (attestation
+        // On LTC/DOGE computeResponsibleSet returns [] by construction (attestation
         // stake is BTC-only), and ATTEST_ADMISSION is already satisfied there on local
         // height, so today EVERY off-BTC request is rejected at admission. At/above
         // ATTEST_RELAY_ORIGIN such a request is instead admitted 'pending' and stamped
@@ -551,12 +551,12 @@ class Attest {
                     ' : ' + data['STATUS']);
 
         // Pin the responsible set AS-OF this request's block so the reorg
-        // missed_count recompute (rollback._recomputeAttestationValidatorStats) reads the
+        // missed_count recompute (rollback.recomputeAttestationValidatorStats) reads the
         // historical set verbatim rather than re-deriving it against the CURRENT mutable
         // stakes.amount (a later SURVIVING slash reduces it, so a bare re-derive charges
         // missed_count to the wrong set). Only a 'pending' request can ever expire and reach
         // the recompute; a 'rejected' row is invisible to the expiry sweep, so skip the stake
-        // query for it. Uses the SAME _computeResponsibleSet the v1 verify + v2 expiry paths
+        // query for it. Uses the SAME computeResponsibleSet the v1 verify + v2 expiry paths
         // use, evaluated at the request's own block_index (the set the recompute keys on).
         // (Reuses the admission-gate set when the gate already computed it.)
         if(data['REQUEST_STATUS'] === 'pending'){
@@ -834,7 +834,7 @@ class Attest {
     //
     // The effects are the v1 chain handler's effects, MINUS A TRANSACTION: the response
     // row, the request's terminal flip, the fee settle and the contract callback are
-    // written exactly as _parseResponse writes them, hung off a system-synthesized
+    // written exactly as parseResponse writes them, hung off a system-synthesized
     // ATTEST v1 action with NULL TX_INDEX/TX_VOUT and a deterministic TX_HASH. That is
     // what keeps everything downstream (rollback by action_index, `stream:action`
     // replication, the VM snapshot, the state hash, the relay's response leg) working
@@ -1109,7 +1109,7 @@ class Attest {
     // re-derives every callback without trusting any hub.
     //
     // THE DOGE SIDE VERIFIES THE BATCH QUORUM ONLY, NEVER THE PER-ROW RESPONSIBLE SET, and
-    // this is a constraint rather than a shortcut: `_computeResponsibleSet` returns [] off
+    // this is a constraint rather than a shortcut: `computeResponsibleSet` returns [] off
     // BTC by construction (attestation stake is BTC-only) and the stake-weighted gate tests
     // the literal 'BTC', so a DOGE indexer cannot resolve a responsible set at all. Per-row
     // verification therefore happens where the stake actually resolves, on the BTC indexer,
@@ -1542,7 +1542,7 @@ class Attest {
     // staking sources whose aggregate weight is below the request provider's
     // block-anchored min_stake_xchain before selecting. `providerId` is therefore
     // REQUIRED at/above STAKE_WEIGHTED_QUORUM; omitting it fails closed to an empty
-    // set. See _providerFloorFilter for why the floor rides the SWQ gate rather than
+    // set. See providerFloorFilter for why the floor rides the SWQ gate rather than
     // a new flag day, and providerMinStakeHistory.js for where the value comes from.
     // `widen` is the liveness ladder's extra slot count (attest_responsible_widening_activation.js),
     // supplied ONLY by the two sites that judge a RESPONSE (the v1 verify filter and the
@@ -1590,7 +1590,7 @@ class Attest {
         // and flips at the anchor in lockstep with the hub.
         //
         // `blockIndex` is the DECLARED height (the request's block). Two different things
-        // come off it, and the difference matters (see _parseResponse):
+        // come off it, and the difference matters (see parseResponse):
         //   - the STAKE_WEIGHTED_QUORUM flag-day is evaluated on the declared height,
         //     verbatim, because moving a cutover block by the reorg buffer is its own fork;
         //   - the set is RESOLVED at the declared height BURIED by CANONICAL_REORG_BUFFER,
@@ -1700,7 +1700,7 @@ class Attest {
 
     // Canonical signing string for the relay REQUEST leg (v3). MUST byte-match the
     // hub's relay driver. Same construction rules as the XCALL dispatch canonical
-    // (xexec.js::_canonical): pipe-joined fixed field order, the free-form payload
+    // (xexec.js::canonical): pipe-joined fixed field order, the free-form payload
     // folded in as a hash rather than inline, and the EQUIV uniform header wrapped
     // around it at/above the flag-day. ROUND_ID folds the phase in so the request
     // and response legs of one request_id can never collide in the equivocation
@@ -2152,7 +2152,7 @@ class Attest {
     //                          onto the same decimal grid). At/above
     //                          ATTEST_ZERO_CONF the split pays the verified
     //                          SIGNERS of the response instead of the whole
-    //                          widened set (_signerPaySet); the pool credit,
+    //                          widened set (signerPaySet); the pool credit,
     //                          the carve-out and the solvency argument are
     //                          unchanged, since the paid set is a subset.
     //   'errored'/'expired'  → escrow → refund to FEE_PAYER.
@@ -2539,7 +2539,7 @@ class Attest {
             includeTxHash: synthActive
         });
 
-        // Unique per injected callback (see _injectCallbackExecute savepoint note).
+        // Unique per injected callback (see injectCallbackExecute savepoint note).
         let savepoint = await this.indexerDb.createSavepoint('attestation_expire_callback_' + parseInt(emissionActionIndex));
         try {
             await this.actions.actionExecute.parse(actionParams, emissionData, null);

@@ -10,7 +10,7 @@
 //
 // test/unit/actions/priceV2Batch.test.js
 //
-// PRICE v0 (_parseV0): the consensus parser that decides, on every indexing
+// PRICE v0 (parseV0): the consensus parser that decides, on every indexing
 // node, whether a batch is valid.
 //
 // Everything here is driven through a REAL six-round batch: real Ed25519
@@ -944,8 +944,8 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
     // -----------------------------------------------------------------------
     describe('rewards', function () {
 
-        // THE PIN for zero batch rewards. The oracle_round derivation lives inline in _parseV0 and is not
-        // shared code, so _parseV0 simply never calls it. Without this test a later
+        // THE PIN for zero batch rewards. The oracle_round derivation lives inline in parseV0 and is not
+        // shared code, so parseV0 simply never calls it. Without this test a later
         // refactor that hoisted the derivation into a shared helper would silently start
         // paying six rounds' worth of rewards per batch, on chain, with no failing test.
         it('writes ZERO validator_rewards rows for a valid BTC-landed batch', async function () {

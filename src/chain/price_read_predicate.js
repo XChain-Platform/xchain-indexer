@@ -58,7 +58,7 @@
  *      mirror. Predicting them would mean re-running their due-set queries
  *      before the block transaction opens, and the answer could still change
  *      before the pass executes, since the mirror keeps syncing concurrently.
- *      Instead the guarantee is enforced where it is exact: db._assertPriceBarrierNotSkipped()
+ *      Instead the guarantee is enforced where it is exact: db.assertPriceBarrierNotSkipped()
  *      fails the block closed at the price-read choke points themselves if this
  *      predicate said "no read" and something read anyway. The block rolls back
  *      and retries with the barrier forced. That also covers any future reader

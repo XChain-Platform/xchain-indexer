@@ -210,7 +210,7 @@ describe('waitingOnFutureBlock() / stallClassOf() / atProcessableTip()', functio
  * The call barrier borrowed matchWatermarkGraceS long after _callSyncSatisfied
  * had been decoupled onto callWatermarkGraceS. Both constants are 120s today, so
  * the emitted value was identical and no behavioural test could see the slip.
- * _barrierClearsAt coerces an unknown field to grace 0, so a rename fails silently
+ * barrierClearsAt coerces an unknown field to grace 0, so a rename fails silently
  * too. Pin the mapping by source text, which is the only place the pairing exists.
  */
 describe('barrier stallClearsAt grace-field mapping @regression', function () {
@@ -228,7 +228,7 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
     //
     // The scan reads the HEIGHT-AWARE helper as well as the plain one, because a re-keyed
     // barrier still has to name which grace it would use below its activation. It does NOT
-    // accept a bare `_barrierClearsAt` on a re-keyed reason silently: the two helper names
+    // accept a bare `barrierClearsAt` on a re-keyed reason silently: the two helper names
     // are distinguished below, so dropping the height-awareness from a call site is a red
     // rather than a rename that slides through.
     function graceWiring() {
@@ -318,7 +318,7 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
     });
 
     it('every grace field named by a barrier exists on the HubDbSync instance', function () {
-        // _barrierClearsAt coerces an unresolvable field to grace 0, so a rename that
+        // barrierClearsAt coerces an unresolvable field to grace 0, so a rename that
         // misses a call site degrades silently rather than throwing.
         for (const [reason, field] of EXPECTED) {
             if (field === null) continue;

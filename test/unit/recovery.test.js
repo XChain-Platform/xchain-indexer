@@ -165,7 +165,7 @@ function memDb(v1s, v2s, opts) {
                 return calls.filter(r => r.call_id === params[0] && r.phase === params[1]).map(r => ({ call_id: r.call_id }));
             if (sql.startsWith('UPDATE cross_chain_calls SET status')) {
                 if (sql.includes('snapshot_block')) {
-                    // Finalized-wins full-column content upgrade (recovery._rebuild). Param order:
+                    // Finalized-wins full-column content upgrade (recovery.rebuild). Param order:
                     // [0]=status, [12]=effective_time, [15]=validator_signatures, [16]=finalizing_view,
                     // [17]=call_id, [18]=phase (mirrors the UPDATE column list).
                     for (let r of calls) if (r.call_id === params[17] && r.phase === params[18]) {
@@ -222,7 +222,7 @@ function memDb(v1s, v2s, opts) {
 //                    DELEGATED-only signer: authorized by a staked source, no stakes row of its
 //                    own. Stage 2 runs only for keys the direct query rejected, so with no
 //                    `effective` override the resolver is never reached for existence.
-//   anything else -> the completeness check (_verifyCompleteness): the qualifying set at
+//   anything else -> the completeness check (verifyCompleteness): the qualifying set at
 // the threshold recovery reconstructed as of the snapshot block
 //                    or null when this handle carries no coin config, in which case db.js
 //                    applies its own local floor. Backed by
@@ -1027,7 +1027,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
                 let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
                 let staked = oracleKeys.concat(crossKeys).map(k => k.pubkey);
                 // Two archived rows for ONE source: the fixture's per-key sources are distinct,
-                // so drive _verifyWeightedCompleteness directly with the crafted group.
+                // so drive verifyWeightedCompleteness directly with the crafted group.
                 let rec = new AnchorRecovery(memDb([v1], []), Object.assign({ btcDb: btcDbStub(staked, {}) }, quiet));
                 let g = { capability: 'cross_chain', block: 100, rows: [
                     { source: 'src_a', signing_pubkey: 'a'.repeat(64), amount: '5' },

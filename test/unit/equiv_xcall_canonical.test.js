@@ -9,8 +9,8 @@
 // General Public License v3.0 or later; see LICENSE.md.
 
 // EQUIV header: cross-chain call (XCALL) round-trip.
-// CONSENSUS-CRITICAL: the dispatch canonical (xexec._canonical) and the result
-// canonical (xcall._resultCanonical) are rebuilt to re-verify quorum sigs and MUST
+// CONSENSUS-CRITICAL: the dispatch canonical (xexec.canonical) and the result
+// canonical (xcall.resultCanonical) are rebuilt to re-verify quorum sigs and MUST
 // byte-match the hub CrossChainCallEngine._canonicalMatch + the archive/recovery
 // twins. XCALL is view-bearing (VIEW = finalizing_view). The ROUND_ID folds in the
 // phase (sha256('XCALLROUND|'+phase+'|'+call_id)), so dispatch and result get DISTINCT

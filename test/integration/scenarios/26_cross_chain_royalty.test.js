@@ -66,7 +66,7 @@ const sha  = s => crypto.createHash('sha256').update(s).digest('hex');
 const ROYAL  = `module.exports={ meta:{ name:'Royalty Guard', description:'Pays a 25 percent royalty leg on every trade.', version:'1.0.0' }, guard:function(){ return { payoutLegs: [{ to: '${LEGADDR}', bps: 2500 }] }; } };`;
 const SEGLEG = `module.exports={ meta:{ name:'Segwit Leg Guard', description:'Pays a royalty leg to a segwit address.', version:'1.0.0' }, guard:function(){ return { payoutLegs: [{ to: '${SEGLEG_ADDR}', bps: 2500 }] }; } };`;
 
-// The production canonical builder (cross_settle._canonical): the injected match must be
+// The production canonical builder (cross_settle.canonical): the injected match must be
 // signed over the EXACT bytes the settlement pass verifies, legs included.
 const Cross_Settle = require('../../../src/actions/cross_settle/index.js');
 const settleCanon  = new Cross_Settle({ config: {}, decoderDb: null, indexerDb: null, util: null, mapper: null });

@@ -180,7 +180,7 @@ class Price {
                 if(roundCount > priceV2.PRICE_BATCH_MAX_ROUND_COUNT)
                     throw new Error('invalid ROUND_COUNT (' + roundCount + ' > ' + priceV2.PRICE_BATCH_MAX_ROUND_COUNT + ')');
 
-                // Pair-name bound, resolved ONCE per action exactly as _parseV0 resolves it, and
+                // Pair-name bound, resolved ONCE per action exactly as parseV0 resolves it, and
                 // keyed on this action's own block time for the same reason: a batch can land on
                 // any of BTC/LTC/DOGE and their heights diverge.
                 let pairPattern = pricePair.pricePairPattern(data['BLOCK_TIME'], this.config['NETWORK']);
@@ -352,7 +352,7 @@ class Price {
             let verifyFirst = priceSigTally.isPriceSigTallyVerifyFirstActive(
                 btcBlockHeight, this.config['NETWORK']);
 
-            // Capability set resolved exactly as _parseV0 resolves it, at the BATCH's signed BTC
+            // Capability set resolved exactly as parseV0 resolves it, at the BATCH's signed BTC
             // anchor and not this action's own BLOCK_INDEX (capability_snapshots.snapshot_block is
             // a BTC height, so off BTC a landing-chain height matches nothing). Includes the same
             // truncation fallback to the per-signer path: getValidatorsByCapability caps at
@@ -396,7 +396,7 @@ class Price {
             }
 
             // Count-or-stake quorum. The GATE, the WEIGHTS and the capability count all key on the
-            // batch's signed BTC anchor, exactly as _parseV0 keys them: the gate must flip on one
+            // batch's signed BTC anchor, exactly as parseV0 keys them: the gate must flip on one
             // height for every chain and the hub, and the validator set is BTC-anchored because
             // capability staking is BTC-only.
             let weighted = swq.isStakeWeightedQuorumActive(btcBlockHeight, this.config['NETWORK']);
@@ -440,7 +440,7 @@ class Price {
         // window for a chain-only node, so retiring one after the attempt cap would destroy
         // an hour of price history rather than a single re-derivable round.
         if(!error && this.hubClient && this.hubClient.enabled){
-            // Source-chain reorg fence: see _parseV0.
+            // Source-chain reorg fence: see parseV0.
             let pushGeneration = await this.indexerDb.getPushGeneration(data['COIN']);
             // KEY NAMES ARE CONSENSUS-ADJACENT AND UNVALIDATED BY THE TRANSPORT. The hub's
             // pushpricebatch handler destructures exactly these names; a typo here fails
@@ -535,7 +535,7 @@ class Price {
         // outbox closes it. The hub dedupes by (source_address, source_chain, action_index), so a
         // later replay it already has is a safe no-op.
         if(!error && this.hubClient && this.hubClient.enabled){
-            // Source-chain reorg fence: see _parseV0 above.
+            // Source-chain reorg fence: see parseV0 above.
             let pushGeneration = await this.indexerDb.getPushGeneration(data['COIN']);
             let payload = {
                 source_chain:   data['COIN'],
@@ -550,7 +550,7 @@ class Price {
                 action_index:   data['ACTION_INDEX'],
                 push_generation: pushGeneration
             };
-            // Durable outbox inside the block transaction (see _parseV0). enqueueHubPushTx
+            // Durable outbox inside the block transaction (see parseV0). enqueueHubPushTx
             // commits the pending_hub_pushes row atomically with the prices row; the staged
             // entry is delivered live post-commit by XChainIndexer and dropped on success, else
             // HubPushQueue drains the survivor. This is the priority case: unlike a price_round,

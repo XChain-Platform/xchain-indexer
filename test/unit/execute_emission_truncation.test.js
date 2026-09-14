@@ -16,7 +16,7 @@
  * Emission amount truncation (item 5346) @regression @tier1
  *
  * Contracts compute with 64-digit bignum precision, so an emitted action can carry an amount
- * with more fractional digits than its tick's decimals. Execute._truncateEmissionAmounts
+ * with more fractional digits than its tick's decimals. Execute.truncateEmissionAmounts
  * normalizes every amount-bearing emission field to its tick's decimals BEFORE the emission is
  * validated/dispatched, using the SAME normalization the ledger applies
  * (createLedgerChangeRecord -> util.bcadd(amount, 0, decimals)). This keeps a contract's

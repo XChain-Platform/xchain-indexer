@@ -44,7 +44,7 @@ function mkDb(effective){
         getEffectiveTokenControllerForGuard: async () => effective
     };
 }
-// guardEnabled toggles the CONTROLLER_GUARD activation gate that _invokeController consults
+// guardEnabled toggles the CONTROLLER_GUARD activation gate that invokeController consults
 // (default true = at/above the flag-day, where the control-flow tests below exercise the guard).
 function mkActions(guardResult, calls, guardEnabled){
     return {
@@ -322,7 +322,7 @@ describe('Programmable policy layer : Phase B enforcement @regression', function
     // The guard is a NEW acceptance + ledger rule: a node version that runs it and one that
     // does not settle the SAME guarded action differently (allow/deny + payout_legs vs plain),
     // forking the ledger and the per-block contract_hash on the first guarded action. Below the
-    // CONTROLLER_GUARD flag-day _invokeController must be a STRICT no-op on every node : no VM
+    // CONTROLLER_GUARD flag-day invokeController must be a STRICT no-op on every node : no VM
     // guard run, no fee, no payout_legs : identical to a node that lacks the controller layer.
     // protocol_changes.test.js pins the real isEnabled() flag-day math; this block pins that the
     // enforcement chokepoint actually HONORS the gate (a deny-returning guard must NOT run, and a

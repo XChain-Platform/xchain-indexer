@@ -67,7 +67,7 @@
  *      BTC included, where that leg is synthetic: the corpus is what is
  *      compared, and its prerequisite is made identical by construction. The
  *      one residue is the injected row's synthetic tx hash, which carries the
- *      coin literal by design (genesis.js _syntheticIssueTx) and is normalized
+ *      coin literal by design (genesis.js syntheticIssueTx) and is normalized
  *      by value like artifact 4; the hash preimages never fold a tx hash, so
  *      the hash-chain comparison stays whole. 10-determinism-baseline pins the
  *      broadcast preamble on BTC, so BTC history itself is still covered.

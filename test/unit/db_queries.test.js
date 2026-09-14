@@ -1947,7 +1947,7 @@ describe('Database.alterTableForDrift() lossless nullability relax @regression @
 });
 
 // ---------------------------------------------------------------------------
-// _migrationMode
+// migrationMode
 // ---------------------------------------------------------------------------
 describe('Database._migrationMode() @regression @tier1', function () {
     let db;
@@ -1974,7 +1974,7 @@ describe('Database._migrationMode() @regression @tier1', function () {
 });
 
 // ---------------------------------------------------------------------------
-// _poolQuery
+// poolQuery
 // ---------------------------------------------------------------------------
 describe('Database._poolQuery() @regression @tier1', function () {
     it('acquires a fresh connection, runs query, releases connection', async function () {
@@ -2167,7 +2167,7 @@ describe('Database.getPendingHubPushes() @regression @tier1', function () {
     });
 
     // Head-of-line blocking fix: the due-time predicate
-    // must be pushed into SQL, mirroring HubPushQueue._isDue's backoff formula
+    // must be pushed into SQL, mirroring HubPushQueue.isDue's backoff formula
     // (delay = LEAST(base * 2^(attempts-1), max)), so pending-but-not-due rows no
     // longer occupy the LIMIT batch slots.
     it('bakes the exponential-backoff due-time predicate into the WHERE clause', async function () {
@@ -2225,7 +2225,7 @@ describe('Database capability snapshot methods @regression @tier1', function () 
 });
 
 // ---------------------------------------------------------------------------
-// _mirrorDb
+// mirrorDb
 // ---------------------------------------------------------------------------
 describe('Database._mirrorDb() @regression @tier1', function () {
     it('returns this when indexer has no hubDb', function () {

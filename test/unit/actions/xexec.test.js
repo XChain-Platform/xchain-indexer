@@ -270,7 +270,7 @@ describe('Xexec (XEXEC) @regression @tier3', function () {
     // XEXEC is injected by the end-of-block cross-chain pass, so it runs on
     // blocks that carry no transaction at all: exactly the blocks priceReadPredicate
     // lets skip the hub price-mirror barrier. The injected EXECUTE then reads the
-    // mirror (native-fee sizing, oracle.getPrice), db._assertPriceBarrierNotSkipped
+    // mirror (native-fee sizing, oracle.getPrice), db.assertPriceBarrierNotSkipped
     // fires, and the whole point of that assertion is a rollback plus a retry with the
     // barrier enforced. The catch above must not convert it into a per-call verdict:
     // on a live isolated regtest venue it did, and all 28 calls of a burst recorded

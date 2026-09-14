@@ -572,7 +572,7 @@ class XBridge {
         // is BTC-only (the literal the five BTC-only handlers share); v1 burns a foreign
         // chain's copy, so it is everywhere BUT BTC (the inverse-chain shape anchor.js
         // uses). v3 and v4 carry no chain literal: their chain rule is the tick's row kind,
-        // which _validateTickShape decides.
+        // which validateTickShape decides.
         if(format === 0 && ctx.coin !== 'BTC')
             return { valid: false, verdict: VERDICTS.BTC_ONLY };
         if(format === 1 && ctx.coin === 'BTC')

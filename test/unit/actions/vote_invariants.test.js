@@ -14,7 +14,7 @@
  * test/unit/actions/vote_invariants.test.js
  *
  * Regression coverage for the four VOTE governance invariants that had zero
- * tests: escrow conservation in _settleDeposit
+ * tests: escrow conservation in settleDeposit
  * (including idempotency) and binding-callback firing/metering. Delegation
  * precedence and quadratic/dust-floor weighting are covered separately in
  * test/unit/votes_tally_invariants.test.js.
@@ -204,7 +204,7 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
         // by the poll's GAS_ESCROW. The emission carries IS_EMISSION (execute.js
         // skipFee) and deliberately omits VM_GAS_LIMIT, so execute.js falls back to
         // GAS_CEILING rather than an escrow-derived ceiling; gas_escrow always
-        // refunds in full (see _settleDeposit tests). This locks the documented
+        // refunds in full (see settleDeposit tests). This locks the documented
         // deferred-metering behavior (ATTEST parity): a future fix that ties the
         // callback's gas ceiling to gas_escrow must set VM_GAS_LIMIT here and will
         // break this test on purpose.

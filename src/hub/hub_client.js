@@ -29,7 +29,7 @@ const { CONFIG_ENV } = require('../config.js');
 // Name the hub rejections a REPLAY can never turn into an acceptance.
 // A push can fail INSIDE a successful JSON-RPC envelope: PriceAggregator returns
 // { accepted:false, reason } and api.js returns { error:'...' } as an ordinary method
-// result, and _call rejects on neither. Every pattern here judges the PAYLOAD itself,
+// result, and call rejects on neither. Every pattern here judges the PAYLOAD itself,
 // which a queued row replays byte for byte, so retrying only grows the queue. Anything
 // else is retryable, including a reason this list has never seen: a needless retry costs
 // a queue slot, a wrong drop costs a never-re-derivable oracle price (actions/price.js).
@@ -44,8 +44,8 @@ const TERMINAL_HUB_REJECTIONS = [
 
 // The THROWN counterpart of TERMINAL_HUB_REJECTIONS above. The hub's durable push
 // handlers now answer a refusal of the call's own arguments with a JSON-RPC error rather
-// than an in-result message, and _call rejects on a top-level `error` before
-// _requireHubAccepted ever sees a payload, so without this every such push retried
+// than an in-result message, and call rejects on a top-level `error` before
+// requireHubAccepted ever sees a payload, so without this every such push retried
 // forever: the durable push types carry no attempt cap (hub_push_queue.js) and the queued
 // row replays the same arguments into the same verdict on every drain.
 //
@@ -68,7 +68,7 @@ function terminalHubRejection(err){
     // A throttle is the hub declining to LOOK at the payload, never a verdict on it, and
     // it can carry an rpcCode; check it first so a future terminal code cannot swallow one.
     if(err.rateLimited) return null;
-    // _call re-homes the envelope's code as rpcCode so it cannot collide with Node's own
+    // call re-homes the envelope's code as rpcCode so it cannot collide with Node's own
     // string `code` on a socket error; `code` is still honoured when it is numeric, for a
     // caller that hands back the hub's error object as the hub stamped it.
     let code = (err.rpcCode !== undefined) ? err.rpcCode
@@ -110,7 +110,7 @@ function readRateLimitHeaders(headers){
 }
 
 // Stamp an error as a throttle so callers can hold off instead of burning a
-// delivery attempt on a row the hub never even looked at. See HubPushQueue._attempt.
+// delivery attempt on a row the hub never even looked at. See HubPushQueue.attempt.
 function markRateLimited(err, facts){
     err.rateLimited = true;
     err.httpStatus  = facts.httpStatus || 429;
@@ -154,14 +154,14 @@ class HubClient {
         // Tracked separately from `enabled`: a deployment may carry a config oracle
         // without a push endpoint, and the config poll must not be gated on the feed.
         this.configEnabled = !!this.configUrl;
-        // Wall-clock ceiling for a single _call; see HUB_CALL_DEADLINE_MS.
+        // Wall-clock ceiling for a single call; see HUB_CALL_DEADLINE_MS.
         let deadline = Number(CONFIG_ENV.HUB_CALL_DEADLINE_MS);
         this.callDeadlineMs = Number.isFinite(deadline) && deadline > 0 ? deadline : HUB_CALL_DEADLINE_MS;
     }
 
     // Read the hub's operational params. The one method here that is NOT on the hub's
     // feed-port allowlist, so it goes to configUrl (a private hub API port) rather than
-    // hubUrl; see the constructor. Left as a thin wrapper over _call so callers never
+    // hubUrl; see the constructor. Left as a thin wrapper over call so callers never
     // have to know which endpoint a method belongs to.
     async getAllConfigs(){
         if(!this.configEnabled) return null;
@@ -321,8 +321,8 @@ class HubClient {
     }
 
     // Deliver one push and judge BOTH shapes a hub refusal arrives in: the in-result message
-    // _requireHubAccepted reads, and the JSON-RPC error _call rejects on. Every push method
-    // above goes through here rather than calling _call directly, so the two shapes cannot
+    // requireHubAccepted reads, and the JSON-RPC error call rejects on. Every push method
+    // above goes through here rather than calling call directly, so the two shapes cannot
     // drift apart again.
     //
     // A terminal rejection is returned as { error: message }, which is byte for byte what
@@ -348,9 +348,9 @@ class HubClient {
     }
 
     // Throw on an application-level hub rejection a retry could still clear, so the durable
-    // outbox RETAINS the row instead of deleting it. _call resolves any
+    // outbox RETAINS the row instead of deleting it. call resolves any
     // error-free JSON-RPC envelope, so before this every rejection read as a delivery:
-    // HubPushQueue._attempt called markHubPushDelivered and XChainIndexer's post-commit
+    // HubPushQueue.attempt called markHubPushDelivered and XChainIndexer's post-commit
     // path did the same, which destroyed the only remaining copy of a price the hub had
     // just refused for a transient reason (no validator snapshot, a hub DB error, an
     // aggregator still booting). Returns the result untouched when there is nothing wrong.
@@ -463,7 +463,7 @@ class HubClient {
                 // RESPONSE: 'end' never fires, and req 'error' never fires either because
                 // the request itself completed. Without these three the promise stays
                 // pending forever, HubPushQueue.drain() keeps `draining` latched across
-                // its awaited _attempt, and every later tick returns at the overlap guard,
+                // its awaited attempt, and every later tick returns at the overlap guard,
                 // so the push queue stops for good with the rows neither acked nor retried.
                 res.on('error',   (err) => { req.destroy(); reject(new Error('hub response error: ' + ((err && err.message) || err))); });
                 res.on('aborted', ()    => { req.destroy(); reject(new Error('hub aborted the response before the body was complete')); });

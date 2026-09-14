@@ -11,7 +11,7 @@
 // ---------------------------------------------------------------------------
 // ATTEST v1 response-verification byte vectors.
 //
-// These vectors were CAPTURED by driving the real _parseResponse handler BEFORE
+// These vectors were CAPTURED by driving the real parseResponse handler BEFORE
 // the verify block was factored out into src/actions/attest/attest_response_verify.js
 // (for the ATTEST response mirror), and they are
 // asserted against the refactored path afterwards. That is the whole point of the
@@ -96,7 +96,7 @@ const DEADLINE_BLOCK = 200;
 
 const b64 = (s) => Buffer.from(s, 'utf8').toString('base64');
 
-// Rank the candidate keys the way _computeResponsibleSet does, so a vector can say
+// Rank the candidate keys the way computeResponsibleSet does, so a vector can say
 // "sign with the validator that is NOT responsible" without hard-coding which of
 // the three fixed keys that happens to be.
 function rankByResponsibleHash(pubkeys, requestId) {
@@ -463,7 +463,7 @@ describe('ATTEST v1 response verification: captured byte vectors @regression @ti
             seatUnweighted([K1.pubkey]);
             const r = await driveSigned([K1.pubkey]);
             // Off BTC the eligibility read stays the pubkey-aggregate query, and
-            // _computeResponsibleSet returns [] by plane, so nothing is responsible.
+            // computeResponsibleSet returns [] by plane, so nothing is responsible.
             assert.strictEqual(indexer.indexerDb.getStakeWeightsByCapability.callCount, 0);
             assert.strictEqual(r.status, 'invalid: insufficient valid signatures (0/1)');
         });
@@ -545,7 +545,7 @@ describe('ATTEST v1 response verification: captured byte vectors @regression @ti
     // MIRROR-ERA CANONICAL. The chain path above never
     // sets `effectiveTime` at all, so it stays on the legacy canonical (proved by
     // every vector above staying green, unchanged). These vectors call the shared
-    // module directly, the way the mirror applier (`_applyMirroredResponse`)
+    // module directly, the way the mirror applier (`applyMirroredResponse`)
     // does, since the applier's own wiring is a separate concern outside this
     // file's scope; what is covered is that the module itself selects the era it is
     // told to, and never crashes on a row that cannot spell its own effective time.

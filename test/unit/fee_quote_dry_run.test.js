@@ -19,7 +19,7 @@ const Actions = require('../../src/actions/index.js');
 
 const FEE_DEST = 'feeDestinationAddr111111111111111';
 
-// Build a minimal Actions-like context exposing the real _dryRunAction /
+// Build a minimal Actions-like context exposing the real dryRunAction /
 // computeFeeQuoteDryRun prototype methods plus stubbed dependencies. processTransaction is
 // stubbed so the test never touches a real DB or handler chain; the transaction-mutex calls
 // (beginTransaction / rollbackTransaction) and the fee-row read are recorded IN ORDER so we
@@ -48,7 +48,7 @@ function makeCtx({ status = 'valid', actionIndex = 55, feeAmount = '1.00000000',
             // Watchdog-fence surface: the dry-run reads the epoch after
             // beginTransaction and runs processTransaction under it. The stub
             // mirrors the real Database contract (fixed epoch, pass-through run).
-            // BOTH fence entry points are stubbed. _dryRunAction runs under
+            // BOTH fence entry points are stubbed. dryRunAction runs under
             // runInDryRunEpoch (the no-consensus-authority variant),
             // never runInTxEpoch; stubbing only the latter made every call here throw
             // `runInDryRunEpoch is not a function` inside the try, which the handler

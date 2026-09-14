@@ -446,12 +446,12 @@ describe('ProtocolChanges @regression @tier3', function () {
     // `guard` method is NEVER run; every SEND/ORDER/SWAP/DISPENSER/DESTROY on a controlled
     // token settles with plain semantics, no allow/deny veto, no royalty payout_legs, no guard
     // contract_executions row, exactly like a node that lacks the controller layer. At/above
-    // it the shared chokepoint (_invokeController) runs the guard, may DENY, and may attach
+    // it the shared chokepoint (invokeController) runs the guard, may DENY, and may attach
     // payout_legs the match-time split applies. A regression in its registration (a zeroed/
     // wrong mainnet flag-day, regtest/testnet flipped off genesis, or the version bumped past
     // the shipping node) makes a controller-layer node and a non-controller node settle the
     // SAME guarded action differently → ledger + per-block contract_hash → federation
-    // checkpoint, forking on the first guarded action. utility.js _invokeController calls the
+    // checkpoint, forking on the first guarded action. utility.js invokeController calls the
     // REAL isEnabled() at the single shared chokepoint, so this block guards the registration
     // that gate depends on. Keep in lockstep with protocol_changes.js.
     describe('CONTROLLER_GUARD activation gate (consensus)', function () {

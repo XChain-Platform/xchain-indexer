@@ -20,7 +20,7 @@
  * existing data must be mode=manual.
  *
  * The failure this guards is invisible to every check that already runs:
- *   - the destructive-DDL scanner (db._destructiveAutoStatement) deliberately ALLOWS a
+ *   - the destructive-DDL scanner (db.destructiveAutoStatement) deliberately ALLOWS a
  *     widening MODIFY without NOT NULL, so the mode tag is the only gate;
  *   - the schema-parity suites compare the two schema paths to each other, and both
  *     paths carry the same widened column, so they agree and stay green;

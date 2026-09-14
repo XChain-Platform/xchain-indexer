@@ -11,10 +11,10 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Unit: XChainIndexer._deliverStagedHubPushes() live-delivery dispatch
+ * Unit: XChainIndexer.deliverStagedHubPushes() live-delivery dispatch
  *
  * Covers the SECOND of the two dispatch arms a price_batch push needs
- * (the first is HubPushQueue._attempt, tested in hub_push_queue.test.js).
+ * (the first is HubPushQueue.attempt, tested in hub_push_queue.test.js).
  * An unknown push_type is left on the durable row forever rather than
  * erroring, so a missing arm here is a silent permanent stall for every
  * PRICE batch, not a visible failure.
@@ -31,7 +31,7 @@ const XChainIndexer  = require('../../src/XChainIndexer.js');
 
 // The constructor only assigns config fields; no DB connection is opened
 // synchronously, so a plain `new XChainIndexer()` with stubbed indexerDb/
-// hubClient is enough to drive _deliverStagedHubPushes() in isolation.
+// hubClient is enough to drive deliverStagedHubPushes() in isolation.
 function makeIndexer(staged, hubClientOpts){
     let indexer = new XChainIndexer();
     indexer.indexerDb = {

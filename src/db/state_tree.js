@@ -18,7 +18,7 @@
  * sweep issues. Installed onto Database.prototype by db/index.js, so call sites
  * stay this.db.<method>().
  *
- * Every method here runs on _poolQuery, NEVER on doQuery, and that is the whole
+ * Every method here runs on poolQuery, NEVER on doQuery, and that is the whole
  * reason they are grouped apart from the block-path state-tree reads. The sweep
  * runs concurrently with block processing on the same Database instance, where
  * getConnection() hands back the open block's transactionConnection; a prune

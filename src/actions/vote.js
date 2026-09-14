@@ -484,7 +484,7 @@ class Vote {
 
         // Binding poll: fire the contract callback when its CALLBACK_ON
         // gate is met - 'always' on any finalization, 'pass' only on a finalized win.
-        // A failed callback does NOT un-finalize the poll (see _injectCallbackExecute).
+        // A failed callback does NOT un-finalize the poll (see injectCallbackExecute).
         if(result && !this.util.isNull(poll.callback_contract_index)){
             let fires = (poll.callback_on === 'always') ||
                         (result.poll_status === 'finalized' && !this.util.isNull(result.winning_option));

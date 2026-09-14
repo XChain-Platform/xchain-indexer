@@ -90,7 +90,7 @@ function dbFor(coin, network, localRows) {
         if (/SELECT 1 FROM capability_snapshots/.test(sql)) return [{ 1: 1 }];
         return MIRROR_ROWS;
     });
-    // _mirrorDb() prefers indexer.hubDb, which is where the mirrored tables live in
+    // mirrorDb() prefers indexer.hubDb, which is where the mirrored tables live in
     // a distributed deployment. The mirror exposes ONLY doQueryStrict: a capability read
     // that reached the swallowing doQuery would throw here instead of passing.
     db.indexer = { hubDb: { doQueryStrict: mirror } };

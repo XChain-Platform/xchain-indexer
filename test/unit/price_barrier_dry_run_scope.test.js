@@ -16,10 +16,10 @@
  * The price-barrier backstop must fire for BLOCK PROCESSING only,
  * never for a fee-quote dry run.
  *
- * WHY THIS EXISTS: `_assertPriceBarrierNotSkipped` is a consensus backstop. It
+ * WHY THIS EXISTS: `assertPriceBarrierNotSkipped` is a consensus backstop. It
  * used to decide "am I inside the block loop?" by asking whether a txEpochStore
  * context existed at all, under a comment asserting that only the block loop
- * installs one. That was false. `Actions._dryRunAction` installs a context too,
+ * installs one. That was false. `Actions.dryRunAction` installs a context too,
  * and for a good reason of its own - it holds the shared transaction and wants
  * the same zombie-write fence a block gets - so every public /feequote
  * whose dry run read the price mirror during a barrier-skipped block answered

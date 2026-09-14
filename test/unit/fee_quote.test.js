@@ -53,7 +53,7 @@ function makeDb({ prices = {}, blockIndex = 100, blockTime = 1000 } = {}){
     };
 }
 
-// Actions-like context exposing the REAL computeFeeQuote/_priceFeeQuote prototype methods
+// Actions-like context exposing the REAL computeFeeQuote/priceFeeQuote prototype methods
 // with the dry-run engine stubbed (the engine itself is unit-tested in fee_quote_dry_run.test.js).
 // dryRun defaults to a valid run whose handler staged a 1.0 XCHAIN fee.
 function makeCtx(util, indexerDb, { dryRun, base64CodeEra = true, actions = Actions } = {}){

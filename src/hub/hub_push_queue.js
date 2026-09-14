@@ -41,7 +41,7 @@ const { CONFIG_ENV } = require('../config.js');
  * `price_batch`, `attest_batch` and the `*_retraction` rows carry NO cap: none is
  * re-derivable from a later block (each batch type is the SOLE carrier of its whole
  * window for a chain-only node), so they stay `pending` and retry at the max backoff
- * until the hub takes them (see _attempt).
+ * until the hub takes them (see attempt).
  *
  ********************************************************************/
 
@@ -157,7 +157,7 @@ class HubPushQueue {
             // The due-time predicate is pushed into SQL (db.js getPendingHubPushes) so
             // parked-in-backoff rows no longer occupy the LIMIT batch slots, which is what
             // caused head-of-line blocking. Pass the SAME backoff params used below by
-            // _isDue, which stays as a cheap belt-and-braces re-check.
+            // isDue, which stays as a cheap belt-and-braces re-check.
             let rows = await this.indexerDb.getPendingHubPushes(this.batchSize, {
                 baseBackoffMs: this.baseBackoffMs,
                 maxBackoffMs:  this.maxBackoffMs
@@ -312,7 +312,7 @@ class HubPushQueue {
             // that no later block re-emits, so actions/price.js states plainly that a lost one is
             // "never re-derivable" and builds this outbox to guarantee it is not lost. The
             // ~10-attempt cap defeated that guarantee: a hub outage past ~30 minutes retired the
-            // row to 'failed', out of the poller's reach, and _pruneFailed deleted it a week later.
+            // row to 'failed', out of the poller's reach, and pruneFailed deleted it a week later.
             // The hub dedupes on that same action key (actions/price.js), so replaying forever is
             // as safe as it is for a retraction. `price_round` keeps the cap: price.js says it IS
             // re-derivable, so it stays disposable.

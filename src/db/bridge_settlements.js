@@ -23,7 +23,7 @@
  * comment. The bridge_settlements methods run on the LOCAL indexer db, because a
  * mirrored row can be retracted later and so cannot answer "did this chain already
  * apply it?". The bridge_transfers and policy_snapshots methods are called on the
- * MIRROR instance (db._mirrorDb()), which is where those rows live.
+ * MIRROR instance (db.mirrorDb()), which is where those rows live.
  *
  ********************************************************************/
 

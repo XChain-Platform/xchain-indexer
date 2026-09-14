@@ -23,7 +23,7 @@
  * there is exactly one copy and both callers call it.
  *
  * THIS FILE ADDED NO BEHAVIOUR WHEN IT WAS CREATED. It is the verify block lifted
- * verbatim out of actions/attest/index.js `_parseResponse`, with the heights the handler would
+ * verbatim out of actions/attest/index.js `parseResponse`, with the heights the handler would
  * read off the surrounding scope turned into parameters. Its byte-behaviour is
  * pinned by test/unit/actions/attest_response_verify_vectors.test.js, whose
  * expected canonicals and error strings were CAPTURED from the pre-extraction
@@ -96,7 +96,7 @@ const { buildResponseCanonicalRaw } = require('../../consensus/attest_response_c
 //   coin, network      this indexer's plane.
 //   indexerDb          the capability queries.
 //   protocolChanges    the block-time-keyed protocol-change gate.
-//   computeResponsibleSet  the caller's own _computeResponsibleSet, injected. It is
+//   computeResponsibleSet  the caller's own computeResponsibleSet, injected. It is
 //                      a method that reads this.config, this.providerRegistry and
 //                      this.indexerDb, and every path that computes a request's
 //                      responsible set MUST use that one derivation or the stat
@@ -224,7 +224,7 @@ async function verifyAttestationResponse(input){
         // below uses. The two MUST agree on eligibility or a responsible signer is
         // discarded here, before it is ever counted.
         //
-        // At/above STAKE_WEIGHTED_QUORUM _computeResponsibleSet selects
+        // At/above STAKE_WEIGHTED_QUORUM computeResponsibleSet selects
         // getStakeWeightsByCapability, whose _stakeWeightsSql qualifies a staking
         // SOURCE on its aggregate and then emits ALL of that source's effective keys,
         // while getValidatorsByCapability / hasCapability qualify each PUBKEY on its
@@ -241,7 +241,7 @@ async function verifyAttestationResponse(input){
         // set, and the responsible filter below is derived from that same query at
         // this same block, so it still clips acceptance to the deterministic
         // top-REDUNDANCY selection: no coalition that was not already responsible can
-        // land a response. Gated exactly as _computeResponsibleSet is, and for its
+        // land a response. Gated exactly as computeResponsibleSet is, and for its
         // reasons: BTC ONLY, because the SWQ anchor is a BTC height and evaluating it
         // against an LTC/DOGE local height resolves TRUE out of band; and on the
         // DECLARED height, because moving a flag-day boundary by the reorg buffer is
@@ -259,7 +259,7 @@ async function verifyAttestationResponse(input){
         // hasCapability sums WHERE s.signing_pubkey_id = ?, the pubkey aggregate
         // again, so falling back to it would reinstate this exact bug on precisely the
         // truncated read where the federation is largest. Take the truncated rows as
-        // they stand instead: _computeResponsibleSet resolves the responsible set from
+        // they stand instead: computeResponsibleSet resolves the responsible set from
         // the SAME truncated read at the same block, so eligibility still covers it and
         // the responsible filter stays the binding gate.
         let capableSet  = (!weighted && capableRows && capableRows.truncated === true)
@@ -286,7 +286,7 @@ async function verifyAttestationResponse(input){
 
         // Restrict the verified signers to the request's deterministic
         // responsible set (the top-REDUNDANCY validators ranked by
-        // SHA256(request_id || pubkey), the same set _parseExpire charges
+        // SHA256(request_id || pubkey), the same set parseExpire charges
         // missed_count to. Holding the attestation capability and producing a
         // valid ed25519 signature is necessary but NOT sufficient: without
         // this gate any quorum of capable validators could assemble a valid

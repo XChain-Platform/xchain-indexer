@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// Direct-hub-DB call-presence barrier (_waitForDirectCallPresence).
+// Direct-hub-DB call-presence barrier (waitForDirectCallPresence).
 //
 // Consensus-correctness regression guard. In single-host / direct-hub-DB mode the
 // HubDbSync call barrier is skipped, so the indexer must independently ensure its

@@ -188,7 +188,7 @@ describe('HubClient', function(){
     });
 
     // -----------------------------------------------------------------------
-    // pushChainTip: public-method guard + _call stubbing
+    // pushChainTip: public-method guard + call stubbing
     // -----------------------------------------------------------------------
     describe('pushChainTip()', function(){
         it('returns immediately without calling _call when not enabled', async function(){
@@ -280,7 +280,7 @@ describe('HubClient', function(){
     });
 
     // ─── Application-level hub rejections ride INSIDE a successful envelope (item 4279) ─────
-    // _call rejects only on a top-level JSON-RPC `error`, but the hub signals push failures in
+    // call rejects only on a top-level JSON-RPC `error`, but the hub signals push failures in
     // the RESULT: PriceAggregator returns { accepted:false, reason } and api.js returns
     // { error:'...' } as an ordinary method result. Resolving those told HubPushQueue and
     // XChainIndexer's post-commit path the push was delivered, and both then DELETE the durable
@@ -517,7 +517,7 @@ describe('HubClient', function(){
     });
 
     // -----------------------------------------------------------------------
-    // _call internals: http.request mocking
+    // call internals: http.request mocking
     //
     // These tests drive the raw socket path via a fake http.request that
     // returns an EventEmitter-shaped fake request and fires fake response events.

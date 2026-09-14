@@ -699,7 +699,7 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
 
     });
 
-    // ─── _processSlashEmission (internal SLASH handler) ───────────────────
+    // ─── processSlashEmission (internal SLASH handler) ───────────────────
     // Driven directly: SLASH emissions never reach the wire/decoder, so they are
     // handled inline by this method rather than the generic emission router.
     describe('processSlashEmission', function () {
@@ -714,7 +714,7 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
             return executeData({ CONTRACT_ACTION_INDEX: CONTRACT, ACTION_INDEX: 99, BLOCK_INDEX: 200, ...overrides });
         }
 
-        // Wire the DB methods _processSlashEmission needs (absent from the default mock).
+        // Wire the DB methods processSlashEmission needs (absent from the default mock).
         function wireSlashDb(over = {}) {
             indexer.indexerDb.getContract        = sinon.stub().resolves({ slash_destination_id: 42 });
             indexer.indexerDb.getPubkeyId        = sinon.stub().resolves(7);

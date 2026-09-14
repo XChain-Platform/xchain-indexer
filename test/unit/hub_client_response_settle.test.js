@@ -8,16 +8,16 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
-// HubClient._call must always settle, and the push queue must survive a hub that
+// HubClient.call must always settle, and the push queue must survive a hub that
 // dies mid-response.
 //
 // The measured failure: a hub that sends its headers and part of a body and then
 // drops the connection aborts the RESPONSE, not the request, so `req.on('error')`
-// never fires and `res.on('end')` never fires. _call carried handlers for neither,
+// never fires and `res.on('end')` never fires. call carried handlers for neither,
 // so the promise stayed pending forever - a probe against the pre-fix client sat
 // PENDING past 12s, twelve times the 5000ms socket timeout, because that option is
 // an IDLE-socket timer and cannot fire on a socket that is already gone.
-// HubPushQueue.drain() awaits _attempt() with `draining` latched, so the queue then
+// HubPushQueue.drain() awaits attempt() with `draining` latched, so the queue then
 // returned at `if(this.draining) return` on every later tick: the push queue stopped
 // permanently, with rows neither acknowledged nor retried.
 //

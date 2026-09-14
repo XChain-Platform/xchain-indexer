@@ -397,7 +397,7 @@ module.exports = {
     // `DELETE WHERE block_index >= ?` pattern can't roll it back - a row's
     // earlier, surviving increments live alongside the orphaned ones. Rollback
     // therefore recomputes affected pairs from the surviving ledger rather than
-    // deleting by index: Rollback._recomputeAttestationValidatorStats() drops the
+    // deleting by index: Rollback.recomputeAttestationValidatorStats() drops the
     // rows last touched in the orphaned range and rebuilds them from surviving
     // signatures (fulfilled) + expired requests (missed), matching a from-genesis
     // replay. This keeps the counters consensus-safe across reorgs so Phase 4
@@ -786,7 +786,7 @@ module.exports = {
     // effective_time has been reached at `blockTime`. The mirror half of the applier's
     // applicability read (§4.1).
     //
-    // Read through _mirrorDb(), which is a SEPARATE connection whenever the indexer
+    // Read through mirrorDb(), which is a SEPARATE connection whenever the indexer
     // follows a remote hub DB, so this cannot be one SQL join against local `attests`
     // (the cross_chain_calls readers above have the same split for the same reason).
     //

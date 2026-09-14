@@ -178,7 +178,7 @@ function buildBatch(batchSeq, rawMatches, oracleKeys, crossKeys, opts) {
         CP.ledger_hash, CP.actions_hash, CP.contract_hash, String(CP.checkpoint_seq), String(SNAPSHOT_BLOCK),
         String(batchSeq), String(matches.length), crc, String(totalChunks)].join('|');
     // EQUIV active in regtest (WI-2 bump 2): the v1 archive ROUND_ID appends batch_seq to
-    // the v0 round id (R-4 distinct-key fix), VIEW=0. Byte-matches recovery._wrapperCanonical.
+    // the v0 round id (R-4 distinct-key fix), VIEW=0. Byte-matches recovery.wrapperCanonical.
     let wrapperCanonical = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT,
         CP.chain + '|' + CP.network + '|' + CP.block_index + '|' + CP.checkpoint_seq + '|' + batchSeq, 0, rawWrapper);
     let wrapperSigs = oracleKeys.slice(0, opts.wrapperSigners || 3)

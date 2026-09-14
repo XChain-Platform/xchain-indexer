@@ -92,7 +92,7 @@ async function filterByRolledGates({ db, validators, requestBlock, network, stat
     if(!db || typeof db.getRollcallGatesForFilter !== 'function') return validators;
     if(list.length === 0) return validators;
 
-    // The SAME burial _computeResponsibleSet resolves the capability snapshot at.
+    // The SAME burial computeResponsibleSet resolves the capability snapshot at.
     // The gate rows must come from an epoch whose close is visible at the height the
     // set was read at, or the filter and the set disagree about which blocks exist.
     let buried = srb.buriedSnapshotBlock(requestBlock, network);

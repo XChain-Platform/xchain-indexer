@@ -13,7 +13,7 @@
  *
  * Drift guard: scripts/repair-validator-stats.js must stay structurally
  * in sync with the rollback recompute in src/rollback.js
- * (_recomputeAttestationValidatorStats). Both walk the same source tables
+ * (recomputeAttestationValidatorStats). Both walk the same source tables
  * with the same eligibility predicate; only the cutoff value differs
  * (the repair script uses the chain tip, the rollback uses block_index-1,
  * which is equivalent when the repair target is tip+1). If the predicates

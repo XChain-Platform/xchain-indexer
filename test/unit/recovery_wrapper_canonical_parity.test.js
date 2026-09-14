@@ -10,7 +10,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
-// ITEM 2729: recovery.js's _wrapperCanonical (the XCHECKPOINT string it builds
+// ITEM 2729: recovery.js's wrapperCanonical (the XCHECKPOINT string it builds
 // for the v1 archive wrapper) had no byte-level drift coverage independent of
 // its own producer. test/fixtures/anchor-archive.js hand-copies the SAME join
 // to sign the wrapper, so it is a self-mirror: base-segment drift leaves the
@@ -18,11 +18,11 @@
 //
 // This test derives its expectation two OTHER ways instead:
 //   1. A frozen 14-segment string literal, independent of any production code.
-//   2. Anchor._canonical (src/actions/anchor.js) with FORMAT=1, the rootless
+//   2. Anchor.canonical (src/actions/anchor.js) with FORMAT=1, the rootless
 //      archive form, which is the OTHER real producer of the shared first-10
 //      "XCHECKPOINT" base segments (the hub / SDK / explorer all byte-match it).
 //
-// If _wrapperCanonical's base-segment order, count, or literal ever drifts,
+// If wrapperCanonical's base-segment order, count, or literal ever drifts,
 // both independent oracles below stop matching it while the self-mirrored
 // fixture test keeps passing, closing that coverage gap.
 

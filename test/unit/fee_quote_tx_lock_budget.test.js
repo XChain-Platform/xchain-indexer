@@ -128,7 +128,7 @@ describe('fee-quote transaction-lock budget', function () {
             assert.strictEqual(settled, true);
         });
 
-        // The invariant that makes giving up safe: _releaseTxLock hands the lock to a LIVE
+        // The invariant that makes giving up safe: releaseTxLock hands the lock to a LIVE
         // waiter. Granting it to one that already rejected would leave the mutex held with
         // nothing left to release it, wedging block processing permanently.
         it('a release skips a timed-out waiter and grants the next live one', async function () {

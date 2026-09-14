@@ -89,7 +89,7 @@ const ATTESTED_VERSIONS = [0, 1, 4, 5, 6, 7];
 // cannot prove an archive reward in either era. A post-activation anchor forged on a
 // legacy byte cannot ride in: at/above ANCHOR_ACTIVATION those bytes parse
 // 'invalid: VERSION (unknown)', a wire-determined status every DOGE node computes
-// identically, and the deterministic-invalid filter in _judge drops the row as evidence.
+// identically, and the deterministic-invalid filter in judge drops the row as evidence.
 const REWARD_FAMILY_VERSIONS = {
     archive: [1, 6],
     bundle:  [0, 7]
@@ -117,7 +117,7 @@ const MAX_ANCHOR_PAGES = 25;
 
 // Anchor statuses that are NOT fleet-uniform, so they are evidence of nothing here.
 //
-// _judge's whole licence to memoize a permanent 'rejected' is that the status is chain
+// judge's whole licence to memoize a permanent 'rejected' is that the status is chain
 // data every honest DOGE node computes identically. Three values in actions/anchor.js
 // break that, and they break it in OPPOSITE directions on the same anchor:
 //   'unverified'            - the node holds no mirrored oracle_publish snapshot
@@ -146,10 +146,10 @@ const MAX_ANCHOR_PAGES = 25;
 const NODE_CLASS_DEPENDENT_STATUS =
     /^(?:unverified|invalid: insufficient|invalid: SECTION \d+ insufficient|invalid_archive)/i;
 
-// Can this row be evidence for the reward tuple at all? The three chain-data terms _judge's
+// Can this row be evidence for the reward tuple at all? The three chain-data terms judge's
 // evidence loop applies before it will accept a row: not deterministically invalid, right
 // checkpoint network, right publisher. Factored out so the old-peer bundle-header
-// reconstruction in _judge (which has no action identity to group on) narrows its maximum
+// reconstruction in judge (which has no action identity to group on) narrows its maximum
 // with EXACTLY the predicates the loop will later apply, and the two can never drift apart
 // into a header no candidate row can equal. The version-family term stays at each call site,
 // which already knows which family it is asking about.
@@ -172,7 +172,7 @@ class AnchorProofClient {
                                 || this.config['DOGE_INDEXER_URL'] || '');
         this.apiKey    = String(o.apiKey || CONFIG_ENV.DOGE_INDEXER_API_KEY || this.config['DOGE_INDEXER_API_KEY'] || '');
         this.timeoutMs = parseInt(o.timeoutMs || CONFIG_ENV.ANCHOR_PROOF_TIMEOUT_MS || '15000', 10);
-        // Per-REWARD-TUPLE verdict memo (see _memoKey; NOT per-txid, which let one tuple's
+        // Per-REWARD-TUPLE verdict memo (see memoKey; NOT per-txid, which let one tuple's
         // verdict answer for a different tuple naming the same txid). A confirmed anchor is
         // immutable chain data and a block can be re-attempted many times behind a barrier,
         // so re-asking DOGE for every attempt is pure load. Only DECIDED verdicts are
@@ -202,7 +202,7 @@ class AnchorProofClient {
         }
     }
 
-    // JSON-RPC over the node http/https core modules, matching HubClient._call. The
+    // JSON-RPC over the node http/https core modules, matching HubClient.call. The
     // indexer deliberately carries no HTTP client dependency, and this read is on the
     // block-processing path, so it does not get to add one.
     rpc(method, params){
@@ -263,13 +263,13 @@ class AnchorProofClient {
         // WALK EVERY PAGE BEFORE JUDGING. getanchorconfirmations bounds its answer at
         // ANCHOR_ROW_LIMIT rows, and a window that happens to hold some attested sibling
         // anchor but not this tuple's own is, on the wire, identical to a complete
-        // non-matching set: _judge below reads it as a positively-detected mis-bind and
+        // non-matching set: judge below reads it as a positively-detected mis-bind and
         // returns a MEMOIZED, permanent 'rejected', and anchor_reward_derive turns that
         // into "no reward derived" forever. Degrading that case to 'unknown' instead is not
         // the fix it looks like: 'unknown' throws AnchorProofUnavailableError, which halts
         // block processing on every BTC node at once and never clears, since the same
         // deterministic window comes back on every retry. So the window is removed rather
-        // than reinterpreted, and _judge keeps seeing a COMPLETE anchor set.
+        // than reinterpreted, and judge keeps seeing a COMPLETE anchor set.
         //
         // Only a peer that positively reports `truncated` is asked for another page. An
         // indexer predating pagination reports nothing, the walk stops after one page, and
@@ -316,15 +316,15 @@ class AnchorProofClient {
     }
 
     // Cache key for a DECIDED verdict. The verdict is a function of the whole reward tuple,
-    // never of the txid alone, so the key carries every field _judge reads. One DOGE txid can
+    // never of the txid alone, so the key carries every field judge reads. One DOGE txid can
     // be named by more than one anchor_reward_attestations row (a failover double-publish
     // inserts one row per publisher, and a per-chain v4/v5 anchor can share a transaction with
     // the v6 archive leg), and doge_anchor_txid is NOT covered by the XANCPUB canonical
     // rewardCanonical() re-verifies, so a txid-only key let a 'verified' for one tuple mint an
     // unproven reward for another, and a 'rejected' suppress a legitimate one. Because the memo
     // is process-lifetime state, that leak also made the derived set restart-dependent, which
-    // is a COLLECT-rail fork. Normalize exactly as _judge does, or two spellings of one tuple
-    // miss each other. A field added to _judge must be added here too. _judge's chain term needs
+    // is a COLLECT-rail fork. Normalize exactly as judge does, or two spellings of one tuple
+    // miss each other. A field added to judge must be added here too. judge's chain term needs
     // no entry of its own, and neither does the reward FAMILY or the round term it selects:
     // all three are derived from rewardType, which is already a term here.
     memoKey(txid, e){

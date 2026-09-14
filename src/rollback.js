@@ -834,7 +834,7 @@ class Rollback {
                 // mirror), so it mints no actions row and an orphaned range carrying only a
                 // derive-side reconcile leaves firstActionIndex null.
 
-                // Cooldown-maturity reversal was here; it is now in _reverseCooldownMaturities,
+                // Cooldown-maturity reversal was here; it is now in reverseCooldownMaturities,
                 // called UNCONDITIONALLY at the top of the transaction (before this guard). It had
                 // to leave this firstActionIndex-gated block because the legacy cooldown maturity
                 // (pre UNSTAKE_COOLDOWN_COMPLETION_ACTION) mints NO actions row, so an orphaned
@@ -921,12 +921,12 @@ class Rollback {
                 // A chunked batch spans blocks: the v5 head in an early block, v6 continuations
                 // after it. The chunk that COMPLETES the coverage reassembles the window and,
                 // when the body or the quorum fails, stamps the verdict on the head
-                // (attest.js _absorbCompletedBatch) - a direct UPDATE on a row created in an
+                // (attest.js absorbCompletedBatch) - a direct UPDATE on a row created in an
                 // earlier block, which therefore survives the bulk delete below. If that
                 // completing chunk is in the orphaned range, the delete removes the chunk and
                 // cannot undo the stamp, and the damage is worse than a stale verdict: the head
                 // is now terminal, getAttestBatchChunks reads status 'valid' only, so the head
-                // is missing from its OWN chunk set and _canonicalBatchHead resolves nothing.
+                // is missing from its OWN chunk set and canonicalBatchHead resolves nothing.
                 // The re-mined continuation then rejoins a batch with no head, absorbs nothing,
                 // and the window is permanently dead on this node while a from-genesis replay
                 // (the chunk never re-mined, or re-mined into a batch that reassembles) has it
@@ -948,12 +948,12 @@ class Rollback {
                 //
                 // Publisher scope, UNCONDITIONAL and with no flag day, unlike the archive twin:
                 // a batch's identity has been (key, author) since the rail shipped (attest.js
-                // _authoredBy), so the scope here has never been wider than the live path's and
+                // authoredBy), so the scope here has never been wider than the live path's and
                 // narrowing it suppresses no reset that was ever owed. Scoped on actions
                 // .source_id rather than the resolved address: both rows are local, the ids are
                 // exact, and index_addresses.address is a case-folding collation. An
                 // unresolvable author on either side is a NULL that no equality matches, so it
-                // authenticates nothing rather than everything, matching _authoredBy's
+                // authenticates nothing rather than everything, matching authoredBy's
                 // fail-closed rule.
                 //
                 // Runs BEFORE the delete (both rows still present) and AFTER the read-phase
@@ -1782,13 +1782,13 @@ class Rollback {
     // the same chunk set forward assembly accepted (db.getAttestBatchChunks) and nothing
     // less. A batch key is sha256 over the window its head declares, so anyone can derive
     // it and file rows under it: A BATCH'S IDENTITY IS (KEY, AUTHOR), NEVER THE KEY ALONE
-    // (actions/attest.js _authoredBy). Joining on the key alone let a row that is no part
+    // (actions/attest.js authoredBy). Joining on the key alone let a row that is no part
     // of the batch un-land it - a rejected duplicate, or a foreign publisher's chunk, sitting
     // anywhere in the orphaned range pulled in a SURVIVING head and queued a retraction that
     // cleared a live batch's hub links. The hub cannot catch that: the retraction names a
     // genuinely valid window, and the link is set-once, so nothing ever restores it.
     //
-    // The author joins are INNER on purpose, mirroring _authoredBy's fail-closed rule that an
+    // The author joins are INNER on purpose, mirroring authoredBy's fail-closed rule that an
     // unresolvable broadcaster scopes to NOTHING. A publisher whose author cannot be resolved
     // never assembles a batch forward either, so no link was ever stamped and there is nothing
     // to retract.
@@ -2042,7 +2042,7 @@ class Rollback {
                 let reqBlock = Number(req.block_index);
                 let cached   = validatorsByBlock.get(reqBlock);
                 if(cached === undefined){
-                    // Mirroring actions/attest.js _computeResponsibleSet (#3233): the SWQ
+                    // Mirroring actions/attest.js computeResponsibleSet (#3233): the SWQ
                     // gate is BTC-anchored, and `reqBlock` is the request's LOCAL height, so
                     // off BTC it is already past the 961000 anchor and would resolve
                     // `weighted` TRUE out of band. This function's header requires
@@ -2053,7 +2053,7 @@ class Rollback {
                     // non-BTC indexer has no responsible set to recompute.
                     //
                     // Two DIFFERENT heights come off `reqBlock`, exactly as in attest.js
-                    // _computeResponsibleSet: the SWQ flag-day is evaluated on the DECLARED
+                    // computeResponsibleSet: the SWQ flag-day is evaluated on the DECLARED
                     // height verbatim (moving a cutover block by the reorg buffer is its own
                     // fork), while the capability SET is resolved at the declared height
                     // BURIED by CANONICAL_REORG_BUFFER, which is where the hub's
@@ -2075,11 +2075,11 @@ class Rollback {
                             : await this.indexerDb.getValidatorsByCapability('attestation', resolveBlock);
                         // RULES-AWARE FILTER (spec §7.4, D59), applied at the same point
                         // the live path applies it: on the raw capability snapshot,
-                        // before _responsibleSet ranks or floors anything. It is a pure
+                        // before responsibleSet ranks or floors anything. It is a pure
                         // function of (reqBlock, network), never of the provider, so it
                         // rides this per-block cache exactly as the snapshot read does,
-                        // and _responsibleSet stays the byte-for-byte ranking twin of
-                        // attest.js._computeResponsibleSet with no filter of its own.
+                        // and responsibleSet stays the byte-for-byte ranking twin of
+                        // attest.js.computeResponsibleSet with no filter of its own.
                         vs = await rgf.filterByRolledGates({
                             db: this.indexerDb, validators: vs || [], requestBlock: reqBlock,
                             network: this.config['NETWORK']
@@ -2091,7 +2091,7 @@ class Rollback {
                 // The provider floor is a PER-REQUEST bar, so it cannot ride the
                 // per-block validator cache above: two requests at the same block against
                 // different providers filter that one snapshot differently. Resolve it here
-                // and let _responsibleSet apply it, keeping the cache provider-agnostic.
+                // and let responsibleSet apply it, keeping the cache provider-agnostic.
                 responsible = this.responsibleSet(String(req.request_id), cached.validators, Number(req.redundancy), cached.weighted,
                                                    this.providerRegistry.getMinStake(String(req.provider_id), Number(req.block_index), this.config['NETWORK']));
             }
@@ -2126,14 +2126,14 @@ class Rollback {
     }
 
     // Deterministic responsible validator set. MUST mirror attest.js
-    // _computeResponsibleSet byte-for-byte (sort by SHA256(request_id || pubkey),
+    // computeResponsibleSet byte-for-byte (sort by SHA256(request_id || pubkey),
     // when stake-weighted dedup to one slot per source keeping the lowest hash,
     // then take the top REDUNDANCY) or reorg-recomputed missed_count diverges from
     // the live expiry path. `validators` are the raw capability rows ({pubkey, source},
     // plus `weight` when weighted); `weighted` is swq.isStakeWeightedQuorumActive for
     // the request block. `minStake` is the request provider's block-anchored
     // min_stake_xchain floor at the request block, applied on the weighted path
-    // only and BEFORE the ranking, exactly as attest.js._providerFloorFilter does; null
+    // only and BEFORE the ranking, exactly as attest.js.providerFloorFilter does; null
     // fails the recompute closed to an empty set the same way the live path does, so a
     // reorg cannot charge missed_count to validators the live expiry never held
     // responsible.

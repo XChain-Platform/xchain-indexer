@@ -21,7 +21,7 @@
  * span early, the literal's real closing quote re-opened it, and the following
  * `;` plus everything up to the next quote merged into one chunk. A `DROP TABLE`
  * then rode inside a chunk whose first keyword was INSERT, where the ^-anchored
- * keyword checks in _destructiveAutoStatement never saw it and the file scored
+ * keyword checks in destructiveAutoStatement never saw it and the file scored
  * auto-eligible.
  *
  * These assertions fail against the pre-fix walkers: reverting the

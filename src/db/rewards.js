@@ -120,7 +120,7 @@ module.exports = {
     // window. Left NULL when not supplied (legacy callers); the collector skips NULL rows.
     //
     // DUE-GATED: a derive-era staged row is materialized only once materializedBlock has
-    // reached the height the live fleet derived it at (_restoredRewardDeriveBlock). A row that
+    // reached the height the live fleet derived it at (restoredRewardDeriveBlock). A row that
     // is not yet due is left staged for the per-block due sweep above, so no caller (the
     // createAddress hook, the rollback re-drain) can put a restored reward on the books at a
     // height where a live node does not hold it. A caller that names no block (legacy/test

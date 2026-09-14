@@ -424,7 +424,7 @@ module.exports = {
 
     // Finalized cross-chain matches that involve THIS chain, are effective at/before
     // block_time, and have not yet been settled locally. Drives the settlement pass.
-    // cross_chain_matches is a hub-mirrored table (read via _mirrorDb), while
+    // cross_chain_matches is a hub-mirrored table (read via mirrorDb), while
     // cross_chain_settlements is a local indexer table (read via this) - so we filter in JS
     // rather than join across two databases.
     //

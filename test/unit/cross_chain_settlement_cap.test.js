@@ -73,7 +73,7 @@ describe('cross-chain settlement per-block cap', function(){
     it('getEffectiveUnsettledMatches returns at most the cap, as the ordered prefix', async function(){
         const db  = makeDb();
         const all = matches(60);
-        sinon.stub(db, 'doQueryStrict').resolves(all); // mirror rows (_mirrorDb() === this here)
+        sinon.stub(db, 'doQueryStrict').resolves(all); // mirror rows (mirrorDb() === this here)
         sinon.stub(db, 'doQuery').resolves([]);        // nothing settled locally yet
 
         const res = await db.getEffectiveUnsettledMatches('BTC', 1700, 25);

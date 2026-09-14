@@ -319,11 +319,11 @@ module.exports = {
 
     // The archive-head anchor (v1, which always carries the publisher tail) that started an
     // archive batch (status irrelevant - chunk geometry checks belong to the caller).
-    // match_batch_seq is NOT unique: the replay guard in anchor.js _parseCheckpoint accepts
+    // match_batch_seq is NOT unique: the replay guard in anchor.js parseCheckpoint accepts
     // an EQUAL MATCH_BATCH_SEQ ('never below the recorded max; equal is allowed'), so a
     // permissionless re-broadcast or failover double-publish stores a SECOND v1 row for
     // the same batch. The returned parent feeds a consensus-visible geometry/CRC verdict in
-    // anchor.js _parseContinuation (TOTAL_CHUNKS gate + batch_crc32 reassembly, which stamps
+    // anchor.js parseContinuation (TOTAL_CHUNKS gate + batch_crc32 reassembly, which stamps
     // setAnchorArchiveStatus(parent.action_index,'invalid_archive')), so the pick MUST be a
     // deterministic total order or two honest nodes select different parents and persist
     // divergent anchor_actions status fleet-wide. ORDER BY action_index ASC picks the EARLIEST
@@ -351,7 +351,7 @@ module.exports = {
         // Version set from ARCHIVE_HEAD_VERSIONS, never a hand-copied literal, for the
         // reason getArchiveReplayWatermarks states above: this is the same earliest-head
         // pick as ARCHIVE_HEAD_AUTHOR_SQL in anchor_action_query.js, and it feeds the
-        // consensus-visible geometry/CRC verdict in anchor.js _parseContinuation. A
+        // consensus-visible geometry/CRC verdict in anchor.js parseContinuation. A
         // hand-copied set drifts the moment a new publisher-bearing head version is
         // added, and the two head picks would then disagree fleet-wide.
         let rows = await this.doQuery(

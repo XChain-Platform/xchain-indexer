@@ -13,14 +13,14 @@
 // A verdict on a batch head is written by one of two very different events, and a
 // reorg has to tell them apart:
 //
-//   AT WRITE TIME, by _parseBatchHead, on the row it is creating. Nothing before it
+//   AT WRITE TIME, by parseBatchHead, on the row it is creating. Nothing before it
 //   was ever true of that row, and no reorg may ever promote it to 'valid'.
 //
-//   AFTER THE FACT, by _absorbCompletedBatch, as an in-place UPDATE on a head that
+//   AFTER THE FACT, by absorbCompletedBatch, as an in-place UPDATE on a head that
 //   landed blocks earlier and was 'valid' right up to that moment. That stamp is
 //   justified only by the chunk that completed the coverage, so a reorg taking the
 //   chunk has to take the stamp with it (rollback.js) - otherwise the head drops out
-//   of its own status='valid' chunk set and _canonicalBatchHead resolves nothing on
+//   of its own status='valid' chunk set and canonicalBatchHead resolves nothing on
 //   replay.
 //
 // The marker is the whole of that distinction, so these cases pin it on both sides:

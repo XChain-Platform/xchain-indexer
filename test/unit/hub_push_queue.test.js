@@ -170,7 +170,7 @@ describe('HubPushQueue', function(){
     });
 
     // -----------------------------------------------------------------------
-    // _isDue()
+    // isDue()
     // -----------------------------------------------------------------------
     describe('_isDue()', function(){
         it('returns true when last_attempted_at is null (never tried)', function(){
@@ -303,7 +303,7 @@ describe('HubPushQueue', function(){
     });
 
     // -----------------------------------------------------------------------
-    // _pruneFailed()  (item 3462: terminal rows must not accumulate forever)
+    // pruneFailed()  (item 3462: terminal rows must not accumulate forever)
     // -----------------------------------------------------------------------
     describe('_pruneFailed()', function(){
         it('throttles to one sweep per pruneIntervalMs', async function(){
@@ -352,7 +352,7 @@ describe('HubPushQueue', function(){
     });
 
     // -----------------------------------------------------------------------
-    // _attempt()
+    // attempt()
     // -----------------------------------------------------------------------
     describe('_attempt()', function(){
         it('marks row failed immediately when payload is not parseable JSON', async function(){
@@ -645,7 +645,7 @@ describe('HubPushQueue', function(){
         // actions/price.js: a PRICE v1 oracle price is never re-emitted by a later block, so
         // "a lost oracle_price is never re-derivable" and the outbox exists to guarantee it is
         // not lost. The ~10-attempt cap retired it to 'failed' after ~30 minutes of hub outage
-        // and _pruneFailed deleted it, defeating that guarantee.
+        // and pruneFailed deleted it, defeating that guarantee.
         it('does NOT retire an oracle_price after maxAttempts failures (never re-derivable)', async function(){
             let indexer = makeIndexer();
             indexer.hubClient.pushOraclePrice = sinon.stub().rejects(new Error('hub down'));
@@ -665,13 +665,13 @@ describe('HubPushQueue', function(){
         it('does not resolve until a drain that is mid-attempt finishes', async function(){
             let indexer = makeIndexer();
             let releaseAttempt;
-            // The in-flight _attempt hangs on this promise until we release it.
+            // The in-flight attempt hangs on this promise until we release it.
             indexer.hubClient.pushPriceRound = sinon.stub().callsFake(() => new Promise(r => { releaseAttempt = r; }));
             indexer.indexerDb.getPendingHubPushes = sinon.stub().resolves([
                 makeRow({ id: 1, push_type: 'price_round', attempts: 0, last_attempted_at: null })
             ]);
             let q = new HubPushQueue(indexer);
-            let drainP = q.drain();                              // enters drain, stalls in _attempt
+            let drainP = q.drain();                              // enters drain, stalls in attempt
             await new Promise(r => setImmediate(r));             // let it reach the stalled attempt
             let paused = false;
             let pauseP = q.pause().then(() => { paused = true; });

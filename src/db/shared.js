@@ -182,7 +182,7 @@ const CANONICAL_CARET_ID = /^[1-9][0-9]*$/;
 // the identical shape PRICE batching already hit.
 //
 // It widens ONLY who is capable, never who is responsible. The per-row responsible set is
-// resolved by actions/attest.js _computeResponsibleSet, which returns [] off BTC before it
+// resolved by actions/attest.js computeResponsibleSet, which returns [] off BTC before it
 // reads anything, and that filter stays the binding gate on the on-chain v1 path: an ATTEST
 // v1 landing off BTC is refused for the same reason after this change as before it. That is
 // deliberate, and it is why per-row responsible-set verification happens on the BTC indexer
@@ -206,7 +206,7 @@ function usesCapabilitySnapshot(config, capability){
 // statements the server would run: `INSERT ... VALUES ('it\'s fine'); DROP TABLE
 // balances;` closes at the `\'`, re-opens at the literal's real closing quote, and
 // swallows the `;` and the DROP into one chunk whose first keyword is INSERT,
-// invisible to the ^-anchored destructive checks in _destructiveAutoStatement, which
+// invisible to the ^-anchored destructive checks in destructiveAutoStatement, which
 // then score the file auto-eligible.
 //
 // Backtick spans are excluded: a backslash inside an identifier quote is a literal

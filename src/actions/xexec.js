@@ -275,7 +275,7 @@ class Xexec {
             // than relaying a validator-local 'error' verdict (persisted below, outside
             // the savepoint) that permanently fences the money-bearing call from retry.
             // Deterministic VM failures never reach here; they are handled at the sibling
-            // branch above via _mapFailureStatus.
+            // branch above via mapFailureStatus.
             rethrowIfInfraFault(e);
             resultStatus = 'error';
             getLogger().warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : execution threw: ' + (e && e.message));

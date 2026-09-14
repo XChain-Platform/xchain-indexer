@@ -14,7 +14,7 @@
  *
  **********************************************************************
  * Shape-aware migration baselining: Database.MIGRATION_PRECONDITIONS and
- * _migrationPreconditionSkip().
+ * migrationPreconditionSkip().
  *
  * A database rebuilt from chain creates its tables directly from src/sql/*.sql,
  * so a manual migration whose end state already holds on the live schema stays
@@ -25,7 +25,7 @@
  * of refusing the deploy.
  *
  * These tests exercise the pubkeys.pubkey predicate directly (pure logic, no
- * live DB) and _migrationPreconditionSkip() against a stubbed connection.
+ * live DB) and migrationPreconditionSkip() against a stubbed connection.
  *
  ********************************************************************/
 
@@ -40,7 +40,7 @@ const FILE = '2026-07-24-pubkeys-widen-uncompressed.sql';
 // width, the stake-weight collation and the reward-key assertions all read
 // information_schema.columns/statistics and pass through on an empty answer, because an
 // absent column is a fresh install rather than drift - which is why a bare fake conn that
-// returns [] has always satisfied them. _assertBridgeTablesPresent reads
+// returns [] has always satisfied them. assertBridgeTablesPresent reads
 // information_schema.TABLES, where an empty answer is NOT ambiguous: zero rows means the
 // three tables really are gone, and halting is the whole point of the guard.
 //
@@ -485,7 +485,7 @@ describe('runMigrations() precondition baseline branch, round_qualifier @regress
     }
 
     // `assertRows` is what the POST-RUN startup assertion
-    // (_assertRewardUniqueKeyCarriesQualifier) sees, which is a different question from
+    // (assertRewardUniqueKeyCarriesQualifier) sees, which is a different question from
     // the precondition predicate and answered by a different query. It defaults to an
     // absent reward_unique index - a state the assertion passes through - so these cases
     // isolate the runner's precondition branch; the assertion's own halt behaviour is

@@ -18,7 +18,7 @@
  * that is this reward's anchor, and it must keep "cannot tell" strictly apart from "no".
  * Conflating the two is what forks the ledger: a node that skipped an unprovable reward
  * would commit a different set than a peer that proved it, at a height they both agree on.
- * These cases drive the pure binding half (_judge) plus the txid/wiring guards; the HTTP
+ * These cases drive the pure binding half (judge) plus the txid/wiring guards; the HTTP
  * half is exercised on regtest.
  ********************************************************************/
 
@@ -294,15 +294,15 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
 
     // getanchorconfirmations bounds its answer. Before the walk below, a window cut off
     // BEFORE the matching anchor looked identical on the wire to a complete non-matching
-    // set: _judge read a positively-detected mis-bind, proveMined MEMOIZED it, and
+    // set: judge read a positively-detected mis-bind, proveMined MEMOIZED it, and
     // anchor_reward_derive turned that into "no reward derived" forever - a legitimate
     // COLLECT-spendable reward lost silently and permanently. Reinterpreting the verdict
     // was not an option: 'unknown' raises AnchorProofUnavailableError, which HALTS block
     // processing on every BTC node and never clears, because the same deterministic window
-    // returns on every retry. So the window is removed instead, and _judge is handed the
+    // returns on every retry. So the window is removed instead, and judge is handed the
     // complete set it always assumed it had.
     describe('proveMined walks every page before judging', function () {
-        // A sibling attested anchor that is NOT this tuple's: on its own it makes _judge
+        // A sibling attested anchor that is NOT this tuple's: on its own it makes judge
         // return the permanent 'rejected'.
         function sibling() { return anchor({ match_batch_seq: 999 }); }
 
@@ -570,7 +570,7 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
         // the hub's, and even a bundle too malformed to yield a section still writes a row
         // carrying its header snapshot block. Reconstructing the header as a maximum over the
         // whole TRANSACTION let such a row raise it above the real bundle's, so no genuine
-        // section equalled it and _judge fell through to a permanent, memoized 'rejected':
+        // section equalled it and judge fell through to a permanent, memoized 'rejected':
         // a legitimate COLLECT-spendable reward destroyed by a third-party write.
         describe('an unrelated anchor on the same transaction cannot suppress the reward', function () {
             // The reward's own bundle, with the row identity a current DOGE indexer serves.

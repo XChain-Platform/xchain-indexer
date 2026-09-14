@@ -76,7 +76,7 @@ function makePriceDb(existsRows) {
     return db;
 }
 
-// A representative batch action's data, shaped the way _parseV0 (tested
+// A representative batch action's data, shaped the way parseV0 (tested
 // elsewhere) is expected to hand it to createPrice: ROUND set to
 // FIRST_ROUND, plus the four new v2 fields.
 const V2_DATA = {

@@ -99,7 +99,7 @@
  *   mode     'auto'   - the widen ships in the mode=auto migration and applies unattended
  *            'manual' - the column is NOT NULL, and a MODIFY carrying NOT NULL is
  *                       indistinguishable from a narrowing to the auto-apply
- *                       destructive-DDL classifier (db._destructiveAutoStatement), so it
+ *                       destructive-DDL classifier (db.destructiveAutoStatement), so it
  *                       ships in the paired mode=manual file. Dropping NOT NULL is not an
  *                       option: MODIFY restates the whole column, so it would silently
  *                       relax the column and diverge the two schema paths.

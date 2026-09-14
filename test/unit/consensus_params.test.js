@@ -140,13 +140,13 @@ const GOLDEN_VALIDATOR_QUERY_LIMIT = 1000;
 // unlike the GAS_* pair, they are NOT identical across chains, so the golden is
 // PER-CHAIN.
 //
-// ACTIVATION_DELAY_BLOCKS, EXPIRATION_FEE_PER_DAY and STAKING were previously left on the
-// hub config overlay's live-poll list. That was a soft-fork hazard: federation nodes
+// ACTIVATION_DELAY_BLOCKS, EXPIRATION_FEE_PER_DAY and STAKING stay off the
+// hub config overlay's live-poll list. Polling them live is a soft-fork hazard: federation nodes
 // observe a committed hub change at different block heights, so a live push would stamp
-// divergent activation_block / expiration-fee rows for the SAME on-chain tx. They are now
+// divergent activation_block / expiration-fee rows for the SAME on-chain tx. They are
 // treated like GAS_*: node-local, changeable only via a coordinated upgrade gated on an
-// activation height. The overlay no longer polls them (see XChainIndexer
-// _mergeHubParams). The behavioural guard at the bottom of this file pins that.
+// activation height. The overlay does not poll them (see XChainIndexer
+// mergeHubParams). The behavioural guard at the bottom of this file pins that.
 const GOLDEN_FEE_PARAMS_SHARED = {
     EXPIRATION_FEE_DEFAULT_DAYS:      90,
     EXPIRATION_FEE_FREE_DAYS:         182,
@@ -229,7 +229,7 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
     });
 
     it('hub config overlay does NOT live-poll consensus params (soft-fork guard)', function(){
-        // The overlay (_mergeHubParams) must ignore hub-pushed values for any param that
+        // The overlay (mergeHubParams) must ignore hub-pushed values for any param that
         // feeds block-hashed state. If a future edit re-adds one of NON_POLLED_CONSENSUS_PARAMS
         // to the SCALAR_PARAMS/BLOB_PARAMS poll lists, the local consensus value below would be
         // overwritten by the divergent hub value and this reddens.

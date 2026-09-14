@@ -36,7 +36,7 @@ const GENESIS_BLOCK = 100;
 const BASE_TIME     = 1700000000;
 const LEDGER_PATH   = path.join(__dirname, '../../../data/genesis', COIN + '-ledger.csv');
 
-// Parse manifest ticks the way genesis.js _loadRows does (last comma splits tick from
+// Parse manifest ticks the way genesis.js loadRows does (last comma splits tick from
 // owner, RFC4180-unwrap a quoted tick), so the assertions track the bundled file rather
 // than hardcoded numbers. Returns the in-order tick list (production manifests have no
 // duplicate ticks, which the `tickers === rowCount` assertion also relies on).
@@ -56,7 +56,7 @@ function manifestTicks(file) {
 }
 
 // Count ancestor ticks (a tick that is the parent-prefix of another present tick),
-// mirroring genesis.js _ancestorSet. On regtest every owner is non-GAS, so the expected
+// mirroring genesis.js ancestorSet. On regtest every owner is non-GAS, so the expected
 // genesis issue rows are: one create per tick + one deferred transfer per ancestor.
 function ancestorCount(ticks) {
     const present = new Set(ticks);

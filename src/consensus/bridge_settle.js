@@ -423,12 +423,12 @@ async function recordSettlement(indexerDb, actionIndex, id, kind, blockIndex, ro
 // TWO CLASSES, split by whether a later pass can change the outcome. A DEFERRAL (a row not yet
 // due, a capability snapshot not yet mirrored, a policy seq gap or leg carried forward) is meant
 // to be re-examined every pass, so each of its lines is a fresh, true statement about that pass
-// and it keeps calling _log/_warn directly. A TERMINAL refusal (a bad signature, a foreign
+// and it keeps calling log/warn directly. A TERMINAL refusal (a bad signature, a foreign
 // network or chain id, an escrow that would go negative, a second settlement for one source leg)
 // names a fact about the ROW that does not change from one pass to the next, so a row sitting
 // refused in the due set would otherwise re-log the same event every pass forever; that is what
 // storms the log and is what the "exactly one refusal" requirement rules out. Terminal call sites use
-// _warnOnce below instead of _warn.
+// warnOnce below instead of warn.
 function log(kind, id, message){
     getLogger().info('\t ' + kind + ' : ' + String(id).substring(0, 16) + '... : ' + message);
 }
@@ -464,7 +464,7 @@ function shouldLogRefusal(kind, id, reason){
 }
 
 // A terminal refusal: warn once per (kind, id) unless the reason changes. Byte-identical to a
-// plain _warn call on the FIRST occurrence, which is what the rail suite greps the log for.
+// plain warn call on the FIRST occurrence, which is what the rail suite greps the log for.
 function warnOnce(kind, id, reason, message){
     if(shouldLogRefusal(kind, id, reason)) warn(kind, id, message);
 }
@@ -483,7 +483,7 @@ function resetRefusalMemo(){
  *   credit(row.dest_address, tick, row.amount) at row.decimals
  *   token SUPPLY += row.amount
  *   creating the token row if this chain holds none yet - for XCHAIN the byte-identical
- *   _injectGasToken parameter set through genesis.injectProtocolToken, for a general token
+ *   injectGasToken parameter set through genesis.injectProtocolToken, for a general token
  *   the <ORIGIN> root row and then the <ORIGIN>.<NAME> child row.
  *
  * OUT leg (this chain is the origin, from a v1/v4 burn on the other side):
@@ -672,7 +672,7 @@ async function applyBridgeTransfer(row, ctx){
         const genesis = new Genesis(ctx.actions, db, ctx.config, util);
         const injectCtx = { blockIndex: ctx.blockIndex, blockTime: ctx.blockTime, txHashPrefix: BRIDGE_TX_PREFIX };
         if(tick === gasTick){
-            // The byte-identical _injectGasToken parameter set, taken from the ONE place that
+            // The byte-identical injectGasToken parameter set, taken from the ONE place that
             // owns it. Retyping the values here is the drift the helper exists to prevent
             // because a drifted parameter is a different token row, which is a different
             // ledger hash on two chains.
@@ -758,7 +758,7 @@ async function applyBridgeTransfer(row, ctx){
  *   0 allow-list create or REMOVE, 1 allow-list ADD, 2 block-list create or REMOVE,
  *   3 block-list ADD, 4 ISSUE 5 (point the bridged row at the lists), 5 SLEEP.
  * Legs with nothing to do are not injected. One synthetic transaction per injected action,
- * _injectGasToken's field shape, tx_hash = 'XPOLICY-' + snapshot_id.slice(0, 48) and
+ * injectGasToken's field shape, tx_hash = 'XPOLICY-' + snapshot_id.slice(0, 48) and
  * vout = the leg's ordinal, so action indexes are identical on every node.
  *
  * MEMBERSHIP IS TRANSPORT, NOT SIGNATURE. allow_list and block_list arrive as JSON arrays

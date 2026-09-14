@@ -86,7 +86,7 @@ describe('UtxoTracker', function(){
     });
 
     // -----------------------------------------------------------------------
-    // _call
+    // call
     // -----------------------------------------------------------------------
     describe('_call()', function(){
         it('throws when not enabled', async function(){

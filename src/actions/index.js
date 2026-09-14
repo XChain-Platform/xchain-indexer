@@ -62,9 +62,9 @@ const FEE_QUOTE_STATIC = new Set(['DEPLOY', 'EXECUTE']);
 // Used only by the BATCH sub-command pre-flight (isBatchProbeForbiddenSubAction): the batch probe
 // dispatches REAL sub-handlers, so "denied at top level" is not a wide enough net - an action the
 // top-level gate lets through for its own reasons still enters the VM when a batch runs it.
-//   ATTEST - v1 response injects a callback EXECUTE (attest.js _injectCallbackExecute).
+//   ATTEST - v1 response injects a callback EXECUTE (attest.js injectCallbackExecute).
 //   VOTE   - a v2 finalize on a binding poll injects a callback EXECUTE (vote.js
-//            _injectCallbackExecute), and VOTE is 'quotable', so the fee-quote classes do not
+//            injectCallbackExecute), and VOTE is 'quotable', so the fee-quote classes do not
 //            cover it. That reach is NOT open today: vote.js refuses a v2 whose data is not
 //            IS_SYNTHETIC, which no probe sets, so this is defence in depth rather than a fix.
 //            It is deliberately kept anyway: that refusal exists to stop a user finalizing
@@ -84,16 +84,16 @@ const PROBE_VM_REACHING_ACTIONS = new Set(['ATTEST', 'VOTE', 'XCALL']);
 // against a native-coin output paying a specific payee/dispenser (coinpay.js/dispense.js
 // early-exit "skip" when it's absent), and the *_MATCH/*_EXPIRE/*_CLOSE/CROSS_SETTLE/XCALL
 // actions are system-synthesized during block processing, never wallet-broadcast (XCALL is
-// VM-emitted/synthetic-only, like CROSS_SETTLE). Quoting any of them used to fall through to a
+// VM-emitted/synthetic-only, like CROSS_SETTLE). Quoting any of them would fall through to a
 // misleading `dry-run produced no status`; instead answer honestly with a zero-fee, feeExempt
 // result. This is a read-only preflight classification, never a consensus path: it changes
 // what the quote reports, not what a handler charges on-chain.
 // ATTEST is exempt (not denylisted) because it stages no wallet-priceable fee AND must never
 // dry-run on the public path: ATTEST v0 is VM-emission-only, and ATTEST v1 (validator response)
-// injects a contract callback EXECUTE (attest.js _injectCallbackExecute) that enters the VM while
+// injects a contract callback EXECUTE (attest.js injectCallbackExecute) that enters the VM while
 // the dry-run holds the block-loop mutex. Its protocol fee is charged at the v0 request origin and
-// settled by _settleRequestFee, so there is nothing for feequote to price; exempting it short-
-// circuits classifyFeeQuoteAction before _dryRunAction, closing the unauthenticated VM-compute-
+// settled by settleRequestFee, so there is nothing for feequote to price; exempting it short-
+// circuits classifyFeeQuoteAction before dryRunAction, closing the unauthenticated VM-compute-
 // under-mutex reachable by replaying a pending v1 response's mempool bytes into feequote/preflight.
 const FEE_QUOTE_EXEMPT = new Set([
     'COINPAY', 'DISPENSE',
@@ -142,7 +142,7 @@ function classifyFeeQuoteAction(action){
 // This is the reason BATCH may be pre-flighted at all: it replaces "lift BATCH out of the
 // denylist" (which re-opens exactly the unauthenticated VM-compute-under-mutex the denylist
 // exists to close) with a per-sub-command refusal. It is checked TWICE on purpose - once as a
-// wire-string pre-scan before the mutex is ever taken (_batchProbeForbiddenSubAction) and once
+// wire-string pre-scan before the mutex is ever taken (batchProbeForbiddenSubAction) and once
 // inside batch.js's dispatch loop against the exact name being dispatched. The second is the
 // load-bearing one: it reads the variable passed to processAction, after alias rewrite and
 // case folding, so no spelling can route around it.
@@ -164,7 +164,7 @@ function feeQuoteAcquireBudgetMs(){
     return parseInt(CONFIG_ENV.INDEXER_FEEQUOTE_ACQUIRE_TIMEOUT_MS, 10) || 2000;
 }
 
-// True for the give-up thrown by a bounded transaction-mutex acquire (db._acquireTxLock).
+// True for the give-up thrown by a bounded transaction-mutex acquire (db.acquireTxLock).
 function isTxLockBusy(e){
     return !!(e && e.code === 'TX_LOCK_BUSY');
 }
@@ -657,12 +657,12 @@ class Actions {
         data['TX_OUTPUTS']       = tx.tx_outputs || []; // Full native-coin output set (fee detection)
         data['IS_GENESIS']       = isGenesis === true;  // synthetic genesis bootstrap action (genesis.js)
         // Guard-inert marker for the public feequote dry-run: when set, a controller guard
-        // refuses at the _invokeController chokepoint instead of entering the VM (utility.js),
+        // refuses at the invokeController chokepoint instead of entering the VM (utility.js),
         // so the unauthenticated feequote endpoint cannot run caller-influenced contract code
         // while holding the block-loop mutex. Sourced from tx.guard_inert, which only
         // computeFeeQuote's synthetic tx carries; ALWAYS false for real decoded transactions.
         data['GUARD_INERT']      = tx.guard_inert === true;
-        // Read-only dry-run marker for output-matching fee checks (see _dryRunAction's
+        // Read-only dry-run marker for output-matching fee checks (see dryRunAction's
         // fee_probe). Sourced from tx.fee_probe, which only the public feequote/preflight
         // synthetic tx carries; ALWAYS false for real decoded transactions.
         data['FEE_PROBE']        = tx.fee_probe === true;
@@ -1296,7 +1296,7 @@ class Actions {
     }
 
     // The denied-action answer for the public feequote. FEE_QUOTE_STATIC actions get a
-    // real, payable fee sized from the gas schedule (see _staticProtocolFee) so a client can build
+    // real, payable fee sized from the gas schedule (see staticProtocolFee) so a client can build
     // the FEE_DESTINATION output on a native-fee chain; everything else keeps the flat refusal,
     // worded for the chain it is answering on (advising "pay it in XCHAIN" on LTC/DOGE, which have
     // no XCHAIN fee lane, is what made those actions unpayable rather than merely unverified).
@@ -1340,14 +1340,14 @@ class Actions {
     }
 
     // Read-only native-coin fee pre-flight (the public `feequote` JSON-RPC). Phase 2: runs the
-    // REAL action handler in a forced-rollback dry-run (_dryRunAction), so validity is
+    // REAL action handler in a forced-rollback dry-run (dryRunAction), so validity is
     // authoritative for any quotable action: class-A failures (fee sizing, oracle price) AND
     // class-B failures the Phase-1 estimator could never see (insufficient balance, taken
     // ticker, expired order, ...), surfaced verbatim in `error`/`status`. The fee is the
     // handler's own staged number, so there is no estimator to drift (estimateActionFee is
     // retired) and no supported-subset restriction. The VM/compound actions in
     // FEE_QUOTE_DENYLIST never reach the engine here; DEPLOY/EXECUTE instead get a
-    // schedule-priced, verdict-free quote (FEE_QUOTE_STATIC / _staticFeeQuote) and XEXEC/BATCH
+    // schedule-priced, verdict-free quote (FEE_QUOTE_STATIC / staticFeeQuote) and XEXEC/BATCH
     // stay unquotable. Never persists.
     //
     // Guardrails for a public endpoint: quotes serialize against the block loop on the db
@@ -1424,7 +1424,7 @@ class Actions {
                 acquireTimeoutMs: acquireMs,
                 label: 'feequote ' + action,
                 // Public unauthenticated path: a controller guard must never enter the VM
-                // here (see _invokeController). feequotedryrun deliberately omits this.
+                // here (see invokeController). feequotedryrun deliberately omits this.
                 guardInert: true,
                 // No transaction exists yet, so output-matching fee checks are unanswerable.
                 feeProbe: true
@@ -1451,7 +1451,7 @@ class Actions {
         base.validated  = true;
 
         // A controlled token whose guard the feequote path refused (never entered the VM,
-        // see _invokeController): the native-fee verdict genuinely depends on a controller
+        // see invokeController): the native-fee verdict genuinely depends on a controller
         // guard we do not run on this public surface, so report it as not natively quotable
         // rather than surfacing the sentinel as a spurious class-B invalidity. The sentinel
         // carries WHICH controller declined, so quote that too: an action can consult several
@@ -1476,7 +1476,7 @@ class Actions {
     }
 
     // Raw fee/validity dry-run (the regtest-only `feequotedryrun` JSON-RPC). Same engine as the
-    // public feequote (_dryRunAction) but with NO deny-list, NO admission cap, the caller's
+    // public feequote (dryRunAction) but with NO deny-list, NO admission cap, the caller's
     // literal `feeOutputs` (no probe injection: absent outputs exercise the BTC xchain-balance
     // fallback / LTC-DOGE mandatory-native rejection exactly as a real broadcast would), and
     // the full block watchdog as its timeout. That unrestricted surface (VM actions on demand,
@@ -1522,7 +1522,7 @@ class Actions {
         // (missing/stale oracle) overwrite the handler's validity verdict: on this raw surface
         // the handler verdict is the headline and sizing is best-effort.
         if(valid && nativeEnabled){
-            // Carry blockTime: it is what _priceFeeQuote anchors the whole price read on (round
+            // Carry blockTime: it is what priceFeeQuote anchors the whole price read on (round
             // selection, staleness, flag-day gate). Without it this raw surface would silently
             // fall back to wall clock and quote off a different price set than the chain.
             let priced = await this.priceFeeQuote({ blockIndex: run.blockIndex, blockTime: run.blockTime }, run.xchainFee, undefined);
@@ -1783,7 +1783,7 @@ class Actions {
 
         // Current oracle prices (best-effort; a missing/stale feed doesn't fail the schedule call;
         // prices.available=false tells the client native fees can't be priced right now).
-        // Anchored on the tip block's time for the same reason _priceFeeQuote is: this
+        // Anchored on the tip block's time for the same reason priceFeeQuote is: this
         // view exists to predict what the chain will charge, so it has to read the prices the
         // chain reads, not the ones the operator's clock happens to agree with.
         let chainTime = Number(blockTime);

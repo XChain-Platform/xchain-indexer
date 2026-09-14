@@ -17,7 +17,7 @@
  *
  * The same signed string is built in three independent places:
  *   1. xchain-hub/src/anchor/publisher.js  _attestationCanonical / _archiveAttestationCanonical
- *   2. xchain-indexer/src/actions/anchor.js    Anchor.prototype._rewardCanonical  (DOGE wire-parse side)
+ *   2. xchain-indexer/src/actions/anchor.js    Anchor.prototype.rewardCanonical  (DOGE wire-parse side)
  *   3. xchain-indexer/src/consensus/anchor_reward_derive.js  rewardCanonical(row)           (BTC mirror re-derivation)
  *
  * Copies 1 and 2 are byte-compared against each other and against these same
@@ -158,7 +158,7 @@ describe('XANCPUB reward canonical: derive copy vs the frozen wire format @regre
 
     // Load-bearing: the mirror copy in src/consensus/anchor_reward_derive.js takes the chain
     // VERBATIM out of reward_type (`String(row.reward_type).slice('anchor_'.length)`),
-    // while Anchor.prototype._rewardCanonical in src/actions/anchor.js upper-cases
+    // while Anchor.prototype.rewardCanonical in src/actions/anchor.js upper-cases
     // d.CHAIN. The two produce the same signed string only for as long as every mirrored
     // row carries an uppercase chain; reward_type lives in a utf8_general_ci column, so a
     // mixed-case row would compare equal there and still fork the canonical here. If that

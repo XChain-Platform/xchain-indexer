@@ -796,7 +796,7 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             ctx.indexerDb.mirrorDb = () => bindSettlementReads({ doQuery: async () => mirrorRows });
             // The two reads are the real db mixin methods over those stubs, not stubs of their
             // own, so the anchor leg still has to issue SQL naming anchor_actions to see a row
-            // and the mirrored leg still has to route through _mirrorDb() to see one.
+            // and the mirrored leg still has to route through mirrorDb() to see one.
             const anchorsMixin = require('../../src/db/anchors');
             ctx.indexerDb.getEarliestValidAnchorCheckpoint =
                 anchorsMixin.getEarliestValidAnchorCheckpoint.bind(ctx.indexerDb);

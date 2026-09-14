@@ -769,19 +769,19 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
 
     // ── the field indices come from a REAL builder, not from a hand-copied join ──
     //
-    // _resolveSlot hard-codes the in-content snapshot_block position per engine
+    // resolveSlot hard-codes the in-content snapshot_block position per engine
     // (CHECKPOINT 9, XANCPUB 3). slash.js is a SEVENTH consumer of the XCHECKPOINT
     // layout and sits on no lockstep list and in no cross-service parity suite; the
     // parity suites compare builders to builders, and every fixture above rebuilds
     // the layout by hand, so a coordinated field insertion between CHAIN|NETWORK and
-    // SNAPSHOT_BLOCK keeps all of them green while _resolveSlot starts reading
+    // SNAPSHOT_BLOCK keeps all of them green while resolveSlot starts reading
     // CHECKPOINT_SEQ as the slot. That resolves the WRONG capability snapshot: real
     // proofs get rejected, or a bond burns against the wrong height. And because
     // deriveCheckpointSeq(snapshot_block) returns snapshot_block, an off-by-one-segment
     // read looks plausible on live data while being structurally wrong.
     //
     // These two cases source the signed bytes from the indexer's OWN builder
-    // (Anchor._canonical / Anchor._rewardCanonical, the sibling of the hub's
+    // (Anchor.canonical / Anchor.rewardCanonical, the sibling of the hub's
     // StateCheckpointEngine.canonicalCheckpoint), so a layout change in anchor.js
     // moves the fixture and this file goes red rather than agreeing with itself.
     // Called off the prototype with a bare receiver: neither builder touches `this`.

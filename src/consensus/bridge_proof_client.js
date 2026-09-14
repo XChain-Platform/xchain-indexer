@@ -135,8 +135,8 @@ function resolveOriginEndpoint(chain, config){
 }
 
 /**
- * JSON-RPC over the node http/https core modules, matching AnchorProofClient._rpc and
- * HubClient._call. The indexer deliberately carries no HTTP client dependency and this read
+ * JSON-RPC over the node http/https core modules, matching AnchorProofClient.rpc and
+ * HubClient.call. The indexer deliberately carries no HTTP client dependency and this read
  * sits on the block-processing path, so it does not get to add one.
  */
 function rpc(endpoint, method, params, timeoutMs){
@@ -174,7 +174,7 @@ function rpc(endpoint, method, params, timeoutMs){
 
 /**
  * Rebuild the XCHECKPOINT v0 canonical for a mirrored state_checkpoints row. MUST byte-match
- * actions/anchor.js `_canonical` (FORMAT 0) and the hub's StateCheckpointEngine, which is why
+ * actions/anchor.js `canonical` (FORMAT 0) and the hub's StateCheckpointEngine, which is why
  * the root suffix is appended UNCONDITIONALLY here too: anchor.js does it alone among the four
  * builders, deliberately. A gated suffix here
  * would reject every genuine mirrored checkpoint the fleet has signed.

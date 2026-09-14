@@ -39,7 +39,7 @@ const assert   = require('assert');
 const crypto   = require('crypto');
 const Database = require('../../src/db');
 
-// sha256 of a data payload, matching db._hashReorgData (the reorg witness hash).
+// sha256 of a data payload, matching db.hashReorgData (the reorg witness hash).
 function reorgHash(data) {
     return crypto.createHash('sha256').update(String(data == null ? '' : data), 'utf8').digest('hex');
 }

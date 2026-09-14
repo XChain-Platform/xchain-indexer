@@ -12,7 +12,7 @@
 //
 // The measured failure, driving a chain-only node's price-history recovery on
 // 2026-08-27: the hub's per-IP guard answered `pushpricebatch` with
-// express-rate-limit's default text/html body, and HubClient._call reported that
+// express-rate-limit's default text/html body, and HubClient.call reported that
 // as `Invalid JSON response: Unexpected token 'T'`. Two things were wrong at
 // once. The message named neither the throttle nor the limit, so the failure was
 // opaque; and the queue treated the rejection as a delivery attempt, charging

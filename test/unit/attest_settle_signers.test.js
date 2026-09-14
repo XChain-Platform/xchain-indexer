@@ -12,7 +12,7 @@
 // fee splits among the VERIFIED SIGNERS of the accepted response, sorted by
 // pubkey, instead of the whole widened responsible set. Below the height the
 // split is the recomputed set, exactly as before. Driven through
-// _settleRequestFee, which is where both fulfilled routes (the chain v1 handler
+// settleRequestFee, which is where both fulfilled routes (the chain v1 handler
 // and the mirror applier) converge.
 
 process.env.INDEXER_COIN = 'BTC';

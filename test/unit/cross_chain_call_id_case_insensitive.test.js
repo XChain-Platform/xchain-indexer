@@ -48,7 +48,7 @@ describe('cross-chain call_id case-insensitive dedup', function () {
     afterEach(() => sinon.restore());
 
     it('getEffectiveUndispatchedCalls: uppercase mirror call_id filtered by lowercase executions row', async function () {
-        const db = makeDb(null); // _mirrorDb() === this
+        const db = makeDb(null); // mirrorDb() === this
         const UPPER = 'ABCDEF0123456789';
         // Mirror dispatch rows come through doQueryStrict (a consensus read); the local
         // executions lookup (lowercase) stays on doQuery.

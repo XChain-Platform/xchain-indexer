@@ -27,7 +27,7 @@
  *
  * Technique (matches db_queries.test.js): stub doQuery on a prototype-borrowed
  * Database so each method exercises real logic against injected results; no live
- * MariaDB required. _mirrorDb() returns `this` in single-host, so a doQuery stub
+ * MariaDB required. mirrorDb() returns `this` in single-host, so a doQuery stub
  * also covers the capability_snapshots read.
  */
 

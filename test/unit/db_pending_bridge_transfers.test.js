@@ -77,7 +77,7 @@ const LEDGER_TABLES = ['index_statuses.sql', 'index_tickers.sql', 'index_address
 
 // One venue per test: a Database whose doQuery/doQueryStrict run on the ledger sqlite
 // handle. `separateMirror` wires a second sqlite handle (holding only bridge_transfers)
-// as indexer.hubDb, so _mirrorDb() is a different object exactly as it is on a node
+// as indexer.hubDb, so mirrorDb() is a different object exactly as it is on a node
 // that follows a remote hub database; the ledger's own bridge_transfers stays EMPTY on
 // that shape, which is what proves the read went to the mirror handle and not the ledger.
 function makeVenue({ separateMirror }){

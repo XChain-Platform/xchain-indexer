@@ -163,9 +163,9 @@ else if(!INDEXER_API_KEY)
 // feequotedryrun runs the REAL action handler with NO action deny-list: DEPLOY
 // constructor / full EXECUTE including emit subtrees, up to the VM CPU cap, while
 // holding the shared transaction mutex, under caller-shaped feeOutputs and the full
-// block watchdog. The consensus question that originally gated it is resolved (block
+// block watchdog. It is not gated for a consensus reason, since that question is settled (block
 // hashes cover canonical strings, and in-transaction index ids are dense-explicit and
-// roll back; see the 06-18 trial + Actions._dryRunAction), so this gate is about
+// roll back; see the 06-18 trial + Actions.dryRunAction), so this gate is about
 // UNMETERED COMPUTE on a public port: the default `feequote` dry-runs safely behind a
 // deny-list + admission cap + short timeout, while this raw surface stays OPT-IN:
 // registered ONLY on a regtest node with INDEXER_ENABLE_DRYRUN explicitly set.
@@ -884,7 +884,7 @@ async function startApi(){
             try {
                 // Intersect the proof-window set with the LIVE full_node capability
                 // at this block (byte-identical to the eligibility rule in
-                // actions/nodeproof.js (_eligibleVerifierSet) and the reward split in
+                // actions/nodeproof.js (eligibleVerifierSet) and the reward split in
                 // actions/price.js, so the hub sizes quorum over the same set the
                 // chain will accept.
                 // Resolve the capability side ONCE (hasCapability is ~5 sequential

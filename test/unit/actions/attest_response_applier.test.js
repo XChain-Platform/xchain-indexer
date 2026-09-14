@@ -14,7 +14,7 @@
 //   utility.selectApplicableAttestationResponses  the BINDING RULE. Which mirrored
 //       responses bind at block B, and in what order. Pure, so the block a callback
 //       fires at is asserted directly rather than inferred from side effects.
-//   attest.js _applyMirroredResponse               the EFFECTS. The synthesized v1
+//   attest.js applyMirroredResponse               the EFFECTS. The synthesized v1
 //       action (NULL tx_index, deterministic hash), the response row, the terminal
 //       flip, the fee settle and the contract callback - and, on a verification
 //       failure, the absence of every one of them.
@@ -299,7 +299,7 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
             assert.strictEqual(data['FORMAT'], 1);
             assert.strictEqual(data['IS_SYNTHETIC'], true);
             assert.strictEqual(data['BLOCK_INDEX'], 100);
-            // _settleRequestFee reaches the fee-oracle read through BLOCK_TIME.
+            // settleRequestFee reaches the fee-oracle read through BLOCK_TIME.
             assert.strictEqual(data['BLOCK_TIME'], BLOCK_TIME);
             assert.strictEqual(data['TX_INDEX'], null, 'a mirror-applied response has no transaction');
             assert.strictEqual(data['TX_VOUT'], null);

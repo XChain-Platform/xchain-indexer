@@ -125,11 +125,11 @@ function hubConfigStaleness(lastHubConfigFetchAt, now){
 // ticker resolves undefined on every poll, so the overlay delivers nothing and says
 // nothing. Falls back to the raw value for a coin absent from the registry.
 //
-// Not every hub-served map is this shape: _checkHubConsensusHash reads
+// Not every hub-served map is this shape: checkHubConsensusHash reads
 // coin_consensus_hashes, which is genuinely ticker-keyed and must NOT be mapped.
 //
 // Module-level rather than a method so the prototype-borrowed
-// `_mergeHubParams.call(stub, tree)` the consensus soft-fork guard uses keeps working
+// `mergeHubParams.call(stub, tree)` the consensus soft-fork guard uses keeps working
 // against a bare `{ config }` stub.
 function hubConfigCoinKey(coinTicker){
     return require('./coins').COIN_FULL_NAME[coinTicker] || coinTicker;
@@ -333,7 +333,7 @@ class XChainIndexer {
         this.lastPollAt = 0;
         // Set true when the decoder has written a durable REORG_HALT marker (a reorg it
         // could not safely rewind). Surfaced on /health so a halted decoder is not mistaken for
-        // ordinary idle/lag. Updated by _checkDecoderReorgHalt(); the log-tick counter keeps the
+        // ordinary idle/lag. Updated by checkDecoderReorgHalt(); the log-tick counter keeps the
         // periodic reminder from firing every tight poll.
         this.decoderReorgHalted   = false;
         this._reorgHaltLogTick    = 0;
@@ -362,7 +362,7 @@ class XChainIndexer {
         // Consensus params (ACTIVATION_DELAY_BLOCKS, EXPIRATION_FEE_PER_DAY, STAKING) are NOT
         // live-polled at any time: they are read once at boot from the per-chain local config
         // and change only by a coordinated node upgrade, so a hub outage cannot freeze them
-        // (_mergeHubParams excludes them deliberately; health.js states the same).
+        // (mergeHubParams excludes them deliberately; health.js states the same).
         this.lastHubConfigFetchAt = null;
 
         // Last hub-config change signals seen. seq = PBFT-committed change counter (0 on a
@@ -396,7 +396,7 @@ class XChainIndexer {
         // priceBarrierBlock      - the block the two flags below describe.
         // priceBarrierSkipped    - the price/oracle barriers were skipped for it because
         //                          priceReadPredicate proved no transaction-borne price
-        //                          reader; read by db._assertPriceBarrierNotSkipped().
+        //                          reader; read by db.assertPriceBarrierNotSkipped().
         // priceBarrierForceBlock - a block that must take the barriers unconditionally on
         //                          its next attempt, set when that assertion fired. Cleared
         //                          once that block commits, so it is a one-shot escalation
@@ -431,7 +431,7 @@ class XChainIndexer {
         // when this block was processed. Before the cross-chain-call pass, the indexer waits
         // (bounded) for any in-flight hub write to land, so a live node and a replaying node
         // inject at the same block. The hub-side relay margin is the primary guarantee; this
-        // is defense-in-depth. See _waitForDirectCallPresence.
+        // is defense-in-depth. See waitForDirectCallPresence.
         this.callPresenceTimeoutMs = parseInt(CONFIG_ENV.XCALL_DIRECT_PRESENCE_TIMEOUT_MS || '10000');
 
         // Grace (seconds) for the direct-hub-DB barrier's hub-clock escape hatch. Resolved in
@@ -563,7 +563,7 @@ class XChainIndexer {
     }
 
     // Decide whether this block takes the price/oracle mirror barriers, and record
-    // that decision for db._assertPriceBarrierNotSkipped(). Returns true to wait.
+    // that decision for db.assertPriceBarrierNotSkipped(). Returns true to wait.
     //
     // Three ways to end up waiting, and the last two are the safety rails:
     //   - blockMayReadPrice says the block carries transactions, so a reader is possible.
@@ -618,7 +618,7 @@ class XChainIndexer {
     // waitingOnFutureBlock() answering 'future_block_wait' for up to two hours after the
     // barrier itself could open, nextBarrierHold() would stay null across that whole window,
     // and the 900 s hold ceiling could never fire on the one barrier the horizon bound was
-    // added to un-stall. The grace field is passed by NAME so _barrierClearsAt stays the only
+    // added to un-stall. The grace field is passed by NAME so barrierClearsAt stays the only
     // reader of a grace and the barrier-to-grace wiring scan still sees which one this is.
     anchorBarrierClearsAt(blockTime, horizonBound, blockHeight, graceField){
         // Height-keyed above the activation: no clock instant exists, so null.
@@ -737,7 +737,7 @@ class XChainIndexer {
 
     // Wall-clock instant (epoch ms) the DIRECT call-presence barrier's hub-clock escape can
     // FIRST open for a block, or null when that cannot be determined. The mirrored twin of
-    // _barrierClearsAt, which cannot serve this path because it returns null without a
+    // barrierClearsAt, which cannot serve this path because it returns null without a
     // HubDbSync. Health verdict only: it gates no wait, no read and no write.
     //
     // Null above the mirror-admission activation at `blockHeight`: the barrier is then
@@ -745,7 +745,7 @@ class XChainIndexer {
     // can fire exactly as it does for the mirrored twins. A caller that passes no height gets
     // today's clock verdict, which keeps the existing one-argument shape meaningful.
     directCallBarrierClearsAt(blockTime, blockHeight){
-        // Guarded on the RAW height before _mirrorAdmissionActiveAt is reached, so the
+        // Guarded on the RAW height before mirrorAdmissionActiveAt is reached, so the
         // pre-train one-argument shape (and a hand-built harness with no config) reads inert
         // without touching this.config. Number(null) is 0, and 0 is above an activation armed
         // at height 0, which is why the guard is on the raw value and never a coerced one.
@@ -792,7 +792,7 @@ class XChainIndexer {
         let timeoutMs = Number(this.callPresenceTimeoutMs);
         if(!Number.isFinite(timeoutMs) || timeoutMs <= 0) timeoutMs = 10000;
         // The raw-height guard is what keeps the one-argument shape inert without reading
-        // this.config (see _directCallBarrierClearsAt).
+        // this.config (see directCallBarrierClearsAt).
         let admission = blockHeight !== null && blockHeight !== undefined && this.mirrorAdmissionActiveAt(blockHeight);
         let chain = (this.config && this.config['COIN']) ? String(this.config['COIN']).trim().toUpperCase() : '';
         // Resolved here rather than at the top of the file so this row touches nothing
@@ -976,7 +976,7 @@ class XChainIndexer {
         await this.applyHubConfigOverlay();
 
         // Keep the overlay live: poll the hub so a PBFT-committed config change takes
-        // effect without requiring a process restart (see _startHubConfigPolling).
+        // effect without requiring a process restart (see startHubConfigPolling).
         this.startHubConfigPolling();
 
         // Establish database connections
@@ -1167,7 +1167,7 @@ class XChainIndexer {
         // Start the durable hub-push retry queue. Both PRICE hub pushes (v0 round and v1
         // oracle price) are write-ahead: price.js enqueues the pending_hub_pushes row
         // UNCONDITIONALLY inside the open block transaction, so it commits atomically with
-        // the prices row. Live delivery runs post-commit (_deliverStagedHubPushes) and drops
+        // the prices row. Live delivery runs post-commit (deliverStagedHubPushes) and drops
         // the row only on success, so neither a crash in that window nor a transient hub
         // outage can permanently drop it; this poller drains whatever survives, with
         // exponential backoff. No-op when no hub is configured (nothing ever enqueues in
@@ -1500,7 +1500,7 @@ class XChainIndexer {
                 // wait buys nothing. blockMayReadPrice is a deliberate over-approximation
                 // (see price_read_predicate.js): any transaction at all means wait, and the
                 // end-of-block passes, which can run the VM on a transaction-free block, are
-                // caught fail-closed at the read itself by db._assertPriceBarrierNotSkipped().
+                // caught fail-closed at the read itself by db.assertPriceBarrierNotSkipped().
                 // Safe without a flag day because a skipped barrier changes no hashed value,
                 // only whether this node paused first.
                 let mayReadPrice = this.evaluatePriceBarrier(blockToParse, blockTransactions);
@@ -1663,7 +1663,7 @@ class XChainIndexer {
                         // future-stamped block. Keyed on this node's wall clock while the
                         // barrier itself reads the hub's: the two are the same host in the
                         // single-host topology this barrier serves, and this value gates no
-                        // wait, no read and no write (health verdict only, see _barrierClearsAt).
+                        // wait, no read and no write (health verdict only, see barrierClearsAt).
                         // Null above the admission activation, where no clock instant opens it.
                         this.stallClearsAt = this.directCallBarrierClearsAt(blockTime, blockToParse);
                         break;
@@ -2185,7 +2185,7 @@ class XChainIndexer {
         }
         // Failed fetch: the hub returned nothing, a non-object, or an HTTP-200 { error: ... }
         // envelope. getallconfigs signals a config-DB read failure as a JSON-RPC *result*
-        // (not a JSON-RPC error), so _call resolves rather than throwing. Report ok:false so
+        // (not a JSON-RPC error), so call resolves rather than throwing. Report ok:false so
         // callers do NOT refresh lastHubConfigFetchAt on it, keeping the staleness health
         // signal honest instead of masking a frozen-config hub.
         if(!response || typeof response !== 'object' || response.error){
@@ -2203,7 +2203,7 @@ class XChainIndexer {
         //   1. pinned-verify-only - consensus-critical coin params (gas schedule, staking,
         //      fee math, addresses, genesis, byte-prefixes). NEVER applied from the hub;
         //      the hub serves them only for the transport-integrity hash check
-        //      (_checkHubConsensusHash). They live solely in the bundled canonical coin
+        //      (checkHubConsensusHash). They live solely in the bundled canonical coin
         //      files (src/coins) and are pin-verified at boot (verifyConsensusPin).
         //   2. live-apply - display/connection params, safe to merge live. Listed below.
         //   3. governance-activated - operationally-mutable consensus params, selected by a
@@ -2262,7 +2262,7 @@ class XChainIndexer {
 
     // Poll the hub for PBFT-committed config changes. The startup overlay runs only
     // once; without this loop a governance-committed change to a tunable/display param
-    // (i.e. one safe to live-poll; see the consensus exclusion list in _mergeHubParams)
+    // (i.e. one safe to live-poll; see the consensus exclusion list in mergeHubParams)
     // would not take effect until the indexer process is restarted. We
     // re-apply the overlay only when the hub's committed sequence advances past the
     // last one we applied, so a steady-state poll is a cheap no-op. Against an older
@@ -2523,7 +2523,7 @@ class XChainIndexer {
         // Same reader the staleness boundary is derived from, so the reported boundary is
         // always three of THESE intervals.
         const intervalMs = effectiveHubConfigPollIntervalMs();
-        // Guarded against self-overlap like _startStateTreeMetric below: a
+        // Guarded against self-overlap like startStateTreeMetric below: a
         // getallconfigs call outrunning the interval (restarting/partitioned hub)
         // must not stack overlapping in-flight polls.
         this._hubConfigPollRunning = false;
@@ -2560,7 +2560,7 @@ class XChainIndexer {
                 // would skip that row forever on a hub whose PBFT seq never advances (a
                 // standalone/config-oracle hub, seq stuck at 0), acting on stale config with
                 // no staleness signal. So an equal NON-ZERO watermark is treated as re-apply-
-                // eligible: _mergeHubParams is idempotent, so re-merging the (full) tree is
+                // eligible: mergeHubParams is idempotent, so re-merging the (full) tree is
                 // safe. A missing watermark (0) keeps the strict path so a seq-only hub does
                 // NOT re-merge every poll. This relies on the full-tree fetch and stays that
                 // way: the hub's since_updated_at delta boundary is now inclusive `>=`,
@@ -2572,7 +2572,7 @@ class XChainIndexer {
                 // high value forever, so config re-apply stops until the hub climbs back past
                 // it. Treat a regression as a cursor reset: re-merge and adopt the
                 // served values verbatim, the way the startup overlay already does
-                // (_applyHubConfigOverlay assigns seq/watermark unclamped). _mergeHubParams is
+                // (applyHubConfigOverlay assigns seq/watermark unclamped). mergeHubParams is
                 // idempotent. Alarm loudly rather than self-heal in silence: a hub that lost
                 // config state is an operator event, not a steady-state poll.
                 let hubReset = (seq < (this.lastHubConfigSeq || 0)) ||

@@ -51,7 +51,7 @@ const Database          = require('../../src/db');
 const swqCap            = require('../../src/swq_source_cap_activation');
 
 // Block heights either side of the source-cap flag day, so both query shapes in
-// _stakeWeightsWithCap are exercised (they map rows independently).
+// stakeWeightsWithCap are exercised (they map rows independently).
 const BELOW_CAP = 900000;
 const ABOVE_CAP = 960000;
 

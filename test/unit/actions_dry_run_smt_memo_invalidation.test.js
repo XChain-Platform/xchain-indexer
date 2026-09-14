@@ -19,13 +19,13 @@
  *
  * That leaves the COUPLING untested, and the coupling is the whole defect. The
  * rolled-back writer that poisons the memos in production is not the block loop,
- * it is `_dryRunAction`: the read-only engine behind /feequote and /preflight runs
+ * it is `dryRunAction`: the read-only engine behind /feequote and /preflight runs
  * the REAL handler inside a transaction it always rolls back, so merely quoting an
  * ISSUE interns its tick, reaches `createLedgerChangeRecord`, and fills the memo
  * with id -> the QUOTED name. If someone re-plumbs that teardown to roll back the
  * connection directly (`this.indexerDb.transactionConnection.rollback()`), or
  * moves it out of the `finally`, both sibling suites stay green and the wedge
- * comes straight back. These tests drive the REAL `_dryRunAction` against a REAL
+ * comes straight back. These tests drive the REAL `dryRunAction` against a REAL
  * `Database`, stubbing only what needs a live pool, so the invalidation has to
  * actually happen on the path the field evidence used.
  *
@@ -92,7 +92,7 @@ function makeDb(){
     return db;
 }
 
-// An Actions-shaped context exposing the real _dryRunAction over that Database.
+// An Actions-shaped context exposing the real dryRunAction over that Database.
 // processTransaction stands in for the handler chain and is where each test says
 // what the quote did to the memos.
 function makeCtx(db, processTransaction){

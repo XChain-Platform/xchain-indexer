@@ -20,7 +20,7 @@
  * supersede earlier ones per match_id (latest-status-wins) and the finalized-wins branch
  * overwrites the FULL non-key column set of cross_chain_calls per (call_id, phase).
  *
- * match_batch_seq is NOT unique on anchor_actions: the _parseCheckpoint replay guard accepts
+ * match_batch_seq is NOT unique on anchor_actions: the parseCheckpoint replay guard accepts
  * an EQUAL MATCH_BATCH_SEQ, so a permissionless re-broadcast or a failover double-publish
  * stores a SECOND v1/v6 head for the same batch. The pre-fix driver ordered ONLY by
  * `match_batch_seq ASC`, so two equal-seq heads carrying different status/content replayed in
@@ -81,7 +81,7 @@ const dupHeads = [
 ];
 
 // Drive the REAL run() only until the driver query fires, capture its SQL, then abort the run
-// by returning [] (an empty head set short-circuits run() before any _verifyBatch work).
+// by returning [] (an empty head set short-circuits run() before any verifyBatch work).
 async function captureDriverSql() {
     const util = new Utility();
     let captured = null;

@@ -30,7 +30,7 @@
  * every unpinned chain, so historical replay must not move).
  *
  * The stubs stand in for the DB, not for the unit under test: the running-total
- * arithmetic being checked is _processSlashEmission's own.
+ * arithmetic being checked is processSlashEmission's own.
  */
 
 'use strict';

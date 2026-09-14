@@ -85,7 +85,7 @@ const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../src/sta
 
 // Capabilities whose archived snapshot is re-resolvable from the BTC capability stakes.
 // Both cross-checks gate on this one set (_verifyStakes for its delegated-key admission,
-// _verifyCompleteness for the whole check), so a future snapshot kind cannot silently reach
+// verifyCompleteness for the whole check), so a future snapshot kind cannot silently reach
 // one and skip the other.
 const QUORUM_CAPABILITIES = new Set(['cross_chain', 'oracle_publish', 'price', 'attestation']);
 
@@ -131,7 +131,7 @@ class AnchorRecovery {
         // derived, diverging a recovery-fed node from a mirror-fed one. The INNER JOIN also drops
         // any row with a NULL status_id, which every production row resolves (anchor.js defaults
         // STATUS to 'valid'); do NOT loosen this to a LEFT JOIN accepting NULL, which reopens the hole.
-        // match_batch_seq is NOT unique: the _parseCheckpoint replay guard admits an EQUAL
+        // match_batch_seq is NOT unique: the parseCheckpoint replay guard admits an EQUAL
         // MATCH_BATCH_SEQ (a permissionless re-broadcast or failover double-publish stores a
         // second v1 head for the same batch, db/anchors.js 'match_batch_seq is NOT unique'). The
         // rebuild below is order-dependent (latest-status-wins per match_id; finalized-wins full
@@ -359,7 +359,7 @@ class AnchorRecovery {
     // Existence check: every archived snapshot pubkey must be a real on-chain signer for its
     // capability at its block. The probe runs in two stages and the ORDER is the fix:
     //
-    //   1. the direct-stake query (_hasDirectStake) answers first, byte-unchanged. It is the
+    //   1. the direct-stake query (hasDirectStake) answers first, byte-unchanged. It is the
     //      fabrication guard, needs no resolver, and is subject to no result cap - so every
     //      key the delegation-blind check already accepted is still accepted.
     //   2. ONLY a key that query rejects is looked up in the delegation-aware effective
@@ -377,20 +377,20 @@ class AnchorRecovery {
     // an honest source's 65th key - a fresh instance of the very false-reject this fixes.
     //
     // The threshold is deliberately LOOSE (minStake '0'), not the capability MIN_STAKE: this
-    // is the existence guard, and _verifyCompleteness is the bar. slashCapabilityStake
+    // is the existence guard, and verifyCompleteness is the bar. slashCapabilityStake
     // rewrites `stakes.amount` IN PLACE (db/stakes.js), so re-resolving a historical block AFTER a
     // slash reports the post-slash amount; a MIN_STAKE-thresholded existence check would then
     // false-reject an honest archive, while at '0' the source still resolves.
     //
     // Truncation at VALIDATOR_QUERY_LIMIT cannot prove a key ABSENT, so it fails closed
-    // (mirrors _verifyCompleteness and the hub's truncation rule). That cap binds only on stage 2, whose
+    // (mirrors verifyCompleteness and the hub's truncation rule). That cap binds only on stage 2, whose
     // input is keys stage 1 has already rejected: a truncated resolution therefore turns a
     // certain rejection into one that names the cap, and can never reject a key stage 1 admitted.
     //
     // Deliberately NOT added here: rejecting a key that is revoked (stake_key_revocations) or
     // slashed at/before the block. The resolver does exclude those, but enforcing it means
     // resolving EVERY archived key through a capped query - re-imposing stage 2's cap on the
-    // keys stage 1 answers for. Qualification is _verifyCompleteness's job; this stays an
+    // keys stage 1 answers for. Qualification is verifyCompleteness's job; this stays an
     // existence guard.
     //
     // BOTH stages re-derive at the DECLARED snapshot_block buried by
@@ -407,7 +407,7 @@ class AnchorRecovery {
     async _verifyStakes(snaps, network){
         // A handle exposing only doQuery (unit fixtures, an embedder holding a raw query
         // handle) has no resolver, so stage 1 is the whole answer - exactly as
-        // _verifyCompleteness degrades to skipping. The recovery bin always builds a
+        // verifyCompleteness degrades to skipping. The recovery bin always builds a
         // BTC-scoped Database, so production runs both stages.
         let canResolve = typeof this.btcDb.getValidatorsByCapability === 'function';
         for(let g of this.groupSnaps(snaps)){
@@ -459,7 +459,7 @@ class AnchorRecovery {
 
     // Key-binding check: bind every archived signing key to the staking SOURCE the archive claims
     // for it. _verifyStakes answers "does this key hold stake somewhere" and
-    // _verifyWeightedCompleteness reduces the archive to source -> amount before it looks,
+    // verifyWeightedCompleteness reduces the archive to source -> amount before it looks,
     // so signing-key identity leaves the weighted path entirely: an attacker holding any
     // small active stake can write their own key onto an honest source's archived row,
     // leave source and amount untouched, pass both checks, and be credited that source's
@@ -479,14 +479,14 @@ class AnchorRecovery {
     //
     // Deliberately NOT added here: the revocation and permanent-slash exclusions
     // stake_source.js carries. Those are QUALIFICATION predicates and belong to
-    // _verifyCompleteness; applying them here would make this probe stricter than the set the
+    // verifyCompleteness; applying them here would make this probe stricter than the set the
     // archive was built from. Known residual: a source's own revoked or slashed key still
     // binds to that source and passes. Same reasoning as the existence guard above.
     async verifyKeySourceBinding(snaps, network){
         for(let g of this.groupSnaps(snaps)){
             if(!QUORUM_CAPABILITIES.has(g.capability)) continue;
             if(!swq.isStakeWeightedQuorumActive(g.block, network)) continue;
-            // Same buried height as _verifyStakes and _verifyCompleteness, so the three
+            // Same buried height as _verifyStakes and verifyCompleteness, so the three
             // checks can never probe a group at two different blocks.
             let atBlock = srb.buriedSnapshotBlock(g.block, network);
             for(let s of g.rows){
@@ -508,7 +508,7 @@ class AnchorRecovery {
     // Is this (pubkey, source) pair an active on-chain authorization at `atBlock`? Two legs,
     // the second tried only when the first finds nothing: a DELEGATED signing key holds no
     // `stakes` row of its own, so a stakes-only probe would reject every honest archive that
-    // carries a delegated-only validator. Join-shaped like _hasDirectStake rather than
+    // carries a delegated-only validator. Join-shaped like hasDirectStake rather than
     // id-lookup-shaped like stake_source.js, so it answers on a bare doQuery handle.
     async hasBoundStake(pubkey, source, atBlock){
         let at   = Number(atBlock);
@@ -568,7 +568,7 @@ class AnchorRecovery {
     //      was taken entirely on trust, because the obvious check - compare it to a
     //      re-resolution - false-rejects honest archives: slashCapabilityStake rewrites
     //      `stakes.amount` IN PLACE, so re-resolving a historical block after a slash reports
-    //      the POST-slash weight, not the weight the hub saw. _slashRestoresAfter() removes
+    //      the POST-slash weight, not the weight the hub saw. slashRestoresAfter() removes
     //      that objection by unwinding every capability_slash_debits row recorded AFTER the
     //      resolve block, so the archived weight is compared to the weight as of the snapshot.
     //      A forged archive can no longer deflate other sources' weights to shrink S.
@@ -951,7 +951,7 @@ class AnchorRecovery {
         // the recovered ledger diverges. Runbook ordering: DOGE archive extract,
         // then BTC reward restore (this), then BTC reindex.
         if(rewards.length > 0){
-            // The missing-btcDb guard is hoisted into _rebuild so it fires before any write.
+            // The missing-btcDb guard is hoisted into rebuild so it fires before any write.
             // Id determinism: do NOT assign index ids at restore time. Calling
             // createAddress/getOrCreatePubkeyId here, OUTSIDE a block tx, would seed
             // low AUTO_INCREMENT ids that offset every subsequent in-block deterministic id
@@ -1093,7 +1093,7 @@ class AnchorRecovery {
 
     // Hub StateCheckpointEngine canonical + the v1 archive extension (anchor.js).
     // v1 ROUND_ID appends batch_seq (distinct from the v0 per-block key, so each batch in a block signs its own round);
-    // gated on the BTC snapshot_block + network, VIEW=0. Must byte-match anchor._canonical.
+    // gated on the BTC snapshot_block + network, VIEW=0. Must byte-match anchor.canonical.
     wrapperCanonical(v1){
         let raw = ['XCHECKPOINT', v1.chain, v1.network, String(v1.block_index), v1.block_hash,
                 v1.ledger_hash, v1.actions_hash, v1.contract_hash,
@@ -1106,7 +1106,7 @@ class AnchorRecovery {
         return raw;
     }
 
-    // Hub CrossChainDexEngine._canonicalMatch / indexer cross_settle._canonical.
+    // Hub CrossChainDexEngine._canonicalMatch / indexer cross_settle.canonical.
     matchCanonical(m){
         let raw = [
             'XMATCH', m.match_id, String(m.snapshot_block),
@@ -1201,7 +1201,7 @@ class AnchorRecovery {
     }
 }
 
-// Test-only export: exposes _wrapperCanonical as a static so byte-parity tests
+// Test-only export: exposes wrapperCanonical as a static so byte-parity tests
 // can call it without constructing a full AnchorRecovery(db, opts) instance.
 // Delegates to the real instance method; does not change its output.
 AnchorRecovery.wrapperCanonicalForTest = function(v1){

@@ -199,13 +199,13 @@ class Database {
         // commit/rollback release. Held only during active processing (barrier stalls happen
         // before beginTransaction), so it never blocks on a stalled indexer - but it IS held
         // for the whole of a block's processing, so a waiter behind a slow block waits that
-        // long. Public read-only callers therefore bound the wait (, _acquireTxLock).
+        // long. Public read-only callers therefore bound the wait (, acquireTxLock).
         this._txLock = { locked: false, queue: [] };
 
         // Watchdog-fence epoch (M-16). Monotonic counter identifying the current DB
         // transaction context. beginTransaction assigns a fresh epoch; every teardown
         // (commit or rollback) bumps it, so a write issued under a torn-down transaction
-        // carries a stale epoch and is rejected by _assertTxNotFenced. See txEpochStore.
+        // carries a stale epoch and is rejected by assertTxNotFenced. See txEpochStore.
         this._txEpoch = 0;
 
         // Circuit breaker state for database connections
@@ -414,7 +414,7 @@ class Database {
     //
     // An absent column and an unreadable name both return early rather than halt: a
     // fresh install has no table yet, and an answer we could not read is not evidence of
-    // drift. Same convention as _assertPubkeyColumnIsUncompressedWide above.
+    // drift. Same convention as assertPubkeyColumnIsUncompressedWide above.
     async assertStakeWeightOrderingCollation(){
         let conn;
         try {
@@ -623,7 +623,7 @@ class Database {
                     // Quote-aware split into statements: strips `--` line comments and
                     // breaks on ';' only outside quoted strings, so a ';' in a comment
                     // header or inside a string literal never terminates a statement, and
-                    // _destructiveAutoStatement classifies real statements not fragments.
+                    // destructiveAutoStatement classifies real statements not fragments.
                     const statements = this.splitSqlStatements(raw);
                     // Destructive-DDL guard: the mode tag is a human declaration; this scan is
                     // the machine check behind it. A file tagged `auto` that contains DDL able
@@ -1597,7 +1597,7 @@ class Database {
     //
     // `#` counts because MariaDB/MySQL honour it to end-of-line exactly like
     // `--`. Missing it made a `# note` line ahead of a destructive statement
-    // invisible to the ^-anchored checks in _destructiveAutoStatement: the
+    // invisible to the ^-anchored checks in destructiveAutoStatement: the
     // chunk began with `#`, matched no keyword, scored the file auto-eligible,
     // and the server ran the DROP unattended at startup. A `;` inside a `#`
     // comment also tore the statement in two for both the classifier and the
@@ -1608,7 +1608,7 @@ class Database {
     // that line (the server does not treat either as a comment start there), and
     // an apostrophe in block-comment prose would open a bogus quote span. The
     // verbatim copy also keeps `/*!...*/` executable-comment payloads intact for
-    // _destructiveAutoStatement to flag.
+    // destructiveAutoStatement to flag.
     stripSqlLineComments(sql){
         let out = '';
         let quote = null;
@@ -1645,7 +1645,7 @@ class Database {
     // sits outside a quoted string. A naive `.split(';')` tears a statement whose
     // string literal contains a semicolon (e.g. `SET data = 'a;b'`) into invalid
     // fragments, so no migration or seed carrying a semicolon in quoted data can
-    // ship, and _destructiveAutoStatement ends up classifying fragments rather than
+    // ship, and destructiveAutoStatement ends up classifying fragments rather than
     // real statements. `--` and `#` line comments are stripped first (same rule as
     // the callers used); the quote model matches stripSqlLineComments exactly
     // (single/double-quote and backtick spans, doubled-quote and backslash escapes).
@@ -1821,7 +1821,7 @@ class Database {
         return new Promise((resolve, reject) => {
             let timer = setTimeout(() => {
                 if(waiter.settled) return;
-                // Stays in the queue but marked settled; _releaseTxLock skips it. Splicing
+                // Stays in the queue but marked settled; releaseTxLock skips it. Splicing
                 // here would be O(n) on every give-up for no benefit.
                 waiter.settled = true;
                 let e = new Error('transaction lock busy: waited ' + Number(timeoutMs) +
@@ -1871,7 +1871,7 @@ class Database {
     // transaction, so it must not be fenced (its epoch counter never advances, so comparing
     // across instances fences every such read; caught live on regtest 2026-07-08).
     // `consensus: true` marks this context as real block processing, which is what
-    // _assertPriceBarrierNotSkipped keys on; see runInDryRunEpoch below for why the flag
+    // assertPriceBarrierNotSkipped keys on; see runInDryRunEpoch below for why the flag
     // exists and why THIS is the defaulted side.
     runInTxEpoch(epoch, fn){
         return txEpochStore.run({ owner: this, epoch: epoch, consensus: true }, fn);
@@ -1880,7 +1880,7 @@ class Database {
     // Same M-16 fence, no consensus authority. The fee-quote dry run needs the
     // zombie-write protection above - it holds the shared transaction and can be abandoned by
     // its watchdog exactly as a block can - but it is NOT block processing and it commits
-    // nothing. _assertPriceBarrierNotSkipped used "a txEpochStore context exists" as its proof
+    // nothing. assertPriceBarrierNotSkipped used "a txEpochStore context exists" as its proof
     // that a caller is the block loop, and this call site made that proof false: a public
     // /feequote whose dry run read the price mirror during a barrier-skipped block answered
     // `handler threw: ... PRICE_BARRIER_DEFERRED` and, worse, set priceBarrierForceBlock, so an
@@ -2634,7 +2634,7 @@ class Database {
      * a block is being processed. Routing queue writes through it would attach
      * operational queue I/O to the block's ACID transaction (committed/rolled
      * back with the block) and risk two statements sharing one physical
-     * connection. _poolQuery() always draws an independent pooled connection.
+     * connection. poolQuery() always draws an independent pooled connection.
      */
 
     // Run a query on a fresh pooled connection, isolated from any in-progress
@@ -2649,7 +2649,7 @@ class Database {
     }
 
     // API-path view of this DB instance: same methods, but every doQuery()
-    // draws an independent pooled connection (_poolQuery) instead of routing
+    // draws an independent pooled connection (poolQuery) instead of routing
     // through getConnection(), which returns the open block's
     // transactionConnection while a block is processing. Any federation RPC
     // handler that WRITES must use this view. There is none today (the last one,
@@ -2666,7 +2666,7 @@ class Database {
         if(!this._apiView){
             this._apiView = Object.create(this);
             this._apiView.doQuery = (query, args) => this.poolQuery(query, args);
-            // doQueryStrict must also bypass transactionConnection. _poolQuery already throws on a
+            // doQueryStrict must also bypass transactionConnection. poolQuery already throws on a
             // query error (no swallow), so it satisfies the strict contract. Without this override,
             // a method that internally calls doQueryStrict (e.g. createReorg) would still adopt an
             // open foreign transaction when invoked on the view - defeating the reorg-path isolation
@@ -2966,7 +2966,7 @@ class Database {
     // bytes. Mirrors rollback.js's valid-chunk self-join and the recovery.js
     // v1 status filter. #3075 added the authorship term and moved the whole
     // query into anchor_action_query.js (ARCHIVE_CHUNK_SET_SQL), which
-    // recovery._verifyBatch now requires verbatim, so the two can no longer
+    // recovery.verifyBatch now requires verbatim, so the two can no longer
     // drift by hand-copy: only chunks authored by the CANONICAL archive head
     // count, which is what stops a junk chunk broadcast BEFORE the head (stored
     // 'orphan', so it carries no rejection verdict of its own) from squatting a
@@ -3395,7 +3395,7 @@ Database.MIGRATION_CHECKSUM_REBASELINES = {
 };
 
 // Applicability preconditions the runner evaluates against the LIVE schema before it
-// applies a migration (see _migrationPreconditionSkip). Each entry is a parameterised
+// applies a migration (see migrationPreconditionSkip). Each entry is a parameterised
 // information_schema query taking the database name, plus a predicate returning a reason
 // string when the migration does not apply to this database and null when it does.
 //
@@ -3413,7 +3413,7 @@ Database.MIGRATION_PRECONDITIONS = {
     // src/sql/pubkeys.sql (already VARCHAR(130) or wider) - and a fresh install never
     // needs the widen a prior narrower column required. Baseline only while the live
     // column is already 130 characters or more, the same threshold
-    // _assertPubkeyColumnIsUncompressedWide enforces at startup.
+    // assertPubkeyColumnIsUncompressedWide enforces at startup.
     //
     // Absent table/column, or an unreadable/NULL length, is deliberately NOT
     // baselined: that state needs an operator, and the startup assertion fails
@@ -3445,7 +3445,7 @@ Database.MIGRATION_PRECONDITIONS = {
     // ledger row records what is true there; without it the file sits PENDING with no
     // row forever and every operator run re-lists a no-op.
     //
-    // ONE bind parameter: _migrationPreconditionSkip passes [this.dbName] and nothing
+    // ONE bind parameter: migrationPreconditionSkip passes [this.dbName] and nothing
     // else, so the database name is bound once in a CTE and reused by each subquery.
     //
     // A partially converged or unreadable schema is deliberately NOT baselined: any
@@ -3492,7 +3492,7 @@ Database.MIGRATION_PRECONDITIONS = {
     // must NOT be baselined, so the index check is the gate and the columns are only a
     // completeness check on the other half of the file.
     //
-    // ONE bind parameter: _migrationPreconditionSkip passes [this.dbName] and nothing else, so
+    // ONE bind parameter: migrationPreconditionSkip passes [this.dbName] and nothing else, so
     // the database name is bound once in a CTE and reused by each subquery.
     //
     // non_unique = 0 is asserted, not assumed: a same-named NON-unique index carrying the
@@ -3623,7 +3623,7 @@ Database.DEPLOY_PRECONDITION_TAG = 'deploy-precondition=required';
 // WHY THIS LIST EXISTS
 // --------------------
 // 2026-08-09: deploying 3bc9771 put all three mainnet indexers (BTC, DOGE, LTC)
-// into Restarting(1) crash-loops on _assertPubkeyColumnIsUncompressedWide, because
+// into Restarting(1) crash-loops on assertPubkeyColumnIsUncompressedWide, because
 // 2026-07-24-pubkeys-widen-uncompressed.sql is mode=manual and had never been
 // applied on mainnet. Both halves were individually right - the migration is a COPY
 // rebuild under a metadata lock, so it wants the writer quiesced, and the assertion
@@ -3669,7 +3669,7 @@ Database.startupAssertedMigrationFile = function(assertion){
 };
 
 // Does this migration file's header declare itself a deploy precondition?
-// Prologue-anchored exactly like _migrationMode (the scan stops at the first
+// Prologue-anchored exactly like migrationMode (the scan stops at the first
 // non-blank, non-comment line), so a token buried in body prose or a data literal
 // cannot arm it. Pure string logic, unit-tested directly.
 //

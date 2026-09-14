@@ -18,7 +18,7 @@
  * batch's verdict on the HEAD, a row from an earlier block that survives the
  * reorg delete, so a reorg of that chunk leaves the head terminal with nothing on
  * chain to justify it. Worse than stale: getAttestBatchChunks reads status
- * 'valid' only, so the head vanishes from its own chunk set, _canonicalBatchHead
+ * 'valid' only, so the head vanishes from its own chunk set, canonicalBatchHead
  * resolves nothing on replay, and the window is dead on this node forever.
  *
  * The reset therefore has to restore the head - but only the heads it may. A head
@@ -63,7 +63,7 @@ const FIRST_ORPHANED = 250;
 const BATCH_KEY = 'ab'.repeat(32);
 const OTHER_KEY = 'cd'.repeat(32);
 
-// A verdict as _absorbCompletedBatch stamps it, and the same verdict text as a
+// A verdict as absorbCompletedBatch stamps it, and the same verdict text as a
 // head that was already terminal when it was WRITTEN carries it.
 const STAMPED   = 'invalid: ATTEST_BATCH (reassembly CRC mismatch)' + ATTEST_BATCH_COMPLETION_STAMP;
 const AT_WRITE  = 'invalid: BATCH_KEY (this publisher already has a head for the window)';

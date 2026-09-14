@@ -18,7 +18,7 @@
  * getMaxAnchorCheckpointSeq() once hardcoded `a.version IN (0, 1, 3)`, omitting
  * the checkpoint-bearing v4/v5 anchors. Post-ANCHOR_REWARD flag-day the live
  * checkpoint stream is v4/v5, so the watermark froze at the last pre-flag-day
- * seq and a replayed older checkpoint passed the _parseCheckpoint staleness
+ * seq and a replayed older checkpoint passed the parseCheckpoint staleness
  * guard, getting recorded STATUS='valid' into the permanent anchor_actions
  * record. The fix builds the filter from the shared CHECKPOINT_VERSIONS
  * constant (anchor_action_query.js), same as getAnchorActionByCheckpoint.

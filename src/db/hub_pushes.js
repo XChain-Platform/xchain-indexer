@@ -84,7 +84,7 @@ module.exports = {
     },
 
     // Like enqueueHubPush, but routes through the OPEN transaction connection (doQuery, not
-    // _poolQuery) so the row commits atomically with the caller's transaction, and returns the new
+    // poolQuery) so the row commits atomically with the caller's transaction, and returns the new
     // row id. Used by rollback.js to write-ahead its hub retractions inside the rollback transaction
     // (HUB-RETRACT-2): the durable row survives a crash between commit and live delivery, and the id
     // lets the caller markHubPushDelivered() on a successful immediate delivery. MUST be called with a
@@ -105,15 +105,15 @@ module.exports = {
 
     // Fetch the oldest DUE pending rows for the poller (`failed` rows are excluded
     // - they are terminal). The backoff due-time predicate mirrors HubPushQueue's
-    // JS-side _isDue formula (delay = LEAST(base * 2^(attempts-1), max)) directly
+    // JS-side isDue formula (delay = LEAST(base * 2^(attempts-1), max)) directly
     // in the WHERE clause, so rows still parked in backoff no longer occupy the
     // LIMIT batch slots. Before this, a row that is pending-but-not-due still
     // counted against LIMIT, so a hub outage that accumulates more than `limit`
     // parked rows could starve every newer due row from ever being fetched
     // (review finding 01178748: head-of-line blocking). `baseBackoffMs` and
-    // `maxBackoffMs` MUST be the same values HubPushQueue uses for _isDue, or the
+    // `maxBackoffMs` MUST be the same values HubPushQueue uses for isDue, or the
     // two due-ness checks drift; the caller passes its own configured values.
-    // The queue keeps _isDue as a cheap belt-and-braces re-check after fetch.
+    // The queue keeps isDue as a cheap belt-and-braces re-check after fetch.
     async getPendingHubPushes(limit, backoffOpts){
         let max = Number(limit);
         if(!Number.isFinite(max) || max <= 0) max = 50;

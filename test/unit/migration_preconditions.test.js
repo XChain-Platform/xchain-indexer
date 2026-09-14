@@ -65,7 +65,7 @@ describe('Database.migrationDeclaresDeployPrecondition @regression @tier1', func
     });
 
     it('ignores the token once the SQL body has started, so prose or a data literal cannot arm it', function () {
-        // Same prologue anchoring as _migrationMode: a comment AFTER the first statement
+        // Same prologue anchoring as migrationMode: a comment AFTER the first statement
         // is body text. Without this, a migration that merely DISCUSSES the convention
         // would be read as declaring itself a precondition and block every deploy.
         const raw = 'ALTER TABLE t;\n-- xchain:migration mode=manual deploy-precondition=required\n';

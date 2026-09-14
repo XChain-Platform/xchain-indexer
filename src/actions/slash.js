@@ -49,7 +49,7 @@
  *   3. BOTH signatures verify against OFFENDER_PUBKEY;
  *   4. OFFENDER_PUBKEY was in the locked capability snapshot for CAPABILITY at the
  *      slot's snapshot_block (recovered deterministically from the proof itself;
- *      see _resolveSlot). The proof declares a RAW height; membership, and the
+ *      see resolveSlot). The proof declares a RAW height; membership, and the
  *      delegated-owner lookup that names whose bond burns, both resolve at
  *      snapshot_reorg_buffer.buriedSnapshotBlock() of it, which is where the hub
  *      that locked the slot resolved its own signer set (flag-day gated);
@@ -131,7 +131,7 @@ function parseOracleContent(content){
 // Read the (first_round, last_round, btc_block_height) triple out of an XORACLEB signed
 // content (ed25519.buildPriceBatchPayload's JSON.stringify output). A batch declares a
 // WINDOW and no scalar `round`, which is why it carries its own engine tag and its own
-// reader here. Same null discipline as _parseOracleContent: an absent or non-integer field
+// reader here. Same null discipline as parseOracleContent: an absent or non-integer field
 // yields null rather than 0, so two absent windows never compare EQUAL and re-open the
 // false-pair hole.
 function parseBatchContent(content){
@@ -277,7 +277,7 @@ class Slash {
                 resolveBlock  = srb.buriedSnapshotBlock(snapshotBlock, this.config['NETWORK']);
                 // One engine tag can host content families locked under DIFFERENT
                 // capabilities: XATTEST's relay legs are verified against `cross_chain`
-                // (attest.js _verifyRelayQuorum), not `attestation`. The slot
+                // (attest.js verifyRelayQuorum), not `attestation`. The slot
                 // resolver names the governing one, so the derived-CAPABILITY check runs
                 // HERE, after the family is known, rather than off the tag alone.
                 if(slot.capability) capability = slot.capability;
@@ -430,7 +430,7 @@ class Slash {
             // The CHECKPOINT engine tag carries TWO content families: the checkpoint
             // root canonical (XCHECKPOINT|...) and the reward-attestation canonical
             // (XANCPUB|scope|seq|snapshot_block|publisher|amount, both the per-chain and
-            // archive legs; see anchor.js _rewardCanonical). Dispatch the field index on the
+            // archive legs; see anchor.js rewardCanonical). Dispatch the field index on the
             // content's leading token; both messages must agree on the family (a matched
             // field across DIFFERENT layouts proves nothing about a shared slot).
             if(engineTag === eq.ENGINE_TAGS.CHECKPOINT){
@@ -528,7 +528,7 @@ class Slash {
         if(engineTag === eq.ENGINE_TAGS.ATTEST){
             // XATTEST carries TWO families (base v1 and relay). The relay legs are shaped
             // like XCALL: pipe-delimited, snapshot_block at index 3, hashed ROUND_ID, and
-            // locked under `cross_chain` (attest.js _verifyRelayQuorum). The base v1
+            // locked under `cross_chain` (attest.js verifyRelayQuorum). The base v1
             // canonical is delimiter-less and starts with the request_id, so its first
             // '|' segment can never be the literal 'ATTEST'. Both messages must agree on
             // the family: a matched field across DIFFERENT layouts proves nothing about a

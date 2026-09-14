@@ -532,7 +532,7 @@ module.exports = {
 
     // Slash a staker. Deducts `amount` from active contract_stakes rows first (LIFO by
     // activation_block / action_index), then from contract_unstakes rows if any remainder.
-    // Does NOT credit the destination or emit the slash_events row - caller (_processSlashEmission)
+    // Does NOT credit the destination or emit the slash_events row - caller (processSlashEmission)
     // wires those side effects.
     //
     // Returns { total, releases }:
@@ -548,7 +548,7 @@ module.exports = {
     // reads the stake row's CURRENT key. Because materializeContractDelegations rewrites the row
     // at the delegation's activation block, a SLASH against a rotated staker lands on the very
     // rows the contract was shown, instead of matching nothing and returning '0' (which
-    // _processSlashEmission's zero-slashed path then records as a punishment the ledger never
+    // processSlashEmission's zero-slashed path then records as a punishment the ledger never
     // applied). No rotation-aware lookup belongs here: the row IS the rotation.
     async slashContractStake(targetContractIndex, pubkeyId, tickId, amount, blockIndex, executionIndex, slashPosition){
         let valid_id = await this.getStatusId('valid');

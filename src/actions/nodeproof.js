@@ -234,7 +234,7 @@ class NodeProof {
         // non-staker). Idempotent on (epoch_height, signing_pubkey).
         if(!error){
             // One batched capability read for the whole PASS list, same fallback rule
-            // as _eligibleVerifierSet: a truncated read re-probes per pubkey. Resolves
+            // as eligibleVerifierSet: a truncated read re-probes per pubkey. Resolves
             // at the buried setBlock, the height the hub locked its claimant universe
             // at, and the row's source is resolved at that same height (the two must
             // agree: a gate that admits a node whose source resolution then finds no

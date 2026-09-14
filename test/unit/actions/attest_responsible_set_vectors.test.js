@@ -14,7 +14,7 @@
 // The attestation responsible-set rule is implemented independently in
 // xchain-hub (AttestationRound._computeResponsibleSet,
 // AttestationPublisher._computeResponsible) and here
-// (actions/attest._computeResponsibleSet, mirrored by rollback._responsibleSet).
+// (actions/attest.computeResponsibleSet, mirrored by rollback.responsibleSet).
 // They MUST produce identical ordered output or attestation quorum evaluation
 // forks: the hub signs with S_hub, this indexer filters verified signatures
 // against S_idx, and any divergence silently expires every affected request.
@@ -99,7 +99,7 @@ describe('ATTEST responsible-set canonical-vector conformance @regression @tier1
     });
 
     // The reorg recompute is a FOURTH copy of the same rule and is not reachable
-    // through _computeResponsibleSet, so run the vectors through it too rather than
+    // through computeResponsibleSet, so run the vectors through it too rather than
     // trusting the two to have been edited together.
     describe('rollback._responsibleSet applies the identical rule', function () {
         const Rollback = require('../../../src/rollback.js');
