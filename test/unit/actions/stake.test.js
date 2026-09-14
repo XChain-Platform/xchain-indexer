@@ -9,87 +9,35 @@
 // General Public License v3.0 or later; see LICENSE.md. A commercial
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
+//
+// Stake handler: FORMAT, the BTC-only chain restriction, v1 capability stake
+// creation and AMOUNT validation. The signing key, sleeping and v2 top-up
+// cases and the v3 contract-targeted stake live beside it in stake.test/, each
+// opening the same 'Stake handler @regression @tier2' describe so every full
+// test title is unchanged; stake.test/helpers/stake_harness.js holds the
+// constants and the mock harness they share.
 
 process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
-const sinon  = require('sinon');
 
-const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
+const { PUBKEY, BLOCK, makeData, useStakeHarness } = require('./stake.test/helpers/stake_harness.js');
 
-const Stake = require('../../../src/actions/stake.js');
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const SOURCE  = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-// Valid 64-char Ed25519 hex public key
-const PUBKEY  = 'a'.repeat(64);
-const BLOCK   = 100;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function makeActionsCtx(indexer) {
-    return {
-        config:          indexer.config,
-        util:            indexer.util,
-        mapper:          indexer.mapper,
-        decoderDb:       indexer.decoderDb,
-        indexerDb:       indexer.indexerDb,
-        protocolChanges: {
-            isDefined:  sinon.stub().returns(true),
-            isEnabled:  sinon.stub().resolves(true),
-        },
-        processAction: sinon.stub().resolves(),
-    };
-}
-
-function makeData(overrides = {}) {
-    return createBaseData(Object.assign({ ACTION: 'STAKE', COIN: 'BTC', BLOCK_INDEX: BLOCK, SOURCE }, overrides));
-}
+// Each test gets a fresh harness from useStakeHarness; bind() hands it to the
+// names the test bodies use.
+let indexer, handler;
+const bind = (h) => { ({ indexer, handler } = h); };
 
 // ---------------------------------------------------------------------------
 // Suite
 // ---------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------
+// FORMAT validation
+// -----------------------------------------------------------------------
 describe('Stake handler @regression @tier2', function () {
-    let indexer, actionsCtx, handler;
-
-    beforeEach(function () {
-        indexer    = createMockIndexer();
-        actionsCtx = makeActionsCtx(indexer);
-        handler    = new Stake(actionsCtx);
-
-        // Stubs not in default mock
-        indexer.indexerDb.createStake            = sinon.stub().resolves();
-        indexer.indexerDb.getActiveStakeByPubkey = sinon.stub().resolves(null);
-        indexer.indexerDb.getDelegationByPubkey  = sinon.stub().resolves(null);  // pubkey not delegated
-        indexer.indexerDb.createContractStake    = sinon.stub().resolves();
-        indexer.indexerDb.getContractStakeOwner  = sinon.stub().resolves(null);
-        indexer.indexerDb.getContract            = sinon.stub().resolves(null);
-        indexer.indexerDb.getStatusString        = sinon.stub().resolves('valid');
-
-        // Sufficient XCHAIN balance for staking
-        const gasToken = createTokenInfo({ TICK: 'XCHAIN', TICK_ID: 1, DECIMALS: 8 });
-        indexer.indexerDb.getTokenInfo.resolves(gasToken);
-        indexer.indexerDb.getAddressBalances.resolves({ 1: '10000.00000000' });
-        indexer.indexerDb.isActionAllowed.resolves(true);
-        indexer.indexerDb.getAddressId.resolves(42);
-
-        indexer.util.resetLists();
-    });
-
-    afterEach(function () {
-        sinon.restore();
-    });
-
-    // -----------------------------------------------------------------------
-    // FORMAT validation
-    // -----------------------------------------------------------------------
+    useStakeHarness(bind);
 
     describe('FORMAT validation', function () {
 
@@ -120,10 +68,13 @@ describe('Stake handler @regression @tier2', function () {
             assert.ok(data.STATUS.startsWith('invalid'));
         });
     });
+});
 
-    // -----------------------------------------------------------------------
-    // Chain restriction
-    // -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// Chain restriction
+// -----------------------------------------------------------------------
+describe('Stake handler @regression @tier2', function () {
+    useStakeHarness(bind);
 
     describe('chain restriction', function () {
 
@@ -145,10 +96,13 @@ describe('Stake handler @regression @tier2', function () {
             assert.ok(data.STATUS.includes('BTC only'));
         });
     });
+});
 
-    // -----------------------------------------------------------------------
-    // v1: Create new capability stake
-    // -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// v1: Create new capability stake
+// -----------------------------------------------------------------------
+describe('Stake handler @regression @tier2', function () {
+    useStakeHarness(bind);
 
     describe('v1: create new capability stake', function () {
         it('valid v1 stake → STATUS valid, createStake called', async function () {
@@ -204,6 +158,10 @@ describe('Stake handler @regression @tier2', function () {
             assert.ok(data.STATUS.includes('already in use'));
         });
     });
+});
+
+describe('Stake handler @regression @tier2', function () {
+    useStakeHarness(bind);
 
     describe('v1: create new capability stake', function () {
         it('pubkey held by an active delegation → invalid for v1 (mirrors the DELEGATE collision rule)', async function () {
@@ -233,10 +191,13 @@ describe('Stake handler @regression @tier2', function () {
             assert.ok(indexer.indexerDb.createStake.calledOnce);
         });
     });
+});
 
-    // -----------------------------------------------------------------------
-    // AMOUNT validations
-    // -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// AMOUNT validations
+// -----------------------------------------------------------------------
+describe('Stake handler @regression @tier2', function () {
+    useStakeHarness(bind);
 
     describe('AMOUNT validations', function () {
 
@@ -286,436 +247,6 @@ describe('Stake handler @regression @tier2', function () {
             await handler.parse(params, data, null);
 
             assert.ok(data.STATUS.includes('insufficient funds'));
-        });
-    });
-
-    // -----------------------------------------------------------------------
-    // SIGNING_PUBKEY validations
-    // -----------------------------------------------------------------------
-
-    describe('SIGNING_PUBKEY validations', function () {
-
-        it('null SIGNING_PUBKEY → invalid', async function () {
-            const params = ['1', '100.00000000', ''];
-            const data   = makeData({ FORMAT: 1 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('SIGNING_PUBKEY'));
-        });
-
-        it('too-short pubkey → invalid', async function () {
-            const params = ['1', '100.00000000', 'abcd1234']; // 8 chars, not 64
-            const data   = makeData({ FORMAT: 1 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('SIGNING_PUBKEY'));
-        });
-
-        it('non-hex pubkey → invalid', async function () {
-            const params = ['1', '100.00000000', 'z'.repeat(64)];
-            const data   = makeData({ FORMAT: 1 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('SIGNING_PUBKEY'));
-        });
-
-        it('valid 64-char hex pubkey → passes pubkey check', async function () {
-            indexer.indexerDb.getActiveStakeByPubkey.resolves(null);
-            const params = ['1', '100.00000000', PUBKEY];
-            const data   = makeData({ FORMAT: 1 });
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data.STATUS, 'valid');
-        });
-    });
-
-    // -----------------------------------------------------------------------
-    // SOURCE sleeping
-    // -----------------------------------------------------------------------
-
-    describe('SOURCE sleeping', function () {
-
-        it('SOURCE sleeping → invalid', async function () {
-            indexer.indexerDb.getActiveStakeByPubkey.resolves(null);
-            indexer.indexerDb.isActionAllowed.resolves(false);
-
-            const params = ['1', '100.00000000', PUBKEY];
-            const data   = makeData({ FORMAT: 1 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('sleeping'));
-        });
-    });
-
-    // -----------------------------------------------------------------------
-    // v2 : Top-up existing capability stake
-    // -----------------------------------------------------------------------
-
-    describe('v2 : top-up existing capability stake', function () {
-
-        it('valid v2 top-up → STATUS valid', async function () {
-            // Active stake exists and is owned by SOURCE (source_id=42)
-            indexer.indexerDb.getActiveStakeByPubkey.resolves({ source_id: 42, amount: '500' });
-            indexer.indexerDb.getAddressId.resolves(42);
-
-            const params = ['2', '100.00000000', PUBKEY];
-            const data   = makeData({ FORMAT: 2 });
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data.STATUS, 'valid');
-        });
-
-        it('v2 top-up : no active stake → invalid', async function () {
-            indexer.indexerDb.getActiveStakeByPubkey.resolves(null);
-
-            const params = ['2', '100.00000000', PUBKEY];
-            const data   = makeData({ FORMAT: 2 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('no active stake to top up'));
-        });
-
-        it('v2 top-up : stake owned by different source → invalid', async function () {
-            indexer.indexerDb.getActiveStakeByPubkey.resolves({ source_id: 99, amount: '500' });
-            indexer.indexerDb.getAddressId.resolves(42); // current SOURCE id=42, not 99
-
-            const params = ['2', '100.00000000', PUBKEY];
-            const data   = makeData({ FORMAT: 2 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('does not own this stake'));
-        });
-
-        it('v2 top-up : source address id null → invalid', async function () {
-            indexer.indexerDb.getActiveStakeByPubkey.resolves({ source_id: 42, amount: '500' });
-            indexer.indexerDb.getAddressId.resolves(null); // source not found
-
-            const params = ['2', '100.00000000', PUBKEY];
-            const data   = makeData({ FORMAT: 2 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('does not own this stake'));
-        });
-    });
-
-    const CONTRACT_INDEX = '5';
-    const CONTRACT_TICK  = 'TEST';
-
-    function makeContractToken() {
-        return createTokenInfo({ TICK: CONTRACT_TICK, TICK_ID: 2, DECIMALS: 0 });
-    }
-
-    function makeContractInfo(overrides = {}) {
-        return Object.assign({ source_id: 42, cooldown_blocks: 100 }, overrides);
-    }
-
-    // -----------------------------------------------------------------------
-    // v3 : Contract-targeted stake
-    // -----------------------------------------------------------------------
-
-    describe('v3 : contract-targeted stake', function () {
-        beforeEach(function () {
-            // Contract exists, is valid, and has cooldown_blocks set
-            indexer.indexerDb.getContract.resolves(makeContractInfo());
-            indexer.indexerDb.getStatusString.resolves('valid');
-            // Token for the stake
-            indexer.indexerDb.getTokenInfo.resolves(makeContractToken());
-            // Sufficient balance
-            indexer.indexerDb.getAddressBalances.resolves({ 2: '1000' });
-            // No existing stake for this (target, pubkey, tick)
-            indexer.indexerDb.getContractStakeOwner.resolves(null);
-        });
-
-        it('valid v3 contract stake → STATUS valid, createContractStake called', async function () {
-            const params = ['3', '100', PUBKEY, CONTRACT_INDEX, CONTRACT_TICK];
-            const data   = makeData({ FORMAT: 3 });
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data.STATUS, 'valid');
-            assert.ok(indexer.indexerDb.createContractStake.calledOnce);
-        });
-
-        it('STAKE-1: rejects a leading-zero TARGET_CONTRACT_INDEX at/after the flag-day', async function () {
-            const params = ['3', '100', PUBKEY, '005', CONTRACT_TICK];   // non-canonical index, flag on by default
-            const data   = makeData({ FORMAT: 3 });
-            await handler.parse(params, data, null);
-            assert.ok(String(data.STATUS).includes('TARGET_CONTRACT_INDEX (format)'));
-        });
-
-        it('STAKE-1: accepts a leading-zero index below the flag-day (legacy /^[0-9]+$/)', async function () {
-            actionsCtx.protocolChanges.isEnabled = sinon.stub().resolves(false);
-            const params = ['3', '100', PUBKEY, '005', CONTRACT_TICK];
-            const data   = makeData({ FORMAT: 3 });
-            await handler.parse(params, data, null);
-            assert.strictEqual(data.STATUS, 'valid');   // '005' -> contract 5, valid pre-flag-day
-        });
-
-        it('STAKE-2: rejects when staking GAS and AMOUNT+guardFee exceeds the GAS balance', async function () {
-            const GAS = actionsCtx.config['GAS'];
-            indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: GAS, TICK_ID: 1, DECIMALS: 8 }));
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '100' });        // exactly AMOUNT, no room for the fee
-            indexer.util.maybeRunControllerGuard = sinon.stub().resolves({ guardFee: '5' });
-            const params = ['3', '100', PUBKEY, CONTRACT_INDEX, GAS];
-            const data   = makeData({ FORMAT: 3 });
-            await handler.parse(params, data, null);
-            assert.ok(String(data.STATUS).includes('STAKE + guard fee'));
-        });
-    });
-
-    describe('v3 : contract-targeted stake', function () {
-        beforeEach(function () {
-            // Contract exists, is valid, and has cooldown_blocks set
-            indexer.indexerDb.getContract.resolves(makeContractInfo());
-            indexer.indexerDb.getStatusString.resolves('valid');
-            // Token for the stake
-            indexer.indexerDb.getTokenInfo.resolves(makeContractToken());
-            // Sufficient balance
-            indexer.indexerDb.getAddressBalances.resolves({ 2: '1000' });
-            // No existing stake for this (target, pubkey, tick)
-            indexer.indexerDb.getContractStakeOwner.resolves(null);
-        });
-
-        it('STAKE-2: allows the combined debit when the GAS balance covers AMOUNT+guardFee', async function () {
-            const GAS = actionsCtx.config['GAS'];
-            indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: GAS, TICK_ID: 1, DECIMALS: 8 }));
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '105' });        // covers 100 + 5
-            indexer.util.maybeRunControllerGuard = sinon.stub().resolves({ guardFee: '5' });
-            const params = ['3', '100', PUBKEY, CONTRACT_INDEX, GAS];
-            const data   = makeData({ FORMAT: 3 });
-            await handler.parse(params, data, null);
-            assert.strictEqual(data.STATUS, 'valid');
-        });
-
-        it('v3 → mapper.createMappings called', async function () {
-            const params = ['3', '100', PUBKEY, CONTRACT_INDEX, CONTRACT_TICK];
-            const data   = makeData({ FORMAT: 3 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(indexer.mapper.createMappings.calledOnce);
-        });
-
-        it('v3 → updateBalances called', async function () {
-            const params = ['3', '100', PUBKEY, CONTRACT_INDEX, CONTRACT_TICK];
-            const data   = makeData({ FORMAT: 3 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(indexer.indexerDb.updateBalances.calledOnce);
-        });
-
-        it('v3 contract not found → invalid', async function () {
-            indexer.indexerDb.getContract.resolves(null);
-
-            const params = ['3', '100', PUBKEY, CONTRACT_INDEX, CONTRACT_TICK];
-            const data   = makeData({ FORMAT: 3 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('unknown'));
-        });
-    });
-
-    describe('v3 : contract-targeted stake', function () {
-        beforeEach(function () {
-            // Contract exists, is valid, and has cooldown_blocks set
-            indexer.indexerDb.getContract.resolves(makeContractInfo());
-            indexer.indexerDb.getStatusString.resolves('valid');
-            // Token for the stake
-            indexer.indexerDb.getTokenInfo.resolves(makeContractToken());
-            // Sufficient balance
-            indexer.indexerDb.getAddressBalances.resolves({ 2: '1000' });
-            // No existing stake for this (target, pubkey, tick)
-            indexer.indexerDb.getContractStakeOwner.resolves(null);
-        });
-
-        it('v3 contract status not valid → invalid', async function () {
-            indexer.indexerDb.getStatusString.resolves('invalid');
-
-            const params = ['3', '100', PUBKEY, CONTRACT_INDEX, CONTRACT_TICK];
-            const data   = makeData({ FORMAT: 3 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('contract not active'));
-        });
-
-        it('v3 contract has no cooldown_blocks → invalid (not stakeable)', async function () {
-            indexer.indexerDb.getContract.resolves({ source_id: 42, cooldown_blocks: null });
-
-            const params = ['3', '100', PUBKEY, CONTRACT_INDEX, CONTRACT_TICK];
-            const data   = makeData({ FORMAT: 3 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('not stakeable'));
-        });
-
-        it('v3 TICK not found → invalid', async function () {
-            indexer.indexerDb.getTokenInfo.resolves(null);
-
-            const params = ['3', '100', PUBKEY, CONTRACT_INDEX, CONTRACT_TICK];
-            const data   = makeData({ FORMAT: 3 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('TICK'));
-        });
-
-        it('v3 amount missing → invalid', async function () {
-            const params = ['3', '', PUBKEY, CONTRACT_INDEX, CONTRACT_TICK];
-            const data   = makeData({ FORMAT: 3 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('AMOUNT'));
-        });
-    });
-
-    describe('v3 : contract-targeted stake', function () {
-        beforeEach(function () {
-            // Contract exists, is valid, and has cooldown_blocks set
-            indexer.indexerDb.getContract.resolves(makeContractInfo());
-            indexer.indexerDb.getStatusString.resolves('valid');
-            // Token for the stake
-            indexer.indexerDb.getTokenInfo.resolves(makeContractToken());
-            // Sufficient balance
-            indexer.indexerDb.getAddressBalances.resolves({ 2: '1000' });
-            // No existing stake for this (target, pubkey, tick)
-            indexer.indexerDb.getContractStakeOwner.resolves(null);
-        });
-
-        it('v3 TARGET_CONTRACT_INDEX missing → invalid', async function () {
-            const params = ['3', '100', PUBKEY, '', CONTRACT_TICK];
-            const data   = makeData({ FORMAT: 3 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('TARGET_CONTRACT_INDEX'));
-        });
-
-        it('v3 TARGET_CONTRACT_INDEX = 0 → invalid', async function () {
-            const params = ['3', '100', PUBKEY, '0', CONTRACT_TICK];
-            const data   = makeData({ FORMAT: 3 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('TARGET_CONTRACT_INDEX'));
-        });
-
-        it('v3 TICK missing → invalid', async function () {
-            const params = ['3', '100', PUBKEY, CONTRACT_INDEX, ''];
-            const data   = makeData({ FORMAT: 3 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('TICK'));
-        });
-
-        it('v3 pubkey already staked by different source → invalid', async function () {
-            indexer.indexerDb.getContractStakeOwner.resolves(99); // owned by address_id=99
-            indexer.indexerDb.getAddressId.resolves(42);           // source is address_id=42
-
-            const params = ['3', '100', PUBKEY, CONTRACT_INDEX, CONTRACT_TICK];
-            const data   = makeData({ FORMAT: 3 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('already staked'));
-        });
-    });
-
-    describe('v3 : contract-targeted stake', function () {
-        beforeEach(function () {
-            // Contract exists, is valid, and has cooldown_blocks set
-            indexer.indexerDb.getContract.resolves(makeContractInfo());
-            indexer.indexerDb.getStatusString.resolves('valid');
-            // Token for the stake
-            indexer.indexerDb.getTokenInfo.resolves(makeContractToken());
-            // Sufficient balance
-            indexer.indexerDb.getAddressBalances.resolves({ 2: '1000' });
-            // No existing stake for this (target, pubkey, tick)
-            indexer.indexerDb.getContractStakeOwner.resolves(null);
-        });
-
-        it('v3 same source top-up → valid (owner matches)', async function () {
-            indexer.indexerDb.getContractStakeOwner.resolves(42); // already staked by same source
-            indexer.indexerDb.getAddressId.resolves(42);
-
-            const params = ['3', '100', PUBKEY, CONTRACT_INDEX, CONTRACT_TICK];
-            const data   = makeData({ FORMAT: 3 });
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data.STATUS, 'valid');
-        });
-
-        it('v3 insufficient balance → invalid', async function () {
-            indexer.indexerDb.getAddressBalances.resolves({ 2: '5' }); // only 5, want 100
-
-            const params = ['3', '100', PUBKEY, CONTRACT_INDEX, CONTRACT_TICK];
-            const data   = makeData({ FORMAT: 3 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('insufficient funds'));
-        });
-
-        it('v3 amount exceeds token decimals → invalid', async function () {
-            // Token with 0 decimals : fractional amount is invalid
-            indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: CONTRACT_TICK, TICK_ID: 2, DECIMALS: 0 }));
-            indexer.indexerDb.getAddressBalances.resolves({ 2: '1000' });
-
-            const params = ['3', '100.1', PUBKEY, CONTRACT_INDEX, CONTRACT_TICK];
-            const data   = makeData({ FORMAT: 3 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('exceeds token decimals'));
-        });
-    });
-
-    describe('v3 : contract-targeted stake', function () {
-        beforeEach(function () {
-            // Contract exists, is valid, and has cooldown_blocks set
-            indexer.indexerDb.getContract.resolves(makeContractInfo());
-            indexer.indexerDb.getStatusString.resolves('valid');
-            // Token for the stake
-            indexer.indexerDb.getTokenInfo.resolves(makeContractToken());
-            // Sufficient balance
-            indexer.indexerDb.getAddressBalances.resolves({ 2: '1000' });
-            // No existing stake for this (target, pubkey, tick)
-            indexer.indexerDb.getContractStakeOwner.resolves(null);
-        });
-
-        it('v3 source sleeping → invalid', async function () {
-            indexer.indexerDb.isActionAllowed.resolves(false);
-
-            const params = ['3', '100', PUBKEY, CONTRACT_INDEX, CONTRACT_TICK];
-            const data   = makeData({ FORMAT: 3 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('sleeping'));
-        });
-
-        it('v3 ACTIVATION_BLOCK set correctly', async function () {
-            const params = ['3', '100', PUBKEY, CONTRACT_INDEX, CONTRACT_TICK];
-            const data   = makeData({ FORMAT: 3 });
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data.ACTIVATION_BLOCK, BLOCK + 6); // ACTIVATION_DELAY_BLOCKS=6
         });
     });
 });
