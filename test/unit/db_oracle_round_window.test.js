@@ -166,7 +166,7 @@ describe('VM oracle round window (getOracleDataForVM) @regression @tier1', funct
 
             const snap = await db.getOracleDataForVM(BLOCK, BLOCK_TS, 0);
 
-            // xchain-vm/src/readonly-accessors.js turns a read below this into a
+            // xchain-vm/src/readonly_accessors.js turns a read below this into a
             // distinguishable "outside the loaded window" answer. Absent, it is the
             // same null as "never existed" and the loser-reclaim is back.
             assert.strictEqual(typeof snap.roundFloor, 'number');

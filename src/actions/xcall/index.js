@@ -259,7 +259,7 @@ class Xcall {
         // emitting their first call collide. The call-path is BOTH content-derived (stable
         // across nodes/reorgs) AND unique per execution in the call tree; it fixes both.
         //
-        // MUST byte-match the VM's derivation in xchain-vm/src/gateway-emit.js
+        // MUST byte-match the VM's derivation in xchain-vm/src/gateway_emit.js
         // (crossExecute). All inputs are REQUIRED; their absence is a hard failure
         // (no silent bypass). NOTE: EMITTER_PATH '' (root on-chain action) is VALID;
         // check === undefined / null, never falsy.

@@ -496,7 +496,7 @@ module.exports = {
         }
         // Return a SERIALIZABLE snapshot (plain data), not closures: the VM runs
         // in a forked worker and the read-only data must cross the IPC boundary.
-        // xchain-vm/src/readonly-accessors.js rebuilds the sync getStake/
+        // xchain-vm/src/readonly_accessors.js rebuilds the sync getStake/
         // getTotalStaked/getStakers accessors from this shape inside the worker.
         let stakeByPubkeyTick = {};
         for(let [key, amt] of perPubkeyTick.entries()) stakeByPubkeyTick[key] = amt;

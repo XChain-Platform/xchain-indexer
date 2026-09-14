@@ -186,7 +186,7 @@ function resolveVmConsensus(){
     // degraded to the fallback, so a dropped export reddens rather than skips.
     try { return { vm: require('xchain-vm'), full: true, pkgErr: null }; }
     catch(e){
-        try { return { vm: require('../../../xchain-vm/src/consensus-runtime.js'), full: false, pkgErr: e }; }
+        try { return { vm: require('../../../xchain-vm/src/consensus_runtime.js'), full: false, pkgErr: e }; }
         catch(e2){ return { vm: null, full: false, pkgErr: e }; }
     }
 }

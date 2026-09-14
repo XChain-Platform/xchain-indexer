@@ -27,7 +27,7 @@ const PUBKEY_A = 'a'.repeat(64);
 const SIG_A    = '1'.repeat(128);
 
 // Mirror the handler's deterministic call_id derivation (MUST byte-match)
-// xchain-vm/src/gateway-emit.js (crossExecute). emitterPath is the emitting
+// xchain-vm/src/gateway_emit.js (crossExecute). emitterPath is the emitting
 // execution's '>'-joined call-path (root = ''); it disambiguates two nested runs
 // of the same contract and is content-derived (stable across nodes/reorgs).
 // ROOT_ACTION_INDEX (the per-root discriminator = the deterministic root on-chain
@@ -38,11 +38,11 @@ const deriveCallId = (network, chain, txHash, rootActionIndex, contractIndex, em
         .digest('hex');
 
 // Cross-repo golden pin for the call_id preimage. This is the checked-in
-// (input tuple -> expected hex) vector from xchain-vm/src/gateway-emit.js
+// (input tuple -> expected hex) vector from xchain-vm/src/gateway_emit.js
 // (GOLDEN_VECTORS.callId). It is a LITERAL constant on purpose: asserting the
 // REAL xcall handler against it (below) catches a lockstep field-reorder that
 // would otherwise pass because the local deriveCallId copy was reordered too.
-// Keep in sync with xchain-vm/src/gateway-emit.js; a mismatch is a genuine
+// Keep in sync with xchain-vm/src/gateway_emit.js; a mismatch is a genuine
 // fleet fork. bin/check-preimage-golden-parity.js (platform root) fails CI if
 // this literal drifts from canonical or the assertion is removed.
 const GOLDEN_CALL_ID = {
@@ -207,7 +207,7 @@ describe('Xcall (XCALL) @regression @tier3', function () {
         });
 
         // The preimage field ORDER and COUNT are the consensus contract with
-        // xchain-vm/src/gateway-emit.js (crossExecute). Pinned literally here, and by
+        // xchain-vm/src/gateway_emit.js (crossExecute). Pinned literally here, and by
         // bin/check-preimage-golden-parity.js against the same canonical order, so a
         // field-count skew fails a suite instead of silently forking the fleet.
         it('the declared call_id preimage fields match the xchain-vm order exactly', function () {
@@ -252,7 +252,7 @@ describe('Xcall (XCALL) @regression @tier3', function () {
             await handler.parse(v0Params(GOLDEN_CALL_ID.expected, { targetChain: gv.targetChain }), data, null);
             assert.strictEqual(data['STATUS'], 'valid',
                 'real handler must accept the checked-in golden CALL_ID; a rejection means the ' +
-                'indexer preimage drifted from xchain-vm/src/gateway-emit.js GOLDEN_VECTORS.callId');
+                'indexer preimage drifted from xchain-vm/src/gateway_emit.js GOLDEN_VECTORS.callId');
         });
 
         it('hard-fails when EMITTER_POSITION is missing (no silent derivation bypass)', async function () {

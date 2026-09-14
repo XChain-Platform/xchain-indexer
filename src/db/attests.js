@@ -49,7 +49,7 @@ module.exports = {
     // xchain.attestation.getResponse(requestId). Scoped to fulfilled requests emitted by
     // THIS contract (the v0 request row's contract_index), visible as-of blockIndex.
     // Returns a SERIALIZABLE snapshot { responses: { [request_id]: { status, payload,
-    // providerId, blockIndex, validatorCount } } }; xchain-vm/src/readonly-accessors.js
+    // providerId, blockIndex, validatorCount } } }; xchain-vm/src/readonly_accessors.js
     // rebuilds the synchronous getResponse accessor from it inside the forked worker
     // (so this returns plain data, not closures, exactly like getContractStakeDataForVM).
     // Only wired into the snapshot at/after the VM_ATTESTATION_GETRESPONSE flag-day; below

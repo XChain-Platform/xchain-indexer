@@ -34,7 +34,7 @@
  *
  * The VM half of the byte-match (the gateway that actually hashes these preimages)
  * is pinned against the same literal hexes in
- * xchain-vm/test/determinism/crossrepo-request-call-id-bytematch.test.js, and
+ * xchain-vm/test/determinism/crossrepo_request_call_id_bytematch.test.js, and
  * bin/check-preimage-golden-parity.js fails CI if either side loses its pin.
  ********************************************************************/
 
@@ -70,7 +70,7 @@ const deriveReqId = (txHash, root, emitterPath, contractIndex, position) =>
 
 // Cross-repo golden pins for the COMPOSITE root form, the shape this regression is
 // about. Literal on purpose: the same two hexes are asserted against the real VM
-// gateway in xchain-vm/test/determinism/crossrepo-request-call-id-bytematch.test.js,
+// gateway in xchain-vm/test/determinism/crossrepo_request_call_id_bytematch.test.js,
 // so a preimage edit on one side alone reddens that side instead of quietly forking
 // the fleet. Inputs mirror the checked-in GOLDEN_VECTORS.requestId tuple
 // (txHash 'abc123', contract 7, path '', position 0) with the root replaced by the

@@ -225,7 +225,7 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         // accepted verdict replays byte-identically; at/after it both are true so the deploy
         // validator blocks. The vm is stubbed here, so this pins the WIRING (which flags,
         // resolved from which height), not the rule logic (proven in
-        // xchain-vm/test/unit/lint-generator-wasm.test.js).
+        // xchain-vm/test/unit/lint_generator_wasm.test.js).
 
         async function optsFor(network, coin, blockIndex) {
             actionsCtx.config['NETWORK'] = network;

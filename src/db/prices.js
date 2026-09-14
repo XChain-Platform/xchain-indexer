@@ -189,7 +189,7 @@ module.exports = {
 
         // ── Build a SERIALIZABLE oracle snapshot (plain data) ───────────────
         // The VM runs in a forked worker; read-only data must cross the IPC
-        // boundary, so we PRE-LOAD here and let xchain-vm/src/readonly-accessors.js
+        // boundary, so we PRE-LOAD here and let xchain-vm/src/readonly_accessors.js
         // rebuild the synchronous getPrice/getPriceAtRound/getSnapshotAge accessors
         // inside the worker. (These were previously async DB closures - incompatible
         // with the VM's synchronous applySync bridge, so oracle reads silently

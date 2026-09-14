@@ -373,7 +373,7 @@ function assertVmRuntimeLoadable(vmModule, loadError, env){
 // locale primitives) that are NOT spec-mandated and have changed across engine
 // versions. A contract can route such a value into hashed state, so a validator on
 // an off-pin V8/ICU commits different bytes for the same contract: divergent
-// contract_hash, chain fork. xchain-vm/src/consensus-runtime.js pins the engine for
+// contract_hash, chain fork. xchain-vm/src/consensus_runtime.js pins the engine for
 // exactly that reason and requires every validator to be gated against the pin.
 //
 // The gate throws here rather than warning, and it lives here rather than in the CI

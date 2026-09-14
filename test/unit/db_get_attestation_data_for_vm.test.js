@@ -16,7 +16,7 @@
  * getAttestationDataForVM builds the read-only snapshot the VM exposes
  * through xchain.attestation.getResponse(requestId). This suite pins the shaping,
  * the retry-then-ok dedup, the as-of visibility gate, and the serializable shape
- * the forked-worker accessor (xchain-vm/src/readonly-accessors.js) rebuilds from.
+ * the forked-worker accessor (xchain-vm/src/readonly_accessors.js) rebuilds from.
  */
 
 'use strict';
@@ -30,7 +30,7 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../fixtures/config');
 const Utility           = require('../../src/utility');
 const Database          = require('../../src/db');
-const { buildAttestationAccessor } = require('../../../xchain-vm/src/readonly-accessors');
+const { buildAttestationAccessor } = require('../../../xchain-vm/src/readonly_accessors');
 
 const VALID_ID = 7;
 

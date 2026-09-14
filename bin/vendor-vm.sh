@@ -83,7 +83,7 @@ fi
 # Read CONSENSUS_VERSION straight from the frozen export so the check never needs to
 # load isolated-vm. Empty if the file/const is missing.
 vm_version() {
-    grep -oE "CONSENSUS_VERSION = '[^']+'" "$1/src/consensus-runtime.js" 2>/dev/null \
+    grep -oE "CONSENSUS_VERSION = '[^']+'" "$1/src/consensus_runtime.js" 2>/dev/null \
         | grep -oE "'[^']+'" | tr -d "'" || true
 }
 
@@ -126,7 +126,7 @@ if [ "$MODE" = "check" ]; then
     # copy EXISTS (every dev tree), version + manifest still verify below.
     #
     # Keyed on the TREE, not on the version string. An empty $DEST_VER means three
-    # different things (no tree, no consensus-runtime.js, no parseable const), and
+    # different things (no tree, no consensus_runtime.js, no parseable const), and
     # spending the staging rsync on the latter two is what made this guard fail
     # OPEN: the rsync has no --delete, so it overwrote a drifted tree's files with
     # canonical ones and then reported the freshly-repaired tree as in sync,

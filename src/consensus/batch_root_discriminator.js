@@ -41,7 +41,7 @@
  * '.' appears in no other preimage field and the field separator is ':', so the
  * composite stays one unambiguous token. The VM keeps it intact rather than folding
  * it through Number(), which would collapse '3.10' and '3.1' onto the same value
- * (xchain-vm/src/gateway-emit.js normalizeRootDiscriminator).
+ * (xchain-vm/src/gateway_emit.js normalizeRootDiscriminator).
  *
  * FLAG-DAY GATED. The request_id is a consensus preimage (it is what the ATTEST v0
  * handler re-derives to accept a request, what validators sign over, and what the

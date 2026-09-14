@@ -54,11 +54,11 @@ const deriveReqId = (txHash, rootActionIndex, emitterPath, contractIndex, positi
         .digest('hex');
 
 // Cross-repo golden pin for the request_id preimage. This is the checked-in
-// (input tuple -> expected hex) vector from xchain-vm/src/gateway-emit.js
+// (input tuple -> expected hex) vector from xchain-vm/src/gateway_emit.js
 // (GOLDEN_VECTORS.requestId). It is a LITERAL constant on purpose: asserting the
 // REAL attest handler against it (below) catches a lockstep field-reorder that
 // would otherwise pass because the local deriveReqId copy was reordered too. Keep
-// in sync with xchain-vm/src/gateway-emit.js; a mismatch is a genuine fleet fork.
+// in sync with xchain-vm/src/gateway_emit.js; a mismatch is a genuine fleet fork.
 const GOLDEN_REQUEST_ID = {
     input: { txHash: 'abc123', rootActionIndex: 100, emitterPath: '', contractIndex: 7, emitterPosition: 0 },
     // sha256('abc123:100::7:0')
@@ -200,7 +200,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             await handler.parse(v0Params({ requestId: GOLDEN_REQUEST_ID.expected }), data, null);
             assert.strictEqual(data['STATUS'], 'valid',
                 'real handler must accept the checked-in golden REQUEST_ID; a rejection means the ' +
-                'indexer preimage drifted from xchain-vm/src/gateway-emit.js GOLDEN_VECTORS.requestId');
+                'indexer preimage drifted from xchain-vm/src/gateway_emit.js GOLDEN_VECTORS.requestId');
         });
 
         it('ATT-RECOMP-1: pins the responsible set AS-OF the request block for a valid request', async function () {
