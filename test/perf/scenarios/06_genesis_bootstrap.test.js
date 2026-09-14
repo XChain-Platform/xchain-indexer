@@ -28,7 +28,7 @@ const path   = require('path');
 const { decoderQuery, indexerQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require('../../integration/setup/db-connection');
 const DecoderSeeder = require('../../integration/setup/decoder-seeder');
-const { initIndexer, processBlocks, destroyIndexer } = require('../../integration/setup/indexer-launcher');
+const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../../integration/setup/indexer-launcher');
 const { countRows } = require('../../integration/setup/assertion-helpers');
 
 const COIN          = process.env.INDEXER_COIN;
@@ -105,6 +105,8 @@ describe('06 Genesis Bootstrap (full-scale)', function () {
         delete process.env.XCHAIN_GENESIS_BLOCK;
         delete process.env.GENESIS_LEDGER_PATH;
         await destroyIndexer(indexer);
+        // Sweep an indexer a partial init left live: each forks a VM worker subprocess that outlives the suite otherwise.
+        await destroyFileIndexers(__filename);
         await closeAll();
     });
 

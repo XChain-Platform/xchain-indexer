@@ -64,7 +64,7 @@ const NETWORK = process.env.PERF_FEESPIKE_NETWORK || 'regtest';
 const assert = require('assert');
 const { decoderQuery, indexerQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require('../../integration/setup/db-connection');
-const { initIndexer, destroyIndexer } = require('../../integration/setup/indexer-launcher');
+const { initIndexer, destroyIndexer, destroyFileIndexers } = require('../../integration/setup/indexer-launcher');
 const { forceXchainFeeMode } = require('../../integration/setup/multi-chain');
 const DataGenerator = require('../setup/data-generator');
 const MetricsCollector = require('../setup/metrics-collector');
@@ -221,6 +221,8 @@ describe('09 Fee Spike (mempool backlog drain)', function () {
     });
 
     after(async function () {
+        // Sweep an indexer a failed before hook left live: each forks a VM worker subprocess that outlives the suite otherwise.
+        await destroyFileIndexers(__filename);
         restoreEnv(priorEnv);
         await closeAll();
     });

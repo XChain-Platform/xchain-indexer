@@ -23,7 +23,7 @@ const assert = require('assert');
 const { decoderQuery, indexerQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require('../../integration/setup/db-connection');
 const DecoderSeeder = require('../../integration/setup/decoder-seeder');
-const { initIndexer, processBlocks, destroyIndexer } = require('../../integration/setup/indexer-launcher');
+const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../../integration/setup/indexer-launcher');
 const { startExplorer, stopExplorer, resetExplorerPools } = require('../setup/explorer-launcher');
 const { createClient } = require('../setup/api-client');
 const { assertApiOk, assertListResponse, assertTokenFields,
@@ -51,6 +51,8 @@ describe('E2E: Token Lifecycle @regression @tier3', function () {
     });
 
     after(async function () {
+        // Sweep any indexer a failed test or partial init left live: each forks a VM worker subprocess that outlives the suite otherwise.
+        await destroyFileIndexers(__filename);
         await stopExplorer(server, explorer);
         await closeAll();
     });

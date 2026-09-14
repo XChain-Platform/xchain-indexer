@@ -16,7 +16,7 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 const assert = require('assert');
 const { decoderQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require('../../integration/setup/db-connection');
-const { initIndexer, destroyIndexer } = require('../../integration/setup/indexer-launcher');
+const { initIndexer, destroyIndexer, destroyFileIndexers } = require('../../integration/setup/indexer-launcher');
 const DataGenerator = require('../setup/data-generator');
 const MetricsCollector = require('../setup/metrics-collector');
 const { processBlocksInstrumented } = require('../setup/instrumented-processor');
@@ -35,6 +35,8 @@ describe('04 Spike Load', function () {
     });
 
     after(async function () {
+        // Sweep any indexer a failed test or partial init left live: each forks a VM worker subprocess that outlives the suite otherwise.
+        await destroyFileIndexers(__filename);
         await closeAll();
     });
 
