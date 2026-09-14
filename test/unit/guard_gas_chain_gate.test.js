@@ -80,6 +80,11 @@ function opts(overrides){
     }, overrides || {});
 }
 
+// db carries only what the reservation arithmetic reads.
+function dbFor(cfg){
+    return { config: cfg };
+}
+
 describe('guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1', function(){
 
     describe('isGuardGasReserved', function(){
@@ -109,13 +114,10 @@ describe('guard gas reservation: keyed on the chain, not on the XCHAIN row @regr
         });
 
     });
+});
 
+describe('guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1', function(){
     describe('the reservation site in _invokeController', function(){
-
-        // db carries only what the reservation arithmetic reads.
-        function dbFor(cfg){
-            return { config: cfg };
-        }
 
         it('refuses on BTC when the source cannot cover the guard gas ceiling', async function(){
             const cfg  = configFor('BTC');
@@ -134,7 +136,11 @@ describe('guard gas reservation: keyed on the chain, not on the XCHAIN row @regr
             // bignumber (bcmul), so compare through the same arithmetic the handlers use.
             assert.strictEqual(util.bcstr(res.guardFee), '0.01', 'guard gas is still billed off BTC');
         });
+    });
+});
 
+describe('guard gas reservation: keyed on the chain, not on the XCHAIN row @regression @tier1', function(){
+    describe('the reservation site in _invokeController', function(){
         it('still refuses on BTC when the source holds less than the ceiling but more than zero', async function(){
             // Guards against a gate that accidentally keys on "has any balance".
             const cfg  = configFor('BTC');
