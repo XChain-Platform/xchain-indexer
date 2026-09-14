@@ -42,7 +42,9 @@ describe('providerMinStakeHistory @regression @tier1', function () {
                     'and must land in the same release as the matching hub-side governance activation');
         });
     });
+});
 
+describe('providerMinStakeHistory @regression @tier1', function () {
     describe('providerMinStakeAt', function () {
 
         it('returns the genesis floor when no activation applies', function () {
@@ -89,7 +91,11 @@ describe('providerMinStakeHistory @regression @tier1', function () {
             ] };
             assert.strictEqual(pmsh.providerMinStakeAt('llm', 900, 'mainnet', '25000', ov), '25000');
         });
+    });
+});
 
+describe('providerMinStakeHistory @regression @tier1', function () {
+    describe('providerMinStakeAt', function () {
         it('an empty-ish height cannot pick up a block-0 activation', function () {
             // Number(null) and Number('') are both a perfectly finite 0, which would
             // otherwise silently arm a block-0 entry for a caller with no height.
@@ -103,7 +109,9 @@ describe('providerMinStakeHistory @regression @tier1', function () {
             assert.strictEqual(pmsh.providerMinStakeAt('http_get', 900, 'mainnet', '10000', ov), '10000');
         });
     });
+});
 
+describe('providerMinStakeHistory @regression @tier1', function () {
     describe('meetsProviderFloor', function () {
 
         it('is inclusive at the boundary and scale-insensitive', function () {

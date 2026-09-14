@@ -71,7 +71,9 @@ describe('ProviderRegistry @regression @tier2', function () {
             }
         });
     });
+});
 
+describe('ProviderRegistry @regression @tier2', function () {
     describe('config overlay', function () {
 
         it('registers a NEW provider from config.ATTESTATION.PROVIDERS', function () {
@@ -130,7 +132,9 @@ describe('ProviderRegistry @regression @tier2', function () {
             assert.strictEqual(fresh.getDeadlineWindows().http_get, 100);
         });
     });
+});
 
+describe('ProviderRegistry @regression @tier2', function () {
     // ---- block-anchored provider stake floor ----------------------------
     // The floor is consensus input at/above STAKE_WEIGHTED_QUORUM: the responsible-set
     // derivation drops sources below it, so a node that resolves a different floor for
@@ -159,7 +163,11 @@ describe('ProviderRegistry @regression @tier2', function () {
             const r = new ProviderRegistry();
             assert.strictEqual(r.getMinStake('nope', 100, 'regtest'), null);
         });
+    });
+});
 
+describe('ProviderRegistry @regression @tier2', function () {
+    describe('getMinStake (block-anchored provider stake floor)', function () {
         it('returns null when an overlay entry carries no floor', function () {
             // An overlay REPLACES the default wholesale, so one that omits
             // min_stake_xchain leaves the provider floorless. That must read as
