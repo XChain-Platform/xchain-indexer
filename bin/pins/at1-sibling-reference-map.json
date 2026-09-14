@@ -1,10 +1,10 @@
 {
   "pinMetadata": {
     "tool": "bin/sibling-reference-map.js",
-    "capturedAt": "2026-09-14T21:44:07.160Z",
-    "indexerSha": "1f558d9e",
-    "siblingsRoot": "..",
-    "note": "M6 re-pin at the landed stack tip 1f558d9e (73 commits over the M6 base 708b52fb), replacing the M3 wave-1 measurement taken at e8ae831e. Taken from the MAIN xchain-indexer checkout, clean at 1f558d9e, so siblingsRoot is the platform root and all 17 sibling repos are swept; a lane worktree sees only the 9 symlinked siblings beside tmp/lanes/idx-pass and would silently under-report by 8 repos. Sibling checkouts at capture, all on develop: contracts 701a635, dashboard edbd22a, decoder 4604f72, documentation 0e0697e, e2e-test 91426ff, encoder e9e745b, explorer 18530d2, hub a1cc6bf, node d384ef4, regtest-miner aadf89e, sdk 6670f5c, sync 2eea40b, utxo-tracker 3a1a2d0, vm 736a7ae, wallet fb327467, websites 138c534. Five carried uncommitted peer work (decoder 2, e2e-test 1, explorer 2, node 5, websites 1); exactly one of those files names an indexer src path, xchain-decoder/src/XChainDecoder.js with 9 mentions, and those 9 reference texts are byte-identical to the file at decoder HEAD, so the PATH set here is uncontaminated while the recorded LINE NUMBERS for that one file are the working tree's, about 87 lines below the committed ones. Sibling repos only: the platform-tooling sweep stays opt-in and is excluded, so platformToolingSwept is empty. WHAT THIS PIN NO LONGER SEES, recorded so the zero is not read as good news: dynamicReferences carries NO computed-require entry, where the e8ae831e pin carried one for src/consensus_rules_digest.js with its 33 carrier candidates. The site did not go away. It changed shape, from require('./' + mod + '.js') on one line to path.join(__dirname, mod + '.js') followed by require(file) at src/consensus_rules_digest.js:155-158, and computedRequireSites() matches only the inline form. So a move of any shared gate carrier now draws no warning from this map and surfaces as a gate reading ABSENT instead. Widening that matcher is a change to the tool, not to this record.",
+    "capturedAt": "2026-09-14T22:44:24.313Z",
+    "indexerSha": "0b5fd692",
+    "siblingsRoot": "../../../../..",
+    "note": "Stack-4 re-pin at 0b5fd692, the hashed-land tip 71f3d080 plus the row 99 twin window, residue-small, the 1f558d9e pin re-take, the corsOrigin rename and logger routing, and the escrow journal writer split. Taken from the lane worktree tmp/lanes/idx-pass/stack4/xchain-indexer with --siblings at the platform root, so siblingsRoot reads as the path from that worktree and all 17 sibling MAIN checkouts are swept, the same sibling set as the 1f558d9e pin. Sibling checkouts at capture, all on develop: contracts 701a635, dashboard edbd22a, decoder f79b545 (one local commit over origin/develop bb58f85, which carries the hashed-land decoder companion), documentation accc9f9 (carries the hashed-land documentation companion 0e0697e), dot-github 9f61d418, e2e-test 91426ff (behind origin/develop 94955bf, which carries the hashed-land e2e-test companion), encoder e9e745b, explorer 42de6ef, hub a1cc6bf, node 72ed381, regtest-miner aadf89e, sdk 6670f5c (the hashed-land sdk companion 8a1b308 is not on origin), sync 2eea40b, utxo-tracker 3a1a2d0, vm 736a7ae, wallet fb327467 (diverged from origin/develop affbc339), websites 138c534. Uncommitted peer work in e2e-test 1, explorer 2 and websites 1 files; none of those files names an indexer src path. What moved against the 1f558d9e pin: the same 206 distinct paths, 154 to 147 resolving, 1823 to 1821 reference sites. Seven paths stopped resolving because the tree moved them: src/actions/batch.js, dividend.js, issue.js, mint.js, order.js and send.js became handler directories in hashed-land, and src/api/corsOrigin.js became cors_origin.js. A site here that names a flat handler file is a live break only where its referrer reads that spelling literally; the companions above teach those referrers both spellings, and the sweep reads text, so it still lists them. The computed-require gap recorded in the 1f558d9e pin still stands: dynamicReferences carries no computed-require entry for src/consensus_rules_digest.js.",
     "indexerSrcFilesAtBaseSha": [
       "src/XChainIndexer.js",
       "src/XChainIndexer/background_jobs.js",
@@ -27,7 +27,13 @@
       "src/actions/actions_class/transaction.js",
       "src/actions/actions_class/vm_runtime.js",
       "src/actions/address.js",
-      "src/actions/airdrop.js",
+      "src/actions/airdrop/controller_guard.js",
+      "src/actions/airdrop/fees.js",
+      "src/actions/airdrop/index.js",
+      "src/actions/airdrop/legs.js",
+      "src/actions/airdrop/recipients.js",
+      "src/actions/airdrop/settle.js",
+      "src/actions/airdrop/validate.js",
       "src/actions/anchor/anchor_action_query.js",
       "src/actions/anchor/anchor_action_query/action_query.js",
       "src/actions/anchor/anchor_action_query/archive_query.js",
@@ -60,7 +66,13 @@
       "src/actions/attest/responsible_set.js",
       "src/actions/attest/rollcall_gates_filter.js",
       "src/actions/attest/settle.js",
-      "src/actions/batch.js",
+      "src/actions/batch/fees.js",
+      "src/actions/batch/index.js",
+      "src/actions/batch/limits.js",
+      "src/actions/batch/mint_cap.js",
+      "src/actions/batch/probe.js",
+      "src/actions/batch/sub_command.js",
+      "src/actions/batch/validate.js",
       "src/actions/bet.js",
       "src/actions/bet/create_feed.js",
       "src/actions/bet/fees.js",
@@ -104,7 +116,11 @@
       "src/actions/deploy/validate.js",
       "src/actions/deploy/wire_params.js",
       "src/actions/deposit.js",
-      "src/actions/destroy.js",
+      "src/actions/destroy/controller_guard.js",
+      "src/actions/destroy/index.js",
+      "src/actions/destroy/legs.js",
+      "src/actions/destroy/settle.js",
+      "src/actions/destroy/validate.js",
       "src/actions/dispense.js",
       "src/actions/dispenser.js",
       "src/actions/dispenser_close.js",
@@ -112,7 +128,11 @@
       "src/actions/dispenser_close/settle.js",
       "src/actions/dispenser_expire.js",
       "src/actions/dispenser_expire/settle.js",
-      "src/actions/dividend.js",
+      "src/actions/dividend/controller_guard.js",
+      "src/actions/dividend/fees.js",
+      "src/actions/dividend/index.js",
+      "src/actions/dividend/settle.js",
+      "src/actions/dividend/validate.js",
       "src/actions/execute/action_params.js",
       "src/actions/execute/controller_guard.js",
       "src/actions/execute/emission.js",
@@ -126,15 +146,33 @@
       "src/actions/execute/validate.js",
       "src/actions/file.js",
       "src/actions/index.js",
-      "src/actions/issue.js",
+      "src/actions/issue/bridge_opt_in.js",
+      "src/actions/issue/controller_binding.js",
+      "src/actions/issue/edit_rules.js",
+      "src/actions/issue/fees.js",
+      "src/actions/issue/index.js",
+      "src/actions/issue/issuance_limits.js",
+      "src/actions/issue/settle.js",
+      "src/actions/issue/supply_rules.js",
+      "src/actions/issue/tick_rules.js",
+      "src/actions/issue/token_state.js",
+      "src/actions/issue/wire.js",
       "src/actions/link.js",
       "src/actions/list.js",
       "src/actions/message.js",
-      "src/actions/mint.js",
+      "src/actions/mint/controller_guard.js",
+      "src/actions/mint/index.js",
+      "src/actions/mint/settle.js",
+      "src/actions/mint/validate.js",
       "src/actions/nodeproof.js",
       "src/actions/nodeproof/settle.js",
       "src/actions/nodeproof/validate.js",
-      "src/actions/order.js",
+      "src/actions/order/context.js",
+      "src/actions/order/controller_guard.js",
+      "src/actions/order/fees.js",
+      "src/actions/order/index.js",
+      "src/actions/order/settle.js",
+      "src/actions/order/validate.js",
       "src/actions/order_expire.js",
       "src/actions/order_expire/settle.js",
       "src/actions/order_match.js",
@@ -149,7 +187,13 @@
       "src/actions/rollcall/rollcall_canonical.js",
       "src/actions/rollcall/signatures.js",
       "src/actions/rollcall/validate.js",
-      "src/actions/send.js",
+      "src/actions/send/controller_guard.js",
+      "src/actions/send/gated_handoff.js",
+      "src/actions/send/index.js",
+      "src/actions/send/legs.js",
+      "src/actions/send/prefetch.js",
+      "src/actions/send/settle.js",
+      "src/actions/send/validate.js",
       "src/actions/slash.js",
       "src/actions/slash/bounty.js",
       "src/actions/slash/content_parsers.js",
@@ -159,7 +203,12 @@
       "src/actions/stake.js",
       "src/actions/stake/capability_stake.js",
       "src/actions/stake/contract_stake.js",
-      "src/actions/swap.js",
+      "src/actions/swap/context.js",
+      "src/actions/swap/controller_guard.js",
+      "src/actions/swap/fees.js",
+      "src/actions/swap/index.js",
+      "src/actions/swap/settle.js",
+      "src/actions/swap/validate.js",
       "src/actions/swap_expire.js",
       "src/actions/swap_expire/settle.js",
       "src/actions/swap_match.js",
@@ -198,7 +247,7 @@
       "src/anchor_reward_activation.js",
       "src/api.js",
       "src/api/chain_block_hash.js",
-      "src/api/corsOrigin.js",
+      "src/api/cors_origin.js",
       "src/api/cross_chain_offer_decimals.js",
       "src/api/health.js",
       "src/api/health/advance_fields.js",
@@ -296,6 +345,8 @@
       "src/consensus/contract_state_subtree.js",
       "src/consensus/ed25519.js",
       "src/consensus/escrowJournalWriter.js",
+      "src/consensus/escrowJournalWriter/attribution.js",
+      "src/consensus/escrowJournalWriter/journal_pass.js",
       "src/consensus/escrow_leaf_subtree.js",
       "src/consensus/exec_context.js",
       "src/consensus/fault_guard.js",
@@ -771,17 +822,17 @@
   ],
   "platformToolingSwept": [],
   "distinctPathCount": 206,
-  "existingPathCount": 154,
-  "referenceCount": 1823,
+  "existingPathCount": 147,
+  "referenceCount": 1821,
   "referenceCountByKind": {
     "require": 127,
-    "join": 79,
-    "text": 1617
+    "join": 78,
+    "text": 1616
   },
   "referenceCountByForm": {
     "text": 1519,
-    "join": 79,
-    "root-var": 169,
+    "join": 78,
+    "root-var": 168,
     "helper": 56,
     "shell-var": 0,
     "shell-arg": 0
@@ -1774,8 +1825,8 @@
       ]
     },
     "src/actions/batch.js": {
-      "exists": true,
-      "referenceCount": 75,
+      "exists": false,
+      "referenceCount": 73,
       "referringRepos": [
         "xchain-decoder",
         "xchain-documentation",
@@ -1798,16 +1849,7 @@
         {
           "repo": "xchain-decoder",
           "file": "xchain-decoder/bin/sync-batch-limits.js",
-          "line": 67,
-          "kind": "text",
-          "form": "root-var",
-          "raw": "src/actions/batch.js",
-          "via": "INDEXER_ROOT"
-        },
-        {
-          "repo": "xchain-decoder",
-          "file": "xchain-decoder/bin/sync-batch-limits.js",
-          "line": 188,
+          "line": 192,
           "kind": "text",
           "form": "text",
           "raw": "src/actions/batch.js"
@@ -1863,15 +1905,7 @@
         {
           "repo": "xchain-decoder",
           "file": "xchain-decoder/test/unit/batch_sub_command_output_capture_activation.test.js",
-          "line": 61,
-          "kind": "join",
-          "form": "join",
-          "raw": "src/actions/batch.js"
-        },
-        {
-          "repo": "xchain-decoder",
-          "file": "xchain-decoder/test/unit/batch_sub_command_output_capture_activation.test.js",
-          "line": 223,
+          "line": 226,
           "kind": "text",
           "form": "text",
           "raw": "src/actions/batch.js"
@@ -2957,7 +2991,7 @@
         {
           "repo": "xchain-decoder",
           "file": "xchain-decoder/src/db.js",
-          "line": 2230,
+          "line": 2243,
           "kind": "text",
           "form": "text",
           "raw": "src/actions/dispenser.js"
@@ -3261,7 +3295,7 @@
       ]
     },
     "src/actions/dividend.js": {
-      "exists": true,
+      "exists": false,
       "referenceCount": 2,
       "referringRepos": [
         "xchain-documentation",
@@ -3641,7 +3675,7 @@
         {
           "repo": "xchain-decoder",
           "file": "xchain-decoder/bin/sync-batch-limits.js",
-          "line": 72,
+          "line": 76,
           "kind": "text",
           "form": "text",
           "raw": "src/actions/index.js"
@@ -4169,7 +4203,7 @@
       ]
     },
     "src/actions/issue.js": {
-      "exists": true,
+      "exists": false,
       "referenceCount": 19,
       "referringRepos": [
         "xchain-e2e-test",
@@ -4352,7 +4386,7 @@
       ]
     },
     "src/actions/mint.js": {
-      "exists": true,
+      "exists": false,
       "referenceCount": 1,
       "referringRepos": [
         "xchain-documentation"
@@ -4412,7 +4446,7 @@
       ]
     },
     "src/actions/order.js": {
-      "exists": true,
+      "exists": false,
       "referenceCount": 1,
       "referringRepos": [
         "xchain-documentation"
@@ -4610,7 +4644,7 @@
       ]
     },
     "src/actions/send.js": {
-      "exists": true,
+      "exists": false,
       "referenceCount": 5,
       "referringRepos": [
         "xchain-node",
@@ -5484,7 +5518,7 @@
       ]
     },
     "src/api/corsOrigin.js": {
-      "exists": true,
+      "exists": false,
       "referenceCount": 2,
       "referringRepos": [
         "xchain-sdk",
@@ -9553,7 +9587,7 @@
         {
           "repo": "xchain-decoder",
           "file": "xchain-decoder/src/db.js",
-          "line": 75,
+          "line": 86,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -9561,7 +9595,7 @@
         {
           "repo": "xchain-decoder",
           "file": "xchain-decoder/src/db.js",
-          "line": 420,
+          "line": 431,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -9569,7 +9603,7 @@
         {
           "repo": "xchain-decoder",
           "file": "xchain-decoder/src/db.js",
-          "line": 486,
+          "line": 497,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -9577,7 +9611,7 @@
         {
           "repo": "xchain-decoder",
           "file": "xchain-decoder/src/db.js",
-          "line": 507,
+          "line": 518,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -9585,7 +9619,7 @@
         {
           "repo": "xchain-decoder",
           "file": "xchain-decoder/src/db.js",
-          "line": 740,
+          "line": 751,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -9593,7 +9627,7 @@
         {
           "repo": "xchain-decoder",
           "file": "xchain-decoder/src/db.js",
-          "line": 1010,
+          "line": 1021,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -9601,7 +9635,7 @@
         {
           "repo": "xchain-decoder",
           "file": "xchain-decoder/src/db.js",
-          "line": 1074,
+          "line": 1085,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -9609,7 +9643,7 @@
         {
           "repo": "xchain-decoder",
           "file": "xchain-decoder/src/db.js",
-          "line": 2992,
+          "line": 3012,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -9617,7 +9651,7 @@
         {
           "repo": "xchain-decoder",
           "file": "xchain-decoder/src/db.js",
-          "line": 3255,
+          "line": 3275,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -11367,7 +11401,7 @@
         {
           "repo": "xchain-decoder",
           "file": "xchain-decoder/bin/sync-batch-limits.js",
-          "line": 68,
+          "line": 72,
           "kind": "text",
           "form": "root-var",
           "raw": "src/protocol_changes.js",
@@ -11376,7 +11410,7 @@
         {
           "repo": "xchain-decoder",
           "file": "xchain-decoder/test/unit/batch_sub_command_output_capture_activation.test.js",
-          "line": 58,
+          "line": 59,
           "kind": "join",
           "form": "join",
           "raw": "src/protocol_changes.js"
@@ -11384,7 +11418,7 @@
         {
           "repo": "xchain-decoder",
           "file": "xchain-decoder/test/unit/batch_sub_command_output_capture_activation.test.js",
-          "line": 102,
+          "line": 105,
           "kind": "text",
           "form": "text",
           "raw": "src/protocol_changes.js"
