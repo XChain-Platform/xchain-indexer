@@ -890,7 +890,7 @@ describe('Database.hasCapability() threshold source @regression @tier1', functio
             // Not slashed (the permanent-disqualification guard): stubbed so the
             // threshold-source assertions exercise the stake/delegated branches; the
             // disqualification path has its own dedicated coverage.
-            _isPubkeySlashedAt:  sinon.stub().resolves(false),
+            isPubkeySlashedAt:  sinon.stub().resolves(false),
             // Stake-key branch resolves a per-pubkey aggregate of 15000
             doQuery:             sinon.stub().resolves([{ total: '15000' }]),
             // The caller value is honoured verbatim (no clamp); util.bcgte is used

@@ -71,7 +71,7 @@ module.exports = {
         // only when no later block happened to touch it again.
         if(this._smtTouched && address != null && tick_id != null && address_id != null){
             let canonTick = await this._smtTickName(tick_id);
-            let canonAddr = await this._smtAddressName(address_id);
+            let canonAddr = await this.smtAddressName(address_id);
             if(canonTick != null && canonTick !== '' && canonAddr != null && canonAddr !== '')
                 this._smtTouched.add(canonAddr + '\t' + canonTick);
         }

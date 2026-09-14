@@ -965,7 +965,7 @@ class AnchorRecovery {
             // During the BTC reindex the staged row materializes into validator_rewards under
             // the deterministic source_id the source address takes in-block, at the height the
             // LIVE fleet derived the reward at (earn-block + the frozen mirror maturity;
-            // db._applyPendingRewardsDueAtBlock, driven per block beside deriveAnchorRewards).
+            // db.applyPendingRewardsDueAtBlock, driven per block beside deriveAnchorRewards).
             // The source's STAKE precedes its COLLECT in chain order, and the derive height
             // precedes any COLLECT that could have claimed the reward on the canonical chain,
             // so the reward is on the books before the COLLECT that spends it replays, without

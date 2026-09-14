@@ -581,6 +581,13 @@ class Actions {
 
     }
 
+    // The BATCH probe-path sub-action refusal, reached by batch.js through the loader instance it
+    // is constructed with, so that action never requires this loader (a load-time cycle) and the
+    // policy stays defined once, beside the dispatch tables it reads.
+    isBatchProbeForbiddenSubAction(action){
+        return isBatchProbeForbiddenSubAction(action);
+    }
+
     // Generalized function to handle processing a transaction
     // @param tx             object     Transaction object
     // @param tx.source      string     Source address
@@ -1852,9 +1859,10 @@ module.exports.classifyFeeQuoteAction = classifyFeeQuoteAction;
 module.exports.getFeeQuoteDenylist    = () => new Set(FEE_QUOTE_DENYLIST);
 module.exports.getFeeQuoteExempt      = () => new Set(FEE_QUOTE_EXEMPT);
 module.exports.getFeeQuoteStatic      = () => new Set(FEE_QUOTE_STATIC);
-// The BATCH probe-path sub-action refusal, exported for batch.js (which cannot require this
-// module at load time - actions/index.js requires batch.js, so the cycle would resolve to an empty
-// exports object) and for the conformance test that binds the policy to the dispatch table.
+// The BATCH probe-path sub-action refusal, exported for the conformance test that binds the policy
+// to the dispatch table and for test contexts that stand in for this loader. batch.js itself reaches
+// it through the Actions instance method above, never by requiring this module (actions/index.js
+// requires batch.js, so a load-time require would resolve to an empty exports object).
 module.exports.isBatchProbeForbiddenSubAction = isBatchProbeForbiddenSubAction;
 module.exports.getProbeVmReachingActions      = () => new Set(PROBE_VM_REACHING_ACTIONS);
 // Pure consensus-runtime gate, exported so its fail-closed contract is unit-testable

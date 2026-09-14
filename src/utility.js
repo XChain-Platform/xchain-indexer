@@ -44,6 +44,10 @@ const amountRepresentability = require('./amount_representability_activation.js'
 
 const { getLogger } = require('./observability/index.js');
 const { CONFIG_ENV } = require('./config.js');
+// The hub-vendored coin registry. config.js above already loads it (through
+// coins/to_indexer_config.js), so binding it here moves no module earlier in load order.
+// Held as the module object, not destructured, so getCoinConfig is looked up per call.
+const coinRegistry = require('./coins');
 // Page size the mirror applier walks its applicability read in. NOT consensus and
 // deliberately not exported: it shapes how many rows a node holds at once, never which
 // rows bind (the read's order is total and the pages are disjoint slices of it), so
@@ -1428,7 +1432,7 @@ class Utility {
         if(this._dustThresholdCoin === undefined){
             let sats = 0;
             try {
-                let bundle = require('./coins').getCoinConfig(this.config['COIN'], this.config['NETWORK']);
+                let bundle = coinRegistry.getCoinConfig(this.config['COIN'], this.config['NETWORK']);
                 sats = (bundle && bundle.net && bundle.net.dustThreshold) || 0;
             } catch(e){
                 sats = 0;   // unknown coin/network: no dust floor rather than a hard failure

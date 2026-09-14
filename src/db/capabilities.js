@@ -346,7 +346,7 @@ module.exports = {
     // block-scoped event row rolls back ⇒ the key re-qualifies). The SQL counterpart inside
     // _effectiveCapabilitySetSql / _stakeWeightsSql excludes it from the SET queries; this is
     // the per-pubkey check used by hasCapability so both paths agree.
-    async _isPubkeySlashedAt(pubkeyId, blockIndex){
+    async isPubkeySlashedAt(pubkeyId, blockIndex){
         if(pubkeyId === null || pubkeyId === undefined) return false;
         let rows = await this.doQuery(
             'SELECT id FROM capability_slash_events WHERE signing_pubkey_id=? AND block_index<=? LIMIT 1',

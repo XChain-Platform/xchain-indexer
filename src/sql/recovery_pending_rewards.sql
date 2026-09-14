@@ -25,7 +25,7 @@ DROP TABLE IF EXISTS recovery_pending_rewards;
 -- Instead recovery now stages each archived reward here keyed by the RAW source address
 -- string + signing pubkey, assigning NO index id. During the reindex the row materializes
 -- into validator_rewards under the deterministic in-block source_id its address takes
--- (db.js createAddress assigns the id; _applyPendingRewardsDueAtBlock lands the reward).
+-- (db.js createAddress assigns the id; applyPendingRewardsDueAtBlock lands the reward).
 -- The counter is never perturbed out-of-band, so a recovered node reproduces the exact
 -- from-genesis id map.
 --

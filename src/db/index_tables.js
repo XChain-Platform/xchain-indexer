@@ -340,7 +340,7 @@ module.exports = {
     // rollback.js drops this cache when it completes. Do not restore the
     // old "the mapping is immutable" justification: it is true only until a
     // reorg reassigns the id.
-    async _smtAddressName(address_id){
+    async smtAddressName(address_id){
         if(!this._smtAddressNameCache) this._smtAddressNameCache = new Map();
         if(this._smtAddressNameCache.has(address_id)) return this._smtAddressNameCache.get(address_id);
         let rows = await this.doQueryStrict("SELECT address FROM index_addresses WHERE id=? LIMIT 1", [address_id]);

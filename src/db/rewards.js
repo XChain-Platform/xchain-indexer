@@ -38,7 +38,7 @@ module.exports = {
     // guard keeps a partially-migrated DB degrading to "no pending" instead of throwing.
     // Returns true iff staged rows remain. The rollback re-arm clears _recoveryPendingChecked
     // to force a re-probe when it re-arms rows.
-    async _probeRecoveryPending(){
+    async probeRecoveryPending(){
         if(!this._recoveryPendingChecked){
             try {
                 let probe = await this.doQuery("SELECT COUNT(*) AS c FROM recovery_pending_rewards WHERE applied=0");
@@ -69,8 +69,8 @@ module.exports = {
     // No-op outside an in-progress recovery (the shared cheap gate), and on a chain whose
     // staging table is empty - which is every chain but BTC, since validator_rewards only ever
     // resolves a source there. Returns the number of rows materialized.
-    async _applyPendingRewardsDueAtBlock(blockIndex){
-        if(!await this._probeRecoveryPending())
+    async applyPendingRewardsDueAtBlock(blockIndex){
+        if(!await this.probeRecoveryPending())
             return 0;
         let bi = Number(blockIndex);
         if(!Number.isFinite(bi))
@@ -100,7 +100,7 @@ module.exports = {
         }
         let count = 0;
         for(let s of (rows || []))
-            count += await this._applyPendingRewardsForAddress(s.source_address, s.source_id, bi);
+            count += await this.applyPendingRewardsForAddress(s.source_address, s.source_id, bi);
         this._recoveryPendingRemaining -= count;
         return count;
     },
@@ -125,7 +125,7 @@ module.exports = {
     // createAddress hook, the rollback re-drain) can put a restored reward on the books at a
     // height where a live node does not hold it. A caller that names no block (legacy/test
     // paths) cannot judge dueness, so it applies as before.
-    async _applyPendingRewardsForAddress(source_address, source_id, materializedBlock){
+    async applyPendingRewardsForAddress(source_address, source_id, materializedBlock){
         let rows = await this.doQuery(
             "SELECT id, validator_pubkey, reward_type, round_reference, amount, block_index FROM recovery_pending_rewards WHERE source_address=? AND applied=0",
             [source_address]);

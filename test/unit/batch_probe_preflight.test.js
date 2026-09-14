@@ -219,6 +219,7 @@ describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', functi
                 decoderDb:       indexer.decoderDb,
                 indexerDb:       indexer.indexerDb,
                 protocolChanges: { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) },
+                isBatchProbeForbiddenSubAction: Actions.isBatchProbeForbiddenSubAction,
                 // Model a handler: every dispatched sub-command records its own verdict on the
                 // shared data object, which is what the loop reads back.
                 processAction:   sinon.stub().callsFake(async (action, params, data) => {
@@ -325,6 +326,7 @@ describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', functi
                 decoderDb:       indexer.decoderDb,
                 indexerDb:       indexer.indexerDb,
                 protocolChanges: { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) },
+                isBatchProbeForbiddenSubAction: Actions.isBatchProbeForbiddenSubAction,
                 processAction:   sinon.stub().resolves()
             };
             dispenser = new Dispenser(actionsCtx);

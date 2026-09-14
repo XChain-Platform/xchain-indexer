@@ -30,11 +30,10 @@ const { rethrowIfInfraFault } = require('../consensus/fault_guard.js');
 
 
 const { getLogger } = require('../observability/index.js');
-// Resolved at CALL time, never at module load: actions/index.js requires this file while it is
-// still being evaluated, so a top-level require here would bind an empty exports object.
-function probeForbiddenSubAction(action){
-    return require('./index.js').isBatchProbeForbiddenSubAction(action);
-}
+// The probe-path sub-action refusal is NOT required from actions/index.js here: that loader
+// requires this file while it is still being evaluated, so a top-level require would bind an
+// empty exports object, and one action never requires another. The loader instance this class
+// is constructed with carries the predicate instead (this.actions.isBatchProbeForbiddenSubAction).
 
 class Batch {
 
@@ -1116,7 +1115,7 @@ class Batch {
                 // _batchProbeForbiddenSubAction) refuses the batch earlier and more cheaply,
                 // but only this one is impossible to spell around, because there is no further
                 // transformation between the check and the call.
-                if(isProbe && probeForbiddenSubAction(action)){
+                if(isProbe && this.actions.isBatchProbeForbiddenSubAction(action)){
                     data['PROBE_SUB_VERDICTS'].push({
                         position: batchPosition,
                         action:   action,

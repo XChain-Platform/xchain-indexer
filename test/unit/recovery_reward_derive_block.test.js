@@ -94,10 +94,10 @@ function makeDb({ network = 'regtest', staged = [], addressBlock = 1 } = {}) {
             }
             return [];
         },
-        _probeRecoveryPending:          Database.prototype._probeRecoveryPending,
+        probeRecoveryPending:          Database.prototype.probeRecoveryPending,
         restoredRewardDeriveBlock:     Database.prototype.restoredRewardDeriveBlock,
-        _applyPendingRewardsForAddress: Database.prototype._applyPendingRewardsForAddress,
-        _applyPendingRewardsDueAtBlock: Database.prototype._applyPendingRewardsDueAtBlock,
+        applyPendingRewardsForAddress: Database.prototype.applyPendingRewardsForAddress,
+        applyPendingRewardsDueAtBlock: Database.prototype.applyPendingRewardsDueAtBlock,
         maybeApplyPendingRewards:      Database.prototype.maybeApplyPendingRewards
     };
     return db;
@@ -119,7 +119,7 @@ describe('recovery-restored rewards claim their ORIGINAL derive block @regressio
     it('stamps derive_block_index = earn-block + the frozen mirror maturity', async function () {
         const earn = 800000;
         const db = makeDb({ staged: [{ block_index: earn }] });
-        const n = await db._applyPendingRewardsDueAtBlock(earn + MATURITY);
+        const n = await db.applyPendingRewardsDueAtBlock(earn + MATURITY);
         assert.strictEqual(n, 1, 'the due row materializes');
         assert.strictEqual(db.rewards.length, 1);
         assert.strictEqual(db.rewards[0].block_index, earn, 'earn-block carried verbatim');
@@ -146,9 +146,9 @@ describe('recovery-restored rewards claim their ORIGINAL derive block @regressio
     it('the due sweep lands it in exactly the derive block, not the one before', async function () {
         const earn = 800000;
         const db = makeDb({ staged: [{ block_index: earn }] });
-        assert.strictEqual(await db._applyPendingRewardsDueAtBlock(earn + MATURITY - 1), 0);
+        assert.strictEqual(await db.applyPendingRewardsDueAtBlock(earn + MATURITY - 1), 0);
         assert.strictEqual(db.rewards.length, 0);
-        assert.strictEqual(await db._applyPendingRewardsDueAtBlock(earn + MATURITY), 1);
+        assert.strictEqual(await db.applyPendingRewardsDueAtBlock(earn + MATURITY), 1);
         assert.strictEqual(db.rewards.length, 1);
         assert.strictEqual(db.stagedRows[0].applied, 1);
         assert.strictEqual(db.stagedRows[0].applied_block, earn + MATURITY,
@@ -158,8 +158,8 @@ describe('recovery-restored rewards claim their ORIGINAL derive block @regressio
     it('is idempotent: a second sweep at a later block adds nothing', async function () {
         const earn = 800000;
         const db = makeDb({ staged: [{ block_index: earn }] });
-        await db._applyPendingRewardsDueAtBlock(earn + MATURITY);
-        await db._applyPendingRewardsDueAtBlock(earn + MATURITY + 50);
+        await db.applyPendingRewardsDueAtBlock(earn + MATURITY);
+        await db.applyPendingRewardsDueAtBlock(earn + MATURITY + 50);
         assert.strictEqual(db.rewards.length, 1);
     });
 
@@ -198,7 +198,7 @@ describe('recovery-restored rewards claim their ORIGINAL derive block @regressio
 
     it('an early chain cannot sweep everything in below the maturity window', async function () {
         const db = makeDb({ staged: [{ block_index: 0 }] });
-        assert.strictEqual(await db._applyPendingRewardsDueAtBlock(MATURITY - 1), 0);
+        assert.strictEqual(await db.applyPendingRewardsDueAtBlock(MATURITY - 1), 0);
         assert.strictEqual(db.rewards.length, 0);
     });
 
@@ -210,7 +210,7 @@ describe('recovery-restored rewards claim their ORIGINAL derive block @regressio
             if(/SELECT COUNT\(\*\) AS c FROM recovery_pending_rewards/.test(sql)) probes++;
             return inner(sql, params);
         };
-        for(let b = 900000; b < 900010; b++) await db._applyPendingRewardsDueAtBlock(b);
+        for(let b = 900000; b < 900010; b++) await db.applyPendingRewardsDueAtBlock(b);
         assert.strictEqual(probes, 1, 'the gate probes once and short-circuits every later block');
     });
 
@@ -220,7 +220,7 @@ describe('recovery-restored rewards claim their ORIGINAL derive block @regressio
         const earn   = 800000;
         const derive = earn + MATURITY;
         const db = makeDb({ staged: [{ block_index: earn }] });
-        await db._applyPendingRewardsDueAtBlock(derive);
+        await db.applyPendingRewardsDueAtBlock(derive);
         const restored = db.rewards[0];
 
         // A live-derived row for the same reward: earn at snapshot_block, minted at the

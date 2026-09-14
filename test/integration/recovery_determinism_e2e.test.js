@@ -397,7 +397,7 @@ describe('Recovery-determinism e2e (consensus) @integration', function () {
         // beside deriveAnchorRewards.
         await Bbtc.beginTransaction();
         Bbtc.blockIndex = REWARD_DERIVE_BLOCK;
-        await Bbtc._applyPendingRewardsDueAtBlock(REWARD_DERIVE_BLOCK);
+        await Bbtc.applyPendingRewardsDueAtBlock(REWARD_DERIVE_BLOCK);
         await Bbtc.commitTransaction();
 
         // Contract-heavy leg: deploy the SAME chunked contract on both nodes, across

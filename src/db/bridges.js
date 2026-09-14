@@ -54,7 +54,7 @@ module.exports = {
         let mirror = this.mirrorDb();
         if(mirror === this){
             return await this.doQuery(
-                this._pendingBridgeTransfersSql(
+                this.pendingBridgeTransfersSql(
                     `AND NOT EXISTS (
                     SELECT 1 FROM bridge_transfers bt
                     WHERE bt.src_chain=? AND bt.src_action_index=x.action_index AND bt.status<>'retracted')`),
@@ -64,7 +64,7 @@ module.exports = {
         let out    = [];
         let cursor = -1;   // keyset: every page reads x.action_index > cursor
         while(out.length < cap){
-            let page = await this.doQuery(this._pendingBridgeTransfersSql('AND x.action_index > ?'), [cursor, cap]);
+            let page = await this.doQuery(this.pendingBridgeTransfersSql('AND x.action_index > ?'), [cursor, cap]);
             if(page.length === 0) break;
             let ids  = page.map(r => r.action_index);
             let held = await mirror.doQueryStrict(

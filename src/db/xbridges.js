@@ -116,7 +116,7 @@ module.exports = {
     // columns, joins, verdict filter and ordering the RPC handler maps stay one text.
     // `extraWhere` is the path's own predicate (the NOT EXISTS exclusion, or the keyset
     // cursor) and carries no caller input; its placeholders bind ahead of the LIMIT.
-    _pendingBridgeTransfersSql(extraWhere){
+    pendingBridgeTransfersSql(extraWhere){
         return `SELECT
                 x.action_index, x.version, x.block_index, x.amount, x.decimals, x.min_depth,
                 x.dest_chain, t.tick AS tick, da.address AS dest_address, sa.address AS src_address,

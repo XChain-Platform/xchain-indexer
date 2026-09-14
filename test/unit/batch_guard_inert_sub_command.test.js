@@ -128,6 +128,7 @@ describe('BATCH pre-flight : a guard-inert sub-command is UNJUDGED, not invalid 
                 decoderDb:       indexer.decoderDb,
                 indexerDb:       indexer.indexerDb,
                 protocolChanges: { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) },
+                isBatchProbeForbiddenSubAction: Actions.isBatchProbeForbiddenSubAction,
                 actionAliases:   { TRANSFER: 'SEND', ADDR: 'ADDRESS', DROP: 'AIRDROP', CAST: 'BROADCAST', MSG: 'MESSAGE' },
                 // The first SEND is controller-bound and comes back guard-inert; the second is an
                 // ordinary send that really was judged.

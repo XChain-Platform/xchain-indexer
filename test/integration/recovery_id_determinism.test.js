@@ -124,7 +124,7 @@ async function legacyPreseedMap() {
 
 // The block the staged reward was FIRST derived at, and therefore the only block it may
 // materialize in: the fleet-agreed watermark above its archived earn-block. The reindex drives
-// _applyPendingRewardsDueAtBlock once per block; this fixture drives just that one.
+// applyPendingRewardsDueAtBlock once per block; this fixture drives just that one.
 const DUE_BLOCK = STAGED_REWARD.block_index + ar.ANCHOR_REWARD_MIRROR_MATURITY;
 
 // The staged recovery path: stage the archived reward by raw string (what recovery.js does),
@@ -148,7 +148,7 @@ async function recoveryMap() {
         // The reindex reaches the reward's original derive height.
         await db.beginTransaction();
         db.blockIndex = DUE_BLOCK;
-        await db._applyPendingRewardsDueAtBlock(DUE_BLOCK);
+        await db.applyPendingRewardsDueAtBlock(DUE_BLOCK);
         await db.commitTransaction();
         const rewards = await db.doQuery(
             "SELECT vr.source_id, vr.reward_type, vr.round_reference, vr.amount, vr.block_index, " +

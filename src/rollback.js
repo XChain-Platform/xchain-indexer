@@ -1344,7 +1344,7 @@ class Rollback {
                 // apply path's due gate and lands again when the replay reaches that height,
                 // which is the same block a live node re-derives it at.
                 for(let s of (survivors || []))
-                    await this.indexerDb._applyPendingRewardsForAddress(s.source_address, s.source_id, block_index);
+                    await this.indexerDb.applyPendingRewardsForAddress(s.source_address, s.source_id, block_index);
             } catch(e){
                 // Swallow ONLY the schema-gap case: recovery_pending_rewards absent on a
                 // non-recovery stack (errno 1146 missing table / 1054 missing column), where

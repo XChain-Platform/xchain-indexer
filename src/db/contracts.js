@@ -397,7 +397,7 @@ module.exports = {
                 let slot = String(row.target_contract_index) + '|' + String(row.source_id) + '|' + String(row.tick_id);
                 if(governedSlots.has(slot)) continue;
                 if(String(row.current_pubkey_id) === String(row.original_pubkey_id)) continue;
-                if(await this._contractPubkeyClaimedElsewhere(row.original_pubkey_id, row, valid_id)) continue;
+                if(await this.contractPubkeyClaimedElsewhere(row.original_pubkey_id, row, valid_id)) continue;
                 applied.push(await this.rotateContractStakeKey(spec.table,
                     { action_index: row.stake_action_index, signing_pubkey_id: row.current_pubkey_id },
                     row.delegation_action_index, row.original_pubkey_id, block));
@@ -410,7 +410,7 @@ module.exports = {
     // or by any active contract delegation. Guards the revert pass: handing a slot back its
     // original key while someone else holds that key would merge two owners into one staker
     // entry in the VM snapshot.
-    async _contractPubkeyClaimedElsewhere(pubkeyId, slotRow, validStatusId){
+    async contractPubkeyClaimedElsewhere(pubkeyId, slotRow, validStatusId){
         let stakeRows = await this.doQuery(
             `SELECT 1 FROM contract_stakes
              WHERE signing_pubkey_id=? AND status_id=?

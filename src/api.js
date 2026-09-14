@@ -104,8 +104,11 @@ const REQUIRED_ENV = [
     'DECODER_DB_HOST','DECODER_DB_PORT','DECODER_DB_NAME','DECODER_DB_USER','DECODER_DB_PASS',
     'INDEXER_DB_HOST','INDEXER_DB_PORT','INDEXER_DB_NAME','INDEXER_DB_USER','INDEXER_DB_PASS'
 ];
+// Read through CONFIG_ENV, which dotenv.config() at the top of this file populated before
+// config.js loaded. Every REQUIRED_ENV key is a CONFIG_ENV key; a name missing from that
+// object would read undefined and fail this check loudly at boot, never pass silently.
 for(const key of REQUIRED_ENV){
-    if(!process.env[key]){
+    if(!CONFIG_ENV[key]){
         getLogger().error('Missing required environment variable: ' + key);
         process.exit(1);
     }

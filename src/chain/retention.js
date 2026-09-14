@@ -54,6 +54,9 @@
 'use strict';
 
 const M = require('../consensus/merkle.js');
+// The default env-like source for parseRetentionConfig: config.js's frozen load-time
+// snapshot, the one place this service reads its environment.
+const { CONFIG_ENV } = require('../config.js');
 
 // Every EMPTY[h] constant, hex. A child hash equal to one of these has no row in
 // state_tree_nodes (empty subtrees are never stored), so the mark skips it. Built
@@ -75,7 +78,7 @@ const EMPTY_CONSTANTS = (function(){
 //   STATE_TREE_METRIC_MAX_NODES  reuse the metric cap: skip the in-memory mark
 //                                (and thus node reclaim) above this node count
 function parseRetentionConfig(env){
-    env = env || process.env;
+    env = env || CONFIG_ENV;
     const rootKeepBlocks = parseInt(env.STATE_ROOT_RETENTION_BLOCKS, 10);
     const enabled = Number.isFinite(rootKeepBlocks) && rootKeepBlocks > 0;
     const reclaimRaw = String(env.STATE_NODE_RECLAIM == null ? '' : env.STATE_NODE_RECLAIM).toLowerCase();

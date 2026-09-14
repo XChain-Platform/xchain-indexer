@@ -76,7 +76,7 @@ describe('_smtTouched: the touched key is canonical on BOTH axes @regression', f
         sinon.stub(db, 'createTicker').resolves(50);
         sinon.stub(db, 'createAddress').resolves(123);          // "^123" resolves to id 123
         sinon.stub(db, '_smtTickName').resolves(TICK);
-        sinon.stub(db, '_smtAddressName').withArgs(123).resolves(ADDR);
+        sinon.stub(db, 'smtAddressName').withArgs(123).resolves(ADDR);
         db._smtTouched = new Set();
 
         await db.createLedgerChangeRecord('credits', 1, TICK, '1000', '^123');
@@ -94,7 +94,7 @@ describe('_smtTouched: the touched key is canonical on BOTH axes @regression', f
         sinon.stub(db, 'createTicker').resolves(50);
         sinon.stub(db, 'createAddress').resolves(123);
         sinon.stub(db, '_smtTickName').resolves(TICK);
-        sinon.stub(db, '_smtAddressName').withArgs(123).resolves(ADDR);
+        sinon.stub(db, 'smtAddressName').withArgs(123).resolves(ADDR);
         db._smtTouched = new Set();
 
         await db.createLedgerChangeRecord('credits', 1, TICK, '1000', ADDR.toUpperCase());
@@ -107,7 +107,7 @@ describe('_smtTouched: the touched key is canonical on BOTH axes @regression', f
         sinon.stub(db, 'createTicker').resolves(50);
         sinon.stub(db, 'createAddress').resolves(123);
         sinon.stub(db, '_smtTickName').resolves(TICK);
-        sinon.stub(db, '_smtAddressName').withArgs(123).resolves(ADDR);
+        sinon.stub(db, 'smtAddressName').withArgs(123).resolves(ADDR);
         db._smtTouched = new Set();
 
         await db.createLedgerChangeRecord('credits', 1, TICK, '1000', ADDR);
@@ -122,7 +122,7 @@ describe('_smtTouched: the touched key is canonical on BOTH axes @regression', f
         sinon.stub(db, 'createTicker').resolves(50);
         sinon.stub(db, 'createAddress').resolves(123);
         sinon.stub(db, '_smtTickName').resolves(TICK);
-        sinon.stub(db, '_smtAddressName').resolves(null);
+        sinon.stub(db, 'smtAddressName').resolves(null);
         db._smtTouched = new Set();
 
         await db.createLedgerChangeRecord('credits', 1, TICK, '1000', '^999999');
@@ -135,7 +135,7 @@ describe('_smtTouched: the touched key is canonical on BOTH axes @regression', f
         sinon.stub(db, 'createTicker').resolves(50);
         sinon.stub(db, 'createAddress').resolves(null);
         sinon.stub(db, '_smtTickName').resolves(TICK);
-        const addrName = sinon.stub(db, '_smtAddressName').resolves(ADDR);
+        const addrName = sinon.stub(db, 'smtAddressName').resolves(ADDR);
         db._smtTouched = new Set();
 
         await db.createLedgerChangeRecord('credits', 1, TICK, '1000', '^nope');
@@ -156,8 +156,8 @@ describe('_smtAddressName: same cache rules as the tick resolver @regression', f
         q.onCall(0).resolves([]);
         q.onCall(1).resolves([{ address: ADDR }]);
 
-        assert.strictEqual(await db._smtAddressName(123), null);
-        assert.strictEqual(await db._smtAddressName(123), ADDR);
+        assert.strictEqual(await db.smtAddressName(123), null);
+        assert.strictEqual(await db.smtAddressName(123), ADDR);
         assert.strictEqual(q.callCount, 2);
     });
 
@@ -166,8 +166,8 @@ describe('_smtAddressName: same cache rules as the tick resolver @regression', f
         db.doQuery.restore();
         const q = sinon.stub(db, 'doQueryStrict').resolves([{ address: ADDR }]);
 
-        assert.strictEqual(await db._smtAddressName(123), ADDR);
-        assert.strictEqual(await db._smtAddressName(123), ADDR);
+        assert.strictEqual(await db.smtAddressName(123), ADDR);
+        assert.strictEqual(await db.smtAddressName(123), ADDR);
         assert.strictEqual(q.callCount, 1);
     });
 
@@ -177,7 +177,7 @@ describe('_smtAddressName: same cache rules as the tick resolver @regression', f
         sinon.stub(db, 'doQueryStrict').rejects(new Error('injected DB fault'));
         sinon.stub(db, 'doQuery').resolves([]);
 
-        await assert.rejects(() => db._smtAddressName(123), /injected DB fault/);
+        await assert.rejects(() => db.smtAddressName(123), /injected DB fault/);
         assert.strictEqual(db.doQuery.callCount, 0);
     });
 });

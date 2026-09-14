@@ -1892,7 +1892,7 @@ class XChainIndexer {
                         // cheap gate as the createAddress hook, so a node with nothing staged
                         // (every node not mid-recovery, and every chain but BTC) pays one COUNT(*)
                         // for the process lifetime.
-                        await this.indexerDb._applyPendingRewardsDueAtBlock(blockToParse);
+                        await this.indexerDb.applyPendingRewardsDueAtBlock(blockToParse);
 
                         // Check for any cancelled items (dispensers)
                         await this.util.processCancellations(this.actions, this.indexerDb, blockToParse, blockTime);

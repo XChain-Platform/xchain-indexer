@@ -186,7 +186,7 @@ class Database {
         // a one-time-probed remaining-unapplied count so normal indexing (no recovery in
         // progress) pays a single COUNT(*) and then short-circuits the hook entirely. The
         // rollback re-arm resets _recoveryPendingChecked to force a re-probe when staged rows
-        // are re-armed. See recovery.js and _applyPendingRewardsForAddress below.
+        // are re-armed. See recovery.js and applyPendingRewardsForAddress below.
         this._recoveryPendingChecked   = false;
         this._recoveryPendingRemaining = 0;
 
@@ -2208,7 +2208,6 @@ class Database {
     // (#2735). sha256 hex; null/undefined data hashes the empty string so a missing payload has a
     // deterministic witness rather than throwing.
     hashReorgData(data){
-        const crypto = require('crypto');
         return crypto.createHash('sha256').update(String(data == null ? '' : data), 'utf8').digest('hex');
     }
 
@@ -2357,14 +2356,14 @@ class Database {
     async maybeApplyPendingRewards(address, source_id, materializedBlock){
         if(source_id === null || source_id === undefined)
             return;
-        if(!await this._probeRecoveryPending())
+        if(!await this.probeRecoveryPending())
             return;
         // Stamp applied_block = the block this address was first seen at (createAddress
         // passes its block context). It is the forward-window key xchain-sync streams
         // these by; without it a materialization whose earn-block sits below a follower's
         // incremental cursor never reaches the follower (the reorg re-drain is the acute
         // case, but a recovery-then-incremental-catch-up has the same gap).
-        let applied = await this._applyPendingRewardsForAddress(address, source_id, materializedBlock);
+        let applied = await this.applyPendingRewardsForAddress(address, source_id, materializedBlock);
         this._recoveryPendingRemaining -= applied;
     }
 
