@@ -1209,7 +1209,9 @@ describe('Database.getActiveStakeByPubkey() @regression @tier1', function () {
         const stake = await db.getActiveStakeByPubkey('pk', 100);
         assert.strictEqual(stake.amount, '0');
     });
+});
 
+describe('Database.getActiveStakeByPubkey() @regression @tier1', function () {
     it('includes blockIndex filter args when blockIndex is provided', async function () {
         const db = makeDb();
         sinon.stub(db, 'getPubkeyId').resolves(3);
@@ -1233,7 +1235,9 @@ describe('Database.getActiveStakeByPubkey() @regression @tier1', function () {
         // range filter (that only fires when blockIndex is non-null).
         assert.strictEqual(args.length, 2);
     });
+});
 
+describe('Database.getActiveStakeByPubkey() @regression @tier1', function () {
     // STAKE v1 key-reuse mode (src/stake_key_reuse_activation.js). These cases pin the
     // SQL TEXT and the bind args; the verdicts that SQL produces are driven at the action
     // layer in test/unit/actions/stake_key_reuse.test.js, and the two halves are written
@@ -1273,7 +1277,11 @@ describe('Database.getActiveStakeByPubkey() @regression @tier1', function () {
             // The bind order above is only meaningful against the clause above it.
             assert.ok(sql.indexOf('s.deactivation_block + ?') < sql.indexOf('GROUP BY'));
         });
+    });
+});
 
+describe('Database.getActiveStakeByPubkey() @regression @tier1', function () {
+    describe('reuseBlockingOnly mode', function () {
         it('does not disturb the other two modes', async function () {
             const db = makeDb();
             sinon.stub(db, 'getPubkeyId').resolves(3);
@@ -1289,9 +1297,7 @@ describe('Database.getActiveStakeByPubkey() @regression @tier1', function () {
                         .test(q.secondCall.args[0]));
             assert.deepStrictEqual(q.secondCall.args[1], [3, 1, 500, 500]);
         });
-    });
 
-    describe('reuseBlockingOnly mode', function () {
         it('is inert without a blockIndex, so the legacy null call cannot reach it', async function () {
             // The mode lives inside the non-null blockIndex branch. A caller that passed
             // the flag with a null block would otherwise get a cooldown clause bound
@@ -1639,6 +1645,11 @@ describe('Database.stripSqlLineComments() @regression @tier1', function () {
         assert.ok(!out.includes('first'));
         assert.ok(!out.includes('second'));
     });
+});
+
+describe('Database.stripSqlLineComments() @regression @tier1', function () {
+    let db;
+    beforeEach(function () { db = makeDb(); });
 
     it('handles doubled-quote escape inside string (does not crash)', function () {
         const sql = "SELECT '' FROM t -- comment";
