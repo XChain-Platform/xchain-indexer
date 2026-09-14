@@ -38,112 +38,20 @@
  *   - inline  `KEY idx_foo (a, b)` inside the CREATE TABLE block
  *   - standalone `CREATE INDEX idx_foo on <table> (a, b);`
  * Only an index reachable through NEITHER is an orphan.
+ *
+ * The pre-ledger baseline cases (index shape and the re-freeze origin anchor) live
+ * beside this file in sql_schema_index_parity.test/baseline.test.js; the parsers
+ * both files read the schema through are in sql_schema_index_parity.test/helpers/.
  ********************************************************************/
 
 const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
-
-const { loadPinnedOriginFixture } = require('../helpers/pinnedOriginFixture');
-
-const SQL_DIR = path.join(__dirname, '..', '..', 'src', 'sql');
-const MIG_DIR = path.join(SQL_DIR, 'migrations');
-const INDEX_BASELINE = path.join(__dirname, '..', 'fixtures', 'schema-index-baseline.json');
-
-// The immutable anchor the re-freeze guard measures against, plus the sha256 that
-// makes editing it a deliberate act. See the re-freeze case at the bottom of this file.
-const ORIGIN_INDEX_BASELINE        = path.join(__dirname, '..', 'fixtures', 'schema-index-baseline-origin.json');
-const ORIGIN_INDEX_BASELINE_SHA256 = 'c5da83b9fb1d9aab4d2e370b2e975022f1bbabecc3e732fe2714e4ca48d720bf';
-
-// Tables whose CREATE TABLE lives in a dated migration are ledger-covered by that
-// statement, indexes included, so they are outside the inverse direction entirely
-// (same carve-out the column baseline states). SQL line comments are stripped
-// first: the migrations explain themselves in prose, and an unstripped scan reads
-// words like "IF" or "is" out of a sentence as table names.
-function stripSqlComments(raw){
-    return String(raw).replace(/^\s*--.*$/gm, '');
-}
-
-function collectLedgerCreatedTables(){
-    const tables = new Set();
-    for(const file of fs.readdirSync(MIG_DIR).filter(f => f.endsWith('.sql'))){
-        const raw = stripSqlComments(fs.readFileSync(path.join(MIG_DIR, file), 'utf8'));
-        for(const m of raw.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?/gi))
-            tables.add(m[1]);
-    }
-    return tables;
-}
-
-// Normalize an index's parenthesized column list into a comparable array.
-// Keeps ORDER (a leading column decides which lookups the index serves) and the
-// (len) prefix (a differently-prefixed index is a different index to the engine),
-// drops backticks, case and whitespace. Returns null when the list is unparsed,
-// which the shape comparison treats as "cannot compare" rather than "differs".
-function normalizeIndexColumns(list){
-    if(list === undefined || list === null) return null;
-    return String(list).split(',')
-        .map(c => c.replace(/`/g, '').trim().toLowerCase().replace(/\s+/g, ''))
-        .filter(c => c.length > 0);
-}
-
-// The optional word between CREATE/ADD and INDEX, reduced to the two flags that make one
-// index a different index from another of the same name. FULLTEXT is admitted alongside
-// UNIQUE because contracts.meta_search is a FULLTEXT index declared on BOTH paths: read
-// with the old `(UNIQUE\s+)?` regexes, a `CREATE FULLTEXT INDEX` matched nothing at all,
-// so the index was invisible to every case in this file and the guard stayed green while
-// covering it not at all. Kept as two booleans rather than the raw capture so a UNIQUE
-// declaration and a FULLTEXT one can never compare equal just because both are truthy.
-function indexKind(qualifier){
-    const q = String(qualifier || '');
-    return { unique: /\bUNIQUE\b/i.test(q), fulltext: /\bFULLTEXT\b/i.test(q) };
-}
-
-// table -> Map(lowercased index name -> {columns, unique, fulltext}) declared in the
-// canonical definitions. A Map, not a Set, so the name-only checks below keep working while
-// the shape comparison gets the columns and the UNIQUE flag the old Set threw away.
-function collectDeclaredIndexes(){
-    const declared = {};
-    const add = (table, index, qualifier, columns) => {
-        const key = String(index).toLowerCase();
-        const map = (declared[table] || (declared[table] = new Map()));
-        // First declaration wins; a table declaring one name twice is its own bug and
-        // is caught by the engine, not here.
-        if(!map.has(key)) map.set(key, Object.assign(indexKind(qualifier), { columns: normalizeIndexColumns(columns) }));
-    };
-
-    for(const file of fs.readdirSync(SQL_DIR).filter(f => f.endsWith('.sql'))){
-        const raw = fs.readFileSync(path.join(SQL_DIR, file), 'utf8');
-
-        // Standalone: CREATE [UNIQUE|FULLTEXT] INDEX <name> on <table> (...)
-        for(const m of raw.matchAll(/CREATE\s+(UNIQUE\s+|FULLTEXT\s+)?INDEX\s+`?(\w+)`?\s+on\s+`?(\w+)`?\s*\(([^)]*(?:\([^)]*\)[^)]*)*)\)/gi))
-            add(m[3], m[2], m[1], m[4]);
-
-        // Inline: KEY / UNIQUE KEY <name> (...) inside the CREATE TABLE block.
-        const createTable = raw.match(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?/i);
-        if(createTable)
-            for(const m of raw.matchAll(/^\s*(UNIQUE\s+)?KEY\s+`?(\w+)`?\s*\(([^)]*(?:\([^)]*\)[^)]*)*)\)/gim))
-                add(createTable[1], m[2], m[1], m[3]);
-    }
-    return declared;
-}
-
-// Every index a dated migration adds: {file, table, index, unique, fulltext, columns}.
-function collectMigrationIndexes(){
-    const added = [];
-    for(const file of fs.readdirSync(MIG_DIR).filter(f => f.endsWith('.sql'))){
-        const raw = fs.readFileSync(path.join(MIG_DIR, file), 'utf8');
-
-        for(const m of raw.matchAll(/ALTER\s+TABLE\s+`?(\w+)`?\s+ADD\s+(UNIQUE\s+|FULLTEXT\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s*\(([^)]*(?:\([^)]*\)[^)]*)*)\)/gi))
-            added.push(Object.assign({ file, table: m[1], index: m[3].toLowerCase(), columns: normalizeIndexColumns(m[4]) }, indexKind(m[2])));
-
-        for(const m of raw.matchAll(/CREATE\s+(UNIQUE\s+|FULLTEXT\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s+on\s+`?(\w+)`?\s*\(([^)]*(?:\([^)]*\)[^)]*)*)\)/gi))
-            added.push(Object.assign({ file, table: m[3], index: m[2].toLowerCase(), columns: normalizeIndexColumns(m[4]) }, indexKind(m[1])));
-    }
-    return added;
-}
+const {
+    SQL_DIR, INDEX_BASELINE, collectLedgerCreatedTables, collectDeclaredIndexes, collectMigrationIndexes,
+} = require('./sql_schema_index_parity.test/helpers/index_ledger.js');
 
 describe('SQL schema index parity (definition path vs ledger path) @regression', function(){
-
     it('sanity: the parser actually finds migration-added indexes (guard is not vacuous)', function(){
         assert.ok(collectMigrationIndexes().length > 0,
             'found no ALTER TABLE ... ADD INDEX in src/sql/migrations; the regexes above have gone stale ' +
@@ -176,7 +84,9 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
             'unguarded on the ledger path');
         assert.ok(ft.every(a => a.unique === false), 'FULLTEXT must not be read as UNIQUE');
     });
+});
 
+describe('SQL schema index parity (definition path vs ledger path) @regression', function(){
     it('no index exists only on the ledger path (every migration-added index is declared in its table definition)', function(){
         const declared = collectDeclaredIndexes();
         const orphans  = collectMigrationIndexes().filter(a =>
@@ -227,7 +137,9 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
             'index additionally enforces a constraint the plain KEY does not. Make the definition ' +
             'in src/sql/<table>.sql and the dated migration agree:\n' + mismatches.join('\n'));
     });
+});
 
+describe('SQL schema index parity (definition path vs ledger path) @regression', function(){
     // The inverse direction the column-parity sibling already closes.
     // An index that exists ONLY on the definition path is invisible to a DB converged by
     // replaying migrations alone (an operator-managed or rebuilt replica). It bites hardest
@@ -265,7 +177,9 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
             'original CREATE TABLE, add it to the baseline deliberately and say so in the commit:\n' +
             unledgered.join('\n'));
     });
+});
 
+describe('SQL schema index parity (definition path vs ledger path) @regression', function(){
     // The seam BETWEEN the two carve-outs above. The inverse guard exempts a
     // ledger-created table because its CREATE TABLE is the ledger record, and the sibling
     // column-parity case compares that CREATE TABLE body byte-for-byte, so an inline
@@ -302,172 +216,5 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
             'the definition\'s name, column list and UNIQUE flag (the shape case above then enforces the ' +
             'match). Do NOT edit the migration that already created the table: an applied migration is ' +
             'immutable and its checksum is the ledger - ship a new dated file:\n' + missing.join('\n'));
-    });
-
-    it('sanity: the index baseline is neither empty nor stale (guard is not vacuous)', function(){
-        const fixture  = JSON.parse(fs.readFileSync(INDEX_BASELINE, 'utf8'));
-        const baseline = fixture.baseline || {};
-        assert.ok(Object.keys(baseline).length > 0, 'the index baseline is empty; the inverse guard would pass vacuously');
-
-        // A baseline entry for an index no definition declares any more is dead weight that
-        // would quietly re-waive the guard if the name were ever reused.
-        const declared = collectDeclaredIndexes();
-        const stale = [];
-        for(const table of Object.keys(baseline))
-            for(const entry of baseline[table]){
-                const index = String(entry.name).toLowerCase();
-                if(!(declared[table] && declared[table].has(index))) stale.push('  ' + table + '.' + index);
-            }
-
-        assert.deepStrictEqual(stale, [],
-            'These baseline entries name an index no src/sql/<table>.sql declares any more. Remove them ' +
-            'from test/fixtures/schema-index-baseline.json:\n' + stale.join('\n'));
-    });
-
-    // The index twin of the column-shape guard. The inverse guard above exempts a
-    // pre-ledger index by NAME, and the baseline stored nothing but names, so re-pointing a
-    // baselined index at different columns, changing its (len) prefix or its column ORDER, or
-    // promoting a plain KEY to UNIQUE all stayed green with no dated migration. The runtime is
-    // no backstop: reconcileTableIndexes matches by COLUMN SET (so it cannot see a prefix or
-    // order change) and for an inline KEY it is never consulted at all, since parseExpectedIndexes
-    // reads only standalone CREATE INDEX. The shape case above covers only indexes a
-    // migration ALSO declares; a baselined index has no migration by definition, so nothing
-    // watched it. The baseline now freezes each one's normalized columns + UNIQUE flag.
-    it('a pre-ledger baselined index has not changed shape (columns, prefix, uniqueness) @regression', function(){
-        const fixture  = JSON.parse(fs.readFileSync(INDEX_BASELINE, 'utf8'));
-        const baseline = fixture.baseline || {};
-        const declared = collectDeclaredIndexes();
-
-        const drifted = [];
-        for(const table of Object.keys(baseline))
-            for(const entry of baseline[table]){
-                const index = String(entry.name).toLowerCase();
-                const decl  = declared[table] && declared[table].get(index);
-                if(!decl) continue;                                       // staleness is the case above
-                if(decl.columns === null || entry.columns === null) continue;  // unparsed, do not guess
-                if(decl.columns.join(',') !== (entry.columns || []).join(','))
-                    drifted.push(`  ${table}.${index} columns: baseline (${(entry.columns || []).join(', ')}) ` +
-                                 `vs definition (${decl.columns.join(', ')})`);
-                else if(decl.unique !== !!entry.unique)
-                    drifted.push(`  ${table}.${index} uniqueness: baseline unique=${!!entry.unique} ` +
-                                 `vs definition unique=${decl.unique}`);
-            }
-
-        assert.deepStrictEqual(drifted, [],
-            'These indexes predate the migration ledger, so they are exempt from needing a dated migration - ' +
-            'but their SHAPE changed in src/sql/<table>.sql with no migration behind it. An aged DB keeps the ' +
-            'original index (the boot reconciler matches by column SET, so it cannot see a reorder or a (len) ' +
-            'prefix change, and never touches an inline KEY at all), so the two schema-construction paths stop ' +
-            'agreeing. Ship a dated migration that recreates the index in its new shape, and re-freeze ' +
-            'test/fixtures/schema-index-baseline.json in the SAME commit:\n' + drifted.join('\n'));
-    });
-
-    // The twin of the column suite's re-freeze guard, for the same reason. The case
-    // above fires when baseline != definition and its message mandates two things - a dated
-    // migration recreating the index in its new shape AND a re-freeze of this fixture in the
-    // same commit - but only the re-freeze is machine-checked. Doing the re-freeze alone
-    // restores baseline == declared and the guard goes green with no migration behind it,
-    // while every aged DB and every replay-only replica keeps the ORIGINAL index: the boot
-    // reconciler matches by column SET (blind to a reorder or a (len) prefix change) and never
-    // touches an inline KEY at all, so nothing heals it later either.
-    //
-    // test/fixtures/schema-index-baseline-origin.json is the anchor, sha256-pinned above and
-    // seeded from the shape-guard landing (01f321c1) rather than from today's baseline - an anchor
-    // copied from today would be vacuous, since nothing would differ from it. Seeded from
-    // that landing it already carries the destroys.action_index UNIQUE -> non-unique re-freeze, which
-    // this case resolves through the real 2026-08-15-destroys-drop-unique-action-index.sql,
-    // so the guard is exercised on live data today rather than on some future commit.
-    //
-    // "Recreated" is read exactly as collectMigrationIndexes reads it, so a DROP INDEX with no
-    // recreate does not count: the aged DB must end up holding the new shape, and only the
-    // ADD/CREATE INDEX puts it there.
-    it('a re-frozen pre-ledger index is backed by a dated migration that recreates it @regression', function(){
-        const origin   = loadPinnedOriginFixture(ORIGIN_INDEX_BASELINE, ORIGIN_INDEX_BASELINE_SHA256,
-                                                 'test/unit/sql_schema_index_parity.test.js');
-        const fixture  = JSON.parse(fs.readFileSync(INDEX_BASELINE, 'utf8'));
-        const baseline = fixture.baseline || {};
-
-        // Migrations replay in lexical filename order, so when several touch one index the
-        // shape an aged DB ends up with is the last one's.
-        const lastCreated = new Map();
-        for(const a of collectMigrationIndexes().slice().sort((x, y) => (x.file < y.file ? -1 : x.file > y.file ? 1 : 0)))
-            lastCreated.set(a.table + '.' + a.index, a);
-
-        const shape = (columns, unique) => (columns || []).join(',') + ' unique=' + !!unique;
-
-        const unjustified = [];
-        const minted      = [];
-        for(const table of Object.keys(baseline)){
-            const anchored = new Map(((origin.baseline || {})[table] || [])
-                .map(e => [String(e.name).toLowerCase(), e]));
-            for(const entry of baseline[table]){
-                const index = String(entry.name).toLowerCase();
-                const o     = anchored.get(index);
-                if(!o){ minted.push(`  ${table}.${index}  (frozen as: ${shape(entry.columns, entry.unique)})`); continue; }
-                if(shape(o.columns, o.unique) === shape(entry.columns, entry.unique)) continue;
-                const m = lastCreated.get(table + '.' + index);
-                if(m && shape(m.columns, m.unique) === shape(entry.columns, entry.unique)) continue;
-                unjustified.push(`  ${table}.${index}\n    origin:    ${shape(o.columns, o.unique)}\n    ` +
-                    `re-frozen: ${shape(entry.columns, entry.unique)}\n    ` +
-                    (m ? `last migration recreate (${m.file}): ${shape(m.columns, m.unique)}`
-                       : 'no dated migration recreates this index'));
-            }
-        }
-
-        assert.deepStrictEqual(unjustified, [],
-            'These pre-ledger indexes were RE-FROZEN in test/fixtures/schema-index-baseline.json - their ' +
-            'shape no longer matches test/fixtures/schema-index-baseline-origin.json - but no dated ' +
-            'migration under src/sql/migrations/ recreates them in the re-frozen shape. The re-freeze ' +
-            'silences the shape guard above for fresh installs while every long-lived DB and every ' +
-            'replay-only replica keeps the ORIGINAL index forever, and the boot reconciler cannot heal it ' +
-            '(it matches by column SET and never reads an inline KEY). Ship the dated migration the ' +
-            'guard\'s own failure message asks for - DROP INDEX IF EXISTS followed by a CREATE INDEX in ' +
-            'the new shape, matching name, column list and UNIQUE flag - or revert the definition and the ' +
-            're-freeze together:\n' + unjustified.join('\n'));
-
-        assert.deepStrictEqual(minted, [],
-            'These indexes were ADDED to test/fixtures/schema-index-baseline.json but are absent from ' +
-            'test/fixtures/schema-index-baseline-origin.json, so they did not ship with their table\'s ' +
-            'original CREATE TABLE and the baseline is claiming a provenance they do not have. Baselining ' +
-            'exempts an index from needing a migration forever, so a replay-only replica never gets it. ' +
-            'Ship a dated CREATE INDEX migration instead, or list it under known_unledgered while its ' +
-            'migration is owed:\n' + minted.join('\n'));
-    });
-
-    // The anchor is only worth what it differs from: re-seeding it from the current baseline
-    // would leave the case above passing over an empty set forever. Pin the one re-freeze we
-    // know shipped, which that case resolves through its real migration.
-    it('sanity: the origin index anchor still differs from the live baseline (re-freeze guard is not vacuous)', function(){
-        const origin   = loadPinnedOriginFixture(ORIGIN_INDEX_BASELINE, ORIGIN_INDEX_BASELINE_SHA256,
-                                                 'test/unit/sql_schema_index_parity.test.js');
-        const fixture  = JSON.parse(fs.readFileSync(INDEX_BASELINE, 'utf8'));
-        const baseline = fixture.baseline || {};
-        const shape    = (columns, unique) => (columns || []).join(',') + ' unique=' + !!unique;
-
-        const moved = [];
-        for(const table of Object.keys(baseline)){
-            const anchored = new Map(((origin.baseline || {})[table] || [])
-                .map(e => [String(e.name).toLowerCase(), e]));
-            for(const entry of baseline[table]){
-                const index = String(entry.name).toLowerCase();
-                const o     = anchored.get(index);
-                if(o && shape(o.columns, o.unique) !== shape(entry.columns, entry.unique))
-                    moved.push(table + '.' + index);
-            }
-        }
-
-        // validator_rewards.reward_unique: re-frozen when round_qualifier joined the reward
-        // ledger key (2026-08-24-validator-rewards-round-qualifier.sql). The archive leg's
-        // round_reference is MATCH_BATCH_SEQ, a dense hub counter a wipe-and-replay rebase
-        // reissues, so the four-column key collapsed two genuinely distinct archive anchors
-        // into one paid reward; the qualifier carries the snapshot_block that already
-        // distinguished them in the signed XANCPUB tuple. The case above resolves this entry
-        // through that dated migration, which DROPs and recreates the index in the new shape -
-        // the one thing the boot reconciler will not do for an aged database.
-        assert.deepStrictEqual(moved, ['destroys.action_index', 'validator_rewards.reward_unique'],
-            'The set of index baseline entries that differ from test/fixtures/schema-index-baseline-origin.json ' +
-            'changed. An EMPTY set means the anchor was re-seeded from the current baseline and the re-freeze ' +
-            'guard above now proves nothing. A LARGER set means a new re-freeze landed: confirm the case above ' +
-            'resolves it through a real dated migration, then add it here - that edit is the reviewed act.');
     });
 });
