@@ -1673,7 +1673,7 @@ class Utility {
                     'acknowledge an intentional single-host node.');
             }
         }
-        // H-3 (NATIVE_FEE_PRICE_TIME_GATE): price rounds are anchored to BTC
+        // NATIVE_FEE_PRICE_TIME_GATE: price rounds are anchored to BTC
         // heights, so getLatestPrice's reference_block gate only pins a round
         // deterministically on the reference chain itself. On every other chain
         // the gate is vacuous against the local height, so at/after the
@@ -2701,7 +2701,7 @@ class Utility {
         await actions.actionVote.processDueCallbacks(block_index, block_time);
     }
 
-    // Materialize matured DELEGATE v1 signing-key rotations onto contract_stakes (#4366).
+    // Materialize matured DELEGATE v1 signing-key rotations onto contract_stakes.
     //
     // Runs at the TOP of a block, before its transactions, so a rotation is in force for
     // everything that block does (EXECUTE snapshots, UNSTAKE lookups, SLASH deductions) exactly

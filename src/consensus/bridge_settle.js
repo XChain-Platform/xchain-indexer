@@ -512,7 +512,7 @@ function resetRefusalMemo(){
  * rather than on the id: a second row naming a lock or burn this chain has already paid out is
  * REFUSED, never deferred. See isSourceLegSettled.
  *
- * NOT BUILT (lane L14).
+ * BUILT.
  *
  * @param {Object} row - one finalized bridge_transfers row as mirrored: transfer_id,
  *                       snapshot_block, network, src_chain, src_action_index, src_address,
@@ -776,7 +776,7 @@ async function applyBridgeTransfer(row, ctx){
  * IDEMPOTENCY. Recorded in bridge_settlements with kind = 'policy' and the snapshot_id in
  * the transfer_id column, which is why `kind` is inside the unique key.
  *
- * NOT BUILT (lane L14).
+ * BUILT.
  *
  * @param {Object} row - one finalized policy_snapshots row as mirrored: snapshot_id,
  *                       snapshot_block, origin_chain, tick, policy_seq, origin_block,
@@ -1078,7 +1078,7 @@ async function applyPolicySnapshot(row, ctx){
  */
 function verifyEscrowAgainstCheckpoint(row, ctx){
     // BUILT. The permissive stub is gone: the real check lives in bridge_checkpoint_check.js
-    // (lane L17) and this is the one door into it, so the settle pass calls one name and the
+    // and this is the one door into it, so the settle pass calls one name and the
     // check keeps its own file, its own tests and its own falsification drill.
     return cpCheck.verifyEscrowAgainstCheckpoint(row, ctx);
 }

@@ -15,17 +15,17 @@
  * XChain Platform Action - XBRIDGE (user-broadcast lock/burn, system-injected settle)
  *
  * The module shape, the method names, the parameter sets and the exact verdict strings
- * are the SEAM every bridge lane builds against. The wire side (v0, v1, v3, v4) is built
- * here by lane L3; the mirror-injected settle legs (v2, v5) live in ../bridge_settle.js.
+ * are the SEAM every bridge component builds against. The wire side (v0, v1, v3, v4) is built
+ * here; the mirror-injected settle legs (v2, v5) live in ../bridge_settle.js.
  *
- * TWO WRITERS THIS HANDLER CALLS THAT DO NOT EXIST YET, raised to the orchestrator by
- * lane L3 rather than invented here (neither spec, nor the seam contract, nor any lane's
- * surface list names them, and both sit in files this lane does not own):
+ * TWO WRITERS THIS HANDLER CALLS, which live in the database layer rather than in
+ * this handler (src/db/xbridges.js and src/db/tokens.js), because neither spec nor the
+ * seam contract places a table writer or a tokens column setter in an action file:
  *
  *   1. `xbridges` action table plus `Database.createXbridge(data)`. Every user-broadcast
  *      action on the platform records its own row (sends, destroys, cross_chain_calls);
  *      the hub's CrossChainBridgeEngine polls the indexer's `getpendingbridgetransfers`
- *      for confirmed locks and burns, and that read (lane L15) has nothing to read
+ *      for confirmed locks and burns, and that read has nothing to read
  *      without this table. The row needs: action_index, format (the version byte),
  *      tick_id, source_id, dest_chain, dest_address_id (v0/v3) or origin_address_id
  *      (v1/v4), amount, decimals, min_depth, memo, status_id, block_index.
@@ -60,10 +60,10 @@
  *
  * Two closures do NOT gate on either activation and hold on every non-BTC chain from the
  * commit that lands them (base spec D62): ISSUE of the GAS tick off BTC, and DESTROY of
- * the GAS tick off BTC. They live in issue.js and destroy.js (lane L4), not here.
+ * the GAS tick off BTC. They live in issue.js and destroy.js, not here.
  *
  * Spec: the base bridge spec sections 4 to 9; the token bridge spec
- * sections 5 to 7. Docs: xchain-documentation/protocol/actions/xbridge.md (lane L9).
+ * sections 5 to 7. Docs: xchain-documentation/protocol/actions/xbridge.md.
  *
  ********************************************************************/
 
@@ -256,7 +256,7 @@ class XBridge {
 
         // A system-injected settle leg that passed the gates is NOT this handler's to
         // apply: ../bridge_settle.js drives v2 and v5 from the mirrored bridge_transfers
-        // row at the pinned end-of-block pass position (lane L14). Returning without
+        // row at the pinned end-of-block pass position. Returning without
         // writing a verdict leaves that row entirely to the settle pass, which is the
         // only writer of it.
         if(!error && INJECTED_VERSIONS.indexOf(format) !== -1)

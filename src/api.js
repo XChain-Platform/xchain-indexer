@@ -1185,10 +1185,10 @@ async function startApi(){
         },
 
         /**
-         * SEAM (no handler here; lane L15 writes getpendingbridgetransfers and
+         * SEAM (no handler here; served by getpendingbridgetransfers and
          * getbridgetransfer). This typedef is the row shape the hub's
-         * CrossChainBridgeEngine polls for and signs, frozen up front so the read lane,
-         * the engine lane and the wallet lane cannot each invent a different field name.
+         * CrossChainBridgeEngine polls for and signs, frozen up front so the read handlers,
+         * the hub engine and the wallet cannot each invent a different field name.
          *
          * One row per CONFIRMED, not-yet-finalized source leg on this chain: a lock
          * (XBRIDGE v0/v3) or a burn (XBRIDGE v1/v4). The hub confirmation-gates on
@@ -1322,7 +1322,7 @@ async function startApi(){
         // The D2 proof envelope (base spec section 12, D2/D70): bridge_checkpoint_check.js's
         // header documents the exact shape and verifyEscrowAgainstCheckpoint verifies it.
         // Producer-side only: this reports what THIS chain committed at block_index and lets
-        // the caller (lane L14's settle pass) bind its own already-verified checkpoint to it.
+        // the caller (the bridge settle pass) bind its own already-verified checkpoint to it.
         // Open read.
         // Body: { address, tick, block_index }
         async getbridgeescrowproof({address, tick, block_index}){

@@ -1437,7 +1437,7 @@ class XChainIndexer {
                 //
                 // The time-keyed barrier is NOT conditioned on the
                 // NATIVE_FEE_PRICE_TIME_GATE flag-day. It was first introduced as the
-                // twin of that gate's fee-validation change (H-3: db.getLatestPrice
+                // twin of that gate's fee-validation change (the time-keyed db.getLatestPrice
                 // selectByTime), but native fees are not the only time-keyed reader of
                 // price_snapshots. FIAT dispenser settlement reads the table bounded on
                 // `block_timestamp <= this block's time` on EVERY chain from day one, in both
@@ -1751,7 +1751,7 @@ class XChainIndexer {
                 this.indexerDb._stagedHubPushes = [];
                 try {
 
-                    // Fence the block's writes to THIS transaction's epoch (M-16). Read the
+                    // Fence the block's writes to THIS transaction's epoch. Read the
                     // epoch that beginTransaction just assigned, then run all block processing
                     // under it (runInTxEpoch) so every DB write it issues carries this epoch.
                     // If the watchdog below fires, the outer catch rolls back and bumps the
@@ -1933,7 +1933,7 @@ class XChainIndexer {
                         return [ledger, actions, contracts];
                     });
 
-                    // Watchdog-timeout safety (M-16). If the watchdog rejects below, we stop
+                    // Watchdog-timeout safety. If the watchdog rejects below, we stop
                     // awaiting blockProcessing but the promise stays pending and may settle
                     // later (typically the epoch fence rejecting a zombie write, or the block
                     // finally finishing). Attach a swallow handler so that late settlement can

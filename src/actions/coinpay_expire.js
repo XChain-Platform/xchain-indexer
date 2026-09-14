@@ -155,7 +155,7 @@ class Coinpay_Expire {
         } else {
             let refundTo = sweepDest || sellerOrder['SOURCE'];
             if(sweepDest) this.util.addAddressTicker(sweepDest, sellerOrder['GIVE_TICK']);
-            // BigNumber-space negation, not JS unary minus (float truncation, #3736).
+            // BigNumber-space negation, not JS unary minus (float truncation).
             escrows.push([sellerOrder['GIVE_TICK'], this.util.bcsub(0, releaseAmount, 64), sellerOrder['SOURCE']]);
             credits.push([sellerOrder['GIVE_TICK'],  releaseAmount, refundTo]);
         }
@@ -191,7 +191,7 @@ class Coinpay_Expire {
                         refundTo = sweepDest;
                         this.util.addAddressTicker(refundTo, sellerOrder['GIVE_TICK']);
                     }
-                    // BigNumber-space negation, not JS unary minus (float truncation, #3736).
+                    // BigNumber-space negation, not JS unary minus (float truncation).
                     escrows.push([sellerOrder['GIVE_TICK'], this.util.bcsub(0, sellerOrder['GIVE_REMAINING'], 64), sellerOrder['SOURCE']]);
                     credits.push([sellerOrder['GIVE_TICK'],  sellerOrder['GIVE_REMAINING'], refundTo]);
                 }

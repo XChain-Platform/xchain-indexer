@@ -655,7 +655,7 @@ class Genesis {
     }
 
     /**
-     * SEAM (lane L5 builds the body). The shared token-row creation helper, factored OUT of
+     * SEAM. The shared token-row creation helper, factored OUT of
      * _injectGasToken so one code path creates a token row from a parameter set, whether the
      * caller is the BTC genesis pass or a bridge settle leg on another chain.
      *
@@ -737,7 +737,7 @@ class Genesis {
     /**
      * Create the two rows a bridged token needs on THIS chain, as
      * the token bridge spec section 6 specifies them, and enforce the
-     * existing-row rules. Called by the settle pass (lane L14) on a v5 in-leg, before any
+     * existing-row rules. Called by the settle pass on a v5 in-leg, before any
      * credit; the caller logs the single refusal line naming the transfer id.
      *
      * 1. The root row `<ORIGIN>` if absent: owned by this chain's bridge role address for

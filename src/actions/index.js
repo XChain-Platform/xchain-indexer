@@ -1044,7 +1044,7 @@ class Actions {
         // Outside the try on purpose: a TX_LOCK_BUSY give-up opened no transaction, so it must
         // not reach the rollback below.
         await this.indexerDb.beginTransaction({ acquireTimeoutMs: acquireTimeoutMs });
-        // Fence the dry-run's writes to THIS transaction's epoch (M-16), same as the block
+        // Fence the dry-run's writes to THIS transaction's epoch, same as the block
         // loop: on watchdog timeout the finally below rolls back and bumps the epoch, but the
         // abandoned processTransaction can still resume and try to write on the shared
         // connection, which by then may belong to a REAL block's transaction. The stale epoch
