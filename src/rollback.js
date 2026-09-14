@@ -101,14 +101,19 @@ class Rollback {
         // (swq.isStakeWeightedQuorumActive above, keyed on the row's OWN snapshot block), which
         // is the only reading a re-derivation can make without inventing a height.
 
-        // Generic rollback table lists, generated from the table-lifecycle
-        // registry (src/hub/table_lifecycle.js): dataTables are deleted by
-        // action_index, blockTables by block_index, indexTables are the two
-        // wire-^<id> consensus lookups deleted by their own block_index. Per-
-        // table rationale (why a table is generic vs recomputed vs bespoke vs
-        // exempt) lives with its registry entry; classify NEW tables there,
-        // not here. The bespoke restores/sweeps in rollback() below stay
-        // hand-written and run in their required order around these loops.
+        this.initRollbackTableLists();
+
+    }
+
+    // Generic rollback table lists, generated from the table-lifecycle
+    // registry (src/hub/table_lifecycle.js): dataTables are deleted by
+    // action_index, blockTables by block_index, indexTables are the two
+    // wire-^<id> consensus lookups deleted by their own block_index. Per-
+    // table rationale (why a table is generic vs recomputed vs bespoke vs
+    // exempt) lives with its registry entry; classify NEW tables there,
+    // not here. The bespoke restores/sweeps in rollback() below stay
+    // hand-written and run in their required order around these loops.
+    initRollbackTableLists(){
         let rollbackLists = lifecycle.rollbackTables();
         this.blockTables  = rollbackLists.blockTables;
         this.dataTables   = rollbackLists.dataTables;
@@ -130,22 +135,11 @@ class Rollback {
         // in a later-orphaned block survives the reorg harmlessly. Do not reintroduce a raw
         // lookup id from one of those tables into any hashed projection, and do not add a new
         // ^<id>-style wire reference for one without also rolling its table back here.
-
     }
 
     // Handle rolling back data to a specific block
     async rollback(block_index){
-        // Genesis floor: the genesis block carries the bootstrapped Counterparty/Dogeparty
-        // name ownership and is the consensus base of the ledger. A reorg can never legitimately
-        // reach it, so refuse to roll back to or below it rather than destroy that state. Throwing
-        // here (before any DB work) surfaces the attempt to the operator instead of silently
-        // unwinding genesis. GENESIS_BLOCK = 0 (disabled) leaves normal rollback unaffected.
-        let genesisBlock = this.config['GENESIS_BLOCK'];
-        if(genesisBlock && Number(block_index) <= Number(genesisBlock)){
-            let msg = 'Rollback to block ' + block_index + ' refused: at/below GENESIS_BLOCK ' + genesisBlock + ' (would destroy the bootstrapped genesis ledger)';
-            getLogger().error(msg);
-            throw new Error(msg);
-        }
+        this.assertAboveGenesis(block_index);
 
         // Start tracking time of rollback
         var rollbackTimer = this.util.startTimer();
@@ -160,31 +154,187 @@ class Rollback {
         // Notify user of start of rollback
         getLogger().info('Starting rollback to block ' + block_index + '...');
 
-        // Source-chain reorg fence (item 5308): this chain's monotonic push generation is bumped so
-        // that rows re-published by forward replay carry the NEW generation while the orphaned rows
-        // keep the prior one, and the retractions below carry the PRE-bump generation (bumped - 1) so
-        // the hub fence deletes only the orphans (push_generation <= pre) while a re-published row at a
-        // recycled action_index (new generation) survives. push_generations is NEVER a rollback
-        // dataTable (monotonic).
-        //
-        // The bump is issued INSIDE the rollback transaction (just before commit, below), NOT here,
-        // for two reasons (HUB-RETRACT-1): (a) fail-closed - a bump failure throws into the
-        // transaction's catch, rolling back every delete, so the reorg is retried idempotently rather
-        // than shipping an un-fenced rollback; (b) atomicity vs concurrent hub PULLs - the hub stamps
-        // getpendingcrosschaincalls / getopencrosschainorders results with the CURRENT generation at
-        // serve time, so if the generation flipped to bumped while the orphaned rows were still
-        // committed and visible, a pull would stamp an orphan with the NEW generation and it would
-        // escape the fence forever. Bumping in-transaction means another connection sees either
-        // (pre-commit) old generation + orphaned rows, stamped with the old generation the fence
-        // covers, or (post-commit) new generation + rows already gone - never orphans + new generation.
-        let retractionGeneration = null;
-        // Retraction rows written ahead inside the transaction (HUB-RETRACT-2); the post-commit block
-        // attempts immediate live delivery and drops each on success, else leaves it for HubPushQueue.
-        let stagedRetractions = [];
-
         // Reset the address/tickers/transactions lists
         this.util.resetLists();
 
+        let scope                 = await this.readRollbackScope(block_index);
+        let firstActionIndex      = scope.firstActionIndex;
+        let lastActionIndex       = scope.lastActionIndex;
+
+        let markets = await this.collectAffectedEntities(firstActionIndex);
+
+        // Get lists of addresses, tickers, and transactions (collected during read phase above)
+        let addresses = this.util.getAddressesList();
+        let tickers   = this.util.getTickersList();
+
+        // The push-generation fence and the durable retraction rows the transaction stages
+        // (stageHubRetractions carries the reasoning for both), read after the commit by the
+        // live delivery and the completion summary.
+        let staged = await this.runRollbackTransaction(block_index, scope, markets, addresses, tickers);
+
+        await this.deliverStagedRetractions(firstActionIndex, staged.retractionGeneration, staged.stagedRetractions);
+
+        this.logRollbackSummary(block_index, firstActionIndex, lastActionIndex, staged.stagedRetractions, rollbackStartedAt);
+
+        // Log the rollback time
+        this.util.logTimer(rollbackTimer, 'Rollback Done');
+    }
+
+    // The atomic part of the reorg: every delete, reset and re-derive, plus the hub
+    // retractions written ahead of the commit so they survive a crash. A throw anywhere
+    // inside leaves the database untouched, and the caller re-detects the reorg and retries.
+    async runRollbackTransaction(block_index, scope, markets, addresses, tickers){
+        let { firstActionIndex, lastActionIndex, unlandedAttestBatches } = scope;
+        let staged = null;
+        // Begin a transaction; all deletes and recalculations are atomic
+        await this.indexerDb.beginTransaction();
+        try {
+
+            // Reverse any cooldown maturities orphaned by this reorg. Runs UNCONDITIONALLY (outside
+            // the firstActionIndex guard) and BEFORE the generic deletes: the legacy (pre-flag-day)
+            // maturity path writes the refund credit + 'completed' flip against a SURVIVING unstake
+            // row and mints NO actions row in the maturity block, so a reorg over an action-empty
+            // range leaves firstActionIndex null and would otherwise skip the reversal entirely,
+            // stranding the refund and forking the ledger vs a from-genesis replay. Keyed entirely
+            // on block_index / cooldown_end_block, so it is a no-op when nothing matured. Seeds the
+            // affected source addresses/ticks into the util lists captured above so the unconditional
+            // updateBalances/updateTokens below recompute them.
+            await this.reverseCooldownMaturities(block_index);
+
+            if(firstActionIndex !== null){
+                await this.deleteContractEmissions(firstActionIndex);
+            }
+
+            await this.restoreInPlaceFlips(block_index, firstActionIndex);
+
+            await this.purgeOrphanedTables(block_index, firstActionIndex, markets);
+
+            // Re-derive attest_validator_stats for the orphaned range. This is
+            // a monotone aggregate (fulfilled/missed/slashed counters per
+            // validator/provider) with no action_index or block FK, so neither
+            // generic delete loop above can touch it. A blanket delete would also
+            // drop increments earned in surviving blocks. Instead we drop only the
+            // rows whose most-recent touch is in the orphaned range and rebuild them
+            // from the surviving signatures + expired-request records, matching what
+            // a from-genesis replay to block_index-1 would produce.
+            await this.recomputeAttestationValidatorStats(block_index);
+
+            await this.refreshDerivedProjections(block_index, addresses, tickers, markets);
+
+                staged = await this.stageHubRetractions(firstActionIndex, lastActionIndex, unlandedAttestBatches);
+
+            await this.commitAndInvalidateCaches();
+
+        } catch(e) {
+            // Roll back so the DB is left untouched rather than in a partial rollback state
+            await this.indexerDb.rollbackTransaction();
+            // Clear the reorg marker on failure too so it can't stick; the caller re-detects
+            // the reorg and retries, re-arming it on the next attempt (#1812).
+            if(this.indexer) this.indexer.stallReason = null;
+            throw e;
+        }
+        return staged;
+    }
+
+    // Undo the flips an orphaned action wrote IN PLACE on a row that SURVIVES the reorg.
+    // Each reset states its own fork risk; they share the guard because every one of them
+    // is keyed on an orphaned action, so none has anything to undo without one.
+    async restoreInPlaceFlips(block_index, firstActionIndex){
+        if(firstActionIndex !== null){
+
+            await this.resetOrphanedAttestRequests(block_index);
+
+            await this.resetOrphanedXcallRequests(block_index);
+
+            await this.reopenOrphanedPolls(block_index);
+
+            await this.resetOrphanedBetFlips(block_index);
+
+            await this.resetOrphanedPollCallbacks(block_index);
+
+            await this.clearOrphanedDeactivations(block_index);
+
+            await this.restoreContractSlashAmounts(block_index);
+
+            await this.restoreDelegationRotations(block_index);
+
+            await this.restoreCapabilitySlashAmounts(block_index);
+
+            // Anchor reward reconcile-restore (RB-ANCHOR) was here; it now runs
+            // UNCONDITIONALLY just past this guard, for the same reason the cooldown reversal
+            // below left it: the BTC-side derive path calls reconcileAnchorRewardWinner with a
+            // NULL anchor action index (anchor_reward_derive.js, the rows arrive over the
+            // mirror), so it mints no actions row and an orphaned range carrying only a
+            // derive-side reconcile leaves firstActionIndex null.
+
+            // Cooldown-maturity reversal was here; it is now in reverseCooldownMaturities,
+            // called UNCONDITIONALLY at the top of the transaction (before this guard). It had
+            // to leave this firstActionIndex-gated block because the legacy cooldown maturity
+            // (pre UNSTAKE_COOLDOWN_COMPLETION_ACTION) mints NO actions row, so an orphaned
+            // range containing only such a maturity leaves firstActionIndex null and would skip
+            // the reversal entirely, forking the ledger vs a from-genesis replay.
+
+            await this.resetOrphanedArchiveHeads(block_index, firstActionIndex);
+
+            await this.restoreStampedAttestHeads(firstActionIndex);
+
+            await this.purgeActionScopedTables(firstActionIndex);
+
+            await this.sweepOrphanedIcons();
+
+            await this.rederiveTokenEscrow();
+
+            await this.rederiveCoinpayMatchStatus();
+        }
+    }
+
+    // Remove what the orphaned blocks left behind, in the order the deletes require:
+    // the restores above read rows these statements drop, the index-id lookups go after
+    // every row that references them, and the sweeps go after the rows they check for.
+    async purgeOrphanedTables(block_index, firstActionIndex, markets){
+        await this.restoreReconciledAnchorRewards(block_index);
+
+        await this.repairRollcallEvictions(block_index);
+
+        await this.unwindRollcallEpochs(block_index);
+
+        await this.purgeBlockScopedTables(block_index);
+
+        await this.purgeDerivedRewards(block_index);
+
+        await this.purgeIndexLookups(block_index);
+
+        await this.rearmRecoveryRewards(block_index);
+
+        await this.sweepDanglingIndexReferences();
+
+        await this.sweepOrphanedMarketPairs(markets);
+
+        await this.purgeOrphanedPriceSnapshots(block_index);
+
+        await this.purgeOrphanedOraclePrices(firstActionIndex);
+
+        await this.purgeCrossChainMirrors(firstActionIndex);
+    }
+
+    // Genesis floor: the genesis block carries the bootstrapped Counterparty/Dogeparty
+    // name ownership and is the consensus base of the ledger. A reorg can never legitimately
+    // reach it, so refuse to roll back to or below it rather than destroy that state. Throwing
+    // here (before any DB work) surfaces the attempt to the operator instead of silently
+    // unwinding genesis. GENESIS_BLOCK = 0 (disabled) leaves normal rollback unaffected.
+    assertAboveGenesis(block_index){
+        let genesisBlock = this.config['GENESIS_BLOCK'];
+        if(genesisBlock && Number(block_index) <= Number(genesisBlock)){
+            let msg = 'Rollback to block ' + block_index + ' refused: at/below GENESIS_BLOCK ' + genesisBlock + ' (would destroy the bootstrapped genesis ledger)';
+            getLogger().error(msg);
+            throw new Error(msg);
+        }
+    }
+
+    // The rolled-back action range and the ATTEST batches the reorg un-lands, all read
+    // BEFORE the transaction opens: the rows that answer them are deleted by the purge
+    // inside it, and the hub retraction has to name a batch that is gone locally by then.
+    async readRollbackScope(block_index){
         // Placeholder for the first action_index. Initialized to null (not a
         // falsy number) so the guards below distinguish "no actions in range"
         // from a legitimate action_index of 0 (Number(0) is falsy), so a false
@@ -199,18 +349,6 @@ class Rollback {
         // ceiling, so that a re-published row at A' (>= first) landing before the deferred drain
         // is not wiped by an open-ended DELETE (items 5296/5297).
         let lastActionIndex = null;
-
-        // Placeholder for market pairs
-        let markets = [];
-        // Orientation-free keys of the pairs already collected in `markets`. The dedupe below
-        // used to rescan the whole array per row, without breaking on a hit, so collecting pairs
-        // cost O(rows x pairs) inside the reorg stall window where every block is deferred. The
-        // key is min:max over the two tick ids, which is exactly the either-orientation match the
-        // scan performed; pairs are still pushed in the orientation they were first seen, so the
-        // contents and order of `markets` are unchanged. Deliberately spans the whole per-table
-        // read loop, matching the array it shadows (dedupe is across tables, not per table).
-        let marketKeys = new Set();
-
         // Get the first action_index at or after the given block
         let query = `SELECT
                         a.action_index
@@ -248,7 +386,24 @@ class Rollback {
         let unlandedAttestBatches = [];
         if(firstActionIndex !== null && this.hubClient && this.hubClient.enabled)
             unlandedAttestBatches = await this.collectUnlandedAttestBatches(firstActionIndex);
+        return { firstActionIndex, lastActionIndex, unlandedAttestBatches };
+    }
 
+    // The addresses, tickers and DEX market pairs the orphaned range touched, read into
+    // the util lists (and the returned pair array) before any delete removes the rows
+    // that name them, so the post-delete balance/supply/market recompute can find them.
+    async collectAffectedEntities(firstActionIndex){
+        let query, args;
+        // Placeholder for market pairs
+        let markets = [];
+        // Orientation-free keys of the pairs already collected in `markets`. Rescanning the whole
+        // array per row, without breaking on a hit, costs O(rows x pairs) inside the reorg stall
+        // window where every block is deferred, so the dedupe below reads this set instead. The
+        // key is min:max over the two tick ids, which is exactly the either-orientation match a
+        // scan gives; pairs are still pushed in the orientation they were first seen, so the
+        // contents and order of `markets` are unchanged. Deliberately spans the whole per-table
+        // read loop, matching the array it shadows (dedupe is across tables, not per table).
+        let marketKeys = new Set();
         // Handle looking up data for any action_indexes in the rollback
         if(firstActionIndex !== null){
 
@@ -256,171 +411,8 @@ class Rollback {
             for(let table of this.dataTables){
 
                 // Build out the correct SQL to pull address and ticker data from the various tables
-                query = false;
+                query = this.entityQueryForTable(table);
                 args  = [firstActionIndex];
-
-                // Credits / Debits / Escrows
-                if(['credits','debits','escrows'].includes(table)){
-                    query = `SELECT 
-                                t1.tick,
-                                a1.address
-                            FROM 
-                                ` + table + ` m
-                                INNER JOIN index_tickers   t1 ON (t1.id=m.tick_id)
-                                INNER JOIN index_addresses a1 ON (a1.id=m.address_id)
-                            WHERE 
-                                m.action_index >= ?`;
-                }
-
-                // Contract staking (STAKE v3 / UNSTAKE v1 / DELEGATE v1+v3)
-                if(['contract_stakes','contract_unstakes','contract_delegations'].includes(table)){
-                    query = `SELECT
-                                t1.tick,
-                                a1.address
-                            FROM
-                                ` + table + ` m
-                                INNER JOIN index_tickers   t1 ON (t1.id=m.tick_id)
-                                INNER JOIN index_addresses a1 ON (a1.id=m.source_id)
-                            WHERE
-                                m.action_index >= ?`;
-                }
-
-                // AIRDROP / DESTROY
-                if(['airdrops','destroys'].includes(table)){
-                    query = `SELECT 
-                                t2.tick,
-                                a2.address
-                            FROM 
-                                ` + table + ` m
-                                INNER JOIN actions         a1 ON (a1.action_index=m.action_index)
-                                INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
-                                INNER JOIN index_tickers   t2 ON (t2.id=m.tick_id)
-                                INNER JOIN index_addresses a2 ON (a2.id=t1.source_id)
-                            WHERE 
-                                m.action_index >= ?`;
-                }
-
-                // MINT / SEND / FEE
-                if(['mints','sends','fees'].includes(table)){
-                    query = `SELECT 
-                                t2.tick,
-                                a2.address,
-                                a3.address as address2
-                            FROM 
-                                ` + table + ` m
-                                INNER JOIN actions         a1 ON (a1.action_index=m.action_index)
-                                INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
-                                INNER JOIN index_tickers   t2 ON (t2.id=m.tick_id)
-                                INNER JOIN index_addresses a2 ON (a2.id=t1.source_id)
-                                LEFT  JOIN index_addresses a3 ON (a3.id=m.destination_id)
-                            WHERE 
-                                m.action_index >= ?`;
-                }
-
-                // ISSUE
-                if(table=='issues'){
-                    query = `SELECT 
-                                t2.tick,
-                                a2.address,
-                                a3.address as address2,
-                                a4.address as address3
-                            FROM 
-                                ` + table + ` m
-                                INNER JOIN actions         a1 ON (a1.action_index=m.action_index)
-                                INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
-                                INNER JOIN index_tickers   t2 ON (t2.id=m.tick_id)
-                                INNER JOIN index_addresses a2 ON (a2.id=t1.source_id)
-                                LEFT  JOIN index_addresses a3 ON (a3.id=m.transfer_id)
-                                LEFT  JOIN index_addresses a4 ON (a4.id=m.transfer_supply_id)
-                            WHERE 
-                                m.action_index >= ?`;
-                }
-
-                // SWAPS
-                if(table=='swaps'){
-                    query = `SELECT 
-                                t2.tick,
-                                a2.address
-                            FROM 
-                                ` + table + ` m
-                                INNER JOIN actions         a1 ON (a1.action_index=m.action_index)
-                                INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
-                                INNER JOIN index_tickers   t2 ON (t2.id=m.give_tick_id)
-                                INNER JOIN index_addresses a2 ON (a2.id=t1.source_id)
-                            WHERE 
-                                m.action_index >= ?`;
-                }
-
-                // SWEEPS
-                if(table=='sweeps'){
-                    query = `SELECT 
-                                a2.address,
-                                a3.address as address2
-                            FROM 
-                                ` + table + ` m
-                                INNER JOIN actions         a1 ON (a1.action_index=m.action_index)
-                                INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
-                                INNER JOIN index_addresses a2 ON (a2.id=t1.source_id)
-                                LEFT  JOIN index_addresses a3 ON (a3.id=m.destination_id)
-                            WHERE 
-                                m.action_index >= ?`;
-                }
-
-                // ORDERS / ORDER_MATCHES
-                if(['orders','order_matches'].includes(table)){
-                    query = `SELECT 
-                                m.give_tick_id as tick1_id,
-                                m.get_tick_id  as tick2_id,
-                                m.give_coin_id as coin1_id,
-                                m.get_coin_id  as coin2_id
-                            FROM 
-                                ` + table + ` m
-                            WHERE 
-                                m.action_index >= ?`;
-                }
-
-                // COINPAY_OBLIGATIONS
-                if(table=='coinpay_obligations'){
-                    query = `SELECT
-                                om.give_tick_id as tick1_id,
-                                om.get_tick_id  as tick2_id,
-                                om.give_coin_id as coin1_id,
-                                om.get_coin_id  as coin2_id
-                            FROM
-                                ` + table + ` m
-                                INNER JOIN order_matches om ON (om.action_index=m.action_index)
-                            WHERE
-                                m.action_index >= ?`;
-                }
-
-                // COINPAY_EXPIRES / COINPAY_STATUSES / COINPAYS
-                if(['coinpay_expires','coinpay_statuses','coinpays'].includes(table)){
-                    query = `SELECT
-                                om.give_tick_id as tick1_id,
-                                om.get_tick_id  as tick2_id,
-                                om.give_coin_id as coin1_id,
-                                om.get_coin_id  as coin2_id
-                            FROM
-                                ` + table + ` m
-                                INNER JOIN coinpay_obligations co ON (co.action_index=m.` + (table=='coinpay_statuses' ? 'coinpay_action_index' : 'obligation_action_index') + `)
-                                INNER JOIN order_matches       om ON (om.action_index=co.action_index)
-                            WHERE
-                                m.action_index >= ?`;
-                }
-
-                // ORDER_CANCELS / ORDER_EDITS / ORDER_EXPIRES
-                if(['order_cancels','order_edits','order_expires'].includes(table)){
-                    query = `SELECT 
-                                o1.give_tick_id as tick1_id,
-                                o1.get_tick_id  as tick2_id,
-                                o1.give_coin_id as coin1_id,
-                                o1.get_coin_id  as coin2_id
-                            FROM 
-                                ` + table + ` m
-                                INNER JOIN orders o1 ON (o1.action_index=m.order_action_index)
-                            WHERE 
-                                m.action_index >= ?`;
-                }
 
                 // Run the query and populate the addresses, tickers, and markets arrays.
                 // doQueryStrict (not doQuery): still pre-transaction; a swallowed fault here would
@@ -430,1290 +422,1553 @@ class Rollback {
                 if(query){
                     let rows = await this.indexerView.doQueryStrict(query, args);
                     for(let row of rows){
-                        // Populate addresses and tickers arrays
-                        if(!this.util.isNull(row.address))
-                            this.util.addAddressTicker(row.address, row.tick);
-                        if(!this.util.isNull(row.address2))
-                            this.util.addAddressTicker(row.address2, row.tick);
-                        if(!this.util.isNull(row.address3))
-                            this.util.addAddressTicker(row.address3, row.tick);
-                        // Build out list of DEX market pairs. A tickerless (native-coin) side
-                        // reads as 0, the sentinel `markets` keys it under, so this collector
-                        // keeps exactly the pairs the block path collects (Database.getMarkets).
-                        // Dropping those rows instead left every token/native market out of the
-                        // post-reorg recompute, so its stats stayed at whatever the orphaned
-                        // range last wrote.
-                        if(!this.util.isNull(row.tick1_id) || !this.util.isNull(row.tick2_id)){
-                            let tick1_id = Database.marketTickId(row.tick1_id);
-                            let tick2_id = Database.marketTickId(row.tick2_id);
-                            let coin1_id = Number(row.coin1_id) || 0;
-                            let coin2_id = Number(row.coin2_id) || 0;
-                            let key      = Math.min(tick1_id, tick2_id) + ':' + Math.max(tick1_id, tick2_id);
-                            if(!marketKeys.has(key)){
-                                marketKeys.add(key);
-                                markets.push({ tick1_id, tick2_id, coin1_id, coin2_id });
-                            }
-                        }
+                        this.absorbEntityRow(row, markets, marketKeys);
                     }
                 }
             }
         }
+        return markets;
+    }
 
-        // Get lists of addresses, tickers, and transactions (collected during read phase above)
-        let addresses = this.util.getAddressesList();
-        let tickers   = this.util.getTickersList();
+    // The read-phase query for one rolled-back table, or false when the table names no
+    // address, ticker or market pair. Grouped by the join each family needs, which is
+    // the only thing that differs between them.
+    entityQueryForTable(table){
+        return this.entityQueryForLedgerTables(table)
+            || this.entityQueryForTransferTables(table)
+            || this.entityQueryForDexTables(table)
+            || this.entityQueryForCoinpayTables(table);
+    }
 
-        // Begin a transaction; all deletes and recalculations are atomic
-        await this.indexerDb.beginTransaction();
-        try {
+    // Tables that carry their own tick_id and address id, so the tick and address come
+    // off the row itself.
+    entityQueryForLedgerTables(table){
+        let query = false;
+        // Credits / Debits / Escrows
+        if(['credits','debits','escrows'].includes(table)){
+            query = `SELECT 
+                        t1.tick,
+                        a1.address
+                    FROM 
+                        ` + table + ` m
+                        INNER JOIN index_tickers   t1 ON (t1.id=m.tick_id)
+                        INNER JOIN index_addresses a1 ON (a1.id=m.address_id)
+                    WHERE 
+                        m.action_index >= ?`;
+        }
 
-            // Reverse any cooldown maturities orphaned by this reorg. Runs UNCONDITIONALLY (outside
-            // the firstActionIndex guard) and BEFORE the generic deletes: the legacy (pre-flag-day)
-            // maturity path writes the refund credit + 'completed' flip against a SURVIVING unstake
-            // row and mints NO actions row in the maturity block, so a reorg over an action-empty
-            // range leaves firstActionIndex null and would otherwise skip the reversal entirely,
-            // stranding the refund and forking the ledger vs a from-genesis replay. Keyed entirely
-            // on block_index / cooldown_end_block, so it is a no-op when nothing matured. Seeds the
-            // affected source addresses/ticks into the util lists captured above so the unconditional
-            // updateBalances/updateTokens below recompute them.
-            await this.reverseCooldownMaturities(block_index);
+        // Contract staking (STAKE v3 / UNSTAKE v1 / DELEGATE v1+v3)
+        if(['contract_stakes','contract_unstakes','contract_delegations'].includes(table)){
+            query = `SELECT
+                        t1.tick,
+                        a1.address
+                    FROM
+                        ` + table + ` m
+                        INNER JOIN index_tickers   t1 ON (t1.id=m.tick_id)
+                        INNER JOIN index_addresses a1 ON (a1.id=m.source_id)
+                    WHERE
+                        m.action_index >= ?`;
+        }
 
-            // Delete contract_emissions first (references contract_executions)
-            if(firstActionIndex !== null){
-                query = `DELETE FROM contract_emissions WHERE execution_index IN
-                            (SELECT action_index FROM contract_executions WHERE action_index >= ?)`;
-                args  = [firstActionIndex];
-                await this.indexerDb.doQuery(query, args);
+        // AIRDROP / DESTROY
+        if(['airdrops','destroys'].includes(table)){
+            query = `SELECT 
+                        t2.tick,
+                        a2.address
+                    FROM 
+                        ` + table + ` m
+                        INNER JOIN actions         a1 ON (a1.action_index=m.action_index)
+                        INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
+                        INNER JOIN index_tickers   t2 ON (t2.id=m.tick_id)
+                        INNER JOIN index_addresses a2 ON (a2.id=t1.source_id)
+                    WHERE 
+                        m.action_index >= ?`;
+        }
+
+        return query;
+    }
+
+    // Tables whose address comes from the transaction that carried the action, reached
+    // through actions -> transactions, plus the extra destination/transfer sides.
+    entityQueryForTransferTables(table){
+        let query = false;
+        // MINT / SEND / FEE
+        if(['mints','sends','fees'].includes(table)){
+            query = `SELECT 
+                        t2.tick,
+                        a2.address,
+                        a3.address as address2
+                    FROM 
+                        ` + table + ` m
+                        INNER JOIN actions         a1 ON (a1.action_index=m.action_index)
+                        INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
+                        INNER JOIN index_tickers   t2 ON (t2.id=m.tick_id)
+                        INNER JOIN index_addresses a2 ON (a2.id=t1.source_id)
+                        LEFT  JOIN index_addresses a3 ON (a3.id=m.destination_id)
+                    WHERE 
+                        m.action_index >= ?`;
+        }
+
+        // ISSUE
+        if(table=='issues'){
+            query = `SELECT 
+                        t2.tick,
+                        a2.address,
+                        a3.address as address2,
+                        a4.address as address3
+                    FROM 
+                        ` + table + ` m
+                        INNER JOIN actions         a1 ON (a1.action_index=m.action_index)
+                        INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
+                        INNER JOIN index_tickers   t2 ON (t2.id=m.tick_id)
+                        INNER JOIN index_addresses a2 ON (a2.id=t1.source_id)
+                        LEFT  JOIN index_addresses a3 ON (a3.id=m.transfer_id)
+                        LEFT  JOIN index_addresses a4 ON (a4.id=m.transfer_supply_id)
+                    WHERE 
+                        m.action_index >= ?`;
+        }
+
+        // SWAPS
+        if(table=='swaps'){
+            query = `SELECT 
+                        t2.tick,
+                        a2.address
+                    FROM 
+                        ` + table + ` m
+                        INNER JOIN actions         a1 ON (a1.action_index=m.action_index)
+                        INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
+                        INNER JOIN index_tickers   t2 ON (t2.id=m.give_tick_id)
+                        INNER JOIN index_addresses a2 ON (a2.id=t1.source_id)
+                    WHERE 
+                        m.action_index >= ?`;
+        }
+
+        return query;
+    }
+
+    // The sweep source/destination pair, and the DEX tables that name a market pair by
+    // its give/get tick and coin ids rather than an address.
+    entityQueryForDexTables(table){
+        let query = false;
+        // SWEEPS
+        if(table=='sweeps'){
+            query = `SELECT 
+                        a2.address,
+                        a3.address as address2
+                    FROM 
+                        ` + table + ` m
+                        INNER JOIN actions         a1 ON (a1.action_index=m.action_index)
+                        INNER JOIN transactions    t1 ON (t1.tx_index=a1.tx_index)
+                        INNER JOIN index_addresses a2 ON (a2.id=t1.source_id)
+                        LEFT  JOIN index_addresses a3 ON (a3.id=m.destination_id)
+                    WHERE 
+                        m.action_index >= ?`;
+        }
+
+        // ORDERS / ORDER_MATCHES
+        if(['orders','order_matches'].includes(table)){
+            query = `SELECT 
+                        m.give_tick_id as tick1_id,
+                        m.get_tick_id  as tick2_id,
+                        m.give_coin_id as coin1_id,
+                        m.get_coin_id  as coin2_id
+                    FROM 
+                        ` + table + ` m
+                    WHERE 
+                        m.action_index >= ?`;
+        }
+
+        // COINPAY_OBLIGATIONS
+        if(table=='coinpay_obligations'){
+            query = `SELECT
+                        om.give_tick_id as tick1_id,
+                        om.get_tick_id  as tick2_id,
+                        om.give_coin_id as coin1_id,
+                        om.get_coin_id  as coin2_id
+                    FROM
+                        ` + table + ` m
+                        INNER JOIN order_matches om ON (om.action_index=m.action_index)
+                    WHERE
+                        m.action_index >= ?`;
+        }
+
+        return query;
+    }
+
+    // COINPay and order-lifecycle rows, whose market pair is reached through the parent
+    // obligation, match or order the row points at.
+    entityQueryForCoinpayTables(table){
+        let query = false;
+        // COINPAY_EXPIRES / COINPAY_STATUSES / COINPAYS
+        if(['coinpay_expires','coinpay_statuses','coinpays'].includes(table)){
+            query = `SELECT
+                        om.give_tick_id as tick1_id,
+                        om.get_tick_id  as tick2_id,
+                        om.give_coin_id as coin1_id,
+                        om.get_coin_id  as coin2_id
+                    FROM
+                        ` + table + ` m
+                        INNER JOIN coinpay_obligations co ON (co.action_index=m.` + (table=='coinpay_statuses' ? 'coinpay_action_index' : 'obligation_action_index') + `)
+                        INNER JOIN order_matches       om ON (om.action_index=co.action_index)
+                    WHERE
+                        m.action_index >= ?`;
+        }
+
+        // ORDER_CANCELS / ORDER_EDITS / ORDER_EXPIRES
+        if(['order_cancels','order_edits','order_expires'].includes(table)){
+            query = `SELECT 
+                        o1.give_tick_id as tick1_id,
+                        o1.get_tick_id  as tick2_id,
+                        o1.give_coin_id as coin1_id,
+                        o1.get_coin_id  as coin2_id
+                    FROM 
+                        ` + table + ` m
+                        INNER JOIN orders o1 ON (o1.action_index=m.order_action_index)
+                    WHERE 
+                        m.action_index >= ?`;
+        }
+
+        return query;
+    }
+
+    // Fold one read-phase row into the recompute sets: its addresses and tickers into
+    // the util lists, its market pair into `markets` (deduped by marketKeys).
+    absorbEntityRow(row, markets, marketKeys){
+        // Populate addresses and tickers arrays
+        if(!this.util.isNull(row.address))
+            this.util.addAddressTicker(row.address, row.tick);
+        if(!this.util.isNull(row.address2))
+            this.util.addAddressTicker(row.address2, row.tick);
+        if(!this.util.isNull(row.address3))
+            this.util.addAddressTicker(row.address3, row.tick);
+        // Build out list of DEX market pairs. A tickerless (native-coin) side
+        // reads as 0, the sentinel `markets` keys it under, so this collector
+        // keeps exactly the pairs the block path collects (Database.getMarkets).
+        // Dropping those rows instead left every token/native market out of the
+        // post-reorg recompute, so its stats stayed at whatever the orphaned
+        // range last wrote.
+        if(!this.util.isNull(row.tick1_id) || !this.util.isNull(row.tick2_id)){
+            let tick1_id = Database.marketTickId(row.tick1_id);
+            let tick2_id = Database.marketTickId(row.tick2_id);
+            let coin1_id = Number(row.coin1_id) || 0;
+            let coin2_id = Number(row.coin2_id) || 0;
+            let key      = Math.min(tick1_id, tick2_id) + ':' + Math.max(tick1_id, tick2_id);
+            if(!marketKeys.has(key)){
+                marketKeys.add(key);
+                markets.push({ tick1_id, tick2_id, coin1_id, coin2_id });
             }
+        }
+    }
 
-            if(firstActionIndex !== null){
+    // Delete contract_emissions first (references contract_executions)
+    async deleteContractEmissions(firstActionIndex){
+        let query, args;
+        query = `DELETE FROM contract_emissions WHERE execution_index IN
+                    (SELECT action_index FROM contract_executions WHERE action_index >= ?)`;
+        args  = [firstActionIndex];
+        await this.indexerDb.doQuery(query, args);
+    }
 
-                // Reset ATTEST v0 (request) rows whose TERMINAL flip happened in the
-                // orphaned range. The forward path flips a request from 'pending' to
-                // 'fulfilled'/'errored' (v1 response) or 'expired' (v2 expiry) via a
-                // direct UPDATE on the request row (created in an EARLIER block, so
-                // it survives the bulk delete below). Without the reset, the
-                // surviving request is stuck non-'pending': a re-applied response is
-                // rejected as already-resolved, the contract callback never fires,
-                // and, for a reorged expiry, the deadline sweep (pending-only)
-                // never re-synthesizes the v2 row, diverging a reorged node from a
-                // fresh sync. Keyed on resolved_block (recorded at flip time) so
-                // BOTH flip paths reset; this replaced the v1-only self-join, which
-                // could not see v2 expiries (they flip without a correlated v1 row).
-                query = `UPDATE attests
-                            SET request_status = 'pending', resolved_block = NULL
-                            WHERE version = 0
-                              AND request_status IN ('fulfilled', 'errored', 'expired')
-                              AND resolved_block >= ?`;
-                args  = [block_index];
-                await this.indexerDb.doQuery(query, args);
+    // Reset ATTEST v0 (request) rows whose TERMINAL flip happened in the
+    // orphaned range. The forward path flips a request from 'pending' to
+    // 'fulfilled'/'errored' (v1 response) or 'expired' (v2 expiry) via a
+    // direct UPDATE on the request row (created in an EARLIER block, so
+    // it survives the bulk delete below). Without the reset, the
+    // surviving request is stuck non-'pending': a re-applied response is
+    // rejected as already-resolved, the contract callback never fires,
+    // and, for a reorged expiry, the deadline sweep (pending-only)
+    // never re-synthesizes the v2 row, diverging a reorged node from a
+    // fresh sync. Keyed on resolved_block (recorded at flip time) so
+    // BOTH flip paths reset; this replaced the v1-only self-join, which
+    // could not see v2 expiries (they flip without a correlated v1 row).
+    async resetOrphanedAttestRequests(block_index){
+        let query, args;
+        query = `UPDATE attests
+                    SET request_status = 'pending', resolved_block = NULL
+                    WHERE version = 0
+                      AND request_status IN ('fulfilled', 'errored', 'expired')
+                      AND resolved_block >= ?`;
+        args  = [block_index];
+        await this.indexerDb.doQuery(query, args);
+    }
 
-                // Reset XCALL v0 (request) rows whose terminal flip (result callback
-                // or deadline expiry) happened in the orphaned range. The flip is a
-                // direct UPDATE on the surviving request row, so the bulk delete
-                // below can't undo it. Without this reset, a re-applied result row
-                // hits the already-resolved interlock and the contract's callback is
-                // silently lost (and an expiry never re-arms). Keyed on
-                // resolved_block (recorded at flip time) so BOTH flip paths reset.
-                query = `UPDATE xcalls
-                            SET request_status = 'pending', result_status = NULL,
-                                result_payload = NULL, resolved_block = NULL,
-                                callback_action_index = NULL
-                            WHERE version = 0 AND request_status IN ('completed', 'expired')
-                              AND resolved_block >= ?`;
-                args  = [block_index];
-                await this.indexerDb.doQuery(query, args);
+    // Reset XCALL v0 (request) rows whose terminal flip (result callback
+    // or deadline expiry) happened in the orphaned range. The flip is a
+    // direct UPDATE on the surviving request row, so the bulk delete
+    // below can't undo it. Without this reset, a re-applied result row
+    // hits the already-resolved interlock and the contract's callback is
+    // silently lost (and an expiry never re-arms). Keyed on
+    // resolved_block (recorded at flip time) so BOTH flip paths reset.
+    async resetOrphanedXcallRequests(block_index){
+        let query, args;
+        query = `UPDATE xcalls
+                    SET request_status = 'pending', result_status = NULL,
+                        result_payload = NULL, resolved_block = NULL,
+                        callback_action_index = NULL
+                    WHERE version = 0 AND request_status IN ('completed', 'expired')
+                      AND resolved_block >= ?`;
+        args  = [block_index];
+        await this.indexerDb.doQuery(query, args);
+    }
 
-                // Re-open VOTE polls whose TERMINAL finalization happened in the
-                // orphaned range. The VOTE v2 sweep flips a poll (created in an
-                // EARLIER block, so it survives the bulk delete below) from 'open'
-                // to 'finalized'/'failed_quorum' via a direct UPDATE on the polls
-                // row, and writes poll_results keyed on the v2 action_index (those
-                // ARE deleted generically). Without this reset the surviving polls
-                // row stays terminal, so the per-block sweep (open-only) never
-                // re-synthesizes the v2 and a reorged node diverges from a fresh
-                // sync. Keyed on resolved_block (stamped at finalize) so it re-opens
-                // and re-evaluates early-decide on replay. Mirrors the ATTEST reset.
-                // deposit_resolved + callback_execute_action_index reset too: the v2
-                // escrow release and the injected binding-callback EXECUTE (both at the
-                // v2 action_index) are deleted generically with the orphaned range, so
-                // the re-synthesized v2 must re-release the escrow and re-fire the
-                // callback on replay.
-                query = `UPDATE polls
-                            SET poll_status = 'open', winning_option = NULL, total_weight = NULL,
-                                total_voters = NULL, quorum_met = NULL, min_voters_met = NULL,
-                                fail_reason = NULL, decided_early = NULL, effective_close_block = NULL,
-                                finalized_action_index = NULL, resolved_block = NULL,
-                                deposit_resolved = NULL, callback_execute_action_index = NULL,
-                                callback_due_block = NULL
-                            WHERE poll_status IN ('finalized', 'failed_quorum')
-                              AND resolved_block >= ?`;
-                args  = [block_index];
-                await this.indexerDb.doQuery(query, args);
+    // Re-open VOTE polls whose TERMINAL finalization happened in the
+    // orphaned range. The VOTE v2 sweep flips a poll (created in an
+    // EARLIER block, so it survives the bulk delete below) from 'open'
+    // to 'finalized'/'failed_quorum' via a direct UPDATE on the polls
+    // row, and writes poll_results keyed on the v2 action_index (those
+    // ARE deleted generically). Without this reset the surviving polls
+    // row stays terminal, so the per-block sweep (open-only) never
+    // re-synthesizes the v2 and a reorged node diverges from a fresh
+    // sync. Keyed on resolved_block (stamped at finalize) so it re-opens
+    // and re-evaluates early-decide on replay. Mirrors the ATTEST reset.
+    // deposit_resolved + callback_execute_action_index reset too: the v2
+    // escrow release and the injected binding-callback EXECUTE (both at the
+    // v2 action_index) are deleted generically with the orphaned range, so
+    // the re-synthesized v2 must re-release the escrow and re-fire the
+    // callback on replay.
+    async reopenOrphanedPolls(block_index){
+        let query, args;
+        query = `UPDATE polls
+                    SET poll_status = 'open', winning_option = NULL, total_weight = NULL,
+                        total_voters = NULL, quorum_met = NULL, min_voters_met = NULL,
+                        fail_reason = NULL, decided_early = NULL, effective_close_block = NULL,
+                        finalized_action_index = NULL, resolved_block = NULL,
+                        deposit_resolved = NULL, callback_execute_action_index = NULL,
+                        callback_due_block = NULL
+                    WHERE poll_status IN ('finalized', 'failed_quorum')
+                      AND resolved_block >= ?`;
+        args  = [block_index];
+        await this.indexerDb.doQuery(query, args);
+    }
 
-                // BET in-place flip resets (P4; the polls/attests pattern
-                // applied to all three BET stamps). A feed row created in an
-                // EARLIER block survives the bulk delete below, but its
-                // feed_status_id was flipped in place by the latch pass
-                // (closed_block stamp) and/or a terminal path (terminal_block
-                // stamp: resolve tx / cancel tx / BET_EXPIRE pass); a bet row
-                // likewise flips bet_status_id in place at settlement
-                // (settled_block stamp). Without these resets a reorg past a
-                // latch block leaves the feed permanently closed (rejecting
-                // valid bets on the re-mined chain) and a reorg past a
-                // settlement block leaves stakes marked won/lost with their
-                // credits deleted - stranded escrow. Reset order matters:
-                // (a) terminal feeds whose latch SURVIVES (closed_block below
-                //     the reorg point) go back to 'closed';
-                // (b) terminal feeds with no surviving latch go back to 'open';
-                // (c) any surviving latch stamped in the orphaned range is
-                //     un-latched (runs last so feeds reset by (b) also clear
-                //     their orphaned closed_block).
-                // Status names resolve through index_statuses (bet_feeds/bets
-                // store status_id, unlike polls' inline strings); the interned
-                // 'open'/'closed' rows are created by the BET handlers, and the
-                // resets are no-ops (JOIN misses) before any BET activity.
-                await this.indexerDb.createStatus('open');
-                await this.indexerDb.createStatus('closed');
-                query = `UPDATE bet_feeds f
-                            JOIN index_statuses cs ON (cs.status = 'closed')
-                            SET f.feed_status_id = cs.id, f.terminal_block = NULL
-                            WHERE f.terminal_block >= ?
-                              AND f.closed_block IS NOT NULL
-                              AND f.closed_block < ?`;
-                args  = [block_index, block_index];
-                await this.indexerDb.doQuery(query, args);
-                query = `UPDATE bet_feeds f
-                            JOIN index_statuses os ON (os.status = 'open')
-                            SET f.feed_status_id = os.id, f.terminal_block = NULL
-                            WHERE f.terminal_block >= ?
-                              AND (f.closed_block IS NULL OR f.closed_block >= ?)`;
-                args  = [block_index, block_index];
-                await this.indexerDb.doQuery(query, args);
-                query = `UPDATE bet_feeds f
-                            JOIN index_statuses os ON (os.status = 'open')
-                            SET f.feed_status_id = os.id, f.closed_block = NULL
-                            WHERE f.closed_block >= ?`;
-                args  = [block_index];
-                await this.indexerDb.doQuery(query, args);
-                // Bets settled in the orphaned range re-open (their terminal
-                // credits/escrow releases are deleted generically, so the stake
-                // is back in escrow, exactly the pre-settlement state)
-                query = `UPDATE bets b
-                            JOIN index_statuses os ON (os.status = 'open')
-                            SET b.bet_status_id = os.id, b.settled_block = NULL
-                            WHERE b.settled_block >= ?`;
-                args  = [block_index];
-                await this.indexerDb.doQuery(query, args);
+    // BET in-place flip resets (P4; the polls/attests pattern
+    // applied to all three BET stamps). A feed row created in an
+    // EARLIER block survives the bulk delete below, but its
+    // feed_status_id was flipped in place by the latch pass
+    // (closed_block stamp) and/or a terminal path (terminal_block
+    // stamp: resolve tx / cancel tx / BET_EXPIRE pass); a bet row
+    // likewise flips bet_status_id in place at settlement
+    // (settled_block stamp). Without these resets a reorg past a
+    // latch block leaves the feed permanently closed (rejecting
+    // valid bets on the re-mined chain) and a reorg past a
+    // settlement block leaves stakes marked won/lost with their
+    // credits deleted - stranded escrow. Reset order matters:
+    // (a) terminal feeds whose latch SURVIVES (closed_block below
+    //     the reorg point) go back to 'closed';
+    // (b) terminal feeds with no surviving latch go back to 'open';
+    // (c) any surviving latch stamped in the orphaned range is
+    //     un-latched (runs last so feeds reset by (b) also clear
+    //     their orphaned closed_block).
+    // Status names resolve through index_statuses (bet_feeds/bets
+    // store status_id, unlike polls' inline strings); the interned
+    // 'open'/'closed' rows are created by the BET handlers, and the
+    // resets are no-ops (JOIN misses) before any BET activity.
+    async resetOrphanedBetFlips(block_index){
+        let query, args;
+        await this.indexerDb.createStatus('open');
+        await this.indexerDb.createStatus('closed');
+        query = `UPDATE bet_feeds f
+                    JOIN index_statuses cs ON (cs.status = 'closed')
+                    SET f.feed_status_id = cs.id, f.terminal_block = NULL
+                    WHERE f.terminal_block >= ?
+                      AND f.closed_block IS NOT NULL
+                      AND f.closed_block < ?`;
+        args  = [block_index, block_index];
+        await this.indexerDb.doQuery(query, args);
+        query = `UPDATE bet_feeds f
+                    JOIN index_statuses os ON (os.status = 'open')
+                    SET f.feed_status_id = os.id, f.terminal_block = NULL
+                    WHERE f.terminal_block >= ?
+                      AND (f.closed_block IS NULL OR f.closed_block >= ?)`;
+        args  = [block_index, block_index];
+        await this.indexerDb.doQuery(query, args);
+        query = `UPDATE bet_feeds f
+                    JOIN index_statuses os ON (os.status = 'open')
+                    SET f.feed_status_id = os.id, f.closed_block = NULL
+                    WHERE f.closed_block >= ?`;
+        args  = [block_index];
+        await this.indexerDb.doQuery(query, args);
+        // Bets settled in the orphaned range re-open (their terminal
+        // credits/escrow releases are deleted generically, so the stake
+        // is back in escrow, exactly the pre-settlement state)
+        query = `UPDATE bets b
+                    JOIN index_statuses os ON (os.status = 'open')
+                    SET b.bet_status_id = os.id, b.settled_block = NULL
+                    WHERE b.settled_block >= ?`;
+        args  = [block_index];
+        await this.indexerDb.doQuery(query, args);
+    }
 
-                // timelock: a DEFERRED binding-callback fire whose due block is
-                // orphaned while the finalization itself survives (resolved_block below
-                // the reorg point, callback_due_block at/above it). The injected EXECUTE
-                // is deleted generically with the orphaned range; re-NULL the fired
-                // marker so the sweep re-fires deterministically when the due block
-                // replays. The stamped callback_due_block itself is derived state
-                // (resolved_block + delay) from a surviving v2, so it stays.
-                query = `UPDATE polls
-                            SET callback_execute_action_index = NULL
-                            WHERE poll_status IN ('finalized', 'failed_quorum')
-                              AND callback_due_block >= ?
-                              AND callback_execute_action_index IS NOT NULL`;
-                args  = [block_index];
-                await this.indexerDb.doQuery(query, args);
+    // timelock: a DEFERRED binding-callback fire whose due block is
+    // orphaned while the finalization itself survives (resolved_block below
+    // the reorg point, callback_due_block at/above it). The injected EXECUTE
+    // is deleted generically with the orphaned range; re-NULL the fired
+    // marker so the sweep re-fires deterministically when the due block
+    // replays. The stamped callback_due_block itself is derived state
+    // (resolved_block + delay) from a surviving v2, so it stays.
+    async resetOrphanedPollCallbacks(block_index){
+        let query, args;
+        query = `UPDATE polls
+                    SET callback_execute_action_index = NULL
+                    WHERE poll_status IN ('finalized', 'failed_quorum')
+                      AND callback_due_block >= ?
+                      AND callback_execute_action_index IS NOT NULL`;
+        args  = [block_index];
+        await this.indexerDb.doQuery(query, args);
+    }
 
-                // tokens.escrow_action_index (the ownership-escrow gate) is RE-DERIVED below,
-                // AFTER the dataTables delete (see rederiveTokenEscrow()). A range reset here
-                // could only handle the SET direction (offer orphaned); it cannot handle the
-                // CLEAR direction (a surviving offer whose release was orphaned), so the
-                // re-derive replaces it entirely.
+    // tokens.escrow_action_index (the ownership-escrow gate) is RE-DERIVED below,
+    // AFTER the dataTables delete (see rederiveTokenEscrow()). A range reset here
+    // could only handle the SET direction (offer orphaned); it cannot handle the
+    // CLEAR direction (a surviving offer whose release was orphaned), so the
+    // re-derive replaces it entirely.
 
-                // Re-NULL deactivation_block stamps that orphaned UNSTAKE / DELEGATE-revoke
-                // actions wrote IN PLACE on surviving parent stake/delegation rows. Each
-                // forward handler (createUnstake, the DELEGATE-revoke path,
-                // createContractUnstake, the contract-revoke path) marks an ALREADY-ACTIVE
-                // parent row (created by a much earlier STAKE/DELEGATE in a surviving block)
-                // with deactivation_block = actionBlock + activationDelay. The bulk delete
-                // below removes the orphaned action row but cannot undo that in-place UPDATE,
-                // so without this reset the surviving parent keeps a non-NULL deactivation_block.
-                // Every active-set read gates on (deactivation_block IS NULL OR
-                // deactivation_block > currentBlock), so once the new chain passes the stale
-                // value the staker/validator silently drops out of the active set on the
-                // reorged node while a from-genesis replay keeps it active, a consensus-
-                // affecting divergence (capability staking on BTC, contract staking on all chains).
-                //
-                // The reset must be PRECISE: a surviving UNSTAKE in an earlier block stamps
-                // earlierBlock + activationDelay, which can itself land at/after block_index, so
-                // a blanket `deactivation_block >= block_index` would wrongly clear legitimately-
-                // earned deactivations. We instead match the EXACT value an orphaned action
-                // wrote. For the two tables that still record a child action row
-                // (stakes↔unstakes, contract_stakes↔contract_unstakes) we JOIN the surviving
-                // parent to its orphaned action row on the same keys the forward handler used
-                // and require deactivation_block = orphanBlock + activationDelay.
-                // `delegations` and `contract_delegations` record NO child row (both revokes are
-                // a pure in-place UPDATE), so both are keyed on the value threshold block_index +
-                // activationDelay (equivalently precise, because any surviving revoke stamps a
-                // strictly smaller value, i.e. survivingBlock < block_index).
-                let staking         = this.config['STAKING'];
-                let activationDelay = Number((staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS']);
+    // Re-NULL deactivation_block stamps that orphaned UNSTAKE / DELEGATE-revoke
+    // actions wrote IN PLACE on surviving parent stake/delegation rows. Each
+    // forward handler (createUnstake, the DELEGATE-revoke path,
+    // createContractUnstake, the contract-revoke path) marks an ALREADY-ACTIVE
+    // parent row (created by a much earlier STAKE/DELEGATE in a surviving block)
+    // with deactivation_block = actionBlock + activationDelay. The bulk delete
+    // below removes the orphaned action row but cannot undo that in-place UPDATE,
+    // so without this reset the surviving parent keeps a non-NULL deactivation_block.
+    // Every active-set read gates on (deactivation_block IS NULL OR
+    // deactivation_block > currentBlock), so once the new chain passes the stale
+    // value the staker/validator silently drops out of the active set on the
+    // reorged node while a from-genesis replay keeps it active, a consensus-
+    // affecting divergence (capability staking on BTC, contract staking on all chains).
+    //
+    // The reset must be PRECISE: a surviving UNSTAKE in an earlier block stamps
+    // earlierBlock + activationDelay, which can itself land at/after block_index, so
+    // a blanket `deactivation_block >= block_index` would wrongly clear legitimately-
+    // earned deactivations. We instead match the EXACT value an orphaned action
+    // wrote. For the two tables that still record a child action row
+    // (stakes↔unstakes, contract_stakes↔contract_unstakes) we JOIN the surviving
+    // parent to its orphaned action row on the same keys the forward handler used
+    // and require deactivation_block = orphanBlock + activationDelay.
+    // `delegations` and `contract_delegations` record NO child row (both revokes are
+    // a pure in-place UPDATE), so both are keyed on the value threshold block_index +
+    // activationDelay (equivalently precise, because any surviving revoke stamps a
+    // strictly smaller value, i.e. survivingBlock < block_index).
+    async clearOrphanedDeactivations(block_index){
+        let query, args;
+        let staking         = this.config['STAKING'];
+        let activationDelay = Number((staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS']);
 
-                // stakes ← orphaned unstakes (capability staking)
-                query = `UPDATE stakes s
-                            JOIN unstakes u ON u.signing_pubkey_id = s.signing_pubkey_id
-                            SET s.deactivation_block = NULL
-                            WHERE u.block_index >= ?
-                              AND s.deactivation_block IS NOT NULL
-                              AND s.deactivation_block = u.block_index + ?`;
-                args = [block_index, activationDelay];
-                await this.indexerDb.doQuery(query, args);
+        // stakes ← orphaned unstakes (capability staking)
+        query = `UPDATE stakes s
+                    JOIN unstakes u ON u.signing_pubkey_id = s.signing_pubkey_id
+                    SET s.deactivation_block = NULL
+                    WHERE u.block_index >= ?
+                      AND s.deactivation_block IS NOT NULL
+                      AND s.deactivation_block = u.block_index + ?`;
+        args = [block_index, activationDelay];
+        await this.indexerDb.doQuery(query, args);
 
-                // delegations ← orphaned DELEGATE-revoke and ROLLCALL-eviction stamps. The revoke
-                // stopped writing a child delegations row at the DELEGATE_REVOKE_NO_REINSERT
-                // flag-day (actions/delegate.js), so the old self-join on that row matched nothing
-                // for any post-flag-day revoke and the surviving parent kept its stamp. Key on the
-                // value threshold instead, exactly as contract_delegations does below.
-                // INVARIANT: every writer of delegations.deactivation_block stamps
-                // actionBlock + ACTIVATION_DELAY_BLOCKS (setDelegationDeactivation from
-                // actions/delegate.js, setAllDelegationDeactivationsBySource from
-                // rollcall_close.js), so a SURVIVING stamper wrote a strictly smaller value. A new
-                // writer using a different offset MUST update this query.
-                query = `UPDATE delegations
-                            SET deactivation_block = NULL
-                            WHERE deactivation_block IS NOT NULL
-                              AND deactivation_block >= ?`;
-                args = [Number(block_index) + activationDelay];
-                await this.indexerDb.doQuery(query, args);
+        // delegations ← orphaned DELEGATE-revoke and ROLLCALL-eviction stamps. The revoke
+        // stopped writing a child delegations row at the DELEGATE_REVOKE_NO_REINSERT
+        // flag-day (actions/delegate.js), so the old self-join on that row matched nothing
+        // for any post-flag-day revoke and the surviving parent kept its stamp. Key on the
+        // value threshold instead, exactly as contract_delegations does below.
+        // INVARIANT: every writer of delegations.deactivation_block stamps
+        // actionBlock + ACTIVATION_DELAY_BLOCKS (setDelegationDeactivation from
+        // actions/delegate.js, setAllDelegationDeactivationsBySource from
+        // rollcall_close.js), so a SURVIVING stamper wrote a strictly smaller value. A new
+        // writer using a different offset MUST update this query.
+        query = `UPDATE delegations
+                    SET deactivation_block = NULL
+                    WHERE deactivation_block IS NOT NULL
+                      AND deactivation_block >= ?`;
+        args = [Number(block_index) + activationDelay];
+        await this.indexerDb.doQuery(query, args);
 
-                // contract_stakes ← orphaned contract_unstakes (contract staking, all chains)
-                query = `UPDATE contract_stakes cs
-                            JOIN contract_unstakes cu
-                              ON cu.signing_pubkey_id     = cs.signing_pubkey_id
-                             AND cu.target_contract_index = cs.target_contract_index
-                             AND cu.tick_id               = cs.tick_id
-                            SET cs.deactivation_block = NULL
-                            WHERE cu.block_index >= ?
-                              AND cs.deactivation_block IS NOT NULL
-                              AND cs.deactivation_block = cu.block_index + ?`;
-                args = [block_index, activationDelay];
-                await this.indexerDb.doQuery(query, args);
+        // contract_stakes ← orphaned contract_unstakes (contract staking, all chains)
+        query = `UPDATE contract_stakes cs
+                    JOIN contract_unstakes cu
+                      ON cu.signing_pubkey_id     = cs.signing_pubkey_id
+                     AND cu.target_contract_index = cs.target_contract_index
+                     AND cu.tick_id               = cs.tick_id
+                    SET cs.deactivation_block = NULL
+                    WHERE cu.block_index >= ?
+                      AND cs.deactivation_block IS NOT NULL
+                      AND cs.deactivation_block = cu.block_index + ?`;
+        args = [block_index, activationDelay];
+        await this.indexerDb.doQuery(query, args);
 
-                // contract_delegations ← orphaned DELEGATE v3 contract-revokes. No child row
-                // exists (pure in-place UPDATE), so key on the value threshold: anything at or
-                // above block_index + activationDelay was stamped by an orphaned revoke.
-                query = `UPDATE contract_delegations
-                            SET deactivation_block = NULL
-                            WHERE deactivation_block IS NOT NULL
-                              AND deactivation_block >= ?`;
-                args = [Number(block_index) + activationDelay];
-                await this.indexerDb.doQuery(query, args);
+        // contract_delegations ← orphaned DELEGATE v3 contract-revokes. No child row
+        // exists (pure in-place UPDATE), so key on the value threshold: anything at or
+        // above block_index + activationDelay was stamped by an orphaned revoke.
+        query = `UPDATE contract_delegations
+                    SET deactivation_block = NULL
+                    WHERE deactivation_block IS NOT NULL
+                      AND deactivation_block >= ?`;
+        args = [Number(block_index) + activationDelay];
+        await this.indexerDb.doQuery(query, args);
+    }
 
-                // Restore stake amounts an orphaned SLASH reduced IN PLACE on surviving rows.
-                // slashContractStake debits contract_stakes/contract_unstakes.amount on rows
-                // from earlier (surviving) blocks and records each debit's pre-slash
-                // `prev_amount` in contract_slash_debits. The generic deletes below drop the
-                // orphaned debit rows but cannot revert the in-place reduction, so without this
-                // a surviving row keeps its slashed amount while a from-genesis replay (slash
-                // never re-mined) keeps the original, a consensus-affecting divergence (active
-                // stake drives VM staker weighting, quorum eligibility, and cooldown refunds on
-                // all chains). We copy back the HIGHEST orphaned `prev_amount` per row: the
-                // debits on one stake row form a strictly decreasing chain (every debit takes a
-                // positive amount and nothing else raises the column), and the orphaned range is
-                // a suffix of that chain, so the maximum IS the value the row held before the
-                // first orphaned debit. The position columns alone cannot express that order,
-                // because a re-entrant nested EXECUTE slashes FIRST under a HIGHER action_index
-                // than its parent frame: ordering on (block_index, execution_index,
-                // slash_position) then reads the parent's later debit as the earliest and
-                // restores a value one slash short. Those columns stay as the tiebreak for
-                // numerically equal amounts, a replay-stable total order the block-hash preimage
-                // also uses for contract_emissions; the AUTO_INCREMENT `id` is NOT, and would
-                // let two nodes restore a divergent amount. The restore itself is a pure string
-                // copy, so the value is byte-identical to the surviving chain's
-                // pre-orphaned-slash state and to a fresh replay (no arithmetic / decimal-format
-                // drift). Earlier SURVIVING debits (block_index < block_index) are intentionally
-                // left applied. Runs BEFORE the deletes so the debit rows and target rows still
-                // exist. Byte-identical (whitespace aside) to the xchain-sync replica twin.
-                for(let slashTbl of ['contract_stakes', 'contract_unstakes']){
-                    //<CONTRACT-SLASH-RESTORE-SQL>
-                    query = `UPDATE ` + slashTbl + ` t
-                                JOIN contract_slash_debits d ON d.stake_action_index = t.action_index
-                                SET t.amount = d.prev_amount
-                                WHERE d.target_table = ?
-                                  AND d.block_index >= ?
-                                  AND NOT EXISTS (
-                                      SELECT 1 FROM contract_slash_debits e
-                                      WHERE e.target_table      = d.target_table
-                                        AND e.stake_action_index = d.stake_action_index
-                                        AND e.block_index >= ?
-                                        AND (CAST(e.prev_amount AS DECIMAL(60,18)) > CAST(d.prev_amount AS DECIMAL(60,18))
-                                             OR (CAST(e.prev_amount AS DECIMAL(60,18)) = CAST(d.prev_amount AS DECIMAL(60,18))
-                                                 AND (e.block_index < d.block_index
-                                                      OR (e.block_index = d.block_index
-                                                          AND (e.execution_index < d.execution_index
-                                                               OR (e.execution_index = d.execution_index
-                                                                   AND e.slash_position < d.slash_position)))))))`;
-                    //</CONTRACT-SLASH-RESTORE-SQL>
-                    args = [slashTbl, block_index, block_index];
-                    await this.indexerDb.doQuery(query, args);
-                }
-
-                // Restore signing keys an orphaned DELEGATE v1 materialization rewrote IN PLACE
-                // on surviving rows. materializeContractDelegations rewrites
-                // contract_stakes/contract_unstakes.signing_pubkey_id on rows from earlier
-                // (surviving) blocks and records each rewrite's pre-rotation key, with the table
-                // it landed on, in contract_delegation_rotations. The
-                // generic deletes below drop the orphaned journal rows but cannot revert the
-                // UPDATE, so without this a surviving row keeps the rotated key while a
-                // from-genesis replay (the DELEGATE never re-mined, or re-mined at a different
-                // height) keeps the original - a consensus-affecting divergence, since the key on
-                // the row is exactly what the VM stake snapshot, the UNSTAKE aggregate and the
-                // SLASH deduction all read. We copy back the EARLIEST orphaned rotation's
-                // `prev_signing_pubkey_id` per row (min block_index, then delegation_action_index,
-                // both replay-stable; the AUTO_INCREMENT `id` is NOT and would let two nodes
-                // restore different keys). Pure id copy, so the restored value is byte-identical
-                // to the surviving chain's pre-rotation state. Earlier SURVIVING rotations are
-                // intentionally left applied. Runs BEFORE the deletes so both tables still exist.
-                for(let rotTbl of ['contract_stakes', 'contract_unstakes']){
-                    query = `UPDATE ` + rotTbl + ` t
-                                JOIN contract_delegation_rotations r ON r.stake_action_index = t.action_index
-                                SET t.signing_pubkey_id = r.prev_signing_pubkey_id
-                                WHERE r.target_table = ?
-                                  AND r.block_index >= ?
-                                  AND NOT EXISTS (
-                                      SELECT 1 FROM contract_delegation_rotations e
-                                      WHERE e.target_table       = r.target_table
-                                        AND e.stake_action_index = r.stake_action_index
-                                        AND e.block_index >= ?
-                                        AND (e.block_index < r.block_index
-                                             OR (e.block_index = r.block_index
-                                                 AND e.delegation_action_index < r.delegation_action_index)))`;
-                    args = [rotTbl, block_index, block_index];
-                    await this.indexerDb.doQuery(query, args);
-                }
-
-                // Same restore for CAPABILITY-stake equivocation slashes (WI-2 bump 2):
-                // slashCapabilityStake reduces stakes/unstakes.amount IN PLACE on surviving
-                // rows and logs the pre-slash `prev_amount` in capability_slash_debits. Copy
-                // back the EARLIEST orphaned debit's prev_amount per row (min block_index, then
-                // slash_action_index tiebreak). This is a pure string copy, byte-identical to the
-                // surviving chain and to a from-genesis replay where the SLASH was never
-                // re-mined. Earlier SURVIVING debits (block_index < block_index) stay applied.
-                // Runs BEFORE the generic deletes so both the debit rows and the target rows
-                // still exist.
-                //
-                // The same-block tiebreak is slash_action_index, NOT the AUTO_INCREMENT `id`:
-                // capability slashes are permissionless SLASH WIRE actions, so slash_action_index
-                // is a deterministic, replay-stable action_index (assigned by the idempotent
-                // compound-key path, not force=true). Ordering by `id` would let two nodes whose
-                // AUTO_INCREMENT chains were assigned in a different order (live vs from-genesis
-                // replay) restore a different prev_amount on a reorg that retracts a block with
-                // ≥2 slashes against one stake row → a stake-weight fork. (The CONTRACT twin in
-                // the restore above keys on the same idea: VM-emitted slashes have no wire
-                // action_index, so it orders by (execution_index, slash_position), i.e. the EXECUTE's
-                // on-chain action_index plus the emission-loop index, the identical deterministic
-                // total order the block-hash preimage uses for contract_emissions.)
-                for(let slashTbl of ['stakes', 'unstakes']){
-                    query = `UPDATE ` + slashTbl + ` t
-                                JOIN capability_slash_debits d ON d.stake_action_index = t.action_index
-                                SET t.amount = d.prev_amount
-                                WHERE d.target_table = ?
-                                  AND d.block_index >= ?
-                                  AND NOT EXISTS (
-                                      SELECT 1 FROM capability_slash_debits e
-                                      WHERE e.target_table      = d.target_table
-                                        AND e.stake_action_index = d.stake_action_index
-                                        AND e.block_index >= ?
-                                        AND (e.block_index < d.block_index
-                                             OR (e.block_index = d.block_index AND e.slash_action_index < d.slash_action_index)))`;
-                    args = [slashTbl, block_index, block_index];
-                    await this.indexerDb.doQuery(query, args);
-                }
-
-                // Anchor reward reconcile-restore (RB-ANCHOR) was here; it now runs
-                // UNCONDITIONALLY just past this guard, for the same reason the cooldown reversal
-                // below left it: the BTC-side derive path calls reconcileAnchorRewardWinner with a
-                // NULL anchor action index (anchor_reward_derive.js, the rows arrive over the
-                // mirror), so it mints no actions row and an orphaned range carrying only a
-                // derive-side reconcile leaves firstActionIndex null.
-
-                // Cooldown-maturity reversal was here; it is now in reverseCooldownMaturities,
-                // called UNCONDITIONALLY at the top of the transaction (before this guard). It had
-                // to leave this firstActionIndex-gated block because the legacy cooldown maturity
-                // (pre UNSTAKE_COOLDOWN_COMPLETION_ACTION) mints NO actions row, so an orphaned
-                // range containing only such a maturity leaves firstActionIndex null and would skip
-                // the reversal entirely, forking the ledger vs a from-genesis replay.
-
-                // Reset an anchor archive batch's parent (v1 archive-head) status that an
-                // orphaned final chunk flipped to 'invalid_archive' IN PLACE on a surviving row. A
-                // chunked archive batch spans multiple blocks: a head in an early block, then v2
-                // continuation chunks in later blocks. When the LAST v2 chunk lands, anchor.js
-                // reassembles the blob and, on a CRC mismatch against the parent's signed
-                // batch_crc32, stamps the parent 'invalid_archive' via a direct UPDATE on the
-                // parent row (created in an EARLIER block, so it survives the bulk delete below).
-                // If that completing chunk is in the orphaned range, the delete removes the chunk
-                // but cannot undo the in-place stamp, leaving the surviving parent stuck
-                // 'invalid_archive' while a from-genesis replay (the bad chunk never re-mined, or
-                // re-mined validly) would re-derive the parent's pre-flip status. anchor_actions
-                // .status_id is not in any block-hash projection, so this is a state-table
-                // divergence (and could mislead the archive-integrity flag / recovery selection,
-                // which read the ARCHIVE_HEAD_VERSIONS set at status 'valid'/'unverified'), not a
-                // consensus fork.
-                //
-                // Reset to 'unverified', the conservative re-verification state (anchor.js stores
-                // a v1 'unverified' whenever its signer snapshot isn't locally mirrored, and
-                // recovery re-verifies such rows from the archived snapshots), so a parent that was
-                // 'valid' before the flip is re-promoted by recovery rather than left wrongly
-                // terminal. We self-join the parent to an orphaned v2 chunk of the SAME
-                // match_batch_seq and require that chunk's status be 'valid': a completing chunk is
-                // always 'valid', and there can be at most TOTAL_CHUNKS-1 distinct valid chunks (the
-                // duplicate-index guard rejects extras as 'invalid: ...'), so a surviving orphaned
-                // VALID chunk proves fewer than the full set remain on the new chain, so the batch can
-                // no longer reassemble there and the flip is not re-derivable. Filtering on 'valid'
-                // also excludes a late duplicate chunk that landed (and was rejected) AFTER a
-                // legitimate completion, which must NOT trigger a reset. Runs BEFORE the delete so
-                // both the parent and the orphaned chunk rows are still present.
-                if(firstActionIndex !== null){
-                    // Intern 'unverified' FIRST (IDX-1). The UPDATE below resolves its target id via
-                    // `JOIN index_statuses us ON us.status = 'unverified'`, but a normally hub-connected
-                    // node never writes 'unverified' forward (anchor.js only stores it when no
-                    // oracle_publish snapshot is mirrored), so that row is usually absent and the JOIN
-                    // matches nothing, silently no-oping the reset and leaving the parent wedged at
-                    // 'invalid_archive'. createStatus interns it (INSERT IGNORE) so the JOIN is
-                    // guaranteed non-empty; index_statuses ids are never hashed, so an in-rollback
-                    // intern is byte-neutral. The UPDATE's JOIN text is pinned by the cross-repo
-                    // drift guard (xchain-sync rollback_coverage); the replica converges via
-                    // snapshot catch-up (it cannot intern locally without diverging the replicated
-                    // id, and anchor status_id is in no block-hash projection).
-                    //
-                    // Version predicate: the parent is any ARCHIVE_HEAD version (today v1, the
-                    // publisher-bearing archive head), spliced from the stateHash.js constant
-                    // rather than hand-copied, so a head version added later reaches this reset
-                    // too. No flag day gates it: every head version's stamp is equally
-                    // un-re-derivable after the chunk delete, and this reset is not a hash
-                    // preimage (the GATED anchor_invalid state-hash class covers the stamp
-                    // itself). client/rollback.js mirrors this; the drift guard pins the
-                    // predicate on both sides.
-                    //
-                    // Author scope, flag-day gated and INERT on every network today: the seq is
-                    // not a batch key once archive batches are publisher-scoped, so a second
-                    // publisher's orphaned chunk resets a head whose own batch survives intact.
-                    // Rationale + arming precondition: archive_rollback_author_scope_activation.js.
-                    await this.indexerDb.createStatus('unverified');
-                    let authorScope = archiveAuthorScopeJoin(block_index, String(this.config['NETWORK'] || ''));
-                    query = `UPDATE anchor_actions p
-                                JOIN index_statuses ps ON ps.id = p.status_id AND ps.status = 'invalid_archive'
-                                JOIN anchor_actions c
-                                  ON c.version = 2
-                                 AND c.match_batch_seq = p.match_batch_seq
-                                 AND c.action_index >= ?
-                                JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid'
-                                ${authorScope}
-                                JOIN index_statuses us ON us.status = 'unverified'
-                                SET p.status_id = us.id
-                                WHERE p.version ${ARCHIVE_HEAD_VERSIONS_SQL}
-                                  AND p.action_index < ?`;
-                    args = [firstActionIndex, firstActionIndex];
-                    await this.indexerDb.doQuery(query, args);
-                }
-
-                // Restore an ATTEST v5 batch head that an orphaned v6 continuation flipped IN
-                // PLACE on a surviving row. The exact shape of the archive reset
-                // above, on the batch rail, and for the same reason.
-                //
-                // A chunked batch spans blocks: the v5 head in an early block, v6 continuations
-                // after it. The chunk that COMPLETES the coverage reassembles the window and,
-                // when the body or the quorum fails, stamps the verdict on the head
-                // (attest.js absorbCompletedBatch) - a direct UPDATE on a row created in an
-                // earlier block, which therefore survives the bulk delete below. If that
-                // completing chunk is in the orphaned range, the delete removes the chunk and
-                // cannot undo the stamp, and the damage is worse than a stale verdict: the head
-                // is now terminal, getAttestBatchChunks reads status 'valid' only, so the head
-                // is missing from its OWN chunk set and canonicalBatchHead resolves nothing.
-                // The re-mined continuation then rejoins a batch with no head, absorbs nothing,
-                // and the window is permanently dead on this node while a from-genesis replay
-                // (the chunk never re-mined, or re-mined into a batch that reassembles) has it
-                // live. attests.status_id is in no block-hash projection, so this is a
-                // state-table divergence, not a consensus fork.
-                //
-                // ONLY A MARKED STAMP IS RESTORED, and this is the whole safety argument. A
-                // blanket "reset every non-valid head joined to an orphaned chunk" is UNSAFE:
-                // a head can be terminal because it was terminal AT WRITE TIME (a duplicate
-                // head for the publisher's own window, a foreign NETWORK, a single-chunk head
-                // that failed its own quorum), every one of which can sit below the orphaned
-                // range with a valid same-author continuation above it, and restoring one
-                // REVIVES a head that was never valid - two live heads for one window. So the
-                // stamp writes ATTEST_BATCH_COMPLETION_STAMP (attest.js; keep the two copies
-                // byte-identical, a test pins the pair) and only rows carrying it are matched.
-                // 'valid' is then not a guess either: a head reaches the stamp only by coming
-                // back from the status='valid' chunk read, so 'valid' is the one value the
-                // flip could have overwritten.
-                //
-                // Publisher scope, UNCONDITIONAL and with no flag day, unlike the archive twin:
-                // a batch's identity has been (key, author) since the rail shipped (attest.js
-                // authoredBy), so the scope here has never been wider than the live path's and
-                // narrowing it suppresses no reset that was ever owed. Scoped on actions
-                // .source_id rather than the resolved address: both rows are local, the ids are
-                // exact, and index_addresses.address is a case-folding collation. An
-                // unresolvable author on either side is a NULL that no equality matches, so it
-                // authenticates nothing rather than everything, matching authoredBy's
-                // fail-closed rule.
-                //
-                // Runs BEFORE the delete (both rows still present) and AFTER the read-phase
-                // retraction collect, which requires the head's status to be 'valid': a batch
-                // stamped on its head never pushed, so it has no hub link to retract, and
-                // restoring it any earlier would invent one.
-                if(firstActionIndex !== null){
-                    // Intern 'valid' first, for the archive reset's reason: the UPDATE resolves
-                    // its target id through `JOIN index_statuses vs ON vs.status = 'valid'`, and
-                    // a JOIN that matches nothing silently no-ops the reset. index_statuses ids
-                    // are never hashed, so an in-rollback intern is byte-neutral.
-                    await this.indexerDb.createStatus('valid');
-                    query = `UPDATE attests p
-                                JOIN index_statuses ps ON ps.id = p.status_id AND ps.status LIKE ?
-                                JOIN actions        pa ON pa.action_index = p.action_index
-                                JOIN attests c
-                                  ON c.request_id = p.request_id
-                                 AND c.version = ${abw.ATTEST_BATCH_CONTINUATION_VERSION}
-                                 AND c.batch_chunk_index IS NOT NULL
-                                 AND c.action_index >= ?
-                                JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid'
-                                JOIN actions        ca ON ca.action_index = c.action_index
-                                                      AND ca.source_id    = pa.source_id
-                                JOIN index_statuses vs ON vs.status = 'valid'
-                                SET p.status_id = vs.id
-                                WHERE p.version = ${abw.ATTEST_BATCH_HEAD_VERSION}
-                                  AND p.batch_chunk_index = 0
-                                  AND p.action_index < ?`;
-                    args = ['%' + ATTEST_BATCH_COMPLETION_STAMP, firstActionIndex, firstActionIndex];
-                    await this.indexerDb.doQuery(query, args);
-                }
-
-                // Loop through the data tables and delete records above the action_index.
-                // This is the whole price rollback path for `prices`: an orphaned PRICE v0
-                // round row and an orphaned PRICE batch row are both removed WHOLESALE by
-                // action_index, so batch_first_round/batch_last_round/round_count/rounds_json
-                // are cleared exactly as round_number/pairs_json/sigs_json are, by virtue of
-                // the row itself being gone; no v2-specific delete or partial-column reset is
-                // needed on top of this generic loop.
-                for(let table of this.dataTables){
-                    query = `DELETE FROM ` + table + ` WHERE action_index >= ?`;
-                    args  = [firstActionIndex];
-                    // HUB-RETRACT-2 nested-reorg guard: never purge a prior rollback's durable
-                    // retraction write-ahead rows. They are keyed at that rollback's OWN
-                    // firstActionIndex, so a deeper later reorg's generic purge would delete an
-                    // UNDELIVERED retraction whose closed range [firstOld, lastOld] this reorg's
-                    // replacement rows cannot cover (those actions were already deleted, so the
-                    // new lastActionIndex sits below firstOld) - permanently orphaning
-                    // 'finalized' hub rows if delivery also fails here. Retractions are
-                    // idempotent and generation-fenced, so letting the older rows survive and
-                    // drain later is safe: their fence cannot delete rows re-published after
-                    // this reorg's generation bump.
-                    if(table === 'pending_hub_pushes'){
-                        query = `DELETE FROM pending_hub_pushes WHERE action_index >= ? AND push_type NOT IN ('price_retraction', 'xcall_retraction', 'match_retraction', 'attest_batch_retraction')`;
-                    }
-                    await this.indexerDb.doQuery(query, args);
-                }
-
-                // Sweep orphaned icon-cache rows. icons is a metadata cache keyed by
-                // token_id with no action_index/block_index of its own, so it escapes
-                // both delete loops. When a token row is removed above (tokens is in
-                // dataTables) any icons row pointing at it is left dangling. With
-                // no enforced FK the DB won't cascade the delete. A stale orphan makes
-                // the icon-fetch pipeline believe an icon already exists for a token
-                // that no longer does. Runs after the loop, so the tokens rows are
-                // already gone before the orphan sweep evaluates the sub-query.
-                query = `DELETE FROM icons WHERE token_id NOT IN (SELECT id FROM tokens)`;
-                await this.indexerDb.doQuery(query, []);
-
-                // Re-derive tokens.escrow_action_index (the ownership-escrow gate) for every
-                // affected token. MUST run AFTER the dataTables delete: orphaned offer rows
-                // (orders/swaps/dispensers) and their append-only status rows
-                // (order_statuses/swap_statuses/dispenser_statuses) are now gone, so a surviving
-                // offer whose closing action was orphaned has reverted to its latest surviving
-                // status. setTokenEscrow stamps the gate with the OFFER's action_index and
-                // clearTokenEscrow NULLs it on release; the in-place stamp survives the delete and
-                // updateTokens never touches the escrow column. A single re-derive collapses both
-                // rollback directions (orphaned offer -> NULL; orphaned release on a surviving
-                // offer -> re-stamp; nothing relevant orphaned -> reproduces the current value)
-                // and byte-matches a from-genesis replay (the gate is always exactly the offer's
-                // action_index). Affected set = tokens currently escrowed (Class A) UNION tokens
-                // with a surviving still-escrowed GIVE_OWNERSHIP offer (Class B), provably
-                // complete: a token in neither cannot have a wrong escrow value. A token's gate
-                // is held while its GIVE_OWNERSHIP offer's latest status is open/cancelling/
-                // expiring (two-phase COINPay states keep escrow set); cleared only at a terminal
-                // status, written in the same action as the escrow clear. Alias `si` (not the
-                // SQL keyword `is`). The SQL between the ESCROW-REDERIVE-SQL markers is kept
-                // logically identical with xchain-sync/src/client/rollback.js; a cross-repo drift
-                // guard (xchain-sync test/unit/rollback_coverage.test.js) asserts they match, so
-                // source + replica derive byte-identical escrow_action_index values.
-                //<ESCROW-REDERIVE-SQL>
-                const escrowAffectedTickersSql =
-                    `SELECT DISTINCT tk.tick FROM tokens t INNER JOIN index_tickers tk ON tk.id=t.tick_id WHERE t.escrow_action_index IS NOT NULL
-                     UNION
-                     SELECT DISTINCT tk.tick FROM index_tickers tk WHERE tk.id IN (
-                         SELECT o.give_tick_id FROM orders o INNER JOIN order_statuses st ON st.order_action_index=o.action_index INNER JOIN index_statuses si ON si.id=st.status_id WHERE o.give_ownership=1 AND st.action_index=(SELECT MAX(x.action_index) FROM order_statuses x WHERE x.order_action_index=o.action_index) AND si.status IN ('open','cancelling','expiring')
-                         UNION ALL
-                         SELECT s.give_tick_id FROM swaps s INNER JOIN swap_statuses st ON st.swap_action_index=s.action_index INNER JOIN index_statuses si ON si.id=st.status_id WHERE s.give_ownership=1 AND st.action_index=(SELECT MAX(x.action_index) FROM swap_statuses x WHERE x.swap_action_index=s.action_index) AND si.status IN ('open','cancelling','expiring')
-                         UNION ALL
-                         SELECT d.give_tick_id FROM dispensers d INNER JOIN dispenser_statuses st ON st.dispenser_action_index=d.action_index INNER JOIN index_statuses si ON si.id=st.status_id WHERE d.give_ownership=1 AND st.action_index=(SELECT MAX(x.action_index) FROM dispenser_statuses x WHERE x.dispenser_action_index=d.action_index) AND si.status IN ('open','cancelling','expiring')
-                     )`;
-                const escrowOpenOfferSql =
-                    `SELECT o.action_index FROM orders o INNER JOIN order_statuses st ON st.order_action_index=o.action_index INNER JOIN index_statuses si ON si.id=st.status_id INNER JOIN index_tickers tk ON tk.id=o.give_tick_id WHERE tk.tick=? AND o.give_ownership=1 AND st.action_index=(SELECT MAX(x.action_index) FROM order_statuses x WHERE x.order_action_index=o.action_index) AND si.status IN ('open','cancelling','expiring')
-                     UNION ALL
-                     SELECT s.action_index FROM swaps s INNER JOIN swap_statuses st ON st.swap_action_index=s.action_index INNER JOIN index_statuses si ON si.id=st.status_id INNER JOIN index_tickers tk ON tk.id=s.give_tick_id WHERE tk.tick=? AND s.give_ownership=1 AND st.action_index=(SELECT MAX(x.action_index) FROM swap_statuses x WHERE x.swap_action_index=s.action_index) AND si.status IN ('open','cancelling','expiring')
-                     UNION ALL
-                     SELECT d.action_index FROM dispensers d INNER JOIN dispenser_statuses st ON st.dispenser_action_index=d.action_index INNER JOIN index_statuses si ON si.id=st.status_id INNER JOIN index_tickers tk ON tk.id=d.give_tick_id WHERE tk.tick=? AND d.give_ownership=1 AND st.action_index=(SELECT MAX(x.action_index) FROM dispenser_statuses x WHERE x.dispenser_action_index=d.action_index) AND si.status IN ('open','cancelling','expiring')
-                     ORDER BY action_index ASC
-                     LIMIT 1`;
-                //</ESCROW-REDERIVE-SQL>
-                let escrowTickers = await this.indexerDb.doQuery(escrowAffectedTickersSql, []);
-                for(let row of escrowTickers){
-                    let offerRows = await this.indexerDb.doQuery(escrowOpenOfferSql, [row.tick, row.tick, row.tick]);
-                    let newEscrow = (offerRows.length > 0) ? offerRows[0].action_index : null;
-                    await this.indexerDb.doQuery("UPDATE tokens SET escrow_action_index=? WHERE tick_id=(SELECT id FROM index_tickers WHERE tick=? LIMIT 1)", [newEscrow, row.tick]);
-                }
-
-                // Re-derive order_matches.status for COINPay matches, AFTER the dataTables
-                // delete and for the same reason the escrow gate above is re-derived there.
-                // A COINPay match is written `pending_coinpay` (actions/order_match.js) and
-                // promoted IN PLACE to `valid` by the settling COINPAY
-                // (actions/coinpay.js -> updateOrderMatchStatus, UPDATE order_matches SET
-                // status_id=? WHERE action_index=?). The promoted row belongs to an EARLIER
-                // action than the COINPAY, so a reorg that orphans the payment deletes the
-                // payment's rows and leaves the promotion standing: the match reads `valid`
-                // where a from-genesis replay reads `pending_coinpay`, and the valid-only
-                // last-trade and 24h price reads keep counting a settlement that no longer
-                // exists.
-                //
-                // Settlement proof is the same thing the forward handler writes: a
-                // `fulfilled` coinpay_statuses row for the obligation, whose
-                // coinpay_action_index IS the match's action_index (createCoinpayStatus is
-                // called with the obligation's index, and coinpay_obligations.action_index =
-                // order_matches.action_index). Those status rows are action-scoped, so the
-                // generic delete has already removed the orphaned one by the time this runs.
-                //
-                // Re-derived rather than range-reset, for the reason this file already states
-                // for the escrow gate: a range reset handles only the SET direction, while a
-                // re-derive collapses both and is idempotent, so it also self-heals rows an
-                // earlier reorg left wrong. Both statements are restricted to rows whose
-                // status actually disagrees, and both no-op when the target status has never
-                // been minted in index_statuses, so neither can blank a status_id.
-                // `pending_coinpay` and `valid` are the only two values a COINPay match ever
-                // takes (updateOrderMatchStatus has exactly one caller), so anything else is
-                // left untouched rather than guessed at.
-                //
-                // The SQL between the COINPAY-MATCH-REDERIVE-SQL markers is kept logically
-                // identical with xchain-sync/src/client/rollback.js; a cross-repo drift guard
-                // (xchain-sync test/unit/rollback_coverage.test.js) asserts they match, so
-                // source and replica derive the same match statuses.
-                //<COINPAY-MATCH-REDERIVE-SQL>
-                const coinpayMatchDemoteSql =
-                    `UPDATE order_matches SET status_id=(SELECT id FROM index_statuses WHERE status='pending_coinpay' LIMIT 1)
-                     WHERE settlement_type='coinpay'
-                       AND (SELECT id FROM index_statuses WHERE status='pending_coinpay' LIMIT 1) IS NOT NULL
-                       AND status_id=(SELECT id FROM index_statuses WHERE status='valid' LIMIT 1)
-                       AND action_index NOT IN (SELECT cs.coinpay_action_index FROM coinpay_statuses cs INNER JOIN index_statuses si ON si.id=cs.status_id WHERE si.status='fulfilled' AND cs.coinpay_action_index IS NOT NULL)`;
-                const coinpayMatchPromoteSql =
-                    `UPDATE order_matches SET status_id=(SELECT id FROM index_statuses WHERE status='valid' LIMIT 1)
-                     WHERE settlement_type='coinpay'
-                       AND (SELECT id FROM index_statuses WHERE status='valid' LIMIT 1) IS NOT NULL
-                       AND status_id=(SELECT id FROM index_statuses WHERE status='pending_coinpay' LIMIT 1)
-                       AND action_index IN (SELECT cs.coinpay_action_index FROM coinpay_statuses cs INNER JOIN index_statuses si ON si.id=cs.status_id WHERE si.status='fulfilled' AND cs.coinpay_action_index IS NOT NULL)`;
-                //</COINPAY-MATCH-REDERIVE-SQL>
-                await this.indexerDb.doQuery(coinpayMatchDemoteSql, []);
-                await this.indexerDb.doQuery(coinpayMatchPromoteSql, []);
-            }
-
-            // Restore anchor validator_rewards rows an orphaned reconcile DELETEd IN PLACE
-            // from earlier SURVIVING blocks (RB-ANCHOR). reconcileAnchorRewardWinner keeps
-            // only the smallest-pubkey winner per (reward_type, round_reference); on a
-            // failover double-publish it deletes loser rows that were created at the
-            // checkpoint's SNAPSHOT_BLOCK (earlier than the ANCHOR that runs the reconcile),
-            // logging each pre-image in anchor_reward_reconcile_log keyed to the reconcile's
-            // (ANCHOR) block. If that ANCHOR is in the orphaned range, the generic block
-            // delete below drops the log rows and the ANCHOR but cannot re-create the deleted
-            // losers, leaving the reorged node with a collapsed reward set while a from-genesis
-            // replay to reorg_block-1 (reconcile never re-ran) keeps every loser. That lowers
-            // a later COLLECT's SUM(validator_rewards) → a ledger-hashed fork. Re-INSERT only
-            // losers whose ORIGINAL earn-block (reward_block_index) SURVIVES the reorg
-            // (< block_index): a loser earned inside the orphaned range is correctly absent
-            // (replay never mints it, and the generic delete already removed any copy). The
-            // restored row carries its original earn-block, so the generic block delete (which
-            // scopes on block_index >= reorg) leaves it in place. Runs BEFORE that delete so
-            // the log rows still exist. amount is the frozen consensus reward constant per
-            // round, so duplicate log rows carry an identical value and INSERT IGNORE is
-            // value-stable + idempotent (no earliest-debit tiebreak needed, unlike the slash
-            // restores above where prev_amount can differ across repeated slashes of one row).
-            //
-            // Runs UNCONDITIONALLY, OUTSIDE the firstActionIndex guard above (RB-ANCHOR-NULL).
-            // The reconcile has two callers and only one of them mints an actions row: the DOGE
-            // ANCHOR handler (actions/anchor.js) passes its own action_index, but the BTC-side
-            // derive (anchor_reward_derive.js) passes NULL because the attested rows arrive over
-            // the mirror, not as a wire action. So a BTC reorg over a range whose only reward
-            // work was a derive-side reconcile leaves firstActionIndex null, while the generic
-            // blockTables loop below still drops anchor_reward_reconcile_log and the
-            // derive_block_index delete below still drops the replacement winner: gated here,
-            // the earlier winner would be deleted and never restored, which is exactly the
-            // SUM(validator_rewards) divergence this statement exists to prevent. Keyed entirely
-            // on block heights (no action-index term), and a no-op when the log holds nothing in
-            // range, so running it on every reorg costs one query. Placed immediately past the
-            // guard rather than at the top of the transaction so its order relative to every
-            // other statement is unchanged; nothing between the guard and the deletes below
-            // touches validator_rewards or anchor_reward_reconcile_log.
-            //
-            // The surviving-earn-block test alone is NOT sufficient once a reward can be
-            // MATERIALIZED later than it is earned. An derived anchor reward
-            // carries block_index = the checkpoint's SNAPSHOT_BLOCK but is written while the
-            // BTC indexer processes a much later block, recorded here as
-            // reward_derive_block_index. A loser materialized INSIDE the orphaned range has a
-            // surviving earn-block yet must NOT be restored: the replay to reorg_block-1 never
-            // ran the derivation, so restoring it would mint an orphan the replay does not have
-            // and fork SUM(validator_rewards) in the other direction. Require BOTH heights to
-            // survive; NULL (every same-block writer, and every row pre-dating the column)
-            // keeps the original earn-block-only behavior.
-            // round_qualifier rides the pre-image like every other key column: it is part
-            // of the reward's UNIQUE identity (snapshot_block for the archive leg, whose
-            // round_reference is a reissuable hub counter), so restoring without it would
-            // re-INSERT the loser under qualifier 0 - a DIFFERENT row from the one the
-            // reconcile deleted, colliding with whatever legacy row already holds that key
-            // and leaving the real loser unrestored.
-            query = `INSERT IGNORE INTO validator_rewards
-                        (source_id, signing_pubkey_id, reward_type, round_reference, round_qualifier,
-                         amount, block_index, derive_block_index)
-                     SELECT d.source_id, d.signing_pubkey_id, d.reward_type, d.round_reference,
-                            d.round_qualifier,
-                            d.amount, d.reward_block_index, d.reward_derive_block_index
-                       FROM anchor_reward_reconcile_log d
-                      WHERE d.block_index >= ?
-                        AND d.reward_block_index < ?
-                        AND (d.reward_derive_block_index IS NULL OR d.reward_derive_block_index < ?)`;
-            args = [block_index, block_index, block_index];
+    // Restore stake amounts an orphaned SLASH reduced IN PLACE on surviving rows.
+    // slashContractStake debits contract_stakes/contract_unstakes.amount on rows
+    // from earlier (surviving) blocks and records each debit's pre-slash
+    // `prev_amount` in contract_slash_debits. The generic deletes below drop the
+    // orphaned debit rows but cannot revert the in-place reduction, so without this
+    // a surviving row keeps its slashed amount while a from-genesis replay (slash
+    // never re-mined) keeps the original, a consensus-affecting divergence (active
+    // stake drives VM staker weighting, quorum eligibility, and cooldown refunds on
+    // all chains). We copy back the HIGHEST orphaned `prev_amount` per row: the
+    // debits on one stake row form a strictly decreasing chain (every debit takes a
+    // positive amount and nothing else raises the column), and the orphaned range is
+    // a suffix of that chain, so the maximum IS the value the row held before the
+    // first orphaned debit. The position columns alone cannot express that order,
+    // because a re-entrant nested EXECUTE slashes FIRST under a HIGHER action_index
+    // than its parent frame: ordering on (block_index, execution_index,
+    // slash_position) then reads the parent's later debit as the earliest and
+    // restores a value one slash short. Those columns stay as the tiebreak for
+    // numerically equal amounts, a replay-stable total order the block-hash preimage
+    // also uses for contract_emissions; the AUTO_INCREMENT `id` is NOT, and would
+    // let two nodes restore a divergent amount. The restore itself is a pure string
+    // copy, so the value is byte-identical to the surviving chain's
+    // pre-orphaned-slash state and to a fresh replay (no arithmetic / decimal-format
+    // drift). Earlier SURVIVING debits (block_index < block_index) are intentionally
+    // left applied. Runs BEFORE the deletes so the debit rows and target rows still
+    // exist. Byte-identical (whitespace aside) to the xchain-sync replica twin.
+    async restoreContractSlashAmounts(block_index){
+        let query, args;
+        for(let slashTbl of ['contract_stakes', 'contract_unstakes']){
+            //<CONTRACT-SLASH-RESTORE-SQL>
+            query = `UPDATE ` + slashTbl + ` t
+                        JOIN contract_slash_debits d ON d.stake_action_index = t.action_index
+                        SET t.amount = d.prev_amount
+                        WHERE d.target_table = ?
+                          AND d.block_index >= ?
+                          AND NOT EXISTS (
+                              SELECT 1 FROM contract_slash_debits e
+                              WHERE e.target_table      = d.target_table
+                                AND e.stake_action_index = d.stake_action_index
+                                AND e.block_index >= ?
+                                AND (CAST(e.prev_amount AS DECIMAL(60,18)) > CAST(d.prev_amount AS DECIMAL(60,18))
+                                     OR (CAST(e.prev_amount AS DECIMAL(60,18)) = CAST(d.prev_amount AS DECIMAL(60,18))
+                                         AND (e.block_index < d.block_index
+                                              OR (e.block_index = d.block_index
+                                                  AND (e.execution_index < d.execution_index
+                                                       OR (e.execution_index = d.execution_index
+                                                           AND e.slash_position < d.slash_position)))))))`;
+            //</CONTRACT-SLASH-RESTORE-SQL>
+            args = [slashTbl, block_index, block_index];
             await this.indexerDb.doQuery(query, args);
+        }
+    }
 
-            // ROLLCALL eviction repair, and it MUST run before the block-table loop below
-            // deletes the rollcall_absences rows it reads.
+    // Restore signing keys an orphaned DELEGATE v1 materialization rewrote IN PLACE
+    // on surviving rows. materializeContractDelegations rewrites
+    // contract_stakes/contract_unstakes.signing_pubkey_id on rows from earlier
+    // (surviving) blocks and records each rewrite's pre-rotation key, with the table
+    // it landed on, in contract_delegation_rotations. The
+    // generic deletes below drop the orphaned journal rows but cannot revert the
+    // UPDATE, so without this a surviving row keeps the rotated key while a
+    // from-genesis replay (the DELEGATE never re-mined, or re-mined at a different
+    // height) keeps the original - a consensus-affecting divergence, since the key on
+    // the row is exactly what the VM stake snapshot, the UNSTAKE aggregate and the
+    // SLASH deduction all read. We copy back the EARLIEST orphaned rotation's
+    // `prev_signing_pubkey_id` per row (min block_index, then delegation_action_index,
+    // both replay-stable; the AUTO_INCREMENT `id` is NOT and would let two nodes
+    // restore different keys). Pure id copy, so the restored value is byte-identical
+    // to the surviving chain's pre-rotation state. Earlier SURVIVING rotations are
+    // intentionally left applied. Runs BEFORE the deletes so both tables still exist.
+    async restoreDelegationRotations(block_index){
+        let query, args;
+        for(let rotTbl of ['contract_stakes', 'contract_unstakes']){
+            query = `UPDATE ` + rotTbl + ` t
+                        JOIN contract_delegation_rotations r ON r.stake_action_index = t.action_index
+                        SET t.signing_pubkey_id = r.prev_signing_pubkey_id
+                        WHERE r.target_table = ?
+                          AND r.block_index >= ?
+                          AND NOT EXISTS (
+                              SELECT 1 FROM contract_delegation_rotations e
+                              WHERE e.target_table       = r.target_table
+                                AND e.stake_action_index = r.stake_action_index
+                                AND e.block_index >= ?
+                                AND (e.block_index < r.block_index
+                                     OR (e.block_index = r.block_index
+                                         AND e.delegation_action_index < r.delegation_action_index)))`;
+            args = [rotTbl, block_index, block_index];
+            await this.indexerDb.doQuery(query, args);
+        }
+    }
+
+    // Same restore for CAPABILITY-stake equivocation slashes (WI-2 bump 2):
+    // slashCapabilityStake reduces stakes/unstakes.amount IN PLACE on surviving
+    // rows and logs the pre-slash `prev_amount` in capability_slash_debits. Copy
+    // back the EARLIEST orphaned debit's prev_amount per row (min block_index, then
+    // slash_action_index tiebreak). This is a pure string copy, byte-identical to the
+    // surviving chain and to a from-genesis replay where the SLASH was never
+    // re-mined. Earlier SURVIVING debits (block_index < block_index) stay applied.
+    // Runs BEFORE the generic deletes so both the debit rows and the target rows
+    // still exist.
+    //
+    // The same-block tiebreak is slash_action_index, NOT the AUTO_INCREMENT `id`:
+    // capability slashes are permissionless SLASH WIRE actions, so slash_action_index
+    // is a deterministic, replay-stable action_index (assigned by the idempotent
+    // compound-key path, not force=true). Ordering by `id` would let two nodes whose
+    // AUTO_INCREMENT chains were assigned in a different order (live vs from-genesis
+    // replay) restore a different prev_amount on a reorg that retracts a block with
+    // ≥2 slashes against one stake row → a stake-weight fork. (The CONTRACT twin in
+    // the restore above keys on the same idea: VM-emitted slashes have no wire
+    // action_index, so it orders by (execution_index, slash_position), i.e. the EXECUTE's
+    // on-chain action_index plus the emission-loop index, the identical deterministic
+    // total order the block-hash preimage uses for contract_emissions.)
+    async restoreCapabilitySlashAmounts(block_index){
+        let query, args;
+        for(let slashTbl of ['stakes', 'unstakes']){
+            query = `UPDATE ` + slashTbl + ` t
+                        JOIN capability_slash_debits d ON d.stake_action_index = t.action_index
+                        SET t.amount = d.prev_amount
+                        WHERE d.target_table = ?
+                          AND d.block_index >= ?
+                          AND NOT EXISTS (
+                              SELECT 1 FROM capability_slash_debits e
+                              WHERE e.target_table      = d.target_table
+                                AND e.stake_action_index = d.stake_action_index
+                                AND e.block_index >= ?
+                                AND (e.block_index < d.block_index
+                                     OR (e.block_index = d.block_index AND e.slash_action_index < d.slash_action_index)))`;
+            args = [slashTbl, block_index, block_index];
+            await this.indexerDb.doQuery(query, args);
+        }
+    }
+
+    // Reset an anchor archive batch's parent (v1 archive-head) status that an
+    // orphaned final chunk flipped to 'invalid_archive' IN PLACE on a surviving row. A
+    // chunked archive batch spans multiple blocks: a head in an early block, then v2
+    // continuation chunks in later blocks. When the LAST v2 chunk lands, anchor.js
+    // reassembles the blob and, on a CRC mismatch against the parent's signed
+    // batch_crc32, stamps the parent 'invalid_archive' via a direct UPDATE on the
+    // parent row (created in an EARLIER block, so it survives the bulk delete below).
+    // If that completing chunk is in the orphaned range, the delete removes the chunk
+    // but cannot undo the in-place stamp, leaving the surviving parent stuck
+    // 'invalid_archive' while a from-genesis replay (the bad chunk never re-mined, or
+    // re-mined validly) would re-derive the parent's pre-flip status. anchor_actions
+    // .status_id is not in any block-hash projection, so this is a state-table
+    // divergence (and could mislead the archive-integrity flag / recovery selection,
+    // which read the ARCHIVE_HEAD_VERSIONS set at status 'valid'/'unverified'), not a
+    // consensus fork.
+    //
+    // Reset to 'unverified', the conservative re-verification state (anchor.js stores
+    // a v1 'unverified' whenever its signer snapshot isn't locally mirrored, and
+    // recovery re-verifies such rows from the archived snapshots), so a parent that was
+    // 'valid' before the flip is re-promoted by recovery rather than left wrongly
+    // terminal. We self-join the parent to an orphaned v2 chunk of the SAME
+    // match_batch_seq and require that chunk's status be 'valid': a completing chunk is
+    // always 'valid', and there can be at most TOTAL_CHUNKS-1 distinct valid chunks (the
+    // duplicate-index guard rejects extras as 'invalid: ...'), so a surviving orphaned
+    // VALID chunk proves fewer than the full set remain on the new chain, so the batch can
+    // no longer reassemble there and the flip is not re-derivable. Filtering on 'valid'
+    // also excludes a late duplicate chunk that landed (and was rejected) AFTER a
+    // legitimate completion, which must NOT trigger a reset. Runs BEFORE the delete so
+    // both the parent and the orphaned chunk rows are still present.
+    async resetOrphanedArchiveHeads(block_index, firstActionIndex){
+        let query, args;
+        if(firstActionIndex !== null){
+            // Intern 'unverified' FIRST (IDX-1). The UPDATE below resolves its target id via
+            // `JOIN index_statuses us ON us.status = 'unverified'`, but a normally hub-connected
+            // node never writes 'unverified' forward (anchor.js only stores it when no
+            // oracle_publish snapshot is mirrored), so that row is usually absent and the JOIN
+            // matches nothing, silently no-oping the reset and leaving the parent wedged at
+            // 'invalid_archive'. createStatus interns it (INSERT IGNORE) so the JOIN is
+            // guaranteed non-empty; index_statuses ids are never hashed, so an in-rollback
+            // intern is byte-neutral. The UPDATE's JOIN text is pinned by the cross-repo
+            // drift guard (xchain-sync rollback_coverage); the replica converges via
+            // snapshot catch-up (it cannot intern locally without diverging the replicated
+            // id, and anchor status_id is in no block-hash projection).
             //
-            // The generic delegations repair above now uses a value threshold and so already
-            // covers an eviction stamp (same actionBlock + activationDelay formula), which the
-            // earlier self-join on an orphaned DELEGATE-revoke row could not: an eviction writes
-            // no revoke row, it stamps every delegation of the source directly, and `evicted = 1`
-            // in rollcall_absences is the only record of which sources were stamped, which is
-            // exactly why that column exists. This sweep is kept as an idempotent narrower
-            // repair, not because the generic one misses it. The stakes side needs nothing here -- the
-            // eviction wrote real `unstakes` rows at the close block, so the orphaned-unstake
-            // join above already re-NULLs those stamps.
-            try {
-                let rcStaking = this.config['STAKING'];
-                let rcDelay   = Number((rcStaking && rcStaking['ACTIVATION_DELAY_BLOCKS'])
-                                       ? rcStaking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS']);
-                await this.indexerDb.doQuery(
-                    `UPDATE delegations d
-                        JOIN rollcall_absences ra ON ra.source_id = d.source_id
-                        SET d.deactivation_block = NULL
-                        WHERE ra.evicted = 1
-                          AND ra.close_block >= ?
-                          AND d.deactivation_block IS NOT NULL
-                          AND d.deactivation_block = ra.close_block + ?`,
-                    [block_index, rcDelay]);
-            } catch(e){
-                // Swallow ONLY a genuine schema gap (1054/1146) on a DB that predates the
-                // ROLLCALL migration; no eviction can exist on such a node, so there is
-                // nothing to repair. Every other fault must surface.
-                if(!(e && (e.errno === 1054 || e.errno === 1146))) throw e;
-            }
-
-            // The two BTC-side ROLLCALL tables delete on close_block. They are declared
-            // rollback: 'special' rather than 'block' because neither has a block_index
-            // column, so the generic blockTables loop below would throw 1054 on them and
-            // fail the entire rollback transaction on every reorg.
-            // Absences before verdicts, so a partial failure cannot leave an absence row
-            // pointing at an epoch whose verdict is already gone; the catch swallows ONLY
-            // the schema gap on a node that predates the ROLLCALL migration, where the
-            // tables do not exist and there is nothing to unwind. This is the ONLY
-            // roll-call unwind: xchain-sync/src/client/rollback.js carries the replica's
-            // mirror of it, and a second copy here re-raises 1146 on a pre-migration node
-            // and aborts the reorg this guard exists to keep alive.
-            try {
-                // Gates before verdicts for the same reason absences are: a gates row is
-                // derived at the close it names.
-                await this.indexerDb.doQuery(`DELETE FROM rollcall_gates WHERE close_block >= ?`, [block_index]);
-                await this.indexerDb.doQuery(`DELETE FROM rollcall_absences WHERE close_block >= ?`, [block_index]);
-                await this.indexerDb.doQuery(`DELETE FROM rollcalls WHERE close_block >= ?`, [block_index]);
-            } catch(e){
-                if(!(e && (e.errno === 1054 || e.errno === 1146))) throw e;
-            }
-
-            // Delete data from tables using block_index
-            for(let table of this.blockTables){
-                query = `DELETE FROM ` + table + ` WHERE block_index >= ?`;
-                args  = [block_index];
-                await this.indexerDb.doQuery(query, args);
-            }
-
-            // Second scoping key for validator_rewards: the MATERIALIZATION block. The
-            // loop above deletes on block_index, which for a reward is its EARN block.
-            // That is the same block for every writer except the BTC-side anchor/archive
-            // derivation, which earns at the checkpoint's SNAPSHOT_BLOCK S but
-            // creates the row while processing a later BTC block B (stamped derive_block_index).
-            // A reorg to any H in (S, B] orphans the block that MINTED the reward while leaving
-            // block_index = S below the delete's scope, so the row survived as a COLLECT-
-            // spendable credit that a from-genesis replay to H-1 has not derived yet: the next
-            // COLLECT reads a larger SUM(validator_rewards) here than on a freshly-synced node,
-            // which is a ledger-hashed fork. Deleting on the creating block makes the reorged
-            // node match the replay, and the derivation is idempotent, so the row re-materializes
-            // when the canonical chain reaches the mirrored attestation again.
+            // Version predicate: the parent is any ARCHIVE_HEAD version (today v1, the
+            // publisher-bearing archive head), spliced from the stateHash.js constant
+            // rather than hand-copied, so a head version added later reaches this reset
+            // too. No flag day gates it: every head version's stamp is equally
+            // un-re-derivable after the chunk delete, and this reset is not a hash
+            // preimage (the GATED anchor_invalid state-hash class covers the stamp
+            // itself). client/rollback.js mirrors this; the drift guard pins the
+            // predicate on both sides.
             //
-            // Runs AFTER the loop (so it also covers a row the earn-block delete already took,
-            // as a no-op) and BEFORE the index_addresses/index_tickers deletes below, which
-            // require that no surviving row still points at an id they are about to remove.
-            // NULL derive_block_index (every same-block writer, and every row written before the
-            // column existed) is never matched, so this is byte-neutral until the derive flag-day
-            // arms. Wrapped for the schema gap on a node that has not yet taken the column.
-            try {
-                await this.indexerDb.doQuery(
-                    `DELETE FROM validator_rewards WHERE derive_block_index >= ?`, [block_index]);
-            } catch(e){
-                // Swallow ONLY a genuine schema gap (1054 unknown column) on a DB that predates
-                // the migration; on such a node no derived reward can exist either, so there is
-                // nothing to delete. Every other fault (deadlock, lock-wait, killed connection)
-                // must propagate so the whole reorg transaction rolls back rather than committing
-                // a partial rollback that keeps a spendable reward.
-                if(!(e && (e.errno === 1146 || e.errno === 1054))) throw e;
-            }
+            // Author scope, flag-day gated and INERT on every network today: the seq is
+            // not a batch key once archive batches are publisher-scoped, so a second
+            // publisher's orphaned chunk resets a head whose own batch survives intact.
+            // Rationale + arming precondition: archive_rollback_author_scope_activation.js.
+            await this.indexerDb.createStatus('unverified');
+            let authorScope = archiveAuthorScopeJoin(block_index, String(this.config['NETWORK'] || ''));
+            query = `UPDATE anchor_actions p
+                        JOIN index_statuses ps ON ps.id = p.status_id AND ps.status = 'invalid_archive'
+                        JOIN anchor_actions c
+                          ON c.version = 2
+                         AND c.match_batch_seq = p.match_batch_seq
+                         AND c.action_index >= ?
+                        JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid'
+                        ${authorScope}
+                        JOIN index_statuses us ON us.status = 'unverified'
+                        SET p.status_id = us.id
+                        WHERE p.version ${ARCHIVE_HEAD_VERSIONS_SQL}
+                          AND p.action_index < ?`;
+            args = [firstActionIndex, firstActionIndex];
+            await this.indexerDb.doQuery(query, args);
+        }
+    }
 
-            // Roll back the index id lookups (index_addresses / index_tickers).
-            //
-            // These ids became consensus-relevant once an address/ticker can be referenced
-            // on the wire as ^<id>: a wire ^<id> is stored verbatim into a *_id column and
-            // resolved back to a string at block-hash time, so the SAME ^<id> must name the
-            // SAME entity on every node. The ids are assigned by an explicit dense counter
-            // (db.getNextAddressId / getNextTickerId), so deleting the ids first seen in the
-            // orphaned blocks lets the surviving MAX(id)+1 reproduce them deterministically
-            // when the canonical chain is reapplied. (Pre-^id, these tables were intentionally
-            // NOT rolled back: their AUTO_INCREMENT ids never rewound and fed no hashed value.
-            // That is now a fork vector, so they ARE rolled back.)
-            //
-            // MUST run AFTER the action_index and block_index data deletes above: every row
-            // that referenced an orphaned-block id has already been removed, so no surviving
-            // row is left pointing at a deleted id. Rows whose block_index is NULL
-            // (pre-migration / never stamped) are never matched and are left untouched.
-            for(let table of this.indexTables){
-                query = `DELETE FROM ` + table + ` WHERE block_index >= ?`;
-                args  = [block_index];
-                await this.indexerDb.doQuery(query, args);
-            }
+    // Restore an ATTEST v5 batch head that an orphaned v6 continuation flipped IN
+    // PLACE on a surviving row. The exact shape of the archive reset
+    // above, on the batch rail, and for the same reason.
+    //
+    // A chunked batch spans blocks: the v5 head in an early block, v6 continuations
+    // after it. The chunk that COMPLETES the coverage reassembles the window and,
+    // when the body or the quorum fails, stamps the verdict on the head
+    // (attest.js absorbCompletedBatch) - a direct UPDATE on a row created in an
+    // earlier block, which therefore survives the bulk delete below. If that
+    // completing chunk is in the orphaned range, the delete removes the chunk and
+    // cannot undo the stamp, and the damage is worse than a stale verdict: the head
+    // is now terminal, getAttestBatchChunks reads status 'valid' only, so the head
+    // is missing from its OWN chunk set and canonicalBatchHead resolves nothing.
+    // The re-mined continuation then rejoins a batch with no head, absorbs nothing,
+    // and the window is permanently dead on this node while a from-genesis replay
+    // (the chunk never re-mined, or re-mined into a batch that reassembles) has it
+    // live. attests.status_id is in no block-hash projection, so this is a
+    // state-table divergence, not a consensus fork.
+    //
+    // ONLY A MARKED STAMP IS RESTORED, and this is the whole safety argument. A
+    // blanket "reset every non-valid head joined to an orphaned chunk" is UNSAFE:
+    // a head can be terminal because it was terminal AT WRITE TIME (a duplicate
+    // head for the publisher's own window, a foreign NETWORK, a single-chunk head
+    // that failed its own quorum), every one of which can sit below the orphaned
+    // range with a valid same-author continuation above it, and restoring one
+    // REVIVES a head that was never valid - two live heads for one window. So the
+    // stamp writes ATTEST_BATCH_COMPLETION_STAMP (attest.js; keep the two copies
+    // byte-identical, a test pins the pair) and only rows carrying it are matched.
+    // 'valid' is then not a guess either: a head reaches the stamp only by coming
+    // back from the status='valid' chunk read, so 'valid' is the one value the
+    // flip could have overwritten.
+    //
+    // Publisher scope, UNCONDITIONAL and with no flag day, unlike the archive twin:
+    // a batch's identity has been (key, author) since the rail shipped (attest.js
+    // authoredBy), so the scope here has never been wider than the live path's and
+    // narrowing it suppresses no reset that was ever owed. Scoped on actions
+    // .source_id rather than the resolved address: both rows are local, the ids are
+    // exact, and index_addresses.address is a case-folding collation. An
+    // unresolvable author on either side is a NULL that no equality matches, so it
+    // authenticates nothing rather than everything, matching authoredBy's
+    // fail-closed rule.
+    //
+    // Runs BEFORE the delete (both rows still present) and AFTER the read-phase
+    // retraction collect, which requires the head's status to be 'valid': a batch
+    // stamped on its head never pushed, so it has no hub link to retract, and
+    // restoring it any earlier would invent one.
+    async restoreStampedAttestHeads(firstActionIndex){
+        let query, args;
+        if(firstActionIndex !== null){
+            // Intern 'valid' first, for the archive reset's reason: the UPDATE resolves
+            // its target id through `JOIN index_statuses vs ON vs.status = 'valid'`, and
+            // a JOIN that matches nothing silently no-ops the reset. index_statuses ids
+            // are never hashed, so an in-rollback intern is byte-neutral.
+            await this.indexerDb.createStatus('valid');
+            query = `UPDATE attests p
+                        JOIN index_statuses ps ON ps.id = p.status_id AND ps.status LIKE ?
+                        JOIN actions        pa ON pa.action_index = p.action_index
+                        JOIN attests c
+                          ON c.request_id = p.request_id
+                         AND c.version = ${abw.ATTEST_BATCH_CONTINUATION_VERSION}
+                         AND c.batch_chunk_index IS NOT NULL
+                         AND c.action_index >= ?
+                        JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid'
+                        JOIN actions        ca ON ca.action_index = c.action_index
+                                              AND ca.source_id    = pa.source_id
+                        JOIN index_statuses vs ON vs.status = 'valid'
+                        SET p.status_id = vs.id
+                        WHERE p.version = ${abw.ATTEST_BATCH_HEAD_VERSION}
+                          AND p.batch_chunk_index = 0
+                          AND p.action_index < ?`;
+            args = ['%' + ATTEST_BATCH_COMPLETION_STAMP, firstActionIndex, firstActionIndex];
+            await this.indexerDb.doQuery(query, args);
+        }
+    }
 
-            // F1a recovery reward re-arm. validator_rewards is block-scoped and was deleted
-            // above by earn-block (block_index >= firstBlockIndex). Re-arm the staging rows for
-            // those same earn-blocks so the reward can be re-materialized on the canonical chain.
-            // Key on the reward's earn-block (block_index), NOT on whether the source address
-            // rolled out: a reward row is dropped iff its earn-block is in the orphaned range,
-            // independent of its source address. The common (and easily missed) case is an
-            // address first seen BEFORE the range that earns a reward INSIDE it: the reward row
-            // is deleted but the address survives, so the old "source_id NOT IN index_addresses"
-            // predicate never fired and the reward was silently lost forever. MUST run AFTER the
-            // validator_rewards/index_addresses deletes above. No-op (and the table may be absent
-            // on a non-recovery stack) outside an in-progress recovery, so it is wrapped cheaply.
-            //
-            // The floor is NOT the reorg height alone. A restored row carries the
-            // MATERIALIZATION block it was first derived at (earn + the frozen mirror
-            // maturity), so the derive-scoped delete above takes it whenever that height is
-            // orphaned - which happens for earn-blocks a whole maturity window BELOW the reorg
-            // point. Re-arming only from the reorg height would leave those rows applied=1 with
-            // no validator_rewards row behind them: the reward would be gone from this node for
-            // good while the live fleet re-derives it from its mirror when the canonical chain
-            // reaches the same height again. restoredRewardRearmFloor drops the floor by exactly
-            // the maturity window on a network where derivation is armed, and stays at the reorg
-            // height everywhere else (nothing below it can carry a derive stamp).
-            let rearmFloor = ar.restoredRewardRearmFloor(block_index, String(this.config['NETWORK'] || ''));
-            if(rearmFloor === null) rearmFloor = block_index;
-            try {
-                let rearm = await this.indexerDb.doQuery(
-                    `UPDATE recovery_pending_rewards
-                        SET applied=0, source_id=NULL, applied_block=NULL
-                      WHERE applied=1 AND block_index >= ?`, [rearmFloor]);
-                if(rearm && rearm.affectedRows)
-                    this.indexerDb._recoveryPendingChecked = false;
-                let survivors = await this.indexerDb.doQuery(
-                    `SELECT DISTINCT rpr.source_address AS source_address, ia.id AS source_id
-                       FROM recovery_pending_rewards rpr
-                       JOIN index_addresses ia ON ia.address = rpr.source_address
-                      WHERE rpr.applied=0`);
-                // Re-materialize at the reorg point B (block_index): the survivor's reward
-                // earn-block may be < B, so stamp applied_block = B as the forward-window key
-                // xchain-sync streams it by (its earn-block sits below the post-reorg window).
-                // A row whose ORIGINAL derive height is still ahead of B is left staged by the
-                // apply path's due gate and lands again when the replay reaches that height,
-                // which is the same block a live node re-derives it at.
-                for(let s of (survivors || []))
-                    await this.indexerDb.applyPendingRewardsForAddress(s.source_address, s.source_id, block_index);
-            } catch(e){
-                // Swallow ONLY the schema-gap case: recovery_pending_rewards absent on a
-                // non-recovery stack (errno 1146 missing table / 1054 missing column), where
-                // nothing was staged to re-arm. Every other fault (lock-wait timeout, deadlock,
-                // killed connection) must propagate to the outer catch so the whole reorg
-                // transaction rolls back and is retried, instead of commitTransaction()
-                // persisting a half-re-armed recovery_pending_rewards/validator_rewards set
-                // (which forks SUM(validator_rewards) at the next COLLECT). Mirrors the
-                // narrow errno gates in xchain-sync's ClientApplier.
-                if(!(e && (e.errno === 1146 || e.errno === 1054))) throw e;
+    // Loop through the data tables and delete records above the action_index.
+    // This is the whole price rollback path for `prices`: an orphaned PRICE v0
+    // round row and an orphaned PRICE batch row are both removed WHOLESALE by
+    // action_index, so batch_first_round/batch_last_round/round_count/rounds_json
+    // are cleared exactly as round_number/pairs_json/sigs_json are, by virtue of
+    // the row itself being gone; no v2-specific delete or partial-column reset is
+    // needed on top of this generic loop.
+    async purgeActionScopedTables(firstActionIndex){
+        let query, args;
+        for(let table of this.dataTables){
+            query = `DELETE FROM ` + table + ` WHERE action_index >= ?`;
+            args  = [firstActionIndex];
+            // HUB-RETRACT-2 nested-reorg guard: never purge a prior rollback's durable
+            // retraction write-ahead rows. They are keyed at that rollback's OWN
+            // firstActionIndex, so a deeper later reorg's generic purge would delete an
+            // UNDELIVERED retraction whose closed range [firstOld, lastOld] this reorg's
+            // replacement rows cannot cover (those actions were already deleted, so the
+            // new lastActionIndex sits below firstOld) - permanently orphaning
+            // 'finalized' hub rows if delivery also fails here. Retractions are
+            // idempotent and generation-fenced, so letting the older rows survive and
+            // drain later is safe: their fence cannot delete rows re-published after
+            // this reorg's generation bump.
+            if(table === 'pending_hub_pushes'){
+                query = `DELETE FROM pending_hub_pushes WHERE action_index >= ? AND push_type NOT IN ('price_retraction', 'xcall_retraction', 'match_retraction', 'attest_batch_retraction')`;
             }
+            await this.indexerDb.doQuery(query, args);
+        }
+    }
 
-            // Sweep balances rows orphaned by the index-table delete above. `balances` is a
-            // derived table keyed by (address_id, tick_id); it is NOT in dataTables (not
-            // deleted by action_index) and is normally reconciled by updateAddressBalance.
-            // But when an address (or tick) is seen ONLY in the orphaned range, its
-            // index_addresses/index_tickers row was just deleted, so the refresh below
-            // resolves the string to NULL (suppressIndexIdCreation) and updateAddressBalance
-            // can no longer locate the stale row by its now-deleted id. That leaves a zombie
-            // balance whose id matches no index row, which inflates sum(balances) and trips
-            // sanityCheck on the next block touching the tick (indexer halts). A
-            // from-genesis replay never created that row, so deleting every balance whose
-            // address_id/tick_id no longer resolves makes the reorged node match a fresh
-            // one. (Pre-suppressIndexIdCreation this was masked: createAddress resurrected the
-            // id and updateAddressBalance recomputed the row to 0 and removed it, at the cost
-            // of the ^<id> fork the index delete exists to close. The id PKs are NOT NULL, so
-            // the NOT IN subqueries never short-circuit on a NULL.) Mirrors the icons orphan
-            // sweep above.
+    // Sweep orphaned icon-cache rows. icons is a metadata cache keyed by
+    // token_id with no action_index/block_index of its own, so it escapes
+    // both delete loops. When a token row is removed above (tokens is in
+    // dataTables) any icons row pointing at it is left dangling. With
+    // no enforced FK the DB won't cascade the delete. A stale orphan makes
+    // the icon-fetch pipeline believe an icon already exists for a token
+    // that no longer does. Runs after the loop, so the tokens rows are
+    // already gone before the orphan sweep evaluates the sub-query.
+    async sweepOrphanedIcons(){
+        let query;
+        query = `DELETE FROM icons WHERE token_id NOT IN (SELECT id FROM tokens)`;
+        await this.indexerDb.doQuery(query, []);
+    }
+
+    // Re-derive tokens.escrow_action_index (the ownership-escrow gate) for every
+    // affected token. MUST run AFTER the dataTables delete: orphaned offer rows
+    // (orders/swaps/dispensers) and their append-only status rows
+    // (order_statuses/swap_statuses/dispenser_statuses) are now gone, so a surviving
+    // offer whose closing action was orphaned has reverted to its latest surviving
+    // status. setTokenEscrow stamps the gate with the OFFER's action_index and
+    // clearTokenEscrow NULLs it on release; the in-place stamp survives the delete and
+    // updateTokens never touches the escrow column. A single re-derive collapses both
+    // rollback directions (orphaned offer -> NULL; orphaned release on a surviving
+    // offer -> re-stamp; nothing relevant orphaned -> reproduces the current value)
+    // and byte-matches a from-genesis replay (the gate is always exactly the offer's
+    // action_index). Affected set = tokens currently escrowed (Class A) UNION tokens
+    // with a surviving still-escrowed GIVE_OWNERSHIP offer (Class B), provably
+    // complete: a token in neither cannot have a wrong escrow value. A token's gate
+    // is held while its GIVE_OWNERSHIP offer's latest status is open/cancelling/
+    // expiring (two-phase COINPay states keep escrow set); cleared only at a terminal
+    // status, written in the same action as the escrow clear. Alias `si` (not the
+    // SQL keyword `is`). The SQL between the ESCROW-REDERIVE-SQL markers is kept
+    // logically identical with xchain-sync/src/client/rollback.js; a cross-repo drift
+    // guard (xchain-sync test/unit/rollback_coverage.test.js) asserts they match, so
+    // source + replica derive byte-identical escrow_action_index values.
+    async rederiveTokenEscrow(){
+        //<ESCROW-REDERIVE-SQL>
+        const escrowAffectedTickersSql =
+            `SELECT DISTINCT tk.tick FROM tokens t INNER JOIN index_tickers tk ON tk.id=t.tick_id WHERE t.escrow_action_index IS NOT NULL
+             UNION
+             SELECT DISTINCT tk.tick FROM index_tickers tk WHERE tk.id IN (
+                 SELECT o.give_tick_id FROM orders o INNER JOIN order_statuses st ON st.order_action_index=o.action_index INNER JOIN index_statuses si ON si.id=st.status_id WHERE o.give_ownership=1 AND st.action_index=(SELECT MAX(x.action_index) FROM order_statuses x WHERE x.order_action_index=o.action_index) AND si.status IN ('open','cancelling','expiring')
+                 UNION ALL
+                 SELECT s.give_tick_id FROM swaps s INNER JOIN swap_statuses st ON st.swap_action_index=s.action_index INNER JOIN index_statuses si ON si.id=st.status_id WHERE s.give_ownership=1 AND st.action_index=(SELECT MAX(x.action_index) FROM swap_statuses x WHERE x.swap_action_index=s.action_index) AND si.status IN ('open','cancelling','expiring')
+                 UNION ALL
+                 SELECT d.give_tick_id FROM dispensers d INNER JOIN dispenser_statuses st ON st.dispenser_action_index=d.action_index INNER JOIN index_statuses si ON si.id=st.status_id WHERE d.give_ownership=1 AND st.action_index=(SELECT MAX(x.action_index) FROM dispenser_statuses x WHERE x.dispenser_action_index=d.action_index) AND si.status IN ('open','cancelling','expiring')
+             )`;
+        const escrowOpenOfferSql =
+            `SELECT o.action_index FROM orders o INNER JOIN order_statuses st ON st.order_action_index=o.action_index INNER JOIN index_statuses si ON si.id=st.status_id INNER JOIN index_tickers tk ON tk.id=o.give_tick_id WHERE tk.tick=? AND o.give_ownership=1 AND st.action_index=(SELECT MAX(x.action_index) FROM order_statuses x WHERE x.order_action_index=o.action_index) AND si.status IN ('open','cancelling','expiring')
+             UNION ALL
+             SELECT s.action_index FROM swaps s INNER JOIN swap_statuses st ON st.swap_action_index=s.action_index INNER JOIN index_statuses si ON si.id=st.status_id INNER JOIN index_tickers tk ON tk.id=s.give_tick_id WHERE tk.tick=? AND s.give_ownership=1 AND st.action_index=(SELECT MAX(x.action_index) FROM swap_statuses x WHERE x.swap_action_index=s.action_index) AND si.status IN ('open','cancelling','expiring')
+             UNION ALL
+             SELECT d.action_index FROM dispensers d INNER JOIN dispenser_statuses st ON st.dispenser_action_index=d.action_index INNER JOIN index_statuses si ON si.id=st.status_id INNER JOIN index_tickers tk ON tk.id=d.give_tick_id WHERE tk.tick=? AND d.give_ownership=1 AND st.action_index=(SELECT MAX(x.action_index) FROM dispenser_statuses x WHERE x.dispenser_action_index=d.action_index) AND si.status IN ('open','cancelling','expiring')
+             ORDER BY action_index ASC
+             LIMIT 1`;
+        //</ESCROW-REDERIVE-SQL>
+        let escrowTickers = await this.indexerDb.doQuery(escrowAffectedTickersSql, []);
+        for(let row of escrowTickers){
+            let offerRows = await this.indexerDb.doQuery(escrowOpenOfferSql, [row.tick, row.tick, row.tick]);
+            let newEscrow = (offerRows.length > 0) ? offerRows[0].action_index : null;
+            await this.indexerDb.doQuery("UPDATE tokens SET escrow_action_index=? WHERE tick_id=(SELECT id FROM index_tickers WHERE tick=? LIMIT 1)", [newEscrow, row.tick]);
+        }
+    }
+
+    // Re-derive order_matches.status for COINPay matches, AFTER the dataTables
+    // delete and for the same reason the escrow gate above is re-derived there.
+    // A COINPay match is written `pending_coinpay` (actions/order_match.js) and
+    // promoted IN PLACE to `valid` by the settling COINPAY
+    // (actions/coinpay.js -> updateOrderMatchStatus, UPDATE order_matches SET
+    // status_id=? WHERE action_index=?). The promoted row belongs to an EARLIER
+    // action than the COINPAY, so a reorg that orphans the payment deletes the
+    // payment's rows and leaves the promotion standing: the match reads `valid`
+    // where a from-genesis replay reads `pending_coinpay`, and the valid-only
+    // last-trade and 24h price reads keep counting a settlement that no longer
+    // exists.
+    //
+    // Settlement proof is the same thing the forward handler writes: a
+    // `fulfilled` coinpay_statuses row for the obligation, whose
+    // coinpay_action_index IS the match's action_index (createCoinpayStatus is
+    // called with the obligation's index, and coinpay_obligations.action_index =
+    // order_matches.action_index). Those status rows are action-scoped, so the
+    // generic delete has already removed the orphaned one by the time this runs.
+    //
+    // Re-derived rather than range-reset, for the reason this file already states
+    // for the escrow gate: a range reset handles only the SET direction, while a
+    // re-derive collapses both and is idempotent, so it also self-heals rows an
+    // earlier reorg left wrong. Both statements are restricted to rows whose
+    // status actually disagrees, and both no-op when the target status has never
+    // been minted in index_statuses, so neither can blank a status_id.
+    // `pending_coinpay` and `valid` are the only two values a COINPay match ever
+    // takes (updateOrderMatchStatus has exactly one caller), so anything else is
+    // left untouched rather than guessed at.
+    //
+    // The SQL between the COINPAY-MATCH-REDERIVE-SQL markers is kept logically
+    // identical with xchain-sync/src/client/rollback.js; a cross-repo drift guard
+    // (xchain-sync test/unit/rollback_coverage.test.js) asserts they match, so
+    // source and replica derive the same match statuses.
+    async rederiveCoinpayMatchStatus(){
+        //<COINPAY-MATCH-REDERIVE-SQL>
+        const coinpayMatchDemoteSql =
+            `UPDATE order_matches SET status_id=(SELECT id FROM index_statuses WHERE status='pending_coinpay' LIMIT 1)
+             WHERE settlement_type='coinpay'
+               AND (SELECT id FROM index_statuses WHERE status='pending_coinpay' LIMIT 1) IS NOT NULL
+               AND status_id=(SELECT id FROM index_statuses WHERE status='valid' LIMIT 1)
+               AND action_index NOT IN (SELECT cs.coinpay_action_index FROM coinpay_statuses cs INNER JOIN index_statuses si ON si.id=cs.status_id WHERE si.status='fulfilled' AND cs.coinpay_action_index IS NOT NULL)`;
+        const coinpayMatchPromoteSql =
+            `UPDATE order_matches SET status_id=(SELECT id FROM index_statuses WHERE status='valid' LIMIT 1)
+             WHERE settlement_type='coinpay'
+               AND (SELECT id FROM index_statuses WHERE status='valid' LIMIT 1) IS NOT NULL
+               AND status_id=(SELECT id FROM index_statuses WHERE status='pending_coinpay' LIMIT 1)
+               AND action_index IN (SELECT cs.coinpay_action_index FROM coinpay_statuses cs INNER JOIN index_statuses si ON si.id=cs.status_id WHERE si.status='fulfilled' AND cs.coinpay_action_index IS NOT NULL)`;
+        //</COINPAY-MATCH-REDERIVE-SQL>
+        await this.indexerDb.doQuery(coinpayMatchDemoteSql, []);
+        await this.indexerDb.doQuery(coinpayMatchPromoteSql, []);
+    }
+
+    // Restore anchor validator_rewards rows an orphaned reconcile DELETEd IN PLACE
+    // from earlier SURVIVING blocks (RB-ANCHOR). reconcileAnchorRewardWinner keeps
+    // only the smallest-pubkey winner per (reward_type, round_reference); on a
+    // failover double-publish it deletes loser rows that were created at the
+    // checkpoint's SNAPSHOT_BLOCK (earlier than the ANCHOR that runs the reconcile),
+    // logging each pre-image in anchor_reward_reconcile_log keyed to the reconcile's
+    // (ANCHOR) block. If that ANCHOR is in the orphaned range, the generic block
+    // delete below drops the log rows and the ANCHOR but cannot re-create the deleted
+    // losers, leaving the reorged node with a collapsed reward set while a from-genesis
+    // replay to reorg_block-1 (reconcile never re-ran) keeps every loser. That lowers
+    // a later COLLECT's SUM(validator_rewards) → a ledger-hashed fork. Re-INSERT only
+    // losers whose ORIGINAL earn-block (reward_block_index) SURVIVES the reorg
+    // (< block_index): a loser earned inside the orphaned range is correctly absent
+    // (replay never mints it, and the generic delete already removed any copy). The
+    // restored row carries its original earn-block, so the generic block delete (which
+    // scopes on block_index >= reorg) leaves it in place. Runs BEFORE that delete so
+    // the log rows still exist. amount is the frozen consensus reward constant per
+    // round, so duplicate log rows carry an identical value and INSERT IGNORE is
+    // value-stable + idempotent (no earliest-debit tiebreak needed, unlike the slash
+    // restores above where prev_amount can differ across repeated slashes of one row).
+    //
+    // Runs UNCONDITIONALLY, OUTSIDE the firstActionIndex guard above (RB-ANCHOR-NULL).
+    // The reconcile has two callers and only one of them mints an actions row: the DOGE
+    // ANCHOR handler (actions/anchor.js) passes its own action_index, but the BTC-side
+    // derive (anchor_reward_derive.js) passes NULL because the attested rows arrive over
+    // the mirror, not as a wire action. So a BTC reorg over a range whose only reward
+    // work was a derive-side reconcile leaves firstActionIndex null, while the generic
+    // blockTables loop below still drops anchor_reward_reconcile_log and the
+    // derive_block_index delete below still drops the replacement winner: gated here,
+    // the earlier winner would be deleted and never restored, which is exactly the
+    // SUM(validator_rewards) divergence this statement exists to prevent. Keyed entirely
+    // on block heights (no action-index term), and a no-op when the log holds nothing in
+    // range, so running it on every reorg costs one query. Placed immediately past the
+    // guard rather than at the top of the transaction so its order relative to every
+    // other statement is unchanged; nothing between the guard and the deletes below
+    // touches validator_rewards or anchor_reward_reconcile_log.
+    //
+    // The surviving-earn-block test alone is NOT sufficient once a reward can be
+    // MATERIALIZED later than it is earned. An derived anchor reward
+    // carries block_index = the checkpoint's SNAPSHOT_BLOCK but is written while the
+    // BTC indexer processes a much later block, recorded here as
+    // reward_derive_block_index. A loser materialized INSIDE the orphaned range has a
+    // surviving earn-block yet must NOT be restored: the replay to reorg_block-1 never
+    // ran the derivation, so restoring it would mint an orphan the replay does not have
+    // and fork SUM(validator_rewards) in the other direction. Require BOTH heights to
+    // survive; NULL (every same-block writer, and every row pre-dating the column)
+    // keeps the original earn-block-only behavior.
+    // round_qualifier rides the pre-image like every other key column: it is part
+    // of the reward's UNIQUE identity (snapshot_block for the archive leg, whose
+    // round_reference is a reissuable hub counter), so restoring without it would
+    // re-INSERT the loser under qualifier 0 - a DIFFERENT row from the one the
+    // reconcile deleted, colliding with whatever legacy row already holds that key
+    // and leaving the real loser unrestored.
+    async restoreReconciledAnchorRewards(block_index){
+        let query, args;
+        query = `INSERT IGNORE INTO validator_rewards
+                    (source_id, signing_pubkey_id, reward_type, round_reference, round_qualifier,
+                     amount, block_index, derive_block_index)
+                 SELECT d.source_id, d.signing_pubkey_id, d.reward_type, d.round_reference,
+                        d.round_qualifier,
+                        d.amount, d.reward_block_index, d.reward_derive_block_index
+                   FROM anchor_reward_reconcile_log d
+                  WHERE d.block_index >= ?
+                    AND d.reward_block_index < ?
+                    AND (d.reward_derive_block_index IS NULL OR d.reward_derive_block_index < ?)`;
+        args = [block_index, block_index, block_index];
+        await this.indexerDb.doQuery(query, args);
+    }
+
+    // ROLLCALL eviction repair, and it MUST run before the block-table loop below
+    // deletes the rollcall_absences rows it reads.
+    //
+    // The generic delegations repair above now uses a value threshold and so already
+    // covers an eviction stamp (same actionBlock + activationDelay formula), which the
+    // earlier self-join on an orphaned DELEGATE-revoke row could not: an eviction writes
+    // no revoke row, it stamps every delegation of the source directly, and `evicted = 1`
+    // in rollcall_absences is the only record of which sources were stamped, which is
+    // exactly why that column exists. This sweep is kept as an idempotent narrower
+    // repair, not because the generic one misses it. The stakes side needs nothing here -- the
+    // eviction wrote real `unstakes` rows at the close block, so the orphaned-unstake
+    // join above already re-NULLs those stamps.
+    async repairRollcallEvictions(block_index){
+        try {
+            let rcStaking = this.config['STAKING'];
+            let rcDelay   = Number((rcStaking && rcStaking['ACTIVATION_DELAY_BLOCKS'])
+                                   ? rcStaking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS']);
             await this.indexerDb.doQuery(
-                `DELETE FROM balances
-                 WHERE address_id NOT IN (SELECT id FROM index_addresses)
-                    OR tick_id    NOT IN (SELECT id FROM index_tickers)`, []);
+                `UPDATE delegations d
+                    JOIN rollcall_absences ra ON ra.source_id = d.source_id
+                    SET d.deactivation_block = NULL
+                    WHERE ra.evicted = 1
+                      AND ra.close_block >= ?
+                      AND d.deactivation_block IS NOT NULL
+                      AND d.deactivation_block = ra.close_block + ?`,
+                [block_index, rcDelay]);
+        } catch(e){
+            // Swallow ONLY a genuine schema gap (1054/1146) on a DB that predates the
+            // ROLLCALL migration; no eviction can exist on such a node, so there is
+            // nothing to repair. Every other fault must surface.
+            if(!(e && (e.errno === 1054 || e.errno === 1146))) throw e;
+        }
+    }
 
-            // Same orphan-sweep for the other two derived tables that reference a rolled-back
-            // index id but are NOT removed by the action_index / block_index delete loops
-            // (an audit of every table referencing index_addresses/index_tickers found exactly
-            // these plus balances and the icons sweep above):
-            //
-            //  - markets (tick1_id, tick2_id): updateMarkets only UPDATEs existing rows, never
-            //    deletes, so a pair whose tick is orphaned-only keeps a row with a dangling
-            //    tick id. Worse on id reclaim: getMarketId(tick1, reclaimed_id) then matches the
-            //    stale row and the new pair silently inherits the old market's price/volume.
-            //  - pubkeys (address_id -> pubkey, INSERT IGNORE): an orphaned-only source address
-            //    leaves a dangling row; because the write is INSERT IGNORE, a later address that
-            //    reclaims the id keeps the OLD pubkey. Not consensus-hashed (block hashes take
-            //    source_pubkey from the decoder DB, not this table), so this is stale-data, not a
-            //    fork, but it still mis-attributes a pubkey after id reuse.
-            //
-            // A from-genesis node never created either row, so deleting any whose id no longer
-            // resolves makes the reorged node match it.
-            // The 0 sentinel is exempt on both sides: it is not a dangling ticker id, it is
-            // a side that has no ticker at all (the native coin, named by coin1_id/coin2_id),
-            // and matching it here deleted every token/native market on the first reorg.
-            await this.indexerDb.doQuery(
-                `DELETE FROM markets
-                 WHERE (tick1_id <> ? AND tick1_id NOT IN (SELECT id FROM index_tickers))
-                    OR (tick2_id <> ? AND tick2_id NOT IN (SELECT id FROM index_tickers))`,
-                [Database.MARKET_NATIVE_TICK_ID, Database.MARKET_NATIVE_TICK_ID]);
-            await this.indexerDb.doQuery(
-                `DELETE FROM pubkeys
-                 WHERE address_id NOT IN (SELECT id FROM index_addresses)`, []);
+    // The two BTC-side ROLLCALL tables delete on close_block. They are declared
+    // rollback: 'special' rather than 'block' because neither has a block_index
+    // column, so the generic blockTables loop below would throw 1054 on them and
+    // fail the entire rollback transaction on every reorg.
+    // Absences before verdicts, so a partial failure cannot leave an absence row
+    // pointing at an epoch whose verdict is already gone; the catch swallows ONLY
+    // the schema gap on a node that predates the ROLLCALL migration, where the
+    // tables do not exist and there is nothing to unwind. This is the ONLY
+    // roll-call unwind: xchain-sync/src/client/rollback.js carries the replica's
+    // mirror of it, and a second copy here re-raises 1146 on a pre-migration node
+    // and aborts the reorg this guard exists to keep alive.
+    async unwindRollcallEpochs(block_index){
+        try {
+            // Gates before verdicts for the same reason absences are: a gates row is
+            // derived at the close it names.
+            await this.indexerDb.doQuery(`DELETE FROM rollcall_gates WHERE close_block >= ?`, [block_index]);
+            await this.indexerDb.doQuery(`DELETE FROM rollcall_absences WHERE close_block >= ?`, [block_index]);
+            await this.indexerDb.doQuery(`DELETE FROM rollcalls WHERE close_block >= ?`, [block_index]);
+        } catch(e){
+            if(!(e && (e.errno === 1054 || e.errno === 1146))) throw e;
+        }
+    }
 
-            // IDX-2: the dangling-tick sweep above misses a market whose pair was FIRST traded only in
-            // the orphaned range but whose ticks survive (both were issued in earlier surviving
-            // blocks). createMarket inserts the markets row on the first order for a pair; if that
-            // order (and every other order/match for the pair) is in the orphaned range, the generic
-            // dataTables delete removes the orders but updateMarkets only refreshes stats, never
-            // deletes, so a zeroed-stats row lingers that a from-genesis replay never created. Scoped
-            // to the pairs this rollback collected (`markets`), each is dropped only if NO surviving
-            // orders/order_matches row references it in either orientation. markets is unhashed and
-            // snapshot-replicated (no consensus reader), so this is a fresh-replay parity fix.
-            // COALESCE on the probes: the pair ids come from `markets`, where a tickerless
-            // side is 0, while orders/order_matches store NULL for it. Comparing the two
-            // directly found no survivor for any token/native pair, so the delete below
-            // dropped live markets on every reorg that touched one.
-            for(let pair of markets){
-                let survives = await this.indexerDb.doQuery(
-                    `SELECT 1 FROM orders o
-                        WHERE (COALESCE(o.give_tick_id,0)=? AND COALESCE(o.get_tick_id,0)=?)
-                           OR (COALESCE(o.give_tick_id,0)=? AND COALESCE(o.get_tick_id,0)=?)
+    // Delete data from tables using block_index
+    async purgeBlockScopedTables(block_index){
+        let query, args;
+        for(let table of this.blockTables){
+            query = `DELETE FROM ` + table + ` WHERE block_index >= ?`;
+            args  = [block_index];
+            await this.indexerDb.doQuery(query, args);
+        }
+    }
+
+    // Second scoping key for validator_rewards: the MATERIALIZATION block. The
+    // loop above deletes on block_index, which for a reward is its EARN block.
+    // That is the same block for every writer except the BTC-side anchor/archive
+    // derivation, which earns at the checkpoint's SNAPSHOT_BLOCK S but
+    // creates the row while processing a later BTC block B (stamped derive_block_index).
+    // A reorg to any H in (S, B] orphans the block that MINTED the reward while leaving
+    // block_index = S below the delete's scope, so the row survived as a COLLECT-
+    // spendable credit that a from-genesis replay to H-1 has not derived yet: the next
+    // COLLECT reads a larger SUM(validator_rewards) here than on a freshly-synced node,
+    // which is a ledger-hashed fork. Deleting on the creating block makes the reorged
+    // node match the replay, and the derivation is idempotent, so the row re-materializes
+    // when the canonical chain reaches the mirrored attestation again.
+    //
+    // Runs AFTER the loop (so it also covers a row the earn-block delete already took,
+    // as a no-op) and BEFORE the index_addresses/index_tickers deletes below, which
+    // require that no surviving row still points at an id they are about to remove.
+    // NULL derive_block_index (every same-block writer, and every row written before the
+    // column existed) is never matched, so this is byte-neutral until the derive flag-day
+    // arms. Wrapped for the schema gap on a node that has not yet taken the column.
+    async purgeDerivedRewards(block_index){
+        try {
+            await this.indexerDb.doQuery(
+                `DELETE FROM validator_rewards WHERE derive_block_index >= ?`, [block_index]);
+        } catch(e){
+            // Swallow ONLY a genuine schema gap (1054 unknown column) on a DB that predates
+            // the migration; on such a node no derived reward can exist either, so there is
+            // nothing to delete. Every other fault (deadlock, lock-wait, killed connection)
+            // must propagate so the whole reorg transaction rolls back rather than committing
+            // a partial rollback that keeps a spendable reward.
+            if(!(e && (e.errno === 1146 || e.errno === 1054))) throw e;
+        }
+    }
+
+    // Roll back the index id lookups (index_addresses / index_tickers).
+    //
+    // These ids became consensus-relevant once an address/ticker can be referenced
+    // on the wire as ^<id>: a wire ^<id> is stored verbatim into a *_id column and
+    // resolved back to a string at block-hash time, so the SAME ^<id> must name the
+    // SAME entity on every node. The ids are assigned by an explicit dense counter
+    // (db.getNextAddressId / getNextTickerId), so deleting the ids first seen in the
+    // orphaned blocks lets the surviving MAX(id)+1 reproduce them deterministically
+    // when the canonical chain is reapplied. (Pre-^id, these tables were intentionally
+    // NOT rolled back: their AUTO_INCREMENT ids never rewound and fed no hashed value.
+    // That is now a fork vector, so they ARE rolled back.)
+    //
+    // MUST run AFTER the action_index and block_index data deletes above: every row
+    // that referenced an orphaned-block id has already been removed, so no surviving
+    // row is left pointing at a deleted id. Rows whose block_index is NULL
+    // (pre-migration / never stamped) are never matched and are left untouched.
+    async purgeIndexLookups(block_index){
+        let query, args;
+        for(let table of this.indexTables){
+            query = `DELETE FROM ` + table + ` WHERE block_index >= ?`;
+            args  = [block_index];
+            await this.indexerDb.doQuery(query, args);
+        }
+    }
+
+    // F1a recovery reward re-arm. validator_rewards is block-scoped and was deleted
+    // above by earn-block (block_index >= firstBlockIndex). Re-arm the staging rows for
+    // those same earn-blocks so the reward can be re-materialized on the canonical chain.
+    // Key on the reward's earn-block (block_index), NOT on whether the source address
+    // rolled out: a reward row is dropped iff its earn-block is in the orphaned range,
+    // independent of its source address. The common (and easily missed) case is an
+    // address first seen BEFORE the range that earns a reward INSIDE it: the reward row
+    // is deleted but the address survives, so the old "source_id NOT IN index_addresses"
+    // predicate never fired and the reward was silently lost forever. MUST run AFTER the
+    // validator_rewards/index_addresses deletes above. No-op (and the table may be absent
+    // on a non-recovery stack) outside an in-progress recovery, so it is wrapped cheaply.
+    //
+    // The floor is NOT the reorg height alone. A restored row carries the
+    // MATERIALIZATION block it was first derived at (earn + the frozen mirror
+    // maturity), so the derive-scoped delete above takes it whenever that height is
+    // orphaned - which happens for earn-blocks a whole maturity window BELOW the reorg
+    // point. Re-arming only from the reorg height would leave those rows applied=1 with
+    // no validator_rewards row behind them: the reward would be gone from this node for
+    // good while the live fleet re-derives it from its mirror when the canonical chain
+    // reaches the same height again. restoredRewardRearmFloor drops the floor by exactly
+    // the maturity window on a network where derivation is armed, and stays at the reorg
+    // height everywhere else (nothing below it can carry a derive stamp).
+    async rearmRecoveryRewards(block_index){
+        let rearmFloor = ar.restoredRewardRearmFloor(block_index, String(this.config['NETWORK'] || ''));
+        if(rearmFloor === null) rearmFloor = block_index;
+        try {
+            let rearm = await this.indexerDb.doQuery(
+                `UPDATE recovery_pending_rewards
+                    SET applied=0, source_id=NULL, applied_block=NULL
+                  WHERE applied=1 AND block_index >= ?`, [rearmFloor]);
+            if(rearm && rearm.affectedRows)
+                this.indexerDb._recoveryPendingChecked = false;
+            let survivors = await this.indexerDb.doQuery(
+                `SELECT DISTINCT rpr.source_address AS source_address, ia.id AS source_id
+                   FROM recovery_pending_rewards rpr
+                   JOIN index_addresses ia ON ia.address = rpr.source_address
+                  WHERE rpr.applied=0`);
+            // Re-materialize at the reorg point B (block_index): the survivor's reward
+            // earn-block may be < B, so stamp applied_block = B as the forward-window key
+            // xchain-sync streams it by (its earn-block sits below the post-reorg window).
+            // A row whose ORIGINAL derive height is still ahead of B is left staged by the
+            // apply path's due gate and lands again when the replay reaches that height,
+            // which is the same block a live node re-derives it at.
+            for(let s of (survivors || []))
+                await this.indexerDb.applyPendingRewardsForAddress(s.source_address, s.source_id, block_index);
+        } catch(e){
+            // Swallow ONLY the schema-gap case: recovery_pending_rewards absent on a
+            // non-recovery stack (errno 1146 missing table / 1054 missing column), where
+            // nothing was staged to re-arm. Every other fault (lock-wait timeout, deadlock,
+            // killed connection) must propagate to the outer catch so the whole reorg
+            // transaction rolls back and is retried, instead of commitTransaction()
+            // persisting a half-re-armed recovery_pending_rewards/validator_rewards set
+            // (which forks SUM(validator_rewards) at the next COLLECT). Mirrors the
+            // narrow errno gates in xchain-sync's ClientApplier.
+            if(!(e && (e.errno === 1146 || e.errno === 1054))) throw e;
+        }
+    }
+
+    // Sweep balances rows orphaned by the index-table delete above. `balances` is a
+    // derived table keyed by (address_id, tick_id); it is NOT in dataTables (not
+    // deleted by action_index) and is normally reconciled by updateAddressBalance.
+    // But when an address (or tick) is seen ONLY in the orphaned range, its
+    // index_addresses/index_tickers row was just deleted, so the refresh below
+    // resolves the string to NULL (suppressIndexIdCreation) and updateAddressBalance
+    // can no longer locate the stale row by its now-deleted id. That leaves a zombie
+    // balance whose id matches no index row, which inflates sum(balances) and trips
+    // sanityCheck on the next block touching the tick (indexer halts). A
+    // from-genesis replay never created that row, so deleting every balance whose
+    // address_id/tick_id no longer resolves makes the reorged node match a fresh
+    // one. (Pre-suppressIndexIdCreation this was masked: createAddress resurrected the
+    // id and updateAddressBalance recomputed the row to 0 and removed it, at the cost
+    // of the ^<id> fork the index delete exists to close. The id PKs are NOT NULL, so
+    // the NOT IN subqueries never short-circuit on a NULL.) Mirrors the icons orphan
+    // sweep above.
+    async sweepDanglingIndexReferences(){
+        await this.indexerDb.doQuery(
+            `DELETE FROM balances
+             WHERE address_id NOT IN (SELECT id FROM index_addresses)
+                OR tick_id    NOT IN (SELECT id FROM index_tickers)`, []);
+
+        // Same orphan-sweep for the other two derived tables that reference a rolled-back
+        // index id but are NOT removed by the action_index / block_index delete loops
+        // (an audit of every table referencing index_addresses/index_tickers found exactly
+        // these plus balances and the icons sweep above):
+        //
+        //  - markets (tick1_id, tick2_id): updateMarkets only UPDATEs existing rows, never
+        //    deletes, so a pair whose tick is orphaned-only keeps a row with a dangling
+        //    tick id. Worse on id reclaim: getMarketId(tick1, reclaimed_id) then matches the
+        //    stale row and the new pair silently inherits the old market's price/volume.
+        //  - pubkeys (address_id -> pubkey, INSERT IGNORE): an orphaned-only source address
+        //    leaves a dangling row; because the write is INSERT IGNORE, a later address that
+        //    reclaims the id keeps the OLD pubkey. Not consensus-hashed (block hashes take
+        //    source_pubkey from the decoder DB, not this table), so this is stale-data, not a
+        //    fork, but it still mis-attributes a pubkey after id reuse.
+        //
+        // A from-genesis node never created either row, so deleting any whose id no longer
+        // resolves makes the reorged node match it.
+        // The 0 sentinel is exempt on both sides: it is not a dangling ticker id, it is
+        // a side that has no ticker at all (the native coin, named by coin1_id/coin2_id),
+        // and matching it here deleted every token/native market on the first reorg.
+        await this.indexerDb.doQuery(
+            `DELETE FROM markets
+             WHERE (tick1_id <> ? AND tick1_id NOT IN (SELECT id FROM index_tickers))
+                OR (tick2_id <> ? AND tick2_id NOT IN (SELECT id FROM index_tickers))`,
+            [Database.MARKET_NATIVE_TICK_ID, Database.MARKET_NATIVE_TICK_ID]);
+        await this.indexerDb.doQuery(
+            `DELETE FROM pubkeys
+             WHERE address_id NOT IN (SELECT id FROM index_addresses)`, []);
+    }
+
+    // IDX-2: the dangling-tick sweep above misses a market whose pair was FIRST traded only in
+    // the orphaned range but whose ticks survive (both were issued in earlier surviving
+    // blocks). createMarket inserts the markets row on the first order for a pair; if that
+    // order (and every other order/match for the pair) is in the orphaned range, the generic
+    // dataTables delete removes the orders but updateMarkets only refreshes stats, never
+    // deletes, so a zeroed-stats row lingers that a from-genesis replay never created. Scoped
+    // to the pairs this rollback collected (`markets`), each is dropped only if NO surviving
+    // orders/order_matches row references it in either orientation. markets is unhashed and
+    // snapshot-replicated (no consensus reader), so this is a fresh-replay parity fix.
+    // COALESCE on the probes: the pair ids come from `markets`, where a tickerless
+    // side is 0, while orders/order_matches store NULL for it. Comparing the two
+    // directly found no survivor for any token/native pair, so the delete below
+    // dropped live markets on every reorg that touched one.
+    async sweepOrphanedMarketPairs(markets){
+        for(let pair of markets){
+            let survives = await this.indexerDb.doQuery(
+                `SELECT 1 FROM orders o
+                    WHERE (COALESCE(o.give_tick_id,0)=? AND COALESCE(o.get_tick_id,0)=?)
+                       OR (COALESCE(o.give_tick_id,0)=? AND COALESCE(o.get_tick_id,0)=?)
+                    LIMIT 1`,
+                [pair.tick1_id, pair.tick2_id, pair.tick2_id, pair.tick1_id]);
+            if(survives.length === 0){
+                survives = await this.indexerDb.doQuery(
+                    `SELECT 1 FROM order_matches om
+                        WHERE (COALESCE(om.give_tick_id,0)=? AND COALESCE(om.get_tick_id,0)=?)
+                           OR (COALESCE(om.give_tick_id,0)=? AND COALESCE(om.get_tick_id,0)=?)
                         LIMIT 1`,
                     [pair.tick1_id, pair.tick2_id, pair.tick2_id, pair.tick1_id]);
-                if(survives.length === 0){
-                    survives = await this.indexerDb.doQuery(
-                        `SELECT 1 FROM order_matches om
-                            WHERE (COALESCE(om.give_tick_id,0)=? AND COALESCE(om.get_tick_id,0)=?)
-                               OR (COALESCE(om.give_tick_id,0)=? AND COALESCE(om.get_tick_id,0)=?)
-                            LIMIT 1`,
-                        [pair.tick1_id, pair.tick2_id, pair.tick2_id, pair.tick1_id]);
-                }
-                if(survives.length === 0){
-                    await this.indexerDb.doQuery(
-                        `DELETE FROM markets WHERE (tick1_id=? AND tick2_id=?) OR (tick1_id=? AND tick2_id=?)`,
-                        [pair.tick1_id, pair.tick2_id, pair.tick2_id, pair.tick1_id]);
-                }
             }
-
-            // Delete consensus price snapshots anchored to the orphaned blocks.
-            // price_snapshots anchors each round to a block via reference_block
-            // (its equivalent of block_index) rather than block_index itself, so
-            // it falls outside the generic blockTables loop above and needs its
-            // own delete. Without it, snapshots tied to orphaned blocks survive
-            // with status='finalized' and a from-genesis replay on the new chain
-            // never regenerates those rounds, leaving replaying nodes permanently
-            // divergent from surviving nodes on this table.
-            //
-            // Note: other hub-mirrored block-anchored tables (state_checkpoints,
-            // capability_snapshots) are intentionally NOT deleted here. Both are
-            // append-only with supersede-by-seq / MAX-per-height read semantics,
-            // so a stale row is harmless once the hub pushes a higher-seq
-            // replacement; convergence is hub-driven for those tables. The
-            // price_snapshots delete exists because a from-genesis replay never
-            // regenerates orphaned rounds, so hub re-mirror alone cannot close
-            // the divergence window on this table.
-            // PRICE-SNAP-1: reference_block is ALWAYS a BTC anchor height (the PRICE v0 wire field),
-            // regardless of the publishing chain, and reference_chain records that publisher. The old
-            // unqualified `reference_block >= block_index` therefore (a) is a numeric no-op on a
-            // DOGE/LTC indexer (local heights dwarf BTC anchors) and (b) would, once the price
-            // capability is resolvable off-BTC, let a BTC reorg delete a DOGE/LTC-published round
-            // anchored to a BTC height that the hub (source_chain-scoped) still keeps - a mirror-hole
-            // fork on a table that feeds getOracleDataForVM. Scope the delete to BTC-published rounds
-            // on the BTC indexer only; off-BTC rounds converge via the hub's source_chain retraction,
-            // exactly as the note above describes. Behavior-preserving today (all v0 rounds are BTC).
-            if(this.config['COIN'] === 'BTC'){
-                query = `DELETE FROM price_snapshots WHERE reference_chain = 'BTC' AND reference_block >= ?`;
-                args  = [block_index];
-                await this.indexerDb.doQuery(query, args);
+            if(survives.length === 0){
+                await this.indexerDb.doQuery(
+                    `DELETE FROM markets WHERE (tick1_id=? AND tick2_id=?) OR (tick1_id=? AND tick2_id=?)`,
+                    [pair.tick1_id, pair.tick2_id, pair.tick2_id, pair.tick1_id]);
             }
-
-            // oracle_prices is the per-action local mirror of PRICE v1 rows
-            // (populated by hub_db_sync). Like price_snapshots, its rows are
-            // tagged by source_chain + action_index and are NOT regenerated by a
-            // from-genesis replay on the new chain. The async hub retraction
-            // (retractPriceRange below) handles convergence eventually, but a
-            // reorg concurrent with a hub blip leaves stale rows serving until
-            // the hub reconnects. Deleting them here closes that window; the
-            // later hub-driven delete is a harmless no-op. The delete MUST be
-            // qualified by source_chain (COIN) because oracle_prices holds rows
-            // from ALL chains and action_index is only unique within a chain.
-            query = `DELETE FROM oracle_prices WHERE source_chain = ? AND action_index >= ?`;
-            args  = [this.config['COIN'], firstActionIndex !== null ? firstActionIndex : Number.MAX_SAFE_INTEGER];
-            await this.indexerDb.doQuery(query, args);
-
-            // cross_chain_calls / cross_chain_matches are the per-action local mirrors
-            // of hub-relayed XCALL + cross-chain DEX rows (populated by hub_db_sync).
-            // Like oracle_prices above, they are tagged by source chain + a per-chain
-            // action_index and are NOT regenerated by a from-genesis replay on the new
-            // chain. The async hub retractions (retractXcallRange / retractMatchRange
-            // below) converge eventually, but a reorg concurrent with a hub blip would
-            // leave stale 'finalized' calls / matches serving until the hub reconnects;
-            // deleting them here closes that window and the later hub-driven row:deleted
-            // is a harmless no-op. cross_chain_matches is two-sided: a match drops when
-            // EITHER leg on this chain was rolled back. Predicates are byte-identical to
-            // client/rollback.js (drift-guarded by the markers below), and deliberately NOT
-            // to hub_db_sync.js _applyRetraction: that path additionally carries the bounded
-            // to_action_index clause and the item-5308 push_generation fence, and for these
-            // two quorum-class tables the fence is MANDATORY (an unfenced retraction is
-            // refused outright), so its emitted SQL is always stricter than this one.
-            // The asymmetry is the point. This delete is our own authoritative rollback of
-            // our own chain, so it is unbounded from the orphan point up; the hub-driven
-            // delete acts on untrusted input and must be fenced to a generation we produced.
-            // Do not "reconcile" the two by adding a fence here or dropping one there.
-            //<CROSS-CHAIN-MIRROR-REORG-DELETE>
-            let crossChainFrom = firstActionIndex !== null ? firstActionIndex : Number.MAX_SAFE_INTEGER;
-            query = `DELETE FROM cross_chain_calls WHERE source_chain = ? AND source_action_index >= ?`;
-            args  = [this.config['COIN'], crossChainFrom];
-            await this.indexerDb.doQuery(query, args);
-            query = `DELETE FROM cross_chain_matches WHERE (a_chain = ? AND a_action_index >= ?) OR (b_chain = ? AND b_action_index >= ?)`;
-            args  = [this.config['COIN'], crossChainFrom, this.config['COIN'], crossChainFrom];
-            await this.indexerDb.doQuery(query, args);
-            // bridge_transfers is the same kind of mirror and closes the same window, and it is
-            // ONE-SIDED: a transfer is retracted when the single source leg (the XBRIDGE v0 lock
-            // or v1 burn named by src_chain/src_action_index) is reorged away, so one column pair
-            // names the range. The spelling is src_chain/src_action_index, not the older
-            // source_chain/source_action_index, because that is what the DDL carries (direction is
-            // derived from src_chain and never stored); hub_db_sync.js _applyRetraction reads the
-            // same pair out of RETRACTION_CHAIN_COLUMNS / RETRACTION_COLUMNS, so the two predicates
-            // remove exactly the same rows apart from that path's bounded to_action_index clause
-            // and its mandatory push_generation fence, which the asymmetry note above explains.
-            // An APPLIED bridge leg is not unwound here: its bridge_settlements row is rollback
-            // 'action' and drops with the orphaned block, so replay re-applies the transfer.
-            query = `DELETE FROM bridge_transfers WHERE src_chain = ? AND src_action_index >= ?`;
-            args  = [this.config['COIN'], crossChainFrom];
-            await this.indexerDb.doQuery(query, args);
-            //</CROSS-CHAIN-MIRROR-REORG-DELETE>
-
-            // Re-derive attest_validator_stats for the orphaned range. This is
-            // a monotone aggregate (fulfilled/missed/slashed counters per
-            // validator/provider) with no action_index or block FK, so neither
-            // generic delete loop above can touch it. A blanket delete would also
-            // drop increments earned in surviving blocks. Instead we drop only the
-            // rows whose most-recent touch is in the orphaned range and rebuild them
-            // from the surviving signatures + expired-request records, matching what
-            // a from-genesis replay to block_index-1 would produce.
-            await this.recomputeAttestationValidatorStats(block_index);
-
-            // DEBUG : Full balances and token updates
-            // await this.indexerDb.updateBalances(true, true);
-            // await this.indexerDb.updateTokens(true, true);
-
-            // The refresh helpers below resolve addresses/tickers collected from the
-            // orphaned range (the read phase ran before the deletes). An entity that
-            // existed ONLY in rolled-back blocks has just had its index_addresses /
-            // index_tickers row removed by the indexTables delete above. Without this
-            // guard, createAddress/createTicker (reached via updateAddressBalance and
-            // updateTokenInfo -> getTokenInfo) would RE-CREATE that lookup row, resurrecting
-            // the just-deleted id at the surviving MAX(id)+1. A fresh-from-genesis node
-            // never had that entity, so the same id stays free there and a wire ^<id>
-            // reference resolves to a different entity -> the exact consensus fork this
-            // rollback delete set out to close. suppressIndexIdCreation makes the create
-            // helpers resolve-only for the duration: surviving entities still resolve to
-            // their existing id; orphaned-only entities resolve to null and the refresh is
-            // a harmless no-op (their data rows are already gone). Reset in finally so a
-            // throw (e.g. sanityCheck supply mismatch) never leaks the read-only mode into
-            // the next forward block.
-            this.indexerDb.suppressIndexIdCreation = true;
-            try {
-
-                // Update address balances to get back to sane balances based on credits/debits
-                await this.indexerDb.updateBalances(Object.keys(addresses), true);
-
-                // Update token information
-                await this.indexerDb.updateTokens(tickers, true);
-
-                // Update market information
-                await this.indexerDb.updateMarkets(markets, block_index);
-
-                // Do a sanity check to verify that token supplies match data in credits/debits/escrows/balances tables
-                await this.indexerDb.sanityCheck(block_index);
-
-            } finally {
-                this.indexerDb.suppressIndexIdCreation = false;
-            }
-
-            // Bump the push-generation fence (HUB-RETRACT-1) and write-ahead the hub retractions
-            // (HUB-RETRACT-2), both INSIDE this transaction so they commit atomically with the
-            // deletes above. Placed last (after sanityCheck) so any earlier failure rolls the bump
-            // back and the reorg is retried cleanly. bumpPushGeneration routes through the open
-            // transaction connection (doQuery), so a failure throws into the catch below.
-            let bumpedGeneration = await this.indexerDb.bumpPushGeneration(this.config['COIN']);
-            retractionGeneration = bumpedGeneration - 1;
-
-            // Write-ahead the three retraction intents as durable pending_hub_pushes rows, committed
-            // atomically with the rollback. Previously the retractions were only enqueued in the
-            // post-commit failure path, so a crash (or DB-pool blip) between commit and the live RPC
-            // dropped them permanently - the retried reorg skips rollback() (lastIndexerBlock already
-            // below minReorgBlock), so they were never re-issued, leaving orphaned 'finalized' hub
-            // rows serving fleet-wide. The rows are inserted AFTER the dataTables purge, so this
-            // rollback's own orphan delete cannot remove them; and a deeper later reorg's purge
-            // deliberately EXCLUDES these retraction push_types (HUB-RETRACT-2 nested-reorg guard,
-            // see the pending_hub_pushes delete above), so they are never superseded by a later
-            // purge and instead drain idempotently under the generation fence. The
-            // durable rows are CLOSED-range (bounded by lastActionIndex): a queued drain runs after
-            // replay may have re-published rows above lastActionIndex, which must be preserved.
-            if(firstActionIndex !== null && this.hubClient && this.hubClient.enabled){
-                for(let pushType of ['price_retraction', 'xcall_retraction', 'match_retraction']){
-                    let id = await this.indexerDb.enqueueHubPushTx(pushType, {
-                        coin: this.config['COIN'], action_index: firstActionIndex,
-                        last_action_index: lastActionIndex, retraction_generation: retractionGeneration });
-                    stagedRetractions.push({ pushType, id });
-                }
-
-                // One durable row per ATTEST batch this reorg un-landed, on the same
-                // write-ahead reasoning: the landing push already told a hub to stamp a batch
-                // link on every response the batch carried, and after the purge below this node
-                // holds nothing that could re-derive which batch that was. The payload names ONE
-                // batch rather than an action range, because the hub-side effect is a link
-                // cleared and never a row deleted (HubClient.retractAttestBatch says why).
-                for(let batch of unlandedAttestBatches){
-                    let payload = {
-                        coin:         this.config['COIN'],
-                        network:      this.config['NETWORK'],
-                        batch_key:    batch.batch_key,
-                        window_start: batch.window_start,
-                        window_end:   batch.window_end,
-                        // The link the hub stamped is the HEAD's action index (row 52), so that
-                        // is the value the retraction has to name, never the chunk that
-                        // completed the batch or the lowest rolled-back action.
-                        action_index: batch.action_index
-                    };
-                    // Keyed at the head's action index like every other queue row, so a deeper
-                    // reorg's purge would carry it away were the retraction types not excluded
-                    // from that delete.
-                    let id = await this.indexerDb.enqueueHubPushTx('attest_batch_retraction', payload,
-                        batch.action_index);
-                    stagedRetractions.push({ pushType: 'attest_batch_retraction', id, payload });
-                }
-            }
-
-            // Commit: the rollback is now atomically applied
-            await this.indexerDb.commitTransaction();
-
-            // Invalidate the height-keyed getBlockTime() memo on BOTH DB instances. This reorg
-            // just changed the content of every height >= block_index: the decoder re-inserted
-            // the new-chain block(s) with new block_time(s), and the indexer's blocks rows were
-            // deleted above. The memo is keyed by height only and is never otherwise cleared, so
-            // without this a depth-1 reorg replay of the same height would hit a stale cache and
-            // drive the block with the orphaned chain's timestamp (a unilateral consensus fork on
-            // any straddling time gate). Clearing after commit guarantees the forward replay
-            // re-reads the new chain's block_time.
-            if(this.decoderDb && typeof this.decoderDb.clearBlockTimeCache === 'function') this.decoderDb.clearBlockTimeCache();
-            if(this.indexerDb && typeof this.indexerDb.clearBlockTimeCache === 'function') this.indexerDb.clearBlockTimeCache();
-
-            // Same reorg, same class of stale memo, same place for the same reason:
-            // drop the light-client touched-key resolver caches. They map a
-            // surrogate id to its canonical name and were cached for the connection
-            // lifetime on the premise that the mapping is immutable. A rollback is
-            // exactly where that premise fails, because it deletes index_tickers /
-            // index_addresses rows above the reorg point and FREES their dense ids for
-            // createTicker/createAddress to reassign to whatever the new chain interns.
-            // (createTicker documents the same hazard from the other side: it refuses
-            // to mint under suppressIndexIdCreation because resurrecting a deleted id
-            // would re-open the wire ^<id> fork.)
-            //
-            // A stale entry yields NO leaf and no error rather than a wrong one: the
-            // touched key is recorded under the OLD name, getNetBalance matches
-            // nothing, _leafOrNull turns 0 into null, and the commitment deletes a key
-            // that never existed. The block's balances_root then comes out
-            // byte-identical to its predecessor's and the real leaf is never written.
-            //
-            // Cleared HERE, immediately after commit and beside the block-time memo,
-            // not at the end of rollback(): a throw between here and there would skip
-            // it on an already-committed rollback, which is precisely the stale-cache
-            // state this prevents. Clearing is cheap (pure memoisation, refilled on
-            // demand); invalidating per deleted id would mean enumerating rows this
-            // pass has already deleted.
-            if(this.indexerDb){
-                this.indexerDb._smtTickNameCache    = null;
-                this.indexerDb._smtAddressNameCache = null;
-            }
-            // Still needed on its own after db.clearSmtNameCaches() was wired into
-            // every transaction ABORT: this frees ids by COMMITTING deletes, an abort
-            // frees them by un-assigning them, and neither implies the other.
-
-            // Invalidate the early-decide tally watermark. This reorg may have deleted
-            // and re-added ledger, vote, and delegation rows at or above block_index (and reused
-            // action_index values), so any cached poll fingerprint could now match spuriously and
-            // wrongly skip a re-tally on the replay. Drop them all; the forward replay re-tallies
-            // each armed poll on first sight, exactly as on a fresh process.
-            if(this.indexerDb && typeof this.indexerDb.clearPollTallyWatermark === 'function') this.indexerDb.clearPollTallyWatermark();
-
-            // Destructive rollback is done and committed; clear the in-progress marker so
-            // /health reflects a caught-up node again (#1812).
-            if(this.indexer) this.indexer.stallReason = null;
-
-        } catch(e) {
-            // Roll back so the DB is left untouched rather than in a partial rollback state
-            await this.indexerDb.rollbackTransaction();
-            // Clear the reorg marker on failure too so it can't stick; the caller re-detects
-            // the reorg and retries, re-arming it on the next attempt (#1812).
-            if(this.indexer) this.indexer.stallReason = null;
-            throw e;
         }
+    }
 
-        // Deliver the write-ahead hub retractions committed above (HUB-RETRACT-2). Each was already
-        // durably staged in pending_hub_pushes inside the rollback transaction, so even a crash right
-        // here loses nothing: HubPushQueue drains the surviving rows on restart. Here we just try an
-        // IMMEDIATE live delivery to prune the hub's orphaned oracle_prices / cross_chain_calls /
-        // cross_chain_matches rows without waiting for the queue's backoff, and drop the durable row
-        // on success. Any failure simply leaves the row for the queue (retractions are idempotent and
-        // generation-fenced, so re-delivery is safe).
+    // Delete consensus price snapshots anchored to the orphaned blocks.
+    // price_snapshots anchors each round to a block via reference_block
+    // (its equivalent of block_index) rather than block_index itself, so
+    // it falls outside the generic blockTables loop above and needs its
+    // own delete. Without it, snapshots tied to orphaned blocks survive
+    // with status='finalized' and a from-genesis replay on the new chain
+    // never regenerates those rounds, leaving replaying nodes permanently
+    // divergent from surviving nodes on this table.
+    //
+    // Note: other hub-mirrored block-anchored tables (state_checkpoints,
+    // capability_snapshots) are intentionally NOT deleted here. Both are
+    // append-only with supersede-by-seq / MAX-per-height read semantics,
+    // so a stale row is harmless once the hub pushes a higher-seq
+    // replacement; convergence is hub-driven for those tables. The
+    // price_snapshots delete exists because a from-genesis replay never
+    // regenerates orphaned rounds, so hub re-mirror alone cannot close
+    // the divergence window on this table.
+    // PRICE-SNAP-1: reference_block is ALWAYS a BTC anchor height (the PRICE v0 wire field),
+    // regardless of the publishing chain, and reference_chain records that publisher. The old
+    // unqualified `reference_block >= block_index` therefore (a) is a numeric no-op on a
+    // DOGE/LTC indexer (local heights dwarf BTC anchors) and (b) would, once the price
+    // capability is resolvable off-BTC, let a BTC reorg delete a DOGE/LTC-published round
+    // anchored to a BTC height that the hub (source_chain-scoped) still keeps - a mirror-hole
+    // fork on a table that feeds getOracleDataForVM. Scope the delete to BTC-published rounds
+    // on the BTC indexer only; off-BTC rounds converge via the hub's source_chain retraction,
+    // exactly as the note above describes. Behavior-preserving today (all v0 rounds are BTC).
+    async purgeOrphanedPriceSnapshots(block_index){
+        let query, args;
+        if(this.config['COIN'] === 'BTC'){
+            query = `DELETE FROM price_snapshots WHERE reference_chain = 'BTC' AND reference_block >= ?`;
+            args  = [block_index];
+            await this.indexerDb.doQuery(query, args);
+        }
+    }
+
+    // oracle_prices is the per-action local mirror of PRICE v1 rows
+    // (populated by hub_db_sync). Like price_snapshots, its rows are
+    // tagged by source_chain + action_index and are NOT regenerated by a
+    // from-genesis replay on the new chain. The async hub retraction
+    // (retractPriceRange below) handles convergence eventually, but a
+    // reorg concurrent with a hub blip leaves stale rows serving until
+    // the hub reconnects. Deleting them here closes that window; the
+    // later hub-driven delete is a harmless no-op. The delete MUST be
+    // qualified by source_chain (COIN) because oracle_prices holds rows
+    // from ALL chains and action_index is only unique within a chain.
+    async purgeOrphanedOraclePrices(firstActionIndex){
+        let query, args;
+        query = `DELETE FROM oracle_prices WHERE source_chain = ? AND action_index >= ?`;
+        args  = [this.config['COIN'], firstActionIndex !== null ? firstActionIndex : Number.MAX_SAFE_INTEGER];
+        await this.indexerDb.doQuery(query, args);
+    }
+
+    // cross_chain_calls / cross_chain_matches are the per-action local mirrors
+    // of hub-relayed XCALL + cross-chain DEX rows (populated by hub_db_sync).
+    // Like oracle_prices above, they are tagged by source chain + a per-chain
+    // action_index and are NOT regenerated by a from-genesis replay on the new
+    // chain. The async hub retractions (retractXcallRange / retractMatchRange
+    // below) converge eventually, but a reorg concurrent with a hub blip would
+    // leave stale 'finalized' calls / matches serving until the hub reconnects;
+    // deleting them here closes that window and the later hub-driven row:deleted
+    // is a harmless no-op. cross_chain_matches is two-sided: a match drops when
+    // EITHER leg on this chain was rolled back. Predicates are byte-identical to
+    // client/rollback.js (drift-guarded by the markers below), and deliberately NOT
+    // to hub_db_sync.js _applyRetraction: that path additionally carries the bounded
+    // to_action_index clause and the item-5308 push_generation fence, and for these
+    // two quorum-class tables the fence is MANDATORY (an unfenced retraction is
+    // refused outright), so its emitted SQL is always stricter than this one.
+    // The asymmetry is the point. This delete is our own authoritative rollback of
+    // our own chain, so it is unbounded from the orphan point up; the hub-driven
+    // delete acts on untrusted input and must be fenced to a generation we produced.
+    // Do not "reconcile" the two by adding a fence here or dropping one there.
+    async purgeCrossChainMirrors(firstActionIndex){
+        let query, args;
+        //<CROSS-CHAIN-MIRROR-REORG-DELETE>
+        let crossChainFrom = firstActionIndex !== null ? firstActionIndex : Number.MAX_SAFE_INTEGER;
+        query = `DELETE FROM cross_chain_calls WHERE source_chain = ? AND source_action_index >= ?`;
+        args  = [this.config['COIN'], crossChainFrom];
+        await this.indexerDb.doQuery(query, args);
+        query = `DELETE FROM cross_chain_matches WHERE (a_chain = ? AND a_action_index >= ?) OR (b_chain = ? AND b_action_index >= ?)`;
+        args  = [this.config['COIN'], crossChainFrom, this.config['COIN'], crossChainFrom];
+        await this.indexerDb.doQuery(query, args);
+        // bridge_transfers is the same kind of mirror and closes the same window, and it is
+        // ONE-SIDED: a transfer is retracted when the single source leg (the XBRIDGE v0 lock
+        // or v1 burn named by src_chain/src_action_index) is reorged away, so one column pair
+        // names the range. The spelling is src_chain/src_action_index, not the older
+        // source_chain/source_action_index, because that is what the DDL carries (direction is
+        // derived from src_chain and never stored); hub_db_sync.js _applyRetraction reads the
+        // same pair out of RETRACTION_CHAIN_COLUMNS / RETRACTION_COLUMNS, so the two predicates
+        // remove exactly the same rows apart from that path's bounded to_action_index clause
+        // and its mandatory push_generation fence, which the asymmetry note above explains.
+        // An APPLIED bridge leg is not unwound here: its bridge_settlements row is rollback
+        // 'action' and drops with the orphaned block, so replay re-applies the transfer.
+        query = `DELETE FROM bridge_transfers WHERE src_chain = ? AND src_action_index >= ?`;
+        args  = [this.config['COIN'], crossChainFrom];
+        await this.indexerDb.doQuery(query, args);
+        //</CROSS-CHAIN-MIRROR-REORG-DELETE>
+    }
+
+    // Recompute the cached projections (balances, token supplies, market stats) for the
+    // entities the orphaned range touched, then sanity-check supplies, with index-id
+    // creation suppressed for the duration so a refresh cannot resurrect a deleted id.
+    // DEBUG : Full balances and token updates
+    // await this.indexerDb.updateBalances(true, true);
+    // await this.indexerDb.updateTokens(true, true);
+
+    // The refresh helpers below resolve addresses/tickers collected from the
+    // orphaned range (the read phase ran before the deletes). An entity that
+    // existed ONLY in rolled-back blocks has just had its index_addresses /
+    // index_tickers row removed by the indexTables delete above. Without this
+    // guard, createAddress/createTicker (reached via updateAddressBalance and
+    // updateTokenInfo -> getTokenInfo) would RE-CREATE that lookup row, resurrecting
+    // the just-deleted id at the surviving MAX(id)+1. A fresh-from-genesis node
+    // never had that entity, so the same id stays free there and a wire ^<id>
+    // reference resolves to a different entity -> the exact consensus fork this
+    // rollback delete set out to close. suppressIndexIdCreation makes the create
+    // helpers resolve-only for the duration: surviving entities still resolve to
+    // their existing id; orphaned-only entities resolve to null and the refresh is
+    // a harmless no-op (their data rows are already gone). Reset in finally so a
+    // throw (e.g. sanityCheck supply mismatch) never leaks the read-only mode into
+    // the next forward block.
+    async refreshDerivedProjections(block_index, addresses, tickers, markets){
+        this.indexerDb.suppressIndexIdCreation = true;
+        try {
+
+            // Update address balances to get back to sane balances based on credits/debits
+            await this.indexerDb.updateBalances(Object.keys(addresses), true);
+
+            // Update token information
+            await this.indexerDb.updateTokens(tickers, true);
+
+            // Update market information
+            await this.indexerDb.updateMarkets(markets, block_index);
+
+            // Do a sanity check to verify that token supplies match data in credits/debits/escrows/balances tables
+            await this.indexerDb.sanityCheck(block_index);
+
+        } finally {
+            this.indexerDb.suppressIndexIdCreation = false;
+        }
+    }
+
+    // Source-chain reorg fence (item 5308): this chain's monotonic push generation is bumped so
+    // that rows re-published by forward replay carry the NEW generation while the orphaned rows
+    // keep the prior one, and the retractions below carry the PRE-bump generation (bumped - 1) so
+    // the hub fence deletes only the orphans (push_generation <= pre) while a re-published row at a
+    // recycled action_index (new generation) survives. push_generations is NEVER a rollback
+    // dataTable (monotonic).
+    //
+    // The bump is issued INSIDE the rollback transaction (just before commit, below), NOT here,
+    // for two reasons (HUB-RETRACT-1): (a) fail-closed - a bump failure throws into the
+    // transaction's catch, rolling back every delete, so the reorg is retried idempotently rather
+    // than shipping an un-fenced rollback; (b) atomicity vs concurrent hub PULLs - the hub stamps
+    // getpendingcrosschaincalls / getopencrosschainorders results with the CURRENT generation at
+    // serve time, so if the generation flipped to bumped while the orphaned rows were still
+    // committed and visible, a pull would stamp an orphan with the NEW generation and it would
+    // escape the fence forever. Bumping in-transaction means another connection sees either
+    // (pre-commit) old generation + orphaned rows, stamped with the old generation the fence
+    // covers, or (post-commit) new generation + rows already gone - never orphans + new generation.
+    // Retraction rows written ahead inside the transaction (HUB-RETRACT-2); the post-commit block
+    // attempts immediate live delivery and drops each on success, else leaves it for HubPushQueue.
+        // Bump the push-generation fence (HUB-RETRACT-1) and write-ahead the hub retractions
+        // (HUB-RETRACT-2), both INSIDE this transaction so they commit atomically with the
+        // deletes above. Placed last (after sanityCheck) so any earlier failure rolls the bump
+        // back and the reorg is retried cleanly. bumpPushGeneration routes through the open
+        // transaction connection (doQuery), so a failure throws into the catch below.
+    async stageHubRetractions(firstActionIndex, lastActionIndex, unlandedAttestBatches){
+        let retractionGeneration = null;
+        let stagedRetractions = [];
+        let bumpedGeneration = await this.indexerDb.bumpPushGeneration(this.config['COIN']);
+        retractionGeneration = bumpedGeneration - 1;
+
+        // Write-ahead the three retraction intents as durable pending_hub_pushes rows, committed
+        // atomically with the rollback. Enqueuing the retractions only in the post-commit failure
+        // path drops them permanently when a crash (or DB-pool blip) lands between commit and the
+        // live RPC: the retried reorg skips rollback() (lastIndexerBlock already below
+        // minReorgBlock), so they are never re-issued, leaving orphaned 'finalized' hub rows
+        // serving fleet-wide. The rows are inserted AFTER the dataTables purge, so this
+        // rollback's own orphan delete cannot remove them; and a deeper later reorg's purge
+        // deliberately EXCLUDES these retraction push_types (HUB-RETRACT-2 nested-reorg guard,
+        // see the pending_hub_pushes delete above), so they are never superseded by a later
+        // purge and instead drain idempotently under the generation fence. The
+        // durable rows are CLOSED-range (bounded by lastActionIndex): a queued drain runs after
+        // replay may have re-published rows above lastActionIndex, which must be preserved.
+        if(firstActionIndex !== null && this.hubClient && this.hubClient.enabled){
+            for(let pushType of ['price_retraction', 'xcall_retraction', 'match_retraction']){
+                let id = await this.indexerDb.enqueueHubPushTx(pushType, {
+                    coin: this.config['COIN'], action_index: firstActionIndex,
+                    last_action_index: lastActionIndex, retraction_generation: retractionGeneration });
+                stagedRetractions.push({ pushType, id });
+            }
+
+            // One durable row per ATTEST batch this reorg un-landed, on the same
+            // write-ahead reasoning: the landing push already told a hub to stamp a batch
+            // link on every response the batch carried, and after the purge below this node
+            // holds nothing that could re-derive which batch that was. The payload names ONE
+            // batch rather than an action range, because the hub-side effect is a link
+            // cleared and never a row deleted (HubClient.retractAttestBatch says why).
+            for(let batch of unlandedAttestBatches){
+                let payload = {
+                    coin:         this.config['COIN'],
+                    network:      this.config['NETWORK'],
+                    batch_key:    batch.batch_key,
+                    window_start: batch.window_start,
+                    window_end:   batch.window_end,
+                    // The link the hub stamped is the HEAD's action index (row 52), so that
+                    // is the value the retraction has to name, never the chunk that
+                    // completed the batch or the lowest rolled-back action.
+                    action_index: batch.action_index
+                };
+                // Keyed at the head's action index like every other queue row, so a deeper
+                // reorg's purge would carry it away were the retraction types not excluded
+                // from that delete.
+                let id = await this.indexerDb.enqueueHubPushTx('attest_batch_retraction', payload,
+                    batch.action_index);
+                stagedRetractions.push({ pushType: 'attest_batch_retraction', id, payload });
+            }
+        }
+        return { retractionGeneration, stagedRetractions };
+    }
+
+    // Commit the reorg, then drop every memo the commit just invalidated. Each clear
+    // states its own hazard below; all of them must run on the committed rollback, so
+    // they sit here rather than at the end of rollback(), where a throw would skip them.
+    // Commit: the rollback is now atomically applied
+    async commitAndInvalidateCaches(){
+        await this.indexerDb.commitTransaction();
+
+        // Invalidate the height-keyed getBlockTime() memo on BOTH DB instances. This reorg
+        // just changed the content of every height >= block_index: the decoder re-inserted
+        // the new-chain block(s) with new block_time(s), and the indexer's blocks rows were
+        // deleted above. The memo is keyed by height only and is never otherwise cleared, so
+        // without this a depth-1 reorg replay of the same height would hit a stale cache and
+        // drive the block with the orphaned chain's timestamp (a unilateral consensus fork on
+        // any straddling time gate). Clearing after commit guarantees the forward replay
+        // re-reads the new chain's block_time.
+        if(this.decoderDb && typeof this.decoderDb.clearBlockTimeCache === 'function') this.decoderDb.clearBlockTimeCache();
+        if(this.indexerDb && typeof this.indexerDb.clearBlockTimeCache === 'function') this.indexerDb.clearBlockTimeCache();
+
+        // Same reorg, same class of stale memo, same place for the same reason:
+        // drop the light-client touched-key resolver caches. They map a
+        // surrogate id to its canonical name and were cached for the connection
+        // lifetime on the premise that the mapping is immutable. A rollback is
+        // exactly where that premise fails, because it deletes index_tickers /
+        // index_addresses rows above the reorg point and FREES their dense ids for
+        // createTicker/createAddress to reassign to whatever the new chain interns.
+        // (createTicker documents the same hazard from the other side: it refuses
+        // to mint under suppressIndexIdCreation because resurrecting a deleted id
+        // would re-open the wire ^<id> fork.)
         //
-        // The immediate delivery is OPEN-ENDED (last_action_index = null): it runs before any forward
-        // replay re-publishes rows, so an open-ended delete hits only orphans. The durable fallback
-        // row is CLOSED-range (bounded by lastActionIndex) because a queued drain runs later, after
-        // replay may have re-published rows above lastActionIndex that must be preserved.
+        // A stale entry yields NO leaf and no error rather than a wrong one: the
+        // touched key is recorded under the OLD name, getNetBalance matches
+        // nothing, _leafOrNull turns 0 into null, and the commitment deletes a key
+        // that never existed. The block's balances_root then comes out
+        // byte-identical to its predecessor's and the real leaf is never written.
         //
-        // Quiesce the durable queue across delivery so an in-flight drain cannot race these rows (item
-        // 5297); resume() is in the finally so the queue always restarts even if a delivery throws.
+        // Cleared HERE, immediately after commit and beside the block-time memo,
+        // not at the end of rollback(): a throw between here and there would skip
+        // it on an already-committed rollback, which is precisely the stale-cache
+        // state this prevents. Clearing is cheap (pure memoisation, refilled on
+        // demand); invalidating per deleted id would mean enumerating rows this
+        // pass has already deleted.
+        if(this.indexerDb){
+            this.indexerDb._smtTickNameCache    = null;
+            this.indexerDb._smtAddressNameCache = null;
+        }
+        // Still needed on its own after db.clearSmtNameCaches() was wired into
+        // every transaction ABORT: this frees ids by COMMITTING deletes, an abort
+        // frees them by un-assigning them, and neither implies the other.
+
+        // Invalidate the early-decide tally watermark. This reorg may have deleted
+        // and re-added ledger, vote, and delegation rows at or above block_index (and reused
+        // action_index values), so any cached poll fingerprint could now match spuriously and
+        // wrongly skip a re-tally on the replay. Drop them all; the forward replay re-tallies
+        // each armed poll on first sight, exactly as on a fresh process.
+        if(this.indexerDb && typeof this.indexerDb.clearPollTallyWatermark === 'function') this.indexerDb.clearPollTallyWatermark();
+
+        // Destructive rollback is done and committed; clear the in-progress marker so
+        // /health reflects a caught-up node again (#1812).
+        if(this.indexer) this.indexer.stallReason = null;
+    }
+
+    // Deliver the write-ahead hub retractions committed above (HUB-RETRACT-2). Each was already
+    // durably staged in pending_hub_pushes inside the rollback transaction, so even a crash right
+    // here loses nothing: HubPushQueue drains the surviving rows on restart. Here we just try an
+    // IMMEDIATE live delivery to prune the hub's orphaned oracle_prices / cross_chain_calls /
+    // cross_chain_matches rows without waiting for the queue's backoff, and drop the durable row
+    // on success. Any failure simply leaves the row for the queue (retractions are idempotent and
+    // generation-fenced, so re-delivery is safe).
+    //
+    // The immediate delivery is OPEN-ENDED (last_action_index = null): it runs before any forward
+    // replay re-publishes rows, so an open-ended delete hits only orphans. The durable fallback
+    // row is CLOSED-range (bounded by lastActionIndex) because a queued drain runs later, after
+    // replay may have re-published rows above lastActionIndex that must be preserved.
+    //
+    // Quiesce the durable queue across delivery so an in-flight drain cannot race these rows (item
+    // 5297); resume() is in the finally so the queue always restarts even if a delivery throws.
+    async deliverStagedRetractions(firstActionIndex, retractionGeneration, stagedRetractions){
         if(stagedRetractions.length > 0){
             // await: pause() now waits for any in-flight drain to finish (HUB-RETRACT-3), so a
             // pre-fetched stale forward push cannot land on the hub after our retraction below.
@@ -1747,19 +2002,18 @@ class Rollback {
                 if(this.hubPushQueue) this.hubPushQueue.resume();
             }
         }
+    }
 
-        // Structured completion summary so a successful rollback is distinguishable
-        // from a hung/partial one in the log stream (#1812): target block, the rolled-
-        // back action range, the staged hub retractions, and elapsed time.
+    // Structured completion summary so a successful rollback is distinguishable
+    // from a hung/partial one in the log stream (#1812): target block, the rolled-
+    // back action range, the staged hub retractions, and elapsed time.
+    logRollbackSummary(block_index, firstActionIndex, lastActionIndex, stagedRetractions, rollbackStartedAt){
         const elapsedMs     = Date.now() - rollbackStartedAt;
         const retractionIds = stagedRetractions.map(r => r.pushType + '#' + r.id);
         getLogger().info('Rollback complete: to block ' + block_index +
             ', action range [' + firstActionIndex + ', ' + lastActionIndex + ']' +
             ', staged retractions ' + (retractionIds.length ? retractionIds.join(', ') : 'none') +
             ', elapsed ' + elapsedMs + 'ms');
-
-        // Log the rollback time
-        this.util.logTimer(rollbackTimer, 'Rollback Done');
     }
 
     // The ATTEST v5/v6 batches whose chain wire this reorg orphans (spec §6.3, row 55).
@@ -1959,10 +2213,23 @@ class Rollback {
             return stats.get(key);
         };
 
-        // fulfilled_count: one per verified signature contributed to a STATUS='ok'
-        // response. Signatures now ride in the validator_signatures JSON column on
-        // the surviving v1 response rows (already rolled back via the action_index
-        // delete), so we aggregate them in JS rather than joining a child table.
+        await this.countFulfilledSignatures(affectedProviders, providerPlaceholders, ensure);
+
+        // Named `expired` here, and deliberately not the name the query below binds: the
+        // repair-script drift guard finds that name's FIRST occurrence in this file and reads
+        // the backtick SQL after it, so the first occurrence must be the query itself.
+        let expired = await this.readExpiredRequests(block_index, affectedProviders, providerPlaceholders);
+
+        await this.countExpiredMisses(expired, ensure);
+
+        await this.writeRecomputedStats(stats, affected);
+    }
+
+    // fulfilled_count: one per verified signature contributed to a STATUS='ok'
+    // response. Signatures now ride in the validator_signatures JSON column on
+    // the surviving v1 response rows (already rolled back via the action_index
+    // delete), so we aggregate them in JS rather than joining a child table.
+    async countFulfilledSignatures(affectedProviders, providerPlaceholders, ensure){
         let okResponses = await this.indexerDb.doQuery(
             `SELECT provider_id, validator_signatures, block_index
              FROM attests
@@ -1983,21 +2250,23 @@ class Rollback {
                 s.lastBlock = Math.max(s.lastBlock, block);
             }
         }
+    }
 
-        // missed_count: one per responsible-set validator each time a request
-        // expired. There is no per-validator expiry row to count, as the live path
-        // recomputes the responsible set deterministically and bumps each member.
-        // We reproduce that over the surviving requests that WOULD have expired in
-        // a replay to block_index-1: a request expires at deadline_block+1 (the
-        // first sweep past its deadline), so it counts iff deadline_block+1 <=
-        // block_index-1 (i.e. deadline_block < block_index-1) AND no *valid*
-        // response survives for it. Only a *terminal* valid v1 response
-        // (response_status IN ('ok','expired')) excludes a request; a retryable
-        // round (timeout/no_quorum/provider_error) leaves it 'pending' so it
-        // still expires and charges missed_count via the v2 sweep. We derive eligibility from
-        // surviving rows, NOT request_status. The resolved_block reset above only
-        // covers flips inside the orphaned range, and deriving from rows keeps this
-        // recomputation independent of status bookkeeping either way.
+    // missed_count: one per responsible-set validator each time a request
+    // expired. There is no per-validator expiry row to count, as the live path
+    // recomputes the responsible set deterministically and bumps each member.
+    // We reproduce that over the surviving requests that WOULD have expired in
+    // a replay to block_index-1: a request expires at deadline_block+1 (the
+    // first sweep past its deadline), so it counts iff deadline_block+1 <=
+    // block_index-1 (i.e. deadline_block < block_index-1) AND no *valid*
+    // response survives for it. Only a *terminal* valid v1 response
+    // (response_status IN ('ok','expired')) excludes a request; a retryable
+    // round (timeout/no_quorum/provider_error) leaves it 'pending' so it
+    // still expires and charges missed_count via the v2 sweep. We derive eligibility from
+    // surviving rows, NOT request_status. The resolved_block reset above only
+    // covers flips inside the orphaned range, and deriving from rows keeps this
+    // recomputation independent of status bookkeeping either way.
+    async readExpiredRequests(block_index, affectedProviders, providerPlaceholders){
         let validId = await this.indexerDb.getStatusId('valid');
         let expiredReqs = await this.indexerDb.doQuery(
             `SELECT ar.request_id, ar.provider_id, ar.redundancy, ar.block_index, ar.deadline_block, ar.responsible_set_json
@@ -2015,12 +2284,15 @@ class Rollback {
                )`,
             [block_index - 1, ...affectedProviders, validId]
         );
+        return expiredReqs;
+    }
 
-        // Cache the capability set per request block; this must consult the SAME
-        // snapshot and stake-weighted branch the live expiry path used, or missed_count
-        // re-derives wrong after a reorg. At/after STAKE_WEIGHTED_QUORUM activation the
-        // live path dedups multi-key sources to one slot, so the unweighted validator
-        // list would credit an excluded key and drop a real one.
+    // Cache the capability set per request block; this must consult the SAME
+    // snapshot and stake-weighted branch the live expiry path used, or missed_count
+    // re-derives wrong after a reorg. At/after STAKE_WEIGHTED_QUORUM activation the
+    // live path dedups multi-key sources to one slot, so the unweighted validator
+    // list would credit an excluded key and drop a real one.
+    async countExpiredMisses(expiredReqs, ensure){
         let validatorsByBlock = new Map();
         for(let req of expiredReqs){
             // ATT-RECOMP-1: prefer the responsible set pinned as-of the request block at v0
@@ -2042,50 +2314,7 @@ class Rollback {
                 let reqBlock = Number(req.block_index);
                 let cached   = validatorsByBlock.get(reqBlock);
                 if(cached === undefined){
-                    // Mirroring actions/attest.js computeResponsibleSet (#3233): the SWQ
-                    // gate is BTC-anchored, and `reqBlock` is the request's LOCAL height, so
-                    // off BTC it is already past the 961000 anchor and would resolve
-                    // `weighted` TRUE out of band. This function's header requires
-                    // byte-for-byte agreement with attest.js "or reorg-recomputed
-                    // missed_count diverges from the live expiry path", so the two must
-                    // short-circuit on the SAME condition, not just reach the same empty
-                    // answer by different routes. Capability staking is BTC-only, so a
-                    // non-BTC indexer has no responsible set to recompute.
-                    //
-                    // Two DIFFERENT heights come off `reqBlock`, exactly as in attest.js
-                    // computeResponsibleSet: the SWQ flag-day is evaluated on the DECLARED
-                    // height verbatim (moving a cutover block by the reorg buffer is its own
-                    // fork), while the capability SET is resolved at the declared height
-                    // BURIED by CANONICAL_REORG_BUFFER, which is where the hub's
-                    // CapabilitySnapshot resolved it. Resolving here at the raw height picks a
-                    // different responsible set than the live expiry path whenever a
-                    // validator's capability stake activates or deactivates inside
-                    // (declared - 6, declared], which is precisely the byte-for-byte
-                    // agreement this function's header demands; the recompute then charges
-                    // missed_count to a validator the live path never held responsible.
-                    // Below the burial flag-day buriedSnapshotBlock returns the declared
-                    // height unchanged, so mainnet replay is byte-identical.
-                    let cached_weighted = false;
-                    let vs = [];
-                    if(this.config['COIN'] === 'BTC'){
-                        cached_weighted = swq.isStakeWeightedQuorumActive(reqBlock, this.config['NETWORK']);
-                        let resolveBlock = srb.buriedSnapshotBlock(reqBlock, this.config['NETWORK']);
-                        vs = cached_weighted
-                            ? await this.indexerDb.getStakeWeightsByCapability('attestation', resolveBlock)
-                            : await this.indexerDb.getValidatorsByCapability('attestation', resolveBlock);
-                        // RULES-AWARE FILTER (spec §7.4, D59), applied at the same point
-                        // the live path applies it: on the raw capability snapshot,
-                        // before responsibleSet ranks or floors anything. It is a pure
-                        // function of (reqBlock, network), never of the provider, so it
-                        // rides this per-block cache exactly as the snapshot read does,
-                        // and responsibleSet stays the byte-for-byte ranking twin of
-                        // attest.js.computeResponsibleSet with no filter of its own.
-                        vs = await rgf.filterByRolledGates({
-                            db: this.indexerDb, validators: vs || [], requestBlock: reqBlock,
-                            network: this.config['NETWORK']
-                        });
-                    }
-                    cached = { weighted: cached_weighted, validators: vs || [] };
+                    cached = await this.capabilitySnapshotForBlock(reqBlock);
                     validatorsByBlock.set(reqBlock, cached);
                 }
                 // The provider floor is a PER-REQUEST bar, so it cannot ride the
@@ -2103,9 +2332,60 @@ class Rollback {
                 s.lastBlock = Math.max(s.lastBlock, expiryBlock);
             }
         }
+    }
 
-        // Re-insert recomputed rows for the pairs we dropped (others are already
-        // correct). slashed_count/quality_score re-derive to 0 (Phase 4 unshipped).
+    // Mirroring actions/attest.js computeResponsibleSet (#3233): the SWQ
+    // gate is BTC-anchored, and `reqBlock` is the request's LOCAL height, so
+    // off BTC it is already past the 961000 anchor and would resolve
+    // `weighted` TRUE out of band. This function's header requires
+    // byte-for-byte agreement with attest.js "or reorg-recomputed
+    // missed_count diverges from the live expiry path", so the two must
+    // short-circuit on the SAME condition, not just reach the same empty
+    // answer by different routes. Capability staking is BTC-only, so a
+    // non-BTC indexer has no responsible set to recompute.
+    //
+    // Two DIFFERENT heights come off `reqBlock`, exactly as in attest.js
+    // computeResponsibleSet: the SWQ flag-day is evaluated on the DECLARED
+    // height verbatim (moving a cutover block by the reorg buffer is its own
+    // fork), while the capability SET is resolved at the declared height
+    // BURIED by CANONICAL_REORG_BUFFER, which is where the hub's
+    // CapabilitySnapshot resolved it. Resolving here at the raw height picks a
+    // different responsible set than the live expiry path whenever a
+    // validator's capability stake activates or deactivates inside
+    // (declared - 6, declared], which is precisely the byte-for-byte
+    // agreement this function's header demands; the recompute then charges
+    // missed_count to a validator the live path never held responsible.
+    // Below the burial flag-day buriedSnapshotBlock returns the declared
+    // height unchanged, so mainnet replay is byte-identical.
+    async capabilitySnapshotForBlock(reqBlock){
+        let cached;
+        let cached_weighted = false;
+        let vs = [];
+        if(this.config['COIN'] === 'BTC'){
+            cached_weighted = swq.isStakeWeightedQuorumActive(reqBlock, this.config['NETWORK']);
+            let resolveBlock = srb.buriedSnapshotBlock(reqBlock, this.config['NETWORK']);
+            vs = cached_weighted
+                ? await this.indexerDb.getStakeWeightsByCapability('attestation', resolveBlock)
+                : await this.indexerDb.getValidatorsByCapability('attestation', resolveBlock);
+            // RULES-AWARE FILTER (spec §7.4, D59), applied at the same point
+            // the live path applies it: on the raw capability snapshot,
+            // before responsibleSet ranks or floors anything. It is a pure
+            // function of (reqBlock, network), never of the provider, so it
+            // rides this per-block cache exactly as the snapshot read does,
+            // and responsibleSet stays the byte-for-byte ranking twin of
+            // attest.js.computeResponsibleSet with no filter of its own.
+            vs = await rgf.filterByRolledGates({
+                db: this.indexerDb, validators: vs || [], requestBlock: reqBlock,
+                network: this.config['NETWORK']
+            });
+        }
+        cached = { weighted: cached_weighted, validators: vs || [] };
+        return cached;
+    }
+
+    // Re-insert recomputed rows for the pairs we dropped (others are already
+    // correct). slashed_count/quality_score re-derive to 0 (Phase 4 unshipped).
+    async writeRecomputedStats(stats, affected){
         for(let s of stats.values()){
             if(!affected.has(s.pubkey + '|' + s.provider))
                 continue;
