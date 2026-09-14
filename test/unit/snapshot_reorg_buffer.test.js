@@ -44,14 +44,19 @@ const AnchorRecovery = require('../../bin/recovery.js');
 const HUB_DIR = path.resolve(__dirname, '../../../xchain-hub');
 const SDK_DIR = path.resolve(__dirname, '../../../xchain-sdk');
 
-function requireSibling(dir, rel){
-    const p = path.join(dir, rel);
-    if(!fs.existsSync(p)){
-        if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-            throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but sibling module not found at ' + p);
-        return null;
+// Takes one spelling per trailing argument and returns the first that exists, so
+// a module the SDK layout pass moved resolves whichever side of the move the
+// sibling checkout sits on. Absence still throws under XCHAIN_REQUIRE_SIBLINGS=1,
+// naming every spelling tried rather than only the last.
+function requireSibling(dir, ...rels){
+    for(const rel of rels){
+        const p = path.join(dir, rel);
+        if(fs.existsSync(p)) return require(p);
     }
-    return require(p);
+    if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+        throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but sibling module not found at '
+            + rels.map(r => path.join(dir, r)).join(' or '));
+    return null;
 }
 
 // ── The stake history every party is asked about ─────────────────────────────
@@ -336,7 +341,13 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
     describe('party 4: the SDK light client', function () {
         let light = null;
         before(function () {
-            light = requireSibling(SDK_DIR, 'src/protocol/light_client.js');
+            // Post-move spelling first, then the pre-move one: the SDK moved
+            // src/light.js to src/protocol/light_client.js and a sibling can sit
+            // on either side of that move, so pinning one turns this party red
+            // under XCHAIN_REQUIRE_SIBLINGS=1 against the other. The spellings go
+            // to requireSibling together, because it THROWS on the first miss and
+            // a chained fallback would never reach the second one.
+            light = requireSibling(SDK_DIR, 'src/protocol/light_client.js', 'src/light.js');
             if(!light) this.skip();
         });
 

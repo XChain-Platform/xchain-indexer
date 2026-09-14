@@ -50,9 +50,15 @@ function resolveSdkUtilityPath() {
         process.env.XCHAIN_SDK_PATH,
         path.join(__dirname, '..', '..', '..', '..', 'xchain-sdk'),
     ].filter(Boolean);
+    // Two spellings per root, post-move first: the SDK's layout pass moved
+    // src/utility.js under src/utils/, and this suite is a consensus drift guard
+    // that THROWS rather than skips when it resolves nothing, so a single
+    // post-move spelling turns it red against a pre-move sibling.
     for (const root of candidates) {
-        const p = path.join(root, 'src', 'utils', 'utility.js');
-        if (fs.existsSync(p)) return p;
+        for (const parts of [['src', 'utils', 'utility.js'], ['src', 'utility.js']]) {
+            const p = path.join(root, ...parts);
+            if (fs.existsSync(p)) return p;
+        }
     }
     throw new Error(
         'xchain-sdk checkout not found (tried XCHAIN_SDK_PATH and the sibling ' +

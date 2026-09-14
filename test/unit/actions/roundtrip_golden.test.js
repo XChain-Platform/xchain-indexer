@@ -138,8 +138,22 @@ function resolveSdkRoot() {
         path.join(__dirname, '..', '..', '..', '..', 'xchain-sdk'),
     ].filter(Boolean);
     for (const root of candidates) {
-        if (fs.existsSync(path.join(root, 'src', 'actions', 'index.js')))
+        if (sdkFile(root, ['src', 'actions', 'index.js'], ['src', 'actions.js']))
             return root;
+    }
+    return null;
+}
+
+// Two spellings per module, post-move first. The SDK's layout pass moved
+// src/actions.js under src/actions/index.js and src/utility.js under
+// src/utils/utility.js, and a sibling checkout can sit on either side of that
+// move. Pinning only the post-move spelling makes resolveSdkRoot() report NO
+// sdk at all against a pre-move sibling, which skips the whole round-trip half
+// of this suite while the run still reports green.
+function sdkFile(root, ...spellings) {
+    for (const parts of spellings) {
+        const p = path.join(root, ...parts);
+        if (fs.existsSync(p)) return p;
     }
     return null;
 }
@@ -172,8 +186,8 @@ describe('Action round-trip golden – indexer parser byte-layout contract', fun
                 return;
             }
             const sdkConfig = require(path.join(sdkRoot, 'src', 'config.js'));
-            const SdkUtil   = require(path.join(sdkRoot, 'src', 'utils', 'utility.js'));
-            const Actions   = require(path.join(sdkRoot, 'src', 'actions', 'index.js'));
+            const SdkUtil   = require(sdkFile(sdkRoot, ['src', 'utils', 'utility.js'], ['src', 'utility.js']));
+            const Actions   = require(sdkFile(sdkRoot, ['src', 'actions', 'index.js'], ['src', 'actions.js']));
             makeActions = () => new Actions({ config: sdkConfig.getConfig(), util: new SdkUtil() });
         });
 

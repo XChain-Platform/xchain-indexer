@@ -433,7 +433,15 @@ describe('bin/sibling-reference-map.js: the idioms in the real tree', function (
     });
 
     it('sees the sdk parity guard that reaches in through an env-var root', () => {
-        const file = path.join(PLATFORM_ROOT, 'xchain-sdk', 'test', 'unit', 'address_ref_fields.test.js');
+        // Post-move spelling first, then the pre-move one. The SDK's layout pass
+        // renamed addressRefFields.test.js to address_ref_fields.test.js, and this
+        // reads the guard as SOURCE TEXT, so a missing file is an ENOENT throw
+        // rather than a skip: a single spelling is red against the other side.
+        const file = [
+            path.join(PLATFORM_ROOT, 'xchain-sdk', 'test', 'unit', 'address_ref_fields.test.js'),
+            path.join(PLATFORM_ROOT, 'xchain-sdk', 'test', 'unit', 'addressRefFields.test.js'),
+        ].find(p => fs.existsSync(p));
+        assert.ok(file, 'the sdk parity guard resolves at neither spelling');
         const found = refs.scanIndirectIdioms(fs.readFileSync(file, 'utf8'), { shell: false }).found;
         assert.strictEqual(found.length, 1, 'the guard pins exactly one indexer file');
         assert.ok(/^src\/.*addressRefFields\.js$/.test(found[0].path),

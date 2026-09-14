@@ -186,8 +186,15 @@ function resolveVmConsensus(){
     // degraded to the fallback, so a dropped export reddens rather than skips.
     try { return { vm: require('xchain-vm'), full: true, pkgErr: null }; }
     catch(e){
-        try { return { vm: require('../../../xchain-vm/src/consensus_runtime.js'), full: false, pkgErr: e }; }
-        catch(e2){ return { vm: null, full: false, pkgErr: e }; }
+        // Two spellings, post-rename first: the VM renamed src/consensus-runtime.js
+        // to src/consensus_runtime.js with nothing left behind, and a sibling can
+        // sit on either side of that rename. Pinning one would send this guard to
+        // the vm:null branch, which SKIPS, against the other.
+        for (const spelling of ['../../../xchain-vm/src/consensus_runtime.js',
+                                '../../../xchain-vm/src/consensus-runtime.js']) {
+            try { return { vm: require(spelling), full: false, pkgErr: e }; } catch(e2){ /* next */ }
+        }
+        return { vm: null, full: false, pkgErr: e };
     }
 }
 
