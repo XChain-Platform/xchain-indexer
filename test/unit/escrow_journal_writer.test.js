@@ -175,7 +175,15 @@ describe('escrow journal writer: block-path wiring @regression', function(){
     it('the writer never consults family aggregates, status predicates, or a clock', function(){
         // The failure mode this design retired: recomputing what "locked" means.
         // Comments are stripped so prose about the old design cannot trip it.
-        const src  = fs.readFileSync(path.resolve(__dirname, '../../src/consensus/escrowJournalWriter.js'), 'utf8');
+        // Entry plus every part, read as one text. Scanning the entry alone would pass
+        // vacuously the moment a banned read moved into escrowJournalWriter/: this
+        // guard grades ABSENCE, so a narrower read is a weaker guard that still looks green.
+        const WRITER = path.resolve(__dirname, '../../src/consensus/escrowJournalWriter.js');
+        const PARTS  = path.resolve(__dirname, '../../src/consensus/escrowJournalWriter');
+        const src  = [WRITER]
+            .concat(fs.readdirSync(PARTS).filter(f => f.endsWith('.js')).sort()
+                .map(f => path.join(PARTS, f)))
+            .map(f => fs.readFileSync(f, 'utf8')).join('\n');
         const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
         for(const banned of ['getOrderAmountsRemaining', 'getDispenserAmountRemaining', 'getDispenserInfo',
                              'getAddressEscrows', "status = 'open'", 'bet_status'])
