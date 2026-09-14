@@ -28,23 +28,10 @@ const TXS_PER_BLOCK    = parseInt(process.env.PERF_SUSTAINED_TPS || '20');
 const BLOCKS_PER_BATCH = 50;
 const BASE_TIME        = 1700000000;
 
-describe('03 Sustained Load', function () {
-    this.timeout(0); // no timeout; duration controlled by PERF_SUSTAINED_MS
+const reporter = new ReportGenerator();
 
-    const reporter = new ReportGenerator();
-
-    before(async function () {
-        await createDatabases(__filename);
-        await createDecoderSchema();
-    });
-
-    after(async function () {
-        // Sweep any indexer a failed test or partial init left live: each forks a VM worker subprocess that outlives the suite otherwise.
-        await destroyFileIndexers(__filename);
-        await closeAll();
-    });
-
-    it(`processes blocks continuously for ${DURATION_MS}ms without degradation`, async function () {
+function registerSustainedLoadCase1() {
+it(`processes blocks continuously for ${DURATION_MS}ms without degradation`, async function () {
         await resetDecoderDb();
         await resetIndexerDb();
 
@@ -96,4 +83,21 @@ describe('03 Sustained Load', function () {
 
         await destroyIndexer(indexer);
     });
+}
+
+describe('03 Sustained Load', function () {
+    this.timeout(0); // no timeout; duration controlled by PERF_SUSTAINED_MS
+
+    before(async function () {
+        await createDatabases(__filename);
+        await createDecoderSchema();
+    });
+
+    after(async function () {
+        // Sweep any indexer a failed test or partial init left live: each forks a VM worker subprocess that outlives the suite otherwise.
+        await destroyFileIndexers(__filename);
+        await closeAll();
+    });
+
+    registerSustainedLoadCase1()
 });

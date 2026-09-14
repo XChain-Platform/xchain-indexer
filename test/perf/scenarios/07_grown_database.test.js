@@ -76,120 +76,128 @@ const MIN_EXPIRY_MS  = parseFloat(process.env.PERF_GROWN_MIN_EXPIRY_MS || '1');
 // generous so it trips only on a catastrophic per-block hang, never on a slow runner.
 const MAX_GROWN_MS   = parseFloat(process.env.PERF_GROWN_MAX_GROWN_MS || '15000');
 
-describe('07 Grown-Database Regression', function () {
-    this.timeout(0); // controlled by block counts, not a wall-clock deadline
+const reporter = new ReportGenerator();
 
-    const reporter = new ReportGenerator();
+async function initializeGrownDatabaseRun() {
+    // ONE database, ONE indexer, no reset between phases: the whole point is an
+    // aged database whose standing set accumulates across every block.
+    await resetDecoderDb();
+    await resetIndexerDb();
 
-    before(async function () {
-        await createDatabases(__filename);
-        await createDecoderSchema();
-    });
+    const gen = new DataGenerator(decoderQuery);
+    const indexer = await initIndexer();
+    return { gen, indexer, nextBlock: 1, baseTime: BASE_TIME };
+}
 
-    after(async function () {
-        // Sweep any indexer a failed test or partial init left live: each forks a VM worker subprocess that outlives the suite otherwise.
-        await destroyFileIndexers(__filename);
-        await closeAll();
-    });
+async function bootstrapGrownDatabaseRun(run) {
+    // --- Bootstrap gas + base tokens (not measured) ---
+    run.nextBlock = await run.gen.bootstrap(run.nextBlock, run.baseTime);
+    run.baseTime += run.nextBlock * 600;
 
-    it('block time does not regress beyond MAX_RATIO as the standing set grows', async function () {
-        // ONE database, ONE indexer, no reset between phases: the whole point is an
-        // aged database whose standing set accumulates across every block.
-        await resetDecoderDb();
-        await resetIndexerDb();
+    const bootstrapCollector = new MetricsCollector({ name: 'grown-bootstrap' });
+    bootstrapCollector.start();
+    await processBlocksInstrumented(run.indexer, bootstrapCollector);
+    bootstrapCollector.stop();
+}
 
-        const gen = new DataGenerator(decoderQuery);
-        const indexer = await initIndexer();
+async function measureDatabaseWindow(gen, indexer, nextBlock, baseTime, name) {
+    await gen.generateBlocks(MEASURE_BLOCKS, ORDERS_PER_BLOCK, 'standing-orders', nextBlock, baseTime);
+    nextBlock += MEASURE_BLOCKS;
+    baseTime  += MEASURE_BLOCKS * 600;
 
-        let nextBlock = 1;
-        let baseTime  = BASE_TIME;
+    const collector = new MetricsCollector({ name, warmupBlocks: WARMUP_BLOCKS });
+    collector.start();
+    await processBlocksInstrumented(indexer, collector);
+    collector.stop();
+    return { stats: collector.getStats(), nextBlock, baseTime };
+}
+
+async function growDatabaseStandingSet(gen, indexer, nextBlock, baseTime) {
+    // --- Grow phase: pile up a large standing set (not measured) ---
+    // Each block adds ORDERS_PER_BLOCK still-open orders that the expiry sweep
+    // re-scans forever; after this the getExpiredItems working set is much larger.
+    for (let seeded = 0; seeded < GROW_BLOCKS; ) {
+        const batch = Math.min(50, GROW_BLOCKS - seeded);
+        await gen.generateBlocks(batch, ORDERS_PER_BLOCK, 'standing-orders', nextBlock, baseTime);
+        nextBlock += batch;
+        baseTime  += batch * 600;
+        const growCollector = new MetricsCollector({ name: 'grown-grow' });
+        growCollector.start();
+        await processBlocksInstrumented(indexer, growCollector);
+        growCollector.stop();
+        seeded += batch;
+    }
+    return { nextBlock, baseTime };
+}
+
+function buildGrownDatabaseMetric(youngStats, grownStats) {
+    // --- Block-time regression metric ---
+    const youngMedian = youngStats.blockTiming.p50;
+    const grownMedian = grownStats.blockTiming.p50;
+    const youngExpiry = youngStats.phaseTiming.expirations.p50;
+    const grownExpiry = grownStats.phaseTiming.expirations.p50;
+    const blockRatio  = youngMedian > 0 ? +(grownMedian / youngMedian).toFixed(3) : null;
+    const expiryRatio = youngExpiry > 0 ? +(grownExpiry / youngExpiry).toFixed(3) : null;
+
+    const metric = {
+        measureBlocks: MEASURE_BLOCKS,
+        warmupBlocks: WARMUP_BLOCKS,
+        growBlocks: GROW_BLOCKS,
+        ordersPerBlock: ORDERS_PER_BLOCK,
+        youngMeasuredBlocks: youngStats.measuredBlocks,
+        grownMeasuredBlocks: grownStats.measuredBlocks,
+        youngMedianMs: youngMedian,
+        grownMedianMs: grownMedian,
+        blockTimeRegressionRatio: blockRatio,
+        youngExpiryMedianMs: youngExpiry,
+        grownExpiryMedianMs: grownExpiry,
+        expirySweepRegressionRatio: expiryRatio,
+        maxRatio: MAX_RATIO,
+        maxExpiryRatio: MAX_EXPIRY_RATIO,
+        youngErrors: youngStats.errors.length,
+        grownErrors: grownStats.errors.length,
+    };
+    return { metric, youngMedian, grownMedian, youngExpiry, grownExpiry, blockRatio, expiryRatio };
+}
+
+function printGrownDatabaseMetric(values, youngStats, grownStats) {
+    const { youngMedian, grownMedian, youngExpiry, grownExpiry, blockRatio, expiryRatio } = values;
+    console.log('');
+    console.log('='.repeat(70));
+    console.log(' Grown-Database Block-Time Regression Metric');
+    console.log('='.repeat(70));
+    console.log(` grow phase        : +${GROW_BLOCKS} blocks x ${ORDERS_PER_BLOCK} open orders`);
+    console.log(` young median      : ${youngMedian} ms (${youngStats.measuredBlocks} blocks)`);
+    console.log(` grown median      : ${grownMedian} ms (${grownStats.measuredBlocks} blocks)`);
+    console.log(` block-time ratio  : ${blockRatio}x (ceiling ${MAX_RATIO}x)`);
+    console.log(` expiry sweep ratio: ${expiryRatio}x (young ${youngExpiry} -> grown ${grownExpiry} ms)`);
+    console.log('='.repeat(70));
+    console.log('');
+}
+
+async function collectGrownDatabaseWindows(run) {
+    const { gen, indexer } = run;
+    await bootstrapGrownDatabaseRun(run);
+    // --- Window A: measure on the YOUNG database ---
+    const young = await measureDatabaseWindow(gen, indexer, run.nextBlock, run.baseTime, 'grown-young');
+    const growth = await growDatabaseStandingSet(gen, indexer, young.nextBlock, young.baseTime);
+    // --- Window B: measure again on the GROWN database ---
+    const grown = await measureDatabaseWindow(gen, indexer, growth.nextBlock, growth.baseTime, 'grown-grown');
+    const youngStats = young.stats;
+    const grownStats = grown.stats;
+    const values = buildGrownDatabaseMetric(youngStats, grownStats);
+    return { youngStats, grownStats, values };
+}
+
+function registerGrownDatabaseCase1() {
+it('block time does not regress beyond MAX_RATIO as the standing set grows', async function () {
+        const run = await initializeGrownDatabaseRun();
+        const { indexer } = run;
 
         try {
-            // --- Bootstrap gas + base tokens (not measured) ---
-            const bootstrapEnd = await gen.bootstrap(nextBlock, baseTime);
-            nextBlock = bootstrapEnd;
-            baseTime += bootstrapEnd * 600;
-
-            const bootstrapCollector = new MetricsCollector({ name: 'grown-bootstrap' });
-            bootstrapCollector.start();
-            await processBlocksInstrumented(indexer, bootstrapCollector);
-            bootstrapCollector.stop();
-
-            // --- Window A: measure on the YOUNG database ---
-            await gen.generateBlocks(MEASURE_BLOCKS, ORDERS_PER_BLOCK, 'standing-orders', nextBlock, baseTime);
-            nextBlock += MEASURE_BLOCKS;
-            baseTime  += MEASURE_BLOCKS * 600;
-
-            const youngCollector = new MetricsCollector({ name: 'grown-young', warmupBlocks: WARMUP_BLOCKS });
-            youngCollector.start();
-            await processBlocksInstrumented(indexer, youngCollector);
-            youngCollector.stop();
-            const youngStats = youngCollector.getStats();
-
-            // --- Grow phase: pile up a large standing set (not measured) ---
-            // Each block adds ORDERS_PER_BLOCK still-open orders that the expiry sweep
-            // re-scans forever; after this the getExpiredItems working set is much larger.
-            for (let seeded = 0; seeded < GROW_BLOCKS; ) {
-                const batch = Math.min(50, GROW_BLOCKS - seeded);
-                await gen.generateBlocks(batch, ORDERS_PER_BLOCK, 'standing-orders', nextBlock, baseTime);
-                nextBlock += batch;
-                baseTime  += batch * 600;
-                const growCollector = new MetricsCollector({ name: 'grown-grow' });
-                growCollector.start();
-                await processBlocksInstrumented(indexer, growCollector);
-                growCollector.stop();
-                seeded += batch;
-            }
-
-            // --- Window B: measure again on the GROWN database ---
-            await gen.generateBlocks(MEASURE_BLOCKS, ORDERS_PER_BLOCK, 'standing-orders', nextBlock, baseTime);
-            nextBlock += MEASURE_BLOCKS;
-            baseTime  += MEASURE_BLOCKS * 600;
-
-            const grownCollector = new MetricsCollector({ name: 'grown-grown', warmupBlocks: WARMUP_BLOCKS });
-            grownCollector.start();
-            await processBlocksInstrumented(indexer, grownCollector);
-            grownCollector.stop();
-            const grownStats = grownCollector.getStats();
-
-            // --- Block-time regression metric ---
-            const youngMedian = youngStats.blockTiming.p50;
-            const grownMedian = grownStats.blockTiming.p50;
-            const youngExpiry = youngStats.phaseTiming.expirations.p50;
-            const grownExpiry = grownStats.phaseTiming.expirations.p50;
-            const blockRatio  = youngMedian > 0 ? +(grownMedian / youngMedian).toFixed(3) : null;
-            const expiryRatio = youngExpiry > 0 ? +(grownExpiry / youngExpiry).toFixed(3) : null;
-
-            const metric = {
-                measureBlocks: MEASURE_BLOCKS,
-                warmupBlocks: WARMUP_BLOCKS,
-                growBlocks: GROW_BLOCKS,
-                ordersPerBlock: ORDERS_PER_BLOCK,
-                youngMeasuredBlocks: youngStats.measuredBlocks,
-                grownMeasuredBlocks: grownStats.measuredBlocks,
-                youngMedianMs: youngMedian,
-                grownMedianMs: grownMedian,
-                blockTimeRegressionRatio: blockRatio,
-                youngExpiryMedianMs: youngExpiry,
-                grownExpiryMedianMs: grownExpiry,
-                expirySweepRegressionRatio: expiryRatio,
-                maxRatio: MAX_RATIO,
-                maxExpiryRatio: MAX_EXPIRY_RATIO,
-                youngErrors: youngStats.errors.length,
-                grownErrors: grownStats.errors.length,
-            };
-
-            console.log('');
-            console.log('='.repeat(70));
-            console.log(' Grown-Database Block-Time Regression Metric');
-            console.log('='.repeat(70));
-            console.log(` grow phase        : +${GROW_BLOCKS} blocks x ${ORDERS_PER_BLOCK} open orders`);
-            console.log(` young median      : ${youngMedian} ms (${youngStats.measuredBlocks} blocks)`);
-            console.log(` grown median      : ${grownMedian} ms (${grownStats.measuredBlocks} blocks)`);
-            console.log(` block-time ratio  : ${blockRatio}x (ceiling ${MAX_RATIO}x)`);
-            console.log(` expiry sweep ratio: ${expiryRatio}x (young ${youngExpiry} -> grown ${grownExpiry} ms)`);
-            console.log('='.repeat(70));
-            console.log('');
+            const { youngStats, grownStats, values } = await collectGrownDatabaseWindows(run);
+            const { metric, youngMedian, grownMedian, youngExpiry, grownExpiry, blockRatio, expiryRatio } = values;
+            printGrownDatabaseMetric(values, youngStats, grownStats);
 
             reporter.writeJson({ name: 'grown-database', metric, young: youngStats, grown: grownStats },
                 '07-grown-database');
@@ -238,4 +246,21 @@ describe('07 Grown-Database Regression', function () {
             await destroyIndexer(indexer);
         }
     });
+}
+
+describe('07 Grown-Database Regression', function () {
+    this.timeout(0); // controlled by block counts, not a wall-clock deadline
+
+    before(async function () {
+        await createDatabases(__filename);
+        await createDecoderSchema();
+    });
+
+    after(async function () {
+        // Sweep any indexer a failed test or partial init left live: each forks a VM worker subprocess that outlives the suite otherwise.
+        await destroyFileIndexers(__filename);
+        await closeAll();
+    });
+
+    registerGrownDatabaseCase1()
 });

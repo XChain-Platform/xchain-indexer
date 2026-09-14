@@ -24,23 +24,10 @@ const ReportGenerator = require('../setup/report-generator');
 
 const BASE_TIME = 1700000000;
 
-describe('04 Spike Load', function () {
-    this.timeout(300000);
+const reporter = new ReportGenerator();
 
-    const reporter = new ReportGenerator();
-
-    before(async function () {
-        await createDatabases(__filename);
-        await createDecoderSchema();
-    });
-
-    after(async function () {
-        // Sweep any indexer a failed test or partial init left live: each forks a VM worker subprocess that outlives the suite otherwise.
-        await destroyFileIndexers(__filename);
-        await closeAll();
-    });
-
-    it('handles spike from 1 tx/block to 100 tx/block without errors', async function () {
+function registerSpikeLoadCase1() {
+it('handles spike from 1 tx/block to 100 tx/block without errors', async function () {
         await resetDecoderDb();
         await resetIndexerDb();
 
@@ -77,8 +64,10 @@ describe('04 Spike Load', function () {
         assert.strictEqual(stats.errors.length, 0, 'No errors during spike');
         await destroyIndexer(indexer);
     });
+}
 
-    it('handles repeated micro-spikes (bursty traffic)', async function () {
+function registerSpikeLoadCase2() {
+it('handles repeated micro-spikes (bursty traffic)', async function () {
         await resetDecoderDb();
         await resetIndexerDb();
 
@@ -110,4 +99,23 @@ describe('04 Spike Load', function () {
         assert.strictEqual(stats.errors.length, 0, 'No errors during micro-spikes');
         await destroyIndexer(indexer);
     });
+}
+
+describe('04 Spike Load', function () {
+    this.timeout(300000);
+
+    before(async function () {
+        await createDatabases(__filename);
+        await createDecoderSchema();
+    });
+
+    after(async function () {
+        // Sweep any indexer a failed test or partial init left live: each forks a VM worker subprocess that outlives the suite otherwise.
+        await destroyFileIndexers(__filename);
+        await closeAll();
+    });
+
+    registerSpikeLoadCase1()
+
+    registerSpikeLoadCase2()
 });

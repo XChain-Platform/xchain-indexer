@@ -26,28 +26,10 @@ const BLOCK_COUNT = 50;
 const TXS_PER_BLOCK = 20;
 const BASE_TIME = 1700000000;
 
-describe('02 Action Benchmarks', function () {
-    this.timeout(600000);
+const reporter = new ReportGenerator();
+const allStats = {};
 
-    const reporter = new ReportGenerator();
-    const allStats = {};
-
-    before(async function () {
-        await createDatabases(__filename);
-        await createDecoderSchema();
-    });
-
-    after(async function () {
-        // Sweep any indexer a failed test or partial init left live: each forks a VM worker subprocess that outlives the suite otherwise.
-        await destroyFileIndexers(__filename);
-        // Write combined comparison report
-        if (Object.keys(allStats).length > 0) {
-            reporter.writeJson({ allStats }, '02-action-benchmarks-combined');
-        }
-        await closeAll();
-    });
-
-    async function benchmarkProfile(label, profile) {
+async function benchmarkProfile(label, profile) {
         await resetDecoderDb();
         await resetIndexerDb();
         const gen = new DataGenerator(decoderQuery);
@@ -67,6 +49,24 @@ describe('02 Action Benchmarks', function () {
         await destroyIndexer(indexer);
         return stats;
     }
+
+describe('02 Action Benchmarks', function () {
+    this.timeout(600000);
+
+    before(async function () {
+        await createDatabases(__filename);
+        await createDecoderSchema();
+    });
+
+    after(async function () {
+        // Sweep any indexer a failed test or partial init left live: each forks a VM worker subprocess that outlives the suite otherwise.
+        await destroyFileIndexers(__filename);
+        // Write combined comparison report
+        if (Object.keys(allStats).length > 0) {
+            reporter.writeJson({ allStats }, '02-action-benchmarks-combined');
+        }
+        await closeAll();
+    });
 
     it('SEND-only blocks', async function () {
         const stats = await benchmarkProfile('send-only', 'send-only');

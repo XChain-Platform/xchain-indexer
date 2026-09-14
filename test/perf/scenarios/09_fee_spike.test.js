@@ -114,128 +114,130 @@ function median(values) {
     return (sorted.length % 2 === 0) ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
-describe('09 Fee Spike (mempool backlog drain)', function () {
-    this.timeout(0); // size controlled by PERF_FEESPIKE_TXS
+const reporter = new ReportGenerator();
+let stats = null;
+let legs = null;               // { baseline, drain, recovery } as { from, to }
+let blockTimings = [];
+let queriesPerBlock = new Map(); // blockIndex -> indexer-DB queries issued
+let validSends = 0;
+let drainMs = 0;
+const priorEnv = { coin: process.env.INDEXER_COIN, network: process.env.INDEXER_NETWORK };
 
-    const reporter = new ReportGenerator();
-    let stats = null;
-    let legs = null;               // { baseline, drain, recovery } as { from, to }
-    let blockTimings = [];
-    let queriesPerBlock = new Map(); // blockIndex -> indexer-DB queries issued
-    let validSends = 0;
-    let drainMs = 0;
-    const priorEnv = { coin: process.env.INDEXER_COIN, network: process.env.INDEXER_NETWORK };
-
-    /** Block timings whose blockIndex falls in [from, to]. */
-    const inRange = (from, to) => blockTimings.filter(b => b.blockIndex >= from && b.blockIndex <= to);
+/** Block timings whose blockIndex falls in [from, to]. */
+const inRange = (from, to) => blockTimings.filter(b => b.blockIndex >= from && b.blockIndex <= to);
 
     /**
      * Seeded transactions in every block BELOW `blockIndex`, read from the decoder DB.
      * Stands in for "how big is the ledger the balance path has to sum over" at the
      * moment that block is processed, which is what the growth-relative gates divide by.
      */
-    const ledgerSizeBefore = async (blockIndex) => {
-        const rows = await decoderQuery('SELECT COUNT(*) AS c FROM transactions WHERE block_index < ?', [blockIndex]);
-        return Number(rows[0].c);
+const ledgerSizeBefore = async (blockIndex) => {
+    const rows = await decoderQuery('SELECT COUNT(*) AS c FROM transactions WHERE block_index < ?', [blockIndex]);
+    return Number(rows[0].c);
+};
+
+async function seedFeeSpikeChain(gen) {
+    // --- Seed the whole three-leg chain up front ---------------------------------
+    let block = await gen.bootstrap(1, BASE_TIME);
+    let time  = BASE_TIME + block * SPACING;
+
+    block = await gen.seedWideAddressPool(SENDERS, block, time, { spacingSeconds: SPACING });
+    time  = BASE_TIME + block * SPACING;
+
+    const baselineFrom = block;
+    await gen.generateBlocks(QUIET_BLOCKS, QUIET_TXS, 'send-only', block, time,
+        { spacingSeconds: SPACING, bulk: true });
+    block += QUIET_BLOCKS; time = BASE_TIME + block * SPACING;
+
+    const drainFrom = block;
+    await gen.generateBlocks(DRAIN_BLOCKS, TXS_PER_BLOCK, 'fee-spike', block, time,
+        { spacingSeconds: SPACING, bulk: true });
+    block += DRAIN_BLOCKS; time = BASE_TIME + block * SPACING;
+
+    const recoveryFrom = block;
+    await gen.generateBlocks(QUIET_BLOCKS, QUIET_TXS, 'send-only', block, time,
+        { spacingSeconds: SPACING, bulk: true });
+    block += QUIET_BLOCKS;
+
+    return {
+        baseline: { from: baselineFrom, to: drainFrom - 1 },
+        drain:    { from: drainFrom,    to: recoveryFrom - 1 },
+        recovery: { from: recoveryFrom, to: block - 1 }
     };
+}
 
-    before(async function () {
-        process.env.INDEXER_COIN    = COIN;
-        process.env.INDEXER_NETWORK = NETWORK;
+function instrumentFeeSpikeQueries(indexer, collector) {
+    // --- Count the per-block query fan-out ---------------------------------------
+    // Every indexer-DB statement routes through doQuery(), so one instance-level
+    // wrapper sees the whole fan-out. Bracketed off the collector's own block
+    // callbacks so the count lines up exactly with the block being timed.
+    let queries = 0, atBlockStart = 0;
+    const passThrough = indexer.indexerDb.doQuery.bind(indexer.indexerDb);
+    indexer.indexerDb.doQuery = async (query, args) => { queries++; return passThrough(query, args); };
+    const beginBlock = collector.beginBlock.bind(collector);
+    const endBlock   = collector.endBlock.bind(collector);
+    collector.beginBlock = (i)    => { atBlockStart = queries; beginBlock(i); };
+    collector.endBlock   = (i, p) => { queriesPerBlock.set(i, queries - atBlockStart); endBlock(i, p); };
+}
 
-        await createDatabases(__filename);
-        await createDecoderSchema();
-        await resetDecoderDb();
-        await resetIndexerDb();
+async function processFeeSpikeChain(indexer, collector) {
+    // --- Run the chain -----------------------------------------------------------
+    collector.start();
+    await processBlocksInstrumented(indexer, collector);
+    collector.stop();
 
-        const gen = new DataGenerator(decoderQuery);
-        const indexer = await initIndexer();
-        // Pin the fee path to xchain-balance (see 08-fast-chain for the full note):
-        // the decoder fixture seeds action rows, not coin outputs, so a configured
-        // native FEE_DESTINATION would reject every fee-bearing action and the drain
-        // would be timing rejections instead of work.
-        forceXchainFeeMode(indexer);
-        const collector = new MetricsCollector({ name: 'fee-spike', warmupBlocks: 0 });
+    stats = collector.getStats();
+    blockTimings = collector.blockTimings;
+    drainMs = inRange(legs.drain.from, legs.drain.to).reduce((sum, b) => sum + b.totalMs, 0);
+    const rows = await indexerQuery(
+        `SELECT COUNT(*) AS c FROM sends
+          WHERE status_id = (SELECT id FROM index_statuses WHERE status='valid')`);
+    validSends = Number(rows[0].c);
 
-        // --- Seed the whole three-leg chain up front ---------------------------------
-        let block = await gen.bootstrap(1, BASE_TIME);
-        let time  = BASE_TIME + block * SPACING;
+    reporter.generateAll(stats, '09-fee-spike');
+    console.log(` Regime           : ${COIN} ${NETWORK}, ${SPIKE_TXS.toLocaleString()} tx backlog ` +
+                `from ${SENDERS} senders, ` +
+                `drained over ${DRAIN_BLOCKS} blocks of ${TXS_PER_BLOCK}`);
+    console.log(` Drain            : ${(drainMs / 1000).toFixed(1)} s ` +
+                `(${Math.round(SPIKE_TXS / (drainMs / 1000)).toLocaleString()} tx/s)`);
 
-        block = await gen.seedWideAddressPool(SENDERS, block, time, { spacingSeconds: SPACING });
-        time  = BASE_TIME + block * SPACING;
+    await destroyIndexer(indexer);
+}
 
-        const baselineFrom = block;
-        await gen.generateBlocks(QUIET_BLOCKS, QUIET_TXS, 'send-only', block, time,
-            { spacingSeconds: SPACING, bulk: true });
-        block += QUIET_BLOCKS; time = BASE_TIME + block * SPACING;
+async function prepareFeeSpikeRun() {
+    process.env.INDEXER_COIN    = COIN;
+    process.env.INDEXER_NETWORK = NETWORK;
 
-        const drainFrom = block;
-        await gen.generateBlocks(DRAIN_BLOCKS, TXS_PER_BLOCK, 'fee-spike', block, time,
-            { spacingSeconds: SPACING, bulk: true });
-        block += DRAIN_BLOCKS; time = BASE_TIME + block * SPACING;
+    await createDatabases(__filename);
+    await createDecoderSchema();
+    await resetDecoderDb();
+    await resetIndexerDb();
 
-        const recoveryFrom = block;
-        await gen.generateBlocks(QUIET_BLOCKS, QUIET_TXS, 'send-only', block, time,
-            { spacingSeconds: SPACING, bulk: true });
-        block += QUIET_BLOCKS;
+    const gen = new DataGenerator(decoderQuery);
+    const indexer = await initIndexer();
+    // Pin the fee path to xchain-balance (see 08-fast-chain for the full note):
+    // the decoder fixture seeds action rows, not coin outputs, so a configured
+    // native FEE_DESTINATION would reject every fee-bearing action and the drain
+    // would be timing rejections instead of work.
+    forceXchainFeeMode(indexer);
+    const collector = new MetricsCollector({ name: 'fee-spike', warmupBlocks: 0 });
+    legs = await seedFeeSpikeChain(gen);
+    instrumentFeeSpikeQueries(indexer, collector);
+    await processFeeSpikeChain(indexer, collector);
+}
 
-        legs = {
-            baseline: { from: baselineFrom, to: drainFrom - 1 },
-            drain:    { from: drainFrom,    to: recoveryFrom - 1 },
-            recovery: { from: recoveryFrom, to: block - 1 }
-        };
-
-        // --- Count the per-block query fan-out ---------------------------------------
-        // Every indexer-DB statement routes through doQuery(), so one instance-level
-        // wrapper sees the whole fan-out. Bracketed off the collector's own block
-        // callbacks so the count lines up exactly with the block being timed.
-        let queries = 0, atBlockStart = 0;
-        const passThrough = indexer.indexerDb.doQuery.bind(indexer.indexerDb);
-        indexer.indexerDb.doQuery = async (query, args) => { queries++; return passThrough(query, args); };
-        const beginBlock = collector.beginBlock.bind(collector);
-        const endBlock   = collector.endBlock.bind(collector);
-        collector.beginBlock = (i)    => { atBlockStart = queries; beginBlock(i); };
-        collector.endBlock   = (i, p) => { queriesPerBlock.set(i, queries - atBlockStart); endBlock(i, p); };
-
-        // --- Run the chain -----------------------------------------------------------
-        collector.start();
-        await processBlocksInstrumented(indexer, collector);
-        collector.stop();
-
-        stats = collector.getStats();
-        blockTimings = collector.blockTimings;
-        drainMs = inRange(legs.drain.from, legs.drain.to).reduce((sum, b) => sum + b.totalMs, 0);
-        const rows = await indexerQuery(
-            `SELECT COUNT(*) AS c FROM sends
-              WHERE status_id = (SELECT id FROM index_statuses WHERE status='valid')`);
-        validSends = Number(rows[0].c);
-
-        reporter.generateAll(stats, '09-fee-spike');
-        console.log(` Regime           : ${COIN} ${NETWORK}, ${SPIKE_TXS.toLocaleString()} tx backlog ` +
-                    `from ${SENDERS} senders, ` +
-                    `drained over ${DRAIN_BLOCKS} blocks of ${TXS_PER_BLOCK}`);
-        console.log(` Drain            : ${(drainMs / 1000).toFixed(1)} s ` +
-                    `(${Math.round(SPIKE_TXS / (drainMs / 1000)).toLocaleString()} tx/s)`);
-
-        await destroyIndexer(indexer);
-    });
-
-    after(async function () {
-        // Sweep an indexer a failed before hook left live: each forks a VM worker subprocess that outlives the suite otherwise.
-        await destroyFileIndexers(__filename);
-        restoreEnv(priorEnv);
-        await closeAll();
-    });
-
-    it('drains the backlog without errors', function () {
+function registerFeeSpikeCase1() {
+it('drains the backlog without errors', function () {
         assert.strictEqual(stats.errors.length, 0,
             'Errors during the fee-spike drain: ' + JSON.stringify(stats.errors.slice(0, 3)));
         const drained = inRange(legs.drain.from, legs.drain.to).length;
         assert.strictEqual(drained, DRAIN_BLOCKS,
             `Only ${drained} of ${DRAIN_BLOCKS} drain blocks were processed`);
     });
+}
 
-    it('indexes the whole backlog as VALID (guards against measuring rejections)', function () {
+function registerFeeSpikeCase2() {
+it('indexes the whole backlog as VALID (guards against measuring rejections)', function () {
         // Every fee-spike transaction is a SEND, so the sends table is the honest count,
         // but ONLY when filtered to the valid status: rejections land in these tables too
         // and are far cheaper to process than acceptances, so an underfunded or misconfigured
@@ -244,8 +246,10 @@ describe('09 Fee Spike (mempool backlog drain)', function () {
             `Only ${validSends} VALID sends indexed for a ${SPIKE_TXS} transaction backlog ` +
             '(the drain was timing rejections, not real work)');
     });
+}
 
-    it('does not increase the per-transaction query fan-out across the drain', function () {
+function registerFeeSpikeCase3() {
+it('does not increase the per-transaction query fan-out across the drain', function () {
         const drain = inRange(legs.drain.from, legs.drain.to).map(b => queriesPerBlock.get(b.blockIndex) / TXS_PER_BLOCK);
         const quarter = Math.max(1, Math.floor(drain.length / 4));
         const early = median(drain.slice(0, quarter));
@@ -258,8 +262,10 @@ describe('09 Fee Spike (mempool backlog drain)', function () {
             `Query fan-out per transaction grew ${ratio.toFixed(2)}x while draining the backlog ` +
             `(${early.toFixed(1)} -> ${late.toFixed(1)} queries/tx), which is an N+1, not a data-size effect`);
     });
+}
 
-    it('keeps per-transaction cost growing no faster than the ledger', async function () {
+function registerFeeSpikeCase4() {
+it('keeps per-transaction cost growing no faster than the ledger', async function () {
         const drain = inRange(legs.drain.from, legs.drain.to);
         const quarter = Math.max(1, Math.floor(drain.length / 4));
         const earlyBlocks = drain.slice(0, quarter);
@@ -279,8 +285,10 @@ describe('09 Fee Spike (mempool backlog drain)', function () {
             `Per-transaction cost grew ${costGrowth.toFixed(2)}x while the ledger grew only ` +
             `${ledgerGrowth.toFixed(2)}x (${early.toFixed(3)} -> ${late.toFixed(3)} ms/tx), which is super-linear`);
     });
+}
 
-    it('leaves quiet blocks no slower than the ledger growth explains', async function () {
+function registerFeeSpikeCase5() {
+it('leaves quiet blocks no slower than the ledger growth explains', async function () {
         const baselineBlocks = inRange(legs.baseline.from, legs.baseline.to);
         const recoveryBlocks = inRange(legs.recovery.from, legs.recovery.to);
         const baseline = median(baselineBlocks.map(b => b.totalMs));
@@ -298,4 +306,29 @@ describe('09 Fee Spike (mempool backlog drain)', function () {
             `Quiet blocks after the spike are ${costGrowth.toFixed(2)}x slower than before it while the ` +
             `ledger grew ${ledgerGrowth.toFixed(2)}x (${baseline.toFixed(2)} -> ${recovery.toFixed(2)} ms)`);
     });
+}
+
+describe('09 Fee Spike (mempool backlog drain)', function () {
+    this.timeout(0); // size controlled by PERF_FEESPIKE_TXS
+
+    before(async function () {
+        await prepareFeeSpikeRun();
+    });
+
+    after(async function () {
+        // Sweep an indexer a failed before hook left live: each forks a VM worker subprocess that outlives the suite otherwise.
+        await destroyFileIndexers(__filename);
+        restoreEnv(priorEnv);
+        await closeAll();
+    });
+
+    registerFeeSpikeCase1()
+
+    registerFeeSpikeCase2()
+
+    registerFeeSpikeCase3()
+
+    registerFeeSpikeCase4()
+
+    registerFeeSpikeCase5()
 });
