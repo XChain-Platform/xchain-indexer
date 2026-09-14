@@ -110,13 +110,13 @@ describe('Security: negative amount rejection in isValidAmountFormat() @regressi
     });
 });
 
+let indexer, actionsCtx;
+
 // ---------------------------------------------------------------------------
 // Suite: negative amounts rejected by action handlers
 // ---------------------------------------------------------------------------
 
 describe('Security: negative amounts rejected by action handlers @regression @tier4', function () {
-    let indexer, actionsCtx;
-
     beforeEach(function () {
         indexer     = createMockIndexer();
         actionsCtx = makeActionsCtx(indexer);
@@ -172,6 +172,24 @@ describe('Security: negative amounts rejected by action handlers @regression @ti
         await handler.parse(params, data, null);
 
         assert.ok(data.STATUS.startsWith('invalid'), `expected invalid but got: ${data.STATUS}`);
+    });
+});
+
+describe('Security: negative amounts rejected by action handlers @regression @tier4', function () {
+    beforeEach(function () {
+        indexer     = createMockIndexer();
+        actionsCtx = makeActionsCtx(indexer);
+
+        // Standard mock setup for token resolution
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', DECIMALS: 0, MAX_SUPPLY: '1000', MAX_MINT: '100', SUPPLY: '500' }));
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
+        indexer.indexerDb.getActionCreditDebitAmount.resolves(0);
+    });
+
+    afterEach(function () {
+        sinon.restore();
     });
 
     it('SEC-11: SEND with \'-0\' AMOUNT → invalid status', async function () {
