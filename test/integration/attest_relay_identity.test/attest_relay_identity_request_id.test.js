@@ -11,14 +11,15 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * test/integration/attest_relay_identity_request_id.test.js
+ * test/integration/attest_relay_identity.test/attest_relay_identity_request_id.test.js
  *
  * The request_id plane of the relay-identity suite: getRelayRequestById against a
  * REAL MariaDB. Why these lookups need a real engine rather than a stub, and the
  * seven properties they share with the origin lookup, are written down in
  * attest_relay_identity.test.js; this file keeps that suite's title, so every
  * full test title reads as it did when the two were one file. The schema, hooks
- * and row writer are test/helpers/relay_identity_db.js, on a database of its own.
+ * and row writer are test/integration/attest_relay_identity.test/helpers/relay_identity_db.js,
+ * on a database of its own.
  *
  * Self-skips when TEST_DB_PASS is unset, matching the other DB-backed files here.
  * Run it with bin/run-db-tiers.sh.
@@ -31,7 +32,7 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const assert = require('assert');
 
-const { IDX, relayDbName, useRelayIdentityDb } = require('../helpers/relay_identity_db');
+const { IDX, relayDbName, useRelayIdentityDb } = require('./helpers/relay_identity_db');
 
 const DB_NAME = relayDbName('rid');
 

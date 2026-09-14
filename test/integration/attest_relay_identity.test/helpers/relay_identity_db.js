@@ -11,12 +11,13 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * test/helpers/relay_identity_db.js
+ * test/integration/attest_relay_identity.test/helpers/relay_identity_db.js
  *
  * The real-MariaDB fixture behind the relay-identity suites:
  * test/integration/attest_relay_identity.test.js (the origin lookup),
- * attest_relay_identity_request_id.test.js (the request_id plane) and
- * attest_relay_identity_migration.test.js (the dated migration). Why those
+ * attest_relay_identity.test/attest_relay_identity_request_id.test.js (the
+ * request_id plane) and attest_relay_identity.test/attest_relay_identity_migration.test.js
+ * (the dated migration). Why those
  * suites need a real engine rather than a stub is written down once, in the
  * first of them.
  *
@@ -36,9 +37,9 @@ const fs      = require('fs');
 const path    = require('path');
 const mariadb = require('mariadb');
 
-const { getTestConfig } = require('../fixtures/config');
-const Utility  = require('../../src/utility');
-const Database = require('../../src/db');
+const { getTestConfig } = require('../../../fixtures/config');
+const Utility  = require('../../../../src/utility');
+const Database = require('../../../../src/db');
 
 const DB_HOST = process.env.TEST_DB_HOST || '127.0.0.1';
 const DB_PORT = parseInt(process.env.TEST_DB_PORT) || 3306;
@@ -46,7 +47,7 @@ const DB_USER = process.env.TEST_DB_USER || 'root';
 const DB_PASS = process.env.TEST_DB_PASS;            // undefined => self-skip
 const DB_NAME = process.env.TEST_ATTEST_RELAY_DB || 'xchain_attest_relay_identity';
 
-const SQL_DIR = path.join(__dirname, '../../src/sql');
+const SQL_DIR = path.join(__dirname, '../../../../src/sql');
 // Strip `--` line comments with the PRODUCT's own stripper, for the reason
 // recovery_id_determinism.test.js documents: the licence banner starts `--***` with
 // no whitespace, which MySQL does not treat as a comment, so a verbatim send is

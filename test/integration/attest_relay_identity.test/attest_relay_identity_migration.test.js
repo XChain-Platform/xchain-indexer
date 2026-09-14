@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * test/integration/attest_relay_identity_migration.test.js
+ * test/integration/attest_relay_identity.test/attest_relay_identity_migration.test.js
  *
  * Property 7 of the relay-identity suite: the dated migration's DDL executes, is
  * idempotent, and produces an index byte-identical in shape to the one
@@ -19,7 +19,7 @@
  * six properties, are written down in attest_relay_identity.test.js; this file
  * keeps that suite's title, so every full test title reads as it did when the
  * two were one file. The schema, hooks and row writer are
- * test/helpers/relay_identity_db.js, on a database of its own.
+ * test/integration/attest_relay_identity.test/helpers/relay_identity_db.js, on a database of its own.
  *
  * Self-skips when TEST_DB_PASS is unset, matching the other DB-backed files here.
  * Run it with bin/run-db-tiers.sh.
@@ -36,7 +36,7 @@ const path   = require('path');
 
 const {
     ORIGIN, OTHER, SQL_DIR, stripSqlLineComments, relayDbName, useRelayIdentityDb,
-} = require('../helpers/relay_identity_db');
+} = require('./helpers/relay_identity_db');
 
 const DB_NAME   = relayDbName('mig');
 const MIGRATION = path.join(SQL_DIR, 'migrations', '2026-08-11-attests-relay-identity-index.sql');

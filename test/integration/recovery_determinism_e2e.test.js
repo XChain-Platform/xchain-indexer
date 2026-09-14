@@ -39,8 +39,9 @@
  * test/integration/** glob, which provides the DB service.
  *
  * WHERE THE FIXTURE LIVES. The two nodes, the chain they replay and the row readers
- * are test/helpers/recovery_determinism_nodes.js; the chunked contract and the real VM
- * its DEPLOY needs are test/helpers/recovery_contract_leg.js. The cases below are three
+ * are recovery_determinism_e2e.test/helpers/recovery_determinism_nodes.js beside this
+ * file; the chunked contract and the real VM its DEPLOY needs are
+ * recovery_determinism_e2e.test/helpers/recovery_contract_leg.js. The cases below are three
  * describe blocks with one title, so every full test title reads as it did when they
  * were one block, and all three read the same two nodes, built once.
  *
@@ -56,10 +57,10 @@ const { buildStateHashData, INDEX_MAP_STATE_HASH_ACTIVATION } = require('../../s
 const {
     util, CHAIN, STAKE_SOURCE, EARN_BLOCK, COLLECT_BLOCK,
     indexMapChecksum, rewardRows, useRecoveredNodes, teardownRecoveredNodes,
-} = require('../helpers/recovery_determinism_nodes');
+} = require('./recovery_determinism_e2e.test/helpers/recovery_determinism_nodes');
 const {
     CONTRACT_DEPLOYER, CONTRACT_CODE, CONTRACT_HASH, CONTRACT_CHUNKS, contractRows, deployChunkRows,
-} = require('../helpers/recovery_contract_leg');
+} = require('./recovery_determinism_e2e.test/helpers/recovery_contract_leg');
 
 // Every block below reads the same two nodes, built once by whichever block's before()
 // runs first, as the single before() of the one-block suite built them once. So the

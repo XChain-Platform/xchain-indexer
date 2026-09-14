@@ -14,8 +14,8 @@
   "splits": {
     "test/integration/attest_relay_identity.test.js": [
       "test/integration/attest_relay_identity.test.js",
-      "test/integration/attest_relay_identity_request_id.test.js",
-      "test/integration/attest_relay_identity_migration.test.js"
+      "test/integration/attest_relay_identity.test/attest_relay_identity_request_id.test.js",
+      "test/integration/attest_relay_identity.test/attest_relay_identity_migration.test.js"
     ]
   },
   "titleDeltas": []

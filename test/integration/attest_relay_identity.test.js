@@ -48,17 +48,18 @@
  * broadcasts, so one malformed v3 at a pending id was stored as rejected and then
  * answered the guard for the real relay, permanently, for one transaction fee. It is
  * a second raw predicate with the same stub-shaped blind spot, and its cases in
- * attest_relay_identity_request_id.test.js pin the same seven properties plus one
+ * attest_relay_identity.test/attest_relay_identity_request_id.test.js pin the same seven properties plus one
  * more: the SHARED lookup (getAttestationRequestById, four consensus callers) still
  * returns the rejected row the narrow one hides, which is the ruling's actual
  * constraint.
  *
  * WHERE EACH PART LIVES. This file holds properties 1 to 6 for the origin lookup;
- * attest_relay_identity_request_id.test.js holds the request_id plane and
- * attest_relay_identity_migration.test.js holds property 7. All three keep the one
+ * the parts directory attest_relay_identity.test/ holds the request_id plane
+ * (attest_relay_identity_request_id.test.js) and property 7
+ * (attest_relay_identity_migration.test.js). All three keep the one
  * suite title below, so every full test title reads as it did when they were one
  * file, and they share the schema, hooks and row writer in
- * test/helpers/relay_identity_db.js. Each describe block below is one or two
+ * attest_relay_identity.test/helpers/relay_identity_db.js. Each describe block below is one or two
  * numbered properties with its own copy of the hooks.
  *
  * Self-skips when TEST_DB_PASS is unset, matching the other DB-backed files here.
@@ -72,7 +73,7 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const assert = require('assert');
 
-const { ORIGIN, OTHER, IDX, BIG, relayDbName, useRelayIdentityDb } = require('../helpers/relay_identity_db');
+const { ORIGIN, OTHER, IDX, BIG, relayDbName, useRelayIdentityDb } = require('./attest_relay_identity.test/helpers/relay_identity_db');
 
 const DB_NAME = relayDbName('');
 

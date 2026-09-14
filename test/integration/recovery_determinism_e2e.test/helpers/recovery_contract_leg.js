@@ -14,7 +14,7 @@
  *
  * The contract-heavy leg of test/integration/recovery_determinism_e2e.test.js:
  * the chunked contract, the real VM its DEPLOY needs, and the row readers the
- * byte-identity assertions compare. test/helpers/recovery_determinism_nodes.js
+ * byte-identity assertions compare. the sibling recovery_determinism_nodes.js
  * drives it on both nodes, after the recovery pre-seed.
  *
  ********************************************************************/
@@ -23,9 +23,9 @@
 const assert = require('assert');
 const crypto = require('crypto');
 
-const { getTestConfig } = require('../fixtures/config');
-const Deploy = require('../../src/actions/deploy/index.js');
-const Mapper = require('../../src/chain/mapper.js');
+const { getTestConfig } = require('../../../fixtures/config');
+const Deploy = require('../../../../src/actions/deploy/index.js');
+const Mapper = require('../../../../src/chain/mapper.js');
 
 // ── Contract-heavy recovery leg ────────────────────────────────────
 // The launch bundle deploys contracts via chunked DEPLOY: a run of v4 carriers each

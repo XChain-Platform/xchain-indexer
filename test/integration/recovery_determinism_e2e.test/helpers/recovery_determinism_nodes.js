@@ -15,7 +15,7 @@
  * The two nodes of test/integration/recovery_determinism_e2e.test.js, and the
  * readers its assertions compare: node A from genesis and node B recovered
  * through the REAL AnchorRecovery.run(), over the identical chain. The
- * contract-heavy leg both nodes deploy is test/helpers/recovery_contract_leg.js.
+ * contract-heavy leg both nodes deploy is the sibling recovery_contract_leg.js.
  *
  * WHY THE BUILD IS SHARED. The suite is several consecutive describe blocks with
  * one title, so every full test title reads as it did when it was one block. The
@@ -33,11 +33,11 @@
 const assert  = require('assert');
 const mariadb = require('mariadb');
 
-const { getTestConfig } = require('../fixtures/config');
-const { makeKeypair, buildBatch, rawMatch } = require('../fixtures/anchor-archive.js');
-const Utility        = require('../../src/utility');
-const Database       = require('../../src/db');
-const AnchorRecovery = require('../../bin/recovery.js');
+const { getTestConfig } = require('../../../fixtures/config');
+const { makeKeypair, buildBatch, rawMatch } = require('../../../fixtures/anchor-archive.js');
+const Utility        = require('../../../../src/utility');
+const Database       = require('../../../../src/db');
+const AnchorRecovery = require('../../../../bin/recovery.js');
 const { sharedVm, shutdownVm, deployChunkedContract } = require('./recovery_contract_leg');
 
 const DB_HOST = process.env.TEST_DB_HOST || '127.0.0.1';
@@ -73,7 +73,7 @@ const COLLECT_BLOCK = 4;
 // ANCHOR_REWARD_AMOUNT and recovery pins the archived amount to it. Node A must
 // credit the frozen amount like a real live node; the ARCHIVE keeps a deliberately
 // wrong 5.00000000 so this suite also proves recovery pins a forged amount.
-const ar            = require('../../src/anchor_reward_activation');
+const ar            = require('../../../../src/anchor_reward_activation');
 const REWARD_AMOUNT = ar.ANCHOR_REWARD_AMOUNT;
 const FORGED_ARCHIVE_AMOUNT = '5.00000000';
 const REWARD_ROUND  = 1;
