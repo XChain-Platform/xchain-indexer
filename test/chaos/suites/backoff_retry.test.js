@@ -24,10 +24,10 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createChaosDb } = require('../setup/harness');
 
+let db, sleepStub;
+
 describe('Chaos: Exponential Backoff & Retry', function () {
     this.timeout(10000);
-
-    let db, sleepStub;
 
     beforeEach(function () {
         db = createChaosDb({ circuitThreshold: 50 }); // high threshold so circuit breaker doesn't interfere
@@ -81,6 +81,19 @@ describe('Chaos: Exponential Backoff & Retry', function () {
         const delay = sleepStub.firstCall.args[0];
         // base=500, jitter=75, total=575
         assert.strictEqual(delay, 575);
+    });
+});
+
+describe('Chaos: Exponential Backoff & Retry', function () {
+    this.timeout(10000);
+
+    beforeEach(function () {
+        db = createChaosDb({ circuitThreshold: 50 }); // high threshold so circuit breaker doesn't interfere
+        sleepStub = sinon.stub(db.util, 'sleep').resolves();
+    });
+
+    afterEach(function () {
+        sinon.restore();
     });
 
     it('BR-05: gives up after maxAttempts (30) with descriptive error', async function () {

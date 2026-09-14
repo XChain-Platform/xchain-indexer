@@ -29,10 +29,10 @@ const Utility = require('../../../src/utility.js');
 // add a dangling handle and a second clock the assertion never reads.
 const neverSettles = () => new Promise(() => {});
 
+let util;
+
 describe('Chaos: Watchdog Timeout', function () {
     this.timeout(10000);
-
-    let util;
 
     beforeEach(function () {
         util = new Utility();
@@ -81,6 +81,14 @@ describe('Chaos: Watchdog Timeout', function () {
             assert.ok(e.message.includes('Watchdog timeout'));
         }
         // Timer should be cleared by .finally() (no dangling timers)
+    });
+});
+
+describe('Chaos: Watchdog Timeout', function () {
+    this.timeout(10000);
+
+    beforeEach(function () {
+        util = new Utility();
     });
 
     it('WD-06: very short timeout rejects near-immediately', async function () {
