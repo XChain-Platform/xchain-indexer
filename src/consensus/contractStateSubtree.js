@@ -10,8 +10,8 @@
  *
  **********************************************************************
  *
- * contract_state_root derivation (SPV sub-tree spec §3 Stage A; design in
- * ).
+ * contract_state_root derivation (SPV sub-tree spec §3 Stage A): the root of
+ * the contract-state sub-tree inside the light-client state commitment.
  *
  * One SMT leaf per live (contract_index, state_key), keyed by
  * merkle.contractStateKey()'s XCHAIN_CST domain. This module owns the whole
