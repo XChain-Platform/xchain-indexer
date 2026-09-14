@@ -72,70 +72,51 @@ const COIN    = 1;      // index_coins id of the chain's own coin
 const TOKEN_A = 5;      // the token of the pair that already has a row
 const TOKEN_B = 9;      // the token of the pair whose row a reorg sweep destroyed
 
-describe('markets native-coin migration against a real MariaDB @tier3', function () {
-    this.timeout(60000);
 
-    let conn;
+let conn;
 
-    before(async function () {
-        if (!DB_PASS) this.skip();
-        const admin = await mariadb.createConnection({
-            host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS, multipleStatements: true });
-        await admin.query('DROP DATABASE IF EXISTS ' + DB_NAME + '; CREATE DATABASE ' + DB_NAME + ';');
-        await admin.query('USE ' + DB_NAME + '; ' + SCHEMA);
-        await admin.end();
-        conn = await mariadb.createConnection({
-            host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS,
-            database: DB_NAME, insertIdAsNumber: true, bigIntAsNumber: true });
-    });
-
-    after(async function () {
-        if (!conn) return;
-        await conn.query('DROP DATABASE IF EXISTS ' + DB_NAME);
-        await conn.end();
-    });
-
-    /** The pre-migration shape: markets.sql declares the two columns, a live DB lacks them. */
-    async function seed() {
-        await conn.query('DELETE FROM markets');
-        await conn.query('DELETE FROM orders');
-        await conn.query('DELETE FROM order_matches');
-        for (const col of ['coin1_id', 'coin2_id']) {
-            try { await conn.query('ALTER TABLE markets DROP COLUMN ' + col); } catch (e) { /* already gone */ }
-        }
-        await conn.query('ALTER TABLE markets AUTO_INCREMENT = 1');
-
-        // The row a live database holds for TOKEN_A against the coin, stored the way
-        // the collector wrote it: the coin side coerced to 0, in ITS orientation.
-        await conn.query('INSERT INTO markets (id, tick1_id, tick2_id) VALUES (?, ?, ?)',
-            [1, TOKEN_A, 0]);
-        // A surplus row for the SAME pair from the NULL era, which the key never bound.
-        await conn.query('INSERT INTO markets (id, tick1_id, tick2_id) VALUES (?, ?, NULL)',
-            [2, TOKEN_A]);
-        // Orders behind that pair, so step 5 can label it.
-        await order(10, TOKEN_A, null);
-        // The pair whose row the reorg sweep deleted. Its EARLIEST order gives the token
-        // and gets the coin, so the row the migration creates must be (0, TOKEN_B).
-        await order(20, TOKEN_B, null);
-        await order(30, null, TOKEN_B);
+/** The pre-migration shape: markets.sql declares the two columns, a live DB lacks them. */
+async function seed() {
+    await conn.query('DELETE FROM markets');
+    await conn.query('DELETE FROM orders');
+    await conn.query('DELETE FROM order_matches');
+    for (const col of ['coin1_id', 'coin2_id']) {
+        try { await conn.query('ALTER TABLE markets DROP COLUMN ' + col); } catch (e) { /* already gone */ }
     }
+    await conn.query('ALTER TABLE markets AUTO_INCREMENT = 1');
 
-    /** One orders row for a same-coin pair. A tickerless side is stored NULL, as the collector does. */
-    function order(action_index, give_tick_id, get_tick_id) {
-        return conn.query(
-            `INSERT INTO orders (action_index, give_coin_id, give_tick_id, get_coin_id, get_tick_id)
-             VALUES (?, ?, ?, ?, ?)`,
-            [action_index, COIN, give_tick_id, COIN, get_tick_id]);
-    }
+    // The row a live database holds for TOKEN_A against the coin, stored the way
+    // the collector wrote it: the coin side coerced to 0, in ITS orientation.
+    await conn.query('INSERT INTO markets (id, tick1_id, tick2_id) VALUES (?, ?, ?)',
+        [1, TOKEN_A, 0]);
+    // A surplus row for the SAME pair from the NULL era, which the key never bound.
+    await conn.query('INSERT INTO markets (id, tick1_id, tick2_id) VALUES (?, ?, NULL)',
+        [2, TOKEN_A]);
+    // Orders behind that pair, so step 5 can label it.
+    await order(10, TOKEN_A, null);
+    // The pair whose row the reorg sweep deleted. Its EARLIEST order gives the token
+    // and gets the coin, so the row the migration creates must be (0, TOKEN_B).
+    await order(20, TOKEN_B, null);
+    await order(30, null, TOKEN_B);
+}
 
-    async function runMigration() {
-        for (const stmt of STATEMENTS) await conn.query(stmt);
-    }
+/** One orders row for a same-coin pair. A tickerless side is stored NULL, as the collector does. */
+function order(action_index, give_tick_id, get_tick_id) {
+    return conn.query(
+        `INSERT INTO orders (action_index, give_coin_id, give_tick_id, get_coin_id, get_tick_id)
+         VALUES (?, ?, ?, ?, ?)`,
+        [action_index, COIN, give_tick_id, COIN, get_tick_id]);
+}
 
-    function marketRows() {
-        return conn.query('SELECT id, tick1_id, tick2_id, coin1_id, coin2_id FROM markets ORDER BY id');
-    }
+async function runMigration() {
+    for (const stmt of STATEMENTS) await conn.query(stmt);
+}
 
+function marketRows() {
+    return conn.query('SELECT id, tick1_id, tick2_id, coin1_id, coin2_id FROM markets ORDER BY id');
+}
+
+function registerNativeCoinMigrationTests1() {
     it('keeps the surviving row on its own id and orientation, and adds the missing pair', async function () {
         await seed();
         await runMigration();
@@ -157,7 +138,6 @@ describe('markets native-coin migration against a real MariaDB @tier3', function
         assert.strictEqual(Number(added.coin1_id), COIN);
         assert.strictEqual(Number(added.coin2_id), COIN);
     });
-
     it('changes nothing on a second run', async function () {
         await seed();
         await runMigration();
@@ -168,7 +148,6 @@ describe('markets native-coin migration against a real MariaDB @tier3', function
             second.map(r => [r.id, Number(r.tick1_id), Number(r.tick2_id), Number(r.coin1_id), Number(r.coin2_id)]),
             first.map(r => [r.id, Number(r.tick1_id), Number(r.tick2_id), Number(r.coin1_id), Number(r.coin2_id)]));
     });
-
     it('runs clean on a database that already carries the columns', async function () {
         await seed();
         await runMigration();
@@ -178,4 +157,28 @@ describe('markets native-coin migration against a real MariaDB @tier3', function
         await runMigration();
         assert.deepStrictEqual((await marketRows()).length, before.length);
     });
+}
+
+describe('markets native-coin migration against a real MariaDB @tier3', function () {
+    this.timeout(60000);
+
+    before(async function () {
+        if (!DB_PASS) this.skip();
+        const admin = await mariadb.createConnection({
+            host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS, multipleStatements: true });
+        await admin.query('DROP DATABASE IF EXISTS ' + DB_NAME + '; CREATE DATABASE ' + DB_NAME + ';');
+        await admin.query('USE ' + DB_NAME + '; ' + SCHEMA);
+        await admin.end();
+        conn = await mariadb.createConnection({
+            host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS,
+            database: DB_NAME, insertIdAsNumber: true, bigIntAsNumber: true });
+    });
+
+    after(async function () {
+        if (!conn) return;
+        await conn.query('DROP DATABASE IF EXISTS ' + DB_NAME);
+        await conn.end();
+    });
+
+    registerNativeCoinMigrationTests1();
 });

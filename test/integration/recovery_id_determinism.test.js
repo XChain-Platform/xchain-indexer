@@ -159,25 +159,8 @@ async function recoveryMap() {
     } finally { await db.pool.end(); }
 }
 
-describe('Recovery id-determinism (consensus) @integration', function () {
-    this.timeout(60000);
 
-    before(async function () {
-        if (DB_PASS === undefined) { this.skip(); return; }
-        try {
-            const c = await mariadb.createConnection({ host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS, connectTimeout: 4000 });
-            await c.query('SELECT 1'); await c.end();
-        } catch (e) { this.skip(); }
-    });
-
-    after(async function () {
-        if (DB_PASS === undefined) return;
-        try {
-            const admin = await mariadb.createConnection({ host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS });
-            await admin.query('DROP DATABASE IF EXISTS ' + DB_NAME); await admin.end();
-        } catch (e) { /* best effort */ }
-    });
-
+function registerRecoveryDeterminismTests1() {
     // THE PRIMITIVE (characterization): out-of-tx createAddress offsets the deterministic id
     // space. This is the hazard staged recovery removes; createAddress itself is unchanged.
     it('primitive: out-of-tx createAddress offsets the deterministic id map', async function () {
@@ -190,7 +173,6 @@ describe('Recovery id-determinism (consensus) @integration', function () {
                 a + ' is offset by the out-of-tx pre-seed count');
         }
     });
-
     // STAGED RECOVERY: the real recovery path (stage by string, no id) reproduces the
     // from-genesis id map EXACTLY, and materializes the staged reward under the deterministic
     // source_id when the source address first gets its in-block id.
@@ -227,7 +209,9 @@ describe('Recovery id-determinism (consensus) @integration', function () {
         assert.strictEqual(Number(staged[0].source_id), genesis['bc1qAlice']);
         assert.strictEqual(Number(staged[0].applied_block), DUE_BLOCK);
     });
+}
 
+function registerRecoveryDeterminismTests2() {
     // Defense-in-depth: a NULL-block (out-of-band) id is NOT resolvable as a wire ^id (the block-stamp
     // gate in resolveAddressRef), while an in-block id is. Confirms the gate is live.
     it('F2 gate: resolveAddressRef resolves only block-stamped ids', async function () {
@@ -248,4 +232,27 @@ describe('Recovery id-determinism (consensus) @integration', function () {
                 'NULL-block id is returned unchanged (rejected downstream), not resolved');
         } finally { await db.pool.end(); }
     });
+}
+
+describe('Recovery id-determinism (consensus) @integration', function () {
+    this.timeout(60000);
+
+    before(async function () {
+        if (DB_PASS === undefined) { this.skip(); return; }
+        try {
+            const c = await mariadb.createConnection({ host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS, connectTimeout: 4000 });
+            await c.query('SELECT 1'); await c.end();
+        } catch (e) { this.skip(); }
+    });
+
+    after(async function () {
+        if (DB_PASS === undefined) return;
+        try {
+            const admin = await mariadb.createConnection({ host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS });
+            await admin.query('DROP DATABASE IF EXISTS ' + DB_NAME); await admin.end();
+        } catch (e) { /* best effort */ }
+    });
+
+    registerRecoveryDeterminismTests1();
+    registerRecoveryDeterminismTests2();
 });

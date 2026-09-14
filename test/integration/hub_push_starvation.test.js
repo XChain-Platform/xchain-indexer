@@ -67,28 +67,10 @@ async function createPendingHubPushesTable(db) {
     }
 }
 
-describe('HubPushQueue starvation fix (MariaDB integration) @regression @tier1', function () {
-    this.timeout(60000);
 
-    let db;
+let db;
 
-    before(async function () {
-        await useFileDatabases(__filename);
-        await resetIndexerDb();
-        const p = getConnectionParams();
-        db = new Database(p.indexerHost, p.indexerPort, p.indexerName, p.indexerUser, p.indexerPass, makeMinimalIndexer());
-        await createPendingHubPushesTable(db);
-    });
-
-    after(async function () {
-        if (db && db.pool) await db.pool.end();
-        await closeAll();
-    });
-
-    beforeEach(async function () {
-        await db.poolQuery('DELETE FROM pending_hub_pushes', []);
-    });
-
+function registerPushStarvationTests1() {
     it('fetches a newer due row even with 50+ older rows parked in backoff (head-of-line blocking)', async function () {
         // 55 "parked" rows: high attempt count and a recent last_attempted_at, so
         // under the base=30s/max=600s backoff schedule none of them are due yet.
@@ -127,7 +109,6 @@ describe('HubPushQueue starvation fix (MariaDB integration) @regression @tier1',
                 'a freshly-attempted, high-attempt (still-in-backoff) row must not be returned: id ' + r.id);
         }
     });
-
     it('still returns parked rows once their backoff window has actually elapsed', async function () {
         // A row attempted long enough ago (11 minutes, past the 600s/10min max
         // backoff cap) must be treated as due regardless of its attempt count.
@@ -140,7 +121,9 @@ describe('HubPushQueue starvation fix (MariaDB integration) @regression @tier1',
         const rows = await db.getPendingHubPushes(50, { baseBackoffMs: 30000, maxBackoffMs: 600000 });
         assert.strictEqual(rows.length, 1, 'the elapsed-backoff row must be fetched once its window has passed');
     });
+}
 
+function registerPushStarvationTests2() {
     it('excludes a row whose backoff window has not yet elapsed', async function () {
         await db.poolQuery(
             `INSERT INTO pending_hub_pushes (push_type, action_index, payload, attempts, last_attempted_at, status)
@@ -151,4 +134,28 @@ describe('HubPushQueue starvation fix (MariaDB integration) @regression @tier1',
         const rows = await db.getPendingHubPushes(50, { baseBackoffMs: 30000, maxBackoffMs: 600000 });
         assert.strictEqual(rows.length, 0, 'a row still inside its backoff window must not be fetched');
     });
+}
+
+describe('HubPushQueue starvation fix (MariaDB integration) @regression @tier1', function () {
+    this.timeout(60000);
+
+    before(async function () {
+        await useFileDatabases(__filename);
+        await resetIndexerDb();
+        const p = getConnectionParams();
+        db = new Database(p.indexerHost, p.indexerPort, p.indexerName, p.indexerUser, p.indexerPass, makeMinimalIndexer());
+        await createPendingHubPushesTable(db);
+    });
+
+    after(async function () {
+        if (db && db.pool) await db.pool.end();
+        await closeAll();
+    });
+
+    beforeEach(async function () {
+        await db.poolQuery('DELETE FROM pending_hub_pushes', []);
+    });
+
+    registerPushStarvationTests1();
+    registerPushStarvationTests2();
 });

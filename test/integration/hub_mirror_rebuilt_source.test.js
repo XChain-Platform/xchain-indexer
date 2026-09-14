@@ -80,69 +80,54 @@ function row(id, chain, seq, blockIndex) {
     };
 }
 
-describe('HubDbSync against a REBUILT hub database, real MariaDB @tier3', function () {
-    this.timeout(60000);
 
-    let db;
+let db;
 
-    before(async function () {
-        if (!DB_PASS) this.skip();
-        const admin = await mariadb.createConnection({
-            host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS, multipleStatements: true });
-        await admin.query('DROP DATABASE IF EXISTS ' + DB_NAME + '; CREATE DATABASE ' + DB_NAME + ';');
-        await admin.query('USE ' + DB_NAME + '; ' + SCHEMA);
-        await admin.end();
+// Seed the mirror as it stood before the hub was rebuilt: rows carrying a retired id
+// space, at ids and checkpoint_seqs far above anything the new hub will ever serve.
+async function seedPreResetMirror(ids) {
+    const conn = await db.getConnection();
+    try {
+        await conn.query('DELETE FROM state_checkpoints');
+        for (const id of ids) {
+            const r = row(id, 'BTC', 11000 + id, 3900 + id);
+            await conn.query(
+                'INSERT INTO state_checkpoints (id, chain, network, block_index, block_hash, ledger_hash, ' +
+                'actions_hash, contract_hash, checkpoint_seq, snapshot_block, state_root, state_root_version, ' +
+                'block_merkle_root, block_merkle_version, validator_signatures) ' +
+                'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                [r.id, r.chain, r.network, r.block_index, r.block_hash, r.ledger_hash, r.actions_hash,
+                 r.contract_hash, r.checkpoint_seq, r.snapshot_block, r.state_root, r.state_root_version,
+                 r.block_merkle_root, r.block_merkle_version, r.validator_signatures]);
+        }
+    } finally { await conn.release(); }
+}
 
-        const config = getTestConfig();
-        db = new Database(DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS, { config, util: new Utility() });
+// A HubDbSync wired to the real database, serving the REBUILT hub's table over the
+// snapshot endpoint exactly as the live hub does (rows strictly above since_id).
+function makeSync(hubRows, advertisedCeiling) {
+    const sync = new HubDbSync(db, { hubUrl: 'http://hub.test', network: NETWORK });
+    if (advertisedCeiling !== undefined) sync._readyMaxIds = { state_checkpoints: advertisedCeiling };
+    sinon.stub(sync, '_httpGet').callsFake(async (p) => {
+        const since = Number(/since_id=(\d+)/.exec(p)[1]);
+        return { rows: hubRows.filter((r) => r.id > since), watermark: 4242 };
     });
+    return sync;
+}
 
-    afterEach(function () { sinon.restore(); });
+async function mirrorState() {
+    const conn = await db.getConnection();
+    try {
+        const rows = await conn.query(
+            'SELECT id, checkpoint_seq FROM state_checkpoints ORDER BY id ASC');
+        return {
+            ids:  rows.map((r) => Number(r.id)),
+            maxSeq: rows.length ? Math.max(...rows.map((r) => Number(r.checkpoint_seq))) : null
+        };
+    } finally { await conn.release(); }
+}
 
-    // Seed the mirror as it stood before the hub was rebuilt: rows carrying a retired id
-    // space, at ids and checkpoint_seqs far above anything the new hub will ever serve.
-    async function seedPreResetMirror(ids) {
-        const conn = await db.getConnection();
-        try {
-            await conn.query('DELETE FROM state_checkpoints');
-            for (const id of ids) {
-                const r = row(id, 'BTC', 11000 + id, 3900 + id);
-                await conn.query(
-                    'INSERT INTO state_checkpoints (id, chain, network, block_index, block_hash, ledger_hash, ' +
-                    'actions_hash, contract_hash, checkpoint_seq, snapshot_block, state_root, state_root_version, ' +
-                    'block_merkle_root, block_merkle_version, validator_signatures) ' +
-                    'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                    [r.id, r.chain, r.network, r.block_index, r.block_hash, r.ledger_hash, r.actions_hash,
-                     r.contract_hash, r.checkpoint_seq, r.snapshot_block, r.state_root, r.state_root_version,
-                     r.block_merkle_root, r.block_merkle_version, r.validator_signatures]);
-            }
-        } finally { await conn.release(); }
-    }
-
-    // A HubDbSync wired to the real database, serving the REBUILT hub's table over the
-    // snapshot endpoint exactly as the live hub does (rows strictly above since_id).
-    function makeSync(hubRows, advertisedCeiling) {
-        const sync = new HubDbSync(db, { hubUrl: 'http://hub.test', network: NETWORK });
-        if (advertisedCeiling !== undefined) sync._readyMaxIds = { state_checkpoints: advertisedCeiling };
-        sinon.stub(sync, '_httpGet').callsFake(async (p) => {
-            const since = Number(/since_id=(\d+)/.exec(p)[1]);
-            return { rows: hubRows.filter((r) => r.id > since), watermark: 4242 };
-        });
-        return sync;
-    }
-
-    async function mirrorState() {
-        const conn = await db.getConnection();
-        try {
-            const rows = await conn.query(
-                'SELECT id, checkpoint_seq FROM state_checkpoints ORDER BY id ASC');
-            return {
-                ids:  rows.map((r) => Number(r.id)),
-                maxSeq: rows.length ? Math.max(...rows.map((r) => Number(r.checkpoint_seq))) : null
-            };
-        } finally { await conn.release(); }
-    }
-
+function registerRebuiltMirrorTests1() {
     // The exact venue shape: the hub restarted its ids at 1 and holds three checkpoints,
     // the mirror still holds the pre-reset id space.
     it('rebuilds the mirror to exactly what a rebuilt hub holds', async function () {
@@ -157,7 +142,6 @@ describe('HubDbSync against a REBUILT hub database, real MariaDB @tier3', functi
         assert.strictEqual(after.maxSeq, 124,
             'readers take MAX(checkpoint_seq); a surviving pre-reset row keeps winning forever');
     });
-
     // THE CASE THIS SUITE ONCE PINNED AS UNREACHABLE. The ceiling comparison sees a replaced
     // id space only while the local cursor sits ABOVE what the hub advertises. Here the
     // rebuilt hub has re-grown onto the retired ids exactly, so the two sides agree on every
@@ -180,7 +164,9 @@ describe('HubDbSync against a REBUILT hub database, real MariaDB @tier3', functi
         assert.strictEqual(after.maxSeq, 124,
             'readers take MAX(checkpoint_seq); a retired row surviving at an overlapping id keeps winning');
     });
+}
 
+function registerRebuiltMirrorTests2() {
     // The same shape with the ids and the drain both looking healthy: the cursor sits AT the
     // ceiling and the drain fetches nothing, which is exactly what a level mirror looks like.
     // The contradiction is what separates them, and the rebuilt mirror must end up byte-equal
@@ -202,7 +188,6 @@ describe('HubDbSync against a REBUILT hub database, real MariaDB @tier3', functi
             hubRows.map((r) => [r.id, r.chain, r.block_index, r.block_hash]),
             'every column must come from the hub row, not from the stale row that held its id');
     });
-
     // The other half, and the one that keeps the delete honest. ABSENCE IS NOT EVIDENCE: a
     // page window, a filtered endpoint or a paging hole can each leave a perfectly valid
     // local row unserved, and none of that may authorise clearing the mirror. Only a row the
@@ -225,7 +210,9 @@ describe('HubDbSync against a REBUILT hub database, real MariaDB @tier3', functi
         assert.deepStrictEqual(after.ids, [1, 2, 3], 'an unserved id is not a retired id');
         assert.strictEqual(after.maxSeq, 11003);
     });
+}
 
+function registerRebuiltMirrorTests3() {
     // A level, healthy mirror on a hub that never rebuilt: every shared id agrees, so the
     // probe must find nothing and the mirror must survive untouched. This is the false-trip
     // direction, and a detector that wipes a healthy mirror every bootstrap is worse than
@@ -240,7 +227,6 @@ describe('HubDbSync against a REBUILT hub database, real MariaDB @tier3', functi
         assert.deepStrictEqual(after.ids, [1, 2, 3], 'a mirror that matches its source must not be rebuilt');
         assert.strictEqual(after.maxSeq, 11003);
     });
-
     // A hub whose database was rebuilt moments ago has an EMPTY table and advertises 0.
     // That is the state the indexers actually reconnected into on the venue, and reading
     // 0 as "no information" is what let the stale mirror survive.
@@ -252,7 +238,6 @@ describe('HubDbSync against a REBUILT hub database, real MariaDB @tier3', functi
         const after = await mirrorState();
         assert.deepStrictEqual(after.ids, [], 'an empty source means an empty mirror, not a preserved one');
     });
-
     // The safety half. An older hub advertises no max_ids at all, and a missing ceiling is
     // evidence of nothing: the mirror must be left alone rather than wiped.
     it('leaves the mirror untouched when the hub advertises no ceiling', async function () {
@@ -264,7 +249,6 @@ describe('HubDbSync against a REBUILT hub database, real MariaDB @tier3', functi
         assert.deepStrictEqual(after.ids, [11241, 11242, 11243, 11244],
             'with no ceiling the cursor resumes and nothing is deleted');
     });
-
     // A healthy mirror on a hub that never rebuilt must keep resuming incrementally; the
     // fence must not turn every bootstrap into a wipe-and-repage.
     it('resumes incrementally and deletes nothing when the mirror is in the hub id space', async function () {
@@ -276,4 +260,26 @@ describe('HubDbSync against a REBUILT hub database, real MariaDB @tier3', functi
         assert.deepStrictEqual(after.ids, [11241, 11242, 11243, 11244],
             'a cursor at or below the ceiling is a valid position, not a rebuild');
     });
+}
+
+describe('HubDbSync against a REBUILT hub database, real MariaDB @tier3', function () {
+    this.timeout(60000);
+
+    before(async function () {
+        if (!DB_PASS) this.skip();
+        const admin = await mariadb.createConnection({
+            host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS, multipleStatements: true });
+        await admin.query('DROP DATABASE IF EXISTS ' + DB_NAME + '; CREATE DATABASE ' + DB_NAME + ';');
+        await admin.query('USE ' + DB_NAME + '; ' + SCHEMA);
+        await admin.end();
+
+        const config = getTestConfig();
+        db = new Database(DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS, { config, util: new Utility() });
+    });
+
+    afterEach(function () { sinon.restore(); });
+
+    registerRebuiltMirrorTests1();
+    registerRebuiltMirrorTests2();
+    registerRebuiltMirrorTests3();
 });

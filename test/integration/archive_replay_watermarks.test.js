@@ -86,10 +86,80 @@ const INSERT = `INSERT INTO anchor_actions
      match_batch_seq, block_index_doge, status_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
+
+let db, status;
+
+async function insert(rows) {
+    const conn = await db.getConnection();
+    try {
+        await conn.query('DELETE FROM anchor_actions');
+        for (const r of rows) await conn.query(INSERT, anchorRow(r));
+    } finally { await conn.release(); }
+}
+
+function registerArchiveWatermarkTests1() {
+    it('an empty table yields both watermarks null, which is what leaves the guard inert', async function () {
+        await insert([]);
+        assert.deepStrictEqual(await db.getArchiveReplayWatermarks(),
+                               { batchSeq: null, checkpointSeq: null });
+    });
+    it('reads batch and checkpoint seq off the archive-head rows', async function () {
+        await insert([
+            { action_index: 1, version: 1, checkpoint_seq: 100, match_batch_seq: 5, status_id: status.valid },
+            { action_index: 2, version: 1, checkpoint_seq: 200, match_batch_seq: 7, status_id: status.unverified },
+        ]);
+        assert.deepStrictEqual(await db.getArchiveReplayWatermarks(),
+                               { batchSeq: 7, checkpointSeq: 200 });
+    });
+    it('ignores non-archive versions, so a v0 checkpoint cannot raise the archive watermark', async function () {
+        // The load-bearing case for reading both from ONE row set. A v0 anchor carries a
+        // checkpoint_seq and NO batch seq; if checkpointSeq came from a wider row set than
+        // batchSeq, this v0 row would raise the checkpoint watermark above every real
+        // archive and the guard would start rejecting legitimate post-rebase batches.
+        await insert([
+            { action_index: 1, version: 1, checkpoint_seq: 100, match_batch_seq: 5, status_id: status.valid },
+            { action_index: 2, version: 0, checkpoint_seq: 999999, status_id: status.valid },
+            { action_index: 3, version: 2, checkpoint_seq: 888888, match_batch_seq: 99, status_id: status.valid },
+        ]);
+        assert.deepStrictEqual(await db.getArchiveReplayWatermarks(),
+                               { batchSeq: 5, checkpointSeq: 100 });
+    });
+    it('ignores rows the parse rejected, so a junk anchor cannot move either watermark', async function () {
+        await insert([
+            { action_index: 1, version: 1, checkpoint_seq: 100, match_batch_seq: 5, status_id: status.valid },
+            // An ARCHIVE-HEAD version deliberately, not a retired one: the point is that
+            // the STATUS filter rejects it. A non-archive version here would be excluded
+            // by the version predicate instead and the case would pass without ever
+            // exercising what it claims to.
+            { action_index: 2, version: 1, checkpoint_seq: 777777, match_batch_seq: 4242, status_id: status.invalid },
+        ]);
+        assert.deepStrictEqual(await db.getArchiveReplayWatermarks(),
+                               { batchSeq: 5, checkpointSeq: 100 });
+    });
+    it('counts an unverified row, because an unmirrored node stores every well-formed ANCHOR that way', async function () {
+        await insert([
+            { action_index: 1, version: 1, checkpoint_seq: 300, match_batch_seq: 11, status_id: status.unverified },
+        ]);
+        assert.deepStrictEqual(await db.getArchiveReplayWatermarks(),
+                               { batchSeq: 11, checkpointSeq: 300 });
+    });
+}
+
+function registerArchiveWatermarkTests2() {
+    it('a NULL batch seq on an archive row does not defeat the batch watermark', async function () {
+        // Defensive: match_batch_seq is nullable, and MAX() skips NULLs rather than
+        // returning NULL, so one malformed-but-valid row must not blank the watermark.
+        await insert([
+            { action_index: 1, version: 1, checkpoint_seq: 100, match_batch_seq: null, status_id: status.valid },
+            { action_index: 2, version: 1, checkpoint_seq: 150, match_batch_seq: 3,    status_id: status.valid },
+        ]);
+        assert.deepStrictEqual(await db.getArchiveReplayWatermarks(),
+                               { batchSeq: 3, checkpointSeq: 150 });
+    });
+}
+
 describe('getArchiveReplayWatermarks() against a real MariaDB @tier3', function () {
     this.timeout(60000);
-
-    let db, status;
 
     before(async function () {
         if (!DB_PASS) this.skip();
@@ -110,72 +180,6 @@ describe('getArchiveReplayWatermarks() against a real MariaDB @tier3', function 
         } finally { await conn.release(); }
     });
 
-    async function insert(rows) {
-        const conn = await db.getConnection();
-        try {
-            await conn.query('DELETE FROM anchor_actions');
-            for (const r of rows) await conn.query(INSERT, anchorRow(r));
-        } finally { await conn.release(); }
-    }
-
-    it('an empty table yields both watermarks null, which is what leaves the guard inert', async function () {
-        await insert([]);
-        assert.deepStrictEqual(await db.getArchiveReplayWatermarks(),
-                               { batchSeq: null, checkpointSeq: null });
-    });
-
-    it('reads batch and checkpoint seq off the archive-head rows', async function () {
-        await insert([
-            { action_index: 1, version: 1, checkpoint_seq: 100, match_batch_seq: 5, status_id: status.valid },
-            { action_index: 2, version: 1, checkpoint_seq: 200, match_batch_seq: 7, status_id: status.unverified },
-        ]);
-        assert.deepStrictEqual(await db.getArchiveReplayWatermarks(),
-                               { batchSeq: 7, checkpointSeq: 200 });
-    });
-
-    it('ignores non-archive versions, so a v0 checkpoint cannot raise the archive watermark', async function () {
-        // The load-bearing case for reading both from ONE row set. A v0 anchor carries a
-        // checkpoint_seq and NO batch seq; if checkpointSeq came from a wider row set than
-        // batchSeq, this v0 row would raise the checkpoint watermark above every real
-        // archive and the guard would start rejecting legitimate post-rebase batches.
-        await insert([
-            { action_index: 1, version: 1, checkpoint_seq: 100, match_batch_seq: 5, status_id: status.valid },
-            { action_index: 2, version: 0, checkpoint_seq: 999999, status_id: status.valid },
-            { action_index: 3, version: 2, checkpoint_seq: 888888, match_batch_seq: 99, status_id: status.valid },
-        ]);
-        assert.deepStrictEqual(await db.getArchiveReplayWatermarks(),
-                               { batchSeq: 5, checkpointSeq: 100 });
-    });
-
-    it('ignores rows the parse rejected, so a junk anchor cannot move either watermark', async function () {
-        await insert([
-            { action_index: 1, version: 1, checkpoint_seq: 100, match_batch_seq: 5, status_id: status.valid },
-            // An ARCHIVE-HEAD version deliberately, not a retired one: the point is that
-            // the STATUS filter rejects it. A non-archive version here would be excluded
-            // by the version predicate instead and the case would pass without ever
-            // exercising what it claims to.
-            { action_index: 2, version: 1, checkpoint_seq: 777777, match_batch_seq: 4242, status_id: status.invalid },
-        ]);
-        assert.deepStrictEqual(await db.getArchiveReplayWatermarks(),
-                               { batchSeq: 5, checkpointSeq: 100 });
-    });
-
-    it('counts an unverified row, because an unmirrored node stores every well-formed ANCHOR that way', async function () {
-        await insert([
-            { action_index: 1, version: 1, checkpoint_seq: 300, match_batch_seq: 11, status_id: status.unverified },
-        ]);
-        assert.deepStrictEqual(await db.getArchiveReplayWatermarks(),
-                               { batchSeq: 11, checkpointSeq: 300 });
-    });
-
-    it('a NULL batch seq on an archive row does not defeat the batch watermark', async function () {
-        // Defensive: match_batch_seq is nullable, and MAX() skips NULLs rather than
-        // returning NULL, so one malformed-but-valid row must not blank the watermark.
-        await insert([
-            { action_index: 1, version: 1, checkpoint_seq: 100, match_batch_seq: null, status_id: status.valid },
-            { action_index: 2, version: 1, checkpoint_seq: 150, match_batch_seq: 3,    status_id: status.valid },
-        ]);
-        assert.deepStrictEqual(await db.getArchiveReplayWatermarks(),
-                               { batchSeq: 3, checkpointSeq: 150 });
-    });
+    registerArchiveWatermarkTests1();
+    registerArchiveWatermarkTests2();
 });

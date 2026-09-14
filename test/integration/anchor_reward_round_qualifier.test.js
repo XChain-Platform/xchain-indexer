@@ -85,105 +85,80 @@ const ROUND    = 4174;
 const SNAP_OLD = 8100;                               // the pre-rebase archive batch
 const SNAP_NEW = 9200;                               // the post-rebase batch that reused the seq
 
-describe('archive reward round_qualifier against a real MariaDB @tier3', function () {
-    this.timeout(60000);
 
-    let db, pubkeyId = {};
+let db, pubkeyId = {};
 
-    before(async function () {
-        if (!DB_PASS) this.skip();
-        const admin = await mariadb.createConnection({
-            host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS, multipleStatements: true });
-        await admin.query('DROP DATABASE IF EXISTS ' + DB_NAME + '; CREATE DATABASE ' + DB_NAME + ';');
-        await admin.query('USE ' + DB_NAME + '; ' + SCHEMA);
-        await admin.end();
+function makeDb() {
+    const config = getTestConfig();
+    const util   = new Utility();
+    return new Database(DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS, { config, util });
+}
 
-        db = makeDb();
-        const c = await db.getConnection();
-        try {
-            for (const pk of [PK_LARGE, PK_SMALL])
-                await c.query('INSERT INTO index_pubkeys (pubkey) VALUES (?)', [pk]);
-            for (const r of await c.query('SELECT id, pubkey FROM index_pubkeys'))
-                pubkeyId[r.pubkey] = Number(r.id);
-        } finally { await c.release(); }
+async function conn(fn) {
+    const c = await db.getConnection();
+    try { return await fn(c); } finally { await c.release(); }
+}
+
+async function reset() {
+    await conn(async c => {
+        for (const t of ['anchor_reward_attestations', 'validator_rewards',
+                         'anchor_reward_reconcile_log'])
+            await c.query('DELETE FROM ' + t);
     });
+}
 
-    after(async function () {
-        if (db && db.pool) await db.pool.end();
-    });
+/** Mirror one hub-authored attestation in, as hub_db_sync does. */
+function attest(rewardType, round, snapshotBlock, publisher) {
+    return conn(c => c.query(
+        `INSERT INTO anchor_reward_attestations
+             (chain, network, reward_type, round_reference, snapshot_block,
+              publisher, reward_amount, publisher_attestations)
+         VALUES ('BTC', 'regtest', ?, ?, ?, ?, ?, '[]')`,
+        [rewardType, round, snapshotBlock, publisher, AMOUNT]));
+}
 
-    beforeEach(reset);
+/**
+ * Credit the derived reward the way createValidatorReward does at/above the derive
+ * gate: the same column list, the same upsert, and block_index = the earn block
+ * (snapshot_block). The stake-source resolution createValidatorReward does first is
+ * not what is under test here, so this writes the row directly.
+ */
+function credit(publisher, rewardType, round, snapshotBlock) {
+    const qualifier = arKey.rewardRoundQualifier(rewardType, snapshotBlock);
+    return conn(c => c.query(
+        `INSERT INTO validator_rewards
+             (source_id, signing_pubkey_id, reward_type, round_reference, round_qualifier,
+              amount, block_index)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE amount=VALUES(amount), block_index=VALUES(block_index)`,
+        [SOURCE, pubkeyId[publisher], rewardType, round, qualifier, AMOUNT, snapshotBlock]));
+}
 
-    function makeDb() {
-        const config = getTestConfig();
-        const util   = new Utility();
-        return new Database(DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS, { config, util });
-    }
+/** Every (pubkey, qualifier) currently credited for a reward type + round. */
+async function credited(rewardType, round) {
+    const rows = await conn(c => c.query(
+        `SELECT pk.pubkey AS pubkey, vr.round_qualifier AS q, vr.block_index AS b
+           FROM validator_rewards vr
+           JOIN index_pubkeys pk ON pk.id = vr.signing_pubkey_id
+          WHERE vr.reward_type = ? AND vr.round_reference = ?
+          ORDER BY vr.round_qualifier, pk.pubkey`, [rewardType, round]));
+    return rows.map(r => ({ pubkey: r.pubkey, qualifier: Number(r.q), block: Number(r.b) }));
+}
 
-    async function conn(fn) {
-        const c = await db.getConnection();
-        try { return await fn(c); } finally { await c.release(); }
-    }
+/**
+ * What a COLLECT at `blockIndex` would credit this staking source. The same scoped
+ * SUM getUnclaimedRewardTotal issues (source_id + block_index <= B), which is the
+ * value the whole defect was leaking.
+ */
+async function collectSum(blockIndex) {
+    const rows = await conn(c => c.query(
+        `SELECT COALESCE(SUM(CAST(amount AS DECIMAL(65,18))), 0) AS total
+           FROM validator_rewards WHERE source_id = ? AND block_index <= ?`,
+        [SOURCE, blockIndex]));
+    return Number(rows[0].total);
+}
 
-    async function reset() {
-        await conn(async c => {
-            for (const t of ['anchor_reward_attestations', 'validator_rewards',
-                             'anchor_reward_reconcile_log'])
-                await c.query('DELETE FROM ' + t);
-        });
-    }
-
-    /** Mirror one hub-authored attestation in, as hub_db_sync does. */
-    function attest(rewardType, round, snapshotBlock, publisher) {
-        return conn(c => c.query(
-            `INSERT INTO anchor_reward_attestations
-                 (chain, network, reward_type, round_reference, snapshot_block,
-                  publisher, reward_amount, publisher_attestations)
-             VALUES ('BTC', 'regtest', ?, ?, ?, ?, ?, '[]')`,
-            [rewardType, round, snapshotBlock, publisher, AMOUNT]));
-    }
-
-    /**
-     * Credit the derived reward the way createValidatorReward does at/above the derive
-     * gate: the same column list, the same upsert, and block_index = the earn block
-     * (snapshot_block). The stake-source resolution createValidatorReward does first is
-     * not what is under test here, so this writes the row directly.
-     */
-    function credit(publisher, rewardType, round, snapshotBlock) {
-        const qualifier = arKey.rewardRoundQualifier(rewardType, snapshotBlock);
-        return conn(c => c.query(
-            `INSERT INTO validator_rewards
-                 (source_id, signing_pubkey_id, reward_type, round_reference, round_qualifier,
-                  amount, block_index)
-             VALUES (?, ?, ?, ?, ?, ?, ?)
-             ON DUPLICATE KEY UPDATE amount=VALUES(amount), block_index=VALUES(block_index)`,
-            [SOURCE, pubkeyId[publisher], rewardType, round, qualifier, AMOUNT, snapshotBlock]));
-    }
-
-    /** Every (pubkey, qualifier) currently credited for a reward type + round. */
-    async function credited(rewardType, round) {
-        const rows = await conn(c => c.query(
-            `SELECT pk.pubkey AS pubkey, vr.round_qualifier AS q, vr.block_index AS b
-               FROM validator_rewards vr
-               JOIN index_pubkeys pk ON pk.id = vr.signing_pubkey_id
-              WHERE vr.reward_type = ? AND vr.round_reference = ?
-              ORDER BY vr.round_qualifier, pk.pubkey`, [rewardType, round]));
-        return rows.map(r => ({ pubkey: r.pubkey, qualifier: Number(r.q), block: Number(r.b) }));
-    }
-
-    /**
-     * What a COLLECT at `blockIndex` would credit this staking source. The same scoped
-     * SUM getUnclaimedRewardTotal issues (source_id + block_index <= B), which is the
-     * value the whole defect was leaking.
-     */
-    async function collectSum(blockIndex) {
-        const rows = await conn(c => c.query(
-            `SELECT COALESCE(SUM(CAST(amount AS DECIMAL(65,18))), 0) AS total
-               FROM validator_rewards WHERE source_id = ? AND block_index <= ?`,
-            [SOURCE, blockIndex]));
-        return Number(rows[0].total);
-    }
-
+function registerRoundQualifierTests1() {
     // ── (a) two real archive anchors sharing a reissued seq ──────────────────────────
 
     it('keeps BOTH archive rewards when one reissued seq covers two snapshots, and COLLECT sees both', async function () {
@@ -210,7 +185,6 @@ describe('archive reward round_qualifier against a real MariaDB @tier3', functio
         assert.strictEqual(await conn(c => c.query('SELECT COUNT(*) AS n FROM anchor_reward_reconcile_log'))
             .then(r => Number(r[0].n)), 0, 'neither reconcile may pre-image a loser: there is no loser');
     });
-
     it('does not let the UNIQUE key merge two archive rewards that differ only in snapshot_block', async function () {
         // The schema half, driven directly. The same publisher can win the archive election
         // on both sides of a rebase; under the four-column key the second publish upserted
@@ -224,7 +198,9 @@ describe('archive reward round_qualifier against a real MariaDB @tier3', functio
         ], 'one publisher, two archive anchors, two rewards');
         assert.strictEqual(await collectSum(SNAP_NEW), 20);
     });
+}
 
+function registerRoundQualifierTests2() {
     it('re-admits the second snapshot through the pending-attestation gate (it was suppressed outright)', async function () {
         // The worst leg of the defect: the NOT EXISTS matched on (reward_type,
         // round_reference) alone, so once ANY publisher of the reissued seq was derived, the
@@ -247,7 +223,6 @@ describe('archive reward round_qualifier against a real MariaDB @tier3', functio
             'the other snapshot must still be pending; deriving one seq must not swallow the other');
         assert.deepStrictEqual(second.map(r => r.publisher), [PK_LARGE]);
     });
-
     // ── (b) the genuine failover case still collapses ────────────────────────────────
 
     it('still collapses a real failover double-publish (same round AND same snapshot) to the smallest pubkey', async function () {
@@ -272,7 +247,9 @@ describe('archive reward round_qualifier against a real MariaDB @tier3', functio
         assert.strictEqual(Number(log[0].round_qualifier), SNAP_OLD);
         assert.strictEqual(Number(log[0].signing_pubkey_id), pubkeyId[PK_LARGE]);
     });
+}
 
+function registerRoundQualifierTests3() {
     it('a reconcile for one snapshot never retracts the other snapshot winner', async function () {
         // The cross-snapshot reach, isolated: three rows, one reconcile, and the row it must
         // not touch is the one that sorts smallest overall.
@@ -283,7 +260,6 @@ describe('archive reward round_qualifier against a real MariaDB @tier3', functio
         assert.strictEqual(removed, 0, 'the old snapshot has a single publisher, so nothing is a loser');
         assert.strictEqual((await credited('anchor_archive', ROUND)).length, 2);
     });
-
     // ── (c) every non-archive reward is untouched ────────────────────────────────────
 
     for (const type of ['anchor_BTC', 'anchor_LTC', 'anchor_DOGE']) {
@@ -304,7 +280,6 @@ describe('archive reward round_qualifier against a real MariaDB @tier3', functio
             ]);
         });
     }
-
     it('leaves a per-chain leg pending exactly as before (the qualifier adds no exclusion)', async function () {
         await attest('anchor_BTC', SNAP_OLD, SNAP_OLD, PK_LARGE);
         await attest('anchor_BTC', SNAP_OLD, SNAP_OLD, PK_SMALL);
@@ -316,4 +291,36 @@ describe('archive reward round_qualifier against a real MariaDB @tier3', functio
         await credit(PK_SMALL, 'anchor_BTC', SNAP_OLD, SNAP_OLD);
         assert.deepStrictEqual(await db.getPendingAnchorRewardAttestations('regtest', SNAP_NEW), []);
     });
+}
+
+describe('archive reward round_qualifier against a real MariaDB @tier3', function () {
+    this.timeout(60000);
+
+    before(async function () {
+        if (!DB_PASS) this.skip();
+        const admin = await mariadb.createConnection({
+            host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS, multipleStatements: true });
+        await admin.query('DROP DATABASE IF EXISTS ' + DB_NAME + '; CREATE DATABASE ' + DB_NAME + ';');
+        await admin.query('USE ' + DB_NAME + '; ' + SCHEMA);
+        await admin.end();
+
+        db = makeDb();
+        const c = await db.getConnection();
+        try {
+            for (const pk of [PK_LARGE, PK_SMALL])
+                await c.query('INSERT INTO index_pubkeys (pubkey) VALUES (?)', [pk]);
+            for (const r of await c.query('SELECT id, pubkey FROM index_pubkeys'))
+                pubkeyId[r.pubkey] = Number(r.id);
+        } finally { await c.release(); }
+    });
+
+    after(async function () {
+        if (db && db.pool) await db.pool.end();
+    });
+
+    beforeEach(reset);
+
+    registerRoundQualifierTests1();
+    registerRoundQualifierTests2();
+    registerRoundQualifierTests3();
 });
