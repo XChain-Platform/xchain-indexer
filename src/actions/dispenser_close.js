@@ -19,7 +19,11 @@
  ********************************************************************/
 
 const divergenceMetrics = require('../chain/dispenser_divergence_metrics.js');
-const ownershipCancelGate = require('../dispenser_ownership_cancel_activation.js');
+
+// The handler's phases, grouped by concern and installed onto Dispenser_Close.prototype below:
+// close.js decides where the escrow goes, settle.js moves it and records the close
+const closePart  = require('./dispenser_close/close.js');
+const settlePart = require('./dispenser_close/settle.js');
 
 const { getLogger } = require('../observability/index.js');
 class Dispenser_Close {
@@ -80,95 +84,21 @@ class Dispenser_Close {
             if(data['DISPENSER_STATUS'] === 'cancelled')
                 divergenceMetrics.recordCancel(this.config['COIN'], data['BLOCK_INDEX'], dispenser['ACTION_INDEX'], dispenser['GET_ADDRESS']);
 
-            // Array of credits, debits, and escrows
-            let credits = [],
-                debits  = [],
-                escrows = [];
-
-            // Determine where escrow gets credited. Priority:
-            //   1. Sweep destination: if the cancel was driven by a SWEEP, honor the chosen destination.
-            //   2. Recorded canceller: per DISPENSER.md, escrow returns to whoever cancelled
-            //      (GET_ADDRESS or SOURCE). Recorded by createDispenserStatus when status='cancelling'.
-            //   3. SOURCE: fallback for paths with no canceller (auto-expire reaches dispenser_expire,
-            //      not here, but covered for safety).
-            let sweepDest = await this.indexerDb.getSweepDestination(data['DISPENSER_ACTION_INDEX']);
-            let canceller = (!this.util.isNull(sweepDest)) ? null : await this.indexerDb.getDispenserCanceller(data['DISPENSER_ACTION_INDEX']);
-            let destination = (!this.util.isNull(sweepDest)) ? sweepDest
-                            : (!this.util.isNull(canceller)) ? canceller
-                            : dispenser['SOURCE'];
-
-            if(Number(dispenser['GIVE_OWNERSHIP']||0) == 1){
-                // Ownership dispenser closure. If the escrow is still set, this is a
-                // cancel/expire/sweep path (no successful DISPENSE), so release the gate
-                // and route the ownership record. If the escrow has already been cleared
-                // (because DISPENSE settled and triggered the auto-close), no action.
-                //
-                // Ownership routing (DISPENSER.md:122): a cancel or expire returns the
-                // token's issuer rights to SOURCE; ONLY a SWEEP-closure delivers them to
-                // a non-SOURCE destination. The legacy path transferred to the computed
-                // `destination` (sweep > canceller > SOURCE), and cancel authority
-                // includes GET_ADDRESS, so a GET_ADDRESS/SOURCE canceller acquired the
-                // token's ownership for free. Gated
-                // (dispenser_ownership_cancel_activation.js): below the flag-day the
-                // legacy canceller-takes-ownership routing runs so historical replay is
-                // byte-identical; at/after it only the SWEEP path transfers ownership and
-                // cancel/expire leave it with SOURCE (matching dispenser_expire.js, which
-                // was already correct). The GIVE token-balance refund routing is separate
-                // (handled per DISPENSER cancel semantics) and unaffected here.
-                let ownershipCancelActive = ownershipCancelGate.isDispenserOwnershipCancelActive(data['BLOCK_TIME'], this.config['NETWORK']);
-                let ownershipDest = ownershipCancelActive
-                                  ? ((!this.util.isNull(sweepDest)) ? sweepDest : dispenser['SOURCE'])
-                                  : destination;
-                let currentEscrow = await this.indexerDb.getTokenEscrow(dispenser['GIVE_TICK']);
-                if(Number(currentEscrow) === Number(dispenser['ACTION_INDEX'])){
-                    if(ownershipDest == dispenser['SOURCE']){
-                        await this.indexerDb.clearTokenEscrow(dispenser['GIVE_TICK']);
-                    } else {
-                        await this.util.transferTokenOwnership(this.indexerDb, this.mapper, data, dispenser['GIVE_TICK'], dispenser['SOURCE'], ownershipDest);
-                    }
-                }
-            } else if(!this.util.isDispenserSettled(dispenser['DISPENSER_STATUS']) &&
-                      this.util.bcgt(dispenser['GIVE_REMAINING'], 0)){
-                // Gated on the dispenser not having settled already: GIVE_REMAINING is derived and no
-                // close/expire reduces it, so a re-settlement would refund it twice
-                // (util.isDispenserSettled). Both live entry statuses still refund: 'cancelling' from
-                // processCancellations, and 'open' from the dispense.js auto-closes ('empty' and the
-                // MAX_DISPENSES cap), which settle a dispenser findMatchingDispensers matched under
-                // its own `status IN ('open','cancelling')` filter.
-                //
-                // Negate via bcsub, not JS unary minus: -GIVE_REMAINING coerces the 64-precision
-                // bignumber string to a float and silently loses digits past ~15 sig figs, de-syncing
-                // the escrow debit from the full-precision credit below (mirrors dispense.js). Negate
-                // at the same precision (64).
-                escrows.push([dispenser['GIVE_TICK'], this.util.bcsub(0, dispenser['GIVE_REMAINING'], 64), destination]);
-                credits.push([dispenser['GIVE_TICK'],  dispenser['GIVE_REMAINING'], destination]);
-            }
-
-            // Add SOURCE and GET_ADDRESS addresses and GET_TICK to addresses list
-            this.util.addAddressTicker(dispenser['GET_ADDRESS'], dispenser['GIVE_TICK']);
-            this.util.addAddressTicker(destination,              dispenser['GIVE_TICK']);
-
-            // Create record in the dispenser_closes table
-            await this.indexerDb.createDispenserClose(data);
-
-            // Create record in the dispenser_statuses table
-            await this.indexerDb.createDispenserStatus(data['ACTION_INDEX'], dispenser['ACTION_INDEX'], data['DISPENSER_STATUS']);
-
-            // Process any transaction ledger changes (credits / debits / escrows)
-            await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
-
-            // Get a list of addresses
-            let addresses = Object.keys(this.util.getAddressesList());
-
-            // Update address balances
-            await this.indexerDb.updateBalances(addresses);
-
-            // Create action mappings
-            await this.mapper.createMappings(data);            
+            // Hand the escrow to its destination, record the close and post the ledger
+            // changes (dispenser_close/settle.js)
+            await this.settleClose(data, dispenser);
         }
-
-
     }
+}
+
+// Install the phase methods from dispenser_close/ NON-ENUMERABLE, the shape the class body
+// they came from produced: parse() reaches them as this.<method>, suites can stub them
+// through Dispenser_Close.prototype, and for-in over a handler stays empty. Same install
+// as db/index.js uses for its query mixins.
+for(const part of [closePart, settlePart]){
+    const descriptors = Object.getOwnPropertyDescriptors(part);
+    for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;
+    Object.defineProperties(Dispenser_Close.prototype, descriptors);
 }
 
 module.exports = Dispenser_Close;
