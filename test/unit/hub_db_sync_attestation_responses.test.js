@@ -180,7 +180,6 @@ function makeStoredSync() {
 }
 
 describe('HubDbSync attestation_responses mirror registration @regression @tier1', function () {
-
     afterEach(function () {
         delete process.env[GRACE_ENV];
         sinon.restore();
@@ -231,6 +230,13 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
             'with no link on the wire there is nothing to upsert, and the plain insert keeps a hub that ' +
             'predates the column working unchanged');
     });
+});
+
+describe('HubDbSync attestation_responses mirror registration @regression @tier1', function () {
+    afterEach(function () {
+        delete process.env[GRACE_ENV];
+        sinon.restore();
+    });
 
     it('_applyRow KEEPS the id for state_checkpoints, the id-parity control in the same class', async function () {
         const { sync, queries } = makeSync();
@@ -280,6 +286,13 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
         assert.strictEqual(stored().response_payload, first.response_payload, 'the attested body is fixed at insert');
         assert.strictEqual(stored().status, first.status, 'the terminal status is fixed at insert');
     });
+});
+
+describe('HubDbSync attestation_responses mirror registration @regression @tier1', function () {
+    afterEach(function () {
+        delete process.env[GRACE_ENV];
+        sinon.restore();
+    });
 
     it('fills a NULL link from a re-delivery and stamps the applied v1 row through the request id', async function () {
         const { sync, stored, setter } = makeStoredSync();
@@ -324,6 +337,13 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
         assert.strictEqual(queries.filter(q => /^SELECT batch_action_index/.test(q.sql)).length, 0,
             'the explorer vendors this same client against a pool with no indexer and no attests table; ' +
             'the mirrored row still applies there, only the local stamp is skipped');
+    });
+});
+
+describe('HubDbSync attestation_responses mirror registration @regression @tier1', function () {
+    afterEach(function () {
+        delete process.env[GRACE_ENV];
+        sinon.restore();
     });
 
     it('every other HUB_STATE_TABLES member keeps its plain INSERT IGNORE', async function () {
@@ -373,6 +393,13 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
         sync.ws = { readyState: 1 };
         assert.strictEqual(sync.mirrorStatus().connected, true);
     });
+});
+
+describe('HubDbSync attestation_responses mirror registration @regression @tier1', function () {
+    afterEach(function () {
+        delete process.env[GRACE_ENV];
+        sinon.restore();
+    });
 
     it('mirrorStatus reflects the stream watermark advancing, HUB_STATE_TABLES included', async function () {
         const { sync } = makeSync();
@@ -416,6 +443,13 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
             'MAX(local id) is not a position in the followed hub id space and since_id=987654 would ask ' +
             'for rows past the end of that hub table and drain zero rows forever. Path was: ' + paths[0]);
     });
+});
+
+describe('HubDbSync attestation_responses mirror registration @regression @tier1', function () {
+    afterEach(function () {
+        delete process.env[GRACE_ENV];
+        sinon.restore();
+    });
 
     it('bootstraps state_checkpoints from MAX(local id), the id-parity cursor control', async function () {
         const { sync } = makeSync({ localMaxId: 987654 });
@@ -458,6 +492,13 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
         assert.strictEqual(sync.attestResponseWatermarkGraceS, 3,
             'regtest blocks are stamped at about now, so without this seam a regtest venue cannot bind ' +
             'a response for a full forward margin per attestation and the acceptance tests are undrivable');
+    });
+});
+
+describe('HubDbSync attestation_responses mirror registration @regression @tier1', function () {
+    afterEach(function () {
+        delete process.env[GRACE_ENV];
+        sinon.restore();
     });
 
     it('IGNORES the override off regtest, with a warning, and keeps the frozen value', function () {

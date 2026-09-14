@@ -138,10 +138,10 @@ describe('HubDbSync stream-watermark stall recovery @regression @tier1', functio
         });
     });
 
+    let clock, errStub;
+
     // ── the wiring, on fake timers ────────────────────────────────────────────
     describe('_checkWatermarkStall wiring', function () {
-        let clock, errStub;
-
         beforeEach(function () {
             clock   = sinon.useFakeTimers({ now: 1_700_000_000_000, toFake: ['Date', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] });
             errStub = sinon.stub(console, 'error');
@@ -199,6 +199,18 @@ describe('HubDbSync stream-watermark stall recovery @regression @tier1', functio
             assert.ok(/HUB_SYNC_WATERMARK_STALL_EXIT_S/.test(reason),
                 'the reason names the knob that timed it: ' + reason);
         });
+    });
+
+    describe('_checkWatermarkStall wiring', function () {
+        beforeEach(function () {
+            clock   = sinon.useFakeTimers({ now: 1_700_000_000_000, toFake: ['Date', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] });
+            errStub = sinon.stub(console, 'error');
+            sinon.stub(console, 'warn');
+        });
+
+        afterEach(function () {
+            sinon.restore();                                // also restores the fake clock
+        });
 
         it('a watermark that is moving fires nothing at all', function () {
             const fatal = sinon.spy();
@@ -233,6 +245,18 @@ describe('HubDbSync stream-watermark stall recovery @regression @tier1', functio
             assert.strictEqual(sync.checkWatermarkStall(), 'ok',
                 'no exit: the recovery is what the whole detector exists to produce');
             assert.strictEqual(fatal.callCount, 0);
+        });
+    });
+
+    describe('_checkWatermarkStall wiring', function () {
+        beforeEach(function () {
+            clock   = sinon.useFakeTimers({ now: 1_700_000_000_000, toFake: ['Date', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] });
+            errStub = sinon.stub(console, 'error');
+            sinon.stub(console, 'warn');
+        });
+
+        afterEach(function () {
+            sinon.restore();                                // also restores the fake clock
         });
 
         it('a PARTIAL advance re-arms stage 1 rather than falling through to the exit', function () {
@@ -272,6 +296,18 @@ describe('HubDbSync stream-watermark stall recovery @regression @tier1', functio
             clock.tick(STALL_MS * 10);
             assert.strictEqual(sync.checkWatermarkStall(), 'ok');
             assert.strictEqual(drive.callCount, 0);
+        });
+    });
+
+    describe('_checkWatermarkStall wiring', function () {
+        beforeEach(function () {
+            clock   = sinon.useFakeTimers({ now: 1_700_000_000_000, toFake: ['Date', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'] });
+            errStub = sinon.stub(console, 'error');
+            sinon.stub(console, 'warn');
+        });
+
+        afterEach(function () {
+            sinon.restore();                                // also restores the fake clock
         });
 
         it('the timer samples several times per window and unrefs itself', function () {

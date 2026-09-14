@@ -200,7 +200,6 @@ describe('XChainIndexer._waitForDirectCallPresence (direct-hub-DB call barrier)'
     // block deferred forever on an otherwise healthy chain.
 
     describe('hub-clock escape hatch', function(){
-
         it('proceeds once the hub clock passes block_time + the call grace', async function(){
             // The wedge shape: newest finalized call a day old, block an hour old, no new
             // XCALL traffic. Coverage can never be satisfied; the escape must open.
@@ -249,7 +248,9 @@ describe('XChainIndexer._waitForDirectCallPresence (direct-hub-DB call barrier)'
             try { await run(self, bt); } catch(e){ threw = true; }
             assert.ok(threw, 'a lagging hub clock must keep the escape shut regardless of local time');
         });
+    });
 
+    describe('hub-clock escape hatch', function(){
         it('reads the hub clock from the SAME query as the watermark', async function(){
             // One reading, one connection, one instant: a second round trip would let skew
             // between the two readings decide a consensus barrier.
@@ -299,7 +300,9 @@ describe('XChainIndexer._waitForDirectCallPresence (direct-hub-DB call barrier)'
                     'an absent reading must stay null, never coerce to 0: ' + msg);
             }
         });
+    });
 
+    describe('hub-clock escape hatch', function(){
         it('names the escape instant in the timeout diagnostic', async function(){
             // The operator has to be able to tell a barrier that is merely early from one
             // that is wedged, which means seeing when it CAN open.

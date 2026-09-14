@@ -16,20 +16,6 @@ const sinon = require('sinon');
 
 const HubDbSync = require('../../src/hub/hub_db_sync.js');
 
-// Repointing an indexer at a different hub (another network, a rebuilt
-// database, a re-genesised testnet) purges state_checkpoints, which carries a
-// `network` column, but leaves price_snapshots contaminated: it has no such column,
-// so both purge paths are unreachable for it, and being a FULL_REPAGE table its
-// cursor is forced to 0 so the id-ceiling fence never runs either. The re-page then
-// converges only the (round_number, coin_pair) keys the two hubs SHARE; a foreign
-// round numbered above anything the new hub has reached is never addressed, and
-// every consensus read of this table takes the newest finalized row by round_number
-// (db.getLatestPrice ORDER BY round_number DESC LIMIT 1, the native fee gate's price
-// source). The mirror then serves a stale price forever on a correct config.
-describe('HubDbSync price mirror repoint @regression @tier2', function () {
-
-    afterEach(function () { sinon.restore(); });
-
     // A HubDbSync over a fake local mirror. `local` is the simulated table content as
     // {id, round_number, coin_pair, status} rows; applied rows land in it through the
     // stubbed _applyRow the same way the real upsert would (insert-or-replace on the
@@ -89,18 +75,31 @@ describe('HubDbSync price mirror repoint @regression @tier2', function () {
         return { sync, rows, seen, doQuery };
     }
 
-    // Serve a hub table honestly over the ascending since_id page walk.
-    function stubHub(sync, hubRows) {
-        sinon.stub(sync, '_httpGet').callsFake(async (path) => {
-            const since = Number(/since_id=(\d+)/.exec(path)[1]);
-            return { rows: hubRows.filter(r => Number(r.id) > since), watermark: 5000 };
-        });
-    }
+// Serve a hub table honestly over the ascending since_id page walk.
+function stubHub(sync, hubRows) {
+    sinon.stub(sync, '_httpGet').callsFake(async (path) => {
+        const since = Number(/since_id=(\d+)/.exec(path)[1]);
+        return { rows: hubRows.filter(r => Number(r.id) > since), watermark: 5000 };
+    });
+}
 
-    function finalized(id, round, pair, block) {
-        return { id: id, round_number: round, coin_pair: pair, price: '1.00',
-                 reference_block: block, block_timestamp: 1000 + round, status: 'finalized' };
-    }
+function finalized(id, round, pair, block) {
+    return { id: id, round_number: round, coin_pair: pair, price: '1.00',
+             reference_block: block, block_timestamp: 1000 + round, status: 'finalized' };
+}
+
+// Repointing an indexer at a different hub (another network, a rebuilt
+// database, a re-genesised testnet) purges state_checkpoints, which carries a
+// `network` column, but leaves price_snapshots contaminated: it has no such column,
+// so both purge paths are unreachable for it, and being a FULL_REPAGE table its
+// cursor is forced to 0 so the id-ceiling fence never runs either. The re-page then
+// converges only the (round_number, coin_pair) keys the two hubs SHARE; a foreign
+// round numbered above anything the new hub has reached is never addressed, and
+// every consensus read of this table takes the newest finalized row by round_number
+// (db.getLatestPrice ORDER BY round_number DESC LIMIT 1, the native fee gate's price
+// source). The mirror then serves a stale price forever on a correct config.
+describe('HubDbSync price mirror repoint @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('clears the previous hub rounds a repoint leaves behind', async function () {
         // The mirror followed a hub that had reached round 900. The new hub is at round 3.
@@ -141,6 +140,10 @@ describe('HubDbSync price mirror repoint @regression @tier2', function () {
         assert.strictEqual(seen.deletes.length, 0, 'a converged mirror must not be touched');
         assert.strictEqual(rows.length, 2);
     });
+});
+
+describe('HubDbSync price mirror repoint @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('clears a stale finalized row at a round this hub holds as skipped', async function () {
         // The status-gated upsert deliberately refuses to downgrade finalized -> skipped
@@ -195,6 +198,10 @@ describe('HubDbSync price mirror repoint @regression @tier2', function () {
         assert.strictEqual(seen.deletes.length, 0, 'a holed drain must delete nothing');
         assert.strictEqual(rows.length, 1);
     });
+});
+
+describe('HubDbSync price mirror repoint @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('never reconciles a table that is not price_snapshots', async function () {
         const { sync, seen } = makeSync([]);

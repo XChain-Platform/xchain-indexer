@@ -24,7 +24,6 @@ const sinon = require('sinon');
 const HubDbSync = require('../../src/hub/hub_db_sync.js');
 
 describe('HubDbSync barrier timeout self-heal (ITEM 2492) @regression @tier2', function () {
-
     it('oracle: stale in-memory scalar + current mirror => waiter resolves at timeout, not rejects', async function () {
         // Mirror MAX(effective_at) is current (1600), but the in-memory scalar is frozen
         // behind the target (500). Before the fix the timeout rejected; now it re-reads.
@@ -74,7 +73,9 @@ describe('HubDbSync barrier timeout self-heal (ITEM 2492) @regression @tier2', f
         assert.strictEqual(got, 1600, 'timeout path must adopt the caught-up call mirror timestamp');
         assert.strictEqual(sync._callWaiters.length, 0, 'self-healed waiter should be cleared');
     });
+});
 
+describe('HubDbSync barrier timeout self-heal (ITEM 2492) @regression @tier2', function () {
     it('call: still REJECTS on timeout when the mirror genuinely stays behind', async function () {
         const doQuery = sinon.stub().callsFake(async () => [{ ts: 500 }]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });

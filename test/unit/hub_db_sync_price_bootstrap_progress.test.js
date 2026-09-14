@@ -16,19 +16,7 @@ const sinon = require('sinon');
 
 const HubDbSync = require('../../src/hub/hub_db_sync.js');
 
-// A fresh indexer's price_snapshots drain is every round the hub has ever finalized, and
-// its cost IS the drain: one awaited INSERT round-trip per row - 411,747 rows measured on
-// one production hub, ~13 minutes of deferred blocks - reported by a single log line after
-// the fact, so a cold start was indistinguishable from a wedge.
-//
-// These tests pin the two things that changed and, more importantly, the several that must
-// not have: the mirror's contents, the accounting, and the stop-at-the-first-unappliable-row
-// rule are identical whether a chunk went out as one statement or as N.
-describe('HubDbSync price bootstrap throughput and progress @regression @tier2', function () {
-
-    afterEach(function () { sinon.restore(); });
-
-    const COLS = ['id', 'round_number', 'coin_pair', 'price', 'reference_block', 'block_timestamp', 'status'];
+const COLS = ['id', 'round_number', 'coin_pair', 'price', 'reference_block', 'block_timestamp', 'status'];
 
     // A HubDbSync over a fake local mirror that applies the REAL statements this module
     // emits. Unlike the bound suite (which stubs _applyRow to model the upsert), this one
@@ -88,22 +76,33 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
         return { sync, rows, stmts, doQuery };
     }
 
-    function stubHub(sync, hubRows) {
-        sinon.stub(sync, '_httpGet').callsFake(async (path) => {
-            const since = Number(/since_id=(\d+)/.exec(path)[1]);
-            return { rows: hubRows.filter(r => Number(r.id) > since), watermark: 5000 };
-        });
-    }
+function stubHub(sync, hubRows) {
+    sinon.stub(sync, '_httpGet').callsFake(async (path) => {
+        const since = Number(/since_id=(\d+)/.exec(path)[1]);
+        return { rows: hubRows.filter(r => Number(r.id) > since), watermark: 5000 };
+    });
+}
 
-    // `n` finalized rounds, ids and round numbers ascending exactly as the hub writes them.
-    function hubTable(n, status) {
-        const out = [];
-        for (let i = 1; i <= n; i++)
-            out.push({ id: i, round_number: i, coin_pair: 'XCHAIN/USD', price: '1.0' + i,
-                       reference_block: 100000 + i, block_timestamp: 1900000000 + (i * 600),
-                       status: status || 'finalized' });
-        return out;
-    }
+// `n` finalized rounds, ids and round numbers ascending exactly as the hub writes them.
+function hubTable(n, status) {
+    const out = [];
+    for (let i = 1; i <= n; i++)
+        out.push({ id: i, round_number: i, coin_pair: 'XCHAIN/USD', price: '1.0' + i,
+                   reference_block: 100000 + i, block_timestamp: 1900000000 + (i * 600),
+                   status: status || 'finalized' });
+    return out;
+}
+
+// A fresh indexer's price_snapshots drain is every round the hub has ever finalized, and
+// its cost IS the drain: one awaited INSERT round-trip per row - 411,747 rows measured on
+// one production hub, ~13 minutes of deferred blocks - reported by a single log line after
+// the fact, so a cold start was indistinguishable from a wedge.
+//
+// These tests pin the two things that changed and, more importantly, the several that must
+// not have: the mirror's contents, the accounting, and the stop-at-the-first-unappliable-row
+// rule are identical whether a chunk went out as one statement or as N.
+describe('HubDbSync price bootstrap throughput and progress @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('emits ONE statement per chunk instead of one per row', async function () {
         // The whole point: a fresh node's drain is dominated by round-trips, and the row
@@ -155,6 +154,10 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
         const kept = batched.rows.find(r => String(r.round_number) === '300');
         assert.strictEqual(kept.price, '7.77', 'a later skipped row must never clobber a finalized one');
     });
+});
+
+describe('HubDbSync price bootstrap throughput and progress @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('builds the batched statement from the same source as the per-row statement', async function () {
         // The ODKU body is the consensus-relevant half of this file. Two copies of it would
@@ -210,6 +213,10 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
         assert.strictEqual(rows.length, 16, 'nothing at or after the bad row may be applied');
         assert.ok(rows.every(r => Number(r.id) < 17));
     });
+});
+
+describe('HubDbSync price bootstrap throughput and progress @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('declines to batch anything but price_snapshots', async function () {
         const { sync } = makeSync();
@@ -256,6 +263,10 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
         assert.ok(/page \d+/.test(progress[0]), 'and the page it is on');
         assert.ok(/through id \d+/.test(progress[0]), 'and how far through the id space it has read');
     });
+});
+
+describe('HubDbSync price bootstrap throughput and progress @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('stays silent on a drain that finishes inside the progress interval', async function () {
         // Nothing changes for the small mirrored tables: the counter is for the drain that

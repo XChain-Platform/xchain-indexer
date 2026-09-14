@@ -17,6 +17,53 @@ const sinon = require('sinon');
 const HubDbSync = require('../../src/hub/hub_db_sync.js');
 const Database  = require('../../src/db');
 
+// Two 64-hex chain ids, distinguishable at a glance in an assertion failure.
+const CHAIN_NEW = '1a2b3c4d5e6f' + '0'.repeat(52);
+const CHAIN_OLD = '9f8e7d6c5b4a' + 'f'.repeat(52);
+
+const MATCH_COLUMNS = ['id', 'match_id', 'network', 'a_chain', 'b_chain', 'effective_time',
+                       'status', 'anchor_txid', 'btc_chain_id'];
+
+// A row shaped like a mirrored match, with whichever chain id the case is about.
+function matchRow(id, chainId) {
+    return {
+        id: id, match_id: 'm' + id, network: 'regtest', a_chain: 'BTC', b_chain: 'DOGE',
+        effective_time: 1000 + id, status: 'finalized', anchor_txid: null, btc_chain_id: chainId
+    };
+}
+
+// A HubDbSync over a fake hub DB that records every statement and answers the shapes the
+// paths under test issue. `deleted` is what a chain-id purge reports as removed.
+function makeSync(opts) {
+    opts = opts || {};
+    const seen = { sql: [] };
+    const doQuery = sinon.stub().callsFake(async (sql, args) => {
+        seen.sql.push({ sql: sql, args: args });
+        if (/^DELETE FROM /.test(sql))        return { affectedRows: opts.deleted || 0 };
+        if (/^SELECT MAX\(id\)/.test(sql))    return [{ max_id: null }];
+        if (/^SELECT MAX\(effective_time\)/.test(sql)) return [{ ts: null }];
+        return [];
+    });
+    const sync = new HubDbSync({ doQuery }, {
+        hubUrl: 'http://hub.test', network: opts.network || 'regtest', coin: opts.coin || 'BTC'
+    });
+    sinon.stub(sync, 'localColumns').resolves(new Set(opts.columns || MATCH_COLUMNS));
+    return { sync, seen, doQuery };
+}
+
+// Serve one snapshot page: the hub's rows plus the envelope's own chain-id statement.
+function stubHub(sync, rows, chainId, watermark) {
+    return sinon.stub(sync, '_httpGet').callsFake(async () => ({
+        rows: rows, btc_chain_id: chainId, watermark: (watermark === undefined ? 4242 : watermark)
+    }));
+}
+
+// Both apply shapes: the cross-chain upsert (INSERT ... ON DUPLICATE KEY UPDATE) and
+// the default mirror apply (INSERT IGNORE INTO).
+const inserts   = (seen) => seen.sql.filter((q) => /^INSERT /.test(q.sql));
+const chainDels = (seen) => seen.sql.filter((q) => /btc_chain_id IS NOT NULL AND btc_chain_id <> \?$/.test(q.sql));
+const lines     = (spy)  => spy.getCalls().map((c) => c.args.map(String).join(' '));
+
 // The three hub-mirrored cross-chain tables are scoped by `network` alone, and on regtest
 // one network name spans every Bitcoin chain a venue has ever had: a re-genesis that leaves
 // the hub database in place keeps serving the dead chain's finalized matches and capability
@@ -26,55 +73,7 @@ const Database  = require('../../src/db');
 // refusal, where the expectation comes from, when it may change, and the purge that closes
 // the window where rows landed before the identity was known.
 describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
-
     afterEach(function () { sinon.restore(); });
-
-    // Two 64-hex chain ids, distinguishable at a glance in an assertion failure.
-    const CHAIN_NEW = '1a2b3c4d5e6f' + '0'.repeat(52);
-    const CHAIN_OLD = '9f8e7d6c5b4a' + 'f'.repeat(52);
-
-    const MATCH_COLUMNS = ['id', 'match_id', 'network', 'a_chain', 'b_chain', 'effective_time',
-                           'status', 'anchor_txid', 'btc_chain_id'];
-
-    // A row shaped like a mirrored match, with whichever chain id the case is about.
-    function matchRow(id, chainId) {
-        return {
-            id: id, match_id: 'm' + id, network: 'regtest', a_chain: 'BTC', b_chain: 'DOGE',
-            effective_time: 1000 + id, status: 'finalized', anchor_txid: null, btc_chain_id: chainId
-        };
-    }
-
-    // A HubDbSync over a fake hub DB that records every statement and answers the shapes the
-    // paths under test issue. `deleted` is what a chain-id purge reports as removed.
-    function makeSync(opts) {
-        opts = opts || {};
-        const seen = { sql: [] };
-        const doQuery = sinon.stub().callsFake(async (sql, args) => {
-            seen.sql.push({ sql: sql, args: args });
-            if (/^DELETE FROM /.test(sql))        return { affectedRows: opts.deleted || 0 };
-            if (/^SELECT MAX\(id\)/.test(sql))    return [{ max_id: null }];
-            if (/^SELECT MAX\(effective_time\)/.test(sql)) return [{ ts: null }];
-            return [];
-        });
-        const sync = new HubDbSync({ doQuery }, {
-            hubUrl: 'http://hub.test', network: opts.network || 'regtest', coin: opts.coin || 'BTC'
-        });
-        sinon.stub(sync, 'localColumns').resolves(new Set(opts.columns || MATCH_COLUMNS));
-        return { sync, seen, doQuery };
-    }
-
-    // Serve one snapshot page: the hub's rows plus the envelope's own chain-id statement.
-    function stubHub(sync, rows, chainId, watermark) {
-        return sinon.stub(sync, '_httpGet').callsFake(async () => ({
-            rows: rows, btc_chain_id: chainId, watermark: (watermark === undefined ? 4242 : watermark)
-        }));
-    }
-
-    // Both apply shapes: the cross-chain upsert (INSERT ... ON DUPLICATE KEY UPDATE) and
-    // the default mirror apply (INSERT IGNORE INTO).
-    const inserts   = (seen) => seen.sql.filter((q) => /^INSERT /.test(q.sql));
-    const chainDels = (seen) => seen.sql.filter((q) => /btc_chain_id IS NOT NULL AND btc_chain_id <> \?$/.test(q.sql));
-    const lines     = (spy)  => spy.getCalls().map((c) => c.args.map(String).join(' '));
 
     // ── The apply-time refusal ───────────────────────────────────────────────────
 
@@ -129,6 +128,10 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
         assert.ok(lines(log).some((l) => /bootstrapped 2 rows into cross_chain_matches/.test(l)),
             'the drain must not count refused rows as mirrored');
     });
+});
+
+describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('keeps every cross-chain table off the batch path, which has no per-row verdict', async function () {
         const { sync } = makeSync({});
@@ -174,6 +177,10 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
         assert.ok(lines(warn).some((l) => /the hub follows a different chain/.test(l) && l.includes(CHAIN_OLD)),
             'the disagreement is the hub\'s to explain, and it must be said out loud');
     });
+});
+
+describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('ignores a null or malformed id rather than dropping the fence', async function () {
         const warn = sinon.stub(console, 'warn');
@@ -225,6 +232,10 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
         assert.strictEqual(lines(warn).filter((l) => /refused 1 cross_chain_matches row/.test(l)).length, 2,
             'each refused live row is reported as it happens');
     });
+});
+
+describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('never re-reads the hub for a locally measured expectation', async function () {
         const warn = sinon.stub(console, 'warn');
@@ -281,6 +292,10 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
         assert.strictEqual(chainDels(seen).length, 5,
             'rows mirrored before block 1 existed carry a foreign id no later delivery re-offers');
     });
+});
+
+describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('does not re-purge when the same id is restated', async function () {
         sinon.stub(console, 'warn');

@@ -173,7 +173,6 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
     });
 
     describe('everything the node cannot disprove still mirrors', function () {
-
         it('applies an honest row', async function () {
             const { db }             = dbFor('BTC');
             const { sync, inserted } = syncFor(db);
@@ -231,7 +230,9 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
             assert.strictEqual(inserted.length, 1);
             assert.strictEqual(seen.stakeQueries.length, 0, 'no local stake read is even attempted off BTC');
         });
+    });
 
+    describe('everything the node cannot disprove still mirrors', function () {
         it('applies rows when no authoritative stake db is wired', async function () {
             // The explorer's vendored display mirror: no indexer db, no re-derivation.
             const { sync, inserted } = syncFor(null);

@@ -48,7 +48,6 @@ const PUSHES = [
 ];
 
 describe('HubClient: a thrown hub rejection is classified like an in-result one', function(){
-
     afterEach(function(){
         sinon.restore();
         delete process.env.HUB_API_URL;
@@ -100,6 +99,14 @@ describe('HubClient: a thrown hub rejection is classified like an in-result one'
             assert.deepStrictEqual(await c.retractPriceRange('ETH', 10), { error: UNKNOWN_CHAIN });
         });
     });
+});
+
+describe('HubClient: a thrown hub rejection is classified like an in-result one', function(){
+    afterEach(function(){
+        sinon.restore();
+        delete process.env.HUB_API_URL;
+        delete process.env.HUB_API_KEY;
+    });
 
     describe('transient: everything else still throws so the row is retried', function(){
 
@@ -146,6 +153,14 @@ describe('HubClient: a thrown hub rejection is classified like an in-result one'
                 return true;
             });
         });
+    });
+});
+
+describe('HubClient: a thrown hub rejection is classified like an in-result one', function(){
+    afterEach(function(){
+        sinon.restore();
+        delete process.env.HUB_API_URL;
+        delete process.env.HUB_API_KEY;
     });
 
     // The in-result path is unchanged by the new branch: a hub that has not moved its guard

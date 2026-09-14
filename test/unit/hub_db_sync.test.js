@@ -27,7 +27,6 @@ function makeSync(maxReferenceBlock) {
 }
 
 describe('HubDbSync price-sync barrier @regression @tier3', function () {
-
     it('starts with priceSyncHeight 0 and is enabled when url + db present', function () {
         const { sync } = makeSync(0);
         assert.strictEqual(sync.priceSyncHeight, 0);
@@ -81,7 +80,9 @@ describe('HubDbSync price-sync barrier @regression @tier3', function () {
         const got = await sync.waitForPriceSyncHeight(150, 1000);
         assert.strictEqual(got, 200);
     });
+});
 
+describe('HubDbSync price-sync barrier @regression @tier3', function () {
     it('waitForPriceSyncHeight resolves once a later sync raises the height', async function () {
         const { sync, doQuery } = makeSync(80);
         // Target not yet reached; the promise should stay pending.
@@ -137,7 +138,9 @@ describe('HubDbSync price-sync barrier @regression @tier3', function () {
         assert.strictEqual(got, 150, 'waiter resolves from the mirror on reconnect, not the timeout');
         assert.strictEqual(sync._priceWaiters.length, 0, 'waiter cleared proactively');
     });
+});
 
+describe('HubDbSync price-sync barrier @regression @tier3', function () {
     it('waitForPriceSyncHeight is a no-op when sync is disabled (single-host)', async function () {
         // No hub URL → enabled false → the local hub DB is the hub itself, always current.
         const sync = new HubDbSync({ doQuery: sinon.stub() }, {});
@@ -165,7 +168,6 @@ function makeOracleSync(maxEffectiveAt) {
 }
 
 describe('HubDbSync oracle-sync barrier @regression @tier3', function () {
-
     it('starts with oracleSyncTimestamp null and oracleBootstrapped false', function () {
         const { sync } = makeOracleSync(0);
         assert.strictEqual(sync.oracleSyncTimestamp, null);
@@ -218,7 +220,9 @@ describe('HubDbSync oracle-sync barrier @regression @tier3', function () {
         assert.strictEqual(got, 1600);
         assert.strictEqual(sync._oracleWaiters.length, 0, 'waiter should be cleared on resolve');
     });
+});
 
+describe('HubDbSync oracle-sync barrier @regression @tier3', function () {
     it('waitForOracleSyncTimestamp resolves immediately when already caught up', async function () {
         const { sync } = makeOracleSync(0);
         sync.oracleBootstrapped  = true;
@@ -260,17 +264,16 @@ describe('HubDbSync oracle-sync barrier @regression @tier3', function () {
     });
 });
 
+function makeWatermarkSync() {
+    const doQuery = sinon.stub().callsFake(async () => [{ h: 0 }]);
+    const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+    sync.priceWatermarkGraceS  = 60;
+    sync.oracleWatermarkGraceS = 60;
+    sync.matchWatermarkGraceS  = 30;
+    return sync;
+}
+
 describe('HubDbSync stream-position watermark @regression @tier3', function () {
-
-    function makeWatermarkSync() {
-        const doQuery = sinon.stub().callsFake(async () => [{ h: 0 }]);
-        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
-        sync.priceWatermarkGraceS  = 60;
-        sync.oracleWatermarkGraceS = 60;
-        sync.matchWatermarkGraceS  = 30;
-        return sync;
-    }
-
     it('_advanceWatermark is monotonic and ignores junk', function () {
         const sync = makeWatermarkSync();
         sync.advanceWatermark(100);
@@ -326,7 +329,9 @@ describe('HubDbSync stream-position watermark @regression @tier3', function () {
         sync.streamWatermark    = 1000 + 29;
         assert.strictEqual(sync.matchSyncSatisfied(1000), false);
     });
+});
 
+describe('HubDbSync stream-position watermark @regression @tier3', function () {
     it('a watermark advance releases an in-flight oracle waiter without a new row', async function () {
         const sync = makeWatermarkSync();
         sync.oracleBootstrapped  = true;
@@ -1025,29 +1030,45 @@ describe('HubDbSync _applyRow cross_chain_matches convergence upgrade @regressio
     });
 });
 
+// Regression (fleet incident 2026-06-16): the hub serves rows as JSON, so a
+// DATETIME column (price_snapshots.created_at) arrives as an ISO-8601 string
+// ('2026-06-16T10:33:01.000Z'). MariaDB strict mode rejects the 'T'/'Z' form
+// for a DATETIME column (ER_TRUNCATED_WRONG_VALUE, 22007) and silently kills
+// the mirror; BTC indexers stalled at 'price mirror at 0' once the oracle
+// resumed finalizing rounds. _applyRow must reformat ISO datetimes to MySQL
+// 'YYYY-MM-DD HH:MM:SS' (UTC) and leave every other value untouched.
+
+function makeApplySync(localCols) {
+    const doQuery = sinon.stub();
+    doQuery.withArgs(sinon.match(/^SHOW COLUMNS/)).resolves(localCols.map(f => ({ Field: f })));
+    doQuery.resolves([]);
+    const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+    return { sync, doQuery };
+}
+
+function argFor(doQuery, table, col, cols) {
+    const insert = doQuery.getCalls().find(c => /INSERT/.test(c.args[0]) && c.args[0].includes(table));
+    return insert.args[1][cols.indexOf(col)];
+}
+
+// A real SHOW COLUMNS result carries Type beside Field. When it does, the
+// coercion is keyed on the column TYPE, not on the value's shape, so a
+// free-text column whose value merely LOOKS like a timestamp lands verbatim.
+// oracle_prices.memo is unvalidated operator input (PRICE v1 validates
+// VALUE/FEE, never MEMO), so without this a shape-keyed rewrite hits an
+// ISO-shaped memo in every distributed mirror while a hubDb pointed straight at the hub keeps the
+// original bytes - mirror content that depended on deployment topology,
+// against src/sql/oracle_prices.sql's verbatim-parity contract.
+function makeTypedApplySync(colTypes) {
+    const doQuery = sinon.stub();
+    doQuery.withArgs(sinon.match(/^SHOW COLUMNS/)).resolves(
+        Object.keys(colTypes).map(f => ({ Field: f, Type: colTypes[f] })));
+    doQuery.resolves([]);
+    const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+    return { sync, doQuery };
+}
+
 describe('HubDbSync _applyRow datetime coercion @regression @tier2', function () {
-
-    // Regression (fleet incident 2026-06-16): the hub serves rows as JSON, so a
-    // DATETIME column (price_snapshots.created_at) arrives as an ISO-8601 string
-    // ('2026-06-16T10:33:01.000Z'). MariaDB strict mode rejects the 'T'/'Z' form
-    // for a DATETIME column (ER_TRUNCATED_WRONG_VALUE, 22007) and silently kills
-    // the mirror; BTC indexers stalled at 'price mirror at 0' once the oracle
-    // resumed finalizing rounds. _applyRow must reformat ISO datetimes to MySQL
-    // 'YYYY-MM-DD HH:MM:SS' (UTC) and leave every other value untouched.
-
-    function makeApplySync(localCols) {
-        const doQuery = sinon.stub();
-        doQuery.withArgs(sinon.match(/^SHOW COLUMNS/)).resolves(localCols.map(f => ({ Field: f })));
-        doQuery.resolves([]);
-        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
-        return { sync, doQuery };
-    }
-
-    function argFor(doQuery, table, col, cols) {
-        const insert = doQuery.getCalls().find(c => /INSERT/.test(c.args[0]) && c.args[0].includes(table));
-        return insert.args[1][cols.indexOf(col)];
-    }
-
     it('reformats an ISO-8601 created_at (T/Z) to MySQL DATETIME', async function () {
         const cols = ['round_number', 'coin_pair', 'status', 'created_at'];
         const { sync, doQuery } = makeApplySync(cols);
@@ -1087,23 +1108,6 @@ describe('HubDbSync _applyRow datetime coercion @regression @tier2', function ()
         assert.strictEqual(argFor(doQuery, 'oracle_prices', 'price', cols), null);
     });
 
-    // A real SHOW COLUMNS result carries Type beside Field. When it does, the
-    // coercion is keyed on the column TYPE, not on the value's shape, so a
-    // free-text column whose value merely LOOKS like a timestamp lands verbatim.
-    // oracle_prices.memo is unvalidated operator input (PRICE v1 validates
-    // VALUE/FEE, never MEMO), so without this a shape-keyed rewrite hits an
-    // ISO-shaped memo in every distributed mirror while a hubDb pointed straight at the hub keeps the
-    // original bytes - mirror content that depended on deployment topology,
-    // against src/sql/oracle_prices.sql's verbatim-parity contract.
-    function makeTypedApplySync(colTypes) {
-        const doQuery = sinon.stub();
-        doQuery.withArgs(sinon.match(/^SHOW COLUMNS/)).resolves(
-            Object.keys(colTypes).map(f => ({ Field: f, Type: colTypes[f] })));
-        doQuery.resolves([]);
-        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
-        return { sync, doQuery };
-    }
-
     it('leaves an ISO-shaped value in a VARCHAR column verbatim when the type is known', async function () {
         const cols = ['id', 'memo', 'created_at'];
         const { sync, doQuery } = makeTypedApplySync({
@@ -1117,7 +1121,9 @@ describe('HubDbSync _applyRow datetime coercion @regression @tier2', function ()
         assert.strictEqual(argFor(doQuery, 'oracle_prices', 'created_at', cols), '2026-06-16 10:33:01',
             'a timestamp column is still reformatted for MariaDB strict mode');
     });
+});
 
+describe('HubDbSync _applyRow datetime coercion @regression @tier2', function () {
     it('still reformats a DATETIME column when the type is known', async function () {
         const cols = ['id', 'created_at'];
         const { sync, doQuery } = makeTypedApplySync({ id: 'int(11)', created_at: 'datetime' });
@@ -1186,7 +1192,6 @@ describe('HubDbSync mirror-table cold-start (missing table) @regression @tier2',
 });
 
 describe('HubDbSync bootstrap fail-closed on partial drain / holes @regression @tier1', function () {
-
     // No mirror holes: on an apply failure mid-page the cursor must not advance past the
     // failed row (directly or via a later row in the page), or the next retry's since_id =
     // SELECT MAX(id) skips it forever and, once the retry drains clean, the heartbeat gate
@@ -1231,7 +1236,9 @@ describe('HubDbSync bootstrap fail-closed on partial drain / holes @regression @
         assert.strictEqual(result, 77, 'clean drain returns the watermark');
         assert.ok(refresh.calledOnce, 'a full drain arms the barrier');
     });
+});
 
+describe('HubDbSync bootstrap fail-closed on partial drain / holes @regression @tier1', function () {
     // Catch-up schema guard: the hub_ready_max_id catch-up fetch must honor the same
     // schema_version fail-closed as the main page loop; a mismatched catch-up page marks
     // the table not-drained rather than applying rows of an unknown shape.
@@ -1255,6 +1262,12 @@ describe('HubDbSync bootstrap fail-closed on partial drain / holes @regression @
     });
 });
 
+function makeBufferSync() {
+    const doQuery = sinon.stub().resolves([]);
+    const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+    return { sync, doQuery };
+}
+
 // ---------------------------------------------------------------------------
 // The WS subscription opens BEFORE the REST bootstrap and
 // price_snapshots deliberately drains LAST behind a multi-minute pull, so a
@@ -1269,13 +1282,6 @@ describe('HubDbSync bootstrap fail-closed on partial drain / holes @regression @
 // above) keeps working unguarded.
 // ---------------------------------------------------------------------------
 describe('HubDbSync live price rows buffer until the price bootstrap drains (#2422) @regression @tier1', function () {
-
-    function makeBufferSync() {
-        const doQuery = sinon.stub().resolves([]);
-        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
-        return { sync, doQuery };
-    }
-
     it('a live price round arriving mid-bootstrap is buffered, not applied, and cannot open the height barrier', async function () {
         const { sync } = makeBufferSync();
         const applyRow = sinon.stub(sync, '_applyRow').resolves();
@@ -1319,7 +1325,9 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
         assert.strictEqual(sync._pendingPriceEvents.length, 0, 'a bad-shape row must not survive to the flush');
         assert.strictEqual(sync._schemaMismatchSeen, true, 'watermark gate frozen');
     });
+});
 
+describe('HubDbSync live price rows buffer until the price bootstrap drains (#2422) @regression @tier1', function () {
     it('the drain replays buffered events in arrival order, arms the refresh, and resumes the live path', async function () {
         const doQuery = sinon.stub().resolves([{ max_id: null }]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
@@ -1367,7 +1375,9 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
         assert.strictEqual(sync._pendingPriceEvents.length, 2, 'failed event and tail stay buffered for the retry');
         assert.ok(refresh.notCalled, 'must not arm the barrier over the hole');
     });
+});
 
+describe('HubDbSync live price rows buffer until the price bootstrap drains (#2422) @regression @tier1', function () {
     it('a disconnect racing the drain cannot stale-arm the live path (epoch guard)', async function () {
         const doQuery = sinon.stub().resolves([{ max_id: null }]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
@@ -1600,6 +1610,16 @@ describe('HubDbSync._applyRetraction closed-range parity @regression @tier3', fu
     });
 });
 
+function makeApply(ownGeneration) {
+    const calls = [];
+    const doQuery = sinon.stub().callsFake(async (sql, args) => { calls.push({ sql, args }); return []; });
+    const opts = { hubUrl: 'http://hub.test', coin: 'BTC' };
+    if (ownGeneration !== undefined) opts.getOwnRollbackGeneration = ownGeneration;
+    const sync = new HubDbSync({ doQuery }, opts);
+    return { sync, calls };
+}
+const deletes = (calls) => calls.filter(c => /^DELETE/.test(c.sql));
+
 // ---------------------------------------------------------------------------
 // Retraction receive-side guards. row:deleted events are unsigned
 // and the hub's push*reorg RPCs forward the caller's claim verbatim, so the
@@ -1608,16 +1628,6 @@ describe('HubDbSync._applyRetraction closed-range parity @regression @tier3', fu
 // per-chain generation monotonicity drops stale replays.
 // ---------------------------------------------------------------------------
 describe('HubDbSync._applyRetraction receive-side guards @regression @tier1', function () {
-    function makeApply(ownGeneration) {
-        const calls = [];
-        const doQuery = sinon.stub().callsFake(async (sql, args) => { calls.push({ sql, args }); return []; });
-        const opts = { hubUrl: 'http://hub.test', coin: 'BTC' };
-        if (ownGeneration !== undefined) opts.getOwnRollbackGeneration = ownGeneration;
-        const sync = new HubDbSync({ doQuery }, opts);
-        return { sync, calls };
-    }
-    const deletes = (calls) => calls.filter(c => /^DELETE/.test(c.sql));
-
     it('accepts an own-chain retraction whose fence is below our rollback generation', async function () {
         const { sync, calls } = makeApply(async () => 6);
         await sync._applyRetraction({ table: 'cross_chain_calls', source_chain: 'BTC', from_action_index: 10, retraction_generation: 5 });
@@ -1668,7 +1678,9 @@ describe('HubDbSync._applyRetraction receive-side guards @regression @tier1', fu
         await sync._applyRetraction({ table: 'cross_chain_calls', source_chain: 'DOGE', from_action_index: 10, retraction_generation: 1 });
         assert.strictEqual(deletes(calls).length, 3, 'independent keys must not shadow each other');
     });
+});
 
+describe('HubDbSync._applyRetraction receive-side guards @regression @tier1', function () {
     it('without the hook (explorer vendored mirror) other-chain legacy behavior is unchanged', async function () {
         const { sync, calls } = makeApply();
         await sync._applyRetraction({ table: 'oracle_prices', source_chain: 'LTC', from_action_index: 1 });
@@ -1678,6 +1690,18 @@ describe('HubDbSync._applyRetraction receive-side guards @regression @tier1', fu
     });
 });
 
+const fs   = require('fs');
+const os   = require('os');
+const path = require('path');
+const { ensureTables } = HubDbSync;
+
+function makeSqlDir(files) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hub-mirror-sql-'));
+    for (const [name, content] of Object.entries(files))
+        fs.writeFileSync(path.join(dir, name), content);
+    return dir;
+}
+
 // ---------------------------------------------------------------------------
 // ensureTables(): mirror-schema creation for consumers without their own
 // table machinery (the explorer's embedded mirror). The indexer never calls
@@ -1686,19 +1710,6 @@ describe('HubDbSync._applyRetraction receive-side guards @regression @tier1', fu
 // backoff, and a hard error on an empty SQL dir.
 // ---------------------------------------------------------------------------
 describe('HubDbSync.ensureTables @regression @tier3', function () {
-
-    const fs   = require('fs');
-    const os   = require('os');
-    const path = require('path');
-    const { ensureTables } = HubDbSync;
-
-    function makeSqlDir(files) {
-        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hub-mirror-sql-'));
-        for (const [name, content] of Object.entries(files))
-            fs.writeFileSync(path.join(dir, name), content);
-        return dir;
-    }
-
     it('is exported alongside the class', function () {
         assert.strictEqual(typeof ensureTables, 'function');
     });
@@ -1751,7 +1762,9 @@ describe('HubDbSync.ensureTables @regression @tier3', function () {
         assert.strictEqual(creates.length, 1, 'comment semicolons must not split statements');
         assert.match(creates[0], /CREATE TABLE t/);
     });
+});
 
+describe('HubDbSync.ensureTables @regression @tier3', function () {
     it('retries a failing file with backoff and succeeds', async function () {
         const clock = sinon.useFakeTimers();
         try {
@@ -1803,7 +1816,6 @@ describe('HubDbSync.ensureTables @regression @tier3', function () {
 // reference_block anchor, so catch-up is judged by the rounds' consensus
 // timestamps (mirror MAX(block_timestamp)) or the hub stream watermark.
 describe('HubDbSync time-keyed price barrier (H-3) @regression @tier3', function () {
-
     function makeTimeSync(maxReferenceBlock, maxTimestamp) {
         const doQuery = sinon.stub();
         doQuery.callsFake(async () => [{ h: maxReferenceBlock, ts: maxTimestamp }]);
@@ -1861,7 +1873,9 @@ describe('HubDbSync time-keyed price barrier (H-3) @regression @tier3', function
         const got = await sync.waitForPriceSyncTime(4000, 50);
         assert.strictEqual(got, 9000, 'timeout path must re-read the mirror before rejecting');
     });
+});
 
+describe('HubDbSync time-keyed price barrier (H-3) @regression @tier3', function () {
     it('is a no-op when sync is disabled (single-host)', async function () {
         const sync = new HubDbSync(null, {});
         const got = await sync.waitForPriceSyncTime(999999, 10);
@@ -1869,23 +1883,22 @@ describe('HubDbSync time-keyed price barrier (H-3) @regression @tier3', function
     });
 });
 
+function makeWatchdogSync() {
+    const doQuery = sinon.stub().resolves([{ h: 0 }]);
+    const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test', watermarkIntervalMs: 10000 });
+    return sync;
+}
+
+function stubWs() {
+    return { terminate: sinon.stub() };
+}
+
 // Heartbeat-timeout watchdog: a reconnect that triggers
 // ONLY on the socket's 'close'/'error' events lets a half-open TCP connection (no
 // frames, no close/error) freeze the mirror indefinitely. The watchdog measures
 // time-since-last-watermark and terminates a stalled socket so the existing
 // close-handler reconnect path self-heals.
 describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () {
-
-    function makeWatchdogSync() {
-        const doQuery = sinon.stub().resolves([{ h: 0 }]);
-        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test', watermarkIntervalMs: 10000 });
-        return sync;
-    }
-
-    function stubWs() {
-        return { terminate: sinon.stub() };
-    }
-
     it('terminates the socket once no watermark frame arrives for 3x the interval', function () {
         const clock = sinon.useFakeTimers();
         try {
@@ -1943,7 +1956,9 @@ describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () 
             clock.restore();
         }
     });
+});
 
+describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () {
     it('no timer remains active after _stopWatchdog (close-path cleanup)', function () {
         const clock = sinon.useFakeTimers();
         try {
@@ -1998,7 +2013,9 @@ describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () 
         assert.strictEqual(sync.watermarkIntervalMs, 10000, 'interval unchanged');
         assert.strictEqual(sync.watermarkTimeoutMs, 30000, 'timeout unchanged (env-seeded fallback intact)');
     });
+});
 
+describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () {
     it('a socket heartbeating at the hub cadence survives once the interval is adopted (drift no longer kills healthy sockets)', function () {
         const clock = sinon.useFakeTimers();
         try {
@@ -2020,6 +2037,44 @@ describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () 
     });
 });
 
+const nodeCrypto = require('crypto');
+const GOLDEN_CANONICAL = 'XRETRACTV1|cross_chain_calls|DOGE|42|99|7|5000';
+const SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
+
+function makeSigner() {
+    const { publicKey, privateKey } = nodeCrypto.generateKeyPairSync('ed25519');
+    const pubkeyHex = publicKey.export({ format: 'der', type: 'spki' }).subarray(SPKI_PREFIX.length).toString('hex');
+    return {
+        pubkey: pubkeyHex.toLowerCase(),
+        sign: (payload) => nodeCrypto.sign(null, Buffer.from(payload, 'utf8'), privateKey).toString('hex')
+    };
+}
+
+// Mirror stub: routes the gate high-water query, the per-block snapshot
+// membership query, and captures DELETEs. `snapRows` = mirrored
+// capability_snapshots at snapshot_block 5000 (source-keyed: SWQ is
+// genesis-active on regtest, so the weighted 3*tally > 2*S predicate runs).
+function makeSigned({ snapRows, maxSnapshotBlock = 5000, network = 'regtest' } = {}) {
+    const deletes = [];
+    const doQuery = sinon.stub().callsFake(async (sql, args) => {
+        if (/MAX\(snapshot_block\)/.test(sql)) return [{ sb: maxSnapshotBlock }];
+        if (/SELECT signing_pubkey/.test(sql)) return snapRows || [];
+        if (/^DELETE/.test(sql)) { deletes.push({ sql, args }); return []; }
+        return [];
+    });
+    const sync = new HubDbSync({ doQuery }, network ? { hubUrl: 'http://hub.test', network } : { hubUrl: 'http://hub.test' });
+    return { sync, deletes };
+}
+
+function signedEvent(sigs, overrides) {
+    return Object.assign({
+        table: 'cross_chain_calls', source_chain: 'DOGE',
+        from_action_index: 42, to_action_index: 99,
+        retraction_generation: 7, snapshot_block: 5000,
+        retraction_signatures: sigs
+    }, overrides || {});
+}
+
 // ---------------------------------------------------------------------------
 // Full fix: signed quorum-class retractions. Once this mirror's own
 // capability_snapshots high-water mark crosses the RETRACTION_SIGNING era
@@ -2031,44 +2086,6 @@ describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () 
 // against this module's independent rebuild, proving producer/consumer parity.
 // ---------------------------------------------------------------------------
 describe('HubDbSync._applyRetraction signed retractions @regression @tier1', function () {
-    const nodeCrypto = require('crypto');
-    const GOLDEN_CANONICAL = 'XRETRACTV1|cross_chain_calls|DOGE|42|99|7|5000';
-    const SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
-
-    function makeSigner() {
-        const { publicKey, privateKey } = nodeCrypto.generateKeyPairSync('ed25519');
-        const pubkeyHex = publicKey.export({ format: 'der', type: 'spki' }).subarray(SPKI_PREFIX.length).toString('hex');
-        return {
-            pubkey: pubkeyHex.toLowerCase(),
-            sign: (payload) => nodeCrypto.sign(null, Buffer.from(payload, 'utf8'), privateKey).toString('hex')
-        };
-    }
-
-    // Mirror stub: routes the gate high-water query, the per-block snapshot
-    // membership query, and captures DELETEs. `snapRows` = mirrored
-    // capability_snapshots at snapshot_block 5000 (source-keyed: SWQ is
-    // genesis-active on regtest, so the weighted 3*tally > 2*S predicate runs).
-    function makeSigned({ snapRows, maxSnapshotBlock = 5000, network = 'regtest' } = {}) {
-        const deletes = [];
-        const doQuery = sinon.stub().callsFake(async (sql, args) => {
-            if (/MAX\(snapshot_block\)/.test(sql)) return [{ sb: maxSnapshotBlock }];
-            if (/SELECT signing_pubkey/.test(sql)) return snapRows || [];
-            if (/^DELETE/.test(sql)) { deletes.push({ sql, args }); return []; }
-            return [];
-        });
-        const sync = new HubDbSync({ doQuery }, network ? { hubUrl: 'http://hub.test', network } : { hubUrl: 'http://hub.test' });
-        return { sync, deletes };
-    }
-
-    function signedEvent(sigs, overrides) {
-        return Object.assign({
-            table: 'cross_chain_calls', source_chain: 'DOGE',
-            from_action_index: 42, to_action_index: 99,
-            retraction_generation: 7, snapshot_block: 5000,
-            retraction_signatures: sigs
-        }, overrides || {});
-    }
-
     it('REFUSES an unsigned quorum-class retraction once the local snapshot era passes the gate', async function () {
         const s = makeSigner();
         const { sync, deletes } = makeSigned({ snapRows: [{ signing_pubkey: s.pubkey, amount: '100', source: 'srcA' }] });
@@ -2125,7 +2142,9 @@ describe('HubDbSync._applyRetraction signed retractions @regression @tier1', fun
         await sync._applyRetraction(signedEvent([{ pubkey: s.pubkey, sig: s.sign(GOLDEN_CANONICAL) }]));
         assert.strictEqual(deletes.length, 0);
     });
+});
 
+describe('HubDbSync._applyRetraction signed retractions @regression @tier1', function () {
     it('REFUSES a signed set whose snapshot_block is itself below the gate era (no sub-gate minting)', async function () {
         const s = makeSigner();
         // mainnet threshold 963000: local high-water past it, but the event claims an old era
@@ -2179,7 +2198,9 @@ describe('HubDbSync._applyRetraction signed retractions @regression @tier1', fun
         assert.strictEqual(deletes.length, 1,
             'the leading garbage entry must not consume the dedupe slot for a valid signer');
     });
+});
 
+describe('HubDbSync._applyRetraction signed retractions @regression @tier1', function () {
     it('still counts a duplicated pubkey ONCE when both entries verify (dedupe intact)', async function () {
         const signers = [makeSigner(), makeSigner(), makeSigner(), makeSigner()];
         const snapRows = signers.map((s, i) => ({ signing_pubkey: s.pubkey, amount: '100', source: 'src' + i }));
@@ -2277,7 +2298,6 @@ describe('HubDbSync anchor-reward attestation barrier @regression @tier1', funct
 // ever be EARLIER, so this is a strict relaxation and nothing that passes today starts
 // deferring.
 describe('HubDbSync anchor-attest maturity-horizon bound @regression @tier1', function () {
-
     // The whole point, in one case: the same block, the same watermark, and the horizon bound
     // is the difference between deferring and proceeding.
     it('a bound BELOW blockTime opens the barrier that the block\'s own stamp would hold', function () {
@@ -2334,7 +2354,9 @@ describe('HubDbSync anchor-attest maturity-horizon bound @regression @tier1', fu
         await pending;
         assert.strictEqual(sync._anchorAttestWaiters.length, 0);
     });
+});
 
+describe('HubDbSync anchor-attest maturity-horizon bound @regression @tier1', function () {
     it('the timeout message keeps its prefix and names the bound that applied', async function () {
         const { sync } = makeSync(0);
         sync.streamWatermark = 0;
@@ -2421,7 +2443,9 @@ describe('HubDbSync height watermark wire contract @regression @tier1', function
         assert.strictEqual(sync._bootstrapDrained, true);
         assert.deepStrictEqual(sync.heightWatermarks, { oracle_prices: { BTC: 77 } });
     });
+});
 
+describe('HubDbSync height watermark wire contract @regression @tier1', function () {
     it('poll mode installs NO height map, exactly as it advances no watermark', async function () {
         const { sync } = makeSync(0);
         sync._pollMode = true;
@@ -2478,7 +2502,9 @@ describe('HubDbSync height watermark wire contract @regression @tier1', function
             'blocks against data this node did not apply');
         assert.strictEqual(sync.streamWatermark, 0);
     });
+});
 
+describe('HubDbSync height watermark wire contract @regression @tier1', function () {
     // The second gate, behind sanitizeHeights. Nothing on the wire path can reach it, which is
     // precisely why it needs a case of its own: an in-process writer that bypassed the
     // sanitizer would otherwise hand a barrier a string or a boolean to compare against B.

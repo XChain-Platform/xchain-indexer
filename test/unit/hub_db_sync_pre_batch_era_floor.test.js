@@ -66,7 +66,6 @@ function makeSync(floorS) {
 }
 
 describe('HubDbSync pre-batch era floor @regression @tier1', function () {
-
     afterEach(function () { sinon.restore(); });
 
     it('replays a pre-activation block without waiting, on BOTH barriers', async function () {
@@ -115,6 +114,10 @@ describe('HubDbSync pre-batch era floor @regression @tier1', function () {
         assert.strictEqual(sync._priceMirrorBoundDisabled, false);
         assert.strictEqual(sync._priceMirrorFloorTs, FLOOR - 3600, 'the bound must survive a pre-era block');
     });
+});
+
+describe('HubDbSync pre-batch era floor @regression @tier1', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('fails CLOSED without a usable block time, even with the floor armed', async function () {
         this.timeout(5000);
@@ -146,6 +149,10 @@ describe('HubDbSync pre-batch era floor @regression @tier1', function () {
         assert.strictEqual(sync._priceTimeWaiters.length, 1);
         await assert.rejects(p, /price time-sync barrier timed out/);
     });
+});
+
+describe('HubDbSync pre-batch era floor @regression @tier1', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('resolves the floor per network, coin-keyed first, and 0 for anything unusable', function () {
         for (const net of ['mainnet', 'testnet', 'regtest']) {

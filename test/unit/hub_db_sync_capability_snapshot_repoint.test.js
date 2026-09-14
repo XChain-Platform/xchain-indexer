@@ -16,18 +16,6 @@ const sinon = require('sinon');
 
 const HubDbSync = require('../../src/hub/hub_db_sync.js');
 
-// A bootstrap never dropped capability_snapshots rows the current hub does not carry
-// on its own. The table has no `network` column, so _mirrorNetworkScope returns null and
-// both purge paths are unreachable, and being a FULL_REPAGE table its cursor is forced
-// to 0 so the id-ceiling fence never runs either. The re-page then converges only the
-// uq_cap_snap keys the two hubs SHARE; a row from a retired hub at a block boundary the
-// current one has never reached is never addressed. MEASURED 2026-08-28: both testnet
-// indexer mirrors held 43 rows at snapshot_block 957439, a BTC MAINNET height inherited
-// from the retired mainnet hub, on a testnet mirror that was never going to converge.
-describe('HubDbSync capability snapshot mirror repoint @regression @tier2', function () {
-
-    afterEach(function () { sinon.restore(); });
-
     // A HubDbSync over a fake local mirror. `local` is the simulated table content;
     // applied rows land in it through the stubbed _applyRow the same way the real apply
     // would (id-less INSERT IGNORE on uq_cap_snap, local AUTO_INCREMENT), so the drain's
@@ -83,18 +71,29 @@ describe('HubDbSync capability snapshot mirror repoint @regression @tier2', func
         return { sync, rows, seen, doQuery };
     }
 
-    // Serve a hub table honestly over the ascending since_id page walk.
-    function stubHub(sync, hubRows) {
-        sinon.stub(sync, '_httpGet').callsFake(async (path) => {
-            const since = Number(/since_id=(\d+)/.exec(path)[1]);
-            return { rows: hubRows.filter(r => Number(r.id) > since), watermark: 5000 };
-        });
-    }
+// Serve a hub table honestly over the ascending since_id page walk.
+function stubHub(sync, hubRows) {
+    sinon.stub(sync, '_httpGet').callsFake(async (path) => {
+        const since = Number(/since_id=(\d+)/.exec(path)[1]);
+        return { rows: hubRows.filter(r => Number(r.id) > since), watermark: 5000 };
+    });
+}
 
-    function snap(id, block, pubkey, source) {
-        return { id: id, snapshot_block: block, capability: 'cross_chain',
-                 signing_pubkey: pubkey, amount: '100', source: source || 'src1' };
-    }
+function snap(id, block, pubkey, source) {
+    return { id: id, snapshot_block: block, capability: 'cross_chain',
+             signing_pubkey: pubkey, amount: '100', source: source || 'src1' };
+}
+
+// A bootstrap never dropped capability_snapshots rows the current hub does not carry
+// on its own. The table has no `network` column, so _mirrorNetworkScope returns null and
+// both purge paths are unreachable, and being a FULL_REPAGE table its cursor is forced
+// to 0 so the id-ceiling fence never runs either. The re-page then converges only the
+// uq_cap_snap keys the two hubs SHARE; a row from a retired hub at a block boundary the
+// current one has never reached is never addressed. MEASURED 2026-08-28: both testnet
+// indexer mirrors held 43 rows at snapshot_block 957439, a BTC MAINNET height inherited
+// from the retired mainnet hub, on a testnet mirror that was never going to converge.
+describe('HubDbSync capability snapshot mirror repoint @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('clears the retired hub validator sets a repoint leaves behind', async function () {
         // The prod shape: the mirror followed a mainnet hub (snapshot_block 957439) and now
@@ -140,6 +139,10 @@ describe('HubDbSync capability snapshot mirror repoint @regression @tier2', func
         await sync._bootstrapTable('capability_snapshots');
         assert.deepStrictEqual(rows, [], 'a hub holding nothing means the mirror holds nothing');
     });
+});
+
+describe('HubDbSync capability snapshot mirror repoint @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('never judges a row that arrived while the drain ran', async function () {
         // Live WS events on this table apply immediately rather than buffering, so a row
@@ -179,6 +182,10 @@ describe('HubDbSync capability snapshot mirror repoint @regression @tier2', func
         assert.strictEqual(seen.selects.length, 0, 'the pass is capability_snapshots-only');
         assert.strictEqual(seen.deletes.length, 0);
     });
+});
+
+describe('HubDbSync capability snapshot mirror repoint @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('refuses to delete when no served key matches, which is a key-derivation fault', async function () {
         // Every row the drain served was applied moments ago, so at least one must read back
@@ -234,6 +241,10 @@ describe('HubDbSync capability snapshot mirror repoint @regression @tier2', func
         assert.ok(rows.some(r => Number(r.snapshot_block) === 90000),
             'the fallback must not reach below the ceiling');
     });
+});
+
+describe('HubDbSync capability snapshot mirror repoint @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('deletes nothing when the mirror was empty before the drain', async function () {
         const { sync, rows, seen } = makeSync([]);

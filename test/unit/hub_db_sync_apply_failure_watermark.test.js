@@ -41,7 +41,6 @@ function makeSync(hubDb) {
 const ROW = { network: 'mainnet', policy_key: 'k', policy_value: 'v' };
 
 describe('HubDbSync mirror-write confirmation and the apply-failure watermark latch @regression @tier1', function () {
-
     afterEach(function () { sinon.restore(); });
 
     describe('writes route through the fail-loud primitive', function () {
@@ -96,6 +95,10 @@ describe('HubDbSync mirror-write confirmation and the apply-failure watermark la
             assert.strictEqual(hubDb.doQuery.callCount, 1);
         });
     });
+});
+
+describe('HubDbSync mirror-write confirmation and the apply-failure watermark latch @regression @tier1', function () {
+    afterEach(function () { sinon.restore(); });
 
     describe('the watermark gate reads the apply-failure latch', function () {
 
@@ -151,6 +154,10 @@ describe('HubDbSync mirror-write confirmation and the apply-failure watermark la
             assert.strictEqual(sync.streamWatermark, 2000);
         });
     });
+});
+
+describe('HubDbSync mirror-write confirmation and the apply-failure watermark latch @regression @tier1', function () {
+    afterEach(function () { sinon.restore(); });
 
     describe('a failed buffered price replay latches too', function () {
 

@@ -44,7 +44,6 @@ function makeSync(network) {
 }
 
 describe('HubDbSync watermark-grace resolver @regression @tier1', function () {
-
     afterEach(function () {
         clearGraceEnv();
         sinon.restore();
@@ -97,6 +96,13 @@ describe('HubDbSync watermark-grace resolver @regression @tier1', function () {
         assert.strictEqual(sync.matchWatermarkGraceS, 30);
         assert.strictEqual(sync.callWatermarkGraceS, 120, 'the call barrier keeps its own frozen constant');
     });
+});
+
+describe('HubDbSync watermark-grace resolver @regression @tier1', function () {
+    afterEach(function () {
+        clearGraceEnv();
+        sinon.restore();
+    });
 
     it('the call barrier reads callWatermarkGraceS, not the match grace', function () {
         clearGraceEnv();
@@ -146,6 +152,13 @@ describe('HubDbSync watermark-grace resolver @regression @tier1', function () {
             !warn.getCalls().some(c => String(c.args[0]).includes('HUB_SYNC_ORACLE_GRACE_S')),
             'no warning when the override matches the pinned constant'
         );
+    });
+});
+
+describe('HubDbSync watermark-grace resolver @regression @tier1', function () {
+    afterEach(function () {
+        clearGraceEnv();
+        sinon.restore();
     });
 
     it('regtest THROWS an actionable error on a negative override', function () {

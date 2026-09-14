@@ -47,7 +47,6 @@ function makeSync(options = {}, rows = []) {
 }
 
 describe('bridge mirror registration @regression @tier1', function () {
-
     it('bootstraps bridge_transfers and policy_snapshots, and drains them before price_snapshots',
         async function () {
         // Registration in the bootstrap set is what makes the tables exist locally at all.
@@ -99,7 +98,9 @@ describe('bridge mirror registration @regression @tier1', function () {
         assert.strictEqual(status.tables.bridge_transfers, 111);
         assert.strictEqual(status.tables.policy_snapshots, 222);
     });
+});
 
+describe('bridge mirror registration @regression @tier1', function () {
     it('the retraction key columns the DELETE names exist in the mirrored DDL', function () {
         // The price_snapshots class of bug: _applyRetraction built a DELETE against columns
         // the mirror twin did not have, every reorg deletion threw ER_BAD_FIELD_ERROR, and
@@ -122,7 +123,6 @@ describe('bridge mirror registration @regression @tier1', function () {
 });
 
 describe('bridge sync barrier @regression @tier1', function () {
-
     it('scopes MAX(effective_time) to transfers touching this coin on either leg', async function () {
         // A global max is the fork: the hub broadcasts every finalized transfer to every
         // mirror, so an unrelated DOGE->LTC transfer would raise this watermark past the
@@ -174,7 +174,9 @@ describe('bridge sync barrier @regression @tier1', function () {
         sync.streamWatermark = 1000 + grace - 1;
         assert.strictEqual(sync.bridgeSyncSatisfied(1000), false, 'must defer until the grace is covered');
     });
+});
 
+describe('bridge sync barrier @regression @tier1', function () {
     it('waitForBridgeSync resolves at once when the mirror is already past the block time', async function () {
         const { sync } = makeSync({ coin: 'DOGE' });
         sync.bridgeSyncTimestamp = 2000;
@@ -222,7 +224,6 @@ describe('bridge sync barrier @regression @tier1', function () {
 });
 
 describe('policy sync barrier @regression @tier1', function () {
-
     it('scopes the watermark to snapshots this chain can apply, by origin_chain', async function () {
         // A policy snapshot names no destination (every chain holding a copy applies it), so
         // there is no dest_chain to key on. The one set of rows this chain can never apply is
@@ -272,7 +273,9 @@ describe('policy sync barrier @regression @tier1', function () {
         sync.policySyncTimestamp = 500;
         assert.strictEqual(await sync.waitForPolicySync(1000, 30), 4000);
     });
+});
 
+describe('policy sync barrier @regression @tier1', function () {
     it('a watermark advance releases an in-flight waiter without a new row', async function () {
         // The quiet-table deadlock class: a quiet table must never freeze the tip. A heartbeat is
         // the only evidence that arrives when no row does, so advanceWatermark has to reach
@@ -331,17 +334,16 @@ describe('bridge-family watermark graces @regression @tier1', function () {
     });
 });
 
+// No network wired, so the co-signature gate never arms and these cases exercise the
+// fence and the DELETE shape alone (the same harness the cross_chain_calls cases use).
+function makeApply(options = {}) {
+    const calls   = [];
+    const doQuery = sinon.stub().callsFake(async (sql, args) => { calls.push({ sql: sql, args: args }); return []; });
+    const sync    = new HubDbSync({ doQuery }, Object.assign({ hubUrl: 'http://hub.test' }, options));
+    return { sync, calls };
+}
+
 describe('bridge mirror retraction @regression @tier1', function () {
-
-    // No network wired, so the co-signature gate never arms and these cases exercise the
-    // fence and the DELETE shape alone (the same harness the cross_chain_calls cases use).
-    function makeApply(options = {}) {
-        const calls   = [];
-        const doQuery = sinon.stub().callsFake(async (sql, args) => { calls.push({ sql: sql, args: args }); return []; });
-        const sync    = new HubDbSync({ doQuery }, Object.assign({ hubUrl: 'http://hub.test' }, options));
-        return { sync, calls };
-    }
-
     it('REFUSES an unfenced deletion of a bridge_transfers row', async function () {
         // row:deleted arrives unsigned over the hub stream. Without the quorum-class rule a
         // compromised hub key wipes co-signed transfers out of every mirror.
@@ -382,7 +384,9 @@ describe('bridge mirror retraction @regression @tier1', function () {
         assert.ok(calls.some(c => /MAX\(effective_time\)/i.test(c.sql) && /bridge_transfers/.test(c.sql)),
             'the bridge watermark must be re-read after a retraction');
     });
+});
 
+describe('bridge mirror retraction @regression @tier1', function () {
     it('NEVER deletes a policy_snapshots row, fenced or not', async function () {
         // A superseding policy arrives as a new row at a higher policy_seq. There is no
         // deletion shape for this table, which is why it carries no RETRACTION_COLUMNS entry.

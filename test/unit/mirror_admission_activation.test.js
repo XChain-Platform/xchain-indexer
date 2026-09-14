@@ -57,7 +57,6 @@ function loadWith(envValue) {
 }
 
 describe('mirror_admission_activation: the arming seam @regression', function () {
-
     // THE `0 >= null` TRAP. Every live network key is null today, so a predicate with no
     // Number.isFinite guard on the threshold reports every one of them ARMED at height 0
     // and the whole fleet silently switches binding rules the moment this ships.
@@ -114,7 +113,9 @@ describe('mirror_admission_activation: the arming seam @regression', function ()
                 'an unreadable height ' + JSON.stringify(String(h)) + ' armed the consumer');
         }
     });
+});
 
+describe('mirror_admission_activation: the arming seam @regression', function () {
     // Number() maps null, '', whitespace, [] and the booleans onto FINITE values (0 or 1), so a
     // Number.isFinite check alone lets an unread height arm a venue at 0: a fail-OPEN on a
     // consensus flag day. NaN and undefined fail closed, which is what hides it from review.
@@ -160,7 +161,9 @@ describe('mirror_admission_activation: the arming seam @regression', function ()
         assert.strictEqual(armed.isMirrorAdmissionProducerActive('btc', 'REGTEST', 0), true,
             'a caller spelling the key differently must not silently read INERT');
     });
+});
 
+describe('mirror_admission_activation: the arming seam @regression', function () {
     it('fails the venue lever CLOSED on anything it does not recognise', function () {
         const env = k => ({ XC_MIRROR_ADMISSION_ACTIVATION: k });
         for (const armedForm of ['armed', 'ARMED', 'on', 'true', 'yes', 'genesis'])
@@ -198,7 +201,6 @@ describe('mirror_admission_activation: the arming seam @regression', function ()
 });
 
 describe('mirror_admission_activation: the follower admission window @regression', function () {
-
     // THE DEFECT THIS GUARDS IS A FLAT BOUND. Six blocks is an hour on BTC and six minutes on
     // DOGE, so a flat [tip+1, tip+6] refuses honest DOGE rows between hubs whose tips differ by
     // three blocks. The assertion is therefore that the two chains accept DIFFERENT windows
@@ -248,7 +250,9 @@ describe('mirror_admission_activation: the follower admission window @regression
             'the literal key "default" must not be addressable as a chain');
         assert.strictEqual(mirror.admitMaxFutureBlocks('btc'), 6, 'the chain code is folded up');
     });
+});
 
+describe('mirror_admission_activation: the follower admission window @regression', function () {
     it('gives each mirrored table its own margin and an unknown table the default', function () {
         assert.strictEqual(mirror.admitMarginBlocks('attestation_responses'), 1);
         assert.strictEqual(mirror.admitMarginBlocks('oracle_prices'), 1);

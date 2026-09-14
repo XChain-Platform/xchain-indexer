@@ -65,10 +65,9 @@ function makeSync(hubUrl){
     return new HubDbSync({ doQuery: async () => [{ h: 0, ts: 0 }] }, { hubUrl });
 }
 
+let hub = null;
+
 describe('HubDbSync snapshot-request settling', function(){
-
-    let hub = null;
-
     afterEach(function(done){
         if(!hub) return done();
         let h = hub; hub = null;
@@ -108,6 +107,15 @@ describe('HubDbSync snapshot-request settling', function(){
         });
         assert.deepStrictEqual(await makeSync(hub.url)._httpGet('/hub-db/snapshot/oracle_prices'),
             { rows: [], schema_version: null });
+    });
+});
+
+describe('HubDbSync snapshot-request settling', function(){
+    afterEach(function(done){
+        if(!hub) return done();
+        let h = hub; hub = null;
+        h.server.closeAllConnections && h.server.closeAllConnections();
+        h.server.close(() => done());
     });
 
     it('releases the _bootstrapping guard after a truncated snapshot response', async function(){

@@ -16,17 +16,6 @@ const sinon = require('sinon');
 
 const HubDbSync = require('../../src/hub/hub_db_sync.js');
 
-// The bootstrap cursor for a hub-mirrored table is since_id = MAX(local id), which is a
-// position in the CURRENT hub's auto-increment space. Rows a different hub served share
-// none of that space: their ids can sit above every id the current hub holds (so since_id
-// asks for rows past the end of the hub's table and the drain reports zero rows on every
-// attempt) and they occupy the ids the current hub's own rows carry (so the id-parity
-// INSERT IGNORE apply drops the real row without an error). This suite drives that whole
-// shape through _bootstrapTable.
-describe('HubDbSync mirror network scope @regression @tier2', function () {
-
-    afterEach(function () { sinon.restore(); });
-
     // A HubDbSync over a fake hub DB that answers only the two statements the bootstrap
     // cursor path issues, and records them. `local` is the simulated local mirror content:
     // foreign is the row count for a network other than `network`, scopedMax/unscopedMax
@@ -54,20 +43,30 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
         return { sync, seen, doQuery };
     }
 
-    // Serve the hub's table honestly: only rows whose id is above the requested since_id,
-    // so a cursor pointing past the end of the hub's table yields nothing, exactly as the
-    // live hub behaves.
-    function stubHub(sync, ids, watermark) {
-        const rows = ids.map((id) => ({ id: id, network: 'testnet' }));
-        return sinon.stub(sync, '_httpGet').callsFake(async (path) => {
-            const since = Number(/since_id=(\d+)/.exec(path)[1]);
-            return { rows: rows.filter((r) => r.id > since), watermark: watermark };
-        });
-    }
+// Serve the hub's table honestly: only rows whose id is above the requested since_id,
+// so a cursor pointing past the end of the hub's table yields nothing, exactly as the
+// live hub behaves.
+function stubHub(sync, ids, watermark) {
+    const rows = ids.map((id) => ({ id: id, network: 'testnet' }));
+    return sinon.stub(sync, '_httpGet').callsFake(async (path) => {
+        const since = Number(/since_id=(\d+)/.exec(path)[1]);
+        return { rows: rows.filter((r) => r.id > since), watermark: watermark };
+    });
+}
 
-    function sinceIds(httpGet) {
-        return httpGet.getCalls().map((c) => Number(/since_id=(\d+)/.exec(c.args[0])[1]));
-    }
+function sinceIds(httpGet) {
+    return httpGet.getCalls().map((c) => Number(/since_id=(\d+)/.exec(c.args[0])[1]));
+}
+
+// The bootstrap cursor for a hub-mirrored table is since_id = MAX(local id), which is a
+// position in the CURRENT hub's auto-increment space. Rows a different hub served share
+// none of that space: their ids can sit above every id the current hub holds (so since_id
+// asks for rows past the end of the hub's table and the drain reports zero rows on every
+// attempt) and they occupy the ids the current hub's own rows carry (so the id-parity
+// INSERT IGNORE apply drops the real row without an error). This suite drives that whole
+// shape through _bootstrapTable.
+describe('HubDbSync mirror network scope @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('drains a hub whose ids all sit BELOW a block of foreign rows the mirror still holds', async function () {
         // The measured shape: 132 rows for another network occupy ids 1-132 locally while
@@ -113,6 +112,10 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
         assert.deepStrictEqual(sinceIds(httpGet), [0]);
         assert.strictEqual(sync._applyRow.callCount, 3);
     });
+});
+
+describe('HubDbSync mirror network scope @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     // Two separate claims, and the delete is the one that needs justifying.
     //
@@ -169,6 +172,10 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
         assert.deepStrictEqual(scopePurge[0].args, ['testnet']);
         assert.strictEqual(mark, 77);
     });
+});
+
+describe('HubDbSync mirror network scope @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     // ABSENT is not ZERO. An older hub advertises no max_ids at all, and must keep the
     // fail-open behaviour: the field is additive, so a missing ceiling is no evidence of
@@ -223,6 +230,10 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
         await sync._bootstrapTable('state_checkpoints');
         assert.deepStrictEqual(sinceIds(httpGet), [20], 'an equal ceiling is a valid position, not a mismatch');
     });
+});
+
+describe('HubDbSync mirror network scope @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     it('deletes nothing and stays unscoped when the consumer names no network', async function () {
         // The display mirror in the explorer constructs this client without a network, so

@@ -269,7 +269,9 @@ describe('HubPushQueue', function(){
             await q.drain();
             assert.strictEqual(attemptStub.callCount, 0);
         });
+    });
 
+    describe('drain()', function(){
         it('calls _attempt for each due row', async function(){
             let indexer = makeIndexer();
             let rows = [
@@ -408,7 +410,9 @@ describe('HubPushQueue', function(){
             assert.deepStrictEqual(indexer.hubClient.pushPriceBatch.firstCall.args[0], payload);
             assert.strictEqual(indexer.indexerDb.markHubPushDelivered.calledWith(20), true);
         });
+    });
 
+    describe('_attempt()', function(){
         it('does NOT retire a price_batch after maxAttempts failures (batch is the sole carrier of its window)', async function(){
             let indexer = makeIndexer();
             indexer.hubClient.pushPriceBatch = sinon.stub().rejects(new Error('hub down'));
@@ -466,7 +470,9 @@ describe('HubPushQueue', function(){
             assert.deepStrictEqual(indexer.hubClient.retractAttestBatch.firstCall.args[1], payload);
             assert.strictEqual(indexer.indexerDb.markHubPushDelivered.calledWith(40), true);
         });
+    });
 
+    describe('_attempt()', function(){
         it('does NOT retire an unknown-to-the-dispatch retraction type as an unknown push_type', async function(){
             let indexer = makeIndexer();
             let q = new HubPushQueue(indexer);
@@ -522,7 +528,9 @@ describe('HubPushQueue', function(){
             await q.drain();
             assert.strictEqual(indexer.indexerDb.getPendingHubPushes.called, true, 'resumed drain fetches');
         });
+    });
 
+    describe('_attempt()', function(){
         it('marks row failed for unknown push_type', async function(){
             let indexer = makeIndexer();
             let q = new HubPushQueue(indexer);
@@ -573,7 +581,9 @@ describe('HubPushQueue', function(){
             let [, msg] = indexer.indexerDb.recordHubPushAttempt.firstCall.args;
             assert.strictEqual(msg.length, 480);
         });
+    });
 
+    describe('_attempt()', function(){
         it('does NOT call markHubPushDelivered on push failure', async function(){
             let indexer = makeIndexer();
             indexer.hubClient.pushPriceRound = sinon.stub().rejects(new Error('fail'));
@@ -630,7 +640,9 @@ describe('HubPushQueue', function(){
                     'a retraction must be recorded with an unbounded cap so it never flips to failed');
             });
         }
+    });
 
+    describe('_attempt()', function(){
         it('DOES retire a best-effort forward push at the attempt cap (unchanged)', async function(){
             let indexer = makeIndexer();
             indexer.hubClient.pushPriceRound = sinon.stub().rejects(new Error('fail'));

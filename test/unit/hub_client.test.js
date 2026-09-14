@@ -123,7 +123,9 @@ describe('HubClient', function(){
             let c = new HubClient('', '');
             assert.strictEqual(c.configEnabled, false);
         });
+    });
 
+    describe('constructor', function(){
         it('marks configEnabled=true from HUB_CONFIG_URL alone, with no feed url', function(){
             process.env.HUB_CONFIG_URL = 'http://private-hub.example.com:10000';
             const FreshHubClient = requireWithFreshConfig(HUB_CLIENT_PATH);
@@ -286,7 +288,6 @@ describe('HubClient', function(){
     // XChainIndexer's post-commit path the push was delivered, and both then DELETE the durable
     // pending_hub_pushes row, so a transient hub rejection destroyed a never-re-derivable price.
     describe('hub-rejection classification', function(){
-
         const TRANSIENT = [
             ['{accepted:false} validator snapshot unavailable', { accepted: false, reason: 'validator snapshot unavailable' }],
             ['{accepted:false} db error',                       { accepted: false, reason: 'db error' }],
@@ -343,7 +344,9 @@ describe('HubClient', function(){
             sinon.stub(c, 'call').resolves({ error: 'error retracting prices' });
             await assert.rejects(() => c.retractPriceRange('BTC', 10), /hub rejected pushpricereorg/);
         });
+    });
 
+    describe('hub-rejection classification', function(){
         it('resolves a successful retraction result untouched', async function(){
             let c = new HubClient('http://hub.example.com', '');
             sinon.stub(c, 'call').resolves({ retracted: { price_snapshots: 2, oracle_prices: 0 } });
@@ -579,7 +582,9 @@ describe('HubClient', function(){
 
             await assert.rejects(() => c.call('ping', {}), /Invalid Request/);
         });
+    });
 
+    describe('_call() HTTP internals', function(){
         it('rejects with JSON parse error when response body is not valid JSON', async function(){
             let c = new HubClient('http://hub.example.com', '');
             let { stub } = buildHttpStub('not-json-at-all');
@@ -637,7 +642,9 @@ describe('HubClient', function(){
             let opts = stub.firstCall.args[0];
             assert.strictEqual(opts.port, 443);
         });
+    });
 
+    describe('_call() HTTP internals', function(){
         it('timeout event destroys the request', async function(){
             let c = new HubClient('http://hub.example.com', '');
             let fakeReq = new EventEmitter();

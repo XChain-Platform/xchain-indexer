@@ -60,10 +60,9 @@ function settledWithin(promise, ms){
     return Promise.race([outcome, new Promise((r) => setTimeout(() => r('pending'), ms))]);
 }
 
+let hub = null;
+
 describe('HubClient response-lifecycle settling', function(){
-
-    let hub = null;
-
     afterEach(function(done){
         sinon.restore();
         if(!hub) return done();
@@ -112,6 +111,16 @@ describe('HubClient response-lifecycle settling', function(){
         });
         let c = new HubClient(hub.url, '');
         assert.deepStrictEqual(await c.call('ping', {}), { ok: true });
+    });
+});
+
+describe('HubClient response-lifecycle settling', function(){
+    afterEach(function(done){
+        sinon.restore();
+        if(!hub) return done();
+        let h = hub; hub = null;
+        h.server.closeAllConnections && h.server.closeAllConnections();
+        h.server.close(() => done());
     });
 
     it('leaves the push queue drainable after a truncated hub response', async function(){

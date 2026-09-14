@@ -32,10 +32,17 @@ const HubDbSync = require('../../src/hub/hub_db_sync.js');
 // nothing to poll and keeps its fixed sleep() settle.
 const { sleep, waitUntil } = require('../helpers/wait.js');
 
+let server, port, sync;
+
+function makeSync() {
+    const s = new HubDbSync({ doQuery: sinon.stub().resolves([]) },
+        { hubUrl: 'http://127.0.0.1:' + port, watermarkIntervalMs: 50 }); // timeout = 150ms
+    s.running = true;
+    return s;
+}
+
 describe('HubDbSync watchdog measures transport not processing (ITEM 2477) @regression @tier2', function () {
     this.timeout(15000);
-
-    let server, port, sync;
 
     beforeEach(async function () {
         server = new WebSocketServer({ port: 0 });
@@ -46,13 +53,6 @@ describe('HubDbSync watchdog measures transport not processing (ITEM 2477) @regr
         if (sync) { sync.running = false; try { sync.stop(); } catch (e) { /* ignore */ } sync = null; }
         if (server) { try { server.close(); } catch (e) { /* ignore */ } server = null; }
     });
-
-    function makeSync() {
-        const s = new HubDbSync({ doQuery: sinon.stub().resolves([]) },
-            { hubUrl: 'http://127.0.0.1:' + port, watermarkIntervalMs: 50 }); // timeout = 150ms
-        s.running = true;
-        return s;
-    }
 
     it('a watermark frame arriving during a long row-apply backlog keeps the watchdog quiet', async function () {
         let serverWs;
@@ -78,6 +78,20 @@ describe('HubDbSync watchdog measures transport not processing (ITEM 2477) @regr
 
         assert.strictEqual(terminateSpy.called, false,
             'a healthy socket with frames arriving must NOT be terminated by a processing backlog');
+    });
+});
+
+describe('HubDbSync watchdog measures transport not processing (ITEM 2477) @regression @tier2', function () {
+    this.timeout(15000);
+
+    beforeEach(async function () {
+        server = new WebSocketServer({ port: 0 });
+        port = await new Promise((res) => server.on('listening', () => res(server.address().port)));
+    });
+
+    afterEach(function () {
+        if (sync) { sync.running = false; try { sync.stop(); } catch (e) { /* ignore */ } sync = null; }
+        if (server) { try { server.close(); } catch (e) { /* ignore */ } server = null; }
     });
 
     it('half-open detection intact: no frames for the timeout window STILL terminates the socket', async function () {

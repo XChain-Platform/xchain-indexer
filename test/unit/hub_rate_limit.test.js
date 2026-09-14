@@ -47,11 +47,47 @@ function startHub(handler){
     });
 }
 
+let hub = null;
+
+function throttleError(retryAfterMs){
+    let err = new Error('hub rate limit exceeded (100 req/min); retry after 60s [HTTP 429]');
+    err.rateLimited  = true;
+    err.httpStatus   = 429;
+    err.hubRateLimit = 100;
+    err.retryAfterMs = retryAfterMs;
+    return err;
+}
+
+function makeQueue(pushBatchStub, rows){
+    let hubClient = {
+        enabled: true,
+        pushPriceRound:  sinon.stub().resolves(),
+        pushOraclePrice: sinon.stub().resolves(),
+        pushPriceBatch:  pushBatchStub,
+        retractPriceRange: sinon.stub().resolves(),
+        retractXcallRange: sinon.stub().resolves(),
+        retractMatchRange: sinon.stub().resolves()
+    };
+    let indexerDb = {
+        getPendingHubPushes:  sinon.stub().resolves(rows),
+        recordHubPushAttempt: sinon.stub().resolves(),
+        markHubPushDelivered: sinon.stub().resolves()
+    };
+    let q = new HubPushQueue({ hubClient, indexerDb }, { failedRetentionSec: 0 });
+    return { q, hubClient, indexerDb };
+}
+
+function batchRows(n){
+    let rows = [];
+    for(let i = 1; i <= n; i++){
+        rows.push({ id: i, push_type: 'price_batch', payload: JSON.stringify({ rounds: [i] }),
+                    attempts: 0, last_attempted_at: null });
+    }
+    return rows;
+}
+
 describe('hub rate-limit handling on the price-push rails', function(){
-
     describe('HubClient._call against a throttling hub', function(){
-        let hub = null;
-
         afterEach(function(done){
             if(!hub) return done();
             hub.server.close(() => { hub = null; done(); });
@@ -86,6 +122,15 @@ describe('hub rate-limit handling on the price-push rails', function(){
             assert.ok(/rate limit exceeded/.test(err.message), err.message);
             assert.ok(/100 requests per 60s/.test(err.message), err.message);
             assert.ok(/HUB_RATE_LIMIT_RPM/.test(err.message), err.message);
+        });
+    });
+});
+
+describe('hub rate-limit handling on the price-push rails', function(){
+    describe('HubClient._call against a throttling hub', function(){
+        afterEach(function(done){
+            if(!hub) return done();
+            hub.server.close(() => { hub = null; done(); });
         });
 
         // A node can be pointed at a hub that predates this change, and the
@@ -138,6 +183,15 @@ describe('hub rate-limit handling on the price-push rails', function(){
             assert.strictEqual(err.httpStatus, 502);
             assert.ok(/HTTP 502/.test(err.message), err.message);
         });
+    });
+});
+
+describe('hub rate-limit handling on the price-push rails', function(){
+    describe('HubClient._call against a throttling hub', function(){
+        afterEach(function(done){
+            if(!hub) return done();
+            hub.server.close(() => { hub = null; done(); });
+        });
 
         it('leaves an ordinary 200 JSON-RPC round trip exactly as it was', async function(){
             hub = await startHub((req, res) => {
@@ -160,47 +214,11 @@ describe('hub rate-limit handling on the price-push rails', function(){
             assert.strictEqual(err.rateLimited, undefined);
         });
     });
+});
 
+describe('hub rate-limit handling on the price-push rails', function(){
     describe('HubPushQueue under a throttling hub', function(){
-
         afterEach(function(){ sinon.restore(); });
-
-        function throttleError(retryAfterMs){
-            let err = new Error('hub rate limit exceeded (100 req/min); retry after 60s [HTTP 429]');
-            err.rateLimited  = true;
-            err.httpStatus   = 429;
-            err.hubRateLimit = 100;
-            err.retryAfterMs = retryAfterMs;
-            return err;
-        }
-
-        function makeQueue(pushBatchStub, rows){
-            let hubClient = {
-                enabled: true,
-                pushPriceRound:  sinon.stub().resolves(),
-                pushOraclePrice: sinon.stub().resolves(),
-                pushPriceBatch:  pushBatchStub,
-                retractPriceRange: sinon.stub().resolves(),
-                retractXcallRange: sinon.stub().resolves(),
-                retractMatchRange: sinon.stub().resolves()
-            };
-            let indexerDb = {
-                getPendingHubPushes:  sinon.stub().resolves(rows),
-                recordHubPushAttempt: sinon.stub().resolves(),
-                markHubPushDelivered: sinon.stub().resolves()
-            };
-            let q = new HubPushQueue({ hubClient, indexerDb }, { failedRetentionSec: 0 });
-            return { q, hubClient, indexerDb };
-        }
-
-        function batchRows(n){
-            let rows = [];
-            for(let i = 1; i <= n; i++){
-                rows.push({ id: i, push_type: 'price_batch', payload: JSON.stringify({ rounds: [i] }),
-                            attempts: 0, last_attempted_at: null });
-            }
-            return rows;
-        }
 
         it('charges NO attempt for a throttled row: the hub never judged the payload', async function(){
             sinon.stub(console, 'warn');
@@ -252,6 +270,12 @@ describe('hub rate-limit handling on the price-push rails', function(){
             assert.strictEqual(q._throttledUntilMs, 5_060_000);
             clock.tick(0);
         });
+    });
+});
+
+describe('hub rate-limit handling on the price-push rails', function(){
+    describe('HubPushQueue under a throttling hub', function(){
+        afterEach(function(){ sinon.restore(); });
 
         // The capped type is the one a mis-classified 429 could actually destroy: ten
         // throttled ticks read as delivery attempts would retire a re-derivable round to
