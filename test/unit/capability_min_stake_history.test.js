@@ -22,6 +22,8 @@ const path   = require('path');
 const fs     = require('fs');
 
 const cmsh = require('../../src/capability_min_stake_history.js');
+// Decides whether the hub source path may be trusted before the rule pin reads it.
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 describe('capability MIN_STAKE as-of-block reconstruction @regression @tier2', function () {
 
@@ -157,7 +159,9 @@ describe('capability MIN_STAKE as-of-block reconstruction @regression @tier2', f
             // the pin is on the RULE: greatest activation_block <= blockIndex wins. A drift
             // here means recovery judges an archive at a bar the hub never used.
             let hubPath = path.resolve(__dirname, '../../../xchain-hub/src/validators/capability_registry.js');
-            if (!fs.existsSync(hubPath)) return this.skip();
+            // A lane symlink into a live main checkout is refused like an absent hub.
+            const hubCheckout = siblingCheckout(__dirname, hubPath);
+            if (!hubCheckout.usable) return skipOrFail(this, hubCheckout, 'the xchain-hub CapabilityRegistry rule pin');
             let src = fs.readFileSync(hubPath, 'utf8');
             assert.ok(/if\s*\(e\.activation_block <= blockIndex\)\s*resolved = e\.value;/.test(src),
                 'xchain-hub CapabilityRegistry.getMinStake no longer resolves "greatest activation_block ' +

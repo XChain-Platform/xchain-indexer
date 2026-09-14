@@ -32,6 +32,7 @@ const fs     = require('fs');
 const path   = require('path');
 
 const indexer = require('../../src/anchor_reward_activation.js');
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 // The self-reference line each copy carries naming its twin (the OTHER file). It is
 // intentionally different per copy and is the only permitted divergence.
@@ -104,6 +105,9 @@ describe('anchor_reward_activation twin parity @regression @tier1', function () 
 
         it('hub export map + amount + predicate match the indexer', function () {
             let hub;
+            // Judged before the require: a lane symlink into a live main checkout is refused.
+            const sibling = siblingCheckout(__dirname, '../../../xchain-hub/src/anchor_reward_activation.js');
+            if (!sibling.usable) return skipOrFail(this, sibling, 'anchor-reward twin parity');
             try { hub = loadHub(); }
             catch (e) {
                 if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
@@ -126,6 +130,8 @@ describe('anchor_reward_activation twin parity @regression @tier1', function () 
 
         it('hub and indexer source are byte-identical apart from the twin-reference line', function () {
             let hubFile;
+            const sibling = siblingCheckout(__dirname, '../../../xchain-hub/src/anchor_reward_activation.js');
+            if (!sibling.usable) return skipOrFail(this, sibling, 'anchor-reward twin byte parity');
             try { hubFile = loadHub().file; }
             catch (e) {
                 if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')

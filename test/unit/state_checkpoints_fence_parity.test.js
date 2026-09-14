@@ -28,6 +28,8 @@
 const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
+// Decides whether a holder path may be trusted before its DDL is read.
+const { siblingCheckout } = require('../helpers/sibling_checkout.js');
 
 // Where the SIBLING checkouts live. This repo's own copy is deliberately not
 // resolved through here: <root>/xchain-indexer/... only resolves when the checkout
@@ -63,13 +65,16 @@ function holderPath(holder) {
 // this repo's own copy, and never null under XCHAIN_REQUIRE_SIBLINGS=1.
 function readHolder(holder) {
     const p = holderPath(holder);
-    if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8');
+    // Refuses an absent sibling and a lane symlink into a live main checkout alike; the
+    // own copy sits inside this checkout, so only absence can refuse it.
+    const verdict = siblingCheckout(__dirname, p);
+    if (verdict.usable) return fs.readFileSync(p, 'utf8');
     if (holder.own)
         throw new Error('this repo\'s own state_checkpoints.sql did not resolve at ' + p
             + '; repoint OWN_COPY rather than letting the mirror drop out of its own parity check');
     if (REQUIRE_SIBLINGS)
-        throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but the ' + holder.label + ' copy is absent at ' + p
-            + '. Check the sibling out, or unset the variable to accept the gap.');
+        throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but the ' + holder.label + ' copy is unusable at ' + p
+            + ': ' + verdict.reason + '. Check the sibling out, or unset the variable to accept the gap.');
     return null;
 }
 

@@ -25,6 +25,7 @@
 const assert = require('assert');
 const M  = require('../../src/consensus/merkle.js');
 const SC = require('../../src/stateCommitment.js');
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 // Deterministic pseudo-random key + amount derived from an index.
 function keyFor(i){ return M.sha256(Buffer.from('key:' + i, 'utf8')); }            // 32-byte key buf
@@ -164,6 +165,11 @@ describe('state-commitment flag-day activation @regression', function(){
     // never green-by-skip where the sibling is required. Standalone CI (flag
     // unset, no sibling) still skips.
     it('indexer activation map == canonical constants.js', function(){
+        // Decide on the sibling first: a lane symlink into a live main checkout resolves
+        // and loads fine, so the catch below would never see it.
+        const canonVerdict = siblingCheckout(__dirname, '../../../xchain-documentation/protocol/constants.js');
+        if (!canonVerdict.usable)
+            return skipOrFail(this, canonVerdict, 'the STATE_COMMITMENT_ACTIVATION parity guard');
         let canonical;
         try { canonical = require('../../../xchain-documentation/protocol/constants.js').STATE_COMMITMENT_ACTIVATION; }
         catch (e) {

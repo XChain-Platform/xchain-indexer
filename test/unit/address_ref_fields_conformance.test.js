@@ -32,6 +32,8 @@ const path   = require('path');
 
 const INDEXER_FILE = path.join(__dirname, '..', '..', 'src', 'consensus', 'addressRefFields.js');
 const SDK_FILE     = path.join(__dirname, '..', '..', '..', 'xchain-sdk', 'src', 'addressRefFields.js');
+// Decides whether the SDK copy may be trusted before the drift guard reads it.
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 describe('addressRefFields.js conformance (indexer <-> sdk) @regression', function () {
 
@@ -52,11 +54,12 @@ describe('addressRefFields.js conformance (indexer <-> sdk) @regression', functi
     });
 
     it('is byte-identical to the SDK copy (cross-repo drift guard)', function () {
-        if (!fs.existsSync(SDK_FILE)) {
+        const sdkCheckout = siblingCheckout(__dirname, SDK_FILE);
+        if (!sdkCheckout.usable) {
             // Sibling SDK repo not checked out (standalone indexer deploy): the
             // cross-repo source of truth is unavailable, so skip rather than error.
-            this.skip();
-            return;
+            // A lane symlink into a live main checkout is refused the same way.
+            return skipOrFail(this, sdkCheckout, 'the addressRefFields SDK drift guard');
         }
         const indexerSrc = fs.readFileSync(INDEXER_FILE, 'utf8');
         const sdkSrc     = fs.readFileSync(SDK_FILE, 'utf8');

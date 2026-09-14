@@ -36,16 +36,25 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 const path   = require('path');
+const fs     = require('fs');
 
 const { createMockIndexer } = require('../../fixtures/mocks');
 const Attest = require('../../../src/actions/attest/index.js');
+// Decides whether the documentation vectors may be trusted before they are loaded.
+const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
 const DOCS_DIR = process.env.XCHAIN_DOCS_DIR
     || path.join(__dirname, '..', '..', '..', '..', 'xchain-documentation');
 const VEC_PATH = path.join(DOCS_DIR, 'protocol', 'test-vectors', 'responsible_set.json');
 
+// A vector file that exists but sits behind a lane symlink into a live main checkout is
+// refused before the require. An absent file still reaches the require, so the load case
+// below keeps failing with the error that names what is missing.
+const vecCheckout = siblingCheckout(__dirname, VEC_PATH);
+const vecRefused  = !vecCheckout.usable && fs.existsSync(vecCheckout.path);
+
 let vec = null, vecErr = null;
-try { vec = require(VEC_PATH); } catch (e) { vecErr = e; }
+if (!vecRefused) { try { vec = require(VEC_PATH); } catch (e) { vecErr = e; } }
 
 // A block far below the mainnet STAKE_WEIGHTED_QUORUM anchor (961000), so the
 // weighted/unweighted branch is selected by NETWORK alone: regtest arms the gate at
@@ -61,6 +70,7 @@ describe('ATTEST responsible-set canonical-vector conformance @regression @tier1
     // absence is also what empties the vector-driven cases below. This case always
     // exists, so it always runs.
     it('loads the canonical vector file', function () {
+        if (vecRefused) return skipOrFail(this, vecCheckout, 'the responsible-set canonical vector conformance');
         if (vec && Array.isArray(vec.computeResponsibleSet) && vec.computeResponsibleSet.length > 0) return;
         const reason = vec
             ? 'the file loaded but computeResponsibleSet is empty'

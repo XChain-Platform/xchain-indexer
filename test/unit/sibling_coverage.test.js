@@ -45,8 +45,11 @@
 const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
+// The same trust judgement every cross-repo guard now makes, so this roster refuses
+// exactly the siblings those guards refuse.
+const { siblingCheckout } = require('../helpers/sibling_checkout.js');
 
-const REPO_ROOT    = path.join(__dirname, '..', '..');
+const REPO_ROOT   = path.join(__dirname, '..', '..');
 const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(REPO_ROOT, '..');
 const STRICT       = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 
@@ -94,18 +97,23 @@ function resolve(entry) {
 // which is the exact silence this file exists to break.
 function inspect(entry) {
     const { dir, via } = resolve(entry);
-    let present = fs.existsSync(dir) && fs.existsSync(path.join(dir, entry.marker));
+    // A lane symlink into a live main checkout is refused like an absent one: every
+    // guard behind it would read uncommitted bytes. The marker lies inside the dir, so
+    // its verdict covers both. path.resolve keeps a relative override resolving
+    // against the cwd, exactly as the existsSync it replaces did.
+    const verdict = siblingCheckout(__dirname, path.resolve(dir, entry.marker));
+    let present = verdict.usable;
     let source  = via;
     if (!present) {
         for (const key of entry.altEnvs || []) {
-            if (process.env[key] && fs.existsSync(process.env[key])) {
+            if (process.env[key] && siblingCheckout(__dirname, path.resolve(process.env[key])).usable) {
                 present = true;
                 source  = key;
                 break;
             }
         }
     }
-    return Object.assign({}, entry, { dir, via: source, present });
+    return Object.assign({}, entry, { dir, via: source, present, reason: present ? null : verdict.reason });
 }
 
 describe('cross-repo sibling coverage (what this run could NOT verify)', function () {
@@ -119,7 +127,7 @@ describe('cross-repo sibling coverage (what this run could NOT verify)', functio
         const mode = STRICT ? 'STRICT (absence fails)' : 'permissive (absence skips)';
         console.log(`      sibling coverage: ${results.length - absent.length}/${results.length} resolvable, ${mode}`);
         for (const r of absent) {
-            console.log(`      NOT VERIFIED: ${r.repo} absent at ${r.dir} (${r.via}) -> ${r.guards}`);
+            console.log(`      NOT VERIFIED: ${r.repo} unusable at ${r.dir} (${r.via}): ${r.reason} -> ${r.guards}`);
         }
     });
 
@@ -150,10 +158,10 @@ describe('cross-repo sibling coverage (what this run could NOT verify)', functio
 
     it('resolves every sibling checkout the cross-repo guards depend on', function () {
         if (!absent.length) return;
-        const detail = absent.map(r => `${r.repo} (expected ${r.dir}, via ${r.via}; silences ${r.guards})`).join('; ');
+        const detail = absent.map(r => `${r.repo} (expected ${r.dir}, via ${r.via}; ${r.reason}; silences ${r.guards})`).join('; ');
         if (STRICT) {
             throw new Error(
-                `XCHAIN_REQUIRE_SIBLINGS=1 but ${absent.length} sibling checkout(s) are missing: ${detail}. `
+                `XCHAIN_REQUIRE_SIBLINGS=1 but ${absent.length} sibling checkout(s) are missing or refused: ${detail}. `
                 + 'Every cross-repo parity guard against them skipped, so this run proves less than a green '
                 + 'result suggests. Check the siblings out, or unset XCHAIN_REQUIRE_SIBLINGS to accept the gap.');
         }

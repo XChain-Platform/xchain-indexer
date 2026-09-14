@@ -38,6 +38,8 @@ const fs     = require('fs');
 const path   = require('path');
 
 const Database = require('../../src/db');
+// Decides whether the hub sql dir may be trusted before the twins are parsed.
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 const LOCAL_SQL_DIR = path.join(__dirname, '..', '..', 'src', 'sql');
 const HUB_DIR       = process.env.XCHAIN_HUB_DIR || path.join(__dirname, '..', '..', '..', 'xchain-hub');
@@ -99,14 +101,13 @@ function parseBigintColumns(dir, table) {
 
 describe('mirror-twin BIGINT signedness conformance @regression', function () {
 
-    const hubPresent = fs.existsSync(HUB_SQL_DIR);
+    // Refuses an absent hub sql dir and a lane symlink into a live main checkout alike.
+    const hubCheckout = siblingCheckout(__dirname, HUB_SQL_DIR);
+    const hubPresent = hubCheckout.usable;
 
     before(function () {
-        if (!hubPresent) {
-            if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but sibling xchain-hub sql dir not found at ' + HUB_SQL_DIR);
-            this.skip();
-        }
+        if (!hubPresent)
+            return skipOrFail(this, hubCheckout, 'the mirror-twin BIGINT signedness guard against xchain-hub/src/sql');
     });
 
     // landed anchor_reward_attestations into HUB_STATE_TABLES without adding it

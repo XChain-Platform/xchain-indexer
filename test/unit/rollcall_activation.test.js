@@ -36,6 +36,7 @@ const fs     = require('fs');
 const path   = require('path');
 
 const act = require('../../src/rollcall_activation.js');
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 const ACT_PATH = require.resolve('../../src/rollcall_activation.js');
 
@@ -72,7 +73,10 @@ function loadCanonical(){
 }
 function loadHub(){
     const p = path.join(__dirname, '../../../xchain-hub/src/rollcall_activation.js');
-    if(!fs.existsSync(p)) throw new Error('xchain-hub sibling missing at ' + p);
+    // Absent, or a lane symlink into a live main checkout that no commit pins: either way
+    // the twin is not read, and the callers skip or rethrow this reason under strict.
+    const sibling = siblingCheckout(__dirname, p);
+    if(!sibling.usable) throw new Error('xchain-hub sibling refused at ' + p + ': ' + sibling.reason);
     return { mod: require(p), file: p };
 }
 
@@ -82,6 +86,9 @@ describe('rollcall_activation', function () {
 
         it('agrees with the canonical documentation copy', function () {
             let canon;
+            // Judged before the require: absent or a lane symlink into a live main checkout.
+            const sibling = siblingCheckout(__dirname, '../../../xchain-documentation/protocol/constants.js');
+            if (!sibling.usable) return skipOrFail(this, sibling, 'the canonical constants comparison');
             try { canon = loadCanonical(); }
             catch (e) {
                 if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')

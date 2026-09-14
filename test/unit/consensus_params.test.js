@@ -24,6 +24,8 @@ const assert = require('assert');
 process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 const Utility = require('../../src/utility.js');
+const fs      = require('fs');
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 // ---- frozen golden (consensus epoch '2') ----
 const GOLDEN_GAS_PRICE = '0.00001';
@@ -190,11 +192,20 @@ function resolveVmConsensus(){
         // to src/consensus_runtime.js with nothing left behind, and a sibling can
         // sit on either side of that rename. Pinning one would send this guard to
         // the vm:null branch, which SKIPS, against the other.
+        // A spelling counts only when its sibling may be trusted. The refusal carried out
+        // names why nothing loaded, preferring a present-but-refused spelling (a lane
+        // symlink into a live main checkout) over one that is simply absent.
+        let refused = null;
         for (const spelling of ['../../../xchain-vm/src/consensus_runtime.js',
                                 '../../../xchain-vm/src/consensus-runtime.js']) {
-            try { return { vm: require(spelling), full: false, pkgErr: e }; } catch(e2){ /* next */ }
+            const verdict = siblingCheckout(__dirname, spelling);
+            if (!verdict.usable){
+                if (!refused || fs.existsSync(verdict.path)) refused = verdict;
+                continue;
+            }
+            try { return { vm: require(spelling), full: false, pkgErr: e, refused: null }; } catch(e2){ /* next */ }
         }
-        return { vm: null, full: false, pkgErr: e };
+        return { vm: null, full: false, pkgErr: e, refused };
     }
 }
 
@@ -311,13 +322,13 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
     });
 
     it('the bundled VM agrees on the consensus version + status vocabulary (cross-repo coupling)', function(){
-        const { vm, full, pkgErr } = resolveVmConsensus();
+        const { vm, full, pkgErr, refused } = resolveVmConsensus();
         // A package load failure caused by the VM's own frozen-export guard
         // (a dropped/renamed STRIPPED_GLOBAL_NAMES or CONSENSUS_RULES) must redden,
         // not degrade to the fallback and skip.
         if(pkgErr && /STRIPPED_GLOBAL_NAMES|CONSENSUS_RULES/.test(String(pkgErr && pkgErr.message)))
             assert.fail('xchain-vm failed to load its frozen consensus surface: ' + pkgErr.message);
-        if(!vm){ this.skip(); return; } // standalone CI without the VM present
+        if(!vm){ return skipOrFail(this, refused, 'the bundled VM consensus coupling guard'); } // standalone CI without the VM present
         assert.strictEqual(vm.CONSENSUS_VERSION, EXPECTED_VM_CONSENSUS_VERSION,
             'bundled VM CONSENSUS_VERSION != indexer expectation (bump both together)');
         assert.deepStrictEqual(vm.CONSENSUS_STATUS_TOKENS, FROZEN_STATUS_TOKENS,
@@ -361,13 +372,13 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
     });
 
     it('the VM async/binary flag-day timestamps match the indexer protocol_changes (cross-repo byte-gate)', function(){
-        const { vm, full, pkgErr } = resolveVmConsensus();
+        const { vm, full, pkgErr, refused } = resolveVmConsensus();
         // Under the required-siblings lane a stale/absent vendored VM (the exact
         // one-sided-edit threat this cross-repo byte-gate exists to catch) must
         // redden, not degrade to a silent pending. Only standalone CI legitimately skips.
         if(!vm || !full){
             if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                assert.fail('XCHAIN_REQUIRE_SIBLINGS=1 but xchain-vm did not resolve to its full package surface (stale/absent vendored VM): ' + (pkgErr ? String(pkgErr.message) : 'package not present'));
+                assert.fail('XCHAIN_REQUIRE_SIBLINGS=1 but xchain-vm did not resolve to its full package surface (stale/absent vendored VM): ' + (pkgErr ? String(pkgErr.message) : 'package not present') + (refused ? '; sibling fallback refused: ' + refused.reason : ''));
             this.skip(); return;
         } // standalone CI without the real VM present
         const pc = require('../../src/protocol_changes.js');

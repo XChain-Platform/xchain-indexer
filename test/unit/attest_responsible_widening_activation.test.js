@@ -24,10 +24,11 @@
 'use strict';
 
 const assert = require('assert');
-const fs     = require('fs');
 const path   = require('path');
 const wid    = require('../../src/attest_responsible_widening_activation.js');
 const zc     = require('../../src/attest_zero_conf_activation.js');
+// Decides whether the hub twin path may be trusted before either guard reads it.
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 // The measured incident: BTC testnet4 request 77f37a86..., admitted at 150699
 // with deadlineBlocks 10 and redundancy 3, whose responsible set held one
@@ -208,12 +209,9 @@ describe('attest_responsible_widening: hub/indexer twin', function () {
     // Skips green when the sibling checkout is absent, matching the house convention in
     // activation_constants_parity.test.js; CI sets XCHAIN_REQUIRE_SIBLINGS=1 to make it hard.
     it('holds the same activation heights and ladder constants as the hub copy', function () {
-        if (!fs.existsSync(HUB_COPY)) {
-            if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                assert.fail('xchain-hub sibling checkout missing: ' + HUB_COPY);
-            this.skip();
-            return;
-        }
+        // Refuses an absent hub and a lane symlink into a live main checkout alike.
+        const hubCheckout = siblingCheckout(__dirname, HUB_COPY);
+        if (!hubCheckout.usable) return skipOrFail(this, hubCheckout, 'the xchain-hub widening constants twin');
         const hub = require(HUB_COPY);
         assert.deepStrictEqual(hub.ATTEST_RESPONSIBLE_WIDENING_ACTIVATION,
                                wid.ATTEST_RESPONSIBLE_WIDENING_ACTIVATION);
@@ -225,7 +223,8 @@ describe('attest_responsible_widening: hub/indexer twin', function () {
     // one-sided edit to widenSlots itself forks the set with both constant maps
     // still equal.
     it('answers identically to the hub copy across the whole ladder', function () {
-        if (!fs.existsSync(HUB_COPY)) { this.skip(); return; }
+        const hubCheckout = siblingCheckout(__dirname, HUB_COPY);
+        if (!hubCheckout.usable) return skipOrFail(this, hubCheckout, 'the xchain-hub widening ladder decision twin');
         const hub = require(HUB_COPY);
         for (const net of ['mainnet', 'testnet', 'regtest']) {
             for (const dl of [REQ, REQ + 3, REQ + 10, REQ + 100]) {

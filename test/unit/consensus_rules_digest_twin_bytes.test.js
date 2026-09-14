@@ -52,6 +52,8 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 const crd    = require('../../src/consensus_rules_digest.js');
+// Decides whether the hub twin path may be trusted before the byte compare reads it.
+const { siblingCheckout } = require('../helpers/sibling_checkout.js');
 
 const REPO_ROOT    = path.join(__dirname, '..', '..');
 const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(REPO_ROOT, '..');
@@ -102,9 +104,12 @@ function normalise(text, expectedHeader, label) {
 describe('consensus_rules_digest: hub twin bytes and hub-side entry points', function () {
 
     before(function () {
-        if (!fs.existsSync(HUB_COPY)) {
+        // Refuses an absent hub and a lane symlink into a live main checkout alike:
+        // the latter reads a peer's uncommitted bytes, which prove nothing either way.
+        const hubCheckout = siblingCheckout(__dirname, HUB_COPY);
+        if (!hubCheckout.usable) {
             if (STRICT) {
-                assert.fail('xchain-hub sibling checkout missing: ' + HUB_COPY
+                assert.fail('xchain-hub sibling checkout unusable: ' + hubCheckout.reason
                     + ' (set XCHAIN_HUB_DIR at a checkout to prove this guard ran)');
             }
             this.skip();

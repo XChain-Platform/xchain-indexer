@@ -33,6 +33,7 @@
 'use strict';
 
 const assert = require('assert');
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 const ADMIT_AT  = 799000;
 const LEGACY_AT = ADMIT_AT - 1;
@@ -67,11 +68,16 @@ let armed = null;
 
 function armTwins() {
     const localPaths = LOCAL_MODULES.map(m => require.resolve(m));
+    // Judge every hub twin before requiring any: absent, or a lane symlink into a live main
+    // checkout, is refused, and the hub cases skip (or fail naming why) through hubOrSkip.
+    const hubVerdict = HUB_MODULES.map(m => siblingCheckout(__dirname, m)).find(v => !v.usable) || null;
     let hubPaths = null;
-    try { hubPaths = HUB_MODULES.map(m => require.resolve(m)); }
-    catch (e) {
-        if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-            throw new Error('PRICE v0 admission parity cannot run: xchain-hub sibling missing (' + e.message + ')');
+    if (!hubVerdict) {
+        try { hubPaths = HUB_MODULES.map(m => require.resolve(m)); }
+        catch (e) {
+            if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                throw new Error('PRICE v0 admission parity cannot run: xchain-hub sibling missing (' + e.message + ')');
+        }
     }
 
     const paths    = localPaths.concat(hubPaths || []);
@@ -98,7 +104,7 @@ function armTwins() {
         else process.env.XC_MIRROR_ADMISSION_ACTIVATION = savedEnv;
     }
 
-    return { ed: ed, act: act, hub: hub, restore: restore };
+    return { ed: ed, act: act, hub: hub, hubVerdict: hubVerdict, restore: restore };
 }
 
 function build(height, map, network) {
@@ -162,7 +168,9 @@ describe('PRICE v0 canonical: the admission field on the indexer verifier', func
 
         function hubOrSkip(ctx) {
             if (armed.hub) return armed.hub;
-            ctx.skip();
+            // A refused hub twin skips, or fails naming the reason under strict.
+            if (armed.hubVerdict) skipOrFail(ctx, armed.hubVerdict, 'the PRICE v0 hub twin parity');
+            else ctx.skip();
             return null;
         }
 

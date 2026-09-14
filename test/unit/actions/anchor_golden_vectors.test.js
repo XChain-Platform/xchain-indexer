@@ -38,6 +38,7 @@ const arMod    = require('../../../src/anchor_reward_activation.js');
 
 const fs     = require('fs');
 const path   = require('path');
+const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
 const GOLDEN = require('../../fixtures/anchor_canonical_vectors.json');
 const BUNDLE = GOLDEN.fixture.bundle;
@@ -59,12 +60,11 @@ const FIXTURE_PATH  = path.resolve(__dirname, '../../fixtures/anchor_canonical_v
 
 describe('Anchor canonical vectors byte-identity to xchain-documentation @regression', function () {
     it('fixture is byte-identical to xchain-documentation/protocol/test-vectors/anchor_canonical.json', function () {
-        if (!fs.existsSync(CANON_VECTORS)) {
-            if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but canonical anchor vectors not found at ' + CANON_VECTORS);
-            this.skip();
-            return;
-        }
+        // Present is not enough: reached through a lane symlink the file is a peer's
+        // live main checkout, which no commit pins, so it must not grade this copy.
+        const canonVerdict = siblingCheckout(__dirname, CANON_VECTORS);
+        if (!canonVerdict.usable)
+            return skipOrFail(this, canonVerdict, 'the canonical anchor vectors byte-identity guard');
         const local = fs.readFileSync(FIXTURE_PATH, 'utf8');
         const canon = fs.readFileSync(CANON_VECTORS, 'utf8');
         assert.strictEqual(local, canon,

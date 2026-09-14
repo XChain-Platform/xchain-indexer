@@ -38,6 +38,7 @@
 const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
+const { siblingCheckout, skipOrFail, siblingsRequired } = require('../helpers/sibling_checkout.js');
 
 const CONSTANTS_PATH = path.resolve(__dirname, '../../../xchain-documentation/protocol/constants.js');
 
@@ -191,15 +192,22 @@ function resolveChainKey(map, key) {
     return map[net];
 }
 
-function resolveCanonSource(canonExists, requireSiblings) {
+// `refusal` is the sibling verdict's reason, so a checkout refused as a lane symlink into a
+// live main checkout says so instead of claiming the file is missing. Without it the message
+// names the absent checkout path as before.
+function resolveCanonSource(canonExists, requireSiblings, refusal) {
     if (canonExists) return { status: 'checked' };
     if (requireSiblings)
-        throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but canonical constants not found at ' + CONSTANTS_PATH);
-    return { status: 'skipped', reason: 'documentation checkout absent at ' + CONSTANTS_PATH };
+        throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but ' +
+            (refusal || 'canonical constants not found at ' + CONSTANTS_PATH));
+    return { status: 'skipped', reason: refusal || 'documentation checkout absent at ' + CONSTANTS_PATH };
 }
 
 describe('activation-gate constant parity to canonical constants.js @regression', function () {
-    const canonExists = fs.existsSync(CONSTANTS_PATH);
+    // Usable, not merely present: a lane symlink into a live main checkout is refused here,
+    // and every parity case below keys off this flag.
+    const canonVerdict = siblingCheckout(__dirname, CONSTANTS_PATH);
+    const canonExists = canonVerdict.usable;
 
     it('reports skipped and names the exact checkout path when the documentation checkout is absent', function () {
         const result = resolveCanonSource(false, false);
@@ -210,6 +218,17 @@ describe('activation-gate constant parity to canonical constants.js @regression'
     it('throws rather than skipping on an absent checkout when XCHAIN_REQUIRE_SIBLINGS=1', function () {
         assert.throws(() => resolveCanonSource(false, true), /XCHAIN_REQUIRE_SIBLINGS=1/);
         assert.strictEqual(resolveCanonSource(true, true).status, 'checked');
+    });
+
+    // A refused checkout is present but untrusted, so the skip and the strict failure must carry
+    // the verdict's reason rather than the absent-checkout wording, which would send a reader
+    // looking for a file that is sitting right there.
+    it('names the sibling refusal reason instead of an absent checkout when one is given', function () {
+        const refusal = 'sibling xchain-documentation resolves through a symlink into the live main checkout /x';
+        assert.strictEqual(resolveCanonSource(false, false, refusal).reason, refusal);
+        assert.throws(() => resolveCanonSource(false, true, refusal),
+            (e) => e.message === 'XCHAIN_REQUIRE_SIBLINGS=1 but ' + refusal);
+        assert.strictEqual(resolveCanonSource(true, true, refusal).status, 'checked');
     });
 
     // The coverage floor. Every parity case below is skipped without the sibling, and each
@@ -234,12 +253,9 @@ describe('activation-gate constant parity to canonical constants.js @regression'
         const here = path.resolve(__dirname, '../../src/train_activation.js');
         const twin = path.resolve(__dirname, '../../../xchain-sync/src/train_activation.js');
         assert.ok(fs.existsSync(here), 'the indexer train-activation gate is missing at ' + here);
-        if (!fs.existsSync(twin)) {
-            if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but the sync twin is absent at ' + twin);
-            this.skip();
-            return;
-        }
+        const twinVerdict = siblingCheckout(__dirname, twin);
+        if (!twinVerdict.usable)
+            return skipOrFail(this, twinVerdict, 'the sync train-activation twin byte compare');
         assert.strictEqual(fs.readFileSync(twin, 'utf8'), fs.readFileSync(here, 'utf8'),
             'xchain-sync/src/train_activation.js has drifted from the indexer copy; the two are ' +
             'vendored twins and a one-sided edit forks the fleet at the train boundary.');
@@ -256,12 +272,9 @@ describe('activation-gate constant parity to canonical constants.js @regression'
         const here = path.resolve(__dirname, '../../src/mirror_admission_activation.js');
         const twin = path.resolve(__dirname, '../../../xchain-hub/src/mirror_admission_activation.js');
         assert.ok(fs.existsSync(here), 'the indexer admission activation module is missing at ' + here);
-        if (!fs.existsSync(twin)) {
-            if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but the hub twin is absent at ' + twin);
-            this.skip();
-            return;
-        }
+        const twinVerdict = siblingCheckout(__dirname, twin);
+        if (!twinVerdict.usable)
+            return skipOrFail(this, twinVerdict, 'the hub mirror-admission twin byte compare');
         assert.strictEqual(fs.readFileSync(twin, 'utf8'), fs.readFileSync(here, 'utf8'),
             'xchain-hub/src/mirror_admission_activation.js has drifted from the indexer copy; the two ' +
             'are byte-identical twins carrying the admission heights AND the canonical encoder, so a ' +
@@ -449,7 +462,7 @@ describe('activation-gate constant parity to canonical constants.js @regression'
 
     let canon = null;
     before(function () {
-        if (resolveCanonSource(canonExists, process.env.XCHAIN_REQUIRE_SIBLINGS === '1').status !== 'checked') return;
+        if (resolveCanonSource(canonExists, siblingsRequired(), canonVerdict.reason).status !== 'checked') return;
         canon = require(CONSTANTS_PATH);
     });
 

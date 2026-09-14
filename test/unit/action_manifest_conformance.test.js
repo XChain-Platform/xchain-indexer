@@ -82,7 +82,9 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
     describe('byte-identity to canonical manifest', function () {
         const DOCS = process.env.XCHAIN_DOCS_DIR || path.join(__dirname, '..', '..', '..', 'xchain-documentation');
         const CANON = path.join(DOCS, 'protocol', 'action-manifest.json');
-        before(function () { if (!fs.existsSync(CANON)) { if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1') throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but canonical action-manifest.json not found at ' + CANON); this.skip(); } });
+        // Refuses an absent docs checkout and a lane symlink into a live main checkout alike.
+        const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
+        before(function () { const docs = siblingCheckout(__dirname, CANON); if (!docs.usable) skipOrFail(this, docs, 'the canonical action-manifest.json byte-identity guard'); });
         it('vendored test/fixtures/action-manifest.json is byte-identical to canonical', function () {
             assert.strictEqual(fs.readFileSync(VENDORED, 'utf8'), fs.readFileSync(CANON, 'utf8'),
                 'vendored action-manifest.json drifted from canonical; edit ' +

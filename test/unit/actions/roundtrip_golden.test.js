@@ -41,6 +41,8 @@ process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const Utility     = require('../../../src/utility.js');
+// Decides whether an sdk spelling may be trusted before the round-trip half loads it.
+const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 const ACTIONS_DIR = path.join(__dirname, '..', '..', '..', 'src', 'actions');
 
 const FIXTURE_PATH = path.join(__dirname, '..', '..', 'fixtures', 'action-roundtrip-golden.json');
@@ -150,12 +152,24 @@ function resolveSdkRoot() {
 // move. Pinning only the post-move spelling makes resolveSdkRoot() report NO
 // sdk at all against a pre-move sibling, which skips the whole round-trip half
 // of this suite while the run still reports green.
+//
+// A spelling counts only when its sibling verdict is usable. One that exists but was
+// refused (a lane symlink into a live main checkout) is remembered in sdkRefusal, so
+// the round-trip half can report WHY it did not run instead of a bare "no sdk".
+let sdkRefusal = null;
 function sdkFile(root, ...spellings) {
     for (const parts of spellings) {
         const p = path.join(root, ...parts);
-        if (fs.existsSync(p)) return p;
+        const v = siblingCheckout(__dirname, p);
+        if (v.usable) return p;
+        if (fs.existsSync(p) && !sdkRefusal) sdkRefusal = v;
     }
     return null;
+}
+
+// The verdict the round-trip half acts on when no sdk root resolved.
+function sdkVerdict() {
+    return sdkRefusal || { usable: false, reason: 'no xchain-sdk checkout resolved (XCHAIN_SDK_PATH or the sibling layout)' };
 }
 
 describe('Action round-trip golden – indexer parser byte-layout contract', function () {
@@ -182,8 +196,7 @@ describe('Action round-trip golden – indexer parser byte-layout contract', fun
 
         before(function () {
             if (!sdkRoot) {
-                this.skip(); // unit tier: no sibling sdk checkout
-                return;
+                return skipOrFail(this, sdkVerdict(), 'the SDK encoder round-trip'); // unit tier: no sibling sdk checkout
             }
             const sdkConfig = require(path.join(sdkRoot, 'src', 'config.js'));
             const SdkUtil   = require(sdkFile(sdkRoot, ['src', 'utils', 'utility.js'], ['src', 'utility.js']));
@@ -192,7 +205,7 @@ describe('Action round-trip golden – indexer parser byte-layout contract', fun
         });
 
         it('the two vendored golden copies are byte-identical', function () {
-            if (!sdkRoot) this.skip();
+            if (!sdkRoot) return skipOrFail(this, sdkVerdict(), 'the vendored golden byte-identity check');
             const sibling = fs.readFileSync(path.join(sdkRoot, 'test', 'fixtures', 'action-roundtrip-golden.json'), 'utf8');
             assert.strictEqual(sibling, fs.readFileSync(FIXTURE_PATH, 'utf8'), 'vendored golden copies drifted');
         });

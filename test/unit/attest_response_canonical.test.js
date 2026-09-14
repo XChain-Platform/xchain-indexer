@@ -13,10 +13,11 @@
 'use strict';
 
 const assert = require('assert');
-const fs     = require('fs');
 const path   = require('path');
 
 const can = require('../../src/consensus/attest_response_canonical.js');
+// Decides whether the hub twin path may be trusted before either guard reads it.
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 const BASE = {
     requestId:    'a'.repeat(64),
@@ -106,12 +107,9 @@ describe('attest_response_canonical: hub/indexer twin', function () {
     const HUB_COPY = path.resolve(__dirname, '../../../xchain-hub/src/attestation/attest_response_canonical.js');
 
     it('produces byte-identical canonicals to the hub copy across both eras', function () {
-        if (!fs.existsSync(HUB_COPY)) {
-            if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                assert.fail('xchain-hub sibling checkout missing: ' + HUB_COPY);
-            this.skip();
-            return;
-        }
+        // Refuses an absent hub and a lane symlink into a live main checkout alike.
+        const hubCheckout = siblingCheckout(__dirname, HUB_COPY);
+        if (!hubCheckout.usable) return skipOrFail(this, hubCheckout, 'the xchain-hub attest_response_canonical twin');
         const hub = require(HUB_COPY);
         for (const meta of ['', 'X', 'status=200', 'a|b', '1234', null]) {
             for (const et of [null, 0, 1, 1788000000, '42']) {
@@ -125,7 +123,8 @@ describe('attest_response_canonical: hub/indexer twin', function () {
     });
 
     it('rejects the same spellings as the hub copy', function () {
-        if (!fs.existsSync(HUB_COPY)) { this.skip(); return; }
+        const hubCheckout = siblingCheckout(__dirname, HUB_COPY);
+        if (!hubCheckout.usable) return skipOrFail(this, hubCheckout, 'the xchain-hub spelling-rejection twin');
         const hub = require(HUB_COPY);
         for (const v of ['0120', '+1', '1.0', '', 'abc', '0', '7', 7, -1, 1e21, 1e20, Infinity]) {
             assert.strictEqual(hub.isCanonicalIntSpelling(v), can.isCanonicalIntSpelling(v),

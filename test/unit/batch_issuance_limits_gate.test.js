@@ -46,6 +46,8 @@ const path   = require('path');
 
 const { createMockIndexer } = require('../fixtures/mocks');
 const ProtocolChanges       = require('../../src/protocol_changes.js');
+// Decides whether the decoder constants may be trusted before the equality cases load them.
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 // The decoder's vendored activation map, the other half of the one-boundary contract.
 // A plain zero-dependency constants file, so it is required straight off disk; skips
@@ -215,10 +217,10 @@ describe('BATCH issuance-limits flag day @regression @tier1', function(){
         // side; this is the indexer half, so a move of BATCH_ISSUANCE_LIMITS made in THIS
         // repo fails in this repo's CI rather than only when decoder CI next runs.
         function decoderCaptureOrSkip(ctx){
-            if (!fs.existsSync(DECODER_CONSTANTS)){
-                if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                    throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but sibling not found: ' + DECODER_CONSTANTS);
-                ctx.skip();
+            // A lane symlink into a live main checkout is refused like an absent decoder.
+            const decoderCheckout = siblingCheckout(__dirname, DECODER_CONSTANTS);
+            if (!decoderCheckout.usable){
+                skipOrFail(ctx, decoderCheckout, 'the decoder capture-instant equality');
                 return null;
             }
             const map = require(DECODER_CONSTANTS).BATCH_SUBCOMMAND_OUTPUT_CAPTURE_ACTIVATION;

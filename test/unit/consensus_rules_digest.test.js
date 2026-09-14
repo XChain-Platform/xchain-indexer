@@ -25,6 +25,8 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 const crd    = require('../../src/consensus_rules_digest.js');
+// Decides whether the hub twin path may be trusted before the digest compare reads it.
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 const HUB_COPY = path.resolve(__dirname, '../../../xchain-hub/src/consensus_rules_digest.js');
 
@@ -42,12 +44,9 @@ describe('consensus_rules_digest (indexer copy)', function () {
     // the indexer share no source file, so armed_map_fingerprint can never match
     // between them, while this must.
     it('is identical to the hub copy gate for gate', function () {
-        if (!fs.existsSync(HUB_COPY)) {
-            if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                assert.fail('xchain-hub sibling checkout missing: ' + HUB_COPY);
-            this.skip();
-            return;
-        }
+        // Refuses an absent hub and a lane symlink into a live main checkout alike.
+        const hubCheckout = siblingCheckout(__dirname, HUB_COPY);
+        if (!hubCheckout.usable) return skipOrFail(this, hubCheckout, 'the xchain-hub consensus_rules_digest twin');
         const hub = require(HUB_COPY);
         const mine = crd.computeConsensusRulesDigest();
         const theirs = hub.computeConsensusRulesDigest();

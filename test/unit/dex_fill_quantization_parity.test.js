@@ -26,6 +26,8 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 const Utility = require('../../src/utility.js');
+// Decides whether the hub fixture path may be trusted before the byte compare reads it.
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 const FIXTURE = path.join(__dirname, '../fixtures/dex-fill-quantization-vectors.json');
 const vectors = JSON.parse(fs.readFileSync(FIXTURE, 'utf8'));
@@ -106,12 +108,10 @@ describe('DEX fill quantization parity, indexer half (#3145/#3146) @regression @
             // Absent sibling skips a bare clone, but FAILS a run that declared the sibling
             // supplied (XCHAIN_REQUIRE_SIBLINGS=1): there an absent hub is a broken checkout,
             // and skipping would let the two vendored copies drift apart green.
-            if (!fs.existsSync(sibling)) {
-                if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                    throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but the xchain-hub vector copy is '
-                        + 'absent at ' + sibling);
-                return this.skip();
-            }
+            // A lane symlink into a live main checkout is refused the same way: its
+            // uncommitted bytes are not a copy any commit holds.
+            const hubCheckout = siblingCheckout(__dirname, sibling);
+            if (!hubCheckout.usable) return skipOrFail(this, hubCheckout, 'the xchain-hub vector copy comparison');
             assert.strictEqual(fs.readFileSync(FIXTURE, 'utf8'), fs.readFileSync(sibling, 'utf8'),
                 'the two vendored copies drifted; a fill-quantization vector must never ' +
                 'differ between the two repos that implement it');

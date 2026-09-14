@@ -35,6 +35,7 @@ const assert  = require('assert');
 const ed25519 = require('../../src/consensus/ed25519.js');
 const eq      = require('../../src/equivocation_header.js');
 const adm     = require('../../src/mirror_admission_activation.js');
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 const NETWORK = 'regtest';
 const ANCHOR = 912345;   // equals the last round's own anchor, per the wire format
@@ -96,6 +97,12 @@ function hubTwins() {
 }
 
 function loadHubTwins(ctx) {
+    // Judge both hub twins before requiring them, so a lane symlink into a live main
+    // checkout skips (or fails naming why) instead of comparing against unpinned bytes.
+    for (const rel of ['../../../xchain-hub/src/oracle/consensus.js', '../../../xchain-hub/src/oracle/price_aggregator.js']) {
+        const verdict = siblingCheckout(__dirname, rel);
+        if (!verdict.usable) { skipOrFail(ctx, verdict, 'PRICE v0 canonical parity'); return null; }
+    }
     try { return hubTwins(); }
     catch (e) {
         if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
@@ -222,6 +229,11 @@ describe('PRICE v0 canonical: three-way twin parity', function () {
         let armed = null;
 
         before(function () {
+            // Every module is judged before the purge, for the same reason as loadHubTwins.
+            for (const m of MODS) {
+                const verdict = siblingCheckout(__dirname, m);
+                if (!verdict.usable) return skipOrFail(this, verdict, 'the PRICE v0 admission-era twin parity');
+            }
             let paths;
             try { paths = MODS.map(m => require.resolve(m)); }
             catch (e) {

@@ -45,13 +45,19 @@ const DOCS_DIR  = process.env.XCHAIN_DOCS_DIR || path.join(__dirname, '..', '..'
 const CANON_DIR = path.join(DOCS_DIR, 'protocol', 'reference-impl');
 const VEC_DIR   = path.join(DOCS_DIR, 'protocol', 'test-vectors');
 
+// Presence is the shared sibling verdict, computed before anything is loaded, so a
+// lane symlink into a live main checkout is refused like an absent documentation repo.
+const { siblingCheckout } = require('../helpers/sibling_checkout.js');
+const VEC_CHECKOUT   = siblingCheckout(__dirname, VEC_DIR);
+const CANON_CHECKOUT = siblingCheckout(__dirname, CANON_DIR);
+
 let quorumVec = null, equivVec = null;
-try {
+if(VEC_CHECKOUT.usable) try {
     quorumVec = require(path.join(VEC_DIR, 'stake_weighted_quorum.json'));
     equivVec  = require(path.join(VEC_DIR, 'equivocation_header.json'));
 } catch(e){ /* sibling xchain-documentation absent */ }
 
-const CANON_PRESENT = fs.existsSync(CANON_DIR);
+const CANON_PRESENT = CANON_CHECKOUT.usable;
 
 // Every copy now shares ONE signature: meetsStakeThreshold(validators, signers),
 // and every copy exports totalStake(). No per-repo adapter remains.
@@ -66,7 +72,7 @@ function vecValidators(c){
 function meets(c){ return swq.meetsStakeThreshold(vecValidators(c), c.signers); }
 
 describe('consensus-primitive conformance: canonical vectors @regression', function(){
-    before(function(){ if(!quorumVec || !equivVec){ if(process.env.XCHAIN_REQUIRE_SIBLINGS==='1') throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but consensus test-vectors not found (sibling xchain-documentation missing)'); this.skip(); } });
+    before(function(){ if(!quorumVec || !equivVec){ if(process.env.XCHAIN_REQUIRE_SIBLINGS==='1') throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but consensus test-vectors not found (' + (VEC_CHECKOUT.reason || 'sibling xchain-documentation missing') + ')'); this.skip(); } });
 
     describe('stake_weighted_quorum.meetsStakeThreshold', function(){
         (quorumVec ? quorumVec.meetsStakeThreshold : []).forEach(function(c){
@@ -106,7 +112,7 @@ describe('consensus-primitive conformance: canonical vectors @regression', funct
 });
 
 describe('consensus-primitive conformance: byte-identity to canonical source @regression', function(){
-    before(function(){ if(!CANON_PRESENT){ if(process.env.XCHAIN_REQUIRE_SIBLINGS==='1') throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but canonical reference-impl dir not found at ' + CANON_DIR); this.skip(); } });
+    before(function(){ if(!CANON_PRESENT){ if(process.env.XCHAIN_REQUIRE_SIBLINGS==='1') throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but canonical reference-impl dir not usable at ' + CANON_DIR + ': ' + CANON_CHECKOUT.reason); this.skip(); } });
 
     ['stake_weighted_quorum.js', 'equivocation_header.js', 'snapshot_reorg_buffer.js'].forEach(function(f){
         it(f + ' is byte-identical to xchain-documentation/protocol/reference-impl', function(){

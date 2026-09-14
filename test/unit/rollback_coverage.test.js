@@ -48,6 +48,8 @@ const sinon  = require('sinon');
 const { createMockIndexer } = require('../fixtures/mocks');
 const Rollback              = require('../../src/rollback.js');
 const lifecycle             = require('../../src/hub/tableLifecycle.js');
+// Decides whether a sync twin path may be trusted before the reciprocal guard reads it.
+const { siblingCheckout }   = require('../helpers/sibling_checkout.js');
 
 // ---------------------------------------------------------------------------
 // The universe: every table the indexer creates, straight from src/sql/.
@@ -280,9 +282,11 @@ describe('Rollback coverage guard @regression', function () {
                                        ['hub/tableLifecycle.js', 'tableLifecycle.js']]){
             it(twin + ' is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)', function(){
                 const syncPath = path.join(SYNC_ROOT, 'src', syncTwin);
-                if(!fs.existsSync(syncPath)){
+                // Refuses an absent sibling and a lane symlink into a live main checkout alike.
+                const syncCheckout = siblingCheckout(__dirname, syncPath);
+                if(!syncCheckout.usable){
                     if(REQUIRE_SIBLINGS)
-                        throw new Error('consensus drift guard cannot run: sibling missing at ' + syncPath +
+                        throw new Error('consensus drift guard cannot run: ' + syncCheckout.reason +
                             ' (check out xchain-sync or set XCHAIN_SYNC_PATH)');
                     this.skip();
                     return;
@@ -304,9 +308,11 @@ describe('Rollback coverage guard @regression', function () {
         // the same SQL on both sides.
         it('the contract slash-restore SQL is identical across xchain-indexer and xchain-sync (cross-repo twin)', function(){
             const syncPath = path.join(SYNC_ROOT, 'src', 'client', 'rollback.js');
-            if(!fs.existsSync(syncPath)){
+            // Refuses an absent sibling and a lane symlink into a live main checkout alike.
+            const syncCheckout = siblingCheckout(__dirname, syncPath);
+            if(!syncCheckout.usable){
                 if(REQUIRE_SIBLINGS)
-                    throw new Error('consensus drift guard cannot run: sibling missing at ' + syncPath +
+                    throw new Error('consensus drift guard cannot run: ' + syncCheckout.reason +
                         ' (check out xchain-sync or set XCHAIN_SYNC_PATH)');
                 this.skip();
                 return;

@@ -45,6 +45,8 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../fixtures/mocks');
 const swq   = require('../../src/stake_weighted_quorum.js');
+const fs    = require('fs');
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 // The regtest producer activation this suite arms, keyed on the ROUND's own BTC anchor.
 const ADMIT_AT  = 799000;
@@ -67,11 +69,18 @@ let armed = null;
 
 function armTwins() {
     const paths = ARMED_MODULES.map(m => require.resolve(m));
+    // A hub twin that is PRESENT but reached through a lane symlink into a live main checkout
+    // is refused, not read; the hub-reading cases skip or fail on it by name. Absence is left
+    // alone: this suite has always failed when the hub twin is missing, and still does.
+    const hubRefusal = HUB_MODULES.map(m => siblingCheckout(__dirname, m))
+        .find(v => !v.usable && fs.existsSync(v.path)) || null;
     let hubPaths = null;
-    try { hubPaths = HUB_MODULES.map(m => require.resolve(m)); }
-    catch (e) {
-        if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-            throw new Error('PRICE admission wire carrier cannot run: xchain-hub sibling missing (' + e.message + ')');
+    if (!hubRefusal) {
+        try { hubPaths = HUB_MODULES.map(m => require.resolve(m)); }
+        catch (e) {
+            if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                throw new Error('PRICE admission wire carrier cannot run: xchain-hub sibling missing (' + e.message + ')');
+        }
     }
     const all      = paths.concat(hubPaths || []);
     const saved    = all.map(p => [p, require.cache[p]]);
@@ -91,7 +100,7 @@ function armTwins() {
         if (savedEnv === undefined) delete process.env.XC_MIRROR_ADMISSION_ACTIVATION;
         else process.env.XC_MIRROR_ADMISSION_ACTIVATION = savedEnv;
     }
-    return { act, ed, Price, hubAgg, restore };
+    return { act, ed, Price, hubAgg, hubRefusal, restore };
 }
 
 // ---------------------------------------------------------------------------
@@ -149,6 +158,7 @@ describe('the admission map rides the on-chain price wire one slot per round (ro
     it('is ARMED for this suite, so neither era case is vacuous', function () {
         assert.strictEqual(armed.act.isMirrorAdmissionProducerActive('BTC', NETWORK, ADMIT_AT), true);
         assert.strictEqual(armed.act.isMirrorAdmissionProducerActive('BTC', NETWORK, LEGACY_AT), false);
+        if (armed.hubRefusal) return skipOrFail(this, armed.hubRefusal, 'the PRICE admission wire carrier hub twin');
         assert.notStrictEqual(armed.hubAgg, null,
             'the hub verifier twin must be resolvable in a monorepo run');
     });
@@ -169,6 +179,7 @@ describe('the admission map rides the on-chain price wire one slot per round (ro
         }
 
         it('decodes the producer\'s field to the producer\'s map, byte for byte both ways', function () {
+            if (armed.hubRefusal) return skipOrFail(this, armed.hubRefusal, 'the hub round canonical round trip');
             const canonical = hubCanonical(ADMIT_AT, MAP);
             const field     = canonical.slice(canonical.lastIndexOf('|') + 1);
             assert.strictEqual(field, FIELD, 'the hub did not append the canonical field');
@@ -187,6 +198,7 @@ describe('the admission map rides the on-chain price wire one slot per round (ro
         });
 
         it('below the activation the bytes are the pre-change bytes exactly', function () {
+            if (armed.hubRefusal) return skipOrFail(this, armed.hubRefusal, 'the hub legacy round canonical');
             const canonical = hubCanonical(LEGACY_AT, undefined);
             assert.strictEqual(canonical.endsWith('}'), true, canonical.slice(-40));
             assert.strictEqual(/BTC:/.test(canonical), false);
@@ -280,6 +292,7 @@ describe('the admission map rides the on-chain price wire one slot per round (ro
 
         it('the hub verifier rebuilds the SAME bytes from the pushed rounds, across the repo boundary', function () {
             const b   = validBatch(ADMIT_AT, MAPS);
+            if (armed.hubRefusal) return skipOrFail(this, armed.hubRefusal, 'the hub verifier batch rebuild');
             const agg = new armed.hubAgg({ db: null, network: NETWORK, getPeerManager: () => ({}) });
             // The hub's ingest shape: snake-cased rounds with admit_blocks, as the push carries them.
             const pushed = b.rounds.map(r => ({ round: r.round, timestamp: r.timestamp,

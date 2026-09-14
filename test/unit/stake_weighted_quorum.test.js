@@ -31,6 +31,8 @@
 
 const assert  = require('assert');
 const swq     = require('../../src/stake_weighted_quorum.js');
+// Decides whether each sibling path may be trusted before a cross-repo guard requires it.
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 // Loads BTC/regtest config into the env so `new Utility()` can resolve its COIN
 // config (same fixture the db unit tests use).
@@ -150,6 +152,10 @@ describe('stake_weighted_quorum (indexer)', function () {
             // checkout but NOT in standalone single-repo CI, where this skips. The
             // authoritative cross-repo byte-identity is enforced by the dedicated
             // consensus-primitive conformance gate, so the skip is not a false green.
+            // Judged before the require: a lane symlink into a live main checkout would
+            // load uncommitted constants and pass against them.
+            const docs = siblingCheckout(__dirname, '../../../xchain-documentation/protocol/constants.js');
+            if (!docs.usable) return skipOrFail(this, docs, 'the canonical constants.js stake-weighted activation parity');
             let canonical;
             try { canonical = require('../../../xchain-documentation/protocol/constants.js').STAKE_WEIGHTED_QUORUM_ACTIVATION; }
             catch (e) { return this.skip(); }
@@ -193,7 +199,10 @@ describe('stake_weighted_quorum (indexer)', function () {
         // Sibling-relative: present in the monorepo/aggregator checkout, absent in
         // standalone single-repo CI (the dependent test then skips).
         let hubSwq;
-        try { hubSwq = require('../../../xchain-hub/src/stake_weighted_quorum.js'); } catch (e) { hubSwq = null; }
+        // Judged before the require, so a lane symlink into a live main checkout is
+        // never loaded as the hub engine.
+        const hubCheckout = siblingCheckout(__dirname, '../../../xchain-hub/src/stake_weighted_quorum.js');
+        try { hubSwq = hubCheckout.usable ? require('../../../xchain-hub/src/stake_weighted_quorum.js') : null; } catch (e) { hubSwq = null; }
 
         // Deterministic PRNG (mulberry32): fixed seed, reproducible fixtures.
         function rng(seed) {
@@ -221,6 +230,7 @@ describe('stake_weighted_quorum (indexer)', function () {
         }
 
         it('hub and indexer predicates agree on 500 seeded random snapshots', function () {
+            if (!hubCheckout.usable) return skipOrFail(this, hubCheckout, 'the hub/indexer seeded snapshot agreement');
             if (!hubSwq) return this.skip();
             const rand = rng(0x5EED1);
             for (let i = 0; i < 500; i++) {
@@ -237,7 +247,9 @@ describe('stake_weighted_quorum (indexer)', function () {
     describe('delegation source-dedup invariant (§3.7, R-2)', function () {
         // Sibling-relative; absent in standalone single-repo CI (dependent test skips).
         let hubSwq;
-        try { hubSwq = require('../../../xchain-hub/src/stake_weighted_quorum.js'); } catch (e) { hubSwq = null; }
+        // Judged before the require, as in the determinism block above.
+        const hubCheckout = siblingCheckout(__dirname, '../../../xchain-hub/src/stake_weighted_quorum.js');
+        try { hubSwq = hubCheckout.usable ? require('../../../xchain-hub/src/stake_weighted_quorum.js') : null; } catch (e) { hubSwq = null; }
 
         function rng(seed) {
             return function () {
@@ -249,6 +261,7 @@ describe('stake_weighted_quorum (indexer)', function () {
         }
 
         it('S = Σ weight over DISTINCT sources, independent of delegated key count', function () {
+            if (!hubCheckout.usable) return skipOrFail(this, hubCheckout, 'the hub/indexer source-dedup agreement');
             if (!hubSwq) return this.skip();
             const rand = rng(0xD3F);
             for (let i = 0; i < 200; i++) {

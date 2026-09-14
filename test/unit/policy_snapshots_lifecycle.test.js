@@ -43,6 +43,8 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
+// Decides whether a registry copy may be trusted before it is require()d.
+const { siblingCheckout } = require('../helpers/sibling_checkout.js');
 
 const TABLE = 'policy_snapshots';
 
@@ -68,10 +70,13 @@ describe('policy_snapshots rollback classification @regression @tier1', function
         // Each copy is require()d fresh off its own path so a divergent twin is visible
         // here even though both files parse and export the same shape.
         function load(ctx) {
-            if (!fs.existsSync(copy.file)) {
+            // Refuses an absent registry and a lane symlink into a live main checkout alike;
+            // this repo's own copy sits inside the checkout, so only absence refuses it.
+            const verdict = siblingCheckout(__dirname, copy.file);
+            if (!verdict.usable) {
                 if (REQUIRE_SIBLINGS)
-                    throw new Error('policy_snapshots rollback guard cannot run: registry missing at ' +
-                        copy.file + ' (check out xchain-sync or set XCHAIN_SYNC_PATH)');
+                    throw new Error('policy_snapshots rollback guard cannot run: ' + verdict.reason +
+                        ' (check out xchain-sync or set XCHAIN_SYNC_PATH)');
                 ctx.skip();
                 return null;
             }

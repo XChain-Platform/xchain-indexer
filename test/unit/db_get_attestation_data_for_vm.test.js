@@ -32,15 +32,22 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../fixtures/config');
 const Utility           = require('../../src/utility');
 const Database          = require('../../src/db');
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 // Two spellings, post-rename first. The VM's layout pass renamed
 // src/readonly-accessors.js to src/readonly_accessors.js and left NOTHING at the
 // old spelling, so a single post-rename spelling makes this whole suite file
 // crash on load against a VM sibling that has not landed the rename yet.
-const { buildAttestationAccessor } = (() => {
+const { buildAttestationAccessor, accessorRefusal } = (() => {
+    let refusal = null;
     for (const spelling of ['../../../xchain-vm/src/readonly_accessors.js',
                             '../../../xchain-vm/src/readonly-accessors.js']) {
-        if (fs.existsSync(path.join(__dirname, spelling))) return require(spelling);
+        const verdict = siblingCheckout(__dirname, spelling);
+        if (verdict.usable) return require(spelling);
+        if (fs.existsSync(path.join(__dirname, spelling))) refusal = verdict;
     }
+    // Present but refused (a lane symlink into a live main checkout): load nothing and
+    // let the one case that calls the accessor skip or fail naming the reason.
+    if (refusal) return { buildAttestationAccessor: null, accessorRefusal: refusal };
     // A sibling that carries neither spelling is a broken VM checkout, not an
     // absent one, so say which spellings were tried rather than dying on ENOENT.
     throw new Error('xchain-vm readonly accessors resolve at neither '
@@ -92,6 +99,8 @@ describe('db.getAttestationDataForVM @regression @tier2', function () {
             blockIndex: 500, validatorCount: 2
         });
         // The forked-worker accessor reads it back the way the gateway calls it.
+        if (!buildAttestationAccessor)
+            return skipOrFail(this, accessorRefusal, 'the forked-worker accessor read-back');
         const acc = buildAttestationAccessor(snap);
         assert.strictEqual(acc.getResponse(rid('a')).payload, 'BTC=64000');
         assert.strictEqual(acc.getResponse('unknown'), null);

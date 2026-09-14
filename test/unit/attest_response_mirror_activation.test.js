@@ -13,10 +13,11 @@
 'use strict';
 
 const assert = require('assert');
-const fs     = require('fs');
 const path   = require('path');
 
 const mir = require('../../src/attest_response_mirror_activation.js');
+// Decides whether the hub twin path may be trusted before either guard reads it.
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 describe('attest_response_mirror_activation', function () {
 
@@ -66,12 +67,9 @@ describe('attest_response_mirror_activation: hub/indexer twin', function () {
     // Skips green when the sibling checkout is absent, matching the house convention in
     // activation_constants_parity.test.js; CI sets XCHAIN_REQUIRE_SIBLINGS=1 to make it hard.
     it('holds the same activation heights as the hub copy', function () {
-        if (!fs.existsSync(HUB_COPY)) {
-            if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                assert.fail('xchain-hub sibling checkout missing: ' + HUB_COPY);
-            this.skip();
-            return;
-        }
+        // Refuses an absent hub and a lane symlink into a live main checkout alike.
+        const hubCheckout = siblingCheckout(__dirname, HUB_COPY);
+        if (!hubCheckout.usable) return skipOrFail(this, hubCheckout, 'the xchain-hub mirror activation height twin');
         const hub = require(HUB_COPY);
         assert.deepStrictEqual(hub.ATTEST_RESPONSE_MIRROR_ACTIVATION,
                                mir.ATTEST_RESPONSE_MIRROR_ACTIVATION);
@@ -83,7 +81,8 @@ describe('attest_response_mirror_activation: hub/indexer twin', function () {
     // the indexer picks the canonical to VERIFY from it, so a disagreement is a fork that
     // presents as "every signature is invalid", not as a missing feature.
     it('answers identically to the hub copy across every network and edge height', function () {
-        if (!fs.existsSync(HUB_COPY)) { this.skip(); return; }
+        const hubCheckout = siblingCheckout(__dirname, HUB_COPY);
+        if (!hubCheckout.usable) return skipOrFail(this, hubCheckout, 'the xchain-hub mirror activation decision twin');
         const hub = require(HUB_COPY);
         for (const net of ['mainnet', 'testnet', 'regtest', 'nosuchnet']) {
             for (const b of [0, 1, 150779, 150780, 150781, 999999999, NaN, null, undefined, 'nonsense']) {

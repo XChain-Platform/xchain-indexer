@@ -42,6 +42,12 @@ process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const Utility = require('../../../src/utility.js');
+// Decides whether an sdk spelling may be trusted before this guard requires it.
+const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
+
+// The verdict for an sdk spelling that EXISTS but was refused (a lane symlink into
+// a live main checkout). Absence still throws below; a refusal skips or fails per case.
+let sdkRefusal = null;
 
 // Resolve the sdk checkout: explicit XCHAIN_SDK_PATH (CI) first, then the
 // sibling monorepo layout (local dev).
@@ -57,9 +63,13 @@ function resolveSdkUtilityPath() {
     for (const root of candidates) {
         for (const parts of [['src', 'utils', 'utility.js'], ['src', 'utility.js']]) {
             const p = path.join(root, ...parts);
-            if (fs.existsSync(p)) return p;
+            const v = siblingCheckout(__dirname, p);
+            if (v.usable) return p;
+            if (fs.existsSync(p) && !sdkRefusal) sdkRefusal = v;
         }
     }
+    // Present but untrusted is not "not found": the cases report the refusal instead.
+    if (sdkRefusal) return null;
     throw new Error(
         'xchain-sdk checkout not found (tried XCHAIN_SDK_PATH and the sibling ' +
         'monorepo layout). This parity suite is a consensus drift guard and must ' +
@@ -70,8 +80,9 @@ describe('15 – SDK<->indexer fee-fragment parity @regression @tier1', function
 
     describe('isValidAmountFormat() fractional-cap parity', function () {
         const util = new Utility();
-        const SdkUtility = require(resolveSdkUtilityPath());
-        const sdkUtil = new SdkUtility();
+        const sdkPath = resolveSdkUtilityPath();
+        const SdkUtility = sdkPath ? require(sdkPath) : null;
+        const sdkUtil = SdkUtility ? new SdkUtility() : null;
         const cases = [
             [0, '100', true], [0, '1.5', false],
             [8, '1.00000001', true], [8, '1.000000001', false],
@@ -83,6 +94,7 @@ describe('15 – SDK<->indexer fee-fragment parity @regression @tier1', function
         ];
         cases.forEach(function ([decimals, amount, expected]) {
             it(`decimals=${decimals} amount=${amount} -> ${expected} (both)`, function () {
+                if (!sdkUtil) return skipOrFail(this, sdkRefusal, 'the SDK fee-fragment parity guard');
                 assert.strictEqual(util.isValidAmountFormat(decimals, amount), expected, 'indexer');
                 assert.strictEqual(sdkUtil.isValidAmountFormat(decimals, amount), expected, 'sdk');
             });

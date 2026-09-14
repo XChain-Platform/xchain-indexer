@@ -72,6 +72,12 @@ describe('dispenser Mode B oracle-price activation predicate @regression @tier1'
         // correct rather than an oversight. Pin it so a future reader does not "fix" it.
         const fs   = require('fs');
         const path = require('path');
+        const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
+        // An absence claim is only as good as the checkout it looks in: a refused sync
+        // root (absent, or a lane symlink into a live main checkout) proves nothing.
+        const syncRoot = siblingCheckout(__dirname, '../../../xchain-sync');
+        if (!syncRoot.usable)
+            return skipOrFail(this, syncRoot, 'the indexer-only sync twin absence pin');
         const twin = path.resolve(
             __dirname, '../../../xchain-sync/src/dispenser_oracle_price_activation.js');
         assert.strictEqual(fs.existsSync(twin), false,

@@ -38,6 +38,8 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
+// Decides whether each carrier path may be trusted before its bytes are hashed.
+const { siblingCheckout, skipOrFail, siblingsRequired } = require('../helpers/sibling_checkout.js');
 
 // Each carrier names its OWN src-relative path, because the feature directories are
 // an xchain-indexer layout: the canonical sits under consensus/ here while the three
@@ -64,15 +66,29 @@ describe('src/consensus/merkle.js is byte-identical across its four carriers', f
     it('every carrier present on disk has the same bytes', function () {
         const root = path.resolve(__dirname, '..', '..', '..');
         const found = [];
+        // A carrier counts only when its checkout may be trusted. One that exists but is
+        // refused (a lane symlink into a live main checkout) is kept aside with its
+        // verdict, so the skip or the strict failure can name why it dropped out.
+        const refused = [];
         for (const [repo, rel] of CARRIERS) {
             const p = path.join(root, repo, 'src', rel);
-            if (fs.existsSync(p)) found.push([repo + '/src/' + rel, sha256File(p)]);
+            const verdict = siblingCheckout(__dirname, p);
+            if (verdict.usable) found.push([repo + '/src/' + rel, sha256File(p)]);
+            else if (fs.existsSync(p)) refused.push([repo, verdict]);
         }
+        // A canonical that is on disk but refused has not moved, so it takes the refusal
+        // path instead of the repoint message below.
+        const canonRefused = refused.find(([repo]) => repo === 'xchain-indexer');
+        if (canonRefused) return skipOrFail(this, canonRefused[1], 'the merkle.js canonical pin');
         // This repo's own copy is never optional: it is the canonical the others are
         // vendored from, so a path that stopped resolving here has to fail rather than
         // leave the siblings comparing against each other.
         assert.ok(found.some(([label]) => label.startsWith('xchain-indexer/')),
             'the canonical copy did not resolve; repoint CARRIERS at its current path');
+        // Under XCHAIN_REQUIRE_SIBLINGS=1 a refused carrier fails naming its reason; in soft
+        // mode the usable carriers are still compared among themselves.
+        if (refused.length && siblingsRequired())
+            return skipOrFail(this, refused[0][1], 'the merkle.js carrier byte comparison');
         // Fewer than two carriers means the siblings are not checked out next to
         // this repo; the pin above still runs, so a standalone CI lane is not
         // silently toothless, it just cannot compare.

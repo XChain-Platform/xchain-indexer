@@ -44,6 +44,8 @@ const sinon  = require('sinon');
 
 const { createMockIndexer } = require('../fixtures/mocks');
 const Rollback              = require('../../src/rollback.js');
+// Decides whether the xchain-sync replica may be trusted before the drift guard reads it.
+const { siblingCheckout } = require('../helpers/sibling_checkout.js');
 
 const ORPHAN_FROM = 50;   // first action_index in the orphaned range
 const REORG_BLOCK = 100;
@@ -108,10 +110,12 @@ describe('bridge_transfers reorg pre-delete @regression @tier1', function () {
             ? path.resolve(process.env.XCHAIN_SYNC_PATH)
             : path.resolve(__dirname, '..', '..', '..', 'xchain-sync');
         const syncFile = path.join(syncRoot, 'src', 'client', 'rollback.js');
-        if (!fs.existsSync(syncFile)) {
+        // A lane symlink into a live main checkout is refused like an absent replica.
+        const syncCheckout = siblingCheckout(__dirname, syncFile);
+        if (!syncCheckout.usable) {
             if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                throw new Error('cross-chain mirror drift guard cannot run: sibling missing at ' +
-                    syncFile + ' (check out xchain-sync or set XCHAIN_SYNC_PATH)');
+                throw new Error('cross-chain mirror drift guard cannot run: ' +
+                    syncCheckout.reason + ' (check out xchain-sync or set XCHAIN_SYNC_PATH)');
             this.skip();
             return;
         }

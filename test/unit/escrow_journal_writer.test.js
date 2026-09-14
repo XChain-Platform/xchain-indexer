@@ -34,6 +34,7 @@
 const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 const M = require('../../src/consensus/merkle.js');
 const W = require('../../src/consensus/escrowJournalWriter.js');
@@ -618,6 +619,11 @@ describe('escrow journal writer: block-path wiring @regression', function(){
     });
 
     it('the FOLLOWER never writes the journal (it replicates)', function(){
+        // An absent follower still fails on the read below, as it always has. A present one
+        // reached through a lane symlink into a live main checkout is refused instead of read.
+        const followerVerdict = siblingCheckout(__dirname, '../../../xchain-sync/src/stateCommitment.js');
+        if (!followerVerdict.usable && fs.existsSync(followerVerdict.path))
+            return skipOrFail(this, followerVerdict, 'the follower never-writes-the-journal pin');
         const follower = fs.readFileSync(
             path.resolve(__dirname, '../../../xchain-sync/src/stateCommitment.js'), 'utf8');
         assert.ok(!/writeEscrowJournal/.test(follower),

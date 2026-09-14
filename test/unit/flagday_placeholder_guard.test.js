@@ -59,6 +59,7 @@
 const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 const SRC = path.join(__dirname, '..', '..', 'src');
 
@@ -235,11 +236,9 @@ describe('flag-day placeholder guard @regression @tier1', function () {
         for (const rel of SIBLING_FILES) {
             it(rel.replace(/^(\.\.\/)+/, '') + ' has no 983000 placeholder and pins the derived height', function () {
                 const p = path.resolve(__dirname, rel);
-                if (!fs.existsSync(p)) {
-                    if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                        assert.fail('required sibling missing: ' + p);
-                    return this.skip();
-                }
+                // Absent or a lane symlink into a live main checkout: skip, or fail naming why.
+                const sibling = siblingCheckout(__dirname, p);
+                if (!sibling.usable) return skipOrFail(this, sibling, 'the placeholder sweep of ' + rel);
                 const s = fs.readFileSync(p, 'utf8');
                 assert.ok(!s.includes('983000'),
                     p + ' still carries the retired 983000 placeholder');
@@ -255,11 +254,8 @@ describe('flag-day placeholder guard @regression @tier1', function () {
         // the docs stay silent now trips CI).
         it('xchain-documentation/protocol/constants.js pins RETRACTION_SIGNING_ACTIVATION by named export, value-equal to the vendored copy', function () {
             const p = path.resolve(__dirname, '../../../xchain-documentation/protocol/constants.js');
-            if (!fs.existsSync(p)) {
-                if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                    assert.fail('required sibling missing: ' + p);
-                return this.skip();
-            }
+            const sibling = siblingCheckout(__dirname, p);
+            if (!sibling.usable) return skipOrFail(this, sibling, 'the RETRACTION_SIGNING_ACTIVATION docs pin');
             const canon = require(p);
             assert.ok(canon.RETRACTION_SIGNING_ACTIVATION && typeof canon.RETRACTION_SIGNING_ACTIVATION === 'object',
                 'constants.js must export a RETRACTION_SIGNING_ACTIVATION map (the canonical authority for the three vendored copies)');
@@ -277,11 +273,8 @@ describe('flag-day placeholder guard @regression @tier1', function () {
         // copy: a re-anchor that moves one side and not the other now trips CI.
         it('xchain-documentation/protocol/constants.js pins PRICE_SIG_TALLY_ACTIVATION by named export, value-equal to the local copy', function () {
             const p = path.resolve(__dirname, '../../../xchain-documentation/protocol/constants.js');
-            if (!fs.existsSync(p)) {
-                if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                    assert.fail('required sibling missing: ' + p);
-                return this.skip();
-            }
+            const sibling = siblingCheckout(__dirname, p);
+            if (!sibling.usable) return skipOrFail(this, sibling, 'the PRICE_SIG_TALLY_ACTIVATION docs pin');
             const canon = require(p);
             assert.ok(canon.PRICE_SIG_TALLY_ACTIVATION && typeof canon.PRICE_SIG_TALLY_ACTIVATION === 'object',
                 'constants.js must export a PRICE_SIG_TALLY_ACTIVATION map (the canonical authority for the indexer + hub copies)');
@@ -295,11 +288,8 @@ describe('flag-day placeholder guard @regression @tier1', function () {
         // same reasoning again for the remaining two cohort members.
         it('xchain-documentation/protocol/constants.js pins ATTEST_RELAY_ACTIVATION and ARCHIVE_REWARD_ACTIVATION by named export', function () {
             const p = path.resolve(__dirname, '../../../xchain-documentation/protocol/constants.js');
-            if (!fs.existsSync(p)) {
-                if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                    assert.fail('required sibling missing: ' + p);
-                return this.skip();
-            }
+            const sibling = siblingCheckout(__dirname, p);
+            if (!sibling.usable) return skipOrFail(this, sibling, 'the ATTEST_RELAY and ARCHIVE_REWARD docs pins');
             const canon = require(p);
             for (const [mapName, file] of [
                 ['ATTEST_RELAY_ACTIVATION',   'attest_relay_activation.js'],
@@ -322,11 +312,8 @@ describe('flag-day placeholder guard @regression @tier1', function () {
         // this tree could previously fail when a re-pin passed it by.
         it('xchain-hub/src/validators/governance.js declares GOV_SNAPSHOT_ACTIVATION at the cohort height', function () {
             const p = path.resolve(__dirname, '../../../xchain-hub/src/validators/governance.js');
-            if (!fs.existsSync(p)) {
-                if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                    assert.fail('required sibling missing: ' + p);
-                return this.skip();
-            }
+            const sibling = siblingCheckout(__dirname, p);
+            if (!sibling.usable) return skipOrFail(this, sibling, 'the GOV_SNAPSHOT_ACTIVATION hub pin');
             const m = fs.readFileSync(p, 'utf8')
                 .match(/const\s+GOV_SNAPSHOT_ACTIVATION\s*=\s*\{\s*mainnet:\s*(\d+)\s*,\s*testnet:\s*(\d+)\s*,\s*regtest:\s*(\d+)\s*\}/);
             assert.ok(m, 'GOV_SNAPSHOT_ACTIVATION declaration not found in validators/governance.js (renamed or reshaped?)');
@@ -356,11 +343,8 @@ describe('flag-day placeholder guard @regression @tier1', function () {
         for (const rel of SIBLING_TWINS) {
             it(rel.replace(/^(\.\.\/)+/, '') + ' is byte-identical to the indexer copy', function () {
                 const p = path.resolve(__dirname, rel);
-                if (!fs.existsSync(p)) {
-                    if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                        assert.fail('required sibling missing: ' + p);
-                    return this.skip();
-                }
+                const verdict = siblingCheckout(__dirname, p);
+                if (!verdict.usable) return skipOrFail(this, verdict, 'the retraction twin byte identity of ' + rel);
                 const local   = fs.readFileSync(LOCAL, 'utf8');
                 const sibling = fs.readFileSync(p, 'utf8');
                 assert.strictEqual(sibling, local,

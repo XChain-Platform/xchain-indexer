@@ -37,6 +37,8 @@ const path   = require('path');
 const zlib   = require('zlib');
 
 const c = require('../../src/actions/price/price_batch_compression.js');
+// Decides whether a hub sibling path may be trusted before the guards below read it.
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -148,12 +150,9 @@ describe('price_batch_compression: consensus constants @regression', function(){
         const hubDir = process.env.XCHAIN_HUB_DIR ||
             path.join(__dirname, '..', '..', '..', 'xchain-hub');
         const pub = path.join(hubDir, 'src', 'oracle', 'publisher.js');
-        if(!fs.existsSync(pub)){
-            if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but the hub sibling was not found at ' + pub);
-            this.skip();
-            return;
-        }
+        // Refuses an absent hub and a lane symlink into a live main checkout alike.
+        const hubCheckout = siblingCheckout(__dirname, pub);
+        if(!hubCheckout.usable) return skipOrFail(this, hubCheckout, 'the PRICE_WIRE_MAX_BYTES hub declaration check');
         const m = /const\s+PRICE_WIRE_MAX_BYTES\s*=\s*(\d+)\s*;/.exec(fs.readFileSync(pub, 'utf8'));
         assert.ok(m, 'PRICE_WIRE_MAX_BYTES declaration not found in ' + pub);
         assert.strictEqual(parseInt(m[1], 10), c.PRICE_WIRE_MAX_BYTES,
@@ -521,12 +520,9 @@ describe('price_batch_compression: vendored-twin byte identity @regression', fun
 
     it('xchain-hub/src/price_batch_compression.js is byte-identical to this repo\'s copy', function(){
         const twin = path.join(HUB_DIR, 'src', 'price_batch_compression.js');
-        if(!fs.existsSync(twin)){
-            if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-                throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but the twin is missing: ' + twin);
-            this.skip();
-            return;
-        }
+        // Refuses an absent twin and a lane symlink into a live main checkout alike.
+        const twinCheckout = siblingCheckout(__dirname, twin);
+        if(!twinCheckout.usable) return skipOrFail(this, twinCheckout, 'the price_batch_compression.js hub twin byte identity');
         const local = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'actions', 'price', 'price_batch_compression.js'), 'utf8');
         assert.strictEqual(local, fs.readFileSync(twin, 'utf8'),
             'price_batch_compression.js has drifted between xchain-indexer and xchain-hub; the two would ' +

@@ -40,6 +40,7 @@ const swq = require('../../src/stake_weighted_quorum.js');
 const { createMockIndexer, createBaseData } = require('../fixtures/mocks');
 const Attest         = require('../../src/actions/attest/index.js');
 const AnchorRecovery = require('../../bin/recovery.js');
+const { siblingCheckout } = require('../helpers/sibling_checkout.js');
 
 const HUB_DIR = path.resolve(__dirname, '../../../xchain-hub');
 const SDK_DIR = path.resolve(__dirname, '../../../xchain-sdk');
@@ -48,14 +49,18 @@ const SDK_DIR = path.resolve(__dirname, '../../../xchain-sdk');
 // a module the SDK layout pass moved resolves whichever side of the move the
 // sibling checkout sits on. Absence still throws under XCHAIN_REQUIRE_SIBLINGS=1,
 // naming every spelling tried rather than only the last.
+// A spelling counts only when the shared helper will trust it, so a lane symlink into a
+// live main checkout reads as unusable here too, and the refusal names the last reason.
 function requireSibling(dir, ...rels){
+    let verdict = null;
     for(const rel of rels){
         const p = path.join(dir, rel);
-        if(fs.existsSync(p)) return require(p);
+        verdict = siblingCheckout(__dirname, p);
+        if(verdict.usable) return require(p);
     }
     if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
         throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but sibling module not found at '
-            + rels.map(r => path.join(dir, r)).join(' or '));
+            + rels.map(r => path.join(dir, r)).join(' or ') + ' (' + verdict.reason + ')');
     return null;
 }
 

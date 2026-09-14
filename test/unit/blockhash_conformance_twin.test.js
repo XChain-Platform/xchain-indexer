@@ -61,10 +61,14 @@ const SYNC_ROOT    = process.env.XCHAIN_SYNC_PATH
     ? path.resolve(process.env.XCHAIN_SYNC_PATH)
     : path.resolve(__dirname, '..', '..', '..', 'xchain-sync');
 const SIBLING_REQUIRED = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
+// Presence is the shared sibling verdict, so a lane symlink into a live main
+// checkout is refused exactly like an absent sync tree, and the error names why.
+const { siblingCheckout } = require('../helpers/sibling_checkout.js');
 function requireSibling(ctx, absPath){
-    if(fs.existsSync(absPath)) return true;
+    const verdict = siblingCheckout(__dirname, absPath);
+    if(verdict.usable) return true;
     if(SIBLING_REQUIRED)
-        throw new Error('consensus drift guard cannot run: sibling missing at ' + absPath +
+        throw new Error('consensus drift guard cannot run: ' + verdict.reason +
             ' (check out xchain-sync or set XCHAIN_SYNC_PATH)');
     ctx.skip();
     return false;

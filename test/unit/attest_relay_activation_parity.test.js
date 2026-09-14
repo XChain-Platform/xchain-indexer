@@ -32,6 +32,8 @@ const fs     = require('fs');
 const path   = require('path');
 
 const indexer = require('../../src/attest_relay_activation.js');
+// Decides whether the hub twin may be trusted before the parity cases read it.
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 const INDEXER_SRC = path.resolve(__dirname, '..', '..', 'src', 'attest_relay_activation.js');
 const HUB_SRC     = path.resolve(__dirname, '..', '..', '..', 'xchain-hub', 'src', 'attest_relay_activation.js');
@@ -39,12 +41,10 @@ const HUB_SRC     = path.resolve(__dirname, '..', '..', '..', 'xchain-hub', 'src
 // A bare clone skips the twin half; a run that declared the sibling supplied
 // (XCHAIN_REQUIRE_SIBLINGS=1, set by bin/ci-all.sh and the CI sibling jobs) fails it,
 // since there an absent hub means a broken checkout and a skip would ship a drift green.
+// A lane symlink into a live main checkout is refused like an absent hub.
 function hubOrSkip(ctx) {
-    if (fs.existsSync(HUB_SRC)) return true;
-    if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-        throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but the xchain-hub twin is absent at ' + HUB_SRC);
-    ctx.skip();
-    return false;
+    const hubCheckout = siblingCheckout(__dirname, HUB_SRC);
+    return skipOrFail(ctx, hubCheckout, 'the xchain-hub attest_relay_activation twin');
 }
 
 describe('attest_relay_activation twin parity @regression @tier1', function () {

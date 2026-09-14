@@ -52,6 +52,7 @@ const sinon  = require('sinon');
 
 const eq = require('../../src/equivocation_header.js');
 const { sleep } = require('../helpers/wait.js');
+const { siblingCheckout, siblingsRequired } = require('../helpers/sibling_checkout.js');
 const bridgeSettlementsMixin = require('../../src/db/bridge_settlements.js');
 
 // The settle pass reaches the mirror through the db/bridge_settlements methods, so a
@@ -69,9 +70,12 @@ const ADMIT_AT  = 799000;                       // the realistic arming height
 const LEGACY_AT = ADMIT_AT - 1;
 
 const HUB_SRC  = path.resolve(__dirname, '../../../xchain-hub/src');
-const HAVE_HUB = fs.existsSync(path.join(HUB_SRC, 'cross_chain', 'dex_engine.js'));
-if (!HAVE_HUB && process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
-    throw new Error('admission binding parity cannot run: xchain-hub sibling missing at ' + HUB_SRC);
+// Present is not enough to trust: in a lane worktree the hub entry can be a symlink into a
+// peer's live main checkout, which no commit pins, so the shared helper decides.
+const HUB_VERDICT = siblingCheckout(__dirname, path.join(HUB_SRC, 'cross_chain', 'dex_engine.js'));
+const HAVE_HUB = HUB_VERDICT.usable;
+if (!HAVE_HUB && siblingsRequired())
+    throw new Error('admission binding parity cannot run: xchain-hub sibling at ' + HUB_SRC + ' refused: ' + HUB_VERDICT.reason);
 
 // Every module that captures a function off the activation twin at require time, so an
 // arming has to purge and re-require all of them or the consumer keeps the old arm.
@@ -408,7 +412,8 @@ describe('admission binding: the attest-response canonical twin', function () {
                     const fields = Object.assign({}, BASE, { effectiveTime: 1234, network: NETWORK, requestBlock: arm.modernBlock, admitBlocks: { BTC: arm.modernBlock + 1 } });
                     const got = indexerCanonical(h, fields, arm.modernBlock);
                     assert.ok(got.endsWith('|1234|BTC:' + (arm.modernBlock + 1)), got.slice(-40));
-                    assert.strictEqual(got, hubCanonical(h, arm.modernBlock, 1234, { BTC: arm.modernBlock + 1 }));
+                    // Guarded like its neighbours: with no trusted hub twin only the indexer side runs.
+                    if (h.hub) assert.strictEqual(got, hubCanonical(h, arm.modernBlock, 1234, { BTC: arm.modernBlock + 1 }));
                     // The map read back off a mirrored row's column is the same map.
                     const fromRow = h.act.columnsAdmitBlocks({ admit_block_btc: arm.modernBlock + 1 });
                     assert.strictEqual(indexerCanonical(h, Object.assign({}, fields, { admitBlocks: fromRow }), arm.modernBlock), got);

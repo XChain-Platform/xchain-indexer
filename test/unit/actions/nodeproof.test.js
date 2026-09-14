@@ -18,6 +18,7 @@ const fs     = require('fs');
 const path   = require('path');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
+const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
 const NodeProof = require('../../../src/actions/nodeproof.js');
 // Same cached module NodeProof references; stubbing verify() controls which
@@ -388,6 +389,10 @@ describe('NodeProof (NODEPROOF) @regression @tier3', function () {
         const src = fs.readFileSync(path.join(__dirname, '../../../src/actions/nodeproof.js'), 'utf8');
         assert.match(src, /passList\.slice\(\)\.sort\(\s*\n?\s*\(a, b\) => Buffer\.compare\(/,
             'the indexer verdict canonical must sort PASS with the byte comparator');
+        // The hub producer must be a trusted sibling, never a lane symlink into a live main checkout.
+        const hubVerdict = siblingCheckout(__dirname, '../../../../xchain-hub/src/consensus/full_node_challenge_round.js');
+        if (!hubVerdict.usable)
+            return skipOrFail(this, hubVerdict, 'the cross-repo PASS sort pin on the hub producer');
         let hubSrc;
         try {
             hubSrc = fs.readFileSync(

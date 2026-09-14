@@ -45,6 +45,8 @@ const Price      = require('../../../src/actions/price/index.js');
 const ed25519    = require('../../../src/consensus/ed25519.js');
 const swq        = require('../../../src/stake_weighted_quorum.js');
 const priceRange = require('../../../src/price_zero_validity_activation.js');
+// Decides whether the hub aggregator source may be trusted before the drift alarm reads it.
+const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
 // The hub's admission predicate, transcribed from PriceAggregator's ingest sites
 // (`!(parseFloat(String(p.price)) > 0) || !(parseFloat(String(p.price)) < PRICE_MAX)`
@@ -278,7 +280,9 @@ describe('PRICE price-range flag day @regression @tier3', function () {
             // Drift alarm rather than the oracle: the transcription above is what grades
             // every case, and this re-reads the hub source when a sibling checkout exists.
             const hubSrc = path.join(__dirname, '..', '..', '..', '..', 'xchain-hub', 'src', 'oracle', 'price_aggregator.js');
-            if(!fs.existsSync(hubSrc)) return this.skip();
+            // A lane symlink into a live main checkout is refused like an absent hub.
+            const hubCheckout = siblingCheckout(__dirname, hubSrc);
+            if(!hubCheckout.usable) return skipOrFail(this, hubCheckout, 'the hub price_aggregator drift alarm');
             const text = fs.readFileSync(hubSrc, 'utf8');
             const lower = /!\(parseFloat\(String\(p\.price\)\) > 0\)/g;
             const upper = /!\(parseFloat\(String\(p\.price\)\) < PRICE_MAX\)/g;
