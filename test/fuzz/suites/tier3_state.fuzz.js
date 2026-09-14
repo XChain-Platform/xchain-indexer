@@ -33,7 +33,7 @@ describe('Tier 3 - State transition edge cases @tier3', function () {
     let Send, indexer, actionsCtx, util;
 
     before(function () {
-        Send = require('../../../src/actions/send.js');
+        Send = require('../../../src/actions/send/index.js');
     });
 
     beforeEach(function () {

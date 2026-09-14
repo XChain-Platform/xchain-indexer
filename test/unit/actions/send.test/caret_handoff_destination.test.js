@@ -22,7 +22,7 @@ const sinon  = require('sinon');
 
 const { createMockIndexer } = require('../../../fixtures/mocks');
 
-const Send = require('../../../../src/actions/send.js');
+const Send = require('../../../../src/actions/send/index.js');
 const gatedHandoffRef = require('../../../../src/gated_handoff_ref_activation.js');
 const {
     SOURCE, DESTINATION, DEST2, makeActionsCtx, makeData, makeToken, makeBalances,

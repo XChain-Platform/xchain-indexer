@@ -36,8 +36,8 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
 
-const Issue = require('../../../src/actions/issue.js');
-const Mint  = require('../../../src/actions/mint.js');
+const Issue = require('../../../src/actions/issue/index.js');
+const Mint  = require('../../../src/actions/mint/index.js');
 
 const ProtocolChanges = require('../../../src/protocol_changes.js');
 

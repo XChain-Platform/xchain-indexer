@@ -62,7 +62,7 @@ describe('bin/reachability.js', function () {
 
         it('carries a transitively required module, not just the direct ones', () => {
             assert.strictEqual(report.files['src/db/index.js'].reachableFromIndexerRuntime, true);
-            assert.strictEqual(report.files['src/actions/send.js'].reachableFromIndexerRuntime, true);
+            assert.strictEqual(report.files['src/actions/send/index.js'].reachableFromIndexerRuntime, true);
         });
 
         it('carries the database mixins the install loop requires by computed path', () => {

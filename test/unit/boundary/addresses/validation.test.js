@@ -17,7 +17,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../fixtures/mocks');
-const Send = require('../../../../src/actions/send.js');
+const Send = require('../../../../src/actions/send/index.js');
 
 function makeActionsCtx(indexer) {
     return {

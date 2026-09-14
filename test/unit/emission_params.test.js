@@ -41,14 +41,14 @@ const Execute = require('../../src/actions/execute/index.js');
 // with Execute.getActionHandler()'s map and the buildActionParams() switch.
 // Maps the action name to its handler module.
 const EMITTABLE_HANDLERS = {
-    'SEND':      require('../../src/actions/send.js'),
-    'DESTROY':   require('../../src/actions/destroy.js'),
-    'ISSUE':     require('../../src/actions/issue.js'),
-    'MINT':      require('../../src/actions/mint.js'),
-    'ORDER':     require('../../src/actions/order.js'),
+    'SEND':      require('../../src/actions/send/index.js'),
+    'DESTROY':   require('../../src/actions/destroy/index.js'),
+    'ISSUE':     require('../../src/actions/issue/index.js'),
+    'MINT':      require('../../src/actions/mint/index.js'),
+    'ORDER':     require('../../src/actions/order/index.js'),
     'DISPENSER': require('../../src/actions/dispenser.js'),
-    'DIVIDEND':  require('../../src/actions/dividend.js'),
-    'AIRDROP':   require('../../src/actions/airdrop.js'),
+    'DIVIDEND':  require('../../src/actions/dividend/index.js'),
+    'AIRDROP':   require('../../src/actions/airdrop/index.js'),
     'CALLBACK':  require('../../src/actions/callback.js'),
     'FILE':      require('../../src/actions/file.js'),
     'LIST':      require('../../src/actions/list.js'),

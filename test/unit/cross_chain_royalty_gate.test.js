@@ -23,8 +23,8 @@ const assert = require('assert');
 const sinon  = require('sinon');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../fixtures/mocks');
 
-const Order = require('../../src/actions/order.js');
-const Swap  = require('../../src/actions/swap.js');
+const Order = require('../../src/actions/order/index.js');
+const Swap  = require('../../src/actions/swap/index.js');
 
 const OWNER_ADDR  = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 // Regtest p2pkh: portable to any coin (shared 0x6f prefix). Regtest segwit

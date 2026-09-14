@@ -15,7 +15,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
 
-const Swap = require('../../../src/actions/swap.js');
+const Swap = require('../../../src/actions/swap/index.js');
 
 const VALID_GET_ADDRESS = 'mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp';
 

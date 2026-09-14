@@ -22,9 +22,9 @@ const {
     createMockIndexer, createTokenInfo, makeActionsCtx,
 } = require('../../../setup/harness');
 
-const Send = require('../../../../../src/actions/send.js');
-const Destroy = require('../../../../../src/actions/destroy.js');
-const Issue = require('../../../../../src/actions/issue.js');
+const Send = require('../../../../../src/actions/send/index.js');
+const Destroy = require('../../../../../src/actions/destroy/index.js');
+const Issue = require('../../../../../src/actions/issue/index.js');
 
 // Valid BTC addresses
 const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';

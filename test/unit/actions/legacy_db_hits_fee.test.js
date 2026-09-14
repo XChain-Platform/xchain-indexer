@@ -28,7 +28,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
 
-const Dividend = require('../../../src/actions/dividend.js');
+const Dividend = require('../../../src/actions/dividend/index.js');
 const Callback = require('../../../src/actions/callback.js');
 const Sweep    = require('../../../src/actions/sweep.js');
 

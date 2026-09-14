@@ -36,7 +36,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../fixtures/mocks');
-const Destroy = require('../../src/actions/destroy.js');
+const Destroy = require('../../src/actions/destroy/index.js');
 
 const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 

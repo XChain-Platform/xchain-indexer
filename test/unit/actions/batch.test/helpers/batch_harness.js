@@ -17,7 +17,7 @@
 const sinon = require('sinon');
 const { createMockIndexer } = require('../../../../fixtures/mocks');
 
-const Batch = require('../../../../../src/actions/batch.js');
+const Batch = require('../../../../../src/actions/batch/index.js');
 
 const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 

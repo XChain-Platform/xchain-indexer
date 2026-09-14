@@ -65,7 +65,7 @@ const { getTestConfig } = require('../fixtures/config');
 
 const Utility         = require('../../src/utility.js');
 const Database        = require('../../src/db');
-const Issue           = require('../../src/actions/issue.js');
+const Issue           = require('../../src/actions/issue/index.js');
 const ProtocolChanges = require('../../src/protocol_changes.js');
 
 // The seven token locks, in the order issue.js validates them.

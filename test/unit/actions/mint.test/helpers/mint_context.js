@@ -19,7 +19,7 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../../fixtures/mocks');
 
-const Mint = require('../../../../../src/actions/mint.js');
+const Mint = require('../../../../../src/actions/mint/index.js');
 
 // ---------------------------------------------------------------------------
 // Helpers

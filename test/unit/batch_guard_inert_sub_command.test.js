@@ -37,7 +37,7 @@ const sinon  = require('sinon');
 
 const Utility = require('../../src/utility.js');
 const Actions = require('../../src/actions/index.js');
-const Batch   = require('../../src/actions/batch.js');
+const Batch   = require('../../src/actions/batch/index.js');
 const PreflightMemo = require('../../src/chain/preflight_memo.js');
 const { createMockIndexer, createBaseData } = require('../fixtures/mocks');
 

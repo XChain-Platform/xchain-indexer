@@ -34,7 +34,7 @@ process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const assert  = require('assert');
-const Mint    = require('../../src/actions/mint.js');
+const Mint    = require('../../src/actions/mint/index.js');
 const Utility = require('../../src/utility.js');
 
 const GAS_ADDR = 'mgassdEpzH2AuKGK9W5FZh8drWYKrpXk6D'; // matches configs/BTC.js testnet GAS address shape

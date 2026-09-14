@@ -41,7 +41,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../fixtures/mocks');
-const Issue                = require('../../src/actions/issue.js');
+const Issue                = require('../../src/actions/issue/index.js');
 const tokenBridgeActivation = require('../../src/token_bridge_activation.js');
 const tokenPolicyActivation = require('../../src/token_policy_activation.js');
 

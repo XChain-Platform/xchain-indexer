@@ -17,7 +17,7 @@
 const sinon = require('sinon');
 const { createMockIndexer } = require('../../../../fixtures/mocks');
 
-const Dividend = require('../../../../../src/actions/dividend.js');
+const Dividend = require('../../../../../src/actions/dividend/index.js');
 
 const SOURCE  = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const HOLDER1 = 'mmqFL1hiu2RDuyS69KS9ko6uaMryhANwsz';

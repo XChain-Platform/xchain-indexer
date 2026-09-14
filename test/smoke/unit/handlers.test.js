@@ -18,8 +18,8 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
 const Actions = require('../../../src/actions/index.js');
-const Issue   = require('../../../src/actions/issue.js');
-const Send    = require('../../../src/actions/send.js');
+const Issue   = require('../../../src/actions/issue/index.js');
+const Send    = require('../../../src/actions/send/index.js');
 
 // Build the indexer-like object expected by Actions constructor
 function makeIndexerForActions(indexer) {

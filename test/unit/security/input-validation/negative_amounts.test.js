@@ -19,10 +19,10 @@ const sinon  = require('sinon');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../fixtures/mocks');
 
 // Import action handlers
-const Send  = require('../../../../src/actions/send.js');
-const Mint  = require('../../../../src/actions/mint.js');
-const Issue = require('../../../../src/actions/issue.js');
-const Order = require('../../../../src/actions/order.js');
+const Send  = require('../../../../src/actions/send/index.js');
+const Mint  = require('../../../../src/actions/mint/index.js');
+const Issue = require('../../../../src/actions/issue/index.js');
+const Order = require('../../../../src/actions/order/index.js');
 
 // ---------------------------------------------------------------------------
 // Helpers

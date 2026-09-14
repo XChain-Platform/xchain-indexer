@@ -34,7 +34,7 @@ const sinon  = require('sinon');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
 
 const Utility    = require('../../../src/utility.js');
-const Send       = require('../../../src/actions/send.js');
+const Send       = require('../../../src/actions/send/index.js');
 const activation = require('../../../src/amount_representability_activation.js');
 
 // Any network the activation map does not carry reads as OFF, which is how these tests

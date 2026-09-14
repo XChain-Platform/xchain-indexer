@@ -41,7 +41,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert  = require('assert');
 
-const Batch   = require('../../src/actions/batch.js');
+const Batch   = require('../../src/actions/batch/index.js');
 const Utility = require('../../src/utility.js');
 
 const FEE_DEST = 'bcrt1qfeedestination';

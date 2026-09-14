@@ -178,7 +178,7 @@ describe('db.resolveAddressRefChecked @regression @tier1', function () {
     });
 });
 
-const Mint = require('../../src/actions/mint.js');
+const Mint = require('../../src/actions/mint/index.js');
 
 // Drive Mint.parse with the real utility and a stubbed DB layer (same shape as
 // gas_mint_network_gate.test.js), so this runs with no MariaDB. `strict` switches

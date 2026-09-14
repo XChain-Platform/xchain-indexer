@@ -52,7 +52,7 @@ process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const assert  = require('assert');
-const Mint    = require('../../src/actions/mint.js');
+const Mint    = require('../../src/actions/mint/index.js');
 const Utility = require('../../src/utility.js');
 
 const SRC_ADDR  = 'mzBc4XEFSdzCDcTxAgf6EZXgsZWpztRhef'; // valid regtest p2pkh (verified isCryptoAddress)

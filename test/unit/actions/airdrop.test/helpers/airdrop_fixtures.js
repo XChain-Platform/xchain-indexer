@@ -14,7 +14,7 @@
 
 const sinon = require('sinon');
 const { createMockIndexer } = require('../../../../fixtures/mocks');
-const Airdrop = require('../../../../../src/actions/airdrop.js');
+const Airdrop = require('../../../../../src/actions/airdrop/index.js');
 
 // A fresh mock indexer, action context and AIRDROP handler, rebuilt before
 // every case.

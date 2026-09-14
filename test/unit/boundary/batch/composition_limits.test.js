@@ -17,7 +17,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../fixtures/mocks');
-const Batch = require('../../../../src/actions/batch.js');
+const Batch = require('../../../../src/actions/batch/index.js');
 
 const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const DEST   = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs';

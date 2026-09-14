@@ -15,7 +15,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
 
-const Destroy = require('../../../src/actions/destroy.js');
+const Destroy = require('../../../src/actions/destroy/index.js');
 
 describe('Destroy @regression @tier1', function () {
     let indexer, actionsCtx, handler;

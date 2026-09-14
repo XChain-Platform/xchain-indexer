@@ -28,7 +28,7 @@ const { createMockIndexer, createBaseData } = require('../../../fixtures/mocks')
 const { makeActionsCtx, LOW_BLOCK, SOURCE } = require('./supply_limits.test/helpers/supply_context.js');
 
 // Import action handlers
-const Issue   = require('../../../../src/actions/issue.js');
+const Issue   = require('../../../../src/actions/issue/index.js');
 
 // ---------------------------------------------------------------------------
 // Issue format 0 param builder

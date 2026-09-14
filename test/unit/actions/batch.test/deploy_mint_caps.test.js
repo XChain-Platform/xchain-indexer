@@ -19,7 +19,7 @@ const sinon = require('sinon');
 const { createBaseData } = require('../../../fixtures/mocks');
 const { SOURCE, useBatchHarness } = require('./helpers/batch_harness.js');
 
-const Batch = require('../../../../src/actions/batch.js');
+const Batch = require('../../../../src/actions/batch/index.js');
 
 // The harness under test. useBatchHarness rebuilds it before every test and
 // restores sinon after it; bind copies it into the names the tests read.

@@ -28,7 +28,7 @@
 
 const assert = require('assert');
 
-const Issue   = require('../../src/actions/issue.js');
+const Issue   = require('../../src/actions/issue/index.js');
 const Execute = require('../../src/actions/execute/index.js');
 
 const STUB = { config: {}, decoderDb: null, indexerDb: null, util: null, mapper: null };

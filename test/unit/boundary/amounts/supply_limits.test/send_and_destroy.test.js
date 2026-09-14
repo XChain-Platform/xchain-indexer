@@ -23,8 +23,8 @@ const sinon  = require('sinon');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../../fixtures/mocks');
 const { makeActionsCtx, LOW_BLOCK, SOURCE, DESTINATION } = require('./helpers/supply_context.js');
 
-const Destroy = require('../../../../../src/actions/destroy.js');
-const Send    = require('../../../../../src/actions/send.js');
+const Destroy = require('../../../../../src/actions/destroy/index.js');
+const Send    = require('../../../../../src/actions/send/index.js');
 
 describe('Supply & amount boundary tests @regression @tier1', function () {
     // -----------------------------------------------------------------------

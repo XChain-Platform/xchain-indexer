@@ -31,7 +31,7 @@ const sinon  = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 const { GATE, LOW_BLOCK } = require('./helpers/emission_budget_fixtures.js');
 
-const Issue = require('../../../src/actions/issue.js');
+const Issue = require('../../../src/actions/issue/index.js');
 
 let indexer, actionsCtx, handler, gateOn;
 

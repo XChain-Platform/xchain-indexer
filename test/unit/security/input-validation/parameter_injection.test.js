@@ -18,8 +18,8 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../fixtures/mocks');
 
-const Send  = require('../../../../src/actions/send.js');
-const Issue = require('../../../../src/actions/issue.js');
+const Send  = require('../../../../src/actions/send/index.js');
+const Issue = require('../../../../src/actions/issue/index.js');
 
 // ---------------------------------------------------------------------------
 // Helpers

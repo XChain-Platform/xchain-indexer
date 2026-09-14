@@ -33,8 +33,8 @@ describe('Tier 2 - Token lifecycle (ISSUE + MINT) @tier2', function () {
     let Issue, Mint, indexer, actionsCtx;
 
     before(function () {
-        Issue = require('../../../src/actions/issue.js');
-        Mint = require('../../../src/actions/mint.js');
+        Issue = require('../../../src/actions/issue/index.js');
+        Mint = require('../../../src/actions/mint/index.js');
     });
 
     beforeEach(function () {

@@ -19,7 +19,7 @@ const sinon = require('sinon');
 const { createBaseData } = require('../../../fixtures/mocks');
 const { SOURCE, useBatchHarness } = require('./helpers/batch_harness.js');
 
-const Batch = require('../../../../src/actions/batch.js');
+const Batch = require('../../../../src/actions/batch/index.js');
 
 // The harness under test. useBatchHarness rebuilds it before every test and
 // restores sinon after it; bind copies it into the names the tests read.
@@ -45,8 +45,8 @@ const EXP_PAID   = day(100);
 // one their OWN format strings declare (index 10, 10 and 13 today). A hand-written
 // format string here would let the pre-check and the handlers drift apart in exactly
 // the way reading the format string exists to prevent.
-const Order     = require('../../../../src/actions/order.js');
-const Swap      = require('../../../../src/actions/swap.js');
+const Order     = require('../../../../src/actions/order/index.js');
+const Swap      = require('../../../../src/actions/swap/index.js');
 const Dispenser = require('../../../../src/actions/dispenser.js');
 
 function stubGates(weightsOn) {

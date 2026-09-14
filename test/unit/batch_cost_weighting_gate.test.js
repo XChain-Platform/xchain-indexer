@@ -47,7 +47,7 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../fixtures/mocks');
 const ProtocolChanges       = require('../../src/protocol_changes.js');
-const Batch                 = require('../../src/actions/batch.js');
+const Batch                 = require('../../src/actions/batch/index.js');
 
 const GATE          = 'BATCH_COST_WEIGHTING';
 const LIMITS        = 'BATCH_ISSUANCE_LIMITS';

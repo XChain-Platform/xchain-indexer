@@ -537,17 +537,35 @@ async function rowsAtBlock(q, block) {
 // it asks isEnabled about, and arm-touched modules it requires. Naming the gate
 // from the divergent action's own reader is what makes a red run actionable.
 function gatesReadBy(treeDir, actionType, movedRegistry, armFiles) {
-    const reader = path.join(treeDir, 'src', 'actions', String(actionType).toLowerCase() + '.js');
-    if (!fs.existsSync(reader)) return { reader: null, registry: [], modules: [] };
-    const text = fs.readFileSync(reader, 'utf8');
+    // A handler is either src/actions/<name>.js or, once the file-size work split it,
+    // src/actions/<name>/ with the entry at index.js and the logic in parts beside it.
+    // Every file of it is read: reading index.js alone after a split would name no gate
+    // for a handler whose gate check moved into a part, and answer "reads nothing".
+    const base  = path.join(treeDir, 'src', 'actions', String(actionType).toLowerCase());
+    const files = [];
+    if (fs.existsSync(base) && fs.statSync(base).isDirectory())
+        files.push(...fs.readdirSync(base).filter(f => f.endsWith('.js')).sort().map(f => path.join(base, f)));
+    else if (fs.existsSync(base + '.js')) files.push(base + '.js');
+    if (!files.length) return { reader: null, registry: [], modules: [] };
     const registry = new Set(), modules = new Set();
-    for (const m of text.matchAll(/isEnabled\(\s*['"]([A-Z0-9_]+)['"]/g))
-        if (movedRegistry.has(m[1])) registry.add(m[1]);
-    for (const m of text.matchAll(/require\(\s*['"]\.\.?\/([\w\/.-]+?)(?:\.js)?['"]\s*\)/g)) {
-        const rel = ('src/' + m[1] + '.js').replace('src/../', '');
-        if (armFiles.has(rel)) modules.add(rel);
+    for (const file of files) {
+        const text = fs.readFileSync(file, 'utf8');
+        for (const m of text.matchAll(/isEnabled\(\s*['"]([A-Z0-9_]+)['"]/g))
+            if (movedRegistry.has(m[1])) registry.add(m[1]);
+        // Resolved against the requiring file's own directory rather than assumed one level
+        // under src/, which is the assumption a part file two levels deep would break.
+        for (const m of text.matchAll(/require\(\s*['"](\.[^'"]+)['"]\s*\)/g)) {
+            let target = path.resolve(path.dirname(file), m[1]);
+            if (!/\.js$/.test(target))
+                target = fs.existsSync(target) && fs.statSync(target).isDirectory()
+                    ? path.join(target, 'index.js') : target + '.js';
+            const rel = path.relative(treeDir, target);
+            if (armFiles.has(rel)) modules.add(rel);
+        }
     }
-    return { reader: path.relative(treeDir, reader), registry: Array.from(registry), modules: Array.from(modules) };
+    const reader = files.length === 1 ? path.relative(treeDir, files[0])
+        : path.relative(treeDir, base) + '/';
+    return { reader, registry: Array.from(registry), modules: Array.from(modules) };
 }
 
 // --- sides ------------------------------------------------------------------

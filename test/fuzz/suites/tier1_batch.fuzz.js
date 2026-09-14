@@ -31,7 +31,7 @@ describe('Tier 1 - BATCH handler @tier1', function () {
     let Batch, indexer, actionsCtx, handler;
 
     before(function () {
-        Batch = require('../../../src/actions/batch.js');
+        Batch = require('../../../src/actions/batch/index.js');
     });
 
     beforeEach(function () {

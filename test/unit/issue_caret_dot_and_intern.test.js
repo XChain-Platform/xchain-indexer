@@ -41,7 +41,7 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../fixtures/mocks');
 
-const Issue = require('../../src/actions/issue.js');
+const Issue = require('../../src/actions/issue/index.js');
 
 const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH'; // createBaseData's default SOURCE
 const GATE   = 'BATCH_ISSUANCE_LIMITS';

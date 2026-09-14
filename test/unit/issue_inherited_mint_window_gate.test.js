@@ -26,7 +26,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../fixtures/mocks');
-const Issue = require('../../src/actions/issue.js');
+const Issue = require('../../src/actions/issue/index.js');
 const {
     ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME,
     ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME,

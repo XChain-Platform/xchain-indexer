@@ -22,7 +22,7 @@ const sinon  = require('sinon');
 
 const { createMockIndexer } = require('../../../fixtures/mocks');
 
-const Send = require('../../../../src/actions/send.js');
+const Send = require('../../../../src/actions/send/index.js');
 const {
     SOURCE, DESTINATION, makeActionsCtx, makeData, makeToken, makeBalances,
 } = require('./helpers/send_harness.js');

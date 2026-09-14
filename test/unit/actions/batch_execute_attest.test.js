@@ -49,7 +49,7 @@ const crypto = require('crypto');
 
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
 
-const Batch  = require('../../../src/actions/batch.js');
+const Batch  = require('../../../src/actions/batch/index.js');
 const Attest = require('../../../src/actions/attest/index.js');
 const swq    = require('../../../src/stake_weighted_quorum.js');
 const attestAdmission = require('../../../src/attest_admission_activation.js');

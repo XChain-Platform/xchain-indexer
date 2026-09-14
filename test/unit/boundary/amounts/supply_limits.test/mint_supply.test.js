@@ -23,7 +23,7 @@ const sinon  = require('sinon');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../../fixtures/mocks');
 const { makeActionsCtx, LOW_BLOCK, SOURCE } = require('./helpers/supply_context.js');
 
-const Mint    = require('../../../../../src/actions/mint.js');
+const Mint    = require('../../../../../src/actions/mint/index.js');
 
 describe('Supply & amount boundary tests @regression @tier1', function () {
     // -----------------------------------------------------------------------

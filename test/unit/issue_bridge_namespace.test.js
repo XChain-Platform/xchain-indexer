@@ -44,7 +44,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../fixtures/mocks');
-const Issue                   = require('../../src/actions/issue.js');
+const Issue                   = require('../../src/actions/issue/index.js');
 const tickNamespaceActivation = require('../../src/tick_namespace_activation.js');
 const { RESERVED_FUTURE_ROOTS, isReservedFutureRoot } = require('../../src/consensus/reservedRoots.js');
 

@@ -48,7 +48,7 @@ const sinon   = require('sinon');
 const Utility = require('../../src/utility.js');
 
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../fixtures/mocks');
-const Send = require('../../src/actions/send.js');
+const Send = require('../../src/actions/send/index.js');
 
 // DOGE and LTC regtest reuse Bitcoin-testnet base58 prefixes (utility ADDRESS_PARAMS),
 // so one address pair is valid on every regtest chain this file drives.

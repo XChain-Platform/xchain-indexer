@@ -19,7 +19,7 @@
 const sinon  = require('sinon');
 const { createMockIndexer, createTokenInfo } = require('../../../../fixtures/mocks');
 
-const Order = require('../../../../../src/actions/order.js');
+const Order = require('../../../../../src/actions/order/index.js');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

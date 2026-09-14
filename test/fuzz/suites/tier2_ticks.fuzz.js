@@ -30,7 +30,7 @@ let Issue, indexer, actionsCtx, handler, config;
 
 function loadIssue() {
     if (Issue) return;
-    Issue = require('../../../src/actions/issue.js');
+    Issue = require('../../../src/actions/issue/index.js');
     config = createMockIndexer().config;
 }
 
