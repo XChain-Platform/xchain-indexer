@@ -69,89 +69,80 @@ function batchBody(batch){
 }
 const uncompressedParams = body => ['2'].concat(body);
 
+let indexer, handler, hubClient, capable;
+
+// The price under test rides round index 3, so a case that passes by grading
+// only the first round is still visible.
+function sixRounds(price){
+    const rounds = [];
+    for(let i = 0; i < 6; i++){
+        rounds.push({
+            round: 100 + i, timestamp: 1700000000 + (i * 600),
+            btcBlockHeight: 799000 + i,
+            pairs: [{ pair: 'BTC/USD', price: i === 3 ? price : HONEST }],
+        });
+    }
+    return rounds;
+}
+
+function signBatch(rounds, identities){
+    const firstRound     = rounds[0].round;
+    const lastRound      = rounds[rounds.length - 1].round;
+    const btcBlockHeight = rounds[rounds.length - 1].btcBlockHeight;
+    const payload = ed25519.buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds);
+    const sigs    = identities.map(id => ({ pubkey: id.pubkey, sig: signWith(id, payload) }));
+    return { firstRound, lastRound, btcBlockHeight, rounds, sigs };
+}
+
+function setCapable(db){
+    db.hasCapability.callsFake(async pubkey => capable.has(String(pubkey).toLowerCase()));
+    db.getValidatorsByCapability.callsFake(async () => {
+        const rows = [...capable].map(pubkey => ({ pubkey, amount: '100' }));
+        rows.truncated = false;
+        return rows;
+    });
+}
+
+function newHandler(){
+    return new Price({
+        config: indexer.config, util: indexer.util, mapper: indexer.mapper,
+        decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb,
+        hubClient: hubClient,
+    });
+}
+
+// A signed, quorate six-round batch carrying `price` on round index 3.
+function batchWith(price){
+    const id = newIdentity();
+    capable.add(id.pubkey);
+    return signBatch(sixRounds(price), [id]);
+}
+
+function setupPriceFixture() {
+    indexer = createMockIndexer();
+    capable = new Set();
+    const db = indexer.indexerDb;
+    db.createPrice                 = sinon.stub().resolves();
+    db.hasCapability               = sinon.stub();
+    db.getValidatorsByCapability   = sinon.stub();
+    db.getActiveCapabilityCount    = sinon.stub().resolves(1);
+    db.getStakeWeightsByCapability = sinon.stub().resolves([]);
+    db.createValidatorReward       = sinon.stub().resolves(true);
+    db.enqueueHubPushTx            = sinon.stub().resolves(42);
+    db.stageHubPush                = sinon.stub();
+    setCapable(db);
+    hubClient = { enabled: true, pushPriceBatch: sinon.stub().resolves() };
+    handler   = newHandler();
+    // The count-quorum path, as the sibling v0 suite drives it.
+    sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+}
+
+const v0Data = (overrides = {}) =>
+    createBaseData({ ACTION: 'PRICE', FORMAT: 0, BLOCK_INDEX: 100, ...overrides });
+
 describe('PRICE v0 canonical price-value flag day @regression @tier3', function () {
-
-    let indexer, handler, hubClient, capable;
-
-    // The price under test rides round index 3, so a case that passes by grading
-    // only the first round is still visible.
-    function sixRounds(price){
-        const rounds = [];
-        for(let i = 0; i < 6; i++){
-            rounds.push({
-                round:          100 + i,
-                timestamp:      1700000000 + (i * 600),
-                btcBlockHeight: 799000 + i,
-                pairs: [{ pair: 'BTC/USD', price: i === 3 ? price : HONEST }],
-            });
-        }
-        return rounds;
-    }
-
-    function signBatch(rounds, identities){
-        const firstRound     = rounds[0].round;
-        const lastRound      = rounds[rounds.length - 1].round;
-        const btcBlockHeight = rounds[rounds.length - 1].btcBlockHeight;
-        const payload = ed25519.buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds);
-        const sigs    = identities.map(id => ({ pubkey: id.pubkey, sig: signWith(id, payload) }));
-        return { firstRound, lastRound, btcBlockHeight, rounds, sigs };
-    }
-
-    function setCapable(db){
-        db.hasCapability.callsFake(async pubkey => capable.has(String(pubkey).toLowerCase()));
-        db.getValidatorsByCapability.callsFake(async () => {
-            const rows = [...capable].map(pubkey => ({ pubkey, amount: '100' }));
-            rows.truncated = false;
-            return rows;
-        });
-    }
-
-    function newHandler(){
-        return new Price({
-            config:    indexer.config,
-            util:      indexer.util,
-            mapper:    indexer.mapper,
-            decoderDb: indexer.decoderDb,
-            indexerDb: indexer.indexerDb,
-            hubClient: hubClient,
-        });
-    }
-
-    // A signed, quorate six-round batch carrying `price` on round index 3.
-    function batchWith(price){
-        const id = newIdentity();
-        capable.add(id.pubkey);
-        return signBatch(sixRounds(price), [id]);
-    }
-
-    beforeEach(function () {
-        indexer = createMockIndexer();
-        capable = new Set();
-
-        const db = indexer.indexerDb;
-        db.createPrice                 = sinon.stub().resolves();
-        db.hasCapability               = sinon.stub();
-        db.getValidatorsByCapability   = sinon.stub();
-        db.getActiveCapabilityCount    = sinon.stub().resolves(1);
-        db.getStakeWeightsByCapability = sinon.stub().resolves([]);
-        db.createValidatorReward       = sinon.stub().resolves(true);
-        db.enqueueHubPushTx            = sinon.stub().resolves(42);
-        db.stageHubPush                = sinon.stub();
-        setCapable(db);
-
-        hubClient = { enabled: true, pushPriceBatch: sinon.stub().resolves() };
-        handler   = newHandler();
-
-        // The count-quorum path, as the sibling v0 suite drives it.
-        sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
-    });
-
-    afterEach(function () {
-        sinon.restore();
-    });
-
-    const v0Data = (overrides = {}) =>
-        createBaseData({ ACTION: 'PRICE', FORMAT: 0, BLOCK_INDEX: 100, ...overrides });
+    beforeEach(setupPriceFixture);
+    afterEach(function () { sinon.restore(); });
 
     // -----------------------------------------------------------------------
     // The shipped map, evaluated with no stub in sight.
@@ -187,6 +178,12 @@ describe('PRICE v0 canonical price-value flag day @regression @tier3', function 
             assert.strictEqual(widest.length, 19);
         });
     });
+
+});
+
+describe('PRICE v0 canonical price-value flag day @regression @tier3', function () {
+    beforeEach(setupPriceFixture);
+    afterEach(function () { sinon.restore(); });
 
     // -----------------------------------------------------------------------
     // Both sides, through the real parser.
@@ -236,6 +233,12 @@ describe('PRICE v0 canonical price-value flag day @regression @tier3', function 
             }
         });
     });
+
+});
+
+describe('PRICE v0 canonical price-value flag day @regression @tier3', function () {
+    beforeEach(setupPriceFixture);
+    afterEach(function () { sinon.restore(); });
 
     // -----------------------------------------------------------------------
     // A real threshold, so the boundary itself is driven rather than only the
