@@ -224,6 +224,26 @@
       "test/unit/actions/price_zero_validity.test.js",
       "test/unit/actions/price_zero_validity.test/batch_parser_gate.test.js"
     ],
+    "test/unit/actions/send.test.js": [
+      "test/unit/actions/send.test.js",
+      "test/unit/actions/send.test/caret_handoff_destination.test.js",
+      "test/unit/actions/send.test/gated_handoff_threshold.test.js",
+      "test/unit/actions/send.test/sleeping_and_multi_send.test.js"
+    ],
+    "test/unit/actions/slash.test.js": [
+      "test/unit/actions/slash.test.js",
+      "test/unit/actions/slash.test/attest_relay.test.js",
+      "test/unit/actions/slash.test/checkpoint_engine.test.js",
+      "test/unit/actions/slash.test/near_miss_rejects.test.js",
+      "test/unit/actions/slash.test/oracle_engines.test.js",
+      "test/unit/actions/slash.test/snapshot_burial.test.js",
+      "test/unit/actions/slash.test/xconfig_engine.test.js"
+    ],
+    "test/unit/actions/stake.test.js": [
+      "test/unit/actions/stake.test.js",
+      "test/unit/actions/stake.test/contract_targeted.test.js",
+      "test/unit/actions/stake.test/signing_key_and_top_up.test.js"
+    ],
     "test/unit/actions/sweep.test.js": [
       "test/unit/actions/sweep.test.js",
       "test/unit/actions/sweep.test/zero_amount_legs.test.js",
