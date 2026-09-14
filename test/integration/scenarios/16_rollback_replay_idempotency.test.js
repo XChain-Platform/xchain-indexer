@@ -103,7 +103,46 @@ async function runNodeB() {
         await destroyIndexer(nodeB);
     }
 }
+async function testRollbackReplayIdempotency() {
+    const seeder = new DecoderSeeder(decoderQuery);
+    await seedGasAndBase(seeder);
 
+    // Node A applies the full chain (100..105) live.
+    let nodeA = await initIndexer();
+    const processedA = await processBlocks(nodeA);
+    await destroyIndexer(nodeA);
+    assert.strictEqual(processedA, TOTAL_BLOCKS);
+
+    // Reorg at 104: orphan blocks 104 and 105, then re-seed the IDENTICAL
+    // block data as the replacement chain. processBlocks detects the reorg,
+    // rolls back 104/105, and re-applies the same blocks verbatim.
+    await seeder.seedReorgEvent([104, 105]);
+    await deleteDecoderBlocksFrom(104);
+    for (const b of replayedBlocks()) await seeder.seedBlock(b.block, b.time, b.txs);
+
+    nodeA = await initIndexer();
+    const replayedA = await processBlocks(nodeA);
+    await destroyIndexer(nodeA);
+    // Bind the replay count: equivalence alone also holds when NO reorg is
+    // processed, since a chain that was never rolled back still matches a
+    // fresh resync of the same decoder rows.
+    assert.strictEqual(replayedA, replayedBlocks().length,
+        'expected the reorg to roll back and re-apply ' + replayedBlocks().length +
+        ' block(s); ' + replayedA + ' were re-applied');
+
+    // Node B fresh-parses the identical final chain from genesis (a resync).
+    const chainB = await runNodeB();
+    const chainA = await readHashChain(indexerQuery);
+
+    // The consensus commitment (resolved hash chain) must be byte-identical,
+    // and the whole DB equivalent in content mode (id high-water marks and
+    // never-deleted index_* residue normalized).
+    assertHashChainsEqual(chainA, chainB, 'rollback-survivor', 'fresh-replay');
+    await assertIndexerDbsEquivalent(indexerQuery, indexerBQuery,
+        { mode: 'content', labelA: 'rollback-survivor', labelB: 'fresh-replay' });
+    await assertStateInvariants(indexerQuery);
+    await assertStateInvariants(indexerBQuery);
+}
 describe('16 – Rollback replay idempotency @regression @tier3', function () {
     this.timeout(180000);
 
@@ -126,44 +165,5 @@ describe('16 – Rollback replay idempotency @regression @tier3', function () {
         await resetIndexerDbB();
     });
 
-    it('apply -> rollback -> re-apply the SAME blocks equals a fresh from-genesis replay (content mode)', async function () {
-        const seeder = new DecoderSeeder(decoderQuery);
-        await seedGasAndBase(seeder);
-
-        // Node A applies the full chain (100..105) live.
-        let nodeA = await initIndexer();
-        const processedA = await processBlocks(nodeA);
-        await destroyIndexer(nodeA);
-        assert.strictEqual(processedA, TOTAL_BLOCKS);
-
-        // Reorg at 104: orphan blocks 104 and 105, then re-seed the IDENTICAL
-        // block data as the replacement chain. processBlocks detects the reorg,
-        // rolls back 104/105, and re-applies the same blocks verbatim.
-        await seeder.seedReorgEvent([104, 105]);
-        await deleteDecoderBlocksFrom(104);
-        for (const b of replayedBlocks()) await seeder.seedBlock(b.block, b.time, b.txs);
-
-        nodeA = await initIndexer();
-        const replayedA = await processBlocks(nodeA);
-        await destroyIndexer(nodeA);
-        // Bind the replay count: equivalence alone also holds when NO reorg is
-        // processed, since a chain that was never rolled back still matches a
-        // fresh resync of the same decoder rows.
-        assert.strictEqual(replayedA, replayedBlocks().length,
-            'expected the reorg to roll back and re-apply ' + replayedBlocks().length +
-            ' block(s); ' + replayedA + ' were re-applied');
-
-        // Node B fresh-parses the identical final chain from genesis (a resync).
-        const chainB = await runNodeB();
-        const chainA = await readHashChain(indexerQuery);
-
-        // The consensus commitment (resolved hash chain) must be byte-identical,
-        // and the whole DB equivalent in content mode (id high-water marks and
-        // never-deleted index_* residue normalized).
-        assertHashChainsEqual(chainA, chainB, 'rollback-survivor', 'fresh-replay');
-        await assertIndexerDbsEquivalent(indexerQuery, indexerBQuery,
-            { mode: 'content', labelA: 'rollback-survivor', labelB: 'fresh-replay' });
-        await assertStateInvariants(indexerQuery);
-        await assertStateInvariants(indexerBQuery);
-    });
+    it('apply -> rollback -> re-apply the SAME blocks equals a fresh from-genesis replay (content mode)', testRollbackReplayIdempotency);
 });

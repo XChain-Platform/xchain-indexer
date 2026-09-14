@@ -69,7 +69,64 @@ async function countRows(table) {
     const rows = await indexerQuery(`SELECT COUNT(*) AS c FROM ${table}`);
     return Number(rows[0].c);
 }
-
+async function seedInitialContractChain(seeder) {
+    // Fee era: the ISSUE and the DEPLOY (gas-priced) both draw on the
+    // deployer's XCHAIN balance.
+    await seedGas(seeder, { addresses: [DEPLOYER] });
+    // Phase 1: ISSUE the token to the deployer, then DEPLOY a stakeable (v1) contract.
+    await seeder.seedBlock(100, T0, [
+        { source: DEPLOYER, destination: null, amount: '0',
+          data: 'ISSUE|0|CTRT|1000|1000|0|contract reorg token|1000' },
+    ]);
+    await seeder.seedBlock(101, T0 + BLK, [
+        // DEPLOY|1|CODE|GAS_LIMIT|CONSTRUCTOR|COOLDOWN_BLOCKS|SLASH_DESTINATION
+        { source: DEPLOYER, destination: null, amount: '0',
+          data: 'DEPLOY|1|' + CODE_B64 + '|100000||100|' },
+    ]);
+}
+async function seedContractBalances(seeder, contractIndex) {
+    // Phase 2: DEPOSIT into the contract and STAKE v3 the token against it.
+    await seeder.seedBlock(102, T0 + BLK * 2, [
+        { source: DEPLOYER, destination: null, amount: '0',
+          data: 'DEPOSIT|0|' + contractIndex + '|CTRT|100' },
+        { source: DEPLOYER, destination: null, amount: '0',
+          data: 'STAKE|3|200|' + PUBKEY + '|' + contractIndex + '|CTRT' },
+    ]);
+}
+async function replaceContractChain(seeder) {
+    // Phase 3: reorg at block 101 (removes the DEPLOY and everything after).
+    await seeder.seedReorgEvent([101]);
+    await deleteDecoderBlocksFrom(101);
+    await seeder.seedBlock(101, T0 + BLK, []); // benign empty replacement block
+}
+async function testContractStateReorg() {
+    const seeder = new DecoderSeeder(decoderQuery);
+    await seedInitialContractChain(seeder);
+    let indexer = await initIndexer();
+    await processBlocks(indexer);
+    await destroyIndexer(indexer);
+    await helpers.assertTokenSupply(indexerQuery, 'CTRT', '1000');
+    assert.strictEqual(await countRows('contracts'), 1, 'contract should exist after DEPLOY');
+    const ci = Number((await indexerQuery('SELECT action_index FROM contracts LIMIT 1'))[0].action_index);
+    await seedContractBalances(seeder, ci);
+    indexer = await initIndexer();
+    await processBlocks(indexer);
+    await destroyIndexer(indexer);
+    // Pre-reorg: all contract rows present, and the deployer's 1000 has been drawn down
+    // by the 100 deposit + 200 stake (300 escrowed into the contract / stake).
+    assert.strictEqual(await countRows('deposits'), 1, 'deposit row should exist');
+    assert.strictEqual(await countRows('contract_stakes'), 1, 'stake row should exist');
+    await helpers.assertBalance(indexerQuery, DEPLOYER, 'CTRT', '700');
+    await replaceContractChain(seeder);
+    indexer = await initIndexer();
+    await processBlocks(indexer);
+    await destroyIndexer(indexer);
+    // Every contract row must be gone, and the deployer's balance fully restored.
+    assert.strictEqual(await countRows('contracts'), 0, 'contracts cleared by reorg');
+    assert.strictEqual(await countRows('contract_stakes'), 0, 'contract_stakes cleared by reorg');
+    assert.strictEqual(await countRows('deposits'), 0, 'deposits cleared by reorg');
+    await helpers.assertBalance(indexerQuery, DEPLOYER, 'CTRT', '1000');
+}
 describe('Contract State Reorg: rollback of contract tables @regression @tier3', function () {
     this.timeout(60000);
 
@@ -94,63 +151,6 @@ describe('Contract State Reorg: rollback of contract tables @regression @tier3',
         await resetIndexerDb();
     });
 
-    it('reorg below a DEPLOY clears contracts / stakes / deposits and restores balances', async function () {
-        const seeder = new DecoderSeeder(decoderQuery);
-
-        // Fee era: the ISSUE and the DEPLOY (gas-priced) both draw on the
-        // deployer's XCHAIN balance.
-        await seedGas(seeder, { addresses: [DEPLOYER] });
-
-        // Phase 1: ISSUE the token to the deployer, then DEPLOY a stakeable (v1) contract.
-        await seeder.seedBlock(100, T0, [
-            { source: DEPLOYER, destination: null, amount: '0',
-              data: 'ISSUE|0|CTRT|1000|1000|0|contract reorg token|1000' },
-        ]);
-        await seeder.seedBlock(101, T0 + BLK, [
-            // DEPLOY|1|CODE|GAS_LIMIT|CONSTRUCTOR|COOLDOWN_BLOCKS|SLASH_DESTINATION
-            { source: DEPLOYER, destination: null, amount: '0',
-              data: 'DEPLOY|1|' + CODE_B64 + '|100000||100|' },
-        ]);
-
-        let indexer = await initIndexer();
-        await processBlocks(indexer);
-        await destroyIndexer(indexer);
-
-        await helpers.assertTokenSupply(indexerQuery, 'CTRT', '1000');
-        assert.strictEqual(await countRows('contracts'), 1, 'contract should exist after DEPLOY');
-        const ci = Number((await indexerQuery('SELECT action_index FROM contracts LIMIT 1'))[0].action_index);
-
-        // Phase 2: DEPOSIT into the contract and STAKE v3 the token against it.
-        await seeder.seedBlock(102, T0 + BLK * 2, [
-            { source: DEPLOYER, destination: null, amount: '0',
-              data: 'DEPOSIT|0|' + ci + '|CTRT|100' },
-            { source: DEPLOYER, destination: null, amount: '0',
-              data: 'STAKE|3|200|' + PUBKEY + '|' + ci + '|CTRT' },
-        ]);
-
-        indexer = await initIndexer();
-        await processBlocks(indexer);
-        await destroyIndexer(indexer);
-
-        // Pre-reorg: all contract rows present, and the deployer's 1000 has been drawn down
-        // by the 100 deposit + 200 stake (300 escrowed into the contract / stake).
-        assert.strictEqual(await countRows('deposits'), 1, 'deposit row should exist');
-        assert.strictEqual(await countRows('contract_stakes'), 1, 'stake row should exist');
-        await helpers.assertBalance(indexerQuery, DEPLOYER, 'CTRT', '700');
-
-        // Phase 3: reorg at block 101 (removes the DEPLOY and everything after).
-        await seeder.seedReorgEvent([101]);
-        await deleteDecoderBlocksFrom(101);
-        await seeder.seedBlock(101, T0 + BLK, []); // benign empty replacement block
-
-        indexer = await initIndexer();
-        await processBlocks(indexer);
-        await destroyIndexer(indexer);
-
-        // Every contract row must be gone, and the deployer's balance fully restored.
-        assert.strictEqual(await countRows('contracts'), 0, 'contracts cleared by reorg');
-        assert.strictEqual(await countRows('contract_stakes'), 0, 'contract_stakes cleared by reorg');
-        assert.strictEqual(await countRows('deposits'), 0, 'deposits cleared by reorg');
-        await helpers.assertBalance(indexerQuery, DEPLOYER, 'CTRT', '1000');
-    });
+    it('reorg below a DEPLOY clears contracts / stakes / deposits and restores balances',
+        testContractStateReorg);
 });
