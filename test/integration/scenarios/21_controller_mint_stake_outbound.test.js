@@ -61,34 +61,35 @@ const DENY   = "module.exports={ meta:{ name:'Deny Guard', description:'Reverts 
 const ALLOW  = "module.exports={ meta:{ name:'Allow Guard', description:'Permits every gated action.', version:'1.0.0' }, guard:function(){ return {}; } };";
 const TARGET = "module.exports={ meta:{ name:'Stake Target', description:'Stakeable contract used as a STAKE target.', version:'1.0.0' }, guard:function(){ return {}; }, noop:function(){} };"; // stakeable target
 
-describe('Controller Phase C: MINT / STAKE / SOURCE-outbound (real DB + real VM) @phaseE', function () {
-    this.timeout(600000);
-    let seeder, indexer, denyIdx, allowIdx, targetIdx;
+let seeder, indexer, denyIdx, allowIdx, targetIdx;
 
-    async function contractIndexByCode(code) {
-        const h = sha(code);
-        const rows = await indexerQuery('SELECT action_index, code_hash FROM contracts', []);
-        const r = rows.find(x => x.code_hash === h);
-        return r ? Number(r.action_index) : null;
-    }
-    async function balanceOf(address, tick) {
-        const rows = await indexerQuery(
-            `SELECT b.amount FROM balances b
-             JOIN index_addresses ia ON ia.id = b.address_id
-             JOIN index_tickers   it ON it.id = b.tick_id
-             WHERE ia.address = ? AND it.tick = ?`, [address, tick]);
-        return rows.length ? String(rows[0].amount) : '0';
-    }
-    // Count only VALID stake rows: a denied STAKE still writes its action record (with `invalid`
-    // status), like every handler; the gating invariant is that no *valid* bond is locked.
-    async function validStakeRows(tick) {
-        return await indexerQuery(
-            `SELECT s.amount FROM contract_stakes s
-             JOIN index_tickers  it  ON it.id  = s.tick_id
-             JOIN index_statuses ist ON ist.id = s.status_id
-             WHERE it.tick = ? AND ist.status = 'valid'`, [tick]);
-    }
+async function contractIndexByCode(code) {
+    const h = sha(code);
+    const rows = await indexerQuery('SELECT action_index, code_hash FROM contracts', []);
+    const r = rows.find(x => x.code_hash === h);
+    return r ? Number(r.action_index) : null;
+}
 
+async function balanceOf(address, tick) {
+    const rows = await indexerQuery(
+        `SELECT b.amount FROM balances b
+         JOIN index_addresses ia ON ia.id = b.address_id
+         JOIN index_tickers   it ON it.id = b.tick_id
+         WHERE ia.address = ? AND it.tick = ?`, [address, tick]);
+    return rows.length ? String(rows[0].amount) : '0';
+}
+
+// Count only VALID stake rows: a denied STAKE still writes its action record (with `invalid`
+// status), like every handler; the gating invariant is that no *valid* bond is locked.
+async function validStakeRows(tick) {
+    return await indexerQuery(
+        `SELECT s.amount FROM contract_stakes s
+         JOIN index_tickers  it  ON it.id  = s.tick_id
+         JOIN index_statuses ist ON ist.id = s.status_id
+         WHERE it.tick = ? AND ist.status = 'valid'`, [tick]);
+}
+
+function registerControllerPhaseHooks() {
     before(async function () {
         // This scenario drives real contract DEPLOY/EXECUTE, which needs the
         // isolated-vm-backed xchain-vm. The integration tier is provisioned
@@ -132,7 +133,9 @@ describe('Controller Phase C: MINT / STAKE / SOURCE-outbound (real DB + real VM)
         await destroyFileIndexers(__filename);
         await closeAll();
     });
+}
 
+function registerControllerPhaseSetupTest() {
     it('sets up tokens, guards, stakeable target, and seeds the self-gating owners', async function () {
         assert.ok(denyIdx,   'deny guard deployed');
         assert.ok(allowIdx,  'allow guard deployed');
@@ -142,7 +145,9 @@ describe('Controller Phase C: MINT / STAKE / SOURCE-outbound (real DB + real VM)
         assert.strictEqual(await balanceOf(OWNERA, PLAIN),  '200',  'OWNERA seeded with PLAIN');
         assert.strictEqual(await balanceOf(OWNERB, PLAIN),  '200',  'OWNERB seeded with PLAIN');
     });
+}
 
+function registerControllerMintTests() {
     // --- 1. MINT guard ---
     it('a mint-class controller DENY reverts a MINT (no supply created)', async function () {
         await seeder.seedBlock(110, T0 + 1000, [
@@ -173,7 +178,9 @@ describe('Controller Phase C: MINT / STAKE / SOURCE-outbound (real DB + real VM)
         assert.strictEqual(Number(await balanceOf(OWNER, GATED2)) - before, 50,
             'allowed MINT created 50 supply and the block committed (sanity passed)');
     });
+}
 
+function registerControllerStakeTests() {
     // --- 2. STAKE v3 guard ---
     it('a stake-class controller DENY reverts a v3 contract stake (no bond locked)', async function () {
         await seeder.seedBlock(120, T0 + 2000, [
@@ -206,7 +213,9 @@ describe('Controller Phase C: MINT / STAKE / SOURCE-outbound (real DB + real VM)
         assert.strictEqual(before - Number(await balanceOf(OWNER, GATED2)), 100,
             'allowed STAKE locked 100 of the bond and the block committed (sanity passed)');
     });
+}
 
+function registerControllerOutboundTests() {
     // --- 3. SOURCE-outbound self-gate ---
     it("a SENDER's own transfer address-controller DENY reverts its OUTBOUND send", async function () {
         // OWNERA self-binds transfer -> deny. Its own outbound SEND of an ungated token must revert.
@@ -242,4 +251,13 @@ describe('Controller Phase C: MINT / STAKE / SOURCE-outbound (real DB + real VM)
         assert.strictEqual(Number(await balanceOf(RECIP, PLAIN)) - before, 10,
             'allowed outbound SEND credited the recipient and the block committed (sanity passed)');
     });
+}
+
+describe('Controller Phase C: MINT / STAKE / SOURCE-outbound (real DB + real VM) @phaseE', function () {
+    this.timeout(600000);
+    registerControllerPhaseHooks();
+    registerControllerPhaseSetupTest();
+    registerControllerMintTests();
+    registerControllerStakeTests();
+    registerControllerOutboundTests();
 });

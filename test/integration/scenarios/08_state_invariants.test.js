@@ -37,6 +37,8 @@ const ADDR2 = 'mjifPngDYQ6HHPNQdGk1kQuFkJWEiQksQp';
 const ADDR3 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi';
 const BASE_TIME = 1700000000;
 
+let seeder, indexer;
+
 // ISSUE → MINT 1000 → SEND 300 (1→2) → SEND 100 (2→3). Final balances
 // 700/200/100 sum to the minted 1000, so the ledger must conserve.
 async function seedLifecycle(seeder, indexer) {
@@ -55,11 +57,7 @@ async function seedLifecycle(seeder, indexer) {
     await processBlocks(indexer);
 }
 
-describe('Whole-ledger state invariants @regression @tier3', function () {
-    this.timeout(30000);
-
-    let seeder, indexer;
-
+function registerStateInvariantHooks() {
     before(async function () {
         await createDatabases(__filename);
         await createDecoderSchema();
@@ -82,7 +80,9 @@ describe('Whole-ledger state invariants @regression @tier3', function () {
         await destroyFileIndexers(__filename);
         await closeAll();
     });
+}
 
+function registerStateInvariantTests() {
     it('a real ISSUE→MINT→SEND lifecycle satisfies every ledger invariant', async function () {
         await seedLifecycle(seeder, indexer);
         const { ticksChecked } = await assertStateInvariants(indexerQuery);
@@ -125,4 +125,10 @@ describe('Whole-ledger state invariants @regression @tier3', function () {
             'checker missed a negative balance'
         );
     });
+}
+
+describe('Whole-ledger state invariants @regression @tier3', function () {
+    this.timeout(30000);
+    registerStateInvariantHooks();
+    registerStateInvariantTests();
 });

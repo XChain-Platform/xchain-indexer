@@ -86,59 +86,57 @@ function dexContent(snap, aAmount) {
             String(T), 'regtest', 'swap', '0', 'swap', '0'].join('|');
 }
 
-describe('Integration: SLASH mid-cooldown must burn the bond once (real DB + real VM) @regression @tier1', function () {
-    this.timeout(120000);
+let offender, run;
 
-    let offender, run;
+function slashAction() {
+    const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.DEX, 'm_1', 0, dexContent(SNAP, '10'));
+    const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.DEX, 'm_1', 0, dexContent(SNAP, '20'));
+    return ['SLASH', '0', 'cross_chain', offender.pubHex,
+            b64(msgA), sign(offender.privateKey, msgA),
+            b64(msgB), sign(offender.privateKey, msgB)].join('|');
+}
 
-    function slashAction() {
-        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.DEX, 'm_1', 0, dexContent(SNAP, '10'));
-        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.DEX, 'm_1', 0, dexContent(SNAP, '20'));
-        return ['SLASH', '0', 'cross_chain', offender.pubHex,
-                b64(msgA), sign(offender.privateKey, msgA),
-                b64(msgB), sign(offender.privateKey, msgB)].join('|');
+async function runCorpus() {
+    await resetDecoderDb();
+    await resetIndexerDb();
+    const seeder = new DecoderSeeder(decoderQuery);
+    await seedGasRich(seeder);
+    // STAKE -> UNSTAKE (schedules cooldown, sets a FUTURE deactivation_block) -> SLASH in-window.
+    await seeder.seedBlock(STAKE_BLOCK,   T,       [{ source: A1, data: 'STAKE|1|' + STAKE_AMT + '|' + offender.pubHex }]);
+    await seeder.seedBlock(UNSTAKE_BLOCK, T + 700, [{ source: A1, data: 'UNSTAKE|0|' + offender.pubHex }]);
+    await seeder.seedBlock(SLASH_BLOCK,   T + 1000, [{ source: A1, data: slashAction() }]);
+
+    const indexer = await initIndexer();
+    try {
+        await processBlocks(indexer);
+        const chain = await indexerQuery(
+            `SELECT b.block_index, t1.hash AS ledger, t2.hash AS actions
+             FROM blocks b
+             LEFT JOIN index_transactions t1 ON t1.id = b.ledger_hash_id
+             LEFT JOIN index_transactions t2 ON t2.id = b.actions_hash_id
+             ORDER BY b.block_index ASC`);
+        const stakeRows   = await indexerQuery(
+            `SELECT s.amount, s.deactivation_block FROM stakes s
+             JOIN index_pubkeys p ON p.id = s.signing_pubkey_id WHERE p.pubkey = ?`, [offender.pubHex]);
+        const unstakeRows = await indexerQuery(
+            `SELECT u.amount FROM unstakes u
+             JOIN index_pubkeys p ON p.id = u.signing_pubkey_id WHERE p.pubkey = ?`, [offender.pubHex]);
+        const events = await indexerQuery(`SELECT capability, amount FROM capability_slash_events`);
+        const debits = await indexerQuery(
+            `SELECT target_table, prev_amount FROM capability_slash_debits ORDER BY id`);
+        return {
+            chain: chain.map(r => ({ block_index: Number(r.block_index), ledger: r.ledger, actions: r.actions })),
+            stakeAmounts:   stakeRows.map(r => String(r.amount)),
+            deactivation:   stakeRows.map(r => (r.deactivation_block == null ? null : Number(r.deactivation_block))),
+            unstakeAmounts: unstakeRows.map(r => String(r.amount)),
+            events, debits,
+        };
+    } finally {
+        await destroyIndexer(indexer);
     }
+}
 
-    async function runCorpus() {
-        await resetDecoderDb();
-        await resetIndexerDb();
-        const seeder = new DecoderSeeder(decoderQuery);
-        await seedGasRich(seeder);
-        // STAKE -> UNSTAKE (schedules cooldown, sets a FUTURE deactivation_block) -> SLASH in-window.
-        await seeder.seedBlock(STAKE_BLOCK,   T,       [{ source: A1, data: 'STAKE|1|' + STAKE_AMT + '|' + offender.pubHex }]);
-        await seeder.seedBlock(UNSTAKE_BLOCK, T + 700, [{ source: A1, data: 'UNSTAKE|0|' + offender.pubHex }]);
-        await seeder.seedBlock(SLASH_BLOCK,   T + 1000, [{ source: A1, data: slashAction() }]);
-
-        const indexer = await initIndexer();
-        try {
-            await processBlocks(indexer);
-            const chain = await indexerQuery(
-                `SELECT b.block_index, t1.hash AS ledger, t2.hash AS actions
-                 FROM blocks b
-                 LEFT JOIN index_transactions t1 ON t1.id = b.ledger_hash_id
-                 LEFT JOIN index_transactions t2 ON t2.id = b.actions_hash_id
-                 ORDER BY b.block_index ASC`);
-            const stakeRows   = await indexerQuery(
-                `SELECT s.amount, s.deactivation_block FROM stakes s
-                 JOIN index_pubkeys p ON p.id = s.signing_pubkey_id WHERE p.pubkey = ?`, [offender.pubHex]);
-            const unstakeRows = await indexerQuery(
-                `SELECT u.amount FROM unstakes u
-                 JOIN index_pubkeys p ON p.id = u.signing_pubkey_id WHERE p.pubkey = ?`, [offender.pubHex]);
-            const events = await indexerQuery(`SELECT capability, amount FROM capability_slash_events`);
-            const debits = await indexerQuery(
-                `SELECT target_table, prev_amount FROM capability_slash_debits ORDER BY id`);
-            return {
-                chain: chain.map(r => ({ block_index: Number(r.block_index), ledger: r.ledger, actions: r.actions })),
-                stakeAmounts:   stakeRows.map(r => String(r.amount)),
-                deactivation:   stakeRows.map(r => (r.deactivation_block == null ? null : Number(r.deactivation_block))),
-                unstakeAmounts: unstakeRows.map(r => String(r.amount)),
-                events, debits,
-            };
-        } finally {
-            await destroyIndexer(indexer);
-        }
-    }
-
+function registerSlashHooks() {
     before(async function () {
         process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
         process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
@@ -149,7 +147,9 @@ describe('Integration: SLASH mid-cooldown must burn the bond once (real DB + rea
     });
 
     after(async function () { await destroyFileIndexers(__filename); await closeAll(); });
+}
 
+function registerSlashTests() {
     it('the slash landed inside the post-unstake activation-delay window (setup sanity)', function () {
         // The proof's set resolves at the buried height, which must land on the activation
         // block and inside the bond's active window, or the SLASH never reaches the burn
@@ -195,4 +195,10 @@ describe('Integration: SLASH mid-cooldown must burn the bond once (real DB + rea
         assert.deepStrictEqual(second.events, run.events);
         assert.deepStrictEqual(second.debits, run.debits);
     });
+}
+
+describe('Integration: SLASH mid-cooldown must burn the bond once (real DB + real VM) @regression @tier1', function () {
+    this.timeout(120000);
+    registerSlashHooks();
+    registerSlashTests();
 });

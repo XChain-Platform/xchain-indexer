@@ -45,11 +45,9 @@ const CARL  = '1CccCarlownstheentirecarlnetfamily';
 const DANA  = '1DddDanaownstherootbutnotthegift00';
 const ERIN  = '1EeeErinownsonlythegiftsubassetXX';
 
-describe('Genesis Ledger Bootstrap @regression', function () {
-    this.timeout(60000);
+let seeder, indexer;
 
-    let seeder, indexer;
-
+function registerGenesisBootstrapHooks() {
     before(async function () {
         // Bind genesis to a current regtest block + the bundled test manifest. Config reads
         // these (regtest branch) at initIndexer time. Cleared in after() so no other suite
@@ -80,7 +78,9 @@ describe('Genesis Ledger Bootstrap @regression', function () {
         await destroyFileIndexers(__filename);
         await closeAll();
     });
+}
 
+function registerGenesisOwnershipTests() {
     it('injects every manifest name with the correct owner (GAS, divergent, and deep-nested)', async function () {
         await processBlocks(indexer);
 
@@ -123,7 +123,9 @@ describe('Genesis Ledger Bootstrap @regression', function () {
         const balances = await countRows(indexerQuery, 'balances', '1=1', []);
         assert.strictEqual(balances, 0, 'genesis creates zero balances');
     });
+}
 
+function registerGenesisSafetyTests() {
     it('treats the genesis block as a rollback floor', async function () {
         await processBlocks(indexer);
         await assert.rejects(
@@ -147,4 +149,11 @@ describe('Genesis Ledger Bootstrap @regression', function () {
         assert.strictEqual(h1.ledger.hash,  h2.ledger.hash,  'ledger hash stable across reindex');
         assert.strictEqual(h1.actions.hash, h2.actions.hash, 'actions hash stable across reindex');
     });
+}
+
+describe('Genesis Ledger Bootstrap @regression', function () {
+    this.timeout(60000);
+    registerGenesisBootstrapHooks();
+    registerGenesisOwnershipTests();
+    registerGenesisSafetyTests();
 });

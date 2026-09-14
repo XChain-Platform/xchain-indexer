@@ -54,31 +54,32 @@ const sha = s => crypto.createHash('sha256').update(s).digest('hex');
 const DENY_ALL = "module.exports={ meta:{ name:'Deny All', description:'Reverts every action class routed to it.', version:'1.0.0' }, guard:function(){ xchain.revert('all-class denied'); } };";
 const ALLOW    = "module.exports={ meta:{ name:'Allow Guard', description:'Permits every action class routed to it.', version:'1.0.0' }, guard:function(){ return {}; } };";
 
-describe("Controller 'all' action class: fallback + override (real DB + real VM) @phaseE", function () {
-    this.timeout(600000);
-    let seeder, indexer, denyIdx, allowIdx;
+let seeder, indexer, denyIdx, allowIdx;
 
-    async function contractIndexByCode(code) {
-        const h = sha(code);
-        const rows = await indexerQuery('SELECT action_index, code_hash FROM contracts', []);
-        const r = rows.find(x => x.code_hash === h);
-        return r ? Number(r.action_index) : null;
-    }
-    async function balanceOf(address, tick) {
-        const rows = await indexerQuery(
-            `SELECT b.amount FROM balances b
-             JOIN index_addresses ia ON ia.id = b.address_id
-             JOIN index_tickers   it ON it.id = b.tick_id
-             WHERE ia.address = ? AND it.tick = ?`, [address, tick]);
-        return rows.length ? String(rows[0].amount) : '0';
-    }
-    async function controllerRows() {
-        return await indexerQuery(
-            `SELECT tc.action_class, tc.contract_index, tc.is_unbind
-             FROM token_controllers tc JOIN index_tickers it ON it.id = tc.tick_id
-             WHERE it.tick = ? ORDER BY tc.action_index`, [TICK]);
-    }
+async function contractIndexByCode(code) {
+    const h = sha(code);
+    const rows = await indexerQuery('SELECT action_index, code_hash FROM contracts', []);
+    const r = rows.find(x => x.code_hash === h);
+    return r ? Number(r.action_index) : null;
+}
 
+async function balanceOf(address, tick) {
+    const rows = await indexerQuery(
+        `SELECT b.amount FROM balances b
+         JOIN index_addresses ia ON ia.id = b.address_id
+         JOIN index_tickers   it ON it.id = b.tick_id
+         WHERE ia.address = ? AND it.tick = ?`, [address, tick]);
+    return rows.length ? String(rows[0].amount) : '0';
+}
+
+async function controllerRows() {
+    return await indexerQuery(
+        `SELECT tc.action_class, tc.contract_index, tc.is_unbind
+         FROM token_controllers tc JOIN index_tickers it ON it.id = tc.tick_id
+         WHERE it.tick = ? ORDER BY tc.action_index`, [TICK]);
+}
+
+function registerControllerAllHooks() {
     before(async function () {
         // This scenario drives real contract DEPLOY/EXECUTE, which needs the
         // isolated-vm-backed xchain-vm. The integration tier is provisioned
@@ -110,7 +111,9 @@ describe("Controller 'all' action class: fallback + override (real DB + real VM)
         await destroyFileIndexers(__filename);
         await closeAll();
     });
+}
 
+function registerControllerAllFallbackTests() {
     it('deploys both guard contracts and mints the token to the owner', async function () {
         assert.ok(denyIdx,  'deny-all guard deployed (has an action_index)');
         assert.ok(allowIdx, 'allow guard deployed (has an action_index)');
@@ -136,7 +139,9 @@ describe("Controller 'all' action class: fallback + override (real DB + real VM)
         assert.strictEqual(await balanceOf(RECIP, TICK), before,
             "SEND falls back to the 'all' guard and is DENIED (recipient uncredited)");
     });
+}
 
+function registerControllerAllOverrideTest() {
     it("a class-specific 'transfer' binding overrides 'all' for that class only (most-specific wins)", async function () {
         // Bind a specific 'transfer' -> permissive guard ON TOP of the live 'all' binding.
         // (Binding a specific class while 'all' is bound must be ALLOWED: it is the override,
@@ -170,7 +175,9 @@ describe("Controller 'all' action class: fallback + override (real DB + real VM)
         assert.strictEqual(Number(xTransfer.contract_index), allowIdx, 'exact getter returns the transfer binding');
         assert.strictEqual(xTrade, null, "exact getter does NOT fall back to 'all' (bind validation correctness)");
     });
+}
 
+function registerControllerAllSettlementTest() {
     it('an allowed guarded SEND commits + the block passes the supply sanity check (regression: guardFee burn recomputes GAS supply)', async function () {
         // With the 'transfer' override (allow guard) bound, this SEND routes to it, settles, and
         // bills a guardFee (a GAS debit with no offsetting credit, i.e. a burn). send.js must call
@@ -185,4 +192,12 @@ describe("Controller 'all' action class: fallback + override (real DB + real VM)
         assert.strictEqual(Number(await balanceOf(RECIP, TICK)) - before, 10,
             'allowed guarded SEND credited the recipient and the block committed (sanity passed)');
     });
+}
+
+describe("Controller 'all' action class: fallback + override (real DB + real VM) @phaseE", function () {
+    this.timeout(600000);
+    registerControllerAllHooks();
+    registerControllerAllFallbackTests();
+    registerControllerAllOverrideTest();
+    registerControllerAllSettlementTest();
 });

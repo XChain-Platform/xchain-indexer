@@ -47,6 +47,30 @@ const PAYEE = 'mnNFBtAigY3EHSCJUZwpyugkphfruNiPHj';
 
 let indexer;
 
+// All obligations share one expiration; the processing block is just past it,
+// so every obligation is simultaneously expirable on the same block.
+const EXPIRATION = 1700000000;
+const BLOCK_TIME = EXPIRATION + 1;
+// action_index values seeded in DESCENDING order on purpose.
+const ACTION_INDEXES = [205, 204, 203, 202, 201];
+const ASCENDING      = [201, 202, 203, 204, 205];
+
+async function seedPendingObligations(db) {
+    for (const ai of ACTION_INDEXES) {
+        await db.createCoinpayObligation({
+            ACTION_INDEX:  ai,
+            PAYER_ADDRESS: PAYER,
+            PAYEE_ADDRESS: PAYEE,
+            COIN:          'BTC',
+            COIN_AMOUNT:   '1000',
+            EXPIRATION:    EXPIRATION,
+            BLOCK_INDEX:   500,
+        });
+        // Latest status = pending_coinpay → the obligation is expirable.
+        await db.createCoinpayStatus(ai, ai, 'pending_coinpay');
+    }
+}
+
 before(async function () {
     this.timeout(30000);
     await createDatabases(__filename);
@@ -60,33 +84,7 @@ after(async function () {
     await closeAll();
 });
 
-describe('07 Deterministic simultaneous-expiry ordering @regression @tier2', function () {
-    this.timeout(60000);
-
-    // All obligations share one expiration; the processing block is just past it,
-    // so every obligation is simultaneously expirable on the same block.
-    const EXPIRATION = 1700000000;
-    const BLOCK_TIME = EXPIRATION + 1;
-    // action_index values seeded in DESCENDING order on purpose.
-    const ACTION_INDEXES = [205, 204, 203, 202, 201];
-    const ASCENDING      = [201, 202, 203, 204, 205];
-
-    async function seedPendingObligations(db) {
-        for (const ai of ACTION_INDEXES) {
-            await db.createCoinpayObligation({
-                ACTION_INDEX:  ai,
-                PAYER_ADDRESS: PAYER,
-                PAYEE_ADDRESS: PAYEE,
-                COIN:          'BTC',
-                COIN_AMOUNT:   '1000',
-                EXPIRATION:    EXPIRATION,
-                BLOCK_INDEX:   500,
-            });
-            // Latest status = pending_coinpay → the obligation is expirable.
-            await db.createCoinpayStatus(ai, ai, 'pending_coinpay');
-        }
-    }
-
+function registerExpiryOrderingTests() {
     it('getExpiredCoinpayObligations returns same-block expirations in ascending action_index order', async function () {
         const db = indexer.indexerDb;
         await seedPendingObligations(db);
@@ -142,4 +140,9 @@ describe('07 Deterministic simultaneous-expiry ordering @regression @tier2', fun
             'pending coinpay obligations for an order must be returned in ascending action_index order'
         );
     });
+}
+
+describe('07 Deterministic simultaneous-expiry ordering @regression @tier2', function () {
+    this.timeout(60000);
+    registerExpiryOrderingTests();
 });

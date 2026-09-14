@@ -47,11 +47,7 @@ async function ownerMap() {
     return m;
 }
 
-describe('Genesis Dump Import @regression', function () {
-    // Three cold indexer inits (verifyTables builds ~60 tables each) put the
-    // byte-identity case at ~125s on a real DB, past the old 120s ceiling.
-    this.timeout(600000);
-
+function registerGenesisDumpHooks() {
     before(async function () {
         process.env.XCHAIN_GENESIS_BLOCK = String(GENESIS_BLOCK);
         process.env.GENESIS_LEDGER_PATH  = LEDGER_PATH;
@@ -68,7 +64,9 @@ describe('Genesis Dump Import @regression', function () {
         await destroyFileIndexers(__filename);
         await closeAll();
     });
+}
 
+function registerGenesisDumpTests() {
     it('imports a precomputed dump to byte-identical genesis block hashes (and owners)', async function () {
         // --- Step A: canonical CSV injection ---
         process.env.GENESIS_DUMP_PATH = NO_DUMP; // force the CSV path
@@ -122,4 +120,12 @@ describe('Genesis Dump Import @regression', function () {
         await assert.rejects(() => processBlocks(idx), /hash mismatch/, 'tampered/mispinned dump must halt');
         await destroyIndexer(idx);
     });
+}
+
+describe('Genesis Dump Import @regression', function () {
+    // Three cold indexer inits (verifyTables builds ~60 tables each) put the
+    // byte-identity case at ~125s on a real DB, past the old 120s ceiling.
+    this.timeout(600000);
+    registerGenesisDumpHooks();
+    registerGenesisDumpTests();
 });

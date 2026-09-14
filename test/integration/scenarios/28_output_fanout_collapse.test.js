@@ -48,11 +48,9 @@ const ADDR3 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi'; // second native payee
 const TICK = 'FANOUT';
 const T0   = 1700000000;
 
-describe('28 output fan-out collapse: a multi-output data-bearing tx runs ONCE @regression @tier2', function () {
-    this.timeout(60000);
+let indexer;
 
-    let indexer;
-
+function registerFanoutHooks() {
     before(async function () {
         await createDatabases(__filename);
         await createDecoderSchema();
@@ -90,7 +88,9 @@ describe('28 output fan-out collapse: a multi-output data-bearing tx runs ONCE @
         await destroyFileIndexers(__filename);
         await closeAll();
     });
+}
 
+function registerFanoutTests() {
     it('the two-output transaction really did fan out to two decoder rows', async function () {
         // Guards the guard: if the seeder stopped emitting two outputs this file would
         // pass for the wrong reason, proving nothing about the collapse.
@@ -120,4 +120,10 @@ describe('28 output fan-out collapse: a multi-output data-bearing tx runs ONCE @
         assert.strictEqual(Number(rows[0].c), 1,
             'one on-chain transaction is one action, whatever its output count');
     });
+}
+
+describe('28 output fan-out collapse: a multi-output data-bearing tx runs ONCE @regression @tier2', function () {
+    this.timeout(60000);
+    registerFanoutHooks();
+    registerFanoutTests();
 });

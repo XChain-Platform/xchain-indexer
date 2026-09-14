@@ -85,10 +85,9 @@ const issueEmit = t => `xchain.emit.issue({tick:'${t}', maxSupply:'1000', maxMin
 const CTOR_NEG = `module.exports={ meta:{ name:'Ctor Neg', description:'Constructor emits an ISSUE its allowlist forbids.', version:'1.0.0' }, permissions:['SEND'],  initialize:function(){ ${issueEmit('CTORNEG')} } };`;
 const CTOR_POS = `module.exports={ meta:{ name:'Ctor Pos', description:'Constructor emits an ISSUE its allowlist permits.', version:'1.0.0' }, permissions:['ISSUE'], initialize:function(){ ${issueEmit('CTORPOS')} } };`;
 
-describe('Phase E permissions manifest: deploy persistence (real DB + real VM) @phaseE', function () {
-    this.timeout(600000);
-    let seeder, indexer;
+let seeder, indexer;
 
+function registerPermissionHooks() {
     before(async function () {
         // This scenario drives real contract DEPLOY/EXECUTE, which needs the
         // isolated-vm-backed xchain-vm. The integration tier is provisioned
@@ -119,36 +118,38 @@ describe('Phase E permissions manifest: deploy persistence (real DB + real VM) @
         await destroyFileIndexers(__filename);
         await closeAll();
     });
+}
 
-    async function rowFor(code) {
-        const h = sha(code);
-        const rows = await indexerQuery(
-            `SELECT c.action_index, c.code_hash, s.status AS status,
-                    c.meta_name, c.meta_description, c.meta_version, c.meta_json,
-                    cp.permissions AS permissions, cp.max_take_bps AS max_take_bps
-             FROM contracts c
-             LEFT JOIN index_statuses s ON s.id = c.status_id
-             LEFT JOIN contract_permissions cp ON cp.contract_index = c.action_index`, []);
-        return rows.find(r => r.code_hash === h);
-    }
+async function rowFor(code) {
+    const h = sha(code);
+    const rows = await indexerQuery(
+        `SELECT c.action_index, c.code_hash, s.status AS status,
+                c.meta_name, c.meta_description, c.meta_version, c.meta_json,
+                cp.permissions AS permissions, cp.max_take_bps AS max_take_bps
+         FROM contracts c
+         LEFT JOIN index_statuses s ON s.id = c.status_id
+         LEFT JOIN contract_permissions cp ON cp.contract_index = c.action_index`, []);
+    return rows.find(r => r.code_hash === h);
+}
 
-    // A real token exists only if the ISSUE actually committed. Check the `tokens` table, NOT
-    // index_tickers, whose INSERT IGNORE / non-rewinding ids survive a rolled-back emission.
-    async function tokenExists(tick) {
-        const rows = await indexerQuery(
-            `SELECT COUNT(*) AS c FROM tokens tk JOIN index_tickers it ON it.id = tk.tick_id WHERE it.tick = ?`,
-            [tick]);
-        return Number(rows[0].c) > 0;
-    }
+// A real token exists only if the ISSUE actually committed. Check the `tokens` table, NOT
+// index_tickers, whose INSERT IGNORE / non-rewinding ids survive a rolled-back emission.
+async function tokenExists(tick) {
+    const rows = await indexerQuery(
+        `SELECT COUNT(*) AS c FROM tokens tk JOIN index_tickers it ON it.id = tk.tick_id WHERE it.tick = ?`,
+        [tick]);
+    return Number(rows[0].c) > 0;
+}
 
-    // All recorded contract-execution error messages (constructor runs recorded here even when
-    // the deploy was rolled back). The allowlist denial surfaces as 'manifest: action <X> not
-    // permitted'; an emission that PASSED the allowlist fails later with a different message.
-    async function execErrors() {
-        const rows = await indexerQuery(`SELECT error_message FROM contract_executions`, []);
-        return rows.map(r => r.error_message || '');
-    }
+// All recorded contract-execution error messages (constructor runs recorded here even when
+// the deploy was rolled back). The allowlist denial surfaces as 'manifest: action <X> not
+// permitted'; an emission that PASSED the allowlist fails later with a different message.
+async function execErrors() {
+    const rows = await indexerQuery(`SELECT error_message FROM contract_executions`, []);
+    return rows.map(r => r.error_message || '');
+}
 
+function registerPermissionPersistenceTests() {
     it('persists a declared manifest (permissions + maxTakeBps) on a clean deploy', async function () {
         const row = await rowFor(MANIFEST_C);
         assert.ok(row, 'manifest contract was deployed');
@@ -172,7 +173,9 @@ describe('Phase E permissions manifest: deploy persistence (real DB + real VM) @
         assert.strictEqual(row.status, 'valid', 'bare deploy is valid');
         assert.strictEqual(row.permissions, null, 'no manifest row → unrestricted default');
     });
+}
 
+function registerPermissionRejectionTests() {
     it('a malformed manifest REJECTS the deploy (CONTRACT_MANIFEST) and stores no row', async function () {
         const row = await rowFor(BAD_C);
         assert.ok(row, 'bad-manifest contract row exists with its (invalid) status');
@@ -203,7 +206,9 @@ describe('Phase E permissions manifest: deploy persistence (real DB + real VM) @
         assert.strictEqual(row.meta_version,     null);
         assert.strictEqual(row.meta_json,        null);
     });
+}
 
+function registerPermissionAllowlistTests() {
     it('ENFORCES the allowlist: a DISALLOWED constructor emission is denied by the manifest', async function () {
         // CTOR_NEG permits only SEND but its constructor emits ISSUE. The allowlist check in
         // processEmission throws BEFORE the action runs, failing the constructor → the deploy
@@ -239,4 +244,12 @@ describe('Phase E permissions manifest: deploy persistence (real DB + real VM) @
         assert.strictEqual(row.status, 'valid',
             'the ISSUE-permitting deploy is valid (its constructor emission succeeded), got: ' + row.status);
     });
+}
+
+describe('Phase E permissions manifest: deploy persistence (real DB + real VM) @phaseE', function () {
+    this.timeout(600000);
+    registerPermissionHooks();
+    registerPermissionPersistenceTests();
+    registerPermissionRejectionTests();
+    registerPermissionAllowlistTests();
 });

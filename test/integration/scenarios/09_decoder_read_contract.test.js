@@ -72,11 +72,9 @@ const SOURCE = 'mn2YrLgFdvZ9MUK64a7TBn3ZVDKFo13b86'; // valid regtest P2PKH (pas
 const DEST   = 'mvQLUzhdrR1gGQmHLkMy62Y86o6ahgRo8h';
 const BASE_TIME = 1700000000;
 
-describe('Decoder->indexer DB read contract @regression @tier1', function () {
-    this.timeout(30000);
+let decoderDb, seeder, decoderDbName;
 
-    let decoderDb, seeder, decoderDbName;
-
+function registerDecoderContractHooks() {
     before(async function () {
         process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
         process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
@@ -101,7 +99,9 @@ describe('Decoder->indexer DB read contract @regression @tier1', function () {
         await resetDecoderDb();
         seeder.reset();
     });
+}
 
+function registerDecoderSchemaTest() {
     // -----------------------------------------------------------------------
     // A. Static contract: declared read surface ⊆ decoder's real columns.
     // -----------------------------------------------------------------------
@@ -119,7 +119,9 @@ describe('Decoder->indexer DB read contract @regression @tier1', function () {
                 `decoder table "${table}" is missing column(s) the indexer reads: ${missing.join(', ')}`);
         }
     });
+}
 
+function registerDecoderReadTests() {
     // -----------------------------------------------------------------------
     // B. Behavioral contract: the real query runs against the real schema and
     //    returns the normalized shape. This is the guard that fails LOUD on the
@@ -166,4 +168,11 @@ describe('Decoder->indexer DB read contract @regression @tier1', function () {
         const rows = await decoderDb.getDecoderBlockData(999999);
         assert.deepStrictEqual(rows, []);
     });
+}
+
+describe('Decoder->indexer DB read contract @regression @tier1', function () {
+    this.timeout(30000);
+    registerDecoderContractHooks();
+    registerDecoderSchemaTest();
+    registerDecoderReadTests();
 });
