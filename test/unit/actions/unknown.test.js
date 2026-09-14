@@ -17,9 +17,9 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Unknown = require('../../../src/actions/unknown.js');
 
-describe('Unknown action handler @regression @tier3', function () {
-    let indexer, actionsCtx, handler;
+let indexer, actionsCtx, handler;
 
+describe('Unknown action handler @regression @tier3', function () {
     beforeEach(function () {
         indexer = createMockIndexer();
         actionsCtx = {
@@ -73,6 +73,26 @@ describe('Unknown action handler @regression @tier3', function () {
         const data = createBaseData({ ACTION: 'UNKNOWN' });
         await handler.parse(null, data, null);
         assert.ok(indexer.mapper.createMappings.calledOnce);
+    });
+});
+
+describe('Unknown action handler @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        actionsCtx = {
+            config: indexer.config,
+            util: indexer.util,
+            mapper: indexer.mapper,
+            decoderDb: indexer.decoderDb,
+            indexerDb: indexer.indexerDb,
+            protocolChanges: {
+                isDefined: sinon.stub().returns(true),
+                isEnabled: sinon.stub().resolves(true),
+            },
+            processAction: sinon.stub().resolves(),
+        };
+        handler = new Unknown(actionsCtx);
+        indexer.util.resetLists();
     });
 
     it('calls mapper.createMappings even when an error is passed in', async function () {

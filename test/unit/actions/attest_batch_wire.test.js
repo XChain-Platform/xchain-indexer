@@ -98,9 +98,7 @@ function roundTrip(win) {
 }
 
 describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
-
     describe('round trip', function () {
-
         it('carries a window out and back with every row field intact', function () {
             const win = window_(5);
             const { enc, head, chunks } = roundTrip(win);
@@ -150,7 +148,11 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
                 abw.computeBatchKey({ network: 'testnet', window_start: 1700000000, window_end: 1700003600 }),
                 'two networks never share a batch key');
         });
+    });
+});
 
+describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
+    describe('round trip', function () {
         it('the signed canonical covers the window and its rows, and NOT the signatures', function () {
             // The BATCH quorum's own signature (distinct from the per-row responsible-set
             // signatures, which DO ride inside the rows and therefore inside the preimage).
@@ -169,7 +171,9 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
                 'the anchor the quorum is resolved at is inside the preimage');
         });
     });
+});
 
+describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
     describe('chunking at the wire boundary', function () {
 
         it('splits an incompressible window across chunks, none of them over 8189 bytes', function () {
@@ -214,7 +218,9 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
                     abw.ATTEST_BATCH_FAIL_REASONS.CHUNK_INDEX);
         });
     });
+});
 
+describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
     describe('coverage', function () {
 
         it('refuses reassembly while any slot is missing', function () {
@@ -255,9 +261,10 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
             assert.deepStrictEqual(abw.attestChunkCoverage([], 1), [], 'a single-wire batch needs no chunks');
         });
     });
+});
 
+describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
     describe('integrity: CRC and canonical base64', function () {
-
         it('reds a reassembled body whose CRC does not match the head', function () {
             const { enc, head, chunks } = roundTrip(window_(5));
             const tampered = { ...head, batchCrc32: 'deadbeef' };
@@ -297,7 +304,11 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
             assert.strictEqual(abw.reassembleAttestBatch(head, chunks).ok, true,
                 'and the untouched batch still reassembles, which is what proves the fixture discriminates');
         });
+    });
+});
 
+describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
+    describe('integrity: CRC and canonical base64', function () {
         it('refuses a non-canonical base64 spelling of the same bytes', function () {
             const { head, chunks } = roundTrip(window_(5));
             // The URL-safe alphabet is a DIFFERENT encoding; accepting both would give one
@@ -328,9 +339,10 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
                 abw.ATTEST_BATCH_FAIL_REASONS.CRC_FORMAT);
         });
     });
+});
 
+describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
     describe('the consensus caps', function () {
-
         it('holds the two frozen numbers', function () {
             assert.strictEqual(abw.ATTEST_BATCH_MAX_INFLATED_BYTES, 1048576);
             assert.strictEqual(abw.ATTEST_BATCH_MAX_ROWS, 256);
@@ -376,7 +388,11 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
                                                   'deadbeef', 'QUJD']).ok,
                 true, 'and so is a continuation inside it');
         });
+    });
+});
 
+describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
+    describe('the consensus caps', function () {
         it('cannot refuse a batch this codebase can build: the encoder tops out under the ceiling', function () {
             // The bound is only safe if it sits above what encodeAttestBatch will EMIT, so
             // measure that rather than assert the comment. The worst case is the inflated
@@ -425,7 +441,11 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
                        abw.ATTEST_BATCH_FAIL_REASONS.RATIO_CAP].includes(out.reason),
                 'refused at the bound rather than absorbed and rejected after, reason ' + out.reason);
         });
+    });
+});
 
+describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
+    describe('the consensus caps', function () {
         it('reds a body whose row_count disagrees with the rows it carries', function () {
             // The header keys the gates and the body carries the rows; letting them
             // differ would let a publisher choose which one a node reads.
@@ -462,7 +482,9 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
             assert.strictEqual(out.reason, abw.ATTEST_BATCH_FAIL_REASONS.ROW_FIELD);
         });
     });
+});
 
+describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
     describe('head structure', function () {
 
         it('refuses a head whose batch key does not derive from the window it declares', function () {
