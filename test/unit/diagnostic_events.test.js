@@ -21,21 +21,20 @@ const diag          = require('../../src/actions/anchor/diagnostic_events.js');
 const observability = require('../../src/observability');
 const XChainDB      = require('../../src/db');
 
-describe('indexer failure-leg diagnostics @regression', function () {
+let sink;
 
-    let sink;
+// Records, not printed lines: getLogger() routes to whatever shipper the
+// process installed, so a capture sink on that shipper sees the fields.
+function lines(event) {
+    return sink.lines.filter(l => l.includes(event));
+}
+function crashCount(kind) {
+    const line = observability.getRegistry().render().split('\n')
+        .find(l => l.startsWith(`xchain_crashes_total{kind="${kind}"}`));
+    return line ? Number(line.trim().split(' ').pop()) : 0;
+}
 
-    // Records, not printed lines: getLogger() routes to whatever shipper the
-    // process installed, so a capture sink on that shipper sees the fields.
-    function lines(event) {
-        return sink.lines.filter(l => l.includes(event));
-    }
-    function crashCount(kind) {
-        const line = observability.getRegistry().render().split('\n')
-            .find(l => l.startsWith(`xchain_crashes_total{kind="${kind}"}`));
-        return line ? Number(line.trim().split(' ').pop()) : 0;
-    }
-
+function useDiagnosticSink() {
     beforeEach(function () {
         observability._resetObservability();
         diag.resetDiagnostics();
@@ -50,16 +49,29 @@ describe('indexer failure-leg diagnostics @regression', function () {
         observability._resetObservability();
         diag.resetDiagnostics();
     });
+}
+
+// The real writer, with only the SQL round trip replaced: the assertion is
+// that recording a refusal emits, not that MariaDB accepts the statement.
+function dbWithFakeQuery() {
+    const db = Object.create(XChainDB.prototype);
+    db.doQuery = async () => [];
+    return db;
+}
+
+// A stand-in process, so the real handlers run without mocha's own
+// handlers or a live process.exit taking part.
+function fakeProc() {
+    const proc = new EventEmitter();
+    proc.exits = [];
+    proc.exit = (code) => proc.exits.push(code);
+    return proc;
+}
+
+describe('indexer failure-leg diagnostics @regression', function () {
+    useDiagnosticSink();
 
     describe('XCALL_REJECTED', function () {
-
-        // The real writer, with only the SQL round trip replaced: the assertion is
-        // that recording a refusal emits, not that MariaDB accepts the statement.
-        function dbWithFakeQuery() {
-            const db = Object.create(XChainDB.prototype);
-            db.doQuery = async () => [];
-            return db;
-        }
 
         it('a recorded cross-chain refusal emits the call and the reason', async function () {
             const db = dbWithFakeQuery();
@@ -91,6 +103,10 @@ describe('indexer failure-leg diagnostics @regression', function () {
             await db.recordCrossChainCallRejection('ee', 'quorum_not_met', 'x', 1);
         });
     });
+});
+
+describe('indexer failure-leg diagnostics @regression', function () {
+    useDiagnosticSink();
 
     describe('isAnchorFailureStatus', function () {
         it('treats only the invalid verdicts as failures', function () {
@@ -104,17 +120,12 @@ describe('indexer failure-leg diagnostics @regression', function () {
             assert.strictEqual(diag.isAnchorFailureStatus(undefined), false);
         });
     });
+});
+
+describe('indexer failure-leg diagnostics @regression', function () {
+    useDiagnosticSink();
 
     describe('CRASH handlers', function () {
-
-        // A stand-in process, so the real handlers run without mocha's own
-        // handlers or a live process.exit taking part.
-        function fakeProc() {
-            const proc = new EventEmitter();
-            proc.exits = [];
-            proc.exit = (code) => proc.exits.push(code);
-            return proc;
-        }
 
         it('an uncaught exception emits one CRASH record and exits non-zero', function () {
             const proc = fakeProc();
