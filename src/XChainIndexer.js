@@ -22,7 +22,6 @@
 const fs        = require('fs');
 const config    = require('./config.js');
 const coins     = require('./coins');
-const pkg       = require('../package.json');
 const protocolTime = require('./consensus/protocol_time.js');
 const util      = require('./utility.js');
 const stateCommitment   = require('./stateCommitment.js');
@@ -101,8 +100,13 @@ class XChainIndexer {
         // "undefined vundefined". Fall back to the package.json this process
         // actually loaded, the same source src/api.js:220 already reports from.
         // Env stays first so the test launchers that pin it keep deciding.
-        this.version = CONFIG_ENV.npm_package_version || pkg.version;
-        this.name    = CONFIG_ENV.npm_package_name    || pkg.name;
+        //
+        // The require stays HERE and is not hoisted to module scope: package.json sits
+        // outside src/, and the armed-map v2 falsification harness loads this module from
+        // a temp tree that copies src/ alone. A load-time require turns that copy into a
+        // MODULE_NOT_FOUND, which is how the hoist was caught.
+        this.version = CONFIG_ENV.npm_package_version || require('../package.json').version;
+        this.name    = CONFIG_ENV.npm_package_name    || require('../package.json').name;
 
         // Decoder database config
         this.decoderDbHost = decoderDbHost;
