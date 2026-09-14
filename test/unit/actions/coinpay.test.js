@@ -7,107 +7,29 @@
 // General Public License v3.0 or later; see LICENSE.md. A commercial
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
+//
+// COINPAY action handler: the early-exit guards, format validation, a valid
+// settlement and obligation expiry. The seller-order finalisation and
+// role/ownership blocks live beside this file in coinpay.test/. Every block in
+// every file opens the same 'Coinpay (COINPAY) @regression @tier2' describe, so
+// each full test title is the one the suite always had;
+// coinpay.test/helpers/coinpay_harness.js holds the fixtures and the mock harness
+// they all run on.
 
 process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
-const sinon  = require('sinon');
-const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
+const { createBaseData } = require('../../fixtures/mocks');
+const { PAYEE, makeObligation, useCoinpayHarness } = require('./coinpay.test/helpers/coinpay_harness.js');
 
-const Coinpay = require('../../../src/actions/coinpay.js');
+// The harness under test. useCoinpayHarness rebuilds it before every test and
+// restores sinon after it; bind copies it into the names the tests read.
+let indexer, handler;
+const bind = (h) => { ({ indexer, handler } = h); };
 
 describe('Coinpay (COINPAY) @regression @tier2', function () {
-    let indexer, actionsCtx, handler;
-
-    const PAYEE   = '1PayeeAddressXXXXXXXXXXXXXXXXWgU1QK';
-    const SELLER  = '1SellerAddressXXXXXXXXXXXXXXXbR3kNE';
-    const BUYER   = '1BuyerAddressXXXXXXXXXXXXXXXXfUzXFr';
-
-    function makeObligation(overrides = {}) {
-        return {
-            ACTION_INDEX:    42,
-            ORDER_MATCH_ACTION_INDEX: 42,
-            PAYEE_ADDRESS:   PAYEE,
-            COIN_AMOUNT:     '0.00100000',
-            COINPAY_STATUS:  'pending_coinpay',
-            EXPIRATION:      9999999999,
-            ...overrides,
-        };
-    }
-
-    function makeOrderInfo(overrides = {}) {
-        return {
-            ACTION_INDEX:    10,
-            SOURCE:          SELLER,
-            GIVE_TICK:       'TEST',
-            GIVE_REMAINING:  '50',
-            GET_REMAINING:   '100',
-            GET_ADDRESS:     BUYER,
-            ORDER_STATUS:    'open',
-            GIVE_OWNERSHIP:  null,
-            ...overrides,
-        };
-    }
-
-    function makeCoinOrderInfo(overrides = {}) {
-        return {
-            ACTION_INDEX:    11,
-            SOURCE:          BUYER,
-            GIVE_TICK:       null,   // native coin side: no tick
-            GIVE_REMAINING:  '0.001',
-            GET_REMAINING:   '50',
-            GET_ADDRESS:     BUYER,
-            ORDER_STATUS:    'open',
-            GIVE_OWNERSHIP:  null,
-            ...overrides,
-        };
-    }
-
-    function makeMatchAmounts(sellerIdx, overrides = {}) {
-        return {
-            give_action_index: 11,   // coin order is the match ("give") side
-            get_action_index:  10,   // seller order is the original ("get") side
-            give_amount:       '0.001',
-            get_amount:        '50',
-            ...overrides,
-        };
-    }
-
-    beforeEach(function () {
-        indexer = createMockIndexer();
-
-        // Extra DB stubs needed by coinpay.js
-        indexer.indexerDb.getCoinpayObligationInfo    = sinon.stub().resolves(makeObligation());
-        indexer.indexerDb.getOrderMatchOrders         = sinon.stub().resolves({ give_action_index: 11, get_action_index: 10 });
-        indexer.indexerDb.getOrderInfo                = sinon.stub();
-        indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 11).resolves(makeCoinOrderInfo());
-        indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 10).resolves(makeOrderInfo());
-        indexer.indexerDb.getOrderMatchAmounts        = sinon.stub().resolves(makeMatchAmounts(10));
-        indexer.indexerDb.createCoinpay              = sinon.stub().resolves();
-        indexer.indexerDb.createCoinpayStatus        = sinon.stub().resolves();
-        indexer.indexerDb.createOrderStatus          = sinon.stub().resolves();
-        indexer.indexerDb.updateOrderMatchStatus     = sinon.stub().resolves();
-        indexer.indexerDb.getPendingCoinpayObligationsByOrder = sinon.stub().resolves([]);
-        indexer.indexerDb.deleteActionIndex          = sinon.stub().resolves();
-        indexer.indexerDb.getOrderSweepDestination   = sinon.stub().resolves(null);
-        indexer.indexerDb.clearTokenEscrow           = sinon.stub().resolves();
-
-        actionsCtx = {
-            config:    indexer.config,
-            util:      indexer.util,
-            mapper:    indexer.mapper,
-            decoderDb: indexer.decoderDb,
-            indexerDb: indexer.indexerDb,
-            protocolChanges: indexer.protocolChanges,   // isEnabled -> true (regtest genesis) by default
-        };
-        handler = new Coinpay(actionsCtx);
-        indexer.util.resetLists();
-    });
-
-    afterEach(function () {
-        sinon.restore();
-    });
+    useCoinpayHarness(bind);
 
     // ─── Early-exit paths (no matching/pending obligation) ────────────────
 
@@ -160,6 +82,10 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
         });
 
     });
+});
+
+describe('Coinpay (COINPAY) @regression @tier2', function () {
+    useCoinpayHarness(bind);
 
     // ─── Format validation ────────────────────────────────────────────────
 
@@ -206,7 +132,13 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
             const [, , status] = indexer.indexerDb.createCoinpayStatus.firstCall.args;
             assert.strictEqual(status, 'fulfilled');
         });
+    });
+});
 
+describe('Coinpay (COINPAY) @regression @tier2', function () {
+    useCoinpayHarness(bind);
+
+    describe('valid settlement', function () {
         it('valid coinpay → ORDER_MATCH status set to valid', async function () {
             const data = createBaseData({
                 ACTION: 'COINPAY', FORMAT: 0,
@@ -253,6 +185,10 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
         });
 
     });
+});
+
+describe('Coinpay (COINPAY) @regression @tier2', function () {
+    useCoinpayHarness(bind);
 
     // ─── Expiration ───────────────────────────────────────────────────────
 
@@ -280,267 +216,6 @@ describe('Coinpay (COINPAY) @regression @tier2', function () {
             });
             await handler.parse(['0', '42'], data, null);
             assert.strictEqual(data['STATUS'], 'valid');
-        });
-
-    });
-
-    // ─── Seller order finalisation ────────────────────────────────────────
-
-    describe('seller order transition states', function () {
-        it('finalises a cancelling seller order when no more obligations remain', async function () {
-            // Seller order in 'cancelling' state with remaining balance
-            const cancellingOrder = makeOrderInfo({ ORDER_STATUS: 'cancelling', GIVE_REMAINING: '10' });
-            indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 10).resolves(cancellingOrder);
-            // Re-fetch (updated) returns same object (same remaining)
-            indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 10).resolves(cancellingOrder);
-            // No pending obligations remain
-            indexer.indexerDb.getPendingCoinpayObligationsByOrder.resolves([]);
-
-            const data = createBaseData({
-                ACTION: 'COINPAY', FORMAT: 0,
-                COIN_DESTINATION: PAYEE, COIN_AMOUNT: '0.001', BLOCK_TIME: 1000,
-            });
-            await handler.parse(['0', '42'], data, null);
-
-            // Should have called createOrderStatus with 'cancelled'
-            const cancelledCall = indexer.indexerDb.createOrderStatus.getCalls()
-                .find(c => c.args[2] === 'cancelled');
-            assert.ok(cancelledCall, 'seller order should be marked cancelled');
-        });
-
-        it('does NOT finalise a cancelling seller order when obligations remain', async function () {
-            const cancellingOrder = makeOrderInfo({ ORDER_STATUS: 'cancelling', GIVE_REMAINING: '10' });
-            indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 10).resolves(cancellingOrder);
-            // One pending obligation still exists
-            indexer.indexerDb.getPendingCoinpayObligationsByOrder.resolves([{ id: 99 }]);
-
-            const data = createBaseData({
-                ACTION: 'COINPAY', FORMAT: 0,
-                COIN_DESTINATION: PAYEE, COIN_AMOUNT: '0.001', BLOCK_TIME: 1000,
-            });
-            await handler.parse(['0', '42'], data, null);
-
-            const cancelledCall = indexer.indexerDb.createOrderStatus.getCalls()
-                .find(c => c.args[2] === 'cancelled');
-            assert.ok(!cancelledCall, 'seller order must NOT be cancelled while obligations remain');
-        });
-
-        it('finalises an expiring seller order when no more obligations remain', async function () {
-            const expiringOrder = makeOrderInfo({ ORDER_STATUS: 'expiring', GIVE_REMAINING: '10' });
-            indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 10).resolves(expiringOrder);
-            indexer.indexerDb.getPendingCoinpayObligationsByOrder.resolves([]);
-
-            const data = createBaseData({
-                ACTION: 'COINPAY', FORMAT: 0,
-                COIN_DESTINATION: PAYEE, COIN_AMOUNT: '0.001', BLOCK_TIME: 1000,
-            });
-            await handler.parse(['0', '42'], data, null);
-
-            const expiredCall = indexer.indexerDb.createOrderStatus.getCalls()
-                .find(c => c.args[2] === 'expired');
-            assert.ok(expiredCall, 'expiring seller order should be marked expired when no obligations remain');
-        });
-    });
-
-    describe('seller order transition states', function () {
-        it('sweep destination used for refund when cancelling seller has one', async function () {
-            const SWEEP_DEST = '1SweepDestXXXXXXXXXXXXXXXXXXXXabc123';
-            const cancellingOrder = makeOrderInfo({ ORDER_STATUS: 'cancelling', GIVE_REMAINING: '20' });
-            indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 10).resolves(cancellingOrder);
-            indexer.indexerDb.getPendingCoinpayObligationsByOrder.resolves([]);
-            indexer.indexerDb.getOrderSweepDestination.resolves(SWEEP_DEST);
-
-            const data = createBaseData({
-                ACTION: 'COINPAY', FORMAT: 0,
-                COIN_DESTINATION: PAYEE, COIN_AMOUNT: '0.001', BLOCK_TIME: 1000,
-            });
-            await handler.parse(['0', '42'], data, null);
-
-            // getOrderSweepDestination must have been called
-            assert.ok(indexer.indexerDb.getOrderSweepDestination.calledOnce,
-                'getOrderSweepDestination should be called for a cancelling seller order');
-        });
-
-    });
-
-    // ─── Guard: matchOrders / orderInfo null ─────────────────────────────────
-
-    describe('null matchOrders / orderInfo guard', function () {
-
-        it('returns early when getOrderMatchOrders returns falsy', async function () {
-            indexer.indexerDb.getOrderMatchOrders.resolves(null);
-
-            const data = createBaseData({
-                ACTION: 'COINPAY', FORMAT: 0,
-                COIN_DESTINATION: PAYEE, COIN_AMOUNT: '0.001', BLOCK_TIME: 1000,
-            });
-            await handler.parse(['0', '42'], data, null);
-
-            // updateBalances must not be called (early return before settlement)
-            assert.ok(indexer.indexerDb.updateBalances.notCalled,
-                'updateBalances should not be called when matchOrders is null');
-        });
-
-        it('returns early when giveOrderInfo is null', async function () {
-            indexer.indexerDb.getOrderMatchOrders.resolves({ give_action_index: 11, get_action_index: 10 });
-            indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 11).resolves(null);
-            indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 10).resolves(makeCoinOrderInfo());
-
-            const data = createBaseData({
-                ACTION: 'COINPAY', FORMAT: 0,
-                COIN_DESTINATION: PAYEE, COIN_AMOUNT: '0.001', BLOCK_TIME: 1000,
-            });
-            await handler.parse(['0', '42'], data, null);
-
-            assert.ok(indexer.indexerDb.updateBalances.notCalled);
-        });
-
-        it('orders marked complete when GIVE_REMAINING <= 0 after settlement', async function () {
-            // Override the re-fetched order info to show remaining = 0
-            const doneOrder = makeOrderInfo({ GIVE_REMAINING: '0', GET_REMAINING: '0' });
-            const doneCoin  = makeCoinOrderInfo({ GIVE_REMAINING: '0', GET_REMAINING: '0' });
-
-            // First two getOrderInfo calls (initial fetch) return normal orders
-            // The re-fetched orders (after createCoinpayStatus) return exhausted orders
-            indexer.indexerDb.getOrderInfo
-                .withArgs(sinon.match.any, 11).onFirstCall().resolves(makeCoinOrderInfo())
-                .withArgs(sinon.match.any, 11).onSecondCall().resolves(doneCoin);
-            indexer.indexerDb.getOrderInfo
-                .withArgs(sinon.match.any, 10).onFirstCall().resolves(makeOrderInfo())
-                .withArgs(sinon.match.any, 10).onSecondCall().resolves(doneOrder);
-
-            const data = createBaseData({
-                ACTION: 'COINPAY', FORMAT: 0,
-                COIN_DESTINATION: PAYEE, COIN_AMOUNT: '0.001', BLOCK_TIME: 1000,
-            });
-            await handler.parse(['0', '42'], data, null);
-
-            // At least one 'complete' status must be recorded
-            const completeCall = indexer.indexerDb.createOrderStatus.getCalls()
-                .find(c => c.args[2] === 'complete');
-            assert.ok(completeCall, 'at least one order should be marked complete when remaining=0');
-        });
-
-    });
-
-    // ─── Seller/coin order role determination ────────────────────────────────
-
-    describe('seller vs coin order role determination', function () {
-        it('giveOrderInfo GIVE_TICK is a real token (not null/COIN) → giveOrder is seller, getOrder is coin', async function () {
-            // giveOrderInfo has GIVE_TICK='TEST' (a real token): falls through to the else branch
-            // (lines 136-138): coinOrder=getOrderInfo, sellerOrder=giveOrderInfo
-            const giveOrder = makeOrderInfo({ ACTION_INDEX: 11, GIVE_TICK: 'TEST', SOURCE: SELLER, GET_ADDRESS: BUYER });
-            const getOrder  = makeCoinOrderInfo({ ACTION_INDEX: 10, GIVE_TICK: null, GET_ADDRESS: BUYER });
-
-            // Obligation matchOrders: give=11 (token seller), get=10 (coin payer)
-            indexer.indexerDb.getOrderMatchOrders.resolves({ give_action_index: 11, get_action_index: 10 });
-            indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 11).resolves(giveOrder);
-            indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 10).resolves(getOrder);
-
-            // matchQuery: seller (giveOrder, index 11) is NOT matchQuery.get_action_index (10)
-            // → tokenAmount = matchQuery.get_amount (lines 164-166)
-            indexer.indexerDb.getOrderMatchAmounts.resolves({
-                give_action_index: 11,
-                get_action_index:  10,
-                give_amount:       '0.001',
-                get_amount:        '50',
-            });
-
-            const data = createBaseData({
-                ACTION: 'COINPAY', FORMAT: 0,
-                COIN_DESTINATION: PAYEE, COIN_AMOUNT: '0.001', BLOCK_TIME: 1000,
-            });
-            await handler.parse(['0', '42'], data, null);
-
-            // Settlement should have completed: createCoinpayStatus with 'fulfilled'
-            assert.ok(indexer.indexerDb.createCoinpayStatus.calledOnce);
-            const [, , st] = indexer.indexerDb.createCoinpayStatus.firstCall.args;
-            assert.strictEqual(st, 'fulfilled');
-        });
-
-        // role detection keys on which side actually GIVES native coin, checking BOTH
-        // orders. A malformed obligation where NEITHER order gives native coin (both GIVE_TICK
-        // are real tokens) is ambiguous - the pre-fix single-side check silently picked getOrder
-        // as the coin side and released the wrong escrow. With COINPAY_NATIVE_RECIPROCITY active
-        // the handler refuses to settle it (order_match no longer creates this shape either).
-        it('refuses to settle when neither order gives native coin (ambiguous roles, flag ON)', async function () {
-            const giveTokenOrder = makeOrderInfo({ ACTION_INDEX: 11, GIVE_TICK: 'TEST',  SOURCE: SELLER, GET_ADDRESS: BUYER });
-            const getTokenOrder  = makeOrderInfo({ ACTION_INDEX: 10, GIVE_TICK: 'TEST2', SOURCE: BUYER,  GET_ADDRESS: SELLER });
-
-            indexer.indexerDb.getOrderMatchOrders.resolves({ give_action_index: 11, get_action_index: 10 });
-            indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 11).resolves(giveTokenOrder);
-            indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 10).resolves(getTokenOrder);
-
-            const data = createBaseData({
-                ACTION: 'COINPAY', FORMAT: 0,
-                COIN_DESTINATION: PAYEE, COIN_AMOUNT: '0.001', BLOCK_TIME: 1000,
-            });
-            await handler.parse(['0', '42'], data, null);
-
-            // No settlement: obligation is never marked fulfilled and no escrow is released.
-            assert.ok(indexer.indexerDb.createCoinpayStatus.notCalled, 'ambiguous match must not be settled');
-            assert.ok(indexer.indexerDb.createEscrow.notCalled, 'no escrow release on an ambiguous match');
-        });
-    });
-
-    describe('seller vs coin order role determination', function () {
-        it('LEGACY (flag OFF): both-token shape falls through to the pre-flag-day single-side split', async function () {
-            actionsCtx.protocolChanges.isEnabled = sinon.stub().resolves(false);
-
-            const giveTokenOrder = makeOrderInfo({ ACTION_INDEX: 11, GIVE_TICK: 'TEST',  SOURCE: SELLER, GET_ADDRESS: BUYER });
-            const getTokenOrder  = makeOrderInfo({ ACTION_INDEX: 10, GIVE_TICK: 'TEST2', SOURCE: BUYER,  GET_ADDRESS: SELLER });
-
-            indexer.indexerDb.getOrderMatchOrders.resolves({ give_action_index: 11, get_action_index: 10 });
-            indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 11).resolves(giveTokenOrder);
-            indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 10).resolves(getTokenOrder);
-
-            const data = createBaseData({
-                ACTION: 'COINPAY', FORMAT: 0,
-                COIN_DESTINATION: PAYEE, COIN_AMOUNT: '0.001', BLOCK_TIME: 1000,
-            });
-            await handler.parse(['0', '42'], data, null);
-
-            // Below the flag-day the legacy path still runs to completion (byte-for-byte replay
-            // parity), even for this malformed shape: giveOrderInfo gives a real token, so the
-            // legacy else-branch treats getOrder as the coin side and settles.
-            assert.ok(indexer.indexerDb.createCoinpayStatus.calledOnce, 'legacy path still settles below the flag-day');
-            const [, , st] = indexer.indexerDb.createCoinpayStatus.firstCall.args;
-            assert.strictEqual(st, 'fulfilled');
-        });
-
-    });
-
-    // ─── Ownership delivery branch ────────────────────────────────────────────
-
-    describe('ownership delivery (GIVE_OWNERSHIP=1)', function () {
-
-        it('GIVE_OWNERSHIP=1 on sellerOrder → transferTokenOwnership called instead of escrow/credit', async function () {
-            const transferSpy = sinon.stub(indexer.util, 'transferTokenOwnership').resolves();
-
-            // sellerOrder (index 10) has GIVE_OWNERSHIP=1
-            const ownershipSeller = makeOrderInfo({ ACTION_INDEX: 10, GIVE_TICK: 'TEST', GIVE_OWNERSHIP: 1 });
-            const coinOrderInfo   = makeCoinOrderInfo({ ACTION_INDEX: 11, GIVE_TICK: null });
-
-            indexer.indexerDb.getOrderMatchOrders.resolves({ give_action_index: 11, get_action_index: 10 });
-            indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 11).resolves(coinOrderInfo);
-            indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 10).resolves(ownershipSeller);
-
-            // Seller is original order (get_action_index=10 matches sellerOrder.ACTION_INDEX=10)
-            // → tokenAmount = matchQuery.give_amount
-            indexer.indexerDb.getOrderMatchAmounts.resolves({
-                give_action_index: 11,
-                get_action_index:  10,
-                give_amount:       '1',    // ownership token amount
-                get_amount:        '0.001',
-            });
-
-            const data = createBaseData({
-                ACTION: 'COINPAY', FORMAT: 0,
-                COIN_DESTINATION: PAYEE, COIN_AMOUNT: '0.001', BLOCK_TIME: 1000,
-            });
-            await handler.parse(['0', '42'], data, null);
-
-            assert.ok(transferSpy.calledOnce, 'transferTokenOwnership must be called for ownership delivery');
         });
 
     });
