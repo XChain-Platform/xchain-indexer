@@ -87,6 +87,38 @@ class Bet {
         if(!error)
             data = this.util.setNumberFormats(data);
 
+        // Feed, token and balance state every phase below reads
+        let { tokenInfo, feedInfo, feedTokenInfo, balances, fees } = await this.loadBetContext(data, format);
+
+        // Canonical outcome labels (trimmed, comma-joined) - computed during
+        // validation below and stored on the feed row
+        let outcomeLabels = [];
+
+        error = await this.validateCreateFeed(data, format, tokenInfo, outcomeLabels, error);
+
+        error = await this.validateFeedState(data, format, feedInfo, error);
+
+        error = await this.validatePlaceBet(data, format, feedInfo, feedTokenInfo, error);
+
+        error = await this.validatePlaceGating(data, format, feedInfo, error);
+
+        error = await this.validateResolve(data, format, feedInfo, error);
+
+        error = await this.validateFields(data, format, error);
+
+        error = await this.applyFees(data, format, fees, balances, feedTokenInfo, error);
+
+        error = await this.validateFeePayment(data, format, fees, balances, feedTokenInfo, error);
+
+        let status = await this.storeBetRows(data, format, feedInfo, outcomeLabels, error);
+
+        await this.settleBet(data, format, status, feedInfo, feedTokenInfo, fees);
+    }
+
+    // The feed row, the wagered token's info and the source's balances and fee object,
+    // read once per action in the order the phases below expect them
+    async loadBetContext(data, format){
+
         // Get information on the wagered token (create validates the wager tick;
         // the other formats read it off the feed row below)
         let tokenInfo = false;
@@ -111,136 +143,162 @@ class Bet {
         // Create the fees object
         let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
 
-        // Canonical outcome labels (trimmed, comma-joined) - computed during
-        // validation below and stored on the feed row
-        let outcomeLabels = [];
+        return { tokenInfo, feedInfo, feedTokenInfo, balances, fees };
+    }
 
-        // Format 0 (Create Feed) validations
-        if(format==0){
+    // Format 0 (Create Feed) validations, in three phases
+    async validateCreateFeed(data, format, tokenInfo, outcomeLabels, error){
+        if(format!=0)
+            return error;
 
-            // Verify LABEL is present and within length bounds
-            if(!error && (this.util.isNull(data['LABEL']) || String(data['LABEL']).length < 1 || String(data['LABEL']).length > this.config['MAX_BET_LABEL_LENGTH']))
-                error = 'invalid: LABEL (length)';
+        error = await this.validateFeedDefinition(data, tokenInfo, outcomeLabels, error);
 
-            // Verify OUTCOMES: comma-split count bounds
+        error = this.validateFeedTerms(data, tokenInfo, error);
+
+        error = await this.validateFeedGating(data, outcomeLabels, error);
+
+        return error;
+    }
+
+    // Feed definition: label, outcome set and the wagered tick
+    async validateFeedDefinition(data, tokenInfo, outcomeLabels, error){
+
+        // Verify LABEL is present and within length bounds
+        if(!error && (this.util.isNull(data['LABEL']) || String(data['LABEL']).length < 1 || String(data['LABEL']).length > this.config['MAX_BET_LABEL_LENGTH']))
+            error = 'invalid: LABEL (length)';
+
+        // Verify OUTCOMES: comma-split count bounds
+        if(!error){
+            let rawOutcomes = this.util.isNull(data['OUTCOMES']) ? [] : String(data['OUTCOMES']).split(',');
+            // A feed needs at least two outcomes to be a market at all, and the ceiling bounds
+            // the settlement work every node does when the feed resolves.
+            if(rawOutcomes.length < 2 || rawOutcomes.length > this.config['MAX_BET_OUTCOMES'])
+                error = 'invalid: OUTCOMES (count)';
+            // Each label trimmed non-empty, within length, and free of the wire
+            // delimiters and ASCII control characters (comma cannot survive the
+            // split; pipe / semicolon cannot reach us through the wire format;
+            // the checks are defense-in-depth per spec)
             if(!error){
-                let rawOutcomes = this.util.isNull(data['OUTCOMES']) ? [] : String(data['OUTCOMES']).split(',');
-                // A feed needs at least two outcomes to be a market at all, and the ceiling bounds
-                // the settlement work every node does when the feed resolves.
-                if(rawOutcomes.length < 2 || rawOutcomes.length > this.config['MAX_BET_OUTCOMES'])
-                    error = 'invalid: OUTCOMES (count)';
-                // Each label trimmed non-empty, within length, and free of the wire
-                // delimiters and ASCII control characters (comma cannot survive the
-                // split; pipe / semicolon cannot reach us through the wire format;
-                // the checks are defense-in-depth per spec)
-                if(!error){
-                    for(let label of rawOutcomes){
-                        let trimmed = String(label).trim();
-                        if(trimmed.length < 1 || trimmed.length > this.config['MAX_BET_OUTCOME_LENGTH'] ||
-                           /[,|;]/.test(trimmed) || /[\x00-\x1F\x7F]/.test(trimmed)){
-                            error = 'invalid: OUTCOMES (label)';
-                            break;
-                        }
-                        outcomeLabels.push(trimmed);
+                for(let label of rawOutcomes){
+                    let trimmed = String(label).trim();
+                    if(trimmed.length < 1 || trimmed.length > this.config['MAX_BET_OUTCOME_LENGTH'] ||
+                       /[,|;]/.test(trimmed) || /[\x00-\x1F\x7F]/.test(trimmed)){
+                        error = 'invalid: OUTCOMES (label)';
+                        break;
                     }
-                }
-                // Labels unique by byte-exact comparison after trim (case variants
-                // may coexist; wallets warn)
-                if(!error && new Set(outcomeLabels).size !== outcomeLabels.length)
-                    error = 'invalid: OUTCOMES (duplicate)';
-            }
-
-            // Verify TICK: native coin (empty) rejects in v0; token must exist
-            if(!error && this.util.isNull(data['TICK']))
-                error = 'invalid: TICK (native coin not supported)';
-            // The wagered tick must be an issued token: stakes are escrowed at its DECIMALS,
-            // which an unknown tick cannot supply.
-            if(!error && !tokenInfo)
-                error = 'invalid: TICK (unknown)';
-
-            // Verify TICK is not sleeping
-            if(!error && await this.indexerDb.isActionAllowed(null, data['TICK'], data['BLOCK_INDEX']) == false)
-                error = 'invalid: TICK (sleeping)';
-
-            // Controller-bound ticks reject in v0: betting would otherwise bypass the
-            // trade controller's listing veto and royalty legs entirely (stake-and-lose
-            // to a colluding winner is an uncontrolled transfer). Resolved through the
-            // same most-specific-wins map the ORDER guard uses ('trade' falls back to a
-            // catch-all 'all' binding), so an all-bound token also rejects.
-            if(!error){
-                let tickId = await this.indexerDb.getTickerId(data['TICK']);
-                let controller = this.util.isNull(tickId) ? null : await this.indexerDb.getEffectiveTokenControllerForGuard(tickId, 'trade', data['BLOCK_INDEX'], data['ACTION_INDEX']);
-                if(controller)
-                    error = 'invalid: TICK (controller-bound)';
-            }
-
-            // Verify FEE: optional percent of the pot, <= 2 decimals, 0..MAX_FEED_FEE
-            if(!error && !this.util.isNull(data['FEE'])){
-                // Two decimal places at most, checked here rather than at settlement, where a bad
-                // value would already have taken stakes it could not pay back.
-                if(!/^\d+(\.\d{1,2})?$/.test(String(data['FEE'])))
-                    error = 'invalid: FEE (format)';
-                else if(this.util.bclt(data['FEE'], 0) || this.util.bcgt(data['FEE'], this.config['MAX_FEED_FEE']))
-                    error = 'invalid: FEE (range)';
-            }
-
-            // Verify DEADLINE: required integer unix time strictly in the future
-            if(!error && (this.util.isNull(data['DEADLINE']) || !this.util.isNumeric(data['DEADLINE']) || !this.util.isInteger(data['DEADLINE'])))
-                error = 'invalid: DEADLINE (format)';
-            if(!error && this.util.bclte(data['DEADLINE'], data['BLOCK_TIME']))
-                error = 'invalid: DEADLINE (past)';
-            // Horizon cap bounds the expire_at arithmetic and keeps open feeds out of
-            // the per-block passes indefinitely
-            if(!error && this.util.bcgt(data['DEADLINE'], this.util.bcadd(data['BLOCK_TIME'], this.config['MAX_BET_DEADLINE_HORIZON'], 0)))
-                error = 'invalid: DEADLINE (too far)';
-
-            // Verify REFUND_WINDOW: optional (defaulted), integer seconds within bounds
-            if(!error && this.util.isNull(data['REFUND_WINDOW']))
-                data['REFUND_WINDOW'] = this.config['DEFAULT_BET_REFUND_WINDOW'];
-            // Verify REFUND_WINDOW is a whole number of seconds
-            if(!error && (!this.util.isNumeric(data['REFUND_WINDOW']) || !this.util.isInteger(data['REFUND_WINDOW'])))
-                error = 'invalid: REFUND_WINDOW (format)';
-            // Verify REFUND_WINDOW falls between the configured minimum and maximum
-            if(!error && (this.util.bclt(data['REFUND_WINDOW'], this.config['MIN_BET_REFUND_WINDOW']) || this.util.bcgt(data['REFUND_WINDOW'], this.config['MAX_BET_REFUND_WINDOW'])))
-                error = 'invalid: REFUND_WINDOW (range)';
-
-            // Materialize expire_at at parse (64-bit columns; the horizon + window caps
-            // above keep the sum from wrapping)
-            if(!error)
-                data['EXPIRE_AT'] = this.util.bcadd(data['DEADLINE'], data['REFUND_WINDOW'], 0);
-
-            // Verify MIN_AMOUNT: optional minimum stake at the tick's DECIMALS, > 0
-            if(!error && !this.util.isNull(data['MIN_AMOUNT']) && (!this.util.isValidAmountFormat(tokenInfo['DECIMALS'], data['MIN_AMOUNT'], data['BLOCK_TIME']) || !this.util.bcgt(data['MIN_AMOUNT'], 0)))
-                error = 'invalid: MIN_AMOUNT (format)';
-
-            // Validate LIST fields (ALLOW_LIST / BLOCK_LIST): list exists and is a
-            // supported (address) type
-            if(!error){
-                for(let name of ['ALLOW_LIST', 'BLOCK_LIST']){
-                    // Only check a LIST field that was actually provided
-                    if(!error && !this.util.isNull(data[name])){
-                        let type = await this.indexerDb.getListType(data[name]);
-                        if(type===false)
-                            error = 'invalid: ' + name + ' (unknown)';
-                        else if(!this.listTypes.includes(type))
-                            error = 'invalid: ' + name + ' (unsupported)';
-                    }
+                    outcomeLabels.push(trimmed);
                 }
             }
-
-            // When both gating lists are set they must differ: the same list in both
-            // slots builds a feed nobody can ever bet on, which looks live in the
-            // explorer and only burns pass rows until it expires
-            if(!error && !this.util.isNull(data['ALLOW_LIST']) && !this.util.isNull(data['BLOCK_LIST']) && Number(data['ALLOW_LIST'])===Number(data['BLOCK_LIST']))
-                error = 'invalid: BLOCK_LIST (same as ALLOW_LIST)';
-
-            // Validate DETAILS (optional): strict base64 wrapping a JSON object whose
-            // optional `outcomes` array must agree with the consensus OUTCOMES field
-            if(!error && !this.util.isNull(data['DETAILS']))
-                error = this.validateDetails(String(data['DETAILS']), outcomeLabels);
+            // Labels unique by byte-exact comparison after trim (case variants
+            // may coexist; wallets warn)
+            if(!error && new Set(outcomeLabels).size !== outcomeLabels.length)
+                error = 'invalid: OUTCOMES (duplicate)';
         }
 
-        // Format 1 / 2 / 3 (existing feed) validations
+        // Verify TICK: native coin (empty) rejects in v0; token must exist
+        if(!error && this.util.isNull(data['TICK']))
+            error = 'invalid: TICK (native coin not supported)';
+        // The wagered tick must be an issued token: stakes are escrowed at its DECIMALS,
+        // which an unknown tick cannot supply.
+        if(!error && !tokenInfo)
+            error = 'invalid: TICK (unknown)';
+
+        // Verify TICK is not sleeping
+        if(!error && await this.indexerDb.isActionAllowed(null, data['TICK'], data['BLOCK_INDEX']) == false)
+            error = 'invalid: TICK (sleeping)';
+
+        // Controller-bound ticks reject in v0: betting would otherwise bypass the
+        // trade controller's listing veto and royalty legs entirely (stake-and-lose
+        // to a colluding winner is an uncontrolled transfer). Resolved through the
+        // same most-specific-wins map the ORDER guard uses ('trade' falls back to a
+        // catch-all 'all' binding), so an all-bound token also rejects.
+        if(!error){
+            let tickId = await this.indexerDb.getTickerId(data['TICK']);
+            let controller = this.util.isNull(tickId) ? null : await this.indexerDb.getEffectiveTokenControllerForGuard(tickId, 'trade', data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            if(controller)
+                error = 'invalid: TICK (controller-bound)';
+        }
+
+        return error;
+    }
+
+    // Feed terms: oracle fee, deadline, refund window and minimum stake
+    validateFeedTerms(data, tokenInfo, error){
+        // Verify FEE: optional percent of the pot, <= 2 decimals, 0..MAX_FEED_FEE
+        if(!error && !this.util.isNull(data['FEE'])){
+            // Two decimal places at most, checked here rather than at settlement, where a bad
+            // value would already have taken stakes it could not pay back.
+            if(!/^\d+(\.\d{1,2})?$/.test(String(data['FEE'])))
+                error = 'invalid: FEE (format)';
+            else if(this.util.bclt(data['FEE'], 0) || this.util.bcgt(data['FEE'], this.config['MAX_FEED_FEE']))
+                error = 'invalid: FEE (range)';
+        }
+
+        // Verify DEADLINE: required integer unix time strictly in the future
+        if(!error && (this.util.isNull(data['DEADLINE']) || !this.util.isNumeric(data['DEADLINE']) || !this.util.isInteger(data['DEADLINE'])))
+            error = 'invalid: DEADLINE (format)';
+        if(!error && this.util.bclte(data['DEADLINE'], data['BLOCK_TIME']))
+            error = 'invalid: DEADLINE (past)';
+        // Horizon cap bounds the expire_at arithmetic and keeps open feeds out of
+        // the per-block passes indefinitely
+        if(!error && this.util.bcgt(data['DEADLINE'], this.util.bcadd(data['BLOCK_TIME'], this.config['MAX_BET_DEADLINE_HORIZON'], 0)))
+            error = 'invalid: DEADLINE (too far)';
+
+        // Verify REFUND_WINDOW: optional (defaulted), integer seconds within bounds
+        if(!error && this.util.isNull(data['REFUND_WINDOW']))
+            data['REFUND_WINDOW'] = this.config['DEFAULT_BET_REFUND_WINDOW'];
+        // Verify REFUND_WINDOW is a whole number of seconds
+        if(!error && (!this.util.isNumeric(data['REFUND_WINDOW']) || !this.util.isInteger(data['REFUND_WINDOW'])))
+            error = 'invalid: REFUND_WINDOW (format)';
+        // Verify REFUND_WINDOW falls between the configured minimum and maximum
+        if(!error && (this.util.bclt(data['REFUND_WINDOW'], this.config['MIN_BET_REFUND_WINDOW']) || this.util.bcgt(data['REFUND_WINDOW'], this.config['MAX_BET_REFUND_WINDOW'])))
+            error = 'invalid: REFUND_WINDOW (range)';
+
+        // Materialize expire_at at parse (64-bit columns; the horizon + window caps
+        // above keep the sum from wrapping)
+        if(!error)
+            data['EXPIRE_AT'] = this.util.bcadd(data['DEADLINE'], data['REFUND_WINDOW'], 0);
+
+        // Verify MIN_AMOUNT: optional minimum stake at the tick's DECIMALS, > 0
+        if(!error && !this.util.isNull(data['MIN_AMOUNT']) && (!this.util.isValidAmountFormat(tokenInfo['DECIMALS'], data['MIN_AMOUNT'], data['BLOCK_TIME']) || !this.util.bcgt(data['MIN_AMOUNT'], 0)))
+            error = 'invalid: MIN_AMOUNT (format)';
+
+        return error;
+    }
+
+    // Gating lists and the optional DETAILS document
+    async validateFeedGating(data, outcomeLabels, error){
+        // Validate LIST fields (ALLOW_LIST / BLOCK_LIST): list exists and is a
+        // supported (address) type
+        if(!error){
+            for(let name of ['ALLOW_LIST', 'BLOCK_LIST']){
+                // Only check a LIST field that was actually provided
+                if(!error && !this.util.isNull(data[name])){
+                    let type = await this.indexerDb.getListType(data[name]);
+                    if(type===false)
+                        error = 'invalid: ' + name + ' (unknown)';
+                    else if(!this.listTypes.includes(type))
+                        error = 'invalid: ' + name + ' (unsupported)';
+                }
+            }
+        }
+
+        // When both gating lists are set they must differ: the same list in both
+        // slots builds a feed nobody can ever bet on, which looks live in the
+        // explorer and only burns pass rows until it expires
+        if(!error && !this.util.isNull(data['ALLOW_LIST']) && !this.util.isNull(data['BLOCK_LIST']) && Number(data['ALLOW_LIST'])===Number(data['BLOCK_LIST']))
+            error = 'invalid: BLOCK_LIST (same as ALLOW_LIST)';
+
+        // Validate DETAILS (optional): strict base64 wrapping a JSON object whose
+        // optional `outcomes` array must agree with the consensus OUTCOMES field
+        if(!error && !this.util.isNull(data['DETAILS']))
+            error = this.validateDetails(String(data['DETAILS']), outcomeLabels);
+
+        return error;
+    }
+
+    // Format 1 / 2 / 3 (existing feed) validations
+    async validateFeedState(data, format, feedInfo, error){
         if(!error && (format==1 || format==2 || format==3) && !feedInfo)
             error = 'invalid: FEED_ACTION_INDEX (unknown)';
 
@@ -255,6 +313,11 @@ class Bet {
         if(!error && (format==1 || format==3) && !['open','closed'].includes(feedInfo['FEED_STATUS']))
             error = 'invalid: FEED_ACTION_INDEX (feed not open)';
 
+        return error;
+    }
+
+    // Format 2 (Place Bet) validations
+    async validatePlaceBet(data, format, feedInfo, feedTokenInfo, error){
         if(format==2){
             // Place requires the stored latch to still read open AND the direct clock
             // check. Both are required: the latch closes the backdating hole once any
@@ -291,6 +354,15 @@ class Bet {
             if(!error && await this.indexerDb.countOpenBetsByFeed(feedInfo['ACTION_INDEX']) >= this.config['MAX_BETS_PER_FEED'])
                 error = 'invalid: FEED_ACTION_INDEX (feed full)';
 
+        }
+
+        return error;
+    }
+
+    // Who may place on this feed: the feed's gating lists, and the tick's own sleep
+    // and allow/block state at this block
+    async validatePlaceGating(data, format, feedInfo, error){
+        if(format==2){
             // Feed gating, evaluated against the LISTs' state at THIS block (later
             // list changes never affect already-placed bets). Checks run allow-then-
             // block and BLOCK_LIST WINS: an address on both lists is rejected
@@ -314,6 +386,11 @@ class Bet {
                 error = 'invalid: SOURCE (not authorized)';
         }
 
+        return error;
+    }
+
+    // Format 3 (Resolve Feed) validations
+    async validateResolve(data, format, feedInfo, error){
         if(format==3){
             // No early resolution: DEADLINE is both betting close and earliest resolve.
             // An oracle may resolve in the first deadline-crossing block, before the
@@ -330,9 +407,13 @@ class Bet {
                 error = 'invalid: OUTCOME (range)';
         }
 
-        /*****************************************************************
-         * General Validations
-         ****************************************************************/
+        return error;
+    }
+
+    /*****************************************************************
+     * General Validations
+     ****************************************************************/
+    async validateFields(data, format, error){
 
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
@@ -354,6 +435,12 @@ class Bet {
         // Verify MEMO is shorter than MAX_MEMO_LENGTH
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
+
+        return error;
+    }
+
+    // Fee schedule and fee payment for this format
+    async applyFees(data, format, fees, balances, feedTokenInfo, error){
 
         // Fees: unified schedule only. BET and UNIFIED_FEES are both genesis-active on every
         // chain and network, so a BET action can never process below the gate; the legacy
@@ -386,7 +473,11 @@ class Bet {
         // pre-funded at place time, and a resolve surcharge would be griefable
         // (dust bets inflating the oracle's cost until rational expiry)
 
-        // Validate fee payment (native coin or XCHAIN balance)
+        return error;
+    }
+
+    // Validate fee payment (native coin or XCHAIN balance), then check the stake itself
+    async validateFeePayment(data, format, fees, balances, feedTokenInfo, error){
         if(!error && this.util.bcgt(fees['AMOUNT'], 0)){
             let paymentMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
             if(paymentMode === 'native'){
@@ -415,6 +506,11 @@ class Bet {
         if(!error && format==2 && !this.util.hasBalance(balances, feedTokenInfo['TICK_ID'], data['AMOUNT']))
             error = 'invalid: insufficient funds (AMOUNT)';
 
+        return error;
+    }
+
+    // Canonical stored values, the final status, and the typed row every format writes
+    async storeBetRows(data, format, feedInfo, outcomeLabels, error){
         /*****************************************************************
          * Storage + ledger changes
          ****************************************************************/
@@ -471,6 +567,12 @@ class Bet {
             this.util.addAddressTicker(data['SOURCE'], data['TICK']);
         if(feedInfo)
             this.util.addAddressTicker(data['SOURCE'], feedInfo['TICK']);
+
+        return status;
+    }
+
+    // Lifecycle leg of a VALID bet: escrow or settle, then fees and balances
+    async settleBet(data, format, status, feedInfo, feedTokenInfo, fees){
 
         // Array of credits, debits, and escrows
         let credits = [],
@@ -580,49 +682,56 @@ class Bet {
         }
 
         if(this.util.bcgt(W, 0)){
-            // Normal settlement: oracle fee off the top (FEE is a percent, so /100),
-            // winners split the pot pro-rata, floored at the tick's decimals; the
-            // rounding remainder (dust) rides the oracle credit
-            let feeFraction = this.util.bcdiv(feedInfo['FEE'], 100, 4);   // <=2dp percent -> exact 4dp fraction
-            let fee  = this.util.bcmulfloor(T, feeFraction, d);
-            let pot  = this.util.bcsub(T, fee, d);
-            let paid = 0;
-            for(let betRow of openBets){
-                // Every open bet leaves escrow here, winner or loser: winners' payouts
-                // include their stake share by construction, losers' stakes are
-                // consumed by the pot
-                escrows.push([feedInfo['TICK'], this.util.bcsub(0, betRow['AMOUNT'], 64), betRow['SOURCE']]);
-                this.util.addAddressTicker(betRow['SOURCE'], feedInfo['TICK']);
-                if(Number(betRow['OUTCOME']) === winning){
-                    let payout = this.util.bcmuldivfloor(betRow['AMOUNT'], pot, W, d);
-                    // Zero-floor rule: a payout flooring to exactly zero emits NO
-                    // credit row; the amount is absorbed into dust. The bet still
-                    // transitions to won (at most one terminal credit per bet)
-                    if(this.util.bcgt(payout, 0)){
-                        credits.push([feedInfo['TICK'], payout, betRow['SOURCE']]);
-                        paid = this.util.bcadd(paid, payout, d);
-                    }
-                    await this.indexerDb.setBetSettled(betRow['ACTION_INDEX'], 'won', data['BLOCK_INDEX']);
-                    await this.indexerDb.createBetStatus(data['ACTION_INDEX'], betRow['ACTION_INDEX'], 'won');
-                } else {
-                    await this.indexerDb.setBetSettled(betRow['ACTION_INDEX'], 'lost', data['BLOCK_INDEX']);
-                    await this.indexerDb.createBetStatus(data['ACTION_INDEX'], betRow['ACTION_INDEX'], 'lost');
-                }
-            }
-            // Oracle credit: fee plus rounding dust, one credit (absorbed by the
-            // flat-free resolve; never charged per-credit). Skipped when zero so a
-            // zero-fee dust-free market emits no empty ledger row
-            let oracleCredit = this.util.bcadd(fee, this.util.bcsub(pot, paid, d), d);
-            if(this.util.bcgt(oracleCredit, 0))
-                credits.push([feedInfo['TICK'], oracleCredit, feedInfo['SOURCE']]);
-            await this.indexerDb.setBetFeedTerminal(feedInfo['ACTION_INDEX'], 'resolved', data['BLOCK_INDEX']);
-            await this.indexerDb.createBetFeedStatus(data['ACTION_INDEX'], feedInfo['ACTION_INDEX'], 'resolved');
-            this.util.addAddressTicker(feedInfo['SOURCE'], feedInfo['TICK']);
+            await this.settleWinningPool(data, feedInfo, d, winning, openBets, T, W, credits, escrows);
         } else {
             // Empty winning pool (decision E): full refund, NO oracle fee. Bettors
             // never net-lose to an outcome nobody backed
             await this.refundOpenBets(data, feedInfo, 'resolved_void', credits, escrows);
         }
+    }
+
+    // Pay a resolved feed's winners pro-rata and credit the oracle its fee plus dust.
+    // Every amount is mathjs bignumber through the house bc* helpers, floored at the
+    // feed tick's DECIMALS.
+    async settleWinningPool(data, feedInfo, d, winning, openBets, T, W, credits, escrows){
+        // Normal settlement: oracle fee off the top (FEE is a percent, so /100),
+        // winners split the pot pro-rata, floored at the tick's decimals; the
+        // rounding remainder (dust) rides the oracle credit
+        let feeFraction = this.util.bcdiv(feedInfo['FEE'], 100, 4);   // <=2dp percent -> exact 4dp fraction
+        let fee  = this.util.bcmulfloor(T, feeFraction, d);
+        let pot  = this.util.bcsub(T, fee, d);
+        let paid = 0;
+        for(let betRow of openBets){
+            // Every open bet leaves escrow here, winner or loser: winners' payouts
+            // include their stake share by construction, losers' stakes are
+            // consumed by the pot
+            escrows.push([feedInfo['TICK'], this.util.bcsub(0, betRow['AMOUNT'], 64), betRow['SOURCE']]);
+            this.util.addAddressTicker(betRow['SOURCE'], feedInfo['TICK']);
+            if(Number(betRow['OUTCOME']) === winning){
+                let payout = this.util.bcmuldivfloor(betRow['AMOUNT'], pot, W, d);
+                // Zero-floor rule: a payout flooring to exactly zero emits NO
+                // credit row; the amount is absorbed into dust. The bet still
+                // transitions to won (at most one terminal credit per bet)
+                if(this.util.bcgt(payout, 0)){
+                    credits.push([feedInfo['TICK'], payout, betRow['SOURCE']]);
+                    paid = this.util.bcadd(paid, payout, d);
+                }
+                await this.indexerDb.setBetSettled(betRow['ACTION_INDEX'], 'won', data['BLOCK_INDEX']);
+                await this.indexerDb.createBetStatus(data['ACTION_INDEX'], betRow['ACTION_INDEX'], 'won');
+            } else {
+                await this.indexerDb.setBetSettled(betRow['ACTION_INDEX'], 'lost', data['BLOCK_INDEX']);
+                await this.indexerDb.createBetStatus(data['ACTION_INDEX'], betRow['ACTION_INDEX'], 'lost');
+            }
+        }
+        // Oracle credit: fee plus rounding dust, one credit (absorbed by the
+        // flat-free resolve; never charged per-credit). Skipped when zero so a
+        // zero-fee dust-free market emits no empty ledger row
+        let oracleCredit = this.util.bcadd(fee, this.util.bcsub(pot, paid, d), d);
+        if(this.util.bcgt(oracleCredit, 0))
+            credits.push([feedInfo['TICK'], oracleCredit, feedInfo['SOURCE']]);
+        await this.indexerDb.setBetFeedTerminal(feedInfo['ACTION_INDEX'], 'resolved', data['BLOCK_INDEX']);
+        await this.indexerDb.createBetFeedStatus(data['ACTION_INDEX'], feedInfo['ACTION_INDEX'], 'resolved');
+        this.util.addAddressTicker(feedInfo['SOURCE'], feedInfo['TICK']);
     }
 
     /*****************************************************************
