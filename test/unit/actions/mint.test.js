@@ -9,6 +9,13 @@
 // General Public License v3.0 or later; see LICENSE.md. A commercial
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
+//
+// MINT handler: a valid mint and its ledger effects, TICK validity, LOCK_MINT,
+// SOURCE and TICK sleeping, MEMO rules and the always-written MINT record. The
+// amount, per-address cap, block-window and DESTINATION blocks live beside it
+// in mint.test/; every file opens the same 'Mint handler @regression @tier1' describe, so each
+// full test title stays under one suite name. mint.test/helpers/mint_context.js
+// holds the constants, builders and the mock indexer every block starts from.
 
 process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
@@ -16,86 +23,26 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 
-const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
+const { SOURCE, BLOCK, makeData, makeMintableToken, makeMintContext } = require('./mint.test/helpers/mint_context.js');
 
-const Mint = require('../../../src/actions/mint.js');
+let indexer, actionsCtx, handler;
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function makeActionsCtx(indexer) {
-    return {
-        config:          indexer.config,
-        util:            indexer.util,
-        mapper:          indexer.mapper,
-        decoderDb:       indexer.decoderDb,
-        indexerDb:       indexer.indexerDb,
-        protocolChanges: {
-            isDefined:  sinon.stub().returns(true),
-            isEnabled:  sinon.stub().resolves(true),
-        },
-        processAction: sinon.stub().resolves(),
-    };
-}
-
-/**
- * Build a data object for a MINT transaction.
- */
-function makeData(overrides = {}) {
-    return createBaseData(Object.assign({ ACTION: 'MINT', FORMAT: 0 }, overrides));
-}
-
-// Shared addresses
-const SOURCE      = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-const DESTINATION = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs';
-const BLOCK       = 100;
-
-/**
- * Build a minimal tokenInfo for a mintable token.
- */
-function makeMintableToken(overrides = {}) {
-    return createTokenInfo(Object.assign({
-        TICK:             'TEST',
-        TICK_ID:          1,
-        DECIMALS:         0,
-        MAX_SUPPLY:       '1000',
-        MAX_MINT:         '100',
-        SUPPLY:           '0',
-        LOCK_MINT:        0,
-        MINT_ADDRESS_MAX: null,
-        MINT_START_BLOCK: null,
-        MINT_STOP_BLOCK:  null,
-        BLOCK_INDEX:      50,   // token was issued at block 50, below current BLOCK=100
-    }, overrides));
+// Each test starts from its own mock indexer and MINT handler.
+function freshMint() {
+    ({ indexer, actionsCtx, handler } = makeMintContext());
 }
 
 // ---------------------------------------------------------------------------
 // Suite
 // ---------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------
+// Valid mint
+// -----------------------------------------------------------------------
+
 describe('Mint handler @regression @tier1', function () {
-    let indexer, actionsCtx, handler;
-
-    beforeEach(function () {
-        indexer    = createMockIndexer();
-        actionsCtx = makeActionsCtx(indexer);
-        handler    = new Mint(actionsCtx);
-
-        const token = makeMintableToken();
-        indexer.indexerDb.getTokenInfo.resolves(token);
-        indexer.indexerDb.isActionAllowed.resolves(true);
-        indexer.indexerDb.getActionCreditDebitAmount.resolves('0'); // minted so far = 0
-        indexer.indexerDb.validTickerBeforeTxIndex.resolves(true);
-    });
-
-    afterEach(function () {
-        sinon.restore();
-    });
-
-    // -----------------------------------------------------------------------
-    // Valid mint
-    // -----------------------------------------------------------------------
+    beforeEach(freshMint);
+    afterEach(() => sinon.restore());
 
     describe('valid mint', function () {
 
@@ -145,10 +92,15 @@ describe('Mint handler @regression @tier1', function () {
             assert.strictEqual(indexer.util.bcformat(sourceCredit[1], 0), '50');
         });
     });
+});
 
-    // -----------------------------------------------------------------------
-    // TICK validations
-    // -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// TICK validations
+// -----------------------------------------------------------------------
+
+describe('Mint handler @regression @tier1', function () {
+    beforeEach(freshMint);
+    afterEach(() => sinon.restore());
 
     describe('TICK validations', function () {
 
@@ -200,10 +152,15 @@ describe('Mint handler @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
+});
 
-    // -----------------------------------------------------------------------
-    // LOCK_MINT
-    // -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// LOCK_MINT
+// -----------------------------------------------------------------------
+
+describe('Mint handler @regression @tier1', function () {
+    beforeEach(freshMint);
+    afterEach(() => sinon.restore());
 
     describe('LOCK_MINT', function () {
 
@@ -231,358 +188,15 @@ describe('Mint handler @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
-
-    // -----------------------------------------------------------------------
-    // AMOUNT > MAX_MINT
-    // -----------------------------------------------------------------------
-
-    describe('AMOUNT vs MAX_MINT', function () {
-
-        it('AMOUNT > MAX_MINT → invalid', async function () {
-            const token = makeMintableToken({ MAX_MINT: '100' });
-            indexer.indexerDb.getTokenInfo.resolves(token);
-
-            const params = ['0', 'TEST', '101', '', ''];
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: BLOCK, SOURCE });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.startsWith('invalid'));
-        });
-
-        it('AMOUNT = MAX_MINT → valid', async function () {
-            const token = makeMintableToken({ MAX_MINT: '100' });
-            indexer.indexerDb.getTokenInfo.resolves(token);
-
-            const params = ['0', 'TEST', '100', '', ''];
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: BLOCK, SOURCE });
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data.STATUS, 'valid');
-        });
-
-        it('AMOUNT < MAX_MINT → valid', async function () {
-            const params = ['0', 'TEST', '50', '', ''];
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: BLOCK, SOURCE });
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data.STATUS, 'valid');
-        });
-    });
-
-    // -----------------------------------------------------------------------
-    // SUPPLY + AMOUNT > MAX_SUPPLY
-    // -----------------------------------------------------------------------
-
-    describe('SUPPLY + AMOUNT > MAX_SUPPLY', function () {
-
-        it('mint would exceed MAX_SUPPLY → invalid', async function () {
-            const token = makeMintableToken({ MAX_SUPPLY: '1000', SUPPLY: '950', MAX_MINT: '100' });
-            indexer.indexerDb.getTokenInfo.resolves(token);
-
-            const params = ['0', 'TEST', '100', '', '']; // 950 + 100 = 1050 > 1000
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: BLOCK, SOURCE });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.startsWith('invalid'));
-        });
-
-        it('mint that fills remaining supply exactly → valid', async function () {
-            const token = makeMintableToken({ MAX_SUPPLY: '1000', SUPPLY: '900', MAX_MINT: '100' });
-            indexer.indexerDb.getTokenInfo.resolves(token);
-
-            const params = ['0', 'TEST', '100', '', '']; // 900 + 100 = 1000 = MAX_SUPPLY
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: BLOCK, SOURCE });
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data.STATUS, 'valid');
-        });
-
-        it('mint that partially fills remaining supply → valid', async function () {
-            const token = makeMintableToken({ MAX_SUPPLY: '1000', SUPPLY: '900', MAX_MINT: '100' });
-            indexer.indexerDb.getTokenInfo.resolves(token);
-
-            const params = ['0', 'TEST', '50', '', ''];
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: BLOCK, SOURCE });
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data.STATUS, 'valid');
-        });
-    });
-
-    // -----------------------------------------------------------------------
-    // MINT_ADDRESS_MAX
-    // -----------------------------------------------------------------------
-
-    describe('MINT_ADDRESS_MAX', function () {
-        // The mock gate resolves MINT_SELF_MINTED_ONLY active, so these exercise
-        // the self-minted measure (getSelfMintedAmount); the flag-day describe
-        // below covers the legacy credits measure and the gate split itself.
-
-        it('minted so far + AMOUNT > MINT_ADDRESS_MAX → invalid', async function () {
-            const token = makeMintableToken({ MAX_MINT: '100', MINT_ADDRESS_MAX: '200' });
-            indexer.indexerDb.getTokenInfo.resolves(token);
-            indexer.indexerDb.getSelfMintedAmount.resolves('150'); // already self-minted 150
-
-            const params = ['0', 'TEST', '100', '', '']; // 150 + 100 = 250 > 200
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: BLOCK, SOURCE });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.startsWith('invalid'));
-        });
-
-        it('minted so far + AMOUNT = MINT_ADDRESS_MAX → valid', async function () {
-            const token = makeMintableToken({ MAX_MINT: '100', MINT_ADDRESS_MAX: '200' });
-            indexer.indexerDb.getTokenInfo.resolves(token);
-            indexer.indexerDb.getSelfMintedAmount.resolves('100'); // already self-minted 100
-
-            const params = ['0', 'TEST', '100', '', '']; // 100 + 100 = 200 = MINT_ADDRESS_MAX
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: BLOCK, SOURCE });
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data.STATUS, 'valid');
-        });
-
-        it('no MINT_ADDRESS_MAX set (null) → no restriction applied', async function () {
-            const token = makeMintableToken({ MINT_ADDRESS_MAX: null });
-            indexer.indexerDb.getTokenInfo.resolves(token);
-            indexer.indexerDb.getSelfMintedAmount.resolves('900');
-
-            const params = ['0', 'TEST', '50', '', ''];
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: BLOCK, SOURCE });
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data.STATUS, 'valid');
-        });
-    });
-
-    describe('MINT_SELF_MINTED_ONLY flag-day (/ MINT-1)', function () {
-
-        function gateStub(active) {
-            return sinon.stub().callsFake(async (name) =>
-                name === 'MINT_SELF_MINTED_ONLY' ? active : true);
-        }
-
-        it('gate ACTIVE: received mints do not count, self-minted measure used', async function () {
-            actionsCtx.protocolChanges.isEnabled = gateStub(true);
-            const token = makeMintableToken({ MAX_MINT: '100', MINT_ADDRESS_MAX: '200' });
-            indexer.indexerDb.getTokenInfo.resolves(token);
-            // Griefer scenario: 150 received via another mint's DESTINATION (credits
-            // measure) but only 100 self-authored (mints-table measure).
-            indexer.indexerDb.getActionCreditDebitAmount.resolves('250');
-            indexer.indexerDb.getSelfMintedAmount.resolves('100');
-
-            const params = ['0', 'TEST', '100', '', '']; // 100 + 100 = 200 = cap
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: BLOCK, SOURCE });
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data.STATUS, 'valid');
-            assert.ok(indexer.indexerDb.getSelfMintedAmount.calledOnce, 'self-minted measure should be used');
-            assert.ok(!indexer.indexerDb.getActionCreditDebitAmount.called, 'legacy credits measure should not be queried');
-        });
-
-        it('gate ACTIVE: self-minted over cap still rejected', async function () {
-            actionsCtx.protocolChanges.isEnabled = gateStub(true);
-            const token = makeMintableToken({ MAX_MINT: '100', MINT_ADDRESS_MAX: '200' });
-            indexer.indexerDb.getTokenInfo.resolves(token);
-            indexer.indexerDb.getSelfMintedAmount.resolves('150');
-
-            const params = ['0', 'TEST', '100', '', '']; // 150 + 100 = 250 > 200
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: BLOCK, SOURCE });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.startsWith('invalid'));
-        });
-
-        it('gate INACTIVE: legacy credits measure applies (received mints count, byte-identical replay)', async function () {
-            actionsCtx.protocolChanges.isEnabled = gateStub(false);
-            const token = makeMintableToken({ MAX_MINT: '100', MINT_ADDRESS_MAX: '200' });
-            indexer.indexerDb.getTokenInfo.resolves(token);
-            indexer.indexerDb.getActionCreditDebitAmount.resolves('150'); // includes received
-            indexer.indexerDb.getSelfMintedAmount.resolves('0');
-
-            const params = ['0', 'TEST', '100', '', '']; // legacy: 150 + 100 = 250 > 200
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: BLOCK, SOURCE });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.startsWith('invalid'), 'legacy over-count must still reject below the flag-day');
-            assert.ok(!indexer.indexerDb.getSelfMintedAmount.called, 'self-minted measure must not be queried below the flag-day');
-        });
-    });
-
-    // -----------------------------------------------------------------------
-    // MINT_START_BLOCK
-    // -----------------------------------------------------------------------
-
-    describe('MINT_START_BLOCK', function () {
-
-        it('before MINT_START_BLOCK → invalid', async function () {
-            const token = makeMintableToken({ MINT_START_BLOCK: '200' }); // mint starts at 200
-            indexer.indexerDb.getTokenInfo.resolves(token);
-
-            const params = ['0', 'TEST', '50', '', ''];
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: 100, SOURCE }); // current block 100 < 200
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.startsWith('invalid'));
-        });
-
-        it('at MINT_START_BLOCK → valid', async function () {
-            const token = makeMintableToken({ MINT_START_BLOCK: '100' });
-            indexer.indexerDb.getTokenInfo.resolves(token);
-
-            const params = ['0', 'TEST', '50', '', ''];
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: 100, SOURCE });
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data.STATUS, 'valid');
-        });
-
-        it('after MINT_START_BLOCK → valid', async function () {
-            const token = makeMintableToken({ MINT_START_BLOCK: '50' });
-            indexer.indexerDb.getTokenInfo.resolves(token);
-
-            const params = ['0', 'TEST', '50', '', ''];
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: 100, SOURCE });
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data.STATUS, 'valid');
-        });
-    });
-
-    // -----------------------------------------------------------------------
-    // MINT_STOP_BLOCK
-    // -----------------------------------------------------------------------
-
-    describe('MINT_STOP_BLOCK', function () {
-
-        it('after MINT_STOP_BLOCK → invalid', async function () {
-            const token = makeMintableToken({ MINT_STOP_BLOCK: '50' }); // stopped at block 50
-            indexer.indexerDb.getTokenInfo.resolves(token);
-
-            const params = ['0', 'TEST', '50', '', ''];
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: 100, SOURCE }); // current block 100 > 50
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.startsWith('invalid'));
-        });
-
-        it('at MINT_STOP_BLOCK → valid', async function () {
-            const token = makeMintableToken({ MINT_STOP_BLOCK: '100' });
-            indexer.indexerDb.getTokenInfo.resolves(token);
-
-            const params = ['0', 'TEST', '50', '', ''];
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: 100, SOURCE });
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data.STATUS, 'valid');
-        });
-
-        it('before MINT_STOP_BLOCK → valid', async function () {
-            const token = makeMintableToken({ MINT_STOP_BLOCK: '200' });
-            indexer.indexerDb.getTokenInfo.resolves(token);
-
-            const params = ['0', 'TEST', '50', '', ''];
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: 100, SOURCE });
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data.STATUS, 'valid');
-        });
-    });
-
-    // -----------------------------------------------------------------------
-    // DESTINATION
-    // -----------------------------------------------------------------------
-
-    describe('DESTINATION', function () {
-        it('valid DESTINATION → credit goes to DESTINATION, debit from SOURCE', async function () {
-            const ledgerSpy = sinon.spy(indexer.util, 'processTransactionLedgerChanges');
-
-            const params = ['0', 'TEST', '50', DESTINATION, ''];
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: BLOCK, SOURCE });
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data.STATUS, 'valid');
-            const [,, credits, debits] = ledgerSpy.firstCall.args;
-
-            // SOURCE should receive initial credit
-            const sourceCredit = credits.find(c => c[2] === SOURCE);
-            assert.ok(sourceCredit, 'SOURCE should receive initial credit');
-
-            // DESTINATION should receive transfer credit
-            const destCredit = credits.find(c => c[2] === DESTINATION);
-            assert.ok(destCredit, 'DESTINATION should receive transfer credit');
-
-            // SOURCE should receive debit for the transfer
-            const sourceDebit = debits.find(d => d[2] === SOURCE);
-            assert.ok(sourceDebit, 'SOURCE should be debited for transfer');
-        });
-
-        it('DESTINATION same as SOURCE → DESTINATION discarded, only SOURCE credited', async function () {
-            const ledgerSpy = sinon.spy(indexer.util, 'processTransactionLedgerChanges');
-
-            const params = ['0', 'TEST', '50', SOURCE, '']; // DESTINATION = SOURCE
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: BLOCK, SOURCE });
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data.STATUS, 'valid');
-            const [,, credits, debits] = ledgerSpy.firstCall.args;
-
-            // Only one credit (to SOURCE), no debit
-            assert.strictEqual(credits.length, 1);
-            assert.strictEqual(debits.length, 0);
-        });
-
-        it('invalid DESTINATION format → invalid', async function () {
-            const params = ['0', 'TEST', '50', 'not-a-valid-address', ''];
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: BLOCK, SOURCE });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.startsWith('invalid'));
-        });
-    });
-
-    describe('DESTINATION', function () {
-        it('DESTINATION not authorized by token list → invalid', async function () {
-            indexer.indexerDb.isActionAllowed
-                .onFirstCall().resolves(true)   // SOURCE sleeping check
-                .onSecondCall().resolves(true)   // TICK sleeping check
-                .onThirdCall().resolves(true)    // SOURCE authorization
-                .onCall(3).resolves(false)        // DESTINATION authorization
-                .resolves(true);
-
-            const params = ['0', 'TEST', '50', DESTINATION, ''];
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: BLOCK, SOURCE });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.startsWith('invalid'));
-        });
-    });
-
-    // -----------------------------------------------------------------------
-    // ADDRESS sleeping
-    // -----------------------------------------------------------------------
+});
+
+// -----------------------------------------------------------------------
+// ADDRESS sleeping
+// -----------------------------------------------------------------------
+
+describe('Mint handler @regression @tier1', function () {
+    beforeEach(freshMint);
+    afterEach(() => sinon.restore());
 
     describe('address sleeping', function () {
 
@@ -613,10 +227,15 @@ describe('Mint handler @regression @tier1', function () {
             assert.ok(data.STATUS.startsWith('invalid'));
         });
     });
+});
 
-    // -----------------------------------------------------------------------
-    // MEMO validations
-    // -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// MEMO validations
+// -----------------------------------------------------------------------
+
+describe('Mint handler @regression @tier1', function () {
+    beforeEach(freshMint);
+    afterEach(() => sinon.restore());
 
     describe('MEMO validations', function () {
 
@@ -647,38 +266,15 @@ describe('Mint handler @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
+});
 
-    // -----------------------------------------------------------------------
-    // AMOUNT format
-    // -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// createMint always called
+// -----------------------------------------------------------------------
 
-    describe('AMOUNT format', function () {
-
-        it('fractional AMOUNT for 0-decimal token → invalid', async function () {
-            const params = ['0', 'TEST', '1.5', '', ''];
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: BLOCK, SOURCE });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.startsWith('invalid'));
-        });
-
-        it('valid decimal AMOUNT for 8-decimal token → valid', async function () {
-            const token = makeMintableToken({ DECIMALS: 8, MAX_MINT: '100' });
-            indexer.indexerDb.getTokenInfo.resolves(token);
-
-            const params = ['0', 'TEST', '1.50000000', '', ''];
-            const data   = makeData({ FORMAT: 0, BLOCK_INDEX: BLOCK, SOURCE });
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data.STATUS, 'valid');
-        });
-    });
-
-    // -----------------------------------------------------------------------
-    // createMint always called
-    // -----------------------------------------------------------------------
+describe('Mint handler @regression @tier1', function () {
+    beforeEach(freshMint);
+    afterEach(() => sinon.restore());
 
     describe('createMint is always called', function () {
 
