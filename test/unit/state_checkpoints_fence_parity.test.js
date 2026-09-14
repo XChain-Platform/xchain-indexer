@@ -97,7 +97,6 @@ function uniqueKeyColumns(sqlWithComments) {
 }
 
 describe('state_checkpoints split-brain fence parity (#3096) @regression @tier1', function () {
-
     for (const holder of HOLDERS) {
         it(`${holder.label}: unique key is exactly (${FENCE_COLUMNS.join(', ')})`, function () {
             const sql = readHolder(holder);
@@ -151,7 +150,9 @@ describe('state_checkpoints split-brain fence parity (#3096) @regression @tier1'
                 'see the same thing');
         }
     });
+});
 
+describe('state_checkpoints split-brain fence parity (#3096) @regression @tier1', function () {
     it('the tightening migration exists and is manual, not auto-applied at boot', function () {
         const dir = path.join(__dirname, '../../src/sql/migrations');
         const hit = fs.readdirSync(dir).find(f => /state-checkpoints-uq-chain-seq/.test(f));

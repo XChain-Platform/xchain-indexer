@@ -89,7 +89,6 @@ describe('mirror-barrier hold ceiling constant @regression @tier1', function () 
 
 // ── The pure fold that measures the hold ───────────────────────────────────────
 describe('nextBarrierHold / barrierHoldMs @regression @tier1', function () {
-
     it('starts a hold when a block is deferred behind a barrier', function () {
         const hold = nextBarrierHold(null, 900, 'attest_response_sync_barrier', null, NOW);
         assert.deepStrictEqual(hold, { block: 900, reason: 'attest_response_sync_barrier', since: NOW, notified: false });
@@ -142,7 +141,9 @@ describe('nextBarrierHold / barrierHoldMs @regression @tier1', function () {
                                         900, 'attest_response_sync_barrier', NOW + 7200000, NOW);
         assert.strictEqual(carried, null, 'an existing hold is dropped once the wait is a future-stamp wait');
     });
+});
 
+describe('nextBarrierHold / barrierHoldMs @regression @tier1', function () {
     it('resumes accounting once the block stamp is no longer in the future', function () {
         const hold = nextBarrierHold(null, 900, 'attest_response_sync_barrier', NOW - 1, NOW);
         assert.ok(hold, 'a clear instant already in the past is a real hold');
@@ -193,27 +194,27 @@ describe('isMirrorBarrierReason @regression @tier1', function () {
     });
 });
 
+function makeIndexer(ceilingMs) {
+    return {
+        stallReason: 'attest_response_sync_barrier',
+        stallClearsAt: null,
+        barrierHold: null,
+        barrierCeilingHits: 0,
+        barrierHoldCeilingMs: ceilingMs,
+        resyncCalls: [],
+        hubDbSync: {
+            requestResync(reason) { this.owner.resyncCalls.push(reason); return true; }
+        }
+    };
+}
+function wire(ix) { ix.hubDbSync.owner = ix; return ix; }
+
+const note = XChainIndexer.prototype.noteBarrierHold;
+
+let err;
+
 // ── The indexer's reaction to a crossing ───────────────────────────────────────
 describe('XChainIndexer.noteBarrierHold @regression @tier1', function () {
-
-    function makeIndexer(ceilingMs) {
-        return {
-            stallReason: 'attest_response_sync_barrier',
-            stallClearsAt: null,
-            barrierHold: null,
-            barrierCeilingHits: 0,
-            barrierHoldCeilingMs: ceilingMs,
-            resyncCalls: [],
-            hubDbSync: {
-                requestResync(reason) { this.owner.resyncCalls.push(reason); return true; }
-            }
-        };
-    }
-    function wire(ix) { ix.hubDbSync.owner = ix; return ix; }
-
-    const note = XChainIndexer.prototype.noteBarrierHold;
-
-    let err;
     beforeEach(function () { err = sinon.stub(console, 'error'); });
     afterEach(function () { err.restore(); });
 
@@ -267,6 +268,11 @@ describe('XChainIndexer.noteBarrierHold @regression @tier1', function () {
         assert.strictEqual(ix.barrierCeilingHits, 0);
         assert.deepStrictEqual(ix.resyncCalls, []);
     });
+});
+
+describe('XChainIndexer.noteBarrierHold @regression @tier1', function () {
+    beforeEach(function () { err = sinon.stub(console, 'error'); });
+    afterEach(function () { err.restore(); });
 
     it('a committed block ends the hold and the next one starts clean', function () {
         const ix = wire(makeIndexer(900000));
@@ -312,19 +318,19 @@ describe('XChainIndexer.noteBarrierHold @regression @tier1', function () {
     });
 });
 
+function makeSync() {
+    const doQuery = sinon.stub().callsFake(async () => []);
+    const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
+    return sync;
+}
+function fakeSocket() {
+    return { terminated: 0, closed: 0, terminate() { this.terminated++; }, close() { this.closed++; } };
+}
+
+let warn;
+
 // ── The remedy: HubDbSync.requestResync ────────────────────────────────────────
 describe('HubDbSync.requestResync @regression @tier1', function () {
-
-    function makeSync() {
-        const doQuery = sinon.stub().callsFake(async () => []);
-        const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
-        return sync;
-    }
-    function fakeSocket() {
-        return { terminated: 0, closed: 0, terminate() { this.terminated++; }, close() { this.closed++; } };
-    }
-
-    let warn;
     beforeEach(function () { warn = sinon.stub(console, 'warn'); });
     afterEach(function () { warn.restore(); });
 
@@ -383,6 +389,11 @@ describe('HubDbSync.requestResync @regression @tier1', function () {
         await new Promise(r => setImmediate(r));
         assert.ok(warn.getCalls().some(c => String(c.args[0]).includes('forced resync bootstrap failed')));
     });
+});
+
+describe('HubDbSync.requestResync @regression @tier1', function () {
+    beforeEach(function () { warn = sinon.stub(console, 'warn'); });
+    afterEach(function () { warn.restore(); });
 
     it('a disabled ceiling disables the forced resync too', function () {
         const sync = makeSync();

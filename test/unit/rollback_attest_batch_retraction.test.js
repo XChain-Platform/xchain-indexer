@@ -88,7 +88,6 @@ function stagedAttestCalls(idx){
 }
 
 describe('Rollback: ATTEST batch-link retraction (spec §6.3, row 55)', function(){
-
     afterEach(function(){ sinon.restore(); });
 
     it('collects un-landed batches by joining every rolled-back chunk back to its head', async function(){
@@ -122,6 +121,10 @@ describe('Rollback: ATTEST batch-link retraction (spec §6.3, row 55)', function
             'the head author is resolved with an INNER join, matching _authoredBy: an ' +
             'unresolvable broadcaster scopes to nothing, and never assembled forward either');
     });
+});
+
+describe('Rollback: ATTEST batch-link retraction (spec §6.3, row 55)', function(){
+    afterEach(function(){ sinon.restore(); });
 
     it('write-ahead-stages a durable attest_batch_retraction naming the batch, then delivers it live', async function(){
         const { rb, idx, hubClient } = makeRollback();
@@ -169,6 +172,10 @@ describe('Rollback: ATTEST batch-link retraction (spec §6.3, row 55)', function
         assert.ok(idx.indexerDb.commitTransaction.calledOnce,
             'a hub that is down must not roll back the local reorg');
     });
+});
+
+describe('Rollback: ATTEST batch-link retraction (spec §6.3, row 55)', function(){
+    afterEach(function(){ sinon.restore(); });
 
     it('stages one row per un-landed batch, and none when the reorg un-lands no batch', async function(){
         const many = makeRollback({ batches: [

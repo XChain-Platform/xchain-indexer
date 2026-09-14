@@ -58,7 +58,6 @@ const SRC = fs.readFileSync(path.resolve(__dirname, '../../src/stateCommitment.j
 // for, because every one of them pinned set semantics and not one asserted that
 // a leaf was written. Shape tests cannot catch that; a driven block can.
 describe('touched-set guard @regression', function(){
-
     it('is ON by default: no env flag gates the check itself', function(){
         // The whole point is that it protects nodes nobody remembered to
         // configure. A gate here would put it back to opt-in.
@@ -115,7 +114,9 @@ describe('touched-set guard @regression', function(){
         assert.ok(/diverge/.test(body),
             'the warn path must say plainly that the node commits a root it knows is incomplete');
     });
+});
 
+describe('touched-set guard @regression', function(){
     it('runs on the incremental branch only', function(){
         // The full-rebuild branch derives from the entire ledger and cannot skip
         // a key, so guarding it would cost a query for no possible finding.
@@ -233,7 +234,6 @@ async function leafPresent(smt, rootHex, address, tick){
 }
 
 describe('leaf-presence assertion @regression', function(){
-
     it('REFUSES the block when a touched key resolves to a null leaf and its leaf never lands', async function(){
         // The signature: the key is in the ledger AND in the touched set
         // so the set guard is satisfied in both directions, yet no leaf exists.
@@ -276,7 +276,9 @@ describe('leaf-presence assertion @regression', function(){
         assert.strictEqual(out.balances_root, seeded, 'a net-zero key must not move the root');
         assert.strictEqual(h.persisted.balances_root, seeded, 'and the block must still commit');
     });
+});
 
+describe('leaf-presence assertion @regression', function(){
     it('passes a healthy block, and does not re-read the net for a leaf that landed', async function(){
         const h = makeBlockMockDb({
             ledgerKeys: [['addr1', 'TICK']],
@@ -316,7 +318,9 @@ describe('leaf-presence assertion @regression', function(){
             () => SC._assertCommittedLeaves(h.db, smt, CHAIN, NETWORK, 10818, applied),
             /leaf-presence assertion FAILED at block 10818[\s\S]*PFX517776/);
     });
+});
 
+describe('leaf-presence assertion @regression', function(){
     it('downgrades to a log under INDEXER_TOUCH_GUARD=warn, and says the node will diverge', async function(){
         const h = makeBlockMockDb({
             ledgerKeys: [['addr1', 'TICK']],
@@ -367,7 +371,9 @@ describe('leaf-presence assertion @regression', function(){
         assert.ok(assertCall < insertRow, 'and it must run BEFORE the row is written');
         assert.ok(assertCall > fullBuild, 'it belongs to the incremental branch');
     });
+});
 
+describe('leaf-presence assertion @regression', function(){
     it('does not assert leaf VALUE equality, which would cost a history scan per key per block', function(){
         const body = SRC.slice(SRC.indexOf('async function _assertCommittedLeaves'),
                                SRC.indexOf('// ---- Orchestrator ---'));

@@ -62,7 +62,6 @@ function makeServer(order){
 describe('graceful shutdown', function(){
 
     describe('createShutdown', function(){
-
         it('runs the drain and exits zero when it completes', async function(){
             const codes = [];
             let drained = false;
@@ -113,7 +112,9 @@ describe('graceful shutdown', function(){
                 'timed out waiting for the hard-exit timer to fire');
             assert.deepStrictEqual(codes, [1]);
         });
+    });
 
+    describe('createShutdown', function(){
         it('exits non-zero when the drain throws, and only once', async function(){
             const codes = [];
             const clock = sinon.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
@@ -186,7 +187,6 @@ describe('graceful shutdown', function(){
     });
 
     describe('createIndexerDrain', function(){
-
         it('flips health, stops the indexer, drains the server and loop, then closes pools', async function(){
             const order   = [];
             const indexer = makeIndexer(order);
@@ -244,7 +244,9 @@ describe('graceful shutdown', function(){
             await running;
             assert.strictEqual(indexer.indexerDb.closed, true);
         });
+    });
 
+    describe('createIndexerDrain', function(){
         // start() is already .catch()'d at the call site, where a fatal error exits 1.
         // A rejection reaching the drain is that same handled error and must not turn a
         // clean stop into a hard exit.

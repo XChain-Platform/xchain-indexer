@@ -169,13 +169,20 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
         });
     });
 
+    let indexer, handler, ed25519;
+
+    const REQ_ID = 'd'.repeat(64);
+    const SIG    = '1'.repeat(128);
+
+    function v1Params(sigs){
+        const head = ['1', REQ_ID, 'http_get', Buffer.from('hello', 'utf8').toString('base64'), 'ok', 'm', String(sigs.length)];
+        const tail = [];
+        for(const s of sigs) tail.push(s.pubkey, s.sig);
+        return head.concat(tail);
+    }
+
     // ── Party 2: the indexer attestation verifier ────────────────────────────
     describe('party 2: the ATTEST v1 verifier', function () {
-        let indexer, handler, ed25519;
-
-        const REQ_ID = 'd'.repeat(64);
-        const SIG    = '1'.repeat(128);
-
         beforeEach(function () {
             ed25519 = require('../../src/consensus/ed25519.js');
             indexer = createMockIndexer();
@@ -222,13 +229,6 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
 
         afterEach(function () { sinon.restore(); });
 
-        function v1Params(sigs){
-            const head = ['1', REQ_ID, 'http_get', Buffer.from('hello', 'utf8').toString('base64'), 'ok', 'm', String(sigs.length)];
-            const tail = [];
-            for(const s of sigs) tail.push(s.pubkey, s.sig);
-            return head.concat(tail);
-        }
-
         it('accepts the set the hub SIGNED: a signer that deactivates inside (N-6, N]', async function () {
             // The hub's responsible set for a request declared at N is the set at N-6,
             // which still contains B. Verifying at the raw N drops B, leaving 1 valid
@@ -240,6 +240,54 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
                 'the verifier rejected the set the hub signed: ' + data['STATUS']);
             assert.strictEqual(data['VALID_SIGS'], 2);
         });
+    });
+
+    describe('party 2: the ATTEST v1 verifier', function () {
+        beforeEach(function () {
+            ed25519 = require('../../src/consensus/ed25519.js');
+            indexer = createMockIndexer();
+            const db = indexer.indexerDb;
+
+            // Height-sensitive capability resolution: the real db.js predicate, so the
+            // verifier's answer depends on WHICH height it asks about.
+            db.getValidatorsByCapability = sinon.stub().callsFake(
+                async (cap, block) => setAt(block).map(pk => ({ pubkey: pk })));
+            db.hasCapability = sinon.stub().callsFake(
+                async (pk, cap, block) => setAt(block).includes(String(pk).toLowerCase()));
+            db.getAttestationAdmissionCounts = sinon.stub().resolves({ total: 0, byContract: 0 });
+            db.getAttestationRequestById = sinon.stub().resolves({
+                request_id: REQ_ID, provider_id: 'http_get', request_status: 'pending',
+                deadline_block: N + 500, block_index: N, redundancy: 2,
+                contract_index: 5, callback_method: 'onResult', callback_params_json: '[]',
+            });
+            db.createAttestationResponse           = sinon.stub().resolves();
+            db.incrementAttestationValidatorStat   = sinon.stub().resolves();
+            db.updateAttestationRequestStatus      = sinon.stub().resolves();
+            db.setAttestationResponseCallbackIndex = sinon.stub().resolves();
+            db.getContract                         = sinon.stub().resolves({ contract_index: 5 });
+            db.createSavepoint                     = sinon.stub().resolves('sp1');
+            db.releaseSavepoint                    = sinon.stub().resolves();
+            db.rollbackToSavepoint                 = sinon.stub().resolves();
+
+            handler = new Attest({
+                config: indexer.config, util: indexer.util, mapper: indexer.mapper,
+                decoderDb: indexer.decoderDb, indexerDb: db,
+                actionExecute: { parse: sinon.stub().resolves() },
+                protocolChanges: { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) },
+            });
+            indexer.util.resetLists();
+            // Legacy count path: the source-deduped weighted resolver has its own
+            // coverage; this test is about WHICH HEIGHT, not which resolver.
+            sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+            // And the response-mirror flag day, armed on regtest at genesis: above it the
+            // chain handler refuses an on-chain v1 before any height is resolved, so these
+            // burial vectors are the legacy era's (matches attest.test.js default).
+            sinon.stub(require('../../src/attest_response_mirror_activation.js'),
+                       'isResponseMirrorActive').returns(false);
+            sinon.stub(ed25519, 'verify').returns(true);
+        });
+
+        afterEach(function () { sinon.restore(); });
 
         it('resolves the capable set and the responsible set at N-6, never at the declared N', async function () {
             const data = createBaseData({ ACTION: 'ATTEST', FORMAT: 1, BLOCK_INDEX: N + 10, ACTION_INDEX: 7 });
@@ -249,6 +297,54 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
             for(const h of heights)
                 assert.strictEqual(h, BURIED, 'a capability set was resolved at ' + h + ', not the buried ' + BURIED);
         });
+    });
+
+    describe('party 2: the ATTEST v1 verifier', function () {
+        beforeEach(function () {
+            ed25519 = require('../../src/consensus/ed25519.js');
+            indexer = createMockIndexer();
+            const db = indexer.indexerDb;
+
+            // Height-sensitive capability resolution: the real db.js predicate, so the
+            // verifier's answer depends on WHICH height it asks about.
+            db.getValidatorsByCapability = sinon.stub().callsFake(
+                async (cap, block) => setAt(block).map(pk => ({ pubkey: pk })));
+            db.hasCapability = sinon.stub().callsFake(
+                async (pk, cap, block) => setAt(block).includes(String(pk).toLowerCase()));
+            db.getAttestationAdmissionCounts = sinon.stub().resolves({ total: 0, byContract: 0 });
+            db.getAttestationRequestById = sinon.stub().resolves({
+                request_id: REQ_ID, provider_id: 'http_get', request_status: 'pending',
+                deadline_block: N + 500, block_index: N, redundancy: 2,
+                contract_index: 5, callback_method: 'onResult', callback_params_json: '[]',
+            });
+            db.createAttestationResponse           = sinon.stub().resolves();
+            db.incrementAttestationValidatorStat   = sinon.stub().resolves();
+            db.updateAttestationRequestStatus      = sinon.stub().resolves();
+            db.setAttestationResponseCallbackIndex = sinon.stub().resolves();
+            db.getContract                         = sinon.stub().resolves({ contract_index: 5 });
+            db.createSavepoint                     = sinon.stub().resolves('sp1');
+            db.releaseSavepoint                    = sinon.stub().resolves();
+            db.rollbackToSavepoint                 = sinon.stub().resolves();
+
+            handler = new Attest({
+                config: indexer.config, util: indexer.util, mapper: indexer.mapper,
+                decoderDb: indexer.decoderDb, indexerDb: db,
+                actionExecute: { parse: sinon.stub().resolves() },
+                protocolChanges: { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) },
+            });
+            indexer.util.resetLists();
+            // Legacy count path: the source-deduped weighted resolver has its own
+            // coverage; this test is about WHICH HEIGHT, not which resolver.
+            sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+            // And the response-mirror flag day, armed on regtest at genesis: above it the
+            // chain handler refuses an on-chain v1 before any height is resolved, so these
+            // burial vectors are the legacy era's (matches attest.test.js default).
+            sinon.stub(require('../../src/attest_response_mirror_activation.js'),
+                       'isResponseMirrorActive').returns(false);
+            sinon.stub(ed25519, 'verify').returns(true);
+        });
+
+        afterEach(function () { sinon.restore(); });
 
         it('rejects a signer that only ACTIVATES inside (N-6, N]: it was not in the signed set', async function () {
             // C qualifies at the raw N but not at N-6, so the hub never selected it. A
@@ -259,6 +355,54 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
                 'a signer outside the hub-resolved set must not count toward quorum');
             assert.strictEqual(data['VALID_SIGS'], 1);
         });
+    });
+
+    describe('party 2: the ATTEST v1 verifier', function () {
+        beforeEach(function () {
+            ed25519 = require('../../src/consensus/ed25519.js');
+            indexer = createMockIndexer();
+            const db = indexer.indexerDb;
+
+            // Height-sensitive capability resolution: the real db.js predicate, so the
+            // verifier's answer depends on WHICH height it asks about.
+            db.getValidatorsByCapability = sinon.stub().callsFake(
+                async (cap, block) => setAt(block).map(pk => ({ pubkey: pk })));
+            db.hasCapability = sinon.stub().callsFake(
+                async (pk, cap, block) => setAt(block).includes(String(pk).toLowerCase()));
+            db.getAttestationAdmissionCounts = sinon.stub().resolves({ total: 0, byContract: 0 });
+            db.getAttestationRequestById = sinon.stub().resolves({
+                request_id: REQ_ID, provider_id: 'http_get', request_status: 'pending',
+                deadline_block: N + 500, block_index: N, redundancy: 2,
+                contract_index: 5, callback_method: 'onResult', callback_params_json: '[]',
+            });
+            db.createAttestationResponse           = sinon.stub().resolves();
+            db.incrementAttestationValidatorStat   = sinon.stub().resolves();
+            db.updateAttestationRequestStatus      = sinon.stub().resolves();
+            db.setAttestationResponseCallbackIndex = sinon.stub().resolves();
+            db.getContract                         = sinon.stub().resolves({ contract_index: 5 });
+            db.createSavepoint                     = sinon.stub().resolves('sp1');
+            db.releaseSavepoint                    = sinon.stub().resolves();
+            db.rollbackToSavepoint                 = sinon.stub().resolves();
+
+            handler = new Attest({
+                config: indexer.config, util: indexer.util, mapper: indexer.mapper,
+                decoderDb: indexer.decoderDb, indexerDb: db,
+                actionExecute: { parse: sinon.stub().resolves() },
+                protocolChanges: { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) },
+            });
+            indexer.util.resetLists();
+            // Legacy count path: the source-deduped weighted resolver has its own
+            // coverage; this test is about WHICH HEIGHT, not which resolver.
+            sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+            // And the response-mirror flag day, armed on regtest at genesis: above it the
+            // chain handler refuses an on-chain v1 before any height is resolved, so these
+            // burial vectors are the legacy era's (matches attest.test.js default).
+            sinon.stub(require('../../src/attest_response_mirror_activation.js'),
+                       'isResponseMirrorActive').returns(false);
+            sinon.stub(ed25519, 'verify').returns(true);
+        });
+
+        afterEach(function () { sinon.restore(); });
 
         it('the flag-day input itself is NOT shifted by the buffer', async function () {
             // Burying the height the EQUIV/SWQ gates are evaluated at would move the
@@ -273,41 +417,40 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
         });
     });
 
+    // BTC-side stub whose answers depend on the height asked about, unlike the
+    // block-blind stub the rest of recovery.test.js uses.
+    function btcDbAtHeight(){
+        const calls = [];
+        const rowsAt = (h) => setAt(h).map(pk => ({ pubkey: pk, source: 'src_' + pk.slice(0, 16), weight: '5' }));
+        return {
+            calls,
+            // Stage-1 direct-stake probe: params are [pubkey, atBlock, atBlock].
+            async doQuery(sql, params){
+                const pk = String(params[0]).toLowerCase();
+                const at = Number(params[1]);
+                calls.push({ method: 'doQuery', block: at });
+                return setAt(at).includes(pk) ? [{ 1: 1 }] : [];
+            },
+            async getValidatorsByCapability(cap, block, minStake){
+                calls.push({ method: 'getValidatorsByCapability', block: Number(block), minStake });
+                return rowsAt(block);
+            },
+            async getStakeWeightsByCapability(cap, block, minStake){
+                calls.push({ method: 'getStakeWeightsByCapability', block: Number(block), minStake });
+                return rowsAt(block);
+            },
+        };
+    }
+
+    // The archive a correct hub wrote: the set it RESOLVED (at N-6) stamped with the
+    // raw label N, which is exactly what _persistCapabilitySnapshot writes.
+    const honestArchive = setAt(BURIED).map(pk => ({
+        capability: 'oracle_publish', snapshot_block: N,
+        signing_pubkey: pk, source: 'src_' + pk.slice(0, 16), amount: '5',
+    }));
+
     // ── Party 3: archive recovery ────────────────────────────────────────────
     describe('party 3: archive recovery', function () {
-
-        // BTC-side stub whose answers depend on the height asked about, unlike the
-        // block-blind stub the rest of recovery.test.js uses.
-        function btcDbAtHeight(){
-            const calls = [];
-            const rowsAt = (h) => setAt(h).map(pk => ({ pubkey: pk, source: 'src_' + pk.slice(0, 16), weight: '5' }));
-            return {
-                calls,
-                // Stage-1 direct-stake probe: params are [pubkey, atBlock, atBlock].
-                async doQuery(sql, params){
-                    const pk = String(params[0]).toLowerCase();
-                    const at = Number(params[1]);
-                    calls.push({ method: 'doQuery', block: at });
-                    return setAt(at).includes(pk) ? [{ 1: 1 }] : [];
-                },
-                async getValidatorsByCapability(cap, block, minStake){
-                    calls.push({ method: 'getValidatorsByCapability', block: Number(block), minStake });
-                    return rowsAt(block);
-                },
-                async getStakeWeightsByCapability(cap, block, minStake){
-                    calls.push({ method: 'getStakeWeightsByCapability', block: Number(block), minStake });
-                    return rowsAt(block);
-                },
-            };
-        }
-
-        // The archive a correct hub wrote: the set it RESOLVED (at N-6) stamped with the
-        // raw label N, which is exactly what _persistCapabilitySnapshot writes.
-        const honestArchive = setAt(BURIED).map(pk => ({
-            capability: 'oracle_publish', snapshot_block: N,
-            signing_pubkey: pk, source: 'src_' + pk.slice(0, 16), amount: '5',
-        }));
-
         it('_verifyStakes accepts an honest archive whose signer deactivates inside (N-6, N]', async function () {
             const btcDb = btcDbAtHeight();
             const rec   = new AnchorRecovery({}, { btcDb, verifyStakes: true, log: () => {} });
@@ -330,7 +473,9 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
             for(const c of resolutions)
                 assert.strictEqual(c.block, BURIED, c.method + ' resolved at ' + c.block + ', not the buried ' + BURIED);
         });
+    });
 
+    describe('party 3: archive recovery', function () {
         it('still rejects a genuinely fabricated key (the existence guard is not weakened)', async function () {
             const btcDb = btcDbAtHeight();
             const rec   = new AnchorRecovery({}, { btcDb, verifyStakes: true, log: () => {} });

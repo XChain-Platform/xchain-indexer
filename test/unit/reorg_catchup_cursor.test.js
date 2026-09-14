@@ -112,7 +112,6 @@ function decoderReorg(id, blockIndex) {
 }
 
 describe('reorg catch-up cursor refresh (XChainIndexer.start REORG-6 recheck)', function () {
-
     it('re-selects just-processed reorgs when the cursor is NOT refreshed (the bug)', async function () {
         // Two decoder reorgs land between iterations (ids 10, 11). The indexer starts
         // with no recorded markers, so the pre-processing cursor is null.
@@ -151,7 +150,9 @@ describe('reorg catch-up cursor refresh (XChainIndexer.start REORG-6 recheck)', 
         const midReorgs = await decoderDb.getReorgsSince(lastProcessedReorgId);
         assert.strictEqual(midReorgs.length, 0, 'refreshed cursor eliminates the spurious break');
     });
+});
 
+describe('reorg catch-up cursor refresh (XChainIndexer.start REORG-6 recheck)', function () {
     it('STILL selects a genuinely new reorg against the refreshed cursor (real reorgs never missed)', async function () {
         const decoderDb        = makeDb([decoderReorg(10, 6241887), decoderReorg(11, 6241890)]);
         const indexerReorgView = makeDb([]);

@@ -715,38 +715,37 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         assert.strictEqual(report.verified, 1);
     });
 
+    // An archive where `attacker` occupies the row of honest validator `victim`: the
+    // source and the weight are byte-identical to the honest archive, only the signing
+    // key changed, and the attacker re-signed the batch with their own key.
+    function forgedBatch() {
+        let victim   = crossKeys[0];
+        let attacker = makeKeypair();
+        let forgedCross = [attacker].concat(crossKeys.slice(1));
+        let victimSource = 'src_' + victim.pubkey.slice(0, 16);
+        let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, forgedCross, {
+            snapSourceFor: pk => (pk === attacker.pubkey ? victimSource : 'src_' + pk.slice(0, 16))
+        });
+        // The attacker really does hold stake, under their OWN source, which is what
+        // makes the existence guard pass.
+        let staked = oracleKeys.map(k => k.pubkey)
+            .concat(crossKeys.slice(1).map(k => k.pubkey))
+            .concat([attacker.pubkey]);
+        // On chain the victim's source is still the victim's: the archived set the
+        // resolver reports is unchanged, so completeness has nothing to object to.
+        let capSets = {
+            cross_chain: capSetFromKeys(crossKeys),
+            oracle_publish: capSetFromKeys(oracleKeys)
+        };
+        return { v1, staked, capSets, attacker, victimSource };
+    }
+
     // Key-source binding: the archive decides which SOURCE a signing key speaks for, and under
     // weighted quorum the source carries the stake. Existence answers "is this key staked
     // somewhere" and weighted completeness reduces the archive to source -> amount before it
     // looks, so signing-key identity left the weighted path entirely and an attacker holding
     // any small stake could write their own key onto an honest source's row.
     describe('key-source binding cross-check (REC-BIND-1)', function () {
-
-        // An archive where `attacker` occupies the row of honest validator `victim`: the
-        // source and the weight are byte-identical to the honest archive, only the signing
-        // key changed, and the attacker re-signed the batch with their own key.
-        function forgedBatch() {
-            let victim   = crossKeys[0];
-            let attacker = makeKeypair();
-            let forgedCross = [attacker].concat(crossKeys.slice(1));
-            let victimSource = 'src_' + victim.pubkey.slice(0, 16);
-            let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, forgedCross, {
-                snapSourceFor: pk => (pk === attacker.pubkey ? victimSource : 'src_' + pk.slice(0, 16))
-            });
-            // The attacker really does hold stake, under their OWN source, which is what
-            // makes the existence guard pass.
-            let staked = oracleKeys.map(k => k.pubkey)
-                .concat(crossKeys.slice(1).map(k => k.pubkey))
-                .concat([attacker.pubkey]);
-            // On chain the victim's source is still the victim's: the archived set the
-            // resolver reports is unchanged, so completeness has nothing to object to.
-            let capSets = {
-                cross_chain: capSetFromKeys(crossKeys),
-                oracle_publish: capSetFromKeys(oracleKeys)
-            };
-            return { v1, staked, capSets, attacker, victimSource };
-        }
-
         it('rejects an attacker key wearing an honest validator\'s staking source', async function () {
             let { v1, staked, capSets, attacker, victimSource } = forgedBatch();
             let report = await new AnchorRecovery(memDb([v1], []),
@@ -769,7 +768,9 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             let report = await rec.run();
             assert.strictEqual(report.verified, 1, JSON.stringify(report.failed));
         });
+    });
 
+    describe('key-source binding cross-check (REC-BIND-1)', function () {
         it('admits a key legitimately backed by TWO sources under either of them', async function () {
             // Existence semantics, not stake_source.js's "latest row wins": picking one
             // answer per key would condemn an honest archive that names the other source.
@@ -814,7 +815,6 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
     });
 
     describe('completeness cross-check (REC-SUBSET-1)', function () {
-
         it('an honest full archived snapshot passes the source completeness check', async function () {
             let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);
             let allStaked = oracleKeys.concat(crossKeys).map(k => k.pubkey);
@@ -853,7 +853,9 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             assert.strictEqual(report.verified, 0);
             assert.ok(report.failed[0].reason.includes('truncated'));
         });
+    });
 
+    describe('completeness cross-check (REC-SUBSET-1)', function () {
         it('rejects a dropped source whose weight is below the archive OWN minimum (threshold-inflation forge, #4269)', async function () {
             // The completeness threshold used to be the archive's own minimum admitted weight,
             // which let the archive pick its own bar: drop every lower-weight qualifying source
@@ -882,12 +884,13 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             assert.ok(btcDb.calls.every(c => c.minStake === null || c.minStake === '0'),
                       'no archive-derived threshold may reach the resolver');
         });
+    });
 
+    describe('completeness cross-check (REC-SUBSET-1)', function () {
         // the bar and the weights are reconstructed AS OF the snapshot block instead
         // of being read off this node's live local config, which is neither the bar the archive
         // was built at nor the weights it was built from.
         describe('as-of-block threshold + weight reconstruction', function () {
-
             // The frozen table in capability_min_stake_history.js ships EMPTY on every network
             // (arming an entry is a coordinated flag day, not a test fixture), so a ratified
             // governance history enters the way a DR operator would supply one.
@@ -938,7 +941,11 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
                 assert.ok(report.failed[0].reason.includes('incomplete'));
                 assert.ok(report.failed[0].reason.includes('src_below_governance'));
             });
+        });
+    });
 
+    describe('completeness cross-check (REC-SUBSET-1)', function () {
+        describe('as-of-block threshold + weight reconstruction', function () {
             it('resolves the threshold at the BURIED block, on the same plane as the set', async function () {
                 // The hub buries the declared height before resolving BOTH its threshold and
                 // its set (CapabilitySnapshot.getSnapshot), so a threshold resolved at the raw
@@ -982,7 +989,11 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
                 assert.deepStrictEqual(report.failed, [], 'a weight restored by its slash debits must match the archive');
                 assert.strictEqual(report.verified, 1);
             });
+        });
+    });
 
+    describe('completeness cross-check (REC-SUBSET-1)', function () {
+        describe('as-of-block threshold + weight reconstruction', function () {
             it('condemns that same archive when the slash is NOT unwound', async function () {
                 // The control for the test above: without the capability_slash_debits
                 // reconstruction the post-slash weight is all there is, so the honest archived
@@ -1038,17 +1049,16 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         });
     });
 
+    function reward(overrides) {
+        return Object.assign({
+            validator_pubkey: 'a'.repeat(64), source: '1StakeAddr',
+            round_number: 7, reward_type: 'anchor_BTC',
+            amount: '10.00000000', block_index: SNAPSHOT_BLOCK
+        }, overrides || {});
+    }
+
     // ── Anchor-publish reward restore (BTC indexer DB) ──────────────────────
     describe('archived rewards', function () {
-
-        function reward(overrides) {
-            return Object.assign({
-                validator_pubkey: 'a'.repeat(64), source: '1StakeAddr',
-                round_number: 7, reward_type: 'anchor_BTC',
-                amount: '10.00000000', block_index: SNAPSHOT_BLOCK
-            }, overrides || {});
-        }
-
         it('restores archived anchor rewards into the BTC indexer DB', async function () {
             let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
                                     { rewards: [reward(), reward({ reward_type: 'anchor_archive', round_number: 3 })] });
@@ -1100,7 +1110,9 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
                 assert.strictEqual(btcDb.rewards[0].amount, '2.50000000');
             } finally { arMod.ARCHIVE_REWARD_ACTIVATION.regtest = saved; }
         });
+    });
 
+    describe('archived rewards', function () {
         it('rejects an archive claiming a derived reward type (oracle_round must never ride the archive)', async function () {
             let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
                                     { rewards: [reward({ reward_type: 'oracle_round' })] });
@@ -1147,7 +1159,9 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             assert.strictEqual(btcDb.commits, 0);
             assert.strictEqual(report.rewards, 0, 'the report never counts rolled-back rows');
         });
+    });
 
+    describe('archived rewards', function () {
         it('one failing batch does not roll back the batches that already committed (#3213)', async function () {
             // Per-BATCH atomicity, not per-run: an operator re-runs recovery after fixing the
             // cause, and every batch that already landed must stay landed (its writes are
@@ -1205,7 +1219,9 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             assert.strictEqual(db.rollbacks, 1);
             assert.strictEqual(db.matches.length, 0);
         });
+    });
 
+    describe('archived rewards', function () {
         it('a raw query handle with no transaction API still rebuilds (back-compat)', async function () {
             // Recovery is also driven by plain doQuery handles (embedders, fixtures). Those
             // keep the pre-#3213 autocommit behavior rather than throwing on beginTransaction.
@@ -1229,7 +1245,6 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
 
     // ── XCALL relay-row restore (cross_chain_calls; the XCALL recoverability leg) ──
     describe('archived XCALL relay rows', function () {
-
         it('round-trips both phases: a DISPATCH and a RESULT row rebuild', async function () {
             let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
                                     { calls: [rawCall('c1', 'dispatch'), rawCall('c1', 'result')] });
@@ -1274,7 +1289,9 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             assert.strictEqual(db.calls.length, 1);
             assert.strictEqual(db.calls[0].status, 'retracted');
         });
+    });
 
+    describe('archived XCALL relay rows', function () {
         it('re-finalized-wins: a later batch re-finalizes a retracted call with NEW content (full-column upgrade, not status-only)', async function () {
             // A source-chain reorg retracts a dispatched call; the hub re-mines and
             // re-finalizes the SAME (call_id, phase) with a LATER effective_time and a
@@ -1323,7 +1340,9 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             assert.strictEqual(db.calls.filter(c => c.phase === 'dispatch').length, 1);
             assert.strictEqual(db.calls.filter(c => c.phase === 'result').length, 1);
         });
+    });
 
+    describe('archived XCALL relay rows', function () {
         it('rejects a call with sub-quorum signatures against the archived cross_chain set', async function () {
             let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
                                     { calls: [rawCall('c1', 'dispatch')], callSigners: 2 });   // 2 < 2f+1 = 3

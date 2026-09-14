@@ -105,6 +105,8 @@ describe('stallWedged() future-stamped-block deadline', function () {
     });
 });
 
+const NOW   = 1_000_000_000;
+
 /*
  * Telling the healthy future-stamped-block wait apart from degradation.
  *
@@ -116,11 +118,6 @@ describe('stallWedged() future-stamped-block deadline', function () {
  * a permanent fault to any monitor. These pin the discriminators that say otherwise.
  */
 describe('waitingOnFutureBlock() / stallClassOf() / atProcessableTip()', function () {
-    const GRACE = 120000;
-    const NOW   = 1_000_000_000;
-    const LONG_STALL = NOW - 900000;   // 15 min with no commit
-    const RECENT     = NOW - 5000;
-
     describe('waitingOnFutureBlock()', function () {
         it('a still-future clear instant with a stall set is a future-block wait', function () {
             assert.strictEqual(waitingOnFutureBlock('anchor_attest_barrier', NOW + 1, NOW), true);
@@ -144,6 +141,12 @@ describe('waitingOnFutureBlock() / stallClassOf() / atProcessableTip()', functio
             }
         });
     });
+});
+
+describe('waitingOnFutureBlock() / stallClassOf() / atProcessableTip()', function () {
+    const GRACE = 120000;
+    const LONG_STALL = NOW - 900000;   // 15 min with no commit
+    const RECENT     = NOW - 5000;
 
     describe('stallClassOf()', function () {
         it('no stall classifies as none', function () {
@@ -184,7 +187,9 @@ describe('waitingOnFutureBlock() / stallClassOf() / atProcessableTip()', functio
             }
         });
     });
+});
 
+describe('waitingOnFutureBlock() / stallClassOf() / atProcessableTip()', function () {
     describe('atProcessableTip()', function () {
         it('level with the decoder tip is at the processable tip', function () {
             assert.strictEqual(atProcessableTip(true, null, null, NOW), true);

@@ -115,7 +115,6 @@ function reorgScopingDelete(rows, reorgBlock){
 }
 
 describe('recovery-restored rewards claim their ORIGINAL derive block @regression @tier1', function () {
-
     it('stamps derive_block_index = earn-block + the frozen mirror maturity', async function () {
         const earn = 800000;
         const db = makeDb({ staged: [{ block_index: earn }] });
@@ -162,7 +161,9 @@ describe('recovery-restored rewards claim their ORIGINAL derive block @regressio
         await db.applyPendingRewardsDueAtBlock(earn + MATURITY + 50);
         assert.strictEqual(db.rewards.length, 1);
     });
+});
 
+describe('recovery-restored rewards claim their ORIGINAL derive block @regression @tier1', function () {
     it('below the derive flag-day the stamp stays NULL and the address hook still lands it', async function () {
         // Below the flag-day no BTC-side row was ever minted by the derive path, so the
         // legacy behaviour must be byte-identical. Every shipped network arms at genesis
@@ -213,7 +214,9 @@ describe('recovery-restored rewards claim their ORIGINAL derive block @regressio
         for(let b = 900000; b < 900010; b++) await db.applyPendingRewardsDueAtBlock(b);
         assert.strictEqual(probes, 1, 'the gate probes once and short-circuits every later block');
     });
+});
 
+describe('recovery-restored rewards claim their ORIGINAL derive block @regression @tier1', function () {
     // ─── The point of the whole thing ────────────────────────────────────────────────
     it('REORG SCOPING: the same delete that removes a live-derived row removes the restored one',
        async function () {
@@ -263,7 +266,9 @@ describe('recovery-restored rewards claim their ORIGINAL derive block @regressio
         assert.strictEqual(ar.restoredRewardRearmFloor(800000, 'nosuchnet'), 800000);
         assert.strictEqual(ar.restoredRewardRearmFloor('not-a-height', 'regtest'), null);
     });
+});
 
+describe('recovery-restored rewards claim their ORIGINAL derive block @regression @tier1', function () {
     it('restoredRewardDeriveHeight is the one rule both the stamp and the floor read', function () {
         // mainnet joined the armed networks on 2026-09-09, so it stamps like the others.
         for (const net of ['regtest', 'testnet', 'mainnet'])

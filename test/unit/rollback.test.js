@@ -18,9 +18,60 @@ const { createMockIndexer } = require('../fixtures/mocks');
 const Rollback = require('../../src/rollback.js');
 const ar = require('../../src/anchor_reward_activation.js');
 
-describe('Rollback @regression @tier3', function () {
-    let indexer, rollback;
+let indexer, rollback;
 
+// ─── Recovery-reward re-arm: errno-gated catch ─────────────────────
+// The re-arm block runs INSIDE the atomic reorg transaction. Only the
+// schema-gap errors (1146 missing table / 1054 missing column: non-recovery
+// stack, nothing staged) may be swallowed; a transient DB fault must abort
+// the reorg so a partial re-arm can never commit.
+
+function rearmFailsWith(err) {
+    indexer.indexerDb.doQuery.callsFake(async (query) => {
+        if (query && query.includes('UPDATE recovery_pending_rewards')) throw err;
+        return [];
+    });
+}
+
+// ─── Attestation request_status reset (reorg correctness) ─────────
+//
+// Regression for: a reorg that orphans an ATTEST v1 (response) block must
+// reset the originating request back to 'pending'. The response row lives in
+// the orphaned range and is bulk-deleted, but the request row was created in
+// an EARLIER block (action_index < firstActionIndex) and survives. Without a
+// companion UPDATE the surviving request stays 'fulfilled'/'errored', the
+// re-applied response is rejected as already-resolved, the contract callback
+// never fires, and the deadline-expiry sweep (which only scans 'pending'
+// requests) never re-arms.
+
+function attestationResetUpdate() {
+    const queries = indexer.indexerDb.doQuery.args.map(a => a[0]);
+    return queries.find(q =>
+        q &&
+        /UPDATE\s+attests/i.test(q) &&
+        /request_status\s*=\s*'pending'/i.test(q)
+    );
+}
+
+// ─── Ownership-escrow RE-DERIVE (reorg correctness) ───
+//
+// tokens.escrow_action_index (the ownership gate) is an in-place projection:
+// a GIVE_OWNERSHIP offer stamps it with the offer's action_index; a release
+// (match/expire/cancel/close) NULLs it. After the dataTables delete, rollback
+// RE-DERIVES it for every affected token = the surviving still-open
+// GIVE_OWNERSHIP offer's action_index, else NULL. One pass collapses both
+// directions: orphaned offer -> NULL; orphaned release on a surviving offer ->
+// re-stamp. The old SET-only `escrow_action_index >= ?` reset is removed (it
+// could not handle the CLEAR direction).
+
+const AFFECTED_SQL_RE = /escrow_action_index IS NOT NULL/i;       // affected-ticker query
+const REDERIVE_UPDATE_RE = /UPDATE tokens SET escrow_action_index=\?\s+WHERE tick_id=\(SELECT id FROM index_tickers/i;
+
+function rederiveUpdateCall() {
+    return indexer.indexerDb.doQuery.args.find(a => a[0] && REDERIVE_UPDATE_RE.test(a[0]));
+}
+
+describe('Rollback @regression @tier3', function () {
     beforeEach(function () {
         indexer = createMockIndexer();
         // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
@@ -69,6 +120,21 @@ describe('Rollback @regression @tier3', function () {
     it('blockTables contains contract_slash_debits so orphaned slash-debit rows are pruned', function () {
         assert.ok(rollback.blockTables.includes('contract_slash_debits'));
     });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
+    });
 
     it('restores slashed stake amounts from contract_slash_debits before the deletes', async function () {
         indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]); // firstActionIndex
@@ -89,6 +155,21 @@ describe('Rollback @regression @tier3', function () {
 
     it('blockTables contains contract_delegation_rotations so orphaned rotation-journal rows are pruned', function () {
         assert.ok(rollback.blockTables.includes('contract_delegation_rotations'));
+    });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
     });
 
     it('restores signing keys an orphaned DELEGATE v1 materialization rewrote, before the deletes', async function () {
@@ -118,6 +199,21 @@ describe('Rollback @regression @tier3', function () {
         const deleteIdx  = calls.findIndex(c => /DELETE FROM contract_stakes WHERE action_index/.test(c.args[0]));
         assert.ok(restoreIdx >= 0 && deleteIdx >= 0 && restoreIdx < deleteIdx,
             'key restore must run before the contract_stakes delete');
+    });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
     });
 
     it('contract slash-restore breaks same-block ties deterministically via (execution_index, slash_position), never AUTO_INCREMENT id', async function () {
@@ -157,6 +253,21 @@ describe('Rollback @regression @tier3', function () {
     it('blockTables contains anchor_reward_reconcile_log so orphaned reconcile-log rows are pruned', function () {
         assert.ok(rollback.blockTables.includes('anchor_reward_reconcile_log'));
     });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
+    });
 
     it('restores reconcile-deleted anchor validator_rewards from anchor_reward_reconcile_log before the deletes (RB-ANCHOR)', async function () {
         indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]); // firstActionIndex
@@ -176,6 +287,21 @@ describe('Rollback @regression @tier3', function () {
         const restoreIdx = calls.indexOf(restore);
         const deleteIdx = calls.findIndex(c => /DELETE FROM validator_rewards WHERE block_index/.test(c.args[0]));
         assert.ok(restoreIdx >= 0 && deleteIdx >= 0 && restoreIdx < deleteIdx, 'reconcile restore must run before the validator_rewards delete');
+    });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
     });
 
     it('restores reconcile-deleted anchor rewards when the orphaned range holds NO actions row (RB-ANCHOR-NULL)', async function () {
@@ -210,6 +336,21 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(deriveDelIdx >= 0 && restoreIdx < deriveDelIdx, 'restore must precede the derive-block delete');
         assert.ok(logDelIdx >= 0 && restoreIdx < logDelIdx, 'restore must precede the reconcile-log delete');
     });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
+    });
 
     // ─── / materialization-block scoping ───────────
     //
@@ -232,6 +373,21 @@ describe('Rollback @regression @tier3', function () {
         const indexIdx = calls.findIndex(c => /DELETE FROM index_addresses WHERE block_index/.test(c.args[0]));
         assert.ok(indexIdx >= 0, 'expected the index_addresses rollback delete');
         assert.ok(delIdx < indexIdx, 'the derive-block delete must precede the index-lookup deletes');
+    });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
     });
 
     it('re-arms recovery-staged rewards from the DERIVE floor, not the reorg height alone', async function () {
@@ -277,6 +433,21 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(/d\.reward_derive_block_index/.test(sql.split('FROM')[0]),
             'restore must project the logged materialization block, not NULL');
     });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
+    });
 
     it('deletes index_addresses and index_tickers by block_index, after the data deletes (#4904)', async function () {
         // index_addresses/index_tickers ids are consensus-relevant (wire ^<id> refs), so the
@@ -301,6 +472,21 @@ describe('Rollback @regression @tier3', function () {
         const blocksIdx = sql.findIndex(q => /DELETE FROM blocks WHERE block_index >= \?/.test(q));
         assert.ok(blocksIdx >= 0, 'sanity: blocks delete present');
         assert.ok(addrIdx > blocksIdx && tickIdx > blocksIdx, 'index-id deletes must run after the block data deletes');
+    });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
     });
 
     it('reverses orphaned cooldown-maturity completions: deletes the refund credit + resets status_id, before the delete and balance recompute', async function () {
@@ -332,6 +518,21 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(capCreditIdx >= 0 && genCreditDelIdx >= 0 && capCreditIdx < genCreditDelIdx, 'maturity-credit delete must precede the generic credits delete');
         assert.ok(indexer.indexerDb.updateBalances.notCalled || capCreditIdx >= 0, 'maturity-credit delete must precede updateBalances');
     });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
+    });
 
     it('feeds the reversed-maturity source address + tick into the balance/supply recompute', async function () {
         // The reversed unstake rows live in surviving blocks (action_index < firstActionIndex),
@@ -355,6 +556,21 @@ describe('Rollback @regression @tier3', function () {
         const tokenArg = indexer.indexerDb.updateTokens.firstCall.args[0];
         assert.ok(tokenArg.includes('XCHAIN'), 'updateTokens should receive GAS for the capability maturity refund');
         assert.ok(tokenArg.includes('CTICK'), 'updateTokens should receive the contract unstake tick');
+    });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
     });
 
     // ─── Contract-staking pre-scan (addresses/tickers collection) ─────
@@ -388,6 +604,21 @@ describe('Rollback @regression @tier3', function () {
         const tokenArg = indexer.indexerDb.updateTokens.firstCall.args[0];
         assert.ok(tokenArg.includes('CSTK') && tokenArg.includes('CUNS') && tokenArg.includes('CDEL'),
             'updateTokens should receive the tickers from all three tables');
+    });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
     });
 
     // ─── Hub price retraction signal ──────────────────────────────────
@@ -428,6 +659,21 @@ describe('Rollback @regression @tier3', function () {
         idx.indexerDb.doQuery.resolves([]);
         await assert.doesNotReject(() => rb.rollback(100));
         assert.ok(idx.indexerDb.commitTransaction.calledOnce, 'local rollback should still commit');
+    });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
     });
 
     it('leaves the durable write-ahead price_retraction row when the live RPC fails (HUB-RETRACT-2)', async function () {
@@ -471,6 +717,21 @@ describe('Rollback @regression @tier3', function () {
         // returns 1, so the pre-bump value is 0.
         assert.strictEqual(payload.retraction_generation, 0, 'durable write-ahead retraction must carry the generation fence');
     });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
+    });
 
     it('keeps the LIVE retraction open-ended (no ceiling) so it never under-deletes the orphaned range', async function () {
         const hubClient = { enabled: true, retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
@@ -506,6 +767,21 @@ describe('Rollback @regression @tier3', function () {
         assert.strictEqual(hubClient.retractPriceRange.firstCall.args[3], 5);
         assert.strictEqual(hubClient.retractXcallRange.firstCall.args[3], 5);
         assert.strictEqual(hubClient.retractMatchRange.firstCall.args[3], 5);
+    });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
     });
 
     it('quiesces the hub-push queue around the retraction block (pause before, resume after, even on throw)', async function () {
@@ -550,6 +826,21 @@ describe('Rollback @regression @tier3', function () {
         assert.strictEqual(hubClient.retractXcallRange.firstCall.args[0], rb.config['COIN']);
         assert.strictEqual(hubClient.retractXcallRange.firstCall.args[1], 50);
     });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
+    });
 
     it('does NOT signal the hub for XCALL retraction when the range is empty', async function () {
         const hubClient = { enabled: true, retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
@@ -588,6 +879,21 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(hubClient.retractMatchRange.calledOnce, 'expected retractMatchRange to be called once');
         assert.strictEqual(hubClient.retractMatchRange.firstCall.args[0], rb.config['COIN']);
         assert.strictEqual(hubClient.retractMatchRange.firstCall.args[1], 50);
+    });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
     });
 
     it('does NOT signal the hub for DEX match retraction when the range is empty', async function () {
@@ -633,6 +939,21 @@ describe('Rollback @regression @tier3', function () {
         await rollback.rollback(100);
         assert.ok(indexer.indexerDb.rollbackTransaction.notCalled);
     });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
+    });
 
     // ─── Error path: rollbackTransaction called on failure ────────────
 
@@ -646,19 +967,6 @@ describe('Rollback @regression @tier3', function () {
         await assert.rejects(() => rollback.rollback(100), /commit failed/);
         assert.ok(indexer.indexerDb.rollbackTransaction.calledOnce);
     });
-
-    // ─── Recovery-reward re-arm: errno-gated catch ─────────────────────
-    // The re-arm block runs INSIDE the atomic reorg transaction. Only the
-    // schema-gap errors (1146 missing table / 1054 missing column: non-recovery
-    // stack, nothing staged) may be swallowed; a transient DB fault must abort
-    // the reorg so a partial re-arm can never commit.
-
-    function rearmFailsWith(err) {
-        indexer.indexerDb.doQuery.callsFake(async (query) => {
-            if (query && query.includes('UPDATE recovery_pending_rewards')) throw err;
-            return [];
-        });
-    }
 
     it('re-arm: a transient DB fault (errno 1205) aborts and rolls back the reorg transaction', async function () {
         const lockTimeout = new Error('Lock wait timeout exceeded');
@@ -683,6 +991,21 @@ describe('Rollback @regression @tier3', function () {
         await rollback.rollback(100);
         assert.ok(indexer.indexerDb.commitTransaction.calledOnce, 'schema-gap swallow must still commit');
         assert.ok(indexer.indexerDb.rollbackTransaction.notCalled);
+    });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
     });
 
     it('re-arm: missing column (errno 1054) is tolerated and the reorg commits', async function () {
@@ -720,6 +1043,21 @@ describe('Rollback @regression @tier3', function () {
         const missing = rollback.blockTables.filter(t => !deletedTables.has(t));
         assert.deepStrictEqual(missing, [],
             `Every blockTables entry must appear in a block_index DELETE; missing: ${missing.join(', ')}`);
+    });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
     });
 
     it('issues DELETE queries for dataTables when firstActionIndex exists', async function () {
@@ -763,6 +1101,21 @@ describe('Rollback @regression @tier3', function () {
         await rollback.rollback(100);
         assert.ok(indexer.indexerDb.updateTokens.calledOnce);
     });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
+    });
 
     it('calls updateMarkets after rollback', async function () {
         indexer.indexerDb.doQuery.resolves([]);
@@ -775,26 +1128,21 @@ describe('Rollback @regression @tier3', function () {
         await rollback.rollback(100);
         assert.ok(indexer.indexerDb.sanityCheck.calledOnce);
     });
+});
 
-    // ─── Attestation request_status reset (reorg correctness) ─────────
-    //
-    // Regression for: a reorg that orphans an ATTEST v1 (response) block must
-    // reset the originating request back to 'pending'. The response row lives in
-    // the orphaned range and is bulk-deleted, but the request row was created in
-    // an EARLIER block (action_index < firstActionIndex) and survives. Without a
-    // companion UPDATE the surviving request stays 'fulfilled'/'errored', the
-    // re-applied response is rejected as already-resolved, the contract callback
-    // never fires, and the deadline-expiry sweep (which only scans 'pending'
-    // requests) never re-arms.
-
-    function attestationResetUpdate() {
-        const queries = indexer.indexerDb.doQuery.args.map(a => a[0]);
-        return queries.find(q =>
-            q &&
-            /UPDATE\s+attests/i.test(q) &&
-            /request_status\s*=\s*'pending'/i.test(q)
-        );
-    }
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
+    });
 
     it('resets terminal attestation requests whose flip happened in the orphaned range', async function () {
         indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
@@ -818,31 +1166,28 @@ describe('Rollback @regression @tier3', function () {
         const call = indexer.indexerDb.doQuery.args.find(a => a[0] === updateQuery);
         assert.deepStrictEqual(call[1], [100], 'reset UPDATE should be parameterised with block_index');
     });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
+    });
 
     it('does NOT issue the request_status reset when there is no orphaned range', async function () {
         indexer.indexerDb.doQuery.resolves([]); // no firstActionIndex
         await rollback.rollback(100);
         assert.ok(!attestationResetUpdate(), 'no reset UPDATE expected when the rolled-back range is empty');
     });
-
-    // ─── Ownership-escrow RE-DERIVE (reorg correctness) ───
-    //
-    // tokens.escrow_action_index (the ownership gate) is an in-place projection:
-    // a GIVE_OWNERSHIP offer stamps it with the offer's action_index; a release
-    // (match/expire/cancel/close) NULLs it. After the dataTables delete, rollback
-    // RE-DERIVES it for every affected token = the surviving still-open
-    // GIVE_OWNERSHIP offer's action_index, else NULL. One pass collapses both
-    // directions: orphaned offer -> NULL; orphaned release on a surviving offer ->
-    // re-stamp. The old SET-only `escrow_action_index >= ?` reset is removed (it
-    // could not handle the CLEAR direction).
-
-    const AFFECTED_SQL_RE = /escrow_action_index IS NOT NULL/i;       // affected-ticker query
     const OPEN_OFFER_RE   = /SELECT\s+o\.action_index\s+FROM\s+orders/i; // per-ticker open-offer query
-    const REDERIVE_UPDATE_RE = /UPDATE tokens SET escrow_action_index=\?\s+WHERE tick_id=\(SELECT id FROM index_tickers/i;
-
-    function rederiveUpdateCall() {
-        return indexer.indexerDb.doQuery.args.find(a => a[0] && REDERIVE_UPDATE_RE.test(a[0]));
-    }
 
     it('re-stamps escrow to a surviving open GIVE_OWNERSHIP offer (orphaned release / CLEAR direction)', async function () {
         indexer.indexerDb.doQuery.resolves([]);
@@ -870,6 +1215,21 @@ describe('Rollback @regression @tier3', function () {
         const call = rederiveUpdateCall();
         assert.ok(call, 'expected a re-derive UPDATE');
         assert.deepStrictEqual(call[1], [null, 'BAR'], 're-derive should NULL the gate when no offer survives');
+    });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
     });
 
     it('re-derives AFTER the dataTables delete (orphaned offers/status rows already gone)', async function () {
@@ -914,6 +1274,21 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(capStatusReset, 'unstakes status reset must still run with a null firstActionIndex');
         assert.ok(conStatusReset, 'contract_unstakes status reset must still run with a null firstActionIndex');
     });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
+    });
 
     it('feeds action-empty-range cooldown sources into the recompute (null firstActionIndex)', async function () {
         indexer.indexerDb.doQuery.callsFake(async (query) => {
@@ -946,6 +1321,21 @@ describe('Rollback @regression @tier3', function () {
         try { await rb.rollback(100); } catch(e){ threw = true; }
         assert.ok(threw, 'a fault on the strict range read must abort the rollback');
         assert.ok(idx.indexerDb.beginTransaction.notCalled, 'no transaction (hence no delete) may begin after a failed range read');
+    });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
     });
 
     // ─── A failed push-generation bump rolls the transaction back ─────
@@ -988,6 +1378,21 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(beginOrder.calledBefore(bumpOrder), 'bump must run AFTER beginTransaction (inside the tx)');
         assert.ok(bumpOrder.calledBefore(commitOrder), 'bump must run BEFORE commitTransaction');
     });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
+    });
 
     // ─── Retractions are write-ahead-staged in-tx, then delivered + dropped on success ─────
     it('write-aheads all three retractions inside the tx and marks each delivered on live success', async function () {
@@ -1029,6 +1434,21 @@ describe('Rollback @regression @tier3', function () {
             'the reset must keep its JOIN text so the cross-repo drift guard still matches');
         const internCall = indexer.indexerDb.createStatus.getCalls().find(c => c.args[0] === 'unverified');
         assert.ok(internCall.calledBefore(anchorUpdate), "createStatus('unverified') must run before the UPDATE");
+    });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
     });
 
     // ─── the anchor invalid_archive reset selects the shared archive-head version set ─────
@@ -1073,6 +1493,21 @@ describe('Rollback @regression @tier3', function () {
         await rb.rollback(100);
         assert.ok(!idx.indexerDb.doQuery.getCalls().some(c => /DELETE FROM price_snapshots/.test(c.args[0])),
             'a DOGE indexer must not run the BTC-anchored price_snapshots delete');
+    });
+});
+
+describe('Rollback @regression @tier3', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        // Rollback itself deliberately holds NO protocolChanges handle (see the constructor:
+        // there is no unambiguous local height to gate on mid-unwind). The stub stands in for
+        // the shared indexer surface the modules a rollback drives read off it.
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
     });
 
     // ─── Markets zombie (pair first-traded only in the orphaned range, ticks survive) ─────

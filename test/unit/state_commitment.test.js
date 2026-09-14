@@ -33,7 +33,6 @@ function amountFor(i){ return String((i * 7 + 1)) + '.' + String(100000 + i).sli
 function leafFor(i){ return M.toHex(M.amountLeaf(amountFor(i))); }
 
 describe('stateCommitment: persistent SMT == in-memory reference @regression', function(){
-
     it('empty tree root matches EMPTY_SMT_ROOT', async function(){
         const smt = new SC.PersistentSMT(new SC.MemoryNodeStore());
         assert.strictEqual(SC.EMPTY_ROOT_HEX, M.toHex(M.EMPTY_SMT_ROOT));
@@ -86,7 +85,9 @@ describe('stateCommitment: persistent SMT == in-memory reference @regression', f
         assert.strictEqual(root, SC.EMPTY_ROOT_HEX, 'fully-emptied tree must return to EMPTY_SMT_ROOT');
         assert.strictEqual(root, ref.rootHex());
     });
+});
 
+describe('stateCommitment: persistent SMT == in-memory reference @regression', function(){
     it('insert order does not affect the root (content-addressed convergence)', async function(){
         const a = new SC.PersistentSMT(new SC.MemoryNodeStore());
         const b = new SC.PersistentSMT(new SC.MemoryNodeStore());

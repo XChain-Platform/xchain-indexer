@@ -59,7 +59,6 @@ function leaf(n) { return M.toHex(M.leafHash(M.canonicalAmount(String(n)))); }
 function key(hexByte) { return M.toBuf(hexByte.repeat(64)); }
 
 describe('stateCommitment.reportOrphanStats @regression @tier2', function () {
-
     it('reports zero orphans when every node is reachable from the single retained root', async function () {
         const store = new SC.MemoryNodeStore();
         const smt   = new SC.PersistentSMT(store);
@@ -105,7 +104,9 @@ describe('stateCommitment.reportOrphanStats @regression @tier2', function () {
         const stats = await SC.reportOrphanStats(makeQuery(store, []), 'BTC', 'regtest');
         assert.deepStrictEqual(stats, { totalNodes: 0, reachableNodes: 0, orphanCount: 0, reachabilitySkipped: false });
     });
+});
 
+describe('stateCommitment.reportOrphanStats @regression @tier2', function () {
     it('stops the walk at maxNodes and flags the truncated figure as an estimate', async function () {
         const store = new SC.MemoryNodeStore();
         const smt   = new SC.PersistentSMT(store);

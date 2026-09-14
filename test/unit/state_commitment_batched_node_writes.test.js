@@ -81,7 +81,6 @@ class PerNodeStore extends CountingStore {
 }
 
 describe('stateCommitment: batched SMT node writes @regression', function(){
-
     it('a key update costs ONE store write call, not one per tree level', async function(){
         const store = new CountingStore();
         const smt   = new SC.PersistentSMT(store);
@@ -137,7 +136,9 @@ describe('stateCommitment: batched SMT node writes @regression', function(){
         for(const [keyHex, leafHex] of entries) ref.set(M.toBuf(keyHex), M.toBuf(leafHex));
         assert.strictEqual(rootBatched, ref.rootHex(), 'batched root diverged from the merkle.js reference');
     });
+});
 
+describe('stateCommitment: batched SMT node writes @regression', function(){
     it('the batch is flushed before update() returns, so the next descend sees it', async function(){
         // buildFull threads the returned root into the next update()'s _descend,
         // which READS the store. Deferring the flush past the return would make
@@ -181,7 +182,9 @@ describe('stateCommitment: batched SMT node writes @regression', function(){
         assert.strictEqual(typeof SC.MemoryNodeStore.prototype.putMany, 'function',
             'MemoryNodeStore must match the DbNodeStore interface');
     });
+});
 
+describe('stateCommitment: batched SMT node writes @regression', function(){
     it('deletes batch the same way and still return the tree to the empty root', async function(){
         const store = new CountingStore();
         const smt   = new SC.PersistentSMT(store);
@@ -198,22 +201,21 @@ describe('stateCommitment: batched SMT node writes @regression', function(){
     });
 });
 
+const CHAIN = 'BTC', NETWORK = 'regtest';
+// 49 keys is the live figure the BTC regtest venue reports
+// (getstakeweightsbycapability keys=49), rebuilt from an empty root every block.
+function stakeEntries(n, salt){
+    const out = [];
+    for(let i = 0; i < n; i++)
+        out.push([M.toHex(keyFor('stake:' + i)), leafFor(i + (salt || 0))]);
+    return out;
+}
+
+function freshSmt(){ return new SC.PersistentSMT(new CountingStore()); }
+
 describe('stateCommitment: stakes subtree rebuilds only on change @regression', function(){
-
-    const CHAIN = 'BTC', NETWORK = 'regtest';
-    // 49 keys is the live figure the BTC regtest venue reports
-    // (getstakeweightsbycapability keys=49), rebuilt from an empty root every block.
-    function stakeEntries(n, salt){
-        const out = [];
-        for(let i = 0; i < n; i++)
-            out.push([M.toHex(keyFor('stake:' + i)), leafFor(i + (salt || 0))]);
-        return out;
-    }
-
     beforeEach(function(){ SC.resetStakesMemo(); });
     afterEach(function(){ SC.resetStakesMemo(); });
-
-    function freshSmt(){ return new SC.PersistentSMT(new CountingStore()); }
 
     it('an unchanged stake set on the next block writes NOTHING and returns the same root', async function(){
         const smt = freshSmt();
@@ -266,6 +268,11 @@ describe('stateCommitment: stakes subtree rebuilds only on change @regression', 
         const plain = await freshSmt().buildFull(stakeEntries(49));
         assert.strictEqual(memoized, plain, 'the memo returned a root buildFull would not have produced');
     });
+});
+
+describe('stateCommitment: stakes subtree rebuilds only on change @regression', function(){
+    beforeEach(function(){ SC.resetStakesMemo(); });
+    afterEach(function(){ SC.resetStakesMemo(); });
 
     it('a GAP in block continuity rebuilds, even with an identical stake set', async function(){
         // A reorg or a rollback lands on a block that is not the memo's successor.
@@ -320,6 +327,11 @@ describe('stateCommitment: stakes subtree rebuilds only on change @regression', 
         assert.strictEqual(second, first, 'and the rebuild must land on the same root');
         assert.ok(smt.store.map.has(first), 'the tree must be back in the store');
     });
+});
+
+describe('stateCommitment: stakes subtree rebuilds only on change @regression', function(){
+    beforeEach(function(){ SC.resetStakesMemo(); });
+    afterEach(function(){ SC.resetStakesMemo(); });
 
     it('reordering the same stake entries still hits, because buildFull is order-independent', async function(){
         const smt = freshSmt();
@@ -344,17 +356,16 @@ describe('stateCommitment: stakes subtree rebuilds only on change @regression', 
     });
 });
 
+// Records what would go to MariaDB without needing one.
+function fakeDb(){
+    const calls = [];
+    return {
+        calls,
+        async doQueryStrict(sql, args){ calls.push({ sql, args }); return []; }
+    };
+}
+
 describe('stateCommitment: DbNodeStore.putMany SQL shape @regression', function(){
-
-    // Records what would go to MariaDB without needing one.
-    function fakeDb(){
-        const calls = [];
-        return {
-            calls,
-            async doQueryStrict(sql, args){ calls.push({ sql, args }); return []; }
-        };
-    }
-
     it('writes one multi-row INSERT IGNORE with three bound params per row', async function(){
         const db = fakeDb();
         const store = new SC.DbNodeStore(db);
@@ -398,7 +409,9 @@ describe('stateCommitment: DbNodeStore.putMany SQL shape @regression', function(
         await new SC.DbNodeStore(db).putMany([]);
         assert.strictEqual(db.calls.length, 0, 'an empty batch must not send an INSERT with no VALUES');
     });
+});
 
+describe('stateCommitment: DbNodeStore.putMany SQL shape @regression', function(){
     it('duplicate hashes inside one batch are left to INSERT IGNORE, not pre-filtered away', async function(){
         // INSERT IGNORE already makes a repeated key a no-op WITHIN a single
         // multi-row statement, exactly as it did across the old single-row calls.

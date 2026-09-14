@@ -238,7 +238,9 @@ describe('retention: phase-2 orphan reachability + reclaim', () => {
         assert.ok(survivors.includes(F), 'and so must every node it reaches');
         assert.strictEqual(res.deleted, 2, 'only the genuinely orphaned nodes (C, D) are reclaimed');
     });
+});
 
+describe('retention: phase-2 orphan reachability + reclaim', () => {
     it('is inert when node reclaim is not opted in', async () => {
         const db = makeDb();
         const cfg = R.parseRetentionConfig({ STATE_ROOT_RETENTION_BLOCKS: '50' });  // phase 1 only

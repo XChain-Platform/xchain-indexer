@@ -168,7 +168,9 @@ describe('reorg-history-query: buildReorgHistoryResponse()', function () {
         assert.strictEqual(buildReorgHistoryResponse(legacy, { block_index: 200, block_hash: H1 }).matched, false);
         assert.strictEqual(buildReorgHistoryResponse(legacy, { block_index: 200 }).matched, true);
     });
+});
 
+describe('reorg-history-query: buildReorgHistoryResponse()', function () {
     it('handles empty / non-array input', function () {
         let r = buildReorgHistoryResponse([], { block_index: 1, block_hash: H1 });
         assert.strictEqual(r.count, 0);

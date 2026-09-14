@@ -67,7 +67,6 @@ class ReadCountingStore {
 }
 
 describe('stateCommitment: cached SMT node reads @regression', function(){
-
     it('caching emits the SAME root and the SAME node set as an uncached engine', async function(){
         const entries = [];
         for(let i = 0; i < 60; i++) entries.push([M.toHex(keyFor(i)), leafFor(i)]);
@@ -106,7 +105,9 @@ describe('stateCommitment: cached SMT node reads @regression', function(){
             'the assertion descent must be served entirely from the write-seeded cache; got ' +
             (store.getCalls - after) + ' store reads (the uncached engine paid ' + M.SMT_DEPTH + ')');
     });
+});
 
+describe('stateCommitment: cached SMT node reads @regression', function(){
     it('the per-block touched-key shape costs materially fewer reads on an established tree', async function(){
         // The shape that matters is NOT buildFull from an empty root (an absent
         // key short-circuits at the first empty subtree, ~log2(keys) levels
@@ -164,7 +165,9 @@ describe('stateCommitment: cached SMT node reads @regression', function(){
         assert.strictEqual(store.getCalls - first, 1,
             'the absent root must be re-read, not answered from a cached miss');
     });
+});
 
+describe('stateCommitment: cached SMT node reads @regression', function(){
     it('the cache is instance-scoped, so a second engine over the same store starts cold', async function(){
         // Never module-scoped: a rolled-back block transaction must discard every
         // entry with the engine that made them.

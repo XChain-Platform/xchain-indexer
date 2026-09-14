@@ -97,13 +97,13 @@ function holes(heights) {
     return gaps;
 }
 
-describe('reorg resume cursor - permanent block holes (XChainIndexer.start, e2b36c4 /)', function () {
+const NEW_CHAIN_TIP  = 6241889;
 
+describe('reorg resume cursor - permanent block holes (XChainIndexer.start, e2b36c4 /)', function () {
     // A depth-1 reorg at 6241887 on a chain indexed through 6241887.
     const TIP            = 6241887;
     const MIN_REORG      = 6241887;
     const SEED           = [6241884, 6241885, 6241886, 6241887];
-    const NEW_CHAIN_TIP  = 6241889;
 
     it('leaves a permanent hole when the resume cursor is NOT re-read (the bug)', async function () {
         const db = makeIndexerDb(SEED);
@@ -155,7 +155,9 @@ describe('reorg resume cursor - permanent block holes (XChainIndexer.start, e2b3
         assert.ok(db._heights().includes(MIN_REORG),
             "the new chain's version of the rolled-back block is parsed");
     });
+});
 
+describe('reorg resume cursor - permanent block holes (XChainIndexer.start, e2b36c4 /)', function () {
     it('re-reads correctly for a multi-block (depth > 1) rollback', async function () {
         const deepSeed = [6241880, 6241881, 6241882, 6241883, 6241884, 6241885, 6241886, 6241887];
         const deepMin  = 6241883;

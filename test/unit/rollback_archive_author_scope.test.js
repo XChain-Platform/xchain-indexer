@@ -159,8 +159,9 @@ async function withRegtestHeight(height, fn){
     try { return await fn(); } finally { ARCHIVE_ROLLBACK_AUTHOR_SCOPE_ACTIVATION.regtest = prev; }
 }
 
-describe('archive invalid_archive reset: publisher scoping @regression', function(){
+let db;
 
+describe('archive invalid_archive reset: publisher scoping @regression', function(){
     describe('the flag day is armed on mainnet and testnet (2026-09-09 ruling)', function(){
         it('carries the ruled heights, and splices the author term exactly at each one', function(){
             assert.deepStrictEqual(ARCHIVE_ROLLBACK_AUTHOR_SCOPE_ACTIVATION,
@@ -203,9 +204,10 @@ describe('archive invalid_archive reset: publisher scoping @regression', functio
             }
         });
     });
+});
 
+describe('archive invalid_archive reset: publisher scoping @regression', function(){
     describe('against a real SQL engine', function(){
-        let db;
         beforeEach(function(){ db = makeDb(); });
         afterEach(function(){ db.close(); });
 
@@ -259,6 +261,13 @@ describe('archive invalid_archive reset: publisher scoping @regression', functio
             assert.deepStrictEqual(db.resetTargets(sql, args), [],
                 'an orphaned chunk whose action linkage is missing must authenticate nothing');
         });
+    });
+});
+
+describe('archive invalid_archive reset: publisher scoping @regression', function(){
+    describe('against a real SQL engine', function(){
+        beforeEach(function(){ db = makeDb(); });
+        afterEach(function(){ db.close(); });
 
         // The chunk must still be inside the orphaned range and still be 'valid'; the
         // author term narrows the join, it never widens it.

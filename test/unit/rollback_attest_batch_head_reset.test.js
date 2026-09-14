@@ -167,8 +167,9 @@ async function captureResetQuery(){
     return { sql: call.args[0], args: call.args[1], indexer };
 }
 
-describe('ATTEST v5 batch head: the reorg reset for an orphaned completion stamp @regression', function(){
+let db, validId;
 
+describe('ATTEST v5 batch head: the reorg reset for an orphaned completion stamp @regression', function(){
     afterEach(function(){ sinon.restore(); });
 
     describe('the query the rollback issues', function(){
@@ -206,9 +207,12 @@ describe('ATTEST v5 batch head: the reorg reset for an orphaned completion stamp
                 'the rollback copy of the marker has drifted from the one attest.js stamps');
         });
     });
+});
+
+describe('ATTEST v5 batch head: the reorg reset for an orphaned completion stamp @regression', function(){
+    afterEach(function(){ sinon.restore(); });
 
     describe('against a real SQL engine', function(){
-        let db, validId;
         beforeEach(function(){ db = makeDb(); validId = db.status('valid'); });
         afterEach(function(){ db.close(); });
 
@@ -260,6 +264,15 @@ describe('ATTEST v5 batch head: the reorg reset for an orphaned completion stamp
             assert.deepStrictEqual(db.resetTargets(sql, args), [],
                 'an unresolvable author fails closed, exactly as _authoredBy does');
         });
+    });
+});
+
+describe('ATTEST v5 batch head: the reorg reset for an orphaned completion stamp @regression', function(){
+    afterEach(function(){ sinon.restore(); });
+
+    describe('against a real SQL engine', function(){
+        beforeEach(function(){ db = makeDb(); validId = db.status('valid'); });
+        afterEach(function(){ db.close(); });
 
         it('a REJECTED orphaned chunk restores nothing', async function(){
             const stampedId = db.status(STAMPED);

@@ -66,7 +66,6 @@ function call(indexer, opts = {}){
 // ---------------------------------------------------------------------------
 
 describe('health() response builder', function(){
-
     it('(a) healthy catch-up: stallReason is null, status healthy, lag reported', async function(){
         const res = await call(makeIndexer());
         assert.strictEqual(res.status, 'healthy');
@@ -122,7 +121,9 @@ describe('health() response builder', function(){
         assert.strictEqual(res.running, false);
         assert.strictEqual(res.error, 'boom');
     });
+});
 
+describe('health() response builder', function(){
     it('action_counters is null when the actions instance is not yet initialised', async function(){
         // During early boot the actions object may not exist yet. The health response
         // must not throw; it should surface null so a monitoring probe can tell the
@@ -175,7 +176,9 @@ describe('health() response builder', function(){
         assert.strictEqual(res.decoderReorgHalted, true);
         assert.strictEqual(res.stallReason, 'price-barrier-timeout');
     });
+});
 
+describe('health() response builder', function(){
     // A testnet4 miner stamping each block ~20 min ahead keeps a fully caught-up
     // indexer at synced:false + degraded:true + a named barrier permanently. health() has to
     // separate that from a fault, or the next ops session re-opens the same non-incident.

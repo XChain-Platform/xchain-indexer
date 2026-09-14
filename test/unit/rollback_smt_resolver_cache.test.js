@@ -40,7 +40,6 @@ const assert = require('assert');
 const path   = require('path');
 
 describe('rollback drops the SMT resolver caches @regression', function(){
-
     // The rollback module is large and DB-bound; this suite asserts the one
     // property in isolation by driving the same field the rollback sets, and by
     // pinning at SOURCE level that the rollback really performs it. A behavioural
@@ -79,7 +78,9 @@ describe('rollback drops the SMT resolver caches @regression', function(){
             'the clear must sit beside the block-time memo clear, not later in rollback() where ' +
             'a throw on an already-committed rollback would skip it');
     });
+});
 
+describe('rollback drops the SMT resolver caches @regression', function(){
     it('a nulled cache is rebuilt lazily and resolves the NEW name', async function(){
         // The consequence of the clear, driven through the real resolver: after a
         // rollback frees id 277 and a new ISSUE reuses it, the next lookup must
