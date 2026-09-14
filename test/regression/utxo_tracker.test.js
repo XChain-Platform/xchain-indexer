@@ -45,12 +45,14 @@ function makeFetch(body, opts){
     });
 }
 
+let origFetch;
+
+function rememberFetch(){ origFetch = global.fetch; }
+function restoreFetch(){ global.fetch = origFetch; sinon.restore(); }
+
 describe('[regression:p0] UtxoTracker DISPENSER fresh-address oracle @regression @tier1', function(){
-
-    let origFetch;
-
-    beforeEach(function(){ origFetch = global.fetch; });
-    afterEach(function(){ global.fetch = origFetch; sinon.restore(); });
+    beforeEach(rememberFetch);
+    afterEach(restoreFetch);
 
     describe('"seen" answer shape (grants no fresh-address exception)', function(){
         it('returns exactly { height: N } for a numeric height', async function(){
@@ -99,14 +101,19 @@ describe('[regression:p0] UtxoTracker DISPENSER fresh-address oracle @regression
             assert.strictEqual(await t.getFirstSeen('1A1zP1...'), null);
         });
     });
+});
 
-    // THE FLAG-DAY FLIP (dispenser_freshness_shape_activation.js). A malformed but
-    // HTTP-successful answer was the one malformed-answer surface that granted the
-    // exception instead of denying it: transport failure, HTTP non-200 and an RPC
-    // error field all throw, and the action's catch reads a throw as not fresh. At/
-    // after the flag day a shape violation joins them, so the verdict fails closed.
-    // Only the shape moves: the null answers above and every numeric height, in
-    // range or not, answer identically on both sides of the gate.
+// THE FLAG-DAY FLIP (dispenser_freshness_shape_activation.js). A malformed but
+// HTTP-successful answer was the one malformed-answer surface that granted the
+// exception instead of denying it: transport failure, HTTP non-200 and an RPC
+// error field all throw, and the action's catch reads a throw as not fresh. At/
+// after the flag day a shape violation joins them, so the verdict fails closed.
+// Only the shape moves: the null answers above and every numeric height, in
+// range or not, answer identically on both sides of the gate.
+describe('[regression:p0] UtxoTracker DISPENSER fresh-address oracle @regression @tier1', function(){
+    beforeEach(rememberFetch);
+    afterEach(restoreFetch);
+
     describe('shape-violating answer at/after the oracle-shape flag-day (strictShape)', function(){
         const violations = [
             ['a stringly-typed height',        { height: '100' }],
@@ -158,6 +165,11 @@ describe('[regression:p0] UtxoTracker DISPENSER fresh-address oracle @regression
             assert.deepStrictEqual(await t.getFirstSeen('genesis', { strictShape: true }), { height: 0 });
         });
     });
+});
+
+describe('[regression:p0] UtxoTracker DISPENSER fresh-address oracle @regression @tier1', function(){
+    beforeEach(rememberFetch);
+    afterEach(restoreFetch);
 
     describe('shape-violating answer at/after the oracle-shape flag-day (strictShape)', function(){
         it('the strict flip is opt-in: no option object is the legacy fail-open null', async function(){
@@ -170,6 +182,11 @@ describe('[regression:p0] UtxoTracker DISPENSER fresh-address oracle @regression
             assert.strictEqual(await t.getFirstSeen('1A1zP1...', {}), null);
         });
     });
+});
+
+describe('[regression:p0] UtxoTracker DISPENSER fresh-address oracle @regression @tier1', function(){
+    beforeEach(rememberFetch);
+    afterEach(restoreFetch);
 
     describe('error surfaces stay distinguishable from a "fresh" answer', function(){
         it('an unconfigured tracker THROWS rather than answering fresh (null)', async function(){
@@ -197,6 +214,11 @@ describe('[regression:p0] UtxoTracker DISPENSER fresh-address oracle @regression
             await assert.rejects(() => t.getFirstSeen('x'), /ECONNREFUSED/);
         });
     });
+});
+
+describe('[regression:p0] UtxoTracker DISPENSER fresh-address oracle @regression @tier1', function(){
+    beforeEach(rememberFetch);
+    afterEach(restoreFetch);
 
     describe('request wire-shape (a drift breaks the tracker contract silently)', function(){
         it('POSTs a JSON-RPC 2.0 get_first_seen with the address in params', async function(){

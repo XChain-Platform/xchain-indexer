@@ -58,29 +58,32 @@ const POOL_OPTS = {
 let decoderPool = null;
 let indexerPool = null;
 
+function createPools() {
+    decoderPool = mariadb.createPool({
+        host: DECODER_HOST, port: DECODER_PORT,
+        database: DECODER_NAME,
+        user: DECODER_USER, password: DECODER_PASS,
+        ...POOL_OPTS,
+    });
+
+    indexerPool = mariadb.createPool({
+        host: INDEXER_HOST, port: INDEXER_PORT,
+        database: INDEXER_NAME,
+        user: INDEXER_USER, password: INDEXER_PASS,
+        ...POOL_OPTS,
+    });
+}
+
+async function closePools() {
+    if (decoderPool) { await decoderPool.end(); decoderPool = null; }
+    if (indexerPool) { await indexerPool.end(); indexerPool = null; }
+}
+
 describe('Smoke: database connectivity @regression @tier3', function () {
     this.timeout(5000);
 
-    before(function () {
-        decoderPool = mariadb.createPool({
-            host: DECODER_HOST, port: DECODER_PORT,
-            database: DECODER_NAME,
-            user: DECODER_USER, password: DECODER_PASS,
-            ...POOL_OPTS,
-        });
-
-        indexerPool = mariadb.createPool({
-            host: INDEXER_HOST, port: INDEXER_PORT,
-            database: INDEXER_NAME,
-            user: INDEXER_USER, password: INDEXER_PASS,
-            ...POOL_OPTS,
-        });
-    });
-
-    after(async function () {
-        if (decoderPool) { await decoderPool.end(); decoderPool = null; }
-        if (indexerPool) { await indexerPool.end(); indexerPool = null; }
-    });
+    before(createPools);
+    after(closePools);
 
     // -------------------------------------------------------------------------
     // Check 1: Decoder DB pool connects
@@ -98,6 +101,13 @@ describe('Smoke: database connectivity @regression @tier3', function () {
         const conn = await indexerPool.getConnection();
         conn.release();
     });
+});
+
+describe('Smoke: database connectivity @regression @tier3', function () {
+    this.timeout(5000);
+
+    before(createPools);
+    after(closePools);
 
     // -------------------------------------------------------------------------
     // Check 3: Indexer DB schema exists
@@ -142,6 +152,13 @@ describe('Smoke: database connectivity @regression @tier3', function () {
                 `Expected table "${t}" to exist in indexer DB; found: ${tableNames.join(', ')}`);
         }
     });
+});
+
+describe('Smoke: database connectivity @regression @tier3', function () {
+    this.timeout(5000);
+
+    before(createPools);
+    after(closePools);
 
     // -------------------------------------------------------------------------
     // Check 5: Decoder DB is readable
