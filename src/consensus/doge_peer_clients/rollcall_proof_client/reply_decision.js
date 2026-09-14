@@ -17,7 +17,7 @@
  *
  ********************************************************************/
 
-const rca = require('../../rollcall_activation.js');
+const rca = require('../../../rollcall_activation.js');
 
 // The signer map, normalized on one field only: ROLLCALL v1's GATES, as
 // carried. A peer that predates v1 answers rows without the key at all, and

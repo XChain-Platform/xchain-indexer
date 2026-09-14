@@ -24,7 +24,7 @@ const crypto = require('crypto');
 const fs     = require('fs');
 const path   = require('path');
 
-const { RollcallProofClient, RollcallProofUnavailableError } = require('../../src/consensus/rollcall_proof_client.js');
+const { RollcallProofClient, RollcallProofUnavailableError } = require('../../src/consensus/doge_peer_clients/rollcall_proof_client.js');
 
 const CONFIG   = { COIN: 'BTC', NETWORK: 'regtest' };
 const EPOCH    = 30;

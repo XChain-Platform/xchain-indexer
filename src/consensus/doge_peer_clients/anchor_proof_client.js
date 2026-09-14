@@ -50,8 +50,8 @@ const http  = require('http');
 const https = require('https');
 const url   = require('url');
 
-const { getLogger } = require('../observability/index.js');
-const { CONFIG_ENV } = require('../config.js');
+const { getLogger } = require('../../observability/index.js');
+const { CONFIG_ENV } = require('../../config.js');
 // The binding rule judge applies (the attested versions, the reward families, the
 // node-class-dependent statuses and the bundle header reconstruction) lives in
 // anchor_proof_client/binding.js; the getanchorconfirmations page walk proveMined runs

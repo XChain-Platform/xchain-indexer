@@ -19,7 +19,7 @@
  ********************************************************************/
 
 const rca = require('../../rollcall_activation.js');
-const { RollcallProofUnavailableError } = require('../rollcall_proof_client.js');
+const { RollcallProofUnavailableError } = require('../doge_peer_clients/rollcall_proof_client.js');
 
 // The responsible set R(E) by effective key: the keys the peer is asked about,
 // the source each key speaks for, and every source in the set.

@@ -48,8 +48,8 @@ const fs      = require('fs');
 const path    = require('path');
 const { decideReply } = require('./rollcall_proof_client/reply_decision.js');
 
-const { getLogger } = require('../observability/index.js');
-const { CONFIG_ENV } = require('../config.js');
+const { getLogger } = require('../../observability/index.js');
+const { CONFIG_ENV } = require('../../config.js');
 // Raised by the epoch close when the DOGE side cannot be believed yet. Its own
 // class, deliberately NOT AnchorProofUnavailableError, so an operator reading a
 // stalled indexer can tell the two cross-chain rails apart at a glance.
@@ -97,7 +97,7 @@ class RollcallProofClient {
     manifestHash(){
         if(this._manifestHash !== undefined) return this._manifestHash;
         try {
-            let p = path.join(__dirname, '..', '..', 'test', 'fixtures', 'action-manifest.json');
+            let p = path.join(__dirname, '..', '..', '..', 'test', 'fixtures', 'action-manifest.json');
             this._manifestHash = crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
         } catch(e){
             getLogger().error('RollcallProofClient: cannot read vendored action-manifest.json: ' + (e && e.message));

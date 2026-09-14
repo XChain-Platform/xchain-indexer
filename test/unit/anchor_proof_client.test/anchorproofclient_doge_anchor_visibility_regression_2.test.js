@@ -22,7 +22,7 @@
 'use strict';
 
 const assert = require('assert');
-const AnchorProofClient = require('../../../src/consensus/anchor_proof_client.js');
+const AnchorProofClient = require('../../../src/consensus/doge_peer_clients/anchor_proof_client.js');
 
 const TXID = 'b'.repeat(64);
 

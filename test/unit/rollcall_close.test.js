@@ -25,7 +25,7 @@
 const assert = require('assert');
 
 const rc  = require('../../src/consensus/rollcall_close.js');
-const { RollcallProofUnavailableError } = require('../../src/consensus/rollcall_proof_client.js');
+const { RollcallProofUnavailableError } = require('../../src/consensus/doge_peer_clients/rollcall_proof_client.js');
 
 // The fixtures and the hook pair that arms ROLLCALL are shared with the parts under
 // test/unit/rollcall_close.test/, which hold the K-streak and the eviction effect,

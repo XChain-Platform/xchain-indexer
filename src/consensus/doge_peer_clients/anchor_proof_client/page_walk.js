@@ -17,7 +17,7 @@
 
 'use strict';
 
-const { getLogger } = require('../../observability/index.js');
+const { getLogger } = require('../../../observability/index.js');
 
 // Hard stop on the getanchorconfirmations page walk in proveMined. At ANCHOR_ROW_LIMIT
 // (20) rows a page this admits 500 anchor actions for one transaction, which no DOGE
