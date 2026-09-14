@@ -22,15 +22,9 @@
 
 const ledgerPrecision = require('../ledger_amount_precision_activation');
 
-// A table or column name cannot be a bound parameter, so every method below that splices
-// one into its statement asserts its shape first. Anything outside [A-Za-z0-9_] is refused
-// rather than quoted, because a backtick-quoted identifier containing a backtick still
-// escapes the quoting.
-function assertSqlIdentifier(name){
-    if(typeof name !== 'string' || !/^[A-Za-z0-9_]+$/.test(name))
-        throw new Error('Refusing a table-parameterized query with an invalid SQL identifier: ' +
-            JSON.stringify(name));
-}
+// The misc mixin is cut into parts by behaviour under misc/; this entry merges them
+// back into the one method set db/index.js installs, at the position those methods held here.
+const tableDump = require('./misc/table_dump.js');
 
 module.exports = {
 
@@ -42,39 +36,7 @@ module.exports = {
             throw new Error('Invalid ledger table: ' + table);
         let tick_id    = await this.createTicker(tick);
         let address_id = await this.createAddress(address);
-        // Light-client SMT touched-key accumulation (SPV spec §4). Record the
-        // (address, CANONICAL tick name) identity actually mutated this block so
-        // stateCommitment updates the right balance leaf. The `tick` argument may
-        // be a NAME or a "^TICK_ID" reference, and NAME refs resolve case-
-        // insensitively, but the SMT balance leaf is keyed by the canonical stored
-        // name: capturing the raw, unresolved tick let ^id / case-variant sends
-        // silently miss their leaf (incremental balances_root drift). Resolve
-        // through tick_id first. Capturing at this single ledger choke point is
-        // robust to backdated cooldown-refund credits (which reuse an EARLIER
-        // block's action_index, so a block-range query would miss them). Active
-        // only while the indexer has installed a per-block set.
-        // BOTH axes must be canonical, and for a long time only the tick one was
-        // The address argument has the SAME hazards the tick argument
-        // has: getAddressId accepts a wire "^<id>" reference and resolves it to a
-        // row whose stored `address` is the real address, so a handler passing
-        // "^123" wrote a correct credit row and then recorded the touched key as
-        // the literal "^123".
-        //
-        // What that costs is not a wrong leaf, it is NO leaf and no error:
-        // getNetBalance('^123', tick) joins index_addresses.address = '^123',
-        // matches nothing, returns 0, and _leafOrNull turns 0 into null, which
-        // makes stateCommitment DELETE a key that never existed. The update is a
-        // no-op, balances_root does not move for that block, and the real
-        // address's leaf is simply never written. On BTC regtest that presented
-        // as 15 of 1531 ledger-changing blocks committing a byte-identical
-        // balances_root to their predecessor, and a key was lost permanently
-        // only when no later block happened to touch it again.
-        if(this._smtTouched && address != null && tick_id != null && address_id != null){
-            let canonTick = await this._smtTickName(tick_id);
-            let canonAddr = await this.smtAddressName(address_id);
-            if(canonTick != null && canonTick !== '' && canonAddr != null && canonAddr !== '')
-                this._smtTouched.add(canonAddr + '\t' + canonTick);
-        }
+        await ledgerChange.recordTouchedKey(this, address, tick_id, address_id);
         // Quantize the amount before storing.
         //
         // LEGACY rule: round to the TICK's own decimal precision. That kept the
@@ -99,36 +61,7 @@ module.exports = {
         // Must be normal notation: String() renders sub-1e-7 amounts exponentially
         // ("3e-8"), which the SMT leaf encoder rejects at parse time (block wedge).
         amount = this.util.bcstr(amount);
-        // Check if record already exists for this token
-        let query = `SELECT
-                        action_index
-                    FROM
-                        ` + table + `
-                    WHERE
-                        action_index=? AND
-                        address_id=? AND 
-                        tick_id=?`;
-        let exists = false;
-        let args    = [action_index, address_id, tick_id];
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
-        if(exists){
-            // UPDATE record
-            query = `UPDATE
-                        ` + table + `
-                    SET
-                        amount=?
-                    WHERE 
-                        action_index=? AND
-                        address_id=? AND 
-                        tick_id=?`;
-        } else {
-            // INSERT record
-            query = `INSERT INTO ` + table + ` (amount, action_index, address_id, tick_id) values (?, ?, ?, ?)`;
-        }
-        args    = [amount, action_index, address_id, tick_id];
-        results = await this.doQuery(query, args);
+        await ledgerChange.upsertRow(this, table, action_index, address_id, tick_id, amount);
     },
 
     // Handle getting credits or debits records for a given address
@@ -266,64 +199,82 @@ module.exports = {
             [schemaName]);
     },
 
-    // Every table name in this schema. The genesis dump walks the whole schema rather than
-    // a fixed list so a table added by a migration is carried without editing the dumper.
-    async listTableNames(){
-        return (await this.doQuery('SHOW TABLES')).map(r => Object.values(r)[0]);
+    ...tableDump,
+
+};
+
+// The two passes of createLedgerChangeRecord that do not decide the stored amount, kept
+// off the exported object so Database.prototype gains no method: the light-client
+// touched-key capture and the upsert of the quantized row.
+const ledgerChange = {
+
+    async recordTouchedKey(db, address, tick_id, address_id){
+        // Light-client SMT touched-key accumulation (SPV spec §4). Record the
+        // (address, CANONICAL tick name) identity actually mutated this block so
+        // stateCommitment updates the right balance leaf. The `tick` argument may
+        // be a NAME or a "^TICK_ID" reference, and NAME refs resolve case-
+        // insensitively, but the SMT balance leaf is keyed by the canonical stored
+        // name: capturing the raw, unresolved tick let ^id / case-variant sends
+        // silently miss their leaf (incremental balances_root drift). Resolve
+        // through tick_id first. Capturing at this single ledger choke point is
+        // robust to backdated cooldown-refund credits (which reuse an EARLIER
+        // block's action_index, so a block-range query would miss them). Active
+        // only while the indexer has installed a per-block set.
+        // BOTH axes must be canonical, and for a long time only the tick one was
+        // The address argument has the SAME hazards the tick argument
+        // has: getAddressId accepts a wire "^<id>" reference and resolves it to a
+        // row whose stored `address` is the real address, so a handler passing
+        // "^123" wrote a correct credit row and then recorded the touched key as
+        // the literal "^123".
+        //
+        // What that costs is not a wrong leaf, it is NO leaf and no error:
+        // getNetBalance('^123', tick) joins index_addresses.address = '^123',
+        // matches nothing, returns 0, and _leafOrNull turns 0 into null, which
+        // makes stateCommitment DELETE a key that never existed. The update is a
+        // no-op, balances_root does not move for that block, and the real
+        // address's leaf is simply never written. On BTC regtest that presented
+        // as 15 of 1531 ledger-changing blocks committing a byte-identical
+        // balances_root to their predecessor, and a key was lost permanently
+        // only when no later block happened to touch it again.
+        if(db._smtTouched && address != null && tick_id != null && address_id != null){
+            let canonTick = await db._smtTickName(tick_id);
+            let canonAddr = await db.smtAddressName(address_id);
+            if(canonTick != null && canonTick !== '' && canonAddr != null && canonAddr !== '')
+                db._smtTouched.add(canonAddr + '\t' + canonTick);
+        }
     },
 
-    // One table's column names in declaration order. The dump records that order and
-    // replays it verbatim on import, so the artifact's bytes depend on it.
-    async listTableColumnNames(table){
-        assertSqlIdentifier(table);
-        return (await this.doQuery('SHOW COLUMNS FROM `' + table + '`')).map(r => r.Field);
-    },
-
-    // How many rows one table holds. The dump uses this to skip empty tables, which is what
-    // keeps an artifact from carrying a table header with no rows under it.
-    async countRowsInTable(table){
-        assertSqlIdentifier(table);
-        let c = await this.doQuery('SELECT COUNT(*) AS c FROM `' + table + '`');
-        return (c.length > 0) ? Number(c[0].c) : 0;
-    },
-
-    // Every row of one table, ordered by its first column and then by every remaining
-    // column. The first column is each table's natural key (id / action_index / tx_index),
-    // but that key is NOT unique on all of them: one action writes many credits, debits,
-    // sends and escrows rows under a single action_index, and the rollcall_* tables key on
-    // (epoch_height, pubkey). Ranking on the first column alone therefore leaves ties whose
-    // order the engine picks freely, and the dump's byte stream moves with it. Ordering on
-    // the FULL column list breaks every such tie on row CONTENT, so rows that still tie are
-    // equal in each dumped column and serialize to identical bytes; that is what makes the
-    // artifact's sha256 the same on every machine that generates it.
-    async readAllRowsByFirstColumn(table, cols){
-        assertSqlIdentifier(table);
-        for(let c of cols)
-            assertSqlIdentifier(c);
-        let colList = cols.map(c => '`' + c + '`').join(',');
-        // Ordinals rather than names: they point at the select list built right above, so the
-        // order clause cannot drift away from the columns actually dumped. Term 1 stays
-        // literal in the SQL text so the source-static ORDER BY audit can still read this
-        // clause rather than losing sight of it behind an assembled string.
-        let ties = cols.slice(1).map((c, i) => ', ' + (i + 2) + ' ASC').join('');
-        return await this.doQuery('SELECT ' + colList + ' FROM `' + table + '` ORDER BY 1 ASC' + ties);
-    },
-
-    // One multi-row INSERT into a caller-named table. Values are bound; only the table and
-    // column identifiers are spliced, and those are shape-asserted above. Rows arrive as
-    // arrays already ordered to match `cols`.
-    async insertRowsIntoTable(table, cols, rows){
-        assertSqlIdentifier(table);
-        for(let c of cols)
-            assertSqlIdentifier(c);
-        let colList = cols.map(c => '`' + c + '`').join(',');
-        let one     = '(' + cols.map(() => '?').join(',') + ')';
-        let sql     = 'INSERT INTO `' + table + '` (' + colList + ') VALUES ' + rows.map(() => one).join(',');
-        let args    = [];
-        for(let r of rows)
-            for(let v of r)
-                args.push(v);
-        return await this.doQuery(sql, args);
+    async upsertRow(db, table, action_index, address_id, tick_id, amount){
+        // Check if record already exists for this token
+        let query = `SELECT
+                        action_index
+                    FROM
+                        ` + table + `
+                    WHERE
+                        action_index=? AND
+                        address_id=? AND 
+                        tick_id=?`;
+        let exists = false;
+        let args    = [action_index, address_id, tick_id];
+        let results = await db.doQuery(query, args);
+        if(results.length > 0)
+            exists = true;
+        if(exists){
+            // UPDATE record
+            query = `UPDATE
+                        ` + table + `
+                    SET
+                        amount=?
+                    WHERE 
+                        action_index=? AND
+                        address_id=? AND 
+                        tick_id=?`;
+        } else {
+            // INSERT record
+            query = `INSERT INTO ` + table + ` (amount, action_index, address_id, tick_id) values (?, ?, ?, ?)`;
+        }
+        args    = [amount, action_index, address_id, tick_id];
+        results = await db.doQuery(query, args);
     },
 
 };
