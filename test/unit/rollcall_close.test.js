@@ -23,155 +23,22 @@
  *
  ********************************************************************/
 const assert = require('assert');
-const crypto = require('crypto');
 
 const rc  = require('../../src/consensus/rollcall_close.js');
-const rca = require('../../src/rollcall_activation.js');
-const rga = require('../../src/rollcall_gates_activation.js');
-const eq  = require('../../src/equivocation_header.js');
 const { RollcallProofUnavailableError } = require('../../src/consensus/rollcall_proof_client.js');
 
-const NETWORK = 'regtest';
-const EPOCH   = 30;                                    // ROLLCALL_INTERVAL_BLOCKS.regtest
-const WINDOW  = rca.ROLLCALL_ACCEPT_WINDOW_BLOCKS[NETWORK];
-const CLOSE   = rca.rollcallCloseHeight(EPOCH, NETWORK);
-const LEDGER  = 'ab'.repeat(32);
-
-const CONFIG = {
-    COIN: 'BTC', NETWORK: NETWORK,
-    STAKING: { COOLDOWN_BLOCKS: 100, ACTIVATION_DELAY_BLOCKS: 6 }
-};
-
-// Minimal amount math, matching the indexer utility's contract for what the close uses.
-const UTIL = {
-    bcformat: (v, d) => Number(v).toFixed(d),
-    bcgt:     (a, b) => Number(a) > Number(b)
-};
-
-// A real Ed25519 identity: the close verifies signatures for real, so the tests
-// produce real ones. A fixture of canned hex would only prove the fixture.
-function identity(){
-    let { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
-    let raw = publicKey.export({ format: 'der', type: 'spki' }).slice(12).toString('hex');
-    return { pubkey: raw, priv: privateKey };
-}
-
-function canonicalFor(epochHeight, ledgerHash){
-    return Buffer.from(eq.buildEquivCanonical(
-        eq.ENGINE_TAGS.ROLLCALL, String(epochHeight), 0,
-        NETWORK + '|' + epochHeight + '|' + ledgerHash), 'utf8');
-}
-
-function signFor(id, epochHeight, ledgerHash){
-    return crypto.sign(null, canonicalFor(epochHeight, ledgerHash), id.priv).toString('hex');
-}
-
-// The ROLLCALL v1 canonical, spelled out here rather than imported from
-// rollcall_canonical.js: a test that signed with the same helper the close
-// verifies with would agree with it however wrong both were. This is the
-// independent statement of the bytes, `network|epoch|ledger|sha256(GATES)`
-// inside the same equivocation header v0 always used.
-function canonicalV1For(epochHeight, ledgerHash, gates){
-    let gh = crypto.createHash('sha256').update(String(gates), 'utf8').digest('hex');
-    return Buffer.from(eq.buildEquivCanonical(
-        eq.ENGINE_TAGS.ROLLCALL, String(epochHeight), 0,
-        NETWORK + '|' + epochHeight + '|' + ledgerHash + '|' + gh), 'utf8');
-}
-
-function signV1For(id, epochHeight, ledgerHash, gates){
-    return crypto.sign(null, canonicalV1For(epochHeight, ledgerHash, gates), id.priv).toString('hex');
-}
-
-// A stub db recording every write the close makes. Only the methods the close
-// actually calls are implemented, so an unexpected call fails loudly rather than
-// silently returning undefined.
-function stubDb(over){
-    let db = {
-        writes: { rollcalls: [], absences: [], unstakes: [], rewards: [], stakeStamps: [], delegationStamps: [], actionIndexes: [], gates: [] },
-
-        responsible: [],
-        blocks: {},
-        rolledEpochs: [],
-        absencesBySource: {},
-        sweepable: {},
-        rewardResult: true,
-
-        async getStakeWeightsByCapability(){ let r = this.responsible.slice(); r.truncated = this.responsible.truncated; return r; },
-        async getStoredBlockHashes(h){ return this.blocks[h] || null; },
-        async insertRollcall(e, s, c, rolled, pinned){ this.writes.rollcalls.push({ e, s, c, rolled, pinned }); return true; },
-        async insertRollcallAbsences(rows){ this.writes.absences.push(...rows); return rows.length; },
-        async insertRollcallGates(e, c, rows){ this.writes.gates.push({ e, c, rows }); return rows.length; },
-        async getRolledRollcallEpochs(){ return this.rolledEpochs; },
-        async getRollcallAbsenceEpochsForSource(src){ return this.absencesBySource[src] || []; },
-        sweepCalls: [],
-        async getSweepableStakeBySource(src, blk, includePending){
-            this.sweepCalls.push({ src, blk, includePending });
-            return this.sweepable[src] || [];
-        },
-        async createActionIndex(d){ let i = 9000 + this.writes.actionIndexes.length; this.writes.actionIndexes.push(Object.assign({ index: i }, d)); return i; },
-        async createUnstake(d){ this.writes.unstakes.push(d); return true; },
-        async setStakeDeactivationBySourceAndPubkey(src, pk, blk, cur, pending){ this.writes.stakeStamps.push({ src, pk, blk, pending }); return true; },
-        async setAllDelegationDeactivationsBySource(src, blk){ this.writes.delegationStamps.push({ src, blk }); return 1; },
-        async createValidatorReward(pk, ref, type, amt, blk, upsert, derive, qual){
-            this.writes.rewards.push({ pk, ref, type, amt, blk, derive, qual });
-            return this.rewardResult;
-        }
-    };
-    return Object.assign(db, over || {});
-}
-
-// A proof client returning a canned decided/undecided answer.
-function stubProof(answer){
-    return { async fetchSigners(){ return answer; } };
-}
-
-// Build a federation of `n` sources, each with one key, all weight 1000.
-function federation(n){
-    let ids = [], responsible = [];
-    for(let i = 0; i < n; i++){
-        let id = identity();
-        ids.push(id);
-        responsible.push({ pubkey: id.pubkey, source: 'src' + i, weight: '1000.00000000' });
-    }
-    return { ids, responsible };
-}
-
-// A decided answer in which `presentIdx` signed for real.
-function answerWith(fed, presentIdx, over){
-    let signers = {};
-    for(let i of presentIdx){
-        signers[fed.ids[i].pubkey] = {
-            sig:          signFor(fed.ids[i], EPOCH, LEDGER),
-            ledger_hash:  LEDGER,
-            publisher:    fed.ids[0].pubkey,
-            action_index: 1, block_index: 10
-        };
-    }
-    return Object.assign({ decided: true, hcut: 50, signers, publishers: {} }, over || {});
-}
-
-function dbFor(fed, over){
-    let db = stubDb(over);
-    db.responsible = fed.responsible;
-    db.blocks[EPOCH]          = { ledger_hash: LEDGER, block_time: 500 };
-    db.blocks[EPOCH + WINDOW] = { ledger_hash: 'cd'.repeat(32), block_time: 900 };
-    return db;
-}
+// The fixtures and the hook pair that arms ROLLCALL are shared with the parts under
+// test/unit/rollcall_close.test/, which hold the K-streak and the eviction effect,
+// the publish reward with leader election and source ordering, and ROLLCALL v1.
+// Every block, here and there, repeats the suite title below, so each full test
+// title is unchanged.
+const {
+    NETWORK, EPOCH, WINDOW, CLOSE, LEDGER, CONFIG, UTIL,
+    signFor, stubProof, federation, answerWith, dbFor, armRollcall
+} = require('./rollcall_close.test/helpers/rollcall_fixtures.js');
 
 describe('ROLLCALL epoch close (§3.4)', function(){
-
-    // The close returns 0 immediately below activation, so on an inert network every
-    // assertion here would pass by doing nothing. Regtest went INERT on 2026-08-31
-    // (a single-coin BTC regtest venue has no DOGE peer to prove a close), so the
-    // suite arms it for its own duration and restores it after. Regtest stays the
-    // right target: its 30/12/2 cadence is the short-interval case, and the live
-    // networks' 1008/144/36 would need epoch heights in the hundreds of thousands.
-    let savedActivation;
-    before(function(){
-        savedActivation = rca.ROLLCALL_ACTIVATION[NETWORK];
-        rca.ROLLCALL_ACTIVATION[NETWORK] = 0;
-    });
-    after(function(){ rca.ROLLCALL_ACTIVATION[NETWORK] = savedActivation; });
+    armRollcall();
 
     describe('when the close does not run at all', function(){
 
@@ -189,6 +56,10 @@ describe('ROLLCALL epoch close (§3.4)', function(){
             assert.strictEqual(db.writes.rollcalls.length, 0);
         });
     });
+});
+
+describe('ROLLCALL epoch close (§3.4)', function(){
+    armRollcall();
 
     describe('deferral: every way of not knowing', function(){
 
@@ -222,6 +93,10 @@ describe('ROLLCALL epoch close (§3.4)', function(){
                 RollcallProofUnavailableError);
         });
     });
+});
+
+describe('ROLLCALL epoch close (§3.4)', function(){
+    armRollcall();
 
     describe('the quorum gate: an unrolled epoch counts for nobody', function(){
 
@@ -256,6 +131,10 @@ describe('ROLLCALL epoch close (§3.4)', function(){
             assert.strictEqual(db.writes.rewards.length, 0, 'an unrolled epoch pays no publish reward');
         });
     });
+});
+
+describe('ROLLCALL epoch close (§3.4)', function(){
+    armRollcall();
 
     describe('verification: only signatures bound to THIS chain count', function(){
 
@@ -286,6 +165,13 @@ describe('ROLLCALL epoch close (§3.4)', function(){
             await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(a), UTIL);
             assert.deepStrictEqual(db.writes.absences.map((r) => r.source), ['src3']);
         });
+    });
+});
+
+describe('ROLLCALL epoch close (§3.4)', function(){
+    armRollcall();
+
+    describe('verification: only signatures bound to THIS chain count', function(){
 
         it('does not count a VALID signature whose row mislabels the ledger_hash', async function(){
             // The strictness the close rule asks for, and it is not redundant with the
@@ -315,513 +201,6 @@ describe('ROLLCALL epoch close (§3.4)', function(){
             // the db layer's job, so this asserts the contract the close actually has.
             assert.deepStrictEqual(db.writes.rollcalls[0].pinned.slice().sort(), ['src0','src1','src2']);
             assert.strictEqual(db.writes.absences.length, 0);
-        });
-    });
-
-    // A rolled lookback window, newest first, each epoch pinning the given sources.
-    function lookback(epochs){
-        return epochs.map((e) => ({
-            epoch_height: e.h,
-            responsible_set_json: e.pinned === null ? null : JSON.stringify(e.pinned)
-        }));
-    }
-
-    describe('the K-streak', function(){
-        it('does not evict on a first absence', async function(){
-            let fed = federation(4);
-            let db  = dbFor(fed);
-            db.rolledEpochs = lookback([{ h: EPOCH, pinned: ['src0','src1','src2','src3'] }]);
-            await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(answerWith(fed, [0,1,2])), UTIL);
-            assert.strictEqual(db.writes.absences.length, 1);
-            assert.strictEqual(db.writes.absences[0].evicted, false);
-            assert.strictEqual(db.writes.unstakes.length, 0);
-        });
-
-        it('evicts once the absence reaches K consecutive rolled epochs', async function(){
-            let fed = federation(4);
-            let db  = dbFor(fed);
-            db.rolledEpochs = lookback([
-                { h: EPOCH,      pinned: ['src0','src1','src2','src3'] },
-                { h: EPOCH - 30, pinned: ['src0','src1','src2','src3'] }
-            ]);
-            db.absencesBySource['src3'] = [EPOCH - 30];
-            db.sweepable['src3'] = [{ signing_pubkey: fed.ids[3].pubkey, amount: '25000.00000000' }];
-            await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(answerWith(fed, [0,1,2])), UTIL);
-            assert.strictEqual(db.writes.absences[0].evicted, true);
-            assert.strictEqual(db.writes.unstakes.length, 1);
-        });
-
-        it('ENDS the streak on a demonstrated presence, so a recovered validator is never evicted', async function(){
-            // This is the flaky-hub shape: absent, then present, then absent. The middle epoch
-            // must break the streak, or an intermittent hub is evicted for being flaky.
-            let fed = federation(4);
-            let db  = dbFor(fed);
-            db.rolledEpochs = lookback([
-                { h: EPOCH,      pinned: ['src0','src1','src2','src3'] },
-                { h: EPOCH - 30, pinned: ['src0','src1','src2','src3'] },   // in R, no absence row => present
-                { h: EPOCH - 60, pinned: ['src0','src1','src2','src3'] }
-            ]);
-            db.absencesBySource['src3'] = [EPOCH - 60];
-            await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(answerWith(fed, [0,1,2])), UTIL);
-            assert.strictEqual(db.writes.absences[0].evicted, false, 'presence must end the streak');
-            assert.strictEqual(db.writes.unstakes.length, 0);
-        });
-
-        it('SKIPS an epoch the source was not responsible for, so dipping under the floor is no escape (D39)', async function(){
-            // The dodge this closes: drop under the capability floor for one epoch with a
-            // partial UNSTAKE, so the source is not in R and pins no absence, then top back
-            // up. If that epoch ended the streak, a validator could stay idle forever.
-            let fed = federation(4);
-            let db  = dbFor(fed);
-            db.rolledEpochs = lookback([
-                { h: EPOCH,      pinned: ['src0','src1','src2','src3'] },
-                { h: EPOCH - 30, pinned: ['src0','src1','src2'] },          // src2 NOT in R: skipped
-                { h: EPOCH - 60, pinned: ['src0','src1','src2','src3'] }    // absent here
-            ]);
-            db.absencesBySource['src3'] = [EPOCH - 60];
-            db.sweepable['src3'] = [{ signing_pubkey: fed.ids[3].pubkey, amount: '25000.00000000' }];
-            await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(answerWith(fed, [0,1,2])), UTIL);
-            assert.strictEqual(db.writes.absences[0].evicted, true,
-                'a skipped epoch must not end the streak');
-        });
-    });
-
-    describe('the K-streak', function(){
-        it('stops the walk on an unreadable pin rather than skipping it', async function(){
-            // A null/unparseable pin means membership cannot be judged at that epoch.
-            // Skipping it would silently treat the source as not-in-R and let the streak
-            // reach back further than the evidence supports.
-            let fed = federation(4);
-            let db  = dbFor(fed);
-            db.rolledEpochs = lookback([
-                { h: EPOCH,      pinned: ['src0','src1','src2','src3'] },
-                { h: EPOCH - 30, pinned: null },
-                { h: EPOCH - 60, pinned: ['src0','src1','src2','src3'] }
-            ]);
-            db.absencesBySource['src3'] = [EPOCH - 60];
-            await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(answerWith(fed, [0,1,2])), UTIL);
-            assert.strictEqual(db.writes.absences[0].evicted, false);
-        });
-
-        it('never reaches past the lookback window', async function(){
-            assert.strictEqual(rca.ROLLCALL_STREAK_LOOKBACK, 2 * rca.ROLLCALL_EVICT_MISSES,
-                'the lookback is 2K by construction');
-        });
-    });
-
-    describe('the eviction effect', function(){
-        async function evictOne(){
-            let fed = federation(4);
-            let db  = dbFor(fed);
-            db.rolledEpochs = [
-                { epoch_height: EPOCH,      responsible_set_json: JSON.stringify(['src0','src1','src2','src3']) },
-                { epoch_height: EPOCH - 30, responsible_set_json: JSON.stringify(['src0','src1','src2','src3']) }
-            ];
-            db.absencesBySource['src3'] = [EPOCH - 30];
-            db.sweepable['src3'] = [{ signing_pubkey: fed.ids[3].pubkey, amount: '25000.00000000' }];
-            await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(answerWith(fed, [0,1,2])), UTIL);
-            return { db, fed };
-        }
-
-        it('mints a synthetic UNSTAKE at FORMAT 3, the eviction marker', async function(){
-            let { db } = await evictOne();
-            assert.strictEqual(db.writes.actionIndexes.length, 1);
-            assert.strictEqual(db.writes.actionIndexes[0].ACTION, 'UNSTAKE');
-            assert.strictEqual(db.writes.actionIndexes[0].FORMAT, 3);
-            assert.strictEqual(db.writes.actionIndexes[0].BLOCK_INDEX, CLOSE);
-        });
-
-        it('refunds through an ordinary unstakes row on the ordinary cooldown', async function(){
-            let { db } = await evictOne();
-            let u = db.writes.unstakes[0];
-            assert.strictEqual(u.SOURCE, 'src3');
-            assert.strictEqual(u.STATUS, 'valid');
-            assert.strictEqual(u.BLOCK_INDEX, CLOSE);
-            assert.strictEqual(u.COOLDOWN_END_BLOCK, CLOSE + CONFIG.STAKING.COOLDOWN_BLOCKS,
-                'deactivation, not a burn: the stake refunds after the ordinary cooldown');
-        });
-
-        it('stamps the stake SOURCE-SCOPED and sweeps pending rows', async function(){
-            let { db } = await evictOne();
-            let s = db.writes.stakeStamps[0];
-            assert.strictEqual(s.src, 'src3', 'scoped to the source, not just the key');
-            assert.strictEqual(s.blk, CLOSE + CONFIG.STAKING.ACTIVATION_DELAY_BLOCKS);
-            assert.strictEqual(s.pending, true, 'a top-up must not walk the source back in');
-        });
-
-        it('READS the pending rows too, not just the activated ones', async function(){
-            // An eviction is a removal, not an amount. If the sweep asked only for
-            // activated rows, a 1-XCHAIN top-up landed just before the epoch would
-            // survive the eviction and walk the source straight back into the set.
-            let { db } = await evictOne();
-            assert.strictEqual(db.sweepCalls.length, 1);
-            assert.strictEqual(db.sweepCalls[0].includePending, true,
-                'the sweep must include pending-activation rows');
-        });
-
-        it('stamps every delegation of the source, or the DELEGATE branch keeps it in', async function(){
-            let { db } = await evictOne();
-            assert.deepStrictEqual(db.writes.delegationStamps,
-                [{ src: 'src3', blk: CLOSE + CONFIG.STAKING.ACTIVATION_DELAY_BLOCKS }]);
-        });
-    });
-
-    describe('the eviction effect', function(){
-        it('is a no-op when a real UNSTAKE already swept the source', async function(){
-            let fed = federation(4);
-            let db  = dbFor(fed);
-            db.rolledEpochs = [
-                { epoch_height: EPOCH,      responsible_set_json: JSON.stringify(['src0','src1','src2','src3']) },
-                { epoch_height: EPOCH - 30, responsible_set_json: JSON.stringify(['src0','src1','src2','src3']) }
-            ];
-            db.absencesBySource['src3'] = [EPOCH - 30];
-            db.sweepable['src3'] = [];                       // nothing left to sweep
-            await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(answerWith(fed, [0,1,2])), UTIL);
-            assert.strictEqual(db.writes.unstakes.length, 0);
-            assert.strictEqual(db.writes.delegationStamps.length, 0);
-        });
-    });
-
-    describe('the publish reward', function(){
-
-        it('pays the ELECTED leader, at the earn/materialisation heights the rollback keys on', async function(){
-            let fed = federation(3);
-            let db  = dbFor(fed);
-            let leader = rc.hashOrder(rc.electionKey(NETWORK, EPOCH), fed.responsible.map((r) => r.pubkey))[0];
-            let a = answerWith(fed, [0,1,2]);
-            a.publishers[leader] = { action_index: 1, block_index: 10 };
-            await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(a), UTIL);
-            assert.strictEqual(db.writes.rewards.length, 1);
-            let r = db.writes.rewards[0];
-            assert.strictEqual(r.pk, leader);
-            assert.strictEqual(r.type, 'rollcall_publish');
-            assert.strictEqual(r.amt, rca.ROLLCALL_REWARD_AMOUNT);
-            assert.strictEqual(r.ref, EPOCH,    'round_reference is the epoch');
-            assert.strictEqual(r.blk, EPOCH,    'block_index is the EARN block');
-            assert.strictEqual(r.derive, CLOSE, 'derive_block_index is the close, so a reorg into (E, C] deletes it');
-            assert.strictEqual(r.qual, 0);
-        });
-
-        it('pays nothing when the leader published nothing', async function(){
-            let fed = federation(3);
-            let db  = dbFor(fed);
-            await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(answerWith(fed, [0,1,2])), UTIL);
-            assert.strictEqual(db.writes.rewards.length, 0);
-        });
-
-        it('throws rather than silently skipping a refused reward write', async function(){
-            // createValidatorReward returns false when its active-stake precondition
-            // fails. The leader is in R(E) by construction, so a false here means the
-            // node disagrees with its peers about the set: better to halt than to
-            // derive a reward set nobody else has.
-            let fed = federation(3);
-            let db  = dbFor(fed);
-            db.rewardResult = false;
-            let leader = rc.hashOrder(rc.electionKey(NETWORK, EPOCH), fed.responsible.map((r) => r.pubkey))[0];
-            let a = answerWith(fed, [0,1,2]);
-            a.publishers[leader] = { action_index: 1, block_index: 10 };
-            await assert.rejects(
-                () => rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(a), UTIL),
-                /reward write refused/);
-        });
-    });
-
-    describe('leader election parity', function(){
-
-        it('orders by sha256(key || pubkey) ascending, the hub\'s own ordering', async function(){
-            // Byte-parity with StateAnchorPublisher.hashOrder. If these diverge, the BTC
-            // side pays a validator the federation did not elect.
-            let keys = Array.from({ length: 8 }, () => crypto.randomBytes(32).toString('hex'));
-            let key  = rc.electionKey(NETWORK, EPOCH);
-            let expected = keys.slice().map((pk) => ({
-                pubkey: pk.toLowerCase(),
-                hash: crypto.createHash('sha256').update(key, 'utf8').update(pk.toLowerCase(), 'utf8').digest('hex')
-            })).sort((a, b) => (a.hash < b.hash) ? -1 : (a.hash > b.hash ? 1 : 0)).map((e) => e.pubkey);
-            assert.deepStrictEqual(rc.hashOrder(key, keys), expected);
-        });
-
-        it('carries its own domain tag, so the anchor election and this one are independent', function(){
-            assert.strictEqual(rc.electionKey('regtest', 30), 'XROLLCALL|regtest|30');
-        });
-    });
-
-    // The close sorts the source set once, and that one order is load-bearing three
-    // ways: it is the pinned responsible_set_json, it fixes the absence row order,
-    // and it fixes the sequence evictSource mints action_index values in.
-    //
-    // The fixture has to disagree with a bare .sort(): U+FFFD is one 0xFFFD code
-    // unit but EF BF BD in UTF-8, and U+10000 is the surrogate pair D800 DC00 but
-    // F0 90 80 80. An all-ASCII fixture cannot fail, which is why these two are here.
-    const SRC_FFFD   = 'src-�';
-    const SRC_10000  = 'src-\u{10000}';
-    const BYTE_ORDER = [SRC_FFFD, SRC_10000, 'src0', 'src1', 'src2'];
-
-    // Three ASCII sources carry the quorum; the two fixture sources are absent for K
-    // epochs, so both are evicted in the same close and their sweep order shows.
-    async function closeWithBothAbsent(){
-        let present = federation(3);
-        let a = identity(), b = identity();
-        let fed = {
-            ids: present.ids.concat([a, b]),
-            responsible: present.responsible.concat([
-                { pubkey: a.pubkey, source: SRC_10000, weight: '1.00000000' },
-                { pubkey: b.pubkey, source: SRC_FFFD,  weight: '1.00000000' }
-            ])
-        };
-        let db = dbFor(fed);
-        db.rolledEpochs = [
-            { epoch_height: EPOCH,      responsible_set_json: JSON.stringify(BYTE_ORDER) },
-            { epoch_height: EPOCH - 30, responsible_set_json: JSON.stringify(BYTE_ORDER) }
-        ];
-        db.absencesBySource[SRC_10000] = [EPOCH - 30];
-        db.absencesBySource[SRC_FFFD]  = [EPOCH - 30];
-        db.sweepable[SRC_10000] = [{ signing_pubkey: a.pubkey, amount: '1.00000000' }];
-        db.sweepable[SRC_FFFD]  = [{ signing_pubkey: b.pubkey, amount: '1.00000000' }];
-        await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(answerWith(fed, [0, 1, 2])), UTIL);
-        return db;
-    }
-
-    describe('source ordering is UTF-8 byte order, the house consensus comparator', function(){
-        it('has a fixture that actually separates the two orders', function(){
-            // Without this, every assertion below would pass under the bare .sort() too.
-            assert.deepStrictEqual([SRC_FFFD, SRC_10000].sort(), [SRC_10000, SRC_FFFD],
-                'UTF-16 code-unit order puts U+10000 first');
-            let bytes = [SRC_10000, SRC_FFFD].sort(
-                (a, b) => Buffer.compare(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8')));
-            assert.deepStrictEqual(bytes, [SRC_FFFD, SRC_10000], 'UTF-8 byte order puts U+FFFD first');
-        });
-
-        it('pins responsible_set_json in byte order', async function(){
-            let db = await closeWithBothAbsent();
-            assert.strictEqual(db.writes.rollcalls[0].rolled, 1);
-            assert.deepStrictEqual(db.writes.rollcalls[0].pinned, BYTE_ORDER);
-        });
-
-        it('writes the absence rows in byte order', async function(){
-            let db = await closeWithBothAbsent();
-            assert.deepStrictEqual(db.writes.absences.map((r) => r.source), [SRC_FFFD, SRC_10000]);
-        });
-    });
-
-    describe('source ordering is UTF-8 byte order, the house consensus comparator', function(){
-        it('evicts in byte order, so the minted action_index sequence is the same on every node', async function(){
-            let db = await closeWithBothAbsent();
-            assert.deepStrictEqual(db.sweepCalls.map((c) => c.src), [SRC_FFFD, SRC_10000]);
-            assert.deepStrictEqual(db.writes.unstakes.map((u) => u.SOURCE), [SRC_FFFD, SRC_10000]);
-            assert.deepStrictEqual(db.writes.actionIndexes.map((a) => a.index), [9000, 9001]);
-        });
-    });
-
-    // ROLLCALL v1. At or above ROLLCALL_GATES_ACTIVATION the signed
-    // canonical commits to sha256(GATES) and a ROLLED epoch records each verified
-    // signer's list, because rollcall_gates is the only BTC-side artifact the
-    // rules-aware attestation set can read.
-    //
-    // Every case here is about the eviction cost of getting the FORM wrong: a row
-    // whose form disagrees with its epoch is not a valid signer, and a signer that
-    // signed a different list verified against nothing, so both are absences and
-    // two absences evict. That is the price of rolling a fleet across
-    // an epoch, and it must fall out of the code, not out of a comment.
-    describe('ROLLCALL v1: the gates canonical and the rollcall_gates write (§7.3, D85)', function(){
-
-        // Shaped like the real field: sorted, comma-joined `<module>.<EXPORT>` keys.
-        const GATES = 'anchor_reward_activation.ANCHOR_REWARD_ACTIVATION,' +
-                      'attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION,' +
-                      'rollcall_activation.ROLLCALL_ACTIVATION';
-        // One gate short: what a validator a release behind the publisher would sign.
-        const GATES_OTHER = 'anchor_reward_activation.ANCHOR_REWARD_ACTIVATION,' +
-                            'rollcall_activation.ROLLCALL_ACTIVATION';
-
-        let savedGates;
-        before(function(){
-            savedGates = rga.ROLLCALL_GATES_ACTIVATION[NETWORK];
-            rga.ROLLCALL_GATES_ACTIVATION[NETWORK] = 0;   // epoch 30 is a v1 epoch
-        });
-        after(function(){ rga.ROLLCALL_GATES_ACTIVATION[NETWORK] = savedGates; });
-
-        // A decided answer whose `presentIdx` signed the v1 canonical over the
-        // PUBLISHER's list, which is the string every row of one action carries.
-        function answerV1(fed, presentIdx, over){
-            let signers = {};
-            for(let i of presentIdx){
-                signers[fed.ids[i].pubkey] = {
-                    sig:          signV1For(fed.ids[i], EPOCH, LEDGER, GATES),
-                    ledger_hash:  LEDGER,
-                    publisher:    fed.ids[0].pubkey,
-                    action_index: 1, block_index: 10,
-                    gates:        GATES
-                };
-            }
-            return Object.assign({ decided: true, hcut: 50, signers, publishers: {} }, over || {});
-        }
-
-        it('counts a v1 signer whose signature verifies over the gates canonical', async function(){
-            let fed = federation(3);
-            let db  = dbFor(fed);
-            await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(answerV1(fed, [0,1,2])), UTIL);
-            assert.strictEqual(db.writes.rollcalls[0].rolled, 1);
-            assert.strictEqual(db.writes.absences.length, 0, 'a v1 signer is present, not absent');
-        });
-
-        it('writes one rollcall_gates row per verified signer, keyed to the epoch and the close block', async function(){
-            let fed = federation(3);
-            let db  = dbFor(fed);
-            await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(answerV1(fed, [0,1,2])), UTIL);
-            assert.strictEqual(db.writes.gates.length, 1, 'one write for the epoch');
-            let w = db.writes.gates[0];
-            assert.strictEqual(w.e, EPOCH);
-            assert.strictEqual(w.c, CLOSE, 'close_block is the rollback anchor');
-            assert.deepStrictEqual(w.rows.map((r) => r.pubkey).slice().sort(),
-                                   fed.ids.map((i) => i.pubkey).slice().sort(),
-                                   'one row per verified key, by PUBKEY not by source');
-            // The list is stored split, so the filter compares gate keys, not a string.
-            for(let r of w.rows) assert.deepStrictEqual(r.gates, GATES.split(','));
-        });
-
-        it('is ABSENT for a signer that signed a different list than the publisher\'s (§7.2)', async function(){
-            // The cost of a fleet rolling across an epoch. The row carries the
-            // publisher's GATES (there is one GATES per action), so a validator whose
-            // build knew a shorter list signed different bytes and verifies against
-            // nothing. It must be absent, and it must get no gates row: a row would
-            // claim the publisher's list on a key that never accepted it.
-            let fed = federation(4);
-            let db  = dbFor(fed);
-            let a = answerV1(fed, [0,1,2]);
-            a.signers[fed.ids[3].pubkey] = {
-                sig:          signV1For(fed.ids[3], EPOCH, LEDGER, GATES_OTHER),
-                ledger_hash:  LEDGER,
-                publisher:    fed.ids[0].pubkey,
-                action_index: 1, block_index: 10,
-                gates:        GATES
-            };
-            await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(a), UTIL);
-            assert.deepStrictEqual(db.writes.absences.map((r) => r.source), ['src3']);
-            assert.deepStrictEqual(db.writes.gates[0].rows.map((r) => r.pubkey).slice().sort(),
-                                   fed.ids.slice(0, 3).map((i) => i.pubkey).slice().sort());
-        });
-
-        it('is ABSENT for a v0 row at a v1 epoch, however well its v0 signature verifies', async function(){
-            let fed = federation(4);
-            let db  = dbFor(fed);
-            let a = answerV1(fed, [0,1,2]);
-            a.signers[fed.ids[3].pubkey] = {
-                sig:          signFor(fed.ids[3], EPOCH, LEDGER),   // valid v0 signature
-                ledger_hash:  LEDGER,
-                publisher:    fed.ids[0].pubkey,
-                action_index: 1, block_index: 10,
-                gates:        null                                 // but no list at all
-            };
-            await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(a), UTIL);
-            assert.deepStrictEqual(db.writes.absences.map((r) => r.source), ['src3'],
-                'the epoch decides the form; a v0 row cannot count at a v1 epoch');
-            assert.strictEqual(db.writes.gates[0].rows.length, 3);
-        });
-
-        it('is ABSENT for an EMPTY gates string, which is never a v1 list', async function(){
-            let fed = federation(4);
-            let db  = dbFor(fed);
-            let a = answerV1(fed, [0,1,2]);
-            a.signers[fed.ids[3].pubkey] = {
-                sig:          signV1For(fed.ids[3], EPOCH, LEDGER, ''),
-                ledger_hash:  LEDGER,
-                publisher:    fed.ids[0].pubkey,
-                action_index: 1, block_index: 10,
-                gates:        ''
-            };
-            await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(a), UTIL);
-            assert.deepStrictEqual(db.writes.absences.map((r) => r.source), ['src3']);
-            // And no [''] row reaches the table, which the filter would read as a key
-            // that accepted a gate named the empty string.
-            assert.strictEqual(db.writes.gates[0].rows.length, 3);
-        });
-
-        it('writes NO gates rows for an UNROLLED v1 epoch, whatever verified', async function(){
-            // An unrolled epoch decided nothing about membership. Recording its lists
-            // would let a partition's partial answer become the set the filter reads.
-            let fed = federation(4);
-            let db  = dbFor(fed);
-            let n = await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(answerV1(fed, [0])), UTIL);
-            assert.strictEqual(n, 1);
-            assert.strictEqual(db.writes.rollcalls[0].rolled, 0);
-            assert.strictEqual(db.writes.gates.length, 0, 'an unrolled epoch writes no gates rows');
-        });
-
-        it('names why each key was dropped on the close line, so a discarded federation is not read as an absence', async function(){
-            // The shape that motivated this: rows of the wrong form for the epoch (here
-            // v0 rows at a v1 epoch) closed "present 0/4" with nothing on the line to say
-            // a canonical mismatch, not a silent federation, was the cause.
-            let fed = federation(4);
-            let db  = dbFor(fed);
-            let a = answerV1(fed, [0,1,2]);
-            for(let i of [0,1,2]) a.signers[fed.ids[i].pubkey].gates = null;
-            let lines = [];
-            let orig  = console.log;
-            console.log = function(){ lines.push(Array.prototype.join.call(arguments, ' ')); };
-            try { await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(a), UTIL); }
-            finally { console.log = orig; }
-            assert.strictEqual(db.writes.rollcalls[0].rolled, 0);
-            let line = lines.find((l) => l.indexOf('ROLLCALL close') !== -1 && l.indexOf('UNROLLED') !== -1);
-            assert.ok(line, 'the close logged its UNROLLED line');
-            assert.ok(line.indexOf('dropped[no_row=1 ledger_hash=0 form=3 sig=0 v1 epoch]') !== -1,
-                'the close line must tally the drops by reason; got: ' + line);
-        });
-
-        it('writes no gates rows when a rolled epoch verified nobody it could record', async function(){
-            // Degenerate but reachable: the write is skipped rather than handing the db
-            // an empty row list.
-            let fed = federation(1);
-            let db  = dbFor(fed);
-            let a = answerV1(fed, []);
-            await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(a), UTIL);
-            assert.strictEqual(db.writes.gates.length, 0);
-        });
-    });
-
-    describe('below ROLLCALL_GATES_ACTIVATION: v0, byte for byte', function(){
-
-        let savedGates;
-        before(function(){
-            savedGates = rga.ROLLCALL_GATES_ACTIVATION[NETWORK];
-            rga.ROLLCALL_GATES_ACTIVATION[NETWORK] = null;   // inert, whatever the venue armed
-        });
-        after(function(){ rga.ROLLCALL_GATES_ACTIVATION[NETWORK] = savedGates; });
-
-        it('never touches rollcall_gates', async function(){
-            let fed = federation(3);
-            let db  = dbFor(fed);
-            db.insertRollcallGates = async () => { throw new Error('insertRollcallGates called below the height'); };
-            await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(answerWith(fed, [0,1,2])), UTIL);
-            assert.strictEqual(db.writes.rollcalls[0].rolled, 1);
-            assert.strictEqual(db.writes.gates.length, 0);
-        });
-
-        it('is ABSENT for a v1 row at a v0 epoch, a form that epoch cannot carry', async function(){
-            let fed = federation(4);
-            let db  = dbFor(fed);
-            const GATES = 'rollcall_activation.ROLLCALL_ACTIVATION';
-            let a = answerWith(fed, [0,1,2]);
-            a.signers[fed.ids[3].pubkey] = {
-                sig:          signV1For(fed.ids[3], EPOCH, LEDGER, GATES),
-                ledger_hash:  LEDGER,
-                publisher:    fed.ids[0].pubkey,
-                action_index: 1, block_index: 10,
-                gates:        GATES
-            };
-            await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(a), UTIL);
-            assert.deepStrictEqual(db.writes.absences.map((r) => r.source), ['src3']);
-        });
-
-        it('still counts a v0 signer whose row carries an empty gates string', async function(){
-            // The false-absence hazard the normalization closes: a column default of ''
-            // upstream must not turn an honest v0 signer into an absence, because two
-            // absences evict.
-            let fed = federation(4);
-            let db  = dbFor(fed);
-            let a = answerWith(fed, [0,1,2,3]);
-            a.signers[fed.ids[3].pubkey].gates = '';
-            await rc.closeRollcallEpochs(db, CONFIG, CLOSE, stubProof(a), UTIL);
-            assert.strictEqual(db.writes.rollcalls[0].rolled, 1);
-            assert.strictEqual(db.writes.absences.length, 0, 'an empty gates string is not a v1 row');
         });
     });
 });
