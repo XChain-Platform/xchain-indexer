@@ -21,6 +21,78 @@
 
 const ledgerPrecision = require('../ledger_amount_precision_activation');
 
+// The escrow-holding kinds getAddressEscrows lists, in the order it lists them: the
+// type tag each row is reported under, and the query for the address's items of that
+// kind whose latest status is still 'open'.
+const ESCROW_KINDS = [
+    // Get list of orders with escrowed tokens
+    { type: 'order', query: `SELECT 
+                        o1.action_index
+                    FROM
+                        orders                    o1
+                        INNER JOIN order_statuses s1 ON (s1.order_action_index=o1.action_index)
+                        INNER JOIN actions        a1 ON (a1.action_index=o1.action_index)        
+                        INNER JOIN transactions   t1 ON (t1.tx_index=a1.tx_index)
+                        INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
+                    WHERE 
+                        s1.action_index = (
+                            SELECT
+                                MAX(s3.action_index)
+                            FROM
+                                order_statuses s3
+                            WHERE
+                                s3.order_action_index=o1.action_index
+                        ) AND
+                        a1.source_id=? AND
+                        s2.status='open'
+                    ORDER BY 
+                        a1.action_index ASC` },
+    // Get list of swaps with escrowed tokens
+    { type: 'swap', query: `SELECT 
+                    s1.action_index
+                FROM
+                    swaps                     s1
+                    INNER JOIN swap_statuses  s2 ON (s2.swap_action_index=s1.action_index)
+                    INNER JOIN actions        a1 ON (a1.action_index=s1.action_index)        
+                    INNER JOIN transactions   t1 ON (t1.tx_index=a1.tx_index)
+                    INNER JOIN index_statuses s3 ON (s3.id=s2.status_id)
+                WHERE 
+                    s2.action_index = (
+                        SELECT
+                            MAX(s4.action_index)
+                        FROM
+                            swap_statuses s4
+                        WHERE
+                            s4.swap_action_index=s1.action_index
+                    ) AND
+                    a1.source_id=? AND
+                    s3.status='open'
+                ORDER BY 
+                    a1.action_index ASC` },
+    // Get list of dispensers with escrowed tokens
+    { type: 'dispenser', query: `SELECT 
+                    d1.action_index
+                FROM
+                    dispensers                    d1
+                    INNER JOIN dispenser_statuses s1 ON (s1.dispenser_action_index=d1.action_index)
+                    INNER JOIN actions            a1 ON (a1.action_index=d1.action_index)        
+                    INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
+                    INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
+                WHERE 
+                    s1.action_index = (
+                        SELECT
+                            MAX(s3.action_index)
+                        FROM
+                            dispenser_statuses s3
+                        WHERE
+                            s3.dispenser_action_index=d1.action_index
+                    ) AND
+                    a1.source_id=? AND
+                    s2.status='open'
+                ORDER BY 
+                    a1.action_index ASC` },
+];
+
 module.exports = {
 
     // Get escrowed token supply for a given ticker from escrows table
@@ -44,98 +116,17 @@ module.exports = {
         let id      = await this.createAddress(address);
         let escrows = [];
         let args    = [id];
-        // Get list of orders with escrowed tokens
-        let query = `SELECT 
-                        o1.action_index
-                    FROM
-                        orders                    o1
-                        INNER JOIN order_statuses s1 ON (s1.order_action_index=o1.action_index)
-                        INNER JOIN actions        a1 ON (a1.action_index=o1.action_index)        
-                        INNER JOIN transactions   t1 ON (t1.tx_index=a1.tx_index)
-                        INNER JOIN index_statuses s2 ON (s2.id=s1.status_id)
-                    WHERE 
-                        s1.action_index = (
-                            SELECT
-                                MAX(s3.action_index)
-                            FROM
-                                order_statuses s3
-                            WHERE
-                                s3.order_action_index=o1.action_index
-                        ) AND
-                        a1.source_id=? AND
-                        s2.status='open'
-                    ORDER BY 
-                        a1.action_index ASC`;
-        let results = await this.doQuery(query, args);
-        if(results.length > 0){
-            for(let row of results)
-                escrows.push({
-                    type: 'order',
-                    action_index: Number(row.action_index)
-                });
+        // One query per kind in ESCROW_KINDS order, each row tagged with its kind.
+        for(const kind of ESCROW_KINDS){
+            let results = await this.doQuery(kind.query, args);
+            if(results.length > 0){
+                for(let row of results)
+                    escrows.push({
+                        type: kind.type,
+                        action_index: Number(row.action_index)
+                    });
+            }
         }
-        // Get list of swaps with escrowed tokens
-        query = `SELECT 
-                    s1.action_index
-                FROM
-                    swaps                     s1
-                    INNER JOIN swap_statuses  s2 ON (s2.swap_action_index=s1.action_index)
-                    INNER JOIN actions        a1 ON (a1.action_index=s1.action_index)        
-                    INNER JOIN transactions   t1 ON (t1.tx_index=a1.tx_index)
-                    INNER JOIN index_statuses s3 ON (s3.id=s2.status_id)
-                WHERE 
-                    s2.action_index = (
-                        SELECT
-                            MAX(s4.action_index)
-                        FROM
-                            swap_statuses s4
-                        WHERE
-                            s4.swap_action_index=s1.action_index
-                    ) AND
-                    a1.source_id=? AND
-                    s3.status='open'
-                ORDER BY 
-                    a1.action_index ASC`;
-        results = await this.doQuery(query, args);
-        if(results.length > 0){
-            for(let row of results)
-                escrows.push({
-                    type: 'swap',
-                    action_index: Number(row.action_index)
-                });
-
-        } 
-        // Get list of dispensers with escrowed tokens
-        query = `SELECT 
-                    d1.action_index
-                FROM
-                    dispensers                    d1
-                    INNER JOIN dispenser_statuses s1 ON (s1.dispenser_action_index=d1.action_index)
-                    INNER JOIN actions            a1 ON (a1.action_index=d1.action_index)        
-                    INNER JOIN transactions       t1 ON (t1.tx_index=a1.tx_index)
-                    INNER JOIN index_statuses     s2 ON (s2.id=s1.status_id)
-                WHERE 
-                    s1.action_index = (
-                        SELECT
-                            MAX(s3.action_index)
-                        FROM
-                            dispenser_statuses s3
-                        WHERE
-                            s3.dispenser_action_index=d1.action_index
-                    ) AND
-                    a1.source_id=? AND
-                    s2.status='open'
-                ORDER BY 
-                    a1.action_index ASC`;
-        results = await this.doQuery(query, args);
-        if(results.length > 0){
-            for(let row of results)
-                escrows.push({
-                    type: 'dispenser',
-                    action_index: Number(row.action_index)
-                });
-
-        } 
         return escrows;
     },
 
