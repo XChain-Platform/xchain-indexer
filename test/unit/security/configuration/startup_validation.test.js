@@ -79,37 +79,7 @@ describe('Security: connection pool timeout configuration @regression @tier4', f
     });
 });
 
-const Module  = require('module');
 const { createMockIndexer } = require('../../../fixtures/mocks');
-
-const actionsPath = require.resolve('../../../../src/actions/index.js');
-
-function dlopenFailure() {
-    const err = new Error(
-        'dlopen(/srv/xchain-indexer/node_modules/isolated-vm/out/isolated_vm.node, 0x0001): ' +
-        "tried: '/srv/xchain-indexer/node_modules/isolated-vm/out/isolated_vm.node' " +
-        '(not a mach-o file)');
-    err.code = 'ERR_DLOPEN_FAILED';
-    return err;
-}
-
-/** Re-evaluate src/actions/index.js with require('xchain-vm') failing, then restore the cache. */
-function actionsWithUnloadableVm(loadError) {
-    const origLoad = Module._load;
-    const saved    = require.cache[actionsPath];
-    delete require.cache[actionsPath];
-    Module._load = function (request) {
-        if (request === 'xchain-vm') throw loadError;
-        return origLoad.apply(this, arguments);
-    };
-    try {
-        return require(actionsPath);
-    } finally {
-        Module._load = origLoad;
-        delete require.cache[actionsPath];
-        if (saved) require.cache[actionsPath] = saved;   // leave the real module for later suites
-    }
-}
 
 function mockIndexer() {
     const indexer = createMockIndexer();
@@ -127,6 +97,37 @@ function mockIndexer() {
 // (the measured case) surfaces to require('xchain-vm') as exactly this ERR_DLOPEN_FAILED,
 // and reproducing it for real would need a foreign node_modules on the test host.
 describe('Security: VM runtime boot refusal @regression @tier4', function () {
+    const Module  = require('module');
+
+    const actionsPath = require.resolve('../../../../src/actions/index.js');
+
+    function dlopenFailure() {
+        const err = new Error(
+            'dlopen(/srv/xchain-indexer/node_modules/isolated-vm/out/isolated_vm.node, 0x0001): ' +
+            "tried: '/srv/xchain-indexer/node_modules/isolated-vm/out/isolated_vm.node' " +
+            '(not a mach-o file)');
+        err.code = 'ERR_DLOPEN_FAILED';
+        return err;
+    }
+
+    /** Re-evaluate src/actions/index.js with require('xchain-vm') failing, then restore the cache. */
+    function actionsWithUnloadableVm(loadError) {
+        const origLoad = Module._load;
+        const saved    = require.cache[actionsPath];
+        delete require.cache[actionsPath];
+        Module._load = function (request) {
+            if (request === 'xchain-vm') throw loadError;
+            return origLoad.apply(this, arguments);
+        };
+        try {
+            return require(actionsPath);
+        } finally {
+            Module._load = origLoad;
+            delete require.cache[actionsPath];
+            if (saved) require.cache[actionsPath] = saved;   // leave the real module for later suites
+        }
+    }
+
     it('SEC-43: Actions construction refuses when the VM binding cannot load', function () {
         const Broken = actionsWithUnloadableVm(dlopenFailure());
         assert.throws(() => new Broken(mockIndexer()), /VM RUNTIME UNAVAILABLE/);
@@ -142,10 +143,6 @@ describe('Security: VM runtime boot refusal @regression @tier4', function () {
             `host platform not named: ${message}`);
         assert.ok(message.includes('ERR_DLOPEN_FAILED'), `loader error not carried: ${message}`);
     });
-});
-
-describe('Security: VM runtime boot refusal @regression @tier4', function () {
-    const Actions = require('../../../../src/actions/index.js');
 
     it('SEC-45: no Actions instance is produced with a null vm (the old silent-park state)', function () {
         const Broken = actionsWithUnloadableVm(dlopenFailure());
@@ -154,6 +151,10 @@ describe('Security: VM runtime boot refusal @regression @tier4', function () {
         assert.strictEqual(instance, null,
             'a constructed Actions with this.vm = null is exactly the state that parks at the first contract block');
     });
+});
+
+describe('Security: VM runtime boot refusal @regression @tier4', function () {
+    const Actions = require('../../../../src/actions/index.js');
 
     it('SEC-46: a loadable VM still constructs (the gate does not fire on a healthy host)', async function () {
         const actions = new Actions(mockIndexer());

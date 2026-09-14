@@ -172,8 +172,9 @@ describe('Actions.processTransaction() @regression @tier3', function () {
 });
 
 describe('Actions.processTransaction() @regression @tier3', function () {
-    afterEach(function () {
+    afterEach(async function () {
         sinon.restore();
+        await shutdownPendingVms();
     });
 
     it('routes CALLBACK to actionCallback.parse', async function () {
@@ -232,8 +233,9 @@ describe('Actions.processTransaction() @regression @tier3', function () {
 });
 
 describe('Actions.processTransaction() @regression @tier3', function () {
-    afterEach(function () {
+    afterEach(async function () {
         sinon.restore();
+        await shutdownPendingVms();
     });
 
     it('routes SWAP to actionSwap.parse', async function () {
@@ -291,8 +293,9 @@ describe('Actions.processTransaction() @regression @tier3', function () {
 });
 
 describe('Actions.processTransaction() @regression @tier3', function () {
-    afterEach(function () {
+    afterEach(async function () {
         sinon.restore();
+        await shutdownPendingVms();
     });
 
     it('resolves DROP alias to AIRDROP', async function () {
@@ -346,8 +349,9 @@ describe('Actions.processTransaction() @regression @tier3', function () {
 });
 
 describe('Actions.processTransaction() @regression @tier3', function () {
-    afterEach(function () {
+    afterEach(async function () {
         sinon.restore();
+        await shutdownPendingVms();
     });
 
     it('does NOT insert extra version for non-legacy SEND with numeric version', async function () {
@@ -401,8 +405,9 @@ describe('Actions.processTransaction() @regression @tier3', function () {
 });
 
 describe('Actions.processTransaction() @regression @tier3', function () {
-    afterEach(function () {
+    afterEach(async function () {
         sinon.restore();
+        await shutdownPendingVms();
     });
 
     // ── data object construction ──────────────────────────────────────────
@@ -450,6 +455,13 @@ describe('Actions.processTransaction() @regression @tier3', function () {
             assert.strictEqual(p, p.trim(), `param "${p}" should have no surrounding whitespace`);
         }
     });
+});
+
+describe('Actions.processTransaction() @regression @tier3', function () {
+    afterEach(async function () {
+        sinon.restore();
+        await shutdownPendingVms();
+    });
 
     // ── DB method calls ───────────────────────────────────────────────────
 
@@ -458,12 +470,6 @@ describe('Actions.processTransaction() @regression @tier3', function () {
         const tx = makeTx();
         await actions.processTransaction(tx);
         assert.ok(indexer.indexerDb.createAddress.called);
-    });
-});
-
-describe('Actions.processTransaction() @regression @tier3', function () {
-    afterEach(function () {
-        sinon.restore();
     });
 
     it('calls createTransaction with tx_hash before processing', async function () {
@@ -570,8 +576,9 @@ describe('Actions.processAction() @regression @tier3', function () {
         sinon.spy(util, 'resetLists');
     });
 
-    afterEach(function () {
+    afterEach(async function () {
         sinon.restore();
+        await shutdownPendingVms();
     });
 
     it('dispatches DISPENSER_CLOSE to actionDispenserClose.parse', async function () {
@@ -629,8 +636,9 @@ describe('Actions.processAction() @regression @tier3', function () {
         sinon.spy(util, 'resetLists');
     });
 
-    afterEach(function () {
+    afterEach(async function () {
         sinon.restore();
+        await shutdownPendingVms();
     });
 
     it('dispatches MESSAGE to actionMessage.parse', async function () {
@@ -688,8 +696,9 @@ describe('Actions.processAction() @regression @tier3', function () {
         sinon.spy(util, 'resetLists');
     });
 
-    afterEach(function () {
+    afterEach(async function () {
         sinon.restore();
+        await shutdownPendingVms();
     });
 
     it('dispatches SWEEP to actionSweep.parse', async function () {
