@@ -45,18 +45,24 @@ function rpc(result) {
     return { jsonrpc: '2.0', id: 1, result };
 }
 
+let origFetch;
+
+function saveFetch() {
+    origFetch = global.fetch;
+}
+
+function restoreFetch() {
+    global.fetch = origFetch;
+    sinon.restore();
+}
+
+function useFetchFixture() {
+    beforeEach(saveFetch);
+    afterEach(restoreFetch);
+}
+
 describe('UtxoTracker boundary tests @regression @tier1', function () {
-
-    let origFetch;
-
-    beforeEach(function () {
-        origFetch = global.fetch;
-    });
-
-    afterEach(function () {
-        global.fetch = origFetch;
-        sinon.restore();
-    });
+    useFetchFixture();
 
     // -----------------------------------------------------------------------
     // Minimum valid height (genesis, block 0)
@@ -70,6 +76,10 @@ describe('UtxoTracker boundary tests @regression @tier1', function () {
             assert.deepStrictEqual(r, { height: 0 });
         });
     });
+});
+
+describe('UtxoTracker boundary tests @regression @tier1', function () {
+    useFetchFixture();
 
     // -----------------------------------------------------------------------
     // Negative height is forwarded (no non-negativity guard)
@@ -83,6 +93,10 @@ describe('UtxoTracker boundary tests @regression @tier1', function () {
             assert.deepStrictEqual(r, { height: -1 });
         });
     });
+});
+
+describe('UtxoTracker boundary tests @regression @tier1', function () {
+    useFetchFixture();
 
     // -----------------------------------------------------------------------
     // Fractional / non-integer height is forwarded (no integer guard)
@@ -96,6 +110,10 @@ describe('UtxoTracker boundary tests @regression @tier1', function () {
             assert.deepStrictEqual(r, { height: 750000.5 });
         });
     });
+});
+
+describe('UtxoTracker boundary tests @regression @tier1', function () {
+    useFetchFixture();
 
     // -----------------------------------------------------------------------
     // Non-finite heights: NaN and Infinity satisfy `typeof === 'number'`
@@ -120,6 +138,10 @@ describe('UtxoTracker boundary tests @regression @tier1', function () {
             assert.deepStrictEqual(r, { height: Infinity });
         });
     });
+});
+
+describe('UtxoTracker boundary tests @regression @tier1', function () {
+    useFetchFixture();
 
     // -----------------------------------------------------------------------
     // Very large heights (MAX_SAFE_INTEGER and beyond)
@@ -142,6 +164,10 @@ describe('UtxoTracker boundary tests @regression @tier1', function () {
             assert.deepStrictEqual(r, { height: beyond });
         });
     });
+});
+
+describe('UtxoTracker boundary tests @regression @tier1', function () {
+    useFetchFixture();
 
     // -----------------------------------------------------------------------
     // Non-number heights collapse to null
@@ -171,6 +197,10 @@ describe('UtxoTracker boundary tests @regression @tier1', function () {
             assert.strictEqual(r, null);
         });
     });
+});
+
+describe('UtxoTracker boundary tests @regression @tier1', function () {
+    useFetchFixture();
 
     // -----------------------------------------------------------------------
     // Strict shape: the same non-number heights THROW at/after the oracle-shape
@@ -223,6 +253,10 @@ describe('UtxoTracker boundary tests @regression @tier1', function () {
             assert.strictEqual(await t.getFirstSeen('never', { strictShape: true }), null);
         });
     });
+});
+
+describe('UtxoTracker boundary tests @regression @tier1', function () {
+    useFetchFixture();
 
     // -----------------------------------------------------------------------
     // Malformed-but-plausible address inputs are forwarded verbatim
@@ -250,6 +284,10 @@ describe('UtxoTracker boundary tests @regression @tier1', function () {
             assert.strictEqual(sent.params.address, huge);
         });
     });
+});
+
+describe('UtxoTracker boundary tests @regression @tier1', function () {
+    useFetchFixture();
 
     // -----------------------------------------------------------------------
     // Constructor enabled/disabled boundary on the port value
