@@ -66,9 +66,9 @@ function makeHandler(opts){
     let indexerDb = createMockDb();
     let mapper    = { createMappings: sinon.stub().resolves() };
 
-    // The two writers raised as seam gaps (see the handler's file header): the
-    // xbridges action row and the tokens.bridged setter. Stubbed here so the payload
-    // each one must receive is pinned by test before either is built.
+    // The two database writers the handler calls (see its file header): the
+    // xbridges action row in src/db/xbridges.js and the tokens.bridged setter in
+    // src/db/tokens.js. Stubbed here so the payload each one receives is pinned by test.
     indexerDb.createXbridge    = sinon.stub().resolves();
     indexerDb.setTokenBridged  = sinon.stub().resolves();
 
