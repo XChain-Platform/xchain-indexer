@@ -305,8 +305,15 @@ describe('Utility.validateOracleFee() - @regression @tier1', function () {
             // waiver is keyed on FEE_PROBE, which only a synthetic dry-run tx ever carries.
             const fs   = require('fs');
             const path = require('path');
-            const src  = fs.readFileSync(
-                path.resolve(__dirname, '../../src/actions/dispenser.js'), 'utf8');
+            // The DISPENSER handler is an entry plus parts: dispenser.js keeps the class and
+            // the two content-pinned gates, and the fee branch lives in
+            // dispenser/validate_format.js. Entry and every part are read as one text, so a
+            // phase that moves between them stays visible instead of reading as absent.
+            const PARTS = path.resolve(__dirname, '../../src/actions/dispenser');
+            const src  = [path.resolve(__dirname, '../../src/actions/dispenser.js')]
+                .concat(fs.readdirSync(PARTS).filter(f => f.endsWith('.js')).sort()
+                    .map(f => path.join(PARTS, f)))
+                .map(f => fs.readFileSync(f, 'utf8')).join('\n');
             assert.ok(/data\['FEE_PROBE'\]\s*\n?\s*\?\s*await this\.util\.quoteOracleFee\(/.test(src),
                 'a FEE_PROBE run must call quoteOracleFee');
             assert.ok(/:\s*await this\.util\.validateOracleFee\(/.test(src),
