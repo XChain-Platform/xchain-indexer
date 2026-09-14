@@ -103,6 +103,81 @@ function makeMatchInfo(overrides = {}) {
     }, overrides);
 }
 
+let indexer, handler;
+
+function setupSmallestUnit() {
+    indexer = createMockIndexer();
+    const actionsCtx = makeActionsCtx(indexer);
+    handler = new OrderMatch(actionsCtx);
+
+    // Order has only 1 unit left to give; GIVE_PRICE = 1 so GET_PRICE = 1 (1:1 ratio)
+    const orderInfo = makeOrderInfo({
+        GIVE_AMOUNT:    '1',
+        GIVE_REMAINING: '1',
+        GIVE_PRICE:     '1',    // 1 RAREPEPE / 1 PEPECASH
+        GET_AMOUNT:     '1',
+        GET_REMAINING:  '1',
+        GET_PRICE:      '1',
+    });
+
+    // Match offers a compatible price (GET_PRICE = 1 == GIVE_PRICE = 1)
+    const matchInfo = makeMatchInfo({
+        GIVE_AMOUNT:    '1',
+        GIVE_REMAINING: '1',
+        GIVE_PRICE:     '1',
+        GET_AMOUNT:     '1',
+        GET_REMAINING:  '1',
+        GET_PRICE:      '1',
+    });
+
+    indexer.indexerDb.getOrderInfo.resolves(orderInfo);
+    indexer.indexerDb.findOrderMatches.resolves([matchInfo]);
+    indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'RAREPEPE', DECIMALS: 0 }));
+    indexer.indexerDb.createActionIndex.resolves(10);
+}
+
+function setupMultipleMatches() {
+    indexer = createMockIndexer();
+    const actionsCtx = makeActionsCtx(indexer);
+    handler = new OrderMatch(actionsCtx);
+
+    const orderInfo = makeOrderInfo({
+        GIVE_AMOUNT:    '200',
+        GIVE_REMAINING: '200',
+        GET_AMOUNT:     '2000',
+        GET_REMAINING:  '2000',
+        GIVE_PRICE:     '0.1',
+        GET_PRICE:      '10',
+    });
+
+    // findOrderMatches returns matches sorted by price desc, action_index asc
+    // matchA has lower GET_PRICE (better for the order) → processed first
+    const matchA = makeMatchInfo({
+        ACTION_INDEX:   2,
+        GIVE_AMOUNT:    '1000',
+        GIVE_REMAINING: '1000',
+        GET_AMOUNT:     '100',
+        GET_REMAINING:  '100',
+        GET_PRICE:      '0.05',  // better: asking less than order offers (0.1)
+    });
+
+    // matchB has a slightly worse price but still compatible
+    const matchB = makeMatchInfo({
+        ACTION_INDEX:   3,
+        GIVE_AMOUNT:    '1000',
+        GIVE_REMAINING: '1000',
+        GET_AMOUNT:     '100',
+        GET_REMAINING:  '100',
+        GET_PRICE:      '0.09',  // still below 0.1 → also valid
+    });
+
+    indexer.indexerDb.getOrderInfo.resolves(orderInfo);
+    // Simulate DB returning matchA first (better price), then matchB
+    indexer.indexerDb.findOrderMatches.resolves([matchA, matchB]);
+    indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'RAREPEPE', DECIMALS: 0 }));
+    indexer.indexerDb.createActionIndex.resolves(10);
+}
+
 // ---------------------------------------------------------------------------
 // Suite
 // ---------------------------------------------------------------------------
@@ -148,7 +223,9 @@ describe('ORDER_MATCH price-boundary tests @regression @tier2', function () {
                 'expected createOrderMatch to be called exactly once');
         });
     });
+});
 
+describe('ORDER_MATCH price-boundary tests @regression @tier2', function () {
     // -----------------------------------------------------------------------
     // Match price slightly better → match succeeds
     // -----------------------------------------------------------------------
@@ -188,7 +265,9 @@ describe('ORDER_MATCH price-boundary tests @regression @tier2', function () {
                 'expected createOrderMatch to be called when match price is better');
         });
     });
+});
 
+describe('ORDER_MATCH price-boundary tests @regression @tier2', function () {
     // -----------------------------------------------------------------------
     // Match price slightly worse → match skipped
     // -----------------------------------------------------------------------
@@ -227,44 +306,15 @@ describe('ORDER_MATCH price-boundary tests @regression @tier2', function () {
                 'expected createOrderMatch NOT to be called when match price exceeds order price');
         });
     });
+});
 
+describe('ORDER_MATCH price-boundary tests @regression @tier2', function () {
     // -----------------------------------------------------------------------
     // GIVE_REMAINING = 1 (smallest unit) → order completes
     // -----------------------------------------------------------------------
 
     describe('ORD-04: Order with GIVE_REMAINING = 1 fills and completes', function () {
-        let indexer, actionsCtx, handler;
-
-        beforeEach(function () {
-            indexer    = createMockIndexer();
-            actionsCtx = makeActionsCtx(indexer);
-            handler    = new OrderMatch(actionsCtx);
-
-            // Order has only 1 unit left to give; GIVE_PRICE = 1 so GET_PRICE = 1 (1:1 ratio)
-            const orderInfo = makeOrderInfo({
-                GIVE_AMOUNT:    '1',
-                GIVE_REMAINING: '1',
-                GIVE_PRICE:     '1',    // 1 RAREPEPE / 1 PEPECASH
-                GET_AMOUNT:     '1',
-                GET_REMAINING:  '1',
-                GET_PRICE:      '1',
-            });
-
-            // Match offers a compatible price (GET_PRICE = 1 == GIVE_PRICE = 1)
-            const matchInfo = makeMatchInfo({
-                GIVE_AMOUNT:    '1',
-                GIVE_REMAINING: '1',
-                GIVE_PRICE:     '1',
-                GET_AMOUNT:     '1',
-                GET_REMAINING:  '1',
-                GET_PRICE:      '1',
-            });
-
-            indexer.indexerDb.getOrderInfo.resolves(orderInfo);
-            indexer.indexerDb.findOrderMatches.resolves([matchInfo]);
-            indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'RAREPEPE', DECIMALS: 0 }));
-            indexer.indexerDb.createActionIndex.resolves(10);
-        });
+        beforeEach(setupSmallestUnit);
 
         afterEach(function () { sinon.restore(); });
 
@@ -289,55 +339,15 @@ describe('ORDER_MATCH price-boundary tests @regression @tier2', function () {
                 'expected at least one createOrderStatus call with status "complete"');
         });
     });
+});
 
+describe('ORDER_MATCH price-boundary tests @regression @tier2', function () {
     // -----------------------------------------------------------------------
     // Multiple matches, best price matched first
     // -----------------------------------------------------------------------
 
     describe('ORD-05: Multiple matches returned, better price processed first', function () {
-        let indexer, actionsCtx, handler;
-
-        beforeEach(function () {
-            indexer    = createMockIndexer();
-            actionsCtx = makeActionsCtx(indexer);
-            handler    = new OrderMatch(actionsCtx);
-
-            const orderInfo = makeOrderInfo({
-                GIVE_AMOUNT:    '200',
-                GIVE_REMAINING: '200',
-                GET_AMOUNT:     '2000',
-                GET_REMAINING:  '2000',
-                GIVE_PRICE:     '0.1',
-                GET_PRICE:      '10',
-            });
-
-            // findOrderMatches returns matches sorted by price desc, action_index asc
-            // matchA has lower GET_PRICE (better for the order) → processed first
-            const matchA = makeMatchInfo({
-                ACTION_INDEX:   2,
-                GIVE_AMOUNT:    '1000',
-                GIVE_REMAINING: '1000',
-                GET_AMOUNT:     '100',
-                GET_REMAINING:  '100',
-                GET_PRICE:      '0.05',  // better: asking less than order offers (0.1)
-            });
-
-            // matchB has a slightly worse price but still compatible
-            const matchB = makeMatchInfo({
-                ACTION_INDEX:   3,
-                GIVE_AMOUNT:    '1000',
-                GIVE_REMAINING: '1000',
-                GET_AMOUNT:     '100',
-                GET_REMAINING:  '100',
-                GET_PRICE:      '0.09',  // still below 0.1 → also valid
-            });
-
-            indexer.indexerDb.getOrderInfo.resolves(orderInfo);
-            // Simulate DB returning matchA first (better price), then matchB
-            indexer.indexerDb.findOrderMatches.resolves([matchA, matchB]);
-            indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'RAREPEPE', DECIMALS: 0 }));
-            indexer.indexerDb.createActionIndex.resolves(10);
-        });
+        beforeEach(setupMultipleMatches);
 
         afterEach(function () { sinon.restore(); });
 
