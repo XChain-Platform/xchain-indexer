@@ -157,7 +157,9 @@ describe('[regression:p0] UtxoTracker DISPENSER fresh-address oracle @regression
             global.fetch = makeFetch({ jsonrpc: '2.0', id: 1, result: { height: 0 } });
             assert.deepStrictEqual(await t.getFirstSeen('genesis', { strictShape: true }), { height: 0 });
         });
+    });
 
+    describe('shape-violating answer at/after the oracle-shape flag-day (strictShape)', function(){
         it('the strict flip is opt-in: no option object is the legacy fail-open null', async function(){
             // Every caller that does not pass the flag keeps the deployed shape, so
             // adding the gate cannot move a verdict on its own.

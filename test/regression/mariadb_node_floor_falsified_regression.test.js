@@ -72,6 +72,10 @@ describe('Regression: mariadb does not need the Node 22.12 require(esm) floor @r
             'require(\'mariadb\') hit ERR_REQUIRE_ESM even though it resolves to a .cjs file: ' +
             result.stderr);
     });
+});
+
+describe('Regression: mariadb does not need the Node 22.12 require(esm) floor @regression', function () {
+    this.timeout(20000);
 
     it('control: a genuinely ESM-only package DOES fail the same way, proving the check above is not vacuous', function () {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'esm-only-control-'));

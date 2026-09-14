@@ -36,7 +36,6 @@ const assert = require('assert');
 const gate   = require('../../src/retraction_signing_activation.js');
 
 describe('[regression:p0] Signed-retraction flag-day @regression @tier1', function () {
-
     describe('activation map (arming heights are a fleet-wide contract)', function () {
         it('mainnet is armed to the ratified 963000 BTC snapshot_block anchor', function () {
             // 963000 is the ratified anchor every hub/indexer/explorer deploy is
@@ -51,7 +50,9 @@ describe('[regression:p0] Signed-retraction flag-day @regression @tier1', functi
             assert.strictEqual(gate.RETRACTION_SIGNING_ACTIVATION.regtest, 0);
         });
     });
+});
 
+describe('[regression:p0] Signed-retraction flag-day @regression @tier1', function () {
     describe('isRetractionSigningActive', function () {
         it('is inactive strictly below the mainnet anchor and active at/above it (inclusive flag-day)', function () {
             const m = gate.RETRACTION_SIGNING_ACTIVATION.mainnet;
