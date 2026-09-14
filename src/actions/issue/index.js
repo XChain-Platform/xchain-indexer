@@ -71,21 +71,21 @@
 // Token-bridge opt-in (ISSUE format 7), the policy-inheritance flag day and the tick
 // namespace flag day. Standalone height-keyed modules, not protocol_changes.js entries,
 // because the hub, SDK and explorer read the same maps; see the module headers.
-const tokenBridgeActivation = require('../token_bridge_activation.js');
-const tokenPolicyActivation = require('../token_policy_activation.js');
-const tickNamespaceActivation = require('../tick_namespace_activation.js');
+const tokenBridgeActivation = require('../../token_bridge_activation.js');
+const tokenPolicyActivation = require('../../token_policy_activation.js');
+const tickNamespaceActivation = require('../../tick_namespace_activation.js');
 
 // Ceiling on the membership of a list a bridged token may carry. Not a hash input:
 // enforced here and by the hub's refusal to sign a larger snapshot.
-const { XPOLICY_MAX_MEMBERS } = require('../protocol/constants.js');
+const { XPOLICY_MAX_MEMBERS } = require('../../protocol/constants.js');
 
 // Chain tickers held for roots XChain has not integrated yet. The membership test is
 // taken from the module rather than re-derived here, so the case folding it applies
 // lives with the list it folds. A name leaves the list only by moving into COINS, and both
 // refuse identically, so nothing re-verdicts on the move.
-const { isReservedFutureRoot } = require('../consensus/reservedRoots.js');
+const { isReservedFutureRoot } = require('../../consensus/reservedRoots.js');
 
-const { getLogger } = require('../observability/index.js');
+const { getLogger } = require('../../observability/index.js');
 // The floor on a NEW top-level name at/above TICK_NAMESPACE_ACTIVATION. Measured
 // on the FULL tick, so a child such as ABCD.X passes on its own length. Creation only:
 // every one-to-three character row issued before the flag keeps its owner, its supply and

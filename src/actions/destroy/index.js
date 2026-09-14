@@ -29,9 +29,9 @@
  * 
  ********************************************************************/
 
-const consolidationLegAmount = require('../consolidation_leg_amount_activation.js');
+const consolidationLegAmount = require('../../consolidation_leg_amount_activation.js');
 
-const { getLogger } = require('../observability/index.js');
+const { getLogger } = require('../../observability/index.js');
 class Destroy {
 
     // Handle constructing a class instance
