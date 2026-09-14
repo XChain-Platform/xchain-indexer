@@ -55,7 +55,7 @@ function makeDb({ pubkeyId = 7, validId = 1, doQuery } = {}) {
         getPubkeyId: sinon.stub().resolves(pubkeyId),
         getStatusId: sinon.stub().resolves(validId),
         doQuery:     doQuery || sinon.stub().resolves([]),
-        _resolveActiveStakeSourceId: Database.prototype._resolveActiveStakeSourceId,
+        resolveActiveStakeSourceId:  Database.prototype.resolveActiveStakeSourceId,
         createValidatorReward:       Database.prototype.createValidatorReward,
     };
 }

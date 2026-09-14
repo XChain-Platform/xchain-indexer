@@ -51,7 +51,7 @@ module.exports = {
     // replicated state) byte-identical across the recovery boundary. The earlier
     // writers took the latest stake by action_index with no predicates, which could
     // diverge from the archive and break byte-identical recovery.
-    async _resolveActiveStakeSourceId(pubkey_id, blockIndex){
+    async resolveActiveStakeSourceId(pubkey_id, blockIndex){
         if(pubkey_id === null || pubkey_id === undefined) return null;
         let blockIdx = Number(blockIndex);
         let valid_id = await this.getStatusId('valid');

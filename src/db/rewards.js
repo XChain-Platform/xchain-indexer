@@ -197,8 +197,8 @@ module.exports = {
             return false;
         }
         // Strict active-row source resolution at this reward's block, matching the
-        // ANCHOR archive + recovery (see _resolveActiveStakeSourceId).
-        let source_id = await this._resolveActiveStakeSourceId(pubkey_id, blockIndex);
+        // ANCHOR archive + recovery (see resolveActiveStakeSourceId).
+        let source_id = await this.resolveActiveStakeSourceId(pubkey_id, blockIndex);
         if(source_id === null || source_id === undefined){
             getLogger().warn('createValidatorReward: no active stake or delegation for pubkey ' + pubkeyHex + ' at block ' + blockIndex);
             return false;

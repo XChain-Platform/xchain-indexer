@@ -48,7 +48,7 @@ module.exports = {
         // active-row resolution matching createValidatorReward + the ANCHOR
         // archive/recovery.
         let sourceBlock = (setBlock === undefined || setBlock === null) ? blockIndex : setBlock;
-        let source_id = await this._resolveActiveStakeSourceId(pubkey_id, sourceBlock);
+        let source_id = await this.resolveActiveStakeSourceId(pubkey_id, sourceBlock);
         if(source_id === null || source_id === undefined){
             getLogger().warn('createNodeProofVerification: no active stake or delegation for pubkey ' + pubkeyHex + ' at block ' + sourceBlock);
             return false;

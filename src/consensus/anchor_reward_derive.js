@@ -15,7 +15,7 @@
  * ANCHOR is DOGE-only, but the reward is a COLLECT-spendable validator_rewards row and
  * COLLECT is BTC-only, and capability staking (hence the stake source createValidatorReward
  * resolves) is BTC-only. So the DOGE indexer can never write this reward (its
- * _resolveActiveStakeSourceId always returns null -> silent drop). Under Option C the hub
+ * resolveActiveStakeSourceId always returns null -> silent drop). Under Option C the hub
  * publishes the XANCPUB publisher-attestation quorum to the append-only, hub-mirrored
  * `anchor_reward_attestations` table; the BTC indexer keys derivation on those mirrored rows.
  *

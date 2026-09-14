@@ -145,13 +145,13 @@ describe('Database.createValidatorReward() @regression @tier1', function () {
         assert.strictEqual(result, false);
     });
 
-    // Source resolution moved into _resolveActiveStakeSourceId (strict active-row
+    // Source resolution moved into resolveActiveStakeSourceId (strict active-row
     // predicates; covered in reward_source_resolution.test.js). These cases stub the
     // resolver so they exercise createValidatorReward's own insert/return logic only.
     it('returns false when no active source resolves for the pubkey', async function () {
         const db = makeDb();
         sinon.stub(db, 'getPubkeyId').resolves(3);
-        sinon.stub(db, '_resolveActiveStakeSourceId').resolves(null);
+        sinon.stub(db, 'resolveActiveStakeSourceId').resolves(null);
         const dq = sinon.stub(db, 'doQuery');
         const result = await db.createValidatorReward('deadbeef', 1, 'oracle_round', '10', 100);
         assert.strictEqual(result, false);
@@ -161,7 +161,7 @@ describe('Database.createValidatorReward() @regression @tier1', function () {
     it('returns true and inserts the reward when a source resolves', async function () {
         const db = makeDb();
         sinon.stub(db, 'getPubkeyId').resolves(3);
-        sinon.stub(db, '_resolveActiveStakeSourceId').resolves(2);
+        sinon.stub(db, 'resolveActiveStakeSourceId').resolves(2);
         const dq = sinon.stub(db, 'doQuery').resolves([]);
         const result = await db.createValidatorReward('deadbeef', 1, 'oracle_round', '10', 100);
         assert.strictEqual(result, true);
@@ -171,7 +171,7 @@ describe('Database.createValidatorReward() @regression @tier1', function () {
     it('writes the resolved source_id into the reward row', async function () {
         const db = makeDb();
         sinon.stub(db, 'getPubkeyId').resolves(3);
-        sinon.stub(db, '_resolveActiveStakeSourceId').resolves(7); // e.g. resolved via a DELEGATE v0 key
+        sinon.stub(db, 'resolveActiveStakeSourceId').resolves(7); // e.g. resolved via a DELEGATE v0 key
         const dq = sinon.stub(db, 'doQuery').resolves([]);
         const result = await db.createValidatorReward('deadbeef', 1, 'oracle_round', '10', 100);
         assert.strictEqual(result, true);
@@ -183,7 +183,7 @@ describe('Database.createValidatorReward() @regression @tier1', function () {
     it('upsert=true emits ON DUPLICATE KEY UPDATE so the deterministic writer wins', async function () {
         const db = makeDb();
         sinon.stub(db, 'getPubkeyId').resolves(3);
-        sinon.stub(db, '_resolveActiveStakeSourceId').resolves(2);
+        sinon.stub(db, 'resolveActiveStakeSourceId').resolves(2);
         const dq = sinon.stub(db, 'doQuery').resolves([]);
         const result = await db.createValidatorReward('deadbeef', 1, 'oracle_round', '10', 100, true);
         assert.strictEqual(result, true);
@@ -200,7 +200,7 @@ describe('Database.createValidatorReward() @regression @tier1', function () {
     it('persists the materialization block when the caller passes one, and NULL otherwise', async function () {
         const db = makeDb();
         sinon.stub(db, 'getPubkeyId').resolves(3);
-        sinon.stub(db, '_resolveActiveStakeSourceId').resolves(2);
+        sinon.stub(db, 'resolveActiveStakeSourceId').resolves(2);
         const dq = sinon.stub(db, 'doQuery').resolves([]);
 
         await db.createValidatorReward('deadbeef', 1, 'anchor_BTC', '10', 850000, true, 962400);
@@ -223,7 +223,7 @@ describe('Database.createValidatorReward() @regression @tier1', function () {
     it('writes round_qualifier 0 for a non-archive reward and when the caller omits it', async function () {
         const db = makeDb();
         sinon.stub(db, 'getPubkeyId').resolves(3);
-        sinon.stub(db, '_resolveActiveStakeSourceId').resolves(2);
+        sinon.stub(db, 'resolveActiveStakeSourceId').resolves(2);
         const dq = sinon.stub(db, 'doQuery').resolves([]);
 
         await db.createValidatorReward('deadbeef', 1, 'anchor_BTC', '10', 850000, true, 962400);
@@ -238,7 +238,7 @@ describe('Database.createValidatorReward() @regression @tier1', function () {
     it('carries the archive reward snapshot_block through as its round_qualifier', async function () {
         const db = makeDb();
         sinon.stub(db, 'getPubkeyId').resolves(3);
-        sinon.stub(db, '_resolveActiveStakeSourceId').resolves(2);
+        sinon.stub(db, 'resolveActiveStakeSourceId').resolves(2);
         const dq = sinon.stub(db, 'doQuery').resolves([]);
 
         // Two archive anchors can carry round_reference 3 across a hub rebase; the qualifier is

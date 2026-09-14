@@ -16,7 +16,7 @@
  * test/unit/reward_source_resolution.test.js
  *
  * Locks the strict active-row source resolution shared by the reward writers
- * (createValidatorReward, createNodeProofVerification) and _resolveActiveStakeSourceId.
+ * (createValidatorReward, createNodeProofVerification) and resolveActiveStakeSourceId.
  *
  * validator_rewards is block-scoped replicated/hashed state, so the source_id
  * stored during block processing must equal the source the ANCHOR archive pins
@@ -45,7 +45,7 @@ function makeDb({ pubkeyId = 7, validId = 1, doQuery } = {}) {
         getPubkeyId: sinon.stub().resolves(pubkeyId),
         getStatusId: sinon.stub().resolves(validId),
         doQuery:     doQuery || sinon.stub().resolves([]),
-        _resolveActiveStakeSourceId: Database.prototype._resolveActiveStakeSourceId,
+        resolveActiveStakeSourceId:  Database.prototype.resolveActiveStakeSourceId,
         createValidatorReward:       Database.prototype.createValidatorReward,
         createNodeProofVerification: Database.prototype.createNodeProofVerification,
     };
@@ -57,7 +57,7 @@ describe('_resolveActiveStakeSourceId() strict active-row resolution', function 
     it('stakes leg: slash exclusion applied, no recording-block_index gate', async function () {
         const doQuery = sinon.stub().resolves([{ source_id: 99 }]);
         const db = makeDb({ doQuery });
-        const id = await db._resolveActiveStakeSourceId.call(db, 7, 850000);
+        const id = await db.resolveActiveStakeSourceId.call(db, 7, 850000);
         assert.strictEqual(id, 99);
         assert.strictEqual(doQuery.callCount, 1); // stakes leg hit, no delegation fallback
         const sql = doQuery.firstCall.args[0];
@@ -73,7 +73,7 @@ describe('_resolveActiveStakeSourceId() strict active-row resolution', function 
         doQuery.onCall(0).resolves([]);
         doQuery.onCall(1).resolves([{ source_id: 42 }]);
         const db = makeDb({ doQuery });
-        const id = await db._resolveActiveStakeSourceId.call(db, 7, 900);
+        const id = await db.resolveActiveStakeSourceId.call(db, 7, 900);
         assert.strictEqual(id, 42);
         const delSql = doQuery.secondCall.args[0];
         assert.match(delSql, /FROM delegations/);
@@ -84,14 +84,14 @@ describe('_resolveActiveStakeSourceId() strict active-row resolution', function 
 
     it('returns null when neither stake nor delegation is active', async function () {
         const db = makeDb({ doQuery: sinon.stub().resolves([]) });
-        assert.strictEqual(await db._resolveActiveStakeSourceId.call(db, 7, 900), null);
+        assert.strictEqual(await db.resolveActiveStakeSourceId.call(db, 7, 900), null);
     });
 
     it('returns null for a null pubkey id or missing valid status', async function () {
         const db1 = makeDb();
-        assert.strictEqual(await db1._resolveActiveStakeSourceId.call(db1, null, 900), null);
+        assert.strictEqual(await db1.resolveActiveStakeSourceId.call(db1, null, 900), null);
         const db2 = makeDb({ validId: null });
-        assert.strictEqual(await db2._resolveActiveStakeSourceId.call(db2, 7, 900), null);
+        assert.strictEqual(await db2.resolveActiveStakeSourceId.call(db2, 7, 900), null);
     });
 });
 
@@ -166,7 +166,7 @@ describe('reward writers resolve source strictly (recovery byte-identity)', func
             const resolveCall = doQuery.getCalls().find(c => /FROM stakes/.test(c.args[0]));
             const insertCall  = doQuery.getCalls()
                 .find(c => /full_node_verifications/.test(c.args[0]) && /INSERT/i.test(c.args[0]));
-            // _resolveActiveStakeSourceId threads the block into every positional slot
+            // resolveActiveStakeSourceId threads the block into every positional slot
             // but the two status ids, so the whole set pins the height it asked about.
             return { source: resolveCall.args[1][2], recorded: insertCall.args[1][6] };
         }
