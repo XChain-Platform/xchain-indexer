@@ -24,19 +24,9 @@ const assert = require('assert');
 const fc = require('fast-check');
 const { NUM_RUNS, createMockIndexer, bindNormalize } = require('../setup/harness');
 
-describe('Tier 1 - normalizeDataValues @tier1', function () {
-    this.timeout(0);
-    let normalize, config, util;
+let normalize, config, util;
 
-    before(function () {
-        normalize = bindNormalize();
-        const indexer = createMockIndexer();
-        config = indexer.config;
-        util = indexer.util;
-    });
-
-    // Arbitrary that produces a data object with known field names populated with random values
-    function fuzzedData() {
+function fuzzedData() {
         const fuzzValue = fc.oneof(
             fc.string({ minLength: 0, maxLength: 300 }),
             fc.integer(),
@@ -78,12 +68,8 @@ describe('Tier 1 - normalizeDataValues @tier1', function () {
         }));
     }
 
-    // normalizeDataValues operates on a shallow COPY and RETURNS it (it stopped mutating
-    // in place to fix an AIRDROP multi-tick corruption bug); every real caller reassigns
-    // from the return value. These properties therefore assert on `data = normalize(data)`,
-    // not the untouched input - reading the original hid the range/coercion effects and let
-    // an out-of-range DECIMALS pass (normalize nulls it, but only on the returned copy).
-    describe('never throws', function () {
+function registerNormalizeGroup1() {
+describe('never throws', function () {
         it('returns without throwing for fuzzed data objects', function () {
             fc.assert(fc.property(
                 fuzzedData(),
@@ -109,8 +95,10 @@ describe('Tier 1 - normalizeDataValues @tier1', function () {
             ), { numRuns: NUM_RUNS });
         });
     });
+}
 
-    describe('NUMBER_FIELDS post-conditions', function () {
+function registerNormalizeGroup2() {
+describe('NUMBER_FIELDS post-conditions', function () {
         it('all NUMBER_FIELDS are null or numeric after normalization (all actions)', function () {
             fc.assert(fc.property(
                 fuzzedData(),
@@ -128,8 +116,10 @@ describe('Tier 1 - normalizeDataValues @tier1', function () {
             ), { numRuns: NUM_RUNS });
         });
     });
+}
 
-    describe('LOCK_FIELDS post-conditions', function () {
+function registerNormalizeGroup3() {
+describe('LOCK_FIELDS post-conditions', function () {
         it('all LOCK_FIELDS are null, 0, or 1 after normalization', function () {
             fc.assert(fc.property(
                 fuzzedData(),
@@ -147,8 +137,10 @@ describe('Tier 1 - normalizeDataValues @tier1', function () {
             ), { numRuns: NUM_RUNS });
         });
     });
+}
 
-    describe('DECIMALS post-conditions', function () {
+function registerNormalizeGroup4() {
+describe('DECIMALS post-conditions', function () {
         it('DECIMALS is null or in [0, 18] after normalization', function () {
             fc.assert(fc.property(
                 fuzzedData(),
@@ -165,8 +157,10 @@ describe('Tier 1 - normalizeDataValues @tier1', function () {
             ), { numRuns: NUM_RUNS });
         });
     });
+}
 
-    describe('string truncation post-conditions', function () {
+function registerNormalizeGroup5() {
+describe('string truncation post-conditions', function () {
         it('MEMO is truncated to at most 250 chars', function () {
             fc.assert(fc.property(
                 fuzzedData(),
@@ -219,8 +213,10 @@ describe('Tier 1 - normalizeDataValues @tier1', function () {
             ), { numRuns: Math.floor(NUM_RUNS / 2) });
         });
     });
+}
 
-    describe('string truncation post-conditions', function () {
+function registerNormalizeGroup6() {
+describe('string truncation post-conditions', function () {
         it('FILE NAME is truncated to at most 250 chars', function () {
             fc.assert(fc.property(
                 fuzzedData().filter(d => d.ACTION === 'FILE'),
@@ -247,4 +243,34 @@ describe('Tier 1 - normalizeDataValues @tier1', function () {
             ), { numRuns: Math.floor(NUM_RUNS / 2) });
         });
     });
+}
+
+describe('Tier 1 - normalizeDataValues @tier1', function () {
+    this.timeout(0);
+
+    before(function () {
+        normalize = bindNormalize();
+        const indexer = createMockIndexer();
+        config = indexer.config;
+        util = indexer.util;
+    });
+
+    // Arbitrary that produces a data object with known field names populated with random values
+
+    // normalizeDataValues operates on a shallow COPY and RETURNS it (it stopped mutating
+    // in place to fix an AIRDROP multi-tick corruption bug); every real caller reassigns
+    // from the return value. These properties therefore assert on `data = normalize(data)`,
+    // not the untouched input - reading the original hid the range/coercion effects and let
+    // an out-of-range DECIMALS pass (normalize nulls it, but only on the returned copy).
+    registerNormalizeGroup1()
+
+    registerNormalizeGroup2()
+
+    registerNormalizeGroup3()
+
+    registerNormalizeGroup4()
+
+    registerNormalizeGroup5()
+
+    registerNormalizeGroup6()
 });

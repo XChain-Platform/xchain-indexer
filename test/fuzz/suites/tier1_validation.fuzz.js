@@ -26,15 +26,10 @@ const { NUM_RUNS, createMockIndexer } = require('../setup/harness');
 const { validAmount, invalidAmount, anyAmount, decimalsValue } = require('../generators/helpers/amounts');
 const { anyAddress } = require('../generators/helpers/addresses');
 
-describe('Tier 1 - Validation functions @tier1', function () {
-    this.timeout(0);
-    let util;
+let util;
 
-    before(function () {
-        util = createMockIndexer().util;
-    });
-
-    describe('isValidAmountFormat(decimals, amount)', function () {
+function registerValidationGroup1() {
+describe('isValidAmountFormat(decimals, amount)', function () {
         it('never throws for any (decimals, amount) pair', function () {
             fc.assert(fc.property(
                 decimalsValue(), anyAmount(),
@@ -82,8 +77,10 @@ describe('Tier 1 - Validation functions @tier1', function () {
             ), { numRuns: NUM_RUNS });
         });
     });
+}
 
-    describe('isValidFiatFormat(decimals, amount)', function () {
+function registerValidationGroup2() {
+describe('isValidFiatFormat(decimals, amount)', function () {
         it('never throws for any (decimals, amount) pair', function () {
             fc.assert(fc.property(
                 decimalsValue(), anyAmount(),
@@ -104,8 +101,10 @@ describe('Tier 1 - Validation functions @tier1', function () {
             ), { numRuns: NUM_RUNS });
         });
     });
+}
 
-    describe('isValidLockValue(value)', function () {
+function registerValidationGroup3() {
+describe('isValidLockValue(value)', function () {
         it('never throws for primitive inputs', function () {
             fc.assert(fc.property(
                 fc.oneof(
@@ -139,8 +138,10 @@ describe('Tier 1 - Validation functions @tier1', function () {
             assert.strictEqual(util.isValidLockValue('1'), true);
         });
     });
+}
 
-    describe('isValidTransactionHash(hash)', function () {
+function registerValidationGroup4() {
+describe('isValidTransactionHash(hash)', function () {
         it('never throws for string inputs', function () {
             fc.assert(fc.property(
                 fc.oneof(fc.string(), fc.integer().map(String), fc.constant(''), fc.constant(null)),
@@ -161,8 +162,10 @@ describe('Tier 1 - Validation functions @tier1', function () {
             ), { numRuns: NUM_RUNS });
         });
     });
+}
 
-    describe('isCryptoAddress(address)', function () {
+function registerValidationGroup5() {
+describe('isCryptoAddress(address)', function () {
         it('never throws for string inputs', function () {
             fc.assert(fc.property(
                 fc.oneof(fc.string(), fc.integer().map(String), fc.constant(''), fc.constant(null)),
@@ -199,8 +202,10 @@ describe('Tier 1 - Validation functions @tier1', function () {
             ), { numRuns: NUM_RUNS });
         });
     });
+}
 
-    describe('isNumeric(value)', function () {
+function registerValidationGroup6() {
+describe('isNumeric(value)', function () {
         it('never throws for primitive inputs', function () {
             fc.assert(fc.property(
                 fc.oneof(
@@ -236,8 +241,10 @@ describe('Tier 1 - Validation functions @tier1', function () {
             assert.strictEqual(util.isNumeric(-Infinity), false);
         });
     });
+}
 
-    describe('isInteger(value)', function () {
+function registerValidationGroup7() {
+describe('isInteger(value)', function () {
         it('never throws for string and number inputs', function () {
             fc.assert(fc.property(
                 fc.oneof(
@@ -271,8 +278,10 @@ describe('Tier 1 - Validation functions @tier1', function () {
             ), { numRuns: NUM_RUNS });
         });
     });
+}
 
-    describe('isNull(value)', function () {
+function registerValidationGroup8() {
+describe('isNull(value)', function () {
         it('never throws for primitive inputs', function () {
             fc.assert(fc.property(
                 fc.oneof(
@@ -295,8 +304,10 @@ describe('Tier 1 - Validation functions @tier1', function () {
             assert.strictEqual(util.isNull('a'), false);
         });
     });
+}
 
-    describe('isValidValue(value, valid)', function () {
+function registerValidationGroup9() {
+describe('isValidValue(value, valid)', function () {
         it('never throws for primitive (value, valid) pairs', function () {
             fc.assert(fc.property(
                 fc.oneof(fc.string(), fc.integer(), fc.double({ noNaN: false }), fc.constant(null)),
@@ -310,8 +321,10 @@ describe('Tier 1 - Validation functions @tier1', function () {
             ), { numRuns: NUM_RUNS });
         });
     });
+}
 
-    describe('getFormatVersion(format)', function () {
+function registerValidationGroup10() {
+describe('getFormatVersion(format)', function () {
         it('never throws for string, number, null, undefined inputs', function () {
             fc.assert(fc.property(
                 fc.oneof(
@@ -356,4 +369,32 @@ describe('Tier 1 - Validation functions @tier1', function () {
             ), { numRuns: 256 });
         });
     });
+}
+
+describe('Tier 1 - Validation functions @tier1', function () {
+    this.timeout(0);
+
+    before(function () {
+        util = createMockIndexer().util;
+    });
+
+    registerValidationGroup1()
+
+    registerValidationGroup2()
+
+    registerValidationGroup3()
+
+    registerValidationGroup4()
+
+    registerValidationGroup5()
+
+    registerValidationGroup6()
+
+    registerValidationGroup7()
+
+    registerValidationGroup8()
+
+    registerValidationGroup9()
+
+    registerValidationGroup10()
 });
