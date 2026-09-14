@@ -328,7 +328,7 @@ module.exports = {
         if(undeclared.length){
             getLogger().warn('Schema shape drift on ' + table + ': live column(s) ' + undeclared.join(', ') +
                 ' are declared by NO SQL source. Not auto-healed (never DROP a column we did not create); ' +
-                'converge with a dated migration via node src/migrate.js, or restore the declaration to ' + file + '.');
+                'converge with a dated migration via node src/migration/migrate.js, or restore the declaration to ' + file + '.');
             recordShapeDrift(this.schemaShapeDrift, table, 'columns', undeclared);
         }
     },

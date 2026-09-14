@@ -316,7 +316,7 @@ async function runSyntheticPersisted(opts){
 }
 
 async function runDb(opts){
-    // Credentials come from the service environment exactly as src/migrate.js reads
+    // Credentials come from the service environment exactly as src/migration/migrate.js reads
     // them: never from the command line, never printed. --db only picks the DATABASE
     // NAME (so one host can benchmark any of its chains); everything else is the
     // running indexer's own configuration.

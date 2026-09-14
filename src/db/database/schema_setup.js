@@ -192,7 +192,7 @@ module.exports = {
     // needing dedup) must be `manual`.
     //
     // opts.includeManual=true also applies pending `manual` migrations - that's the
-    // operator-initiated path (`node src/migrate.js`). The whole run holds a DB-scoped
+    // operator-initiated path (`node src/migration/migrate.js`). The whole run holds a DB-scoped
     // advisory lock so concurrent processes/replicas can't apply the same file twice.
     // Returns { applied:[...], pending:[...] }.
     //

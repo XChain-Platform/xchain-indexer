@@ -234,7 +234,7 @@ module.exports = {
 
             // Apply any pending `auto` schema migrations (additive/idempotent changes the
             // drift reconciler can't make on its own). Manual/destructive migrations stay
-            // gated for an explicit operator run (`node src/migrate.js`). Recorded in the
+            // gated for an explicit operator run (`node src/migration/migrate.js`). Recorded in the
             // schema_migrations ledger, so this is a no-op once applied.
             await this.indexerDb.runMigrations();
 

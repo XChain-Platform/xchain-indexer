@@ -70,7 +70,7 @@ const splitStatements = (raw) => Database.prototype.splitSqlStatements.call(
 /**
  * ONE dated exemption, for the single instance that had already shipped and applied when
  * this guard was written. It is recorded here rather than fixed in place because editing
- * an applied migration changes its sha256 and fails `node src/migrate.js` closed forever
+ * an applied migration changes its sha256 and fails `node src/migration/migrate.js` closed forever
  * on every database that already applied it, and because a backdated replacement file
  * trips the runner's dated-frontier guard on the same operator path.
  *

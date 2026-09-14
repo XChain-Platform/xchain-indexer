@@ -987,7 +987,7 @@ describe('committed mode=auto migrations contain no destructive DDL @regression 
             const offender = destructiveOf(statementsOf(raw));
             assert.strictEqual(offender, null,
                 file + ' is tagged mode=auto but contains destructive DDL: "' + String(offender).slice(0, 120) +
-                '". Re-tag it mode=manual (applied via `node src/migrate.js`) - a destructive ' +
+                '". Re-tag it mode=manual (applied via `node src/migration/migrate.js`) - a destructive ' +
                 'statement must never auto-run unattended against validator DBs.');
         });
     });
@@ -1039,7 +1039,7 @@ describe('Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1', function 
     };
 
     // The three files the 758fc1db internal-reference scrub caught. Their entries were
-    // missing until 2026-08-26, and the cost was not the log noise: `node src/migrate.js`
+    // missing until 2026-08-26, and the cost was not the log noise: `node src/migration/migrate.js`
     // fails CLOSED on a checksum mismatch, so the first of these made the entire pending
     // manual backlog unappliable on every aged testnet/regtest host.
     const SCRUBBED = {
@@ -1051,7 +1051,7 @@ describe('Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1', function 
     Object.entries(SCRUBBED).forEach(function ([file, recorded]) {
         it(file + ': heals from its pre-scrub revision', function () {
             const r = Database.MIGRATION_CHECKSUM_REBASELINES[file];
-            assert.ok(r, file + ' must have a rebaseline entry - without it `node src/migrate.js` ' +
+            assert.ok(r, file + ' must have a rebaseline entry - without it `node src/migration/migrate.js` ' +
                 'fails closed on any DB that applied the pre-scrub revision, taking every OTHER ' +
                 'pending manual migration down with it.');
             assert.ok([].concat(r.from).includes(recorded),
@@ -1331,7 +1331,7 @@ describe('runMigrations() backdated-migration guard @regression @tier1', functio
 
     // The carve-out that keeps the guard shippable. A mode=manual file legitimately sits
     // unapplied behind the frontier for as long as the operator defers it, so guarding it
-    // would make `node src/migrate.js` throw on every aged fleet DB.
+    // would make `node src/migration/migrate.js` throw on every aged fleet DB.
     it('a deferred mode=manual migration is exempt and still applies on the operator path', async function () {
         const ledger = ledgerOfAll();
         ledger.delete(EARLY_MANUAL);
@@ -1348,7 +1348,7 @@ describe('runMigrations() backdated-migration guard @regression @tier1', functio
     // and 1c728c5 carries an undated add_controller_bound_token_columns.sql row that no
     // rename heals, and undated sorts above every 2026-* name. Before the filter this made
     // the frontier garbage and threw on the operator path for an ordinary new migration -
-    // the same hard-fail of `node src/migrate.js` on an aged fleet DB that the manual
+    // the same hard-fail of `node src/migration/migrate.js` on an aged fleet DB that the manual
     // carve-out above exists to prevent, reintroduced from the ledger side.
     it('an undated legacy ledger row does not fail the operator path for a normal new migration', async function () {
         const files  = allFiles();
@@ -1521,7 +1521,7 @@ describe('runMigrations() pubkey-width assertion @regression @tier1', function (
     it('throws with the remedy when pubkeys.pubkey is too narrow for an uncompressed key', async function () {
         await assert.rejects(
             () => quietly(() => makeDb(66).runMigrations({ only: '2026-07-24-pubkeys-widen-uncompressed.sql' })),
-            /pubkeys\.pubkey holds 66 chars but VARCHAR\(130\) is required[\s\S]*node src\/migrate\.js/);
+            /pubkeys\.pubkey holds 66 chars but VARCHAR\(130\) is required[\s\S]*node src\/migration\/migrate\.js/);
     });
 
     it('passes at the migrated width', async function () {
@@ -1580,7 +1580,7 @@ describe('runMigrations() bridge-tables assertion @regression @tier1', function 
     it('halts naming the migration file when every bridge table is absent', async function () {
         await assert.rejects(
             () => quietly(() => makeDb([]).runMigrations({})),
-            /bridge_transfers, bridge_settlements, policy_snapshots are absent[\s\S]*node src\/migrate\.js --file 2026-09-12-bridge-tables\.sql/);
+            /bridge_transfers, bridge_settlements, policy_snapshots are absent[\s\S]*node src\/migration\/migrate\.js --file 2026-09-12-bridge-tables\.sql/);
     });
 
     // A partially migrated database is the shape a scoped --file rollout actually leaves,

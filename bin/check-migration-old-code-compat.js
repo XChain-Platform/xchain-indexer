@@ -36,7 +36,7 @@
  *   2. seed `schema_migrations` the way that host's ledger really looks, so the
  *      pending set is the host's pending set and not "all of them",
  *   3. run the REAL runMigrations({includeManual:true}) from the batch tree, the
- *      same code path src/migrate.js drives, and
+ *      same code path src/migration/migrate.js drives, and
  *   4. run OLD code's statements against the migrated schema.
  *
  * Step 4 is the point. Between the rollout's migrate step and its halt step, the
