@@ -70,6 +70,10 @@
  *                                                     which is how a reindex is
  *                                                     compared against its pin
  *   node bin/consensus-identity.js --network testnet  default regtest
+ *   node bin/consensus-identity.js --assert-no-absent exit 1 if any shared gate
+ *                                                     resolves to the absent
+ *                                                     sentinel (the check a
+ *                                                     restructure has to survive)
  *
  *   XC_ROLLCALL_REGTEST_ACTIVATION=armed XC_ROLLCALL_GATES_REGTEST_ACTIVATION=armed \
  *     node bin/consensus-identity.js
@@ -188,7 +192,7 @@ async function readStateHash(opts) {
 }
 
 function parseArgs(argv) {
-    const opts = { json: false, stateHash: false, network: 'regtest', chain: 'BTC' };
+    const opts = { json: false, stateHash: false, network: 'regtest', chain: 'BTC', assertNoAbsent: false };
     for (let i = 0; i < argv.length; i += 1) {
         if (argv[i] === '--json') opts.json = true;
         else if (argv[i] === '--state-hash') opts.stateHash = true;
@@ -196,6 +200,7 @@ function parseArgs(argv) {
         else if (argv[i] === '--chain') { opts.chain = argv[i + 1]; i += 1; }
         else if (argv[i] === '--db') { opts.db = argv[i + 1]; i += 1; }
         else if (argv[i] === '--at-block') { opts.atBlock = Number(argv[i + 1]); opts.stateHash = true; i += 1; }
+        else if (argv[i] === '--assert-no-absent') opts.assertNoAbsent = true;
         else if (argv[i] === '--help' || argv[i] === '-h') opts.help = true;
     }
     return opts;
@@ -212,6 +217,17 @@ async function main() {
     // Absent rather than null when the read was not asked for, so a pin can
     // never be mistaken for a tip that read back empty.
     if (opts.stateHash) identity.tip = await readStateHash(opts);
+
+    // Checked before either output branch, so --json and the human summary both
+    // carry the same exit code: matching the hub's --assert-no-absent, the check
+    // a restructure that moves a gate carrier out from under this build has to
+    // survive, not just the ability to print a lower resolved count.
+    if (opts.assertNoAbsent && identity.consensus_rules_gates_absent_keys.length) {
+        console.error(`ABSENT GATES (${identity.consensus_rules_gates_absent}): the digest is over a rules set `
+            + 'this build has lost:');
+        for (const key of identity.consensus_rules_gates_absent_keys) console.error(`  ${key}`);
+        process.exitCode = 1;
+    }
 
     if (opts.json) {
         console.log(JSON.stringify(identity, null, 2));
