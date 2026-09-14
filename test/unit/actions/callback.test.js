@@ -7,72 +7,42 @@
 // General Public License v3.0 or later; see LICENSE.md. A commercial
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
+//
+// CALLBACK action handler.
+//
+// This file holds the valid path and the authorization, CALLBACK_BLOCK, TICK,
+// balance and record-creation checks. The native-coin fee payment branches, the
+// validation guards and the CALLBACK_TICK allow/block list filtering live beside
+// it in callback.test/, each opening the same 'Callback @regression @tier3'
+// describe so every full test title is unchanged;
+// callback.test/helpers/callback_fixtures.js builds the mock handler and the
+// token fixtures they share.
 
 process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon = require('sinon');
-const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
+const { createBaseData } = require('../../fixtures/mocks');
+const {
+    OWNER, OTHER, HOLDER1, HOLDER2, makeTokenInfo, makeCallbackTokenInfo, freshCallback,
+} = require('./callback.test/helpers/callback_fixtures.js');
 
-const Callback = require('../../../src/actions/callback.js');
+let indexer, handler;
+
+function freshHandler() {
+    ({ indexer, handler } = freshCallback());
+}
+
+function restoreStubs() {
+    sinon.restore();
+}
+
+// ─── Valid path ───────────────────────────────────────────────────
 
 describe('Callback @regression @tier3', function () {
-    let indexer, actionsCtx, handler;
-
-    const OWNER   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-    const OTHER   = '1OtherAddressXXXXXXXXXXXXXXXXVtKwXp';
-    const HOLDER1 = 'mmqFL1hiu2RDuyS69KS9ko6uaMryhANwsz';
-    const HOLDER2 = 'mk7MdP3qzVkgyjaYNR2sUY8Ggn4DWxt2KS';
-
-    function makeTokenInfo(overrides = {}) {
-        return createTokenInfo({
-            TICK: 'TEST',
-            TICK_ID: 1,
-            OWNER,
-            DECIMALS: 0,
-            LOCK_CALLBACK: 0,
-            CALLBACK_BLOCK: 90,
-            CALLBACK_TICK: 'CBTEST',
-            CALLBACK_AMOUNT: '1',
-            ...overrides,
-        });
-    }
-
-    function makeCallbackTokenInfo(overrides = {}) {
-        return createTokenInfo({
-            TICK: 'CBTEST',
-            TICK_ID: 2,
-            DECIMALS: 0,
-            ALLOW_LIST: null,
-            BLOCK_LIST: null,
-            ...overrides,
-        });
-    }
-
-    beforeEach(function () {
-        indexer = createMockIndexer();
-        actionsCtx = {
-            config:          indexer.config,
-            util:            indexer.util,
-            mapper:          indexer.mapper,
-            decoderDb:       indexer.decoderDb,
-            indexerDb:       indexer.indexerDb,
-            protocolChanges: {
-                isDefined:  sinon.stub().returns(true),
-                isEnabled:  sinon.stub().resolves(true),
-            },
-            processAction:   sinon.stub().resolves(),
-        };
-        handler = new Callback(actionsCtx);
-        indexer.util.resetLists();
-    });
-
-    afterEach(function () {
-        sinon.restore();
-    });
-
-    // ─── Valid path ───────────────────────────────────────────────────
+    beforeEach(freshHandler);
+    afterEach(restoreStubs);
 
     describe('valid callback', function () {
         it('owner can callback: createCallback called with valid status', async function () {
@@ -117,6 +87,11 @@ describe('Callback @regression @tier3', function () {
             assert.ok(indexer.indexerDb.updateBalances.called);
         });
     });
+});
+
+describe('Callback @regression @tier3', function () {
+    beforeEach(freshHandler);
+    afterEach(restoreStubs);
 
     describe('valid callback', function () {
         it('source not in holders: no debit for source', async function () {
@@ -141,8 +116,13 @@ describe('Callback @regression @tier3', function () {
         });
 
     });
+});
 
-    // ─── Invalid: authorization ───────────────────────────────────────
+// ─── Invalid: authorization ───────────────────────────────────────
+
+describe('Callback @regression @tier3', function () {
+    beforeEach(freshHandler);
+    afterEach(restoreStubs);
 
     describe('authorization checks', function () {
 
@@ -187,8 +167,13 @@ describe('Callback @regression @tier3', function () {
         });
 
     });
+});
 
-    // ─── Invalid: block index ─────────────────────────────────────────
+// ─── Invalid: block index ─────────────────────────────────────────
+
+describe('Callback @regression @tier3', function () {
+    beforeEach(freshHandler);
+    afterEach(restoreStubs);
 
     describe('CALLBACK_BLOCK validations', function () {
 
@@ -233,8 +218,13 @@ describe('Callback @regression @tier3', function () {
         });
 
     });
+});
 
-    // ─── Invalid: TICK not found ──────────────────────────────────────
+// ─── Invalid: TICK not found ──────────────────────────────────────
+
+describe('Callback @regression @tier3', function () {
+    beforeEach(freshHandler);
+    afterEach(restoreStubs);
 
     describe('TICK validations', function () {
 
@@ -273,8 +263,13 @@ describe('Callback @regression @tier3', function () {
         });
 
     });
+});
 
-    // ─── Invalid: insufficient balance ───────────────────────────────
+// ─── Invalid: insufficient balance ───────────────────────────────
+
+describe('Callback @regression @tier3', function () {
+    beforeEach(freshHandler);
+    afterEach(restoreStubs);
 
     describe('balance validations', function () {
 
@@ -300,8 +295,13 @@ describe('Callback @regression @tier3', function () {
         });
 
     });
+});
 
-    // ─── createCallback always called ────────────────────────────────
+// ─── createCallback always called ────────────────────────────────
+
+describe('Callback @regression @tier3', function () {
+    beforeEach(freshHandler);
+    afterEach(restoreStubs);
 
     describe('record creation', function () {
 
@@ -341,208 +341,5 @@ describe('Callback @regression @tier3', function () {
             assert.ok(indexer.mapper.createMappings.called);
         });
 
-    });
-
-    // ─── Native-coin fee payment branches ─────────────────────────────────
-    // The default suite covers XCHAIN-balance fee deduction; these drive the
-    // native-coin payment-mode branch (detectFeePaymentMode → 'native'/'rejected').
-
-    describe('native-coin fee payment', function () {
-
-        function setupValid() {
-            indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(makeTokenInfo());
-            indexer.indexerDb.getTokenInfo.withArgs('CBTEST').resolves(makeCallbackTokenInfo());
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '1', 2: '100' });
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            indexer.indexerDb.getHolders.resolves({ [HOLDER1]: '10', [HOLDER2]: '20' });
-            indexer.indexerDb.getList.resolves([]);
-            indexer.indexerDb.isActionAllowed.resolves(true);
-        }
-
-        it('accepts a valid native-coin fee (PAYMENT_MODE native)', async function () {
-            setupValid();
-            sinon.stub(indexer.util, 'detectFeePaymentMode').returns('native');
-            const valStub = sinon.stub(indexer.util, 'validateNativeCoinFee').resolves({
-                valid: true, nativeCoinAmount: '0.0001', nativeCoin: 'BTC', oracleRound: 7,
-            });
-            const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100 });
-            await handler.parse(['0', 'TEST', null], data, null);
-            assert.ok(valStub.called);
-            assert.strictEqual(data['STATUS'], 'valid');
-            assert.ok(indexer.indexerDb.createCallback.called);
-        });
-
-        it('rejects an invalid native-coin fee (validation.valid=false)', async function () {
-            setupValid();
-            sinon.stub(indexer.util, 'detectFeePaymentMode').returns('native');
-            sinon.stub(indexer.util, 'validateNativeCoinFee').resolves({ valid: false, error: 'underpaid' });
-            const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100 });
-            await handler.parse(['0', 'TEST', null], data, null);
-            assert.ok(String(data['STATUS']).startsWith('invalid'));
-        });
-
-        it('rejects when native-coin output is required but absent (rejected)', async function () {
-            setupValid();
-            sinon.stub(indexer.util, 'detectFeePaymentMode').returns('rejected');
-            const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100 });
-            await handler.parse(['0', 'TEST', null], data, null);
-            assert.ok(String(data['STATUS']).startsWith('invalid'));
-        });
-    });
-
-    function setup(tokenOverrides = {}, cbOverrides = {}) {
-        indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(makeTokenInfo(tokenOverrides));
-        indexer.indexerDb.getTokenInfo.withArgs('CBTEST').resolves(makeCallbackTokenInfo(cbOverrides));
-        indexer.indexerDb.getAddressBalances.resolves({ 1: '1', 2: '100' });
-        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-        indexer.indexerDb.getHolders.resolves({ [HOLDER1]: '10', [HOLDER2]: '20' });
-        indexer.indexerDb.getList.resolves([]);
-        indexer.indexerDb.isActionAllowed.resolves(true);
-    }
-
-    async function run(params, dataOverrides = {}) {
-        const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100, ...dataOverrides });
-        await handler.parse(params, data, null);
-        return data;
-    }
-
-    // ─── Validation guards (each rejects with its specific reason) ────────
-    describe('validation guards', function () {
-        it('rejects when LOCK_CALLBACK is set', async function () {
-            setup({ LOCK_CALLBACK: 1 });
-            const data = await run(['0', 'TEST', null]);
-            assert.strictEqual(data['STATUS'], 'invalid: LOCK_CALLBACK');
-        });
-
-        it('rejects when the TICK ownership is escrowed', async function () {
-            setup();
-            indexer.indexerDb.isOwnershipEscrowed.resolves(true);
-            const data = await run(['0', 'TEST', null]);
-            assert.strictEqual(data['STATUS'], 'invalid: TICK (ownership escrowed)');
-        });
-
-        it('rejects a malformed CALLBACK_BLOCK', async function () {
-            setup({ CALLBACK_BLOCK: '9.5' });
-            const data = await run(['0', 'TEST', null]);
-            assert.strictEqual(data['STATUS'], 'invalid: CALLBACK_BLOCK (format)');
-        });
-
-        it('rejects a malformed CALLBACK_AMOUNT', async function () {
-            setup({ CALLBACK_AMOUNT: '1.5' }); // CBTEST DECIMALS=0 → fractional invalid
-            const data = await run(['0', 'TEST', null]);
-            assert.strictEqual(data['STATUS'], 'invalid: CALLBACK_AMOUNT (format)');
-        });
-
-        it('rejects when SOURCE is sleeping', async function () {
-            setup();
-            indexer.indexerDb.isActionAllowed.callsFake(async (addr) => addr !== OWNER);
-            const data = await run(['0', 'TEST', null]);
-            assert.strictEqual(data['STATUS'], 'invalid: SOURCE (sleeping)');
-        });
-
-        it('rejects when the TICK is sleeping', async function () {
-            setup();
-            indexer.indexerDb.isActionAllowed.callsFake(async (addr, tick) => tick !== 'TEST');
-            const data = await run(['0', 'TEST', null]);
-            assert.strictEqual(data['STATUS'], 'invalid: TICK (sleeping)');
-        });
-
-        it('rejects when the CALLBACK_TICK is sleeping', async function () {
-            setup();
-            indexer.indexerDb.isActionAllowed.callsFake(async (addr, tick) => tick !== 'CBTEST');
-            const data = await run(['0', 'TEST', null]);
-            assert.strictEqual(data['STATUS'], 'invalid: CALLBACK_TICK (sleeping)');
-        });
-
-        it('rejects when CALLBACK_BLOCK is in the future', async function () {
-            setup({ CALLBACK_BLOCK: 200 }); // > BLOCK_INDEX 100
-            const data = await run(['0', 'TEST', null]);
-            assert.strictEqual(data['STATUS'], 'invalid: CALLBACK_BLOCK (block index)');
-        });
-
-        it('rejects a MEMO containing a pipe', async function () {
-            setup();
-            const data = await run(['0', 'TEST', 'a|b']);
-            assert.strictEqual(data['STATUS'], 'invalid: MEMO (pipe)');
-        });
-    });
-
-    describe('validation guards', function () {
-        it('rejects a MEMO containing a semicolon', async function () {
-            setup();
-            const data = await run(['0', 'TEST', 'a;b']);
-            assert.strictEqual(data['STATUS'], 'invalid: MEMO (semicolon)');
-        });
-
-        it('rejects a MEMO exceeding MAX_MEMO_LENGTH', async function () {
-            setup();
-            const data = await run(['0', 'TEST', 'x'.repeat(5000)]);
-            assert.strictEqual(data['STATUS'], 'invalid: MEMO (length)');
-        });
-    });
-
-    // ─── CALLBACK_TICK ALLOW/BLOCK list filters holders ───────────────────
-    describe('holder allow/block list filtering', function () {
-
-        function setup(cbOverrides) {
-            indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(makeTokenInfo());
-            indexer.indexerDb.getTokenInfo.withArgs('CBTEST').resolves(makeCallbackTokenInfo(cbOverrides));
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '1', 2: '100' });
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            // include the SOURCE as a holder to drive the source-skip branch too
-            indexer.indexerDb.getHolders.resolves({ [OWNER]: '5', [HOLDER1]: '10', [HOLDER2]: '20' });
-            indexer.indexerDb.isActionAllowed.resolves(true);
-        }
-
-        it('excludes holders not on the CALLBACK_TICK ALLOW_LIST', async function () {
-            setup({ ALLOW_LIST: 70 });
-            indexer.indexerDb.getList.callsFake(async (id) => (id === 70 ? [HOLDER1] : []));
-            const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100 });
-            await handler.parse(['0', 'TEST', null], data, null);
-            assert.strictEqual(data['STATUS'], 'valid');
-            // only HOLDER1 should be credited (HOLDER2 filtered out)
-            const credited = indexer.indexerDb.createCredit.getCalls().map(c => c.args[3]);
-            assert.ok(credited.includes(HOLDER1));
-            assert.ok(!credited.includes(HOLDER2));
-        });
-
-        it('excludes holders on the CALLBACK_TICK BLOCK_LIST', async function () {
-            setup({ BLOCK_LIST: 71 });
-            indexer.indexerDb.getList.callsFake(async (id) => (id === 71 ? [HOLDER2] : []));
-            const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100 });
-            await handler.parse(['0', 'TEST', null], data, null);
-            assert.strictEqual(data['STATUS'], 'valid');
-            const credited = indexer.indexerDb.createCredit.getCalls().map(c => c.args[3]);
-            assert.ok(!credited.includes(HOLDER2));
-        });
-
-        // Load-bearing: emptiness gates the check here, so a configured-but-empty ALLOW_LIST
-        // credits every holder. AIRDROP gates on list existence and would credit nobody.
-        it('an ALLOW_LIST that resolves empty still credits every holder', async function () {
-            setup({ ALLOW_LIST: 70 });
-            indexer.indexerDb.getList.resolves([]);
-            const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100 });
-            await handler.parse(['0', 'TEST', null], data, null);
-            assert.strictEqual(data['STATUS'], 'valid');
-            const credited = indexer.indexerDb.createCredit.getCalls().map(c => c.args[3]);
-            assert.ok(credited.includes(HOLDER1));
-            assert.ok(credited.includes(HOLDER2));
-        });
-    });
-
-    // ─── Native fee: validation failure with no error message (fallback) ──
-    it('falls back to a generic message when native fee fails without error text', async function () {
-        indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(makeTokenInfo());
-        indexer.indexerDb.getTokenInfo.withArgs('CBTEST').resolves(makeCallbackTokenInfo());
-        indexer.indexerDb.getAddressBalances.resolves({ 1: '1', 2: '100' });
-        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-        indexer.indexerDb.getHolders.resolves({ [HOLDER1]: '10' });
-        indexer.indexerDb.getList.resolves([]);
-        indexer.indexerDb.isActionAllowed.resolves(true);
-        sinon.stub(indexer.util, 'detectFeePaymentMode').returns('native');
-        sinon.stub(indexer.util, 'validateNativeCoinFee').resolves({ valid: false }); // no .error
-        const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100 });
-        await handler.parse(['0', 'TEST', null], data, null);
-        assert.strictEqual(data['STATUS'], 'invalid: native coin fee validation failed');
     });
 });
