@@ -62,7 +62,9 @@ describe('ATTEST broadcast-fee activation (spec §11) @regression', function () 
             assert.strictEqual(abf.isAttestBroadcastFeeActive(0, 'regtest'), true);
         });
     });
+});
 
+describe('ATTEST broadcast-fee activation (spec §11) @regression', function () {
     describe('broadcastFeeCapNative', function () {
         it('returns the shipped per-provider allowance for a known provider', function () {
             assert.strictEqual(abf.broadcastFeeCapNative('http_get', { provider_id: 'http_get' }), '0.00010000');
@@ -90,6 +92,11 @@ describe('ATTEST broadcast-fee activation (spec §11) @regression', function () 
             assert.strictEqual(
                 abf.broadcastFeeCapNative('llm', { broadcast_fee_cap_native: '0.5' }), '0.00100000');
         });
+    });
+});
+
+describe('ATTEST broadcast-fee activation (spec §11) @regression', function () {
+    describe('broadcastFeeCapNative', function () {
 
         it('ignores a malformed or negative overlay and uses the shipped value instead', function () {
             for (const bad of ['', '   ', 'abc', '-1', 'Infinity', null, undefined, {}, []])
@@ -122,7 +129,9 @@ describe('ATTEST broadcast-fee activation (spec §11) @regression', function () 
                 '0.00001234');
         });
     });
+});
 
+describe('ATTEST broadcast-fee activation (spec §11) @regression', function () {
     describe('broadcastFeeCapNative', function () {
         it('clamps on an EXACT compare against HARD_MAX, not a float near-miss', function () {
             // Number('0.0009999999999999999') lands below the double nearest 0.001, so the old

@@ -134,12 +134,21 @@ function applierSpy(bindHashes = []) {
     };
 }
 
+// Three candidates for one request, hashes chosen so the sort order is a<b<c.
+function threeCandidates() {
+    return [
+        mirrorRow({ response_hash: 'c'.repeat(64) }),
+        mirrorRow({ response_hash: 'a'.repeat(64) }),
+        mirrorRow({ response_hash: 'b'.repeat(64) }),
+    ];
+}
+
+let util;
+function resetUtility() { util = new Utility(); }
+
+// ------------------------------------------------------------------ the selector
 describe('ATTEST applier fall-through above the zero-conf height @regression @tier3', function () {
-
-    let util;
-    beforeEach(function () { util = new Utility(); });
-
-    // ------------------------------------------------------------------ the selector
+    beforeEach(resetUtility);
 
     describe('selector candidate list (utility.selectApplicableAttestationResponses)', function () {
         it('carries every eligible row for one request, sorted, as ONE item', function () {
@@ -174,7 +183,13 @@ describe('ATTEST applier fall-through above the zero-conf height @regression @ti
             assert.deepStrictEqual(applied[0].candidates.map(c => c.response_hash), ['b'.repeat(64)],
                 'a candidate is a row that BINDS at this block; a future stamp is not one yet');
         });
+    });
+});
 
+describe('ATTEST applier fall-through above the zero-conf height @regression @tier3', function () {
+    beforeEach(resetUtility);
+
+    describe('selector candidate list (utility.selectApplicableAttestationResponses)', function () {
         it('gives each request its own list, in the (block_index, action_index) order', function () {
             const earlyId = 'f'.repeat(64);
             const lateId  = '0'.repeat(64);
@@ -196,6 +211,10 @@ describe('ATTEST applier fall-through above the zero-conf height @regression @ti
             assert.deepStrictEqual(applied[1].candidates.map(c => c.response_hash), ['c'.repeat(64)]);
         });
     });
+});
+
+describe('ATTEST applier fall-through above the zero-conf height @regression @tier3', function () {
+    beforeEach(resetUtility);
 
     describe('selector candidate list (utility.selectApplicableAttestationResponses)', function () {
         it('BELOW the height returns the old single-choice item with no candidates key', function () {
@@ -219,17 +238,11 @@ describe('ATTEST applier fall-through above the zero-conf height @regression @ti
                 'and the choice is the old rule\'s: the smaller signed effective_time');
         });
     });
+});
 
-    // Three candidates for one request, hashes chosen so the sort order is a<b<c.
-    function threeCandidates() {
-        return [
-            mirrorRow({ response_hash: 'c'.repeat(64) }),
-            mirrorRow({ response_hash: 'a'.repeat(64) }),
-            mirrorRow({ response_hash: 'b'.repeat(64) }),
-        ];
-    }
-
-    // ---------------------------------------------------------------- the applier pass
+// ---------------------------------------------------------------- the applier pass
+describe('ATTEST applier fall-through above the zero-conf height @regression @tier3', function () {
+    beforeEach(resetUtility);
 
     describe('the pass tries candidates in order (utility.processAttestationResponses)', function () {
         it('stops at the first candidate that binds and never dispatches again for that request', async function () {
@@ -277,6 +290,10 @@ describe('ATTEST applier fall-through above the zero-conf height @regression @ti
             }
         });
     });
+});
+
+describe('ATTEST applier fall-through above the zero-conf height @regression @tier3', function () {
+    beforeEach(resetUtility);
 
     describe('the pass tries candidates in order (utility.processAttestationResponses)', function () {
         it('tries EVERY candidate when none binds, and the request is selected again unchanged next block', async function () {

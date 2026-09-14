@@ -76,12 +76,14 @@ const VALID = {
     }
 };
 
-describe('isCryptoAddress per-chain validation @regression @tier1', function () {
-    let util;
+let util;
 
-    before(function () {
-        util = new Utility();
-    });
+function resetUtility() {
+    util = new Utility();
+}
+
+describe('isCryptoAddress per-chain validation @regression @tier1', function () {
+    before(resetUtility);
 
     describe('valid addresses per coin/network', function () {
         for (const coin of Object.keys(VALID)) {
@@ -94,6 +96,10 @@ describe('isCryptoAddress per-chain validation @regression @tier1', function () 
             }
         }
     });
+});
+
+describe('isCryptoAddress per-chain validation @regression @tier1', function () {
+    before(resetUtility);
 
     describe('wrong-network / wrong-coin rejection', function () {
         it('DOGE mainnet address on BTC mainnet → invalid', function () {
@@ -119,6 +125,10 @@ describe('isCryptoAddress per-chain validation @regression @tier1', function () 
             assert.strictEqual(util.isCryptoAddress(VALID.LTC.mainnet.p2tr,  'DOGE', 'mainnet'), false);
         });
     });
+});
+
+describe('isCryptoAddress per-chain validation @regression @tier1', function () {
+    before(resetUtility);
 
     describe('checksum integrity', function () {
         it('base58 P2PKH with one flipped character → invalid', function () {
@@ -141,6 +151,10 @@ describe('isCryptoAddress per-chain validation @regression @tier1', function () 
             assert.strictEqual(util.isCryptoAddress('bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kemeawh', 'BTC', 'mainnet'), false);
         });
     });
+});
+
+describe('isCryptoAddress per-chain validation @regression @tier1', function () {
+    before(resetUtility);
 
     describe('BIP-173 / BIP-350 reference vectors', function () {
         it('accepts the BIP-173 P2WPKH vector (upper and lower case)', function () {
@@ -157,6 +171,10 @@ describe('isCryptoAddress per-chain validation @regression @tier1', function () 
             assert.strictEqual(util.isCryptoAddress('BC1QW508d6QEJxTDG4y5R3ZArVARY0C5XW7KV8F3t4', 'BTC', 'mainnet'), false);
         });
     });
+});
+
+describe('isCryptoAddress per-chain validation @regression @tier1', function () {
+    before(resetUtility);
 
     describe('malformed input', function () {
         it('rejects null / empty / non-string input', function () {

@@ -89,11 +89,14 @@ function heights(sync, map) {
 
 let armed = null;
 
-describe('mirror-admission height barriers: ARMED @regression @tier1', function () {
+function setupArmedModules() { armed = armModules(); }
+function restoreArmedModules() { if (armed) armed.restore(); armed = null; }
+const ARMED_TITLE = 'mirror-admission height barriers: ARMED @regression @tier1';
+function describeArmed(register) {
+    describe(ARMED_TITLE, function () { before(setupArmedModules); after(restoreArmedModules); register(); });
+}
 
-    before(function () { armed = armModules(); });
-    after(function () { if (armed) armed.restore(); armed = null; });
-
+describeArmed(function () {
     it('the arming seam actually arms (otherwise every case below is vacuous)', function () {
         assert.strictEqual(armed.act.isMirrorAdmissionConsumerActive('BTC', 'regtest', B), true);
         assert.strictEqual(armed.act.isMirrorAdmissionProducerActive('BTC', 'regtest', B), true);
@@ -131,10 +134,12 @@ describe('mirror-admission height barriers: ARMED @regression @tier1', function 
         assert.strictEqual(sync.attestResponseSyncSatisfied(futureStamp, B), true, 'attest response');
         assert.strictEqual(sync.anchorAttestSyncSatisfied(futureStamp, null, B), true, 'anchor attest');
     });
+});
 
-    // The mirror image, and the one that proves the predicate is not simply permissive: the
-    // clock is now IRRELEVANT, not merely insufficient. A watermark far past blockTime + every
-    // grace satisfies nothing while the height evidence is absent.
+// The mirror image, and the one that proves the predicate is not simply permissive: the
+// clock is IRRELEVANT, not merely insufficient. A watermark far past blockTime + every
+// grace satisfies nothing while the height evidence is absent.
+describeArmed(function () {
     it('a stream watermark past blockTime + grace no longer satisfies a re-keyed barrier', function () {
         const { sync } = makeSync(armed.HubDbSync);
         sync.streamWatermark = 10 ** 9;                   // decades past any grace
@@ -175,8 +180,10 @@ describe('mirror-admission height barriers: ARMED @regression @tier1', function 
         assert.strictEqual(sync.attestResponseSyncSatisfied(1, B), false, 'attest response margin is 1');
         assert.strictEqual(sync.anchorAttestSyncSatisfied(1, null, B), false, 'anchor margin is 144, not 145');
     });
+});
 
-    // FAIL-CLOSED BY ABSENCE, at every granularity the seam names.
+// FAIL-CLOSED BY ABSENCE, at every granularity the seam names.
+describeArmed(function () {
     it('every shape of missing evidence defers, and none of them reads as zero', function () {
         const { sync } = makeSync(armed.HubDbSync);
         sync.streamWatermark = 10 ** 9;
@@ -206,10 +213,12 @@ describe('mirror-admission height barriers: ARMED @regression @tier1', function 
         assert.strictEqual(sync.matchSyncSatisfied(1, B), true, 'a lower-case chain key is the same chain');
         assert.deepStrictEqual(sync.heightWatermarks.cross_chain_matches, { BTC: B });
     });
+});
 
-    // The one member that keeps BOTH certificates, and the reason it must: its height
-    // watermark can be held for up to 6 h by one stuck DOGE anchor, which is WORSE than the
-    // clock it replaces, so the clock form stays as a floor and either one releases the block.
+// The one member that keeps BOTH certificates, and the reason it must: its height
+// watermark can be held for up to 6 h by one stuck DOGE anchor, which is WORSE than the
+// clock it replaces, so the clock form stays as a floor and either one releases the block.
+describeArmed(function () {
     describe('the anchor-attest member keeps both certificates', function () {
         it('the height rule releases a block the clock form would still hold', function () {
             const { sync } = makeSync(armed.HubDbSync);
@@ -235,9 +244,11 @@ describe('mirror-admission height barriers: ARMED @regression @tier1', function 
             assert.strictEqual(sync.anchorAttestSyncSatisfied(1000, null, B), false);
         });
     });
+});
 
-    // The attest-response member is the opposite trade: no escape of any kind, so above the
-    // activation the height rule REPLACES the clock rather than joining it.
+// The attest-response member is the opposite trade: no escape of any kind, so above the
+// activation the height rule REPLACES the clock rather than joining it.
+describeArmed(function () {
     it('the attest-response member is stricter above the activation, not looser', function () {
         const { sync } = makeSync(armed.HubDbSync);
         sync.streamWatermark = 1000 + sync.attestResponseWatermarkGraceS;   // clock satisfied
@@ -274,10 +285,12 @@ describe('mirror-admission height barriers: ARMED @regression @tier1', function 
                 return true;
             });
     });
+});
 
-    // C7: the snapshot member never stalls on a stamp, but its SCOPE filter is t(B), and a
-    // node filtering snapshots by time while binding matches by height disagrees with its own
-    // match set. That is a fork, not a stall, which is why the filter moves in this change.
+// The snapshot member never stalls on a stamp, but its SCOPE filter is t(B), and a
+// node filtering snapshots by time while binding matches by height disagrees with its own
+// match set. That is a fork, not a stall, which is why the filter moves in this change.
+describeArmed(function () {
     describe('the snapshot barrier\'s scope filter moves with members 4 and 5', function () {
         it('uses the IS NULL OR form on the admission column, never a bare comparison', async function () {
             const { sync, doQuery } = makeSync(armed.HubDbSync);
@@ -306,9 +319,11 @@ describe('mirror-admission height barriers: ARMED @regression @tier1', function 
             assert.ok(!sql.includes('admit_block'), 'the legacy filter carries no admission column: ' + sql);
         });
     });
+});
 
-    // C8. The null is what makes the stall measurable: with a clear instant reported,
-    // nextBarrierHold() refuses to accumulate and the 900 s ceiling can never fire.
+// The null is what makes the stall measurable: with a clear instant reported,
+// nextBarrierHold() refuses to accumulate and the 900 s ceiling can never fire.
+describeArmed(function () {
     it('a re-keyed barrier reports NO stallClearsAt, so a hold accumulates', function () {
         const idx = Object.create(armed.Indexer.prototype);
         idx.config = { COIN: 'BTC', NETWORK: 'regtest' };

@@ -51,12 +51,14 @@ const VERSION = {
     DOGE: { p2pkh: 0x1e, p2sh: 0x16 }
 };
 
-describe('cross-chain address re-encoding @regression @tier1', function () {
-    let util;
+let util;
 
-    before(function () {
-        util = new Utility();
-    });
+function resetUtility() {
+    util = new Utility();
+}
+
+describe('cross-chain address re-encoding @regression @tier1', function () {
+    before(resetUtility);
 
     describe('base58CheckEncode', function () {
         it('encodes the genesis-address payload to the published address', function () {
@@ -87,6 +89,10 @@ describe('cross-chain address re-encoding @regression @tier1', function () {
             assert.strictEqual(util.base58CheckEncode([0, 1, 2]), false);
         });
     });
+});
+
+describe('cross-chain address re-encoding @regression @tier1', function () {
+    before(resetUtility);
 
     describe('bech32Encode', function () {
         it('encodes the BIP-173 P2WPKH vector (mainnet and testnet HRP)', function () {
@@ -128,6 +134,10 @@ describe('cross-chain address re-encoding @regression @tier1', function () {
             assert.strictEqual(util.bech32Encode(null, 0, p20), false);
         });
     });
+});
+
+describe('cross-chain address re-encoding @regression @tier1', function () {
+    before(resetUtility);
 
     describe('crossChainReencodeAddress: base58 (p2pkh / p2sh)', function () {
         // Every ordered coin pair, both address kinds: version byte swaps to the
@@ -157,6 +167,10 @@ describe('cross-chain address re-encoding @regression @tier1', function () {
             assert.strictEqual(util.crossChainReencodeAddress(MAINNET.BTC.p2pkh, 'BTC', 'BTC', 'mainnet'), MAINNET.BTC.p2pkh);
         });
     });
+});
+
+describe('cross-chain address re-encoding @regression @tier1', function () {
+    before(resetUtility);
 
     describe('crossChainReencodeAddress: segwit', function () {
         for (const kind of ['p2wpkh', 'p2wsh', 'p2tr']) {
@@ -184,6 +198,10 @@ describe('cross-chain address re-encoding @regression @tier1', function () {
             }
         });
     });
+});
+
+describe('cross-chain address re-encoding @regression @tier1', function () {
+    before(resetUtility);
 
     describe('crossChainReencodeAddress: fail-closed', function () {
         it('contract ledger addresses are null (chain-tagged, cannot cross)', function () {
@@ -220,6 +238,10 @@ describe('cross-chain address re-encoding @regression @tier1', function () {
             assert.strictEqual(util.crossChainReencodeAddress('notanaddress', 'BTC', 'DOGE', 'mainnet'), null);
         });
     });
+});
+
+describe('cross-chain address re-encoding @regression @tier1', function () {
+    before(resetUtility);
 
     describe('regtest prefix collision (why these tests use mainnet)', function () {
         it('regtest p2pkh re-encode is a no-op across all three coins', function () {
@@ -230,6 +252,10 @@ describe('cross-chain address re-encoding @regression @tier1', function () {
             assert.strictEqual(util.crossChainReencodeAddress(regtest, 'BTC', 'LTC', 'regtest'), regtest);
         });
     });
+});
+
+describe('cross-chain address re-encoding @regression @tier1', function () {
+    before(resetUtility);
 
     describe('canReencodeAddress', function () {
         it('mirrors crossChainReencodeAddress non-null', function () {
