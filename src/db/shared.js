@@ -147,7 +147,7 @@ const txEpochStore = new AsyncLocalStorage();
 // it is version 1; the id-based design never carried a version number.
 // Bumping this is a consensus break requiring a coordinated all-validator re-baseline of
 // checkpoints from an agreed height (already-anchored hashes stay on their original scheme).
-// MUST stay identical to xchain-sync/src/BlockHasher.js BLOCK_HASH_VERSION; the two hashers
+// MUST stay identical to xchain-sync/src/client/block_hasher.js BLOCK_HASH_VERSION; the two hashers
 // are a byte-for-byte conformance pair (guarded by the xchain-e2e-test conformance scenario
 // and the xchain-sync block-hash-vectors golden). This is a fixed protocol constant, never
 // env-overridable.

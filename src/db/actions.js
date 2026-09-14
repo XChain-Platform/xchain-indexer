@@ -57,7 +57,7 @@ module.exports = {
         // so this is purely additive: tx-only blocks hash identically, blocks with synthetic actions
         // now cover them. ORDER BY action_index already gives those rows a deterministic position.
         // (BLOCK_HASH_VERSION unchanged: same preimage structure, more rows; everything re-bases
-        // atomically pre-launch. xchain-sync/src/BlockHasher.js is the byte-for-byte conformance pair.)
+        // atomically pre-launch. xchain-sync/src/client/block_hasher.js is the byte-for-byte conformance pair.)
         // Get data from credits table
         // These rows feed the consensus ledger hash. We hash the RESOLVED address/ticker
         // strings (LEFT JOIN through the lookup tables), never the raw address_id/tick_id -
@@ -121,7 +121,7 @@ module.exports = {
         // hash below AND the block_merkle_root (which reuses these stashed rows) see the
         // same canonical strings; balances still track the real address (rows are not
         // mutated in the DB, only this gathered copy used for hashing). See
-        // protocolAddressRoles.js; xchain-sync/src/BlockHasher.js mirrors this byte-for-byte.
+        // protocolAddressRoles.js; xchain-sync/src/client/block_hasher.js mirrors this byte-for-byte.
         for (const row of ledger.credits) row.address = canonicalizeHashAddress(row.address);
         for (const row of ledger.debits)  row.address = canonicalizeHashAddress(row.address);
         for (const row of ledger.escrows) row.address = canonicalizeHashAddress(row.address);
@@ -174,7 +174,7 @@ module.exports = {
         // height state_key is pinned COLLATE utf8_bin (the same hazard the
         // address/tick sorts above already pin against); below it the folding form
         // is kept so historical block hashes replay byte-identically.
-        // xchain-sync/src/BlockHasher.js mirrors this gate byte-for-byte.
+        // xchain-sync/src/client/block_hasher.js mirrors this gate byte-for-byte.
         let stateKeyBin = stateKeyCollation.isStateKeyBinCollationActive(
             block_index, this.config['NETWORK'], this.config['COIN']);
         let stateKeyCollate = stateKeyBin ? ' COLLATE utf8_bin' : '';

@@ -36,7 +36,7 @@ DROP TABLE IF EXISTS recovery_pending_rewards;
 -- live-derived one to the reorg-scoping delete and to a COLLECT at any height.
 --
 -- This is a restore-time scratch artifact: recovery-local, NOT consensus-hashed and NOT
--- replicated by xchain-sync (excluded from replicatedTables.js and from
+-- replicated by xchain-sync (excluded from schema/replicated_tables.js and from
 -- SnapshotBuilder.OPERATOR_LOCAL_TABLES). source_id is NULL until the row is applied;
 -- the rollback re-arm (rollback.js) resets applied=0 + source_id=NULL when the materialized
 -- source address is rolled out of the index, so a reapply re-runs the hook.

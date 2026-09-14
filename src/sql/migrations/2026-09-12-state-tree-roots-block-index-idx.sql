@@ -20,7 +20,7 @@
 -- fixed the identical gap on validator_rewards.
 --
 -- Snapshot-bootstrapped sync replicas never run this runner; they get the index from
--- ensureReplicaSecondaryIndexes() in xchain-sync/src/db.js, extended in the same change.
+-- ensureReplicaSecondaryIndexes() in xchain-sync/src/db/index.js, extended in the same change.
 
 ALTER TABLE state_tree_roots
   ADD INDEX IF NOT EXISTS block_index (block_index);

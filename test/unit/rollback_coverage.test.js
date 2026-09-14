@@ -303,7 +303,7 @@ describe('Rollback coverage guard @regression', function () {
         // interpolated table name dropping out of both) and normalising whitespace yields
         // the same SQL on both sides.
         it('the contract slash-restore SQL is identical across xchain-indexer and xchain-sync (cross-repo twin)', function(){
-            const syncPath = path.join(SYNC_ROOT, 'src', 'ClientRollback.js');
+            const syncPath = path.join(SYNC_ROOT, 'src', 'client', 'rollback.js');
             if(!fs.existsSync(syncPath)){
                 if(REQUIRE_SIBLINGS)
                     throw new Error('consensus drift guard cannot run: sibling missing at ' + syncPath +

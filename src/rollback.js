@@ -879,7 +879,7 @@ class Rollback {
                     // 'invalid_archive'. createStatus interns it (INSERT IGNORE) so the JOIN is
                     // guaranteed non-empty; index_statuses ids are never hashed, so an in-rollback
                     // intern is byte-neutral. The UPDATE's JOIN text is pinned by the cross-repo
-                    // drift guard (xchain-sync rollback-coverage); the replica converges via
+                    // drift guard (xchain-sync rollback_coverage); the replica converges via
                     // snapshot catch-up (it cannot intern locally without diverging the replicated
                     // id, and anchor status_id is in no block-hash projection).
                     //
@@ -889,7 +889,7 @@ class Rollback {
                     // too. No flag day gates it: every head version's stamp is equally
                     // un-re-derivable after the chunk delete, and this reset is not a hash
                     // preimage (the GATED anchor_invalid state-hash class covers the stamp
-                    // itself). ClientRollback.js mirrors this; the drift guard pins the
+                    // itself). client/rollback.js mirrors this; the drift guard pins the
                     // predicate on both sides.
                     //
                     // Author scope, flag-day gated and INERT on every network today: the seq is
@@ -1041,7 +1041,7 @@ class Rollback {
                 // expiring (two-phase COINPay states keep escrow set); cleared only at a terminal
                 // status, written in the same action as the escrow clear. Alias `si` (not the
                 // SQL keyword `is`). The SQL between the ESCROW-REDERIVE-SQL markers is kept
-                // logically identical with xchain-sync/src/ClientRollback.js; a cross-repo drift
+                // logically identical with xchain-sync/src/client/rollback.js; a cross-repo drift
                 // guard (xchain-sync test/unit/rollback_coverage.test.js) asserts they match, so
                 // source + replica derive byte-identical escrow_action_index values.
                 //<ESCROW-REDERIVE-SQL>
@@ -1101,7 +1101,7 @@ class Rollback {
                 // left untouched rather than guessed at.
                 //
                 // The SQL between the COINPAY-MATCH-REDERIVE-SQL markers is kept logically
-                // identical with xchain-sync/src/ClientRollback.js; a cross-repo drift guard
+                // identical with xchain-sync/src/client/rollback.js; a cross-repo drift guard
                 // (xchain-sync test/unit/rollback_coverage.test.js) asserts they match, so
                 // source and replica derive the same match statuses.
                 //<COINPAY-MATCH-REDERIVE-SQL>
@@ -1228,7 +1228,7 @@ class Rollback {
             // pointing at an epoch whose verdict is already gone; the catch swallows ONLY
             // the schema gap on a node that predates the ROLLCALL migration, where the
             // tables do not exist and there is nothing to unwind. This is the ONLY
-            // roll-call unwind: xchain-sync/src/ClientRollback.js carries the replica's
+            // roll-call unwind: xchain-sync/src/client/rollback.js carries the replica's
             // mirror of it, and a second copy here re-raises 1146 on a pre-migration node
             // and aborts the reorg this guard exists to keep alive.
             try {
@@ -1498,7 +1498,7 @@ class Rollback {
             // deleting them here closes that window and the later hub-driven row:deleted
             // is a harmless no-op. cross_chain_matches is two-sided: a match drops when
             // EITHER leg on this chain was rolled back. Predicates are byte-identical to
-            // ClientRollback.js (drift-guarded by the markers below), and deliberately NOT
+            // client/rollback.js (drift-guarded by the markers below), and deliberately NOT
             // to hub_db_sync.js _applyRetraction: that path additionally carries the bounded
             // to_action_index clause and the item-5308 push_generation fence, and for these
             // two quorum-class tables the fence is MANDATORY (an unfenced retraction is

@@ -20,7 +20,7 @@
  * same one-directional hole the whole-file twin guard in
  * rollback_coverage.test.js closes for merkle.js and friends).
  *
- * xchain-sync/src/BlockHasher.js computeBlockHashes() is a hand-ported twin of
+ * xchain-sync/src/client/block_hasher.js computeBlockHashes() is a hand-ported twin of
  * xchain-indexer/src/db.js getBlockHashes(): same consensus SELECTs, same
  * special-address canonicalization, same chaining/version fold, hashed through
  * the same getDataHash/jsonStringify pair. The two live inside DIFFERENT host
@@ -148,21 +148,21 @@ describe('consensus block-hash conformance twins (static drift-lock) @regression
     }
 
     it('BLOCK_HASH_VERSION is identical across indexer db.js and sync BlockHasher.js', function(){
-        const pair = loadPair(this, 'src/BlockHasher.js', 'src/db');
+        const pair = loadPair(this, 'src/client/block_hasher.js', 'src/db');
         if(!pair) return;
         const vSync    = pair.sync.match(/const BLOCK_HASH_VERSION = (\d+)/);
         const vIndexer = pair.indexer.match(/const BLOCK_HASH_VERSION = (\d+)/);
         assert.ok(vSync && vIndexer, 'BLOCK_HASH_VERSION constant missing on one side');
         assert.strictEqual(vIndexer[1], vSync[1],
             'BLOCK_HASH_VERSION drifted between xchain-indexer/src/db.js and ' +
-            'xchain-sync/src/BlockHasher.js; a version bump is a consensus break and MUST land on both sides');
+            'xchain-sync/src/client/block_hasher.js; a version bump is a consensus break and MUST land on both sides');
     });
 
     it('every consensus SQL literal matches, in gathering order', function(){
-        const pair = loadPair(this, 'src/BlockHasher.js', 'src/db');
+        const pair = loadPair(this, 'src/client/block_hasher.js', 'src/db');
         if(!pair) return;
         const syncFn    = stripComments(extractFunction(pair.sync,
-            /async computeBlockHashes\(block_index, network, coin\)\{/, 'BlockHasher.js'));
+            /async computeBlockHashes\(block_index, network, coin\)\{/, 'block_hasher.js'));
         const indexerFn = stripComments(extractFunction(pair.indexer,
             /async getBlockHashes\(block_index\)\{/, 'db.js'));
         const syncSql    = sqlLiterals(syncFn);
@@ -182,10 +182,10 @@ describe('consensus block-hash conformance twins (static drift-lock) @regression
     });
 
     it('special-address canonicalization covers credits, debits and escrows on both sides', function(){
-        const pair = loadPair(this, 'src/BlockHasher.js', 'src/db');
+        const pair = loadPair(this, 'src/client/block_hasher.js', 'src/db');
         if(!pair) return;
         const loopRe = /for \(const row of ledger\.(credits|debits|escrows)\)\s+row\.address = canonicalizeHashAddress\(row\.address\);/g;
-        for(const [name, src] of [['db.js', pair.indexer], ['BlockHasher.js', pair.sync]]){
+        for(const [name, src] of [['db.js', pair.indexer], ['block_hasher.js', pair.sync]]){
             const seen = new Set();
             let m;
             loopRe.lastIndex = 0;
@@ -197,7 +197,7 @@ describe('consensus block-hash conformance twins (static drift-lock) @regression
     });
 
     it('the hash-assembly tail (chaining + hash_version fold) is identical', function(){
-        const pair = loadPair(this, 'src/BlockHasher.js', 'src/db');
+        const pair = loadPair(this, 'src/client/block_hasher.js', 'src/db');
         if(!pair) return;
         const tailRe = /let tables = \[[^]*?tables\.forEach\(table => \{[^]*?\}\);/;
         const tSync    = pair.sync.match(tailRe);
@@ -209,12 +209,12 @@ describe('consensus block-hash conformance twins (static drift-lock) @regression
     });
 
     it('utility jsonStringify + getDataHash (shared preimage serializer) are identical', function(){
-        const pair = loadPair(this, 'src/utility.js', 'src/utility.js');
+        const pair = loadPair(this, 'src/util/index.js', 'src/utility.js');
         if(!pair) return;
         for(const sig of [/jsonStringify\(obj\)\{/, /getDataHash\(data\)\{/]){
             assert.strictEqual(
                 normalize(extractFunction(pair.indexer, sig, 'xchain-indexer/src/utility.js')),
-                normalize(extractFunction(pair.sync, sig, 'xchain-sync/src/utility.js')),
+                normalize(extractFunction(pair.sync, sig, 'xchain-sync/src/util/index.js')),
                 sig + ' drifted between xchain-indexer and xchain-sync utility.js; it serializes every ' +
                 'consensus hash preimage and MUST stay identical (bigint coercion included)');
         }

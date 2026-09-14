@@ -12,7 +12,7 @@
 // consensus, both guarded here:
 //   1. a config edit adds/changes a special address but the canonical map does
 //      not pick it up (it is config-derived, so this asserts coverage);
-//   2. the frozen mirror vendored in xchain-sync/src/protocolAddressRoles.js
+//   2. the frozen mirror vendored in xchain-sync/src/util/protocol_address_roles.js
 //      drifts from this source (a replica would then recompute a mismatching
 //      hash). The expected snapshot below is the byte-for-byte contract both
 //      repos must satisfy.

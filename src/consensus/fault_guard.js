@@ -37,7 +37,7 @@
  *      and missing column (1054) are the only benign older-schema gaps and are
  *      left for the caller to absorb; every other errno (lock-wait timeout
  *      1205, deadlock 1213, killed connection, ...) must propagate. Mirrors the
- *      gate at rollback.js and xchain-sync/src/ClientRollback.js.
+ *      gate at rollback.js and xchain-sync/src/client/rollback.js.
  *
  *   3. The price-barrier deferral (code 'PRICE_BARRIER_DEFERRED'): this
  *      block skipped the hub price-mirror barrier and then read the mirror

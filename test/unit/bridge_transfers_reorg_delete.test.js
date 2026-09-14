@@ -107,7 +107,7 @@ describe('bridge_transfers reorg pre-delete @regression @tier1', function () {
         const syncRoot = process.env.XCHAIN_SYNC_PATH
             ? path.resolve(process.env.XCHAIN_SYNC_PATH)
             : path.resolve(__dirname, '..', '..', '..', 'xchain-sync');
-        const syncFile = path.join(syncRoot, 'src', 'ClientRollback.js');
+        const syncFile = path.join(syncRoot, 'src', 'client', 'rollback.js');
         if (!fs.existsSync(syncFile)) {
             if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
                 throw new Error('cross-chain mirror drift guard cannot run: sibling missing at ' +
@@ -121,7 +121,7 @@ describe('bridge_transfers reorg pre-delete @regression @tier1', function () {
             markedSql(syncFile),
             markedSql(path.resolve(__dirname, '../../src/rollback.js')),
             'the cross-chain mirror reorg deletes drifted between xchain-indexer/src/rollback.js ' +
-            'and xchain-sync/src/ClientRollback.js; keep them identical');
+            'and xchain-sync/src/client/rollback.js; keep them identical');
     });
 
     it('leaves policy_snapshots alone: append-only signed snapshots survive a reorg', function () {

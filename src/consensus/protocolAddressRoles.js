@@ -31,7 +31,7 @@
 // never enters a ledger hash, and it is env-overridable (would defeat a frozen
 // map).
 //
-// xchain-sync/src/BlockHasher.js vendors a byte-identical copy of ROLE_BY_ADDRESS
+// xchain-sync/src/client/block_hasher.js vendors a byte-identical copy of ROLE_BY_ADDRESS
 // and canonicalizeHashAddress; the indexer unit suite asserts this map matches
 // the coin bundles so config edits can never silently drift the consensus map.
 

@@ -34,7 +34,7 @@
  * consumer (the indexer's own hub-DB mirror), and its real payload is the
  * `waitForPriceSyncHeight` consensus barrier wired into the block loop
  * (XChainIndexer.js), NOT the plumbing. The two are kept apart on purpose:
- * xchain-sync's replicatedTables.js excludes price_snapshots as "hub-mirrored"
+ * xchain-sync's schema/replicated_tables.js excludes price_snapshots as "hub-mirrored"
  * and SnapshotBuilder defers to this file. See review finding e800fdf6.
  *
  * TRIGGER for revisiting: if a THIRD cross-service table (e.g. validator-set
