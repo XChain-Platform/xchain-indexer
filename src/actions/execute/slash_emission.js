@@ -36,6 +36,52 @@
 const slashLedgerConsolidation = require('../../slash_ledger_consolidation_activation.js');
 
 const { getLogger } = require('../../observability/index.js');
+
+// The emission's target lookup (./slash_target.js), run with the same receiver as the writer.
+const { resolveSlashTarget } = require('./slash_target.js');
+
+// The amount passed to the ledger is this EXECUTION's RUNNING TOTAL for (tick, address),
+// not this emission's share: createLedgerChangeRecord keys on (action_index, address_id,
+// tick_id) and its existing-row branch SETs the amount, so handing it the share
+// would silently erase the earlier slash's row. Graduated penalties are documented
+// as repeated slash calls (protocol/contract-staking.md), so that collision is the
+// normal path, not a corner case. Gated: it changes stored ledger amounts.
+function slashConsolidationActive(data, slashLedger){
+    return slashLedgerConsolidation.isSlashLedgerConsolidationActive(
+        data['BLOCK_INDEX'], this.config['NETWORK'], this.config['COIN']) && slashLedger;
+}
+
+// Keyed on tickId, never on the wire spelling. createLedgerChangeRecord
+// collides on (action_index, address_id, TICK_ID), so the running total
+// has to merge over exactly what collides: two spellings that resolve to
+// one tick_id (a case variant, a caret ref) key two buckets, each total
+// is short, and the later write erases the earlier row anyway. tickId is
+// the resolved id from the getTickerId call above.
+function runningTotal(consolidate, bucket, key, amount, scale){
+    if(!consolidate) return amount;
+    let sum = this.util.bcstr(this.util.bcadd(bucket.get(key) || '0', amount, scale));
+    bucket.set(key, sum);
+    return sum;
+}
+
+// Release the escrow the stake was locked in BEFORE crediting the destination: a
+// contract stake LOCKS its tokens, so the credit below redirects them rather than
+// minting them, and supply falls only by what the destination does not receive.
+
+// Per owner: the deduction walks several rows and a delegated key's rows can span
+// sources. Written under the EXECUTE's action_index, which escrowJournalWriter
+// attributes through its EXECUTE rule.
+async function applySlashReleases(data, target, deduction, consolidate, slashLedger){
+    let token  = target.token;
+    let tickId = target.tickId;
+    for(let r of deduction.releases){
+        let release = this.util.bcsub(0, r.amount, 64);
+        release = runningTotal.call(this, consolidate, slashLedger && slashLedger.escrows, tickId + '\t' + r.address, release, 64);
+        await this.indexerDb.createEscrow(data['ACTION_INDEX'], token, release, r.address);
+        this.util.addAddressTicker(r.address, token);
+    }
+}
+
 // Process a SLASH emission from inside the VM. The emission carries:
 //   { action: 'SLASH', params: { contractIndex, pubkey, token, amount } }
 // Authorization is implicit: the gateway's contractStakeData accessor is scoped
@@ -48,42 +94,11 @@ const { getLogger } = require('../../observability/index.js');
 //   3. Write a slash_events row keyed by execution_index for audit + wallet UX.
 //   4. Accumulate this execution's slash ledger totals in `slashLedger` so a second
 //      same-token slash adds to the first instead of overwriting it (see the
-//      running-total note below and slash_ledger_consolidation_activation.js).
+//      running-total note above and slash_ledger_consolidation_activation.js).
 async function processSlashEmission(emission, data, slashPosition, slashLedger){
-    let p = emission.params || {};
-    let contractIndex = Number(p.contractIndex);
-    let pubkey        = String(p.pubkey || '').toLowerCase();
-    let token         = String(p.token || '');
-    let amount        = String(p.amount || '0');
-
-    // Defense in depth: caller mismatch should never happen if the gateway
-    // closure is sourced correctly, but throw if it does (rolls back the savepoint).
-    if(contractIndex !== Number(data['CONTRACT_ACTION_INDEX']))
-        throw new Error('SLASH emission contractIndex mismatch: ' + contractIndex + ' vs ' + data['CONTRACT_ACTION_INDEX']);
-
-    // Load contract row to fetch slash_destination_id (locked at DEPLOY time)
-    let contractInfo = await this.indexerDb.getContract(contractIndex);
-    if(!contractInfo)
-        throw new Error('SLASH: contract not found: ' + contractIndex);
-    if(contractInfo.slash_destination_id === null || contractInfo.slash_destination_id === undefined)
-        throw new Error('SLASH: contract has no slash destination configured');
-
-    // Resolve FKs
-    let pubkeyId = await this.indexerDb.getPubkeyId(pubkey);
-    if(pubkeyId === null){
-        // pubkey is not known to index_pubkeys at all: not staked anywhere on this
-        // chain. Nothing to deduct; log for auditability so the no-op is visible.
-        getLogger().info('\t SLASH (no-op): pubkey not found in index_pubkeys: ' + pubkey +
-            ' contract=' + contractIndex + ' token=' + token);
-        return;
-    }
-    let tickId = await this.indexerDb.getTickerId(token);
-    if(tickId === null){
-        // token is unknown. Nothing to deduct; log for auditability.
-        getLogger().info('\t SLASH (no-op): token not found: ' + token +
-            ' pubkey=' + pubkey + ' contract=' + contractIndex);
-        return;
-    }
+    let target = await resolveSlashTarget.call(this, emission, data);
+    if(target === null) return;
+    let { contractIndex, pubkey, token, amount, contractInfo, pubkeyId, tickId } = target;
 
     // Deduct (returns actual slashed total; may be less than requested if balance lower).
     // Pass BLOCK_INDEX so Pass 1 slashes only still-active stake; unstaked-but-cooling tokens are
@@ -106,43 +121,11 @@ async function processSlashEmission(emission, data, slashPosition, slashLedger){
     if(destAddress === null)
         throw new Error('SLASH: destination address row missing');
 
-    // Release the escrow the stake was locked in BEFORE crediting the destination: a
-    // contract stake LOCKS its tokens, so the credit below redirects them rather than
-    // minting them, and supply falls only by what the destination does not receive.
-
-    // Per owner: the deduction walks several rows and a delegated key's rows can span
-    // sources. Written under the EXECUTE's action_index, which escrowJournalWriter
-    // attributes through its EXECUTE rule.
-    //
-    // The amount passed is this EXECUTION's RUNNING TOTAL for (tick, address), not this
-    // emission's share: createLedgerChangeRecord keys on (action_index, address_id,
-    // tick_id) and its existing-row branch SETs the amount, so handing it the share
-    // would silently erase the earlier slash's row. Graduated penalties are documented
-    // as repeated slash calls (protocol/contract-staking.md), so that collision is the
-    // normal path, not a corner case. Gated: it changes stored ledger amounts.
-    let consolidate = slashLedgerConsolidation.isSlashLedgerConsolidationActive(
-        data['BLOCK_INDEX'], this.config['NETWORK'], this.config['COIN']) && slashLedger;
-    // Keyed on tickId, never on the wire spelling. createLedgerChangeRecord
-    // collides on (action_index, address_id, TICK_ID), so the running total
-    // has to merge over exactly what collides: two spellings that resolve to
-    // one tick_id (a case variant, a caret ref) key two buckets, each total
-    // is short, and the later write erases the earlier row anyway. tickId is
-    // the resolved id from the getTickerId call above.
-    let runningTotal = (bucket, key, amount, scale) => {
-        if(!consolidate) return amount;
-        let sum = this.util.bcstr(this.util.bcadd(bucket.get(key) || '0', amount, scale));
-        bucket.set(key, sum);
-        return sum;
-    };
-    for(let r of deduction.releases){
-        let release = this.util.bcsub(0, r.amount, 64);
-        release = runningTotal(slashLedger && slashLedger.escrows, tickId + '\t' + r.address, release, 64);
-        await this.indexerDb.createEscrow(data['ACTION_INDEX'], token, release, r.address);
-        this.util.addAddressTicker(r.address, token);
-    }
+    let consolidate = slashConsolidationActive.call(this, data, slashLedger);
+    await applySlashReleases.call(this, data, target, deduction, consolidate, slashLedger);
 
     // Write credit row (action_index = the EXECUTE's action_index, for audit trail)
-    let credited = runningTotal(slashLedger && slashLedger.credits, tickId + '\t' + destAddress, slashed, 64);
+    let credited = runningTotal.call(this, consolidate, slashLedger && slashLedger.credits, tickId + '\t' + destAddress, slashed, 64);
     await this.indexerDb.createCredit(data['ACTION_INDEX'], token, credited, destAddress);
 
     // Track destination + token for balance reconciliation in the surrounding execute()
