@@ -80,67 +80,16 @@
  ********************************************************************/
 
 const ed25519 = require('../consensus/ed25519.js');
-const eq      = require('../equivocation_header.js');
 const srb     = require('../snapshot_reorg_buffer.js');
 
 const { getLogger } = require('../observability/index.js');
-// ENGINE_TAG → the membership label the locked snapshot governs that engine's signer
-// set under. For the five capability-scoped engines this is the staking capability whose
-// MIN_STAKE-qualified set signed the slot. XCONFIG is the exception: config-change PBFT is
-// authorized by the WHOLE federation (every active staker, no capability subset; see
-// xchain-hub Consensus._lockSnapshot), so it carries the sentinel label 'config' and its
-// membership resolves against getActiveValidators (handled in parse()), not a capability set.
-const CONFIG_CAPABILITY = 'config';
-const ENGINE_CAPABILITY = {
-    [eq.ENGINE_TAGS.DEX]:        'cross_chain',
-    [eq.ENGINE_TAGS.XCALL]:      'cross_chain',
-    [eq.ENGINE_TAGS.CHECKPOINT]: 'oracle_publish',
-    [eq.ENGINE_TAGS.ORACLE]:     'price',
-    // PRICE batches are signed by the same price-capable set as v0 rounds, under the
-    // same locked snapshot, so they burn the same bond. The tag is distinct only so a v0
-    // round and a batch at one BTC anchor can never share an equiv key.
-    [eq.ENGINE_TAGS.ORACLE_BATCH]: 'price',
-    [eq.ENGINE_TAGS.ATTEST]:     'attestation',
-    // The bridge and the token-policy engines are signed by the SAME cross_chain set the DEX
-    // and XCALL are, under the same locked snapshot, so they burn the same bond. They are in
-    // this map because a forgery in either DIRECTS VALUE: an XBRIDGE canonical mints units on
-    // a destination chain, and an XPOLICY canonical decides who may move a bridged row's
-    // units at all. A tag absent from this map is namespacing only and is NOT a slashable
-    // family (XNODEPROOF and ROLLCALL are deliberately absent for that reason), which for
-    // these two would leave the one class of equivocation that moves money unpunished.
-    // Distinct tags, so a validator that signs one transfer and one policy snapshot in the
-    // same round can never collide on an equivocation key.
-    [eq.ENGINE_TAGS.BRIDGE]:     'cross_chain',
-    [eq.ENGINE_TAGS.POLICY]:     'cross_chain',
-    [eq.ENGINE_TAGS.CONFIG]:     CONFIG_CAPABILITY,
-};
-
-// Read the (round, btc_block_height) pair out of an XORACLE signed content.
-// The content is ed25519.buildPriceV0Payload's JSON.stringify output, so a parse failure
-// or a non-integer field means "this content does not declare the value" (null), never a
-// zero: coercing an absent round to 0 would make two absent rounds compare EQUAL and
-// re-open the false-pair hole this exists to close.
-function parseOracleContent(content){
-    let obj = null;
-    try { obj = JSON.parse(String(content)); } catch(e){ return null; }
-    if(obj === null || typeof obj !== 'object' || Array.isArray(obj)) return null;
-    let num = (v) => Number.isInteger(v) ? v : null;
-    return { round: num(obj.round), height: num(obj.btc_block_height) };
-}
-
-// Read the (first_round, last_round, btc_block_height) triple out of an XORACLEB signed
-// content (ed25519.buildPriceBatchPayload's JSON.stringify output). A batch declares a
-// WINDOW and no scalar `round`, which is why it carries its own engine tag and its own
-// reader here. Same null discipline as parseOracleContent: an absent or non-integer field
-// yields null rather than 0, so two absent windows never compare EQUAL and re-open the
-// false-pair hole.
-function parseBatchContent(content){
-    let obj = null;
-    try { obj = JSON.parse(String(content)); } catch(e){ return null; }
-    if(obj === null || typeof obj !== 'object' || Array.isArray(obj)) return null;
-    let num = (v) => Number.isInteger(v) ? v : null;
-    return { first: num(obj.first_round), last: num(obj.last_round), height: num(obj.btc_block_height) };
-}
+// The proof's own parts. The handler keeps the chain-facing rules (signatures,
+// membership, idempotency, settlement) and delegates the rules that are purely
+// about the submitted bytes or about payout policy.
+const { CONFIG_CAPABILITY, readProofWire, deriveEquivKey,
+        capabilityForEngine } = require('./slash/proof_wire.js');
+const { resolveSlot: resolveProofSlot } = require('./slash/resolve_slot.js');
+const { bountyTreasurySplit: splitBountyTreasury } = require('./slash/bounty.js');
 
 class Slash {
 
@@ -160,95 +109,53 @@ class Slash {
 
     async parse(params, data, error){
 
-        // Validate format
-        let format = data['FORMAT'];
-        if(!error && (format === null || this.formats[format] === undefined))
-            error = 'invalid: VERSION (unknown)';
-
-        // Extract fields
-        data['CAPABILITY']      = params[1];
-        data['OFFENDER_PUBKEY'] = params[2];
-        let msgAb64 = params[3], sigA = params[4], msgBb64 = params[5], sigB = params[6];
-
-        // SLASH is BTC-only (capability stake is BTC-only)
-        if(!error && data['COIN'] !== 'BTC')
-            error = 'invalid: ACTION (BTC only)';
-
-        // Field presence
-        if(!error && (this.util.isNull(data['OFFENDER_PUBKEY']) ||
-                      this.util.isNull(msgAb64) || this.util.isNull(sigA) ||
-                      this.util.isNull(msgBb64) || this.util.isNull(sigB) || this.util.isNull(data['CAPABILITY'])))
-            error = 'invalid: missing field';
-
-        // OFFENDER_PUBKEY format
-        let offender = String(data['OFFENDER_PUBKEY'] || '').toLowerCase();
-        if(!error && !/^[0-9a-fA-F]{64}$/.test(offender))
-            error = 'invalid: OFFENDER_PUBKEY (format)';
-
-        // Decode the two signed canonicals (base64url → utf8 string)
-        let msgA = null, msgB = null;
-        if(!error){
-            try { msgA = Buffer.from(String(msgAb64), 'base64url').toString('utf8'); } catch(e){ msgA = null; }
-            try { msgB = Buffer.from(String(msgBb64), 'base64url').toString('utf8'); } catch(e){ msgB = null; }
-            if(msgA === null || msgB === null) error = 'invalid: MSG (base64)';
-        }
-
-        // (1) Derive the EQUIV key from MSG_A's header. The wire action does NOT carry it
-        // (it contains '|' and would break the pipe split). The header is
-        // `EQUIV|<ENGINE_TAG|ROUND_ID|VIEW>||<CONTENT>`; the key has no `||` (no empty
-        // segment), so the FIRST `||` is the unambiguous key/content boundary.
-        let equivKey = '', prefix = '';
-        if(!error){
-            let sep = msgA.startsWith('EQUIV|') ? msgA.indexOf('||') : -1;
-            if(sep < 0){
-                error = 'invalid: MSG_A has no EQUIV header';
-            } else {
-                prefix   = msgA.slice(0, sep + 2);            // 'EQUIV|<key>||'
-                equivKey = msgA.slice('EQUIV|'.length, sep);  // '<key>'
-            }
-        }
-
-        // Both messages must share that EXACT header prefix (same engine, round, AND view).
-        if(!error && !msgB.startsWith(prefix))
-            error = 'invalid: EQUIV header/key mismatch';
-
-        // (2) Their content must DIFFER (identical bytes = the same message, not equivocation).
-        if(!error && msgA === msgB)
-            error = 'invalid: identical messages (not equivocation)';
-
-        // Parse the key into (engineTag, roundId, view). ROUND_ID may contain '|',
-        // so take the FIRST segment as the tag and the LAST as the view.
-        let engineTag = '', roundId = '', view = '';
-        if(!error){
-            let firstPipe = equivKey.indexOf('|');
-            let lastPipe  = equivKey.lastIndexOf('|');
-            if(firstPipe < 0 || lastPipe <= firstPipe){
-                error = 'invalid: EQUIV_KEY (format)';
-            } else {
-                engineTag = equivKey.substring(0, firstPipe);
-                view      = equivKey.substring(lastPipe + 1);
-                roundId   = equivKey.substring(firstPipe + 1, lastPipe);
-            }
-        }
-
-        // CAPABILITY must be the one the engine maps to (derived, not trusted). XCONFIG
-        // maps to the sentinel 'config' capability (membership resolves
-        // against getActiveValidators, see below). Only an unknown/unmapped engine has no
-        // slashable membership here → reject.
-        let capability = null;
-        if(!error){
-            capability = ENGINE_CAPABILITY[engineTag];
-            if(!capability)
-                error = 'invalid: ENGINE_TAG (not slashable)';
-        }
+        // Read the wire, derive the EQUIV key, then the capability the engine is
+        // judged under. Each phase carries the error forward untouched, so the FIRST
+        // failure is still the one that is reported.
+        let wire = readProofWire(this.formats, this.util, params, data, error);
+        let key  = deriveEquivKey(wire.msgA, wire.msgB, wire.error);
+        let cap  = capabilityForEngine(key.engineTag, key.error);
+        let offender   = wire.offender;
+        let equivKey   = key.equivKey;
+        let capability = cap.capability;
+        error = cap.error;
 
         // (3) BOTH signatures verify against OFFENDER_PUBKEY over the FULL signed bytes.
-        if(!error && !ed25519.verify(msgA, String(sigA), offender))
+        if(!error && !ed25519.verify(wire.msgA, String(wire.sigA), offender))
             error = 'invalid: SIG_A (does not verify)';
         // Verify SIG_B is the offender's own signature over MSG_B
-        if(!error && !ed25519.verify(msgB, String(sigB), offender))
+        if(!error && !ed25519.verify(wire.msgB, String(wire.sigB), offender))
             error = 'invalid: SIG_B (does not verify)';
 
+        let slot = await this.resolveSlotAndCapability(data, wire, key, capability, error);
+        error      = slot.error;
+        capability = slot.capability;
+
+        error = await this.verifyMembership(data, capability, offender, slot, error);
+
+        // (5) Idempotency: a first proof burns the whole bond; later (pubkey,capability)
+        // proofs are no-ops.
+        let pubkeyId = null;
+        if(!error){
+            pubkeyId = await this.indexerDb.getOrCreatePubkeyId(offender);
+            if(await this.indexerDb.hasCapabilitySlashEvent(pubkeyId, capability))
+                error = 'invalid: already slashed (pubkey, capability)';
+        }
+
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        getLogger().info("\t SLASH : capability=" + String(data['CAPABILITY']) +
+            ' : offender=' + offender.substring(0, 16) + '...' +
+            ' : key=' + equivKey.substring(0, 24) + '...' +
+            ' : ' + status);
+
+        await this.settleSlash(data, status, capability, pubkeyId, slot.resolveBlock, equivKey);
+    }
+
+    // (4) Recover the slot the proof is about, and with it the capability that
+    // actually governs the content family, then hold the submitter to it.
+    async resolveSlotAndCapability(data, wire, key, capability, error){
         // (4) Recover the slot's snapshot_block deterministically from the proof and
         // confirm OFFENDER_PUBKEY was in CAPABILITY's locked snapshot at that block.
         //
@@ -270,7 +177,8 @@ class Slash {
             // must agree on the oracle round carried in-content. Gated, not unconditional,
             // because narrowing which proofs burn a bond is a consensus acceptance rule.
             let oracleRoundGate = await this.actions.protocolChanges.isEnabled('SLASH_ORACLE_ROUND_DISCRIMINATED', data['BLOCK_INDEX']);
-            let slot = await this.resolveSlot(engineTag, roundId, msgA.substring(prefix.length), msgB.substring(prefix.length), oracleRoundGate);
+            let slot = await this.resolveSlot(key.engineTag, key.roundId, wire.msgA.substring(key.prefix.length),
+                wire.msgB.substring(key.prefix.length), oracleRoundGate);
             if(slot.error) error = slot.error;
             else {
                 snapshotBlock = slot.snapshotBlock;
@@ -286,6 +194,11 @@ class Slash {
         // CAPABILITY is derived, never trusted: the submitter declares it and must match.
         if(!error && String(data['CAPABILITY']) !== capability)
             error = 'invalid: CAPABILITY (does not match engine)';
+        return { error: error, capability: capability, snapshotBlock: snapshotBlock, resolveBlock: resolveBlock };
+    }
+
+    // Returns the error chain, unchanged when it already carries a failure.
+    async verifyMembership(data, capability, offender, slot, error){
         // Verify the offender was actually in the signing set for this slot (a non-member cannot equivocate in it)
         if(!error){
             // XCONFIG is authorized by the WHOLE federation (getActiveValidators), every other
@@ -293,64 +206,77 @@ class Slash {
             // Read at the BURIED height (see above); the message still names the declared one,
             // matching attest.js, so the reject bytes do not move with the buffer.
             let validators = (capability === CONFIG_CAPABILITY)
-                ? await this.indexerDb.getActiveValidators(resolveBlock)
-                : await this.indexerDb.getValidatorsByCapability(capability, resolveBlock);
+                ? await this.indexerDb.getActiveValidators(slot.resolveBlock)
+                : await this.indexerDb.getValidatorsByCapability(capability, slot.resolveBlock);
             let inSet = Array.isArray(validators) &&
                 validators.some(v => String(v.pubkey || '').toLowerCase() === offender);
             if(!inSet)
                 error = 'invalid: OFFENDER_PUBKEY not in ' +
                     (capability === CONFIG_CAPABILITY ? 'federation' : 'capability') +
-                    ' snapshot at block ' + snapshotBlock;
+                    ' snapshot at block ' + slot.snapshotBlock;
         }
+        return error;
+    }
 
-        // (5) Idempotency: a first proof burns the whole bond; later (pubkey,capability)
-        // proofs are no-ops.
-        let pubkeyId = null;
-        if(!error){
-            pubkeyId = await this.indexerDb.getOrCreatePubkeyId(offender);
-            if(await this.indexerDb.hasCapabilitySlashEvent(pubkeyId, capability))
-                error = 'invalid: already slashed (pubkey, capability)';
-        }
+    // Split out of the settlement so the two questions it answers (burn pending
+    // stakes? whose bond is it?) read together.
+    async burnWholeBond(data, pubkeyId, resolveBlock){
+        // Burn the whole bond (active stakes + cooldown unstakes); returns total XCHAIN burned.
+        // At/after SLASH_BURNS_PENDING_STAKE (EQUIV-height-gated) burn pending-activation
+        // stakes too, so an equivocator's just-submitted top-up can't survive the burn.
+        let burnPending = await this.actions.protocolChanges.isEnabled('SLASH_BURNS_PENDING_STAKE', data['BLOCK_INDEX']);
 
-        let status = (error) ? error : 'valid';
-        data['STATUS'] = status;
+        // If the offender was a DELEGATED signing key, the bond is held by
+        // the source that delegated to it, not by rows keyed on the delegated pubkey.
+        // Burning by signing_pubkey_id matched nothing and burned ZERO while still
+        // writing a valid slash event, so equivocating through a delegated key cost
+        // the staker nothing. Resolve the owner AT THE EQUIVOCATION HEIGHT
+        // (recovered from the proof above) rather than at processing time, so a
+        // delegation revoked after the offence cannot orphan the proof and the target
+        // is a pure function of the proof itself.
+        //
+        // The height read is `resolveBlock`, the SAME buried height the membership
+        // check above used, not the raw declared one. The two must agree or the pair
+        // is incoherent: a delegation that activated inside the buried window puts the
+        // key in the raw-height set while the buried-height owner lookup returns null
+        // (burn nothing), and a delegation revoked inside it does the mirror. Deciding
+        // "was this key authorized to sign" and "whose bond does that make it" at two
+        // different heights is what produces a valid slash event that burns zero.
+        //
+        // A key that stakes in its own name resolves to null and keeps the original
+        // targeting. A bond that has since fully unstaked and withdrawn burns zero:
+        // that is deliberate, not a rejection, so the outcome never depends on stake
+        // motion after the offence.
+        let ownerSourceId = await this.indexerDb.getStakeSourceForDelegatedPubkey(pubkeyId, resolveBlock);
+        let burn   = await this.indexerDb.slashCapabilityStake(pubkeyId, data['BLOCK_INDEX'], data['ACTION_INDEX'], burnPending, ownerSourceId);
+        return burn;
+    }
 
-        getLogger().info("\t SLASH : capability=" + String(data['CAPABILITY']) +
-            ' : offender=' + offender.substring(0, 16) + '...' +
-            ' : key=' + equivKey.substring(0, 24) + '...' +
-            ' : ' + status);
+    async recordSlashEvent(data, capability, equivKey, pubkeyId, burned, split){
+        // Audit row (also the (pubkey,capability) dedup record).
+        let submitterId  = await this.indexerDb.getAddressId(data['SOURCE']);
+        let destinationId = split.treasuryAddr ? await this.indexerDb.getAddressId(split.treasuryAddr) : null;
+        await this.indexerDb.createCapabilitySlashEvent({
+            SLASH_ACTION_INDEX: data['ACTION_INDEX'],
+            SIGNING_PUBKEY_ID:  pubkeyId,
+            CAPABILITY:         capability,
+            EQUIV_KEY:          equivKey,
+            AMOUNT:             burned,
+            BOUNTY_AMOUNT:      split.bounty,
+            TREASURY_AMOUNT:    split.treasury,
+            SUBMITTER_ID:       submitterId,
+            DESTINATION_ID:     destinationId,
+            BLOCK_INDEX:        data['BLOCK_INDEX']
+        });
+    }
 
+    // Apply the verdict to the ledger. A rejected proof still lands here with empty
+    // arrays, so balances and mappings are reconciled on every path.
+    async settleSlash(data, status, capability, pubkeyId, resolveBlock, equivKey){
         let credits = [], debits = [], escrows = [];
 
         if(status === 'valid'){
-            // Burn the whole bond (active stakes + cooldown unstakes); returns total XCHAIN burned.
-            // At/after SLASH_BURNS_PENDING_STAKE (EQUIV-height-gated) burn pending-activation
-            // stakes too, so an equivocator's just-submitted top-up can't survive the burn.
-            let burnPending = await this.actions.protocolChanges.isEnabled('SLASH_BURNS_PENDING_STAKE', data['BLOCK_INDEX']);
-
-            // If the offender was a DELEGATED signing key, the bond is held by
-            // the source that delegated to it, not by rows keyed on the delegated pubkey.
-            // Burning by signing_pubkey_id matched nothing and burned ZERO while still
-            // writing a valid slash event, so equivocating through a delegated key cost
-            // the staker nothing. Resolve the owner AT THE EQUIVOCATION HEIGHT
-            // (recovered from the proof above) rather than at processing time, so a
-            // delegation revoked after the offence cannot orphan the proof and the target
-            // is a pure function of the proof itself.
-            //
-            // The height read is `resolveBlock`, the SAME buried height the membership
-            // check above used, not the raw declared one. The two must agree or the pair
-            // is incoherent: a delegation that activated inside the buried window puts the
-            // key in the raw-height set while the buried-height owner lookup returns null
-            // (burn nothing), and a delegation revoked inside it does the mirror. Deciding
-            // "was this key authorized to sign" and "whose bond does that make it" at two
-            // different heights is what produces a valid slash event that burns zero.
-            //
-            // A key that stakes in its own name resolves to null and keeps the original
-            // targeting. A bond that has since fully unstaked and withdrawn burns zero:
-            // that is deliberate, not a rejection, so the outcome never depends on stake
-            // motion after the offence.
-            let ownerSourceId = await this.indexerDb.getStakeSourceForDelegatedPubkey(pubkeyId, resolveBlock);
-            let burn   = await this.indexerDb.slashCapabilityStake(pubkeyId, data['BLOCK_INDEX'], data['ACTION_INDEX'], burnPending, ownerSourceId);
+            let burn   = await this.burnWholeBond(data, pubkeyId, resolveBlock);
             let burned = burn.total;
 
             // Bounty / treasury split. Governance config; absent → pure burn.
@@ -375,21 +301,7 @@ class Slash {
             if(split.treasuryAddr && this.util.bcgt(split.treasury, '0'))
                 credits.push([gas, split.treasury, split.treasuryAddr]);
 
-            // Audit row (also the (pubkey,capability) dedup record).
-            let submitterId  = await this.indexerDb.getAddressId(data['SOURCE']);
-            let destinationId = split.treasuryAddr ? await this.indexerDb.getAddressId(split.treasuryAddr) : null;
-            await this.indexerDb.createCapabilitySlashEvent({
-                SLASH_ACTION_INDEX: data['ACTION_INDEX'],
-                SIGNING_PUBKEY_ID:  pubkeyId,
-                CAPABILITY:         capability,
-                EQUIV_KEY:          equivKey,
-                AMOUNT:             burned,
-                BOUNTY_AMOUNT:      split.bounty,
-                TREASURY_AMOUNT:    split.treasury,
-                SUBMITTER_ID:       submitterId,
-                DESTINATION_ID:     destinationId,
-                BLOCK_INDEX:        data['BLOCK_INDEX']
-            });
+            await this.recordSlashEvent(data, capability, equivKey, pubkeyId, burned, split);
 
             if(split.treasuryAddr) this.util.addAddressTicker(split.treasuryAddr, gas);
             this.util.addAddressTicker(data['SOURCE'], gas);
@@ -405,203 +317,17 @@ class Slash {
         await this.mapper.createMappings(data);
     }
 
-    // Recover the slot's snapshot_block from the proof, deterministically per engine.
-    // The two CONTENT strings (header already stripped) must agree on the block where
-    // it is carried in-content; for engines that don't carry it, derive from the round.
+    // Recover the slot's snapshot_block from the proof. The per-engine layouts live
+    // in slash/resolve_slot.js; this handler only needs the answer, and hands those
+    // readers the state they need (util for isNull, indexerDb for the XATTEST read).
     async resolveSlot(engineTag, roundId, contentA, contentB, oracleRoundGate){
-        // In-content snapshot_block field index per engine (raw canonical layout).
-        const FIELD = {
-            [eq.ENGINE_TAGS.DEX]:        2,   // XMATCH|match_id|snapshot_block|...
-            [eq.ENGINE_TAGS.XCALL]:      3,   // XCALL|DISPATCH|call_id|snapshot_block|...  (RESULT: same index)
-            [eq.ENGINE_TAGS.CHECKPOINT]: 9,   // XCHECKPOINT|chain|network|block_index|block_hash|ledger|actions|contract|checkpoint_seq|snapshot_block[|batch_seq..]
-            // The bridge pair. WITHOUT these two rows the ENGINE_CAPABILITY entries above are
-            // inert: a well-formed bridge equivocation proof maps to cross_chain, then falls
-            // through to 'invalid: ENGINE_TAG (no snapshot_block rule)' and burns nothing,
-            // which is the one outcome "a bridge forgery directs value, so it must be
-            // slashable" was meant to rule out. Each carries the height in-content at index 2
-            // and each is a SINGLE content family, so neither needs the family discriminator
-            // the CHECKPOINT and ATTEST legs below carry.
-            [eq.ENGINE_TAGS.BRIDGE]:     2,   // XBRIDGE|transfer_id|snapshot_block|tick|...
-            [eq.ENGINE_TAGS.POLICY]:     2,   // XPOLICY|snapshot_id|snapshot_block|origin_chain|...
-            [eq.ENGINE_TAGS.CONFIG]:     0,   // XCONFIG content = snapshot_block|config_digest (block carried in-content so config equivocation is slashable)
-        };
-        if(FIELD[engineTag] !== undefined){
-            let i  = FIELD[engineTag];
-            // The CHECKPOINT engine tag carries TWO content families: the checkpoint
-            // root canonical (XCHECKPOINT|...) and the reward-attestation canonical
-            // (XANCPUB|scope|seq|snapshot_block|publisher|amount, both the per-chain and
-            // archive legs; see anchor.js rewardCanonical). Dispatch the field index on the
-            // content's leading token; both messages must agree on the family (a matched
-            // field across DIFFERENT layouts proves nothing about a shared slot).
-            if(engineTag === eq.ENGINE_TAGS.CHECKPOINT){
-                let famA = contentA.split('|', 1)[0];
-                let famB = contentB.split('|', 1)[0];
-                if(famA !== famB)
-                    return { error: 'invalid: CHECKPOINT content family mismatch' };
-                if(famA === 'XANCPUB') i = 3;
-            }
-            let fa = contentA.split('|')[i];
-            let fb = contentB.split('|')[i];
-            if(this.util.isNull(fa) || fa !== fb || !/^[0-9]+$/.test(String(fa)))
-                return { error: 'invalid: snapshot_block (mismatch or format)' };
-            return { snapshotBlock: Number(fa) };
-        }
-        // XORACLE: the ROUND_ID IS the BTC block.
-        if(engineTag === eq.ENGINE_TAGS.ORACLE){
-            if(!/^[0-9]+$/.test(String(roundId)))
-                return { error: 'invalid: ORACLE round (not a block)' };
-            // The BTC height alone does NOT name the slot. Oracle rounds
-            // advance on wall-clock (hub oracle/round.js), so a run of rounds can capture
-            // the SAME BTC tip; ed25519.buildPriceV0Payload keys the EQUIV header on that
-            // height with VIEW=0 and leaves the round counter inside the signed JSON. Two
-            // honest, distinct rounds at one tip therefore share the header prefix and
-            // differ in content, which reads here as equivocation and burns the whole bond
-            // of a validator that did nothing wrong. Discriminate on the in-content round:
-            // different rounds are different messages, not two versions of one.
-            //
-            // Only pairs where BOTH contents declare a round are judged. A content with no
-            // `round` cannot have come from buildPriceV0Payload, the one producer of an
-            // ORACLE-tagged canonical, and refusing to resolve those would widen the
-            // rejection surface past the bug (the fail-open leg is unreachable for a real
-            // proof: both signatures verify against the offender's own key). The
-            // btc_block_height cross-check runs on the same terms.
-            if(oracleRoundGate){
-                let pa = parseOracleContent(contentA);
-                let pb = parseOracleContent(contentB);
-                if(pa !== null && pb !== null){
-                    if(pa.round !== null && pb.round !== null && pa.round !== pb.round)
-                        return { error: 'invalid: ORACLE round mismatch (distinct rounds, not equivocation)' };
-                    if((pa.height !== null && pa.height !== Number(roundId)) ||
-                       (pb.height !== null && pb.height !== Number(roundId)))
-                        return { error: 'invalid: ORACLE btc_block_height (does not match ROUND_ID)' };
-                }
-            }
-            return { snapshotBlock: Number(roundId) };
-        }
-        // XORACLEB (PRICE batches): the ROUND_ID is the COMPOSITE
-        // `<anchor>|<first_round>|<last_round>`, so the BTC anchor is its first segment.
-        if(engineTag === eq.ENGINE_TAGS.ORACLE_BATCH){
-            // The round id legitimately contains '|' and equivKey treats it as opaque, so
-            // it is parsed HERE and never by field-splitting the whole key (the checkpoint
-            // round id `chain|network|block_index|checkpoint_seq` has the same property).
-            // parse() already peeled ENGINE_TAG and VIEW off the ends, so exactly three
-            // integer segments must remain; anything else does not name a batch slot.
-            let seg = String(roundId).split('|');
-            if(seg.length !== 3 || !seg.every(s => /^[0-9]+$/.test(s)))
-                return { error: 'invalid: ORACLE_BATCH round id (format)' };
-            let anchor = Number(seg[0]), first = Number(seg[1]), last = Number(seg[2]);
-            if(first > last)
-                return { error: 'invalid: ORACLE_BATCH window (first_round > last_round)' };
-
-            // A batch is named by (anchor, window), and the spec explicitly permits two
-            // leaders to split ONE window differently at one anchor. Two batches over
-            // different sub-ranges are therefore two messages, not two versions of one, and
-            // pairing them would burn an honest bond. Discriminate on the in-content window
-            // the way the XORACLE leg above discriminates on `round`, each end independently
-            // so a half-declared window still narrows the pair.
-            //
-            // Ungated, unlike SLASH_ORACLE_ROUND_DISCRIMINATED: that gate exists only because
-            // XORACLE has pre-fix verdicts it must keep reproducing. XORACLEB is a new tag
-            // whose first acceptance is this branch (the XCONFIG precedent), so there is no
-            // earlier verdict to stay identical with, and no window in which an honest split
-            // would burn a bond.
-            let pa = parseBatchContent(contentA);
-            let pb = parseBatchContent(contentB);
-            if(pa !== null && pb !== null){
-                if((pa.first !== null && pb.first !== null && pa.first !== pb.first) ||
-                   (pa.last  !== null && pb.last  !== null && pa.last  !== pb.last))
-                    return { error: 'invalid: ORACLE_BATCH window mismatch (distinct windows, not equivocation)' };
-                // The anchor is what membership resolves at, so a content naming a different
-                // one is not evidence about this slot. The WINDOW is deliberately not
-                // cross-checked against the header: it is offender-attested there, and a pair
-                // whose contents agree with each other but not with the header is still two
-                // conflicting signatures under one key, which is equivocation.
-                if((pa.height !== null && pa.height !== anchor) ||
-                   (pb.height !== null && pb.height !== anchor))
-                    return { error: 'invalid: ORACLE_BATCH btc_block_height (does not match ROUND_ID)' };
-            }
-            return { snapshotBlock: anchor };
-        }
-        // XATTEST: the canonical is delimiter-less and carries no block. Recover it from
-        // the mirrored request row keyed by the ROUND_ID (= request_id). Deterministic
-        // (the request is indexed state present on every BTC indexer).
-        if(engineTag === eq.ENGINE_TAGS.ATTEST){
-            // XATTEST carries TWO families (base v1 and relay). The relay legs are shaped
-            // like XCALL: pipe-delimited, snapshot_block at index 3, hashed ROUND_ID, and
-            // locked under `cross_chain` (attest.js verifyRelayQuorum). The base v1
-            // canonical is delimiter-less and starts with the request_id, so its first
-            // '|' segment can never be the literal 'ATTEST'. Both messages must agree on
-            // the family: a matched field across DIFFERENT layouts proves nothing about a
-            // shared slot.
-            let pa = contentA.split('|'), pb = contentB.split('|');
-            let relayA = pa[0] === 'ATTEST' && (pa[1] === 'RELAY_REQUEST' || pa[1] === 'RELAY_RESPONSE');
-            let relayB = pb[0] === 'ATTEST' && (pb[1] === 'RELAY_REQUEST' || pb[1] === 'RELAY_RESPONSE');
-            if(relayA !== relayB)
-                return { error: 'invalid: ATTEST content family mismatch' };
-            if(relayA){
-                if(pa[1] !== pb[1])
-                    return { error: 'invalid: ATTEST relay phase mismatch' };
-                let fa = pa[3], fb = pb[3];
-                if(this.util.isNull(fa) || fa !== fb || !/^[0-9]+$/.test(String(fa)))
-                    return { error: 'invalid: snapshot_block (mismatch or format)' };
-                return { snapshotBlock: Number(fa), capability: 'cross_chain' };
-            }
-            let request = await this.indexerDb.getAttestationRequestById(String(roundId).toLowerCase());
-            if(!request || request.block_index == null)
-                return { error: 'invalid: ATTEST request unknown (cannot resolve snapshot_block)' };
-            return { snapshotBlock: Number(request.block_index) };
-        }
-        return { error: 'invalid: ENGINE_TAG (no snapshot_block rule)' };
+        return await resolveProofSlot(this, engineTag, roundId, contentA, contentB, oracleRoundGate);
     }
 
-    // Bounty/treasury split for a burned bond. Governance-configured. The submitter's
-    // bounty = clamp(BOUNTY_BPS·burned, BOUNTY_FLOOR, BOUNTY_CAP), never exceeding the bond; the
-    // remainder goes to TREASURY_ADDRESS, or is BURNED when unset. Config shape:
-    //   config.STAKING.CAPABILITIES[capability].SLASH  for the 5 capability-scoped engines, or
-    //   config.CONFIG_SLASH                            for XCONFIG (capability === 'config',
-    //                                                  whole-federation scope, no CAPABILITIES home)
-    //   = { BOUNTY_BPS, BOUNTY_FLOOR, BOUNTY_CAP, TREASURY_ADDRESS }  (all optional)
-    // Absent / zero → PURE BURN (bounty 0, no treasury credit). Never pays validators.
+    // The payout policy lives in slash/bounty.js. The method stays because it is the
+    // handler's public shape: callers and tests reach the split through it.
     bountyTreasurySplit(capability, burned){
-        let total = String(burned || '0');
-        if(!this.util.bcgt(total, '0')) return { bounty: '0', treasury: '0', treasuryAddr: null };
-
-        // XCONFIG has no staking capability, so its SLASH policy lives at config.CONFIG_SLASH;
-        // every other engine reads its capability's SLASH block.
-        let cfg;
-        if(capability === 'config'){
-            cfg = this.config['CONFIG_SLASH'] || {};
-        } else {
-            let caps = (this.config['STAKING'] && this.config['STAKING']['CAPABILITIES']) ? this.config['STAKING']['CAPABILITIES'] : {};
-            cfg = (caps[capability] && caps[capability]['SLASH']) ? caps[capability]['SLASH'] : {};
-        }
-
-        let bps = Number(cfg['BOUNTY_BPS'] || 0);
-        if(!Number.isFinite(bps) || bps < 0) bps = 0;
-        if(bps > 10000) bps = 10000;
-
-        // bc* return mathjs BigNumbers → String() so the ledger sees plain amount strings
-        // (the convention everywhere else, e.g. STAKE's debits).
-        let bounty = (bps > 0)
-            ? String(this.util.bcdiv(this.util.bcmul(total, String(bps), 8), '10000', 8))
-            : '0';
-        // FLOOR: guarantee a minimum payout so a submitter always clears the (BTC-tx + protocol)
-        // submission cost, even on a bond at MIN_STAKE. Applied before the cap; the final clamp
-        // to `total` keeps a sub-floor bond from minting (bounty = whole bond, treasury 0).
-        let floor = cfg['BOUNTY_FLOOR'];
-        if(floor != null && this.util.bcgt(String(floor), bounty))
-            bounty = String(floor);
-        // CAP: hard ceiling (detection cost is constant; don't scale the reward with whale bonds).
-        let cap = cfg['BOUNTY_CAP'];
-        if(cap != null && this.util.bcgt(bounty, String(cap)))
-            bounty = String(cap);
-        // Never pay out more than was burned.
-        if(this.util.bcgt(bounty, total))
-            bounty = total;
-
-        let treasury     = String(this.util.bcsub(total, bounty, 8));
-        let treasuryAddr = cfg['TREASURY_ADDRESS'] ? String(cfg['TREASURY_ADDRESS']) : null;  // null = BURN
-        return { bounty: bounty, treasury: treasury, treasuryAddr: treasuryAddr };
+        return splitBountyTreasury(this.config, this.util, capability, burned);
     }
 }
 
