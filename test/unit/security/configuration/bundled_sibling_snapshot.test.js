@@ -36,64 +36,60 @@ const path   = require('path');
 // past, exactly as xchain-e2e-test's sibling-tree advisory guard caught for its own staged
 // siblings (test/unit/security/configuration/sibling-tree-advisories.test.js).
 // This is that guard, ported.
-describe('Security: bundled sibling lockfile snapshots @regression @tier4', function () {
-    // Located by walking up to the lockfile rather than by a fixed number of
-    // '..' hops, so this file stays byte-identical across the sibling repos
-    // that carry it regardless of where each one files its tests.
-    const root = (function () {
-        let dir = __dirname;
-        while (!fs.existsSync(path.join(dir, 'package-lock.json'))) {
-            const up = path.dirname(dir);
-            if (up === dir) throw new Error(`no package-lock.json above ${__dirname}`);
-            dir = up;
-        }
-        return dir;
-    })();
-    const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-
-    // Every dependency declared as a local path, in whichever section it is
-    // declared: the indexer bundles the VM as a hard dependency, the explorer
-    // as an optional one, and a third bundled sibling is covered the day it is
-    // added rather than the day someone remembers this file.
-    function bundledSiblings() {
-        const sections = ['dependencies', 'optionalDependencies', 'devDependencies'];
-        const seen = new Map();
-        for (const section of sections) {
-            for (const [name, range] of Object.entries(pkg[section] || {})) {
-                if (!/^file:/.test(String(range)) || seen.has(name)) continue;
-                seen.set(name, {
-                    name,
-                    dir: path.resolve(root, String(range).replace(/^file:/, ''))
-                });
-            }
-        }
-        return [...seen.values()];
+// Located by walking up to the lockfile rather than by a fixed number of
+// '..' hops, so this file stays byte-identical across the sibling repos
+// that carry it regardless of where each one files its tests.
+const root = (function () {
+    let dir = __dirname;
+    while (!fs.existsSync(path.join(dir, 'package-lock.json'))) {
+        const up = path.dirname(dir);
+        if (up === dir) throw new Error(`no package-lock.json above ${__dirname}`);
+        dir = up;
     }
-
-    // Source of truth, in the two places the sibling can actually be, canonical
-    // first. bin/vendor-vm.sh treats the checkout BESIDE this repo as canonical
-    // and its `check` mode fails closed on any byte drift between that and the
-    // staged copy, so preferring it here keeps the two guards pointed at the
-    // same version rather than at each other. The staged copy is the fallback
-    // for a standalone checkout that has no sibling beside it.
-    function truthManifest(sibling) {
-        const candidates = [
-            path.join(root, '..', path.basename(sibling.dir), 'package.json'),
-            path.join(sibling.dir, 'package.json')
-        ];
-        const found = candidates.find(p => fs.existsSync(p));
-        return found ? { file: found, manifest: JSON.parse(fs.readFileSync(found, 'utf8')) } : null;
+    return dir;
+})();
+const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+// Every dependency declared as a local path, in whichever section it is
+// declared: the indexer bundles the VM as a hard dependency, the explorer
+// as an optional one, and a third bundled sibling is covered the day it is
+// added rather than the day someone remembers this file.
+function bundledSiblings() {
+    const sections = ['dependencies', 'optionalDependencies', 'devDependencies'];
+    const seen = new Map();
+    for (const section of sections) {
+        for (const [name, range] of Object.entries(pkg[section] || {})) {
+            if (!/^file:/.test(String(range)) || seen.has(name)) continue;
+            seen.set(name, {
+                name,
+                dir: path.resolve(root, String(range).replace(/^file:/, ''))
+            });
+        }
     }
-
-    it('SNAP-1: package.json still declares the bundled siblings as local paths', function () {
-        // Guards the premise rather than the hazard: if these stop being file:
-        // dependencies the per-sibling cases below silently cover nothing, and
-        // this suite would pass while proving less than it did yesterday.
-        assert.ok(bundledSiblings().length > 0,
-            'expected at least one file: dependency (xchain-vm); the bundling layout changed '
-            + 'and this guard needs re-pointing');
-    });
-
+    return [...seen.values()];
+}
+// Source of truth, in the two places the sibling can actually be, canonical
+// first. bin/vendor-vm.sh treats the checkout BESIDE this repo as canonical
+// and its `check` mode fails closed on any byte drift between that and the
+// staged copy, so preferring it here keeps the two guards pointed at the
+// same version rather than at each other. The staged copy is the fallback
+// for a standalone checkout that has no sibling beside it.
+function truthManifest(sibling) {
+    const candidates = [
+        path.join(root, '..', path.basename(sibling.dir), 'package.json'),
+        path.join(sibling.dir, 'package.json')
+    ];
+    const found = candidates.find(p => fs.existsSync(p));
+    return found ? { file: found, manifest: JSON.parse(fs.readFileSync(found, 'utf8')) } : null;
+}
+function testBundledSiblingsDeclared() {
+    // Guards the premise rather than the hazard: if these stop being file:
+    // dependencies the per-sibling cases below silently cover nothing, and
+    // this suite would pass while proving less than it did yesterday.
+    assert.ok(bundledSiblings().length > 0,
+        'expected at least one file: dependency (xchain-vm); the bundling layout changed '
+        + 'and this guard needs re-pointing');
+}
+function registerSiblingSnapshotTests() {
     bundledSiblings().forEach(function (sibling) {
         it(`SNAP-2: the lockfile snapshot of ${sibling.name} records the version the sibling carries`, function () {
             const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
@@ -151,4 +147,8 @@ describe('Security: bundled sibling lockfile snapshots @regression @tier4', func
                 + 'sibling (npm run vendor:vm) and regenerate the lockfile.');
         });
     });
+}
+describe('Security: bundled sibling lockfile snapshots @regression @tier4', function () {
+    it('SNAP-1: package.json still declares the bundled siblings as local paths', testBundledSiblingsDeclared);
+    registerSiblingSnapshotTests();
 });
