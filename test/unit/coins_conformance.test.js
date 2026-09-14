@@ -34,12 +34,12 @@ const path   = require('path');
 
 const coins = require('../../src/coins');
 const { CONSENSUS_CONFIG_PIN } = require('../../src/coins/consensus_pin.js');
+// Decides whether the canonical xchain-hub sibling may be trusted before the identity tier reads it.
+const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 
 const LOCAL_COINS_DIR = path.join(__dirname, '..', '..', 'src', 'coins');
 const HUB_DIR   = process.env.XCHAIN_HUB_DIR || path.join(__dirname, '..', '..', '..', 'xchain-hub');
 const CANON_DIR = path.join(HUB_DIR, 'src', 'coins');
-const CANON_PRESENT = fs.existsSync(CANON_DIR);
-const REQUIRE_SIBLINGS = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 
 // Keep in lockstep with FILES in xchain-hub/bin/sync-coins.sh.
 const VENDORED_FILES = ['BTC.js', 'LTC.js', 'DOGE.js', 'index.js', 'consensus_pin.js'];
@@ -63,12 +63,12 @@ describe('coin-registry conformance (vendored copy) @regression', function(){
     });
 
     describe('byte-identity to canonical xchain-hub/src/coins', function(){
+        // Refuses an absent canonical dir and a lane symlink into a live main checkout alike.
+        const canonCheckout = siblingCheckout(__dirname, CANON_DIR);
+
         before(function(){
-            if(!CANON_PRESENT){
-                if(REQUIRE_SIBLINGS)
-                    throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but canonical xchain-hub coins dir not found at ' + CANON_DIR);
-                this.skip();
-            }
+            if(!canonCheckout.usable)
+                return skipOrFail(this, canonCheckout, 'the coin-registry byte-identity guard against xchain-hub/src/coins');
         });
 
         VENDORED_FILES.forEach(function(f){
