@@ -15,11 +15,11 @@
  * XChain Platform Action - AIRDROP: fees
  *
  * Prices one leg's per-tx FEE and validates how SOURCE pays it. The fees
- * object itself is created once per action by airdrop.js.
+ * object itself is created once per action by index.js.
  *
  ********************************************************************/
 
-// Installed onto Airdrop.prototype by airdrop.js; each method runs with `this` bound to the
+// Installed onto Airdrop.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
 module.exports = {
 

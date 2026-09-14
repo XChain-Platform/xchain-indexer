@@ -35,12 +35,12 @@
 // reads the wire into legs and consolidates them, prefetch.js makes the once-per-action
 // reads, validate.js and gated_handoff.js judge a leg, controller_guard.js runs the bound
 // guards, settle.js records each leg and closes the action
-const legsPart            = require('./send/legs.js');
-const prefetchPart        = require('./send/prefetch.js');
-const validatePart        = require('./send/validate.js');
-const gatedHandoffPart    = require('./send/gated_handoff.js');
-const controllerGuardPart = require('./send/controller_guard.js');
-const settlePart          = require('./send/settle.js');
+const legsPart            = require('./legs.js');
+const prefetchPart        = require('./prefetch.js');
+const validatePart        = require('./validate.js');
+const gatedHandoffPart    = require('./gated_handoff.js');
+const controllerGuardPart = require('./controller_guard.js');
+const settlePart          = require('./settle.js');
 
 class Send {
 

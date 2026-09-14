@@ -32,10 +32,10 @@
 // validate.js judges the action, fees.js prices the fee and validates its payment,
 // controller_guard.js runs the bound guard, settle.js stages the DEBIT, records and applies
 // the ledger. Reading the context and building the recipient list stay in this file.
-const validatePart        = require('./dividend/validate.js');
-const feesPart            = require('./dividend/fees.js');
-const controllerGuardPart = require('./dividend/controller_guard.js');
-const settlePart          = require('./dividend/settle.js');
+const validatePart        = require('./validate.js');
+const feesPart            = require('./fees.js');
+const controllerGuardPart = require('./controller_guard.js');
+const settlePart          = require('./settle.js');
 
 class Dividend {
 

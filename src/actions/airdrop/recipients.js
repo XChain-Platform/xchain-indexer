@@ -19,7 +19,7 @@
  *
  ********************************************************************/
 
-// Installed onto Airdrop.prototype by airdrop.js; each method runs with `this` bound to the
+// Installed onto Airdrop.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
 module.exports = {
 
@@ -29,7 +29,7 @@ module.exports = {
         // Set of addresses that will receive this AIRDROP. A Set, not an array: membership is
         // tested once per holder and a list can carry thousands of addresses (see mapper.js),
         // so an array made dedup O(n^2) on the synchronous per-block path. Set over a plain
-        // object (the dividend.js/callback.js idiom) because insertion order is guaranteed,
+        // object (the dividend/index.js and callback.js idiom) because insertion order is guaranteed,
         // keeping the credit order below deterministic for consensus.
         let recipients = new Set();
 

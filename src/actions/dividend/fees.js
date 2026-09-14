@@ -15,11 +15,11 @@
  * XChain Platform Action - DIVIDEND: fees
  *
  * Prices the DIVIDEND's per-tx FEE and validates how SOURCE pays it. The
- * fees object itself is created by dividend.js.
+ * fees object itself is created by index.js.
  *
  ********************************************************************/
 
-// Installed onto Dividend.prototype by dividend.js; each method runs with `this` bound to the
+// Installed onto Dividend.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
 module.exports = {
 

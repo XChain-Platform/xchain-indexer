@@ -36,12 +36,12 @@
 // recipients.js expands and filters who receives it, fees.js prices the fee and validates
 // its payment, controller_guard.js runs the bound guard, settle.js stages, commits, records
 // and closes
-const legsPart            = require('./airdrop/legs.js');
-const validatePart        = require('./airdrop/validate.js');
-const recipientsPart      = require('./airdrop/recipients.js');
-const feesPart            = require('./airdrop/fees.js');
-const controllerGuardPart = require('./airdrop/controller_guard.js');
-const settlePart          = require('./airdrop/settle.js');
+const legsPart            = require('./legs.js');
+const validatePart        = require('./validate.js');
+const recipientsPart      = require('./recipients.js');
+const feesPart            = require('./fees.js');
+const controllerGuardPart = require('./controller_guard.js');
+const settlePart          = require('./settle.js');
 
 class Airdrop {
 

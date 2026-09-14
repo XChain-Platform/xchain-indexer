@@ -19,7 +19,7 @@
  *
  ********************************************************************/
 
-// Installed onto Airdrop.prototype by airdrop.js; each method runs with `this` bound to the
+// Installed onto Airdrop.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
 module.exports = {
 

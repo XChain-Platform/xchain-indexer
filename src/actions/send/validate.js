@@ -18,7 +18,7 @@
  *
  ********************************************************************/
 
-// Installed onto Send.prototype by send.js; each method runs with `this` bound to the
+// Installed onto Send.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
 module.exports = {
 

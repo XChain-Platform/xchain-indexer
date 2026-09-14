@@ -18,7 +18,7 @@
  *
  ********************************************************************/
 
-// Installed onto Dividend.prototype by dividend.js; each method runs with `this` bound to the
+// Installed onto Dividend.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
 module.exports = {
 
