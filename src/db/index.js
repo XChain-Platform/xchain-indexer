@@ -865,7 +865,7 @@ class Database {
         // body-buried protection (the scan stops at the first non-comment, non-blank
         // line, so no data literal or trailing prose can be seen) while accommodating
         // any length of leading comment banner. Kept byte-for-byte in step with the
-        // sibling runner at xchain-decoder/src/db.js:_migrationMode.
+        // sibling runner at xchain-decoder/src/db.js:migrationMode.
         const lines    = String(raw).split('\n');
         const prologue = [];
         for(const line of lines){
