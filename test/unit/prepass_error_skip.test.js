@@ -63,13 +63,24 @@ describe('assignActionAddressIds: pre-handler-error skip (#4888) @regression @ti
 
     it('interns the fresh destination id when the action has NO pre-handler error', async function () {
         const { actions, created } = makeActions();
-        await actions.assignActionAddressIds('MINT', params, data, null);
-        assert.deepStrictEqual(created, [NEW_DEST], 'a clean MINT interns its new destination id');
+        try {
+            await actions.assignActionAddressIds('MINT', params, data, null);
+            assert.deepStrictEqual(created, [NEW_DEST], 'a clean MINT interns its new destination id');
+        } finally {
+            // makeActions() builds a real Actions instance, which forks a persistent
+            // VM subprocess (execution: 'subprocess'); nothing else here ever shut
+            // it down.
+            await actions.vm.shutdown();
+        }
     });
 
     it('does NOT intern any id when the action was rejected before the handler', async function () {
         const { actions, created } = makeActions();
-        await actions.assignActionAddressIds('MINT', params, data, 'invalid: ACTION is not yet activated');
-        assert.deepStrictEqual(created, [], 'a pre-handler-rejected action mints no index ids');
+        try {
+            await actions.assignActionAddressIds('MINT', params, data, 'invalid: ACTION is not yet activated');
+            assert.deepStrictEqual(created, [], 'a pre-handler-rejected action mints no index ids');
+        } finally {
+            await actions.vm.shutdown();
+        }
     });
 });

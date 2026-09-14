@@ -58,8 +58,12 @@ describe('Tier 1 - processTransaction crash safety @tier1', function () {
         actions = new Actions(indexer);
     });
 
-    afterEach(function () {
+    afterEach(async function () {
         sinon.restore();
+        // beforeEach's `new Actions(indexer)` forks a persistent VM subprocess
+        // (execution: 'subprocess'); nothing else in this suite ever called
+        // vm.shutdown(), so each test's fork outlived the process.
+        await actions.vm.shutdown();
     });
 
     // Helper: process tx and log crashes (does not assert; crash logging only)

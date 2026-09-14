@@ -152,8 +152,16 @@ describe('Security: VM runtime boot refusal @regression @tier4', function () {
             'a constructed Actions with this.vm = null is exactly the state that parks at the first contract block');
     });
 
-    it('SEC-46: a loadable VM still constructs (the gate does not fire on a healthy host)', function () {
+    it('SEC-46: a loadable VM still constructs (the gate does not fire on a healthy host)', async function () {
         const actions = new Actions(mockIndexer());
-        assert.ok(actions.vm, 'vm must be wired when xchain-vm loads');
+        try {
+            assert.ok(actions.vm, 'vm must be wired when xchain-vm loads');
+        } finally {
+            // Unlike SEC-43/44/45 (whose Broken constructor throws before this.vm is
+            // set), this is the one real Actions construction in the file, so it
+            // forks a real persistent VM subprocess (execution: 'subprocess') that
+            // nothing else here ever shut down.
+            await actions.vm.shutdown();
+        }
     });
 });

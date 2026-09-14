@@ -249,6 +249,13 @@ async function destroyIndexer(indexer) {
     try {
         if (indexer.indexerDb && indexer.indexerDb.pool) await indexer.indexerDb.pool.end();
     } catch (e) { /* ignore */ }
+    try {
+        // initIndexer()'s `new Actions(indexer)` forks a persistent VM subprocess
+        // (execution: 'subprocess'); without this every scenario file across the
+        // whole integration tier leaked one, and the suite never exited on its
+        // own without --exit.
+        if (indexer.actions && indexer.actions.vm) await indexer.actions.vm.shutdown();
+    } catch (e) { /* ignore */ }
 }
 
 /**
