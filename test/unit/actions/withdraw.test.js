@@ -9,95 +9,36 @@
 // General Public License v3.0 or later; see LICENSE.md. A commercial
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
+//
+// WITHDRAW handler: FORMAT validation, the sleeping-tick and canonical-index
+// checks, the valid path, CONTRACT_ACTION_INDEX and TICK validation and a
+// sleeping SOURCE. The AMOUNT, contract-balance and ledger blocks live beside
+// it in withdraw.test/; every file opens the same 'Withdraw handler
+// @regression @tier2' describe, so each full test title stays under one suite
+// name. withdraw.test/helpers/withdraw_context.js holds the constants, builders
+// and the mock indexer every block starts from.
 
 process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
-const sinon  = require('sinon');
+const sinon = require('sinon');
+const { CONTRACT_INDEX, TICK, makeData, makeWithdrawContext } = require('./withdraw.test/helpers/withdraw_context.js');
 
-const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
+let indexer, handler;
 
-const Withdraw = require('../../../src/actions/withdraw.js');
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const SOURCE           = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-const CONTRACT_INDEX   = '7';
-const TICK             = 'TEST';
-const BLOCK            = 100;
-// Contract address as computed by the handler: 'C:BTC:<contract_action_index>'
-const CONTRACT_ADDRESS = 'C:BTC:' + CONTRACT_INDEX;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function makeActionsCtx(indexer) {
-    return {
-        config:          indexer.config,
-        util:            indexer.util,
-        mapper:          indexer.mapper,
-        decoderDb:       indexer.decoderDb,
-        indexerDb:       indexer.indexerDb,
-        protocolChanges: {
-            isDefined:  sinon.stub().returns(true),
-            isEnabled:  sinon.stub().resolves(true),
-        },
-        processAction: sinon.stub().resolves(),
-    };
+// Each test starts from its own mock indexer and WITHDRAW handler.
+function freshWithdraw() {
+    ({ indexer, handler } = makeWithdrawContext());
 }
 
-function makeData(overrides = {}) {
-    return createBaseData(Object.assign({ ACTION: 'WITHDRAW', FORMAT: 0, COIN: 'BTC', BLOCK_INDEX: BLOCK, SOURCE }, overrides));
-}
-
-function makeToken(overrides = {}) {
-    return createTokenInfo(Object.assign({ TICK, TICK_ID: 1, DECIMALS: 0 }, overrides));
-}
-
-// ---------------------------------------------------------------------------
-// Suite
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// FORMAT validation
+// -----------------------------------------------------------------------
 
 describe('Withdraw handler @regression @tier2', function () {
-    let indexer, actionsCtx, handler;
-
-    beforeEach(function () {
-        indexer    = createMockIndexer();
-        actionsCtx = makeActionsCtx(indexer);
-        handler    = new Withdraw(actionsCtx);
-
-        // Extra stubs not present in default mock
-        indexer.indexerDb.createWithdrawal = sinon.stub().resolves();
-        indexer.indexerDb.getContract      = sinon.stub().resolves(null);
-
-        // Default: contract exists and caller is owner (source_id matches)
-        indexer.indexerDb.getContract.resolves({ source_id: 42 });
-        indexer.indexerDb.getAddressId.resolves(42);
-
-        // Default: token exists
-        indexer.indexerDb.getTokenInfo.resolves(makeToken());
-
-        // Default: contract has sufficient balance
-        // getAddressBalances is called with the contract address
-        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
-
-        // Default: source not sleeping
-        indexer.indexerDb.isActionAllowed.resolves(true);
-
-        indexer.util.resetLists();
-    });
-
-    afterEach(function () {
-        sinon.restore();
-    });
-
-    // -----------------------------------------------------------------------
-    // FORMAT validation
-    // -----------------------------------------------------------------------
+    beforeEach(freshWithdraw);
+    afterEach(() => sinon.restore());
 
     describe('FORMAT validation', function () {
 
@@ -128,6 +69,11 @@ describe('Withdraw handler @regression @tier2', function () {
             assert.ok(data.STATUS.startsWith('invalid'));
         });
     });
+});
+
+describe('Withdraw handler @regression @tier2', function () {
+    beforeEach(freshWithdraw);
+    afterEach(() => sinon.restore());
 
     // WITHDRAW, like every other token-moving handler, must check whether the TICK
     // is asleep, and must not share the /^\d+$/ gate that admits leading-zero (phantom-address) indexes.
@@ -155,10 +101,15 @@ describe('Withdraw handler @regression @tier2', function () {
             assert.ok(String(data.STATUS).includes('CONTRACT_ACTION_INDEX (format)'));
         });
     });
+});
 
-    // -----------------------------------------------------------------------
-    // Valid withdraw
-    // -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// Valid withdraw
+// -----------------------------------------------------------------------
+
+describe('Withdraw handler @regression @tier2', function () {
+    beforeEach(freshWithdraw);
+    afterEach(() => sinon.restore());
 
     describe('valid withdraw', function () {
 
@@ -199,10 +150,15 @@ describe('Withdraw handler @regression @tier2', function () {
             assert.ok(indexer.indexerDb.updateTokens.calledOnce);
         });
     });
+});
 
-    // -----------------------------------------------------------------------
-    // CONTRACT_ACTION_INDEX validations
-    // -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// CONTRACT_ACTION_INDEX validations
+// -----------------------------------------------------------------------
+
+describe('Withdraw handler @regression @tier2', function () {
+    beforeEach(freshWithdraw);
+    afterEach(() => sinon.restore());
 
     describe('CONTRACT_ACTION_INDEX validations', function () {
         it('missing CONTRACT_ACTION_INDEX → invalid', async function () {
@@ -235,7 +191,14 @@ describe('Withdraw handler @regression @tier2', function () {
 
             assert.ok(data.STATUS.includes('CONTRACT_ACTION_INDEX'));
         });
+    });
+});
 
+describe('Withdraw handler @regression @tier2', function () {
+    beforeEach(freshWithdraw);
+    afterEach(() => sinon.restore());
+
+    describe('CONTRACT_ACTION_INDEX validations', function () {
         it('caller is not contract owner → invalid', async function () {
             indexer.indexerDb.getContract.resolves({ source_id: 99 }); // owned by 99
             indexer.indexerDb.getAddressId.resolves(42);               // caller is 42
@@ -274,10 +237,15 @@ describe('Withdraw handler @regression @tier2', function () {
             assert.ok(indexer.indexerDb.createWithdrawal.calledOnce);
         });
     });
+});
 
-    // -----------------------------------------------------------------------
-    // TICK validations
-    // -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// TICK validations
+// -----------------------------------------------------------------------
+
+describe('Withdraw handler @regression @tier2', function () {
+    beforeEach(freshWithdraw);
+    afterEach(() => sinon.restore());
 
     describe('TICK validations', function () {
 
@@ -292,96 +260,15 @@ describe('Withdraw handler @regression @tier2', function () {
             assert.ok(data.STATUS.includes('TICK'));
         });
     });
+});
 
-    // -----------------------------------------------------------------------
-    // AMOUNT validations
-    // -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
+// SOURCE sleeping
+// -----------------------------------------------------------------------
 
-    describe('AMOUNT validations', function () {
-
-        it('zero AMOUNT → invalid', async function () {
-            const params = ['0', CONTRACT_INDEX, TICK, '0'];
-            const data   = makeData({ FORMAT: 0 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('AMOUNT'));
-        });
-
-        it('fractional AMOUNT for 0-decimal token → invalid (format check)', async function () {
-            const params = ['0', CONTRACT_INDEX, TICK, '1.5'];
-            const data   = makeData({ FORMAT: 0 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('AMOUNT'));
-        });
-
-        it('valid integer AMOUNT for 0-decimal token → valid', async function () {
-            const params = ['0', CONTRACT_INDEX, TICK, '100'];
-            const data   = makeData({ FORMAT: 0 });
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data.STATUS, 'valid');
-        });
-
-        it('valid decimal AMOUNT for 8-decimal token → valid', async function () {
-            indexer.indexerDb.getTokenInfo.resolves(makeToken({ DECIMALS: 8, TICK_ID: 1 }));
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '1000.00000000' });
-
-            const params = ['0', CONTRACT_INDEX, TICK, '50.12345678'];
-            const data   = makeData({ FORMAT: 0 });
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data.STATUS, 'valid');
-        });
-    });
-
-    // -----------------------------------------------------------------------
-    // Contract balance validation
-    // -----------------------------------------------------------------------
-
-    describe('contract balance validation', function () {
-
-        it('insufficient contract balance → invalid', async function () {
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '50' }); // only 50, want 100
-
-            const params = ['0', CONTRACT_INDEX, TICK, '100'];
-            const data   = makeData({ FORMAT: 0 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('insufficient contract balance'));
-        });
-
-        it('zero contract balance → invalid', async function () {
-            indexer.indexerDb.getAddressBalances.resolves({});
-
-            const params = ['0', CONTRACT_INDEX, TICK, '100'];
-            const data   = makeData({ FORMAT: 0 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(data.STATUS.includes('insufficient contract balance'));
-        });
-
-        it('exact balance → valid', async function () {
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '100' });
-
-            const params = ['0', CONTRACT_INDEX, TICK, '100'];
-            const data   = makeData({ FORMAT: 0 });
-
-            await handler.parse(params, data, null);
-
-            assert.strictEqual(data.STATUS, 'valid');
-        });
-    });
-
-    // -----------------------------------------------------------------------
-    // SOURCE sleeping
-    // -----------------------------------------------------------------------
+describe('Withdraw handler @regression @tier2', function () {
+    beforeEach(freshWithdraw);
+    afterEach(() => sinon.restore());
 
     describe('SOURCE sleeping', function () {
 
@@ -394,47 +281,6 @@ describe('Withdraw handler @regression @tier2', function () {
             await handler.parse(params, data, null);
 
             assert.ok(data.STATUS.includes('sleeping'));
-        });
-    });
-
-    // -----------------------------------------------------------------------
-    // Ledger changes
-    // -----------------------------------------------------------------------
-
-    describe('ledger changes on valid withdraw', function () {
-
-        it('valid withdraw: debit from contract address, credit to SOURCE', async function () {
-            const ledgerSpy = sinon.spy(indexer.util, 'processTransactionLedgerChanges');
-
-            const params = ['0', CONTRACT_INDEX, TICK, '100'];
-            const data   = makeData({ FORMAT: 0 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(ledgerSpy.calledOnce);
-            const [, , credits, debits] = ledgerSpy.firstCall.args;
-
-            const sourceCredit = credits.find(c => c[2] === SOURCE);
-            assert.ok(sourceCredit, 'SOURCE should receive credit');
-
-            const contractDebit = debits.find(d => d[2] === CONTRACT_ADDRESS);
-            assert.ok(contractDebit, 'Contract address should be debited');
-        });
-
-        it('invalid withdraw: no ledger changes (no debit or credit)', async function () {
-            const ledgerSpy = sinon.spy(indexer.util, 'processTransactionLedgerChanges');
-
-            indexer.indexerDb.getTokenInfo.resolves(null); // invalid: no token
-
-            const params = ['0', CONTRACT_INDEX, TICK, '100'];
-            const data   = makeData({ FORMAT: 0 });
-
-            await handler.parse(params, data, null);
-
-            assert.ok(ledgerSpy.calledOnce);
-            const [, , credits, debits] = ledgerSpy.firstCall.args;
-            assert.strictEqual(credits.length, 0);
-            assert.strictEqual(debits.length, 0);
         });
     });
 });
