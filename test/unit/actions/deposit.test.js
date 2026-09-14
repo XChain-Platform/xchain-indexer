@@ -17,47 +17,42 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fi
 
 const Deposit = require('../../../src/actions/deposit.js');
 
+const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+const CONTRACT_INDEX = '7';
+let indexer, actionsCtx, handler;
+
+function addDepositStubs(db) {
+    db.getContract     = sinon.stub().resolves({ contract_index: 7, status_id: 1 });
+    db.getStatusString = sinon.stub().resolves('valid');
+    db.createDeposit   = sinon.stub().resolves();
+}
+
+function makeToken(overrides = {}) {
+    return createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0, ...overrides });
+}
+
+function depositData(overrides = {}) {
+    return createBaseData({ ACTION: 'DEPOSIT', FORMAT: 0, SOURCE, ...overrides });
+}
+
+function setupDepositFixture() {
+    indexer = createMockIndexer();
+    addDepositStubs(indexer.indexerDb);
+    indexer.indexerDb.isActionAllowed.resolves(true);
+    indexer.indexerDb.getTokenInfo.resolves(makeToken());
+    indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
+
+    actionsCtx = {
+        config: indexer.config, util: indexer.util, mapper: indexer.mapper,
+        decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb,
+    };
+    handler = new Deposit(actionsCtx);
+    indexer.util.resetLists();
+}
+
 describe('Deposit (DEPOSIT) @regression @tier2', function () {
-    let indexer, actionsCtx, handler;
-
-    const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-    const CONTRACT_INDEX = '7';
-
-    function addDepositStubs(db) {
-        db.getContract     = sinon.stub().resolves({ contract_index: 7, status_id: 1 });
-        db.getStatusString = sinon.stub().resolves('valid');
-        db.createDeposit   = sinon.stub().resolves();
-    }
-
-    function makeToken(overrides = {}) {
-        return createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0, ...overrides });
-    }
-
-    function depositData(overrides = {}) {
-        return createBaseData({ ACTION: 'DEPOSIT', FORMAT: 0, SOURCE, ...overrides });
-    }
-
-    beforeEach(function () {
-        indexer = createMockIndexer();
-        addDepositStubs(indexer.indexerDb);
-        indexer.indexerDb.isActionAllowed.resolves(true);
-        indexer.indexerDb.getTokenInfo.resolves(makeToken());
-        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
-
-        actionsCtx = {
-            config:    indexer.config,
-            util:      indexer.util,
-            mapper:    indexer.mapper,
-            decoderDb: indexer.decoderDb,
-            indexerDb: indexer.indexerDb,
-        };
-        handler = new Deposit(actionsCtx);
-        indexer.util.resetLists();
-    });
-
-    afterEach(function () {
-        sinon.restore();
-    });
+    beforeEach(setupDepositFixture);
+    afterEach(function () { sinon.restore(); });
 
     // ─── Format validation ────────────────────────────────────────────────
 
@@ -76,6 +71,12 @@ describe('Deposit (DEPOSIT) @regression @tier2', function () {
         });
 
     });
+
+});
+
+describe('Deposit (DEPOSIT) @regression @tier2', function () {
+    beforeEach(setupDepositFixture);
+    afterEach(function () { sinon.restore(); });
 
     // ─── Contract validations ─────────────────────────────────────────────
 
@@ -103,6 +104,15 @@ describe('Deposit (DEPOSIT) @regression @tier2', function () {
             await handler.parse(['0', '2.0', 'TEST', '10'], data, null);
             assert.ok(String(data['STATUS']).includes('CONTRACT_ACTION_INDEX (format)'));
         });
+
+    });
+});
+
+describe('Deposit (DEPOSIT) @regression @tier2', function () {
+    beforeEach(setupDepositFixture);
+    afterEach(function () { sinon.restore(); });
+
+    describe('contract validations', function () {
 
         // Leading-zero forms coerce to the real contract id in SQL but derive a
         // distinct custody address ('C:BTC:07' != 'C:BTC:7'), silently stranding the deposit.
@@ -134,6 +144,12 @@ describe('Deposit (DEPOSIT) @regression @tier2', function () {
         });
 
     });
+
+});
+
+describe('Deposit (DEPOSIT) @regression @tier2', function () {
+    beforeEach(setupDepositFixture);
+    afterEach(function () { sinon.restore(); });
 
     // ─── Token validations ────────────────────────────────────────────────
 
@@ -168,6 +184,12 @@ describe('Deposit (DEPOSIT) @regression @tier2', function () {
 
     });
 
+});
+
+describe('Deposit (DEPOSIT) @regression @tier2', function () {
+    beforeEach(setupDepositFixture);
+    afterEach(function () { sinon.restore(); });
+
     // ─── Sleeping checks ──────────────────────────────────────────────────
 
     describe('sleeping checks', function () {
@@ -193,6 +215,12 @@ describe('Deposit (DEPOSIT) @regression @tier2', function () {
         });
 
     });
+
+});
+
+describe('Deposit (DEPOSIT) @regression @tier2', function () {
+    beforeEach(setupDepositFixture);
+    afterEach(function () { sinon.restore(); });
 
     // ─── Valid settlement ─────────────────────────────────────────────────
 
@@ -229,6 +257,12 @@ describe('Deposit (DEPOSIT) @regression @tier2', function () {
         });
 
     });
+
+});
+
+describe('Deposit (DEPOSIT) @regression @tier2', function () {
+    beforeEach(setupDepositFixture);
+    afterEach(function () { sinon.restore(); });
 
     // ─── Record always created ────────────────────────────────────────────
 
