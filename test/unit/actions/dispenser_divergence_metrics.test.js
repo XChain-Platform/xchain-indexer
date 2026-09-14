@@ -17,7 +17,7 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const metrics = require('../../../src/chain/dispenser_divergence_metrics.js');
 const Dispenser_Close = require('../../../src/actions/dispenser_close.js');
-const Dispense = require('../../../src/actions/dispense.js');
+const Dispense = require('../../../src/actions/dispense/index.js');
 
 // Grab all console.log output during `fn` and return the joined lines.
 async function captureLog(fn) {

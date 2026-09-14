@@ -46,7 +46,7 @@ const assert = require('assert');
 
 const Utility  = require('../../src/utility.js');
 const Coinpay  = require('../../src/actions/coinpay.js');
-const Dispense = require('../../src/actions/dispense.js');
+const Dispense = require('../../src/actions/dispense/index.js');
 
 // What batch.js seeds, verbatim, once BATCH_ISSUANCE_LIMITS is enabled.
 function seedLedger(){

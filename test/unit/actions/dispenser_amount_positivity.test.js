@@ -23,8 +23,8 @@ const assert = require('assert');
 const sinon  = require('sinon');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
 
-const Dispenser = require('../../../src/actions/dispenser.js');
-const Dispense  = require('../../../src/actions/dispense.js');
+const Dispenser = require('../../../src/actions/dispenser/index.js');
+const Dispense  = require('../../../src/actions/dispense/index.js');
 const activation = require('../../../src/dispenser_amount_positivity_activation.js');
 
 // Any network name the activation map does not carry reads as OFF, which is how these

@@ -20,7 +20,7 @@ const sinon  = require('sinon');
 const { createBaseData, createTokenInfo } = require('../../../fixtures/mocks');
 const { OWNER_ADDR, BLOCK_TIME, EXPIRATION, makeParams, useDispenserHarness } = require('./helpers/dispenser_harness.js');
 
-const Dispenser = require('../../../../src/actions/dispenser.js');
+const Dispenser = require('../../../../src/actions/dispenser/index.js');
 
 // The harness under test. useDispenserHarness rebuilds it before every test
 // and restores sinon after it; bind copies it into the names the tests read.

@@ -37,7 +37,7 @@ const sinon  = require('sinon');
 const { isDispenserOraclePriceActive, DISPENSER_ORACLE_PRICE_ACTIVATION } =
     require('../../src/dispenser_oracle_price_activation.js');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../fixtures/mocks');
-const Dispenser = require('../../src/actions/dispenser.js');
+const Dispenser = require('../../src/actions/dispenser/index.js');
 
 describe('dispenser Mode B oracle-price activation predicate @regression @tier1', function () {
 

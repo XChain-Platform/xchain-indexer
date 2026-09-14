@@ -24,7 +24,7 @@
 const divergenceMetrics = require('../../chain/dispenser_divergence_metrics.js');
 const tallyScaleActivation = require('../../dispense_payment_tally_scale_activation.js');
 
-// Installed onto Dispense.prototype by dispense.js; each method runs with `this`
+// Installed onto Dispense.prototype by index.js; each method runs with `this`
 // bound to the handler, exactly as the inline code it was.
 module.exports = {
 

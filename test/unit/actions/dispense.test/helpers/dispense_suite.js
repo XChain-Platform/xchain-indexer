@@ -26,7 +26,7 @@
 const sinon  = require('sinon');
 const { createMockIndexer, createTokenInfo } = require('../../../../fixtures/mocks');
 
-const Dispense = require('../../../../../src/actions/dispense.js');
+const Dispense = require('../../../../../src/actions/dispense/index.js');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

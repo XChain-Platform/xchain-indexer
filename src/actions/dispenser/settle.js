@@ -26,7 +26,7 @@
 const divergenceMetrics = require('../../chain/dispenser_divergence_metrics.js');
 const { getLogger } = require('../../observability/index.js');
 
-// Installed onto Dispenser.prototype by dispenser.js; each method runs with `this`
+// Installed onto Dispenser.prototype by index.js; each method runs with `this`
 // bound to the handler, exactly as the inline code it was.
 module.exports = {
 

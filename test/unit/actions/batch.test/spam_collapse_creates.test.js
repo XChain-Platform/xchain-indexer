@@ -47,7 +47,7 @@ const EXP_PAID   = day(100);
 // the way reading the format string exists to prevent.
 const Order     = require('../../../../src/actions/order/index.js');
 const Swap      = require('../../../../src/actions/swap/index.js');
-const Dispenser = require('../../../../src/actions/dispenser.js');
+const Dispenser = require('../../../../src/actions/dispenser/index.js');
 
 function stubGates(weightsOn) {
     const known = ['BATCH', 'SEND', 'ISSUE', 'MINT', 'ORDER', 'SWAP', 'DISPENSER',

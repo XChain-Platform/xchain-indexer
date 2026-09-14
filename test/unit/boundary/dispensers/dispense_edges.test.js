@@ -18,7 +18,7 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../fixtures/mocks');
 
-const Dispense = require('../../../../src/actions/dispense.js');
+const Dispense = require('../../../../src/actions/dispense/index.js');
 
 function makeActionsCtx(indexer) {
     return {

@@ -46,7 +46,7 @@ const EMITTABLE_HANDLERS = {
     'ISSUE':     require('../../src/actions/issue/index.js'),
     'MINT':      require('../../src/actions/mint/index.js'),
     'ORDER':     require('../../src/actions/order/index.js'),
-    'DISPENSER': require('../../src/actions/dispenser.js'),
+    'DISPENSER': require('../../src/actions/dispenser/index.js'),
     'DIVIDEND':  require('../../src/actions/dividend/index.js'),
     'AIRDROP':   require('../../src/actions/airdrop/index.js'),
     'CALLBACK':  require('../../src/actions/callback.js'),

@@ -25,15 +25,15 @@
 //
 // The caps activation is required HERE and reached through isDispenseCapsActive below,
 // rather than required in settle.js: bin/check-flagday-deploy.sh greps the deployed
-// src/actions/dispense.js for the literal dispenser_caps_activation, and an absent
+// src/actions/dispense/index.js for the literal dispenser_caps_activation, and an absent
 // marker there reads UNKNOWN rather than failing, so moving the require would retire
 // that flag-day row silently.
-const dispenserCaps = require('../dispenser_caps_activation.js');
+const dispenserCaps = require('../../dispenser_caps_activation.js');
 
-const contextPart = require('./dispense/context.js');
-const pricingPart = require('./dispense/pricing.js');
-const pricingPathsPart = require('./dispense/pricing_paths.js');
-const settlePart = require('./dispense/settle.js');
+const contextPart = require('./context.js');
+const pricingPart = require('./pricing.js');
+const pricingPathsPart = require('./pricing_paths.js');
+const settlePart = require('./settle.js');
 class Dispense {
 
     // Handle constructing a class instance

@@ -54,17 +54,17 @@
 // comparison that forces the DISPENSER family to resolve through the dispenser row.
 // Both are content pins on this FILE, not on the handler, so moving either block out
 // would retire a guard silently rather than fail.
-const dispenserFreshness = require('../dispenser_freshness_activation.js');
-const dispenserFreshnessShape = require('../dispenser_freshness_shape_activation.js');
+const dispenserFreshness = require('../../dispenser_freshness_activation.js');
+const dispenserFreshnessShape = require('../../dispenser_freshness_shape_activation.js');
 
-const contextPart = require('./dispenser/context.js');
-const validatePart = require('./dispenser/validate.js');
-const validateFormatPart = require('./dispenser/validate_format.js');
-const feesPart = require('./dispenser/fees.js');
-const controllerGuardPart = require('./dispenser/controller_guard.js');
-const settlePart = require('./dispenser/settle.js');
+const contextPart = require('./context.js');
+const validatePart = require('./validate.js');
+const validateFormatPart = require('./validate_format.js');
+const feesPart = require('./fees.js');
+const controllerGuardPart = require('./controller_guard.js');
+const settlePart = require('./settle.js');
 
-const { getLogger } = require('../observability/index.js');
+const { getLogger } = require('../../observability/index.js');
 class Dispenser {
 
     // Handle constructing a class instance
@@ -158,8 +158,8 @@ class Dispenser {
         await this.settleDispenser(ctx);
     }
 
-    // Kept in this file rather than in dispenser/ because it carries this path's flag-day
-    // marker: bin/check-flagday-deploy.sh greps the deployed src/actions/dispenser.js for
+    // Kept in this entry rather than in a dispenser/ part because it carries this path's flag-day
+    // marker: bin/check-flagday-deploy.sh greps the deployed src/actions/dispenser/index.js for
     // the literal dispenser_freshness_activation, and a missing path reads UNKNOWN rather
     // than failing, so moving this block would retire that row silently.
     async checkGetAddressPermission(ctx){
@@ -223,7 +223,7 @@ class Dispenser {
     }
 
     // Kept in this file for the same reason: test/unit/escrow_journal_writer.test.js reads
-    // src/actions/dispenser.js and asserts the owner-authority comparison below is still
+    // src/actions/dispenser/index.js and asserts the owner-authority comparison below is still
     // what it was, because that gate is why the whole DISPENSER family must resolve its
     // escrow attribution through the dispenser row rather than the escrow row's address.
     async checkDispenserAuthority(ctx){

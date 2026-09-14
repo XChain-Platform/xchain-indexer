@@ -303,17 +303,10 @@ describe('Utility.validateOracleFee() - @regression @tier1', function () {
             // Source-shape pin. The branch is deep inside validateAction and has no unit
             // seam, so this guards the one thing a refactor could silently drop: that the
             // waiver is keyed on FEE_PROBE, which only a synthetic dry-run tx ever carries.
-            const fs   = require('fs');
-            const path = require('path');
-            // The DISPENSER handler is an entry plus parts: dispenser.js keeps the class and
-            // the two content-pinned gates, and the fee branch lives in
-            // dispenser/validate_format.js. Entry and every part are read as one text, so a
-            // phase that moves between them stays visible instead of reading as absent.
-            const PARTS = path.resolve(__dirname, '../../src/actions/dispenser');
-            const src  = [path.resolve(__dirname, '../../src/actions/dispenser.js')]
-                .concat(fs.readdirSync(PARTS).filter(f => f.endsWith('.js')).sort()
-                    .map(f => path.join(PARTS, f)))
-                .map(f => fs.readFileSync(f, 'utf8')).join('\n');
+            const { concatSrcTreeFiles } = require('../helpers/src_tree_files');
+            // DISPENSER is a directory (the fee branch sits in its validate_format.js part),
+            // read whole so a phase moving between its files never reads as absent.
+            const src  = concatSrcTreeFiles(__dirname + '/../../src/actions/dispenser');
             assert.ok(/data\['FEE_PROBE'\]\s*\n?\s*\?\s*await this\.util\.quoteOracleFee\(/.test(src),
                 'a FEE_PROBE run must call quoteOracleFee');
             assert.ok(/:\s*await this\.util\.validateOracleFee\(/.test(src),

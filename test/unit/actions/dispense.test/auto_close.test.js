@@ -20,7 +20,7 @@ const sinon  = require('sinon');
 const { createBaseData } = require('../../../fixtures/mocks');
 const { makeDispenserInfo, BUYER_ADDR, BLOCK_TIME, freshDispenseSuite } = require('./helpers/dispense_suite.js');
 
-const Dispense = require('../../../../src/actions/dispense.js');
+const Dispense = require('../../../../src/actions/dispense/index.js');
 
 // The suite's fixtures. Every same-title block below runs freshSuite before
 // each test, so each test starts from the same fixtures as the rest of the suite.

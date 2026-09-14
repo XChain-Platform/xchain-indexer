@@ -22,7 +22,7 @@
 
 const dispenserCaps = require('../../dispenser_caps_activation.js');
 
-// Installed onto Dispenser.prototype by dispenser.js; each method runs with `this`
+// Installed onto Dispenser.prototype by index.js; each method runs with `this`
 // bound to the handler, exactly as the inline code it was.
 module.exports = {
 

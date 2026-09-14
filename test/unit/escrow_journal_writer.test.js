@@ -119,7 +119,7 @@ describe('escrow journal writer: attribution exhaustiveness @regression', functi
             assert.ok(!W.SELF_ATTRIBUTING.has(a), a + ' must not be self-attributing');
         }
         // And the authority gate that forces this is still what it was.
-        const disp = fs.readFileSync(path.resolve(__dirname, '../../src/actions/dispenser.js'), 'utf8');
+        const disp = fs.readFileSync(path.resolve(__dirname, '../../src/actions/dispenser/index.js'), 'utf8');
         assert.ok(/data\['SOURCE'\]!=dispenserInfo\['SOURCE'\] && data\['SOURCE'\]!=dispenserInfo\['GET_ADDRESS'\]/.test(disp),
             'dispenser edit authority changed; re-derive whether the family still needs row-resolution');
     });

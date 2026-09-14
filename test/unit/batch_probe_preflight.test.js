@@ -31,7 +31,7 @@ const Utility       = require('../../src/utility.js');
 const Actions       = require('../../src/actions/index.js');
 const PreflightMemo = require('../../src/chain/preflight_memo.js');
 const Batch         = require('../../src/actions/batch/index.js');
-const Dispenser     = require('../../src/actions/dispenser.js');
+const Dispenser     = require('../../src/actions/dispenser/index.js');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../fixtures/mocks');
 
 const FEE_DEST = 'feeDestinationAddr111111111111111';

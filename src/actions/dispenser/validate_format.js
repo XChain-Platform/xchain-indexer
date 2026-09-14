@@ -25,7 +25,7 @@ const dispenserGiveAmount = require('../../dispenser_give_amount_activation.js')
 const dispenserOraclePrice = require('../../dispenser_oracle_price_activation.js');
 const dispenserAmountPositivity = require('../../dispenser_amount_positivity_activation.js');
 
-// Installed onto Dispenser.prototype by dispenser.js; each method runs with `this`
+// Installed onto Dispenser.prototype by index.js; each method runs with `this`
 // bound to the handler, exactly as the inline code it was.
 module.exports = {
 

@@ -24,7 +24,7 @@ process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const Utility  = require('../../../../src/utility.js');
-const Dispense = require('../../../../src/actions/dispense.js');
+const Dispense = require('../../../../src/actions/dispense/index.js');
 
 const DISPENSER_ADDRESS = 'dispenserAddress11111111111';
 const BUYER             = 'buyerAddress';

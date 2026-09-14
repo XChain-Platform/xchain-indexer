@@ -15,9 +15,9 @@
  * The body of the per-dispense loop: the action index, the status, the dispenses
  * record, the ledger changes, the mappings, and the auto-close that mints a
  * DISPENSER_CLOSE when the dispenser can no longer fill. The caps flag-day the
- * auto-close reads is asked of the handler (dispense.js isDispenseCapsActive) rather
+ * auto-close reads is asked of the handler (index.js isDispenseCapsActive) rather
  * than required here, because bin/check-flagday-deploy.sh greps the deployed
- * src/actions/dispense.js for the literal dispenser_caps_activation and an absent
+ * src/actions/dispense/index.js for the literal dispenser_caps_activation and an absent
  * marker there reads UNKNOWN rather than failing.
  *
  ********************************************************************/
@@ -26,7 +26,7 @@
 
 const { getLogger } = require('../../observability/index.js');
 
-// Installed onto Dispense.prototype by dispense.js; each method runs with `this`
+// Installed onto Dispense.prototype by index.js; each method runs with `this`
 // bound to the handler, exactly as the inline code it was.
 module.exports = {
 
