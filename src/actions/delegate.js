@@ -32,6 +32,10 @@ const { getLogger } = require('../observability/index.js');
  *
  ********************************************************************/
 
+// Wire-field validation and settlement, installed onto Delegate.prototype below
+const validatePart = require('./delegate/validate.js');
+const settlePart   = require('./delegate/settle.js');
+
 class Delegate {
 
     // Handle constructing a class instance
@@ -84,17 +88,36 @@ class Delegate {
          * SIGNING_PUBKEY Validations
          ****************************************************************/
 
-        // Verify SIGNING_PUBKEY is provided
-        if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
-            error = 'invalid: SIGNING_PUBKEY (required)';
-
-        // Verify SIGNING_PUBKEY is 64 hex characters (Ed25519)
-        if(!error && !/^[0-9a-fA-F]{64}$/.test(data['SIGNING_PUBKEY']))
-            error = 'invalid: SIGNING_PUBKEY (format)';
+        // Verify SIGNING_PUBKEY is provided and is 64 hex characters (Ed25519) (delegate/validate.js)
+        error = this.validateSigningPubkey(data, error);
 
         /*****************************************************************
          * Stake Existence Validations
          ****************************************************************/
+
+        // SOURCE must hold an active stake, the new key must be free of every stake and
+        // delegation, and SOURCE must not be sleeping
+        error = await this.checkCapabilityRotate(data, error);
+
+        // Calculate the activation block (per-chain ACTIVATION_DELAY_BLOCKS, calibrated for ~60 min reorg protection on each chain)
+        data['ACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + this.activationDelay();
+
+        // Determine final status
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        // Print status message
+        getLogger().info("\t DELEGATE : pubkey=" + data['SIGNING_PUBKEY'] + ' : ' + data['STATUS']);
+
+        // Create record in delegations table
+        await this.indexerDb.createDelegation(data);
+
+        // Post the ledger changes and refresh balances, supply and mappings (delegate/settle.js)
+        await this.postLedgerChanges(data, this.config['GAS']);
+    }
+
+    // DELEGATE v0 stake checks: SOURCE's own stake, then pubkey collisions, then sleep
+    async checkCapabilityRotate(data, error){
 
         // Verify SOURCE has an active stake (gated by activation delay)
         if(!error){
@@ -125,41 +148,7 @@ class Delegate {
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
-        // Calculate the activation block (per-chain ACTIVATION_DELAY_BLOCKS, calibrated for ~60 min reorg protection on each chain)
-        let staking = this.config['STAKING'];
-        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
-        data['ACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + activationDelay;
-
-        // Determine final status
-        let status = (error) ? error : 'valid';
-        data['STATUS'] = status;
-
-        // Print status message
-        getLogger().info("\t DELEGATE : pubkey=" + data['SIGNING_PUBKEY'] + ' : ' + data['STATUS']);
-
-        // Create record in delegations table
-        await this.indexerDb.createDelegation(data);
-
-        // Store the SOURCE in addresses list
-        this.util.addAddressTicker(data['SOURCE'], this.config['GAS']);
-
-        // Array of credits and debits
-        let credits = [],
-            debits  = [];
-
-        // Process any transaction ledger changes (credits / debits)
-        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
-
-        // Get a list of tickers & addresses
-        let tickers   = this.util.getTickersList(),
-            addresses = Object.keys(this.util.getAddressesList());
-
-        // Update address balances and token supply
-        await this.indexerDb.updateBalances(addresses);
-        await this.indexerDb.updateTokens(tickers);
-
-        // Create action mappings
-        await this.mapper.createMappings(data);
+        return error;
     }
 
     // DELEGATE v1: rotate signing key for a contract-targeted stake.
@@ -177,19 +166,36 @@ class Delegate {
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        // Verify SIGNING_PUBKEY is provided + format
-        if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
-            error = 'invalid: SIGNING_PUBKEY (required)';
-        if(!error && !/^[0-9a-fA-F]{64}$/.test(String(data['SIGNING_PUBKEY'])))
-            error = 'invalid: SIGNING_PUBKEY (format)';
-        if(!error && this.util.isNull(data['TARGET_CONTRACT_INDEX']))
-            error = 'invalid: TARGET_CONTRACT_INDEX (required)';
-        // Gated by CONTRACT_INDEX_CANONICAL: reject non-canonical leading zeros at/after the flag-day.
-        let idxRe = (await this.actions.protocolChanges.isEnabled('CONTRACT_INDEX_CANONICAL', data['BLOCK_INDEX'])) ? /^[1-9]\d*$/ : /^[0-9]+$/;
-        if(!error && (!idxRe.test(String(data['TARGET_CONTRACT_INDEX'])) || Number(data['TARGET_CONTRACT_INDEX']) <= 0))
-            error = 'invalid: TARGET_CONTRACT_INDEX (format)';
-        if(!error && this.util.isNull(data['TICK']))
-            error = 'invalid: TICK (required)';
+        // Verify SIGNING_PUBKEY is provided + format, then the (target, tick) slot (delegate/validate.js)
+        error = this.validateSigningPubkey(data, error);
+        error = await this.validateContractSlot(data, error);
+
+        // SOURCE must back the slot with a live stake and the new key must be free in contract scope
+        error = await this.checkContractRotate(data, error);
+
+        // Verify SOURCE is not sleeping
+        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
+            error = 'invalid: SOURCE (sleeping)';
+
+        data['ACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + this.activationDelay();
+
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        getLogger().info("\t DELEGATE v1 : pubkey=" + String(data['SIGNING_PUBKEY']).substring(0, 16) +
+            '... : target=' + data['TARGET_CONTRACT_INDEX'] +
+            ' : tick=' + data['TICK'] +
+            ' : ' + data['STATUS']);
+
+        await this.indexerDb.createContractDelegation(data);
+
+        // Post the ledger changes against the staked TICK (delegate/settle.js)
+        await this.postLedgerChanges(data, data['TICK']);
+    }
+
+    // DELEGATE v1 slot checks: SOURCE's backing contract stake, then the contract-scope
+    // pubkey collision
+    async checkContractRotate(data, error){
 
         // Source must own an active contract-stake for (target, *, tick); any pubkey on this slot
         if(!error){
@@ -228,36 +234,7 @@ class Delegate {
             }
         }
 
-        // Verify SOURCE is not sleeping
-        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
-            error = 'invalid: SOURCE (sleeping)';
-
-        let staking = this.config['STAKING'];
-        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
-        data['ACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + activationDelay;
-
-        let status = (error) ? error : 'valid';
-        data['STATUS'] = status;
-
-        getLogger().info("\t DELEGATE v1 : pubkey=" + String(data['SIGNING_PUBKEY']).substring(0, 16) +
-            '... : target=' + data['TARGET_CONTRACT_INDEX'] +
-            ' : tick=' + data['TICK'] +
-            ' : ' + data['STATUS']);
-
-        await this.indexerDb.createContractDelegation(data);
-
-        this.util.addAddressTicker(data['SOURCE'], data['TICK']);
-
-        let credits = [],
-            debits  = [];
-        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
-
-        let tickers   = this.util.getTickersList(),
-            addresses = Object.keys(this.util.getAddressesList());
-        await this.indexerDb.updateBalances(addresses);
-        await this.indexerDb.updateTokens(tickers);
-
-        await this.mapper.createMappings(data);
+        return error;
     }
 
     // DELEGATE v2: capability revoke. Removes a previously delegated signing key
@@ -276,11 +253,8 @@ class Delegate {
         if(!error && data['COIN'] !== 'BTC')
             error = 'invalid: ACTION (BTC only)';
 
-        // Verify SIGNING_PUBKEY is provided + format
-        if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
-            error = 'invalid: SIGNING_PUBKEY (required)';
-        if(!error && !/^[0-9a-fA-F]{64}$/.test(data['SIGNING_PUBKEY']))
-            error = 'invalid: SIGNING_PUBKEY (format)';
+        // Verify SIGNING_PUBKEY is provided + format (delegate/validate.js)
+        error = this.validateSigningPubkey(data, error);
 
         // Resolve the revocation target. v2 revokes either:
         //   - a previously delegated key (a `delegations` row), or
@@ -289,22 +263,8 @@ class Delegate {
         //     be revocable once a replacement is delegated via v0). Recorded in
         //     `stake_key_revocations`; re-staking the same key later (STAKE v2)
         //     clears the revocation.
-        let stakeKeyMode = false;
-        if(!error){
-            let activeDelegation = await this.indexerDb.getActiveDelegation(data['SOURCE'], data['SIGNING_PUBKEY'], data['BLOCK_INDEX']);
-            if(!activeDelegation){
-                let stakeRow = await this.indexerDb.getActiveStakeBySourceAndPubkey(data['SOURCE'], data['SIGNING_PUBKEY'], data['BLOCK_INDEX']);
-                if(stakeRow){
-                    let priorRevocation = await this.indexerDb.getStakeKeyRevocation(data['SOURCE'], data['SIGNING_PUBKEY'], stakeRow.action_index);
-                    if(priorRevocation)
-                        error = 'invalid: SIGNING_PUBKEY (already revoked)';
-                    else
-                        stakeKeyMode = true;
-                } else {
-                    error = 'invalid: no active delegation or stake key for pubkey';
-                }
-            }
-        }
+        let stakeKeyMode;
+        ({ error, stakeKeyMode } = await this.resolveRevokeTarget(data, error));
 
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
@@ -315,8 +275,16 @@ class Delegate {
 
         getLogger().info("\t DELEGATE v2 (revoke" + (stakeKeyMode ? ', stake key' : '') + ") : pubkey=" + data['SIGNING_PUBKEY'] + ' : ' + data['STATUS']);
 
-        let staking = this.config['STAKING'];
-        let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
+        // Record the revocation: a stake-key revocation row, or the parent delegation's deactivation
+        await this.recordCapabilityRevoke(data, status, stakeKeyMode);
+
+        // Store the SOURCE in addresses list, then post the ledger changes (delegate/settle.js)
+        await this.postLedgerChanges(data, this.config['GAS']);
+    }
+
+    // DELEGATE v2 writes, keyed on which target resolveRevokeTarget (delegate/validate.js) found
+    async recordCapabilityRevoke(data, status, stakeKeyMode){
+        let activationDelay = this.activationDelay();
 
         if(stakeKeyMode){
             // Stake-key revocation: recorded ONLY in stake_key_revocations. A
@@ -343,20 +311,6 @@ class Delegate {
             if(status === 'valid')
                 await this.indexerDb.setDelegationDeactivation(data['SOURCE'], data['SIGNING_PUBKEY'], parseInt(data['BLOCK_INDEX']) + activationDelay);
         }
-
-        // Store the SOURCE in addresses list
-        this.util.addAddressTicker(data['SOURCE'], this.config['GAS']);
-
-        let credits = [],
-            debits  = [];
-        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
-
-        let tickers   = this.util.getTickersList(),
-            addresses = Object.keys(this.util.getAddressesList());
-        await this.indexerDb.updateBalances(addresses);
-        await this.indexerDb.updateTokens(tickers);
-
-        await this.mapper.createMappings(data);
     }
 
     // DELEGATE v3: contract-targeted revoke. Removes a previously delegated signing key
@@ -373,19 +327,9 @@ class Delegate {
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        // Verify SIGNING_PUBKEY is provided + format
-        if(!error && this.util.isNull(data['SIGNING_PUBKEY']))
-            error = 'invalid: SIGNING_PUBKEY (required)';
-        if(!error && !/^[0-9a-fA-F]{64}$/.test(String(data['SIGNING_PUBKEY'])))
-            error = 'invalid: SIGNING_PUBKEY (format)';
-        if(!error && this.util.isNull(data['TARGET_CONTRACT_INDEX']))
-            error = 'invalid: TARGET_CONTRACT_INDEX (required)';
-        // Gated by CONTRACT_INDEX_CANONICAL: reject non-canonical leading zeros at/after the flag-day.
-        let idxRe = (await this.actions.protocolChanges.isEnabled('CONTRACT_INDEX_CANONICAL', data['BLOCK_INDEX'])) ? /^[1-9]\d*$/ : /^[0-9]+$/;
-        if(!error && (!idxRe.test(String(data['TARGET_CONTRACT_INDEX'])) || Number(data['TARGET_CONTRACT_INDEX']) <= 0))
-            error = 'invalid: TARGET_CONTRACT_INDEX (format)';
-        if(!error && this.util.isNull(data['TICK']))
-            error = 'invalid: TICK (required)';
+        // Verify SIGNING_PUBKEY is provided + format, then the (target, tick) slot (delegate/validate.js)
+        error = this.validateSigningPubkey(data, error);
+        error = await this.validateContractSlot(data, error);
 
         // Verify SOURCE owns an active contract_delegations row for (target, pubkey, tick)
         if(!error){
@@ -416,31 +360,23 @@ class Delegate {
                     ' : tick=' + data['TICK'] +
                     ' : ' + data['STATUS']);
 
-        // Mark the contract_delegations row's deactivation_block
-        if(status === 'valid'){
-            let staking = this.config['STAKING'];
-            let activationDelay = (staking && staking['ACTIVATION_DELAY_BLOCKS']) ? staking['ACTIVATION_DELAY_BLOCKS'] : this.config['ACTIVATION_DELAY_BLOCKS'];
-            let deactivationBlock = parseInt(data['BLOCK_INDEX']) + activationDelay;
-            let valid_id  = await this.indexerDb.getStatusId('valid');
-            let pubkey_id = await this.indexerDb.getPubkeyId(String(data['SIGNING_PUBKEY']).toLowerCase());
-            let tick_id   = await this.indexerDb.getTickerId(data['TICK']);
-            await this.indexerDb.deactivateContractDelegation(
-                deactivationBlock, Number(data['TARGET_CONTRACT_INDEX']), pubkey_id, tick_id, valid_id);
-        }
+        // Mark the contract_delegations row's deactivation_block (delegate/settle.js)
+        if(status === 'valid')
+            await this.deactivateContractSlot(data);
 
-        this.util.addAddressTicker(data['SOURCE'], data['TICK']);
-
-        let credits = [],
-            debits  = [];
-        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
-
-        let tickers   = this.util.getTickersList(),
-            addresses = Object.keys(this.util.getAddressesList());
-        await this.indexerDb.updateBalances(addresses);
-        await this.indexerDb.updateTokens(tickers);
-
-        await this.mapper.createMappings(data);
+        // Post the ledger changes against the staked TICK (delegate/settle.js)
+        await this.postLedgerChanges(data, data['TICK']);
     }
+}
+
+// Install the parts from delegate/ NON-ENUMERABLE, the shape the class body they came from
+// produced: the parse methods reach them as this.<method>, suites can stub them through
+// Delegate.prototype, and for-in over a handler stays empty. Same install as db/index.js uses
+// for its query mixins.
+for(const part of [validatePart, settlePart]){
+    const descriptors = Object.getOwnPropertyDescriptors(part);
+    for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;
+    Object.defineProperties(Delegate.prototype, descriptors);
 }
 
 module.exports = Delegate;
