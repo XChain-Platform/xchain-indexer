@@ -51,6 +51,11 @@
  *                                                  the same, with the moving
  *                                                  commit's {old: new} paths
  *                                                  applied to the pin first
+ *   node bin/suite-title-map.js --compare <pin> --split-map <file>
+ *                                                  the same, with the splitting
+ *                                                  commit's {old: [new, ...]}
+ *                                                  files graded as one union
+ *                                                  (bin/suite_title_map/split_map.js)
  *
  ********************************************************************/
 
@@ -60,6 +65,7 @@ const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
 const { spawnSync } = require('child_process');
+const { loadSplits, compareWithSplits } = require('./suite_title_map/split_map.js');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const MOCHA_BIN = path.join(REPO_ROOT, 'node_modules', '.bin', 'mocha');
@@ -257,6 +263,7 @@ function parseArgs(argv) {
         else if (argv[i] === '--script') { opts.script = argv[i + 1]; i += 1; }
         else if (argv[i] === '--compare') { opts.compare = path.resolve(argv[i + 1]); i += 1; }
         else if (argv[i] === '--rename-map') { opts.renameMap = path.resolve(argv[i + 1]); i += 1; }
+        else if (argv[i] === '--split-map') { opts.splitMap = path.resolve(argv[i + 1]); i += 1; }
         else if (argv[i] === '--help' || argv[i] === '-h') opts.help = true;
     }
     return opts;
@@ -273,10 +280,12 @@ function main() {
     if (opts.compare) {
         const pin = JSON.parse(fs.readFileSync(opts.compare, 'utf8'));
         const renames = opts.renameMap ? JSON.parse(fs.readFileSync(opts.renameMap, 'utf8')) : {};
-        const differences = compare(pin, map, renames, opts.script);
+        const splits = opts.splitMap ? loadSplits(opts.splitMap) : {};
+        const differences = compareWithSplits({ pin, fresh: map, renames, splits, only: opts.script, compare });
         if (!differences.length) {
             console.log(`suite identity holds against ${path.relative(REPO_ROOT, opts.compare)}`
-                + `${opts.renameMap ? ' through the declared rename map' : ''}`);
+                + `${opts.renameMap ? ' through the declared rename map' : ''}`
+                + `${opts.splitMap ? ' through the declared split map' : ''}`);
             return;
         }
         console.log(`${differences.length} difference(s) against ${path.relative(REPO_ROOT, opts.compare)}:`);
