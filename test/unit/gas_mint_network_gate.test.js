@@ -40,28 +40,20 @@ const Utility = require('../../src/utility.js');
 const GAS_ADDR = 'mgassdEpzH2AuKGK9W5FZh8drWYKrpXk6D'; // matches configs/BTC.js testnet GAS address shape
 const DEV_ADDR = 'mDevAddrXXXXXXXXXXXXXXXXXXXXXXXXXXX';
 
-// Build a Mint handler wired to the real utility and a benign stubbed DB, then
-// run parse() for a single MINT and return the resulting STATUS.
-async function runMint({ network, source, amount, tick, mintStartBlock = 0, blockIndex = 100,
-                         maxMint = 100000, supply = 0 }){
-
-    const util = new Utility();
-
-    // The only util method that touches the DB on the valid path : stub to a no-op.
-    util.processTransactionLedgerChanges = async () => {};
-
-    // An unlocked, open-mint token mirroring the XCHAIN genesis: 8 decimals, a
-    // 100,000,000 MAX_SUPPLY, a per-tx MAX_MINT cap, and a configurable MINT_START_BLOCK.
-    // A different BLOCK_INDEX (1) so the same-block re-check branch is skipped. maxMint = 0
-    // disables the per-tx cap so the MAX_SUPPLY ceiling can be exercised in isolation.
-    const tokenInfo = {
+// An unlocked, open-mint token mirroring the XCHAIN genesis: 8 decimals, a
+// 100,000,000 MAX_SUPPLY, a per-tx MAX_MINT cap, and a configurable MINT_START_BLOCK.
+// A different BLOCK_INDEX (1) so the same-block re-check branch is skipped. maxMint = 0
+// disables the per-tx cap so the MAX_SUPPLY ceiling can be exercised in isolation.
+function tokenInfoFor(mintStartBlock, maxMint, supply) {
+    return {
         BLOCK_INDEX: 1, SUPPLY: supply, DECIMALS: 8, MAX_SUPPLY: 100000000,
         MAX_MINT: maxMint, MINT_ADDRESS_MAX: 0, MINT_START_BLOCK: mintStartBlock,
         MINT_STOP_BLOCK: 0, LOCK_MINT: 0
     };
+}
 
-    let captured = {};
-    const indexerDb = {
+function indexerDbFor(tokenInfo, captured) {
+    return {
         getTokenInfo:                async () => tokenInfo,
         resolveAddressRef:           async (v) => v,
         resolveAddressRefChecked:    async (v) => ({ value: v, rejected: false }),
@@ -78,6 +70,20 @@ async function runMint({ network, source, amount, tick, mintStartBlock = 0, bloc
         getTickerId:                         async () => null,
         getEffectiveTokenControllerForGuard: async () => null
     };
+}
+
+// Build a Mint handler wired to the real utility and a benign stubbed DB, then
+// run parse() for a single MINT and return the resulting STATUS.
+async function runMint({ network, source, amount, tick, mintStartBlock = 0, blockIndex = 100,
+                         maxMint = 100000, supply = 0 }){
+
+    const util = new Utility();
+
+    // The only util method that touches the DB on the valid path : stub to a no-op.
+    util.processTransactionLedgerChanges = async () => {};
+
+    let captured = {};
+    const indexerDb = indexerDbFor(tokenInfoFor(mintStartBlock, maxMint, supply), captured);
 
     const action = {
         config: {
