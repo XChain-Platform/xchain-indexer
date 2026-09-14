@@ -15,9 +15,12 @@
  * XChain Indexer - Database mixin: votes
  * 
  * The queries over the votes table family in src/sql/. Installed onto Database.prototype by
- * db/index.js, so call sites stay this.db.<method>().
+ * db/index.js, so call sites stay this.db.<method>(). The poll tally lives in a part under
+ * votes/, and this file is the entry that merges it into the one method set it exports.
  *
  ********************************************************************/
+
+const pollTally = require('./votes/poll_tally.js');
 
 module.exports = {
 
@@ -90,144 +93,6 @@ module.exports = {
         }
     },
 
-    async getPollTally(pollIndex, measureBlock=null){
-        let poll = await this.getPoll(pollIndex);
-        if(this.util.isNull(poll)) return null;
-        let end_block   = Number(poll.end_block);
-        if(this.util.isNull(measureBlock)) measureBlock = end_block;
-        measureBlock    = Math.min(Number(measureBlock), end_block);
-        let tick        = await this.getTicker(poll.tick_id);
-        let options     = JSON.parse(poll.options || '[]');
-        let optionCount = options.length;
-        let tally_mode  = poll.tally_mode  || 'approval';
-        let weight_mode = poll.weight_mode || 'balance';
-        let minVoteBal  = this.util.isNull(poll.min_vote_balance) ? '0' : String(poll.min_vote_balance);
-        // Close-block holders (deterministic, address-tiebroken); supply = sum
-        let holders = await this.getHolders(tick, measureBlock, null);
-        // time_weighted maps each voter's close eligibility to their average
-        // balance over [creation_block, close]; preloaded once (windowed ledger
-        // aggregation, Section 12.2). Other modes derive weight from closeBal.
-        let twBalances = (weight_mode === 'time_weighted')
-            ? await this.getTimeWeightedBalances(tick, Number(poll.block_index), measureBlock)
-            : null;
-        let supply  = '0';
-        for(let addr in holders) supply = this.util.bcadd(supply, holders[addr], 18);
-        // Current ballots for the poll, grouped by voter. votes is append-only
-        // (every re-vote is a new action_index set), so the voter's CURRENT ballot
-        // is their rows at MAX(action_index); earlier sets stay in the table purely
-        // for reorg safety (rolling back the latest set re-exposes the prior one).
-        let rows = await this.doQuery(
-            `SELECT a.address AS address, v.choice AS choice, v.share AS share
-               FROM votes v INNER JOIN index_addresses a ON (a.id=v.voter_address_id)
-              WHERE v.poll_index=?
-                AND v.action_index = (SELECT MAX(v2.action_index) FROM votes v2
-                                       WHERE v2.poll_index=v.poll_index
-                                         AND v2.voter_address_id=v.voter_address_id)`, [pollIndex]);
-        let byVoter = {};
-        for(let r of rows){
-            if(this.util.isNull(byVoter[r.address])) byVoter[r.address] = [];
-            byVoter[r.address].push({ choice: Number(r.choice), share: this.util.isNull(r.share) ? '1' : String(r.share) });
-        }
-        // Map a close-eligible voter's close balance to a weight number under the
-        // active mode. balance = close holdings; flat = one-address-one-vote;
-        // quadratic = sqrt(close) to flatten whales; time_weighted = average
-        // holdings over the window. Weight eligibility is hold-to-count only (a
-        // positive close balance); MIN_VOTE_BALANCE is NOT a floor on weight - it
-        // gates only the qualifyingVoters headcount below. So quadratic weight has
-        // no dust floor: splitting stake across many sub-floor addresses still
-        // yields sqrt-amplified weight (Sybil-resistant, not Sybil-proof), bounded
-        // only by per-address transaction fees.
-        const weightFor = (addr, closeBal) => {
-            if(weight_mode === 'flat')          return '1';
-            if(weight_mode === 'quadratic')     return this.util.bcsqrt(closeBal, 18);
-            if(weight_mode === 'time_weighted') return (twBalances && !this.util.isNull(twBalances[addr])) ? twBalances[addr] : '0';
-            return closeBal;
-        };
-
-        // One-hop delegation (Section 13): a holder who did NOT vote directly and
-        // still holds at close lends their weight to their delegate's ballot, if
-        // the delegate cast one. Standing per-token delegation resolved at the
-        // close block. inbound[delegate] = summed delegated weight; folded into the
-        // delegate's own weight in the loop below.
-        let inbound = {};
-        if(!this.util.isNull(poll.tick_id)){
-            let delegations = await this.getActiveDelegations(poll.tick_id, measureBlock);
-            for(let delegator in delegations){
-                let delegate = delegations[delegator];
-                if(this.util.isNull(delegate)) continue;                  // cleared delegation
-                if(!this.util.isNull(byVoter[delegator])) continue;       // voted directly -> overrides
-                if(this.util.isNull(byVoter[delegate])) continue;         // idle delegate -> weight unused
-                let dBal = holders[delegator];
-                if(this.util.isNull(dBal) || !this.util.bcgt(dBal, 0)) continue; // hold-to-count on delegator
-                let dWeight = weightFor(delegator, dBal);
-                inbound[delegate] = this.util.bcadd(this.util.isNull(inbound[delegate]) ? '0' : inbound[delegate], dWeight, 18);
-            }
-        }
-
-        let totals = [];
-        let optionVoters = [];
-        for(let i=0;i<optionCount;i++){ totals.push('0'); optionVoters.push(0); }
-        let totalCountedWeight = '0';
-        let qualifyingVoters   = 0;
-        for(let addr in byVoter){
-            let closeBal = holders[addr];
-            // Hold-to-count: the ballot counts only if the voter still holds the token
-            // at close (applies to every weight mode; the dust floor below also reads
-            // closeBal, so eligibility is always the close snapshot, never the transform).
-            if(this.util.isNull(closeBal) || !this.util.bcgt(closeBal, 0)) continue;
-            // The voter's own weight plus any weight delegated to them (one-hop).
-            let weight = this.util.bcadd(weightFor(addr, closeBal), this.util.isNull(inbound[addr]) ? '0' : inbound[addr], 18);
-            // Participation gate counts a direct voter only above the dust floor
-            // (delegators add weight but not headcount; see spec).
-            if(this.util.bcgte(closeBal, minVoteBal)) qualifyingVoters++;
-            let picks = byVoter[addr];
-            if(tally_mode==='split'){
-                let sumShares = '0';
-                for(let p of picks) sumShares = this.util.bcadd(sumShares, p.share, 18);
-                if(!this.util.bcgt(sumShares, 0)) continue;
-                for(let p of picks){
-                    if(p.choice < 0 || p.choice >= optionCount) continue;
-                    let portion = this.util.bcmul(weight, this.util.bcdiv(p.share, sumShares, 18), 18);
-                    totals[p.choice] = this.util.bcadd(totals[p.choice], portion, 18);
-                    optionVoters[p.choice]++;
-                }
-            } else {
-                for(let p of picks){
-                    if(p.choice < 0 || p.choice >= optionCount) continue;
-                    totals[p.choice] = this.util.bcadd(totals[p.choice], weight, 18);
-                    optionVoters[p.choice]++;
-                }
-            }
-            // Counted once per voter for the weight-quorum turnout fraction
-            totalCountedWeight = this.util.bcadd(totalCountedWeight, weight, 18);
-        }
-        // Winner: highest weight, lowest option index on a tie
-        let winning_option = null, best = '0';
-        for(let i=0;i<optionCount;i++)
-            if(this.util.bcgt(totals[i], best)){ best = totals[i]; winning_option = i; }
-        // Validity gates (both fractions of supply / counts; either may be unset)
-        let quorum_met = true, min_voters_met = true;
-        if(!this.util.isNull(poll.quorum) && this.util.bcgt(poll.quorum, 0)){
-            let turnout = this.util.bcgt(supply, 0) ? this.util.bcdiv(totalCountedWeight, supply, 18) : '0';
-            quorum_met  = this.util.bcgte(turnout, poll.quorum);
-        }
-        if(!this.util.isNull(poll.min_voters) && Number(poll.min_voters) > 0)
-            min_voters_met = (qualifyingVoters >= Number(poll.min_voters));
-        let passed = quorum_met && min_voters_met;
-        let latest = await this.getLatestBlockIndex();
-        let closed = (latest >= end_block);
-        let status = !passed ? 'failed_quorum' : (closed ? 'finalized' : 'open');
-        let optionResults = [];
-        // bcstr, not String(): a dust weight below 1e-7 (18-decimal governance
-        // token) would render exponentially and persist that way in poll_results.
-        for(let i=0;i<optionCount;i++)
-            optionResults.push({ index: i, label: options[i], weight: this.util.bcstr(totals[i]), voters: optionVoters[i] });
-        return {
-            poll_index: Number(pollIndex), tick, measure_block: measureBlock, end_block,
-            tally_mode, weight_mode, options: optionResults,
-            supply: this.util.bcstr(supply), total_counted_weight: this.util.bcstr(totalCountedWeight),
-            total_voters: qualifyingVoters, quorum_met, min_voters_met, winning_option, status
-        };
-    },
+    ...pollTally,
 
 };
