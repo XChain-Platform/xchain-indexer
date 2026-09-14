@@ -3673,7 +3673,7 @@ Database.startupAssertedMigrationFile = function(assertion){
 // non-blank, non-comment line), so a token buried in body prose or a data literal
 // cannot arm it. Pure string logic, unit-tested directly.
 //
-// Twin: xchain-node/src/services/MigrationPreconditionService.js carries the same
+// Twin: xchain-node/src/services/migration_precondition_service.js carries the same
 // parser, because the deploy tool reads these files from a source tree it has only
 // cloned and cannot require this module. Keep the two in step.
 Database.migrationDeclaresDeployPrecondition = function(raw){

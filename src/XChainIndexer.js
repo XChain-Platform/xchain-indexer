@@ -119,7 +119,7 @@ function hubConfigStaleness(lastHubConfigFetchAt, now){
 // hashed value and no barrier waits any differently for it.
 // Top-level key of the hub's configs tree for a coin. The hub keys that tree by FULL
 // lowercase coin name ('bitcoin'), never by the ticker config['COIN'] carries ('BTC'):
-// its rows are written from xchain-node's full-name config tree (constants.js Coin) and
+// its rows are written from xchain-node's full-name config tree (config/index.js Coin) and
 // every hub-side reader of the same tree maps the ticker through COIN_FULL_NAME first
 // (XChainHub getFeeQuote, _resolveIndexerUrl, db normalizeCoin). Indexing it with the raw
 // ticker resolves undefined on every poll, so the overlay delivers nothing and says
