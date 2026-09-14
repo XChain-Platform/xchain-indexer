@@ -27,6 +27,11 @@ const { getLogger } = require('../observability/index.js');
  * 
  ********************************************************************/
 
+// The TICK, general and funding validations (./callback/validate.js). Each is called with
+// this handler as the receiver, so the checks read this.indexerDb / this.util /
+// this.config unchanged and the error they settle on does not depend on the file.
+const validate = require('./callback/validate.js');
+
 class Callback {
 
     // Handle constructing a class instance
@@ -62,6 +67,39 @@ class Callback {
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
+        let s = await this.loadCallbackState(data);
+        let callback = s.callback;
+        let totals = this.buildCallbackTotals(data, s.tokenInfo, s.callbackTokenInfo, s.holders, s.allowList, s.blockList, s.recipients);
+        await this.chargeCallbackFee(data, s.fees, s.recipients);
+        error = await validate.validateCallbackToken.call(this, data, s.tokenInfo, s.callbackTokenInfo, error);
+        error = await validate.validateCallbackState.call(this, data, s.tokenInfo, error);
+        error = await validate.validateCallbackFunding.call(this, data, s, error, totals.totalCallbackTickAmount);
+        // Determine final status
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = callback['STATUS'] = status;
+
+        // Print status message
+        getLogger().info("\t CALLBACK : " + data['TICK'] + ' : '  +  data['MEMO'] + ' : ' + data['STATUS']);
+
+        // Create record in callback table
+        await this.indexerDb.createCallback(callback);
+
+        // Store the SOURCE, TICK, and CALLBACK_TICK in addresses list
+        this.util.addAddressTicker(data['SOURCE'], [callback['TICK'], callback['CALLBACK_TICK']]);
+
+        // If this was a valid transaction, then create the credit and debit records
+        if(status=='valid'){
+
+            let ledger = await this.buildCallbackLedger(data, callback, s.fees, s.holders, totals.totalTickAmount, totals.totalCallbackTickAmount);
+            await this.applyCallbackLedger(data, callback, s.recipients, ledger.credits, ledger.debits);
+        }
+
+        // Create action mappings
+        await this.mapper.createMappings(data);
+    }
+    // Everything the phases below read: the callback row, both tokens, the SOURCE's balances
+    // and preferences, the holders, the CALLBACK_TICK lists, the fees object and recipients.
+    async loadCallbackState(data){
         // Clone the raw data for storage in callbacks table
         let callback = Object.assign({}, data);
 
@@ -95,6 +133,13 @@ class Callback {
             callback['CALLBACK_AMOUNT'] = tokenInfo['CALLBACK_AMOUNT'];
         }
 
+        return { callback: callback, tokenInfo: tokenInfo, callbackTokenInfo: callbackTokenInfo, balances: balances,
+                 preferences: preferences, holders: holders, allowList: allowList, blockList: blockList,
+                 fees: fees, recipients: recipients };
+    }
+
+    // The per-holder tally: who is owed CALLBACK_TICK, and the TICK and CALLBACK_TICK totals.
+    buildCallbackTotals(data, tokenInfo, callbackTokenInfo, holders, allowList, blockList, recipients){
         // Placeholders for total amounts for TICK and CALLBACK_TICK
         let totalTickAmount         = 0;
         let totalCallbackTickAmount = 0;
@@ -128,6 +173,11 @@ class Callback {
             }
         }
 
+        return { totalTickAmount: totalTickAmount, totalCallbackTickAmount: totalCallbackTickAmount };
+    }
+
+    // Price the transaction onto the fees object: unified gas schedule or the legacy db-hits model.
+    async chargeCallbackFee(data, fees, recipients){
         // Determine the total transaction FEE. UNIFIED_FEES_SWEEP_CALLBACK gates the move off
         // the legacy per-DB-hit model: the legacy price has no floor, so on LTC/DOGE (where
         // detectFeePaymentMode REJECTS a missing native-coin fee output rather than falling
@@ -164,182 +214,69 @@ class Callback {
         // Emitted (VM-synthesized) actions pay no separate per-tx fee; see util.feeForAction.
         fees['AMOUNT'] = this.util.feeForAction(fees['AMOUNT'], data);
 
-        /*****************************************************************
-         * TICK Validations
-         ****************************************************************/
-
-        // Validate TICK exists
-        if(!error && !tokenInfo)
-            error = 'invalid: TICK (unknown)';
-
-        // Validate CALLBACK_TICK exists
-        if(!error && !callbackTokenInfo)
-            error = 'invalid: CALLBACK_TICK (unknown)';
-
-        /*****************************************************************
-         * ACTION Validations
-         ****************************************************************/
-
-        // Verify CALLBACK is allowed
-        if(!error && !this.util.isNull(tokenInfo['LOCK_CALLBACK']) && tokenInfo['LOCK_CALLBACK']==1)
-            error = "invalid: LOCK_CALLBACK";
-
-        // Verify only token OWNER can perform CALLBACK action
-        if(!error && data['SOURCE']!=tokenInfo['OWNER'])
-            error = "invalid: SOURCE (not authorized)";
-
-        // Reject if TICK ownership is currently escrowed by an open ORDER/SWAP/DISPENSER
-        if(!error && await this.indexerDb.isOwnershipEscrowed(data['TICK']))
-            error = "invalid: TICK (ownership escrowed)";
-
-        /*****************************************************************
-         * FORMAT Validations
-         ****************************************************************/
-
-        // Verify CALLBACK_BLOCK format
-        if(!error && tokenInfo && !this.util.isNull(tokenInfo['CALLBACK_BLOCK']) && tokenInfo['CALLBACK_BLOCK'] != parseInt(tokenInfo['CALLBACK_BLOCK']))
-            error = 'invalid: CALLBACK_BLOCK (format)';
-
-        // Verify CALLBACK_AMOUNT format
-        if(!error && tokenInfo && !this.util.isNull(tokenInfo['CALLBACK_AMOUNT']) && !this.util.isValidAmountFormat(callbackTokenInfo['DECIMALS'], tokenInfo['CALLBACK_AMOUNT'], data['BLOCK_TIME']))
-            error = 'invalid: CALLBACK_AMOUNT (format)';
-
-        /*****************************************************************
-         * General Validations
-         ****************************************************************/
-
-        // Verify SOURCE is not sleeping
-        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
-            error = 'invalid: SOURCE (sleeping)';
-
-        // Verify TICK is not sleeping
-        if(!error && await this.indexerDb.isActionAllowed(null, tokenInfo['TICK'], data['BLOCK_INDEX']) == false)
-            error = 'invalid: TICK (sleeping)';
-
-        // Verify CALLBACK_TICK is not sleeping
-        if(!error && await this.indexerDb.isActionAllowed(null, tokenInfo['CALLBACK_TICK'], data['BLOCK_INDEX']) == false)
-            error = 'invalid: CALLBACK_TICK (sleeping)';
-
-        // Verify CALLBACK_BLOCK is less than or equal to current block index
-        if(!error && tokenInfo && !this.util.isNull(tokenInfo['CALLBACK_BLOCK']) && tokenInfo['CALLBACK_BLOCK'] > data['BLOCK_INDEX'])
-            error = 'invalid: CALLBACK_BLOCK (block index)';
-
-        // MEMO cannot contain '|' (field delimiter) or ';' (action delimiter)
-        if(!error && !this.util.isNull(data['MEMO']) && String(data['MEMO']).indexOf('|')!=-1)
-            error = 'invalid: MEMO (pipe)';
-
-        // Verify no semicolon in MEMO (semicolon is action delimiter)
-        if(!error && !this.util.isNull(data['MEMO']) && String(data['MEMO']).indexOf(';')!=-1)
-            error = 'invalid: MEMO (semicolon)';
-
-        // Verify MEMO is shorter than MAX_MEMO_LENGTH
-        if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
-            error = 'invalid: MEMO (length)';
-
-        // Verify SOURCE has enough balances to cover CALLBACK_TICK total amount
-        if(!error && !this.util.hasBalance(balances, callbackTokenInfo['TICK_ID'], totalCallbackTickAmount))
-            error = 'invalid: insufficient funds (CALLBACK_TICK)';
-
-        // Adjust balances to reduce by CALLBACK_TICK total amount
-        if(!error)
-            balances = this.util.debitBalances(balances, callbackTokenInfo['TICK_ID'], totalCallbackTickAmount);
-
-        // Validate fee payment (native coin or XCHAIN balance)
-        if(!error && this.util.bcgt(fees['AMOUNT'], 0)){
-            let paymentMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
-            if(paymentMode === 'native'){
-                let validation = await this.util.validateNativeCoinFee(data, fees, this.indexerDb, data['TX_OUTPUTS']);
-                if(!validation.valid){
-                    error = 'invalid: ' + (validation.error || 'native coin fee validation failed');
-                } else {
-                    fees['PAYMENT_MODE']       = 1;
-                    fees['NATIVE_COIN_AMOUNT'] = validation.nativeCoinAmount;
-                    fees['NATIVE_COIN']        = validation.nativeCoin;
-                    fees['ORACLE_ROUND']       = validation.oracleRound;
-                }
-            } else if(paymentMode === 'rejected'){
-                error = 'invalid: insufficient fee (native coin output required)';
-            } else {
-                if(!this.util.hasBalance(balances, fees['TICK_ID'], fees['AMOUNT']))
-                    error = 'invalid: insufficient funds (FEE)';
-            }
-        }
-
-        // Adjust balances to reduce by FEE AMOUNT (only for XCHAIN deduction mode)
-        if(!error && (!fees['PAYMENT_MODE'] || fees['PAYMENT_MODE'] === 2))
-            balances = this.util.debitBalances(balances, fees['TICK_ID'], fees['AMOUNT']);
-
-        // Determine final status
-        let status = (error) ? error : 'valid';
-        data['STATUS'] = callback['STATUS'] = status;
-
-        // Print status message
-        getLogger().info("\t CALLBACK : " + data['TICK'] + ' : '  +  data['MEMO'] + ' : ' + data['STATUS']);
-
-        // Create record in callback table
-        await this.indexerDb.createCallback(callback);
-
-        // Store the SOURCE, TICK, and CALLBACK_TICK in addresses list
-        this.util.addAddressTicker(data['SOURCE'], [callback['TICK'], callback['CALLBACK_TICK']]);
-
-        // If this was a valid transaction, then create the credit and debit records
-        if(status=='valid'){
-
-            // Array of credits and debits (tick, amount, address)
-            let credits = [],
-                debits  = [];
-
-            // If we are charging a fee, store the SOURCE and fees TICK in addresses list
-            if(this.util.bcgt(fees['AMOUNT'], 0))
-                this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
-
-            // Loop through list of holders
-            for(let address in holders){
-
-                // Ignore the source address so it is not debited what it is holding
-                if(address==data['SOURCE'])
-                   continue;
-
-                // Create debit record to callback the TICK to SOURCE
-                debits.push([callback['TICK'], holders[address], address]);
-
-                // Store the holder ADDRESS and TICK in addresses list
-                this.util.addAddressTicker(address, callback['TICK']);
-            }
-
-            // Create credit record for TICK total to SOURCE
-            credits.push([callback['TICK'], totalTickAmount, callback['SOURCE']]);
-
-            // Create debit record for CALLBACK_TICK total from SOURCE
-            debits.push([callback['CALLBACK_TICK'], totalCallbackTickAmount, callback['SOURCE']]);
-
-            // Handle any transaction FEE according the users's ADDRESS preferences
-            [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
-
-            // Loop through recipient addresses
-            for(let address in recipients){
-
-                // Store the recipient ADDRESS and TICK in addresses list
-                this.util.addAddressTicker(address, callback['CALLBACK_TICK']);
-
-                credits.push([callback['CALLBACK_TICK'], recipients[address], address]);
-            }
-
-            // Process any transaction ledger changes (credits / debits)
-            await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
-
-            // Get a list of tickers & addresses
-            let tickers   = this.util.getTickersList(),
-                addresses = Object.keys(this.util.getAddressesList());
-
-            // Update address balances and token supply
-            await this.indexerDb.updateBalances(addresses);
-            await this.indexerDb.updateTokens(tickers);
-        }
-
-        // Create action mappings
-        await this.mapper.createMappings(data);
     }
+
+    // The ledger a valid CALLBACK writes: the holders' TICK moves to the SOURCE, the SOURCE pays
+    // the CALLBACK_TICK total, and the fee is routed by the payer's preferences.
+    async buildCallbackLedger(data, callback, fees, holders, totalTickAmount, totalCallbackTickAmount){
+        // Array of credits and debits (tick, amount, address)
+        let credits = [],
+            debits  = [];
+
+        // If we are charging a fee, store the SOURCE and fees TICK in addresses list
+        if(this.util.bcgt(fees['AMOUNT'], 0))
+            this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
+
+        // Loop through list of holders
+        for(let address in holders){
+
+            // Ignore the source address so it is not debited what it is holding
+            if(address==data['SOURCE'])
+               continue;
+
+            // Create debit record to callback the TICK to SOURCE
+            debits.push([callback['TICK'], holders[address], address]);
+
+            // Store the holder ADDRESS and TICK in addresses list
+            this.util.addAddressTicker(address, callback['TICK']);
+        }
+
+        // Create credit record for TICK total to SOURCE
+        credits.push([callback['TICK'], totalTickAmount, callback['SOURCE']]);
+
+        // Create debit record for CALLBACK_TICK total from SOURCE
+        debits.push([callback['CALLBACK_TICK'], totalCallbackTickAmount, callback['SOURCE']]);
+
+        // Handle any transaction FEE according the users's ADDRESS preferences
+        [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
+
+        return { credits: credits, debits: debits };
+    }
+
+    // Credit each recipient its CALLBACK_TICK, write the ledger changes, and refresh the
+    // balances and token supplies they moved.
+    async applyCallbackLedger(data, callback, recipients, credits, debits){
+        // Loop through recipient addresses
+        for(let address in recipients){
+
+            // Store the recipient ADDRESS and TICK in addresses list
+            this.util.addAddressTicker(address, callback['CALLBACK_TICK']);
+
+            credits.push([callback['CALLBACK_TICK'], recipients[address], address]);
+        }
+
+        // Process any transaction ledger changes (credits / debits)
+        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
+
+        // Get a list of tickers & addresses
+        let tickers   = this.util.getTickersList(),
+            addresses = Object.keys(this.util.getAddressesList());
+
+        // Update address balances and token supply
+        await this.indexerDb.updateBalances(addresses);
+        await this.indexerDb.updateTokens(tickers);
+    }
+
 }
 
 module.exports = Callback;
