@@ -162,7 +162,6 @@ describe('price_batch_compression: consensus constants @regression', function(){
 });
 
 describe('price_batch_compression: round trip @regression', function(){
-
     it('a compressed body inflates back byte-identically', function(){
         const body = buildRealisticV2Body();
         const r = c.inflatePriceBatchBody(c.compressPriceBatchBody(body));
@@ -216,7 +215,9 @@ describe('price_batch_compression: round trip @regression', function(){
         assert.strictEqual(r.ok, true, r.reason);
         assert.strictEqual(r.body, body);
     });
+});
 
+describe('price_batch_compression: round trip @regression', function(){
     it('compressPriceBatchBody refuses a non-string body', function(){
         assert.throws(() => c.compressPriceBatchBody(Buffer.from('x')), TypeError);
         assert.throws(() => c.compressPriceBatchBody(null), TypeError);
@@ -224,7 +225,6 @@ describe('price_batch_compression: round trip @regression', function(){
 });
 
 describe('price_batch_compression: the bomb is refused before the buffer grows @regression', function(){
-
     // 200 KB of one byte deflates to a couple of hundred bytes, a ratio near
     // 950:1. This is the payload the cap exists for.
     const BOMB_PLAIN = Buffer.alloc(200 * 1024, 0x41);
@@ -275,7 +275,9 @@ describe('price_batch_compression: the bomb is refused before the buffer grows @
         assert.strictEqual(r.detail, raw.length * c.PRICE_BATCH_MAX_INFLATE_RATIO);
         assert.strictEqual(r.body, undefined);
     });
+});
 
+describe('price_batch_compression: the bomb is refused before the buffer grows @regression', function(){
     it('rejects a ratio breach that would have FIT the wire ceiling', function(){
         // The two bounds are independent, and this is the case that proves it.
         // 8,000 bytes of one repeated byte fit the wire comfortably, so the
@@ -316,7 +318,9 @@ describe('price_batch_compression: the bomb is refused before the buffer grows @
         assert.strictEqual(r.detail, c.PRICE_WIRE_MAX_BYTES);
         assert.strictEqual(r.body, undefined);
     });
+});
 
+describe('price_batch_compression: the bomb is refused before the buffer grows @regression', function(){
     it('accepts a body of exactly the wire ceiling and rejects one byte more', function(){
         // The size bound is inclusive. Both sides are driven, because an
         // off-by-one here forks a node that admits the batch from one that does
@@ -411,7 +415,6 @@ describe('price_batch_compression: strictly canonical base64 @regression', funct
 });
 
 describe('price_batch_compression: every failure is explicit and terminal @regression', function(){
-
     const cases = [
         ['non-string (undefined)', undefined,                     'not-a-string'],
         ['non-string (null)',      null,                          'not-a-string'],
@@ -468,7 +471,9 @@ describe('price_batch_compression: every failure is explicit and terminal @regre
         assert.strictEqual(r.ok, true, r.reason);
         assert.strictEqual(r.body, body);
     });
+});
 
+describe('price_batch_compression: every failure is explicit and terminal @regression', function(){
     it('never falls back to treating the field as an uncompressed body', function(){
         // A plausible-looking uncompressed body handed in where a compressed
         // field belongs must be rejected, not read.

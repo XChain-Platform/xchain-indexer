@@ -32,7 +32,6 @@ const {
 const ARMED = 1800000000;   // an arbitrary armed threshold, for the boundary cases
 
 describe('PRICE v0 pair-name widening flag-day @regression', function () {
-
     describe('the activation map', function () {
         it('is ARMED at genesis on mainnet by the 2026-09-09 ruling', function () {
             // 0 PRICE actions have ever been indexed on any mainnet chain (measured
@@ -57,7 +56,9 @@ describe('PRICE v0 pair-name widening flag-day @regression', function () {
             assert.strictEqual(PRICE_PAIR_TICKER_MAX_WIDE, 6);
         });
     });
+});
 
+describe('PRICE v0 pair-name widening flag-day @regression', function () {
     describe('what each bound accepts', function () {
         it('accepts the existing 36 pair shapes under BOTH bounds', function () {
             // The gate must not change a single already-valid pair, or every historical
@@ -105,7 +106,9 @@ describe('PRICE v0 pair-name widening flag-day @regression', function () {
             for (let i = 0; i < 4; i++) assert.strictEqual(PRICE_PAIR_RE_WIDE.test('BTC/USD'), true);
         });
     });
+});
 
+describe('PRICE v0 pair-name widening flag-day @regression', function () {
     describe('isPricePairWideningActive()', function () {
         it('is inclusive at the boundary instant', function () {
             let map = { mainnet: ARMED, testnet: 0, regtest: 0 };

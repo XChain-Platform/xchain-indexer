@@ -67,7 +67,6 @@ function barrierBlock() {
 }
 
 describe('price barrier decoupled from the fee flag-day @regression @tier1', function () {
-
     it('the non-BTC time barrier is not guarded by isNativeFeePriceTimeGateActive', function () {
         const block = barrierBlock();
         assert.ok(!/isNativeFeePriceTimeGateActive/.test(block),
@@ -109,7 +108,9 @@ describe('price barrier decoupled from the fee flag-day @regression @tier1', fun
         assert.strictEqual(
             changes.isNativeFeePriceTimeGateActive('mainnet', 1786060800 - 1), false);
     });
+});
 
+describe('price barrier decoupled from the fee flag-day @regression @tier1', function () {
     it('the widened barrier still opens on the watermark with no local rounds', async function () {
         // The reason widening is safe: a chain that has never seen a price round,
         // or is sitting in a round gap, must not freeze its tip. Case 2 of

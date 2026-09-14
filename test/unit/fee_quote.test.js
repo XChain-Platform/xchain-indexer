@@ -468,6 +468,9 @@ describe('native coin fee quote @regression @tier1', function () {
             }
         });
 
+        const LTC_PRICES = { 'XCHAIN/USD': '1.00000000', 'LTC/USD': '100.00000000' };
+        const CODE_B64   = Buffer.from('x', 'utf8').toString('base64');
+
         // DEPLOY/EXECUTE stage their protocol fee from the gas schedule BEFORE entering
         // the VM, and that pre-VM number is what validateNativeCoinFee judges the native output
         // against. So they get a payable, verdict-free quote instead of the old `supported:false`
@@ -477,9 +480,6 @@ describe('native coin fee quote @regression @tier1', function () {
         // 1 code byte => 100000 + 10 = 100010 gas @ 0.00001 = 1.00010000 XCHAIN;
         // @ XCHAIN $1 / LTC $100 => 0.01000100 LTC (1000100 sats), min 0.00950095.
         describe('static (no-VM) quotes for DEPLOY/EXECUTE @regression', function () {
-            const LTC_PRICES = { 'XCHAIN/USD': '1.00000000', 'LTC/USD': '100.00000000' };
-            const CODE_B64   = Buffer.from('x', 'utf8').toString('base64');
-
             it('DEPLOY v0 inline: payable fee, no verdict, engine never invoked', async function () {
                 let util = makeUtil('LTC', FEE_DEST);
                 let { ctx, calls } = makeCtx(util, makeDb({ prices: LTC_PRICES }));
@@ -533,7 +533,9 @@ describe('native coin fee quote @regression @tier1', function () {
                 let q = await ctx.computeFeeQuote.call(ctx, { action: 'DEPLOY', params: ['0', '78', '500000', ''], source: 'src' });
                 assert.strictEqual(q.gasCost, 100010, "hex '78' is the same 1 byte of source");
             });
+        });
 
+        describe('static (no-VM) quotes for DEPLOY/EXECUTE @regression', function () {
             it('non-canonical CODE_ENCODING rejects with the handler string, no fee sizing', async function () {
                 let util = makeUtil('LTC', FEE_DEST);
                 let { ctx } = makeCtx(util, makeDb({ prices: LTC_PRICES }));
@@ -579,7 +581,9 @@ describe('native coin fee quote @regression @tier1', function () {
                 assert.ok(/LTC\/USD/.test(q.error), q.error);
                 assert.strictEqual(q.requiredFeeSats, undefined);
             });
+        });
 
+        describe('static (no-VM) quotes for DEPLOY/EXECUTE @regression', function () {
             it('BATCH/XEXEC refusal on a native-only chain does not advise the XCHAIN lane', async function () {
                 let util = makeUtil('DOGE', FEE_DEST);
                 let { ctx } = makeCtx(util, makeDb({ prices: BTC_PRICES }));

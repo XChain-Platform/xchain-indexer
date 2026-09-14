@@ -89,7 +89,6 @@ function outputs(value){
 }
 
 describe('native fee batch ledger @regression @tier1', function () {
-
     describe('no ledger (non-BATCH tx, or a pre-flag-day BATCH)', function () {
 
         it('returns the FULL paid amount and repeats identically on re-entry', async function () {
@@ -116,9 +115,10 @@ describe('native fee batch ledger @regression @tier1', function () {
                 'insufficient native coin fee (paid: 4.74999999, expected: ' + EXPECTED + ', min: ' + MIN_ACC + ')');
         });
     });
+});
 
+describe('native fee batch ledger @regression @tier1', function () {
     describe('batch pool accounting', function () {
-
         it('ONE command\'s worth of fee validates exactly ONE of three commands', async function () {
             let util = makeUtil(), db = priceStub();
             let data = makeData({ BATCH_VALUE_LEDGER: seedLedger() });
@@ -168,7 +168,11 @@ describe('native fee batch ledger @regression @tier1', function () {
             // A rejected command consumes nothing.
             assert.strictEqual(data['BATCH_VALUE_LEDGER'].nativeFeeConsumed, '15.00000000');
         });
+    });
+});
 
+describe('native fee batch ledger @regression @tier1', function () {
+    describe('batch pool accounting', function () {
         it('the 0.95x tolerance does not compound: paying exactly minAcceptable buys ONE command', async function () {
             let util = makeUtil(), db = priceStub();
             let data = makeData({ BATCH_VALUE_LEDGER: seedLedger() });
@@ -201,7 +205,9 @@ describe('native fee batch ledger @regression @tier1', function () {
             assert.strictEqual(data['BATCH_VALUE_LEDGER'].nativeFeeConsumed, EXPECTED);
         });
     });
+});
 
+describe('native fee batch ledger @regression @tier1', function () {
     describe('paths that must consume nothing', function () {
 
         it('a FEE_PROBE dry run leaves nativeFeeConsumed untouched and still quotes valid', async function () {
@@ -244,7 +250,9 @@ describe('native fee batch ledger @regression @tier1', function () {
             assert.strictEqual(data['BATCH_VALUE_LEDGER'].nativeFeeConsumed, '0');
         });
     });
+});
 
+describe('native fee batch ledger @regression @tier1', function () {
     describe('ledger value discipline', function () {
 
         it('holds decimal STRINGS, never JS numbers, after several accumulations', async function () {

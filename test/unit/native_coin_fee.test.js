@@ -44,9 +44,7 @@ function priceStub(prices){
 const DATA = { BLOCK_INDEX: 100, BLOCK_TIME: 1000, COIN: 'DOGE' };
 
 describe('native coin fee @regression @tier1', function () {
-
     describe('validateNativeCoinFee()', function () {
-
         it('accepts a correct fee: 0.5 XCHAIN @ $1.00, DOGE @ $0.10 => 5.0 DOGE', async function () {
             let util = makeUtil('DOGE', FEE_DEST);
             let db   = priceStub({ 'XCHAIN/USD': '1.00000000', 'DOGE/USD': '0.10000000' });
@@ -97,7 +95,11 @@ describe('native coin fee @regression @tier1', function () {
             assert.strictEqual(r.valid, false);
             assert.ok(/invalid oracle price for DOGE\/USD/.test(r.error), r.error);
         });
+    });
+});
 
+describe('native coin fee @regression @tier1', function () {
+    describe('validateNativeCoinFee()', function () {
         it('rejects when no output pays the fee destination', async function () {
             let util = makeUtil('DOGE', FEE_DEST);
             let db   = priceStub({ 'XCHAIN/USD': '1.00000000', 'DOGE/USD': '0.10000000' });
@@ -123,7 +125,9 @@ describe('native coin fee @regression @tier1', function () {
             assert.strictEqual(r.expectedAmount, '0.00002000');
         });
     });
+});
 
+describe('native coin fee @regression @tier1', function () {
     describe('detectFeePaymentMode()', function () {
 
         it('returns "xchain" when FEE_DESTINATION is the unset placeholder', function () {

@@ -138,7 +138,6 @@ function verdicts(calls){
 }
 
 describe('FEE_PROBE parity on a batched multi-payee COINPAY @regression @tier1', function () {
-
     describe('a probe resolves its own payee\'s output', function () {
 
         it('the NON-lowest-vout payee quotes VALID, not a destination mismatch', async function () {
@@ -190,7 +189,9 @@ describe('FEE_PROBE parity on a batched multi-payee COINPAY @regression @tier1',
             assert.strictEqual(calls.created[0].COIN_AMOUNT, '5.00000000');
         });
     });
+});
 
+describe('FEE_PROBE parity on a batched multi-payee COINPAY @regression @tier1', function () {
     describe('the probe agrees with what the chain does', function () {
 
         it('every sub-command of a two-payee batch quotes the consensus verdict', async function () {
@@ -223,7 +224,9 @@ describe('FEE_PROBE parity on a batched multi-payee COINPAY @regression @tier1',
             }
         });
     });
+});
 
+describe('FEE_PROBE parity on a batched multi-payee COINPAY @regression @tier1', function () {
     describe('the read capability buys no write capability', function () {
 
         it('the tally object is byte-identical before and after a probe', async function () {
@@ -276,7 +279,9 @@ describe('FEE_PROBE parity on a batched multi-payee COINPAY @regression @tier1',
             assert.deepStrictEqual(data['BATCH_VALUE_LEDGER'].coinPayeeConsumed, { [PAYEE_B]: '3.00000000' });
         });
     });
+});
 
+describe('FEE_PROBE parity on a batched multi-payee COINPAY @regression @tier1', function () {
     describe('below the flag and off the batch path, a probe is unchanged', function () {
 
         it('with NO ledger key a probe still reports the destination mismatch', async function () {

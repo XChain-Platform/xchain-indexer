@@ -89,9 +89,7 @@ function makeQuoteCtx({ dryRunThrows = null, actions = Actions } = {}){
 }
 
 describe('fee-quote transaction-lock budget', function () {
-
     describe('_acquireTxLock() bounded wait', function () {
-
         it('takes a free lock immediately even with a budget', async function () {
             let db = makeLock();
             await db.acquireTxLock(50);
@@ -143,7 +141,11 @@ describe('fee-quote transaction-lock budget', function () {
             assert.strictEqual(live, true, 'the live waiter got the lock');
             assert.strictEqual(db._txLock.locked, true, 'lock is held by the live waiter');
         });
+    });
+});
 
+describe('fee-quote transaction-lock budget', function () {
+    describe('_acquireTxLock() bounded wait', function () {
         it('a release with only dead waiters leaves the lock FREE, not stranded', async function () {
             let db = makeLock();
             await db.acquireTxLock();
@@ -155,7 +157,9 @@ describe('fee-quote transaction-lock budget', function () {
             assert.strictEqual(db._txLock.locked, true);
         });
     });
+});
 
+describe('fee-quote transaction-lock budget', function () {
     describe('_dryRunAction() passes the budget to the mutex', function () {
 
         function makeDryRunCtx({ acquireRejects = false } = {}){
@@ -206,7 +210,9 @@ describe('fee-quote transaction-lock budget', function () {
             assert.strictEqual(calls.rollback, 0, 'no rollback for a transaction that never opened');
         });
     });
+});
 
+describe('fee-quote transaction-lock budget', function () {
     describe('computeFeeQuote() answers busy instead of waiting out a block', function () {
 
         it('passes the acquire budget down to the dry-run', async function () {
@@ -256,7 +262,9 @@ describe('fee-quote transaction-lock budget', function () {
                 /engine boom/);
         });
     });
+});
 
+describe('fee-quote transaction-lock budget', function () {
     describe('computePreflight() gives up on the same terms', function () {
 
         it('returns busy/retryable with valid null, and memoizes nothing', async function () {

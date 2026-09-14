@@ -22,7 +22,6 @@ const { PRICE_BATCHES_DEFAULT_LIMIT, PRICE_BATCHES_MAX_LIMIT,
 const pricesMixin = require('../../src/db/prices');
 
 describe('price-batch-query (getpricebatches)', function () {
-
     describe('validatePriceBatchParams', function () {
         it('accepts a closed round range and defaults the limit', function () {
             let v = validatePriceBatchParams({ first_round: 21, last_round: 1568 });
@@ -50,7 +49,9 @@ describe('price-batch-query (getpricebatches)', function () {
             assert.strictEqual(validatePriceBatchParams({ first_round: 0, last_round: 1, limit: 'x' }).ok, false);
         });
     });
+});
 
+describe('price-batch-query (getpricebatches)', function () {
     describe('db.getPriceBatchesOverlappingRange', function () {
         // Drive the mixin method with a recording stub rather than asserting on an exported
         // string: this captures the SQL the method actually issues AND the bind order, which
@@ -82,7 +83,9 @@ describe('price-batch-query (getpricebatches)', function () {
             assert.deepStrictEqual(rows, [{ action_index: 7 }]);
         });
     });
+});
 
+describe('price-batch-query (getpricebatches)', function () {
     describe('buildPriceBatchesResponse', function () {
         const V = { first_round: 40, last_round: 60, limit: 3 };
 

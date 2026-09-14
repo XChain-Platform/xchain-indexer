@@ -29,7 +29,6 @@ const assert = require('assert');
 const gate   = require('../../src/price_sig_tally_activation.js');
 
 describe('PRICE v0 signature-tally flag-day @regression', function () {
-
     describe('activation map', function () {
         it('mainnet is armed to the ratified 963000 BTC anchor, not the shipped 961000 train', function () {
             // 961000 is ~2026-08-04 and its deploy train shipped 2026-07-23, so arming
@@ -43,7 +42,9 @@ describe('PRICE v0 signature-tally flag-day @regression', function () {
             assert.strictEqual(gate.PRICE_SIG_TALLY_ACTIVATION.regtest, 0);
         });
     });
+});
 
+describe('PRICE v0 signature-tally flag-day @regression', function () {
     describe('isPriceSigTallyVerifyFirstActive', function () {
         it('is inactive below the mainnet anchor and active at/above it', function () {
             assert.strictEqual(gate.isPriceSigTallyVerifyFirstActive(962999, 'mainnet'), false);

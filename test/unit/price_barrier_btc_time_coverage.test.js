@@ -77,7 +77,6 @@ function priceBarrierBlock() {
 }
 
 describe('BTC price barrier covers time as well as height @regression @tier1', function () {
-
     it('the time barrier is reachable on BTC, not an else-branch of the height barrier', function () {
         const block = priceBarrierBlock();
         assert.ok(!/else if\(this\.hubDbSync\)\{/.test(block),
@@ -123,7 +122,9 @@ describe('BTC price barrier covers time as well as height @regression @tier1', f
             'each barrier must break out of the loop without advancing lastIndexerBlock, ' +
             'so the block is retried rather than settled against a stale mirror');
     });
+});
 
+describe('BTC price barrier covers time as well as height @regression @tier1', function () {
     // The behavioural core: a mirror that satisfies the height barrier can still
     // be missing rounds inside the settlement window.
     it('height satisfaction does not imply time satisfaction', function () {

@@ -107,7 +107,6 @@ function makeDispatchCtx(){
 }
 
 describe('a fee quote answers for the action it was asked about', () => {
-
     it('[REGRESSION] reports the ORDER\'s verdict, not the match it triggered', async () => {
         let { ctx } = makeDryRunCtx();
         let r = await ctx.dryRunAction.call(ctx, {
@@ -155,7 +154,9 @@ describe('a fee quote answers for the action it was asked about', () => {
             'preferring the primary verdict must not swallow a genuine refusal');
         assert.strictEqual(r.xchainFee, null, 'a refused action stages no fee');
     });
+});
 
+describe('a fee quote answers for the action it was asked about', () => {
     describe('which dispatches capture a primary verdict', () => {
 
         it('ORDER_MATCH captures the record it was handed, before overwriting it', async () => {

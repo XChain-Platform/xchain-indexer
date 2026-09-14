@@ -32,10 +32,9 @@ const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js'
 const FIXTURE = path.join(__dirname, '../fixtures/dex-fill-quantization-vectors.json');
 const vectors = JSON.parse(fs.readFileSync(FIXTURE, 'utf8'));
 
+const util = new Utility();
+
 describe('DEX fill quantization parity, indexer half (#3145/#3146) @regression @tier1', function () {
-
-    const util = new Utility();
-
     describe('precision alignment (the reference the hub is ported to)', function () {
         for (const v of vectors.precision_alignment) {
             it(`${v.label}: derives at precision 64`, function () {
@@ -65,7 +64,9 @@ describe('DEX fill quantization parity, indexer half (#3145/#3146) @regression @
             for (const m of muls) assert.match(m, /,\s*64\)$/);
         });
     });
+});
 
+describe('DEX fill quantization parity, indexer half (#3145/#3146) @regression @tier1', function () {
     describe('tick quantization (indexer-only until offers carry decimals)', function () {
         for (const v of vectors.tick_quantization) {
             it(`${v.label}: bcround(${v.amount}, ${v.decimals}) -> ${v.expected}`, function () {

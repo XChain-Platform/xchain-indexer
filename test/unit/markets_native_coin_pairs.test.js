@@ -63,7 +63,6 @@ const pairKey = (p) => Math.min(p.tick1_id, p.tick2_id) + ':' + Math.max(p.tick1
 afterEach(function () { sinon.restore(); });
 
 describe('markets: a token against the native coin @regression @tier1', function () {
-
     it('collects ONE pair from two opposite-orientation orders on a token/native market', async function () {
         const db = makeDb();
         collectorOn(db, [
@@ -107,7 +106,9 @@ describe('markets: a token against the native coin @regression @tier1', function
         assert.ok(/INSERT INTO markets \(tick1_id, tick2_id, coin1_id, coin2_id\)/.test(q.getCall(1).args[0]));
         assert.deepStrictEqual(q.getCall(1).args[1], [0, TOKEN_A, COIN, COIN]);
     });
+});
 
+describe('markets: a token against the native coin @regression @tier1', function () {
     it('labels an existing unlabelled row with exactly one UPDATE', async function () {
         const db = makeDb();
         const q  = sinon.stub(db, 'doQuery');
@@ -157,7 +158,9 @@ describe('markets: a token against the native coin @regression @tier1', function
         assert.strictEqual(data.coin1_id, 3);
         assert.strictEqual(data.coin2_id, 2);
     });
+});
 
+describe('markets: a token against the native coin @regression @tier1', function () {
     it('persists the derived labels, and only once both sides are known', async function () {
         const db = makeDb();
         const q  = sinon.stub(db, 'doQuery').resolves({});
@@ -188,9 +191,9 @@ describe('markets: a token against the native coin @regression @tier1', function
     });
 });
 
-describe('markets: the rollback collector agrees with the block path @regression @tier1', function () {
-    let indexer, rollback;
+let indexer, rollback;
 
+describe('markets: the rollback collector agrees with the block path @regression @tier1', function () {
     beforeEach(function () {
         indexer = createMockIndexer();
         indexer.protocolChanges = {
@@ -232,6 +235,18 @@ describe('markets: the rollback collector agrees with the block path @regression
             'the sweep must skip the native-coin sentinel, which is not a dangling ticker id');
         assert.deepStrictEqual(sweep.args[1],
             [Database.MARKET_NATIVE_TICK_ID, Database.MARKET_NATIVE_TICK_ID]);
+    });
+});
+
+describe('markets: the rollback collector agrees with the block path @regression @tier1', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        indexer.protocolChanges = {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true)
+        };
+        rollback = new Rollback(indexer);
+        indexer.util.resetLists();
     });
 
     it('probes order survival NULL-aware, so a live token/native market is not swept as a zombie', async function () {

@@ -306,16 +306,16 @@ describe('EMISSION_ISSUANCE_LIMITS budget in issue.js @regression @tier1', funct
 
 });
 
+let indexer, actionsCtx, handler;
+
+const SOURCE   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+const CONTRACT = 5;
+
 /*****************************************************************
  * The propagation seams
  ****************************************************************/
 
 describe('EMISSION_ISSUANCE_LIMITS budget propagation @regression @tier2', function () {
-    let indexer, actionsCtx, handler;
-
-    const SOURCE   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-    const CONTRACT = 5;
-
     beforeEach(function () {
         indexer = createMockIndexer();
         indexer.indexerDb.getContractPermissions = sinon.stub().resolves(null);
@@ -358,6 +358,29 @@ describe('EMISSION_ISSUANCE_LIMITS budget propagation @regression @tier2', funct
 
         assert.strictEqual(seen, ledger, 'the emission must share the transaction budget object, not a copy');
     });
+});
+
+describe('EMISSION_ISSUANCE_LIMITS budget propagation @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        indexer.indexerDb.getContractPermissions = sinon.stub().resolves(null);
+        indexer.indexerDb.createActionIndex      = sinon.stub().resolves(777);
+
+        actionsCtx = {
+            config:          indexer.config,
+            util:            indexer.util,
+            mapper:          indexer.mapper,
+            decoderDb:       indexer.decoderDb,
+            indexerDb:       indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,
+            vm:              { execute: sinon.stub().resolves({ success: true, gasUsed: 0, stateChanges: [], stateDeletes: [], emittedActions: [] }) },
+        };
+        handler = new Execute(actionsCtx);
+    });
+
+    afterEach(function () {
+        sinon.restore();
+    });
 
     it('two emissions of one EXECUTE share ONE budget', async function () {
         const seen = [];
@@ -392,6 +415,29 @@ describe('EMISSION_ISSUANCE_LIMITS budget propagation @regression @tier2', funct
         });
 
         assert.deepStrictEqual(ctx.ISSUANCE_LIMIT_LEDGER, { topLevel: 0 });
+    });
+});
+
+describe('EMISSION_ISSUANCE_LIMITS budget propagation @regression @tier2', function () {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        indexer.indexerDb.getContractPermissions = sinon.stub().resolves(null);
+        indexer.indexerDb.createActionIndex      = sinon.stub().resolves(777);
+
+        actionsCtx = {
+            config:          indexer.config,
+            util:            indexer.util,
+            mapper:          indexer.mapper,
+            decoderDb:       indexer.decoderDb,
+            indexerDb:       indexer.indexerDb,
+            protocolChanges: indexer.protocolChanges,
+            vm:              { execute: sinon.stub().resolves({ success: true, gasUsed: 0, stateChanges: [], stateDeletes: [], emittedActions: [] }) },
+        };
+        handler = new Execute(actionsCtx);
+    });
+
+    afterEach(function () {
+        sinon.restore();
     });
 
     it('two injected executions do not share a budget', function () {

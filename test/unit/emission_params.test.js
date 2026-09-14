@@ -80,7 +80,6 @@ function formatFieldCount(HandlerClass){
 }
 
 describe('Emission Params Arity (MANDATORY) @regression @tier1', function() {
-
     for(const [action, HandlerClass] of Object.entries(EMITTABLE_HANDLERS)){
         it(action + ': buildActionParams arity === handler formats[0] field count', function() {
             const expected = formatFieldCount(HandlerClass);
@@ -132,7 +131,9 @@ describe('Emission Params Arity (MANDATORY) @regression @tier1', function() {
         assert.strictEqual(r[6], 'EM');   // ENCRYPTION_METHOD
         assert.strictEqual(r[7], 'KH');   // KEY_HASH
     });
+});
 
+describe('Emission Params Arity (MANDATORY) @regression @tier1', function() {
     // EMITTER_POSITION is mandatory for ATTEST emissions: the v0 request handler re-derives
     // the request_id from (tx_hash, contract_index, emitter_position) to defend against a
     // compromised VM. processEmission must fail loudly at the source if the position is

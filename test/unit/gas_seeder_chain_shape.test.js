@@ -34,8 +34,9 @@ function recordingSeeder() {
     return { blocks, seedBlock: async (index, time, txs) => { blocks.push({ index, time, txs }); } };
 }
 
+let priorCoin;
+
 describe('gas seeder: chain-shaped preamble', function () {
-    let priorCoin;
     beforeEach(function () { priorCoin = process.env.INDEXER_COIN; clearSystemGas(); });
     afterEach(function () {
         if (priorCoin === undefined) delete process.env.INDEXER_COIN;
@@ -92,6 +93,15 @@ describe('gas seeder: chain-shaped preamble', function () {
         await seedGas(recordingSeeder(), { addresses });
         addresses.push(A2);
         assert.deepStrictEqual(pendingSystemGasAt(99).addresses, [A1]);
+    });
+});
+
+describe('gas seeder: chain-shaped preamble', function () {
+    beforeEach(function () { priorCoin = process.env.INDEXER_COIN; clearSystemGas(); });
+    afterEach(function () {
+        if (priorCoin === undefined) delete process.env.INDEXER_COIN;
+        else process.env.INDEXER_COIN = priorCoin;
+        clearSystemGas();
     });
 
     it('clearSystemGas forgets every pending seed', async function () {

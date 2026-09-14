@@ -67,7 +67,6 @@ function capture(fn) {
 }
 
 describe('the price barrier is scoped to consensus, not to "a context exists"', () => {
-
     it('1. fires inside a BLOCK-LOOP context when the block skipped the barrier', () => {
         const db  = stubDb();
         const err = capture(() =>
@@ -122,7 +121,9 @@ describe('the price barrier is scoped to consensus, not to "a context exists"', 
         assert.ok(err);
         assert.match(err.message, /transaction fenced \(M-16\)/);
     });
+});
 
+describe('the price barrier is scoped to consensus, not to "a context exists"', () => {
     it('7. the fee-quote dry run is the only caller that opts out of consensus', () => {
         // Structural, because the defect was a call site rather than a branch: a new
         // caller reaching for the fence must get `runInTxEpoch` and therefore stay

@@ -84,7 +84,6 @@ function makeDb() {
 }
 
 describe('action-scoped price barrier', function () {
-
     afterEach(() => sinon.restore());
 
     describe('blockMayReadPrice (soundness of the skip decision)', function () {
@@ -107,6 +106,10 @@ describe('action-scoped price barrier', function () {
         });
 
     });
+});
+
+describe('action-scoped price barrier', function () {
+    afterEach(() => sinon.restore());
 
     describe('_evaluatePriceBarrier (the block loop\'s decision)', function () {
 
@@ -155,6 +158,10 @@ describe('action-scoped price barrier', function () {
         });
 
     });
+});
+
+describe('action-scoped price barrier', function () {
+    afterEach(() => sinon.restore());
 
     // The flag lifecycle lives inline in the block loop (start() is not importable in
     // isolation, same constraint reorg_catchup_cursor.test.js documents), so it is pinned
@@ -180,6 +187,10 @@ describe('action-scoped price barrier', function () {
         });
 
     });
+});
+
+describe('action-scoped price barrier', function () {
+    afterEach(() => sinon.restore());
 
     describe('db._assertPriceBarrierNotSkipped (fail-closed backstop)', function () {
 
@@ -232,6 +243,10 @@ describe('action-scoped price barrier', function () {
         });
 
     });
+});
+
+describe('action-scoped price barrier', function () {
+    afterEach(() => sinon.restore());
 
     // Sweep the siblings: a guard on four of the five readers is a fork on the fifth.
     describe('every price-mirror read is guarded', function () {

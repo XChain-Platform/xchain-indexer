@@ -37,7 +37,6 @@ const amount = fc.tuple(
 });
 
 describe('amount precision (bignumber math) @money @regression', function () {
-
     describe('known float/double traps the bc* math must beat', function () {
         it('bcmul(0.1, 0.2) is exactly 0.02 (IEEE-754 gives 0.020000000000000004)', function () {
             assert.strictEqual(fmt(util.bcmul('0.1', '0.2', 18)), '0.020000000000000000');
@@ -92,7 +91,9 @@ describe('amount precision (bignumber math) @money @regression', function () {
             }), { numRuns: 300 });
         });
     });
+});
 
+describe('amount precision (bignumber math) @money @regression', function () {
     describe('conservation: summing many amounts is order-independent (exact)', function () {
         it('Σ amounts folded forward equals the same set folded in reverse', function () {
             fc.assert(fc.property(fc.array(amount, { minLength: 1, maxLength: 40 }), (arr) => {
