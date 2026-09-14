@@ -46,12 +46,22 @@ const { siblingCheckout, skipOrFail, siblingsRequired } = require('../helpers/si
 // vendored copies stay flat. One shared path would silently drop the canonical out of
 // the comparison, leaving the three siblings agreeing with each other while the file
 // this repo actually commits roots with went unchecked.
-const CARRIERS = [
-    ['xchain-indexer',  'consensus/merkle.js'],
+//
+// The indexer's own copy is NOT listed here: resolving it as `<sibling-parent>/xchain-indexer/...`
+// only works when this checkout's directory happens to be named xchain-indexer, so a lane
+// worktree or a renamed clone would fail to resolve the canonical it exists to protect. It is
+// pinned separately as OWN_COPY, read straight out of this checkout.
+const SIBLING_CARRIERS = [
     ['xchain-explorer', 'merkle.js'],
     ['xchain-sync',     'merkle.js'],
     ['xchain-sdk',      'merkle.js'],
 ];
+
+// This repo's own canonical copy, resolved from inside this checkout rather than through
+// the sibling parent above, and never passed through siblingCheckout: that helper judges
+// whether a SIBLING entry beside this checkout may be trusted, and the own copy is not a
+// sibling, it lives inside this checkout, so that question does not apply to it.
+const OWN_COPY = path.resolve(__dirname, '..', '..', 'src', 'consensus', 'merkle.js');
 
 function sha256File(p) {
     return crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
@@ -70,7 +80,18 @@ describe('src/consensus/merkle.js is byte-identical across its four carriers', f
         // refused (a lane symlink into a live main checkout) is kept aside with its
         // verdict, so the skip or the strict failure can name why it dropped out.
         const refused = [];
-        for (const [repo, rel] of CARRIERS) {
+        // This repo's own copy is resolved directly from this checkout (OWN_COPY above),
+        // never through the sibling loop below: it is not a sibling, so it can never be
+        // refused as a lane symlink, and a missing file here fails loudly right away
+        // rather than silently dropping the canonical out of found[]. This also leaves
+        // the canonical-refused branch a few lines down permanently unreachable for
+        // xchain-indexer specifically, since that repo no longer appears in refused[];
+        // it is left in place rather than deleted, since a sibling carrier could in
+        // principle still be named 'xchain-indexer' by a future SIBLING_CARRIERS entry.
+        assert.ok(fs.existsSync(OWN_COPY),
+            'the canonical copy did not resolve at ' + OWN_COPY + '; repoint OWN_COPY at its current path');
+        found.push(['xchain-indexer/src/consensus/merkle.js', sha256File(OWN_COPY)]);
+        for (const [repo, rel] of SIBLING_CARRIERS) {
             const p = path.join(root, repo, 'src', rel);
             const verdict = siblingCheckout(__dirname, p);
             if (verdict.usable) found.push([repo + '/src/' + rel, sha256File(p)]);
