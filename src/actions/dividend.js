@@ -1,4 +1,3 @@
-const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -28,6 +27,15 @@ const { getLogger } = require('../observability/index.js');
  * - 0 = Full
  * 
  ********************************************************************/
+
+// The handler's phases, grouped by concern and installed onto Dividend.prototype below:
+// validate.js judges the action, fees.js prices the fee and validates its payment,
+// controller_guard.js runs the bound guard, settle.js stages the DEBIT, records and applies
+// the ledger. Reading the context and building the recipient list stay in this file.
+const validatePart        = require('./dividend/validate.js');
+const feesPart            = require('./dividend/fees.js');
+const controllerGuardPart = require('./dividend/controller_guard.js');
+const settlePart          = require('./dividend/settle.js');
 
 class Dividend {
 
@@ -68,10 +76,40 @@ class Dividend {
         // Clone the raw data for storage in dividends table
         let dividend = Object.assign({}, data);
 
-        // Convert NUMBER fields from string value to number value so comparisons are mathematical 
+        // Convert NUMBER fields from string value to number value so comparisons are mathematical
         if(!error)
             data = this.util.setNumberFormats(data);
 
+        // SOURCE balances and preferences, the TICK holders and three tokens' info (loadDividendContext)
+        let ctx = await this.loadDividendContext(data);
+
+        // Create the fees object
+        let fees = await this.util.createFeesObject(this.indexerDb, data, ctx.preferences);
+
+        // The eligible recipients and the total DEBIT (buildDividendRecipients), then the validations
+        let recipients = await this.buildDividendRecipients(data, ctx.holders, ctx.dividendTokenInfo, dividend);
+        error = await this.validateDividend(data, ctx.tokenInfo, ctx.dividendTokenInfo, error);
+
+        // Price the per-tx FEE (priceDividend), then take the DEBIT out of balances (stageDividendDebit)
+        await this.priceDividend(recipients, fees, data);
+        error = this.stageDividendDebit(dividend, ctx, error);
+
+        // The controller guard on the aggregate distribution, then the fee payment
+        let guardFee;
+        ({ error, guardFee } = await this.runDividendGuard(data, dividend, ctx, error));
+        error = await this.validateDividendFeePayment(data, fees, ctx.balances, error);
+
+        // Adjust balances to reduce by FEE AMOUNT (only for XCHAIN deduction mode)
+        if(!error && (!fees['PAYMENT_MODE'] || fees['PAYMENT_MODE'] === 2))
+            ctx.balances = this.util.debitBalances(ctx.balances, fees['TICK_ID'], fees['AMOUNT']);
+
+        // Final status, the DIVIDEND record, the ledger rows and the mappings (settleDividend)
+        await this.settleDividend(data, dividend, fees, recipients, ctx, error, guardFee);
+    }
+
+    // The reads every later step shares: SOURCE balances and preferences, the TICK holders, and
+    // token info for TICK, DIVIDEND_TICK and the GAS token
+    async loadDividendContext(data){
         // Get source address balances and preferences, as well as TICK holders list
         let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let preferences = await this.indexerDb.getAddressPreferences(data['SOURCE'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
@@ -88,11 +126,13 @@ class Dividend {
         // the guard is a strict no-op.
         let gasTick = this.config['GAS'];
         let gasInfo = await this.indexerDb.getTokenInfo(gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
-        let guardFee = 0;
 
-        // Create the fees object 
-        let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
+        return { balances, preferences, holders, tokenInfo, dividendTokenInfo, gasTick, gasInfo };
+    }
 
+    // The holders that receive this DIVIDEND and each one's share, with the total DEBIT set on the
+    // dividend record. Returns recipients as { address: amount }.
+    async buildDividendRecipients(data, holders, dividendTokenInfo, dividend){
         // List of recipients which will receive this DIVIDEND
         // Format: recipients['address'] = amount;
         let recipients = {};
@@ -131,196 +171,18 @@ class Dividend {
                 totalDebit = this.util.bcadd(totalDebit, recipients[address], dividendTokenInfo['DECIMALS'])
             dividend['DEBIT'] = totalDebit;
         }
-
-        /*****************************************************************
-         * TICK Validations
-         ****************************************************************/
-        // Validate TICK exists
-        if(!error && !tokenInfo)
-            error = 'invalid: TICK (unknown)';
-
-        // Validate DIVIDEND_TICK exists
-        if(!error && !dividendTokenInfo)
-            error = 'invalid: DIVIDEND_TICK (unknown)';
-
-        /*****************************************************************
-         * FORMAT Validations
-         ****************************************************************/
-        // Verify AMOUNT format valid for DIVIDEND_TICK
-        if(!error && (this.util.isNull(data['AMOUNT']) || !this.util.isValidAmountFormat(dividendTokenInfo['DECIMALS'], data['AMOUNT'], data['BLOCK_TIME'])))
-            error = "invalid: AMOUNT (format)";
-
-        /*****************************************************************
-         * General Validations
-         ****************************************************************/
-        // Verify SOURCE is not sleeping
-        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
-            error = 'invalid: SOURCE (sleeping)';
-
-        // Verify TICK is not sleeping
-        if(!error && await this.indexerDb.isActionAllowed(null, data['TICK'], data['BLOCK_INDEX']) == false)
-            error = 'invalid: TICK (sleeping)';
-
-        // Verify DIVIDEND_TICK is not sleeping
-        if(!error && await this.indexerDb.isActionAllowed(null, data['DIVIDEND_TICK'], data['BLOCK_INDEX']) == false)
-            error = 'invalid: DIVIDEND_TICK (sleeping)';
-
-        // Verify no pipe in MEMO (pipe is field delimiter)
-        if(!error && !this.util.isNull(data['MEMO']) && String(data['MEMO']).indexOf('|')!=-1)
-            error = 'invalid: MEMO (pipe)';
-
-        // Verify no semicolon in MEMO (semicolon is action delimiter)
-        if(!error && !this.util.isNull(data['MEMO']) && String(data['MEMO']).indexOf(';')!=-1)
-            error = 'invalid: MEMO (semicolon)';
-
-        // Verify MEMO is shorter than MAX_MEMO_LENGTH
-        if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
-            error = 'invalid: MEMO (length)';
-
-        // Determine total transaction FEE
-        let unifiedFees = await this.actions.protocolChanges.isEnabled('UNIFIED_FEES', data['BLOCK_INDEX']);
-        if(unifiedFees){
-            // Unified gas schedule: per-recipient gas
-            let recipientCount = (recipients) ? Object.keys(recipients).length : 0;
-            let result = this.util.getUnifiedTransactionFee(recipientCount, 'DIVIDEND_PER_RECIPIENT');
-            fees['GAS_COST']    = result.gasCost;
-            fees['AMOUNT']      = result.fee;
-            fees['FEE_VERSION'] = 2;
-        } else {
-            // Legacy: database hits model. LEGACY_FEE_NUMERIC_DBHITS gates the fix of
-            // the db_hits string-concatenation bug: below the flag-day reproduce the original
-            // `db_hits += bcmul(...)` concatenation byte-for-byte (3 + "4" -> "34") so a
-            // pre-activation replay commits the identical (inflated) fee; at/above it accumulate
-            // numerically. See protocol_changes.js.
-            let numericDbHits = await this.actions.protocolChanges.isEnabled('LEGACY_FEE_NUMERIC_DBHITS', data['BLOCK_INDEX']);
-            let db_hits = 3;
-            if(numericDbHits)
-                db_hits += (recipients) ? Number(Object.keys(recipients).length) * 2 : 0;
-            else
-                db_hits += (recipients) ? this.util.bcmul(Object.keys(recipients).length, 2, 0) : 0;
-            fees['AMOUNT'] = this.util.getTransactionFee(db_hits, fees['TICK']);
-        }
-        // Emitted (VM-synthesized) actions pay no separate per-tx fee; see util.feeForAction
-        // (the dividend DEBIT to holders is unaffected).
-        fees['AMOUNT'] = this.util.feeForAction(fees['AMOUNT'], data);
-
-        // Verify SOURCE has enough balances to cover DIVIDEND_TICK total DEBIT amount
-        if(!error && !this.util.hasBalance(balances, dividendTokenInfo['TICK_ID'], dividend['DEBIT']))
-            error = 'invalid: insufficient funds (TICK)';
-    
-        // Adjust balances to reduce by DIVIDEND_TICK total DEBIT amount
-        if(!error)
-            balances = this.util.debitBalances(balances, dividendTokenInfo['TICK_ID'], dividend['DEBIT']);
-
-        // Controller-bound token: DIVIDEND_TICK's bound contract gates the AGGREGATE outbound
-        // distribution once (from=SOURCE, amount=total DEBIT, no single recipient). Deny reverts the
-        // whole dividend; an allow bills metered gas. Reserve the guard fee out of `balances` BEFORE
-        // the per-tx fee check so a holder short on GAS can't pass the fee check and then be
-        // over-debited by the guard fee (negative GAS -> sanityCheck halt). Flag-gated no-op pre-day.
-        if(!error && dividendTokenInfo){
-            let result = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {
-                actionType:  'DIVIDEND',
-                tick:        data['DIVIDEND_TICK'],
-                from:        data['SOURCE'],
-                to:          '',
-                amount:      dividend['DEBIT'],
-                data:        data,
-                gasInfo:     gasInfo,
-                gasBalances: balances,
-                seq:         0
-            });
-            if(result.error){
-                error = 'invalid: ' + result.error;
-            } else if(this.util.bcgt(result.guardFee, 0)){
-                guardFee = result.guardFee;
-                if(gasInfo)
-                    balances = this.util.debitBalances(balances, gasInfo['TICK_ID'], guardFee);
-            }
-        }
-
-        // Validate fee payment (native coin or XCHAIN balance)
-        if(!error && this.util.bcgt(fees['AMOUNT'], 0)){
-            let paymentMode = this.util.detectFeePaymentMode(data, this.decoderDb, data['TX_OUTPUTS']);
-            if(paymentMode === 'native'){
-                let validation = await this.util.validateNativeCoinFee(data, fees, this.indexerDb, data['TX_OUTPUTS']);
-                if(!validation.valid){
-                    error = 'invalid: ' + (validation.error || 'native coin fee validation failed');
-                } else {
-                    fees['PAYMENT_MODE']       = 1;
-                    fees['NATIVE_COIN_AMOUNT'] = validation.nativeCoinAmount;
-                    fees['NATIVE_COIN']        = validation.nativeCoin;
-                    fees['ORACLE_ROUND']       = validation.oracleRound;
-                }
-            } else if(paymentMode === 'rejected'){
-                error = 'invalid: insufficient fee (native coin output required)';
-            } else {
-                if(!this.util.hasBalance(balances, fees['TICK_ID'], fees['AMOUNT']))
-                    error = 'invalid: insufficient funds (FEE)';
-            }
-        }
-
-        // Adjust balances to reduce by FEE AMOUNT (only for XCHAIN deduction mode)
-        if(!error && (!fees['PAYMENT_MODE'] || fees['PAYMENT_MODE'] === 2))
-            balances = this.util.debitBalances(balances, fees['TICK_ID'], fees['AMOUNT']);
-
-        // Determine final status
-        let status = (error) ? error : 'valid';
-        data['STATUS'] = dividend['STATUS'] = status;
-
-        // Print status message 
-        getLogger().info("\t DIVIDEND : " + dividend['TICK'] + ' : ' + dividend['DIVIDEND_TICK'] + ' : ' + this.util.logAmount(dividend['AMOUNT']) + ' : ' + dividend['STATUS']);
-
-        // Create record in dividends table
-        await this.indexerDb.createDividend(dividend);
-
-        // Store the SOURCE and TICK in addresses list
-        this.util.addAddressTicker(data['SOURCE'], fees['TICK']);
-
-        // If this was a valid transaction, then create the credit and debit records
-        if(status=='valid'){
-
-            // Array of credits and debits
-            let credits = [],
-                debits  = [];
-
-            // Add DIVIDEND_TICK and DEBIT to debits array
-            debits.push([dividend['DIVIDEND_TICK'], dividend['DEBIT'], dividend['SOURCE']]);
-
-            // Bill the controller-guard gas to SOURCE (a GAS burn with no offsetting credit); the
-            // end-of-action updateTokens recomputes GAS supply from the ledger so sanityCheck holds.
-            if(this.util.bcgt(guardFee, 0)){
-                debits.push([gasTick, guardFee, dividend['SOURCE']]);
-                this.util.addAddressTicker(dividend['SOURCE'], gasTick);
-            }
-
-            // Handle any transaction FEE according the users's ADDRESS preferences
-            [credits, debits] = await this.util.processTransactionFees(this.indexerDb, credits, debits, fees);
-
-            // Loop through recipient addresses
-            for(let address in recipients){
-
-                // Store the recipient ADDRESS and TICK in addresses list
-                this.util.addAddressTicker(address, dividend['DIVIDEND_TICK']);
-    
-                // Credit address with DIVIDEND_TICK AMOUNT
-                credits.push([dividend['DIVIDEND_TICK'], recipients[address], address]);
-            }
-
-            // Process any transaction ledger changes (credits / debits)
-            await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
-
-            // Get a list of tickers & addresses
-            let tickers   = this.util.getTickersList(),
-                addresses = Object.keys(this.util.getAddressesList());
-
-            // Update address balances and token supply
-            await this.indexerDb.updateBalances(addresses);
-            await this.indexerDb.updateTokens(tickers);
-        }
-
-        // Create action mappings
-        await this.mapper.createMappings(data);
+        return recipients;
     }
+}
+
+// Install the phase methods from dividend/ NON-ENUMERABLE, the shape the class body they came
+// from produced: parse() reaches them as this.<method>, suites can stub them through
+// Dividend.prototype, and for-in over a handler stays empty. Same install as dispenser_close.js
+// and db/index.js use.
+for(const part of [validatePart, feesPart, controllerGuardPart, settlePart]){
+    const descriptors = Object.getOwnPropertyDescriptors(part);
+    for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;
+    Object.defineProperties(Dividend.prototype, descriptors);
 }
 
 module.exports = Dividend;
