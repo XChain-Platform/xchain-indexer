@@ -19,7 +19,7 @@
  * refuses to apply rows from a hub running a different version, so a hub that
  * adds a consensus-relevant column before this indexer migrates cannot
  * silently fork the ledger. MUST stay in lockstep with
- * xchain-hub/src/hub-schema-version.js; bump both together whenever the mirror
+ * xchain-hub/src/hub_schema_version.js; bump both together whenever the mirror
  * row shape changes OR the mirror set gains a table (a table this indexer does
  * not know about fails by omission rather than by column, which forks the ledger
  * just as quietly).
@@ -28,7 +28,7 @@
 
 // v2: capability_snapshots.uq_cap_snap gained `source`, so the hub now
 // mirrors both (source, pubkey) rows for a multi-source key. Lockstep with
-// xchain-hub/src/hub-schema-version.js (already at v2); a v1 indexer must reject
+// xchain-hub/src/hub_schema_version.js (already at v2); a v1 indexer must reject
 // the v2 stream until its own uq_cap_snap is widened (2026-07-20 migration).
 //
 // v3: the mirror set gained anchor_reward_attestations (HUB_STATE_TABLES

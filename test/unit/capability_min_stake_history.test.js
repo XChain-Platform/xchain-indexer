@@ -156,7 +156,7 @@ describe('capability MIN_STAKE as-of-block reconstruction @regression @tier2', f
             // The two implementations are independent (different repos, different storage), so
             // the pin is on the RULE: greatest activation_block <= blockIndex wins. A drift
             // here means recovery judges an archive at a bar the hub never used.
-            let hubPath = path.resolve(__dirname, '../../../xchain-hub/src/CapabilityRegistry.js');
+            let hubPath = path.resolve(__dirname, '../../../xchain-hub/src/validators/capability_registry.js');
             if (!fs.existsSync(hubPath)) return this.skip();
             let src = fs.readFileSync(hubPath, 'utf8');
             assert.ok(/if\s*\(e\.activation_block <= blockIndex\)\s*resolved = e\.value;/.test(src),

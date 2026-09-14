@@ -1027,7 +1027,7 @@ class AnchorRecovery {
                     // hub_db_sync._applyRow's cross_chain_calls ODKU (hub_db_sync.js:861-869).
                     // Unlike matches, a call's signed content is NOT immutable per key: the
                     // hub can re-finalize a retracted (call_id, phase) with NEW signed terms
-                    // after a source-chain reorg (CrossChainCallEngine._writeFinalizedRow
+                    // after a source-chain reorg (CrossChainCallEngine.writeFinalizedRow
                     // upserts the fresh quorum's content), and the anchor publisher re-archives
                     // on any status change, so both versions land in successive batches. A
                     // status-only update here would keep the FIRST batch's effective_time /

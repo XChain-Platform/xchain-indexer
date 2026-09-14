@@ -879,7 +879,7 @@ describe('HubDbSync _applyRow cross_chain_matches convergence upgrade @regressio
 
     // Two mutations reach a mirrored match after its first delivery:
     //  1. anchor_txid, stamped later by the ANCHOR v1 archive
-    //     (StateAnchorPublisher._backfillBatch) and re-broadcast. A plain INSERT IGNORE
+    //     (StateAnchorPublisher.backfillBatch) and re-broadcast. A plain INSERT IGNORE
     //     would no-op and leave anchor_txid NULL on streamed mirrors while a fresh REST
     //     bootstrap serves the stamp (divergent mirrors). First-stamp-wins COALESCE.
     //  2. RETRACT -> REVIVE: a source-chain reorg retracts the crossing (mirrored
@@ -2164,7 +2164,7 @@ describe('HubDbSync._applyRetraction signed retractions @regression @tier1', fun
 
     // Twin parity: the tally marks a pubkey into the dedupe set only
     // AFTER its signature verifies, exactly as the hub producer twin
-    // (RetractionConsensus._handleFinalized) and the sibling tallies in anchor.js,
+    // (RetractionConsensus.handleFinalized) and the sibling tallies in anchor.js,
     // recovery.js and StateAnchorPublisher already do. Pre-fix this consumer marked on
     // first encounter, so a garbage entry ordered ahead of the real one for the same
     // snapshot member silently under-counted the quorum and refused a hub-finalized

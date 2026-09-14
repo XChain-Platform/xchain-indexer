@@ -191,7 +191,7 @@ class NodeProof {
                 // ed25519 preimage, so it is consensus, and the default sort is a total
                 // order here only because every element happens to be lowercase 64-hex.
                 // Pinned in lockstep with the hub PRODUCER's four PASS sorts
-                // (xchain-hub FullNodeChallengeRound.js PASS_CMP); pinning one side alone
+                // (xchain-hub consensus/full_node_challenge_round.js PASS_CMP); pinning one side alone
                 // would diverge the verifier from the producer on any non-uniform input.
                 let sortedPass = passList.slice().sort(
                     (a, b) => Buffer.compare(Buffer.from(String(a), 'utf8'),

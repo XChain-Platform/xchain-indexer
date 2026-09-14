@@ -180,7 +180,7 @@ const ENABLE_DRYRUN = INDEXER_NETWORK === 'regtest'
 // oversight. `pushvalidatorrewards` was the only member: a key-authenticated
 // rail that minted COLLECT-spendable validator_rewards rows. Every reward it
 // carried is now derived from on-chain bytes by every indexer, the hub holds no
-// caller for it any more (xchain-hub/src/RewardTracker.js has no push loop and
+// caller for it any more (xchain-hub/src/anchor/reward_tracker.js has no push loop and
 // no terminal-refusal predicate), and mainnet is past both reward flag-days with
 // no pre-flag reward history to reinterpret. With no caller left to answer, the
 // method is gone rather than kept as a refusing stub: an unknown method answers
@@ -815,7 +815,7 @@ async function startApi(){
                 //
                 // WHY block_index + CANONICAL_REORG_BUFFER. `block_index` here is
                 // ALREADY the buried block: CapabilitySnapshot.getSnapshot subtracts the
-                // buffer before it calls (CapabilitySnapshot.js:238). The filter buries
+                // buffer before it calls (validators/capability_snapshot.js:238). The filter buries
                 // its own argument, exactly as _computeResponsibleSet does, so it must
                 // be handed the raw request height whose burial is this block_index.
                 // Two edges follow. buriedSnapshotBlock clamps at 0, so for the first
@@ -1303,9 +1303,9 @@ async function startApi(){
         },
 
         // The chain-state read getbridgeinvariant needs (the hub's
-        // CrossChainBridgeEngine._readBridgeBalances is the caller). Open read. Answers for
+        // CrossChainBridgeEngine.readBridgeBalances is the caller). Open read. Answers for
         // ONE tick at a time: { supply, escrow: { <COIN>: balance } }, escrow keyed by the
-        // bare coin (the hub's _escrowFor accepts either spelling).
+        // bare coin (the hub's escrowFor accepts either spelling).
         // Body: { tick }
         async getbridgebalances({tick}){
             if(!indexer.indexerDb)
@@ -1474,7 +1474,7 @@ async function startApi(){
                 let latest = await db.getLatestBlockIndex();
                 // Source-chain reorg fence: the hub follower pins this call's
                 // generation against the leader's proposed dispatch row
-                // (CrossChainCallEngine._validateDispatch). The field is stamped on the row but
+                // (CrossChainCallEngine.validateDispatch). The field is stamped on the row but
                 // never enters the signed canonical, so the pin is what stops a Byzantine leader
                 // inflating it to evade a later source-keyed retraction. Omitting it here made
                 // the follower re-derive 0 for every call, which matched only until the first

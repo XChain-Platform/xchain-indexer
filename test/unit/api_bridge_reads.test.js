@@ -89,7 +89,7 @@ describe('bridge reads are registered open (base spec D44) @regression @tier1', 
 
     // getpendingbridgetransfers carries push_generation on each row, the row's own
     // spec text ("on the getpendingcrosschaincalls convention at api.js:1230"), and
-    // the hub reads it (CrossChainBridgeEngine.js:_maybeFinalizeTransfer,
+    // the hub reads it (cross_chain/bridge_engine.js:maybeFinalizeTransfer,
     // row.push_generation). Checked the api_pushgeneration_stamping.test.js way:
     // the real handler body must read the generation and it must come BEFORE the
     // rows are read, never grepped for the bare identifier alone.

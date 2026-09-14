@@ -86,7 +86,7 @@ function serializeCall(c) {
     }
     return out;
 }
-// Byte-identical to recovery._callCanonical / hub StateAnchorPublisher._callCanonical.
+// Byte-identical to recovery.callCanonical / hub StateAnchorPublisher.callCanonical.
 function callCanonical(c) {
     let sha = (s) => crypto.createHash('sha256').update(String(s == null ? '' : s), 'utf8').digest('hex');
     let phase = (c.phase === 'result') ? 'result' : 'dispatch';

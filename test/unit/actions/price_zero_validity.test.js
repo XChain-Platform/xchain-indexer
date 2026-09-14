@@ -277,7 +277,7 @@ describe('PRICE price-range flag day @regression @tier3', function () {
         it('still carries the same expression the hub carries, when the hub tree is present', function () {
             // Drift alarm rather than the oracle: the transcription above is what grades
             // every case, and this re-reads the hub source when a sibling checkout exists.
-            const hubSrc = path.join(__dirname, '..', '..', '..', '..', 'xchain-hub', 'src', 'PriceAggregator.js');
+            const hubSrc = path.join(__dirname, '..', '..', '..', '..', 'xchain-hub', 'src', 'oracle', 'price_aggregator.js');
             if(!fs.existsSync(hubSrc)) return this.skip();
             const text = fs.readFileSync(hubSrc, 'utf8');
             const lower = /!\(parseFloat\(String\(p\.price\)\) > 0\)/g;

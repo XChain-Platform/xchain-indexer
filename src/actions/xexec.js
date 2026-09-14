@@ -75,7 +75,7 @@ class Xexec {
 
     // Canonical signing string for the dispatch phase. MUST byte-match the hub's
     // CrossChainCallEngine._canonicalMatch (dispatch branch) and the archive
-    // verifier (StateAnchorPublisher._callCanonical).
+    // verifier (StateAnchorPublisher.callCanonical).
     canonical(c){
         let raw = [
             'XCALL', 'DISPATCH', c.call_id, String(c.snapshot_block), c.network || '',

@@ -147,7 +147,7 @@ describe('price_batch_compression: consensus constants @regression', function(){
         // fourth copy of the name from drifting away from the other three.
         const hubDir = process.env.XCHAIN_HUB_DIR ||
             path.join(__dirname, '..', '..', '..', 'xchain-hub');
-        const pub = path.join(hubDir, 'src', 'OraclePublisher.js');
+        const pub = path.join(hubDir, 'src', 'oracle', 'publisher.js');
         if(!fs.existsSync(pub)){
             if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
                 throw new Error('XCHAIN_REQUIRE_SIBLINGS=1 but the hub sibling was not found at ' + pub);
@@ -157,7 +157,7 @@ describe('price_batch_compression: consensus constants @regression', function(){
         const m = /const\s+PRICE_WIRE_MAX_BYTES\s*=\s*(\d+)\s*;/.exec(fs.readFileSync(pub, 'utf8'));
         assert.ok(m, 'PRICE_WIRE_MAX_BYTES declaration not found in ' + pub);
         assert.strictEqual(parseInt(m[1], 10), c.PRICE_WIRE_MAX_BYTES,
-            'the PRICE wire ceiling has diverged between OraclePublisher.js and price_batch_compression.js; ' +
+            'the PRICE wire ceiling has diverged between oracle/publisher.js and price_batch_compression.js; ' +
             'the publisher and the parser would disagree on which batches are expressible');
     });
 });

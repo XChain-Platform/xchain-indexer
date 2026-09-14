@@ -47,8 +47,8 @@ const LOCAL_MODULES = [
 const HUB_MODULES = [
     '../../../xchain-hub/src/mirror_admission_activation.js',
     '../../../xchain-hub/src/lib/admission_height.js',
-    '../../../xchain-hub/src/OracleConsensus.js',
-    '../../../xchain-hub/src/PriceAggregator.js'
+    '../../../xchain-hub/src/oracle/consensus.js',
+    '../../../xchain-hub/src/oracle/price_aggregator.js'
 ];
 
 function pairs() {
@@ -84,8 +84,8 @@ function armTwins() {
     const act = require('../../src/mirror_admission_activation.js');
     let hub = null;
     if (hubPaths) {
-        const OracleConsensus = require('../../../xchain-hub/src/OracleConsensus.js');
-        const PriceAggregator = require('../../../xchain-hub/src/PriceAggregator.js');
+        const OracleConsensus = require('../../../xchain-hub/src/oracle/consensus.js');
+        const PriceAggregator = require('../../../xchain-hub/src/oracle/price_aggregator.js');
         const stubHub = { db: null, network: NETWORK, getPeerManager: () => ({}) };
         hub = { producer: new OracleConsensus(stubHub, {}), ingest: new PriceAggregator(stubHub) };
     }

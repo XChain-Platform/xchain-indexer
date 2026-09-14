@@ -58,7 +58,7 @@
  * module with its own flag day, and both callers already wrap this string in it
  * when it is active; folding it in would give this twin two reasons to change.
  *
- * BYTE-TWIN of xchain-hub/src/attest_response_canonical.js. A one-sided edit
+ * BYTE-TWIN of xchain-hub/src/attestation/attest_response_canonical.js. A one-sided edit
  * makes every mirror-era signature fail to verify, which presents as a dead
  * federation rather than as a missing feature, so the twin is test-pinned.
  *

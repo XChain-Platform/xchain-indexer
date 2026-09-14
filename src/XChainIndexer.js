@@ -300,7 +300,7 @@ class XChainIndexer {
         // regtest genesis hash is a chainparams constant, identical across every re-genesis,
         // while block 1 commits to the instant the chain was created. Null until block 1 is
         // parsed, which on a freshly re-genesised chain is not true at startup, so the read
-        // is retried once per parsed block until it resolves (see _resolveBtcChainId).
+        // is retried once per parsed block until it resolves (see resolveBtcChainId).
         this.btcChainId = null;
 
         // Short machine-readable reason the block counter is currently not advancing,

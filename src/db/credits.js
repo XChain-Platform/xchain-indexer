@@ -296,7 +296,7 @@ module.exports = {
     },
 
     // Chain-state half of getbridgeinvariant (getbridgebalances RPC, base spec section 13;
-    // CrossChainBridgeEngine._readBridgeBalances is the caller): the tick's supply on THIS
+    // CrossChainBridgeEngine.readBridgeBalances is the caller): the tick's supply on THIS
     // chain plus the balance held at every ADDRESS.BRIDGE_<COIN> role address this chain's
     // own config carries.
     //
@@ -307,7 +307,7 @@ module.exports = {
     // ledger-wide net (SUM(credits)-SUM(debits) over every address on this chain), the
     // "shadow of its escrow" the base spec names for a foreign chain's holding.
     //
-    // escrow is keyed by the BARE coin (never the BRIDGE_ prefix): the hub's _escrowFor
+    // escrow is keyed by the BARE coin (never the BRIDGE_ prefix): the hub's escrowFor
     // accepts either spelling, and this is the form the seam pins.
     async getBridgeBalances(tick){
         let t      = String(tick);

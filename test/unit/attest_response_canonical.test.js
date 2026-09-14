@@ -103,7 +103,7 @@ describe('attest_response_canonical', function () {
 
 describe('attest_response_canonical: hub/indexer twin', function () {
 
-    const HUB_COPY = path.resolve(__dirname, '../../../xchain-hub/src/attest_response_canonical.js');
+    const HUB_COPY = path.resolve(__dirname, '../../../xchain-hub/src/attestation/attest_response_canonical.js');
 
     it('produces byte-identical canonicals to the hub copy across both eras', function () {
         if (!fs.existsSync(HUB_COPY)) {

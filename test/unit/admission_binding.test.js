@@ -69,7 +69,7 @@ const ADMIT_AT  = 799000;                       // the realistic arming height
 const LEGACY_AT = ADMIT_AT - 1;
 
 const HUB_SRC  = path.resolve(__dirname, '../../../xchain-hub/src');
-const HAVE_HUB = fs.existsSync(path.join(HUB_SRC, 'CrossChainDexEngine.js'));
+const HAVE_HUB = fs.existsSync(path.join(HUB_SRC, 'cross_chain', 'dex_engine.js'));
 if (!HAVE_HUB && process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
     throw new Error('admission binding parity cannot run: xchain-hub sibling missing at ' + HUB_SRC);
 
@@ -89,10 +89,10 @@ const LOCAL_MODULES = [
 const HUB_MODULES = [
     '../../../xchain-hub/src/mirror_admission_activation.js',
     '../../../xchain-hub/src/lib/admission_height.js',
-    '../../../xchain-hub/src/CrossChainDexEngine.js',
-    '../../../xchain-hub/src/CrossChainCallEngine.js',
-    '../../../xchain-hub/src/CrossChainBridgeEngine.js',
-    '../../../xchain-hub/src/AttestationConsensus.js'
+    '../../../xchain-hub/src/cross_chain/dex_engine.js',
+    '../../../xchain-hub/src/cross_chain/call_engine.js',
+    '../../../xchain-hub/src/cross_chain/bridge_engine.js',
+    '../../../xchain-hub/src/attestation/consensus.js'
 ];
 
 // Purge, arm (or disarm), re-require, and hand back everything a case needs plus the
@@ -123,10 +123,10 @@ function load(activation) {
         h.hub = {
             act:    require('../../../xchain-hub/src/mirror_admission_activation.js'),
             ah:     require('../../../xchain-hub/src/lib/admission_height.js'),
-            Dex:    require('../../../xchain-hub/src/CrossChainDexEngine.js'),
-            Call:   require('../../../xchain-hub/src/CrossChainCallEngine.js'),
-            Bridge: require('../../../xchain-hub/src/CrossChainBridgeEngine.js'),
-            Attest: require('../../../xchain-hub/src/AttestationConsensus.js')
+            Dex:    require('../../../xchain-hub/src/cross_chain/dex_engine.js'),
+            Call:   require('../../../xchain-hub/src/cross_chain/call_engine.js'),
+            Bridge: require('../../../xchain-hub/src/cross_chain/bridge_engine.js'),
+            Attest: require('../../../xchain-hub/src/attestation/consensus.js')
         };
     }
     h.restore = function () {
@@ -384,7 +384,7 @@ describe('admission binding: the attest-response canonical twin', function () {
                 const mirror = h.can.buildResponseCanonicalRaw(Object.assign({}, BASE, { effectiveTime: 1234 }));
                 assert.strictEqual(mirror, legacy + '|1234');
                 if (h.hub) {
-                    const hubTwin = require('../../../xchain-hub/src/attest_response_canonical.js');
+                    const hubTwin = require('../../../xchain-hub/src/attestation/attest_response_canonical.js');
                     assert.strictEqual(hubTwin.buildResponseCanonicalRaw(Object.assign({}, BASE, { effectiveTime: 1234 })), mirror);
                 }
             });

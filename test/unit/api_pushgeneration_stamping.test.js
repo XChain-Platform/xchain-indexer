@@ -15,7 +15,7 @@
  * Three handlers feed a hub-side generation pin:
  *   getopencrosschainorders   -> CrossChainDexEngine.validateProposedMatch (per leg)
  *   getpendingcrosschaincalls -> the leader stamps the proposed dispatch row
- *   getcrosschaincall         -> CrossChainCallEngine._validateDispatch (follower)
+ *   getcrosschaincall         -> CrossChainCallEngine.validateDispatch (follower)
  *
  * The hub compares `Number(x.push_generation) || 0` on both sides, so a handler
  * that omits the field does not error: the follower silently re-derives 0. That
@@ -120,7 +120,7 @@ describe('push_generation stamping on hub-pinned federation reads (item 2367) @r
 
         it('stamps push_generation on the returned call', function () {
             assert.strictEqual(res.call.push_generation, 7,
-                'the follower-side dispatch pin (xchain-hub CrossChainCallEngine._validateDispatch) '
+                'the follower-side dispatch pin (xchain-hub CrossChainCallEngine.validateDispatch) '
                 + 'compares call.push_generation; omitting it wedges XCALL relay on any chain that '
                 + 'has rolled back at least once');
         });
@@ -130,7 +130,7 @@ describe('push_generation stamping on hub-pinned federation reads (item 2367) @r
                              'target_chain', 'target_contract_index', 'method', 'params_json',
                              'gas_limit', 'cross_hops'])
                 assert.ok(Object.prototype.hasOwnProperty.call(res.call, f),
-                    'getcrosschaincall dropped ' + f + ', which _validateDispatch compares');
+                    'getcrosschaincall dropped ' + f + ', which validateDispatch compares');
         });
     });
 });

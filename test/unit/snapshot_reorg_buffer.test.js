@@ -133,7 +133,7 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
     describe('party 1: the hub signer', function () {
         let CapabilitySnapshot = null;
         before(function () {
-            CapabilitySnapshot = requireSibling(HUB_DIR, 'src/CapabilitySnapshot.js');
+            CapabilitySnapshot = requireSibling(HUB_DIR, 'src/validators/capability_snapshot.js');
             if(!CapabilitySnapshot) this.skip();
         });
 

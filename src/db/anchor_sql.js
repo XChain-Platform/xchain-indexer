@@ -241,7 +241,7 @@ const ARCHIVE_ANCHOR_ROW_LIMIT = 50;
 // checkpoint identity the archive is wrapped in (chain, network, block_index,
 // checkpoint_seq) plus the batch's content commitment (batch_crc32 over the
 // uncompressed archive JSON, and match_count). The publisher signs exactly those
-// fields into the v1 canonical (_archiveCanonical), so a hub can compute the key
+// fields into the v1 canonical (archiveCanonical), so a hub can compute the key
 // before it broadcasts and recognize its own earlier send afterwards.
 //
 // match_batch_seq is deliberately NOT part of the key, and cannot be: recognizing a
@@ -249,7 +249,7 @@ const ARCHIVE_ANCHOR_ROW_LIMIT = 50;
 //
 // Status is returned, never filtered: an 'invalid: ...' head still SPENT the fee, and
 // the caller decides whether an invalid row counts as "already published" (the hub
-// treats it as absent, matching _findExistingCheckpointAnchor, because a malformed
+// treats it as absent, matching findExistingCheckpointAnchor, because a malformed
 // row anchored nothing). Filtering here would also make the answer differ between a
 // node with a mirrored oracle_publish snapshot and one without, exactly as it would
 // for the head picks above.

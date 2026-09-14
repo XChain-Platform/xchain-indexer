@@ -421,7 +421,7 @@ function heightsAdvanced(prev, next){
 // ── signed-retraction verification helpers ───────────────────────────
 
 // Rebuild the retraction canonical from the wire event. MUST byte-match the
-// producer in xchain-hub/src/RetractionConsensus.js canonicalRetraction():
+// producer in xchain-hub/src/consensus/retraction.js canonicalRetraction():
 //   XRETRACTV1|<table>|<source_chain>|<from>|<to or ''>|<generation or ''>|<snapshot_block>
 function canonicalRetraction(event) {
     let to  = (event.to_action_index       !== undefined && event.to_action_index       !== null) ? String(event.to_action_index)       : '';
@@ -3544,7 +3544,7 @@ class HubDbSync {
         // source-chain reorg does NOT leave a status='retracted' row: _applyRetraction
         // DELETEs the mirrored row outright on the deletion event, so a retracted key is
         // simply absent locally, never locally queryable with a retracted status. When
-        // the hub later re-finalizes the re-mined call (CrossChainCallEngine._writeFinalizedRow
+        // the hub later re-finalizes the re-mined call (CrossChainCallEngine.writeFinalizedRow
         // upserts the current quorum's content via ON DUPLICATE KEY UPDATE and rebroadcasts),
         // a plain INSERT IGNORE here would drop the upgrade and strand the replica on the
         // stale row. Because effective_time is in the signed canonical and
@@ -3633,7 +3633,7 @@ class HubDbSync {
         // cross_chain_matches needs an in-place upgrade path, not plain INSERT IGNORE.
         // TWO distinct mutations reach a match after it was first mirrored:
         //
-        //   1. anchor_txid is stamped LATER (StateAnchorPublisher._backfillBatch, first-
+        //   1. anchor_txid is stamped LATER (StateAnchorPublisher.backfillBatch, first-
         //      stamp-wins COALESCE) when the ANCHOR v1 archive publishes, and the hub
         //      re-broadcasts the stamped row. A plain INSERT IGNORE would no-op against
         //      the already-mirrored row and leave anchor_txid NULL on streamed mirrors
@@ -4018,7 +4018,7 @@ class HubDbSync {
             if (!snapPubkeys.has(pk)) continue;
             if (!verifyEd25519(canonical, sig, pk)) continue;
             // Mark seen only AFTER the signature verifies (Pkg 13 /), matching
-            // the hub producer twin (RetractionConsensus._handleFinalized) and the
+            // the hub producer twin (RetractionConsensus.handleFinalized) and the
             // sibling tallies in anchor.js / recovery.js / StateAnchorPublisher. Marking
             // on first encounter lets a garbage-then-valid pair for one snapshot member
             // consume the dedupe slot and suppress the real signature, under-counting the

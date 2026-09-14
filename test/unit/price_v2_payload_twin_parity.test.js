@@ -86,8 +86,8 @@ const PREFIX = 'EQUIV|' + eq.ENGINE_TAGS.ORACLE_BATCH + '|' + ANCHOR + '|' + FIR
 // need a hub with db/network/getPeerManager, so the methods under test are reached the
 // same way production reaches them.
 function hubTwins() {
-    const OracleConsensus = require('../../../xchain-hub/src/OracleConsensus.js');
-    const PriceAggregator = require('../../../xchain-hub/src/PriceAggregator.js');
+    const OracleConsensus = require('../../../xchain-hub/src/oracle/consensus.js');
+    const PriceAggregator = require('../../../xchain-hub/src/oracle/price_aggregator.js');
     const stubHub = { db: null, network: 'regtest', getPeerManager: () => ({}) };
     return {
         producer: new OracleConsensus(stubHub, {}),
@@ -217,8 +217,8 @@ describe('PRICE v0 canonical: three-way twin parity', function () {
         const MODS = ['../../src/mirror_admission_activation.js', '../../src/consensus/ed25519.js',
                       '../../../xchain-hub/src/mirror_admission_activation.js',
                       '../../../xchain-hub/src/lib/admission_height.js',
-                      '../../../xchain-hub/src/OracleConsensus.js',
-                      '../../../xchain-hub/src/PriceAggregator.js'];
+                      '../../../xchain-hub/src/oracle/consensus.js',
+                      '../../../xchain-hub/src/oracle/price_aggregator.js'];
         let armed = null;
 
         before(function () {
@@ -234,8 +234,8 @@ describe('PRICE v0 canonical: three-way twin parity', function () {
             process.env.XC_MIRROR_ADMISSION_ACTIVATION = '0';
             const act = require('../../src/mirror_admission_activation.js');
             const ed  = require('../../src/consensus/ed25519.js');
-            const OC  = require('../../../xchain-hub/src/OracleConsensus.js');
-            const PA  = require('../../../xchain-hub/src/PriceAggregator.js');
+            const OC  = require('../../../xchain-hub/src/oracle/consensus.js');
+            const PA  = require('../../../xchain-hub/src/oracle/price_aggregator.js');
             const stubHub = { db: null, network: NETWORK, getPeerManager: () => ({}) };
             armed = { act, ed, producer: new OC(stubHub, {}), ingest: new PA(stubHub), restore() {
                 for (const [p, mod] of saved) { if (mod === undefined) delete require.cache[p]; else require.cache[p] = mod; }

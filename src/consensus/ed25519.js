@@ -15,7 +15,7 @@
  * XChain Indexer - Ed25519 Helper
  *
  * Verification of Ed25519 signatures using Node.js built-in crypto.
- * Mirrors the format used by xchain-hub/src/ValidatorIdentity.js so
+ * Mirrors the format used by xchain-hub/src/validators/identity.js so
  * signatures produced by validators can be verified by indexers.
  *
  ********************************************************************/

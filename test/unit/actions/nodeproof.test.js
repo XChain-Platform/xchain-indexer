@@ -391,7 +391,7 @@ describe('NodeProof (NODEPROOF) @regression @tier3', function () {
         let hubSrc;
         try {
             hubSrc = fs.readFileSync(
-                path.join(__dirname, '../../../../xchain-hub/src/FullNodeChallengeRound.js'), 'utf8');
+                path.join(__dirname, '../../../../xchain-hub/src/consensus/full_node_challenge_round.js'), 'utf8');
         } catch (e) { return this.skip(); }
         assert.match(hubSrc, /const PASS_CMP = \(a, b\) => Buffer\.compare\(/,
             'the hub producer must define the same byte comparator');

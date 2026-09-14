@@ -123,7 +123,7 @@ class Anchor {
         let roundId = d['CHAIN'] + '|' + d['NETWORK'] + '|' + d['BLOCK_INDEX_CHECKPOINTED'] + '|' + d['CHECKPOINT_SEQ'];
         if(Number(d['FORMAT']) === 1){
             // Archive head: rootless checkpoint base + archive extension. Byte-matches the
-            // hub's _archiveCanonical, which nests the bare _rawCanonicalCheckpoint; the
+            // hub's archiveCanonical, which nests the bare rawCanonicalCheckpoint; the
             // wrapper sigs are produced over the SAME archive canonical (the publisher tail
             // is attested separately via _rewardCanonical).
             base += '|' + String(d['MATCH_BATCH_SEQ']) + '|' + String(d['MATCH_COUNT']) + '|' +
@@ -131,7 +131,7 @@ class Anchor {
             roundId += '|' + d['MATCH_BATCH_SEQ'];
         } else if(Number(d['FORMAT']) === 0){
             // Append the root suffix UNCONDITIONALLY, alone among the four canonical
-            // builders: hub (_checkpointRootSuffix), SDK and explorer all gate it on
+            // builders: hub (checkpointRootSuffix), SDK and explorer all gate it on
             // isCheckpointCommitmentActive. The divergence is deliberate and
             // belongs to the per-network anchor bundle.
             //

@@ -60,7 +60,7 @@ const ARMED_MODULES = ['../../src/mirror_admission_activation.js', '../../src/co
 const HUB_MODULES = [
     '../../../xchain-hub/src/mirror_admission_activation.js',
     '../../../xchain-hub/src/lib/admission_height.js',
-    '../../../xchain-hub/src/PriceAggregator.js'
+    '../../../xchain-hub/src/oracle/price_aggregator.js'
 ];
 
 let armed = null;
@@ -82,7 +82,7 @@ function armTwins() {
     const act     = require('../../src/mirror_admission_activation.js');
     const ed      = require('../../src/consensus/ed25519.js');
     const Price   = require('../../src/actions/price/index.js');
-    const hubAgg  = hubPaths ? require('../../../xchain-hub/src/PriceAggregator.js') : null;
+    const hubAgg  = hubPaths ? require('../../../xchain-hub/src/oracle/price_aggregator.js') : null;
 
     function restore() {
         for (const [p, mod] of saved) {

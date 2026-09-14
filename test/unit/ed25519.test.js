@@ -13,7 +13,7 @@ const crypto = require('crypto');
 const ed = require('../../src/consensus/ed25519.js');
 
 // Mint a REAL Ed25519 keypair and expose the 32-byte raw pubkey as hex,
-// exactly as xchain-hub/src/ValidatorIdentity.js does. These tests exercise
+// exactly as xchain-hub/src/validators/identity.js does. These tests exercise
 // the genuine primitive - unlike the action tests, which stub verify().
 function realKey() {
     const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');

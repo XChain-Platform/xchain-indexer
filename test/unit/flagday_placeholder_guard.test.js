@@ -320,8 +320,8 @@ describe('flag-day placeholder guard @regression @tier1', function () {
         // engine, so read the declaration out of the source instead. It still has to be
         // asserted somewhere, because it was the third file named and nothing in
         // this tree could previously fail when a re-pin passed it by.
-        it('xchain-hub/src/Governance.js declares GOV_SNAPSHOT_ACTIVATION at the cohort height', function () {
-            const p = path.resolve(__dirname, '../../../xchain-hub/src/Governance.js');
+        it('xchain-hub/src/validators/governance.js declares GOV_SNAPSHOT_ACTIVATION at the cohort height', function () {
+            const p = path.resolve(__dirname, '../../../xchain-hub/src/validators/governance.js');
             if (!fs.existsSync(p)) {
                 if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
                     assert.fail('required sibling missing: ' + p);
@@ -329,7 +329,7 @@ describe('flag-day placeholder guard @regression @tier1', function () {
             }
             const m = fs.readFileSync(p, 'utf8')
                 .match(/const\s+GOV_SNAPSHOT_ACTIVATION\s*=\s*\{\s*mainnet:\s*(\d+)\s*,\s*testnet:\s*(\d+)\s*,\s*regtest:\s*(\d+)\s*\}/);
-            assert.ok(m, 'GOV_SNAPSHOT_ACTIVATION declaration not found in Governance.js (renamed or reshaped?)');
+            assert.ok(m, 'GOV_SNAPSHOT_ACTIVATION declaration not found in validators/governance.js (renamed or reshaped?)');
             assert.strictEqual(parseInt(m[1]), RATIFIED_BTC_HEIGHT,
                 'GOV_SNAPSHOT_ACTIVATION.mainnet is ' + m[1] + ', not the cohort height ' + RATIFIED_BTC_HEIGHT);
             assert.strictEqual(parseInt(m[2]), 0, 'GOV_SNAPSHOT_ACTIVATION.testnet must be genesis-active');

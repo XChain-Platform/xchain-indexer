@@ -23,7 +23,7 @@
 // below that the next line throws a bare ERR_REQUIRE_ESM that names neither the Node version
 // nor the reason. engines.node cannot enforce this (npm only warns, and nothing in the tree
 // sets engine-strict), and .nvmrc says only "22", so the check lives here, where the failure
-// actually happens. Same guard, same wording, as xchain-hub/src/db.js.
+// actually happens. Same guard, same wording, as xchain-hub/src/db/index.js.
 const [NODE_MAJOR, NODE_MINOR] = String(process.versions.node).split('.').map(Number);
 if (NODE_MAJOR < 22 || (NODE_MAJOR === 22 && NODE_MINOR < 12)) {
     throw new Error('xchain-indexer requires Node >= 22.12.0 (running ' + process.versions.node +

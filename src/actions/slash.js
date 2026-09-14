@@ -451,7 +451,7 @@ class Slash {
             if(!/^[0-9]+$/.test(String(roundId)))
                 return { error: 'invalid: ORACLE round (not a block)' };
             // The BTC height alone does NOT name the slot. Oracle rounds
-            // advance on wall-clock (hub OracleRound.js), so a run of rounds can capture
+            // advance on wall-clock (hub oracle/round.js), so a run of rounds can capture
             // the SAME BTC tip; ed25519.buildPriceV0Payload keys the EQUIV header on that
             // height with VIEW=0 and leaves the round counter inside the signed JSON. Two
             // honest, distinct rounds at one tip therefore share the header prefix and

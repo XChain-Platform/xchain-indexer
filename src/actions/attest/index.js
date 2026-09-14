@@ -137,7 +137,7 @@ const BATCH_CHAIN = 'DOGE';
 const ATTEST_BATCH_COMPLETION_STAMP = ' (stamped on batch completion)';
 
 // Decoded-body ceiling for a mirror-applied response, the byte-twin of the hub's
-// ATTEST_RESPONSE_BODY_MAX_BYTES (xchain-hub/src/lib/attest_response_body_cap.js),
+// ATTEST_RESPONSE_BODY_MAX_BYTES (xchain-hub/src/attestation/attest_response_body_cap.js),
 // which the leader enforces before proposing and every follower before signing.
 // The applier re-checks it so a DISHONEST quorum cannot push through a body the
 // periodic on-chain batch could never carry: v3/v4 relay legs stay on chain at the
@@ -1829,7 +1829,7 @@ class Attest {
         // The carried SNAPSHOT_BLOCK is what keeps this node on the same activation
         // predicate as everyone else. It is the ONLY plane the hub can gate on, since
         // the hub decides whether to co-sign and broadcast BEFORE the action has a
-        // landing height at all (xchain-hub AttestationRelay._validateRowEnvelope and
+        // landing height at all (xchain-hub AttestationRelay.validateRowEnvelope and
         // the request-round gate), and it is the plane the v4 leg, the
         // isAttestRelayActive contract, and the SNAPSHOT_BLOCK field spec all name.
         // Without it the window landing >= activation > snapshot is accepted here and
