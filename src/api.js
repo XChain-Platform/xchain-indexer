@@ -54,6 +54,10 @@ const { installObservability } = require('./observability');   // default-off /m
 const { installIndexerMetrics } = require('./api/indexer_metrics');  // poll-freshness heartbeat gauge
 const { parseCorsOrigin } = require('./api/corsOrigin.js');
 const { installCrashHandlers } = require('./actions/anchor/diagnostic_events.js');
+const { chainBlockHash } = require('./api/chain_block_hash');           // decoder-side hash for the block-hash triple
+const { tipBlockTime }   = require('./api/tip_block_time');            // expiry filter clock for the open book
+const { rollcallSignersRequest, rollcallPresence } = require('./api/rollcall_signers');
+const { readDecoderBlock, hubMirrorStatus, statusVerdict, statusBody } = require('./api/status_route');
 
 // Constant-time API-key comparison. A plain `!==` short-circuits at the first
 // mismatching byte, leaking the key that guards reward-forging writes through
@@ -226,12 +230,6 @@ const FEDERATION_READ_METHODS = new Set([
     'getcrosschaincall',
     'getcrosschaincallresult'
 ]);
-
-// Upper bound on the key lists getrollcallsigners will answer over. The BTC
-// close asks for |R(E)| + 1 keys, so this is a sanity ceiling on a malformed or
-// hostile caller, not a paging limit: the method never enumerates, so a caller
-// that needs more keys than this is not doing what the method is for.
-const ROLLCALL_READ_MAX_KEYS = 2048;
 
 // sha256 of THIS indexer's vendored action-manifest.json, cached after the first
 // read. The BTC-side epoch close compares it against its own vendored copy and
@@ -520,9 +518,7 @@ async function startApi(){
                 let stored = await db.getStoredBlockHashes(target);
                 if(!stored)
                     return { error: 'block not indexed: ' + target };
-                let blockHash = null;
-                let rows = await decoderDb.getDecoderBlockHashRow(target);
-                if(rows.length > 0 && rows[0].block_hash) blockHash = String(rows[0].block_hash);
+                let blockHash = await chainBlockHash(decoderDb, target);
                 return {
                     coin:          indexer.config['COIN'],
                     network:       indexer.config['NETWORK'],
@@ -1076,12 +1072,7 @@ async function startApi(){
                 // awaiting its next block-loop expiry pass cannot occupy a bounded slot. A missing
                 // block_time (older-schema gap) yields a non-finite value → the filter is skipped
                 // (fail open, unchanged behavior) rather than dropping the whole book.
-                // getBlockTime returns the `false` sentinel on a missing block / older-schema gap;
-                // coerce that (and any non-finite) to null so the filter is skipped rather than
-                // running as a `>= 0` no-op or, worse, a `>= NaN` that drops the whole book.
-                let rawBlockTime = await db.getBlockTime(latest);
-                let blockTime = (rawBlockTime !== false && Number.isFinite(Number(rawBlockTime)))
-                    ? Number(rawBlockTime) : null;
+                let blockTime = await tipBlockTime(db, latest);
                 // Unified cross-chain book: SWAP (exact single-fill) + ORDER
                 // (price-time partial fills) drawn in one UNION ALL so a single global
                 // LIMIT + keyset cursor bounds the whole book. Each offer is tagged `kind`; the
@@ -1723,25 +1714,12 @@ async function startApi(){
         async getrollcallsigners({network, epoch_height, max_block_time, pubkeys, publishers}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
-            if(String(indexer.config['COIN']) !== 'DOGE')
-                return { error: 'getrollcallsigners is DOGE-only' };
-            if(network !== undefined && String(network) !== String(indexer.config['NETWORK']))
-                return { error: 'network mismatch' };
-
-            let epoch = parseInt(epoch_height);
-            let maxT  = parseInt(max_block_time);
-            if(!Number.isFinite(epoch) || epoch < 0) return { error: 'invalid epoch_height' };
-            if(!Number.isFinite(maxT))               return { error: 'invalid max_block_time' };
-
-            let keys = Array.isArray(pubkeys)    ? pubkeys    : [];
-            let pubs = Array.isArray(publishers) ? publishers : [];
-            // Hex-shaped and bounded. A caller asking about a key it cannot name is
-            // asking to enumerate, which this method does not do.
-            const HEX64 = /^[0-9a-fA-F]{64}$/;
-            keys = keys.filter((k) => HEX64.test(String(k))).map((k) => String(k).toLowerCase());
-            pubs = pubs.filter((k) => HEX64.test(String(k))).map((k) => String(k).toLowerCase());
-            if(keys.length > ROLLCALL_READ_MAX_KEYS || pubs.length > ROLLCALL_READ_MAX_KEYS)
-                return { error: 'too many keys requested' };
+            // DOGE only, this network, a numeric epoch and window, and key lists that
+            // are hex-shaped and bounded, refused in that order (./api/rollcall_signers).
+            let req = rollcallSignersRequest(indexer.config,
+                { network, epoch_height, max_block_time, pubkeys, publishers });
+            if(req.error) return req;
+            let { epoch, maxT, keys, pubs } = req;
 
             try {
                 // Federation READ isolation: committed-only, off the block tx.
@@ -1752,34 +1730,10 @@ async function startApi(){
 
                 let hcut = await db.getRollcallWindowCut(maxT);
 
-                let signers = {};
-                for(let k of keys) signers[k] = null;
-                let publishersOut = {};
-                for(let k of pubs) publishersOut[k] = null;
-
-                // A null cut means no DOGE block is inside the window yet. Answer the
-                // shape with an explicit null hcut so the caller defers rather than
-                // reading empty maps as a positive "none".
-                if(hcut !== null){
-                    for(let r of await db.getRollcallSignersForKeys(epoch, keys, hcut)){
-                        signers[String(r.pubkey).toLowerCase()] = {
-                            sig:          String(r.sig).toLowerCase(),
-                            ledger_hash:  String(r.ledger_hash).toLowerCase(),
-                            publisher:    String(r.publisher).toLowerCase(),
-                            action_index: Number(r.action_index),
-                            block_index:  Number(r.block_index),
-                            // ROLLCALL v1 GATES as carried, null on a v0 row: the BTC close
-                            // needs it to rebuild the v1 canonical it re-verifies against.
-                            gates:        (r.gates === undefined || r.gates === null) ? null : String(r.gates)
-                        };
-                    }
-                    for(let r of await db.getRollcallPublishers(epoch, pubs, hcut)){
-                        publishersOut[String(r.publisher).toLowerCase()] = {
-                            action_index: Number(r.action_index),
-                            block_index:  Number(r.block_index)
-                        };
-                    }
-                }
+                // Every asked-about key's presence signature and every asked-about
+                // publisher's roll call at or below the cut, null for anyone with no
+                // row and for everyone while there is no cut yet.
+                let { signers, publishersOut } = await rollcallPresence(db, epoch, keys, pubs, hcut);
 
                 return {
                     hcut,
@@ -2009,23 +1963,13 @@ async function startApi(){
         }
         if(inFlightBlock != null && indexerBlock != null && inFlightBlock <= indexerBlock)
             inFlightBlock = null;
-        let decoderBlock = null;
-        try {
-            if(indexer.decoderDb)
-                decoderBlock = await indexer.decoderDb.getBlockIndex('decoder', 'last');
-            if(decoderBlock != null) decoderBlock = Number(decoderBlock);
-        } catch (err) {
-            // Database unreachable; use in-memory snapshot as fallback
-            decoderBlock = (indexer.lastDecoderBlock != null) ? Number(indexer.lastDecoderBlock) : null;
-        }
-        // Age of the last successful hub-config fetch (null until the first success). A
-        // climbing age here while the indexer otherwise looks synced is the signal that
-        // the hub is unreachable and the live-polled governance params are stale.
-        let lastHubConfigFetchAt = indexer.lastHubConfigFetchAt || null;
-        // Age + explicit staleness via the one shared helper (same threshold as buildHealthResponse).
-        let hubConfig            = XChainIndexer.hubConfigStaleness(lastHubConfigFetchAt, Date.now());
-        let hubConfigAgeSeconds  = hubConfig.ageSeconds;
-        let hubConfigStale       = hubConfig.stale;
+        // Fresh from the decoder DB, falling back to the in-memory snapshot when
+        // that database is unreachable (./api/status_route).
+        let decoderBlock = await readDecoderBlock(indexer);
+        // The hub config age and the stall verdict, all off one clock read
+        // (./api/status_route), then the hub mirror snapshot.
+        let verdict   = statusVerdict(XChainIndexer, indexer);
+        let hubMirror = hubMirrorStatus(indexer);
         // Status-code contract for the xchain-node http_get healthcheck (wget
         // exits 0 on any 2xx): 503 when the indexer DB is unreachable or the
         // block counter is genuinely WEDGED, matching the encoder / utxo-tracker /
@@ -2036,81 +1980,9 @@ async function startApi(){
         // no committed block inside the grace window; a stalled-but-advancing
         // indexer stays 200 with degraded:true. isSynced=false alone likewise
         // stays 200: a healthy initial catch-up must not trip restart loops.
-        let now       = Date.now();
-        let stalled   = !!indexer.stallReason;
-        let wedged    = XChainIndexer.stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
-                                                  indexer.healthStallGraceMs, now,
-                                                  indexer.stallClearsAt);
-        // Discriminate the healthy future-stamped-block wait from real degradation. One
-        // clock read for all three so the fields can never disagree with each other.
-        let futureWait  = XChainIndexer.waitingOnFutureBlock(indexer.stallReason, indexer.stallClearsAt, now);
-        let stallClass  = XChainIndexer.stallClassOf(indexer.stallReason, indexer.lastBlockCommittedAt,
-                                                     indexer.healthStallGraceMs, now, indexer.stallClearsAt);
-        // Hub mirror connectivity (row 48, attest-response-mirror spec). Absent
-        // entirely on a single-host deployment (HUB_DB_SYNC_ENABLED unset), so an
-        // honest verdict starts from whether the instance exists at all; a snapshot
-        // failure must not fail the whole probe, so it degrades to the same shape.
-        let hubMirror;
-        try {
-            hubMirror = indexer.hubDbSync
-                ? indexer.hubDbSync.mirrorStatus()
-                : { configured: false, connected: false, bootstrapped: false, streamWatermark: null, tables: {} };
-        } catch (err) {
-            hubMirror = { configured: false, connected: false, bootstrapped: false, streamWatermark: null, tables: {} };
-        }
-        let unhealthy = indexerDbUnreachable || wedged;
-        res.status(unhealthy ? 503 : 200).json({
-            indexerBlock: indexerBlock,
-            inFlightBlock: inFlightBlock,
-            decoderBlock: decoderBlock,
-            lag:          (decoderBlock != null && indexerBlock != null)
-                            ? decoderBlock - indexerBlock
-                            : null,
-            isSynced:     indexer.isSynced(),
-            // true when every block consensus currently PERMITS this indexer to commit is
-            // committed: level with the decoder tip, or the only thing in the way is a
-            // future-stamped block it must legally wait out. Read this, not isSynced, before
-            // concluding a non-zero lag means the indexer is behind: a testnet4 miner stamping
-            // each block ~20 min ahead pins lag at ~6 blocks forever with isSynced stuck false,
-            // while the indexer commits every block the instant it becomes processable.
-            atProcessableTip: XChainIndexer.atProcessableTip(indexer.isSynced(), indexer.stallReason,
-                                                             indexer.stallClearsAt, now),
-            // Why the block counter is not advancing, or null when advancing normally:
-            // a hub-sync barrier timeout (price/oracle/match/call/snapshot) or a VM
-            // executor host fault. Lets a monitoring probe tell these stalls apart from
-            // a healthy catch-up, all of which otherwise present only as a growing lag.
-            stallReason:  indexer.stallReason || null,
-            // Epoch-ms at which the current time-keyed barrier can first be
-            // satisfied, or null. Non-null means this indexer is waiting on WALL CLOCK
-            // because the block it is on is stamped in the future, which is expected and
-            // self-clearing; it is not counted as a wedge, and it tells a probe when the
-            // chain should move again rather than leaving a valid stall looking like death.
-            stallClearsAt: indexer.stallClearsAt || null,
-            // true when a sync barrier is deferring blocks but the counter is still
-            // advancing (healthy-degraded, stays 200); distinct from a wedge, which is
-            // stalled AND making no progress inside the grace window (503).
-            // NOTE it stays true during the future-stamped-block wait too, deliberately:
-            // consumers keyed on `degraded === false` treat that as the wedge case, so
-            // flipping it would UPGRADE a healthy wait to a critical alert. Read
-            // waitingOnFutureBlock / stallClass to tell the two apart.
-            degraded:     stalled && !wedged,
-            // true when the stall is only a wait for wall clock to reach a future-stamped
-            // block (stallClearsAt still ahead). Healthy and self-clearing: the indexer has
-            // committed everything consensus lets it commit and will take the rest the
-            // moment their stamps arrive. A monitor should not alert on this.
-            waitingOnFutureBlock: futureWait,
-            // Single machine-readable verdict on the counter, so a probe does not have to
-            // join stallReason/degraded/stallClearsAt: 'none' | 'future_block_wait' |
-            // 'barrier_defer' | 'wedged'.
-            stallClass:   stallClass,
-            // epoch-ms of the most recent successful block commit (null until the first),
-            // so a probe can read advance-recency directly rather than infer it from lag.
-            lastBlockCommittedAt: indexer.lastBlockCommittedAt || null,
-            lastHubConfigFetchAt: lastHubConfigFetchAt,
-            hubConfigAgeSeconds:  hubConfigAgeSeconds,
-            hubConfigStale:       hubConfigStale,
-            hubMirror:            hubMirror
-        });
+        let unhealthy = indexerDbUnreachable || verdict.wedged;
+        res.status(unhealthy ? 503 : 200).json(statusBody(XChainIndexer, indexer,
+            { indexerBlock, inFlightBlock, decoderBlock, verdict, hubMirror }));
     });
 
     // Express 5 / body-parser 2.x leaves req.body undefined when a request carries
