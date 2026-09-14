@@ -27,6 +27,7 @@
 // ms). Async only for the hub_push_queue stats fetch; all other fields are
 // derived synchronously from already-resolved values.
 const { computeArmedMapFingerprint } = require('../armedMapFingerprint');
+const { computeArmedMapFingerprintV2 } = require('../consensus/armed_map/fingerprint_v2');
 const { computeConsensusRulesDigest } = require('../consensus_rules_digest');
 const { hubConfigStaleness, stallWedged, waitingOnFutureBlock, stallClassOf, atProcessableTip,
         barrierHoldMs, barrierCeilingExceeded } = require('../XChainIndexer');
@@ -231,6 +232,9 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
         // fleet sweep can confirm every deployed indexer runs the same armed map
         // before a flag-day height. Per-file hashes live behind computeArmedMapFingerprint.
         armed_map_fingerprint: computeArmedMapFingerprint().fingerprint,
+        // v2 of the same answer, published beside v1 during the W1 window: the armed VALUES
+        // row by row, so it survives a comment, rename or move; UNREADABLE, never a guess.
+        armed_map_fingerprint_v2: computeArmedMapFingerprintV2().hex,
         // The CROSS-REPO half of the same question. armed_map_fingerprint hashes this
         // repo's own file bytes and so is only comparable against another indexer;
         // this digest hashes the DECIDED HEIGHTS of the gates the hub evaluates too,

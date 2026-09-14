@@ -1,6 +1,7 @@
 {
   "note": "AT1 consensus identity for the code-structure pass. Three values come from the source tree; the tip state_hash is read against a regtest rail and is recorded by the AT run, not here. The digest is environment-sensitive on regtest: both readings are kept so a later milestone can compare against the one taken the same way.",
   "indexer_rev": "b3c0cd22263ee675ac3d46ec541d49132065eda4",
+  "armed_map_fingerprint_v2_note": "armed_map_fingerprint_v2 and armed_map_rows were added by fingerprint v2 window W1, read 2026-09-14T15:57:13Z in a detached worktree at indexer cf776e32 plus the W1 files, node_modules linked, by the same two invocations as the rest of this pin (bare, and with the armed env below). Every older value in each block re-read byte-identical in that tree, so none was re-pinned. v2 hashes resolved values, so like the digest it differs between the bare and armed readings.",
   "bare_checkout": {
     "network": "regtest",
     "coin_registry_consensus_hash": "ae89ab099baa3acd02926daba4f3790377b6527dbb19bd4580bab558a61f16a2",
@@ -10,6 +11,8 @@
       "DOGE": "34f8dafeff36f7c8ca3b327c3c915251e78e64448742860620522a92a69368a0"
     },
     "armed_map_fingerprint": "55891dfd56f600227242b7aca78a9e0861177ccdd15a908096ea678473708ca0",
+    "armed_map_fingerprint_v2": "9db471b71d5fe79aae440a5498d3ab4df5c6d1716777299641b41aab45888ec5",
+    "armed_map_rows": 290,
     "consensus_rules_digest": "26ba9cce1936d6c38518489b35e3ceb558746ffb466cea90f65b39adf49b2036",
     "consensus_rules_gates": {
       "anchor_reward_activation.ANCHOR_REWARD_ACTIVATION": "{\"mainnet\":961000,\"regtest\":0,\"testnet\":0}",
@@ -56,6 +59,8 @@
       "DOGE": "34f8dafeff36f7c8ca3b327c3c915251e78e64448742860620522a92a69368a0"
     },
     "armed_map_fingerprint": "55891dfd56f600227242b7aca78a9e0861177ccdd15a908096ea678473708ca0",
+    "armed_map_fingerprint_v2": "53bbe306f1a8ee199a3473044996592715c9e3b6b48965414cc24c3ef7a23d1a",
+    "armed_map_rows": 290,
     "consensus_rules_digest": "f026ee1dc2de3437d9139147e9f49446273413a203dd38a89d821625f536ab2a",
     "consensus_rules_gates": {
       "anchor_reward_activation.ANCHOR_REWARD_ACTIVATION": "{\"mainnet\":961000,\"regtest\":0,\"testnet\":0}",

@@ -22,7 +22,12 @@
  *                                  in src/. Comparable between two indexers,
  *                                  and it moves on a comment reformat, which is
  *                                  correct: it answers "same build?".
- *   consensus_rules_digest         sha256 over the DECIDED HEIGHTS of the gates
+ *   armed_map_fingerprint_v2       sha256 over the armed VALUES those carriers
+ *   and armed_map_rows             resolve to, one row per key, and the count.
+ *                                  Unmoved by a comment, rename or move, so it
+ *                                  answers "same armed map?"; UNREADABLE when a
+ *                                  row fails to resolve, never a plausible hash.
+ *   consensus_rules_digest        sha256 over the DECIDED HEIGHTS of the gates
  *                                  the hub also evaluates. Comparable across
  *                                  repos, and it answers "same rules?".
  *   state_hash                     the stored hash at the regtest tip, or at a
@@ -43,12 +48,13 @@
  * ONE OF THE THREE IS NOT PURE, AND IT MATTERS FOR ANY PIN. The rules digest
  * hashes gate VALUES, and a regtest venue arms some gates from its own
  * environment rather than from a committed height, so the same build reports one
- * digest in a bare checkout and another inside a configured container. The
+ * digest in a bare checkout and another inside a configured container. The v1
  * fingerprint does not move with it: it hashes file bytes, and an
- * environment-resolved height changes no byte. Two readings therefore have to be
- * taken with the same environment to be comparable, and `consensus_rules_gates`
- * in the JSON output is what turns a mismatch into a named gate instead of two
- * opaque hashes.
+ * environment-resolved height changes no byte. armed_map_fingerprint_v2 does
+ * move, because like the digest it hashes resolved values. Two readings
+ * therefore have to be taken with the same environment to be comparable, and
+ * `consensus_rules_gates` in the JSON output is what turns a mismatch into a
+ * named gate instead of two opaque hashes.
  *
  * READING THE TIP AGAINST A REGTEST RAIL, READ-ONLY. Run it on the host that
  * runs the regtest stack, as a user whose grants are SELECT only, with the
@@ -98,15 +104,18 @@ function canonicalJson(value) {
 /**
  * The three values that come from the source tree alone.
  * @returns {{coin_registry_consensus_hash: string, coin_registry_consensus_hashes: object,
- *            armed_map_fingerprint: string, consensus_rules_digest: string}}
+ *            armed_map_fingerprint: string, armed_map_fingerprint_v2: string,
+ *            armed_map_rows: ?number, consensus_rules_digest: string}}
  */
 function codeIdentity(network) {
     const coins = require('../src/coins/index.js');
     const { computeArmedMapFingerprint } = require('../src/armedMapFingerprint.js');
+    const { computeArmedMapFingerprintV2 } = require('../src/consensus/armed_map/fingerprint_v2.js');
     const { computeConsensusRulesDigest, ABSENT } = require('../src/consensus_rules_digest.js');
 
     const hashes = coins.consensusHashes(network);
     const rules = computeConsensusRulesDigest();
+    const armedMapV2 = computeArmedMapFingerprintV2();
     // The shape of the measurement, beside the number it produced. A digest taken over a
     // list in which some gate read ABSENT is a different question answered, and nothing
     // about the hash itself says so: 87637dfa and 26ba9cce are equally plausible on sight.
@@ -119,6 +128,9 @@ function codeIdentity(network) {
         coin_registry_consensus_hash: crypto.createHash('sha256').update(canonicalJson(hashes)).digest('hex'),
         coin_registry_consensus_hashes: hashes,
         armed_map_fingerprint: computeArmedMapFingerprint().fingerprint,
+        // The row count is null exactly when v2 reads UNREADABLE: no count is honest then.
+        armed_map_fingerprint_v2: armedMapV2.hex,
+        armed_map_rows: armedMapV2.count === undefined ? null : armedMapV2.count,
         consensus_rules_digest: rules.digest,
         consensus_rules_gates_resolved: Object.keys(rules.gates).length - absent.length,
         consensus_rules_gates_absent: absent.length,
@@ -239,6 +251,8 @@ async function main() {
         console.log(`  ${tick.padEnd(29)}${identity.coin_registry_consensus_hashes[tick]}`);
     }
     console.log(`armed_map_fingerprint:         ${identity.armed_map_fingerprint}`);
+    console.log(`armed_map_fingerprint_v2:      ${identity.armed_map_fingerprint_v2}`);
+    console.log(`armed_map_rows:                ${identity.armed_map_rows}`);
     console.log(`consensus_rules_digest:        ${identity.consensus_rules_digest}`);
     console.log(`  shared gates:                ${identity.consensus_rules_gates_resolved} resolved, `
                 + `${identity.consensus_rules_gates_absent} absent`);
