@@ -151,7 +151,7 @@ function syntheticDb(n, shape){
         rows.push({ contract_index: contract, state_key: key,
                     state_value: JSON.stringify({ i: i, pad: 'x'.repeat(32) }) });
     }
-    // Both readers: the derivation reads strictly (M-17), and a stub carrying
+    // Both readers: the derivation reads strictly, and a stub carrying
     // only doQuery would make buildFullContractStateRoot throw here rather than
     // benchmark anything.
     return { async doQuery(){ return rows; }, async doQueryStrict(){ return rows; } };

@@ -915,7 +915,7 @@ function siblingRepos(root) {
     const names = [];
     for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
         if (!entry.name.startsWith('xchain-')) continue;
-        // By name as well as by real path: a lane worktree resolves somewhere
+        // By name as well as by real path: a git worktree resolves somewhere
         // else entirely, so a sweep aimed at the platform root would otherwise
         // count the indexer's own checkout as one of its siblings.
         if (entry.name === REPO_NAME) continue;

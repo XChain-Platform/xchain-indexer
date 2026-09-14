@@ -81,7 +81,7 @@ function journalOverlay(db){
     const rows = [];                       // {address, tick, locked_amount, block_index, id}
     let nextId = 1;
     // BOTH readers are wrapped. The writer inserts through doQuery while the
-    // reader (escrowLeafSubtree.js) reads through doQueryStrict (M-17), so
+    // reader (escrowLeafSubtree.js) reads through doQueryStrict, so
     // wrapping only one leaves the other talking to the real database: the
     // reads would then miss every overlaid row and the harness would report a
     // clean "incremental equals replay" over two empty sets.
