@@ -85,7 +85,6 @@ const debitInserts = (calls) => calls.filter(c => /INSERT\s+INTO\s+capability_sl
 afterEach(function () { sinon.restore(); });
 
 describe('Database.slashCapabilityStake() equivocation burn @regression @tier1', function () {
-
     it('Pass 1 burns an active staker from stakes (whole bond) and logs a verbatim debit', async function () {
         const db = makeDb();
         const calls = wire(db, { stakes: [{ action_index: 7, amount: '1000' }] });
@@ -136,7 +135,9 @@ describe('Database.slashCapabilityStake() equivocation burn @regression @tier1',
         assert.strictEqual(d.length, 1);
         assert.strictEqual(d[0].args[1], 'unstakes');
     });
+});
 
+describe('Database.slashCapabilityStake() equivocation burn @regression @tier1', function () {
     it('burns the WHOLE bond (active stakes AND cooldown unstakes together)', async function () {
         const db = makeDb();
         const calls = wire(db, {
@@ -176,7 +177,9 @@ describe('Database.slashCapabilityStake() equivocation burn @regression @tier1',
         assert.strictEqual(debitInserts(calls).length, 0);
         assert.deepStrictEqual(burned.releases, [], 'nothing burned releases no escrow');
     });
+});
 
+describe('Database.slashCapabilityStake() equivocation burn @regression @tier1', function () {
     // The bond is LOCKED in the staker's escrow, so slash.js releases it against whoever
     // holds the lock. A bare total cannot be attributed: a delegated key's rows resolve to
     // the OWNING source, so one burn can span two addresses.

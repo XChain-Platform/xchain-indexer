@@ -106,7 +106,6 @@ function roundQueryCall(db) {
 afterEach(function () { sinon.restore(); });
 
 describe('VM oracle round window (getOracleDataForVM) @regression @tier1', function () {
-
     describe('a chain holding less history than the window', function () {
 
         it('reports floor 0, because nothing is hidden', async function () {
@@ -133,7 +132,9 @@ describe('VM oracle round window (getOracleDataForVM) @regression @tier1', funct
             assert.deepStrictEqual(roundQueryCall(db).args, [BLOCK, 0]);
         });
     });
+});
 
+describe('VM oracle round window (getOracleDataForVM) @regression @tier1', function () {
     describe('a chain past the window', function () {
 
         // The DISTINCT query is capped at the window, so a full result means older
@@ -173,7 +174,9 @@ describe('VM oracle round window (getOracleDataForVM) @regression @tier1', funct
             assert.ok(snap.roundFloor > 0);
         });
     });
+});
 
+describe('VM oracle round window (getOracleDataForVM) @regression @tier1', function () {
     describe('the row ceiling', function () {
 
         // Enough rows to hit the ceiling, with the OLDEST round deliberately
@@ -222,7 +225,9 @@ describe('VM oracle round window (getOracleDataForVM) @regression @tier1', funct
                 'the first fully covered round must');
         });
     });
+});
 
+describe('VM oracle round window (getOracleDataForVM) @regression @tier1', function () {
     describe('the row budget', function () {
 
         it('fits the live pair count, so pair growth cannot silently shrink the window', async function () {

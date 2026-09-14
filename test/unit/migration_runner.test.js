@@ -503,7 +503,6 @@ describe('leg-ordinal migration rename: destroys-sends-leg-ordinal @regression @
 });
 
 describe('Database._destructiveAutoStatement() @regression @tier1', function () {
-
     // ── flagged: statements that can lose, truncate, or rename data ──────
 
     it('flags DROP TABLE', function () {
@@ -559,7 +558,9 @@ describe('Database._destructiveAutoStatement() @regression @tier1', function () 
         assert.ok(destructiveOf(['ALTER TABLE tokens RENAME TO tokens_v2']));
         assert.ok(destructiveOf(['ALTER TABLE tokens RENAME COLUMN tick TO ticker']));
     });
+});
 
+describe('Database._destructiveAutoStatement() @regression @tier1', function () {
     it('flags ALTER TABLE ... CHANGE (rename + retype in one clause)', function () {
         assert.ok(destructiveOf(['ALTER TABLE tokens CHANGE COLUMN tick ticker VARCHAR(32)']));
     });
@@ -614,7 +615,9 @@ describe('Database._destructiveAutoStatement() @regression @tier1', function () 
         assert.strictEqual(destructiveOf(['ALTER TABLE votes DROP INDEX IF EXISTS poll_voter_choice']), null);
         assert.strictEqual(destructiveOf(['ALTER TABLE attests DROP KEY request_id_version']), null);
     });
+});
 
+describe('Database._destructiveAutoStatement() @regression @tier1', function () {
     it('allows structural metadata drops (FOREIGN KEY / CONSTRAINT / PRIMARY KEY / DEFAULT)', function () {
         assert.strictEqual(destructiveOf(['ALTER TABLE a DROP FOREIGN KEY fk_b']), null);
         assert.strictEqual(destructiveOf(['ALTER TABLE a DROP CONSTRAINT chk_positive']), null);
@@ -669,7 +672,9 @@ describe('Database._destructiveAutoStatement() @regression @tier1', function () 
         // (c) a trailing LIMIT after the id=0 predicate
         assert.ok(destructiveOf(['UPDATE balances SET id = (SELECT 1) WHERE id = 0 LIMIT 1']));
     });
+});
 
+describe('Database._destructiveAutoStatement() @regression @tier1', function () {
     it('still allows the nested-subquery id repair after the carve-out is tightened', function () {
         // The balanced-paren matcher must not reject the committed repair shape, whose
         // subquery contains nested parens and commas (a naive "no commas" rule would).
@@ -726,7 +731,9 @@ describe('Database._destructiveAutoStatement() @regression @tier1', function () 
         assert.ok(offender && /DROP TABLE balances/i.test(offender),
             'the versioned comment payload must reach the classifier, not be stripped before it');
     });
+});
 
+describe('Database._destructiveAutoStatement() @regression @tier1', function () {
     it('a plain (non-executable) block comment still does not trigger', function () {
         assert.strictEqual(destructiveOf(['CREATE TABLE foo (id INT) /* DROP TABLE bar */']), null);
         assert.strictEqual(destructiveOf(['CREATE TABLE foo (id INT)']), null);
@@ -780,7 +787,9 @@ describe('Database._destructiveAutoStatement() @regression @tier1', function () 
         assert.ok(destructiveOf(["LOAD DATA INFILE '/tmp/x.csv' REPLACE INTO TABLE balances"]));
         assert.ok(destructiveOf(["LOAD DATA LOCAL INFILE '/tmp/x.csv' INTO TABLE balances"]));
     });
+});
 
+describe('Database._destructiveAutoStatement() @regression @tier1', function () {
     // ── ALTER clauses that destroy rows with no DROP/RENAME/CHANGE/MODIFY ──
 
     it('flags ALTER TABLE partition clauses (TRUNCATE / EXCHANGE / ADD are one class)', function () {
@@ -804,7 +813,6 @@ describe('Database._destructiveAutoStatement() @regression @tier1', function () 
 });
 
 describe('Database.backdatedFrontierViolation() @regression @tier1', function () {
-
     it('reports the frontier when a pending file is dated before an applied one', function () {
         assert.strictEqual(
             Database.backdatedFrontierViolation('2026-07-01-late-add.sql',
@@ -861,7 +869,9 @@ describe('Database.backdatedFrontierViolation() @regression @tier1', function ()
             null,
             'an undated legacy row must never become the frontier');
     });
+});
 
+describe('Database.backdatedFrontierViolation() @regression @tier1', function () {
     it('still reports a real violation when an undated legacy row is present', function () {
         assert.strictEqual(
             Database.backdatedFrontierViolation('2026-07-01-late-add.sql', [
@@ -891,9 +901,9 @@ describe('Database.backdatedFrontierViolation() @regression @tier1', function ()
     });
 });
 
-describe('Database.splitSqlStatements() @regression @tier1', function () {
-    const splitOf = (raw) => Database.prototype.splitSqlStatements.call(Database.prototype, raw);
+const splitOf = (raw) => Database.prototype.splitSqlStatements.call(Database.prototype, raw);
 
+describe('Database.splitSqlStatements() @regression @tier1', function () {
     it('does not split on a ; inside a single-quoted string literal', function () {
         assert.deepStrictEqual(splitOf("UPDATE t SET data = 'a;b' WHERE id = 1;"),
             ["UPDATE t SET data = 'a;b' WHERE id = 1"]);
@@ -949,7 +959,9 @@ describe('Database.splitSqlStatements() @regression @tier1', function () {
         assert.deepStrictEqual(splitOf('CREATE TABLE a (id INT);\nCREATE TABLE b (id INT);'),
             ['CREATE TABLE a (id INT)', 'CREATE TABLE b (id INT)']);
     });
+});
 
+describe('Database.splitSqlStatements() @regression @tier1', function () {
     it('guard classifies real statements, not fragments (both directions)', function () {
         // A ;DROP TABLE buried in a string literal is ONE non-destructive statement.
         assert.strictEqual(destructiveOf(splitOf(
@@ -1214,70 +1226,69 @@ describe('runMigrations() checksum heal branch @regression @tier1', function () 
     });
 });
 
+const crypto  = require('crypto');
+const MIG_DIR = path.join(__dirname, '..', '..', 'src', 'sql', 'migrations');
+
+const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
+const allFiles = () => fs.readdirSync(MIG_DIR).filter(f => f.endsWith('.sql')).sort();
+const ledgerOfAll = () => new Map(allFiles().map(f => [f, sha256(fs.readFileSync(path.join(MIG_DIR, f), 'utf8'))]));
+
+// `DatabaseClass` lets a case that sets env run the runner from a Database loaded
+// after the write: the strict-checksum switch is read from src/config.js's
+// load-time CONFIG_ENV snapshot, not from process.env at call time.
+async function runAgainst(ledger, opts, DatabaseClass = Database) {
+    const logged = [];
+    const applied = [];
+    const conn = {
+        query: async function (sql, params) {
+            if (/GET_LOCK/i.test(sql))     return [{ l: 1 }];
+            if (/RELEASE_LOCK/i.test(sql)) return [{}];
+            if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) {
+                return Array.from(ledger, ([name, checksum]) => ({ name, checksum }));
+            }
+            if (/^INSERT INTO schema_migrations/i.test(sql.trim())) { applied.push(params[0]); return {}; }
+            if (/^(UPDATE|INSERT|CREATE|ALTER|DROP)/i.test(sql.trim())) return {};
+            return [];
+        },
+        release: async function () {},
+    };
+    const db = {
+        dbName: 'test_indexer',
+        transactionConnection: null,
+        getConnection: async () => conn,
+        ensureMigrationsLedger: async () => {},
+        runMigrationsInner: DatabaseClass.prototype.runMigrationsInner,
+        migrationMode: DatabaseClass.prototype.migrationMode,
+        migrationPreconditionSkip: DatabaseClass.prototype.migrationPreconditionSkip,
+        splitSqlStatements: DatabaseClass.prototype.splitSqlStatements,
+        stripSqlLineComments: DatabaseClass.prototype.stripSqlLineComments,
+        destructiveAutoStatement: DatabaseClass.prototype.destructiveAutoStatement,
+        isIdRepairUpdate: DatabaseClass.prototype.isIdRepairUpdate,
+    };
+    const realLog = console.log, realErr = console.error, realWarn = console.warn;
+    console.log = console.error = console.warn = (...a) => { logged.push(a.join(' ')); };
+    try {
+        const r = await DatabaseClass.prototype.runMigrationsInner.call(db, opts || {});
+        return { logged, applied, result: r, threw: null };
+    } catch (err) {
+        return { logged, applied, result: null, threw: err };
+    } finally {
+        console.log = realLog; console.error = realErr; console.warn = realWarn;
+    }
+}
+
 // Backdating guard in the apply loop. Apply order is lexical, so a migration committed
 // with a date EARLIER than one the fleet already applied runs in its date slot on a
 // fresh DB and after the frontier on an aged one, diverging the schemas. Driven through
 // the real runMigrationsInner against the real migrations dir: seeding the ledger with
 // every file EXCEPT an early auto one reproduces exactly the aged-DB shape.
 describe('runMigrations() backdated-migration guard @regression @tier1', function () {
-
-    const crypto  = require('crypto');
-    const MIG_DIR = path.join(__dirname, '..', '..', 'src', 'sql', 'migrations');
-
-    const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
-    const allFiles = () => fs.readdirSync(MIG_DIR).filter(f => f.endsWith('.sql')).sort();
-    const ledgerOfAll = () => new Map(allFiles().map(f => [f, sha256(fs.readFileSync(path.join(MIG_DIR, f), 'utf8'))]));
-
     // Earliest committed mode=auto file: pulling it out of the ledger makes it pending
     // behind a frontier of everything else, which is the backdating shape.
     const EARLY_AUTO = allFiles().find(f =>
         modeOf(fs.readFileSync(path.join(MIG_DIR, f), 'utf8')) === 'auto');
     const EARLY_MANUAL = allFiles().find(f =>
         modeOf(fs.readFileSync(path.join(MIG_DIR, f), 'utf8')) === 'manual');
-
-    // `DatabaseClass` lets a case that sets env run the runner from a Database loaded
-    // after the write: the strict-checksum switch is read from src/config.js's
-    // load-time CONFIG_ENV snapshot, not from process.env at call time.
-    async function runAgainst(ledger, opts, DatabaseClass = Database) {
-        const logged = [];
-        const applied = [];
-        const conn = {
-            query: async function (sql, params) {
-                if (/GET_LOCK/i.test(sql))     return [{ l: 1 }];
-                if (/RELEASE_LOCK/i.test(sql)) return [{}];
-                if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) {
-                    return Array.from(ledger, ([name, checksum]) => ({ name, checksum }));
-                }
-                if (/^INSERT INTO schema_migrations/i.test(sql.trim())) { applied.push(params[0]); return {}; }
-                if (/^(UPDATE|INSERT|CREATE|ALTER|DROP)/i.test(sql.trim())) return {};
-                return [];
-            },
-            release: async function () {},
-        };
-        const db = {
-            dbName: 'test_indexer',
-            transactionConnection: null,
-            getConnection: async () => conn,
-            ensureMigrationsLedger: async () => {},
-            runMigrationsInner: DatabaseClass.prototype.runMigrationsInner,
-            migrationMode: DatabaseClass.prototype.migrationMode,
-            migrationPreconditionSkip: DatabaseClass.prototype.migrationPreconditionSkip,
-            splitSqlStatements: DatabaseClass.prototype.splitSqlStatements,
-            stripSqlLineComments: DatabaseClass.prototype.stripSqlLineComments,
-            destructiveAutoStatement: DatabaseClass.prototype.destructiveAutoStatement,
-            isIdRepairUpdate: DatabaseClass.prototype.isIdRepairUpdate,
-        };
-        const realLog = console.log, realErr = console.error, realWarn = console.warn;
-        console.log = console.error = console.warn = (...a) => { logged.push(a.join(' ')); };
-        try {
-            const r = await DatabaseClass.prototype.runMigrationsInner.call(db, opts || {});
-            return { logged, applied, result: r, threw: null };
-        } catch (err) {
-            return { logged, applied, result: null, threw: err };
-        } finally {
-            console.log = realLog; console.error = realErr; console.warn = realWarn;
-        }
-    }
 
     it('the shipped tree is clean: a fully current ledger raises no backdating error', async function () {
         const { logged, threw } = await runAgainst(ledgerOfAll(), {});
@@ -1330,7 +1341,9 @@ describe('runMigrations() backdated-migration guard @regression @tier1', functio
         assert.ok(!logged.some(l => /dated BEFORE/.test(l)), 'manual files must not be flagged: ' + logged.join(' | '));
         assert.ok(applied.includes(EARLY_MANUAL), 'the operator must still be able to apply it');
     });
+});
 
+describe('runMigrations() backdated-migration guard @regression @tier1', function () {
     // The aged-fleet shape the frontier filter exists for. A DB migrated between 7f1142e
     // and 1c728c5 carries an undated add_controller_bound_token_columns.sql row that no
     // rename heals, and undated sorts above every 2026-* name. Before the filter this made
@@ -1526,6 +1539,37 @@ describe('runMigrations() pubkey-width assertion @regression @tier1', function (
     });
 });
 
+// `present` is the list of bridge tables information_schema reports. null answers the
+// probe with a non-array (the unreadable case), which must pass through rather than halt.
+function makeDb(present) {
+    const conn = {
+        async query(sql) {
+            if (/GET_LOCK/i.test(sql))                                     return [{ l: '1' }];
+            if (/RELEASE_LOCK/i.test(sql))                                 return [];
+            if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) return [];
+            if (BRIDGE_TABLES_PROBE.test(sql))
+                return (present === null) ? null : present.map((name) => ({ name }));
+            return [];
+        },
+        async release() {},
+    };
+    const db = Object.create(Database.prototype);
+    db.dbName = 'fake_indexer';
+    db.transactionConnection = null;
+    db.getConnection = async () => conn;
+    db.ensureMigrationsLedger = async () => {};
+    // A lock-skip returns early from the inner body; the wrapper must still assert.
+    db.runMigrationsInner = async () => ({ applied: [], pending: [], lockSkipped: true });
+    return db;
+}
+
+async function quietly(fn) {
+    const realLog = console.log, realWarn = console.warn;
+    console.log = console.warn = () => {};
+    try { return await fn(); }
+    finally { console.log = realLog; console.warn = realWarn; }
+}
+
 // Post-run schema contract for the three bridge tables (2026-09-12-bridge-tables.sql,
 // mode=manual deploy-precondition=required). This is the case the harnesses above seed
 // their way past, so it is the one that has to hold: without it a node boots, looks
@@ -1533,38 +1577,6 @@ describe('runMigrations() pubkey-width assertion @regression @tier1', function (
 // debited on the other chain, because the mirror ingest for a table this database cannot
 // write fails by OMISSION rather than by error.
 describe('runMigrations() bridge-tables assertion @regression @tier1', function () {
-
-    // `present` is the list of bridge tables information_schema reports. null answers the
-    // probe with a non-array (the unreadable case), which must pass through rather than halt.
-    function makeDb(present) {
-        const conn = {
-            async query(sql) {
-                if (/GET_LOCK/i.test(sql))                                     return [{ l: '1' }];
-                if (/RELEASE_LOCK/i.test(sql))                                 return [];
-                if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) return [];
-                if (BRIDGE_TABLES_PROBE.test(sql))
-                    return (present === null) ? null : present.map((name) => ({ name }));
-                return [];
-            },
-            async release() {},
-        };
-        const db = Object.create(Database.prototype);
-        db.dbName = 'fake_indexer';
-        db.transactionConnection = null;
-        db.getConnection = async () => conn;
-        db.ensureMigrationsLedger = async () => {};
-        // A lock-skip returns early from the inner body; the wrapper must still assert.
-        db.runMigrationsInner = async () => ({ applied: [], pending: [], lockSkipped: true });
-        return db;
-    }
-
-    async function quietly(fn) {
-        const realLog = console.log, realWarn = console.warn;
-        console.log = console.warn = () => {};
-        try { return await fn(); }
-        finally { console.log = realLog; console.warn = realWarn; }
-    }
-
     it('halts naming the migration file when every bridge table is absent', async function () {
         await assert.rejects(
             () => quietly(() => makeDb([]).runMigrations({})),
@@ -1593,7 +1605,9 @@ describe('runMigrations() bridge-tables assertion @regression @tier1', function 
     it('accepts the names case-folded', async function () {
         await quietly(() => makeDb(['BRIDGE_TRANSFERS', 'Bridge_Settlements', 'POLICY_snapshots']).runMigrations({}));
     });
+});
 
+describe('runMigrations() bridge-tables assertion @regression @tier1', function () {
     // An answer we could not read is not evidence of a missing table, the same convention
     // the pubkey and reward assertions follow.
     it('passes through on an unreadable answer', async function () {

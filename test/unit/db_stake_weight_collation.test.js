@@ -58,9 +58,7 @@ function dbFor(network, coin) {
 afterEach(function () { sinon.restore(); });
 
 describe('stake-weight ordering collation gate @regression @tier1', function () {
-
     describe('emitted SQL', function () {
-
         it('an unpinned chain emits no COLLATE in either regime', async function () {
             // testnet is the unpinned network now that mainnet arms at genesis. Pick block
             // heights on both sides of the source cap so BOTH the capped branch and the
@@ -106,7 +104,11 @@ describe('stake-weight ordering collation gate @regression @tier1', function () 
             assert.match(q, /ORDER BY source COLLATE utf8_bin, pubkey COLLATE utf8_bin LIMIT \?/,
                 'the legacy LIMIT branch must pin the same collation the capped branch does');
         });
+    });
+});
 
+describe('stake-weight ordering collation gate @regression @tier1', function () {
+    describe('emitted SQL', function () {
         it('only the ordering changed: the gate adds COLLATE and nothing else', async function () {
             const off = dbFor('testnet');
             await off.stakeWeightsWithCap(1, 5000000, '0', 'test');
@@ -120,7 +122,9 @@ describe('stake-weight ordering collation gate @regression @tier1', function () 
                 'anything else means the gate widened past the ordering');
         });
     });
+});
 
+describe('stake-weight ordering collation gate @regression @tier1', function () {
     describe('activation map', function () {
 
         it('is armed at genesis on mainnet by the 2026-09-09 ruling, and still unpinned on testnet', function () {
@@ -165,7 +169,9 @@ describe('stake-weight ordering collation gate @regression @tier1', function () 
             assert.strictEqual(swc.isStakeWeightBinCollationActive(0, 'regtest', 'BTC'), true);
         });
     });
+});
 
+describe('stake-weight ordering collation gate @regression @tier1', function () {
     describe('schema-drift predicate (fail-closed startup check)', function () {
 
         const addressSpec = swc.STAKE_WEIGHT_ORDERING_COLUMNS
@@ -209,7 +215,9 @@ describe('stake-weight ordering collation gate @regression @tier1', function () 
                 { CHARACTER_SET_NAME: null, COLLATION_NAME: null }), null);
         });
     });
+});
 
+describe('stake-weight ordering collation gate @regression @tier1', function () {
     describe('the startup assertion', function () {
 
         function dbWithSchemaRows(rows) {

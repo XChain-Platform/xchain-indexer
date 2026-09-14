@@ -99,7 +99,6 @@ function removeFixture() {
 afterEach(function () { sinon.restore(); });
 
 describe('db.getList() LIST edit resolution @regression @tier1', function () {
-
     it('legacy path (no block context) still reads the create index verbatim', async function () {
         const db = removeFixture();
         // No block_index means no gate evaluation, so historical replay of a block
@@ -152,7 +151,9 @@ describe('db.getList() LIST edit resolution @regression @tier1', function () {
         assert.deepStrictEqual(list.slice().sort(), [ADDR_A, ADDR_B].sort(),
             'an invalid edit must leave the previous head standing');
     });
+});
 
+describe('db.getList() LIST edit resolution @regression @tier1', function () {
     it('resolving by an EDIT index gives the same membership as the CREATE index', async function () {
         const db = removeFixture();
         const byCreate = await db.getList(2020, 100);

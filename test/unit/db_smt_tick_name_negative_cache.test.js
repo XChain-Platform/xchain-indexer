@@ -55,7 +55,6 @@ function makeDb(){
 }
 
 describe('_smtTickName: an absence is never cached @regression', function(){
-
     afterEach(() => sinon.restore());
 
     it('a miss followed by a hit returns the NAME (the ticker was interned meanwhile)', async function(){
@@ -110,6 +109,10 @@ describe('_smtTickName: an absence is never cached @regression', function(){
         assert.strictEqual(db.doQuery.callCount, 0,
             'the resolver must not fall back to the fail-soft reader');
     });
+});
+
+describe('_smtTickName: an absence is never cached @regression', function(){
+    afterEach(() => sinon.restore());
 
     it('a fault leaves NO cache entry, so a retried block can still resolve the tick', async function(){
         // The block is retried after a throw. If the failed attempt had left any

@@ -91,7 +91,6 @@ const journals  = (writes) => writes.filter(w => /INSERT INTO contract_delegatio
 afterEach(function () { sinon.restore(); });
 
 describe('Database.materializeContractDelegations() @regression @tier1', function () {
-
     it('rewrites the delegating source stake rows onto the delegated key and journals the old one', async function () {
         const db = makeDb();
         const writes = wire(db, {
@@ -147,7 +146,9 @@ describe('Database.materializeContractDelegations() @regression @tier1', functio
         // Matured + not-yet-revoked, evaluated at the swept block.
         assert.deepStrictEqual(gov.args, [VALID, 306, 306, VALID, 306, 306]);
     });
+});
 
+describe('Database.materializeContractDelegations() @regression @tier1', function () {
     it('includes pending-activation stake rows, so a top-up cannot resurface under the old key', async function () {
         const db = makeDb();
         const writes = wire(db, {
@@ -194,7 +195,9 @@ describe('Database.materializeContractDelegations() @regression @tier1', functio
         assert.deepStrictEqual(rewrites(writes).map(w => w.args), [[11, 100]]);
         assert.deepStrictEqual(journals(writes).map(w => w.args), [['contract_stakes', 900, 100, 77, 11, 400]]);
     });
+});
 
+describe('Database.materializeContractDelegations() @regression @tier1', function () {
     it('does not revert while a delegation still governs the slot', async function () {
         const db = makeDb();
         const writes = wire(db, {
@@ -250,7 +253,6 @@ describe('Database.materializeContractDelegations() @regression @tier1', functio
 });
 
 describe('DELEGATE v1 rotation reaches all three lookup surfaces @regression @tier1', function () {
-
     // The stake row IS the rotation once materialized, so the VM snapshot shows the new
     // pubkey and a SLASH against it debits that row. Both halves of the ledger's verify
     // criterion, driven through the real query paths with the rotated row in place.
@@ -297,7 +299,9 @@ describe('DELEGATE v1 rotation reaches all three lookup surfaces @regression @ti
         const debit = seen.find(c => /INSERT INTO contract_slash_debits/i.test(c.sql));
         assert.ok(debit, 'the slash is journaled for reorg restore');
     });
+});
 
+describe('DELEGATE v1 rotation reaches all three lookup surfaces @regression @tier1', function () {
     it('getActiveContractStakeByPubkey resolves the stake under the rotated key', async function () {
         const db = makeDb();
         sinon.stub(db, 'getPubkeyId').resolves(77);

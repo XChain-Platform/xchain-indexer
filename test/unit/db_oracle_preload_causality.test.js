@@ -144,9 +144,7 @@ async function belowFlag(fn){
 }
 
 describe('VM oracle preload causality gate (getOracleDataForVM) @regression @tier1', function(){
-
     describe('behaviour: does the preload admit a round finalized after the block', function(){
-
         it('INERT arm (LTC mainnet, key pinned inert): the future round reaches the VM, which is the defect', async function(){
             const db  = dbFor('mainnet', 'LTC');
             // A local LTC height far above every BTC anchor, so `reference_block <= ?`
@@ -197,7 +195,11 @@ describe('VM oracle preload causality gate (getOracleDataForVM) @regression @tie
             assert.ok(out.prices['BTC/USD'] === undefined || out.prices['BTC/USD'].roundNumber === 1,
                 'no future-stamped row survives to be measured as fresh');
         });
+    });
+});
 
+describe('VM oracle preload causality gate (getOracleDataForVM) @regression @tier1', function(){
+    describe('behaviour: does the preload admit a round finalized after the block', function(){
         it('BTC is unchanged: the exact height cap already excludes the later round', async function(){
             const db  = dbFor('regtest', 'BTC');
             // Reference chain: blockIndex IS a BTC height, so 961005 sits between the
@@ -211,7 +213,9 @@ describe('VM oracle preload causality gate (getOracleDataForVM) @regression @tie
                     which + ': the reference chain must never take the time bound');
         });
     });
+});
 
+describe('VM oracle preload causality gate (getOracleDataForVM) @regression @tier1', function(){
     describe('gate: which SQL each of the four reads emits', function(){
 
         it('armed: ALL FOUR reads carry the time bound, with the block time bound to it', async function(){
@@ -257,7 +261,9 @@ describe('VM oracle preload causality gate (getOracleDataForVM) @regression @tie
                     which + ': no bound is safer than a bound on NaN');
         });
     });
+});
 
+describe('VM oracle preload causality gate (getOracleDataForVM) @regression @tier1', function(){
     describe('activation-module predicate', function(){
 
         it('the reference chain is off at every height on every network', function(){

@@ -74,7 +74,6 @@ async function contractStateQuery(db, contractIndex, blockIndex) {
 afterEach(function () { sinon.restore(); });
 
 describe('state_key binary-collation gate (contract_hash preimage + VM reload) @regression @tier1', function () {
-
     describe('getBlockHashes contract-state gather', function () {
 
         it('regtest (armed from genesis) pins COLLATE utf8_bin in GROUP BY and ORDER BY', async function () {
@@ -120,7 +119,9 @@ describe('state_key binary-collation gate (contract_hash preimage + VM reload) @
             assert.doesNotMatch(q, /COLLATE utf8_bin/);
         });
     });
+});
 
+describe('state_key binary-collation gate (contract_hash preimage + VM reload) @regression @tier1', function () {
     describe('activation-module predicate', function () {
 
         it('regtest is armed from genesis; unknown network/coin is off', function () {

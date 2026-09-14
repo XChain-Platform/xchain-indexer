@@ -100,9 +100,7 @@ function dbFor(coin, network, localRows) {
 afterEach(function () { sinon.restore(); });
 
 describe('price capability resolution off BTC @regression', function () {
-
     describe('the mirrored set answers, on every network', function () {
-
         ['mainnet', 'testnet', 'regtest'].forEach(function (network) {
             it('getValidatorsByCapability reads capability_snapshots on DOGE ' + network, async function () {
                 const { db, local, mirror } = dbFor('DOGE', network);
@@ -151,7 +149,11 @@ describe('price capability resolution off BTC @regression', function () {
             assert.match(mirror.firstCall.args[0], /COUNT\(DISTINCT signing_pubkey\)/);
             assert.strictEqual(local.callCount, 0);
         });
+    });
+});
 
+describe('price capability resolution off BTC @regression', function () {
+    describe('the mirrored set answers, on every network', function () {
         it('hasCapability answers from the mirror, so the truncation fallback agrees', async function () {
             // actions/price.js drops to the per-signer hasCapability path when the capable
             // read reports `truncated === true`. If that path stayed local off BTC it would
@@ -202,7 +204,11 @@ describe('price capability resolution off BTC @regression', function () {
             assert.strictEqual(mirror.callCount, 0,
                 'the redirect is a NAMED list, not "everything off BTC"');
         });
+    });
+});
 
+describe('price capability resolution off BTC @regression', function () {
+    describe('the mirrored set answers, on every network', function () {
         it('attestation redirects too, for the ATTEST response batch on the DOGE rail', async function () {
             // A v5 batch resolves its quorum against the attestation snapshot at the
             // signed BTC anchor. Without the redirect that quorum sums to zero stake on
@@ -254,7 +260,9 @@ describe('price capability resolution off BTC @regression', function () {
             });
         });
     });
+});
 
+describe('price capability resolution off BTC @regression', function () {
     describe('the truncation fallback still behaves', function () {
 
         it('the local BTC path still marks a capped read truncated', async function () {

@@ -62,7 +62,6 @@ const PK_B = 'b'.repeat(64);
 afterEach(function () { sinon.restore(); });
 
 describe('db.getRollcallGatesForFilter (the rules filter read) @regression @tier1', function () {
-
     it('selects the rolled epoch by close_block <= and epoch_height >=, in that argument order', async function () {
         const db = dbFor(twoStep([], []));
         await db.getRollcallGatesForFilter(994, 900);
@@ -111,7 +110,9 @@ describe('db.getRollcallGatesForFilter (the rules filter read) @regression @tier
         assert.deepStrictEqual(db._calls[1].args, [960]);
         assert.ok(/FROM rollcall_gates/.test(db._calls[1].query));
     });
+});
 
+describe('db.getRollcallGatesForFilter (the rules filter read) @regression @tier1', function () {
     it('a malformed or non-array gates_json reads as an empty list, which the filter drops', async function () {
         const db = dbFor(twoStep(
             [{ epoch_height: 960, close_block: 990 }],

@@ -207,7 +207,9 @@ describe('getOpenCrossChainOffers() UNION + cursor + expiration hardening (XCC-2
         assert.strictEqual(out[1].get_remaining, '3');
         assert.strictEqual(remaining.calledOnceWith(2), true, 'remaining looked up only for the order row');
     });
+});
 
+describe('getOpenCrossChainOffers() UNION + cursor + expiration hardening (XCC-2) @regression @tier1', function () {
     it('applies the expiration filter + cursor as bound params only when provided', async function () {
         const db = makeDb();
         const calls = [];

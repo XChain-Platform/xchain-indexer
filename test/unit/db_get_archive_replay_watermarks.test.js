@@ -53,7 +53,6 @@ function makeDb() {
 }
 
 describe('getArchiveReplayWatermarks()', function () {
-
     afterEach(() => sinon.restore());
 
     it('returns both watermarks from a SINGLE statement over the same row set', async function () {
@@ -110,6 +109,10 @@ describe('getArchiveReplayWatermarks()', function () {
         assert.deepStrictEqual(await db.getArchiveReplayWatermarks(),
                                { batchSeq: null, checkpointSeq: null });
     });
+});
+
+describe('getArchiveReplayWatermarks()', function () {
+    afterEach(() => sinon.restore());
 
     it('returns nulls on an empty result set rather than throwing', async function () {
         const db = makeDb();

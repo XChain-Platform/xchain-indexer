@@ -63,7 +63,6 @@ function makeDb(network) {
 afterEach(function () { sinon.restore(); });
 
 describe('Database.slashContractStake() off-grid conservation guard @regression @tier1', function () {
-
     it('gate is armed on regtest and on mainnet at genesis by the 2026-09-09 ruling, inert on testnet', function () {
         assert.strictEqual(slashGrid.isSlashGridActive(0, 'regtest', 'BTC'), true);
         assert.strictEqual(slashGrid.isSlashGridActive(9e9, 'mainnet', 'BTC'), true);
@@ -116,7 +115,9 @@ describe('Database.slashContractStake() off-grid conservation guard @regression 
         assert.deepStrictEqual(updates, [], 'and touches no row');
         assert.strictEqual(debit.callCount, 0, 'and journals no debit for rollback to restore');
     });
+});
 
+describe('Database.slashContractStake() off-grid conservation guard @regression @tier1', function () {
     it('ACTIVE: a 1.5 slash of a decimals=0 stake takes exactly 1 and credits exactly 1', async function () {
         const db = makeDb('regtest');
         const updates = [];
@@ -169,7 +170,9 @@ describe('Database.slashContractStake() off-grid conservation guard @regression 
             sinon.restore();
         }
     });
+});
 
+describe('Database.slashContractStake() off-grid conservation guard @regression @tier1', function () {
     it('ACTIVE: an off-grid STORED row still credits only what it held', async function () {
         // The delta must not be re-rounded at the tick's grid: a '0.5' row on a decimals=0
         // tick would otherwise report a full unit taken while only half a unit left the row.

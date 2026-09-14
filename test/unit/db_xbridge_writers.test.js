@@ -362,47 +362,46 @@ describe('setTokenBridged() - the sticky tokens.bridged bit @regression', functi
     });
 });
 
+// The real handler over a mock read-side db, with the two WRITERS bound to a real
+// Database over the table simulator. This is what proves the handler's payload and
+// the writer's column binding agree; each side tested alone can be self-consistent
+// and still disagree with the other.
+function setup(){
+    const config = configjs.getConfig('BTC', 'regtest');
+    config['ADDRESS']['BRIDGE_DOGE']       = BRIDGE_DOGE;
+    config['GAS_SCHEDULE']['XBRIDGE_BASE'] = 5000;
+
+    const util      = new Utility(config);
+    const indexerDb = createMockDb();
+    const xbridges  = makeTable('xbridges', ['action_index']);
+    const tokens    = makeTable('tokens', ['tick_id']);
+    const ids       = { tick: { FUFU: 101 } };
+    const realDb    = makeDb([xbridges, tokens], ids);
+    tokens.rows.push({ tick_id: 101, bridged: 0 });
+
+    indexerDb.createXbridge   = (data) => realDb.createXbridge(data);
+    indexerDb.setTokenBridged = (tick, block) => realDb.setTokenBridged(tick, block);
+    indexerDb.getTokenInfo.resolves(createTokenInfo({
+        TICK: 'FUFU', TICK_ID: 7, DECIMALS: 2, OWNER: SOURCE,
+        BRIDGE_CHAINS: 'DOGE', MIN_DEPTH: 3
+    }));
+    indexerDb.getAddressBalances.resolves({ 7: '100', 1: '100' });
+
+    const handler = new XBridge({
+        config, util, indexerDb,
+        decoderDb: createMockDb(),
+        mapper:    { createMappings: sinon.stub().resolves() },
+        protocolChanges: {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true)
+        }
+    });
+    util.resetLists();
+    return { handler, xbridges, tokens, ids };
+}
+
 describe('XBRIDGE handler into the real writers, end to end @regression', function(){
-
     afterEach(() => sinon.restore());
-
-    // The real handler over a mock read-side db, with the two WRITERS bound to a real
-    // Database over the table simulator. This is what proves the handler's payload and
-    // the writer's column binding agree; each side tested alone can be self-consistent
-    // and still disagree with the other.
-    function setup(){
-        const config = configjs.getConfig('BTC', 'regtest');
-        config['ADDRESS']['BRIDGE_DOGE']       = BRIDGE_DOGE;
-        config['GAS_SCHEDULE']['XBRIDGE_BASE'] = 5000;
-
-        const util      = new Utility(config);
-        const indexerDb = createMockDb();
-        const xbridges  = makeTable('xbridges', ['action_index']);
-        const tokens    = makeTable('tokens', ['tick_id']);
-        const ids       = { tick: { FUFU: 101 } };
-        const realDb    = makeDb([xbridges, tokens], ids);
-        tokens.rows.push({ tick_id: 101, bridged: 0 });
-
-        indexerDb.createXbridge   = (data) => realDb.createXbridge(data);
-        indexerDb.setTokenBridged = (tick, block) => realDb.setTokenBridged(tick, block);
-        indexerDb.getTokenInfo.resolves(createTokenInfo({
-            TICK: 'FUFU', TICK_ID: 7, DECIMALS: 2, OWNER: SOURCE,
-            BRIDGE_CHAINS: 'DOGE', MIN_DEPTH: 3
-        }));
-        indexerDb.getAddressBalances.resolves({ 7: '100', 1: '100' });
-
-        const handler = new XBridge({
-            config, util, indexerDb,
-            decoderDb: createMockDb(),
-            mapper:    { createMappings: sinon.stub().resolves() },
-            protocolChanges: {
-                isDefined: sinon.stub().returns(true),
-                isEnabled: sinon.stub().resolves(true)
-            }
-        });
-        util.resetLists();
-        return { handler, xbridges, tokens, ids };
-    }
 
     it('a valid v3 lock leaves an xbridges row and a set bridged bit', async function(){
         const { handler, xbridges, tokens, ids } = setup();
@@ -425,6 +424,10 @@ describe('XBRIDGE handler into the real writers, end to end @regression', functi
         assert.strictEqual(row.block_index,  100);
         assert.strictEqual(tokens.rows[0].bridged, 1, 'the first applied v3 sets the bit');
     });
+});
+
+describe('XBRIDGE handler into the real writers, end to end @regression', function(){
+    afterEach(() => sinon.restore());
 
     it('a refused v3 still leaves its row and never sets the bridged bit', async function(){
         const { handler, xbridges, tokens } = setup();

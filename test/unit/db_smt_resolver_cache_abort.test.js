@@ -95,7 +95,6 @@ function attachTx(db){
 }
 
 describe('SMT resolver memos are dropped on transaction ABORT @regression', function(){
-
     afterEach(() => sinon.restore());
 
     it('rollbackTransaction() drops BOTH memos', async function(){
@@ -150,6 +149,10 @@ describe('SMT resolver memos are dropped on transaction ABORT @regression', func
         assert.strictEqual(db._smtTickNameCache.get(FREED_ID), REAL_TICK);
         assert.ok(db._smtAddressNameCache instanceof Map);
     });
+});
+
+describe('SMT resolver memos are dropped on transaction ABORT @regression', function(){
+    afterEach(() => sinon.restore());
 
     it('clearSmtNameCaches() is safe on a db that never resolved anything', function(){
         const db = makeDb();
@@ -159,20 +162,19 @@ describe('SMT resolver memos are dropped on transaction ABORT @regression', func
     });
 });
 
+// Reproduces block 10818 through the real resolver and the real choke point.
+// The DB models one dense id: the quoted tick holds it until the dry run
+// aborts, the real tick holds it afterwards.
+function stubIdResolution(db, nameNow){
+    sinon.stub(db, 'doQueryStrict').callsFake(async (sql) => {
+        if(/FROM index_tickers/.test(sql))   return [{ tick: nameNow() }];
+        if(/FROM index_addresses/.test(sql)) return [{ address: ADDR }];
+        return [];
+    });
+}
+
 describe('the dry-run wedge: quote a tick, reject it, broadcast another @regression', function(){
-
     afterEach(() => sinon.restore());
-
-    // Reproduces block 10818 through the real resolver and the real choke point.
-    // The DB models one dense id: the quoted tick holds it until the dry run
-    // aborts, the real tick holds it afterwards.
-    function stubIdResolution(db, nameNow){
-        sinon.stub(db, 'doQueryStrict').callsFake(async (sql) => {
-            if(/FROM index_tickers/.test(sql))   return [{ tick: nameNow() }];
-            if(/FROM index_addresses/.test(sql)) return [{ address: ADDR }];
-            return [];
-        });
-    }
 
     it('the broadcast block records the REAL tick, not the quoted one', async function(){
         const db = makeDb();
@@ -202,6 +204,10 @@ describe('the dry-run wedge: quote a tick, reject it, broadcast another @regress
             'invalidation this returned ' + QUOTED_TICK + ' from the memo, the touched-set guard ' +
             'refused the block, and the retry read the same memo forever');
     });
+});
+
+describe('the dry-run wedge: quote a tick, reject it, broadcast another @regression', function(){
+    afterEach(() => sinon.restore());
 
     it('the freed ADDRESS id behaves the same way (the shape both LTC wedges took)', async function(){
         // rltc1q... receiving a tick for the first time, and BTC 13363's

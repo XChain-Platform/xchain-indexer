@@ -167,7 +167,9 @@ describe('Database transaction lifecycle @regression @tier1', function () {
         const result = await db.commitTransaction();
         assert.strictEqual(result, false);
     });
+});
 
+describe('Database transaction lifecycle @regression @tier1', function () {
     it('commitTransaction rolls back on commit failure', async function () {
         const db   = makeDb();
         const conn = {
@@ -857,6 +859,10 @@ describe('Database.getTokenSupplyBalance()/getTokenSupplyEscrow() @regression @t
     }
 });
 
+// give_tick_id 10 == tick1, so price1 = get_amount / give_amount.
+const leg = (give, get) => ({ give_tick_id: 10, give_amount: give, get_tick_id: 20, get_amount: get });
+const getMarketInfoOn = (db) => db.getMarketInfo(1, 1000000);
+
 // getMarketInfo
 describe('Database.getMarketInfo() @regression @tier1', function () {
     // getMarketInfo issues six queries in order: market lookup, last trade, 24h-ago trade,
@@ -877,9 +883,6 @@ describe('Database.getMarketInfo() @regression @tier1', function () {
         q.onCall(5).resolves(matches);
         return db;
     }
-    // give_tick_id 10 == tick1, so price1 = get_amount / give_amount.
-    const leg = (give, get) => ({ give_tick_id: 10, give_amount: give, get_tick_id: 20, get_amount: get });
-    const getMarketInfoOn = (db) => db.getMarketInfo(1, 1000000);
 
     it('ranks bid/ask numerically, not as lexicographic strings', async function () {
         // getPrice returns a decimal.js bignumber; `price > best` coerces BOTH sides to
@@ -908,7 +911,9 @@ describe('Database.getMarketInfo() @regression @tier1', function () {
         assert.strictEqual(String(data.tick1_24hr_volume), '1.15');
         assert.strictEqual(String(data.tick2_24hr_volume), '10.5');
     });
+});
 
+describe('Database.getMarketInfo() @regression @tier1', function () {
     it('sums 24h volume at a 0-decimal tick without inventing units', async function () {
         const db = makeDb();
         const q  = sinon.stub(db, 'doQuery');
@@ -1018,7 +1023,9 @@ describe('Database token escrow methods @regression @tier1', function () {
         await db.setTokenEscrow('PEPE', 55);
         assert.match(stub.getCall(1).args[0], /UPDATE tokens/i);
     });
+});
 
+describe('Database token escrow methods @regression @tier1', function () {
     it('clearTokenEscrow calls doQuery with UPDATE setting NULL', async function () {
         const db   = makeDb();
         const stub = sinon.stub(db, 'doQuery');
@@ -1232,7 +1239,6 @@ describe('Database.getActiveStakeByPubkey() @regression @tier1', function () {
     // layer in test/unit/actions/stake_key_reuse.test.js, and the two halves are written
     // to be read together.
     describe('reuseBlockingOnly mode', function () {
-
         async function capture(blockIndex) {
             const db = makeDb();
             sinon.stub(db, 'getPubkeyId').resolves(3);
@@ -1283,7 +1289,9 @@ describe('Database.getActiveStakeByPubkey() @regression @tier1', function () {
                         .test(q.secondCall.args[0]));
             assert.deepStrictEqual(q.secondCall.args[1], [3, 1, 500, 500]);
         });
+    });
 
+    describe('reuseBlockingOnly mode', function () {
         it('is inert without a blockIndex, so the legacy null call cannot reach it', async function () {
             // The mode lives inside the non-null blockIndex branch. A caller that passed
             // the flag with a null block would otherwise get a cooldown clause bound
@@ -1706,11 +1714,12 @@ describe('Database.parseExpectedColumns() @regression @tier1', function () {
     });
 });
 
+let db;
+
 // ---------------------------------------------------------------------------
 // parseExpectedIndexes
 // ---------------------------------------------------------------------------
 describe('Database.parseExpectedIndexes() @regression @tier1', function () {
-    let db;
     beforeEach(function () { db = makeDb(); });
 
     it('returns [] when no CREATE INDEX statements found', function () {
@@ -1757,6 +1766,10 @@ describe('Database.parseExpectedIndexes() @regression @tier1', function () {
         assert.deepStrictEqual(idxs[1].columns, ['a', 'b']);
         assert.deepStrictEqual(idxs[1].prefixes, [10, null]);
     });
+});
+
+describe('Database.parseExpectedIndexes() @regression @tier1', function () {
+    beforeEach(function () { db = makeDb(); });
 
     // An aged prefixed UNIQUE index matching the declared full-column
     // one by column set must be WARNED about (auditable drift), never DDL'd
@@ -1796,6 +1809,10 @@ describe('Database.parseExpectedIndexes() @regression @tier1', function () {
             warn.restore();
         }
     });
+});
+
+describe('Database.parseExpectedIndexes() @regression @tier1', function () {
+    beforeEach(function () { db = makeDb(); });
 
     // A declared UNIQUE index whose name is already held by a live NON-unique
     // index of the same column set must be WARNED about (uniqueness drift is otherwise
@@ -2052,7 +2069,9 @@ describe('Database.apiView() @regression @tier1', function () {
         await db.doQuery('SELECT 1', []);
         assert.ok(txConn.query.calledOnce, 'block-loop queries must keep joining the transaction');
     });
+});
 
+describe('Database.apiView() @regression @tier1', function () {
     // Federation read isolation: READ methods (not just the pushvalidatorrewards
     // write) must resolve on a pooled connection. A read accessor invoked through the
     // view routes its internal doQuery calls off the open block transaction, so a hub
@@ -4423,7 +4442,9 @@ describe('Database.createValidatorReward() @regression @tier1', function () {
         assert.ok(sql.includes('ON DUPLICATE KEY UPDATE'));
         assert.ok(!sql.includes('INSERT IGNORE'));
     });
+});
 
+describe('Database.createValidatorReward() @regression @tier1', function () {
     // a reward whose EARN block is not its MATERIALIZATION block (the
     // BTC-side anchor derivation) must persist both, or the reorg delete has no key
     // that names the block which actually minted the row.
@@ -4587,7 +4608,9 @@ describe('Database.getExpiredItems() @regression @tier1', function () {
         const result = await db.getExpiredItems(200);
         assert.deepStrictEqual(result, [{ type: 'swap', action_index: 7, expiration: 0 }]);
     });
+});
 
+describe('Database.getExpiredItems() @regression @tier1', function () {
     // The old JS compare was false for every row when block_time was not a
     // number, so nothing expired. Binding that into SQL would change the answer.
     it('expires nothing and issues no query for a non-numeric block_time', async function () {

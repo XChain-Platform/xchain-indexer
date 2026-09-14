@@ -91,7 +91,6 @@ const MISSING = [
 afterEach(function () { sinon.restore(); });
 
 describe('weightless stake-weight rows fail closed @regression @tier1', function () {
-
     describe('Database.requireStakeWeight', function () {
 
         for (const bad of MISSING) {
@@ -149,7 +148,9 @@ describe('weightless stake-weight rows fail closed @regression @tier1', function
             assert.deepStrictEqual(out.map(r => r.weight), ['50000', '0']);
         });
     });
+});
 
+describe('weightless stake-weight rows fail closed @regression @tier1', function () {
     describe('getActiveStakeWeights (whole-federation weights)', function () {
 
         it('throws when a row weight is missing', async function () {

@@ -82,7 +82,6 @@ function stubRows(db, rows) {
 const rid = (c) => c.repeat(64);
 
 describe('db.getAttestationDataForVM @regression @tier2', function () {
-
     afterEach(() => sinon.restore());
 
     it('shapes an ok response into { status, payload, providerId, blockIndex, validatorCount }', async function () {
@@ -137,6 +136,10 @@ describe('db.getAttestationDataForVM @regression @tier2', function () {
         assert.strictEqual(snap.responses[rid('b')].payload, 'early');
         assert.strictEqual(snap.responses[rid('b')].blockIndex, 500);
     });
+});
+
+describe('db.getAttestationDataForVM @regression @tier2', function () {
+    afterEach(() => sinon.restore());
 
     it('tolerates a null payload and a malformed / missing signatures column', async function () {
         const db = makeDb();

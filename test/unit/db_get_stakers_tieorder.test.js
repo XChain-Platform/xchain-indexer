@@ -75,7 +75,6 @@ afterEach(function () { sinon.restore(); });
 
 // ---------------------------------------------------------------------------
 describe('getContractStakeDataForVM() staker tie-order determinism @regression @tier1', function () {
-
     // (1) Property: equal-amount stakers must order the SAME way regardless of the physical
     //     row order the query returned, via the lexicographic pubkey tiebreak.
     it('orders equal-amount stakers deterministically regardless of query return order', async function () {
@@ -122,7 +121,9 @@ describe('getContractStakeDataForVM() staker tie-order determinism @regression @
         assert.strictEqual(survivorsA[999], 'pk0999');
         assert.ok(!survivorsA.includes('pk1000'), 'the lexicographically-largest pubkey is dropped');
     });
+});
 
+describe('getContractStakeDataForVM() staker tie-order determinism @regression @tier1', function () {
     // (4) Negative control: the PRE-FIX amount-only comparator leaves the injected scramble
     //     intact (Node's sort is stable), proving the property tests above are not vacuous.
     it('negative control: an amount-only comparator forks on equal-amount stakers', function () {

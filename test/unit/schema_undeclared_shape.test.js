@@ -130,7 +130,6 @@ function declaredColumns(table) {
 }
 
 describe('startup drift detection sees shape the SQL source does NOT declare @regression', function () {
-
     describe('columns', function () {
 
         it('reports a live column no source declares (the signed mirror-twin shape)', async function () {
@@ -160,7 +159,9 @@ describe('startup drift detection sees shape the SQL source does NOT declare @re
                 'MariaDB column names are case-insensitive; an upper-cased live name is not drift');
         });
     });
+});
 
+describe('startup drift detection sees shape the SQL source does NOT declare @regression', function () {
     describe('indexes', function () {
 
         it('reports the pre-fence state_checkpoints key (declared nowhere, added by nothing)', async function () {
@@ -214,7 +215,9 @@ describe('startup drift detection sees shape the SQL source does NOT declare @re
                 'an inline-keys-only table must still be inspected: ' + JSON.stringify(warns));
         });
     });
+});
 
+describe('startup drift detection sees shape the SQL source does NOT declare @regression', function () {
     describe('the boot summary', function () {
 
         it('names every drifted table once, so one line per DB is the fleet comparison', function () {

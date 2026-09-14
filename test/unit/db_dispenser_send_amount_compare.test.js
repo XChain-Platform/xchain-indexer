@@ -78,9 +78,7 @@ function sendsQuery(db) {
 afterEach(function () { sinon.restore(); });
 
 describe('token-SEND dispense affordability compare gate @regression @tier1', function () {
-
     describe('gate: which predicate is emitted', function () {
-
         it('BTC testnet is unpinned, so the legacy predicate is emitted byte-identically', async function () {
             const db = dbFor('testnet');
             await db.findDispenserSends(1, 5000000);
@@ -134,7 +132,11 @@ describe('token-SEND dispense affordability compare gate @regression @tier1', fu
             assert.ok(sendsQuery(db).includes(LEGACY_PREDICATE_BYTES),
                 'a caller with no block context (out-of-band write, API reader) must stay on the legacy rule');
         });
+    });
+});
 
+describe('token-SEND dispense affordability compare gate @regression @tier1', function () {
+    describe('gate: which predicate is emitted', function () {
         it('a non-numeric block index keeps the legacy predicate even on an armed chain', async function () {
             const db = dbFor('regtest');
             await db.findDispenserSends(1, 'not-a-height');
@@ -158,9 +160,10 @@ describe('token-SEND dispense affordability compare gate @regression @tier1', fu
                 'the gate changed something other than the affordability predicate');
         });
     });
+});
 
+describe('token-SEND dispense affordability compare gate @regression @tier1', function () {
     describe('activation-module predicate', function () {
-
         it('regtest is active from genesis', function () {
             assert.strictEqual(dsc.isDispenserSendAmountCompareActive(0, 'regtest', 'BTC'), true);
             assert.strictEqual(dsc.isDispenserSendAmountCompareActive(1, 'regtest', null), true);
@@ -209,7 +212,11 @@ describe('token-SEND dispense affordability compare gate @regression @tier1', fu
             assert.strictEqual(dsc.isDispenserSendAmountCompareActive(0, 'mainnet', null), false);
             assert.strictEqual(dsc.isDispenserSendAmountCompareActive(0, 'mainnet', undefined), false);
         });
+    });
+});
 
+describe('token-SEND dispense affordability compare gate @regression @tier1', function () {
+    describe('activation-module predicate', function () {
         it('mainnet is pinned at genesis and testnet is still unpinned, in the shipped map', function () {
             for (const [key, height] of Object.entries(dsc.DISPENSER_SEND_AMOUNT_COMPARE_ACTIVATION)) {
                 if (key === 'regtest') { assert.strictEqual(height, 0); continue; }

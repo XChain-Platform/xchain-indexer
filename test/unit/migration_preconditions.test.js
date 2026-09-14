@@ -85,7 +85,6 @@ describe('Database.migrationDeclaresDeployPrecondition @regression @tier1', func
 });
 
 describe('Database.STARTUP_ASSERTED_MIGRATIONS @regression @tier1', function () {
-
     it('registers at least the pubkeys widen that caused the 2026-08-09 fleet halt', function () {
         const files = Database.STARTUP_ASSERTED_MIGRATIONS.map(m => m.file);
         assert.ok(files.includes('2026-07-24-pubkeys-widen-uncompressed.sql'),
@@ -138,7 +137,9 @@ describe('Database.STARTUP_ASSERTED_MIGRATIONS @regression @tier1', function () 
         assert.deepStrictEqual(offenders, [], 'auto migrations self-apply and can never be the missing ' +
             'precondition; tagging one makes the deploy guard refuse a deploy it should let through: ' + offenders.join(', '));
     });
+});
 
+describe('Database.STARTUP_ASSERTED_MIGRATIONS @regression @tier1', function () {
     describe('startupAssertedMigrationFile()', function () {
         it('resolves a registered assertion to its migration filename', function () {
             assert.strictEqual(Database.startupAssertedMigrationFile('assertPubkeyColumnIsUncompressedWide'),
@@ -188,30 +189,29 @@ describe('_assertPubkeyColumnIsUncompressedWide error text @regression @tier1', 
     });
 });
 
+// Minimal fake connection: the assertion reads one row of two counts off
+// information_schema.statistics. `rows` is what that query answers.
+function dbWithIndexShape(rows) {
+    let seenSql = null, seenParams = null;
+    return {
+        dbName: 'test_indexer',
+        transactionConnection: null,
+        seen: () => ({ sql: seenSql, params: seenParams }),
+        getConnection: async () => ({
+            query: async (sql, params) => { seenSql = sql; seenParams = params; return rows; },
+            release: async () => {}
+        })
+    };
+}
+const run = (db) => Database.prototype.assertRewardUniqueKeyCarriesQualifier.call(db);
+// The live shape the assertion reads: table present, qualifier column present, a
+// reward_unique index of `key_columns` columns, `qualifier_columns` of which is the
+// qualifier as part of a UNIQUE index.
+const shape = (over) => [Object.assign(
+    { reward_table: 1, qualifier_column: 1, key_columns: 5, qualifier_columns: 1 }, over)];
+
 describe('_assertRewardUniqueKeyCarriesQualifier @regression @tier1', function () {
-
     const QUALIFIER_FILE = '2026-08-24-validator-rewards-round-qualifier.sql';
-
-    // Minimal fake connection: the assertion reads one row of two counts off
-    // information_schema.statistics. `rows` is what that query answers.
-    function dbWithIndexShape(rows) {
-        let seenSql = null, seenParams = null;
-        return {
-            dbName: 'test_indexer',
-            transactionConnection: null,
-            seen: () => ({ sql: seenSql, params: seenParams }),
-            getConnection: async () => ({
-                query: async (sql, params) => { seenSql = sql; seenParams = params; return rows; },
-                release: async () => {}
-            })
-        };
-    }
-    const run = (db) => Database.prototype.assertRewardUniqueKeyCarriesQualifier.call(db);
-    // The live shape the assertion reads: table present, qualifier column present, a
-    // reward_unique index of `key_columns` columns, `qualifier_columns` of which is the
-    // qualifier as part of a UNIQUE index.
-    const shape = (over) => [Object.assign(
-        { reward_table: 1, qualifier_column: 1, key_columns: 5, qualifier_columns: 1 }, over)];
 
     it('HALTS on the four-column key: the index exists and carries no qualifier', async function () {
         // The state the migration exists to converge, and the one the drift reconciler
@@ -268,7 +268,9 @@ describe('_assertRewardUniqueKeyCarriesQualifier @regression @tier1', function (
         await run(dbWithIndexShape(shape({ key_columns: 'not-a-number', qualifier_columns: 0 })));
         await run(dbWithIndexShape(shape({ qualifier_columns: 'not-a-number' })));
     });
+});
 
+describe('_assertRewardUniqueKeyCarriesQualifier @regression @tier1', function () {
     it('reads the live INDEX shape, unique-only, bound once on the database name', async function () {
         // A column-level test alone would pass on exactly the database this guard exists
         // for, so the index shape is what gates it; the column is the loud half.

@@ -226,7 +226,6 @@ const WIDEN_INDEXED = 'ALTER TABLE files\n  MODIFY name VARCHAR(250) CHARACTER S
                       'COLLATE utf8mb4_general_ci;\n';
 
 describe('mode=auto migrations never widen an indexed column past the legacy key limit @regression', function () {
-
     // The scanner's inputs, resolved once from the real tree so the control cases below
     // exercise the same collectors the tree scan uses.
     const indexed = declaredIndexColumns();
@@ -274,7 +273,9 @@ describe('mode=auto migrations never widen an indexed column past the legacy key
         assert.deepStrictEqual(scan('2099-01-01-synthetic-convert.sql', raw),
             [{ file: '2099-01-01-synthetic-convert.sql', table: 'files', column: 'name', bytes: 1000 }]);
     });
+});
 
+describe('mode=auto migrations never widen an indexed column past the legacy key limit @regression', function () {
     // THE GUARD.
 
     it('no unexempted mode=auto migration widens an indexed column past 767 bytes', function () {

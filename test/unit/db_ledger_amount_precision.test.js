@@ -192,7 +192,6 @@ describe('createLedgerChangeRecord amount quantization @money @regression @tier1
 });
 
 describe('Ledger projections: sum exactly, round once @money @regression @tier1', function () {
-
     it('getAddressCreditDebit accumulates at the exact scale, not the tick scale', async function () {
         const db = makeDb('regtest', 'BTC');
         sinon.stub(db, 'createAddress').resolves(22);
@@ -235,7 +234,9 @@ describe('Ledger projections: sum exactly, round once @money @regression @tier1'
             assert.ok(/DECIMAL\(60,18\)/.test(sql), 'every component sum must be taken at the exact scale');
         assert.ok(dq.callCount === 3);
     });
+});
 
+describe('Ledger projections: sum exactly, round once @money @regression @tier1', function () {
     it('getTokenSupply: per-component rounding would fork the projection, netting first does not', async function () {
         const db = makeDb('regtest', 'BTC');
         sinon.stub(db, 'createTicker').resolves(11);

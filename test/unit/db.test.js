@@ -45,14 +45,14 @@ function makeDbLike() {
     return { obj, config, util };
 }
 
+let normalize;
+let config;
+let util;
+
 // ---------------------------------------------------------------------------
 // describe: normalizeDataValues
 // ---------------------------------------------------------------------------
 describe('Database.normalizeDataValues() @regression @tier1', function () {
-    let normalize;
-    let config;
-    let util;
-
     beforeEach(function () {
         const built = makeDbLike();
         config      = built.config;
@@ -107,6 +107,15 @@ describe('Database.normalizeDataValues() @regression @tier1', function () {
         const out  = normalize(data);
         assert.strictEqual(out.BLOCK_LIST, null);
     });
+});
+
+describe('Database.normalizeDataValues() @regression @tier1', function () {
+    beforeEach(function () {
+        const built = makeDbLike();
+        config      = built.config;
+        util        = built.util;
+        normalize   = built.obj.normalizeDataValues.bind(built.obj);
+    });
 
     it('leaves ALLOW_LIST null when it is already null', function () {
         const data = { ALLOW_LIST: null, BLOCK_LIST: null };
@@ -150,6 +159,15 @@ describe('Database.normalizeDataValues() @regression @tier1', function () {
         const data = { DECIMALS: 'abc' };
         const out  = normalize(data);
         assert.strictEqual(out.DECIMALS, null);
+    });
+});
+
+describe('Database.normalizeDataValues() @regression @tier1', function () {
+    beforeEach(function () {
+        const built = makeDbLike();
+        config      = built.config;
+        util        = built.util;
+        normalize   = built.obj.normalizeDataValues.bind(built.obj);
     });
 
     it('preserves a FILE action MIME string in TYPE', function () {
@@ -198,6 +216,15 @@ describe('Database.normalizeDataValues() @regression @tier1', function () {
         const data = { LOCK_MAX_SUPPLY: null };
         const out  = normalize(data);
         assert.strictEqual(out.LOCK_MAX_SUPPLY, null);
+    });
+});
+
+describe('Database.normalizeDataValues() @regression @tier1', function () {
+    beforeEach(function () {
+        const built = makeDbLike();
+        config      = built.config;
+        util        = built.util;
+        normalize   = built.obj.normalizeDataValues.bind(built.obj);
     });
 
     it('converts LOCK_MINT string "1" to integer 1', function () {
@@ -250,6 +277,15 @@ describe('Database.normalizeDataValues() @regression @tier1', function () {
         const out  = normalize(data);
         assert.strictEqual(out.DECIMALS, null);
     });
+});
+
+describe('Database.normalizeDataValues() @regression @tier1', function () {
+    beforeEach(function () {
+        const built = makeDbLike();
+        config      = built.config;
+        util        = built.util;
+        normalize   = built.obj.normalizeDataValues.bind(built.obj);
+    });
 
     // ── BROADCAST truncation ──────────────────────────────────────────────
 
@@ -300,6 +336,15 @@ describe('Database.normalizeDataValues() @regression @tier1', function () {
         const out  = normalize(data);
         assert.strictEqual(out.FEE, '1.5');
     });
+});
+
+describe('Database.normalizeDataValues() @regression @tier1', function () {
+    beforeEach(function () {
+        const built = makeDbLike();
+        config      = built.config;
+        util        = built.util;
+        normalize   = built.obj.normalizeDataValues.bind(built.obj);
+    });
 
     // ── FILE truncation ───────────────────────────────────────────────────
 
@@ -344,6 +389,15 @@ describe('Database.normalizeDataValues() @regression @tier1', function () {
         const out  = normalize(data);
         assert.strictEqual(out.DESCRIPTION, null);
     });
+});
+
+describe('Database.normalizeDataValues() @regression @tier1', function () {
+    beforeEach(function () {
+        const built = makeDbLike();
+        config      = built.config;
+        util        = built.util;
+        normalize   = built.obj.normalizeDataValues.bind(built.obj);
+    });
 
     // ── MESSAGE truncation ────────────────────────────────────────────────
 
@@ -387,6 +441,15 @@ describe('Database.normalizeDataValues() @regression @tier1', function () {
         const out  = normalize(data);
         assert.strictEqual(out.RESUME_BLOCK, '100');
     });
+});
+
+describe('Database.normalizeDataValues() @regression @tier1', function () {
+    beforeEach(function () {
+        const built = makeDbLike();
+        config      = built.config;
+        util        = built.util;
+        normalize   = built.obj.normalizeDataValues.bind(built.obj);
+    });
 
     // ── MEMO truncation (applies to all actions) ──────────────────────────
 
@@ -429,6 +492,15 @@ describe('Database.normalizeDataValues() @regression @tier1', function () {
         const data = { ACTION: null, MEMO: long };
         const out  = normalize(data);
         assert.strictEqual(out.MEMO.length, 250);
+    });
+});
+
+describe('Database.normalizeDataValues() @regression @tier1', function () {
+    beforeEach(function () {
+        const built = makeDbLike();
+        config      = built.config;
+        util        = built.util;
+        normalize   = built.obj.normalizeDataValues.bind(built.obj);
     });
 
     // ── Return value ──────────────────────────────────────────────────────
@@ -1170,6 +1242,8 @@ describe('Database.getDecoderBlockData() amount unit conflation @regression @tie
     });
 });
 
+let db;
+
 // ---------------------------------------------------------------------------
 // describe: createActionMappings (batched multi-row insert)
 //
@@ -1180,8 +1254,6 @@ describe('Database.getDecoderBlockData() amount unit conflation @regression @tie
 // de-duplication and dangling-reference skip semantics.
 // ---------------------------------------------------------------------------
 describe('Database.createActionMappings() batched insert @regression @tier1', function () {
-    let db;
-
     beforeEach(function () {
         db = {
             util: { isNull: v => v === null || v === undefined },
@@ -1234,6 +1306,18 @@ describe('Database.createActionMappings() batched insert @regression @tier1', fu
         await db.createActionMappings.call(db, 5, 'address', ['addrA', '^999']);
         const existsArgs = db.doQuery.firstCall.args[1];
         assert.deepStrictEqual(existsArgs, [5, 2, 10], 'only the resolved id should reach the exists-check');
+    });
+});
+
+describe('Database.createActionMappings() batched insert @regression @tier1', function () {
+    beforeEach(function () {
+        db = {
+            util: { isNull: v => v === null || v === undefined },
+            createTicker: sinon.stub(),
+            createAddress: sinon.stub(),
+            doQuery: sinon.stub(),
+            createActionMappings: Database.prototype.createActionMappings,
+        };
     });
 
     it('does nothing at all when every value resolves to a null id', async function () {

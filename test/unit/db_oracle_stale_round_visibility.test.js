@@ -92,7 +92,6 @@ const FRESH_TIP = BLOCK_TS - 60;
 afterEach(function () { sinon.restore(); });
 
 describe('VM oracle stale-round visibility gate (getOracleDataForVM) @regression @tier1', function () {
-
     describe('gate: what a STALE tip round looks like to the VM', function () {
 
         it('mainnet BELOW its per-coin height drops the stale tip (legacy, byte-identical replay)', async function () {
@@ -140,7 +139,9 @@ describe('VM oracle stale-round visibility gate (getOracleDataForVM) @regression
                 'gated: the void guard fails, so settle() is the only remaining transition');
         });
     });
+});
 
+describe('VM oracle stale-round visibility gate (getOracleDataForVM) @regression @tier1', function () {
     describe('fresh rows are untouched on both sides of the boundary', function () {
 
         it('a FRESH tip is identical inert vs active (price present, no marker)', async function () {
@@ -181,7 +182,9 @@ describe('VM oracle stale-round visibility gate (getOracleDataForVM) @regression
             assert.deepStrictEqual(active.rounds, inert.rounds);
         });
     });
+});
 
+describe('VM oracle stale-round visibility gate (getOracleDataForVM) @regression @tier1', function () {
     describe('activation-module predicate', function () {
 
         it('regtest is active from genesis at any block height', function () {

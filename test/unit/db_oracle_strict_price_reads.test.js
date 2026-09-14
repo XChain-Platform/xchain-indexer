@@ -103,7 +103,6 @@ async function rejects(fn) {
 afterEach(function () { sinon.restore(); });
 
 describe('price-barrier-guarded reads fail loudly on a DB fault @regression @tier1', function () {
-
     it('getOracleDataForVM rejects rather than handing the VM an empty oracle', async function () {
         const db  = faultingDb();
         const err = await rejects(() => db.getOracleDataForVM(500, 1700000000, 1800));
@@ -156,7 +155,9 @@ describe('price-barrier-guarded reads fail loudly on a DB fault @regression @tie
         assert.ok(err, 'a failed read must not become an empty settlement window');
         assert.strictEqual(err.errno, 1205);
     });
+});
 
+describe('price-barrier-guarded reads fail loudly on a DB fault @regression @tier1', function () {
     it('getPricesInTimeRange rejects rather than reporting no validator price', async function () {
         const db  = faultingDb();
         const err = await rejects(() => db.getPricesInTimeRange('BTC/USD', 1699000000, 1700000000));

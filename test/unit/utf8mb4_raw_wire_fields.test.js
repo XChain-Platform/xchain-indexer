@@ -255,7 +255,6 @@ describe('the grammar-constrained raw wire columns hold a 4-byte character @regr
     // INGEST path: the real writers, against the strict-server stub. Each case is a column
     // the probe showed carries a raw 4-byte character all the way to the INSERT.
     describe('the ingest writers survive a 4-byte character', function () {
-
         it('createContract: contract source on an INVALID deploy (contracts.code)', async function () {
             const { db, doQuery } = makeDb();
             await db.createContract({ ACTION: 'DEPLOY', ACTION_INDEX: 1, SOURCE: 's', BLOCK_INDEX: 5,
@@ -310,7 +309,9 @@ describe('the grammar-constrained raw wire columns hold a 4-byte character @regr
             const hit = astralColumns(doQuery, 'votes');
             assert.deepStrictEqual([...hit].sort(), ['memo', 'share']);
         });
+    });
 
+    describe('the ingest writers survive a 4-byte character', function () {
         it('createGatedFile: the gate ticker and its threshold (gated_files.*)', async function () {
             const { db, doQuery } = makeDb();
             await db.createGatedFile({ ACTION: 'FILE', ACTION_INDEX: 7, STATUS: 'invalid', SOURCE: 's',

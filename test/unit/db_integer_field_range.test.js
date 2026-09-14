@@ -54,7 +54,6 @@ function makeDb() {
 afterEach(function () { sinon.restore(); });
 
 describe('integer-backed wire fields are range-guarded before the bind @regression @tier1', function () {
-
     it('nulls an EXPIRATION one past the BIGINT UNSIGNED maximum', function () {
         const db = makeDb();
         const out = db.normalizeDataValues({ ACTION: 'ORDER', EXPIRATION: OVER_U64 });
@@ -100,7 +99,9 @@ describe('integer-backed wire fields are range-guarded before the bind @regressi
         assert.strictEqual(String(out['MAX_SUPPLY']),  '184467440737095516150.00000000');
         assert.strictEqual(String(out['GIVE_AMOUNT']), '999999999999999999999.00000000');
     });
+});
 
+describe('integer-backed wire fields are range-guarded before the bind @regression @tier1', function () {
     it('every INTEGER_FIELDS maximum is an unsigned column bound, never a money field', function () {
         const db = makeDb();
         const map = db.config['INTEGER_FIELDS'];

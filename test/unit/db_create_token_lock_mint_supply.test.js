@@ -112,7 +112,6 @@ afterEach(function () {
 });
 
 describe('Database.createToken() token locks @regression @tier1', function () {
-
     it('INSERT writes all seven locks, each bound to its own column', async function () {
         const { sql, args } = await runCreateToken(ALL_SET, []);
         const cols = insertColumns(sql);
@@ -167,7 +166,9 @@ describe('Database.createToken() token locks @regression @tier1', function () {
         assert.strictEqual(args.length, cols.length,
             'arg count (' + args.length + ') must match column count (' + cols.length + ')');
     });
+});
 
+describe('Database.createToken() token locks @regression @tier1', function () {
     it('UPDATE SET placeholder count matches its args (tick_id is the trailing WHERE arg)', async function () {
         const { sql, args } = await runCreateToken(ALL_SET, [{ id: 5 }]);
         const cols  = updateSetColumns(sql);

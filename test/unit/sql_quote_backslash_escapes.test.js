@@ -47,7 +47,6 @@ const isIdRepair    = Database.prototype.isIdRepairUpdate.bind(Database.prototyp
 const BS = String.fromCharCode(92);
 
 describe('SQL quote walkers honour backslash escapes @regression @tier1', function () {
-
     it('splits INSERT-with-\\\' then DROP into two statements, not one', function () {
         const raw = "INSERT INTO index_memos (memo) VALUES ('it" + BS + "'s fine');\n" +
                     'DROP TABLE balances;\n';
@@ -103,7 +102,9 @@ describe('SQL quote walkers honour backslash escapes @regression @tier1', functi
         const raw = "INSERT INTO t (a) VALUES ('x" + BS + "' # y');\nSELECT 1;\n";
         assert.ok(stripComments(raw).includes('# y'));
     });
+});
 
+describe('SQL quote walkers honour backslash escapes @regression @tier1', function () {
     it('does not let a backslash-escaped quote hide a # from hasUnquotedHash', function () {
         // The `#` here is OUTSIDE the literal once the escape is modelled, so the
         // classifier must refuse the statement rather than read past a comment.

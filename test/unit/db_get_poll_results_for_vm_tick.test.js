@@ -74,7 +74,6 @@ function stubPollQueries(db) {
 afterEach(function () { sinon.restore(); });
 
 describe('getPollResultsForVM() VOTE_POLL_TICK_VISIBLE tick gating @regression @tier1', function () {
-
     it('includeTick=false: entry shape is byte-identical to the pre-flag snapshot (no `tick` key)', async function () {
         const db = makeDb();
         stubPollQueries(db);
@@ -127,7 +126,9 @@ describe('getPollResultsForVM() VOTE_POLL_TICK_VISIBLE tick gating @regression @
         assert.ok('tick' in entry, 'the tick key is present when the gate is on');
         assert.strictEqual(entry.tick, null, 'an unresolved electorate tick surfaces as null');
     });
+});
 
+describe('getPollResultsForVM() VOTE_POLL_TICK_VISIBLE tick gating @regression @tier1', function () {
     // The options for the whole finalized set are read in ONE grouped query, so the
     // grouping key is now consensus-load-bearing: a poll that collects another poll's
     // option rows, or loses its own, changes what getPollResult returns.

@@ -68,7 +68,6 @@ function ageCall(db) {
 afterEach(function () { sinon.restore(); });
 
 describe('VM oracle snapshot-age causality gate (getOracleDataForVM age query) @regression @tier1', function () {
-
     describe('gate: which age query is emitted', function () {
 
         it('regtest (genesis-armed) causally caps the age query at the processing block', async function () {
@@ -106,7 +105,9 @@ describe('VM oracle snapshot-age causality gate (getOracleDataForVM age query) @
             assert.deepStrictEqual(c.args, [500]);
         });
     });
+});
 
+describe('VM oracle snapshot-age causality gate (getOracleDataForVM age query) @regression @tier1', function () {
     describe('activation-module predicate', function () {
 
         it('regtest is active from genesis at any block height', function () {

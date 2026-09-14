@@ -127,7 +127,6 @@ function makeDb() {
 }
 
 describe('user-text columns hold a 4-byte character @regression', function () {
-
     afterEach(() => sinon.restore());
 
     it('sanity: the fixture character really is 4 bytes (utf8mb3 cannot hold it)', function () {
@@ -175,10 +174,13 @@ describe('user-text columns hold a 4-byte character @regression', function () {
             'long-lived DB keeps utf8mb3 forever (alterTableForDrift adds missing columns, it never ' +
             'retypes an existing one) and stays halted on the same broadcast:\n  ' + missing.join('\n  '));
     });
+});
+
+describe('user-text columns hold a 4-byte character @regression', function () {
+    afterEach(() => sinon.restore());
 
     // INGEST path: the real writers, against the strict-server stub.
     describe('the ingest writers survive a 4-byte character', function () {
-
         it('createTxIndex: the whole decoded action string (transactions.data)', async function () {
             const db = makeDb();
             const doQuery = makeStrictServer();
@@ -224,7 +226,13 @@ describe('user-text columns hold a 4-byte character @regression', function () {
             assert.ok(insert, 'expected an INSERT INTO broadcasts');
             assert.ok(insert.args[1].some(v => hasAstralChar(v)));
         });
+    });
+});
 
+describe('user-text columns hold a 4-byte character @regression', function () {
+    afterEach(() => sinon.restore());
+
+    describe('the ingest writers survive a 4-byte character', function () {
         it('createFile: FILE name and title (files.name, files.title)', async function () {
             const db = makeDb();
             const doQuery = makeStrictServer();

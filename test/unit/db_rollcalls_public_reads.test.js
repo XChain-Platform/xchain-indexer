@@ -76,7 +76,6 @@ function dbFor(rows) {
 afterEach(function () { sinon.restore(); });
 
 describe('getRollcalls (JSON-RPC getrollcalls, BTC public read) @regression @tier1', function () {
-
     it('defaults to limit 20 when no limit is given', async function () {
         const db = dbFor([]);
         await db.getRollcalls(undefined);
@@ -131,7 +130,9 @@ describe('getRollcalls (JSON-RPC getrollcalls, BTC public read) @regression @tie
                 'absent_count must be COUNT(*) correlated on epoch_height, not a global or mis-keyed count');
         });
     });
+});
 
+describe('getRollcalls (JSON-RPC getrollcalls, BTC public read) @regression @tier1', function () {
     it('passes rows through unmodified (0 for unrolled, correct count for rolled)', async function () {
         const rows = [
             { epoch_height: 300, snapshot_block: 290, close_block: 306, rolled: 1, absent_count: 3 },
@@ -170,7 +171,6 @@ describe('getRollcalls (JSON-RPC getrollcalls, BTC public read) @regression @tie
 });
 
 describe('getRollcallAbsencesBySource (JSON-RPC getrollcallabsences, BTC public read) @regression @tier1', function () {
-
     it('returns {absences: []} for an unknown/unresolvable source, without erroring', async function () {
         const db = dbFor([{ epoch_height: 1, source: 'should-not-be-reached', close_block: 1, evicted: 0 }]);
         sinon.stub(db, 'getAddressId').resolves(null);
@@ -225,7 +225,9 @@ describe('getRollcallAbsencesBySource (JSON-RPC getrollcallabsences, BTC public 
         await db4.getRollcallAbsencesBySource('addr', 'garbage');
         assert.strictEqual(db4._calls[0].args[1], 20, 'non-numeric limit takes the default rather than erroring');
     });
+});
 
+describe('getRollcallAbsencesBySource (JSON-RPC getrollcallabsences, BTC public read) @regression @tier1', function () {
     it('rolls evicted through as 0 or 1 as stored, rows unmodified', async function () {
         const rows = [
             { epoch_height: 900, source: 'bc1qEVICTED', close_block: 906, evicted: 1 },
@@ -259,6 +261,23 @@ describe('getRollcallAbsencesBySource (JSON-RPC getrollcallabsences, BTC public 
     });
 });
 
+const API_SRC = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
+
+function extractHandlerBodies(src) {
+    const decl = /\n {8}async\s+(\w+)\s*\(/g;
+    const starts = [];
+    let m;
+    while ((m = decl.exec(src)) !== null) starts.push({ name: m[1], index: m.index });
+    const bodies = {};
+    for (let i = 0; i < starts.length; i++) {
+        const end = (i + 1 < starts.length) ? starts[i + 1].index : src.length;
+        bodies[starts[i].name] = src.slice(starts[i].index, end);
+    }
+    return bodies;
+}
+
+const bodies = extractHandlerBodies(API_SRC);
+
 // ---------------------------------------------------------------------------
 // src/api.js: static source-scan, the same technique
 // api_federation_read_isolation.test.js uses (startApi() opens real DB
@@ -268,21 +287,6 @@ describe('getRollcallAbsencesBySource (JSON-RPC getrollcallabsences, BTC public 
 // exactly the response shape the spec calls for.
 // ---------------------------------------------------------------------------
 describe('api.js getrollcalls / getrollcallabsences wiring (source-scan) @regression @tier1', function () {
-    const API_SRC = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
-
-    function extractHandlerBodies(src) {
-        const decl = /\n {8}async\s+(\w+)\s*\(/g;
-        const starts = [];
-        let m;
-        while ((m = decl.exec(src)) !== null) starts.push({ name: m[1], index: m.index });
-        const bodies = {};
-        for (let i = 0; i < starts.length; i++) {
-            const end = (i + 1 < starts.length) ? starts[i + 1].index : src.length;
-            bodies[starts[i].name] = src.slice(starts[i].index, end);
-        }
-        return bodies;
-    }
-
     function parseSet(src, name) {
         const m = src.match(new RegExp('const\\s+' + name + '\\s*=\\s*new Set\\(\\[([\\s\\S]*?)\\]\\)'));
         assert.ok(m, name + ' not found in src/api.js');
@@ -292,8 +296,6 @@ describe('api.js getrollcalls / getrollcallabsences wiring (source-scan) @regres
         while ((hit = re.exec(m[1])) !== null) names.push(hit[1]);
         return names;
     }
-
-    const bodies = extractHandlerBodies(API_SRC);
 
     it('getrollcalls and getrollcallabsences have handlers in the controller', function () {
         assert.ok(bodies['getrollcalls'], 'no getrollcalls handler found');
@@ -325,7 +327,9 @@ describe('api.js getrollcalls / getrollcallabsences wiring (source-scan) @regres
                 name + ' must clamp limit to at most 100');
         }
     });
+});
 
+describe('api.js getrollcalls / getrollcallabsences wiring (source-scan) @regression @tier1', function () {
     it('getrollcalls returns exactly {rollcalls: [...]}', function () {
         assert.match(bodies['getrollcalls'], /return \{ rollcalls: rows \};/);
     });

@@ -120,7 +120,6 @@ afterEach(function(){
 });
 
 describe('Database.createContract() contract meta manifest @regression @tier1', function(){
-
     it('INSERT writes all four meta columns, each bound to its own column', async function(){
         const { sql, args } = await runCreateContract(META_PRESENT, []);
         const cols = insertColumns(sql);
@@ -171,7 +170,9 @@ describe('Database.createContract() contract meta manifest @regression @tier1', 
         assert.strictEqual(boundValue(cols, args, 'meta_version'), null);
         assert.strictEqual(boundValue(cols, args, 'meta_json'), META_PRESENT.META_JSON);
     });
+});
 
+describe('Database.createContract() contract meta manifest @regression @tier1', function(){
     it('the meta write does not disturb the columns the row already carried', async function(){
         const { sql, args } = await runCreateContract(META_PRESENT, []);
         const cols = insertColumns(sql);

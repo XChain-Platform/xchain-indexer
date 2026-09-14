@@ -72,7 +72,6 @@ function makeDb(conn) {
 afterEach(function () { sinon.restore(); });
 
 describe('Database watchdog-fence epoch (M-16) @regression @tier1', function () {
-
     it('advances the epoch on every transaction teardown (begin/commit/rollback)', async function () {
         const db = makeDb(makeConn());
         const start = db.currentTxEpoch();
@@ -118,7 +117,9 @@ describe('Database watchdog-fence epoch (M-16) @regression @tier1', function () 
         await assert.doesNotReject(() => db.doQuery('SELECT 1', []));
         await db.commitTransaction();
     });
+});
 
+describe('Database watchdog-fence epoch (M-16) @regression @tier1', function () {
     it('rejects a zombie write after rollback while the next block proceeds cleanly', async function () {
         const conn = makeConn();
         const db   = makeDb(conn);
@@ -166,7 +167,9 @@ describe('Database watchdog-fence epoch (M-16) @regression @tier1', function () 
 
         await db.commitTransaction();
     });
+});
 
+describe('Database watchdog-fence epoch (M-16) @regression @tier1', function () {
     it('never fences a SIBLING Database instance read inside the block epoch context', async function () {
         // The indexer process holds several Database instances (indexer DB, decoder DB,
         // hub-DB mirror). Fee validation reads oracle prices through the hub-mirror
@@ -205,7 +208,9 @@ describe('Database watchdog-fence epoch (M-16) @regression @tier1', function () 
             'sibling read reached its own driver'
         );
     });
+});
 
+describe('Database watchdog-fence epoch (M-16) @regression @tier1', function () {
     it('fences a zombie savepoint call after rollback', async function () {
         const conn = makeConn();
         const db   = makeDb(conn);

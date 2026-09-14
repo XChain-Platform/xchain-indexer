@@ -53,7 +53,6 @@ function makeDb() {
 afterEach(function () { sinon.restore(); });
 
 describe('reconcileAnchorRewardWinner() @regression @tier1', function () {
-
     it('is a no-op for non-anchor reward types (issues no query)', async function () {
         const db    = makeDb();
         const query = sinon.stub(db, 'doQuery').resolves({ affectedRows: 7 });
@@ -101,7 +100,9 @@ describe('reconcileAnchorRewardWinner() @regression @tier1', function () {
         assert.deepStrictEqual(query.firstCall.args[1],
             ['anchor_archive', 306, 8100, 'anchor_archive', 306, 8100]);
     });
+});
 
+describe('reconcileAnchorRewardWinner() @regression @tier1', function () {
     it('pre-images the loser rows into anchor_reward_reconcile_log BEFORE the DELETE when a reconcile block is given (RB-ANCHOR)', async function () {
         const db    = makeDb();
         const query = sinon.stub(db, 'doQuery').resolves({ affectedRows: 2 });
@@ -156,7 +157,9 @@ describe('reconcileAnchorRewardWinner() @regression @tier1', function () {
         sinon.stub(db, 'doQuery').resolves({ affectedRows: 0 });
         assert.strictEqual(await db.reconcileAnchorRewardWinner(306, 'anchor_archive'), 0);
     });
+});
 
+describe('reconcileAnchorRewardWinner() @regression @tier1', function () {
     it('tolerates a driver result without affectedRows', async function () {
         const db = makeDb();
         sinon.stub(db, 'doQuery').resolves(undefined);

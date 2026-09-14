@@ -82,15 +82,14 @@ function applyOrder(rows, clause) {
 
 afterEach(function () { sinon.restore(); });
 
+// Two v1 rows sharing match_batch_seq 42 (a failover double-publish), injected HIGH-first so
+// insertion order alone would return the wrong (later) head. action_index 5 is canonical.
+const dupRows = [
+    { action_index: 9, match_batch_seq: 42, version: 1, total_chunks: 4, batch_crc32: 'bbbb' },
+    { action_index: 5, match_batch_seq: 42, version: 1, total_chunks: 3, batch_crc32: 'aaaa' }
+];
+
 describe('Database.getAnchorV1ByBatchSeq() head-selection determinism @regression @tier1', function () {
-
-    // Two v1 rows sharing match_batch_seq 42 (a failover double-publish), injected HIGH-first so
-    // insertion order alone would return the wrong (later) head. action_index 5 is canonical.
-    const dupRows = [
-        { action_index: 9, match_batch_seq: 42, version: 1, total_chunks: 4, batch_crc32: 'bbbb' },
-        { action_index: 5, match_batch_seq: 42, version: 1, total_chunks: 3, batch_crc32: 'aaaa' }
-    ];
-
     it('requests a deterministic total order on action_index ASC with LIMIT 1', async function () {
         const db = makeDb();
         let captured = null;
@@ -144,7 +143,9 @@ describe('Database.getAnchorV1ByBatchSeq() head-selection determinism @regressio
         assert.strictEqual(head.action_index, 5, 'canonical head is the batch starter (lowest action_index)');
         assert.strictEqual(head.batch_crc32, 'aaaa');
     });
+});
 
+describe('Database.getAnchorV1ByBatchSeq() head-selection determinism @regression @tier1', function () {
     // Teeth: the pre-fix query (no ORDER BY) leaves the HIGH-first scramble intact and returns
     // the wrong head, so the assertion above genuinely depends on the fix.
     it('negative control: an un-ordered query would return the wrong (later) head', function () {

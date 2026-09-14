@@ -68,7 +68,6 @@ function makeDb(){
 }
 
 describe('_smtTouched: the touched key is canonical on BOTH axes @regression', function(){
-
     afterEach(() => sinon.restore());
 
     it('a wire ^<id> ADDRESS reference records the canonical address, not the caret form', async function(){
@@ -114,6 +113,10 @@ describe('_smtTouched: the touched key is canonical on BOTH axes @regression', f
 
         assert.deepStrictEqual(Array.from(db._smtTouched), [ADDR + '\t' + TICK]);
     });
+});
+
+describe('_smtTouched: the touched key is canonical on BOTH axes @regression', function(){
+    afterEach(() => sinon.restore());
 
     it('an unresolvable address records NOTHING rather than a raw fallback', async function(){
         // Fail closed. Recording the raw string "because we have it" is precisely

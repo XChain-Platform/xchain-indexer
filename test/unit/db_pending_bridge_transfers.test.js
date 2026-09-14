@@ -143,7 +143,6 @@ for(const separateMirror of [false, true]){
     const shape = separateMirror ? 'separate mirror handle (indexer.hubDb)' : 'same connection (single-host)';
 
     describe('db.getPendingBridgeTransfers, ' + shape + ' @regression @tier1', function(){
-
         it('excludes a leg whose transfer is mirrored finalized, keeps a retracted one and an unmirrored one', async function(){
             const v = makeVenue({ separateMirror });
             v.seedLeg({ action_index: 10, block_index: 100 });
@@ -199,7 +198,9 @@ for(const separateMirror of [false, true]){
             const rows = await v.db.getPendingBridgeTransfers(100);
             assert.deepStrictEqual(rows.map(r => Number(r.action_index)), [32, 33, 34]);
         });
+    });
 
+    describe('db.getPendingBridgeTransfers, ' + shape + ' @regression @tier1', function(){
         it('returns every PendingBridgeTransfer column the RPC handler maps', async function(){
             const v = makeVenue({ separateMirror });
             v.seedLeg({ action_index: 40, block_index: 140, version: 3, tick: 'FUFU', amount: '10.5' });
