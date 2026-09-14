@@ -15,7 +15,7 @@
  * XChain Indexer - Hub config overlay
  *
  * Overlay of hub-served operational params onto the live coin config: the startup
- * fetch, one poll tick (the poll timer stays in ../XChainIndexer.js beside the
+ * fetch, one poll tick (the poll timer lives in ./hub_config_poll.js beside the
  * call-time interval reader), the consensus-hash transport check, and the three-way
  * classifier that keeps every consensus param out of the overlay. The methods are
  * installed onto XChainIndexer.prototype by ../XChainIndexer.js.

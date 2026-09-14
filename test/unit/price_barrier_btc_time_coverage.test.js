@@ -52,13 +52,11 @@ process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
-const fs     = require('fs');
-const path   = require('path');
 
 const HubDbSync = require('../../src/hub/hub_db_sync.js');
 
-const INDEXER_SRC = fs.readFileSync(
-    path.resolve(__dirname, '../../src/XChainIndexer.js'), 'utf8');
+const INDEXER_SRC = require('../helpers/indexer_class_source.js')
+    .readIndexerClassSource();
 
 // The price-barrier block only: from the BTC height call to the oracle barrier
 // that follows it. Narrow enough that an edit elsewhere in the block loop

@@ -46,14 +46,12 @@ process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
-const fs     = require('fs');
-const path   = require('path');
 
 const changes   = require('../../src/protocol_changes.js');
 const HubDbSync = require('../../src/hub/hub_db_sync.js');
 
-const INDEXER_SRC = fs.readFileSync(
-    path.resolve(__dirname, '../../src/XChainIndexer.js'), 'utf8');
+const INDEXER_SRC = require('../helpers/indexer_class_source.js')
+    .readIndexerClassSource();
 
 // The barrier block: from the BTC height-barrier branch through the non-BTC
 // time-barrier call. Narrow enough that an unrelated edit elsewhere in the

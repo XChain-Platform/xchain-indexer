@@ -252,8 +252,7 @@ describe('protocol_time', () => {
     // test still passed because each half was individually correct. This asserts the
     // wiring, which is the part that was actually wrong.
     describe('XChainIndexer wiring (ratchet)', () => {
-        const fs  = require('fs');
-        const src = fs.readFileSync(require('path').join(__dirname, '../../src/XChainIndexer.js'), 'utf8');
+        const src = require('../helpers/indexer_class_source.js').readIndexerClassSource();
 
         it('re-stamps the decoder transaction rows with protocol time', () => {
             assert.ok(/stampProtocolTime\(\s*blockTransactions\s*,\s*blockTime\s*\)/.test(src),

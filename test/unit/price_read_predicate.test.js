@@ -32,8 +32,6 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 
-const fs   = require('fs');
-const path = require('path');
 
 const { getTestConfig }      = require('../fixtures/config');
 const Utility                = require('../../src/utility');
@@ -42,8 +40,8 @@ const XChainIndexer          = require('../../src/XChainIndexer');
 const { blockMayReadPrice }  = require('../../src/chain/price_read_predicate');
 const { rethrowIfInfraFault } = require('../../src/consensus/fault_guard');
 
-const INDEXER_SRC = fs.readFileSync(
-    path.resolve(__dirname, '../../src/XChainIndexer.js'), 'utf8');
+const INDEXER_SRC = require('../helpers/indexer_class_source.js')
+    .readIndexerClassSource();
 
 // Minimal `this` for the barrier decision, in the shape the block loop presents.
 // Same prototype-call harness as test/unit/direct_call_presence.test.js.

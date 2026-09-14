@@ -32,7 +32,7 @@ const path   = require('path');
 const { processBlocks } = require('../integration/setup/indexer-launcher.js');
 
 const LAUNCHER = path.join(__dirname, '../integration/setup/indexer-launcher.js');
-const PRODUCTION = path.join(__dirname, '../../src/XChainIndexer.js');
+const { readIndexerClassSource } = require('../helpers/indexer_class_source.js');
 
 // A stub indexer exposing exactly the surface processBlocks touches. Every call
 // that matters to block rhythm appends to `calls`, so the assertions read as the
@@ -159,7 +159,7 @@ describe('integration harness VM block rhythm', function(){
     it('production still calls both hooks, so the harness mirrors a live rhythm', function(){
         // If XChainIndexer ever drops or renames these calls, the harness's mirror
         // becomes fiction. Guard the production side of the pair too.
-        const prod = fs.readFileSync(PRODUCTION, 'utf8');
+        const prod = readIndexerClassSource();
         assert.ok(/this\.actions\.vm\.beginBlock\(\)/.test(prod),
             'XChainIndexer.js must call this.actions.vm.beginBlock()');
         assert.ok(/this\.actions\.vm\.endBlock\(\)/.test(prod),

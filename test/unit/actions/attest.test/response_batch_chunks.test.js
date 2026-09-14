@@ -308,7 +308,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
 
         it('the delivery arm knows the attest_batch push type', function () {
-            const src = fs.readFileSync(path.join(__dirname, '../../../../src/XChainIndexer.js'), 'utf8');
+            const src = require('../../../helpers/indexer_class_source.js').readIndexerClassSource();
             assert.match(src, /entry\.pushType === 'attest_batch'/,
                 'a staged push whose type no arm handles is left undelivered and silent');
             assert.match(src, /pushAttestBatch/);

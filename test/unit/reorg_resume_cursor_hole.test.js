@@ -41,8 +41,6 @@
 'use strict';
 
 const assert   = require('assert');
-const fs       = require('fs');
-const path     = require('path');
 const Database = require('../../src/db');
 
 // Minimal indexer stub: the Database constructor only touches config + util.
@@ -176,8 +174,8 @@ describe('reorg resume cursor - permanent block holes (XChainIndexer.start, e2b3
     });
 
     it('start() still re-reads the resume cursor immediately after rollback (source guard)', function () {
-        const src = fs.readFileSync(
-            path.join(__dirname, '..', '..', 'src', 'XChainIndexer.js'), 'utf8');
+        const src = require('../helpers/indexer_class_source.js')
+            .readIndexerClassSource();
 
         const rollbackCall = 'await this.rollback.rollback(minReorgBlock);';
         const at = src.indexOf(rollbackCall);

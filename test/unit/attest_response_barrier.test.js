@@ -12,8 +12,6 @@ process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
-const fs     = require('fs');
-const path   = require('path');
 const sinon  = require('sinon');
 
 const HubDbSync = require('../../src/hub/hub_db_sync.js');
@@ -151,8 +149,8 @@ describe('HubDbSync attestation-response barrier @regression @tier1', function (
     });
 });
 
-const INDEXER_SRC = fs.readFileSync(
-    path.resolve(__dirname, '../../src/XChainIndexer.js'), 'utf8');
+const INDEXER_SRC = require('../helpers/indexer_class_source.js')
+    .readIndexerClassSource();
 
     // Lift the whole `if(...){ ... }` that contains the barrier's stall reason: walk back
     // to the nearest preceding `if(` and brace-match forward from it.
