@@ -76,9 +76,31 @@ class Sleep {
         // Set sleep type based off data format
         data['TYPE'] = (format==1) ? 'TICK' : 'ADDRESS';
 
-        /*****************************************************************
-         * TICK Validations
-         ****************************************************************/
+        error = await this.validateSleepTarget(data, tokenInfo, error);
+
+        error = await this.validateSleepPolicy(data, tokenInfo, error);
+
+        // Determine final status
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        // Print status message
+        getLogger().info("\t SLEEP : " + data['TICK'] + ' : ' + data['RESUME_BLOCK'] + ' : ' + data['STATUS']);
+
+        // Create record in messages table
+        await this.indexerDb.createSleep(data);
+
+        // Store the SOURCE and TICK in addresses list
+        this.util.addAddressTicker(data['SOURCE'], data['TICK']);
+
+        await this.mapper.createMappings(data);
+
+    }
+
+    /*****************************************************************
+     * TICK Validations
+     ****************************************************************/
+    async validateSleepTarget(data, tokenInfo, error){
 
         // Validate TICK exists
         if(!error && data['TYPE']=='TICK' && !tokenInfo)
@@ -102,6 +124,12 @@ class Sleep {
         // Verify TICK sleep is being done by current TICK owner
         if(!error && data['TYPE']=='TICK' && data['SOURCE']!=tokenInfo['OWNER'])
             error = 'invalid: TICK (not authorized)';
+
+        return error;
+    }
+
+    // Lock, escrow and MEMO rules that decide whether a well-formed SLEEP may take effect
+    async validateSleepPolicy(data, tokenInfo, error){
 
         // Honor the token's LOCK_SLEEP flag. A token issued with LOCK_SLEEP=1 carries an immutable
         // "cannot be paused" guarantee (issue.js), so a TICK sleep of it must be rejected, the same
@@ -138,21 +166,7 @@ class Sleep {
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
-        // Determine final status
-        let status = (error) ? error : 'valid';
-        data['STATUS'] = status;
-
-        // Print status message
-        getLogger().info("\t SLEEP : " + data['TICK'] + ' : ' + data['RESUME_BLOCK'] + ' : ' + data['STATUS']);
-
-        // Create record in messages table
-        await this.indexerDb.createSleep(data);
-
-        // Store the SOURCE and TICK in addresses list
-        this.util.addAddressTicker(data['SOURCE'], data['TICK']);
-
-        await this.mapper.createMappings(data);
-
+        return error;
     }
 }
 

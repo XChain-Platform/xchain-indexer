@@ -82,9 +82,50 @@ class Broadcast {
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        /*****************************************************************
-         * FORMAT Validations
-         ****************************************************************/
+        error = this.validateFieldFormats(data, error);
+
+        error = await this.validateFields(data, error);
+
+        // Determine final status
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        // Print status message
+        getLogger().info("\t BROADCAST : " + data['MESSAGE'] + ' : ' +  data['VALUE'] + ' : ' + data['STATUS']);
+
+        await this.storeBroadcast(data, format, status);
+
+    }
+
+    // Write the broadcast row, register the address, and map the action
+    async storeBroadcast(data, format, status){
+
+        // Create record in broadcasts table
+        await this.indexerDb.createBroadcast(data);
+
+        // Store the SOURCE in addresses list
+        this.util.addAddressTicker(data['SOURCE']);
+
+        // Create action mappings
+        await this.mapper.createMappings(data);
+
+        if(status=='valid'){
+
+            // Resolve any open bets on this feed
+            if(format==3){
+
+                // TODO : Add support for resolving bets
+
+            }
+
+        }
+
+    }
+
+    /*****************************************************************
+     * FORMAT Validations
+     ****************************************************************/
+    validateFieldFormats(data, error){
 
         // Verify VALUE format
         if(!error && !this.util.isNull(data['VALUE']) && !this.util.isNumeric(data['VALUE']))
@@ -98,9 +139,13 @@ class Broadcast {
         if(!error && !this.util.isNull(data['BROADCAST_ACTION_INDEX']) && !this.util.isNumeric(data['BROADCAST_ACTION_INDEX']))
             error = 'invalid: BROADCAST_ACTION_INDEX (format)';
 
-        /*****************************************************************
-         * General Validations
-         ****************************************************************/
+        return error;
+    }
+
+    /*****************************************************************
+     * General Validations
+     ****************************************************************/
+    async validateFields(data, error){
 
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
@@ -130,33 +175,7 @@ class Broadcast {
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
-        // Determine final status
-        let status = (error) ? error : 'valid';
-        data['STATUS'] = status;
-
-        // Print status message
-        getLogger().info("\t BROADCAST : " + data['MESSAGE'] + ' : ' +  data['VALUE'] + ' : ' + data['STATUS']);
-
-        // Create record in broadcasts table
-        await this.indexerDb.createBroadcast(data);
-
-        // Store the SOURCE in addresses list
-        this.util.addAddressTicker(data['SOURCE']);
-
-        // Create action mappings
-        await this.mapper.createMappings(data);
-
-        if(status=='valid'){
-
-            // Resolve any open bets on this feed
-            if(format==3){
-
-                // TODO : Add support for resolving bets
-
-            }
-
-        }
-
+        return error;
     }
 }
 

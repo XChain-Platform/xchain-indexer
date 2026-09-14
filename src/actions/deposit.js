@@ -63,9 +63,24 @@ class Deposit {
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        /*****************************************************************
-         * Contract Validations
-         ****************************************************************/
+        error = await this.validateContract(data, error);
+
+        error = await this.validateTokenAndBalance(data, error);
+
+        // Determine final status
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        // Print status message
+        getLogger().info("\t DEPOSIT : contract=" + data['CONTRACT_ACTION_INDEX'] + ' : ' + data['TICK'] + ' : ' + this.util.logAmount(data['AMOUNT']) + ' : ' + data['STATUS']);
+
+        await this.settleDeposit(data, status);
+    }
+
+    /*****************************************************************
+     * Contract Validations
+     ****************************************************************/
+    async validateContract(data, error){
 
         // Verify CONTRACT_ACTION_INDEX is provided
         if(!error && this.util.isNull(data['CONTRACT_ACTION_INDEX']))
@@ -97,9 +112,13 @@ class Deposit {
                 error = 'invalid: contract (not active)';
         }
 
-        /*****************************************************************
-         * Token Validations
-         ****************************************************************/
+        return error;
+    }
+
+    /*****************************************************************
+     * Token Validations
+     ****************************************************************/
+    async validateTokenAndBalance(data, error){
 
         // Get information on token
         let tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
@@ -135,12 +154,11 @@ class Deposit {
         if(!error && await this.indexerDb.isActionAllowed(null, data['TICK'], data['BLOCK_INDEX']) == false)
             error = 'invalid: TICK (sleeping)';
 
-        // Determine final status
-        let status = (error) ? error : 'valid';
-        data['STATUS'] = status;
+        return error;
+    }
 
-        // Print status message
-        getLogger().info("\t DEPOSIT : contract=" + data['CONTRACT_ACTION_INDEX'] + ' : ' + data['TICK'] + ' : ' + this.util.logAmount(data['AMOUNT']) + ' : ' + data['STATUS']);
+    // Store the deposit row and move the stake into the contract's derived custody address
+    async settleDeposit(data, status){
 
         // Create record in deposits table
         await this.indexerDb.createDeposit(data);

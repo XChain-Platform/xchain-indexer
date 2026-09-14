@@ -99,7 +99,23 @@ class Message {
 
         // TODO : Make sure that ENCRYPTION_METHOD is a numeric value or null (stop storing 'u' in database when undefined)
 
-        // FORMAT Validations
+        error = this.validateMessageFormats(data, error);
+
+        error = await this.validateFields(data, error);
+
+        // Determine final status
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        // Print status message
+        getLogger().info("\t MESSAGE : " + data['DESTINATION'] + ' : ' + data['STATUS']);
+
+        await this.storeMessage(data);
+
+    }
+
+    // FORMAT Validations
+    validateMessageFormats(data, error){
 
         // Verify COIN is a valid coin
         if(!error && !this.util.isNull(data['COIN']) && !this.config['COINS'].includes(String(data['COIN']).toUpperCase()))
@@ -119,7 +135,11 @@ class Message {
         if(!error && !this.util.isNull(data['ENCRYPTION_METHOD']) && !this.util.isNumeric(data['ENCRYPTION_METHOD']))
             error = 'invalid: ENCRYPTION_METHOD (format)';
 
-        // General Validations
+        return error;
+    }
+
+    // General Validations
+    async validateFields(data, error){
 
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
@@ -141,12 +161,11 @@ class Message {
         if(!error && String(data['PLAINTEXT_MESSAGE']).length > this.config['MAX_MESSAGE_LENGTH'])
             error = 'invalid: PLAINTEXT_MESSAGE (length)';
 
-        // Determine final status
-        let status = (error) ? error : 'valid';
-        data['STATUS'] = status;
+        return error;
+    }
 
-        // Print status message
-        getLogger().info("\t MESSAGE : " + data['DESTINATION'] + ' : ' + data['STATUS']);
+    // Write the message row, register the sender, and map the action
+    async storeMessage(data){
 
         // Create record in messages table
         await this.indexerDb.createMessage(data);

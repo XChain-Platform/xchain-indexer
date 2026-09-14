@@ -70,7 +70,30 @@ class Link {
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        // COIN Validations
+        error = this.validateCoinsAndFormats(data, format, error);
+
+        error = await this.validateFields(data, error);
+
+        // Determine final status
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        // Print status message
+        getLogger().info("\t LINK : " + data['COIN1'] + ':' + data['COIN1_ACTION_INDEX'] + '->' + data['COIN2'] + ':' + data['COIN2_ACTION_INDEX'] + ' : ' + data['STATUS']);
+
+        // Create record in links table
+        await this.indexerDb.createLink(data);
+
+        // Store the SOURCE in addresses list
+        this.util.addAddressTicker(data['SOURCE']);
+
+        // Create action mappings
+        await this.mapper.createMappings(data);
+
+    }
+
+    // COIN Validations
+    validateCoinsAndFormats(data, format, error){
 
         // Validate COIN1 is valid: a LINK pairs two on-chain actions across two COIN networks,
         // so COIN1 has to be a network this indexer is configured for, or the pairing can never
@@ -95,7 +118,11 @@ class Link {
         if(!error && (this.util.isNull(data['COIN2_ACTION_INDEX']) || !this.util.isNumeric(data['COIN2_ACTION_INDEX'])))
             error = 'invalid: COIN2_ACTION_INDEX (format)';
 
-        // General Validations
+        return error;
+    }
+
+    // General Validations
+    async validateFields(data, error){
 
         // Verify SOURCE is not sleeping: a frozen address may not create or change links,
         // matching every other action-creating handler.
@@ -140,22 +167,7 @@ class Link {
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
-        // Determine final status
-        let status = (error) ? error : 'valid';
-        data['STATUS'] = status;
-
-        // Print status message
-        getLogger().info("\t LINK : " + data['COIN1'] + ':' + data['COIN1_ACTION_INDEX'] + '->' + data['COIN2'] + ':' + data['COIN2_ACTION_INDEX'] + ' : ' + data['STATUS']);
-
-        // Create record in links table
-        await this.indexerDb.createLink(data);
-
-        // Store the SOURCE in addresses list
-        this.util.addAddressTicker(data['SOURCE']);
-
-        // Create action mappings
-        await this.mapper.createMappings(data);
-
+        return error;
     }
 }
 
