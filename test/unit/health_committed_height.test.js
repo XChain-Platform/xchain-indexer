@@ -77,6 +77,103 @@ function openBlock(db, blockIndex = UNCOMMITTED){
     return db;
 }
 
+function indexerStub(){
+    return {
+        decoderDb:        { circuitState: 'closed' },
+        indexerDb:        { circuitState: 'closed' },
+        lastDecoderBlock: UNCOMMITTED,
+        isSynced:         () => true
+    };
+}
+
+// startApi() is not importable (it opens DB connections and auto-starts),
+// so guard the source the same way api_federation_read_isolation.test.js does.
+const API_SRC = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
+
+// Slice the health() and getlatestblock() handler bodies out of the
+// jsonRpcController object literal.
+function handlerBody(name){
+    const decl = new RegExp('\\n {8}async\\s+' + name + '\\s*\\(');
+    const m = decl.exec(API_SRC);
+    assert.ok(m, 'handler not found in src/api.js: ' + name);
+    const rest = API_SRC.slice(m.index + 1);
+    const next = /\n {8}async\s+\w+\s*\(/.exec(rest);
+    return next ? rest.slice(0, next.index) : rest;
+}
+
+// The whole app.get('/status', ...) route.
+function statusRoute(){
+    const start = API_SRC.indexOf("app.get('/status'");
+    assert.ok(start > 0, "app.get('/status') not found in src/api.js");
+    const end = API_SRC.indexOf('\n    });', start);
+    assert.ok(end > start, "could not find the end of the '/status' route");
+    return API_SRC.slice(start, end);
+}
+
+// A handler may either call committedView() inline or bind it once
+// (`let db = committedView(indexer.indexerDb)`) and read off the binding.
+// Return the binding name so the guard can follow it, or null for inline.
+function committedBinding(body, handle){
+    const re = new RegExp('(\\w+)\\s*=\\s*committedView\\(\\s*indexer\\.' + handle + '\\s*\\)');
+    const m  = re.exec(body);
+    return m ? m[1] : null;
+}
+
+// Every height read must resolve through committedView(indexer.indexerDb),
+// inline or via a binding.
+function assertsCommittedHeight(name, body){
+    if(/committedView\(\s*indexer\.indexerDb\s*\)\.getLatestBlockIndex\(\)/.test(body)) return;
+    const bound = committedBinding(body, 'indexerDb');
+    assert.ok(bound, name + ' must read the height via committedView(indexer.indexerDb), not the raw handle');
+    assert.match(body, new RegExp('\\b' + bound + '\\.getLatestBlockIndex\\(\\)'),
+                name + ' binds committedView() as `' + bound + '` but does not read the height off it');
+}
+
+const TARGETS = {
+    // Endpoints that ADVERTISE a height: they must also surface the
+    // in-flight block separately rather than folding it into the height.
+    'health()':         { body: handlerBody('health'),        advertisesInFlight: true },
+    'getlatestblock()': { body: handlerBody('getlatestblock'), advertisesInFlight: true },
+    '/status':          { body: statusRoute(),                advertisesInFlight: true },
+    // getblockhashes does not advertise a height, it MINTS the
+    // hashes the hub's StateCheckpointEngine quorum-signs into the
+    // XCHECKPOINT canonical. Same dirty-read class as, worse blast
+    // radius: a mid-block read gets a state hash for a block a reorg may
+    // still erase, and the signature outlives the rollback. Its default
+    // target height AND the stored-hash row must both come off the
+    // committed view, and so must the decoder-side chain block hash that
+    // is signed alongside them.
+    'getblockhashes()': { body: handlerBody('getblockhashes'), advertisesInFlight: false,
+                          guardsDecoderDb: true }
+};
+
+const COMMITTED_LEDGER   = 'aa'.repeat(32);
+const UNCOMMITTED_LEDGER = 'bb'.repeat(32);
+
+// Same Database class as above, but the two connections answer the stored
+// block-hash query with DIFFERENT rows, which is exactly the mid-block
+// situation: the open transaction can see the block's own hash row before
+// any other reader (or any reorg) can.
+function makeHashDb(){
+    const db = makeDb();
+    db.pool = {
+        getConnection: async () => ({
+            query: async (sql) => sql.includes('MAX(block_index)')
+                ? [{ max_block: COMMITTED }]
+                : [{ block_index: COMMITTED, block_time: 1, ledger_hash: COMMITTED_LEDGER }],
+            release: async () => {}
+        })
+    };
+    db.transactionConnection = {
+        query: async (sql) => sql.includes('MAX(block_index)')
+            ? [{ max_block: UNCOMMITTED }]
+            : [{ block_index: UNCOMMITTED, block_time: 2, ledger_hash: UNCOMMITTED_LEDGER }],
+        release: async () => {}
+    };
+    db.blockIndex = UNCOMMITTED;
+    return db;
+}
+
 describe('health advertises committed height only @regression @tier1', function(){
 
     describe('committedView()', function(){
@@ -114,7 +211,9 @@ describe('health advertises committed height only @regression @tier1', function(
             assert.strictEqual(committedView(null), null);
         });
     });
+});
 
+describe('health advertises committed height only @regression @tier1', function(){
     describe('inFlightBlockIndex()', function(){
 
         it('reports the block inside the open transaction', function(){
@@ -136,17 +235,10 @@ describe('health advertises committed height only @regression @tier1', function(
             assert.strictEqual(inFlightBlockIndex(undefined), null);
         });
     });
+});
 
+describe('health advertises committed height only @regression @tier1', function(){
     describe('response shape', function(){
-
-        function indexerStub(){
-            return {
-                decoderDb:        { circuitState: 'closed' },
-                indexerDb:        { circuitState: 'closed' },
-                lastDecoderBlock: UNCOMMITTED,
-                isSynced:         () => true
-            };
-        }
 
         it('reports committed and in-flight heights as separate fields', async function(){
             const res = await buildHealthResponse({
@@ -170,69 +262,10 @@ describe('health advertises committed height only @regression @tier1', function(
             assert.strictEqual(res.inFlightBlock, null);
         });
     });
+});
 
+describe('health advertises committed height only @regression @tier1', function(){
     describe('src/api.js height-advertising endpoints (static guard)', function(){
-        // startApi() is not importable (it opens DB connections and auto-starts),
-        // so guard the source the same way api_federation_read_isolation.test.js does.
-        const API_SRC = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
-
-        // Slice the health() and getlatestblock() handler bodies out of the
-        // jsonRpcController object literal.
-        function handlerBody(name){
-            const decl = new RegExp('\\n {8}async\\s+' + name + '\\s*\\(');
-            const m = decl.exec(API_SRC);
-            assert.ok(m, 'handler not found in src/api.js: ' + name);
-            const rest = API_SRC.slice(m.index + 1);
-            const next = /\n {8}async\s+\w+\s*\(/.exec(rest);
-            return next ? rest.slice(0, next.index) : rest;
-        }
-
-        // The whole app.get('/status', ...) route.
-        function statusRoute(){
-            const start = API_SRC.indexOf("app.get('/status'");
-            assert.ok(start > 0, "app.get('/status') not found in src/api.js");
-            const end = API_SRC.indexOf('\n    });', start);
-            assert.ok(end > start, "could not find the end of the '/status' route");
-            return API_SRC.slice(start, end);
-        }
-
-        // A handler may either call committedView() inline or bind it once
-        // (`let db = committedView(indexer.indexerDb)`) and read off the binding.
-        // Return the binding name so the guard can follow it, or null for inline.
-        function committedBinding(body, handle){
-            const re = new RegExp('(\\w+)\\s*=\\s*committedView\\(\\s*indexer\\.' + handle + '\\s*\\)');
-            const m  = re.exec(body);
-            return m ? m[1] : null;
-        }
-
-        // Every height read must resolve through committedView(indexer.indexerDb),
-        // inline or via a binding.
-        function assertsCommittedHeight(name, body){
-            if(/committedView\(\s*indexer\.indexerDb\s*\)\.getLatestBlockIndex\(\)/.test(body)) return;
-            const bound = committedBinding(body, 'indexerDb');
-            assert.ok(bound, name + ' must read the height via committedView(indexer.indexerDb), not the raw handle');
-            assert.match(body, new RegExp('\\b' + bound + '\\.getLatestBlockIndex\\(\\)'),
-                name + ' binds committedView() as `' + bound + '` but does not read the height off it');
-        }
-
-        const TARGETS = {
-            // Endpoints that ADVERTISE a height: they must also surface the
-            // in-flight block separately rather than folding it into the height.
-            'health()':         { body: handlerBody('health'),        advertisesInFlight: true },
-            'getlatestblock()': { body: handlerBody('getlatestblock'), advertisesInFlight: true },
-            '/status':          { body: statusRoute(),                advertisesInFlight: true },
-            // getblockhashes does not advertise a height, it MINTS the
-            // hashes the hub's StateCheckpointEngine quorum-signs into the
-            // XCHECKPOINT canonical. Same dirty-read class as, worse blast
-            // radius: a mid-block read gets a state hash for a block a reorg may
-            // still erase, and the signature outlives the rollback. Its default
-            // target height AND the stored-hash row must both come off the
-            // committed view, and so must the decoder-side chain block hash that
-            // is signed alongside them.
-            'getblockhashes()': { body: handlerBody('getblockhashes'), advertisesInFlight: false,
-                                  guardsDecoderDb: true }
-        };
-
         for(const [name, target] of Object.entries(TARGETS)){
             const body = target.body;
 
@@ -281,39 +314,13 @@ describe('health advertises committed height only @regression @tier1', function(
             }
         }
     });
+});
 
+describe('health advertises committed height only @regression @tier1', function(){
     // Runtime proof for the signing path: the hash row a mid-block read
     // returns is not the row a committed-only reader sees, and it is the committed
     // one the checkpoint engine must sign.
     describe('getStoredBlockHashes() through committedView()', function(){
-
-        const COMMITTED_LEDGER   = 'aa'.repeat(32);
-        const UNCOMMITTED_LEDGER = 'bb'.repeat(32);
-
-        // Same Database class as above, but the two connections answer the stored
-        // block-hash query with DIFFERENT rows, which is exactly the mid-block
-        // situation: the open transaction can see the block's own hash row before
-        // any other reader (or any reorg) can.
-        function makeHashDb(){
-            const db = makeDb();
-            db.pool = {
-                getConnection: async () => ({
-                    query: async (sql) => sql.includes('MAX(block_index)')
-                        ? [{ max_block: COMMITTED }]
-                        : [{ block_index: COMMITTED, block_time: 1, ledger_hash: COMMITTED_LEDGER }],
-                    release: async () => {}
-                })
-            };
-            db.transactionConnection = {
-                query: async (sql) => sql.includes('MAX(block_index)')
-                    ? [{ max_block: UNCOMMITTED }]
-                    : [{ block_index: UNCOMMITTED, block_time: 2, ledger_hash: UNCOMMITTED_LEDGER }],
-                release: async () => {}
-            };
-            db.blockIndex = UNCOMMITTED;
-            return db;
-        }
-
         it('returns the committed hash row while a block transaction is open', async function(){
             const db = makeHashDb();
             const dirty = await db.getStoredBlockHashes(UNCOMMITTED);
