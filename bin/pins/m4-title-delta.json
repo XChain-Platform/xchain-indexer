@@ -5,7 +5,8 @@
   15,
   16,
   17,
-  20
+  20,
+  49
  ],
  "date": "2026-09-13",
  "renames": {
@@ -474,14 +475,14 @@
  "compare_totals": {
   "files_in_the_pin_with_no_counterpart": 0,
   "titles_dropped": 178,
-  "titles_added": 180,
+  "titles_added": 185,
   "declared_here_for_m4": 131,
   "declared_by_an_earlier_milestone_delta": 47,
   "undeclared": 0,
   "how_counted": "Each dropped title is PAIRED with an added title in the same file under the same script whose only difference is an identifier row 16 renamed or a filename row 15 renamed. Pairing rather than counting is the point: a dropped title and an unrelated added one balance perfectly while a real test has gone missing."
  },
  "inherited_from_the_m3_landing": "One title, in test/unit/apiview_fallback_affordance.test.js across five scripts, reads api/health.js where the AT1 pin reads health.js. M3 moved that file and the M3 landing commit 2bd35c36 repointed the title; m3-title-delta.json predates that commit and so does not declare it, which is why it is accounted here rather than left undeclared.",
- "net_new_titles_since_the_pin": "Titles added exceed titles dropped by two. Those are tests ADDED between the AT1 pin and now by earlier milestones, not renames, and an addition cannot hide a loss: the loss side is proved separately by files_in_the_pin_with_no_counterpart being 0 and by every dropped title having a same-file twin.",
+ "net_new_titles_since_the_pin": "Titles added exceed titles dropped by seven. Those are tests ADDED between the AT1 pin and now, not renames, and an addition cannot hide a loss: the loss side is proved separately by files_in_the_pin_with_no_counterpart being 0 and by every dropped title having a same-file twin. Two came from earlier milestones. The other five are one title in five scripts, added by row 49 AFTER M4 landed and declared in the rows [49] entry below: this file is the newest milestone delta, so it carries the accounting for a difference no earlier one can, the same reason inherited_from_the_m3_landing is recorded here. The pair buckets (declared_here_for_m4 plus declared_by_an_earlier_milestone_delta, 178) count dropped titles and are unchanged by a pure addition.",
  "no_test_was_lost": "Read, not counted: every collected test file in the AT1 pin has a counterpart here through the rename map (files_in_the_pin_with_no_counterpart is 0), and every dropped title has a same-file added twin that differs only by a name M4 moved.",
  "titleDeltas": [
   {
@@ -617,6 +618,24 @@
     "XChainIndexer.noteBarrierHold @regression @tier1 tolerates no mirror at all"
    ],
    "why": "The title names a method row 16 renamed out of its underscore prefix. The test is the same test: its dropped and added titles differ only by that identifier, and the same assertions run against the same code under the new name."
+  },
+  {
+   "rows": [
+    49
+   ],
+   "file": "test/unit/vm_gas_parity.test.js",
+   "scripts": [
+    "test",
+    "test:integration",
+    "test:regression",
+    "test:regression:fast",
+    "test:regression:full"
+   ],
+   "differences": 5,
+   "added": [
+    "static fee quote <-> handler acceptance fee parity @regression @tier1 no site recomputes the VM gas arithmetic no other file under src/ prices VM gas either"
+   ],
+   "why": "A PURE ADDITION, with no dropped twin: row 49 adds a test, it does not rename one. The re-duplication guard scanned four hard-coded SITES, so a fifth file pricing VM gas outside util.vmGasCost was invisible to it; the new test walks every .js under src/ instead, exempting only a coin schedule's declaration LINES, and asserts that utility.js and each named SITE still resolve in the walked set. The four SITES titles in this same file that the compare also reports are M3's, declared in m3-title-delta.json under the file's pre-M4 name vmGasParity.test.js, and row 49 leaves them untouched. Driven: with a temporary src/actions/fee_probe_tmp.js doing raw gas arithmetic the new test is the only one that goes red while the four SITES tests stay green; deleting its comparison turns that same tree green, and the file restored byte-exact (cmp) turns it red again."
   }
  ]
 }
