@@ -63,9 +63,27 @@ class Withdraw {
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        /*****************************************************************
-         * Contract Validations
-         ****************************************************************/
+        // Contract derived address, resolved once for the balance check and the ledger legs
+        let contractAddress = 'C:' + this.config['CHAIN'] + ':' + data['CONTRACT_ACTION_INDEX'];
+
+        error = await this.validateContract(data, error);
+
+        error = await this.validateTokenAndBalance(data, contractAddress, error);
+
+        // Determine final status
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        // Print status message
+        getLogger().info("\t WITHDRAW : contract=" + data['CONTRACT_ACTION_INDEX'] + ' : ' + data['TICK'] + ' : ' + this.util.logAmount(data['AMOUNT']) + ' : ' + data['STATUS']);
+
+        await this.settleWithdrawal(data, contractAddress, status);
+    }
+
+    /*****************************************************************
+     * Contract Validations
+     ****************************************************************/
+    async validateContract(data, error){
 
         // Verify CONTRACT_ACTION_INDEX is provided
         if(!error && this.util.isNull(data['CONTRACT_ACTION_INDEX']))
@@ -93,9 +111,13 @@ class Withdraw {
                 error = 'invalid: SOURCE (not contract owner)';
         }
 
-        /*****************************************************************
-         * Token Validations
-         ****************************************************************/
+        return error;
+    }
+
+    /*****************************************************************
+     * Token Validations
+     ****************************************************************/
+    async validateTokenAndBalance(data, contractAddress, error){
 
         // Get information on token
         let tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
@@ -113,7 +135,6 @@ class Withdraw {
             error = 'invalid: AMOUNT (zero)';
 
         // Verify contract has sufficient balance at its derived address
-        let contractAddress = 'C:' + this.config['CHAIN'] + ':' + data['CONTRACT_ACTION_INDEX'];
         if(!error){
             let contractBalances = await this.indexerDb.getAddressBalances(contractAddress, null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
             if(!this.util.hasBalance(contractBalances, tokenInfo['TICK_ID'], data['AMOUNT']))
@@ -131,12 +152,11 @@ class Withdraw {
         if(!error && await this.indexerDb.isActionAllowed(null, data['TICK'], data['BLOCK_INDEX']) == false)
             error = 'invalid: TICK (sleeping)';
 
-        // Determine final status
-        let status = (error) ? error : 'valid';
-        data['STATUS'] = status;
+        return error;
+    }
 
-        // Print status message
-        getLogger().info("\t WITHDRAW : contract=" + data['CONTRACT_ACTION_INDEX'] + ' : ' + data['TICK'] + ' : ' + this.util.logAmount(data['AMOUNT']) + ' : ' + data['STATUS']);
+    // Store the withdrawal row and move the balance out of contract custody back to SOURCE
+    async settleWithdrawal(data, contractAddress, status){
 
         // Create record in withdrawals table
         await this.indexerDb.createWithdrawal(data);

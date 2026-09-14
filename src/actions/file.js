@@ -105,107 +105,13 @@ class File {
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
-        // General Validations
-
-        // Verify SOURCE is not sleeping
-        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
-            error = 'invalid: SOURCE (sleeping)';
-
-        // Verify NAME is shorter than MAX_FILE_NAME_LENGTH
-        if(!error && String(data['NAME']).length > this.config['MAX_FILE_NAME_LENGTH'])
-            error = 'invalid: NAME (length)';
-
-        // Verify TYPE is shorter than MAX_FILE_NAME_LENGTH
-        if(!error && String(data['TYPE']).length > this.config['MAX_FILE_TYPE_LENGTH'])
-            error = 'invalid: TYPE (length)';
-
-        // Verify TITLE is shorter than MAX_FILE_NAME_LENGTH
-        if(!error && String(data['TITLE']).length > this.config['MAX_FILE_TITLE_LENGTH'])
-            error = 'invalid: TITLE (length)';
-
-        // Verify no pipe in MEMO (pipe is field delimiter)
-        if(!error && String(data['MEMO']).indexOf('|')!=-1)
-            error = 'invalid: MEMO (pipe)';
-
-        // Verify no semicolon in MEMO (semicolon is action delimiter)
-        if(!error && String(data['MEMO']).indexOf(';')!=-1)
-            error = 'invalid: MEMO (semicolon)';
-
-        // Verify MEMO is shorter than MAX_MEMO_LENGTH
-        if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
-            error = 'invalid: MEMO (length)';
+        error = await this.validateFields(data, error);
 
         // Gated content validations (optional fields appended to format 0)
 
         let isGated = (!this.util.isNull(data['GATE_TICKER']) && String(data['GATE_TICKER']).length > 0);
 
-        // Validate the gated-content fields, but only when this FILE is actually gated
-        if(!error && isGated){
-            // ENCRYPTION_METHOD must be 1 (AES-256-GCM) in v1
-            if(Number(data['ENCRYPTION_METHOD']) !== 1)
-                error = 'invalid: ENCRYPTION_METHOD (must be 1)';
-
-            // KEY_HASH must be 64-char hex. The /i is consensus as shipped: this
-            // clause has always taken either case, and db.js records the lowercase
-            // form, so tightening it would retroactively invalidate FILEs the live
-            // chain accepted. It moves only behind a flag day.
-            if(!error && !/^[0-9a-f]{64}$/i.test(String(data['KEY_HASH'] || '')))
-                error = 'invalid: KEY_HASH (format)';
-
-            // Only the issuer of GATE_TICKER may publish gated files for it.
-            // Prevents third parties from gating spam content to popular tickers.
-            if(!error){
-                let tokenInfo = await this.indexerDb.getTokenInfo(data['GATE_TICKER'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
-                if(!tokenInfo)
-                    error = 'invalid: GATE_TICKER (unknown)';
-                else if(tokenInfo['OWNER'] !== data['SOURCE'])
-                    error = 'invalid: SOURCE (not GATE_TICKER issuer)';
-                else if(await this.indexerDb.isOwnershipEscrowed(data['GATE_TICKER']))
-                    error = 'invalid: GATE_TICKER (ownership escrowed)';
-
-                // GATE_MIN_AMOUNT is validated STRICT. A present but invalid
-                // threshold REJECTS the FILE rather than being dropped, since a
-                // FILE is immutable and dropping would let the publisher believe
-                // a threshold was in force when the chain recorded none. This is
-                // replay-safe without a flag-day because the SDK drops unknown
-                // positional fields, so no conforming emitter has ever produced a
-                // nine-field FILE. The gate-tick-existence clause the spec leaves
-                // open is moot here: an unknown GATE_TICKER already rejects the
-                // whole FILE above.
-                if(!error && !this.util.isNull(data['GATE_MIN_AMOUNT']) &&
-                   String(data['GATE_MIN_AMOUNT']).length > 0){
-                    let raw = String(data['GATE_MIN_AMOUNT']);
-                    // Format rules, byte-for-byte the SDK's stateless validation set.
-                    // Length first, so a pathological input never reaches the regexes below.
-                    if(raw.length > GATE_MIN_AMOUNT_MAX_LENGTH)
-                        error = 'invalid: GATE_MIN_AMOUNT';
-                    else if(!/^\d+(\.\d+)?$/.test(raw))
-                        error = 'invalid: GATE_MIN_AMOUNT';
-                    // No leading zeros: '007' and '7' must not be two spellings of one threshold.
-                    else if(/^0\d/.test(raw))
-                        error = 'invalid: GATE_MIN_AMOUNT';
-                    // A zero threshold is not a gate: the field exists to require a nonzero balance.
-                    else if(!/[1-9]/.test(raw))
-                        error = 'invalid: GATE_MIN_AMOUNT';   // every zero spelling
-                    // Verify GATE_MIN_AMOUNT does not use more decimal places than the tick (or the fixed threshold scale) allows
-                    if(!error){
-                        // Divisibility: the STATE-dependent half the SDK cannot do.
-                        // Bounded at min(tick divisibility, THRESHOLD_SCALE) because a
-                        // threshold with more than THRESHOLD_SCALE decimals is
-                        // unrepresentable in the wallet's fixed-scale BigInt compare,
-                        // so the two sides would disagree on the last digit for a value
-                        // neither considers malformed.
-                        let dot      = raw.indexOf('.');
-                        let places   = (dot === -1) ? 0 : (raw.length - dot - 1);
-                        let tickDec  = Number(tokenInfo['DECIMALS']);
-                        if(!Number.isFinite(tickDec)) tickDec = 0;
-                        let maxPlaces = Math.min(tickDec, THRESHOLD_SCALE);
-                        if(places > maxPlaces)
-                            error = 'invalid: GATE_MIN_AMOUNT';
-                    }
-                }
-            }
-        }
+        error = await this.validateGatedContent(data, isGated, error);
 
         // A threshold with no gate is meaningless and must not be storable: it would
         // sit in gated_files with no gate_ticker to weigh a balance against. Rejected
@@ -235,6 +141,122 @@ class File {
         // Create action mappings
         await this.mapper.createMappings(data);
 
+    }
+
+    // General Validations
+    async validateFields(data, error){
+
+        // Verify SOURCE is not sleeping
+        if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
+            error = 'invalid: SOURCE (sleeping)';
+
+        // Verify NAME is shorter than MAX_FILE_NAME_LENGTH
+        if(!error && String(data['NAME']).length > this.config['MAX_FILE_NAME_LENGTH'])
+            error = 'invalid: NAME (length)';
+
+        // Verify TYPE is shorter than MAX_FILE_NAME_LENGTH
+        if(!error && String(data['TYPE']).length > this.config['MAX_FILE_TYPE_LENGTH'])
+            error = 'invalid: TYPE (length)';
+
+        // Verify TITLE is shorter than MAX_FILE_NAME_LENGTH
+        if(!error && String(data['TITLE']).length > this.config['MAX_FILE_TITLE_LENGTH'])
+            error = 'invalid: TITLE (length)';
+
+        // Verify no pipe in MEMO (pipe is field delimiter)
+        if(!error && String(data['MEMO']).indexOf('|')!=-1)
+            error = 'invalid: MEMO (pipe)';
+
+        // Verify no semicolon in MEMO (semicolon is action delimiter)
+        if(!error && String(data['MEMO']).indexOf(';')!=-1)
+            error = 'invalid: MEMO (semicolon)';
+
+        // Verify MEMO is shorter than MAX_MEMO_LENGTH
+        if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
+            error = 'invalid: MEMO (length)';
+
+        return error;
+    }
+
+    // Gated content validations (optional fields appended to format 0)
+    async validateGatedContent(data, isGated, error){
+
+        // Validate the gated-content fields, but only when this FILE is actually gated
+        if(!error && isGated){
+            // ENCRYPTION_METHOD must be 1 (AES-256-GCM) in v1
+            if(Number(data['ENCRYPTION_METHOD']) !== 1)
+                error = 'invalid: ENCRYPTION_METHOD (must be 1)';
+
+            // KEY_HASH must be 64-char hex. The /i is consensus as shipped: this
+            // clause has always taken either case, and db.js records the lowercase
+            // form, so tightening it would retroactively invalidate FILEs the live
+            // chain accepted. It moves only behind a flag day.
+            if(!error && !/^[0-9a-f]{64}$/i.test(String(data['KEY_HASH'] || '')))
+                error = 'invalid: KEY_HASH (format)';
+
+            // Only the issuer of GATE_TICKER may publish gated files for it.
+            // Prevents third parties from gating spam content to popular tickers.
+            if(!error){
+                let tokenInfo = await this.indexerDb.getTokenInfo(data['GATE_TICKER'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+                if(!tokenInfo)
+                    error = 'invalid: GATE_TICKER (unknown)';
+                else if(tokenInfo['OWNER'] !== data['SOURCE'])
+                    error = 'invalid: SOURCE (not GATE_TICKER issuer)';
+                else if(await this.indexerDb.isOwnershipEscrowed(data['GATE_TICKER']))
+                    error = 'invalid: GATE_TICKER (ownership escrowed)';
+
+                error = this.validateGateMinAmount(data, tokenInfo, error);
+            }
+        }
+
+        return error;
+    }
+
+    // Threshold rules for a gated FILE's GATE_MIN_AMOUNT field
+    validateGateMinAmount(data, tokenInfo, error){
+
+        // GATE_MIN_AMOUNT is validated STRICT. A present but invalid
+        // threshold REJECTS the FILE rather than being dropped, since a
+        // FILE is immutable and dropping would let the publisher believe
+        // a threshold was in force when the chain recorded none. This is
+        // replay-safe without a flag-day because the SDK drops unknown
+        // positional fields, so no conforming emitter has ever produced a
+        // nine-field FILE. The gate-tick-existence clause the spec leaves
+        // open is moot here: an unknown GATE_TICKER already rejects the
+        // whole FILE above.
+        if(!error && !this.util.isNull(data['GATE_MIN_AMOUNT']) &&
+           String(data['GATE_MIN_AMOUNT']).length > 0){
+            let raw = String(data['GATE_MIN_AMOUNT']);
+            // Format rules, byte-for-byte the SDK's stateless validation set.
+            // Length first, so a pathological input never reaches the regexes below.
+            if(raw.length > GATE_MIN_AMOUNT_MAX_LENGTH)
+                error = 'invalid: GATE_MIN_AMOUNT';
+            else if(!/^\d+(\.\d+)?$/.test(raw))
+                error = 'invalid: GATE_MIN_AMOUNT';
+            // No leading zeros: '007' and '7' must not be two spellings of one threshold.
+            else if(/^0\d/.test(raw))
+                error = 'invalid: GATE_MIN_AMOUNT';
+            // A zero threshold is not a gate: the field exists to require a nonzero balance.
+            else if(!/[1-9]/.test(raw))
+                error = 'invalid: GATE_MIN_AMOUNT';   // every zero spelling
+            // Verify GATE_MIN_AMOUNT does not use more decimal places than the tick (or the fixed threshold scale) allows
+            if(!error){
+                // Divisibility: the STATE-dependent half the SDK cannot do.
+                // Bounded at min(tick divisibility, THRESHOLD_SCALE) because a
+                // threshold with more than THRESHOLD_SCALE decimals is
+                // unrepresentable in the wallet's fixed-scale BigInt compare,
+                // so the two sides would disagree on the last digit for a value
+                // neither considers malformed.
+                let dot      = raw.indexOf('.');
+                let places   = (dot === -1) ? 0 : (raw.length - dot - 1);
+                let tickDec  = Number(tokenInfo['DECIMALS']);
+                if(!Number.isFinite(tickDec)) tickDec = 0;
+                let maxPlaces = Math.min(tickDec, THRESHOLD_SCALE);
+                if(places > maxPlaces)
+                    error = 'invalid: GATE_MIN_AMOUNT';
+            }
+        }
+
+        return error;
     }
 }
 

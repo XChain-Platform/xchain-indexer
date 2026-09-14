@@ -101,9 +101,40 @@ class Address {
                 data[name] = this.util.bcnum(value);
         }
 
-        /*****************************************************************
-         * FORMAT Validations
-         ****************************************************************/
+        error = this.validatePreferenceFormats(data, error);
+
+        error = await this.validateFields(data, error);
+
+        error = await this.validateControllerBinding(data, format, error);
+
+        // Determine final status
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        // Print status message
+        getLogger().info("\t ADDRESS : " + data['SOURCE'] + ' : ' + data['STATUS']);
+
+        // Every ADDRESS action writes its `addresses` row, valid or not: that row is the audit trail a
+        // client reads the verdict from, so a refused one reads back its `invalid: ...` reason instead of
+        // being indistinguishable from an unprocessed action (same contract as issue.js, which calls
+        // createIssue unconditionally). Format 1 carries no preferences, so its row leaves those columns
+        // NULL; getAddressPreferences excludes the format for that reason (a NULL would read back as
+        // fee_preference=0).
+        await this.indexerDb.createAddressOption(data);
+
+        await this.recordControllerEvent(data, format, status);
+
+        // Store the SOURCE in addresses list
+        this.util.addAddressTicker(data['SOURCE']);
+
+        // Create action mappings
+        await this.mapper.createMappings(data);
+    }
+
+    /*****************************************************************
+     * FORMAT Validations
+     ****************************************************************/
+    validatePreferenceFormats(data, error){
 
         // Verify FEE_PREFERENCE is numeric
         if(!error && !this.util.isNull(data['FEE_PREFERENCE']) && !this.util.isNumeric(data['FEE_PREFERENCE']))
@@ -117,9 +148,13 @@ class Address {
         if(!error && !this.util.isNull(data['DISPENSER_PREFERENCE']) && !this.util.isNumeric(data['DISPENSER_PREFERENCE']))
             error = "invalid: DISPENSER_PREFERENCE (format)";
 
-        /*****************************************************************
-         * General Validations
-         ****************************************************************/
+        return error;
+    }
+
+    /*****************************************************************
+     * General Validations
+     ****************************************************************/
+    async validateFields(data, error){
 
         // Verify FEE_PREFERENCE value is valid
         if(!error && !this.util.isNull(data['FEE_PREFERENCE']) && !this.validValues['FEE_PREFERENCE'].includes(Number(data['FEE_PREFERENCE'])))
@@ -148,6 +183,13 @@ class Address {
         // Verify MEMO is shorter than MAX_MEMO_LENGTH
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
+
+        return error;
+    }
+
+    // Controller bind/unbind rules for format 1: the controller must exist and be active, and the
+    // bind or unbind must be legal against whatever controller already gates the class.
+    async validateControllerBinding(data, format, error){
 
         // Verify CONTROLLER references an existing, active contract on this chain (BIND only; on UNBIND
         // it is empty and ignored). A missing/throwing guard method is fail-closed at runtime, not here.
@@ -191,25 +233,14 @@ class Address {
             }
         }
 
-        // Determine final status
-        let status = (error) ? error : 'valid';
-        data['STATUS'] = status;
+        return error;
+    }
 
-        // Print status message
-        getLogger().info("\t ADDRESS : " + data['SOURCE'] + ' : ' + data['STATUS']);
-
-        // Every ADDRESS action writes its `addresses` row, valid or not: that row is the audit trail a
-        // client reads the verdict from, so a refused one reads back its `invalid: ...` reason instead of
-        // being indistinguishable from an unprocessed action (same contract as issue.js, which calls
-        // createIssue unconditionally). Format 1 carries no preferences, so its row leaves those columns
-        // NULL; getAddressPreferences excludes the format for that reason (a NULL would read back as
-        // fee_preference=0).
-        await this.indexerDb.createAddressOption(data);
-
-        // Format 1 additionally appends the bind/unbind event. Only a VALID one is appended:
-        // address_controllers is the enforcement log, so a refused bind must never gate its class.
-        // CONTROLLER/COOLDOWN_BLOCKS stay out of the NUMBER list, remaining raw strings for the
-        // BIGINT/INT columns.
+    // Format 1 additionally appends the bind/unbind event. Only a VALID one is appended:
+    // address_controllers is the enforcement log, so a refused bind must never gate its class.
+    // CONTROLLER/COOLDOWN_BLOCKS stay out of the NUMBER list, remaining raw strings for the
+    // BIGINT/INT columns.
+    async recordControllerEvent(data, format, status){
         if(format === 1 && status === 'valid'){
             let addressId   = await this.indexerDb.createAddress(data['SOURCE']);
             let actionClass = String(data['ACTION_CLASS']).toLowerCase();
@@ -233,12 +264,6 @@ class Address {
                 });
             }
         }
-
-        // Store the SOURCE in addresses list
-        this.util.addAddressTicker(data['SOURCE']);
-
-        // Create action mappings
-        await this.mapper.createMappings(data);
     }
 }
 

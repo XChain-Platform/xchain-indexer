@@ -116,12 +116,45 @@ class List {
             data = this.util.setNumberFormats(data);
 
         // Define some placeholders
-        let type    = null;
         let edit    = {};
         let list    = [];
         let invalid = {};
 
-        // FORMAT Validations
+        // Load the list this action edits, which also decides TYPE and the stored index
+        let loaded = await this.validateAndLoadList(data, format, error);
+        error = loaded.error;
+        list  = loaded.list;
+
+        error = await this.validateEditAuthority(data, format, error);
+
+        error = await this.validateFields(data, error);
+
+        // Handle building out some data arrays using list items
+        if(!error){
+
+            await this.collectEditItems(data, format, params, edit);
+
+            this.applyEditItems(data, format, edit, list, invalid);
+
+        }
+
+        // Determine final status
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        // Print status message
+        getLogger().info("\t LIST : " + data['STATUS']);
+
+        await this.storeList(data, status, edit, list, invalid);
+
+    }
+
+    // FORMAT Validations
+    async validateAndLoadList(data, format, error){
+
+        // The list's current membership, empty until an edit loads it
+        let type = null;
+        let list = [];
 
         // Validate TYPE
         if(!error && format==0 && !this.listTypes.includes(Number(data['TYPE'])))
@@ -159,17 +192,21 @@ class List {
             list = await this.indexerDb.getList(data['LIST_ACTION_INDEX'], data['BLOCK_INDEX']);
         }
 
-        // ── Who may EDIT this list (two rules, one read) ──────────────────────────────────
-        //
-        // Both rules judge the ROOT CREATE's source, never the last edit's: the authority
-        // over an edit chain belongs to the address that created the list, and reading the
-        // newest edit would let the first unauthorized edit launder authority for every edit
-        // after it. Resolved here rather than leaning on the normalization above, which is
-        // itself flag-gated.
-        //
-        // Injected edits are exempt through IS_GENESIS: policy inheritance rewrites the
-        // copy's membership from a signed snapshot through processTransaction(tx, true), and
-        // the bridge role address that owns the list holds no key to broadcast with.
+        return { error, list };
+    }
+
+    // ── Who may EDIT this list (two rules, one read) ──────────────────────────────────
+    //
+    // Both rules judge the ROOT CREATE's source, never the last edit's: the authority
+    // over an edit chain belongs to the address that created the list, and reading the
+    // newest edit would let the first unauthorized edit launder authority for every edit
+    // after it. Resolved here rather than leaning on the normalization above, which is
+    // itself flag-gated.
+    //
+    // Injected edits are exempt through IS_GENESIS: policy inheritance rewrites the
+    // copy's membership from a signed snapshot through processTransaction(tx, true), and
+    // the bridge role address that owns the list holds no key to broadcast with.
+    async validateEditAuthority(data, format, error){
         if(!error && format==1 && !data['IS_GENESIS']){
 
             let bridgeRoles = this.bridgeRoleAddresses();
@@ -205,7 +242,11 @@ class List {
             }
         }
 
-        // General Validations
+        return error;
+    }
+
+    // General Validations
+    async validateFields(data, error){
 
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
@@ -223,77 +264,77 @@ class List {
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
-        // Handle building out some data arrays using list items
-        if(!error){
+        return error;
+    }
 
-            // Build out array of edit items and status for each
-            let firstItemIndex = this.itemStartIndex[format];
-            for(let idx in params){
-                let status = 'valid';
-                let item   = params[idx];
-                // Get list items (everything from the end of the fixed prefix onward).
-                // `idx` is a string here (for..in over an array), so compare numerically
-                // rather than leaning on coercion.
-                if(Number(idx) >= firstItemIndex){
+    // Build out array of edit items and status for each
+    async collectEditItems(data, format, params, edit){
 
-                    // Verify TICK 
-                    if(data['TYPE']==1){
-                        let tokenInfo = await this.indexerDb.getTokenInfo(item);
-                        if(!tokenInfo)
-                            status = 'invalid: TICK (unknown)';
-                    }
+        let firstItemIndex = this.itemStartIndex[format];
+        for(let idx in params){
+            let status = 'valid';
+            let item   = params[idx];
+            // Get list items (everything from the end of the fixed prefix onward).
+            // `idx` is a string here (for..in over an array), so compare numerically
+            // rather than leaning on coercion.
+            if(Number(idx) >= firstItemIndex){
 
-                    // Verify ADDRESS.
-                    //
-                    // ANY-COIN ITEMS at/above TOKEN_POLICY_INHERITANCE_ACTIVATION: a bridged
-                    // copy inherits ONE list from its origin row, so that list has to be able
-                    // to name holders on every chain a copy lives on. isAnyCoinAddress loops
-                    // the existing coin-and-network-aware validator over COINS rather than
-                    // introducing a second address validator. Below the flag it is the
-                    // one-argument call this line has always made.
-                    //
-                    // The widening is hash-visible, which is why it is gated at all: an
-                    // admitted item writes a list_items row and that table is hashed DERIVED.
-                    // The ACTION's own status never moved either way (a bad item is recorded
-                    // in list_items_invalid and the LIST stays valid), so only the membership
-                    // is at stake.
-                    if(data['TYPE']==2 && !this.indexerDb.isAnyCoinAddress(item, data['BLOCK_INDEX']))
-                        status = 'invalid: ADDRESS (format)';
-
-                    // Add item and status to edits array
-                    edit[item] = status;
+                // Verify TICK 
+                if(data['TYPE']==1){
+                    let tokenInfo = await this.indexerDb.getTokenInfo(item);
+                    if(!tokenInfo)
+                        status = 'invalid: TICK (unknown)';
                 }
+
+                // Verify ADDRESS.
+                //
+                // ANY-COIN ITEMS at/above TOKEN_POLICY_INHERITANCE_ACTIVATION: a bridged
+                // copy inherits ONE list from its origin row, so that list has to be able
+                // to name holders on every chain a copy lives on. isAnyCoinAddress loops
+                // the existing coin-and-network-aware validator over COINS rather than
+                // introducing a second address validator. Below the flag it is the
+                // one-argument call this line has always made.
+                //
+                // The widening is hash-visible, which is why it is gated at all: an
+                // admitted item writes a list_items row and that table is hashed DERIVED.
+                // The ACTION's own status never moved either way (a bad item is recorded
+                // in list_items_invalid and the LIST stays valid), so only the membership
+                // is at stake.
+                if(data['TYPE']==2 && !this.indexerDb.isAnyCoinAddress(item, data['BLOCK_INDEX']))
+                    status = 'invalid: ADDRESS (format)';
+
+                // Add item and status to edits array
+                edit[item] = status;
             }
-
-            // Build out final array of list items
-            for(let item in edit){
-                let status = edit[item];
-
-                // VALID items
-                if(status=='valid'){
-
-                    // ADD items
-                    if((format==0 || (format==1 && data['EDIT']==1)) && !list.includes(item))
-                        list.push(item);
-
-                    // REMOVE items
-                    if(format==1 && data['EDIT']==2 && list.includes(item))
-                        list.splice(list.indexOf(item),1);
-
-                } else {
-                    // INVALID items
-                    invalid[item] = status;
-                }
-            }
-
         }
+    }
 
-        // Determine final status
-        let status = (error) ? error : 'valid';
-        data['STATUS'] = status;
+    // Build out final array of list items
+    applyEditItems(data, format, edit, list, invalid){
 
-        // Print status message
-        getLogger().info("\t LIST : " + data['STATUS']);
+        for(let item in edit){
+            let status = edit[item];
+
+            // VALID items
+            if(status=='valid'){
+
+                // ADD items
+                if((format==0 || (format==1 && data['EDIT']==1)) && !list.includes(item))
+                    list.push(item);
+
+                // REMOVE items
+                if(format==1 && data['EDIT']==2 && list.includes(item))
+                    list.splice(list.indexOf(item),1);
+
+            } else {
+                // INVALID items
+                invalid[item] = status;
+            }
+        }
+    }
+
+    // Persist the LIST action row, its edits and the resulting membership
+    async storeList(data, status, edit, list, invalid){
 
         // Create record in lists table
         await this.indexerDb.createList(data);
