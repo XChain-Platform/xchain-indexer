@@ -44,8 +44,6 @@
  ********************************************************************/
 
 const crypto  = require('crypto');
-const ed25519 = require('../consensus/ed25519.js');
-const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
 const ah      = require('../mirror_admission_activation.js');
 // Read from the vendored protocol constants, not re-exported through
@@ -53,9 +51,12 @@ const ah      = require('../mirror_admission_activation.js');
 // load-order dependent, and the hop ceiling is protocol data rather than
 // xcall's to own.
 const XCALL_MAX_HOPS = require('../protocol/constants.js').XCALL_MAX_HOPS;
-const { rethrowIfInfraFault } = require('../consensus/fault_guard.js');
 
 const { getLogger } = require('../observability/index.js');
+// The dispatch quorum check and the savepointed target run (./xexec/). Each is called
+// with this handler as the receiver, so both read this.indexerDb / this.actions unchanged.
+const dispatchQuorum = require('./xexec/dispatch_quorum.js');
+const runTarget      = require('./xexec/run_target.js');
 // Return payloads are mirrored to every indexer AND ANCHOR-archived on DOGE,
 // so they are hard-capped. Oversize yields status 'payload_too_large' with an
 // empty payload (deterministic truncation rule). Vendored single source of
@@ -103,18 +104,16 @@ class Xexec {
         return crypto.createHash('sha256').update(s, 'utf8').digest('hex');
     }
 
-    async parse(params, data, error){
-        let c = data['CALL'];
-        if(!c) return;
-
-        let coin = this.config['COIN'];
-
+    // Network, target and hop scope: the three refusals that are decided from the
+    // mirrored row alone, before any validator set is read. Returns false when the
+    // dispatch is not this chain's to run.
+    dispatchInScope(c, coin){
         // Network + target scope (belt-and-suspenders; the query pre-filters)
         if(String(c.network || '') !== String(this.config['NETWORK'] || '')){
             getLogger().warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : network mismatch (' + c.network + ' != ' + this.config['NETWORK'] + ') - skipping');
-            return;
+            return false;
         }
-        if(String(c.target_chain) !== String(coin)) return;                 // not our call
+        if(String(c.target_chain) !== String(coin)) return false;           // not our call
 
         // Defense-in-depth: re-assert the hop ceiling at injection. The cap is
         // enforced at VM emit (gateway-emit.js) and source parse (xcall.js), but
@@ -122,99 +121,21 @@ class Xexec {
         // Under honest-majority this is never triggered; it guards the injection path.
         if(Number(c.cross_hops) > XCALL_MAX_HOPS){
             getLogger().warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : cross_hops (' + c.cross_hops + ') exceeds XCALL_MAX_HOPS (' + XCALL_MAX_HOPS + ') - skipping');
-            return;
+            return false;
         }
+        return true;
+    }
 
-        // Verify the cross_chain quorum over the dispatch canonical.
-        // Stake-weighted (source-deduped 3·Σ>2·S) at/above STAKE_WEIGHTED_QUORUM
-        // (BTC snapshot_block + network), else legacy 2f+1 signer count.
-        let snapshotBlock = Number(c.snapshot_block);
-        let weighted = swq.isStakeWeightedQuorumActive(snapshotBlock, c.network);
-        let validators = weighted
-            ? await this.indexerDb.getStakeWeightsByCapability('cross_chain', snapshotBlock)
-            : await this.indexerDb.getValidatorsByCapability('cross_chain', snapshotBlock);
-        let N = (validators && validators.length) ? validators.length : 0;
-        if(N === 0){
-            // Snapshot not mirrored yet. The block loop's call-sync + snapshot barriers
-            // front-stop this (defer the whole block); this early-return is the
-            // defensive guard for the residual race / single-host path. The dispatch
-            // stays effective + unexecuted and retries on a later block. NOT an error.
-            getLogger().info("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : capability snapshot not synced - deferring');
-            return;
-        }
-
-        let sigs;
-        try { sigs = JSON.parse(c.validator_signatures || '[]'); }
-        catch(_) { sigs = []; }
-
-        let canonical = this.canonical(c);
-        let snapPubkeys = new Set(validators.map(v => String(v.pubkey).toLowerCase()));
-        let validSigners = [], seen = new Set();
-        for(let s of sigs){
-            let pk  = String(s.pubkey || '').toLowerCase();
-            let sig = String(s.sig || '').toLowerCase();
-            if(seen.has(pk)) continue;
-            if(!/^[0-9a-f]{64}$/.test(pk) || !/^[0-9a-f]{128}$/.test(sig)) continue;
-            if(!snapPubkeys.has(pk)) continue;
-            if(!ed25519.verify(canonical, sig, pk)) continue;
-            // Mark seen only AFTER the signature verifies, matching the hub
-            // finalizer and the SDK/explorer/sync verifiers (and anchor.js):
-            // marking on first encounter lets a garbage-then-valid pair for one
-            // qualified validator suppress the real signature (order-dependent
-            // quorum under-count, failing a quorate injection closed).
-            seen.add(pk);
-            validSigners.push(pk);
-        }
-        let quorumMet = weighted
-            ? swq.meetsStakeThreshold(validators, validSigners)
-            : (validSigners.length >= ((N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2))));
-        if(!quorumMet){
-            // Quorum starvation: the mirrored row's signature set does not
-            // meet quorum against the pinned snapshot. NOT terminal: signature sets
-            // are per-hub and hubs gossip more signatures over time, so the call
-            // stays effective + unexecuted and retries every block. Record the
-            // refusal (node-local diagnostics, upsert per attempt) so a starved
-            // dispatch is visible to operators and to getcrosschaincallresult
-            // instead of leaving only this console line.
-            let detail = weighted
-                ? 'insufficient signer stake (' + validSigners.length + ' valid signers of ' + N + ' snapshot keys)'
-                : 'insufficient valid signatures (' + validSigners.length + '/' + N + ')';
-            getLogger().warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : ' + detail + ' - skipping');
-            await this.indexerDb.recordCrossChainCallRejection(
-                String(c.call_id).toLowerCase(), 'quorum_not_met', detail, data['BLOCK_INDEX']);
-            return;
-        }
-
-        // Mint the internal XEXEC action (rollback anchor for the whole call)
-        let action = { ACTION: 'XEXEC', BLOCK_INDEX: data['BLOCK_INDEX'] };
-        data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
-        data['STATUS'] = 'valid';
-
-        // Run the target method as a fresh depth-0 execution
-        let parsedParams = [];
-        try {
-            let p = JSON.parse(String(c.params_json || '[]'));
-            if(Array.isArray(p)) parsedParams = p.map(String);
-        } catch(_){ parsedParams = []; }
-
-        // Positional EXECUTE format: VERSION|CONTRACT_ACTION_INDEX|METHOD|PARAMS...
-        let actionParams = [0, Number(c.target_contract_index), String(c.method), ...parsedParams];
-
-        let executeActionIndex = await this.indexerDb.createActionIndex({
-            ACTION:      'EXECUTE',
-            BLOCK_INDEX: data['BLOCK_INDEX'],
-            FORMAT:      0,
-            // The caller is the SOURCE chain's contract, addressed across chains.
-            SOURCE:      'C:' + String(c.source_chain) + ':' + String(c.source_contract_index)
-        }, true);
-
-        // Synthetic, chain/network-namespaced TX_HASH: there is no real transaction
-        // on this chain, but anything the execution emits (ATTEST request_ids, XCALL
-        // call_ids) derives from TX_HASH. It must be unique and collision-free
-        // against real tx hashes AND other injected calls. CROSS_HOPS threads the
-        // hop budget; IS_CROSS_CALL makes the VM enforce the target's crossCallable
-        // allowlist; VM_GAS_LIMIT applies the caller-funded ceiling.
-        let executionData = {
+    // The EXECUTE context the injected call runs in.
+    //
+    // Synthetic, chain/network-namespaced TX_HASH: there is no real transaction
+    // on this chain, but anything the execution emits (ATTEST request_ids, XCALL
+    // call_ids) derives from TX_HASH. It must be unique and collision-free
+    // against real tx hashes AND other injected calls. CROSS_HOPS threads the
+    // hop budget; IS_CROSS_CALL makes the VM enforce the target's crossCallable
+    // allowlist; VM_GAS_LIMIT applies the caller-funded ceiling.
+    buildExecutionContext(c, data, coin, executeActionIndex){
+        return {
             ACTION_INDEX: executeActionIndex,
             SOURCE:       'C:' + String(c.source_chain) + ':' + String(c.source_contract_index),
             FEE_PAYER:    'C:' + String(c.source_chain) + ':' + String(c.source_contract_index),
@@ -235,51 +156,87 @@ class Xexec {
             // its own budget rather than inheriting the delivering transaction's.
             ISSUANCE_LIMIT_LEDGER: { topLevel: 0 }
         };
+    }
 
-        let resultStatus = 'error';
-        let returnPayloadB64 = '';
-        let gasUsed = 0;
+    async parse(params, data, error){
+        let c = data['CALL'];
+        if(!c) return;
 
-        let savepoint = await this.indexerDb.createSavepoint('xexec_' + executeActionIndex);
-        try {
-            await this.actions.actionExecute.parse(actionParams, executionData, null);
-            let status = String(executionData['STATUS'] || 'error');
-            gasUsed = Number(executionData['VM_GAS_BILLED']) || 0;
+        let coin = this.config['COIN'];
 
-            if(status === 'valid'){
-                resultStatus = 'ok';
-                let rv = executionData['VM_RETURN_VALUE'];
-                if(rv != null){
-                    let bytes = Buffer.from(String(rv), 'utf8');
-                    if(bytes.length > XCALL_MAX_RETURN_BYTES){
-                        // Deterministic truncation rule: oversize returns become a
-                        // distinct failure status with an EMPTY payload (never a
-                        // truncated one, since partial JSON would be a foot-gun). The
-                        // state changes stand (the contract ran fine); only the
-                        // return payload is suppressed.
-                        resultStatus = 'payload_too_large';
-                    } else {
-                        returnPayloadB64 = bytes.toString('base64');
-                    }
-                }
-                await this.indexerDb.releaseSavepoint(savepoint);
-            } else {
-                // The run failed: roll back any partial effects; the failure is the result.
-                await this.indexerDb.rollbackToSavepoint(savepoint);
-                resultStatus = this.mapFailureStatus(status, executionData['VM_ERROR_MESSAGE']);
-            }
-        } catch(e){
-            await this.indexerDb.rollbackToSavepoint(savepoint);
-            // An infrastructure fault (VM host fault, transient DB error) is not a
-            // cross-chain call result: halt so the block rolls back and retries rather
-            // than relaying a validator-local 'error' verdict (persisted below, outside
-            // the savepoint) that permanently fences the money-bearing call from retry.
-            // Deterministic VM failures never reach here; they are handled at the sibling
-            // branch above via mapFailureStatus.
-            rethrowIfInfraFault(e);
-            resultStatus = 'error';
-            getLogger().warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : execution threw: ' + (e && e.message));
+        if(!this.dispatchInScope(c, coin)) return;
+
+        let q = await dispatchQuorum.verifyDispatchQuorum.call(this, c);
+        if(!q.synced){
+            // Snapshot not mirrored yet. The block loop's call-sync + snapshot barriers
+            // front-stop this (defer the whole block); this early-return is the
+            // defensive guard for the residual race / single-host path. The dispatch
+            // stays effective + unexecuted and retries on a later block. NOT an error.
+            getLogger().info("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : capability snapshot not synced - deferring');
+            return;
         }
+        if(!q.quorumMet){
+            await this.recordQuorumRefusal(c, data, q);
+            return;
+        }
+
+        // Mint the internal XEXEC action (rollback anchor for the whole call)
+        let action = { ACTION: 'XEXEC', BLOCK_INDEX: data['BLOCK_INDEX'] };
+        data['ACTION_INDEX'] = await this.indexerDb.createActionIndex(action);
+        data['STATUS'] = 'valid';
+
+        let actionParams = this.buildCallParams(c);
+
+        let executeActionIndex = await this.indexerDb.createActionIndex({
+            ACTION:      'EXECUTE',
+            BLOCK_INDEX: data['BLOCK_INDEX'],
+            FORMAT:      0,
+            // The caller is the SOURCE chain's contract, addressed across chains.
+            SOURCE:      'C:' + String(c.source_chain) + ':' + String(c.source_contract_index)
+        }, true);
+
+        let executionData = this.buildExecutionContext(c, data, coin, executeActionIndex);
+
+        let run = await runTarget.runTargetExecution.call(this, c, actionParams, executionData, executeActionIndex);
+
+        await this.recordExecutionResult(c, data, coin, executeActionIndex, run);
+
+        await this.mapper.createMappings(data);
+    }
+
+    // Quorum starvation: the mirrored row's signature set does not
+    // meet quorum against the pinned snapshot. NOT terminal: signature sets
+    // are per-hub and hubs gossip more signatures over time, so the call
+    // stays effective + unexecuted and retries every block. Record the
+    // refusal (node-local diagnostics, upsert per attempt) so a starved
+    // dispatch is visible to operators and to getcrosschaincallresult
+    // instead of leaving only this console line.
+    async recordQuorumRefusal(c, data, q){
+        let detail = q.weighted
+            ? 'insufficient signer stake (' + q.validSigners.length + ' valid signers of ' + q.N + ' snapshot keys)'
+            : 'insufficient valid signatures (' + q.validSigners.length + '/' + q.N + ')';
+        getLogger().warn("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '... : ' + detail + ' - skipping');
+        await this.indexerDb.recordCrossChainCallRejection(
+            String(c.call_id).toLowerCase(), 'quorum_not_met', detail, data['BLOCK_INDEX']);
+    }
+
+    // Run the target method as a fresh depth-0 execution
+    buildCallParams(c){
+        let parsedParams = [];
+        try {
+            let p = JSON.parse(String(c.params_json || '[]'));
+            if(Array.isArray(p)) parsedParams = p.map(String);
+        } catch(_){ parsedParams = []; }
+
+        // Positional EXECUTE format: VERSION|CONTRACT_ACTION_INDEX|METHOD|PARAMS...
+        return [0, Number(c.target_contract_index), String(c.method), ...parsedParams];
+    }
+
+    // Record the execution (idempotent on call_id; rollback-able with this block).
+    // Written OUTSIDE the execution savepoint so a rolled-back failed run still
+    // records its result: the failure must relay, and the call must not retry.
+    async recordExecutionResult(c, data, coin, executeActionIndex, run){
+        let resultStatus = run.resultStatus, returnPayloadB64 = run.returnPayloadB64, gasUsed = run.gasUsed;
 
         getLogger().info("\t XEXEC : call=" + String(c.call_id).substring(0,16) + '...' +
                     ' : ' + c.source_chain + ':' + c.source_contract_index +
@@ -287,14 +244,9 @@ class Xexec {
                     ' : gas=' + gasUsed + '/' + c.gas_limit +
                     ' : ' + resultStatus);
 
-        // Record the execution (idempotent on call_id; rollback-able with this block).
-        // Written OUTSIDE the execution savepoint so a rolled-back failed run still
-        // records its result: the failure must relay, and the call must not retry.
         await this.indexerDb.recordCrossChainCallExecution(
             data['ACTION_INDEX'], String(c.call_id).toLowerCase(), executeActionIndex,
             resultStatus, returnPayloadB64, gasUsed, data['BLOCK_INDEX']);
-
-        await this.mapper.createMappings(data);
     }
 
     // Map an EXECUTE handler status to the relayed result status vocabulary.
@@ -311,5 +263,9 @@ class Xexec {
     }
 }
 
+// The return-payload cap, readable off the class for anything sizing a payload against it.
+// It hangs on the handler rather than on a second export object, so the module's one
+// export stays the class; the value is the vendored protocol constant above.
+Xexec.XCALL_MAX_RETURN_BYTES = XCALL_MAX_RETURN_BYTES;
+
 module.exports = Xexec;
-module.exports.XCALL_MAX_RETURN_BYTES = XCALL_MAX_RETURN_BYTES;
