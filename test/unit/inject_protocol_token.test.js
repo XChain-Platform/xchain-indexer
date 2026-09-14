@@ -109,6 +109,10 @@ describe('genesis.injectProtocolToken and the bridged row creation @regression',
 
     });
 
+});
+
+describe('genesis.injectProtocolToken and the bridged row creation @regression', function () {
+
     describe('the first in-leg for a token on this chain', function () {
 
         it('creates the root row and then the child row, in that order', async function () {
@@ -137,6 +141,14 @@ describe('genesis.injectProtocolToken and the bridged row creation @regression',
             assert.strictEqual(h.sent[1].tx.tx_hash, CHILD_HASH);
             assert.notStrictEqual(h.sent[0].tx.tx_hash, h.sent[1].tx.tx_hash);
         });
+
+    });
+
+});
+
+describe('genesis.injectProtocolToken and the bridged row creation @regression', function () {
+
+    describe('the first in-leg for a token on this chain', function () {
 
         it('sets every lock a keyless copy needs and never LOCK_MAX_SUPPLY', async function () {
             const h = harness();
@@ -169,6 +181,10 @@ describe('genesis.injectProtocolToken and the bridged row creation @regression',
         });
 
     });
+
+});
+
+describe('genesis.injectProtocolToken and the bridged row creation @regression', function () {
 
     describe('the existing-row rules (token bridge section 6)', function () {
         it('refuses the leg when the root is owned by anyone but the bridge role address', async function () {
@@ -224,6 +240,10 @@ describe('genesis.injectProtocolToken and the bridged row creation @regression',
         });
     });
 
+});
+
+describe('genesis.injectProtocolToken and the bridged row creation @regression', function () {
+
     describe('the existing-row rules (token bridge section 6)', function () {
         it('refuses and injects nothing when the decimals differ and supply exists', async function () {
             const h = harness({ BTC: lock(), 'BTC.FUFU': lock({ TICK: 'BTC.FUFU', DECIMALS: 2, SUPPLY: '0.00000001' }) });
@@ -236,6 +256,10 @@ describe('genesis.injectProtocolToken and the bridged row creation @regression',
         });
 
     });
+
+});
+
+describe('genesis.injectProtocolToken and the bridged row creation @regression', function () {
 
     describe('idempotency across legs', function () {
 

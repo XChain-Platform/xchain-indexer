@@ -46,14 +46,16 @@ function fakeDb(snapshots = [], oraclePrices = []) {
 const snap = (price, timestamp, roundNumber = 1) => ({ price, timestamp, roundNumber });
 const oracle = (price, effectiveAt, actionIndex = 1) => ({ price, effectiveAt, actionIndex, blockTime: effectiveAt });
 
-describe('Utility FIAT dispenser price matching @regression', function () {
-    let util;
-    const WINDOW = 86400;
-    const NOW = 1790000000;
+let util;
+const WINDOW = 86400;
+const NOW = 1790000000;
 
-    beforeEach(function () {
-        util = new Utility();
-    });
+function resetUtility() {
+    util = new Utility();
+}
+
+describe('Utility FIAT dispenser price matching @regression', function () {
+    beforeEach(resetUtility);
 
     describe('reversePriceMatch() - Mode A, validator snapshot', function () {
         it('floors the multiplier and absorbs the remainder as a tip', async function () {
@@ -79,6 +81,15 @@ describe('Utility FIAT dispenser price matching @regression', function () {
             const r = await util.reversePriceMatch('0.00199999', '100', 'BTC/USD', NOW, WINDOW, db);
             assert.strictEqual(r, null, 'below one unit is not a dispense');
         });
+
+    });
+
+});
+
+describe('Utility FIAT dispenser price matching @regression', function () {
+    beforeEach(resetUtility);
+
+    describe('reversePriceMatch() - Mode A, validator snapshot', function () {
 
         it('returns the newest snapshot that yields at least one unit', async function () {
             // Newest is too expensive to afford a unit; the next one down works.
@@ -112,6 +123,11 @@ describe('Utility FIAT dispenser price matching @regression', function () {
         });
     });
 
+});
+
+describe('Utility FIAT dispenser price matching @regression', function () {
+    beforeEach(resetUtility);
+
     describe('reversePriceMatch() - Mode A, validator snapshot', function () {
         it('never matches a snapshot newer than the block being processed', async function () {
             // Causality: a node replaying an old block must not see a price that
@@ -132,6 +148,11 @@ describe('Utility FIAT dispenser price matching @regression', function () {
             assert.strictEqual(r, null);
         });
     });
+
+});
+
+describe('Utility FIAT dispenser price matching @regression', function () {
+    beforeEach(resetUtility);
 
     describe('reverseOraclePriceMatch() - Mode B, user oracle', function () {
         it('cross-converts through the shared fiat currency', async function () {
@@ -185,6 +206,11 @@ describe('Utility FIAT dispenser price matching @regression', function () {
         });
     });
 
+});
+
+describe('Utility FIAT dispenser price matching @regression', function () {
+    beforeEach(resetUtility);
+
     describe('reverseOraclePriceMatch() - Mode B, user oracle', function () {
         it('skips an oracle row that has no validator price behind it', async function () {
             // First (newest) oracle row has no coin price in its own window; the
@@ -226,6 +252,15 @@ describe('Utility FIAT dispenser price matching @regression', function () {
                 'the oracle lookup must still use the chain of the priced token (GIVE_COIN)');
         });
 
+    });
+
+});
+
+describe('Utility FIAT dispenser price matching @regression', function () {
+    beforeEach(resetUtility);
+
+    describe('reverseOraclePriceMatch() - Mode B, user oracle', function () {
+
         it('falls back to the priced-token coin when no pay coin is given', async function () {
             const db = fakeDb([snap('15000000', NOW - 600)], [oracle('7.50', NOW - 600)]);
             await util.reverseOraclePriceMatch(
@@ -241,6 +276,11 @@ describe('Utility FIAT dispenser price matching @regression', function () {
             assert.strictEqual(db.calls.oracle[0].endTime, NOW);
         });
     });
+
+});
+
+describe('Utility FIAT dispenser price matching @regression', function () {
+    beforeEach(resetUtility);
 
     describe('reverseOraclePriceMatch() - Mode B, user oracle', function () {
         it('returns null when the oracle published nothing in the window', async function () {
@@ -276,6 +316,11 @@ describe('Utility FIAT dispenser price matching @regression', function () {
             assert.ok(!/e/i.test(r.rawUnits), `rawUnits must not be exponential: ${r.rawUnits}`);
         });
     });
+
+});
+
+describe('Utility FIAT dispenser price matching @regression', function () {
+    beforeEach(resetUtility);
 
     // Guards on the inputs a PRICE v1 oracle is actually allowed to publish
     // (actions/price.js validates VALUE only as a positive 8-decimal string, so

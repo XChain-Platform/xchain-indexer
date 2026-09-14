@@ -112,6 +112,10 @@ describe('public pre-flight (computePreflight) @regression @tier1', function () 
         });
     });
 
+});
+
+describe('public pre-flight (computePreflight) @regression @tier1', function () {
+
     describe('FEE_DESTINATION decoupling (the fix)', function () {
         it('reports a verdict even when no FEE_DESTINATION is configured', async function () {
             let { ctx } = makeCtx(makeUtil('BTC', PLACEHOLDER));
@@ -138,6 +142,10 @@ describe('public pre-flight (computePreflight) @regression @tier1', function () 
             assert.strictEqual(r.error, 'balance too low');
         });
     });
+
+});
+
+describe('public pre-flight (computePreflight) @regression @tier1', function () {
 
     describe('fee echo', function () {
         it('echoes the dry-run xchainFee, 8dp normalized, so no second round-trip is needed', async function () {
@@ -192,6 +200,10 @@ describe('public pre-flight (computePreflight) @regression @tier1', function () 
         });
     });
 
+});
+
+describe('public pre-flight (computePreflight) @regression @tier1', function () {
+
     // the dry-run used to inject the probe fee output unconditionally, which put every
     // pre-flight in NATIVE settlement mode and so never debited the protocol fee against the
     // payer's XCHAIN balance. A payer holding zero XCHAIN got valid:true, signed, paid a miner
@@ -233,6 +245,14 @@ describe('public pre-flight (computePreflight) @regression @tier1', function () 
             assert.strictEqual(calls.lastArgs.probeFeeDestination, null);
         });
 
+    });
+
+});
+
+describe('public pre-flight (computePreflight) @regression @tier1', function () {
+
+    describe('fee settlement mode + payer balance', function () {
+
         it('an unrecognized feeMode falls back to the chain default rather than guessing', async function () {
             let { ctx } = makeCtx(makeUtil('BTC', FEE_DEST));
             let r = await ctx.computePreflight({ action: 'ISSUE', params: '0|NEWTICK', feeMode: 'gas' });
@@ -255,6 +275,10 @@ describe('public pre-flight (computePreflight) @regression @tier1', function () 
             assert.strictEqual(r.feeTick, 'XCHAIN');
         });
     });
+
+});
+
+describe('public pre-flight (computePreflight) @regression @tier1', function () {
 
     describe('fee settlement mode + payer balance', function () {
         it('reports the payer balance beside the fee, 8dp, with affordability', async function () {
@@ -310,6 +334,10 @@ describe('public pre-flight (computePreflight) @regression @tier1', function () 
             assert.strictEqual(cached.cached, true);
         });
     });
+
+});
+
+describe('public pre-flight (computePreflight) @regression @tier1', function () {
 
     describe('guardInert surfacing', function () {
         it('a controller-guard-refused verdict sets guardInert:true and valid:null', async function () {

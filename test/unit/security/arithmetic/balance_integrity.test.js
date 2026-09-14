@@ -18,17 +18,19 @@ const sinon  = require('sinon');
 
 const { createMockIndexer } = require('../../../fixtures/mocks');
 
+let util;
+
+function prepareUtil() {
+    const indexer = createMockIndexer();
+    util = indexer.util;
+}
+
 // ---------------------------------------------------------------------------
 // Suite: balance and arithmetic integrity
 // ---------------------------------------------------------------------------
 
 describe('Security: balance integrity and adversarial arithmetic @regression @tier4', function () {
-    let util;
-
-    before(function () {
-        const indexer = createMockIndexer();
-        util = indexer.util;
-    });
+    before(prepareUtil);
 
     // -----------------------------------------------------------------------
     // hasBalance
@@ -54,6 +56,11 @@ describe('Security: balance integrity and adversarial arithmetic @regression @ti
         const result = util.debitBalances({ 1: '100' }, 1, '50');
         assert.strictEqual(util.bcformat(result[1], 18), '50.000000000000000000');
     });
+
+});
+
+describe('Security: balance integrity and adversarial arithmetic @regression @tier4', function () {
+    before(prepareUtil);
 
     // -----------------------------------------------------------------------
     // bcsub edge cases

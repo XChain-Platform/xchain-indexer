@@ -92,6 +92,10 @@ describe('rollback block-key coverage @regression', function () {
             'absence row pointing at an epoch whose verdict is already gone');
     });
 
+});
+
+describe('rollback block-key coverage @regression', function () {
+
     // ONE unwind, and it must sit inside the schema-gap guard. The bespoke delete was
     // added twice: 1bdc67ed82 landed the guarded pair and 7efa7e742a added an unguarded
     // duplicate after the block loop, which re-raised errno 1146 on a node that predates

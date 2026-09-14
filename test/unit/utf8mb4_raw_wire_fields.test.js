@@ -171,9 +171,13 @@ function migrationWidens() {
     return seen;
 }
 
+function restoreSinon() {
+    sinon.restore();
+}
+
 describe('the grammar-constrained raw wire columns hold a 4-byte character @regression', function () {
 
-    afterEach(() => sinon.restore());
+    afterEach(restoreSinon);
 
     it('sanity: the widen set is populated and the fixture character really is 4 bytes', function () {
         assert.ok(widenSet.UTF8MB4_RAW_FIELD_COLUMNS.length >= 60,
@@ -206,6 +210,12 @@ describe('the grammar-constrained raw wire columns hold a 4-byte character @regr
             'These columns disagree with src/chain/utf8mb4_columns.js, so the module no longer describes what a ' +
             'fresh install gets and the xchain-sync replica widen would issue the wrong MODIFY:\n' + wrong.join('\n'));
     });
+
+});
+
+describe('the grammar-constrained raw wire columns hold a 4-byte character @regression', function () {
+
+    afterEach(restoreSinon);
 
     // LEDGER path: what an aged DB converges to by replaying migrations, and under which
     // apply mode. A mode mismatch is the difference between a wedge that closes itself at
@@ -252,6 +262,12 @@ describe('the grammar-constrained raw wire columns hold a 4-byte character @regr
             'contracts.code wedged until an operator runs it for no reason - fold it into the auto file');
     });
 
+});
+
+describe('the grammar-constrained raw wire columns hold a 4-byte character @regression', function () {
+
+    afterEach(restoreSinon);
+
     // INGEST path: the real writers, against the strict-server stub. Each case is a column
     // the probe showed carries a raw 4-byte character all the way to the INSERT.
     describe('the ingest writers survive a 4-byte character', function () {
@@ -282,6 +298,16 @@ describe('the grammar-constrained raw wire columns hold a 4-byte character @regr
                 'the 4-byte character never reached messages.coin');
         });
 
+    });
+
+});
+
+describe('the grammar-constrained raw wire columns hold a 4-byte character @regression', function () {
+
+    afterEach(restoreSinon);
+
+    describe('the ingest writers survive a 4-byte character', function () {
+
         it('createContractExecution: EXECUTE method, params and error text (contract_executions.*)', async function () {
             const { db, doQuery } = makeDb();
             await db.createContractExecution({ ACTION: 'EXECUTE', ACTION_INDEX: 4, CONTRACT_INDEX: 1, CALLER: 'c',
@@ -310,6 +336,12 @@ describe('the grammar-constrained raw wire columns hold a 4-byte character @regr
             assert.deepStrictEqual([...hit].sort(), ['memo', 'share']);
         });
     });
+
+});
+
+describe('the grammar-constrained raw wire columns hold a 4-byte character @regression', function () {
+
+    afterEach(restoreSinon);
 
     describe('the ingest writers survive a 4-byte character', function () {
         it('createGatedFile: the gate ticker and its threshold (gated_files.*)', async function () {

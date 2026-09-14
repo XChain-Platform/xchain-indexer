@@ -56,20 +56,24 @@ function makeRepo(dir) {
     git(dir, 'commit', '-q', '-m', 'fixture');
 }
 
+let T;
+
+function setupLayouts() {
+    T = fs.mkdtempSync(path.join(os.tmpdir(), 'sibling-checkout-'));
+    makeRepo(path.join(T, 'main', 'xchain-own'));
+    makeRepo(path.join(T, 'main', 'xchain-sib'));
+}
+
+function cleanupLayouts() {
+    if (T) fs.rmSync(T, { recursive: true, force: true });
+}
+
+const judge = (ownRoot, target) => siblingCheckout(ownRoot, target, { ownRoot });
+
 describe('sibling_checkout verdict against real git layouts', function () {
     this.timeout(30000);
-
-    let T;
-    before(function () {
-        T = fs.mkdtempSync(path.join(os.tmpdir(), 'sibling-checkout-'));
-        makeRepo(path.join(T, 'main', 'xchain-own'));
-        makeRepo(path.join(T, 'main', 'xchain-sib'));
-    });
-    after(function () {
-        if (T) fs.rmSync(T, { recursive: true, force: true });
-    });
-
-    const judge = (ownRoot, target) => siblingCheckout(ownRoot, target, { ownRoot });
+    before(setupLayouts);
+    after(cleanupLayouts);
 
     it('trusts a real sibling directory beside a main checkout', function () {
         const v = judge(path.join(T, 'main', 'xchain-own'), '../xchain-sib/f.js');
@@ -97,6 +101,13 @@ describe('sibling_checkout verdict against real git layouts', function () {
         const v = judge(path.join(T, 'venue', 'xchain-own'), '../xchain-sib/f.js');
         assert.strictEqual(v.usable, true, v.reason);
     });
+
+});
+
+describe('sibling_checkout verdict against real git layouts', function () {
+    this.timeout(30000);
+    before(setupLayouts);
+    after(cleanupLayouts);
 
     it('trusts --shared clones laid side by side', function () {
         git(T, 'clone', '-q', '--shared', path.join(T, 'main', 'xchain-own'), path.join(T, 'shared', 'xchain-own'));

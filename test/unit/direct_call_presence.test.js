@@ -102,10 +102,12 @@ function hubDbWithRealReads(hubDb){
 const run = (self, blockTime) =>
     XChainIndexer.prototype.waitForDirectCallPresence.call(self, blockTime);
 
+function restoreSinon(){
+    sinon.restore();
+}
+
 describe('XChainIndexer._waitForDirectCallPresence (direct-hub-DB call barrier)', function(){
-
-    afterEach(() => sinon.restore());
-
+    afterEach(restoreSinon);
     it('is a no-op when no hub DB connection exists', async function(){
         const self = ctx({ noHubDb: true });
         await run(self, NOW_S() + 3600);                 // returns immediately, no hubDb to read
@@ -148,6 +150,11 @@ describe('XChainIndexer._waitForDirectCallPresence (direct-hub-DB call barrier)'
         assert.ok(threw, 'must defer (throw) for a behind mirror inside the grace window');
         assert.ok(self._doQuery.called, 'must query the mirror, not short-circuit on wall-clock');
     });
+});
+
+describe('XChainIndexer._waitForDirectCallPresence (direct-hub-DB call barrier)', function(){
+
+    afterEach(restoreSinon);
 
     it('(defer) throws on timeout when the mirror never catches up (no partial-set proceed)', async function(){
         // Mirror always reports a watermark BELOW block_time and the hub clock is nowhere
@@ -192,13 +199,18 @@ describe('XChainIndexer._waitForDirectCallPresence (direct-hub-DB call barrier)'
         assert.ok(threw, 'must defer (throw) on persistent table-not-ready, not proceed');
     });
 
+});
+
+describe('XChainIndexer._waitForDirectCallPresence (direct-hub-DB call barrier)', function(){
+
+    afterEach(restoreSinon);
+
     // ── Hub-clock escape hatch ────────────────────────────────────────────────────
     //
     // Liveness must not be keyed on cross-chain call TRAFFIC. Once the newest finalized
     // cross_chain_call is in the chain's past and no new call is ever finalized, the
     // coverage condition can never be met again, and before this hatch every subsequent
     // block deferred forever on an otherwise healthy chain.
-
     describe('hub-clock escape hatch', function(){
         it('proceeds once the hub clock passes block_time + the call grace', async function(){
             // The wedge shape: newest finalized call a day old, block an hour old, no new
@@ -210,7 +222,6 @@ describe('XChainIndexer._waitForDirectCallPresence (direct-hub-DB call barrier)'
             assert.strictEqual(self._doQuery.calledOnce, true, 'escape must open on the first poll');
             assert.strictEqual(self._sleep.called, false, 'escape must not enter the poll loop');
         });
-
         it('an idle-traffic chain stops deferring: every retry would have deferred before', async function(){
             // Drive the caller's defer-and-retry loop the way the block loop does. Before the
             // hatch every attempt threw; now the very first one returns.
@@ -249,6 +260,11 @@ describe('XChainIndexer._waitForDirectCallPresence (direct-hub-DB call barrier)'
             assert.ok(threw, 'a lagging hub clock must keep the escape shut regardless of local time');
         });
     });
+});
+
+describe('XChainIndexer._waitForDirectCallPresence (direct-hub-DB call barrier)', function(){
+
+    afterEach(restoreSinon);
 
     describe('hub-clock escape hatch', function(){
         it('reads the hub clock from the SAME query as the watermark', async function(){
@@ -302,6 +318,12 @@ describe('XChainIndexer._waitForDirectCallPresence (direct-hub-DB call barrier)'
         });
     });
 
+});
+
+describe('XChainIndexer._waitForDirectCallPresence (direct-hub-DB call barrier)', function(){
+
+    afterEach(restoreSinon);
+
     describe('hub-clock escape hatch', function(){
         it('names the escape instant in the timeout diagnostic', async function(){
             // The operator has to be able to tell a barrier that is merely early from one
@@ -333,6 +355,12 @@ describe('XChainIndexer._waitForDirectCallPresence (direct-hub-DB call barrier)'
             assert.deepStrictEqual(args, []);
         });
     });
+
+});
+
+describe('XChainIndexer._waitForDirectCallPresence (direct-hub-DB call barrier)', function(){
+
+    afterEach(restoreSinon);
 
     describe('_directCallBarrierClearsAt (health verdict)', function(){
         const clearsAt = (self, bt, height) =>

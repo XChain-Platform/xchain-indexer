@@ -95,12 +95,14 @@ function restoredAmount(restore, debits){
     }
 }
 
-describe('Rollback contract slash-restore order @regression @tier3', function(){
-    let restores;
+let restores;
 
-    before(async function(){
-        restores = await shippedRestores();
-    });
+async function prepareRestores(){
+    restores = await shippedRestores();
+}
+
+describe('Rollback contract slash-restore order @regression @tier3', function(){
+    before(prepareRestores);
 
     it('issues a restore for both stake-ledger tables', function(){
         assert.ok(restores['contract_stakes'],   'expected a contract_stakes restore');
@@ -130,6 +132,11 @@ describe('Rollback contract slash-restore order @regression @tier3', function(){
         assert.strictEqual(got, '1000',
             'the restore must copy back the amount before the FIRST orphaned debit, not the lowest-execution_index one');
     });
+
+});
+
+describe('Rollback contract slash-restore order @regression @tier3', function(){
+    before(prepareRestores);
 
     it('restores the pre-slash amount through three inverted nesting levels', function(){
         const got = restoredAmount(restores['contract_stakes'], [

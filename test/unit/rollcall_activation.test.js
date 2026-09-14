@@ -128,6 +128,14 @@ describe('rollcall_activation', function () {
             );
         });
 
+    });
+
+});
+
+describe('rollcall_activation', function () {
+
+    describe('the eight consensus values', function () {
+
         // flagdayPlaceholderGuard cannot take a null map, so the lock lives here.
         it('MAINNET IS ARMED AT GENESIS: ROLLCALL_ACTIVATION.mainnet is 0', function () {
             // Ruled 2026-09-09: mainnet carries 0 validators, 0 stakes and 0 roll-calls
@@ -169,6 +177,9 @@ describe('rollcall_activation', function () {
         });
     });
 
+});
+
+describe('rollcall_activation', function () {
     // The 2026-09-01 ruling scopes the no-tunable-input rule to
     // shared-ledger networks and gives regtest a documented arming height.
     describe('the regtest arming opt-in', function () {
@@ -226,7 +237,9 @@ describe('rollcall_activation', function () {
                 'the close block must resolve back to its epoch once the venue is armed');
         });
     });
+});
 
+describe('rollcall_activation', function () {
     describe('the regtest arming opt-in', function () {
         it('an arming height above genesis leaves the epochs below it inert', function () {
             const m = loadWithEnv('60');
@@ -284,6 +297,9 @@ describe('rollcall_activation', function () {
             assert.strictEqual(act.isRollcallActive(undefined, 'regtest'), false);
         });
     });
+});
+
+describe('rollcall_activation', function () {
 
     describe('isRollcallEpoch', function () {
 
@@ -305,6 +321,10 @@ describe('rollcall_activation', function () {
             assert.strictEqual(act.isRollcallEpoch('abc', 'regtest'), false);
         });
     });
+
+});
+
+describe('rollcall_activation', function () {
 
     describe('epoch close arithmetic', function () {
 
