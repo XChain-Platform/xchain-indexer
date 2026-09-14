@@ -105,13 +105,13 @@ describe('Utility isCryptoAddress() boundary tests @regression @tier3', function
     });
 });
 
+let indexer, actionsCtx, handler;
+
 // ---------------------------------------------------------------------------
 // SEND DESTINATION validation (end-to-end through the Send handler)
 // ---------------------------------------------------------------------------
 
 describe('Address validation boundary tests via SEND handler @regression @tier3', function () {
-    let indexer, actionsCtx, handler;
-
     beforeEach(function () {
         indexer     = createMockIndexer();
         actionsCtx  = makeActionsCtx(indexer);
@@ -164,6 +164,22 @@ describe('Address validation boundary tests via SEND handler @regression @tier3'
 
         assert.ok(data.STATUS.startsWith('invalid'), `expected invalid but got: ${data.STATUS}`);
     });
+});
+
+describe('Address validation boundary tests via SEND handler @regression @tier3', function () {
+    beforeEach(function () {
+        indexer     = createMockIndexer();
+        actionsCtx  = makeActionsCtx(indexer);
+        handler     = new Send(actionsCtx);
+
+        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 }));
+        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.findDispenserSends.resolves([]);
+    });
+
+    afterEach(function () { sinon.restore(); });
 
     it('ADR-05: valid bech32 segwit DESTINATION → valid', async function () {
         const params = ['0', 'TEST', '1', 'bcrt1qe6l04hhwjg98fmggptdm0cemj6lm7hhwzahaul', ''];

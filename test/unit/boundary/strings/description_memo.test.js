@@ -64,7 +64,6 @@ function makeIssueParams(overrides = {}) {
 const DESTINATION = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs';
 
 describe('Description & memo boundary tests @regression @tier3', function () {
-
     // -------------------------------------------------------------------------
     // DESCRIPTION boundary (Issue handler)
     // MAX_TOKEN_DESCRIPTION = 250; check is `>= 250` so 249 passes, 250 fails
@@ -100,7 +99,9 @@ describe('Description & memo boundary tests @regression @tier3', function () {
             assert.ok(data.STATUS.startsWith('invalid'), `expected invalid but got: ${data.STATUS}`);
         });
     });
+});
 
+describe('Description & memo boundary tests @regression @tier3', function () {
     // -------------------------------------------------------------------------
     // MEMO boundary (Send handler)
     // MAX_MEMO_LENGTH = 250; check is `> 250` so 250 passes, 251 fails

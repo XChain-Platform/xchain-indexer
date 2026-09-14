@@ -67,7 +67,6 @@ function makeDispenserInfo(overrides = {}) {
 // ---------------------------------------------------------------------------
 
 describe('DISPENSE edge-case tests @regression @tier2', function () {
-
     // -----------------------------------------------------------------------
     // Payment exactly equal to GET_AMOUNT → multiplier=1, valid
     // -----------------------------------------------------------------------
@@ -114,7 +113,9 @@ describe('DISPENSE edge-case tests @regression @tier2', function () {
                 'expected GIVE_AMOUNT = 10 for multiplier of 1');
         });
     });
+});
 
+describe('DISPENSE edge-case tests @regression @tier2', function () {
     // -----------------------------------------------------------------------
     // Payment 1 satoshi below GET_AMOUNT → multiplier=0, fails
     // -----------------------------------------------------------------------
@@ -157,7 +158,9 @@ describe('DISPENSE edge-case tests @regression @tier2', function () {
             );
         });
     });
+});
 
+describe('DISPENSE edge-case tests @regression @tier2', function () {
     // -----------------------------------------------------------------------
     // Payment for multiplier > GIVE_REMAINING → while loop reduces multiplier
     // -----------------------------------------------------------------------
@@ -210,7 +213,9 @@ describe('DISPENSE edge-case tests @regression @tier2', function () {
                 `expected GIVE_AMOUNT = 50, got: ${dispenseArg['GIVE_AMOUNT']}`);
         });
     });
+});
 
+describe('DISPENSE edge-case tests @regression @tier2', function () {
     // -----------------------------------------------------------------------
     // After dispense GIVE_REMAINING < GIVE_AMOUNT → auto-close
     // -----------------------------------------------------------------------
@@ -266,7 +271,9 @@ describe('DISPENSE edge-case tests @regression @tier2', function () {
                 'expected DISPENSER_STATUS = "empty" in the close call');
         });
     });
+});
 
+describe('DISPENSE edge-case tests @regression @tier2', function () {
     // -----------------------------------------------------------------------
     // Exactly equal: GIVE_REMAINING === GIVE_AMOUNT → one dispense empties, auto-close
     // -----------------------------------------------------------------------
@@ -318,7 +325,9 @@ describe('DISPENSE edge-case tests @regression @tier2', function () {
                 'expected DISPENSER_CLOSE to be triggered when dispenser empties exactly');
         });
     });
+});
 
+describe('DISPENSE edge-case tests @regression @tier2', function () {
     describe('DSP-06: dust-priced non-FIAT dispenser does not wedge the block loop', function () {
         let indexer, actionsCtx, handler;
 

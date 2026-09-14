@@ -32,7 +32,6 @@ const {
 const M = RETRACTION_SIGNING_ACTIVATION.mainnet;
 
 describe('retraction_signing_activation boundary tests @regression @tier1', function () {
-
     // -----------------------------------------------------------------------
     // Off-by-one across the mainnet flag-day (inclusive at threshold)
     // -----------------------------------------------------------------------
@@ -80,7 +79,9 @@ describe('retraction_signing_activation boundary tests @regression @tier1', func
             assert.strictEqual(isRetractionSigningActive(String(M - 1) + '.9', 'mainnet'), false);
         });
     });
+});
 
+describe('retraction_signing_activation boundary tests @regression @tier1', function () {
     // -----------------------------------------------------------------------
     // Malformed-but-plausible wire strings (values arrive as strings)
     // -----------------------------------------------------------------------

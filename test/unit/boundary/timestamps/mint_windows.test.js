@@ -94,30 +94,30 @@ describe('MINT block window boundary tests @regression @tier2', function () {
     });
 });
 
+let indexer, actionsCtx, issueHandler;
+
+// Minimal Issue params for format 0 (enough fields to pass validation if format is known)
+function makeMinimalIssueParams() {
+    return [
+        '0',          // VERSION
+        'NEWTOKEN',   // TICK
+        '1000',       // MAX_SUPPLY
+        '100',        // MAX_MINT
+        '0',          // DECIMALS
+        'Test token', // DESCRIPTION
+        '', '', '',   // MINT_SUPPLY, TRANSFER, TRANSFER_SUPPLY
+        '', '', '',   // LOCK_MAX_SUPPLY, LOCK_MAX_MINT, LOCK_DESCRIPTION
+        '', '',       // LOCK_SLEEP, LOCK_CALLBACK
+        '', '', '',   // CALLBACK_BLOCK, CALLBACK_TICK, CALLBACK_AMOUNT
+        '', '',       // ALLOW_LIST, BLOCK_LIST
+        '',           // MINT_ADDRESS_MAX
+        '', '',       // MINT_START_BLOCK, MINT_STOP_BLOCK
+        '', '',       // LOCK_MINT, LOCK_MINT_SUPPLY
+        '',           // MEMO
+    ];
+}
+
 describe('FORMAT_VERSION boundary tests (via ISSUE) @regression @tier2', function () {
-    let indexer, actionsCtx, issueHandler;
-
-    // Minimal Issue params for format 0 (enough fields to pass validation if format is known)
-    function makeMinimalIssueParams() {
-        return [
-            '0',          // VERSION
-            'NEWTOKEN',   // TICK
-            '1000',       // MAX_SUPPLY
-            '100',        // MAX_MINT
-            '0',          // DECIMALS
-            'Test token', // DESCRIPTION
-            '', '', '',   // MINT_SUPPLY, TRANSFER, TRANSFER_SUPPLY
-            '', '', '',   // LOCK_MAX_SUPPLY, LOCK_MAX_MINT, LOCK_DESCRIPTION
-            '', '',       // LOCK_SLEEP, LOCK_CALLBACK
-            '', '', '',   // CALLBACK_BLOCK, CALLBACK_TICK, CALLBACK_AMOUNT
-            '', '',       // ALLOW_LIST, BLOCK_LIST
-            '',           // MINT_ADDRESS_MAX
-            '', '',       // MINT_START_BLOCK, MINT_STOP_BLOCK
-            '', '',       // LOCK_MINT, LOCK_MINT_SUPPLY
-            '',           // MEMO
-        ];
-    }
-
     beforeEach(function () {
         indexer      = createMockIndexer();
         actionsCtx   = makeActionsCtx(indexer);
@@ -146,6 +146,22 @@ describe('FORMAT_VERSION boundary tests (via ISSUE) @regression @tier2', functio
         await issueHandler.parse(params, data, null);
         assert.ok(data.STATUS.startsWith('invalid'), `expected invalid but got: ${data.STATUS}`);
     });
+});
+
+describe('FORMAT_VERSION boundary tests (via ISSUE) @regression @tier2', function () {
+    beforeEach(function () {
+        indexer      = createMockIndexer();
+        actionsCtx   = makeActionsCtx(indexer);
+        issueHandler = new Issue(actionsCtx);
+        indexer.indexerDb.getTokenInfo.resolves(null);    // new token
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.isDistributed.resolves(false);
+        indexer.indexerDb.getAddressBalances.resolves({});
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.getTokenSupply.resolves('0');
+    });
+
+    afterEach(function () { sinon.restore(); });
 
     it('TS-15: FORMAT_VERSION = 256 (getFormatVersion returns null) is invalid', async function () {
         // getFormatVersion returns null for values > 255; action rejects null format

@@ -37,9 +37,9 @@ function makeActionsCtx(indexer) {
     };
 }
 
-describe('BATCH composition limit boundary tests @regression @tier3', function () {
-    let indexer, actionsCtx, handler;
+let indexer, actionsCtx, handler;
 
+describe('BATCH composition limit boundary tests @regression @tier3', function () {
     beforeEach(function () {
         indexer    = createMockIndexer();
         actionsCtx = makeActionsCtx(indexer);
@@ -91,6 +91,19 @@ describe('BATCH composition limit boundary tests @regression @tier3', function (
         assert.strictEqual(actionsCtx.processAction.callCount, 0,
             'processAction should not be called when batch is invalid');
     });
+});
+
+describe('BATCH composition limit boundary tests @regression @tier3', function () {
+    beforeEach(function () {
+        indexer    = createMockIndexer();
+        actionsCtx = makeActionsCtx(indexer);
+        handler    = new Batch(actionsCtx);
+
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.createActionIndex.resolves(2);
+    });
+
+    afterEach(function () { sinon.restore(); });
 
     it('BAT-04: BATCH with 2 ISSUEs makes the whole batch invalid; processAction is never called', async function () {
         const TX_DATA = 'BATCH|0|ISSUE|0|NEWTOKEN|1000|100|0|Test||||||||||||||||;ISSUE|0|OTHER|500|50|0|Test2||||||||||||||||';
@@ -138,6 +151,19 @@ describe('BATCH composition limit boundary tests @regression @tier3', function (
                 `sub-action ${i} should be SEND`);
         }
     });
+});
+
+describe('BATCH composition limit boundary tests @regression @tier3', function () {
+    beforeEach(function () {
+        indexer    = createMockIndexer();
+        actionsCtx = makeActionsCtx(indexer);
+        handler    = new Batch(actionsCtx);
+
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.createActionIndex.resolves(2);
+    });
+
+    afterEach(function () { sinon.restore(); });
 
     it('BAT-07: BATCH with empty action name followed by a valid SEND is handled gracefully', async function () {
         // The empty segment becomes action '': no limit defined for it, so the

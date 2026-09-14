@@ -86,7 +86,6 @@ function makeIssueParams(overrides = {}) {
 // ---------------------------------------------------------------------------
 
 describe('Supply & amount boundary tests @regression @tier1', function () {
-
     // -----------------------------------------------------------------------
     // ISSUE supply limits: minimum, maximum, over-maximum and zero supply
     // -----------------------------------------------------------------------
@@ -123,7 +122,9 @@ describe('Supply & amount boundary tests @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
+});
 
+describe('Supply & amount boundary tests @regression @tier1', function () {
     describe('AMT-02: Issue token with maximum supply', function () {
         let indexer, actionsCtx, handler;
 
@@ -155,7 +156,9 @@ describe('Supply & amount boundary tests @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
+});
 
+describe('Supply & amount boundary tests @regression @tier1', function () {
     describe('AMT-03: Issue token exceeding maximum supply', function () {
         let indexer, actionsCtx, handler;
 
@@ -192,7 +195,9 @@ describe('Supply & amount boundary tests @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'invalid: MAX_SUPPLY (min/max)');
         });
     });
+});
 
+describe('Supply & amount boundary tests @regression @tier1', function () {
     describe('AMT-04: Issue token with zero supply', function () {
         let indexer, actionsCtx, handler;
 
@@ -229,7 +234,9 @@ describe('Supply & amount boundary tests @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
+});
 
+describe('Supply & amount boundary tests @regression @tier1', function () {
     // -----------------------------------------------------------------------
     // MINT at supply boundary: exactly to MAX_SUPPLY and 1 unit over
     // -----------------------------------------------------------------------
@@ -272,7 +279,9 @@ describe('Supply & amount boundary tests @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
+});
 
+describe('Supply & amount boundary tests @regression @tier1', function () {
     describe('AMT-06: MINT 1 unit over MAX_SUPPLY', function () {
         let indexer, actionsCtx, handler;
 
@@ -310,7 +319,9 @@ describe('Supply & amount boundary tests @regression @tier1', function () {
             assert.ok(data.STATUS.startsWith('invalid'));
         });
     });
+});
 
+describe('Supply & amount boundary tests @regression @tier1', function () {
     // -----------------------------------------------------------------------
     // SEND balance boundaries: drain to zero and 1 unit over
     // -----------------------------------------------------------------------
@@ -347,7 +358,9 @@ describe('Supply & amount boundary tests @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
+});
 
+describe('Supply & amount boundary tests @regression @tier1', function () {
     describe('AMT-08: SEND 1 unit over balance', function () {
         let indexer, actionsCtx, handler;
 
@@ -379,7 +392,9 @@ describe('Supply & amount boundary tests @regression @tier1', function () {
             assert.ok(data.STATUS.startsWith('invalid'));
         });
     });
+});
 
+describe('Supply & amount boundary tests @regression @tier1', function () {
     // -----------------------------------------------------------------------
     // DESTROY entire supply
     // -----------------------------------------------------------------------
@@ -419,7 +434,9 @@ describe('Supply & amount boundary tests @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
+});
 
+describe('Supply & amount boundary tests @regression @tier1', function () {
     // -----------------------------------------------------------------------
     // Maximum precision arithmetic (18 decimals)
     // -----------------------------------------------------------------------
@@ -461,7 +478,9 @@ describe('Supply & amount boundary tests @regression @tier1', function () {
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
+});
 
+describe('Supply & amount boundary tests @regression @tier1', function () {
     // -----------------------------------------------------------------------
     // MINT at per-address cap (MINT_ADDRESS_MAX)
     // -----------------------------------------------------------------------

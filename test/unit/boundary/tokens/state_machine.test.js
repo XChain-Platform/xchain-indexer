@@ -317,7 +317,6 @@ describe('Token state machine boundary tests @regression @tier2', function () {
     // -------------------------------------------------------------------------
 
     describe('TOK-10: LOCK_MAX_SUPPLY guard : declared cap, not minted supply', function () {
-
         // The LOCK_MAX_SUPPLY guard validates the *declared cap* (from this action, else
         // the token record), NOT minted supply : a fair-mint token must be able to issue
         // with zero supply, public mint rules, and a permanently locked cap in one ISSUE.
@@ -360,7 +359,9 @@ describe('Token state machine boundary tests @regression @tier2', function () {
 
             assert.strictEqual(data.STATUS, 'invalid: LOCK_MAX_SUPPLY (no max supply)', `got: ${data.STATUS}`);
         });
+    });
 
+    describe('TOK-10: LOCK_MAX_SUPPLY guard : declared cap, not minted supply', function () {
         it('ISSUE format 0 fair-mint (zero supply, mint rules, locked cap) → valid', async function () {
             indexer.indexerDb.getTokenInfo.resolves(null);
             // Fee activation is irrelevant to the lock rule under test

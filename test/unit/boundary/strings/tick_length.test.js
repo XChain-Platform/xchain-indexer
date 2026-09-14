@@ -59,9 +59,9 @@ function makeIssueParams(overrides = {}) {
         m.MEMO];
 }
 
-describe('Tick name boundary tests @regression @tier3', function () {
-    let indexer, actionsCtx, handler;
+let indexer, actionsCtx, handler;
 
+describe('Tick name boundary tests @regression @tier3', function () {
     beforeEach(function () {
         indexer     = createMockIndexer();
         actionsCtx  = makeActionsCtx(indexer);
@@ -117,6 +117,22 @@ describe('Tick name boundary tests @regression @tier3', function () {
         await handler.parse(params, data, null);
         assert.strictEqual(data.STATUS, 'valid', `expected valid but got: ${data.STATUS}`);
     });
+});
+
+describe('Tick name boundary tests @regression @tier3', function () {
+    beforeEach(function () {
+        indexer     = createMockIndexer();
+        actionsCtx  = makeActionsCtx(indexer);
+        handler     = new Issue(actionsCtx);
+        indexer.indexerDb.getTokenInfo.resolves(null); // new token
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.isDistributed.resolves(false);
+        indexer.indexerDb.getAddressBalances.resolves({});
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.getTokenSupply.resolves('0');
+    });
+
+    afterEach(function () { sinon.restore(); });
 
     it('STR-03: TICK exceeding maximum (251 chars) is invalid', async function () {
         const params = makeIssueParams({ TICK: 'A'.repeat(251) });
@@ -145,6 +161,22 @@ describe('Tick name boundary tests @regression @tier3', function () {
         await handler.parse(params, data, null);
         assert.ok(data.STATUS.startsWith('invalid'), `expected invalid but got: ${data.STATUS}`);
     });
+});
+
+describe('Tick name boundary tests @regression @tier3', function () {
+    beforeEach(function () {
+        indexer     = createMockIndexer();
+        actionsCtx  = makeActionsCtx(indexer);
+        handler     = new Issue(actionsCtx);
+        indexer.indexerDb.getTokenInfo.resolves(null); // new token
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.isDistributed.resolves(false);
+        indexer.indexerDb.getAddressBalances.resolves({});
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.getTokenSupply.resolves('0');
+    });
+
+    afterEach(function () { sinon.restore(); });
 
     it('STR-11: TICK with every allowed special char is valid', async function () {
         // The tick contains a '.' so the indexer treats it as a child issuance.

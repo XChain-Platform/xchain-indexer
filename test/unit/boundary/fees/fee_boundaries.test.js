@@ -62,9 +62,9 @@ function makeIssueParams(overrides = {}) {
 const XCHAIN_TICK_ID = 99;
 const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 
-describe('Fee boundary tests @regression @tier1', function () {
-    let indexer, actionsCtx, handler;
+let indexer, actionsCtx, handler;
 
+describe('Fee boundary tests @regression @tier1', function () {
     beforeEach(function () {
         indexer     = createMockIndexer();
         actionsCtx  = makeActionsCtx(indexer);
@@ -116,6 +116,24 @@ describe('Fee boundary tests @regression @tier1', function () {
 
         assert.ok(data.STATUS.startsWith('invalid'), `expected invalid but got: ${data.STATUS}`);
     });
+});
+
+describe('Fee boundary tests @regression @tier1', function () {
+    beforeEach(function () {
+        indexer     = createMockIndexer();
+        actionsCtx  = makeActionsCtx(indexer);
+        handler     = new Issue(actionsCtx);
+
+        indexer.indexerDb.getTokenInfo.resolves(null); // new token by default
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.isDistributed.resolves(false);
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.getTokenSupply.resolves('0');
+        // getTickerId for XCHAIN gas token
+        indexer.indexerDb.getTickerId.resolves(XCHAIN_TICK_ID); // XCHAIN tick_id = 99
+    });
+
+    afterEach(function () { sinon.restore(); });
 
     it('FEE-04: Issue at block 862633 with exact XCHAIN balance drains account to zero : valid', async function () {
         // Balance equals fee exactly : fee is charged, leaving zero XCHAIN
@@ -143,6 +161,24 @@ describe('Fee boundary tests @regression @tier1', function () {
 
         assert.strictEqual(data.STATUS, 'valid', `expected valid but got: ${data.STATUS}`);
     });
+});
+
+describe('Fee boundary tests @regression @tier1', function () {
+    beforeEach(function () {
+        indexer     = createMockIndexer();
+        actionsCtx  = makeActionsCtx(indexer);
+        handler     = new Issue(actionsCtx);
+
+        indexer.indexerDb.getTokenInfo.resolves(null); // new token by default
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.isDistributed.resolves(false);
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.getTokenSupply.resolves('0');
+        // getTickerId for XCHAIN gas token
+        indexer.indexerDb.getTickerId.resolves(XCHAIN_TICK_ID); // XCHAIN tick_id = 99
+    });
+
+    afterEach(function () { sinon.restore(); });
 
     it('FEE-06: Sub-token issuance charges ISSUANCE_FEE_SUBTOKEN (0.5 XCHAIN) : valid with exact balance', async function () {
         // TICK = 'PARENT.CHILD' → detected as sub-token because parts.length > 1
