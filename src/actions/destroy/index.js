@@ -29,9 +29,54 @@
  * 
  ********************************************************************/
 
-const consolidationLegAmount = require('../../consolidation_leg_amount_activation.js');
+// WHERE THE PARTS LIVE. This file is the entry and the per-leg dispatch. The legs and
+// their consolidation are in ./legs.js, the per-leg verdict ladder in ./validate.js,
+// the GAS context and controller guard in ./controller_guard.js, and the rows and
+// ledger write in ./settle.js. Every part runs with `this` bound to the handler.
+const legs            = require('./legs.js');
+const validate        = require('./validate.js');
+const controllerGuard = require('./controller_guard.js');
+const settle          = require('./settle.js');
 
-const { getLogger } = require('../../observability/index.js');
+// One leg of the consolidated DESTROY: its fields copied onto the shared data row, the
+// TICK, FORMAT and General validations, the controller guard, and the leg's record.
+// Runs with `this` bound to the handler. The running SOURCE balances live on ctx so a
+// later leg is judged against what an earlier one already burned.
+async function processLeg(ctx, idx){
+    // Parse in the destroy information
+    let info = ctx.destroys[idx];
+
+    // Reset error to the original value
+    let error = ctx.origError;
+
+    // Copy base transaction data object
+    let destroy = ctx.data;
+
+    // Update transaction data object with destroy values
+    destroy['TICK']   = info[0];
+    destroy['AMOUNT'] = info[1];
+    destroy['MEMO']   = info[2];
+
+    // Convert NUMBER fields from string value to number value so comparisons are mathematical
+    if(!error)
+        destroy = this.util.setNumberFormats(destroy);
+
+    // Get information on token
+    let tokenInfo = ctx.ticks[destroy['TICK']];
+
+    error = validate.validateLegTick.call(this, destroy, tokenInfo, error);
+    error = await validate.validateLegRules.call(this, destroy, tokenInfo, ctx.balances, ctx.data, error);
+
+    let guard = await controllerGuard.runLegGuard.call(this, destroy, tokenInfo, idx, ctx.gas, error);
+    error = guard.error;
+
+    // Adjust balances to reduce by DESTROY AMOUNT
+    if(!error)
+        ctx.balances = this.util.debitBalances(ctx.balances, tokenInfo['TICK_ID'], destroy['AMOUNT']);
+
+    await settle.recordLeg.call(this, ctx.data, destroy, error, guard.guardFee, ctx.gas, ctx.debits);
+}
+
 class Destroy {
 
     // Handle constructing a class instance
@@ -68,250 +113,27 @@ class Destroy {
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
-        // Array of destroys [TICK, AMOUNT, MEMO]
-        let destroys = []; 
-
-        // Extract memo
-        let memo = null;
-        let last = params.length - 1;
-        for(let idx in params)
-            if(idx==last && ((format==0 && idx==3) || (format==1 && idx%2==1)))
-                memo = params[idx];
-
-        // If we encountered an invalid version error add it to the destroys list so we create a record of it in destroys
-        if(error)
-            destroys.push([params[0], params[1], memo]);
-
-        // Build out array of destroys
-        let lastIdx = params.length - 1;
-        for(let idx in params){
-            // Force index to integer value
-            idx = parseInt(idx);
-
-            // Single Destroy
-            if(format==0 && idx==0)
-                destroys.push([params[1], params[2], memo]);
-
-            // Multi-Destroy (Full)
-            // A trailing memo (when present) always sits at the odd last index, so the
-            // idx%2==0 test already excludes it; the extra `idx < lastIdx` guard wrongly
-            // dropped the final tick/amount pair whenever no trailing memo was supplied.
-            if(format==1 && idx>1 && idx%2==0)
-                destroys.push([params[idx-1], params[idx], memo]);
-
-            // Multi-Destroy (Full) with Multiple Memos
-            if(format==2 && idx>0 && idx%3==1 && idx < lastIdx)
-                destroys.push([params[idx], params[(idx+1)], params[idx+2], params[idx+3]]);
-        }
-
-        // Get token data for every TICK (reduces duplicated sql queries)
-        let ticks = {};
-        for(let destroy of destroys){
-            let tick = destroy[0];
-            if(ticks[tick] === undefined)
-                ticks[tick] = await this.indexerDb.getTokenInfo(tick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
-        }
-
-        // Consolidate destroys by TICK and MEMO.
-        //
-        // Same rule and same gate as the SEND leg merge: a leg whose RAW amount fails its tick's
-        // format is held out of the merge on its own key, so it reaches the per-leg format check
-        // below rather than being summed into a passing total. Below the threshold the legacy key
-        // and merge run unchanged (consolidation_leg_amount_activation.js carries the rationale).
-        let legAmountRule = consolidationLegAmount.isConsolidationLegAmountActive(data['BLOCK_TIME'], this.config['NETWORK']);
-        let keys = {};
-        for(let idx in destroys){
-            let [tick, amount, memo] = destroys[idx];
-            let key = tick + '|' + memo;
-            if(legAmountRule)
-                key = (ticks[tick] && !this.util.isValidAmountFormat(ticks[tick]['DECIMALS'], amount, data['BLOCK_TIME']))
-                    ? 'i|' + idx
-                    : 'k|' + key;
-            if(!this.util.isNull(keys[key]))
-                amount = this.util.bcadd(amount, keys[key][1], ticks[tick] && ticks[tick]['DECIMALS']);
-            keys[key] = [tick, amount, memo];
-        }
-
-        // Update destroys using consolidated info
-        destroys = [];
-        for(let key in keys)
-            destroys.push(keys[key]);
+        // The legs this DESTROY names, the token row for each tick, then the merge of legs
+        // sharing a TICK and MEMO
+        let destroys = legs.buildDestroys(params, format, error);
+        let ticks    = await legs.loadTicks.call(this, destroys, data);
+        destroys     = legs.consolidateLegs.call(this, destroys, ticks, data);
 
         // Get source address balances
         let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
-        // Controller-bound token gas context. A DESTROY of a token whose `burn` class is bound to a
-        // controller runs that contract's `guard` before the burn settles; the SOURCE pays the
-        // (bounded) guard gas. Load the SOURCE's GAS balance once so a multi-destroy debits it
-        // cumulatively across controlled legs (maybeRunControllerGuard reserves the ceiling).
-        let gasTick     = this.config['GAS'];
-        let gasInfo     = await this.indexerDb.getTokenInfo(gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
-        let gasBalances = await this.indexerDb.getAddressBalances(data['SOURCE'], gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        // GAS context for controller-bound legs, loaded once for the whole action
+        let gas = await controllerGuard.loadGasContext.call(this, data);
 
-        // Store original error value
-        let origError = error;
-
-        // Array of credits and debits
-        let credits = [],
-            debits  = [];
+        // Store original error value, and the arrays of credits and debits
+        let ctx = { data, destroys, ticks, balances, gas, origError: error, credits: [], debits: [] };
 
         // Loop through destroys and process each
-        for(let idx in destroys){
+        for(let idx in destroys)
+            await processLeg.call(this, ctx, idx);
 
-            // Parse in the destroy information
-            let info = destroys[idx];
-
-            // Reset error to the original value
-            error = origError;
-
-            // Copy base transaction data object
-            let destroy = data;
-
-            // Update transaction data object with destroy values
-            destroy['TICK']   = info[0];
-            destroy['AMOUNT'] = info[1];
-            destroy['MEMO']   = info[2];
-
-            // Convert NUMBER fields from string value to number value so comparisons are mathematical 
-            if(!error)
-                destroy = this.util.setNumberFormats(destroy);
-
-            // Get information on token
-            let tokenInfo = ticks[destroy['TICK']];
-
-            /*****************************************************************
-             * TICK Validations
-             ****************************************************************/
-            // Validate TICK exists
-            if(!error && !tokenInfo)
-                error = 'invalid: TICK (unknown)';
-
-            // ── Bridge supply-path closures ───────────────────────────────────────────────
-            //
-            // DESTROY lowers a token's SUPPLY with no counterpart anywhere else, which is
-            // exactly the wrong verb for a supply that is the shadow of an escrow balance
-            // held on another chain. Burned here, the escrow on the origin chain would be
-            // stranded forever and the bridge invariant (escrow >= supply) would read a
-            // permanent surplus nobody can redeem. Both refusals name the action that DOES
-            // have a counterpart leg: XBRIDGE v1 for XCHAIN, v4 for a bridged copy.
-            //
-            // UNCONDITIONAL, not activation-keyed. Neither refusal can move a
-            // historical verdict: no off-BTC XCHAIN row exists to destroy (every broadcast
-            // ISSUE of the gas tick off BTC is refused), and no `<ORIGIN>.<NAME>` row can
-            // exist before the bridge creates one, because the parent gate refuses any child
-            // of a coin root that does not exist and the roots are measured absent on every
-            // live chain. An unconditional rule also cannot be mis-ordered against the block
-            // at which the bridge first creates such a row.
-            if(!error && String(destroy['TICK']).toUpperCase()==String(this.config['GAS']).toUpperCase() && this.config['COIN']!='BTC')
-                error = 'invalid: TICK (use XBRIDGE v1)';
-
-            if(!error && this.util.parseBridgedTick(destroy['TICK']))
-                error = 'invalid: TICK (use XBRIDGE v4)';
-
-            /*************************************************************
-             * FORMAT Validations
-             ************************************************************/
-            // Verify AMOUNT format
-            if(!error && !this.util.isNull(destroy['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], destroy['AMOUNT'], data['BLOCK_TIME']))
-                error = "invalid: AMOUNT (format)";
-
-            /*************************************************************
-             * General Validations
-             ************************************************************/
-            // Verify SOURCE is not sleeping
-            if(!error && await this.indexerDb.isActionAllowed(destroy['SOURCE'], null, destroy['BLOCK_INDEX']) == false)
-                error = 'invalid: SOURCE (sleeping)';
-
-            // Verify TICK is not sleeping
-            if(!error && await this.indexerDb.isActionAllowed(null, destroy['TICK'], destroy['BLOCK_INDEX']) == false)
-                error = 'invalid: TICK (sleeping)';
-
-            // Verify no pipe in MEMO (pipe is field delimiter)
-            if(!error && String(destroy['MEMO']).indexOf('|')!=-1)
-                error = 'invalid: MEMO (pipe)';
-
-            // Verify no semicolon in MEMO (semicolon is action delimiter)
-            if(!error && String(destroy['MEMO']).indexOf(';')!=-1)
-                error = 'invalid: MEMO (semicolon)';
-
-            // Verify MEMO is shorter than MAX_MEMO_LENGTH
-            if(!error && String(destroy['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
-                error = 'invalid: MEMO (length)';
-
-            // Verify TICK action is allowed from SOURCE (allow/block lists)
-            if(!error && await this.indexerDb.isActionAllowed(destroy['SOURCE'], destroy['TICK']) == false)
-                error = 'invalid: SOURCE (not authorized)';
-
-            // Verify SOURCE has enough balances to cover destroy
-            if(!error && !this.util.hasBalance(balances, tokenInfo['TICK_ID'], destroy['AMOUNT']))
-                error = 'invalid: insufficient funds';
-
-            // Guard gas fee billed to SOURCE for this leg (0 = uncontrolled token)
-            let guardFee = 0;
-
-            // Controller-bound token: the token's `burn` controller must approve destroying it.
-            if(!error && tokenInfo){
-                let result = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {
-                    actionType:  'DESTROY',
-                    tick:        destroy['TICK'],
-                    from:        destroy['SOURCE'],
-                    to:          '',
-                    amount:      destroy['AMOUNT'],
-                    data:        destroy,
-                    gasInfo:     gasInfo,
-                    gasBalances: gasBalances,
-                    seq:         parseInt(idx) || 0
-                });
-                if(result.error)
-                    error = 'invalid: ' + result.error;
-                else
-                    guardFee = result.guardFee;
-            }
-
-            // Adjust balances to reduce by DESTROY AMOUNT
-            if(!error)
-                balances = this.util.debitBalances(balances, tokenInfo['TICK_ID'], destroy['AMOUNT']);
-
-            // Determine final status
-            let status = (error) ? error : 'valid';
-            data['STATUS'] = destroy['STATUS'] = status;
-    
-            // Print status message 
-            getLogger().info("\t DESTROY : " + destroy['TICK'] + ' : ' + this.util.logAmount(destroy['AMOUNT']) + ' : ' + destroy['MEMO'] + ' : '+ data['STATUS']);
-    
-            // Create record in destroys table
-            await this.indexerDb.createDestroy(destroy);
-    
-            // Store the SOURCE and TICK in addresses list
-            this.util.addAddressTicker(destroy['SOURCE'], destroy['TICK']);
-
-            // If this was a valid transaction, then add records to the credits and debits array
-            if(status=='valid'){
-
-                // Add ticker and amount to debits array
-                debits.push([destroy['TICK'], destroy['AMOUNT'], destroy['SOURCE']]);
-
-                // Bill the controller-guard gas to SOURCE (in GAS). Reduce the in-memory GAS
-                // balance so a later controlled leg in this same multi-destroy sees the spend.
-                if(this.util.bcgt(guardFee, 0)){
-                    debits.push([gasTick, guardFee, destroy['SOURCE']]);
-                    this.util.addAddressTicker(destroy['SOURCE'], gasTick);
-                    if(gasInfo)
-                        gasBalances = this.util.debitBalances(gasBalances, gasInfo['TICK_ID'], guardFee);
-                }
-            }
-        }
-
-        // Process any transaction ledger changes (credits / debits)
-        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
-
-        // Get a list of tickers & addresses
-        let tickers   = this.util.getTickersList(),
-            addresses = Object.keys(this.util.getAddressesList());
-
-        // Update address balances and token supply
-        await this.indexerDb.updateBalances(addresses);
-        await this.indexerDb.updateTokens(tickers);
+        // Write the ledger changes and refresh balances and supply
+        await settle.settleLedger.call(this, data, ctx.credits, ctx.debits);
 
         // Create action mappings
         await this.mapper.createMappings(data);
