@@ -17,106 +17,22 @@ process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
-const crypto = require('crypto');
 const sinon  = require('sinon');
-const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
-const { getTestConfig } = require('../../fixtures/config');
+const { B64, CODE, HASH, assemblerRow, carrierChunk, buildHarness, assemblerData, carrierData } =
+    require('./deploy_deferred.test/helpers/harness.js');
 
-const Deploy = require('../../../src/actions/deploy/index.js');
+let indexer, ctx, db, handler, ledgerWrites;
 
-const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-const CODE   = 'module.exports = { initialize: function() { return 1; } };';
-const B64    = Buffer.from(CODE, 'utf8').toString('base64');
-const HASH   = crypto.createHash('sha256').update(CODE).digest('hex');
-
-// The assembler's stored rows, as db.getPendingDeployAssembler returns them. gas_limit /
-// input_params come from its contract_executions row, the staking pair from its contracts row.
-function assemblerRow(overrides = {}){
-    return {
-        action_index: 700, block_index: 100, code_hash: HASH,
-        cooldown_blocks: null, slash_destination_id: null,
-        gas_limit: 100000, input_params: 'x', fee_payment_mode: 2,
-        ...overrides
-    };
+function build(options) {
+    ({ indexer, ctx, db, handler, ledgerWrites } = buildHarness(options));
 }
-function carrierChunk(overrides = {}){
-    return { chunk_index: 0, total_chunks: 1, code_part: B64, action_index: 902, ...overrides };
-}
+
+const execRow = () => db.createContractExecution.firstCall.args[0];
+const contractRow = () => db.createContract.firstCall.args[0];
+const totalDebited = () => ledgerWrites.reduce((n, w) => n + w.debits.length, 0);
 
 describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
-
-    let indexer, ctx, db, handler, ledgerWrites;
-
-    // gateOn / balance / chunkRows / pendingAssembler are the four axes every case below moves.
-    // scheduleOverrides is a fifth, narrow one: the gas-parity test neutralizes
-    // VM_DEPLOY_PER_BYTE so DEPLOY_INLINE collapses to the same base DEPLOY_CHUNKED always
-    // charges. Reassigned on THIS call's own config object only (never mutated in place),
-    // since src/coins/to_indexer_config.js hands every getConfig() call the SAME cached
-    // GAS_SCHEDULE object and an in-place edit would leak into every other test file.
-    function build({ gateOn = true, balance = '1000', chunkRows = [], pendingAssembler = null, ctorGas = 5000, scheduleOverrides = null } = {}){
-        const config = getTestConfig();
-        if(scheduleOverrides)
-            config['GAS_SCHEDULE'] = Object.assign({}, config['GAS_SCHEDULE'], scheduleOverrides);
-        indexer = createMockIndexer({ config });
-        db = indexer.indexerDb;
-        for(const m of ['createContract','createContractPermission','deleteContract','createContractExecution',
-                        'createContractState','releaseSavepoint','rollbackToSavepoint','recordDeployChunk','createAddress'])
-            db[m] = sinon.stub().resolves();
-        db.createSavepoint        = sinon.stub().resolves('sp1');
-        db.getOracleDataForVM     = sinon.stub().resolves({});
-        db.getCrossChainDataForVM = sinon.stub().resolves({});
-        db.getPollResultsForVM    = sinon.stub().resolves({ polls: {} });
-        db.getStatusString        = sinon.stub().resolves('valid');
-        db.getAddressById         = sinon.stub().resolves(null);
-        db.isActionAllowed.resolves(true);
-        db.getTokenInfo.resolves({ TICK_ID: 1 });
-        db.getAddressBalances.resolves({ 1: balance });
-        // The assembly bound is honoured for real: rows at or above `before` are not returned,
-        // which is what makes the C + 1 bound observable.
-        db.getDeployChunksForAssembly = sinon.stub().callsFake(async (src, hash, before) =>
-            chunkRows.filter(r => Number(r.action_index) < Number(before)));
-        db.getPendingDeployAssembler  = sinon.stub().resolves(pendingAssembler);
-
-        const isEnabled = sinon.stub().resolves(true);
-        isEnabled.withArgs('DEPLOY_DEFERRED_ASSEMBLY', sinon.match.any).resolves(gateOn);
-
-        // Capture each ledger write of this action BEFORE consolidation, so a split write is
-        // visible as two entries rather than hiding inside one consolidated row.
-        ledgerWrites = [];
-        const realLedger = indexer.util.processTransactionLedgerChanges.bind(indexer.util);
-        indexer.util.processTransactionLedgerChanges = async (d, data, credits, debits, escrows) => {
-            ledgerWrites.push({ action: String(data['ACTION_INDEX']), debits: debits.map(x => x.slice()) });
-            return realLedger(d, data, credits, debits, escrows);
-        };
-
-        ctx = {
-            config: indexer.config, util: indexer.util, mapper: indexer.mapper,
-            decoderDb: indexer.decoderDb, indexerDb: db,
-            protocolChanges: { isEnabled },
-            vm: {
-                validateSyntax:     sinon.stub().returns({ valid: true }),
-                checkFloatWarnings: sinon.stub().returns([]),
-                // CONTRACT_META_REQUIRED is genesis-active on regtest, so the stubbed manifest must
-                // carry a conforming meta or every deploy here reads 'meta required'.
-                readManifest:       sinon.stub().resolves({ success: true, manifest: { hasInitialize: true, permissionsType: 'undefined', maxTakeBpsType: 'undefined', metaType: 'object', metaJson: JSON.stringify({ name: 'Unit Fixture', description: 'A unit-test contract fixture.', version: '1.0.0' }), metaError: false, metaOversize: false } }),
-                execute:            sinon.stub().resolves({ success: true, gasUsed: ctorGas, stateChanges: [], stateDeletes: [], emittedActions: [] })
-            }
-        };
-        indexer.util.resetLists();
-        handler = new Deploy(ctx);
-    }
-
     afterEach(function () { sinon.restore(); });
-
-    function assemblerData(overrides = {}){
-        return createBaseData({ ACTION: 'DEPLOY', FORMAT: 2, SOURCE, BLOCK_INDEX: 100, ACTION_INDEX: 700, ...overrides });
-    }
-    function carrierData(overrides = {}){
-        return createBaseData({ ACTION: 'DEPLOY', FORMAT: 4, SOURCE, BLOCK_INDEX: 100, ACTION_INDEX: 902, ...overrides });
-    }
-    const execRow = () => db.createContractExecution.firstCall.args[0];
-    const contractRow = () => db.createContract.firstCall.args[0];
-    const totalDebited = () => ledgerWrites.reduce((n, w) => n + w.debits.length, 0);
 
     describe('R2: the assembler lands', function () {
 
@@ -165,6 +81,14 @@ describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
             assert.strictEqual(ctx.vm.validateSyntax.callCount, 0);
         });
 
+    });
+});
+
+describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
+
+    describe('R2: the assembler lands', function () {
+
         it('rejects a second assembler while one is pending, and charges it nothing', async function () {
             build({ chunkRows: [], pendingAssembler: assemblerRow() });
             const data = assemblerData({ ACTION_INDEX: 800 });
@@ -200,6 +124,14 @@ describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
             await handler.parse(['2', HASH, '100000', 'x'], data, null);
             assert.strictEqual(data['STATUS'], 'invalid: SOURCE (sleeping)');
         });
+
+    });
+});
+
+describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
+
+    describe('R2: the assembler lands', function () {
 
         it('lets the chunk verdict win over a broken native fee below the flag day', async function () {
             // Pre-activation: the incomplete-group error is assigned BEFORE the fee/sleeping
@@ -240,6 +172,11 @@ describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
             assert.strictEqual(totalDebited(), 0);
         });
     });
+
+});
+
+describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     describe('R1 + R3: the carrier that completes the group deploys it', function () {
 
@@ -285,6 +222,14 @@ describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
             assert.strictEqual(db.createContract.callCount, 0);
         });
 
+    });
+});
+
+describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
+
+    describe('R1 + R3: the carrier that completes the group deploys it', function () {
+
         it('writes the carrier fee and the deployment fee in ONE ledger call', async function () {
             build({ chunkRows: [carrierChunk()], pendingAssembler: assemblerRow() });
             await handler.parse(['4', HASH, '0', '1', B64], carrierData(), null);
@@ -321,6 +266,14 @@ describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
             assert.strictEqual(execRow().ASSEMBLER_ACTION_INDEX, 700);
             assert.strictEqual(data['STATUS'], 'valid');   // the carrier itself was fine
         });
+
+    });
+});
+
+describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
+
+    describe('R1 + R3: the carrier that completes the group deploys it', function () {
 
         it('completes nothing from an INVALID carrier', async function () {
             build({ chunkRows: [carrierChunk()], pendingAssembler: assemblerRow() });
@@ -364,6 +317,11 @@ describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
             assert.strictEqual(db.createContract.callCount, 0);
         });
     });
+
+});
+
+describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
 
     describe('Gas parity: A + C sum to an inline deploy of the same source', function () {
 
