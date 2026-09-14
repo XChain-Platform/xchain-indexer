@@ -19,6 +19,9 @@ const { getLogger } = require('../observability/index.js');
  *
  ********************************************************************/
 
+// The settlement phase, installed onto Swap_Expire.prototype below
+const settlePart = require('./swap_expire/settle.js');
+
 class Swap_Expire {
 
     // Handle constructing a class instance
@@ -60,43 +63,19 @@ class Swap_Expire {
         // Print status message
         getLogger().info("\t SWAP_EXPIRE : " + this.config['COIN'] + ':' + swapInfo['ACTION_INDEX'] + ' : ' + data['STATUS']);
 
-        // Array of credits, debits, and escrows
-        let credits = [],
-            debits  = [],
-            escrows = [];
-
-        if(swapInfo['GIVE_OWNERSHIP']==1){
-            // Release ownership escrow back to the seller (tokens.owner_id is unchanged)
-            await this.indexerDb.clearTokenEscrow(swapInfo['GIVE_TICK']);
-        } else {
-            // Debit GIVE_TICK from escrows and credit it to the SOURCE address.
-            // BigNumber-space negation, not JS unary minus (float truncation).
-            escrows.push([swapInfo['GIVE_TICK'], this.util.bcsub(0, swapInfo['GIVE_AMOUNT'], 64), swapInfo['SOURCE']]);
-            credits.push([swapInfo['GIVE_TICK'],  swapInfo['GIVE_AMOUNT'], swapInfo['SOURCE']]);
-        }
-
-        // Create record in the swaps_expires table
-        await this.indexerDb.createSwapExpire(data['ACTION_INDEX'], swapInfo['ACTION_INDEX'], data['STATUS']);
-
-        // Create record in the swaps_statuses table
-        await this.indexerDb.createSwapStatus(data['ACTION_INDEX'], swapInfo['ACTION_INDEX'], 'expired');
-
-        // Process any transaction ledger changes (credits / debits / escrows)
-        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits, escrows);
-
-        // Get a list of tickers & addresses
-        let tickers   = this.util.getTickersList(),
-            addresses = Object.keys(this.util.getAddressesList());
-
-        // Update address balances and token supply
-        await this.indexerDb.updateBalances(addresses);
-        await this.indexerDb.updateTokens(tickers);
-
-        // Create action mappings
-        await this.mapper.createMappings(data);
-
-
+        // Refund the escrow, record the expiry and post the ledger changes (swap_expire/settle.js)
+        await this.settleExpiry(data, swapInfo);
     }
+}
+
+// Install the phase methods from swap_expire/ NON-ENUMERABLE, the shape the class body they
+// came from produced: parse() reaches them as this.<method>, suites can stub them through
+// Swap_Expire.prototype, and for-in over a handler stays empty. Same install as db/index.js
+// uses for its query mixins.
+for(const part of [settlePart]){
+    const descriptors = Object.getOwnPropertyDescriptors(part);
+    for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;
+    Object.defineProperties(Swap_Expire.prototype, descriptors);
 }
 
 module.exports = Swap_Expire;
