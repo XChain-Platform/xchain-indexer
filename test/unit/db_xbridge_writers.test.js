@@ -41,135 +41,18 @@ const fs     = require('fs');
 const path   = require('path');
 const sinon  = require('sinon');
 
-const { createMockDb, createBaseData, createTokenInfo } = require('../fixtures/mocks');
-const Utility  = require('../../src/utility.js');
-const configjs = require('../../src/config.js');
-const Database = require('../../src/db');
-const XBridge  = require('../../src/actions/xbridge/index.js');
+const { DEST, makeTable, makeDb, xbridgeRow } = require('./db_xbridge_writers.test/helpers/writer_db.js');
 
-const SOURCE      = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-const DEST        = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
-const BRIDGE_DOGE = 'mxchainbridgedogeXXXXXXXXXXXXXXXXX';
-
-// In-memory stand-in for one table. Understands only the statement shapes the two
-// writers emit, and binds args positionally exactly as those methods pass them, so the
-// test cannot drift from the writer's own binding.
-function makeTable(name, keyColumns){
-    const rows = [];
-
-    const matches = (row, where) => Object.keys(where).every(k => {
-        const a = row[k] === undefined ? null : row[k];
-        const b = where[k] === undefined ? null : where[k];
-        return a === b;
-    });
-
-    return {
-        name,
-        rows,
-        query(sql, args){
-            const kind = sql.trim().slice(0, 6).toUpperCase();
-            if(kind === 'SELECT'){
-                const where = {};
-                keyColumns.forEach((col, i) => { where[col] = args[i]; });
-                return rows.filter(r => matches(r, where));
-            }
-            if(kind === 'INSERT'){
-                // Column order is read out of the statement itself.
-                const cols = sql.slice(sql.indexOf('(') + 1, sql.indexOf(')')).split(',').map(s => s.trim());
-                const row  = {};
-                cols.forEach((col, i) => { row[col] = args[i]; });
-                rows.push(row);
-                return { affectedRows: 1 };
-            }
-            if(kind === 'UPDATE'){
-                const setCols   = sql.slice(sql.indexOf('SET') + 3, sql.indexOf('WHERE'))
-                    .split(',').map(s => s.trim().replace(/=\?$/, '').replace(/=\d+$/, '')).filter(Boolean);
-                // A literal assignment (`bridged=1`) binds no argument, so it is applied
-                // from the statement text; only `col=?` consumes a positional arg.
-                const literals  = {};
-                sql.slice(sql.indexOf('SET') + 3, sql.indexOf('WHERE'))
-                    .split(',').map(s => s.trim())
-                    .forEach(frag => {
-                        const m = frag.match(/^([a-z_]+)=(\d+)$/);
-                        if(m) literals[m[1]] = Number(m[2]);
-                    });
-                const bound     = setCols.filter(c => !(c in literals));
-                const whereFrags = sql.slice(sql.indexOf('WHERE') + 5).split(/\s+AND\s+/).map(s => s.trim());
-                const whereCols = [];
-                const whereLits = {};
-                for(const frag of whereFrags){
-                    const lit = frag.match(/^([a-z_]+)\s*=\s*(\d+)$/);
-                    if(lit){ whereLits[lit[1]] = Number(lit[2]); continue; }
-                    const col = (frag.match(/([a-z_]+)\s*(?:=|<=>)\s*\?/) || [])[1];
-                    if(col) whereCols.push(col);
-                }
-                const setArgs   = args.slice(0, bound.length);
-                const whereArgs = args.slice(bound.length);
-                const where     = Object.assign({}, whereLits);
-                whereCols.forEach((col, i) => { where[col] = whereArgs[i]; });
-                const hit = rows.filter(r => matches(r, where));
-                for(const row of hit){
-                    bound.forEach((col, i) => { row[col] = setArgs[i]; });
-                    Object.keys(literals).forEach(col => { row[col] = literals[col]; });
-                }
-                return { affectedRows: hit.length };
-            }
-            throw new Error('unexpected statement in test simulator: ' + sql);
-        }
-    };
-}
-
-// A real Database whose doQuery routes to whichever simulated table the statement names,
-// and whose four lookup interners hand back stable, distinct ids per value.
-function makeDb(tables, ids){
-    const config = configjs.getConfig('BTC', 'regtest');
-    const util   = new Utility(config);
-    const db     = new Database('127.0.0.1', 3306, 'xchain_btc_regtest', 'u', 'p', { config, util });
-    sinon.stub(db, 'doQuery').callsFake(async (sql, args) => {
-        for(const table of tables)
-            if(new RegExp('\\b' + table.name + '\\b').test(sql))
-                return table.query(sql, args);
-        throw new Error('no simulated table for: ' + sql);
-    });
-    const intern = (map, prefix) => async value => {
-        if(value === null || value === undefined || value === '') return null;
-        const key = String(value);
-        if(!(key in map)) map[key] = prefix + (Object.keys(map).length + 1);
-        return map[key];
-    };
-    ids.tick    = ids.tick    || {};
-    ids.address = ids.address || {};
-    ids.memo    = ids.memo    || {};
-    ids.status  = ids.status  || {};
-    sinon.stub(db, 'createTicker').callsFake(intern(ids.tick, 100));
-    sinon.stub(db, 'createAddress').callsFake(intern(ids.address, 200));
-    sinon.stub(db, 'createMemo').callsFake(intern(ids.memo, 300));
-    sinon.stub(db, 'createStatus').callsFake(intern(ids.status, 400));
-    return db;
-}
-
-// The row shape actions/xbridge.js hands createXbridge: the raw wire clone plus the
-// three fields the apply path stamps onto it.
-function xbridgeRow(overrides){
-    return Object.assign({
-        ACTION:       'XBRIDGE',
-        ACTION_INDEX: 42,
-        BLOCK_INDEX:  100,
-        SOURCE:       SOURCE,
-        MEMO:         '',
-        STATUS:       'valid'
-    }, overrides || {});
+// A fresh xbridges table and a real Database over it, for each createXbridge case.
+function setup(){
+    const xbridges = makeTable('xbridges', ['action_index']);
+    const ids      = {};
+    return { xbridges, ids, db: makeDb([xbridges], ids) };
 }
 
 describe('createXbridge() - the xbridges action row @regression', function(){
 
     afterEach(() => sinon.restore());
-
-    function setup(){
-        const xbridges = makeTable('xbridges', ['action_index']);
-        const ids      = {};
-        return { xbridges, ids, db: makeDb([xbridges], ids) };
-    }
 
     it('records a v3 lock with every field the hub poll reads', async function(){
         const { xbridges, ids, db } = setup();
@@ -209,6 +92,10 @@ describe('createXbridge() - the xbridges action row @regression', function(){
         assert.deepStrictEqual(xbridges.rows.map(r => [r.version, r.tick_id]),
             [[0, gasId], [1, gasId]]);
     });
+});
+
+describe('createXbridge() - the xbridges action row @regression', function(){
+    afterEach(() => sinon.restore());
 
     it('takes the destination address from the field THIS version actually carries', async function(){
         const { xbridges, ids, db } = setup();
@@ -255,6 +142,10 @@ describe('createXbridge() - the xbridges action row @regression', function(){
         assert.strictEqual(xbridges.rows[0].version, null);
         assert.ok(!Number.isNaN(xbridges.rows[0].version), 'a NaN version would wedge the block loop');
     });
+});
+
+describe('createXbridge() - the xbridges action row @regression', function(){
+    afterEach(() => sinon.restore());
 
     it('updates in place on a re-parse of the same block instead of duplicating', async function(){
         const { xbridges, ids, db } = setup();
@@ -319,128 +210,5 @@ describe('xbridges DDL and the writer agree @regression', function(){
         const block      = migration.slice(migration.indexOf('CREATE TABLE IF NOT EXISTS xbridges'));
         assert.deepStrictEqual(declaredColumns(block), definition,
             'a fresh install and a migrated database would disagree on the xbridges shape');
-    });
-});
-
-describe('setTokenBridged() - the sticky tokens.bridged bit @regression', function(){
-
-    afterEach(() => sinon.restore());
-
-    function setup(){
-        const tokens = makeTable('tokens', ['tick_id']);
-        const ids    = { tick: { FUFU: 101, OTHER: 102 } };
-        const db     = makeDb([tokens], ids);
-        tokens.rows.push({ tick_id: 101, bridged: 0 });
-        tokens.rows.push({ tick_id: 102, bridged: 0 });
-        return { tokens, db };
-    }
-
-    it('sets the bit on the locked token and on nothing else', async function(){
-        const { tokens, db } = setup();
-        await db.setTokenBridged('FUFU', 500);
-
-        assert.deepStrictEqual(tokens.rows.map(r => [r.tick_id, r.bridged]), [[101, 1], [102, 0]]);
-    });
-
-    it('is a no-op for every later lock of the same token', async function(){
-        const { tokens, db } = setup();
-        await db.setTokenBridged('FUFU', 500);
-        const logged = sinon.stub(console, 'log');
-        await db.setTokenBridged('FUFU', 900);
-        const secondLockLogged = logged.callCount;
-        logged.restore();
-
-        assert.strictEqual(tokens.rows[0].bridged, 1, 'the bit stays set');
-        assert.strictEqual(secondLockLogged, 0, 'the WHERE must exclude an already-set bit');
-    });
-
-    it('writes nothing for a tick that has no row on this chain', async function(){
-        const { tokens, db } = setup();
-        await db.setTokenBridged('NOSUCH', 500);
-
-        assert.deepStrictEqual(tokens.rows.map(r => r.bridged), [0, 0]);
-    });
-});
-
-// The real handler over a mock read-side db, with the two WRITERS bound to a real
-// Database over the table simulator. This is what proves the handler's payload and
-// the writer's column binding agree; each side tested alone can be self-consistent
-// and still disagree with the other.
-function setup(){
-    const config = configjs.getConfig('BTC', 'regtest');
-    config['ADDRESS']['BRIDGE_DOGE']       = BRIDGE_DOGE;
-    config['GAS_SCHEDULE']['XBRIDGE_BASE'] = 5000;
-
-    const util      = new Utility(config);
-    const indexerDb = createMockDb();
-    const xbridges  = makeTable('xbridges', ['action_index']);
-    const tokens    = makeTable('tokens', ['tick_id']);
-    const ids       = { tick: { FUFU: 101 } };
-    const realDb    = makeDb([xbridges, tokens], ids);
-    tokens.rows.push({ tick_id: 101, bridged: 0 });
-
-    indexerDb.createXbridge   = (data) => realDb.createXbridge(data);
-    indexerDb.setTokenBridged = (tick, block) => realDb.setTokenBridged(tick, block);
-    indexerDb.getTokenInfo.resolves(createTokenInfo({
-        TICK: 'FUFU', TICK_ID: 7, DECIMALS: 2, OWNER: SOURCE,
-        BRIDGE_CHAINS: 'DOGE', MIN_DEPTH: 3
-    }));
-    indexerDb.getAddressBalances.resolves({ 7: '100', 1: '100' });
-
-    const handler = new XBridge({
-        config, util, indexerDb,
-        decoderDb: createMockDb(),
-        mapper:    { createMappings: sinon.stub().resolves() },
-        protocolChanges: {
-            isDefined: sinon.stub().returns(true),
-            isEnabled: sinon.stub().resolves(true)
-        }
-    });
-    util.resetLists();
-    return { handler, xbridges, tokens, ids };
-}
-
-describe('XBRIDGE handler into the real writers, end to end @regression', function(){
-    afterEach(() => sinon.restore());
-
-    it('a valid v3 lock leaves an xbridges row and a set bridged bit', async function(){
-        const { handler, xbridges, tokens, ids } = setup();
-        const data = createBaseData({
-            ACTION: 'XBRIDGE', FORMAT: 3, COIN: 'BTC', SOURCE: SOURCE,
-            BLOCK_INDEX: 100, ACTION_INDEX: 42, TX_OUTPUTS: []
-        });
-        await handler.parse(['3', 'FUFU', 'DOGE', DEST, '5.25', ''], data, null);
-
-        assert.strictEqual(data['STATUS'], 'valid', 'the lock itself must apply');
-        assert.strictEqual(xbridges.rows.length, 1);
-        const row = xbridges.rows[0];
-        assert.strictEqual(row.action_index, 42);
-        assert.strictEqual(row.version,      3);
-        assert.strictEqual(row.tick_id,      ids.tick['FUFU']);
-        assert.strictEqual(row.dest_chain,   'DOGE');
-        assert.strictEqual(row.amount,       '5.25');
-        assert.strictEqual(row.decimals,     2);
-        assert.strictEqual(row.min_depth,    3);
-        assert.strictEqual(row.block_index,  100);
-        assert.strictEqual(tokens.rows[0].bridged, 1, 'the first applied v3 sets the bit');
-    });
-});
-
-describe('XBRIDGE handler into the real writers, end to end @regression', function(){
-    afterEach(() => sinon.restore());
-
-    it('a refused v3 still leaves its row and never sets the bridged bit', async function(){
-        const { handler, xbridges, tokens } = setup();
-        const data = createBaseData({
-            ACTION: 'XBRIDGE', FORMAT: 3, COIN: 'BTC', SOURCE: SOURCE,
-            BLOCK_INDEX: 100, ACTION_INDEX: 43, TX_OUTPUTS: []
-        });
-        // XCHAIN keeps v0, so a v3 naming the GAS tick is refused before any effect.
-        await handler.parse(['3', 'XCHAIN', 'DOGE', DEST, '5', ''], data, null);
-
-        assert.strictEqual(data['STATUS'], 'invalid: TICK (use XBRIDGE v0)');
-        assert.strictEqual(xbridges.rows.length, 1, 'the refusal is recorded');
-        assert.strictEqual(xbridges.rows[0].dest_chain, null);
-        assert.strictEqual(tokens.rows[0].bridged, 0, 'a refused lock must never set the bit');
     });
 });
