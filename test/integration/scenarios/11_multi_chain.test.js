@@ -55,69 +55,100 @@ async function balanceOf(address, tick) {
     return r.length ? r[0].amount : null;
 }
 
+// One coin's run of the chain-agnostic lifecycle corpus: seed the gas, issue, mint and
+// send, then read back the ledger those blocks produced. Where the coin's gas came from
+// is recorded in gasOrigin, because balances alone would not show a preamble that had
+// been accepted off BTC.
+// The launch fee destinations are committed in every coin config, and LTC/DOGE
+// are native-fee-only: a fee-bearing action with no native fee output would be
+// rejected there. Exercising native mode needs fee outputs + seeded oracle
+// prices (the live e2e suites cover that); HERE the premise is "identical input
+// -> identical ledger", so pin every coin to the same xchain-balance fee path.
+// xchainFeeMode blanks FEE_DESTINATION on the live config AFTER a clean init;
+// the former env-placeholder route now fails closed at startup on LTC/DOGE
+// (src/config.js FEE_DESTINATION guard).
+async function runLifecycleCorpus(coin, gasOrigin) {
+    return withCoin(coin, 'regtest', async ({ seeder, indexer }) => {
+        // Fee era: A1's ISSUE/MINT/SEND and A2's balance row all cost gas. The
+        // preamble is chain-shaped by protocol: a broadcast ISSUE + MINT on BTC,
+        // bridge in-leg credits on LTC/DOGE (gas-seeder.js), so the gas that
+        // funds the corpus arrives the way it does on a real chain.
+        await seedGas(seeder, { addresses: [A1, A2] });
+        await seeder.seedBlock(100, T,        [{ source: A1, data: 'ISSUE|0|MCTOK|100000|1000|0|multi-chain token' }]);
+        await seeder.seedBlock(101, T + 600,  [{ source: A1, data: 'MINT|0|MCTOK|500' }]);
+        await seeder.seedBlock(102, T + 1200, [{ source: A1, destination: A2, data: 'SEND|0|MCTOK|200|' + A2 }]);
+        await processBlocks(indexer);
+        const tok = await getToken(indexerQuery, 'MCTOK');
+        gasOrigin[coin] = {
+            // A valid broadcast ISSUE of the gas tick: allowed on BTC only.
+            broadcastIssues: Number((await indexerQuery(
+                `SELECT COUNT(*) AS n FROM issues i
+                 INNER JOIN index_tickers  t ON t.id = i.tick_id
+                 INNER JOIN index_statuses s ON s.id = i.status_id
+                 INNER JOIN actions        a ON a.action_index = i.action_index
+                 INNER JOIN transactions  tx ON tx.tx_index = a.tx_index
+                 INNER JOIN index_transactions h ON h.id = tx.tx_hash_id
+                 WHERE t.tick = 'XCHAIN' AND s.status = 'valid' AND h.hash NOT LIKE 'XBRIDGE-%'`))[0].n),
+            // Credits minted by an XBRIDGE v2 in-leg: the only source off BTC.
+            bridgeCredits: Number((await indexerQuery(
+                `SELECT COUNT(*) AS n FROM credits c
+                 INNER JOIN actions       a ON a.action_index = c.action_index
+                 INNER JOIN index_actions ia ON ia.id = a.action_id
+                 INNER JOIN index_tickers  t ON t.id = c.tick_id
+                 WHERE ia.action = 'XBRIDGE' AND t.tick = 'XCHAIN'`))[0].n),
+        };
+        return {
+            supply: tok ? tok.supply : null,
+            balA1: await balanceOf(A1, 'MCTOK'),
+            balA2: await balanceOf(A2, 'MCTOK'),
+            gasA1: await balanceOf(A1, 'XCHAIN'),
+        };
+    }, { xchainFeeMode: true });
+}
+
+const FEE_DEST = 'mwEp2rWfnJuo9UEu71P7avKuEJZZvom8S5'; // any real (non-placeholder) address
+const PLACEHOLDER = 'X'.repeat(34);
+
+function utilFor(coin) {
+    process.env.INDEXER_COIN    = coin;
+    process.env.INDEXER_NETWORK = 'regtest';
+    return new Utility();
+}
+
+// utilFor mutates global env; restore BTC so later scenario files in a
+// consolidated run don't inherit whichever coin the last loop ended on.
+function restoreBtcEnv() {
+    process.env.INDEXER_COIN    = 'BTC';
+    process.env.INDEXER_NETWORK = 'regtest';
+}
+
+// The suite is written as consecutive blocks that all carry the same describe title, so no
+// block exceeds the readability limit while every full test title stays what it was. Both
+// hooks are registered by every block, so each test still runs under them; creating this
+// file's own scoped schemas again is the same work, not different work.
+async function createFileSchemas() {
+    await createDatabases(__filename);
+    await createDecoderSchema();
+}
+
+async function closeFileSchemas() {
+    await destroyFileIndexers(__filename);
+    await closeAll();
+}
+
 describe('Multi-chain action processing @regression @tier1', function () {
     this.timeout(120000);
-
-    before(async function () {
-        await createDatabases(__filename);
-        await createDecoderSchema();
-    });
-    after(async function () {
-        await destroyFileIndexers(__filename);
-        await closeAll();
-    });
+    before(createFileSchemas);
+    after(closeFileSchemas);
 
     // -----------------------------------------------------------------------
     // 1. Chain-agnostic core lifecycle.
     // -----------------------------------------------------------------------
     it('ISSUE/MINT/SEND lifecycle produces identical ledger state on BTC, LTC and DOGE', async function () {
-        // The launch fee destinations are committed in every coin config, and LTC/DOGE
-        // are native-fee-only: a fee-bearing action with no native fee output would be
-        // rejected there. Exercising native mode needs fee outputs + seeded oracle
-        // prices (the live e2e suites cover that); HERE the premise is "identical input
-        // -> identical ledger", so pin every coin to the same xchain-balance fee path.
-        // xchainFeeMode blanks FEE_DESTINATION on the live config AFTER a clean init;
-        // the former env-placeholder route now fails closed at startup on LTC/DOGE
-        // (src/config.js FEE_DESTINATION guard).
         const results = {};
         const gasOrigin = {};
         for (const coin of COINS) {
-            results[coin] = await withCoin(coin, 'regtest', async ({ seeder, indexer }) => {
-                // Fee era: A1's ISSUE/MINT/SEND and A2's balance row all cost gas. The
-                // preamble is chain-shaped by protocol: a broadcast ISSUE + MINT on BTC,
-                // bridge in-leg credits on LTC/DOGE (gas-seeder.js), so the gas that
-                // funds the corpus arrives the way it does on a real chain.
-                await seedGas(seeder, { addresses: [A1, A2] });
-                await seeder.seedBlock(100, T,        [{ source: A1, data: 'ISSUE|0|MCTOK|100000|1000|0|multi-chain token' }]);
-                await seeder.seedBlock(101, T + 600,  [{ source: A1, data: 'MINT|0|MCTOK|500' }]);
-                await seeder.seedBlock(102, T + 1200, [{ source: A1, destination: A2, data: 'SEND|0|MCTOK|200|' + A2 }]);
-                await processBlocks(indexer);
-                const tok = await getToken(indexerQuery, 'MCTOK');
-                gasOrigin[coin] = {
-                    // A valid broadcast ISSUE of the gas tick: allowed on BTC only.
-                    broadcastIssues: Number((await indexerQuery(
-                        `SELECT COUNT(*) AS n FROM issues i
-                         INNER JOIN index_tickers  t ON t.id = i.tick_id
-                         INNER JOIN index_statuses s ON s.id = i.status_id
-                         INNER JOIN actions        a ON a.action_index = i.action_index
-                         INNER JOIN transactions  tx ON tx.tx_index = a.tx_index
-                         INNER JOIN index_transactions h ON h.id = tx.tx_hash_id
-                         WHERE t.tick = 'XCHAIN' AND s.status = 'valid' AND h.hash NOT LIKE 'XBRIDGE-%'`))[0].n),
-                    // Credits minted by an XBRIDGE v2 in-leg: the only source off BTC.
-                    bridgeCredits: Number((await indexerQuery(
-                        `SELECT COUNT(*) AS n FROM credits c
-                         INNER JOIN actions       a ON a.action_index = c.action_index
-                         INNER JOIN index_actions ia ON ia.id = a.action_id
-                         INNER JOIN index_tickers  t ON t.id = c.tick_id
-                         WHERE ia.action = 'XBRIDGE' AND t.tick = 'XCHAIN'`))[0].n),
-                };
-                return {
-                    supply: tok ? tok.supply : null,
-                    balA1: await balanceOf(A1, 'MCTOK'),
-                    balA2: await balanceOf(A2, 'MCTOK'),
-                    gasA1: await balanceOf(A1, 'XCHAIN'),
-                };
-            }, { xchainFeeMode: true });
+            results[coin] = await runLifecycleCorpus(coin, gasOrigin);
         }
 
         // Chain-agnostic: every coin must derive the same ledger (including the
@@ -134,6 +165,13 @@ describe('Multi-chain action processing @regression @tier1', function () {
         assert.strictEqual(results.BTC.balA2, '200', 'expected 200 MCTOK sent to A2');
         assert.ok(results.BTC.gasA1, 'A1 should hold a residual XCHAIN gas balance');
     });
+
+});
+
+describe('Multi-chain action processing @regression @tier1', function () {
+    this.timeout(120000);
+    before(createFileSchemas);
+    after(closeFileSchemas);
 
     // -----------------------------------------------------------------------
     // 2. Capability staking is BTC-only.
@@ -162,6 +200,13 @@ describe('Multi-chain action processing @regression @tier1', function () {
         }
     });
 
+});
+
+describe('Multi-chain action processing @regression @tier1', function () {
+    this.timeout(120000);
+    before(createFileSchemas);
+    after(closeFileSchemas);
+
     // -----------------------------------------------------------------------
     // 3. Fee-payment mode per chain (behavioral test of detectFeePaymentMode).
     //
@@ -172,21 +217,7 @@ describe('Multi-chain action processing @regression @tier1', function () {
     // injecting the placeholder.
     // -----------------------------------------------------------------------
     describe('fee-payment mode', function () {
-        const FEE_DEST = 'mwEp2rWfnJuo9UEu71P7avKuEJZZvom8S5'; // any real (non-placeholder) address
-        const PLACEHOLDER = 'X'.repeat(34);
-
-        function utilFor(coin) {
-            process.env.INDEXER_COIN    = coin;
-            process.env.INDEXER_NETWORK = 'regtest';
-            return new Utility();
-        }
-
-        // utilFor mutates global env; restore BTC so later scenario files in a
-        // consolidated run don't inherit whichever coin the last loop ended on.
-        after(function () {
-            process.env.INDEXER_COIN    = 'BTC';
-            process.env.INDEXER_NETWORK = 'regtest';
-        });
+        after(restoreBtcEnv);
 
         it('every coin config ships a real (non-placeholder) FEE_DESTINATION', function () {
             for (const coin of COINS) {
@@ -219,6 +250,17 @@ describe('Multi-chain action processing @regression @tier1', function () {
                 }
             }
         });
+
+    });
+});
+
+describe('Multi-chain action processing @regression @tier1', function () {
+    this.timeout(120000);
+    before(createFileSchemas);
+    after(closeFileSchemas);
+
+    describe('fee-payment mode', function () {
+        after(restoreBtcEnv);
 
         it('with a fee output present: native on every coin', function () {
             for (const coin of COINS) {

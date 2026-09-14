@@ -77,46 +77,47 @@ function genValidator() {
     return { pubkey, privateKey };
 }
 
-describe('Cross-chain royalty: create-side gate + signed-legs settlement (real DB + real VM) @phaseE', function () {
-    this.timeout(600000);
-    let seeder, indexer, royalIdx, segIdx, sellOrderIdx, plainOrderIdx;
-    let priorFeeDestination, priorCoin, priorNetwork;
+let seeder, indexer, royalIdx, segIdx, sellOrderIdx, plainOrderIdx;
+let priorFeeDestination, priorCoin, priorNetwork;
 
-    async function contractIndexByCode(code) {
-        const h = sha(code);
-        const rows = await indexerQuery('SELECT action_index, code_hash FROM contracts', []);
-        const r = rows.find(x => x.code_hash === h);
-        return r ? Number(r.action_index) : null;
-    }
-    async function orderRow(actionIndex) {
-        const rows = await indexerQuery(
-            'SELECT o.payout_legs FROM orders o WHERE o.action_index = ?', [actionIndex]);
-        return rows.length ? rows[0] : null;
-    }
-    async function orderStatus(actionIndex) {
-        const rows = await indexerQuery(
-            `SELECT st.status FROM order_statuses os
-             JOIN index_statuses st ON st.id = os.status_id
-             WHERE os.order_action_index = ? ORDER BY os.action_index DESC LIMIT 1`, [actionIndex]);
-        return rows.length ? String(rows[0].status) : null;
-    }
-    async function orderIndexByMemo(memo) {
-        const rows = await indexerQuery(
-            `SELECT a.action_index AS ai FROM actions a
-             JOIN transactions t ON t.tx_index = a.tx_index
-             WHERE t.data LIKE ? ORDER BY a.action_index ASC LIMIT 1`, ['%' + memo + '%']);
-        return rows.length ? Number(rows[0].ai) : null;
-    }
-    async function balanceOf(address, tick) {
-        const rows = await indexerQuery(
-            `SELECT b.amount FROM balances b
-             JOIN index_addresses ia ON ia.id = b.address_id
-             JOIN index_tickers   it ON it.id = b.tick_id
-             WHERE ia.address = ? AND it.tick = ?`, [address, tick]);
-        return rows.length ? String(rows[0].amount) : '0';
-    }
+async function contractIndexByCode(code) {
+    const h = sha(code);
+    const rows = await indexerQuery('SELECT action_index, code_hash FROM contracts', []);
+    const r = rows.find(x => x.code_hash === h);
+    return r ? Number(r.action_index) : null;
+}
+async function orderRow(actionIndex) {
+    const rows = await indexerQuery(
+        'SELECT o.payout_legs FROM orders o WHERE o.action_index = ?', [actionIndex]);
+    return rows.length ? rows[0] : null;
+}
+async function orderStatus(actionIndex) {
+    const rows = await indexerQuery(
+        `SELECT st.status FROM order_statuses os
+         JOIN index_statuses st ON st.id = os.status_id
+         WHERE os.order_action_index = ? ORDER BY os.action_index DESC LIMIT 1`, [actionIndex]);
+    return rows.length ? String(rows[0].status) : null;
+}
+async function orderIndexByMemo(memo) {
+    const rows = await indexerQuery(
+        `SELECT a.action_index AS ai FROM actions a
+         JOIN transactions t ON t.tx_index = a.tx_index
+         WHERE t.data LIKE ? ORDER BY a.action_index ASC LIMIT 1`, ['%' + memo + '%']);
+    return rows.length ? Number(rows[0].ai) : null;
+}
 
-    before(async function () {
+async function balanceOf(address, tick) {
+    const rows = await indexerQuery(
+        `SELECT b.amount FROM balances b
+         JOIN index_addresses ia ON ia.id = b.address_id
+         JOIN index_tickers   it ON it.id = b.tick_id
+         WHERE ia.address = ? AND it.tick = ?`, [address, tick]);
+    return rows.length ? String(rows[0].amount) : '0';
+}
+
+// The rail all three cases read: three tokens issued on LTC, both guards deployed and
+// bound to their trade class, with the fee path and the chain env pinned for the file.
+async function setupRoyaltyRail() {
         try { require('xchain-vm'); } catch (e) { return this.skip(); }
         // Off-BTC on purpose (see header): the injected capability_snapshots rows are the
         // validator set cross_settle verifies the match signatures against.
@@ -164,9 +165,9 @@ describe('Cross-chain royalty: create-side gate + signed-legs settlement (real D
             { source: OWNER, data: `ISSUE|6|${CBTS}|${segIdx}|trade|0|0|bind-trade-segleg` },
         ]);
         await processBlocks(indexer);
-    });
+}
 
-    after(async function () {
+async function teardownRoyaltyRail() {
         if (indexer && priorFeeDestination !== undefined)
             indexer.config.ADDRESS.FEE_DESTINATION = priorFeeDestination;
         if (indexer) await destroyIndexer(indexer);
@@ -176,7 +177,85 @@ describe('Cross-chain royalty: create-side gate + signed-legs settlement (real D
         else process.env.INDEXER_NETWORK = priorNetwork;
         await destroyFileIndexers(__filename);
         await closeAll();
-    });
+}
+
+// Open the plain cross-chain order whose escrow the match will settle.
+async function openPlainCrossChainOrder() {
+    await seeder.seedBlock(104, T0 + 400, [
+        { source: OWNER, data: `ORDER|0|LTC|${PLNA}|100||BTC|FOO|50||${GETADDR}|${EXP}|||xcr-plain` },
+    ]);
+    await processBlocks(indexer);
+    plainOrderIdx = await orderIndexByMemo('xcr-plain');
+    assert.strictEqual(await orderStatus(plainOrderIdx), 'open');
+}
+
+// Single validator with a snapshot weight (stake-weighted quorum: 3w > 2w for N=1).
+async function seedCrossChainValidator() {
+    const v = genValidator();
+    await indexerQuery(
+        `INSERT INTO capability_snapshots (snapshot_block, capability, signing_pubkey, amount, source)
+         VALUES (?, 'cross_chain', ?, '5', 'srcA')`, [SNAP, v.pubkey]);
+    return v;
+}
+
+// The counterparty (BTC side, leg a) sold a controlled token there; its legs are in
+// BTC regtest encoding and apply to the proceeds THIS chain releases (b's escrow →
+// a_payout_addr). BTC/LTC regtest share the p2pkh prefix, so the re-encode is the
+// identity here; the mainnet byte-swap is pinned by address_reencode.test.js.
+function makeMatchRow(matchId, legs) {
+    return {
+        match_id: matchId, snapshot_block: SNAP, network: 'regtest',
+        a_chain: 'BTC', a_action_index: 424242, a_kind: 'order', a_tick: 'FOO', a_amount: '50',
+        a_filled_before: '0', a_ownership: 0, a_payout_addr: CPARTY, a_payout_legs: legs,
+        b_chain: 'LTC', b_action_index: plainOrderIdx, b_kind: 'order', b_tick: PLNA, b_amount: '100',
+        b_filled_before: '0', b_ownership: 0, b_payout_addr: GETADDR, b_payout_legs: null,
+        effective_time: T0 + 450, finalizing_view: 0
+    };
+}
+
+async function insertMatch(m, sigs) {
+    return indexerQuery(
+        `INSERT INTO cross_chain_matches
+            (match_id, snapshot_block, network,
+             a_chain, a_action_index, a_kind, a_tick, a_amount, a_filled_before, a_ownership, a_payout_addr, a_payout_legs,
+             b_chain, b_action_index, b_kind, b_tick, b_amount, b_filled_before, b_ownership, b_payout_addr, b_payout_legs,
+             effective_time, finalizing_view, validator_signatures, status)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'finalized')`,
+        [m.match_id, m.snapshot_block, m.network,
+         m.a_chain, m.a_action_index, m.a_kind, m.a_tick, m.a_amount, m.a_filled_before, m.a_ownership, m.a_payout_addr, m.a_payout_legs,
+         m.b_chain, m.b_action_index, m.b_kind, m.b_tick, m.b_amount, m.b_filled_before, m.b_ownership, m.b_payout_addr, m.b_payout_legs,
+         m.effective_time, m.finalizing_view, JSON.stringify(sigs)]);
+}
+
+// (a) Tamper control: sign WITH legs, store WITHOUT them → the canonical no longer
+// matches the signature, so the settlement pass must refuse to settle.
+// (b) The honest match: signed over the legs-bearing canonical, stored intact.
+async function insertTamperedAndHonestMatches(v, legs) {
+    const tampered = makeMatchRow('a'.repeat(64), legs);
+    const tamperedSig = crypto.sign(null, Buffer.from(settleCanon.canonical(tampered), 'utf8'), v.privateKey).toString('hex');
+    tampered.a_payout_legs = null;             // strip AFTER signing
+    await insertMatch(tampered, [{ pubkey: v.pubkey, sig: tamperedSig }]);
+
+    const honest = makeMatchRow('b'.repeat(64), legs);
+    const honestSig = crypto.sign(null, Buffer.from(settleCanon.canonical(honest), 'utf8'), v.privateKey).toString('hex');
+    await insertMatch(honest, [{ pubkey: v.pubkey, sig: honestSig }]);
+}
+
+// The tampered match settled nothing; the honest one split 100 PLNA into 75 + 25.
+async function assertOnlyHonestMatchSettled() {
+    const settled = await indexerQuery('SELECT match_id FROM cross_chain_settlements', []);
+    const settledIds = settled.map(r => String(r.match_id));
+    assert.ok(!settledIds.includes('a'.repeat(64)), 'stripped-legs match must NOT settle');
+    assert.ok(settledIds.includes('b'.repeat(64)), 'honest match settles');
+    assert.strictEqual(await balanceOf(CPARTY, PLNA), '75', 'seller remainder');
+    assert.strictEqual(await balanceOf(LEGADDR, PLNA), '25', 'royalty leg credit');
+    assert.strictEqual(await orderStatus(plainOrderIdx), 'complete');
+}
+
+describe('Cross-chain royalty: create-side gate + signed-legs settlement (real DB + real VM) @phaseE', function () {
+    this.timeout(600000);
+    before(setupRoyaltyRail);
+    after(teardownRoyaltyRail);
 
     it('1. cross-chain listing of a royalty token is ACCEPTED and the legs ride the order row', async function () {
         await seeder.seedBlock(102, T0 + 200, [
@@ -205,56 +284,9 @@ describe('Cross-chain royalty: create-side gate + signed-legs settlement (real D
     });
 
     it('3. a signed match carrying counterparty legs settles as remainder + re-encoded leg credit; stripped legs do not verify', async function () {
-        // Open the plain cross-chain order whose escrow the match will settle.
-        await seeder.seedBlock(104, T0 + 400, [
-            { source: OWNER, data: `ORDER|0|LTC|${PLNA}|100||BTC|FOO|50||${GETADDR}|${EXP}|||xcr-plain` },
-        ]);
-        await processBlocks(indexer);
-        plainOrderIdx = await orderIndexByMemo('xcr-plain');
-        assert.strictEqual(await orderStatus(plainOrderIdx), 'open');
-
-        // Single validator with a snapshot weight (stake-weighted quorum: 3w > 2w for N=1).
-        const v = genValidator();
-        await indexerQuery(
-            `INSERT INTO capability_snapshots (snapshot_block, capability, signing_pubkey, amount, source)
-             VALUES (?, 'cross_chain', ?, '5', 'srcA')`, [SNAP, v.pubkey]);
-
-        // The counterparty (BTC side, leg a) sold a controlled token there; its legs are in
-        // BTC regtest encoding and apply to the proceeds THIS chain releases (b's escrow →
-        // a_payout_addr). BTC/LTC regtest share the p2pkh prefix, so the re-encode is the
-        // identity here; the mainnet byte-swap is pinned by address_reencode.test.js.
-        const A_LEGS = JSON.stringify([{ to: LEGADDR, bps: 2500 }]);
-        const makeRow = (matchId, legs) => ({
-            match_id: matchId, snapshot_block: SNAP, network: 'regtest',
-            a_chain: 'BTC', a_action_index: 424242, a_kind: 'order', a_tick: 'FOO', a_amount: '50',
-            a_filled_before: '0', a_ownership: 0, a_payout_addr: CPARTY, a_payout_legs: legs,
-            b_chain: 'LTC', b_action_index: plainOrderIdx, b_kind: 'order', b_tick: PLNA, b_amount: '100',
-            b_filled_before: '0', b_ownership: 0, b_payout_addr: GETADDR, b_payout_legs: null,
-            effective_time: T0 + 450, finalizing_view: 0
-        });
-        const insertMatch = async (m, sigs) => indexerQuery(
-            `INSERT INTO cross_chain_matches
-                (match_id, snapshot_block, network,
-                 a_chain, a_action_index, a_kind, a_tick, a_amount, a_filled_before, a_ownership, a_payout_addr, a_payout_legs,
-                 b_chain, b_action_index, b_kind, b_tick, b_amount, b_filled_before, b_ownership, b_payout_addr, b_payout_legs,
-                 effective_time, finalizing_view, validator_signatures, status)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'finalized')`,
-            [m.match_id, m.snapshot_block, m.network,
-             m.a_chain, m.a_action_index, m.a_kind, m.a_tick, m.a_amount, m.a_filled_before, m.a_ownership, m.a_payout_addr, m.a_payout_legs,
-             m.b_chain, m.b_action_index, m.b_kind, m.b_tick, m.b_amount, m.b_filled_before, m.b_ownership, m.b_payout_addr, m.b_payout_legs,
-             m.effective_time, m.finalizing_view, JSON.stringify(sigs)]);
-
-        // (a) Tamper control: sign WITH legs, store WITHOUT them → the canonical no longer
-        // matches the signature, so the settlement pass must refuse to settle.
-        const tampered = makeRow('a'.repeat(64), A_LEGS);
-        const tamperedSig = crypto.sign(null, Buffer.from(settleCanon.canonical(tampered), 'utf8'), v.privateKey).toString('hex');
-        tampered.a_payout_legs = null;             // strip AFTER signing
-        await insertMatch(tampered, [{ pubkey: v.pubkey, sig: tamperedSig }]);
-
-        // (b) The honest match: signed over the legs-bearing canonical, stored intact.
-        const honest = makeRow('b'.repeat(64), A_LEGS);
-        const honestSig = crypto.sign(null, Buffer.from(settleCanon.canonical(honest), 'utf8'), v.privateKey).toString('hex');
-        await insertMatch(honest, [{ pubkey: v.pubkey, sig: honestSig }]);
+        await openPlainCrossChainOrder();
+        const v = await seedCrossChainValidator();
+        await insertTamperedAndHonestMatches(v, JSON.stringify([{ to: LEGADDR, bps: 2500 }]));
 
         // Any next block triggers the settlement pass.
         await seeder.seedBlock(105, T0 + 500, [
@@ -262,13 +294,6 @@ describe('Cross-chain royalty: create-side gate + signed-legs settlement (real D
         ]);
         await processBlocks(indexer);
 
-        // The tampered match settled nothing; the honest one split 100 PLNA into 75 + 25.
-        const settled = await indexerQuery('SELECT match_id FROM cross_chain_settlements', []);
-        const settledIds = settled.map(r => String(r.match_id));
-        assert.ok(!settledIds.includes('a'.repeat(64)), 'stripped-legs match must NOT settle');
-        assert.ok(settledIds.includes('b'.repeat(64)), 'honest match settles');
-        assert.strictEqual(await balanceOf(CPARTY, PLNA), '75', 'seller remainder');
-        assert.strictEqual(await balanceOf(LEGADDR, PLNA), '25', 'royalty leg credit');
-        assert.strictEqual(await orderStatus(plainOrderIdx), 'complete');
+        await assertOnlyHonestMatchSettled();
     });
 });

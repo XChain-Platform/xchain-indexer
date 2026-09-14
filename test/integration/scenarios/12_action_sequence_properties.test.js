@@ -82,56 +82,64 @@ class Model {
 
     // Produce one action { source, data, note }: ~85% intended-valid,
     // ~15% deliberately invalid (must be rejected without breaking invariants).
+    // The roll decides which kind, and each kind is drawn by its own method below.
     nextAction() {
         const ticks = Object.keys(this.tokens);
         const roll = this.rand();
 
-        if (ticks.length === 0 || roll < 0.18) {                       // ISSUE
-            const tick = 'PROP' + (this.nextTick++);
-            const maxSupply = this.int(500, 5000);
-            const maxMint = this.int(50, 500);
-            this.tokens[tick] = { maxSupply, maxMint, supply: 0 };
-            return { source: this.pick(ACTORS),
-                     data: `ISSUE|0|${tick}|${maxSupply}|${maxMint}|0|prop token`,
-                     note: 'ISSUE ' + tick };
-        }
+        if (ticks.length === 0 || roll < 0.18) return this.issueAction();   // ISSUE
 
         const tick = this.pick(ticks);
-        const t = this.tokens[tick];
-
-        if (roll < 0.50) {                                             // MINT
-            const headroom = t.maxSupply - t.supply;
-            if (headroom <= 0 || this.rand() < 0.15) {
-                // deliberate over-mint (or no headroom left): expect rejection
-                return { source: this.pick(ACTORS),
-                         data: `MINT|0|${tick}|${t.maxMint}`,
-                         note: 'over-MINT ' + tick };
-            }
-            const amt = Math.min(this.int(1, t.maxMint), headroom);
-            const source = this.pick(ACTORS);
-            t.supply += amt;
-            this.credit(source, tick, amt);
-            return { source, data: `MINT|0|${tick}|${amt}`, note: 'MINT ' + tick };
-        }
-
-        if (roll < 0.85) {                                             // SEND
-            const holders = this.holders(tick);
-            if (holders.length === 0 || this.rand() < 0.15) {
-                // overspend from a (possibly empty) address: expect rejection
-                return { source: this.pick(ACTORS),
-                         data: `SEND|0|${tick}|999999|${this.pick(ACTORS)}`,
-                         note: 'over-SEND ' + tick };
-            }
-            const source = this.pick(holders);
-            const bal = this.balances[source][tick];
-            const amt = this.int(1, bal);
-            const dest = this.pick(ACTORS.filter(a => a !== source));
-            this.credit(source, tick, -amt);
-            this.credit(dest, tick, amt);
-            return { source, data: `SEND|0|${tick}|${amt}|${dest}`, note: 'SEND ' + tick };
-        }
-
+        if (roll < 0.50) return this.mintAction(tick);                  // MINT
+        if (roll < 0.85) return this.sendAction(tick);                  // SEND
         // DESTROY
+        return this.destroyAction(tick);
+    }
+
+    issueAction() {
+        const tick = 'PROP' + (this.nextTick++);
+        const maxSupply = this.int(500, 5000);
+        const maxMint = this.int(50, 500);
+        this.tokens[tick] = { maxSupply, maxMint, supply: 0 };
+        return { source: this.pick(ACTORS),
+                 data: `ISSUE|0|${tick}|${maxSupply}|${maxMint}|0|prop token`,
+                 note: 'ISSUE ' + tick };
+    }
+
+    mintAction(tick) {
+        const t = this.tokens[tick];
+        const headroom = t.maxSupply - t.supply;
+        if (headroom <= 0 || this.rand() < 0.15) {
+            // deliberate over-mint (or no headroom left): expect rejection
+            return { source: this.pick(ACTORS),
+                     data: `MINT|0|${tick}|${t.maxMint}`,
+                     note: 'over-MINT ' + tick };
+        }
+        const amt = Math.min(this.int(1, t.maxMint), headroom);
+        const source = this.pick(ACTORS);
+        t.supply += amt;
+        this.credit(source, tick, amt);
+        return { source, data: `MINT|0|${tick}|${amt}`, note: 'MINT ' + tick };
+    }
+
+    sendAction(tick) {
+        const holders = this.holders(tick);
+        if (holders.length === 0 || this.rand() < 0.15) {
+            // overspend from a (possibly empty) address: expect rejection
+            return { source: this.pick(ACTORS),
+                     data: `SEND|0|${tick}|999999|${this.pick(ACTORS)}`,
+                     note: 'over-SEND ' + tick };
+        }
+        const source = this.pick(holders);
+        const bal = this.balances[source][tick];
+        const amt = this.int(1, bal);
+        const dest = this.pick(ACTORS.filter(a => a !== source));
+        this.credit(source, tick, -amt);
+        this.credit(dest, tick, amt);
+        return { source, data: `SEND|0|${tick}|${amt}|${dest}`, note: 'SEND ' + tick };
+    }
+
+    destroyAction(tick) {
         const holders = this.holders(tick);
         if (holders.length === 0)
             return { source: this.pick(ACTORS),
