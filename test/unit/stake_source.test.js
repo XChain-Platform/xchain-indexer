@@ -41,8 +41,8 @@ function makeIndexer({ pubkeyId = 7, validId = 1, doQuery } = {}) {
         getStatusId: sinon.stub().resolves(validId),
         doQuery:     doQuery || sinon.stub().resolves([])
     };
-    // getStakeSourceByPubkey resolves through indexer.indexerDb.apiView() (/
-    // H2 residual: a federation read must draw an independent pooled connection, never
+    // getStakeSourceByPubkey resolves through indexer.indexerDb.apiView() (a federation
+    // read must draw an independent pooled connection, never
     // join the block's open transaction). The fake view returns the same stubbed db so
     // the behaviour assertions below still observe db.doQuery / db.getPubkeyId; the
     // pooled-isolation guarantee itself is exercised by the real-Database test below.

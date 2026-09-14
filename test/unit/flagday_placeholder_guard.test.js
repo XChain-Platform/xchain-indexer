@@ -21,7 +21,7 @@
  *   - a TIME half. The 2026-07-15 hardening gates in protocol_changes.js moved
  *     off the 1798761600 (2027-01-01) placeholder onto the ratified timestamp,
  *     joining the confirmed 0.2.0 contract-era cohort. That timestamp has since
- * been repinned twice (, then) and now reads 1786060800
+ *     been repinned twice and now reads 1786060800
  *     (2026-08-07);
  *   - a BTC-HEIGHT half, for the gates keyed on a snapshot_block rather than a
  *     block time. It moved off the 983000 (~2027-01-01) placeholder onto 969500.

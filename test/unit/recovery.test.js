@@ -1079,7 +1079,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             let byType = Object.fromEntries(btcDb.rewards.map(r => [r.reward_type, r]));
             // anchor_BTC is v4/v5-derived at/above the flag: pinned to the frozen constant.
             assert.strictEqual(byType['anchor_BTC'].amount, '10.00000000');
-            // anchor_archive is v6-derived at/above ITS flag-day (, regtest = genesis)
+            // anchor_archive is v6-derived at/above ITS flag-day (genesis on regtest), so it is
             // pinned to the frozen ARCHIVE constant for the same recovered==live reason.
             assert.strictEqual(byType['anchor_archive'].amount, '10.00000000');
         });
