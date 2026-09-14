@@ -27,7 +27,7 @@ const pmsh      = require('./attestation/providerMinStakeHistory.js');
 // the live expiry never held responsible.
 const rgf       = require('./actions/attest/rollcall_gates_filter.js');
 const ProviderRegistry = require('./attestation/providerRegistry.js');
-const lifecycle = require('./hub/tableLifecycle.js');
+const lifecycle = require('./hub/table_lifecycle.js');
 // For the market-pair sentinel only. db.js requires nothing from here, so this is
 // a one-way edge; the pair key has to be the same one Database.getMarkets builds or
 // the two collectors disagree about which markets a reorg must recompute.

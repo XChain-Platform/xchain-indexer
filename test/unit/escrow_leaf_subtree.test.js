@@ -39,7 +39,7 @@ const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js'
 const M   = require('../../src/consensus/merkle.js');
 const SC  = require('../../src/stateCommitment.js');
 const SUB = require('../../src/state_subtree_activation.js');
-const ESC = require('../../src/consensus/escrowLeafSubtree.js');
+const ESC = require('../../src/consensus/escrow_leaf_subtree.js');
 
 const CHAIN = 'BTC', NETWORK = 'regtest';
 const ADDR  = '1LockerAaaaaaaaaaaaaaaaaaaaaaaaaaa';

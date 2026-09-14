@@ -55,7 +55,7 @@ const path   = require('path');
 const M   = require('../../src/consensus/merkle.js');
 const SC  = require('../../src/stateCommitment.js');
 const SUB = require('../../src/state_subtree_activation.js');
-const CST = require('../../src/consensus/contractStateSubtree.js');
+const CST = require('../../src/consensus/contract_state_subtree.js');
 
 const CHAIN = 'BTC', NETWORK = 'regtest';
 
@@ -354,7 +354,7 @@ describe('contract_state_root: frozen row-to-leaf mapping @regression', function
         // Comments are stripped BEFORE the quoted-string scan: prose apostrophes
         // ("repo's") otherwise open a phantom string literal and the check ends up
         // grading the documentation instead of the queries.
-        const src = fs.readFileSync(path.resolve(__dirname, '../../src/consensus/contractStateSubtree.js'), 'utf8')
+        const src = fs.readFileSync(path.resolve(__dirname, '../../src/consensus/contract_state_subtree.js'), 'utf8')
             .replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
         const sql = src.match(/'[^']*(?:SELECT|FROM|WHERE|GROUP BY|ORDER BY)[^']*'/g).join(' ');
         // Every contract_state key reference is the utf8_bin shadow column. A plain

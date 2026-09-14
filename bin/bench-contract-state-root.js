@@ -78,7 +78,7 @@
 
 'use strict';
 
-const CST = require('../src/consensus/contractStateSubtree.js');
+const CST = require('../src/consensus/contract_state_subtree.js');
 const SC  = require('../src/stateCommitment.js');
 
 function parseArgs(argv){
