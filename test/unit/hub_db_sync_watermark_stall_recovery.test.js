@@ -155,21 +155,21 @@ describe('HubDbSync stream-watermark stall recovery @regression @tier1', functio
         it('heartbeats flowing, watermark frozen, hub tip advancing => one resync, no exit', function () {
             const fatal = sinon.spy();
             const sync  = armStalled(makeSync({ onFatalStall: fatal }));
-            const drive = sinon.stub(sync, '_driveResync');
+            const drive = sinon.stub(sync, 'driveResync');
 
             clock.tick(STALL_MS - 1);
-            assert.strictEqual(sync._checkWatermarkStall(), 'ok');
+            assert.strictEqual(sync.checkWatermarkStall(), 'ok');
             assert.strictEqual(drive.callCount, 0);
 
             clock.tick(1);
-            assert.strictEqual(sync._checkWatermarkStall(), 'resync');
+            assert.strictEqual(sync.checkWatermarkStall(), 'resync');
             assert.strictEqual(drive.callCount, 1, 'stage 1 forces a subscribe-then-bootstrap');
             assert.strictEqual(fatal.callCount, 0, 'stage 1 must not end the process');
 
             // Sampling again inside the exit window must not re-drive: the latch makes the
             // remedy one-per-episode so stage 2 measures the remedy, not a second freeze.
             clock.tick(EXIT_MS - 1);
-            assert.strictEqual(sync._checkWatermarkStall(), 'ok');
+            assert.strictEqual(sync.checkWatermarkStall(), 'ok');
             assert.strictEqual(drive.callCount, 1);
             assert.strictEqual(fatal.callCount, 0);
         });
@@ -177,17 +177,17 @@ describe('HubDbSync stream-watermark stall recovery @regression @tier1', functio
         it('still frozen after the resync => the bounded exit fires with a named reason', function () {
             const fatal = sinon.spy();
             const sync  = armStalled(makeSync({ onFatalStall: fatal }));
-            sinon.stub(sync, '_driveResync');
+            sinon.stub(sync, 'driveResync');
 
             clock.tick(STALL_MS);
-            assert.strictEqual(sync._checkWatermarkStall(), 'resync');
+            assert.strictEqual(sync.checkWatermarkStall(), 'resync');
 
             clock.tick(EXIT_MS - 1);
-            assert.strictEqual(sync._checkWatermarkStall(), 'ok', 'the window is not up yet');
+            assert.strictEqual(sync.checkWatermarkStall(), 'ok', 'the window is not up yet');
             assert.strictEqual(fatal.callCount, 0);
 
             clock.tick(1);
-            assert.strictEqual(sync._checkWatermarkStall(), 'exit');
+            assert.strictEqual(sync.checkWatermarkStall(), 'exit');
             assert.strictEqual(fatal.callCount, 1, 'stage 2 hands the process to its supervisor');
 
             const reason = fatal.firstCall.args[0];
@@ -203,14 +203,14 @@ describe('HubDbSync stream-watermark stall recovery @regression @tier1', functio
         it('a watermark that is moving fires nothing at all', function () {
             const fatal = sinon.spy();
             const sync  = armStalled(makeSync({ onFatalStall: fatal }));
-            const drive = sinon.stub(sync, '_driveResync');
+            const drive = sinon.stub(sync, 'driveResync');
 
             // The hub tip advances and the mirror keeps up: every sample is ok, forever.
             for (let i = 0; i < 20; i++) {
                 clock.tick(STALL_MS);
                 sync._hubTipTs += 30;
-                sync._advanceWatermark(sync.streamWatermark + 30);
-                assert.strictEqual(sync._checkWatermarkStall(), 'ok');
+                sync.advanceWatermark(sync.streamWatermark + 30);
+                assert.strictEqual(sync.checkWatermarkStall(), 'ok');
             }
             assert.strictEqual(drive.callCount, 0, 'a healthy mirror is never re-driven');
             assert.strictEqual(fatal.callCount, 0);
@@ -219,18 +219,18 @@ describe('HubDbSync stream-watermark stall recovery @regression @tier1', functio
         it('an advance mid-episode disarms a pending exit', function () {
             const fatal = sinon.spy();
             const sync  = armStalled(makeSync({ onFatalStall: fatal }));
-            sinon.stub(sync, '_driveResync');
+            sinon.stub(sync, 'driveResync');
 
             clock.tick(STALL_MS);
-            assert.strictEqual(sync._checkWatermarkStall(), 'resync');
+            assert.strictEqual(sync.checkWatermarkStall(), 'resync');
 
             // The forced resync worked: the re-bootstrap drained and the mirror caught up.
             clock.tick(EXIT_MS - 1);
-            sync._advanceWatermark(sync._hubTipTs);
+            sync.advanceWatermark(sync._hubTipTs);
             assert.strictEqual(sync._watermarkStallResyncAt, null, 'the latch clears on a real advance');
 
             clock.tick(EXIT_MS * 2);
-            assert.strictEqual(sync._checkWatermarkStall(), 'ok',
+            assert.strictEqual(sync.checkWatermarkStall(), 'ok',
                 'no exit: the recovery is what the whole detector exists to produce');
             assert.strictEqual(fatal.callCount, 0);
         });
@@ -241,56 +241,56 @@ describe('HubDbSync stream-watermark stall recovery @regression @tier1', functio
             // fresh detection window, and only a second full freeze escalates again.
             const fatal = sinon.spy();
             const sync  = armStalled(makeSync({ onFatalStall: fatal }));
-            sinon.stub(sync, '_driveResync');
+            sinon.stub(sync, 'driveResync');
 
             clock.tick(STALL_MS);
-            assert.strictEqual(sync._checkWatermarkStall(), 'resync');
+            assert.strictEqual(sync.checkWatermarkStall(), 'resync');
 
             clock.tick(EXIT_MS - 1);
-            sync._advanceWatermark(1500);                  // still short of the 2000 tip
+            sync.advanceWatermark(1500);                  // still short of the 2000 tip
 
             clock.tick(STALL_MS);
-            assert.strictEqual(sync._checkWatermarkStall(), 'resync', 'stage 1 again, not stage 2');
+            assert.strictEqual(sync.checkWatermarkStall(), 'resync', 'stage 1 again, not stage 2');
             assert.strictEqual(fatal.callCount, 0, 'progress is never charged to the fatal window');
         });
 
         it('without a fatal handler the mirror keeps re-driving instead of exiting', function () {
             const sync  = armStalled(makeSync());          // no onFatalStall: the vendored-consumer shape
-            const drive = sinon.stub(sync, '_driveResync');
+            const drive = sinon.stub(sync, 'driveResync');
 
             clock.tick(STALL_MS);
-            assert.strictEqual(sync._checkWatermarkStall(), 'resync');
+            assert.strictEqual(sync.checkWatermarkStall(), 'resync');
             clock.tick(EXIT_MS);
-            assert.strictEqual(sync._checkWatermarkStall(), 'exit');
+            assert.strictEqual(sync.checkWatermarkStall(), 'exit');
             assert.strictEqual(drive.callCount, 2, 'stage 2 re-drives when nothing will restart it');
         });
 
         it('a stopped or disabled mirror never fires', function () {
             const sync = armStalled(makeSync());
-            const drive = sinon.stub(sync, '_driveResync');
+            const drive = sinon.stub(sync, 'driveResync');
             sync.running = false;
             clock.tick(STALL_MS * 10);
-            assert.strictEqual(sync._checkWatermarkStall(), 'ok');
+            assert.strictEqual(sync.checkWatermarkStall(), 'ok');
             assert.strictEqual(drive.callCount, 0);
         });
 
         it('the timer samples several times per window and unrefs itself', function () {
             const sync = armStalled(makeSync());
-            const check = sinon.stub(sync, '_checkWatermarkStall').returns('ok');
-            sync._startStallDetector();
+            const check = sinon.stub(sync, 'checkWatermarkStall').returns('ok');
+            sync.startStallDetector();
             try {
                 assert.ok(sync._stallTimer, 'a detector is running');
-                assert.ok(sync._stallCheckIntervalMs() <= STALL_MS / 4,
+                assert.ok(sync.stallCheckIntervalMs() <= STALL_MS / 4,
                     'the sampler must not be able to miss a window');
                 clock.tick(STALL_MS);
                 assert.ok(check.callCount >= 4, 'sampled ' + check.callCount + ' times per window');
-            } finally { sync._stopStallDetector(); }
+            } finally { sync.stopStallDetector(); }
             assert.strictEqual(sync._stallTimer, null);
         });
 
         it('a zero stall window starts no detector at all', function () {
             const sync = makeSync({ watermarkStallMs: 0 });
-            sync._startStallDetector();
+            sync.startStallDetector();
             assert.strictEqual(sync._stallTimer, null);
         });
     });
@@ -299,13 +299,13 @@ describe('HubDbSync stream-watermark stall recovery @regression @tier1', functio
     describe('hub tip recording', function () {
         it('_noteHubTip keeps the newest tip and ignores junk and regressions', function () {
             const sync = makeSync();
-            sync._noteHubTip(1000);
-            sync._noteHubTip(900);
+            sync.noteHubTip(1000);
+            sync.noteHubTip(900);
             assert.strictEqual(sync._hubTipTs, 1000, 'monotonic');
-            sync._noteHubTip('nope');
-            sync._noteHubTip(null);
+            sync.noteHubTip('nope');
+            sync.noteHubTip(null);
             assert.strictEqual(sync._hubTipTs, 1000, 'non-numeric tips are ignored');
-            sync._noteHubTip(1100);
+            sync.noteHubTip(1100);
             assert.strictEqual(sync._hubTipTs, 1100);
         });
 
@@ -315,8 +315,8 @@ describe('HubDbSync stream-watermark stall recovery @regression @tier1', functio
             // detector could never tell this apart from a hub with nothing to send.
             const sync = makeSync();
             sync._bootstrapDrained = false;
-            sync._noteHubTip(5000);
-            if (sync._bootstrapDrained && !sync._schemaMismatchSeen) sync._advanceWatermark(5000);
+            sync.noteHubTip(5000);
+            if (sync._bootstrapDrained && !sync._schemaMismatchSeen) sync.advanceWatermark(5000);
             assert.strictEqual(sync.streamWatermark, 0, 'the gate held');
             assert.strictEqual(sync._hubTipTs, 5000, 'the tip was still recorded');
         });
@@ -347,7 +347,7 @@ describe('HubDbSync stream-watermark stall recovery @regression @tier1', functio
                 // only meaningful if the stage-1 retry actually happened.
                 const before = sync.forcedResyncCount;
                 sync._lastWatermarkAdvanceAt = Date.now() - sync.watermarkStallMs;
-                assert.strictEqual(sync._checkWatermarkStall(), 'resync');
+                assert.strictEqual(sync.checkWatermarkStall(), 'resync');
                 assert.strictEqual(sync.forcedResyncCount, before + 1, 'the resync really ran');
             } finally { warn.restore(); err.restore(); }
         });

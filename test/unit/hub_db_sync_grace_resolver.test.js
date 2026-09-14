@@ -106,9 +106,9 @@ describe('HubDbSync watermark-grace resolver @regression @tier1', function () {
         sync.matchWatermarkGraceS = 0;         // a match-grace read would open the barrier here
         sync.callWatermarkGraceS  = 100;
         sync.streamWatermark      = 1050;
-        assert.strictEqual(sync._callSyncSatisfied(1000), false, 'watermark under blockTime + call grace');
+        assert.strictEqual(sync.callSyncSatisfied(1000), false, 'watermark under blockTime + call grace');
         sync.streamWatermark      = 1100;
-        assert.strictEqual(sync._callSyncSatisfied(1000), true, 'watermark at blockTime + call grace opens it');
+        assert.strictEqual(sync.callSyncSatisfied(1000), true, 'watermark at blockTime + call grace opens it');
     });
 
     it('regtest honors a valid env override (test tunability)', function () {

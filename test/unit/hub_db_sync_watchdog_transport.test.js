@@ -60,12 +60,12 @@ describe('HubDbSync watchdog measures transport not processing (ITEM 2477) @regr
 
         sync = makeSync();
         // A slow row apply holds _msgChain busy far longer than the 150ms watchdog timeout.
-        sinon.stub(sync, '_handleRowEvent').callsFake(() => sleep(600));
+        sinon.stub(sync, 'handleRowEvent').callsFake(() => sleep(600));
 
         await sync._connectWebSocket();                 // resolves on 'ready'
         const terminateSpy = sinon.spy(sync.ws, 'terminate');
 
-        // Deliver a row frame -> enqueued to _msgChain -> _handleRowEvent hangs 600ms.
+        // Deliver a row frame -> enqueued to _msgChain -> handleRowEvent hangs 600ms.
         serverWs.send(JSON.stringify({ type: 'row:inserted', table: 'oracle_prices', row: { id: 1 } }));
         // Watermark frames keep arriving on the socket every 40ms; each must stamp
         // _lastHeartbeatAt at ARRIVAL even though the message chain is stuck on the apply.

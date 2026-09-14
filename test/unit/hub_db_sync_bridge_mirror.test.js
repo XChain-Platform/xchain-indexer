@@ -57,7 +57,7 @@ describe('bridge mirror registration @regression @tier1', function () {
         const seen = [];
         sinon.stub(sync, '_bootstrapTable').callsFake(async (table) => { seen.push(table); return 900; });
 
-        await sync._bootstrapAll();
+        await sync.bootstrapAll();
 
         assert.ok(seen.includes('bridge_transfers'), 'bridge_transfers must bootstrap');
         assert.ok(seen.includes('policy_snapshots'), 'policy_snapshots must bootstrap');
@@ -77,11 +77,11 @@ describe('bridge mirror registration @regression @tier1', function () {
         sync._expectedBtcChainId = ours;
 
         for (const table of ['bridge_transfers', 'policy_snapshots']) {
-            assert.strictEqual(sync._refuseForeignChainRow(table, { btc_chain_id: foreign }), true,
+            assert.strictEqual(sync.refuseForeignChainRow(table, { btc_chain_id: foreign }), true,
                 table + ' must refuse a row from another Bitcoin chain');
-            assert.strictEqual(sync._refuseForeignChainRow(table, { btc_chain_id: ours }), false,
+            assert.strictEqual(sync.refuseForeignChainRow(table, { btc_chain_id: ours }), false,
                 table + ' must apply a row from this chain');
-            assert.strictEqual(sync._refuseForeignChainRow(table, { btc_chain_id: null }), false,
+            assert.strictEqual(sync.refuseForeignChainRow(table, { btc_chain_id: null }), false,
                 table + ' must apply a pre-column NULL row');
         }
     });
@@ -129,7 +129,7 @@ describe('bridge sync barrier @regression @tier1', function () {
         // block time and open the barrier before this chain's own transfers are local.
         const { sync, calls } = makeSync({ coin: 'DOGE' }, [{ ts: 456 }]);
 
-        await sync._refreshBridgeSyncTimestamp();
+        await sync.refreshBridgeSyncTimestamp();
 
         assert.match(calls[0].sql, /FROM bridge_transfers/);
         assert.match(calls[0].sql, /src_chain\s*=\s*\?\s+OR\s+dest_chain\s*=\s*\?/i);
@@ -139,7 +139,7 @@ describe('bridge sync barrier @regression @tier1', function () {
 
     it('falls back to an unscoped watermark when no coin is configured', async function () {
         const { sync, calls } = makeSync({}, [{ ts: 9 }]);
-        await sync._refreshBridgeSyncTimestamp();
+        await sync.refreshBridgeSyncTimestamp();
         assert.ok(!/src_chain/.test(calls[0].sql), 'no coin means no chain filter');
         assert.deepStrictEqual(calls[0].args, []);
     });
@@ -148,7 +148,7 @@ describe('bridge sync barrier @regression @tier1', function () {
         const { sync, doQuery } = makeSync({ coin: 'DOGE' });
         sync.bridgeSyncTimestamp = 777;
         doQuery.rejects(new Error("Table 'bridge_transfers' doesn't exist"));
-        await sync._refreshBridgeSyncTimestamp();
+        await sync.refreshBridgeSyncTimestamp();
         assert.strictEqual(sync.bridgeSyncTimestamp, 777, 'a missing table must not reset the scalar');
     });
 
@@ -157,9 +157,9 @@ describe('bridge sync barrier @regression @tier1', function () {
         // node that drained nothing would mint at the wrong block and fork.
         const { sync } = makeSync({ coin: 'DOGE' });
         sync.bridgeSyncTimestamp = null;
-        assert.strictEqual(sync._bridgeSyncSatisfied(1000), false, 'un-bootstrapped: must defer');
+        assert.strictEqual(sync.bridgeSyncSatisfied(1000), false, 'un-bootstrapped: must defer');
         sync.bridgeBootstrapped = true;
-        assert.strictEqual(sync._bridgeSyncSatisfied(1000), true);
+        assert.strictEqual(sync.bridgeSyncSatisfied(1000), true);
     });
 
     it('opens on the stream watermark at exactly its own grace, not one second earlier', function () {
@@ -170,9 +170,9 @@ describe('bridge sync barrier @regression @tier1', function () {
         sync.bridgeSyncTimestamp = 500;                     // armed, far behind the tip
         const grace = sync.bridgeWatermarkGraceS;
         sync.streamWatermark = 1000 + grace;
-        assert.strictEqual(sync._bridgeSyncSatisfied(1000), true);
+        assert.strictEqual(sync.bridgeSyncSatisfied(1000), true);
         sync.streamWatermark = 1000 + grace - 1;
-        assert.strictEqual(sync._bridgeSyncSatisfied(1000), false, 'must defer until the grace is covered');
+        assert.strictEqual(sync.bridgeSyncSatisfied(1000), false, 'must defer until the grace is covered');
     });
 
     it('waitForBridgeSync resolves at once when the mirror is already past the block time', async function () {
@@ -209,7 +209,7 @@ describe('bridge sync barrier @regression @tier1', function () {
         sync.bridgeSyncTimestamp = 500;
         const pending = sync.waitForBridgeSync(1000, 5000);
         assert.strictEqual(sync._bridgeWaiters.length, 1);
-        sync._advanceWatermark(1000 + sync.bridgeWatermarkGraceS);
+        sync.advanceWatermark(1000 + sync.bridgeWatermarkGraceS);
         await pending;
         assert.strictEqual(sync._bridgeWaiters.length, 0, 'released by the watermark, not by a row');
     });
@@ -229,7 +229,7 @@ describe('policy sync barrier @regression @tier1', function () {
         // the ones it originates: it already holds that policy natively.
         const { sync, calls } = makeSync({ coin: 'BTC' }, [{ ts: 321 }]);
 
-        await sync._refreshPolicySyncTimestamp();
+        await sync.refreshPolicySyncTimestamp();
 
         assert.match(calls[0].sql, /FROM policy_snapshots/);
         assert.match(calls[0].sql, /origin_chain\s*<>\s*\?/i);
@@ -241,9 +241,9 @@ describe('policy sync barrier @regression @tier1', function () {
     it('an empty mirror satisfies the barrier ONLY after a full bootstrap drain', function () {
         const { sync } = makeSync({ coin: 'DOGE' });
         sync.policySyncTimestamp = null;
-        assert.strictEqual(sync._policySyncSatisfied(1000), false);
+        assert.strictEqual(sync.policySyncSatisfied(1000), false);
         sync.policyBootstrapped = true;
-        assert.strictEqual(sync._policySyncSatisfied(1000), true);
+        assert.strictEqual(sync.policySyncSatisfied(1000), true);
     });
 
     it('opens on the stream watermark at exactly its own grace', function () {
@@ -252,9 +252,9 @@ describe('policy sync barrier @regression @tier1', function () {
         sync.policySyncTimestamp = 500;
         const grace = sync.policyWatermarkGraceS;
         sync.streamWatermark = 1000 + grace;
-        assert.strictEqual(sync._policySyncSatisfied(1000), true);
+        assert.strictEqual(sync.policySyncSatisfied(1000), true);
         sync.streamWatermark = 1000 + grace - 1;
-        assert.strictEqual(sync._policySyncSatisfied(1000), false);
+        assert.strictEqual(sync.policySyncSatisfied(1000), false);
     });
 
     it('waitForPolicySync rejects behind a stale mirror and names the mirror position', async function () {
@@ -275,14 +275,14 @@ describe('policy sync barrier @regression @tier1', function () {
 
     it('a watermark advance releases an in-flight waiter without a new row', async function () {
         // The quiet-table deadlock class: a quiet table must never freeze the tip. A heartbeat is
-        // the only evidence that arrives when no row does, so _advanceWatermark has to reach
+        // the only evidence that arrives when no row does, so advanceWatermark has to reach
         // this waiter list as well as the older ones.
         const { sync } = makeSync({ coin: 'DOGE' });
         sync.policyBootstrapped  = true;
         sync.policySyncTimestamp = 500;
         const pending = sync.waitForPolicySync(1000, 5000);
         assert.strictEqual(sync._policyWaiters.length, 1);
-        sync._advanceWatermark(1000 + sync.policyWatermarkGraceS);
+        sync.advanceWatermark(1000 + sync.policyWatermarkGraceS);
         await pending;
         assert.strictEqual(sync._policyWaiters.length, 0, 'released by the watermark, not by a row');
     });
@@ -402,7 +402,7 @@ describe('bridge mirror reconnect refresh @regression @tier2', function () {
         // the reconnect edge clears the waiters from data already local instead of making
         // every deferred block wait out its full timeout.
         const { sync, calls } = makeSync({ coin: 'DOGE' }, [{ ts: 1 }]);
-        await sync._refreshAllSyncHeights();
+        await sync.refreshAllSyncHeights();
         assert.ok(calls.some(c => /FROM bridge_transfers/.test(c.sql)), 'bridge watermark must be re-read');
         assert.ok(calls.some(c => /FROM policy_snapshots/.test(c.sql)), 'policy watermark must be re-read');
     });

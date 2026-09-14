@@ -192,8 +192,8 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
         const { sync } = makeSync();
         const drained = [];
         sinon.stub(sync, '_bootstrapTable').callsFake(async (table) => { drained.push(table); return 1; });
-        sinon.stub(sync, '_advanceWatermark');
-        await sync._bootstrapAll();
+        sinon.stub(sync, 'advanceWatermark');
+        await sync.bootstrapAll();
         assert.ok(drained.indexOf('attestation_responses') !== -1,
             'the bootstrap loop must page attestation_responses; it concatenates the class arrays, so ' +
             'membership in HUB_STATE_TABLES is the whole mechanism');
@@ -377,7 +377,7 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
     it('mirrorStatus reflects the stream watermark advancing, HUB_STATE_TABLES included', async function () {
         const { sync } = makeSync();
         assert.strictEqual(sync.mirrorStatus().streamWatermark, 0);
-        sync._advanceWatermark(1700000000);
+        sync.advanceWatermark(1700000000);
         const status = sync.mirrorStatus();
         assert.strictEqual(status.streamWatermark, 1700000000);
         for (const table of HubDbSync.HUB_STATE_TABLES) {

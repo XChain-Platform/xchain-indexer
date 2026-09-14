@@ -32,9 +32,9 @@ function makeSync(hubDb) {
     const sync = new HubDbSync(hubDb, { hubUrl: 'http://hub.test' });
     sync.running = true;
     // The column filter and the chain-identity fence are not under test here.
-    sync._localColumns      = async () => new Set(['network', 'policy_key', 'policy_value']);
-    sync._cachedColumnType  = () => 'varchar(64)';
-    sync._refuseForeignChainRow = () => false;
+    sync.localColumns      = async () => new Set(['network', 'policy_key', 'policy_value']);
+    sync.cachedColumnType  = () => 'varchar(64)';
+    sync.refuseForeignChainRow = () => false;
     return sync;
 }
 
@@ -109,8 +109,8 @@ describe('HubDbSync mirror-write confirmation and the apply-failure watermark la
         // One heartbeat, driven the way the socket handler drives it: the hub tip is noted
         // before the gate, then the frame goes through the gate.
         function heartbeat(sync, ts, heights) {
-            sync._noteHubTip(ts);
-            sync._handleWatermarkFrame({ ts, heights });
+            sync.noteHubTip(ts);
+            sync.handleWatermarkFrame({ ts, heights });
         }
 
         it('advances on a heartbeat while no apply has failed', function () {
@@ -159,7 +159,7 @@ describe('HubDbSync mirror-write confirmation and the apply-failure watermark la
             sync._applyRow = sinon.stub().rejects(new Error('write failed'));
             sync._pendingPriceEvents = [{ type: 'row:inserted', row: { round_number: 7 } }];
 
-            const drainedOk = await sync._flushPendingPriceEvents();
+            const drainedOk = await sync.flushPendingPriceEvents();
 
             assert.strictEqual(drainedOk, false);
             assert.strictEqual(sync._pendingPriceEvents.length, 1, 'the failed event must stay at the head');
@@ -171,7 +171,7 @@ describe('HubDbSync mirror-write confirmation and the apply-failure watermark la
             sync._applyRow = sinon.stub().resolves();
             sync._pendingPriceEvents = [{ type: 'row:inserted', row: { round_number: 7 } }];
 
-            const drainedOk = await sync._flushPendingPriceEvents();
+            const drainedOk = await sync.flushPendingPriceEvents();
 
             assert.strictEqual(drainedOk, true);
             assert.strictEqual(sync._pendingPriceEvents.length, 0);

@@ -84,7 +84,7 @@ function makeSync(HubDbSync, opts) {
 
 // Install one height map, the way a heartbeat frame delivers it.
 function heights(sync, map) {
-    sync._noteHeights(map);
+    sync.noteHeights(map);
 }
 
 let armed = null;
@@ -123,13 +123,13 @@ describe('mirror-admission height barriers: ARMED @regression @tier1', function 
         });
         assert.strictEqual(sync._priceSyncSatisfied(B, futureStamp), true, 'price height');
         assert.strictEqual(sync._priceTimeSyncSatisfied(futureStamp, B), true, 'price time');
-        assert.strictEqual(sync._oracleSyncSatisfied(futureStamp, B), true, 'oracle');
-        assert.strictEqual(sync._matchSyncSatisfied(futureStamp, B), true, 'match');
-        assert.strictEqual(sync._callSyncSatisfied(futureStamp, B), true, 'call');
-        assert.strictEqual(sync._bridgeSyncSatisfied(futureStamp, B), true, 'bridge');
-        assert.strictEqual(sync._policySyncSatisfied(futureStamp, B), true, 'policy');
-        assert.strictEqual(sync._attestResponseSyncSatisfied(futureStamp, B), true, 'attest response');
-        assert.strictEqual(sync._anchorAttestSyncSatisfied(futureStamp, null, B), true, 'anchor attest');
+        assert.strictEqual(sync.oracleSyncSatisfied(futureStamp, B), true, 'oracle');
+        assert.strictEqual(sync.matchSyncSatisfied(futureStamp, B), true, 'match');
+        assert.strictEqual(sync.callSyncSatisfied(futureStamp, B), true, 'call');
+        assert.strictEqual(sync.bridgeSyncSatisfied(futureStamp, B), true, 'bridge');
+        assert.strictEqual(sync.policySyncSatisfied(futureStamp, B), true, 'policy');
+        assert.strictEqual(sync.attestResponseSyncSatisfied(futureStamp, B), true, 'attest response');
+        assert.strictEqual(sync.anchorAttestSyncSatisfied(futureStamp, null, B), true, 'anchor attest');
     });
 
     // The mirror image, and the one that proves the predicate is not simply permissive: the
@@ -141,12 +141,12 @@ describe('mirror-admission height barriers: ARMED @regression @tier1', function 
         heights(sync, {});                                 // published, and empty
         assert.strictEqual(sync._priceSyncSatisfied(B, 1000), false, 'price height');
         assert.strictEqual(sync._priceTimeSyncSatisfied(1000, B), false, 'price time');
-        assert.strictEqual(sync._oracleSyncSatisfied(1000, B), false, 'oracle');
-        assert.strictEqual(sync._matchSyncSatisfied(1000, B), false, 'match');
-        assert.strictEqual(sync._callSyncSatisfied(1000, B), false, 'call');
-        assert.strictEqual(sync._bridgeSyncSatisfied(1000, B), false, 'bridge');
-        assert.strictEqual(sync._policySyncSatisfied(1000, B), false, 'policy');
-        assert.strictEqual(sync._attestResponseSyncSatisfied(1000, B), false, 'attest response');
+        assert.strictEqual(sync.oracleSyncSatisfied(1000, B), false, 'oracle');
+        assert.strictEqual(sync.matchSyncSatisfied(1000, B), false, 'match');
+        assert.strictEqual(sync.callSyncSatisfied(1000, B), false, 'call');
+        assert.strictEqual(sync.bridgeSyncSatisfied(1000, B), false, 'bridge');
+        assert.strictEqual(sync.policySyncSatisfied(1000, B), false, 'policy');
+        assert.strictEqual(sync.attestResponseSyncSatisfied(1000, B), false, 'attest response');
     });
 
     it('the per-table margin is the one the canon names, at the exact boundary', function () {
@@ -159,10 +159,10 @@ describe('mirror-admission height barriers: ARMED @regression @tier1', function 
             attestation_responses:      { BTC: B - 1 },     // 1: the forward margin is deliberately short
             anchor_reward_attestations: { BTC: B - 144 }    // 144: the frozen maturity
         });
-        assert.strictEqual(sync._matchSyncSatisfied(1, B), true);
-        assert.strictEqual(sync._oracleSyncSatisfied(1, B), true);
-        assert.strictEqual(sync._attestResponseSyncSatisfied(1, B), true);
-        assert.strictEqual(sync._anchorAttestSyncSatisfied(1, null, B), true);
+        assert.strictEqual(sync.matchSyncSatisfied(1, B), true);
+        assert.strictEqual(sync.oracleSyncSatisfied(1, B), true);
+        assert.strictEqual(sync.attestResponseSyncSatisfied(1, B), true);
+        assert.strictEqual(sync.anchorAttestSyncSatisfied(1, null, B), true);
 
         heights(sync, {
             cross_chain_matches:        { BTC: B - 5 },
@@ -170,10 +170,10 @@ describe('mirror-admission height barriers: ARMED @regression @tier1', function 
             attestation_responses:      { BTC: B - 2 },
             anchor_reward_attestations: { BTC: B - 145 }
         });
-        assert.strictEqual(sync._matchSyncSatisfied(1, B), false, 'match margin is 4, not 5');
-        assert.strictEqual(sync._oracleSyncSatisfied(1, B), false, 'oracle margin is 1, not 2');
-        assert.strictEqual(sync._attestResponseSyncSatisfied(1, B), false, 'attest response margin is 1');
-        assert.strictEqual(sync._anchorAttestSyncSatisfied(1, null, B), false, 'anchor margin is 144, not 145');
+        assert.strictEqual(sync.matchSyncSatisfied(1, B), false, 'match margin is 4, not 5');
+        assert.strictEqual(sync.oracleSyncSatisfied(1, B), false, 'oracle margin is 1, not 2');
+        assert.strictEqual(sync.attestResponseSyncSatisfied(1, B), false, 'attest response margin is 1');
+        assert.strictEqual(sync.anchorAttestSyncSatisfied(1, null, B), false, 'anchor margin is 144, not 145');
     });
 
     // FAIL-CLOSED BY ABSENCE, at every granularity the seam names.
@@ -196,14 +196,14 @@ describe('mirror-admission height barriers: ARMED @regression @tier1', function 
         ];
         for (const [label, map] of cases) {
             heights(sync, map);
-            assert.strictEqual(sync._matchSyncSatisfied(1, B), false, label + ' must defer');
+            assert.strictEqual(sync.matchSyncSatisfied(1, B), false, label + ' must defer');
         }
     });
 
     it('a chain key is matched case-insensitively but never coerced', function () {
         const { sync } = makeSync(armed.HubDbSync);
         heights(sync, { cross_chain_matches: { btc: B } });
-        assert.strictEqual(sync._matchSyncSatisfied(1, B), true, 'a lower-case chain key is the same chain');
+        assert.strictEqual(sync.matchSyncSatisfied(1, B), true, 'a lower-case chain key is the same chain');
         assert.deepStrictEqual(sync.heightWatermarks.cross_chain_matches, { BTC: B });
     });
 
@@ -215,16 +215,16 @@ describe('mirror-admission height barriers: ARMED @regression @tier1', function 
             const { sync } = makeSync(armed.HubDbSync);
             sync.streamWatermark = 0;                     // the clock certifies nothing at all
             heights(sync, { anchor_reward_attestations: { BTC: B - 144 } });
-            assert.strictEqual(sync._anchorAttestSyncSatisfied(1000, null, B), true);
+            assert.strictEqual(sync.anchorAttestSyncSatisfied(1000, null, B), true);
         });
 
         it('the clock form releases a block a stuck height watermark would still hold', function () {
             const { sync } = makeSync(armed.HubDbSync);
             sync.streamWatermark = 1000 + sync.anchorAttestWatermarkGraceS;
             heights(sync, { anchor_reward_attestations: { BTC: 0 } });   // frozen far behind
-            assert.strictEqual(sync._heightSatisfied('anchor_reward_attestations', B), false,
+            assert.strictEqual(sync.heightSatisfied('anchor_reward_attestations', B), false,
                 'the height half is genuinely unsatisfied');
-            assert.strictEqual(sync._anchorAttestSyncSatisfied(1000, null, B), true,
+            assert.strictEqual(sync.anchorAttestSyncSatisfied(1000, null, B), true,
                 'a queued DOGE anchor must not make this barrier hold a block the clock released');
         });
 
@@ -232,7 +232,7 @@ describe('mirror-admission height barriers: ARMED @regression @tier1', function 
             const { sync } = makeSync(armed.HubDbSync);
             sync.streamWatermark = 0;
             heights(sync, { anchor_reward_attestations: { BTC: 0 } });
-            assert.strictEqual(sync._anchorAttestSyncSatisfied(1000, null, B), false);
+            assert.strictEqual(sync.anchorAttestSyncSatisfied(1000, null, B), false);
         });
     });
 
@@ -242,7 +242,7 @@ describe('mirror-admission height barriers: ARMED @regression @tier1', function 
         const { sync } = makeSync(armed.HubDbSync);
         sync.streamWatermark = 1000 + sync.attestResponseWatermarkGraceS;   // clock satisfied
         heights(sync, { attestation_responses: { BTC: 0 } });
-        assert.strictEqual(sync._attestResponseSyncSatisfied(1000, B), false,
+        assert.strictEqual(sync.attestResponseSyncSatisfied(1000, B), false,
             'the clock escape is retired for this member above the activation');
     });
 
@@ -253,7 +253,7 @@ describe('mirror-admission height barriers: ARMED @regression @tier1', function 
         const pending = sync.waitForAttestationResponseSync(1000, 2000, B);
         assert.strictEqual(sync._attestResponseWaiters.length, 1, 'the block waits');
         // A frame carrying only a height advance: streamWatermark never moves.
-        sync._noteHeights({ attestation_responses: { BTC: B - 1 } });
+        sync.noteHeights({ attestation_responses: { BTC: B - 1 } });
         await pending;
         assert.strictEqual(sync._attestResponseWaiters.length, 0, 'waiter cleared by the height advance alone');
         assert.strictEqual(sync.streamWatermark, 0, 'and the seconds watermark never moved');
@@ -323,7 +323,7 @@ describe('mirror-admission height barriers: ARMED @regression @tier1', function 
     it('mirrorStatus reports the height watermark beside the seconds one', function () {
         const { sync } = makeSync(armed.HubDbSync);
         heights(sync, { cross_chain_matches: { BTC: 990 } });
-        assert.strictEqual(sync._matchSyncSatisfied(1, B), false);     // records a shortfall
+        assert.strictEqual(sync.matchSyncSatisfied(1, B), false);     // records a shortfall
         const status = sync.mirrorStatus();
         assert.deepStrictEqual(status.heights, { cross_chain_matches: { BTC: 990 } });
         assert.deepStrictEqual(status.heightShortfalls, { 'cross_chain_matches|BTC': 996 });
@@ -347,20 +347,20 @@ describe('mirror-admission height barriers: UNARMED (today\'s rule, byte for byt
         assert.deepStrictEqual(sync.heightWatermarks, {}, 'no heights map, and none needed');
         assert.strictEqual(sync._priceSyncSatisfied(B, 1000), true);
         assert.strictEqual(sync._priceTimeSyncSatisfied(1000, B), true);
-        assert.strictEqual(sync._oracleSyncSatisfied(1000, B), true);
-        assert.strictEqual(sync._matchSyncSatisfied(1000, B), true);
-        assert.strictEqual(sync._callSyncSatisfied(1000, B), true);
-        assert.strictEqual(sync._bridgeSyncSatisfied(1000, B), true);
-        assert.strictEqual(sync._policySyncSatisfied(1000, B), true);
-        assert.strictEqual(sync._attestResponseSyncSatisfied(1000, B), true);
-        assert.strictEqual(sync._anchorAttestSyncSatisfied(1000, null, B), true);
+        assert.strictEqual(sync.oracleSyncSatisfied(1000, B), true);
+        assert.strictEqual(sync.matchSyncSatisfied(1000, B), true);
+        assert.strictEqual(sync.callSyncSatisfied(1000, B), true);
+        assert.strictEqual(sync.bridgeSyncSatisfied(1000, B), true);
+        assert.strictEqual(sync.policySyncSatisfied(1000, B), true);
+        assert.strictEqual(sync.attestResponseSyncSatisfied(1000, B), true);
+        assert.strictEqual(sync.anchorAttestSyncSatisfied(1000, null, B), true);
     });
 
     it('a height map that would satisfy nothing cannot make an unarmed barrier defer', function () {
         const { sync } = makeSync(HubDbSync);
         sync.streamWatermark = 1000 + 4800;
-        sync._noteHeights({ cross_chain_matches: { BTC: 0 } });
-        assert.strictEqual(sync._matchSyncSatisfied(1000, B), true,
+        sync.noteHeights({ cross_chain_matches: { BTC: 0 } });
+        assert.strictEqual(sync.matchSyncSatisfied(1000, B), true,
             'below the activation the heights object is not read at all');
     });
 

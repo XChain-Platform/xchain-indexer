@@ -49,7 +49,7 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
             return [];
         });
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test', network: opts.network });
-        sinon.stub(sync, '_localColumns').resolves(new Set(opts.columns || ['id', 'network', 'chain']));
+        sinon.stub(sync, 'localColumns').resolves(new Set(opts.columns || ['id', 'network', 'chain']));
         sinon.stub(sync, '_applyRow').resolves();
         return { sync, seen, doQuery };
     }

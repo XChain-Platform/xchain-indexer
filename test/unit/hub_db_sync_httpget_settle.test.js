@@ -14,7 +14,7 @@
 // RESPONSE, not the request, so `req.on('error')` never fires and `res.on('end')`
 // never fires. _httpGet carried handlers for neither, and a probe against the
 // pre-fix client sat PENDING past 40s - beyond the 30000ms socket option, which is an
-// IDLE-socket timer and cannot fire on a socket that is already gone. _bootstrapAll
+// IDLE-socket timer and cannot fire on a socket that is already gone. bootstrapAll
 // awaits that request with `_bootstrapping` latched and clears the flag only in its
 // `finally`, so every later reconnect and poll returned at `if (this._bootstrapping)
 // return`: the mirror bootstrap, and the settlement barriers it feeds, stalled until
@@ -114,17 +114,17 @@ describe('HubDbSync snapshot-request settling', function(){
         hub = await startHub(truncatingHub);
         let sync = makeSync(hub.url);
         // Every table's fetch goes through the real transport; the per-table try/catch
-        // in _bootstrapAll turns each rejection into "not drained". `running` is false,
+        // in bootstrapAll turns each rejection into "not drained". `running` is false,
         // so no retry timer is armed and the flag is the only thing under test.
         sync._bootstrapTable = () => sync._httpGet('/hub-db/snapshot/oracle_prices');
         let warn = console.warn;
         console.warn = () => {};
         try {
-            await settledWithin(sync._bootstrapAll(), 5000);
+            await settledWithin(sync.bootstrapAll(), 5000);
         } finally {
             console.warn = warn;
         }
         assert.strictEqual(sync._bootstrapping, false,
-            '_bootstrapAll latched _bootstrapping across an unsettled snapshot request');
+            'bootstrapAll latched _bootstrapping across an unsettled snapshot request');
     });
 });

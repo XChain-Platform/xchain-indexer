@@ -13,7 +13,7 @@
 // INSERTs but can NEVER receive an in-place upsert or a row:deleted retraction the
 // way the WS stream does. Advancing the stream watermark in that mode falsely
 // certifies the mirror as live-complete and opens the settlement barriers over data
-// that can be silently stale. The fix sets this._pollMode and makes _bootstrapAll
+// that can be silently stale. The fix sets this._pollMode and makes bootstrapAll
 // SKIP the watermark advance (warning each cycle) while still mirroring; the normal
 // WS-connected bootstrap path must still advance the watermark exactly as before.
 
@@ -41,7 +41,7 @@ describe('HubDbSync poll-mode watermark fail-closed (ITEM 2476) @regression @tie
         const bootstrapTable = sinon.stub(sync, '_bootstrapTable').callsFake(async () => 900);
         const warn = sinon.stub(console, 'warn');
         try {
-            await sync._bootstrapAll();
+            await sync.bootstrapAll();
         } finally {
             warn.restore();
         }
@@ -67,7 +67,7 @@ describe('HubDbSync poll-mode watermark fail-closed (ITEM 2476) @regression @tie
             bridge_transfers: 935, policy_snapshots: 940,
         };
         sinon.stub(sync, '_bootstrapTable').callsFake(async (table) => marks[table]);
-        await sync._bootstrapAll();
+        await sync.bootstrapAll();
         assert.strictEqual(sync._bootstrapDrained, true);
         assert.strictEqual(sync.streamWatermark, 880, 'WS path must advance to min across tables, unchanged');
     });

@@ -43,20 +43,20 @@ describe('HubDbSync attestation-response barrier @regression @tier1', function (
     it('is NOT satisfied one second below blockTime + grace', function () {
         const { sync } = makeSync();
         sync.streamWatermark = 1000 + sync.attestResponseWatermarkGraceS - 1;
-        assert.strictEqual(sync._attestResponseSyncSatisfied(1000), false);
+        assert.strictEqual(sync.attestResponseSyncSatisfied(1000), false);
     });
 
     it('is satisfied exactly at blockTime + grace', async function () {
         const { sync } = makeSync();
         sync.streamWatermark = 1000 + sync.attestResponseWatermarkGraceS;
-        assert.strictEqual(sync._attestResponseSyncSatisfied(1000), true);
+        assert.strictEqual(sync.attestResponseSyncSatisfied(1000), true);
         assert.strictEqual(await sync.waitForAttestationResponseSync(1000, 500), sync.streamWatermark);
     });
 
     it('is satisfied above blockTime + grace', async function () {
         const { sync } = makeSync();
         sync.streamWatermark = 1000 + sync.attestResponseWatermarkGraceS + 5000;
-        assert.strictEqual(sync._attestResponseSyncSatisfied(1000), true);
+        assert.strictEqual(sync.attestResponseSyncSatisfied(1000), true);
         assert.strictEqual(await sync.waitForAttestationResponseSync(1000, 500), sync.streamWatermark);
     });
 
@@ -65,9 +65,9 @@ describe('HubDbSync attestation-response barrier @regression @tier1', function (
         assert.strictEqual(typeof sync.attestResponseWatermarkGraceS, 'number');
         sync.attestResponseWatermarkGraceS = 900;
         sync.streamWatermark = 1000 + 899;
-        assert.strictEqual(sync._attestResponseSyncSatisfied(1000), false);
+        assert.strictEqual(sync.attestResponseSyncSatisfied(1000), false);
         sync.streamWatermark = 1000 + 900;
-        assert.strictEqual(sync._attestResponseSyncSatisfied(1000), true);
+        assert.strictEqual(sync.attestResponseSyncSatisfied(1000), true);
     });
 
     // The wake path, end to end and through the real release site. A barrier that only
@@ -79,7 +79,7 @@ describe('HubDbSync attestation-response barrier @regression @tier1', function (
         sync.streamWatermark = 0;
         const pending = sync.waitForAttestationResponseSync(1000, 1000);
         assert.strictEqual(sync._attestResponseWaiters.length, 1, 'the block waits rather than proceeding');
-        sync._advanceWatermark(1000 + sync.attestResponseWatermarkGraceS);
+        sync.advanceWatermark(1000 + sync.attestResponseWatermarkGraceS);
         const got = await pending;
         assert.strictEqual(got, 1000 + sync.attestResponseWatermarkGraceS);
         assert.strictEqual(sync._attestResponseWaiters.length, 0, 'waiter cleared on resolve');
@@ -90,7 +90,7 @@ describe('HubDbSync attestation-response barrier @regression @tier1', function (
         sync.streamWatermark = 0;
         const pending = sync.waitForAttestationResponseSync(1000, 1000);
         pending.catch(() => {});                                  // the timeout rejection is expected here
-        sync._advanceWatermark(1000 + sync.attestResponseWatermarkGraceS - 1);
+        sync.advanceWatermark(1000 + sync.attestResponseWatermarkGraceS - 1);
         assert.strictEqual(sync._attestResponseWaiters.length, 1, 'a short advance must not release the block');
     });
 
@@ -103,7 +103,7 @@ describe('HubDbSync attestation-response barrier @regression @tier1', function (
         assert.strictEqual(sync._attestResponseWaiters.length, 0, 'timed-out waiter removed');
     });
 
-    // No empty-mirror escape. _callSyncSatisfied admits a block when the mirror holds no
+    // No empty-mirror escape. callSyncSatisfied admits a block when the mirror holds no
     // rows at all, because a missing relay row there is a latency question. Here an empty
     // mirror is indistinguishable from a mirror that has not yet been told about the row
     // binding at THIS block, and admitting the block would fork the ledger permanently.
@@ -111,7 +111,7 @@ describe('HubDbSync attestation-response barrier @regression @tier1', function (
         const { sync, doQuery } = makeSync();
         sync.enabled = true;
         sync.streamWatermark = 0;
-        assert.strictEqual(sync._attestResponseSyncSatisfied(1000), false);
+        assert.strictEqual(sync.attestResponseSyncSatisfied(1000), false);
         await assert.rejects(
             sync.waitForAttestationResponseSync(1000, 50),
             /attestation response mirror barrier timed out/);
@@ -124,7 +124,7 @@ describe('HubDbSync attestation-response barrier @regression @tier1', function (
     it('is satisfied by definition when sync is disabled', async function () {
         const sync = new HubDbSync({ doQuery: sinon.stub().resolves([]) }, { hubUrl: '' });
         assert.strictEqual(sync.enabled, false);
-        assert.strictEqual(sync._attestResponseSyncSatisfied(999999), true);
+        assert.strictEqual(sync.attestResponseSyncSatisfied(999999), true);
         await sync.waitForAttestationResponseSync(999999, 10);
     });
 

@@ -83,8 +83,8 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
             // No getPriceMirrorHorizon: this is the FRESH-node shape the item is about,
             // where the bound has nothing to remove and every row must be applied.
         }, options || {}));
-        sinon.stub(sync, '_localColumns').resolves(new Set(COLS));
-        sinon.stub(sync, '_flushPendingPriceEvents').resolves(true);
+        sinon.stub(sync, 'localColumns').resolves(new Set(COLS));
+        sinon.stub(sync, 'flushPendingPriceEvents').resolves(true);
         return { sync, rows, stmts, doQuery };
     }
 
@@ -194,7 +194,7 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
     it('still stops the page at the first unappliable row', async function () {
         // Batching must not let a bad row be stepped over: an apply that
         // throws has to leave that row and everything after it unapplied, and report the
-        // table not-drained so _bootstrapAll retries with the barrier shut.
+        // table not-drained so bootstrapAll retries with the barrier shut.
         const { sync, rows } = makeSync({ batchApplyRows: 1000 });
         stubHub(sync, hubTable(40));
         const real = sync._applyRow.bind(sync);
@@ -203,7 +203,7 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
             return real(t, row);
         });
         // Force the per-row path, which is where a throwing apply is visible at all.
-        sinon.stub(sync, '_applyRowsBatched').resolves(false);
+        sinon.stub(sync, 'applyRowsBatched').resolves(false);
 
         assert.strictEqual(await sync._bootstrapTable('price_snapshots'), null,
             'a holed drain must not be certified');
@@ -213,8 +213,8 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
 
     it('declines to batch anything but price_snapshots', async function () {
         const { sync } = makeSync();
-        assert.strictEqual(await sync._applyRowsBatched('oracle_prices', hubTable(4)), false);
-        assert.strictEqual(await sync._applyRowsBatched('cross_chain_matches', hubTable(4)), false);
+        assert.strictEqual(await sync.applyRowsBatched('oracle_prices', hubTable(4)), false);
+        assert.strictEqual(await sync.applyRowsBatched('cross_chain_matches', hubTable(4)), false);
     });
 
     it('declines to batch rows whose mirrored columns differ', async function () {
@@ -222,17 +222,17 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
         // mixing row shapes goes back to the per-row path rather than misaligning args.
         const { sync } = makeSync();
         const mixed = [hubTable(1)[0], { id: 2, round_number: 2, coin_pair: 'XCHAIN/USD', status: 'finalized' }];
-        assert.strictEqual(await sync._applyRowsBatched('price_snapshots', mixed), false);
+        assert.strictEqual(await sync.applyRowsBatched('price_snapshots', mixed), false);
     });
 
     it('declines to batch when the rows carry no status column', async function () {
         // Without `status` the per-row applier takes its generic INSERT IGNORE branch, not
         // the price ODKU, and the batch must not silently substitute a different statement.
         const { sync } = makeSync();
-        sync._localColumns.resolves(new Set(['id', 'round_number', 'coin_pair', 'price']));
+        sync.localColumns.resolves(new Set(['id', 'round_number', 'coin_pair', 'price']));
         const noStatus = hubTable(4).map(r => ({ id: r.id, round_number: r.round_number,
                                                  coin_pair: r.coin_pair, price: r.price }));
-        assert.strictEqual(await sync._applyRowsBatched('price_snapshots', noStatus), false);
+        assert.strictEqual(await sync.applyRowsBatched('price_snapshots', noStatus), false);
     });
 
     it('reports a progress counter while a long drain is running', async function () {

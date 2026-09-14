@@ -109,7 +109,7 @@ function syncFor(db) {
     };
     const sync = new HubDbSync(hubDb, { hubUrl: 'http://hub.test', network: 'regtest',
                                         authoritativeDb: db || null });
-    sinon.stub(sync, '_localColumns').resolves(
+    sinon.stub(sync, 'localColumns').resolves(
         new Set(['id', 'snapshot_block', 'capability', 'signing_pubkey', 'amount', 'source']));
     return { sync, inserted, hubDb };
 }
@@ -257,8 +257,8 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
         it('leaves every OTHER mirrored table untouched by the fence', async function () {
             const { db, seen } = dbFor('BTC');
             const { sync }     = syncFor(db);
-            sync._localColumns.restore();
-            sinon.stub(sync, '_localColumns').resolves(new Set(['id', 'checkpoint_seq']));
+            sync.localColumns.restore();
+            sinon.stub(sync, 'localColumns').resolves(new Set(['id', 'checkpoint_seq']));
 
             await sync._applyRow('state_checkpoints', { id: 4, checkpoint_seq: 9 });
 

@@ -67,7 +67,7 @@ describe('HubDbSync capability snapshot mirror repoint @regression @tier2', func
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test', network: 'testnet' });
         // No `network` column - that absence is the whole reason the two existing purges
         // cannot defend this table, so the fixture must reproduce it.
-        sinon.stub(sync, '_localColumns').resolves(
+        sinon.stub(sync, 'localColumns').resolves(
             new Set(['id', 'snapshot_block', 'capability', 'signing_pubkey', 'amount', 'source']));
         sinon.stub(sync, '_applyRow').callsFake(async (t, row) => {
             if (opts && opts.refuseApply) return false;         // chain-identity fence refusal
@@ -152,7 +152,7 @@ describe('HubDbSync capability snapshot mirror repoint @regression @tier2', func
         rows.push({ id: 500, snapshot_block: 90002, capability: 'cross_chain',
                     signing_pubkey: 'cc', amount: '100', source: 'src1' });
 
-        await sync._reconcileForeignCapabilitySnapshots(
+        await sync.reconcileForeignCapabilitySnapshots(
             new Set([[90000, 'cross_chain', 'aa', 'src1'].join(' ')]), true, 90000, preMax);
 
         assert.ok(rows.some(r => Number(r.id) === 500),
@@ -226,7 +226,7 @@ describe('HubDbSync capability snapshot mirror repoint @regression @tier2', func
         // Above the cap, absence from the set proves nothing, so the pass drops to the
         // weaker rule that needs no set: nothing above the highest boundary the hub served.
         const { sync, rows, seen } = makeSync([snap(1, 957439, 'aa'), snap(2, 90000, 'bb')]);
-        await sync._reconcileForeignCapabilitySnapshots(new Set(), false, 90000, 2);
+        await sync.reconcileForeignCapabilitySnapshots(new Set(), false, 90000, 2);
 
         assert.ok(seen.selects.includes('ceiling'), 'the fallback must use the ceiling read');
         assert.ok(!rows.some(r => Number(r.snapshot_block) === 957439),

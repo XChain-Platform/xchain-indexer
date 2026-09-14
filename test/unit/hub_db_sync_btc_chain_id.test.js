@@ -59,7 +59,7 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
         const sync = new HubDbSync({ doQuery }, {
             hubUrl: 'http://hub.test', network: opts.network || 'regtest', coin: opts.coin || 'BTC'
         });
-        sinon.stub(sync, '_localColumns').resolves(new Set(opts.columns || MATCH_COLUMNS));
+        sinon.stub(sync, 'localColumns').resolves(new Set(opts.columns || MATCH_COLUMNS));
         return { sync, seen, doQuery };
     }
 
@@ -135,7 +135,7 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
         await sync.setExpectedBtcChainId(CHAIN_NEW, 'local');
         for (const table of ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots',
                              'bridge_transfers', 'policy_snapshots']) {
-            assert.strictEqual(await sync._applyRowsBatched(table, [matchRow(1, CHAIN_OLD), matchRow(2, CHAIN_OLD)]),
+            assert.strictEqual(await sync.applyRowsBatched(table, [matchRow(1, CHAIN_OLD), matchRow(2, CHAIN_OLD)]),
                 false, table + ' must fall to the per-row path where the fence runs');
         }
     });
@@ -199,7 +199,7 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
         const httpGet = sinon.stub(sync, '_httpGet').resolves({ rows: [], btc_chain_id: CHAIN_NEW });
         seen.sql.length = 0;
 
-        await sync._handleRowEvent({ type: 'row:inserted', table: 'cross_chain_matches', row: matchRow(7, CHAIN_NEW) });
+        await sync.handleRowEvent({ type: 'row:inserted', table: 'cross_chain_matches', row: matchRow(7, CHAIN_NEW) });
 
         assert.strictEqual(httpGet.callCount, 1, 'exactly one envelope re-read');
         assert.match(httpGet.firstCall.args[0], /^\/hub-db\/snapshot\/capability_snapshots\?since_id=0&limit=1$/);
@@ -216,8 +216,8 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
         const httpGet = sinon.stub(sync, '_httpGet').resolves({ rows: [], btc_chain_id: CHAIN_OLD });
         seen.sql.length = 0;
 
-        await sync._handleRowEvent({ type: 'row:inserted', table: 'cross_chain_matches', row: matchRow(7, CHAIN_NEW) });
-        await sync._handleRowEvent({ type: 'row:inserted', table: 'cross_chain_matches', row: matchRow(8, CHAIN_NEW) });
+        await sync.handleRowEvent({ type: 'row:inserted', table: 'cross_chain_matches', row: matchRow(7, CHAIN_NEW) });
+        await sync.handleRowEvent({ type: 'row:inserted', table: 'cross_chain_matches', row: matchRow(8, CHAIN_NEW) });
 
         assert.strictEqual(httpGet.callCount, 1, 'a stream of foreign rows must not storm the hub');
         assert.strictEqual(sync._expectedBtcChainId, CHAIN_OLD);
@@ -234,7 +234,7 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
         const httpGet = sinon.stub(sync, '_httpGet').resolves({ rows: [], btc_chain_id: CHAIN_OLD });
         seen.sql.length = 0;
 
-        await sync._handleRowEvent({ type: 'row:inserted', table: 'cross_chain_matches', row: matchRow(9, CHAIN_OLD) });
+        await sync.handleRowEvent({ type: 'row:inserted', table: 'cross_chain_matches', row: matchRow(9, CHAIN_OLD) });
 
         assert.strictEqual(httpGet.callCount, 0, 'this node read its own block 1; nothing the hub says can move it');
         assert.strictEqual(sync._expectedBtcChainId, CHAIN_NEW);

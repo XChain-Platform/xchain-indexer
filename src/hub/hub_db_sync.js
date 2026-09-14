@@ -61,6 +61,11 @@ const { priceEraFloorS, isPreBatchEraFloor } = require('../price_batching_floor_
 // dependency-free: the alternative threads an activation verdict through eleven predicate
 // signatures, their waiters and every one of their call sites.
 const { admitMarginBlocks, isMirrorAdmissionConsumerActive } = require('../mirror_admission_activation.js');
+// One logger for the whole service (CODE-STYLE.md, Logging). The accessor is read per
+// call, so it resolves exactly when console did and falls through to console before the
+// shim is installed. The explorer's vendored copy reaches the same path because it
+// carries the hub-canonical observability shim at src/observability/.
+const { getLogger } = require('../observability/index.js');
 
 let WebSocket = null;
 try {
@@ -103,8 +108,8 @@ const RETRACTION_CHAIN_COLUMNS = {
 // ── Watermark grace margins: frozen protocol constants every node must share ──
 // The four barrier grace margins (seconds) are NOT operational timeouts: they
 // decide WHEN the block-loop consensus barriers open via the stream-watermark
-// escape (_priceSyncSatisfied / _oracleSyncSatisfied / _matchSyncSatisfied /
-// _callSyncSatisfied).
+// escape (_priceSyncSatisfied / oracleSyncSatisfied / matchSyncSatisfied /
+// callSyncSatisfied).
 // A per-node divergence forks settlement: operator A with grace 60 settles a
 // block without a retroactive-effective-time row that lands inside the window
 // while operator B with grace 600 waits and settles it differently. An
@@ -201,7 +206,7 @@ function resolveWatermarkGrace(frozen, envKey, network){
     if(override === undefined || override === '') return frozen;
     if(network !== 'regtest'){
         if(String(override) !== String(frozen))
-            console.log('WARNING: ' + envKey + ' is set but IGNORED on ' + String(network) +
+            getLogger().info('WARNING: ' + envKey + ' is set but IGNORED on ' + String(network) +
                 '; using the frozen protocol grace constant ' + frozen + 's. Watermark graces are ' +
                 'consensus inputs (a per-node value forks settlement) and are not operator-tunable off regtest.');
         return frozen;
@@ -252,7 +257,7 @@ function resolveBarrierHoldCeilingMs(raw){
     if(override === undefined || override === null || override === '')
         return HUB_SYNC_BARRIER_HOLD_CEILING_S * 1000;
     if(!/^\d+$/.test(String(override).trim())){
-        console.log('WARNING: HUB_SYNC_BARRIER_HOLD_CEILING_S="' + override + '" is not a non-negative ' +
+        getLogger().info('WARNING: HUB_SYNC_BARRIER_HOLD_CEILING_S="' + override + '" is not a non-negative ' +
             'integer number of seconds; using the default ceiling ' + HUB_SYNC_BARRIER_HOLD_CEILING_S + 's.');
         return HUB_SYNC_BARRIER_HOLD_CEILING_S * 1000;
     }
@@ -305,7 +310,7 @@ function resolveWatermarkStallMs(raw, envKey, defaultS){
     if(override === undefined || override === null || override === '')
         return defaultS * 1000;
     if(!/^\d+$/.test(String(override).trim())){
-        console.log('WARNING: ' + envKey + '="' + override + '" is not a non-negative integer ' +
+        getLogger().info('WARNING: ' + envKey + '="' + override + '" is not a non-negative integer ' +
             'number of seconds; using the default ' + defaultS + 's.');
         return defaultS * 1000;
     }
@@ -318,7 +323,7 @@ function resolveWatermarkStallMs(raw, envKey, defaultS){
 //
 // Each suppression below is a state where a frozen watermark is CORRECT and neither
 // remedy could help:
-//   - poll mode freezes the watermark by design (_bootstrapAll refuses to certify a
+//   - poll mode freezes the watermark by design (bootstrapAll refuses to certify a
 //     mirror that cannot receive upserts or retractions),
 //   - a schema mismatch is a deliberate permanent fail-closed hold that only a hub
 //     upgrade clears, so restarting into it would buy a restart loop and nothing else,
@@ -458,7 +463,7 @@ function verifyEd25519(payload, sigHex, pubkeyHex) {
 // matching how the hub stores it); leave every other value untouched.
 //
 // columnType is the LOCAL column's SHOW COLUMNS Type, lowercased (see
-// _cachedColumnType). The rewrite is keyed on that TYPE rather than on the
+// cachedColumnType). The rewrite is keyed on that TYPE rather than on the
 // value's shape, because a shape-keyed rewrite also hits free-text columns:
 // oracle_prices.memo is unvalidated operator input (PRICE v1 validates
 // VALUE/FEE but never MEMO), so a memo that is literally an ISO timestamp was
@@ -491,7 +496,7 @@ function coerceMirrorValue(v, columnType) {
 // immutable history and never retracted.
 //
 // bridge_transfers and policy_snapshots join the list because membership buys exactly the
-// two things a federation-signed mirrored table needs and nothing else: _refuseForeignChainRow
+// two things a federation-signed mirrored table needs and nothing else: refuseForeignChainRow
 // fences their btc_chain_id (both DDLs carry the column, and a regtest venue that re-genesises
 // its Bitcoin chain otherwise keeps serving dead-chain transfers to every fresh indexer), and
 // _applyRetraction treats a deletion naming them as quorum-class, so it demands the
@@ -513,7 +518,7 @@ const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'cross_chain_calls', 'capabil
 // for a related reason (locally-assigned ids, #2270). The three keep hub-id parity
 // (only capability_snapshots strips id in _applyRow); the re-page cost is O(table)
 // per reconnect, accepted. cross_chain_matches additionally runs a reconciliation
-// pass over the completed re-page (_reconcileRetractedMatches), because the one
+// pass over the completed re-page (reconcileRetractedMatches), because the one
 // mutation the hub CANNOT re-serve is a retraction: the snapshot endpoint filters
 // retracted rows out entirely, so there is no row to converge against.
 // attestation_responses is here for capability_snapshots' SECOND reason alone, and it is
@@ -582,7 +587,7 @@ const HUB_STATE_TABLES = ['state_checkpoints', 'anchor_reward_attestations', 'at
 // The columns are each table's UNIQUE natural key - the tuple that says WHICH logical row
 // this is, which is exactly the question "did the source's id space get replaced" asks.
 // They are signed/consensus inputs and immutable once written, so a legitimate mirror can
-// never hold a different one at the hub's id. See _detectRebuiltSourceByContent.
+// never hold a different one at the hub's id. See detectRebuiltSourceByContent.
 const REBUILT_SOURCE_IDENTITY_COLUMNS = Object.freeze({
     state_checkpoints:          Object.freeze(['chain', 'network', 'checkpoint_seq']),
     anchor_reward_attestations: Object.freeze(['chain', 'network', 'reward_type', 'round_reference',
@@ -597,12 +602,12 @@ const REBUILT_SOURCE_IDENTITY_COLUMNS = Object.freeze({
 const REBUILT_SOURCE_PROBE_ROWS = 200;
 
 // TTL for the per-table local-column cache. Bounds how long a hub-side column
-// rename can keep silently NULLing the mirror before _localColumns re-reads the
-// schema and self-heals (see _localColumns).
+// rename can keep silently NULLing the mirror before localColumns re-reads the
+// schema and self-heals (see localColumns).
 const LOCAL_COLUMN_CACHE_TTL_MS = 5 * 60 * 1000;
 
 // Cap on live price_snapshots events buffered while the price bootstrap drains
-// (see _bufferPriceEvent). Rounds finalize on PBFT cadence, so even a
+// (see bufferPriceEvent). Rounds finalize on PBFT cadence, so even a
 // multi-minute drain sees a handful; the cap only bounds a pathological hub.
 const PENDING_PRICE_EVENT_CAP = 10000;
 
@@ -658,7 +663,7 @@ function priceUpsertSql(cols, rowCount) {
 // Run ONE mirror WRITE through a query primitive that FAILS LOUDLY.
 //
 // The indexer's hubDb is the shared Db wrapper, whose doQuery swallows a
-// non-transactional query error and returns its `[]` default (db.js, the M-17
+// non-transactional query error and returns its `[]` default (src/db/index.js doQuery, the M-17
 // fork hazard). A swallowed write is then indistinguishable from a landed one
 // at the call site: the row is dropped, the caller returns normally, and the
 // next heartbeat certifies the stream as caught up over data this mirror never
@@ -755,7 +760,7 @@ function priceRoundKey(round, pair) {
 }
 
 // Memory bound on the served-key set the capability-snapshot reconciliation builds
-// over a full re-page (_reconcileForeignCapabilitySnapshots). One key per row the hub
+// over a full re-page (reconcileForeignCapabilitySnapshots). One key per row the hub
 // serves; the hub writes one row per (block boundary, capability, key, source) and never
 // prunes, so this only trips on a pathological table. Above it the pass degrades to the
 // snapshot_block-ceiling rule, which needs no set at all.
@@ -783,7 +788,7 @@ class HubDbSync {
         this.pollIntervalMs = parseInt(options.pollInterval || process.env.HUB_DB_SYNC_POLL_INTERVAL || '30000');
         // Total wall-clock budget for one snapshot GET. The `timeout: 30000` request
         // option in _httpGet is an IDLE-socket timer that resets on every byte received,
-        // so a hub drip-feeding a body holds the request (and, through _bootstrapAll's
+        // so a hub drip-feeding a body holds the request (and, through bootstrapAll's
         // guard, the whole mirror bootstrap) open indefinitely inside it. Four times the
         // idle timer, so a 10k-row snapshot page has room to stream and only a wedged
         // request can reach the ceiling.
@@ -827,7 +832,7 @@ class HubDbSync {
         // successful oracle_prices sync. Unlike price_snapshots (foundational on BTC),
         // oracle_prices is optional: a deployment with no FIAT oracles never populates it, so
         // this stays null and the barrier must treat that as "nothing to wait on" (see
-        // _oracleSyncSatisfied) rather than stalling every block forever.
+        // oracleSyncSatisfied) rather than stalling every block forever.
         this.oracleSyncTimestamp = null;                   // null = mirror's max effective_at not yet known
         this.oracleBootstrapped  = false;                  // true once the mirror has been read at least once
         this._oracleWaiters      = [];                     // pending waitForOracleSyncTimestamp() resolvers
@@ -877,7 +882,7 @@ class HubDbSync {
 
         // Database holding this node's OWN authoritative stake rows, the source for
         // re-deriving mirrored capability_snapshots rows (see
-        // _refuseUnprovenCapabilitySnapshot).
+        // refuseUnprovenCapabilitySnapshot).
         // Capability stakes are indexed into the INDEXER db, not the hub-mirror db, so
         // this is deliberately NOT hubDb. Supplied explicitly by a test or an embedder;
         // otherwise resolved lazily off the mirror db's parent indexer, because that is
@@ -947,7 +952,7 @@ class HubDbSync {
         // logged per row, so a drain that refuses a whole relic table says so once.
         this._refusedChainIdRows = new Map();
         // One re-probe per unseen id and one warning per process, so a stream of foreign
-        // rows can storm neither the hub nor the log (see _maybeAdoptHubChainId).
+        // rows can storm neither the hub nor the log (see maybeAdoptHubChainId).
         this._chainIdProbedIds     = new Set();
         this._foreignHubChainNoted = false;
 
@@ -1069,7 +1074,7 @@ class HubDbSync {
         // silently skips the gap under it). Deferring the apply keeps the
         // local mirror a CONTIGUOUS prefix of the hub's table at all times,
         // which is what makes the reconnect self-heal
-        // (_refreshAllSyncHeights) and the timeout self-heal safe to read
+        // (refreshAllSyncHeights) and the timeout self-heal safe to read
         // from it unguarded. _priceDrained is per-connection (reset on close,
         // like _bootstrapDrained); the buffer replays in arrival order once
         // the drain completes (see _bootstrapTable), then the live path
@@ -1101,7 +1106,7 @@ class HubDbSync {
         // or 0 when it holds everything the hub served. Read by the price barriers: a block
         // older than this is a block whose price reads the mirror cannot answer, so the
         // bound is abandoned and the table re-mirrored in full rather than settled against
-        // (see _notePriceMirrorFloor).
+        // (see notePriceMirrorFloor).
         this._priceMirrorFloorTs   = 0;
 
         // Pre-batch era floor: the instant this network's price rail began. Blocks below
@@ -1125,7 +1130,7 @@ class HubDbSync {
         // half-open TCP connection (NAT timeout, LB idle drop, hub host power loss)
         // fires neither 'close' nor 'error' on this socket, so without an explicit
         // liveness check the mirror can freeze silently for hours. _lastHeartbeatAt
-        // is stamped in _advanceWatermark's caller (the 'watermark' message handler)
+        // is stamped in advanceWatermark's caller (the 'watermark' message handler)
         // and on every fresh connection; _watchdogTimer polls it while the socket is
         // open and terminates a stalled socket so the existing close-handler
         // reconnect path self-heals. See review finding 0af6d951.
@@ -1185,7 +1190,7 @@ class HubDbSync {
 
     // Advance the stream watermark (monotonic) and re-evaluate every pending
     // barrier waiter; a watermark advance can satisfy any of them.
-    _advanceWatermark(ts) {
+    advanceWatermark(ts) {
         ts = Number(ts);
         if (!Number.isFinite(ts) || ts <= this.streamWatermark) return;
         this.streamWatermark = ts;
@@ -1195,37 +1200,37 @@ class HubDbSync {
         // certified progress" is the whole measurement.
         this._lastWatermarkAdvanceAt = Date.now();
         this._watermarkStallResyncAt = null;
-        this._releasePriceWaiters();
+        this.releasePriceWaiters();
         this._releasePriceTimeWaiters();
-        this._releaseOracleWaiters();
-        this._releaseMatchWaiters();
-        this._releaseCallWaiters();
-        this._releaseBridgeWaiters();
-        this._releasePolicyWaiters();
-        this._releaseAnchorAttestWaiters();
-        this._releaseAttestResponseWaiters();
+        this.releaseOracleWaiters();
+        this.releaseMatchWaiters();
+        this.releaseCallWaiters();
+        this.releaseBridgeWaiters();
+        this.releasePolicyWaiters();
+        this.releaseAnchorAttestWaiters();
+        this.releaseAttestResponseWaiters();
     }
 
     // The same re-evaluation, driven by a HEIGHT advance rather than a seconds advance.
     // Above the activation the height watermark is what satisfies every waiter above, and it
     // can move on a frame whose `ts` did not: without this a block released by a height
     // advance would still sit out the rest of its 60 s timeout on every single advance.
-    _releaseHeightWaiters() {
-        this._releasePriceWaiters();
+    releaseHeightWaiters() {
+        this.releasePriceWaiters();
         this._releasePriceTimeWaiters();
-        this._releaseOracleWaiters();
-        this._releaseMatchWaiters();
-        this._releaseCallWaiters();
-        this._releaseBridgeWaiters();
-        this._releasePolicyWaiters();
-        this._releaseAnchorAttestWaiters();
-        this._releaseAttestResponseWaiters();
+        this.releaseOracleWaiters();
+        this.releaseMatchWaiters();
+        this.releaseCallWaiters();
+        this.releaseBridgeWaiters();
+        this.releasePolicyWaiters();
+        this.releaseAnchorAttestWaiters();
+        this.releaseAttestResponseWaiters();
     }
 
     // Record the newest tip the hub has claimed in a heartbeat, independently of whether
     // the watermark gate accepted it. A refused tip is exactly the evidence the stall
     // detector runs on, so it must be kept even when it changes nothing else.
-    _noteHubTip(ts) {
+    noteHubTip(ts) {
         const t = Number(ts);
         if (Number.isFinite(t) && t > this._hubTipTs) this._hubTipTs = t;
     }
@@ -1244,12 +1249,12 @@ class HubDbSync {
     // was never written, opening the settlement barriers on it. The caller records the hub's
     // claimed tip BEFORE this gate, because a tip the gate refuses is exactly the evidence the
     // stall detector runs on.
-    _handleWatermarkFrame(event) {
+    handleWatermarkFrame(event) {
         if (!this._bootstrapDrained || this._schemaMismatchSeen || this._applyFailureSeen) return;
         // Heights first, so waiters released by the seconds advance below already see the
         // fresh map rather than the previous frame's.
-        this._noteHeights((event || {}).heights);
-        this._advanceWatermark((event || {}).ts);
+        this.noteHeights((event || {}).heights);
+        this.advanceWatermark((event || {}).ts);
     }
 
     // ── The height watermark: consumer side ────────────────────────────────────
@@ -1261,7 +1266,7 @@ class HubDbSync {
     // A carrier with no usable object CLEARS the map rather than leaving the previous one
     // standing. That is the whole fail-closed rule in one line: an older hub, or one that has
     // stopped publishing, must make this node defer, not coast on a claim nobody is renewing.
-    _noteHeights(raw) {
+    noteHeights(raw) {
         const next = sanitizeHeights(raw);
         if (next === null) {
             this.heightWatermarks = {};
@@ -1273,14 +1278,14 @@ class HubDbSync {
         // the stall detector must stay quiet on it, exactly as a null lastAdvanceAt does on
         // the seconds axis.
         if (advanced || this._heightsLastAdvanceAt == null) this._heightsLastAdvanceAt = Date.now();
-        this._reconcileHeightShortfalls();
-        if (advanced) this._releaseHeightWaiters();
+        this.reconcileHeightShortfalls();
+        if (advanced) this.releaseHeightWaiters();
         return advanced;
     }
 
     // This indexer's own chain code, normalised the way the hub keys the map. Null when the
     // mirror was built without a coin, which reads as no admission evidence at all.
-    _admissionChain() {
+    admissionChain() {
         if (this.coin === null || this.coin === undefined) return null;
         const c = String(this.coin).trim().toUpperCase();
         return c === '' ? null : c;
@@ -1297,7 +1302,7 @@ class HubDbSync {
     // The published height for one (table, chain), or null when there is no usable entry.
     // Null is never coerced to zero anywhere in this file: a zero would certify a genesis-era
     // mirror as complete for every block, which is the fail-OPEN this design may not have.
-    _publishedHeight(table, chain) {
+    publishedHeight(table, chain) {
         const entry = this.heightWatermarks[table];
         if (!entry || typeof entry !== 'object') return null;
         const h = entry[chain];
@@ -1311,13 +1316,13 @@ class HubDbSync {
     //
     // A shortfall is RECORDED rather than merely returned, because the mirror's own stall
     // detector has no other way to see a heights map that froze while `ts` kept ticking.
-    _heightSatisfied(table, blockHeight) {
-        const chain = this._admissionChain();
+    heightSatisfied(table, blockHeight) {
+        const chain = this.admissionChain();
         const b = Number(blockHeight);
         if (chain === null || !Number.isFinite(b)) return false;
         const target = b - admitMarginBlocks(table);
         const key = table + '|' + chain;
-        const h = this._publishedHeight(table, chain);
+        const h = this.publishedHeight(table, chain);
         if (h === null || h < target) {
             if (!(this._heightShortfalls[key] >= target)) this._heightShortfalls[key] = target;
             return false;
@@ -1328,25 +1333,25 @@ class HubDbSync {
 
     // Drop every shortfall the newly installed map has caught up with, so a mirror that
     // recovers stops being reported as stalled without waiting for another block to ask.
-    _reconcileHeightShortfalls() {
+    reconcileHeightShortfalls() {
         for (const key of Object.keys(this._heightShortfalls)) {
             const split = key.lastIndexOf('|');
-            const h = this._publishedHeight(key.slice(0, split), key.slice(split + 1));
+            const h = this.publishedHeight(key.slice(0, split), key.slice(split + 1));
             if (h !== null && h >= this._heightShortfalls[key]) delete this._heightShortfalls[key];
         }
     }
 
     // True while at least one height comparison this node actually made is still short.
-    _heightsShort() {
+    heightsShort() {
         return Object.keys(this._heightShortfalls).length > 0;
     }
 
     // The height clause appended to a timed-out barrier's message ABOVE the activation. The
     // message's existing prefix is untouched: two unit tests and the api-status smoke match on
     // it, and an operator greps for it.
-    _heightTail(table, blockHeight) {
-        const chain = this._admissionChain();
-        const h = (chain === null) ? null : this._publishedHeight(table, chain);
+    heightTail(table, blockHeight) {
+        const chain = this.admissionChain();
+        const h = (chain === null) ? null : this.publishedHeight(table, chain);
         return ' (admission height ' + table + '.' + (chain === null ? 'unknown' : chain) +
                ' at ' + (h === null ? 'none' : h) +
                ', needs ' + (Number(blockHeight) - admitMarginBlocks(table)) + ')';
@@ -1354,7 +1359,7 @@ class HubDbSync {
 
     // Sample the stall condition once and act on the verdict. Split from the timer so a
     // test can drive a single evaluation at a chosen clock, with no socket and no DB.
-    _checkWatermarkStall(now) {
+    checkWatermarkStall(now) {
         if (now === undefined) now = Date.now();
         if (!this.enabled || !this.running) return 'ok';
 
@@ -1370,7 +1375,7 @@ class HubDbSync {
             // The height dimension (C20): a `heights` map that froze while `ts` kept ticking
             // holds every re-keyed barrier and is invisible to the comparison above.
             heightsLastAdvanceAt: this._heightsLastAdvanceAt,
-            heightsShort:         this._heightsShort()
+            heightsShort:         this.heightsShort()
         }, now);
         if (verdict === 'ok') return verdict;
 
@@ -1379,20 +1384,20 @@ class HubDbSync {
         const frozenS = Math.round((now - frozenFrom) / 1000);
         const shape   = 'stream watermark frozen at ' + this.streamWatermark + ' for ' + frozenS +
                         's while the hub heartbeat tip reached ' + this._hubTipTs +
-                        (this._heightsShort()
+                        (this.heightsShort()
                             ? '; height watermark short at ' + JSON.stringify(this._heightShortfalls)
                             : '');
 
         if (verdict === 'resync') {
             this._watermarkStallResyncAt = now;
-            console.error('HubDbSync: ' + shape + '. Heartbeats are arriving, so the transport is ' +
+            getLogger().error('HubDbSync: ' + shape + '. Heartbeats are arriving, so the transport is ' +
                 'healthy and the mirror is certifying nothing; forcing a subscribe-then-bootstrap ' +
                 'cycle, then exiting if it is still frozen ' +
                 Math.round(this.watermarkStallExitMs / 1000) + 's from now.');
             // Deliberately bypasses requestResync's hold-ceiling throttle: this detector
             // carries its own one-per-episode latch above, and a block-loop resync minutes
             // earlier must not silently consume the single remedy stage 2 is timing.
-            this._driveResync(shape);
+            this.driveResync(shape);
             return verdict;
         }
 
@@ -1402,35 +1407,35 @@ class HubDbSync {
         const reason = 'hub-mirror stream watermark stalled: ' + shape + ', still frozen ' +
                        Math.round(this.watermarkStallExitMs / 1000) + 's after a forced resync ' +
                        '(HUB_SYNC_WATERMARK_STALL_S / HUB_SYNC_WATERMARK_STALL_EXIT_S)';
-        console.error('HubDbSync: ' + reason);
-        this._driveResync(shape + ' after a forced resync');
+        getLogger().error('HubDbSync: ' + reason);
+        this.driveResync(shape + ' after a forced resync');
         if (this._onFatalStall) this._onFatalStall(reason);
-        else console.error('HubDbSync: no onFatalStall handler wired, so this mirror stays up and ' +
+        else getLogger().error('HubDbSync: no onFatalStall handler wired, so this mirror stays up and ' +
             'keeps re-driving; a consumer that wants a supervisor restart must wire one.');
         return verdict;
     }
 
     // Cadence for the sampler, clamped down when the windows themselves are small so a
     // short test or a short operator override is still sampled several times per window.
-    _stallCheckIntervalMs() {
+    stallCheckIntervalMs() {
         const windows = [this.watermarkStallMs, this.watermarkStallExitMs].filter((v) => v > 0);
         const smallest = windows.length ? Math.min.apply(null, windows) : WATERMARK_STALL_CHECK_MS;
         return Math.max(1000, Math.min(WATERMARK_STALL_CHECK_MS, Math.floor(smallest / 4)));
     }
 
-    _startStallDetector() {
-        this._stopStallDetector();
+    startStallDetector() {
+        this.stopStallDetector();
         if (!(this.watermarkStallMs > 0)) return;
         this._stallTimer = setInterval(() => {
             // A throw here would kill the interval and silently retire the last bound this
             // mirror has, so the sampler swallows and keeps its cadence.
-            try { this._checkWatermarkStall(); }
-            catch (err) { console.warn('HubDbSync: watermark stall check failed:', err && err.message); }
-        }, this._stallCheckIntervalMs());
+            try { this.checkWatermarkStall(); }
+            catch (err) { getLogger().warn('HubDbSync: watermark stall check failed: ' + (err && err.message)); }
+        }, this.stallCheckIntervalMs());
         if (typeof this._stallTimer.unref === 'function') this._stallTimer.unref();
     }
 
-    _stopStallDetector() {
+    stopStallDetector() {
         if (this._stallTimer) {
             clearInterval(this._stallTimer);
             this._stallTimer = null;
@@ -1443,7 +1448,7 @@ class HubDbSync {
     // an older hub omits the field (value undefined/NaN) and this leaves the
     // env-seeded interval/timeout untouched. Returns true when a new interval was
     // adopted so the caller can re-arm the running watchdog at the new cadence.
-    _adoptHubWatermarkInterval(watermarkIntervalMs) {
+    adoptHubWatermarkInterval(watermarkIntervalMs) {
         let ms = Number(watermarkIntervalMs);
         if (!Number.isFinite(ms) || ms <= 0) return false;
         // Clamp both ends: the value arrives from the hub over the wire, so an
@@ -1463,14 +1468,14 @@ class HubDbSync {
     // Start the heartbeat-timeout watchdog for the given live socket. Called once
     // the socket is open; cleared in the 'close'/'error' cleanup so it can never
     // fire against a dead socket object or leak a timer across reconnects.
-    _startWatchdog(ws) {
+    startWatchdog(ws) {
         this._lastHeartbeatAt = Date.now();
-        this._stopWatchdog();
+        this.stopWatchdog();
         this._watchdogTimer = setInterval(() => {
             if (this._lastHeartbeatAt == null) return;
             const idleMs = Date.now() - this._lastHeartbeatAt;
             if (idleMs >= this.watermarkTimeoutMs) {
-                console.warn('HubDbSync: no watermark heartbeat for ' + idleMs +
+                getLogger().warn('HubDbSync: no watermark heartbeat for ' + idleMs +
                     'ms (timeout ' + this.watermarkTimeoutMs + 'ms); terminating stalled socket');
                 ws.terminate();
             }
@@ -1479,7 +1484,7 @@ class HubDbSync {
     }
 
     // Clear the watchdog timer. Safe to call whether or not one is running.
-    _stopWatchdog() {
+    stopWatchdog() {
         if (this._watchdogTimer) {
             clearInterval(this._watchdogTimer);
             this._watchdogTimer = null;
@@ -1493,14 +1498,14 @@ class HubDbSync {
     // bootstrap window are harmless duplicates (_applyRow uses INSERT IGNORE).
     async start() {
         if (!this.enabled) {
-            console.log('HubDbSync: disabled (no hub URL or no local hub DB connection)');
+            getLogger().info('HubDbSync: disabled (no hub URL or no local hub DB connection)');
             return;
         }
         this.running = true;
         // Armed from the start, but inert until the watermark has advanced at least once:
         // a cold start that never drains is the block loop's hold ceiling to bound, not
         // this detector's, and exiting during a first drain would only restart-loop.
-        this._startStallDetector();
+        this.startStallDetector();
 
         if (WebSocket) {
             // Subscribe first so no row is missed between the REST snapshot and
@@ -1508,21 +1513,21 @@ class HubDbSync {
             try {
                 await this._connectWebSocket();
             } catch (err) {
-                console.warn('HubDbSync: WebSocket not ready before bootstrap:', err);
-                // Continue: bootstrap still runs; _scheduleReconnect is already queued
+                getLogger().warn('HubDbSync: WebSocket not ready before bootstrap:', err);
+                // Continue: bootstrap still runs; scheduleReconnect is already queued
             }
         } else {
-            console.warn('HubDbSync: ws package not available, falling back to periodic polling');
+            getLogger().warn('HubDbSync: ws package not available, falling back to periodic polling');
             // Select the poll fallback BEFORE the first bootstrap so even that initial
-            // drain fails closed (does not certify the watermark); see _bootstrapAll (#2476).
+            // drain fails closed (does not certify the watermark); see bootstrapAll (#2476).
             this._pollMode = true;
         }
 
         // Bootstrap each tracked table after the subscription is confirmed active
-        await this._bootstrapAll();
+        await this.bootstrapAll();
 
         if (!WebSocket) {
-            this._startPolling();
+            this.startPolling();
         }
     }
 
@@ -1539,7 +1544,7 @@ class HubDbSync {
     // 2026-06-11: BTC mainnet deferred every tip block in 60s loops because the
     // single-page bootstrap could not drain a >10k-row price_snapshots table and
     // nothing ever re-attempted it).
-    async _bootstrapAll() {
+    async bootstrapAll() {
         if (this._bootstrapping) return;                     // reconnect + retry timer may overlap
         this._bootstrapping = true;
         try {
@@ -1569,7 +1574,7 @@ class HubDbSync {
                     else marks.push(mark);
                 } catch (err) {
                     allDrained = false;
-                    console.warn('HubDbSync: ' + table + ' bootstrap failed:', err);
+                    getLogger().warn('HubDbSync: ' + table + ' bootstrap failed:', err);
                 }
             }
             if (allDrained && marks.length > 0) {
@@ -1593,20 +1598,20 @@ class HubDbSync {
                     // stale, forking the ledger. Freeze the watermark and warn every
                     // cycle instead; the barriers fall back to their content paths and
                     // DEFER rather than certify. Mirroring itself still ran above.
-                    console.warn('HubDbSync: poll-mode mirror: watermark frozen, WS unavailable, ' +
+                    getLogger().warn('HubDbSync: poll-mode mirror: watermark frozen, WS unavailable, ' +
                         'upserts/retractions cannot be received; settlement barriers will not certify');
                 } else {
                     // Install the height map from whichever carrier served one this drain,
                     // preferring the snapshot pages over the ready frame because they are the
                     // later statement. Neither means CLEAR, the fail-closed direction: a hub
                     // that publishes no heights cannot certify a re-keyed barrier.
-                    this._noteHeights(this._pendingBootstrapHeights || this._readyHeights);
-                    this._advanceWatermark(Math.min.apply(null, marks));
+                    this.noteHeights(this._pendingBootstrapHeights || this._readyHeights);
+                    this.advanceWatermark(Math.min.apply(null, marks));
                 }
             } else if (this.running) {
-                console.warn('HubDbSync: bootstrap partial, retrying in ' + this.pollIntervalMs + 'ms (heartbeat gate stays closed)');
+                getLogger().warn('HubDbSync: bootstrap partial, retrying in ' + this.pollIntervalMs + 'ms (heartbeat gate stays closed)');
                 setTimeout(() => {
-                    if (this.running && !this._bootstrapDrained) this._bootstrapAll();
+                    if (this.running && !this._bootstrapDrained) this.bootstrapAll();
                 }, this.pollIntervalMs);
             }
         } finally {
@@ -1616,7 +1621,7 @@ class HubDbSync {
 
     stop() {
         this.running = false;
-        this._stopStallDetector();
+        this.stopStallDetector();
         if (this.ws) {
             try { this.ws.close(); } catch (e) { /* ignore */ }
             this.ws = null;
@@ -1677,7 +1682,7 @@ class HubDbSync {
     // that may have arrived while the REST round-trip was in flight.
     // Returns the snapshot response's stream watermark when this table fully
     // drained (page not full, every row applied), or null otherwise; the caller
-    // (_bootstrapAll) only advances the global watermark once every table drains.
+    // (bootstrapAll) only advances the global watermark once every table drains.
     // `afterRebuiltPurge` is set only on the re-drain this method schedules for itself after
     // the content probe below cleared a retired id space. It suppresses a second probe, so
     // the detect -> purge -> re-page sequence can run exactly once per bootstrap.
@@ -1686,16 +1691,16 @@ class HubDbSync {
         const MAX_PAGES  = 1000;                             // runaway backstop (10M rows)
 
         // Prime (and validate) the local column cache once, up front. If the mirror
-        // table does not exist yet, _localColumns throws (it refuses to cache an empty
-        // column set); bail as "not drained" so _bootstrapAll schedules a retry once
+        // table does not exist yet, localColumns throws (it refuses to cache an empty
+        // column set); bail as "not drained" so bootstrapAll schedules a retry once
         // the indexer's verifyTables() has created it. Doing this here (rather than
         // letting each row fail in _applyRow) avoids a SHOW COLUMNS storm + a misleading
         // "bootstrapped N rows" log when the whole page silently no-ops. Self-heals the
         // cold-start race without a process restart.
         try {
-            await this._localColumns(table);
+            await this.localColumns(table);
         } catch (e) {
-            console.warn('HubDbSync: ' + table + ' not ready for bootstrap (' + e.message + '), will retry');
+            getLogger().warn('HubDbSync: ' + table + ' not ready for bootstrap (' + e.message + '), will retry');
             return null;
         }
 
@@ -1718,7 +1723,7 @@ class HubDbSync {
         // position in this hub's stream and must not seed a cursor into it.
         let lastId = 0;
         if (!FULL_REPAGE_TABLES.includes(table)) {
-            lastId = await this._localMaxId(table, scope);
+            lastId = await this.localMaxId(table, scope);
         }
 
         // Second fence on the same class, for the id spaces no local column can separate
@@ -1763,11 +1768,11 @@ class HubDbSync {
         let readyCeiling = (this._readyMaxIds && this._readyMaxIds[table] != null)
             ? Number(this._readyMaxIds[table]) : NaN;
         if (lastId > 0 && Number.isFinite(readyCeiling) && lastId > readyCeiling) {
-            console.warn('HubDbSync: local ' + table + ' cursor ' + lastId + ' sits above the hub ceiling ' +
+            getLogger().warn('HubDbSync: local ' + table + ' cursor ' + lastId + ' sits above the hub ceiling ' +
                 readyCeiling + ', so the local rows are not from this hub id space' +
                 (readyCeiling === 0 ? ' (the hub reports an EMPTY table, the signature of a rebuilt hub database)' : '') +
                 '; clearing the mirror for this scope and re-paging from 0');
-            await this._purgeRebuiltSourceRows(table, scope, lastId, readyCeiling);
+            await this.purgeRebuiltSourceRows(table, scope, lastId, readyCeiling);
             lastId = 0;
         }
 
@@ -1808,7 +1813,7 @@ class HubDbSync {
         // to 0, so the id-ceiling fence never runs either. Collect the natural keys the hub
         // actually served so the pass after the drain can clear what it did not, and record
         // where the local id space stood BEFORE this drain so that pass can only ever judge
-        // rows that predate it. See _reconcileForeignCapabilitySnapshots.
+        // rows that predate it. See reconcileForeignCapabilitySnapshots.
         let servedSnapshotKeys    = (table === 'capability_snapshots') ? new Set() : null;
         let snapshotKeysComplete  = true;
         let maxServedSnapshotBlock = 0;
@@ -1817,13 +1822,13 @@ class HubDbSync {
         // apply - necessarily carries an id above this mark. Reading it here, before the first
         // page is applied, is what lets the reconciliation exempt those rows without needing a
         // buffer like the price path's.
-        let snapshotPreDrainMaxId = (table === 'capability_snapshots') ? await this._localMaxId(table, scope) : 0;
+        let snapshotPreDrainMaxId = (table === 'capability_snapshots') ? await this.localMaxId(table, scope) : 0;
         // price_snapshots only: the bootstrap bound. `priceHorizon` is the block
         // time of the oldest block this consumer can still process, 0 when no bound applies.
         // `priceFloor` is how far below it this drain reaches. Rows older than the floor are
         // SERVED (so every warrant that rests on the drain having seen the hub's whole table
         // - the reconciliation below above all - is untouched) but not APPLIED.
-        let priceHorizon = (table === 'price_snapshots') ? await this._resolvePriceMirrorHorizon() : 0;
+        let priceHorizon = (table === 'price_snapshots') ? await this.resolvePriceMirrorHorizon() : 0;
         let priceFloor   = (priceHorizon > 0) ? (priceHorizon - this._priceMirrorLookbackS) : 0;
         // Distinct FINALIZED rounds below the horizon the hub served, and how many of them
         // this drain kept. Finalized-only because that is the exact set every consensus read
@@ -1864,7 +1869,7 @@ class HubDbSync {
             let share    = (Number.isFinite(ceiling) && ceiling > 0 && lastId > 0)
                              ? ' (~' + Math.min(99, Math.floor((lastId / ceiling) * 100)) + '% of the hub id space)'
                              : '';
-            console.log('HubDbSync: bootstrapping ' + table + ': ' + fetched + ' row(s) fetched, ' +
+            getLogger().info('HubDbSync: bootstrapping ' + table + ': ' + fetched + ' row(s) fetched, ' +
                 applied + ' applied, page ' + pagesFetched + ', through id ' + lastId + share +
                 ', ' + elapsedS + 's elapsed (' + Math.round(fetched / elapsedS) + ' rows/s)');
         };
@@ -1881,7 +1886,7 @@ class HubDbSync {
             // A batch cannot express a per-row hold, so a drain under the mirror
             // horizon takes the per-row path. Batching is an optimization only, and
             // this is the same fallback a statement the driver rejects already takes.
-            let batched = (batch.length > 1 && !(priceHorizon > 0)) ? await this._applyRowsBatched(table, batch) : false;
+            let batched = (batch.length > 1 && !(priceHorizon > 0)) ? await this.applyRowsBatched(table, batch) : false;
             let ok      = true;
             for (let entry of pending) {
                 let row = entry.row;
@@ -1943,7 +1948,7 @@ class HubDbSync {
                         // Every row the hub SERVED, including one the chain-identity fence
                         // refused to apply: the question this set answers is what the hub
                         // holds, not what this mirror took from it. A refused relic is
-                        // reported separately (_reportRefusedChainRows) and must not have its
+                        // reported separately (reportRefusedChainRows) and must not have its
                         // local twin deleted on the strength of a fence decision made here.
                         let sb = Number(row.snapshot_block);
                         if (Number.isFinite(sb) && sb > maxServedSnapshotBlock) maxServedSnapshotBlock = sb;
@@ -1953,7 +1958,7 @@ class HubDbSync {
                     if (!boundOut && !refused) applied++;
                 } catch (err) {
                     applyErrors++;
-                    console.warn('HubDbSync: failed to apply row in ' + table + ':', err);
+                    getLogger().warn('HubDbSync: failed to apply row in ' + table + ':', err);
                     // Stop the page at the FIRST unappliable row. Advancing the cursor past it
                     // (here, or by applying a later row in this page and raising the local
                     // MAX(id)) would make the next retry's since_id = SELECT MAX(id) skip it
@@ -1964,7 +1969,7 @@ class HubDbSync {
                     // table's barrier (defer) rather than silently forking - the module's
                     // fail-closed contract, same as the schema-mismatch path.
                     //
-                    // A batch cannot hide such a row: _applyRowsBatched only reports success on a
+                    // A batch cannot hide such a row: applyRowsBatched only reports success on a
                     // statement the driver accepted, and any other outcome sends every row in the
                     // chunk back through this loop one at a time, where the bad one still stops it.
                     ok = false;
@@ -1987,7 +1992,7 @@ class HubDbSync {
         // every bootstrapProgressMs until it lands.
         let announcedCeiling = Number(this._readyMaxIds && this._readyMaxIds[table]);
         if (Number.isFinite(announcedCeiling) && announcedCeiling > PAGE_LIMIT)
-            console.log('HubDbSync: draining ' + table + ' from id ' + lastId +
+            getLogger().info('HubDbSync: draining ' + table + ' from id ' + lastId +
                 ' (the hub reports ' + announcedCeiling + ' as its highest id)');
 
         for (let page = 0; page < MAX_PAGES; page++) {
@@ -1999,11 +2004,11 @@ class HubDbSync {
             // mirror schema_version. A mismatch means the hub's row shape differs from
             // what this indexer was built for, so applying these rows could drop a
             // consensus-relevant column and fork the ledger. Fail closed: return "not
-            // drained" without applying, so _bootstrapAll retries and the barrier stays
+            // drained" without applying, so bootstrapAll retries and the barrier stays
             // shut, deferring blocks rather than settling against mismatched mirror data.
             // The != null guard keeps older hubs that send no version working unchanged.
             if (result.schema_version != null && result.schema_version !== HUB_SCHEMA_VERSION) {
-                console.error('HubDbSync: hub snapshot schema_version ' + result.schema_version +
+                getLogger().error('HubDbSync: hub snapshot schema_version ' + result.schema_version +
                     ' != local ' + HUB_SCHEMA_VERSION + ' for ' + table +
                     '; refusing to bootstrap. Restart this indexer after upgrading the hub.');
                 return null;
@@ -2035,7 +2040,7 @@ class HubDbSync {
             if (Number.isFinite(Number(result.watermark))) watermark = Number(result.watermark);
             // The height watermark rides every snapshot page too, immediately after `count`.
             // Stashed rather than installed: like the seconds watermark it is only true of a
-            // mirror that has FULLY drained, and _bootstrapAll owns that verdict. Without a
+            // mirror that has FULLY drained, and bootstrapAll owns that verdict. Without a
             // carrier here a poll-mode or reconnecting mirror would never establish a
             // baseline at all and would defer every block forever above the activation.
             const pageHeights = sanitizeHeights(result.heights);
@@ -2043,12 +2048,12 @@ class HubDbSync {
             if (applyErrors > 0) break;                      // hole hit: stop paging, retry from it
             if (result.rows.length < PAGE_LIMIT) break;      // short page = drained
         }
-        console.log('HubDbSync: bootstrapped ' + applied + ' rows into ' + table +
+        getLogger().info('HubDbSync: bootstrapped ' + applied + ' rows into ' + table +
             (priceSkipped > 0 ? ' (' + priceSkipped + ' row(s) below the ' + priceFloor +
                 ' mirror floor left unapplied)' : ''));
         // One line per foreign chain this drain refused rows from, rather than one per row:
         // a hub database that outlived a venue re-genesis serves its whole relic table.
-        this._reportRefusedChainRows(table);
+        this.reportRefusedChainRows(table);
 
         // THE HALF A COMPARISON OF IDS ALONE CANNOT SEE.
         //
@@ -2076,14 +2081,14 @@ class HubDbSync {
         // attempt with no other signal. A mirror still behind its source defers the check to
         // the bootstrap that finds it level, which is the next reconnect at the latest.
         if (fetched === 0 && applyErrors === 0 && lastId > 0 && !afterRebuiltPurge) {
-            let clash = await this._detectRebuiltSourceByContent(table, scope, lastId);
+            let clash = await this.detectRebuiltSourceByContent(table, scope, lastId);
             if (clash) {
-                console.warn('HubDbSync: ' + table + ' id ' + clash.id + ' holds ' + clash.column + '=' +
+                getLogger().warn('HubDbSync: ' + table + ' id ' + clash.id + ' holds ' + clash.column + '=' +
                     clash.local + ' locally while the hub serves ' + clash.hub + ' at that id. This table is ' +
                     'append-only and id-parity, so one id cannot mean two rows: the source id space has been ' +
                     'replaced and re-grown onto the retired ids (a rebuilt hub database). Clearing the mirror ' +
                     'for this scope and re-paging from 0.');
-                let removed = await this._purgeRebuiltSourceRows(table, scope, lastId, readyCeiling,
+                let removed = await this.purgeRebuiltSourceRows(table, scope, lastId, readyCeiling,
                     'id ' + clash.id + ' carries ' + clash.column + '=' + clash.local + ' locally while the hub ' +
                     'serves ' + clash.hub + ' at that id');
                 // Only a purge that actually removed rows changes what a re-page would find;
@@ -2107,9 +2112,9 @@ class HubDbSync {
             // Same network scope as the cursor read: an unscoped MAX(id) here compares a
             // foreign hub's id against this hub's ceiling and reaches the opposite verdict
             // about whether a gap exists.
-            let localMax = await this._localMaxId(table, scope);
+            let localMax = await this.localMaxId(table, scope);
             if (localMax < hubReadyMaxId) {
-                console.log('HubDbSync: gap detected in ' + table + ' (local=' + localMax +
+                getLogger().info('HubDbSync: gap detected in ' + table + ' (local=' + localMax +
                             ' hub_ready=' + hubReadyMaxId + '), fetching catch-up rows');
                 try {
                     let catchUpPath = '/hub-db/snapshot/' + table + '?since_id=' + localMax + '&limit=10000';
@@ -2119,7 +2124,7 @@ class HubDbSync {
                         // could drop a consensus-relevant column, so refuse it and mark the
                         // table not-drained (CATCHUP-SCHEMA-BYPASS-1).
                         if (catchUp.schema_version != null && catchUp.schema_version !== HUB_SCHEMA_VERSION) {
-                            console.error('HubDbSync: catch-up schema_version ' + catchUp.schema_version +
+                            getLogger().error('HubDbSync: catch-up schema_version ' + catchUp.schema_version +
                                 ' != local ' + HUB_SCHEMA_VERSION + ' for ' + table + '; skipping catch-up');
                             applyErrors++;
                         } else {
@@ -2129,13 +2134,13 @@ class HubDbSync {
                                 try { await this._applyRow(table, row); }
                                 catch (e) {
                                     applyErrors++;
-                                    console.warn('HubDbSync: catch-up apply failed for ' + table + ':', e);
+                                    getLogger().warn('HubDbSync: catch-up apply failed for ' + table + ':', e);
                                 }
                             }
                         }
                     }
                 } catch (err) {
-                    console.warn('HubDbSync: catch-up fetch failed for ' + table + ':', err);
+                    getLogger().warn('HubDbSync: catch-up fetch failed for ' + table + ':', err);
                 }
             }
         }
@@ -2163,7 +2168,7 @@ class HubDbSync {
                 } catch (err) {
                     applyErrors++;
                     fullyDrained = false;
-                    console.warn('HubDbSync: failed to apply the held predecessor row for ' +
+                    getLogger().warn('HubDbSync: failed to apply the held predecessor row for ' +
                         pair + ' in ' + table + ':', err);
                     break;
                 }
@@ -2175,7 +2180,7 @@ class HubDbSync {
         // hub's own data says how many rounds a span holds - a deployment on a longer round
         // interval fits far fewer. So the drain measures what it actually kept and refuses to
         // certify a table it cut too thin: widen the span and report not-drained, which leaves
-        // the barrier shut and sends _bootstrapAll around again (a re-page is idempotent -
+        // the barrier shut and sends bootstrapAll around again (a re-page is idempotent -
         // every apply is an INSERT IGNORE/ODKU on the natural key). Past the ceiling the bound
         // gives up entirely and the next drain mirrors the table in full, because a bounded
         // mirror that cannot prove its own depth is worth less than a slow one.
@@ -2185,12 +2190,12 @@ class HubDbSync {
             let widened = this._priceMirrorLookbackS * PRICE_MIRROR_LOOKBACK_GROWTH;
             if (widened > PRICE_MIRROR_LOOKBACK_MAX_S) {
                 this._priceMirrorBoundDisabled = true;        // full mirror from here on
-                console.warn('HubDbSync: price mirror bound gave up after reaching its ' +
+                getLogger().warn('HubDbSync: price mirror bound gave up after reaching its ' +
                     PRICE_MIRROR_LOOKBACK_MAX_S + 's ceiling with only ' + preHorizonRetained.size +
                     ' pre-horizon round(s); the next drain mirrors price_snapshots in full');
             } else {
                 this._priceMirrorLookbackS = widened;
-                console.warn('HubDbSync: price mirror bound kept only ' + preHorizonRetained.size +
+                getLogger().warn('HubDbSync: price mirror bound kept only ' + preHorizonRetained.size +
                     ' of the ' + preHorizonServed.size + ' round(s) the hub holds below the horizon, ' +
                     'short of the ' + PRICE_MIRROR_MIN_PRE_HORIZON_ROUNDS + ' a consensus read can ' +
                     'reach; widening the lookback to ' + widened + 's and re-draining');
@@ -2199,7 +2204,7 @@ class HubDbSync {
             return null;
         }
 
-        // The floor the barriers police (see _notePriceMirrorFloor). Set only on a drain that
+        // The floor the barriers police (see notePriceMirrorFloor). Set only on a drain that
         // both bounded something and passed the check above; a full drain clears it.
         if (table === 'price_snapshots' && fullyDrained) {
             this._priceMirrorFloorTs = (priceSkipped > 0) ? priceFloor : 0;
@@ -2210,13 +2215,13 @@ class HubDbSync {
         // Reconcile the retractions the bootstrap can never re-deliver (#3211). Only after a
         // COMPLETE re-page: a partial drain has not seen every row the hub holds, so a
         // "missing" match may simply be on a page we never fetched.
-        if (fullyDrained && servedMatchIds) await this._reconcileRetractedMatches(servedMatchIds, maxServedId);
+        if (fullyDrained && servedMatchIds) await this.reconcileRetractedMatches(servedMatchIds, maxServedId);
 
         // Clear the capability snapshots this hub does not hold (#1837). Same COMPLETE-re-page
         // precondition as the two passes above, and ordered BEFORE the barrier re-evaluation
-        // in the block below so _releaseSnapshotWaiters judges the cleaned table.
+        // in the block below so releaseSnapshotWaiters judges the cleaned table.
         if (fullyDrained && servedSnapshotKeys)
-            await this._reconcileForeignCapabilitySnapshots(servedSnapshotKeys, snapshotKeysComplete,
+            await this.reconcileForeignCapabilitySnapshots(servedSnapshotKeys, snapshotKeysComplete,
                                                             maxServedSnapshotBlock, snapshotPreDrainMaxId);
 
         // Only arm this table's barrier state once it FULLY drained. The per-table refresh
@@ -2226,8 +2231,8 @@ class HubDbSync {
         // NEITHER of which is gated on the global stream watermark - and the oracle/match/call
         // barriers would open against an incomplete mirror and fork (BOOTSTRAP-FLAG-PARTIAL-DRAIN;
         // unlike the price-height barrier, which has no empty fast path and safely DEFERS). A
-        // partial drain returns null below, so _bootstrapAll retries with the gate shut. The
-        // reconnect self-heal (_refreshAllSyncHeights) still refreshes from a complete local
+        // partial drain returns null below, so bootstrapAll retries with the gate shut. The
+        // reconnect self-heal (refreshAllSyncHeights) still refreshes from a complete local
         // mirror on its own path; this only withholds arming on an incomplete bootstrap.
         if (fullyDrained) {
             // Pass armBootstrap=true: this is the only path allowed to arm the
@@ -2250,13 +2255,13 @@ class HubDbSync {
                 // before the next event task runs, so the live apply path
                 // resumes exactly at the replay boundary with no ordering gap.
                 // A failed or disconnect-raced flush reports the table
-                // not-drained (return null) so _bootstrapAll retries from the
+                // not-drained (return null) so bootstrapAll retries from the
                 // still-contiguous local max, the same fail-closed contract as
                 // the page loop (BOOTSTRAP-HOLE-1).
                 let flushed = false;
                 let epoch = this._wsEpoch;
                 this._msgChain = this._msgChain.then(async () => {
-                    flushed = await this._flushPendingPriceEvents();
+                    flushed = await this.flushPendingPriceEvents();
                     if (flushed && epoch === this._wsEpoch) this._priceDrained = true;
                     else flushed = false;
                 });
@@ -2264,14 +2269,14 @@ class HubDbSync {
                 if (!flushed) return null;
                 await this._refreshPriceSyncHeight();
             }
-            if (table === 'oracle_prices')       await this._refreshOracleSyncTimestamp(true);
-            if (table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp(true);
-            if (table === 'cross_chain_calls')   await this._refreshCallSyncTimestamp(true);
-            if (table === 'bridge_transfers')    await this._refreshBridgeSyncTimestamp(true);
-            if (table === 'policy_snapshots')    await this._refreshPolicySyncTimestamp(true);
+            if (table === 'oracle_prices')       await this.refreshOracleSyncTimestamp(true);
+            if (table === 'cross_chain_matches') await this.refreshMatchSyncTimestamp(true);
+            if (table === 'cross_chain_calls')   await this.refreshCallSyncTimestamp(true);
+            if (table === 'bridge_transfers')    await this.refreshBridgeSyncTimestamp(true);
+            if (table === 'policy_snapshots')    await this.refreshPolicySyncTimestamp(true);
             // A new match/call (new required snapshot_block) or an arriving snapshot can change
             // snapshot-presence: re-evaluate the snapshot barrier on any cross-chain table.
-            if (CROSS_CHAIN_TABLES.indexOf(table) !== -1) await this._releaseSnapshotWaiters();
+            if (CROSS_CHAIN_TABLES.indexOf(table) !== -1) await this.releaseSnapshotWaiters();
         }
 
         if (!fullyDrained) return null;
@@ -2284,13 +2289,13 @@ class HubDbSync {
     // non-positive/non-finite value, or a bound this instance has already given up on.
     // Fail-open is the only safe direction here: a wrong horizon costs a mirror that is
     // short of what a consensus read needs, and no drain is worth that.
-    async _resolvePriceMirrorHorizon() {
+    async resolvePriceMirrorHorizon() {
         if (!this.getPriceMirrorHorizon || this._priceMirrorBoundDisabled) return 0;
         let horizon;
         try {
             horizon = await this.getPriceMirrorHorizon();
         } catch (e) {
-            console.warn('HubDbSync: price mirror horizon unavailable (' + e.message +
+            getLogger().warn('HubDbSync: price mirror horizon unavailable (' + e.message +
                 '); mirroring price_snapshots in full');
             return 0;
         }
@@ -2311,12 +2316,12 @@ class HubDbSync {
     // in full. Fail-closed: blocks defer while the re-drain runs rather than settling against
     // a mirror that is knowingly short. Idempotent - the first call clears the floor, so the
     // re-drain is scheduled once however many waiters trip it.
-    _notePriceMirrorFloor(blockTime) {
+    notePriceMirrorFloor(blockTime) {
         if (!(this._priceMirrorFloorTs > 0)) return;
         blockTime = Number(blockTime);
         if (!Number.isFinite(blockTime) || blockTime <= 0) return;
         if (blockTime >= this._priceMirrorFloorTs) return;
-        console.error('HubDbSync: block time ' + blockTime + ' is below the bounded price mirror floor ' +
+        getLogger().error('HubDbSync: block time ' + blockTime + ' is below the bounded price mirror floor ' +
             this._priceMirrorFloorTs + ' - this node is processing blocks older than the history its ' +
             'price mirror holds. Abandoning the bound and re-mirroring price_snapshots in full ' +
             '(blocks defer until it drains).');
@@ -2325,8 +2330,8 @@ class HubDbSync {
         this._priceMirrorRefloor       = true;
         if (this.running) {
             Promise.resolve()
-                .then(() => this._bootstrapAll())
-                .catch(err => console.warn('HubDbSync: full price re-mirror failed to start:', err));
+                .then(() => this.bootstrapAll())
+                .catch(err => getLogger().warn('HubDbSync: full price re-mirror failed to start:', err));
         }
     }
 
@@ -2343,14 +2348,14 @@ class HubDbSync {
     async _mirrorNetworkScope(table) {
         if (typeof this.network !== 'string' || this.network === '') return null;
         let cols;
-        try { cols = await this._localColumns(table); } catch (e) { return null; }
+        try { cols = await this.localColumns(table); } catch (e) { return null; }
         return (cols && typeof cols.has === 'function' && cols.has('network')) ? this.network : null;
     }
 
     // Highest local id for a mirrored table, restricted to `scope`'s network when one was
     // proven. Returns 0 when nothing matches or the read fails (the table may not exist
     // yet), which starts the caller's cursor at the beginning of the hub's table.
-    async _localMaxId(table, scope) {
+    async localMaxId(table, scope) {
         try {
             let sql  = 'SELECT MAX(id) AS max_id FROM ' + table + (scope ? ' WHERE network = ?' : '');
             let rows = await this.hubDb.doQuery(sql, scope ? [scope] : undefined);
@@ -2384,7 +2389,7 @@ class HubDbSync {
         try {
             result = await this.hubDb.doQuery('DELETE FROM ' + table + ' WHERE network <> ?', [network]);
         } catch (e) {
-            console.warn('HubDbSync: could not clear foreign-network rows from ' + table + ':', e);
+            getLogger().warn('HubDbSync: could not clear foreign-network rows from ' + table + ':', e);
             return 0;
         }
         // doQuery collapses a non-transactional query error into [], which carries no
@@ -2393,12 +2398,12 @@ class HubDbSync {
         // zero rows, which is precisely the silent stall this method exists to end.
         let removed = Number(result && result.affectedRows);
         if (!Number.isFinite(removed)) {
-            console.warn('HubDbSync: foreign-network purge of ' + table + ' reported no result; ' +
+            getLogger().warn('HubDbSync: foreign-network purge of ' + table + ' reported no result; ' +
                 'if the mirror keeps draining zero rows, this read is where to look');
             return 0;
         }
         if (removed <= 0) return 0;
-        console.warn('HubDbSync: removed ' + removed + ' row(s) from ' + table + ' belonging to a network ' +
+        getLogger().warn('HubDbSync: removed ' + removed + ' row(s) from ' + table + ' belonging to a network ' +
             'other than ' + network + '; a mirror holds only what the hub it follows serves, and those rows ' +
             'block both the id cursor and the id-parity apply');
         return removed;
@@ -2432,14 +2437,14 @@ class HubDbSync {
     // this table, no proven scope, a page the hub refused or shaped differently, a schema
     // version this build does not mirror, a local read that threw). Nothing is deleted on a
     // question that could not be asked.
-    async _detectRebuiltSourceByContent(table, scope, localMax) {
+    async detectRebuiltSourceByContent(table, scope, localMax) {
         let identity = REBUILT_SOURCE_IDENTITY_COLUMNS[table];
         if (!identity || !scope || !(localMax > 0)) return null;
 
         // The local table must actually carry every identity column; a schema that has
         // drifted from this build's expectation is not something to delete rows over.
         let cols;
-        try { cols = await this._localColumns(table); } catch (e) { return null; }
+        try { cols = await this.localColumns(table); } catch (e) { return null; }
         if (!cols || typeof cols.has !== 'function' || !identity.every((c) => cols.has(c))) return null;
 
         let page;
@@ -2447,7 +2452,7 @@ class HubDbSync {
             page = await this._httpGet('/hub-db/snapshot/' + table +
                 '?since_id=0&limit=' + REBUILT_SOURCE_PROBE_ROWS);
         } catch (e) {
-            console.warn('HubDbSync: rebuilt-source content probe of ' + table + ' could not fetch page 1:', e);
+            getLogger().warn('HubDbSync: rebuilt-source content probe of ' + table + ' could not fetch page 1:', e);
             return null;
         }
         if (!page || !Array.isArray(page.rows) || page.rows.length === 0) return null;
@@ -2483,8 +2488,8 @@ class HubDbSync {
             let hr = hubById.get(Number(lr.id));
             if (!hr) continue;
             for (let col of identity) {
-                let mine  = this._identityText(lr[col]);
-                let theirs = this._identityText(hr[col]);
+                let mine  = this.identityText(lr[col]);
+                let theirs = this.identityText(hr[col]);
                 if (mine === theirs) continue;
                 return { id: Number(lr.id), column: col, local: mine, hub: theirs };
             }
@@ -2495,7 +2500,7 @@ class HubDbSync {
     // Compare-only rendering of one identity value. The two sides arrive by different routes
     // (a driver row and a JSON wire row), so a BIGINT read back as a BigInt and the same
     // number on the wire must compare EQUAL or every bootstrap would report a contradiction.
-    _identityText(value) {
+    identityText(value) {
         if (value === null || value === undefined) return '';
         if (Buffer.isBuffer(value)) return value.toString('hex');
         return String(value);
@@ -2503,7 +2508,7 @@ class HubDbSync {
 
     // `evidence` names what proved the id space is retired, for the logs; the caller that
     // compares against the advertised ceiling leaves it out and gets that wording.
-    async _purgeRebuiltSourceRows(table, scope, localMax, ceiling, evidence) {
+    async purgeRebuiltSourceRows(table, scope, localMax, ceiling, evidence) {
         let why = evidence || ('the local cursor ' + localMax + ' sits above the hub ceiling ' + ceiling);
         // NO PROVEN SCOPE, NO DELETE. Without a network this would be an unqualified
         // DELETE FROM <table>, and the caller reaches here on evidence about an ID SPACE,
@@ -2515,7 +2520,7 @@ class HubDbSync {
         // be the bolder one. The cursor still restarts, which is the pre-existing behaviour
         // for these consumers and leaves them no worse than before.
         if (!scope) {
-            console.warn('HubDbSync: ' + table + ': ' + why + ', but this mirror has no proven network scope, ' +
+            getLogger().warn('HubDbSync: ' + table + ': ' + why + ', but this mirror has no proven network scope, ' +
                 'so the retired rows are LEFT IN PLACE (an unscoped delete here would clear the whole table). ' +
                 'Re-paging only; if this mirror keeps serving rows the hub does not have, give it a network.');
             return 0;
@@ -2524,7 +2529,7 @@ class HubDbSync {
         try {
             result = await this.hubDb.doQuery('DELETE FROM ' + table + ' WHERE network = ?', [scope]);
         } catch (e) {
-            console.warn('HubDbSync: could not clear the stale id space from ' + table + ':', e);
+            getLogger().warn('HubDbSync: could not clear the stale id space from ' + table + ':', e);
             return 0;
         }
         // Same reasoning as the foreign-network purge: doQuery collapses a non-transactional
@@ -2533,12 +2538,12 @@ class HubDbSync {
         // re-page below then applies almost nothing, which is the silent stall this exists to end.
         let removed = Number(result && result.affectedRows);
         if (!Number.isFinite(removed)) {
-            console.warn('HubDbSync: rebuilt-source purge of ' + table + ' reported no result; ' +
+            getLogger().warn('HubDbSync: rebuilt-source purge of ' + table + ' reported no result; ' +
                 'if the mirror keeps serving rows the hub does not have, this read is where to look');
             return 0;
         }
         if (removed <= 0) return 0;
-        console.warn('HubDbSync: removed ' + removed + ' row(s) from ' + table + ' carrying a retired id space (' +
+        getLogger().warn('HubDbSync: removed ' + removed + ' row(s) from ' + table + ' carrying a retired id space (' +
             why + '); the mirror will be rebuilt from the hub in full');
         return removed;
     }
@@ -2556,7 +2561,7 @@ class HubDbSync {
     // that would drop the fence at exactly the moment relics are being served.
     //
     // Returns true when the expectation moved. On the first non-null value, and on every
-    // change after it, the local relics are purged (see _purgeForeignChainIdRows): rows
+    // change after it, the local relics are purged (see purgeForeignChainIdRows): rows
     // applied before the identity was known - a freshly re-genesised chain has no block 1
     // while the first bootstrap drains - are otherwise invisible to the apply-time filter
     // for the life of the mirror.
@@ -2565,13 +2570,13 @@ class HubDbSync {
         let next = (typeof id === 'string') ? id.trim().toLowerCase() : null;
         if (next === null) return false;
         if (!/^[0-9a-f]{64}$/.test(next)) {
-            console.warn('HubDbSync: ignoring a malformed btc_chain_id from the ' + source + ' source: ' + id);
+            getLogger().warn('HubDbSync: ignoring a malformed btc_chain_id from the ' + source + ' source: ' + id);
             return false;
         }
         // A local measurement is never replaced by a hub value; a disagreement is the hub's
         // to explain, and it is reported rather than acted on.
         if (source === 'hub' && this._btcChainIdSource === 'local') {
-            if (next !== this._expectedBtcChainId) this._noteForeignHubChain(next);
+            if (next !== this._expectedBtcChainId) this.noteForeignHubChain(next);
             return false;
         }
         if (next === this._expectedBtcChainId) {
@@ -2582,9 +2587,9 @@ class HubDbSync {
         this._expectedBtcChainId = next;
         this._btcChainIdSource   = source;
         this._chainIdProbedIds.clear();
-        console.log('HubDbSync: cross-chain rows are fenced to Bitcoin chain ' + next + ' (block 1, ' +
+        getLogger().info('HubDbSync: cross-chain rows are fenced to Bitcoin chain ' + next + ' (block 1, ' +
             (source === 'local' ? 'read from this node\'s own chain' : 'as advertised by the hub') + ')');
-        await this._purgeForeignChainIdRows(previous);
+        await this.purgeForeignChainIdRows(previous);
         return true;
     }
 
@@ -2592,10 +2597,10 @@ class HubDbSync {
     // process: it is an operator-visible misconfiguration (or a hub that has not caught up
     // with a venue re-genesis), not a per-row event, and the local measurement stands
     // either way, so every row naming the hub's chain is refused.
-    _noteForeignHubChain(hubChainId) {
+    noteForeignHubChain(hubChainId) {
         if (this._foreignHubChainNoted) return;
         this._foreignHubChainNoted = true;
-        console.warn('HubDbSync: the hub follows a different chain (it advertises btc_chain_id ' + hubChainId +
+        getLogger().warn('HubDbSync: the hub follows a different chain (it advertises btc_chain_id ' + hubChainId +
             ', this node indexes ' + this._expectedBtcChainId + '); its cross-chain rows for that chain are refused');
     }
 
@@ -2611,7 +2616,7 @@ class HubDbSync {
     // expectation, with no dependence on what one snapshot response happened to contain. A
     // NULL is not such a property - it means "written before the column existed" - so NULL
     // rows are always left in place.
-    async _purgeForeignChainIdRows(previous) {
+    async purgeForeignChainIdRows(previous) {
         let expected = this._expectedBtcChainId;
         if (!expected) return 0;
         let total = 0, refreshMatches = false, refreshCalls = false, refreshBridge = false, refreshPolicy = false;
@@ -2621,7 +2626,7 @@ class HubDbSync {
                 result = await this.hubDb.doQuery(
                     'DELETE FROM ' + table + ' WHERE btc_chain_id IS NOT NULL AND btc_chain_id <> ?', [expected]);
             } catch (e) {
-                console.warn('HubDbSync: could not clear foreign-chain rows from ' + table + ':', e);
+                getLogger().warn('HubDbSync: could not clear foreign-chain rows from ' + table + ':', e);
                 continue;
             }
             // doQuery collapses a non-transactional query error into [], which carries no
@@ -2630,13 +2635,13 @@ class HubDbSync {
             // reach again, which is the silent state this method exists to end.
             let removed = Number(result && result.affectedRows);
             if (!Number.isFinite(removed)) {
-                console.warn('HubDbSync: foreign-chain purge of ' + table + ' reported no result; ' +
+                getLogger().warn('HubDbSync: foreign-chain purge of ' + table + ' reported no result; ' +
                     'if this mirror keeps holding rows from a dead chain, this read is where to look');
                 continue;
             }
             if (removed <= 0) continue;
             total += removed;
-            console.warn('HubDbSync: purged ' + removed + ' ' + table + ' row(s) from ' +
+            getLogger().warn('HubDbSync: purged ' + removed + ' ' + table + ' row(s) from ' +
                 (previous ? ('chain ' + previous) : 'another chain'));
             if (table === 'cross_chain_matches') refreshMatches = true;
             if (table === 'cross_chain_calls')   refreshCalls   = true;
@@ -2647,13 +2652,13 @@ class HubDbSync {
         // purge that removed the row holding the maximum must re-read it exactly as a
         // retraction does; a cached scalar left high opens a barrier over rows that are gone.
         try {
-            if (refreshMatches) await this._refreshMatchSyncTimestamp();
-            if (refreshCalls)   await this._refreshCallSyncTimestamp();
-            if (refreshBridge)  await this._refreshBridgeSyncTimestamp();
-            if (refreshPolicy)  await this._refreshPolicySyncTimestamp();
-            if (refreshMatches || refreshCalls) await this._releaseSnapshotWaiters();
+            if (refreshMatches) await this.refreshMatchSyncTimestamp();
+            if (refreshCalls)   await this.refreshCallSyncTimestamp();
+            if (refreshBridge)  await this.refreshBridgeSyncTimestamp();
+            if (refreshPolicy)  await this.refreshPolicySyncTimestamp();
+            if (refreshMatches || refreshCalls) await this.releaseSnapshotWaiters();
         } catch (e) {
-            console.warn('HubDbSync: could not refresh the sync barriers after a foreign-chain purge:', e);
+            getLogger().warn('HubDbSync: could not refresh the sync barriers after a foreign-chain purge:', e);
         }
         return total;
     }
@@ -2669,7 +2674,7 @@ class HubDbSync {
     // drain continues, because a relic is not a hole in the mirror - it is a row the mirror
     // is supposed to be without - and failing the page closed here would wedge every
     // settlement barrier forever against a hub database nobody purged.
-    _refuseForeignChainRow(table, row) {
+    refuseForeignChainRow(table, row) {
         if (CROSS_CHAIN_TABLES.indexOf(table) === -1) return false;
         let expected = this._expectedBtcChainId;
         if (!expected) return false;
@@ -2685,7 +2690,7 @@ class HubDbSync {
     // The authoritative-stake database, resolved lazily. Capability stakes are indexed
     // into the INDEXER db; the mirror db only holds the hub's copy of them, which is the
     // very thing under test here, so re-deriving against it would be self-certification.
-    _authoritativeStakeDb() {
+    authoritativeStakeDb() {
         if (this.authoritativeDb) return this.authoritativeDb;
         let parent = this.hubDb && this.hubDb.indexer;
         return (parent && parent.indexerDb) ? parent.indexerDb : null;
@@ -2711,8 +2716,8 @@ class HubDbSync {
     //   - Every non-refusal (unreached block, unconfigured capability, truncated set,
     //     a read that threw, no authoritative db wired) applies the row. An unjudgeable
     //     row must never become a permanent mirror hole.
-    async _refuseUnprovenCapabilitySnapshot(row) {
-        let db = this._authoritativeStakeDb();
+    async refuseUnprovenCapabilitySnapshot(row) {
+        let db = this.authoritativeStakeDb();
         // The explorer's vendored display mirror carries no such db and no such method.
         if (!db || typeof db.verifyCapabilitySnapshotRow !== 'function') return false;
         let verdict;
@@ -2720,12 +2725,12 @@ class HubDbSync {
             verdict = await db.verifyCapabilitySnapshotRow(row);
         } catch (e) {
             // A failed re-derivation is not evidence of a forgery.
-            console.warn('HubDbSync: capability_snapshots re-derivation failed, applying row unchecked: ' +
+            getLogger().warn('HubDbSync: capability_snapshots re-derivation failed, applying row unchecked: ' +
                 (e && e.message ? e.message : e));
             return false;
         }
         if (!verdict || verdict.verdict !== 'refused') return false;
-        console.error('HubDbSync: REFUSED a capability_snapshots row this node can disprove from its own ' +
+        getLogger().error('HubDbSync: REFUSED a capability_snapshots row this node can disprove from its own ' +
             'stakes - ' + verdict.reason + '. The hub is serving a validator set that contradicts the chain; ' +
             'off-BTC nodes cannot see this and will have mirrored it.');
         return true;
@@ -2734,11 +2739,11 @@ class HubDbSync {
     // Report the refusals counted for `table` since the last report, one line per foreign
     // chain, and clear them. Called at the end of that table's drain (so a bootstrap that
     // refused a whole relic table says so once, with the count) and after a refused live row.
-    _reportRefusedChainRows(table) {
+    reportRefusedChainRows(table) {
         for (let [key, entry] of Array.from(this._refusedChainIdRows.entries())) {
             if (entry.table !== table) continue;
             this._refusedChainIdRows.delete(key);
-            console.warn('HubDbSync: refused ' + entry.count + ' ' + entry.table + ' row(s) carrying btc_chain_id ' +
+            getLogger().warn('HubDbSync: refused ' + entry.count + ' ' + entry.table + ' row(s) carrying btc_chain_id ' +
                 entry.hash + ' (this chain is ' + this._expectedBtcChainId + ')');
         }
     }
@@ -2752,13 +2757,13 @@ class HubDbSync {
     // row's id, that is the hub restating its own identity, and the mirror follows it (which
     // purges the previous chain's rows before this row applies). A 'local' expectation is
     // this node's own measurement of the chain it indexes and is never adopted away from.
-    async _maybeAdoptHubChainId(table, row) {
+    async maybeAdoptHubChainId(table, row) {
         if (CROSS_CHAIN_TABLES.indexOf(table) === -1) return;
         let expected = this._expectedBtcChainId;
         if (!expected) return;
         let rowChainId = (row && typeof row.btc_chain_id === 'string') ? row.btc_chain_id.trim().toLowerCase() : null;
         if (!rowChainId || rowChainId === expected) return;
-        if (this._btcChainIdSource !== 'hub') { this._noteForeignHubChain(rowChainId); return; }
+        if (this._btcChainIdSource !== 'hub') { this.noteForeignHubChain(rowChainId); return; }
         if (this._chainIdProbedIds.has(rowChainId)) return;  // asked once for this id already
         this._chainIdProbedIds.add(rowChainId);
         let envelope;
@@ -2800,14 +2805,14 @@ class HubDbSync {
     //     documented retracted-row carve-out);
     //   - a mistaken mark is fail-CLOSED (a match stops settling), where a mistaken delete
     //     would also lose the signed row itself.
-    async _reconcileRetractedMatches(servedMatchIds, maxServedId) {
+    async reconcileRetractedMatches(servedMatchIds, maxServedId) {
         if (!Number.isFinite(maxServedId) || maxServedId <= 0) return;   // nothing served, nothing to judge
         let locals;
         try {
             locals = await this.hubDb.doQuery(
                 "SELECT id, match_id FROM cross_chain_matches WHERE id <= ? AND status = 'finalized'", [maxServedId]);
         } catch (e) {
-            console.warn('HubDbSync: match retraction reconciliation skipped (read failed):', e);
+            getLogger().warn('HubDbSync: match retraction reconciliation skipped (read failed):', e);
             return;
         }
         let stale = (locals || []).filter(r => !servedMatchIds.has(String(r.match_id))).map(r => Number(r.id));
@@ -2820,13 +2825,13 @@ class HubDbSync {
                     "UPDATE cross_chain_matches SET status = 'retracted' WHERE id IN (" +
                     chunk.map(() => '?').join(',') + ") AND status = 'finalized'", chunk);
             } catch (e) {
-                console.warn('HubDbSync: match retraction reconciliation failed for a chunk:', e);
+                getLogger().warn('HubDbSync: match retraction reconciliation failed for a chunk:', e);
                 return;
             }
         }
-        console.warn('HubDbSync: reconciled ' + stale.length + ' cross_chain_matches row(s) the hub has retracted ' +
+        getLogger().warn('HubDbSync: reconciled ' + stale.length + ' cross_chain_matches row(s) the hub has retracted ' +
                      'but this mirror still held as finalized (missed retraction converged, #3211)');
-        await this._refreshMatchSyncTimestamp();
+        await this.refreshMatchSyncTimestamp();
     }
 
     // Clear finalized price rounds this hub does not hold.
@@ -2835,7 +2840,7 @@ class HubDbSync {
     // re-genesised testnet - leaves every round the previous hub served sitting in the
     // mirror. price_snapshots is the one mirrored table with NO defence against that.
     // It carries no `network` column, so _mirrorNetworkScope returns null and both
-    // _purgeForeignNetworkRows and _purgeRebuiltSourceRows are unreachable for it; and
+    // _purgeForeignNetworkRows and purgeRebuiltSourceRows are unreachable for it; and
     // being a FULL_REPAGE table its cursor is forced to 0, so the id-ceiling fence that
     // detects a retired id space never runs. The re-page then converges only the keys the
     // two hubs SHARE, because _applyRow's upsert is keyed on (round_number, coin_pair):
@@ -2859,7 +2864,7 @@ class HubDbSync {
     // row the hub does not have: either a round it never produced, or one it holds as
     // skipped/disputed, which the status-gated upsert deliberately refuses to downgrade.
     // Neither is recoverable by any later delivery, exactly like the retraction
-    // _reconcileRetractedMatches converges.
+    // reconcileRetractedMatches converges.
     //
     // Delete rather than mark: unlike a match, a price round has no status consensus
     // treats as a tombstone (a 'skipped' row IS a legitimate hub row), and the hub's own
@@ -2874,7 +2879,7 @@ class HubDbSync {
             // holds, so no round above the highest it served exists there. This still
             // clears the shape that poisons the ORDER BY round_number DESC readers, and
             // leaves any lower-numbered foreign round for the operator.
-            console.warn('HubDbSync: price round reconciliation exceeded its key cap (' +
+            getLogger().warn('HubDbSync: price round reconciliation exceeded its key cap (' +
                 PRICE_FINALIZED_KEY_CAP + '); falling back to the round-ceiling rule ' +
                 '(rounds above ' + maxServedRound + ' only)');
             try {
@@ -2882,7 +2887,7 @@ class HubDbSync {
                     "SELECT id FROM price_snapshots WHERE status = 'finalized' AND round_number > ?",
                     [maxServedRound]);
             } catch (e) {
-                console.warn('HubDbSync: price round reconciliation skipped (read failed):', e);
+                getLogger().warn('HubDbSync: price round reconciliation skipped (read failed):', e);
                 return;
             }
             stale = (locals || []).map(r => Number(r.id)).filter(Number.isFinite);
@@ -2891,7 +2896,7 @@ class HubDbSync {
                 locals = await this.hubDb.doQuery(
                     "SELECT id, round_number, coin_pair FROM price_snapshots WHERE status = 'finalized'");
             } catch (e) {
-                console.warn('HubDbSync: price round reconciliation skipped (read failed):', e);
+                getLogger().warn('HubDbSync: price round reconciliation skipped (read failed):', e);
                 return;
             }
             locals = locals || [];
@@ -2907,7 +2912,7 @@ class HubDbSync {
             // mirror. Refuse, loudly: a stalled reconciliation is recoverable, a wiped
             // price history under a mirror the operator believes is converging is not.
             if (servedKeys.size > 0 && locals.length > 0 && stale.length === locals.length) {
-                console.error('HubDbSync: price round reconciliation refused: the hub served ' +
+                getLogger().error('HubDbSync: price round reconciliation refused: the hub served ' +
                     servedKeys.size + ' finalized round(s) but NONE of the ' + locals.length +
                     ' local finalized row(s) matched a served key. That is a key-derivation ' +
                     'mismatch, not contamination; leaving the mirror untouched.');
@@ -2922,11 +2927,11 @@ class HubDbSync {
                 await this.hubDb.doQuery(
                     'DELETE FROM price_snapshots WHERE id IN (' + chunk.map(() => '?').join(',') + ')', chunk);
             } catch (e) {
-                console.warn('HubDbSync: price round reconciliation failed for a chunk:', e);
+                getLogger().warn('HubDbSync: price round reconciliation failed for a chunk:', e);
                 return;
             }
         }
-        console.warn('HubDbSync: removed ' + stale.length + ' finalized price_snapshots row(s) this hub does ' +
+        getLogger().warn('HubDbSync: removed ' + stale.length + ' finalized price_snapshots row(s) this hub does ' +
             'not hold (a repointed or rebuilt hub leaves the previous one\'s rounds behind, and the newest ' +
             'round_number wins every price read); the mirror now holds only what this hub serves');
         await this._refreshPriceSyncHeight();
@@ -2972,11 +2977,11 @@ class HubDbSync {
     // Delete rather than mark: presence of the row IS the qualification statement (there is
     // no status column and no tombstone consensus honours), and the hub's own row for that
     // key re-arrives on the next drain if it exists.
-    async _reconcileForeignCapabilitySnapshots(servedKeys, keysComplete, maxServedBlock, preDrainMaxId) {
+    async reconcileForeignCapabilitySnapshots(servedKeys, keysComplete, maxServedBlock, preDrainMaxId) {
         if (!servedKeys) return;
         preDrainMaxId = Number(preDrainMaxId);
         // Nothing predates this drain: an empty mirror has nothing to reconcile, and a
-        // read that failed reports 0 (see _localMaxId), where deleting on a guess is the
+        // read that failed reports 0 (see localMaxId), where deleting on a guess is the
         // one outcome worse than waiting for the next drain.
         if (!Number.isFinite(preDrainMaxId) || preDrainMaxId <= 0) return;
         let stale;
@@ -2986,7 +2991,7 @@ class HubDbSync {
             // no boundary above the highest it served exists there. That still clears the
             // shape this pass exists for (a foreign chain's height sits ABOVE anything a
             // younger network has reached) and leaves any lower foreign boundary alone.
-            console.warn('HubDbSync: capability snapshot reconciliation exceeded its key cap (' +
+            getLogger().warn('HubDbSync: capability snapshot reconciliation exceeded its key cap (' +
                 CAPABILITY_SNAPSHOT_KEY_CAP + '); falling back to the snapshot_block-ceiling rule ' +
                 '(boundaries above ' + maxServedBlock + ' only)');
             let rows;
@@ -2995,7 +3000,7 @@ class HubDbSync {
                     'SELECT id FROM capability_snapshots WHERE id <= ? AND snapshot_block > ?',
                     [preDrainMaxId, maxServedBlock]);
             } catch (e) {
-                console.warn('HubDbSync: capability snapshot reconciliation skipped (read failed):', e);
+                getLogger().warn('HubDbSync: capability snapshot reconciliation skipped (read failed):', e);
                 return;
             }
             stale = (rows || []).map(r => Number(r.id)).filter(Number.isFinite);
@@ -3010,13 +3015,13 @@ class HubDbSync {
                 locals = await this.hubDb.doQuery(
                     'SELECT id, snapshot_block, capability, signing_pubkey, source FROM capability_snapshots');
             } catch (e) {
-                console.warn('HubDbSync: capability snapshot reconciliation skipped (read failed):', e);
+                getLogger().warn('HubDbSync: capability snapshot reconciliation skipped (read failed):', e);
                 return;
             }
             locals = locals || [];
             let matched = locals.filter(r => servedKeys.has(capabilitySnapshotKey(r))).length;
             if (servedKeys.size > 0 && locals.length > 0 && matched === 0) {
-                console.error('HubDbSync: capability snapshot reconciliation refused: the hub served ' +
+                getLogger().error('HubDbSync: capability snapshot reconciliation refused: the hub served ' +
                     servedKeys.size + ' row(s) but NONE of the ' + locals.length + ' local row(s) matched ' +
                     'a served key. That is a key-derivation mismatch, not contamination; leaving the ' +
                     'mirror untouched.');
@@ -3035,11 +3040,11 @@ class HubDbSync {
                 await this.hubDb.doQuery(
                     'DELETE FROM capability_snapshots WHERE id IN (' + chunk.map(() => '?').join(',') + ')', chunk);
             } catch (e) {
-                console.warn('HubDbSync: capability snapshot reconciliation failed for a chunk:', e);
+                getLogger().warn('HubDbSync: capability snapshot reconciliation failed for a chunk:', e);
                 return;
             }
         }
-        console.warn('HubDbSync: removed ' + stale.length + ' capability_snapshots row(s) this hub does not ' +
+        getLogger().warn('HubDbSync: removed ' + stale.length + ' capability_snapshots row(s) this hub does not ' +
             'hold (a repointed or rebuilt hub leaves the previous one\'s validator sets behind, and every ' +
             'read of this table keys on snapshot_block); the mirror now holds only what this hub serves');
     }
@@ -3052,14 +3057,14 @@ class HubDbSync {
     // reconnect edge clears those waiters immediately from data already local.
     // Cheap (MAX()/MAX-timestamp reads) and idempotent; each refresh is internally
     // guarded so one failure can't abort the others.
-    async _refreshAllSyncHeights() {
+    async refreshAllSyncHeights() {
         try { await this._refreshPriceSyncHeight(); }     catch (e) { /* internally guarded */ }
-        try { await this._refreshOracleSyncTimestamp(); } catch (e) { /* internally guarded */ }
-        try { await this._refreshMatchSyncTimestamp(); }  catch (e) { /* internally guarded */ }
-        try { await this._refreshCallSyncTimestamp(); }   catch (e) { /* internally guarded */ }
-        try { await this._refreshBridgeSyncTimestamp(); } catch (e) { /* internally guarded */ }
-        try { await this._refreshPolicySyncTimestamp(); } catch (e) { /* internally guarded */ }
-        try { await this._releaseSnapshotWaiters(); }     catch (e) { /* internally guarded */ }
+        try { await this.refreshOracleSyncTimestamp(); } catch (e) { /* internally guarded */ }
+        try { await this.refreshMatchSyncTimestamp(); }  catch (e) { /* internally guarded */ }
+        try { await this.refreshCallSyncTimestamp(); }   catch (e) { /* internally guarded */ }
+        try { await this.refreshBridgeSyncTimestamp(); } catch (e) { /* internally guarded */ }
+        try { await this.refreshPolicySyncTimestamp(); } catch (e) { /* internally guarded */ }
+        try { await this.releaseSnapshotWaiters(); }     catch (e) { /* internally guarded */ }
     }
 
     // Recompute the highest finalized price block present in the local price_snapshots
@@ -3092,7 +3097,7 @@ class HubDbSync {
         this.priceSyncHeight       = height;
         this.priceSyncMaxTimestamp = maxTs;
         this.priceBootstrapped     = true;                  // mirror read successfully at least once
-        this._releasePriceWaiters();
+        this.releasePriceWaiters();
         this._releasePriceTimeWaiters();
     }
 
@@ -3103,10 +3108,10 @@ class HubDbSync {
     //      live rows are buffered until the bootstrap drain completes, so the
     //      local mirror is always a CONTIGUOUS run of the hub's table ending at its
     //      newest row; a fresh round streamed mid-drain can no longer raise the
-    //      height over still-missing earlier rounds. See _bufferPriceEvent, #2422).
+    //      height over still-missing earlier rounds. See bufferPriceEvent, #2422).
     //      Under the bootstrap bound that run starts at the mirror floor
     //      rather than at the hub's first row, which is sound for exactly the blocks
-    //      the floor was derived from and no others - hence _notePriceMirrorFloor,
+    //      the floor was derived from and no others - hence notePriceMirrorFloor,
     //      which vetoes this case outright once a block below the floor turns up.
     //   2. The hub's stream watermark has passed this block's time plus a grace
     //      margin covering PBFT finalization lag (the hub has told us everything
@@ -3132,14 +3137,14 @@ class HubDbSync {
         if (this._priceMirrorRefloor) return false;
         if (this.priceSyncHeight >= blockHeight) return true;
         if (this.admissionActiveAt(blockHeight))
-            return this.priceBootstrapped && this._heightSatisfied('price_snapshots', blockHeight);
+            return this.priceBootstrapped && this.heightSatisfied('price_snapshots', blockHeight);
         if (this.priceBootstrapped && Number.isFinite(blockTime) &&
             this.streamWatermark >= blockTime + this.priceWatermarkGraceS) return true;
         return false;
     }
 
     // Resolve any pending waiters whose target is now covered.
-    _releasePriceWaiters() {
+    releasePriceWaiters() {
         if (this._priceWaiters.length === 0) return;
         let stillWaiting = [];
         for (let w of this._priceWaiters) {
@@ -3172,12 +3177,12 @@ class HubDbSync {
         // the eligible set is empty on every node and there is nothing to wait for: the
         // barrier resolves rather than paying its full timeout on a block no round can
         // ever cover (the chain-only replay cost, measured 2026-09-09). This precedes
-        // _notePriceMirrorFloor deliberately - such a block reads no round at all, so it
+        // notePriceMirrorFloor deliberately - such a block reads no round at all, so it
         // is not evidence that a bounded mirror is short, and tripping a full re-mirror on
         // it is part of the same replay cost.
         if (isPreBatchEraFloor(blockTime, this._priceEraFloorS)) return Promise.resolve(this.priceSyncHeight);
         // Before judging the block, judge the mirror against the block.
-        this._notePriceMirrorFloor(blockTime);
+        this.notePriceMirrorFloor(blockTime);
         if (this._priceSyncSatisfied(blockHeight, blockTime)) return Promise.resolve(this.priceSyncHeight);
 
         let ms = parseInt(timeoutMs);
@@ -3193,7 +3198,7 @@ class HubDbSync {
                 // (BTC mainnet 2026-06-13: in-memory stuck at the restart block while
                 // price_snapshots had caught up; only a process restart cleared it).
                 // Re-read the DB here; _refreshPriceSyncHeight resolves+clears this
-                // waiter via _releasePriceWaiters if the mirror has since caught up.
+                // waiter via releasePriceWaiters if the mirror has since caught up.
                 try { await this._refreshPriceSyncHeight(); } catch (e) { /* fall through to reject */ }
                 if (this._priceSyncSatisfied(blockHeight, blockTime)) return;   // already resolved by the refresh
                 this._priceWaiters = this._priceWaiters.filter(w => w !== waiter);
@@ -3201,7 +3206,7 @@ class HubDbSync {
                                  blockHeight + ' (price mirror at ' + this.priceSyncHeight +
                                  ', stream watermark at ' + this.streamWatermark + ')' +
                                  (this.admissionActiveAt(blockHeight)
-                                     ? this._heightTail('price_snapshots', blockHeight) : '')));
+                                     ? this.heightTail('price_snapshots', blockHeight) : '')));
             }, ms);
             this._priceWaiters.push(waiter);
         });
@@ -3231,7 +3236,7 @@ class HubDbSync {
         // `return true` would be a fail-OPEN on the one axis that may never have one.
         if (this.admissionActiveAt(blockHeight))
             return !this._priceMirrorRefloor && this.priceBootstrapped &&
-                   this._heightSatisfied('price_snapshots', blockHeight);
+                   this.heightSatisfied('price_snapshots', blockHeight);
         if (!Number.isFinite(blockTime)) return true;       // nothing to gate on
         if (this._priceMirrorRefloor)    return false;      // see _priceSyncSatisfied
         if (this.priceBootstrapped && this.priceSyncMaxTimestamp >= blockTime) return true;
@@ -3273,7 +3278,7 @@ class HubDbSync {
         if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.priceSyncMaxTimestamp);
         // PRE-BATCH ERA, same escape and same ordering as the height barrier above.
         if (isPreBatchEraFloor(blockTime, this._priceEraFloorS)) return Promise.resolve(this.priceSyncMaxTimestamp);
-        this._notePriceMirrorFloor(blockTime);            // same check as the height barrier
+        this.notePriceMirrorFloor(blockTime);            // same check as the height barrier
         if (this._priceTimeSyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.priceSyncMaxTimestamp);
 
         let ms = parseInt(timeoutMs);
@@ -3290,7 +3295,7 @@ class HubDbSync {
                                  blockTime + ' (mirror max round timestamp ' + this.priceSyncMaxTimestamp +
                                  ', stream watermark at ' + this.streamWatermark + ')' +
                                  (this.admissionActiveAt(blockHeight)
-                                     ? this._heightTail('price_snapshots', blockHeight) : '')));
+                                     ? this.heightTail('price_snapshots', blockHeight) : '')));
             }, ms);
             this._priceTimeWaiters.push(waiter);
         });
@@ -3301,7 +3306,7 @@ class HubDbSync {
     // table (bootstrap, poll, live insert, reorg retraction). A NULL max (empty mirror) is a
     // valid result; it means this deployment has no oracle prices, which oracleBootstrapped
     // distinguishes from "not synced yet".
-    async _refreshOracleSyncTimestamp(armBootstrap = this._bootstrapDrained) {
+    async refreshOracleSyncTimestamp(armBootstrap = this._bootstrapDrained) {
         let ts = null;
         try {
             let rows = await this.hubDb.doQuery('SELECT MAX(effective_at) AS ts FROM oracle_prices');
@@ -3311,12 +3316,12 @@ class HubDbSync {
         }
         this.oracleSyncTimestamp = ts;                      // number, or null when the mirror holds no oracle prices
         // Arm the empty-mirror barrier flag only when a full bootstrap drain is in
-        // effect. A refresh from the reconnect edge (_refreshAllSyncHeights, before
+        // effect. A refresh from the reconnect edge (refreshAllSyncHeights, before
         // re-bootstrap) or a single live row arriving mid-partial-bootstrap defaults
         // armBootstrap to _bootstrapDrained (false then), so it cannot arm the NULL
-        // fast path in _oracleSyncSatisfied against a holed mirror and fork (#1788).
+        // fast path in oracleSyncSatisfied against a holed mirror and fork (#1788).
         if (armBootstrap) this.oracleBootstrapped = true;   // read at least once AND fully drained
-        this._releaseOracleWaiters();
+        this.releaseOracleWaiters();
     }
 
     // Whether the local oracle mirror is caught up enough to safely settle a block at blockTime.
@@ -3329,10 +3334,10 @@ class HubDbSync {
     //      including the 24 h lock window, and admission is what the barrier certifies).
     //      The empty-mirror case above survives unchanged, because it is a content escape
     //      and not a clock: a mirror holding no row at all holds none whatever arrives next.
-    _oracleSyncSatisfied(blockTime, blockHeight = null) {
+    oracleSyncSatisfied(blockTime, blockHeight = null) {
         if (this.oracleBootstrapped && this.oracleSyncTimestamp === null) return true;
         if (this.admissionActiveAt(blockHeight))
-            return this.oracleBootstrapped && this._heightSatisfied('oracle_prices', blockHeight);
+            return this.oracleBootstrapped && this.heightSatisfied('oracle_prices', blockHeight);
         if (this.oracleSyncTimestamp !== null && this.oracleSyncTimestamp >= blockTime) return true;
         // Stream watermark: the hub has sent us every row it produced through
         // blockTime + grace, so the set of prices effective at or before this
@@ -3344,11 +3349,11 @@ class HubDbSync {
     }
 
     // Resolve any pending waiters whose target time is now covered.
-    _releaseOracleWaiters() {
+    releaseOracleWaiters() {
         if (this._oracleWaiters.length === 0) return;
         let stillWaiting = [];
         for (let w of this._oracleWaiters) {
-            if (this._oracleSyncSatisfied(w.ts, w.height)) {
+            if (this.oracleSyncSatisfied(w.ts, w.height)) {
                 clearTimeout(w.timer);
                 w.resolve(this.oracleSyncTimestamp);
             } else {
@@ -3371,7 +3376,7 @@ class HubDbSync {
     waitForOracleSyncTimestamp(blockTime, timeoutMs, blockHeight = null) {
         blockTime = Number(blockTime);
         if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.oracleSyncTimestamp);
-        if (this._oracleSyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.oracleSyncTimestamp);
+        if (this.oracleSyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.oracleSyncTimestamp);
 
         let ms = parseInt(timeoutMs);
         if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
@@ -3380,18 +3385,18 @@ class HubDbSync {
             waiter.timer = setTimeout(async () => {
                 // Self-heal before giving up, same as waitForPriceSyncHeight: the in-memory
                 // oracleSyncTimestamp only advances when a stream/bootstrap event drives
-                // _refreshOracleSyncTimestamp, so a missed refresh on a stream/reconnect
+                // refreshOracleSyncTimestamp, so a missed refresh on a stream/reconnect
                 // edge can leave it stale behind a local mirror that is actually current,
                 // and then every block deferred the full timeout even though the data was
-                // present. Re-read the DB here; _refreshOracleSyncTimestamp resolves+clears
-                // this waiter via _releaseOracleWaiters if the mirror has since caught up.
-                try { await this._refreshOracleSyncTimestamp(); } catch (e) { /* fall through to reject */ }
-                if (this._oracleSyncSatisfied(blockTime, blockHeight)) return;   // already resolved by the refresh
+                // present. Re-read the DB here; refreshOracleSyncTimestamp resolves+clears
+                // this waiter via releaseOracleWaiters if the mirror has since caught up.
+                try { await this.refreshOracleSyncTimestamp(); } catch (e) { /* fall through to reject */ }
+                if (this.oracleSyncSatisfied(blockTime, blockHeight)) return;   // already resolved by the refresh
                 this._oracleWaiters = this._oracleWaiters.filter(w => w !== waiter);
                 reject(new Error('oracle sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
                                  blockTime + ' (oracle mirror at ' + this.oracleSyncTimestamp + ')' +
                                  (this.admissionActiveAt(blockHeight)
-                                     ? this._heightTail('oracle_prices', blockHeight) : '')));
+                                     ? this.heightTail('oracle_prices', blockHeight) : '')));
             }, ms);
             this._oracleWaiters.push(waiter);
         });
@@ -3416,7 +3421,7 @@ class HubDbSync {
     // the ODKU per row against what the statement has already written, and the
     // skipped -> finalized upgrade is keyed on VALUES(status), so a chunk holding
     // both states for one round converges to the same row either order.
-    async _applyRowsBatched(table, rows) {
+    async applyRowsBatched(table, rows) {
         // The chain-identity fence lives in _applyRow, the single funnel every applied row
         // passes through. A batch has no per-row verdict, so a CROSS_CHAIN_TABLES row must
         // never travel this path: declining here keeps the three tables on the per-row path
@@ -3429,7 +3434,7 @@ class HubDbSync {
 
         let allowed;
         try {
-            allowed = await this._localColumns(table);
+            allowed = await this.localColumns(table);
         } catch (e) {
             return false;                                    // not ready: the per-row path reports it
         }
@@ -3442,7 +3447,7 @@ class HubDbSync {
         for (let row of rows) {
             let rowCols = Object.keys(row).filter(c => allowed.has(c));
             if (rowCols.join('') !== signature) return false;
-            for (let c of cols) args.push(coerceMirrorValue(row[c], this._cachedColumnType(table, c)));
+            for (let c of cols) args.push(coerceMirrorValue(row[c], this.cachedColumnType(table, c)));
         }
 
         let result;
@@ -3459,7 +3464,7 @@ class HubDbSync {
         if (!result || Array.isArray(result)) {
             if (!this._batchApplyWarned) {
                 this._batchApplyWarned = true;
-                console.warn('HubDbSync: batched ' + table + ' upsert did not land; falling back to ' +
+                getLogger().warn('HubDbSync: batched ' + table + ' upsert did not land; falling back to ' +
                     'per-row applies for this drain (set HUB_SYNC_BATCH_APPLY=false to disable batching)');
             }
             return false;
@@ -3482,14 +3487,14 @@ class HubDbSync {
         // per-row, batch fallback, live event, buffered replay). Returns false so the
         // bootstrap's accounting can tell a refused relic from an applied row; the caller
         // moves its cursor past it either way, since a refusal is not an apply error.
-        if (this._refuseForeignChainRow(table, row)) return false;
+        if (this.refuseForeignChainRow(table, row)) return false;
         // Stake re-derivation fence for capability_snapshots, on the SAME footing as the
         // chain-identity fence above and for the same reason: this is the one mirrored
         // table that arrives with no authentication at all, so a hub that serves a forged
         // validator set is otherwise mirrored verbatim. A BTC node can prove the claim
         // against its own stakes; every other verdict applies the row unchanged.
-        if (table === 'capability_snapshots' && await this._refuseUnprovenCapabilitySnapshot(row)) return false;
-        let allowed = await this._localColumns(table);
+        if (table === 'capability_snapshots' && await this.refuseUnprovenCapabilitySnapshot(row)) return false;
+        let allowed = await this.localColumns(table);
         let cols = Object.keys(row).filter(c => allowed.has(c));
         // capability_snapshots is a NATURAL-KEY mirror (uq_cap_snap: snapshot_block,
         // capability, signing_pubkey, source; no reader keys on id). `source` is the
@@ -3517,7 +3522,7 @@ class HubDbSync {
         if (table === 'capability_snapshots' || table === 'attestation_responses') cols = cols.filter(c => c !== 'id');
         if (cols.length === 0) return;
         let placeholders = cols.map(() => '?').join(', ');
-        let args = cols.map(c => coerceMirrorValue(row[c], this._cachedColumnType(table, c)));
+        let args = cols.map(c => coerceMirrorValue(row[c], this.cachedColumnType(table, c)));
 
         // price_snapshots needs an in-place upgrade path, not plain INSERT IGNORE.
         // It carries UNIQUE (round_number, coin_pair). The hub writes a 'skipped'
@@ -3731,7 +3736,7 @@ class HubDbSync {
             let query = 'INSERT INTO attestation_responses (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
                       + ' ON DUPLICATE KEY UPDATE batch_action_index = COALESCE(batch_action_index, VALUES(batch_action_index))';
             await applyMirrorWrite(this.hubDb, query, args);
-            if (row.batch_action_index != null) await this._linkAppliedResponseToBatch(row);
+            if (row.batch_action_index != null) await this.linkAppliedResponseToBatch(row);
             return;
         }
 
@@ -3757,7 +3762,7 @@ class HubDbSync {
     // a constructor option, so this file stays the canonical copy other services vendor: the
     // explorer runs this same client against a pool that has no indexer and no attests table,
     // and simply skips the link.
-    async _linkAppliedResponseToBatch(row) {
+    async linkAppliedResponseToBatch(row) {
         let db = this.hubDb && this.hubDb.indexer && this.hubDb.indexer.indexerDb;
         if (!db || typeof db.setAttestationResponseBatchIndex !== 'function') return;
         try {
@@ -3772,7 +3777,7 @@ class HubDbSync {
             if (linked == null) return;
             await db.setAttestationResponseBatchIndex(row.request_id, linked);
         } catch (e) {
-            console.warn('HubDbSync: could not link attestation response ' +
+            getLogger().warn('HubDbSync: could not link attestation response ' +
                 String(row.request_id) + ' to its on-chain batch:', e);
         }
     }
@@ -3788,7 +3793,7 @@ class HubDbSync {
     // minutes per table is negligible. We do NOT invalidate eagerly on a dropped
     // column because the hub legitimately serves columns the mirror omits by
     // design (see _applyRow), which would otherwise trigger a re-fetch storm.
-    async _localColumns(table) {
+    async localColumns(table) {
         if (!this._localColumnCache) this._localColumnCache = {};
         let entry = this._localColumnCache[table];
         if (!entry || (Date.now() - entry.fetchedAt) > LOCAL_COLUMN_CACHE_TTL_MS) {
@@ -3822,9 +3827,9 @@ class HubDbSync {
     // Returns '' (read as "unknown") when the table or column is absent from the
     // cache or the driver served no Type, which keeps the coercion's legacy
     // shape-based fallback in play. Never issues a query: _applyRow awaits
-    // _localColumns for the same table first, so the entry is primed by then,
-    // and a test that stubs _localColumns simply lands on the fallback.
-    _cachedColumnType(table, col) {
+    // localColumns for the same table first, so the entry is primed by then,
+    // and a test that stubs localColumns simply lands on the fallback.
+    cachedColumnType(table, col) {
         let entry = this._localColumnCache && this._localColumnCache[table];
         if (!entry || !entry.types) return '';
         return entry.types.get(col) || '';
@@ -3868,7 +3873,7 @@ class HubDbSync {
                            event.table === 'bridge_transfers');
         let ownChain = !!(this.coin && event.source_chain === this.coin && this.getOwnRollbackGeneration);
         if ((quorumClass || ownChain) && !fenced) {
-            console.error('HubDbSync: refusing UNFENCED retraction of ' + event.table +
+            getLogger().error('HubDbSync: refusing UNFENCED retraction of ' + event.table +
                 ' (source_chain ' + event.source_chain + ', from ' + from +
                 '): quorum-class deletions require a retraction_generation fence');
             return;
@@ -3883,7 +3888,7 @@ class HubDbSync {
                 let own = null;
                 try { own = Number(await this.getOwnRollbackGeneration()); } catch (e) { own = null; }
                 if (own === null || !Number.isFinite(own) || gen >= own) {
-                    console.error('HubDbSync: refusing retraction of ' + event.table + ' for OWN chain ' +
+                    getLogger().error('HubDbSync: refusing retraction of ' + event.table + ' for OWN chain ' +
                         this.coin + ' at generation ' + gen + ' (own rollback generation ' + own +
                         '): no local rollback produced this fence');
                     return;
@@ -3895,7 +3900,7 @@ class HubDbSync {
             let trackKey = event.table + '|' + event.source_chain;
             let tracked = this.trackedRollbackGeneration[trackKey];
             if (tracked !== undefined && gen < tracked) {
-                console.warn('HubDbSync: skipping stale retraction of ' + event.table +
+                getLogger().warn('HubDbSync: skipping stale retraction of ' + event.table +
                     ' (source_chain ' + event.source_chain + ') at generation ' + gen +
                     ' < last-observed rollback generation ' + tracked);
                 return;
@@ -3920,9 +3925,9 @@ class HubDbSync {
                 if (rows.length > 0 && rows[0].sb !== null) gateBlock = Number(rows[0].sb);
             } catch (e) { gateBlock = null; }                  // mirror table not ready yet
             if (gateBlock !== null && isRetractionSigningActive(gateBlock, this.network)) {
-                let ok = await this._verifyRetractionSignatures(event);
+                let ok = await this.verifyRetractionSignatures(event);
                 if (!ok) {
-                    console.error('HubDbSync: refusing UNVERIFIED retraction of ' + event.table +
+                    getLogger().error('HubDbSync: refusing UNVERIFIED retraction of ' + event.table +
                         ' (source_chain ' + event.source_chain + ', from ' + from +
                         '): quorum-class deletions require a valid 2f+1 co-signature set');
                     return;
@@ -3945,7 +3950,7 @@ class HubDbSync {
             await applyMirrorWrite(this.hubDb, 
                 'DELETE FROM cross_chain_matches WHERE ' + leg('a', 'a_push_generation') + ' OR ' + leg('b', 'b_push_generation'),
                 legArgs().concat(legArgs()));
-            await this._refreshMatchSyncTimestamp();
+            await this.refreshMatchSyncTimestamp();
             return;
         }
         // cross_chain_calls retracts on its source-chain request (the XCALL v0 row
@@ -3959,7 +3964,7 @@ class HubDbSync {
             if (bounded) args.push(to);
             if (fenced) args.push(gen);
             await applyMirrorWrite(this.hubDb, 'DELETE FROM cross_chain_calls WHERE ' + tail, args);
-            await this._refreshCallSyncTimestamp();
+            await this.refreshCallSyncTimestamp();
             return;
         }
         let column = RETRACTION_COLUMNS[event.table];
@@ -3978,7 +3983,7 @@ class HubDbSync {
         // The two tables above this line refresh inside their own branches for the same
         // reason, and neither remaining generic table (oracle_prices, price_snapshots) is
         // reached by a deletion without its own refresh at the caller.
-        if (event.table === 'bridge_transfers') await this._refreshBridgeSyncTimestamp();
+        if (event.table === 'bridge_transfers') await this.refreshBridgeSyncTimestamp();
     }
 
     // Verify a quorum-class retraction's co-signature set. The event
@@ -3988,7 +3993,7 @@ class HubDbSync {
     // mirrored `cross_chain` capability snapshot at that block, with the same
     // quorum predicate the settlement pass applies to match insertions
     // (stake-weighted at/above SWQ activation, else count 2f+1/majority).
-    async _verifyRetractionSignatures(event) {
+    async verifyRetractionSignatures(event) {
         let sb = Number(event.snapshot_block);
         if (!Number.isFinite(sb) || sb < 0) return false;
         if (!isRetractionSigningActive(sb, this.network)) return false;
@@ -4019,7 +4024,7 @@ class HubDbSync {
             if (!verifyEd25519(canonical, sig, pk)) continue;
             // Mark seen only AFTER the signature verifies, matching
             // the hub producer twin (RetractionConsensus.handleFinalized) and the
-            // sibling tallies in anchor.js / recovery.js / StateAnchorPublisher. Marking
+            // sibling tallies in actions/anchor/index.js / recovery.js / StateAnchorPublisher. Marking
             // on first encounter lets a garbage-then-valid pair for one snapshot member
             // consume the dedupe slot and suppress the real signature, under-counting the
             // quorum and refusing a retraction the hub itself finalized.
@@ -4037,11 +4042,11 @@ class HubDbSync {
 
     // Recompute the highest effective_time present in the local cross_chain_matches copy
     // (finalized only) and release satisfied waiters. A NULL max (empty mirror) is valid.
-    async _refreshMatchSyncTimestamp(armBootstrap = this._bootstrapDrained) {
+    async refreshMatchSyncTimestamp(armBootstrap = this._bootstrapDrained) {
         let ts = null;
         try {
             // Scope the watermark to matches that touch THIS coin (either leg), matching
-            // the settlement query (db.js: WHERE ... AND (a_chain = ? OR b_chain = ?)) and
+            // the settlement query (src/db/cross_chain.js: WHERE ... AND (a_chain = ? OR b_chain = ?)) and
             // the snapshot-presence barrier. A global MAX(effective_time) could be bumped
             // past this block's time by an unrelated other-chain match (both legs on other
             // chains, still mirrored here because the hub broadcasts every match), letting
@@ -4062,7 +4067,7 @@ class HubDbSync {
         // default armBootstrap to _bootstrapDrained so they cannot arm the NULL
         // fast path from a holed mirror and fork (#1788).
         if (armBootstrap) this.matchBootstrapped = true;
-        this._releaseMatchWaiters();
+        this.releaseMatchWaiters();
     }
 
     // ADMISSION ERA: the cross_chain_matches height watermark for this chain has reached
@@ -4070,10 +4075,10 @@ class HubDbSync {
     // carried onto the admission axis with the seconds conversion deleted). It replaces BOTH
     // clock cases: a match's effective_time is a time, and the row's admission height is what
     // binds it above the flag day. The empty-mirror escape survives: it is content, not clock.
-    _matchSyncSatisfied(blockTime, blockHeight = null) {
+    matchSyncSatisfied(blockTime, blockHeight = null) {
         if (this.matchBootstrapped && this.matchSyncTimestamp === null) return true;
         if (this.admissionActiveAt(blockHeight))
-            return this.matchBootstrapped && this._heightSatisfied('cross_chain_matches', blockHeight);
+            return this.matchBootstrapped && this.heightSatisfied('cross_chain_matches', blockHeight);
         if (this.matchSyncTimestamp !== null && this.matchSyncTimestamp >= blockTime) return true;
         // Stream watermark: matches are stamped with the hub's wall clock at
         // finalization and broadcast immediately, so a watermark past this
@@ -4086,11 +4091,11 @@ class HubDbSync {
         return false;
     }
 
-    _releaseMatchWaiters() {
+    releaseMatchWaiters() {
         if (this._matchWaiters.length === 0) return;
         let stillWaiting = [];
         for (let w of this._matchWaiters) {
-            if (this._matchSyncSatisfied(w.ts, w.height)) {
+            if (this.matchSyncSatisfied(w.ts, w.height)) {
                 clearTimeout(w.timer);
                 w.resolve(this.matchSyncTimestamp);
             } else {
@@ -4108,7 +4113,7 @@ class HubDbSync {
     waitForMatchSync(blockTime, timeoutMs, blockHeight = null) {
         blockTime = Number(blockTime);
         if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.matchSyncTimestamp);
-        if (this._matchSyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.matchSyncTimestamp);
+        if (this.matchSyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.matchSyncTimestamp);
 
         let ms = parseInt(timeoutMs);
         if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
@@ -4118,15 +4123,15 @@ class HubDbSync {
                 // Self-heal before giving up, same as waitForPriceSyncHeight: a missed
                 // refresh on a stream/reconnect edge can leave matchSyncTimestamp stale
                 // behind a local mirror that is actually current. Re-read the DB here;
-                // _refreshMatchSyncTimestamp resolves+clears this waiter via
-                // _releaseMatchWaiters if the mirror has since caught up.
-                try { await this._refreshMatchSyncTimestamp(); } catch (e) { /* fall through to reject */ }
-                if (this._matchSyncSatisfied(blockTime, blockHeight)) return;   // already resolved by the refresh
+                // refreshMatchSyncTimestamp resolves+clears this waiter via
+                // releaseMatchWaiters if the mirror has since caught up.
+                try { await this.refreshMatchSyncTimestamp(); } catch (e) { /* fall through to reject */ }
+                if (this.matchSyncSatisfied(blockTime, blockHeight)) return;   // already resolved by the refresh
                 this._matchWaiters = this._matchWaiters.filter(w => w !== waiter);
                 reject(new Error('match sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
                                  blockTime + ' (match mirror at ' + this.matchSyncTimestamp + ')' +
                                  (this.admissionActiveAt(blockHeight)
-                                     ? this._heightTail('cross_chain_matches', blockHeight) : '')));
+                                     ? this.heightTail('cross_chain_matches', blockHeight) : '')));
             }, ms);
             this._matchWaiters.push(waiter);
         });
@@ -4134,7 +4139,7 @@ class HubDbSync {
 
     // ── Cross-chain call sync barrier (mirrors the match barrier exactly) ──────
 
-    async _refreshCallSyncTimestamp(armBootstrap = this._bootstrapDrained) {
+    async refreshCallSyncTimestamp(armBootstrap = this._bootstrapDrained) {
         let ts = null;
         try {
             // Scope the watermark to calls that touch THIS coin (target or source),
@@ -4157,15 +4162,15 @@ class HubDbSync {
         // default armBootstrap to _bootstrapDrained so they cannot arm the NULL
         // fast path from a holed mirror and fork (#1788).
         if (armBootstrap) this.callBootstrapped = true;
-        this._releaseCallWaiters();
+        this.releaseCallWaiters();
     }
 
     // ADMISSION ERA: the cross_chain_calls height watermark for this chain has reached
     // B - 4, replacing both clock cases exactly as the match member above.
-    _callSyncSatisfied(blockTime, blockHeight = null) {
+    callSyncSatisfied(blockTime, blockHeight = null) {
         if (this.callBootstrapped && this.callSyncTimestamp === null) return true;
         if (this.admissionActiveAt(blockHeight))
-            return this.callBootstrapped && this._heightSatisfied('cross_chain_calls', blockHeight);
+            return this.callBootstrapped && this.heightSatisfied('cross_chain_calls', blockHeight);
         if (this.callSyncTimestamp !== null && this.callSyncTimestamp >= blockTime) return true;
         // Stream watermark escape: a relay row is broadcast the moment the hub
         // finalizes it, so a watermark past this block's time plus the grace means
@@ -4182,11 +4187,11 @@ class HubDbSync {
         return false;
     }
 
-    _releaseCallWaiters() {
+    releaseCallWaiters() {
         if (this._callWaiters.length === 0) return;
         let stillWaiting = [];
         for (let w of this._callWaiters) {
-            if (this._callSyncSatisfied(w.ts, w.height)) {
+            if (this.callSyncSatisfied(w.ts, w.height)) {
                 clearTimeout(w.timer);
                 w.resolve(this.callSyncTimestamp);
             } else {
@@ -4203,7 +4208,7 @@ class HubDbSync {
     waitForCallSync(blockTime, timeoutMs, blockHeight = null) {
         blockTime = Number(blockTime);
         if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.callSyncTimestamp);
-        if (this._callSyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.callSyncTimestamp);
+        if (this.callSyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.callSyncTimestamp);
 
         let ms = parseInt(timeoutMs);
         if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
@@ -4213,15 +4218,15 @@ class HubDbSync {
                 // Self-heal before giving up, same as waitForPriceSyncHeight: a missed
                 // refresh on a stream/reconnect edge can leave callSyncTimestamp stale
                 // behind a local mirror that is actually current. Re-read the DB here;
-                // _refreshCallSyncTimestamp resolves+clears this waiter via
-                // _releaseCallWaiters if the mirror has since caught up.
-                try { await this._refreshCallSyncTimestamp(); } catch (e) { /* fall through to reject */ }
-                if (this._callSyncSatisfied(blockTime, blockHeight)) return;   // already resolved by the refresh
+                // refreshCallSyncTimestamp resolves+clears this waiter via
+                // releaseCallWaiters if the mirror has since caught up.
+                try { await this.refreshCallSyncTimestamp(); } catch (e) { /* fall through to reject */ }
+                if (this.callSyncSatisfied(blockTime, blockHeight)) return;   // already resolved by the refresh
                 this._callWaiters = this._callWaiters.filter(w => w !== waiter);
                 reject(new Error('call sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
                                  blockTime + ' (call mirror at ' + this.callSyncTimestamp + ')' +
                                  (this.admissionActiveAt(blockHeight)
-                                     ? this._heightTail('cross_chain_calls', blockHeight) : '')));
+                                     ? this.heightTail('cross_chain_calls', blockHeight) : '')));
             }, ms);
             this._callWaiters.push(waiter);
         });
@@ -4229,7 +4234,7 @@ class HubDbSync {
 
     // ── XBRIDGE transfer sync barrier (mirrors the match/call barriers exactly) ──
 
-    async _refreshBridgeSyncTimestamp(armBootstrap = this._bootstrapDrained) {
+    async refreshBridgeSyncTimestamp(armBootstrap = this._bootstrapDrained) {
         let ts = null;
         try {
             // Scope the watermark to transfers that touch THIS coin on either leg, the same
@@ -4257,15 +4262,15 @@ class HubDbSync {
         // armBootstrap to _bootstrapDrained so they cannot arm the NULL fast path from a
         // holed mirror and fork (#1788).
         if (armBootstrap) this.bridgeBootstrapped = true;
-        this._releaseBridgeWaiters();
+        this.releaseBridgeWaiters();
     }
 
     // ADMISSION ERA: the bridge_transfers height watermark for this chain has reached B - 4,
     // replacing both clock cases exactly as the match and call members above.
-    _bridgeSyncSatisfied(blockTime, blockHeight = null) {
+    bridgeSyncSatisfied(blockTime, blockHeight = null) {
         if (this.bridgeBootstrapped && this.bridgeSyncTimestamp === null) return true;
         if (this.admissionActiveAt(blockHeight))
-            return this.bridgeBootstrapped && this._heightSatisfied('bridge_transfers', blockHeight);
+            return this.bridgeBootstrapped && this.heightSatisfied('bridge_transfers', blockHeight);
         if (this.bridgeSyncTimestamp !== null && this.bridgeSyncTimestamp >= blockTime) return true;
         // Stream watermark escape: a transfer is broadcast the moment the hub finalizes it,
         // and its effective_time is stamped FORWARD (now + the destination's relay margin
@@ -4280,11 +4285,11 @@ class HubDbSync {
         return false;
     }
 
-    _releaseBridgeWaiters() {
+    releaseBridgeWaiters() {
         if (this._bridgeWaiters.length === 0) return;
         let stillWaiting = [];
         for (let w of this._bridgeWaiters) {
-            if (this._bridgeSyncSatisfied(w.ts, w.height)) {
+            if (this.bridgeSyncSatisfied(w.ts, w.height)) {
                 clearTimeout(w.timer);
                 w.resolve(this.bridgeSyncTimestamp);
             } else {
@@ -4302,7 +4307,7 @@ class HubDbSync {
     waitForBridgeSync(blockTime, timeoutMs, blockHeight = null) {
         blockTime = Number(blockTime);
         if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.bridgeSyncTimestamp);
-        if (this._bridgeSyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.bridgeSyncTimestamp);
+        if (this.bridgeSyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.bridgeSyncTimestamp);
 
         let ms = parseInt(timeoutMs);
         if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
@@ -4311,15 +4316,15 @@ class HubDbSync {
             waiter.timer = setTimeout(async () => {
                 // Self-heal before giving up, same as the match and call barriers: a missed
                 // refresh on a stream/reconnect edge can leave bridgeSyncTimestamp stale
-                // behind a mirror that is actually current. _refreshBridgeSyncTimestamp
-                // resolves and clears this waiter via _releaseBridgeWaiters if so.
-                try { await this._refreshBridgeSyncTimestamp(); } catch (e) { /* fall through to reject */ }
-                if (this._bridgeSyncSatisfied(blockTime, blockHeight)) return;  // already resolved by the refresh
+                // behind a mirror that is actually current. refreshBridgeSyncTimestamp
+                // resolves and clears this waiter via releaseBridgeWaiters if so.
+                try { await this.refreshBridgeSyncTimestamp(); } catch (e) { /* fall through to reject */ }
+                if (this.bridgeSyncSatisfied(blockTime, blockHeight)) return;  // already resolved by the refresh
                 this._bridgeWaiters = this._bridgeWaiters.filter(w => w !== waiter);
                 reject(new Error('bridge sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
                                  blockTime + ' (bridge mirror at ' + this.bridgeSyncTimestamp + ')' +
                                  (this.admissionActiveAt(blockHeight)
-                                     ? this._heightTail('bridge_transfers', blockHeight) : '')));
+                                     ? this.heightTail('bridge_transfers', blockHeight) : '')));
             }, ms);
             this._bridgeWaiters.push(waiter);
         });
@@ -4327,7 +4332,7 @@ class HubDbSync {
 
     // ── XPOLICY snapshot sync barrier (the bridge barrier, keyed on origin_chain) ──
 
-    async _refreshPolicySyncTimestamp(armBootstrap = this._bootstrapDrained) {
+    async refreshPolicySyncTimestamp(armBootstrap = this._bootstrapDrained) {
         let ts = null;
         try {
             // Scoped on origin_chain ALONE, and that is the one place this barrier departs
@@ -4348,7 +4353,7 @@ class HubDbSync {
         }
         this.policySyncTimestamp = ts;
         if (armBootstrap) this.policyBootstrapped = true;
-        this._releasePolicyWaiters();
+        this.releasePolicyWaiters();
     }
 
     // ADMISSION ERA: the policy_snapshots height watermark for this chain has reached B - 4.
@@ -4356,10 +4361,10 @@ class HubDbSync {
     // EVERY chain with no clause at all, so its map must name every chain the federation
     // serves, and a chain the map omits binds by the legacy rule on this rail rather than
     // being admitted by somebody else's height.
-    _policySyncSatisfied(blockTime, blockHeight = null) {
+    policySyncSatisfied(blockTime, blockHeight = null) {
         if (this.policyBootstrapped && this.policySyncTimestamp === null) return true;
         if (this.admissionActiveAt(blockHeight))
-            return this.policyBootstrapped && this._heightSatisfied('policy_snapshots', blockHeight);
+            return this.policyBootstrapped && this.heightSatisfied('policy_snapshots', blockHeight);
         if (this.policySyncTimestamp !== null && this.policySyncTimestamp >= blockTime) return true;
         // Stream watermark escape, exactly as above. Note the cached scalar is a MAX over a
         // column that is NOT monotonic across policy_seq: a later seq can carry an EARLIER
@@ -4372,11 +4377,11 @@ class HubDbSync {
         return false;
     }
 
-    _releasePolicyWaiters() {
+    releasePolicyWaiters() {
         if (this._policyWaiters.length === 0) return;
         let stillWaiting = [];
         for (let w of this._policyWaiters) {
-            if (this._policySyncSatisfied(w.ts, w.height)) {
+            if (this.policySyncSatisfied(w.ts, w.height)) {
                 clearTimeout(w.timer);
                 w.resolve(this.policySyncTimestamp);
             } else {
@@ -4394,20 +4399,20 @@ class HubDbSync {
     waitForPolicySync(blockTime, timeoutMs, blockHeight = null) {
         blockTime = Number(blockTime);
         if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.policySyncTimestamp);
-        if (this._policySyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.policySyncTimestamp);
+        if (this.policySyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.policySyncTimestamp);
 
         let ms = parseInt(timeoutMs);
         if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
         return new Promise((resolve, reject) => {
             let waiter = { ts: blockTime, height: blockHeight, resolve: resolve, timer: null };
             waiter.timer = setTimeout(async () => {
-                try { await this._refreshPolicySyncTimestamp(); } catch (e) { /* fall through to reject */ }
-                if (this._policySyncSatisfied(blockTime, blockHeight)) return;  // already resolved by the refresh
+                try { await this.refreshPolicySyncTimestamp(); } catch (e) { /* fall through to reject */ }
+                if (this.policySyncSatisfied(blockTime, blockHeight)) return;  // already resolved by the refresh
                 this._policyWaiters = this._policyWaiters.filter(w => w !== waiter);
                 reject(new Error('policy sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
                                  blockTime + ' (policy mirror at ' + this.policySyncTimestamp + ')' +
                                  (this.admissionActiveAt(blockHeight)
-                                     ? this._heightTail('policy_snapshots', blockHeight) : '')));
+                                     ? this.heightTail('policy_snapshots', blockHeight) : '')));
             }, ms);
             this._policyWaiters.push(waiter);
         });
@@ -4466,12 +4471,12 @@ class HubDbSync {
     // has to be: `Number(false)` is 0, and the decoder returns literal `false` for a block it
     // cannot serve, so a coercing guard would silently open this barrier at
     // `watermark >= margin + grace` on every decoder gap above height 144.
-    _anchorAttestSyncSatisfied(blockTime, horizonBound = null, blockHeight = null) {
+    anchorAttestSyncSatisfied(blockTime, horizonBound = null, blockHeight = null) {
         if (!this.enabled) return true;
         blockTime = Number(blockTime);
         if (!Number.isFinite(blockTime)) return true;
         if (this.admissionActiveAt(blockHeight) &&
-            this._heightSatisfied('anchor_reward_attestations', blockHeight)) return true;
+            this.heightSatisfied('anchor_reward_attestations', blockHeight)) return true;
         // typeof, not Number(): `Number(false)` is 0 and passes a bare isFinite check, and
         // `false` is exactly what getBlockTime returns for a block it cannot serve.
         let usable = (typeof horizonBound === 'number') && Number.isFinite(horizonBound);
@@ -4479,11 +4484,11 @@ class HubDbSync {
         return this.streamWatermark >= target + this.anchorAttestWatermarkGraceS;
     }
 
-    _releaseAnchorAttestWaiters() {
+    releaseAnchorAttestWaiters() {
         if (!this._anchorAttestWaiters || this._anchorAttestWaiters.length === 0) return;
         let stillWaiting = [];
         for (let w of this._anchorAttestWaiters) {
-            if (this._anchorAttestSyncSatisfied(w.ts, w.bound, w.height)) {
+            if (this.anchorAttestSyncSatisfied(w.ts, w.bound, w.height)) {
                 clearTimeout(w.timer);
                 w.resolve(this.streamWatermark);
             } else {
@@ -4500,7 +4505,7 @@ class HubDbSync {
     waitForAnchorAttestationSync(blockTime, timeoutMs, horizonBound = null, blockHeight = null) {
         blockTime = Number(blockTime);
         if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.streamWatermark);
-        if (this._anchorAttestSyncSatisfied(blockTime, horizonBound, blockHeight))
+        if (this.anchorAttestSyncSatisfied(blockTime, horizonBound, blockHeight))
             return Promise.resolve(this.streamWatermark);
 
         let ms = parseInt(timeoutMs);
@@ -4520,7 +4525,7 @@ class HubDbSync {
                                                  this.streamWatermark + ')'
                                                : ' (stream watermark at ' + this.streamWatermark + ')') +
                                  (this.admissionActiveAt(blockHeight)
-                                     ? this._heightTail('anchor_reward_attestations', blockHeight) : '')));
+                                     ? this.heightTail('anchor_reward_attestations', blockHeight) : '')));
             }, ms);
             this._anchorAttestWaiters.push(waiter);
         });
@@ -4559,20 +4564,20 @@ class HubDbSync {
     // escape of any kind: an empty mirror is indistinguishable from a mirror that has not
     // been told about the row binding at this very block, so absence defers here as it always
     // has, now under the height rule instead of the clock.
-    _attestResponseSyncSatisfied(blockTime, blockHeight = null) {
+    attestResponseSyncSatisfied(blockTime, blockHeight = null) {
         if (!this.enabled) return true;
         if (this.admissionActiveAt(blockHeight))
-            return this._heightSatisfied('attestation_responses', blockHeight);
+            return this.heightSatisfied('attestation_responses', blockHeight);
         blockTime = Number(blockTime);
         if (!Number.isFinite(blockTime)) return true;
         return this.streamWatermark >= blockTime + this.attestResponseWatermarkGraceS;
     }
 
-    _releaseAttestResponseWaiters() {
+    releaseAttestResponseWaiters() {
         if (!this._attestResponseWaiters || this._attestResponseWaiters.length === 0) return;
         let stillWaiting = [];
         for (let w of this._attestResponseWaiters) {
-            if (this._attestResponseSyncSatisfied(w.ts, w.height)) {
+            if (this.attestResponseSyncSatisfied(w.ts, w.height)) {
                 clearTimeout(w.timer);
                 w.resolve(this.streamWatermark);
             } else {
@@ -4589,7 +4594,7 @@ class HubDbSync {
     waitForAttestationResponseSync(blockTime, timeoutMs, blockHeight = null) {
         blockTime = Number(blockTime);
         if (!this.enabled || !Number.isFinite(blockTime)) return Promise.resolve(this.streamWatermark);
-        if (this._attestResponseSyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.streamWatermark);
+        if (this.attestResponseSyncSatisfied(blockTime, blockHeight)) return Promise.resolve(this.streamWatermark);
 
         let ms = parseInt(timeoutMs);
         if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
@@ -4601,7 +4606,7 @@ class HubDbSync {
                                  'ms waiting for block_time ' + blockTime +
                                  ' (stream watermark at ' + this.streamWatermark + ')' +
                                  (this.admissionActiveAt(blockHeight)
-                                     ? this._heightTail('attestation_responses', blockHeight) : '')));
+                                     ? this.heightTail('attestation_responses', blockHeight) : '')));
             }, ms);
             this._attestResponseWaiters.push(waiter);
         });
@@ -4651,8 +4656,8 @@ class HubDbSync {
             // The scope clause and its bindings, one per table alias. Below the activation
             // this is the byte-identical `effective_time <= ?` the barrier has always used.
             const scope = (alias) => admission
-                ? '(' + alias + '.' + this._admitColumn() + ' IS NULL AND ' + alias + '.effective_time <= ?) OR (' +
-                  alias + '.' + this._admitColumn() + ' IS NOT NULL AND ' + alias + '.' + this._admitColumn() + ' <= ?)'
+                ? '(' + alias + '.' + this.admitColumn() + ' IS NULL AND ' + alias + '.effective_time <= ?) OR (' +
+                  alias + '.' + this.admitColumn() + ' IS NOT NULL AND ' + alias + '.' + this.admitColumn() + ' <= ?)'
                 : alias + '.effective_time <= ?';
             const scopeArgs = admission ? [blockTime, Number(blockHeight)] : [blockTime];
 
@@ -4691,12 +4696,12 @@ class HubDbSync {
     // name is never taken from a frame. The columns themselves arrive with the indexer's dated
     // admission migration; nothing reads them below the activation, which is every network in
     // this train.
-    _admitColumn() {
-        const chain = this._admissionChain();
+    admitColumn() {
+        const chain = this.admissionChain();
         return 'admit_block_' + (chain === null ? 'btc' : chain.toLowerCase());
     }
 
-    async _releaseSnapshotWaiters() {
+    async releaseSnapshotWaiters() {
         if (this._snapshotWaiters.length === 0) return;
         let stillWaiting = [];
         for (let w of this._snapshotWaiters) {
@@ -4729,8 +4734,8 @@ class HubDbSync {
                 // than a cached scalar), but release is still event-driven: a snapshot
                 // that mirrored in without firing a cross-chain event would leave this
                 // waiter armed until the timeout. Re-evaluate against the mirror here;
-                // _releaseSnapshotWaiters resolves+clears this waiter if satisfied now.
-                try { await this._releaseSnapshotWaiters(); } catch (e) { /* fall through to reject */ }
+                // releaseSnapshotWaiters resolves+clears this waiter if satisfied now.
+                try { await this.releaseSnapshotWaiters(); } catch (e) { /* fall through to reject */ }
                 if (await this._snapshotSyncSatisfied(blockTime, blockHeight)) return;   // already resolved by the refresh
                 this._snapshotWaiters = this._snapshotWaiters.filter(w => w !== waiter);
                 reject(new Error('snapshot sync barrier timed out after ' + ms + 'ms waiting for block_time ' +
@@ -4752,7 +4757,7 @@ class HubDbSync {
     // still-draining REST pull and every MAX()-based refresh would open the
     // height barrier over the hole), and only then does the normal
     // apply-and-refresh path run.
-    async _handleRowEvent(event) {
+    async handleRowEvent(event) {
         if (event.schema_version != null && event.schema_version !== HUB_SCHEMA_VERSION) {
             // Schema-version mismatch: the hub is broadcasting a mirror row shape
             // this indexer was not built for, so applying it (or its retraction)
@@ -4761,7 +4766,7 @@ class HubDbSync {
             // barrier stays shut and the block is deferred rather than settled
             // against mismatched mirror data. The != null guard keeps older hubs
             // that send no version working unchanged.
-            console.error('HubDbSync: hub schema_version ' + event.schema_version +
+            getLogger().error('HubDbSync: hub schema_version ' + event.schema_version +
                 ' != local ' + HUB_SCHEMA_VERSION + ' for ' + event.table +
                 '; refusing to apply row. Restart this indexer after upgrading the hub.');
             // Freeze the watermark gate until a clean re-bootstrap, so a
@@ -4771,7 +4776,7 @@ class HubDbSync {
             return;
         }
         if (event.table === 'price_snapshots' && !this._priceDrained) {
-            this._bufferPriceEvent(event);
+            this.bufferPriceEvent(event);
             return;
         }
         if (event.type === 'row:inserted' && event.table && event.row) {
@@ -4779,27 +4784,27 @@ class HubDbSync {
             // may be the stale side: a consumer that learned its expectation FROM the hub
             // re-asks the hub once before refusing, so a venue re-genesis the hub has
             // adopted cannot strand a running DOGE/LTC mirror. A locally-measured
-            // expectation is never adopted away from (see _maybeAdoptHubChainId).
-            await this._maybeAdoptHubChainId(event.table, event.row);
+            // expectation is never adopted away from (see maybeAdoptHubChainId).
+            await this.maybeAdoptHubChainId(event.table, event.row);
             await this._applyRow(event.table, event.row);
-            this._reportRefusedChainRows(event.table);
+            this.reportRefusedChainRows(event.table);
             if (event.table === 'price_snapshots')     await this._refreshPriceSyncHeight();
-            if (event.table === 'oracle_prices')       await this._refreshOracleSyncTimestamp();
-            if (event.table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp();
-            if (event.table === 'cross_chain_calls')   await this._refreshCallSyncTimestamp();
-            if (event.table === 'bridge_transfers')    await this._refreshBridgeSyncTimestamp();
-            if (event.table === 'policy_snapshots')    await this._refreshPolicySyncTimestamp();
-            if (CROSS_CHAIN_TABLES.indexOf(event.table) !== -1) await this._releaseSnapshotWaiters();
+            if (event.table === 'oracle_prices')       await this.refreshOracleSyncTimestamp();
+            if (event.table === 'cross_chain_matches') await this.refreshMatchSyncTimestamp();
+            if (event.table === 'cross_chain_calls')   await this.refreshCallSyncTimestamp();
+            if (event.table === 'bridge_transfers')    await this.refreshBridgeSyncTimestamp();
+            if (event.table === 'policy_snapshots')    await this.refreshPolicySyncTimestamp();
+            if (CROSS_CHAIN_TABLES.indexOf(event.table) !== -1) await this.releaseSnapshotWaiters();
         } else if (event.type === 'row:deleted' && event.table) {
             await this._applyRetraction(event);
             if (event.table === 'price_snapshots')     await this._refreshPriceSyncHeight();
-            if (event.table === 'oracle_prices')       await this._refreshOracleSyncTimestamp();
-            if (event.table === 'cross_chain_matches') await this._refreshMatchSyncTimestamp();
-            if (event.table === 'cross_chain_calls')   await this._refreshCallSyncTimestamp();
+            if (event.table === 'oracle_prices')       await this.refreshOracleSyncTimestamp();
+            if (event.table === 'cross_chain_matches') await this.refreshMatchSyncTimestamp();
+            if (event.table === 'cross_chain_calls')   await this.refreshCallSyncTimestamp();
             // bridge_transfers refreshes inside _applyRetraction (the only path that can
             // delete one), so it is deliberately not repeated here; policy_snapshots is
             // never retracted at all.
-            if (event.table === 'cross_chain_matches' || event.table === 'cross_chain_calls') await this._releaseSnapshotWaiters();
+            if (event.table === 'cross_chain_matches' || event.table === 'cross_chain_calls') await this.releaseSnapshotWaiters();
         }
     }
 
@@ -4808,14 +4813,14 @@ class HubDbSync {
     // retraction before the insert it retracts would no-op the delete and then
     // re-insert the retracted row, so arrival order is consensus-relevant. On
     // overflow the buffer is abandoned and flagged: the flush then reports the
-    // table not-drained so _bootstrapAll re-pages the dropped rows straight
+    // table not-drained so bootstrapAll re-pages the dropped rows straight
     // from the hub (they are in its DB) instead of opening the gate over the
     // loss; dropped deletions are redelivered by the hub's deferred-retraction
     // path (item 5296), same as deletions missed while disconnected.
-    _bufferPriceEvent(event) {
+    bufferPriceEvent(event) {
         if (this._pendingPriceOverflow) return;
         if (this._pendingPriceEvents.length >= PENDING_PRICE_EVENT_CAP) {
-            console.error('HubDbSync: pending price_snapshots event buffer overflow (' +
+            getLogger().error('HubDbSync: pending price_snapshots event buffer overflow (' +
                 PENDING_PRICE_EVENT_CAP + '); discarding and forcing a re-drain');
             this._pendingPriceOverflow = true;
             this._pendingPriceEvents = [];
@@ -4833,7 +4838,7 @@ class HubDbSync {
     // drain frontier, the retry re-fetches the failed row over REST, and a
     // persistently bad row wedges the barrier (defer) rather than silently
     // forking, the module's fail-closed contract (BOOTSTRAP-HOLE-1).
-    async _flushPendingPriceEvents() {
+    async flushPendingPriceEvents() {
         if (this._pendingPriceOverflow) {
             this._pendingPriceOverflow = false;
             this._pendingPriceEvents = [];
@@ -4848,7 +4853,7 @@ class HubDbSync {
                     await this._applyRetraction(event);
                 }
             } catch (err) {
-                console.warn('HubDbSync: failed to replay buffered price_snapshots event:', err);
+                getLogger().warn('HubDbSync: failed to replay buffered price_snapshots event:', err);
                 // The event stays at the head of the buffer and the table reports
                 // not-drained, but the watermark gate has its own key: latch here too so a
                 // heartbeat arriving before the retry cannot certify coverage.
@@ -4882,8 +4887,8 @@ class HubDbSync {
             try {
                 ws = new WebSocket(wsUrl, { headers: headers });
             } catch (e) {
-                console.warn('HubDbSync: WebSocket connect failed:', e);
-                this._scheduleReconnect();
+                getLogger().warn('HubDbSync: WebSocket connect failed:', e);
+                this.scheduleReconnect();
                 return reject(e);
             }
             this.ws = ws;
@@ -4897,8 +4902,8 @@ class HubDbSync {
             };
 
             ws.on('open', () => {
-                console.log('HubDbSync: WebSocket connected to ' + wsUrl);
-                this._startWatchdog(ws);
+                getLogger().info('HubDbSync: WebSocket connected to ' + wsUrl);
+                this.startWatchdog(ws);
             });
 
             ws.on('message', (data) => {
@@ -4915,7 +4920,7 @@ class HubDbSync {
                 try {
                     event = JSON.parse(data.toString());
                 } catch (err) {
-                    console.warn('HubDbSync: failed to parse WebSocket message:', err);
+                    getLogger().warn('HubDbSync: failed to parse WebSocket message:', err);
                     return;
                 }
 
@@ -4933,8 +4938,8 @@ class HubDbSync {
                     // consumer. Re-arm the watchdog (already started on 'open' with the
                     // env-seeded cadence) only when a valid new interval was adopted, so
                     // both the poll cadence and the timeout track the hub.
-                    if (this._adoptHubWatermarkInterval(event.watermark_interval_ms))
-                        this._startWatchdog(ws);
+                    if (this.adoptHubWatermarkInterval(event.watermark_interval_ms))
+                        this.startWatchdog(ws);
                     // NOTE: the ready watermark is NOT advanced here. At this point
                     // the REST bootstrap has not run, so rows the hub produced before
                     // this subscription may not be local yet. Bootstrap responses
@@ -4970,16 +4975,16 @@ class HubDbSync {
                             // Record the hub's claimed tip BEFORE the gate. A tip the gate
                             // refuses is the evidence the stall detector runs on: without
                             // it a frozen watermark is indistinguishable from a quiet hub.
-                            this._noteHubTip(event.ts);
-                            this._handleWatermarkFrame(event);
+                            this.noteHubTip(event.ts);
+                            this.handleWatermarkFrame(event);
                         } else if (event.type === 'row:inserted' || event.type === 'row:deleted') {
                             // Schema fail-closed check, price-event buffering
                             // (#2422), and the apply-and-refresh path all live
-                            // in _handleRowEvent (extracted for testability).
-                            await this._handleRowEvent(event);
+                            // in handleRowEvent (extracted for testability).
+                            await this.handleRowEvent(event);
                         }
                     } catch (err) {
-                        console.warn('HubDbSync: failed to handle WebSocket message:', err);
+                        getLogger().warn('HubDbSync: failed to handle WebSocket message:', err);
                         // Latch the failure so the watermark gate stays shut. A row we did
                         // not apply is a hole, and without the latch a later heartbeat
                         // would certify the stream over it. A throw from the heartbeat
@@ -4991,8 +4996,8 @@ class HubDbSync {
             });
 
             ws.on('close', () => {
-                console.log('HubDbSync: WebSocket disconnected, reconnecting in 5s');
-                this._stopWatchdog();
+                getLogger().info('HubDbSync: WebSocket disconnected, reconnecting in 5s');
+                this.stopWatchdog();
                 this.ws = null;
                 // Rows produced while disconnected won't arrive on the socket;
                 // close the heartbeat gate (and freeze the watermark) until the
@@ -5019,12 +5024,12 @@ class HubDbSync {
                 // rather than waiting on in-flight work from the dead socket.
                 this._msgChain = Promise.resolve();
                 settle(reject, new Error('WebSocket closed before ready'));
-                this._scheduleReconnect();
+                this.scheduleReconnect();
             });
 
             ws.on('error', (err) => {
-                console.warn('HubDbSync: WebSocket error:', err.message);
-                // close fires after error and will call _scheduleReconnect
+                getLogger().warn('HubDbSync: WebSocket error: ' + err.message);
+                // close fires after error and will call scheduleReconnect
                 settle(reject, err);
             });
         });
@@ -5040,7 +5045,7 @@ class HubDbSync {
     // while the mirror certifies nothing, indefinitely. Tearing the socket down puts the
     // mirror back through the ONE path that does re-arm it, which the close handler
     // already implements and exercises on every ordinary disconnect
-    // (_scheduleReconnect -> _connectWebSocket -> _refreshAllSyncHeights -> _bootstrapAll).
+    // (scheduleReconnect -> _connectWebSocket -> refreshAllSyncHeights -> bootstrapAll).
     //
     // This opens NO barrier and commits NO block: a mirror that is genuinely missing
     // rows keeps deferring after the resync, which is the fail-closed outcome. It only
@@ -5061,7 +5066,7 @@ class HubDbSync {
         const now = Date.now();
         if (this._lastResyncRequestAt && (now - this._lastResyncRequestAt) < this.barrierHoldCeilingMs) return false;
         this._lastResyncRequestAt = now;
-        return this._driveResync(reason);
+        return this.driveResync(reason);
     }
 
     // The resync itself, without the hold-ceiling throttle above. Split out because the
@@ -5069,9 +5074,9 @@ class HubDbSync {
     // schedule: sharing requestResync's rate limiter would let an unrelated block-loop
     // resync minutes earlier swallow the stage-1 attempt whose outcome stage 2 then
     // measures, and the detector would exit having never actually retried.
-    _driveResync(reason) {
+    driveResync(reason) {
         this.forcedResyncCount++;
-        console.warn('HubDbSync: forcing a mirror resync (' + String(reason || 'barrier hold ceiling reached') + ')');
+        getLogger().warn('HubDbSync: forcing a mirror resync (' + String(reason || 'barrier hold ceiling reached') + ')');
         if (this.ws) {
             // terminate() over close(): a half-open socket may never complete a closing
             // handshake, and the 'close' handler runs either way to schedule the reconnect.
@@ -5079,19 +5084,19 @@ class HubDbSync {
                 if (typeof this.ws.terminate === 'function') this.ws.terminate();
                 else if (typeof this.ws.close === 'function') this.ws.close();
             } catch (err) {
-                console.warn('HubDbSync: forced resync could not terminate the socket:', err && err.message);
+                getLogger().warn('HubDbSync: forced resync could not terminate the socket: ' + (err && err.message));
             }
             return true;
         }
         // No live socket: poll mode, or a reconnect already pending. Re-drive the
         // bootstrap directly so a stuck poll-mode mirror still gets a fresh pull.
         Promise.resolve()
-            .then(() => this._bootstrapAll())
-            .catch(err => console.warn('HubDbSync: forced resync bootstrap failed:', err && err.message));
+            .then(() => this.bootstrapAll())
+            .catch(err => getLogger().warn('HubDbSync: forced resync bootstrap failed: ' + (err && err.message)));
         return true;
     }
 
-    _scheduleReconnect() {
+    scheduleReconnect() {
         if (!this.running) return;
         setTimeout(async () => {
             if (!this.running) return;
@@ -5102,7 +5107,7 @@ class HubDbSync {
             try {
                 await this._connectWebSocket();
             } catch (err) {
-                // _connectWebSocket already queued another _scheduleReconnect via the
+                // _connectWebSocket already queued another scheduleReconnect via the
                 // close handler; nothing more to do here.
                 return;
             }
@@ -5113,30 +5118,30 @@ class HubDbSync {
             // current (or close to it); refreshing here clears any block deferred
             // only on that staleness immediately, instead of making each wait for
             // re-bootstrap to redeliver rows or fall through to the 60s timeout.
-            await this._refreshAllSyncHeights();
+            await this.refreshAllSyncHeights();
 
             // Re-bootstrap to fill in rows missed while disconnected. _bootstrapTable
             // uses the local max-ID as since_id, so it fetches only genuinely-missing
             // rows; re-receives are harmless thanks to INSERT IGNORE in _applyRow.
             // A full drain re-opens the heartbeat gate and advances the watermark.
-            await this._bootstrapAll();
+            await this.bootstrapAll();
         }, 5000);
     }
 
     // Polling fallback when ws is not available. Poll-mode mirrors do NOT get the
     // same liveness semantics as the WS heartbeat (#2476): the REST snapshot
     // endpoints are append-only, so a poll cycle can observe new-id INSERTs but can
-    // never receive an in-place upsert or a row:deleted retraction. _bootstrapAll
+    // never receive an in-place upsert or a row:deleted retraction. bootstrapAll
     // therefore refuses to advance the stream watermark while _pollMode is set, so
     // the settlement barriers fail closed (defer) rather than certify against a
     // mirror that may be silently stale. Bootstrapping/mirroring still runs each cycle.
-    _startPolling() {
+    startPolling() {
         let poll = async () => {
             if (!this.running) return;
             try {
-                await this._bootstrapAll();
+                await this.bootstrapAll();
             } catch (err) {
-                console.warn('HubDbSync: poll error:', err);
+                getLogger().warn('HubDbSync: poll error:', err);
             }
             if (this.running) setTimeout(poll, this.pollIntervalMs);
         };
@@ -5181,7 +5186,7 @@ class HubDbSync {
                 });
                 // A hub restarting mid-snapshot aborts the RESPONSE: 'end' never fires,
                 // and req 'error' never fires either because the request itself completed.
-                // Without these three the promise stays pending forever, _bootstrapAll
+                // Without these three the promise stays pending forever, bootstrapAll
                 // never reaches the `finally` that clears `_bootstrapping`, and every
                 // later reconnect and poll returns at that guard - the mirror bootstrap
                 // and the settlement barriers it feeds stall until the process restarts.
@@ -5211,7 +5216,7 @@ class HubDbSync {
 
 // Remove SQL `--` line comments while respecting quoted strings, so a ';'
 // appearing inside comment prose is never mistaken for a statement terminator.
-// Faithful copy of the indexer db.js stripSqlLineComments logic; lives here so
+// Faithful copy of the indexer src/db/index.js stripSqlLineComments logic; lives here so
 // ensureTables() stays self-contained in the vendored client.
 function stripSqlLineComments(sql) {
     let out = '';
@@ -5239,7 +5244,7 @@ function stripSqlLineComments(sql) {
 
 // Quote-aware SQL statement splitter. Strips `--` line comments, then breaks on
 // ';' only outside quoted strings, so a ';' inside a string literal never tears a
-// statement into invalid fragments. Faithful copy of the indexer db.js
+// statement into invalid fragments. Faithful copy of the indexer src/db/index.js
 // splitSqlStatements logic; lives here so ensureTables() stays self-contained in
 // the vendored client.
 function splitSqlStatements(sql) {
@@ -5269,7 +5274,7 @@ function splitSqlStatements(sql) {
 // consumers that (unlike the indexer, whose verifyTables() owns its schema)
 // have no table-creation machinery of their own, e.g. the explorer's embedded
 // mirror. Must complete before HubDbSync.start(): starting against a missing
-// table poisons the per-table column cache (see _localColumns / the 2026-06-17
+// table poisons the per-table column cache (see localColumns / the 2026-06-17
 // cold-start regression). dbConn is the same doQuery-bearing object the
 // HubDbSync constructor takes. Retries each file with exponential backoff so a
 // transient DB blip at boot doesn't leave half-built schema.
@@ -5305,7 +5310,7 @@ async function ensureTables(dbConn, sqlDir) {
                 lastErr = err;
                 if (attempt >= MAX_ATTEMPTS) break;
                 const backoffMs = Math.min(30000, 500 * Math.pow(2, attempt - 1));
-                console.log('ensureTables: error creating ' + file + ' (attempt ' + attempt + '/' + MAX_ATTEMPTS + '): '
+                getLogger().info('ensureTables: error creating ' + file + ' (attempt ' + attempt + '/' + MAX_ATTEMPTS + '): '
                     + (err && err.message) + '. Retrying in ' + backoffMs + 'ms...');
                 await sleep(backoffMs);
             }
@@ -5322,7 +5327,7 @@ module.exports.ensureTables = ensureTables;
 // restating its numbers, which would let a future change here pass a stale test.
 module.exports.HUB_SYNC_WATERMARK_GRACE_S = HUB_SYNC_WATERMARK_GRACE_S;
 // Exported for the direct-hub-DB (no-mirror) call barrier in XChainIndexer.js, which
-// opens on the SAME frozen call grace as _callSyncSatisfied's watermark escape. It has
+// opens on the SAME frozen call grace as callSyncSatisfied's watermark escape. It has
 // to resolve that grace through this exact function, not a private copy: the regtest
 // override, the off-regtest ignore-with-warning and the invalid-value throw are part of
 // the constant's contract, and two nodes resolving it differently fork settlement.

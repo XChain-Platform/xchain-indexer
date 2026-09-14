@@ -367,7 +367,7 @@ describe('HubDbSync.requestResync @regression @tier1', function () {
         const sync = makeSync();
         sync.running = true;
         sync.ws = null;
-        const boot = sinon.stub(sync, '_bootstrapAll').resolves();
+        const boot = sinon.stub(sync, 'bootstrapAll').resolves();
         assert.strictEqual(sync.requestResync('poll mode'), true);
         await new Promise(r => setImmediate(r));
         assert.strictEqual(boot.callCount, 1);
@@ -377,7 +377,7 @@ describe('HubDbSync.requestResync @regression @tier1', function () {
         const sync = makeSync();
         sync.running = true;
         sync.ws = null;
-        sinon.stub(sync, '_bootstrapAll').rejects(new Error('hub down'));
+        sinon.stub(sync, 'bootstrapAll').rejects(new Error('hub down'));
         assert.strictEqual(sync.requestResync('poll mode'), true);
         await new Promise(r => setImmediate(r));
         await new Promise(r => setImmediate(r));

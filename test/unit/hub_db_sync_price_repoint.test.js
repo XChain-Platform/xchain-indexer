@@ -70,7 +70,7 @@ describe('HubDbSync price mirror repoint @regression @tier2', function () {
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test', network: 'testnet' });
         // price_snapshots carries no `network` column - that absence is the whole reason
         // the two existing purges cannot defend it, so the fixture must reproduce it.
-        sinon.stub(sync, '_localColumns').resolves(
+        sinon.stub(sync, 'localColumns').resolves(
             new Set(['id', 'round_number', 'coin_pair', 'price', 'reference_block', 'block_timestamp', 'status']));
         sinon.stub(sync, '_applyRow').callsFake(async (t, row) => {
             const i = rows.findIndex(r => String(r.round_number) === String(row.round_number) &&
@@ -85,7 +85,7 @@ describe('HubDbSync price mirror repoint @regression @tier2', function () {
         });
         // The buffered-replay path is exercised by its own suite; here it must simply
         // not veto the drain.
-        sinon.stub(sync, '_flushPendingPriceEvents').resolves(true);
+        sinon.stub(sync, 'flushPendingPriceEvents').resolves(true);
         return { sync, rows, seen, doQuery };
     }
 

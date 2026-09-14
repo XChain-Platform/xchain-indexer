@@ -132,7 +132,7 @@ describe('HubDbSync price-sync barrier @regression @tier3', function () {
         const pending = sync.waitForPriceSyncHeight(100, 60000);
         assert.strictEqual(sync._priceWaiters.length, 1);
         doQuery.callsFake(async () => [{ h: 150 }]);        // local mirror is actually current
-        await sync._refreshAllSyncHeights();               // simulate the reconnect-edge refresh
+        await sync.refreshAllSyncHeights();               // simulate the reconnect-edge refresh
         const got = await pending;
         assert.strictEqual(got, 150, 'waiter resolves from the mirror on reconnect, not the timeout');
         assert.strictEqual(sync._priceWaiters.length, 0, 'waiter cleared proactively');
@@ -174,25 +174,25 @@ describe('HubDbSync oracle-sync barrier @regression @tier3', function () {
 
     it('_refreshOracleSyncTimestamp adopts MAX(effective_at) and marks bootstrapped on the drain path', async function () {
         const { sync } = makeOracleSync(1700000000);
-        await sync._refreshOracleSyncTimestamp(true);   // armBootstrap=true = the full-drain path
+        await sync.refreshOracleSyncTimestamp(true);   // armBootstrap=true = the full-drain path
         assert.strictEqual(sync.oracleSyncTimestamp, 1700000000);
         assert.strictEqual(sync.oracleBootstrapped, true);
     });
 
     it('_refreshOracleSyncTimestamp records an empty mirror as null but still bootstrapped on the drain path', async function () {
         const { sync } = makeOracleSync(null);     // MAX over an empty table → null
-        await sync._refreshOracleSyncTimestamp(true);
+        await sync.refreshOracleSyncTimestamp(true);
         assert.strictEqual(sync.oracleSyncTimestamp, null);
         assert.strictEqual(sync.oracleBootstrapped, true);
     });
 
     it('_refreshOracleSyncTimestamp does NOT arm when the bootstrap has not drained (#1788)', async function () {
         // Default armBootstrap = this._bootstrapDrained (false here): a reconnect
-        // (_refreshAllSyncHeights before re-bootstrap) or a single live row mid-partial-
+        // (refreshAllSyncHeights before re-bootstrap) or a single live row mid-partial-
         // bootstrap updates the scalar but must NOT arm the empty-mirror fast path.
         const { sync } = makeOracleSync(null);
         assert.strictEqual(sync._bootstrapDrained, false);
-        await sync._refreshOracleSyncTimestamp();       // no arg = the reconnect/live-row default
+        await sync.refreshOracleSyncTimestamp();       // no arg = the reconnect/live-row default
         assert.strictEqual(sync.oracleSyncTimestamp, null, 'scalar still refreshed');
         assert.strictEqual(sync.oracleBootstrapped, false, 'flag withheld until a full drain');
     });
@@ -202,7 +202,7 @@ describe('HubDbSync oracle-sync barrier @regression @tier3', function () {
         sync.oracleSyncTimestamp = 1234;
         sync.oracleBootstrapped  = true;
         doQuery.rejects(new Error("Table 'oracle_prices' doesn't exist"));
-        await sync._refreshOracleSyncTimestamp();
+        await sync.refreshOracleSyncTimestamp();
         assert.strictEqual(sync.oracleSyncTimestamp, 1234, 'timestamp must not reset on query failure');
     });
 
@@ -213,7 +213,7 @@ describe('HubDbSync oracle-sync barrier @regression @tier3', function () {
         assert.strictEqual(sync._oracleWaiters.length, 1);
         // A sync delivers prices effective at/after the target block time.
         doQuery.callsFake(async () => [{ ts: 1600 }]);
-        await sync._refreshOracleSyncTimestamp();
+        await sync.refreshOracleSyncTimestamp();
         const got = await pending;
         assert.strictEqual(got, 1600);
         assert.strictEqual(sync._oracleWaiters.length, 0, 'waiter should be cleared on resolve');
@@ -229,7 +229,7 @@ describe('HubDbSync oracle-sync barrier @regression @tier3', function () {
 
     it('waitForOracleSyncTimestamp is a no-op once the mirror is known to be empty (no FIAT oracles)', async function () {
         const { sync } = makeOracleSync(null);
-        await sync._refreshOracleSyncTimestamp(true);  // full-drain path: empty table → bootstrapped, timestamp null
+        await sync.refreshOracleSyncTimestamp(true);  // full-drain path: empty table → bootstrapped, timestamp null
         // Must resolve immediately for any block time, otherwise non-oracle deployments stall.
         const got = await sync.waitForOracleSyncTimestamp(9999999999, 50);
         assert.strictEqual(got, null);
@@ -273,13 +273,13 @@ describe('HubDbSync stream-position watermark @regression @tier3', function () {
 
     it('_advanceWatermark is monotonic and ignores junk', function () {
         const sync = makeWatermarkSync();
-        sync._advanceWatermark(100);
+        sync.advanceWatermark(100);
         assert.strictEqual(sync.streamWatermark, 100);
-        sync._advanceWatermark(50);                       // regression must not rewind
+        sync.advanceWatermark(50);                       // regression must not rewind
         assert.strictEqual(sync.streamWatermark, 100);
-        sync._advanceWatermark('not-a-number');
+        sync.advanceWatermark('not-a-number');
         assert.strictEqual(sync.streamWatermark, 100);
-        sync._advanceWatermark(150);
+        sync.advanceWatermark(150);
         assert.strictEqual(sync.streamWatermark, 150);
     });
 
@@ -312,9 +312,9 @@ describe('HubDbSync stream-position watermark @regression @tier3', function () {
         sync.oracleBootstrapped   = true;
         sync.oracleSyncTimestamp  = 500;                  // armed: newest row far behind the tip
         sync.streamWatermark      = 1000 + 60;
-        assert.strictEqual(sync._oracleSyncSatisfied(1000), true);
+        assert.strictEqual(sync.oracleSyncSatisfied(1000), true);
         sync.streamWatermark      = 1000 + 59;
-        assert.strictEqual(sync._oracleSyncSatisfied(1000), false, 'must defer until grace is covered');
+        assert.strictEqual(sync.oracleSyncSatisfied(1000), false, 'must defer until grace is covered');
     });
 
     it('match barrier releases a stale armed match via the watermark (#1984, not coin-scoped)', function () {
@@ -322,9 +322,9 @@ describe('HubDbSync stream-position watermark @regression @tier3', function () {
         sync.matchBootstrapped  = true;
         sync.matchSyncTimestamp = 500;
         sync.streamWatermark    = 1000 + 30;
-        assert.strictEqual(sync._matchSyncSatisfied(1000), true);
+        assert.strictEqual(sync.matchSyncSatisfied(1000), true);
         sync.streamWatermark    = 1000 + 29;
-        assert.strictEqual(sync._matchSyncSatisfied(1000), false);
+        assert.strictEqual(sync.matchSyncSatisfied(1000), false);
     });
 
     it('a watermark advance releases an in-flight oracle waiter without a new row', async function () {
@@ -333,7 +333,7 @@ describe('HubDbSync stream-position watermark @regression @tier3', function () {
         sync.oracleSyncTimestamp = 500;                   // armed
         const pending = sync.waitForOracleSyncTimestamp(1000, 5000);
         assert.strictEqual(sync._oracleWaiters.length, 1);
-        sync._advanceWatermark(1000 + 60);                // heartbeat lands
+        sync.advanceWatermark(1000 + 60);                // heartbeat lands
         await pending;
         assert.strictEqual(sync._oracleWaiters.length, 0, 'waiter released by watermark, not by a row');
     });
@@ -342,7 +342,7 @@ describe('HubDbSync stream-position watermark @regression @tier3', function () {
         const sync = makeWatermarkSync();
         const marks = { price_snapshots: 900, oracle_prices: 880, cross_chain_matches: 910, cross_chain_calls: 915, capability_snapshots: 905, state_checkpoints: 920, anchor_reward_attestations: 925, attestation_responses: 930, bridge_transfers: 935, policy_snapshots: 940 };
         sinon.stub(sync, '_bootstrapTable').callsFake(async (table) => marks[table]);
-        await sync._bootstrapAll();
+        await sync.bootstrapAll();
         assert.strictEqual(sync._bootstrapDrained, true);
         assert.strictEqual(sync.streamWatermark, 880, 'min across tables; no table may be certified past its own drain');
     });
@@ -351,7 +351,7 @@ describe('HubDbSync stream-position watermark @regression @tier3', function () {
         const sync = makeWatermarkSync();
         sinon.stub(sync, '_bootstrapTable').callsFake(async (table) =>
             table === 'oracle_prices' ? null : 900);      // partial page / apply error
-        await sync._bootstrapAll();
+        await sync.bootstrapAll();
         assert.strictEqual(sync._bootstrapDrained, false);
         assert.strictEqual(sync.streamWatermark, 0, 'watermark must not advance on a partial drain');
     });
@@ -368,7 +368,7 @@ describe('HubDbSync stream-position watermark @regression @tier3', function () {
         const sync = makeWatermarkSync();
         const order = [];
         sinon.stub(sync, '_bootstrapTable').callsFake(async (table) => { order.push(table); return 900; });
-        await sync._bootstrapAll();
+        await sync.bootstrapAll();
         const pi = order.indexOf('price_snapshots');
         assert.ok(pi !== -1, 'price_snapshots bootstrapped');
         assert.strictEqual(pi, order.length - 1, 'price_snapshots must bootstrap LAST (got ' + order.join(',') + ')');
@@ -397,9 +397,9 @@ describe('HubDbSync bootstrap pagination + retry @regression @tier2', function (
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test', pollInterval: 50 });
         sinon.stub(sync, '_applyRow').resolves();
         sinon.stub(sync, '_refreshPriceSyncHeight').resolves();
-        sinon.stub(sync, '_refreshOracleSyncTimestamp').resolves();
-        sinon.stub(sync, '_refreshMatchSyncTimestamp').resolves();
-        sinon.stub(sync, '_releaseSnapshotWaiters').resolves();
+        sinon.stub(sync, 'refreshOracleSyncTimestamp').resolves();
+        sinon.stub(sync, 'refreshMatchSyncTimestamp').resolves();
+        sinon.stub(sync, 'releaseSnapshotWaiters').resolves();
         return sync;
     }
 
@@ -433,7 +433,7 @@ describe('HubDbSync bootstrap pagination + retry @regression @tier2', function (
     // collides with a local PK where INSERT IGNORE drops the row.
     it('capability_snapshots bootstraps from since_id=0 regardless of local MAX(id) (#2270)', async function () {
         const sync = makeBootstrapSync();
-        sinon.stub(sync, '_localColumns').resolves(new Set(['id', 'snapshot_block']));
+        sinon.stub(sync, 'localColumns').resolves(new Set(['id', 'snapshot_block']));
         sync.hubDb.doQuery = sinon.stub().resolves([{ max_id: 500 }]);   // local rows exist
         const httpGet = sinon.stub(sync, '_httpGet').resolves({ rows: [{ id: 3 }], watermark: 7 });
         assert.strictEqual(await sync._bootstrapTable('capability_snapshots'), 7);
@@ -449,7 +449,7 @@ describe('HubDbSync bootstrap pagination + retry @regression @tier2', function (
     ['price_snapshots', 'cross_chain_calls', 'cross_chain_matches'].forEach((table) => {
         it(`${table} bootstraps from since_id=0 regardless of local MAX(id) to re-fetch in-place upgrades (#2491)`, async function () {
             const sync = makeBootstrapSync();
-            sinon.stub(sync, '_localColumns').resolves(new Set(['id', 'status']));
+            sinon.stub(sync, 'localColumns').resolves(new Set(['id', 'status']));
             sync.hubDb.doQuery = sinon.stub().resolves([{ max_id: 500 }]);   // local rows already present
             const httpGet = sinon.stub(sync, '_httpGet').resolves({ rows: [{ id: 3 }], watermark: 7 });
             await sync._bootstrapTable(table);
@@ -523,7 +523,7 @@ describe('HubDbSync bootstrap pagination + retry @regression @tier2', function (
     it('_applyRow strips the wire id for capability_snapshots so a local PK can never collide (#2270)', async function () {
         const doQuery = sinon.stub().resolves([]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
-        sinon.stub(sync, '_localColumns').resolves(
+        sinon.stub(sync, 'localColumns').resolves(
             new Set(['id', 'snapshot_block', 'capability', 'signing_pubkey', 'amount', 'source']));
         await sync._applyRow('capability_snapshots',
             { id: 42, snapshot_block: 1, capability: 'cross_chain', signing_pubkey: 'aa', amount: '10', source: 's1' });
@@ -552,7 +552,7 @@ describe('HubDbSync bootstrap pagination + retry @regression @tier2', function (
             bootstrapTable.onCall(0).resolves(null);    // price_snapshots fails round 1
             bootstrapTable.resolves(123);               // everything drains afterwards
 
-            await sync._bootstrapAll();
+            await sync.bootstrapAll();
             assert.strictEqual(sync._bootstrapDrained, false, 'gate closed after partial drain');
 
             await clock.tickAsync(sync.pollIntervalMs + 1);
@@ -569,7 +569,7 @@ describe('HubDbSync bootstrap pagination + retry @regression @tier2', function (
             const sync = makeBootstrapSync();
             sync.running = false;                       // stopped: no retry even on failure
             const bootstrapTable = sinon.stub(sync, '_bootstrapTable').resolves(null);
-            await sync._bootstrapAll();
+            await sync.bootstrapAll();
             await clock.tickAsync(sync.pollIntervalMs * 3);
             assert.strictEqual(bootstrapTable.callCount, 10, 'one pass over the 10 mirrored tables, no retries');
         } finally {
@@ -1130,7 +1130,7 @@ describe('HubDbSync _applyRow datetime coercion @regression @tier2', function ()
         // 2026-06-16 ER_TRUNCATED_WRONG_VALUE mirror-kill: with no type to key on,
         // an ISO-8601 string is still reformatted.
         const sync = new HubDbSync({ doQuery: sinon.stub().resolves([]) }, { hubUrl: 'http://hub.test' });
-        assert.strictEqual(sync._cachedColumnType('oracle_prices', 'created_at'), '');
+        assert.strictEqual(sync.cachedColumnType('oracle_prices', 'created_at'), '');
         const cols = ['id', 'created_at'];
         const { sync: s2, doQuery } = makeApplySync(cols);
         await s2._applyRow('oracle_prices', { id: 1, created_at: '2026-06-16T10:33:01.000Z' });
@@ -1143,7 +1143,7 @@ describe('HubDbSync mirror-table cold-start (missing table) @regression @tier2',
     // Prod rollout abort 2026-06-17: on a fresh `reset`, hub_db_sync began
     // bootstrapping before the indexer's verifyTables() had created price_snapshots.
     // doQuery swallows the 1146 (missing table) for non-transactional reads and
-    // returns [], so _localColumns cached an EMPTY column set for the whole process
+    // returns [], so localColumns cached an EMPTY column set for the whole process
     // lifetime; every _applyRow then filtered to zero columns and silently no-op'd
     // (while still counting the row as "applied", hence "bootstrapped 44614 rows"),
     // the mirror stayed at 0, and the BTC-only price barrier deferred every block
@@ -1153,7 +1153,7 @@ describe('HubDbSync mirror-table cold-start (missing table) @regression @tier2',
     it('_localColumns refuses to cache an empty column set and throws (table not ready)', async function () {
         const doQuery = sinon.stub().resolves([]);              // SHOW COLUMNS on a missing table
         const sync = new HubDbSync({ doQuery }, {});
-        await assert.rejects(() => sync._localColumns('price_snapshots'), /not available yet/);
+        await assert.rejects(() => sync.localColumns('price_snapshots'), /not available yet/);
         assert.ok(!sync._localColumnCache || !sync._localColumnCache['price_snapshots'],
             'an empty/failed lookup must NOT be cached (else it poisons the mirror until restart)');
     });
@@ -1163,7 +1163,7 @@ describe('HubDbSync mirror-table cold-start (missing table) @regression @tier2',
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
         const httpGet = sinon.stub(sync, '_httpGet');
         assert.strictEqual(await sync._bootstrapTable('price_snapshots'), null,
-            'an absent table must report not-drained so _bootstrapAll schedules a retry');
+            'an absent table must report not-drained so bootstrapAll schedules a retry');
         assert.strictEqual(httpGet.callCount, 0,
             'must not fetch from the hub at all when the local table is absent');
     });
@@ -1246,7 +1246,7 @@ describe('HubDbSync bootstrap fail-closed on partial drain / holes @regression @
         httpGet.onFirstCall().resolves({ rows: [], watermark: 10 });          // main page: clean short drain
         httpGet.onSecondCall().resolves({ rows: [{ id: 6 }], schema_version: 999999 });  // catch-up: mismatch
         sinon.stub(sync, '_applyRow').resolves();
-        const refresh = sinon.stub(sync, '_refreshOracleSyncTimestamp').resolves();
+        const refresh = sinon.stub(sync, 'refreshOracleSyncTimestamp').resolves();
 
         const result = await sync._bootstrapTable('oracle_prices');
 
@@ -1281,7 +1281,7 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
         const applyRow = sinon.stub(sync, '_applyRow').resolves();
         const refresh  = sinon.stub(sync, '_refreshPriceSyncHeight').resolves();
         assert.strictEqual(sync._priceDrained, false, 'price drain pending on a fresh connection');
-        await sync._handleRowEvent({ type: 'row:inserted', table: 'price_snapshots',
+        await sync.handleRowEvent({ type: 'row:inserted', table: 'price_snapshots',
             row: { id: 37032, reference_block: 900000, status: 'finalized' } });
         assert.ok(applyRow.notCalled, 'must not apply ahead of the still-draining bootstrap');
         assert.ok(refresh.notCalled, 'must not refresh (a MAX() read would adopt the holed height)');
@@ -1294,7 +1294,7 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
     it('a live price retraction mid-bootstrap buffers too (replay order vs its insert is consensus-relevant)', async function () {
         const { sync } = makeBufferSync();
         const retract = sinon.stub(sync, '_applyRetraction').resolves();
-        await sync._handleRowEvent({ type: 'row:deleted', table: 'price_snapshots',
+        await sync.handleRowEvent({ type: 'row:deleted', table: 'price_snapshots',
             source_chain: 'BTC', from_action_index: 50 });
         assert.ok(retract.notCalled, 'deletion deferred behind any buffered insert it may retract');
         assert.strictEqual(sync._pendingPriceEvents.length, 1);
@@ -1303,8 +1303,8 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
     it('live rows for OTHER tables still apply immediately mid-bootstrap', async function () {
         const { sync } = makeBufferSync();
         const applyRow = sinon.stub(sync, '_applyRow').resolves();
-        const refresh  = sinon.stub(sync, '_refreshOracleSyncTimestamp').resolves();
-        await sync._handleRowEvent({ type: 'row:inserted', table: 'oracle_prices', row: { id: 1 } });
+        const refresh  = sinon.stub(sync, 'refreshOracleSyncTimestamp').resolves();
+        await sync.handleRowEvent({ type: 'row:inserted', table: 'oracle_prices', row: { id: 1 } });
         assert.ok(applyRow.calledOnce, 'non-price mirrors keep the live path');
         assert.ok(refresh.calledOnce);
         assert.strictEqual(sync._pendingPriceEvents.length, 0);
@@ -1313,7 +1313,7 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
     it('a schema-mismatched live price event is refused outright, never buffered for replay', async function () {
         const { sync } = makeBufferSync();
         const applyRow = sinon.stub(sync, '_applyRow').resolves();
-        await sync._handleRowEvent({ type: 'row:inserted', table: 'price_snapshots',
+        await sync.handleRowEvent({ type: 'row:inserted', table: 'price_snapshots',
             schema_version: 999999, row: { id: 1 } });
         assert.ok(applyRow.notCalled);
         assert.strictEqual(sync._pendingPriceEvents.length, 0, 'a bad-shape row must not survive to the flush');
@@ -1323,7 +1323,7 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
     it('the drain replays buffered events in arrival order, arms the refresh, and resumes the live path', async function () {
         const doQuery = sinon.stub().resolves([{ max_id: null }]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
-        sinon.stub(sync, '_localColumns').resolves(new Set(['id', 'status']));
+        sinon.stub(sync, 'localColumns').resolves(new Set(['id', 'status']));
         sinon.stub(sync, '_httpGet').resolves({ rows: [{ id: 1 }, { id: 2 }], watermark: 55 });
         const seq = [];
         sinon.stub(sync, '_applyRow').callsFake(async (t, row) => { seq.push('insert:' + row.id); });
@@ -1331,8 +1331,8 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
         const refresh = sinon.stub(sync, '_refreshPriceSyncHeight').resolves();
 
         // Two live events land mid-drain: a fresh round, then its retraction.
-        await sync._handleRowEvent({ type: 'row:inserted', table: 'price_snapshots', row: { id: 9 } });
-        await sync._handleRowEvent({ type: 'row:deleted', table: 'price_snapshots', source_chain: 'BTC', from_action_index: 9 });
+        await sync.handleRowEvent({ type: 'row:inserted', table: 'price_snapshots', row: { id: 9 } });
+        await sync.handleRowEvent({ type: 'row:deleted', table: 'price_snapshots', source_chain: 'BTC', from_action_index: 9 });
         assert.deepStrictEqual(seq, [], 'nothing applied before the drain');
 
         const mark = await sync._bootstrapTable('price_snapshots');
@@ -1344,7 +1344,7 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
         assert.ok(refresh.calledOnce, 'the barrier refresh runs once, after the replay');
 
         // Live path resumes: the next event applies immediately and refreshes.
-        await sync._handleRowEvent({ type: 'row:inserted', table: 'price_snapshots', row: { id: 10 } });
+        await sync.handleRowEvent({ type: 'row:inserted', table: 'price_snapshots', row: { id: 10 } });
         assert.deepStrictEqual(seq.slice(-1), ['insert:10']);
         assert.ok(refresh.calledTwice, 'post-drain live rows refresh as before');
     });
@@ -1352,17 +1352,17 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
     it('a failed replay fails closed: the table reports not-drained and the failed event stays buffered', async function () {
         const doQuery = sinon.stub().resolves([{ max_id: null }]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
-        sinon.stub(sync, '_localColumns').resolves(new Set(['id']));
+        sinon.stub(sync, 'localColumns').resolves(new Set(['id']));
         sinon.stub(sync, '_httpGet').resolves({ rows: [{ id: 1 }], watermark: 55 });
         const applyRow = sinon.stub(sync, '_applyRow');
         applyRow.resolves();
         applyRow.withArgs('price_snapshots', sinon.match({ id: 9 })).rejects(new Error('ER_SOMETHING'));
         const refresh = sinon.stub(sync, '_refreshPriceSyncHeight').resolves();
-        await sync._handleRowEvent({ type: 'row:inserted', table: 'price_snapshots', row: { id: 9 } });
-        await sync._handleRowEvent({ type: 'row:inserted', table: 'price_snapshots', row: { id: 10 } });
+        await sync.handleRowEvent({ type: 'row:inserted', table: 'price_snapshots', row: { id: 9 } });
+        await sync.handleRowEvent({ type: 'row:inserted', table: 'price_snapshots', row: { id: 10 } });
 
         const mark = await sync._bootstrapTable('price_snapshots');
-        assert.strictEqual(mark, null, 'flush failure must report not-drained so _bootstrapAll retries');
+        assert.strictEqual(mark, null, 'flush failure must report not-drained so bootstrapAll retries');
         assert.strictEqual(sync._priceDrained, false, 'live path must not open over the missed round');
         assert.strictEqual(sync._pendingPriceEvents.length, 2, 'failed event and tail stay buffered for the retry');
         assert.ok(refresh.notCalled, 'must not arm the barrier over the hole');
@@ -1371,12 +1371,12 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
     it('a disconnect racing the drain cannot stale-arm the live path (epoch guard)', async function () {
         const doQuery = sinon.stub().resolves([{ max_id: null }]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
-        sinon.stub(sync, '_localColumns').resolves(new Set(['id']));
+        sinon.stub(sync, 'localColumns').resolves(new Set(['id']));
         sinon.stub(sync, '_httpGet').resolves({ rows: [], watermark: 55 });
         const refresh = sinon.stub(sync, '_refreshPriceSyncHeight').resolves();
         // Simulate the socket closing while the flush is in flight (the close
         // handler bumps _wsEpoch and resets the per-connection drain state).
-        sinon.stub(sync, '_flushPendingPriceEvents').callsFake(async () => { sync._wsEpoch++; return true; });
+        sinon.stub(sync, 'flushPendingPriceEvents').callsFake(async () => { sync._wsEpoch++; return true; });
 
         const mark = await sync._bootstrapTable('price_snapshots');
         assert.strictEqual(mark, null, 'a raced drain must not certify the table');
@@ -1387,11 +1387,11 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
     it('buffer overflow forces a re-drain instead of opening the gate over dropped events', async function () {
         const { sync } = makeBufferSync();
         sync._pendingPriceEvents = new Array(10000).fill({ type: 'row:inserted', row: { id: 1 } });
-        sync._bufferPriceEvent({ type: 'row:inserted', row: { id: 99999 } });
+        sync.bufferPriceEvent({ type: 'row:inserted', row: { id: 99999 } });
         assert.strictEqual(sync._pendingPriceOverflow, true, 'overflow flagged');
         assert.strictEqual(sync._pendingPriceEvents.length, 0, 'buffer abandoned (rows re-page from the hub)');
-        assert.strictEqual(await sync._flushPendingPriceEvents(), false,
-            'the flush reports not-drained so _bootstrapAll re-pages the dropped rows');
+        assert.strictEqual(await sync.flushPendingPriceEvents(), false,
+            'the flush reports not-drained so bootstrapAll re-pages the dropped rows');
         assert.strictEqual(sync._pendingPriceOverflow, false, 'flag consumed; the retry starts clean');
     });
 
@@ -1408,7 +1408,7 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
         sync._bootstrapDrained = false;            // reconnect edge: gate closed...
         sync._priceDrained     = false;            // ...and the price re-drain still pending
         const pending = sync.waitForPriceSyncHeight(100, 60000);
-        await sync._refreshAllSyncHeights();       // the reconnect-edge proactive refresh
+        await sync.refreshAllSyncHeights();       // the reconnect-edge proactive refresh
         assert.strictEqual(await pending, 150, 'barrier opens from the complete local mirror, not the timeout');
         assert.strictEqual(sync._priceWaiters.length, 0);
     });
@@ -1424,7 +1424,7 @@ describe('HubDbSync call-sync watermark chain scoping @regression @tier1', funct
         doQuery.callsFake(async (sql, args) => { captured = { sql, args }; return [{ ts: 123 }]; });
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test', coin: 'BTC' });
 
-        await sync._refreshCallSyncTimestamp();
+        await sync.refreshCallSyncTimestamp();
 
         assert.ok(captured, 'query ran');
         assert.ok(/cross_chain_calls/.test(captured.sql));
@@ -1440,7 +1440,7 @@ describe('HubDbSync call-sync watermark chain scoping @regression @tier1', funct
         doQuery.callsFake(async (sql, args) => { captured = { sql, args }; return [{ ts: 5 }]; });
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
 
-        await sync._refreshCallSyncTimestamp();
+        await sync.refreshCallSyncTimestamp();
 
         assert.ok(!/target_chain/.test(captured.sql), 'no coin -> no chain filter');
         assert.deepStrictEqual(captured.args, []);
@@ -1458,7 +1458,7 @@ describe('HubDbSync match-sync watermark chain scoping @regression @tier1', func
         doQuery.callsFake(async (sql, args) => { captured = { sql, args }; return [{ ts: 456 }]; });
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test', coin: 'BTC' });
 
-        await sync._refreshMatchSyncTimestamp();
+        await sync.refreshMatchSyncTimestamp();
 
         assert.ok(captured, 'query ran');
         assert.ok(/cross_chain_matches/.test(captured.sql));
@@ -1474,7 +1474,7 @@ describe('HubDbSync match-sync watermark chain scoping @regression @tier1', func
         doQuery.callsFake(async (sql, args) => { captured = { sql, args }; return [{ ts: 9 }]; });
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
 
-        await sync._refreshMatchSyncTimestamp();
+        await sync.refreshMatchSyncTimestamp();
 
         assert.ok(!/a_chain/.test(captured.sql), 'no coin -> no chain filter');
         assert.deepStrictEqual(captured.args, []);
@@ -1840,7 +1840,7 @@ describe('HubDbSync time-keyed price barrier (H-3) @regression @tier3', function
         const { sync } = makeTimeSync(0, 0);
         await sync._refreshPriceSyncHeight();
         const pending = sync.waitForPriceSyncTime(4000, 2000);
-        sync._advanceWatermark(4000 + sync.priceWatermarkGraceS);
+        sync.advanceWatermark(4000 + sync.priceWatermarkGraceS);
         const got = await pending;
         assert.strictEqual(got, 0, 'watermark satisfaction does not require any local round');
     });
@@ -1891,7 +1891,7 @@ describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () 
         try {
             const sync = makeWatchdogSync();
             const ws = stubWs();
-            sync._startWatchdog(ws);
+            sync.startWatchdog(ws);
 
             clock.tick(29999);
             assert.strictEqual(ws.terminate.called, false, 'must not terminate before the 3x threshold');
@@ -1908,7 +1908,7 @@ describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () 
         try {
             const sync = makeWatchdogSync();
             const ws = stubWs();
-            sync._startWatchdog(ws);
+            sync.startWatchdog(ws);
 
             // Simulate a heartbeat landing every 10s, well inside the 30s timeout,
             // for several times longer than the timeout would otherwise allow.
@@ -1928,7 +1928,7 @@ describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () 
             const sync = makeWatchdogSync();
             sync._bootstrapDrained = true;
             const ws = stubWs();
-            sync._startWatchdog(ws);
+            sync.startWatchdog(ws);
 
             // Advance close to (but under) the threshold, then simulate what the
             // 'watermark' message handler does: stamp liveness and advance the
@@ -1936,7 +1936,7 @@ describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () 
             // through another full interval.
             clock.tick(25000);
             sync._lastHeartbeatAt = Date.now();
-            sync._advanceWatermark(1);
+            sync.advanceWatermark(1);
             clock.tick(25000);
             assert.strictEqual(ws.terminate.called, false, 'a fresh heartbeat must reset the idle clock');
         } finally {
@@ -1949,10 +1949,10 @@ describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () 
         try {
             const sync = makeWatchdogSync();
             const ws = stubWs();
-            sync._startWatchdog(ws);
+            sync.startWatchdog(ws);
             assert.ok(sync._watchdogTimer, 'watchdog timer set while socket is open');
 
-            sync._stopWatchdog();
+            sync.stopWatchdog();
             assert.strictEqual(sync._watchdogTimer, null, 'timer reference cleared');
 
             clock.tick(60000);
@@ -1967,11 +1967,11 @@ describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () 
         try {
             const sync = makeWatchdogSync();
             const ws1 = stubWs();
-            sync._startWatchdog(ws1);
+            sync.startWatchdog(ws1);
             const firstTimer = sync._watchdogTimer;
 
             const ws2 = stubWs();
-            sync._startWatchdog(ws2);
+            sync.startWatchdog(ws2);
             assert.notStrictEqual(sync._watchdogTimer, firstTimer, 'a new timer replaces the old one');
 
             clock.tick(30000);
@@ -1984,7 +1984,7 @@ describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () 
     it('adopts the hub-advertised watermark interval and resizes the timeout to 3x', function () {
         const sync = makeWatchdogSync();
         assert.strictEqual(sync.watermarkTimeoutMs, 30000, 'seed timeout is 3x the env/option interval');
-        const adopted = sync._adoptHubWatermarkInterval(45000);
+        const adopted = sync.adoptHubWatermarkInterval(45000);
         assert.strictEqual(adopted, true, 'a valid interval is adopted');
         assert.strictEqual(sync.watermarkIntervalMs, 45000);
         assert.strictEqual(sync.watermarkTimeoutMs, 135000, 'timeout self-sizes to 3x the hub cadence');
@@ -1993,7 +1993,7 @@ describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () 
     it('ignores a missing/invalid advertised interval, keeping the env-seeded timeout (older hub)', function () {
         const sync = makeWatchdogSync();
         for (const bad of [undefined, null, 0, -1, 'x', NaN]) {
-            assert.strictEqual(sync._adoptHubWatermarkInterval(bad), false, 'invalid interval is not adopted');
+            assert.strictEqual(sync.adoptHubWatermarkInterval(bad), false, 'invalid interval is not adopted');
         }
         assert.strictEqual(sync.watermarkIntervalMs, 10000, 'interval unchanged');
         assert.strictEqual(sync.watermarkTimeoutMs, 30000, 'timeout unchanged (env-seeded fallback intact)');
@@ -2005,9 +2005,9 @@ describe('HubDbSync heartbeat-timeout watchdog @regression @tier2', function () 
             const sync = makeWatchdogSync();
             // Hub raised its interval to 45s; without adoption the 30s (3x10s) timeout
             // would terminate a socket that legitimately heartbeats every 45s.
-            sync._adoptHubWatermarkInterval(45000);
+            sync.adoptHubWatermarkInterval(45000);
             const ws = stubWs();
-            sync._startWatchdog(ws);
+            sync.startWatchdog(ws);
 
             for (let i = 0; i < 6; i++) {
                 clock.tick(45000);
@@ -2224,7 +2224,7 @@ describe('HubDbSync anchor-reward attestation barrier @regression @tier1', funct
     it('does NOT resolve on a watermark that is short by the grace margin', function () {
         const { sync } = makeSync(0);
         sync.streamWatermark = 1000 + sync.anchorAttestWatermarkGraceS - 1;
-        assert.strictEqual(sync._anchorAttestSyncSatisfied(1000), false);
+        assert.strictEqual(sync.anchorAttestSyncSatisfied(1000), false);
     });
 
     it('resolves once a later watermark advance covers the block', async function () {
@@ -2232,7 +2232,7 @@ describe('HubDbSync anchor-reward attestation barrier @regression @tier1', funct
         sync.streamWatermark = 0;
         const pending = sync.waitForAnchorAttestationSync(1000, 2000);
         assert.strictEqual(sync._anchorAttestWaiters.length, 1, 'the block waits rather than deriving a partial set');
-        sync._advanceWatermark(1000 + sync.anchorAttestWatermarkGraceS);
+        sync.advanceWatermark(1000 + sync.anchorAttestWatermarkGraceS);
         await pending;
         assert.strictEqual(sync._anchorAttestWaiters.length, 0, 'waiter cleared on resolve');
     });
@@ -2251,7 +2251,7 @@ describe('HubDbSync anchor-reward attestation barrier @regression @tier1', funct
     it('is satisfied by definition when sync is disabled', async function () {
         const sync = new HubDbSync({ doQuery: sinon.stub().resolves([]) }, { hubUrl: '' });
         assert.strictEqual(sync.enabled, false);
-        assert.strictEqual(sync._anchorAttestSyncSatisfied(999999), true);
+        assert.strictEqual(sync.anchorAttestSyncSatisfied(999999), true);
         await sync.waitForAnchorAttestationSync(999999, 10);
     });
 
@@ -2284,16 +2284,16 @@ describe('HubDbSync anchor-attest maturity-horizon bound @regression @tier1', fu
         const { sync } = makeSync(0);
         const grace = sync.anchorAttestWatermarkGraceS;
         sync.streamWatermark = 900 + grace;
-        assert.strictEqual(sync._anchorAttestSyncSatisfied(1000), false,
+        assert.strictEqual(sync.anchorAttestSyncSatisfied(1000), false,
             'without a bound the +7200-class block holds');
-        assert.strictEqual(sync._anchorAttestSyncSatisfied(1000, 900), true,
+        assert.strictEqual(sync.anchorAttestSyncSatisfied(1000, 900), true,
             'with the horizon bound it proceeds');
     });
 
     it('a bound ABOVE blockTime cannot delay the barrier (min(), never max())', function () {
         const { sync } = makeSync(0);
         sync.streamWatermark = 1000 + sync.anchorAttestWatermarkGraceS;
-        assert.strictEqual(sync._anchorAttestSyncSatisfied(1000, 999999), true,
+        assert.strictEqual(sync.anchorAttestSyncSatisfied(1000, 999999), true,
             'the bound may only ever open EARLIER; a large one is simply ignored');
     });
 
@@ -2301,9 +2301,9 @@ describe('HubDbSync anchor-attest maturity-horizon bound @regression @tier1', fu
         const { sync } = makeSync(0);
         const grace = sync.anchorAttestWatermarkGraceS;
         sync.streamWatermark = 1000 + grace - 1;
-        assert.strictEqual(sync._anchorAttestSyncSatisfied(1000, null), false);
+        assert.strictEqual(sync.anchorAttestSyncSatisfied(1000, null), false);
         sync.streamWatermark = 1000 + grace;
-        assert.strictEqual(sync._anchorAttestSyncSatisfied(1000, null), true);
+        assert.strictEqual(sync.anchorAttestSyncSatisfied(1000, null), true);
     });
 
     // THE TRAP THIS GUARD EXISTS FOR. getBlockTime returns literal `false` for a block the
@@ -2315,12 +2315,12 @@ describe('HubDbSync anchor-attest maturity-horizon bound @regression @tier1', fu
         const grace = sync.anchorAttestWatermarkGraceS;
         sync.streamWatermark = grace;          // enough for a bound of 0, nowhere near blockTime
         for (const bogus of [false, true, null, undefined, NaN, Infinity, '', '900', [], {}]) {
-            assert.strictEqual(sync._anchorAttestSyncSatisfied(1000, bogus), false,
+            assert.strictEqual(sync.anchorAttestSyncSatisfied(1000, bogus), false,
                 'a bound of ' + JSON.stringify(bogus) + ' must not open the barrier');
         }
         // and the same watermark with a REAL bound of 0 does open it, so the case above is
         // rejecting the sentinel rather than the arithmetic.
-        assert.strictEqual(sync._anchorAttestSyncSatisfied(1000, 0), true);
+        assert.strictEqual(sync.anchorAttestSyncSatisfied(1000, 0), true);
     });
 
     it('the waiter carries its bound, so a later advance releases it on the bound', async function () {
@@ -2330,7 +2330,7 @@ describe('HubDbSync anchor-attest maturity-horizon bound @regression @tier1', fu
         assert.strictEqual(sync._anchorAttestWaiters.length, 1);
         // Short of blockTime + grace, but past bound + grace: only a waiter that kept its
         // bound can be released here.
-        sync._advanceWatermark(900 + sync.anchorAttestWatermarkGraceS);
+        sync.advanceWatermark(900 + sync.anchorAttestWatermarkGraceS);
         await pending;
         assert.strictEqual(sync._anchorAttestWaiters.length, 0);
     });
@@ -2360,7 +2360,7 @@ describe('HubDbSync anchor-attest maturity-horizon bound @regression @tier1', fu
     it('the six single-argument callers keep working under the optional parameters', function () {
         const { sync } = makeSync(0);
         sync.streamWatermark = 1000 + sync.anchorAttestWatermarkGraceS;
-        assert.strictEqual(sync._anchorAttestSyncSatisfied(1000), true);
+        assert.strictEqual(sync.anchorAttestSyncSatisfied(1000), true);
     });
 });
 
@@ -2392,21 +2392,21 @@ describe('HubDbSync height watermark wire contract @regression @tier1', function
 
     it('a carrier with no usable map CLEARS the previous one rather than coasting on it', function () {
         const { sync } = makeSync(0);
-        sync._noteHeights({ cross_chain_matches: { BTC: 10 } });
+        sync.noteHeights({ cross_chain_matches: { BTC: 10 } });
         assert.deepStrictEqual(sync.heightWatermarks, { cross_chain_matches: { BTC: 10 } });
         // An older hub, or one that stopped publishing: a v6 hub serving a v7 indexer above
         // the activation must make it DEFER, not run on a claim nobody is renewing.
-        sync._noteHeights(undefined);
+        sync.noteHeights(undefined);
         assert.deepStrictEqual(sync.heightWatermarks, {});
     });
 
     it('the first install arms the height stall axis; a repeat does not restart its window', function () {
         const { sync } = makeSync(0);
         assert.strictEqual(sync._heightsLastAdvanceAt, null, 'cold start, not a stall');
-        sync._noteHeights({ t: { BTC: 5 } });
+        sync.noteHeights({ t: { BTC: 5 } });
         const first = sync._heightsLastAdvanceAt;
         assert.ok(first !== null);
-        sync._noteHeights({ t: { BTC: 5 } });
+        sync.noteHeights({ t: { BTC: 5 } });
         assert.strictEqual(sync._heightsLastAdvanceAt, first, 'a hub repeating itself has not advanced');
     });
 
@@ -2417,7 +2417,7 @@ describe('HubDbSync height watermark wire contract @regression @tier1', function
             this._pendingBootstrapHeights = { oracle_prices: { BTC: 77 } };
             return 12345;
         };
-        await sync._bootstrapAll();
+        await sync.bootstrapAll();
         assert.strictEqual(sync._bootstrapDrained, true);
         assert.deepStrictEqual(sync.heightWatermarks, { oracle_prices: { BTC: 77 } });
     });
@@ -2429,7 +2429,7 @@ describe('HubDbSync height watermark wire contract @regression @tier1', function
             this._pendingBootstrapHeights = { oracle_prices: { BTC: 77 } };
             return 12345;
         };
-        await sync._bootstrapAll();
+        await sync.bootstrapAll();
         assert.deepStrictEqual(sync.heightWatermarks, {},
             'a poll-mode mirror cannot observe an upsert, so it certifies nothing on either axis');
     });
@@ -2439,7 +2439,7 @@ describe('HubDbSync height watermark wire contract @regression @tier1', function
         sync._pollMode = false;
         sync._readyHeights = { policy_snapshots: { DOGE: 9 } };
         sync._bootstrapTable = async function () { return 12345; };
-        await sync._bootstrapAll();
+        await sync.bootstrapAll();
         assert.deepStrictEqual(sync.heightWatermarks, { policy_snapshots: { DOGE: 9 } });
     });
 
@@ -2455,7 +2455,7 @@ describe('HubDbSync height watermark wire contract @regression @tier1', function
     it('a heartbeat frame installs NOTHING before the bootstrap has drained', function () {
         const { sync } = makeSync(0);
         sync._bootstrapDrained = false;
-        sync._handleWatermarkFrame({ ts: 5000, heights: { oracle_prices: { BTC: 42 } } });
+        sync.handleWatermarkFrame({ ts: 5000, heights: { oracle_prices: { BTC: 42 } } });
         assert.deepStrictEqual(sync.heightWatermarks, {}, 'no height evidence before the drain');
         assert.strictEqual(sync.streamWatermark, 0, 'and no seconds evidence either, as always');
     });
@@ -2463,7 +2463,7 @@ describe('HubDbSync height watermark wire contract @regression @tier1', function
     it('a heartbeat frame installs BOTH once the bootstrap has drained', function () {
         const { sync } = makeSync(0);
         sync._bootstrapDrained = true;
-        sync._handleWatermarkFrame({ ts: 5000, heights: { oracle_prices: { BTC: 42 } } });
+        sync.handleWatermarkFrame({ ts: 5000, heights: { oracle_prices: { BTC: 42 } } });
         assert.deepStrictEqual(sync.heightWatermarks, { oracle_prices: { BTC: 42 } });
         assert.strictEqual(sync.streamWatermark, 5000);
     });
@@ -2472,7 +2472,7 @@ describe('HubDbSync height watermark wire contract @regression @tier1', function
         const { sync } = makeSync(0);
         sync._bootstrapDrained   = true;
         sync._schemaMismatchSeen = true;
-        sync._handleWatermarkFrame({ ts: 5000, heights: { oracle_prices: { BTC: 42 } } });
+        sync.handleWatermarkFrame({ ts: 5000, heights: { oracle_prices: { BTC: 42 } } });
         assert.deepStrictEqual(sync.heightWatermarks, {},
             'rows are being REFUSED under a mismatch, so certifying either axis would settle ' +
             'blocks against data this node did not apply');
@@ -2485,12 +2485,12 @@ describe('HubDbSync height watermark wire contract @regression @tier1', function
     it('_publishedHeight refuses anything that is not a real height, sanitizer or no sanitizer', function () {
         const { sync } = makeSync(0);
         sync.heightWatermarks = { t: { BTC: '900', LTC: true, DOGE: 900.5, XCP: -1, ZZZ: 900 } };
-        assert.strictEqual(sync._publishedHeight('t', 'BTC'), null, 'a digit string is not a number');
-        assert.strictEqual(sync._publishedHeight('t', 'LTC'), null, 'true is not height one');
-        assert.strictEqual(sync._publishedHeight('t', 'DOGE'), null, 'a height is an integer');
-        assert.strictEqual(sync._publishedHeight('t', 'XCP'), null, 'a height is not negative');
-        assert.strictEqual(sync._publishedHeight('t', 'ZZZ'), 900);
-        assert.strictEqual(sync._publishedHeight('missing', 'BTC'), null);
+        assert.strictEqual(sync.publishedHeight('t', 'BTC'), null, 'a digit string is not a number');
+        assert.strictEqual(sync.publishedHeight('t', 'LTC'), null, 'true is not height one');
+        assert.strictEqual(sync.publishedHeight('t', 'DOGE'), null, 'a height is an integer');
+        assert.strictEqual(sync.publishedHeight('t', 'XCP'), null, 'a height is not negative');
+        assert.strictEqual(sync.publishedHeight('t', 'ZZZ'), 900);
+        assert.strictEqual(sync.publishedHeight('missing', 'BTC'), null);
     });
 });
 
@@ -2554,9 +2554,9 @@ describe('watermarkStallVerdict height dimension @regression @tier1', function (
     it('the shortfall record clears itself when the map catches up', function () {
         const { sync } = makeSync(0);
         sync._heightShortfalls = { 'cross_chain_matches|BTC': 996 };
-        sync._noteHeights({ cross_chain_matches: { BTC: 995 } });
-        assert.strictEqual(sync._heightsShort(), true, 'still one short');
-        sync._noteHeights({ cross_chain_matches: { BTC: 996 } });
-        assert.strictEqual(sync._heightsShort(), false, 'caught up, so no longer stalled');
+        sync.noteHeights({ cross_chain_matches: { BTC: 995 } });
+        assert.strictEqual(sync.heightsShort(), true, 'still one short');
+        sync.noteHeights({ cross_chain_matches: { BTC: 996 } });
+        assert.strictEqual(sync.heightsShort(), false, 'caught up, so no longer stalled');
     });
 });

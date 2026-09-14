@@ -207,7 +207,7 @@ describe('waitingOnFutureBlock() / stallClassOf() / atProcessableTip()', functio
 /*
  * Every barrier keys its stallClearsAt on ITS OWN grace field.
  *
- * The call barrier borrowed matchWatermarkGraceS long after _callSyncSatisfied
+ * The call barrier borrowed matchWatermarkGraceS long after callSyncSatisfied
  * had been decoupled onto callWatermarkGraceS. Both constants are 120s today, so
  * the emitted value was identical and no behavioural test could see the slip.
  * barrierClearsAt coerces an unknown field to grace 0, so a rename fails silently
@@ -342,28 +342,28 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
     });
 
     // Curated, not derived from every `_release*Waiters` definition:
-    // _releaseSnapshotWaiters is deliberately driven off the CROSS_CHAIN_TABLES
+    // releaseSnapshotWaiters is deliberately driven off the CROSS_CHAIN_TABLES
     // content refresh instead of the watermark, so a blanket "every waiter
     // method fires here" rule would be wrong on its face. A barrier missing
-    // from _advanceWatermark blocks its waiters for the full poll timeout on
+    // from advanceWatermark blocks its waiters for the full poll timeout on
     // every advance.
     const REQUIRED_WATERMARK_RELEASES = [
-        '_releasePriceWaiters',
+        'releasePriceWaiters',
         '_releasePriceTimeWaiters',
-        '_releaseOracleWaiters',
-        '_releaseMatchWaiters',
-        '_releaseCallWaiters',
-        '_releaseAnchorAttestWaiters',
-        '_releaseAttestResponseWaiters',
+        'releaseOracleWaiters',
+        'releaseMatchWaiters',
+        'releaseCallWaiters',
+        'releaseAnchorAttestWaiters',
+        'releaseAttestResponseWaiters',
     ];
 
     it('every curated barrier registers its release call inside _advanceWatermark', function () {
-        const m = /_advanceWatermark\([^)]*\)\s*\{([\s\S]*?)\n    \}/.exec(SYNC_SRC);
-        assert.ok(m, '_advanceWatermark method not found in hub_db_sync.js');
+        const m = /advanceWatermark\([^)]*\)\s*\{([\s\S]*?)\n    \}/.exec(SYNC_SRC);
+        assert.ok(m, 'advanceWatermark method not found in hub_db_sync.js');
         const body = m[1];
         for (const call of REQUIRED_WATERMARK_RELEASES) {
             assert.ok(body.includes(call + '('),
-                call + '() is missing from _advanceWatermark; its waiters would block for the full poll timeout on every advance');
+                call + '() is missing from advanceWatermark; its waiters would block for the full poll timeout on every advance');
         }
     });
 
@@ -372,12 +372,12 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
     // therefore sits out its whole 60 s timeout on every height advance, which is the same
     // defect as the one above on the axis the family actually opens on.
     it('every curated barrier registers its release call inside _releaseHeightWaiters', function () {
-        const m = /_releaseHeightWaiters\([^)]*\)\s*\{([\s\S]*?)\n    \}/.exec(SYNC_SRC);
-        assert.ok(m, '_releaseHeightWaiters method not found in hub_db_sync.js');
+        const m = /releaseHeightWaiters\([^)]*\)\s*\{([\s\S]*?)\n    \}/.exec(SYNC_SRC);
+        assert.ok(m, 'releaseHeightWaiters method not found in hub_db_sync.js');
         const body = m[1];
         for (const call of REQUIRED_WATERMARK_RELEASES) {
             assert.ok(body.includes(call + '('),
-                call + '() is missing from _releaseHeightWaiters; its waiters would block for the full poll timeout on every height advance');
+                call + '() is missing from releaseHeightWaiters; its waiters would block for the full poll timeout on every height advance');
         }
     });
 });

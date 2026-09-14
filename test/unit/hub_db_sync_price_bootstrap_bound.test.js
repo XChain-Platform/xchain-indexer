@@ -72,7 +72,7 @@ describe('HubDbSync price bootstrap bound @regression @tier2', function () {
             network: 'testnet',
             getPriceMirrorHorizon: async () => HORIZON
         }, options || {}));
-        sinon.stub(sync, '_localColumns').resolves(
+        sinon.stub(sync, 'localColumns').resolves(
             new Set(['id', 'round_number', 'coin_pair', 'price', 'reference_block', 'block_timestamp', 'status']));
         sinon.stub(sync, '_applyRow').callsFake(async (t, row) => {
             const i = rows.findIndex(r => String(r.round_number) === String(row.round_number) &&
@@ -81,7 +81,7 @@ describe('HubDbSync price bootstrap bound @regression @tier2', function () {
             if (String(row.status) !== 'finalized') return;
             rows[i] = Object.assign({}, row, { id: rows[i].id });
         });
-        sinon.stub(sync, '_flushPendingPriceEvents').resolves(true);
+        sinon.stub(sync, 'flushPendingPriceEvents').resolves(true);
         return { sync, rows, seen };
     }
 
@@ -223,10 +223,10 @@ describe('HubDbSync price bootstrap bound @regression @tier2', function () {
         assert.ok(floor > 0);
 
         sync.running = true;
-        const rebootstrap = sinon.stub(sync, '_bootstrapAll').resolves();
+        const rebootstrap = sinon.stub(sync, 'bootstrapAll').resolves();
         sync.priceSyncHeight = 999999;                  // the height barrier would otherwise open
 
-        sync._notePriceMirrorFloor(floor - 1);
+        sync.notePriceMirrorFloor(floor - 1);
         assert.strictEqual(sync._priceSyncSatisfied(1, floor - 1), false,
             'the height barrier must stop certifying');
         assert.strictEqual(sync._priceTimeSyncSatisfied(floor - 1), false,
@@ -242,7 +242,7 @@ describe('HubDbSync price bootstrap bound @regression @tier2', function () {
         await sync._bootstrapTable('price_snapshots');
         const floor = sync._priceMirrorFloorTs;
 
-        sync._notePriceMirrorFloor(floor);
+        sync.notePriceMirrorFloor(floor);
         assert.strictEqual(sync._priceMirrorBoundDisabled, false);
         assert.strictEqual(sync._priceMirrorRefloor, false);
     });

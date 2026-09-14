@@ -493,7 +493,7 @@ class XChainIndexer {
     //   * Hub-clock escape hatch (proceed): the hub's OWN clock, read as UNIX_TIMESTAMP() on the
     //     same connection in the same query, has passed block_time + directCallGraceS. See the
     //     long note at the escape in the loop body; this is the ruled fix for the forever-defer
-    //     wedge, and is the direct-mode twin of _callSyncSatisfied's streamWatermark
+    //     wedge, and is the direct-mode twin of callSyncSatisfied's streamWatermark
     //     escape in hub_db_sync.js.
     //   * Mirror-lags (defer): if the highest finalized effective_time is still BELOW block_time
     //     and the hub clock has not yet cleared the grace, the mirror may genuinely be behind, so
@@ -771,7 +771,7 @@ class XChainIndexer {
     //   mirror lag.
     //
     // The coverage read is scoped to calls that touch THIS coin (target or source) at every
-    // height, matching the mirrored twin (_refreshCallSyncTimestamp): a global watermark
+    // height, matching the mirrored twin (refreshCallSyncTimestamp): a global watermark
     // could be bumped past block_time by an unrelated other-chain call and let this node
     // proceed before every call effective for its coin was present, which is the same fork
     // the mirrored path already closed. It is a wait and hashes nothing, so it is not gated
@@ -801,7 +801,7 @@ class XChainIndexer {
             ? (Number(blockHeight) - require('./mirror_admission_activation.js').admitMarginBlocks('cross_chain_calls'))
             : null;
         // The height tail every log line below carries ABOVE the activation, in the shape
-        // hub_db_sync._heightTail gives the mirrored twins; each line's prefix is untouched
+        // hub_db_sync.heightTail gives the mirrored twins; each line's prefix is untouched
         // because a unit test and an operator's grep match on it.
         let heightTail = (floor) => ' (admission height cross_chain_calls.' + (chain === '' ? 'unknown' : chain) +
                                     ' at ' + (floor === null ? 'none' : floor) + ', needs ' + target + ')';
@@ -859,7 +859,7 @@ class XChainIndexer {
                         // the newest finalized effective_time and NOTHING can ever satisfy the
                         // barrier again. Every block defers, forever, on a chain that is perfectly
                         // healthy. The hub_db_sync path never had this failure mode because
-                        // _callSyncSatisfied also opens on `streamWatermark >= blockTime + grace`.
+                        // callSyncSatisfied also opens on `streamWatermark >= blockTime + grace`.
                         //
                         // This is that same escape, keyed on the same frozen grace, with the hub's
                         // clock standing in for the stream watermark. The two are the same reading:
@@ -1586,7 +1586,7 @@ class XChainIndexer {
                     } catch(err){
                         getLogger().warn('Deferring block ' + blockToParse + ' (cross-chain call sync): ', err);
                         this.stallReason = 'call_sync_barrier';
-                        // callWatermarkGraceS, NOT the match grace: _callSyncSatisfied waits on
+                        // callWatermarkGraceS, NOT the match grace: callSyncSatisfied waits on
                         // the call grace, and the two producers stamp effective_time differently
                         // (hub_db_sync.js HUB_SYNC_WATERMARK_GRACE_S.call). Keying the health
                         // verdict on the match value would mis-time the wedge discriminator the
