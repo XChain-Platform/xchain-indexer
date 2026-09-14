@@ -76,6 +76,70 @@ describe('consensus_rules_digest (indexer copy)', function () {
     });
 });
 
+// A carrier this build LACKS and a carrier that is here and will not load are two
+// different facts, and only the first of them has a digest. The distinction is not
+// cosmetic: src/stake_weighted_quorum.js requires mathjs, so a checkout without
+// node_modules reports 87637dfa rather than 26ba9cce unless the second case refuses, and
+// two revisions measured that way agree with each other while agreeing with no real
+// build. The digest is the evidence a restructure is judged on, so a measurement it
+// cannot take must refuse rather than round down.
+//
+// Driven against a COPY of the real module in a scratch directory, with one generated
+// stub per SHARED_GATES carrier, because __dirname is what the loader resolves against:
+// the cases have to be able to delete and break carriers, which no real checkout may do.
+describe('consensus_rules_digest: a broken carrier is not an absent one', function () {
+
+    const os = require('os');
+    const MODULE_SRC = path.resolve(__dirname, '../../src/consensus_rules_digest.js');
+
+    // A standalone tree: the module under test plus a stub for every carrier it names,
+    // each exporting the names that carrier owns. `mutate` then removes or breaks one.
+    function scratchTree(mutate) {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crd-carrier-'));
+        fs.copyFileSync(MODULE_SRC, path.join(dir, 'consensus_rules_digest.js'));
+        const byModule = new Map();
+        for (const [mod, names] of crd.SHARED_GATES) {
+            if (!byModule.has(mod)) byModule.set(mod, []);
+            byModule.get(mod).push(...names);
+        }
+        for (const [mod, names] of byModule) {
+            const body = names.map(n => 'exports.' + n + ' = { regtest: 0 };').join('\n');
+            fs.writeFileSync(path.join(dir, mod + '.js'), body + '\n');
+        }
+        mutate(dir);
+        return require(path.join(dir, 'consensus_rules_digest.js'));
+    }
+
+    it('digests an absent carrier FILE as the absent sentinel and does not throw', function () {
+        const victim = 'cross_chain_royalty_activation';
+        const mod = scratchTree(dir => fs.unlinkSync(path.join(dir, victim + '.js')));
+        const { gates } = mod.computeConsensusRulesDigest();
+        assert.strictEqual(gates[victim + '.CROSS_CHAIN_ROYALTY_ACTIVATION'], crd.ABSENT);
+        // Absent is a real protocol state, so it must still produce a digest, and one
+        // that differs from the same tree with the carrier present.
+        const whole = scratchTree(() => {});
+        assert.notStrictEqual(mod.computeConsensusRulesDigest().digest,
+            whole.computeConsensusRulesDigest().digest);
+    });
+
+    it('REFUSES when a carrier is present and fails to load, naming it and the cause', function () {
+        const victim = 'stake_weighted_quorum';
+        const mod = scratchTree(dir => fs.writeFileSync(path.join(dir, victim + '.js'),
+            "require('a-dependency-that-is-not-installed');\n"));
+        assert.throws(() => mod.computeConsensusRulesDigest(), (e) => {
+            assert.ok(e instanceof Error);
+            assert.ok(e.message.includes(victim), 'must name the carrier: ' + e.message);
+            assert.ok(e.message.includes('a-dependency-that-is-not-installed'),
+                'must carry the underlying cause: ' + e.message);
+            return true;
+        });
+        // The signed wire field and the active set read the same loader, so a broken
+        // carrier must take those down too rather than publish a shortened gate list.
+        assert.throws(() => mod.knownGateKeys(), /stake_weighted_quorum/);
+        assert.throws(() => mod.activeGatesAt(0, 'regtest'), /stake_weighted_quorum/);
+    });
+});
+
 // The zero-confirmation flip's three appended SHARED_GATES rows, plus the two
 // helpers a ROLLCALL v1 publisher and the rules-aware capability set filter both read.
 // The hub copy carries the load-bearing knownGateKeys()/activeGatesAt() cases; this is

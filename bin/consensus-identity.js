@@ -99,10 +99,14 @@ function canonicalJson(value) {
 function codeIdentity(network) {
     const coins = require('../src/coins/index.js');
     const { computeArmedMapFingerprint } = require('../src/armedMapFingerprint.js');
-    const { computeConsensusRulesDigest } = require('../src/consensus_rules_digest.js');
+    const { computeConsensusRulesDigest, ABSENT } = require('../src/consensus_rules_digest.js');
 
     const hashes = coins.consensusHashes(network);
     const rules = computeConsensusRulesDigest();
+    // The shape of the measurement, beside the number it produced. A digest taken over a
+    // list in which some gate read ABSENT is a different question answered, and nothing
+    // about the hash itself says so: 87637dfa and 26ba9cce are equally plausible on sight.
+    const absent = Object.keys(rules.gates).filter(k => rules.gates[k] === ABSENT).sort();
     return {
         network,
         // One number for the registry, over the per-coin hashes the hub serves.
@@ -112,6 +116,9 @@ function codeIdentity(network) {
         coin_registry_consensus_hashes: hashes,
         armed_map_fingerprint: computeArmedMapFingerprint().fingerprint,
         consensus_rules_digest: rules.digest,
+        consensus_rules_gates_resolved: Object.keys(rules.gates).length - absent.length,
+        consensus_rules_gates_absent: absent.length,
+        consensus_rules_gates_absent_keys: absent,
         // The gate-by-gate preimage, kept beside the digest because two
         // mismatched hashes say nothing about what to fix. It is also what makes
         // an environment-shifted digest diagnosable in one read: see the header.
@@ -217,6 +224,13 @@ async function main() {
     }
     console.log(`armed_map_fingerprint:         ${identity.armed_map_fingerprint}`);
     console.log(`consensus_rules_digest:        ${identity.consensus_rules_digest}`);
+    console.log(`  shared gates:                ${identity.consensus_rules_gates_resolved} resolved, `
+                + `${identity.consensus_rules_gates_absent} absent`);
+    // Named, not just counted: an absent gate is a legitimate reading of a build that
+    // lacks the carrier, so the reader has to be able to tell that from a wrong one.
+    for (const key of identity.consensus_rules_gates_absent_keys) {
+        console.log(`    absent:                    ${key}`);
+    }
     if (!opts.stateHash) {
         console.log('tip state_hash:                not read (pass --state-hash with the service .env loaded)');
         return;

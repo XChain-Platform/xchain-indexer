@@ -57,6 +57,8 @@
 'use strict';
 
 const crypto = require('crypto');
+const fs     = require('fs');
+const path   = require('path');
 
 // The activation maps BOTH repos evaluate, as [module basename, [export names]].
 // Order is fixed and part of the digest preimage; append new gates at the END so
@@ -141,6 +143,26 @@ function canonical(value){
 let cached = null;
 let cachedValues = null;
 
+// A gate carrier's exports, or null when this build genuinely does not carry the file.
+// The FILE decides that and never the require, because a carrier this build lacks is a
+// real protocol state the digest must record as ABSENT, while a carrier that IS here and
+// fails to load is a broken measurement with no digest to report. Swallowing the second
+// yields 87637dfa instead of 26ba9cce in a checkout without node_modules, since
+// stake_weighted_quorum.js requires mathjs: two revisions measured that way both carry
+// the wrong number and FALSELY MATCH. A moved carrier still reads ABSENT, the state
+// xchain-hub/bin/check-frozen-set.js exists to refuse and must therefore keep seeing.
+function loadGateModule(mod){
+    const file = path.join(__dirname, mod + '.js');
+    if (!fs.existsSync(file)) return null;
+    try {
+        return require(file);
+    } catch (e) {
+        throw new Error('consensus-rules gate ' + mod + ' is present at src/' + mod
+            + '.js but failed to load, so no digest can be computed: '
+            + ((e && e.message) ? e.message : String(e)));
+    }
+}
+
 // The RAW export of every shared gate, keyed '<module>.<EXPORT>', ABSENT where this
 // build lacks it. Read once: the digest and the active-set derivation below must see
 // the same values, and a gate module is never re-required after boot.
@@ -148,8 +170,7 @@ function loadGateValues(){
     if (cachedValues) return cachedValues;
     const values = {};
     for (const [mod, names] of SHARED_GATES) {
-        let m = null;
-        try { m = require('./' + mod + '.js'); } catch (e) { m = null; }
+        const m = loadGateModule(mod);
         for (const name of names) {
             const key = mod + '.' + name;
             values[key] = (m && Object.prototype.hasOwnProperty.call(m, name)) ? m[name] : ABSENT;
