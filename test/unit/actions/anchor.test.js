@@ -7,347 +7,39 @@
 // General Public License v3.0 or later; see LICENSE.md. A commercial
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
+//
+// ANCHOR action handler: the per-network checkpoint bundle (v0), the archive
+// head (v1) and its continuation chunks (v2).
+//
+// This file holds the bundle reward and the v1 archive head. The v0 bundle
+// checks, the activation gate, the archive replay guard and the chunk path live
+// beside it in anchor.test/, each opening the same 'Anchor (ANCHOR) @regression
+// @tier3' describe so every full test title is unchanged;
+// anchor.test/helpers/anchor_fixtures.js holds the wire builders and the mock
+// handler they share.
 
 process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
-const sinon  = require('sinon');
-const zlib   = require('zlib');
+const sinon = require('sinon');
+const { createBaseData } = require('../../fixtures/mocks');
+const { PUBKEY_A, PUBKEY_B, SIG, HASH, crc32Hex, gz64, v0Params, THREE_CHAINS, v1Params, ARCHIVE_JSON, PUBLISHER, armAnchor, disarmAnchor } = require('./anchor.test/helpers/anchor_fixtures.js');
+const Anchor = require('../../../src/actions/anchor/index.js');
+const eq = require('../../../src/equivocation_header.js');
 
-const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
+let indexer, handler, verifyStub, swqStub, deriveGateStub;
 
-const Anchor  = require('../../../src/actions/anchor/index.js');
-// Same module instance Anchor holds a reference to (Node module cache); stubbing
-// `verify` here controls signature acceptance inside the handler.
-const ed25519 = require('../../../src/consensus/ed25519.js');
-const swq     = require('../../../src/stake_weighted_quorum.js');
-const eq      = require('../../../src/equivocation_header.js');
-const arMod   = require('../../../src/anchor_reward_activation.js');
-const aact    = require('../../../src/anchor_activation.js');
+function lastWrite() { return indexer.indexerDb.createAnchorAction.lastCall.args[0]; }
 
-const PUBKEY_A = 'a'.repeat(64);
-const PUBKEY_B = 'b'.repeat(64);
-const PUBKEY_C = 'c'.repeat(64);
-const PUBKEY_D = 'd'.repeat(64);
-const SIG      = '1'.repeat(128);
-
-const HASH = (c) => c.repeat(64);
-
-function crc32Hex(str) {
-    let buf = Buffer.from(str, 'utf8');
-    let n;
-    if (zlib.crc32) n = zlib.crc32(buf);
-    else {
-        let c, crc = 0xFFFFFFFF;
-        for (let i = 0; i < buf.length; i++) {
-            c = (crc ^ buf[i]) & 0xFF;
-            for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-            crc = (crc >>> 8) ^ c;
-        }
-        n = (crc ^ 0xFFFFFFFF) >>> 0;
-    }
-    return (n >>> 0).toString(16).padStart(8, '0');
-}
-function gz64(str) { return zlib.gzipSync(Buffer.from(str, 'utf8'), { level: 9 }).toString('base64url'); }
-
-// ANCHOR v0 params (the per-network checkpoint bundle; params[0] = VERSION, mirroring how
-// actions/index.js splits the wire string): header, SECTION_COUNT sections in wire order, then
-// ONE publisher tail for the whole bundle. `section_count` overrides the declared count
-// independently of the sections actually emitted, so a lying header can be exercised.
-function v0Params(overrides = {}) {
-    let f = Object.assign({
-        network: 'regtest', snapshot: '100',
-        sections: [{ chain: 'BTC' }],
-        publisher: PUBKEY_A, attest: [[PUBKEY_A, SIG]],
-        section_count: null
-    }, overrides);
-    let sections = f.sections.map(s => Object.assign({
-        chain: 'BTC', block_index: '500', block_hash: HASH('0'),
-        ledger: HASH('1'), actions: HASH('2'), contracts: HASH('3'),
-        seq: '0', snapshot: f.snapshot,
-        state_root: HASH('d'), state_root_version: '1',
-        block_merkle_root: HASH('e'), block_merkle_version: '1',
-        sigs: [[PUBKEY_A, SIG]]
-    }, s));
-    let p = ['0', f.network, f.snapshot,
-             String(f.section_count !== null ? f.section_count : sections.length)];
-    for (let s of sections) {
-        p.push(s.chain, s.block_index, s.block_hash, s.ledger, s.actions, s.contracts,
-               s.seq, s.snapshot, s.state_root, s.state_root_version,
-               s.block_merkle_root, s.block_merkle_version, String(s.sigs.length));
-        for (let [pk, sg] of s.sigs) p.push(pk, sg);
-    }
-    p.push(f.publisher, String(f.attest.length));
-    for (let [pk, sg] of f.attest) p.push(pk, sg);
-    return p;
-}
-
-// A three-chain bundle in wire order (sections CHAIN ascending): the standard bundle shape.
-const THREE_CHAINS = [{ chain: 'BTC',  block_index: '500' },
-                      { chain: 'DOGE', block_index: '600' },
-                      { chain: 'LTC',  block_index: '700' }];
-
-
-
-
-
-// ANCHOR v1 params (the archive head): the checkpoint wrapper + archive segment +
-// the wrapper sig list, then the
-// PUBLISHER pubkey + the attestation sig list appended at the tail.
-function v1Params(archiveJson, overrides = {}) {
-    let b64 = (overrides.archive_b64 !== undefined) ? overrides.archive_b64 : gz64(archiveJson);
-    let f = Object.assign({
-        chain: 'BTC', network: 'regtest', block_index: '500', block_hash: HASH('0'),
-        ledger: HASH('1'), actions: HASH('2'), contracts: HASH('3'),
-        seq: '0', snapshot: '100',
-        batch_seq: '0', match_count: '1',
-        crc: crc32Hex(archiveJson), total_chunks: '1',
-        sigs: [[PUBKEY_A, SIG]],
-        publisher: PUBKEY_A, attest: [[PUBKEY_A, SIG]]
-    }, overrides);
-    let p = ['1', f.chain, f.network, f.block_index, f.block_hash, f.ledger, f.actions, f.contracts,
-             f.seq, f.snapshot, f.batch_seq, f.match_count, f.crc, f.total_chunks, b64, String(f.sigs.length)];
-    for (let [pk, sg] of f.sigs) p.push(pk, sg);
-    p.push(f.publisher, String(f.attest.length));
-    for (let [pk, sg] of f.attest) p.push(pk, sg);
-    return p;
-}
-
-const ARCHIVE_JSON = JSON.stringify({ v: 1, network: 'regtest', batch_seq: 0, matches: [{ match_id: 'm1' }], capability_snapshots: [] });
-
-// The archive head's AUTHOR address, i.e. what db.getAnchorV1ByBatchSeq now
-// returns as `source`. Deliberately createBaseData's SOURCE: a v2 continuation chunk is
-// authenticated by matching it, so every legitimate-chunk fixture below publishes as this
-// address and the hostile ones publish as OUTSIDER.
-const PUBLISHER = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-const OUTSIDER  = 'mzBc4XEFSdzCDcTxAgf6EZXgsZWpztRhef';
+function writtenRows() { return indexer.indexerDb.createAnchorAction.getCalls().map(c => c.args[0]); }
 
 describe('Anchor (ANCHOR) @regression @tier3', function () {
-    let indexer, handler, verifyStub, swqStub, deriveGateStub;
-
-    function addAnchorDbStubs(db) {
-        db.getValidatorsByCapability  = sinon.stub().resolves([{ pubkey: PUBKEY_A, amount: '1' }]);
-        db.hasCapability              = sinon.stub().resolves(true);
-        db.getMaxAnchorCheckpointSeq  = sinon.stub().resolves(null);
-        db.getArchiveReplayWatermarks = sinon.stub().resolves({ batchSeq: null, checkpointSeq: null });
-        db.createAnchorAction         = sinon.stub().resolves();
-        db.getAnchorV1ByBatchSeq      = sinon.stub().resolves(null);
-        db.getAnchorChunks            = sinon.stub().resolves([]);
-        db.setAnchorArchiveStatus     = sinon.stub().resolves();
-        db.createValidatorReward      = sinon.stub().resolves(true);
-        db.reconcileAnchorRewardWinner= sinon.stub().resolves(0);
-    }
-
     beforeEach(function () {
-        indexer = createMockIndexer();
-        indexer.config = Object.assign({}, indexer.config, { COIN: 'DOGE', NETWORK: 'regtest' });
-        addAnchorDbStubs(indexer.indexerDb);
-        handler = new Anchor(indexer);
-        verifyStub = sinon.stub(ed25519, 'verify').returns(true);
-        // These cases assert legacy COUNT quorum (the live mainnet path, whose
-        // activation is a far-future placeholder). Regtest has stake-weighted
-        // quorum active at every block, so pin the legacy path: the oracle_publish
-        // mocks here carry no source/weight. Weighted coverage: stake_weighted_quorum.test.js.
-        swqStub = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
-        // these cases assert the LEGACY DOGE-side reward derivation (still the
-        // behavior below the derive-relocation flag-day / on mainnet, where the gate is an
-        // inert placeholder). Pin the derive gate OFF so anchor.js runs the DOGE-side write;
-        // the at/above-gate skip + BTC-side relocation are covered by anchor_reward_derive.test.js
-        // and the dedicated 'derive-relocation flag-day' describe below.
-        deriveGateStub = sinon.stub(arMod, 'isAnchorRewardDeriveActive').returns(false);
+        ({ indexer, handler, verifyStub, swqStub, deriveGateStub } = armAnchor());
     });
-    // sinon.restore() as well as the named ones: every beforeEach mints a fresh mock
-    // indexer (~210 fakes) into the default sandbox, and without draining it the suite
-    // trips sinon's 10000-fake leak warning partway through the file.
     afterEach(function () {
-        verifyStub.restore(); swqStub.restore(); deriveGateStub.restore();
-        sinon.restore();
-    });
-
-    // A second handler over the SAME mock DB, bound to another network. Built by
-    // re-wrapping `indexer` rather than by minting a fresh mock, so the reward/row
-    // assertions still read indexer.indexerDb and the suite does not accumulate a
-    // second full set of stubs per case.
-    function handlerOn(network) {
-        return new Anchor(Object.assign({}, indexer,
-            { config: Object.assign({}, indexer.config, { NETWORK: network }) }));
-    }
-
-    function lastWrite() { return indexer.indexerDb.createAnchorAction.lastCall.args[0]; }
-
-    function writtenRows() { return indexer.indexerDb.createAnchorAction.getCalls().map(c => c.args[0]); }
-
-    // ── v0: the per-network checkpoint bundle ────────────────────────────────────────
-    it('v0 with a quorum of valid oracle_publish sigs is valid and stores one row per section', async function () {
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
-        await handler.parse(v0Params({ sections: THREE_CHAINS }), data, null);
-        assert.strictEqual(data['STATUS'], 'valid');
-        let rows = writtenRows();
-        assert.strictEqual(rows.length, 3, 'three chains, three rows, ONE action');
-        assert.deepStrictEqual(rows.map(r => r['CHAIN']), ['BTC', 'DOGE', 'LTC']);
-        assert.deepStrictEqual(rows.map(r => Number(r['SECTION_INDEX'])), [0, 1, 2]);
-        assert.deepStrictEqual(rows.map(r => String(r['BLOCK_INDEX_CHECKPOINTED'])), ['500', '600', '700']);
-        // Every row carries the header network and the bundle's publisher tail.
-        for (let r of rows) {
-            assert.strictEqual(r['NETWORK'], 'regtest');
-            assert.strictEqual(r['PUBLISHER'], PUBKEY_A);
-            assert.strictEqual(r['STATE_ROOT'], HASH('d'));
-        }
-        // The signed section canonical is the per-chain XCHECKPOINT + root suffix, rebuilt
-        // with the HEADER network (the section's own network field is off the wire) and
-        // EQUIV-wrapped (the regtest EQUIV header).
-        let raw = ['XCHECKPOINT', 'BTC', 'regtest', '500', HASH('0'), HASH('1'), HASH('2'), HASH('3'), '0', '100',
-                   HASH('d'), '1', HASH('e'), '1'].join('|');
-        let expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, 'BTC|regtest|500|0', 0, raw);
-        assert.strictEqual(verifyStub.firstCall.args[0], expected);
-    });
-
-    it('v0 rejects a malformed STATE_ROOT, naming the section', async function () {
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
-        await handler.parse(v0Params({ sections: [{ chain: 'BTC' }, { chain: 'LTC', state_root: 'nothex' }] }), data, null);
-        assert.strictEqual(data['STATUS'], 'invalid: SECTION 1 STATE_ROOT (format)');
-    });
-
-    it('v0 rejects a rootless section: the bundle is root-bearing by construction', async function () {
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
-        await handler.parse(v0Params({ sections: [{ chain: 'BTC', block_merkle_root: '' }] }), data, null);
-        assert.strictEqual(data['STATUS'], 'invalid: SECTION 0 BLOCK_MERKLE_ROOT (format)');
-    });
-
-    it('v0 rejects a header SNAPSHOT_BLOCK that is not the section maximum', async function () {
-        // The bundle block is the MAX over sections, because it is where the election
-        // and the attestation resolve. A higher header would move the attestation round
-        // onto a set no section signature is bound to.
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
-        await handler.parse(v0Params({ snapshot: '200', sections: [{ chain: 'BTC', snapshot: '100' }] }), data, null);
-        assert.strictEqual(data['STATUS'], 'invalid: SNAPSHOT_BLOCK (not the section maximum)');
-    });
-
-    it('v0 accepts a lagging section riding at its OWN snapshot block (D6)', async function () {
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
-        await handler.parse(v0Params({
-            snapshot: '100',
-            sections: [{ chain: 'BTC', snapshot: '100' }, { chain: 'LTC', snapshot: '94', seq: '0' }]
-        }), data, null);
-        assert.strictEqual(data['STATUS'], 'valid');
-        assert.deepStrictEqual(writtenRows().map(r => String(r['SNAPSHOT_BLOCK'])), ['100', '94'],
-            'each section row keeps its own snapshot block, never the bundle MAX');
-    });
-
-    it('rejects ANCHOR on a non-DOGE chain', async function () {
-        indexer.config['COIN'] = 'BTC';
-        handler = new Anchor(indexer);
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0 });
-        await handler.parse(v0Params(), data, null);
-        assert.ok(String(data['STATUS']).startsWith('invalid: ANCHOR only valid on DOGE'));
-    });
-
-    it('rejects a bundle for a different network', async function () {
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
-        await handler.parse(v0Params({ network: 'mainnet' }), data, null);
-        assert.ok(String(data['STATUS']).startsWith('invalid: NETWORK'));
-    });
-
-    it('enforces 2f+1 per section: 2 valid sigs of a 4-validator set (quorum 3) is rejected', async function () {
-        indexer.indexerDb.getValidatorsByCapability.resolves(
-            [PUBKEY_A, PUBKEY_B, PUBKEY_C, PUBKEY_D].map(pk => ({ pubkey: pk, amount: '1' })));
-        verifyStub.callsFake((canon, sig, pk) => (pk === PUBKEY_A || pk === PUBKEY_B));
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
-        await handler.parse(v0Params({
-            sections: [{ chain: 'BTC', sigs: [[PUBKEY_A, SIG], [PUBKEY_B, SIG], [PUBKEY_C, SIG]] }]
-        }), data, null);
-        // Message denominator is N (total snapshot validators), not the quorum;
-        // 2 valid signatures of a 4-validator set (quorum 3) -> rejected.
-        assert.strictEqual(data['STATUS'], 'invalid: SECTION 0 insufficient valid signatures (2/4)');
-    });
-
-    it('a garbage-then-valid duplicate for one signer still passes (seen marked AFTER verify; hub/SDK/explorer/sync parity)', async function () {
-        // N=2 validators -> quorum 2, so BOTH A and B must count. The wire sig list is
-        // attacker-influenceable: prepend an INVALID entry for B before its genuine one.
-        // Marking "seen" on first encounter (the pre-fix order) would suppress B's real
-        // signature and reject a legitimately-quorate section (order-dependent under-count),
-        // disagreeing with the hub finalizer + SDK/explorer/sync verifiers on the same bytes.
-        indexer.indexerDb.getValidatorsByCapability.resolves(
-            [PUBKEY_A, PUBKEY_B].map(pk => ({ pubkey: pk, amount: '1' })));
-        const BADSIG = '0'.repeat(128);
-        verifyStub.callsFake((canon, sig, pk) => sig === SIG);
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
-        await handler.parse(v0Params({
-            sections: [{ chain: 'BTC', sigs: [[PUBKEY_A, SIG], [PUBKEY_B, BADSIG], [PUBKEY_B, SIG]] }]
-        }), data, null);
-        assert.strictEqual(data['STATUS'], 'valid');
-    });
-
-    it('stores as unverified when no oracle_publish snapshot is mirrored locally', async function () {
-        indexer.indexerDb.getValidatorsByCapability.resolves([]);
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
-        await handler.parse(v0Params({ sections: THREE_CHAINS }), data, null);
-        assert.strictEqual(data['STATUS'], 'unverified');
-        assert.strictEqual(writtenRows().length, 3);                  // stored regardless
-        assert.ok(writtenRows().every(r => r['STATUS'] === 'unverified'),
-            'the verdict is one column on N rows: never a mix');
-    });
-
-    // ── one bad section takes the whole bundle down, with zero rewards ──────────
-    it('AT7: one STALE section invalidates the WHOLE bundle and writes no reward', async function () {
-        // The chain-scoped watermark says every chain is already anchored at seq 5. BTC and
-        // DOGE re-broadcast at 5 (equal is tolerated), LTC arrives at 4, which the hub's
-        // selector can never emit: it is a replay or a forgery.
-        indexer.indexerDb.getMaxAnchorCheckpointSeq.resolves(5);
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
-        await handler.parse(v0Params({
-            sections: [{ chain: 'BTC', block_index: '500', seq: '5' },
-                       { chain: 'DOGE', block_index: '600', seq: '5' },
-                       { chain: 'LTC', block_index: '700', seq: '4' }]
-        }), data, null);
-        assert.strictEqual(data['STATUS'],
-            'invalid: SECTION 2 CHECKPOINT_SEQ (stale; replay of an older checkpoint)');
-        assert.ok(indexer.indexerDb.createValidatorReward.notCalled,
-            'a bundle with a bad section pays nothing, not even for its good sections');
-        assert.ok(indexer.indexerDb.reconcileAnchorRewardWinner.notCalled);
-        let rows = writtenRows();
-        assert.strictEqual(rows.length, 3, 'every section is still recorded on chain');
-        assert.ok(rows.every(r => r['STATUS'] === data['STATUS']),
-            'the verdict is all-or-nothing: no section row is left valid');
-    });
-
-    it('D39: two sections naming the same CHAIN invalidate the WHOLE bundle and write no reward', async function () {
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
-        await handler.parse(v0Params({
-            sections: [{ chain: 'BTC', block_index: '500' },
-                       { chain: 'LTC', block_index: '700' },
-                       { chain: 'BTC', block_index: '501' }]
-        }), data, null);
-        assert.strictEqual(data['STATUS'], 'invalid: SECTION 2 CHAIN (duplicate)');
-        assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
-        assert.ok(indexer.indexerDb.reconcileAnchorRewardWinner.notCalled);
-        assert.ok(writtenRows().every(r => r['STATUS'] === data['STATUS']),
-            'no section row survives a duplicate-chain bundle as valid');
-    });
-
-    it('D39: the duplicate is named by the LATER section, not the first claim', async function () {
-        // The reason has to point at the section that repeats, or an operator reading the
-        // status goes looking at the legitimate first claim.
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
-        await handler.parse(v0Params({
-            sections: [{ chain: 'DOGE' }, { chain: 'DOGE' }]
-        }), data, null);
-        assert.strictEqual(data['STATUS'], 'invalid: SECTION 1 CHAIN (duplicate)');
-    });
-
-    it('D39: three DISTINCT chains are unaffected by the guard', async function () {
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
-        await handler.parse(v0Params({ sections: THREE_CHAINS }), data, null);
-        assert.strictEqual(data['STATUS'], 'valid');
-        assert.strictEqual(writtenRows().length, 3);
-    });
-
-    it('an EQUAL section seq is tolerated (a signature-bound re-broadcast, not a replay)', async function () {
-        indexer.indexerDb.getMaxAnchorCheckpointSeq.resolves(5);
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
-        await handler.parse(v0Params({ sections: [{ chain: 'BTC', seq: '5' }] }), data, null);
-        assert.strictEqual(data['STATUS'], 'valid');
+        disarmAnchor({ verifyStub, swqStub, deriveGateStub });
     });
 
     // ── the bundle reward ────────────────────────────────────────────────────────────
@@ -399,6 +91,15 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         assert.ok(String(data['STATUS']).startsWith('invalid: PUBLISHER format'));
         assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
     });
+});
+
+describe('Anchor (ANCHOR) @regression @tier3', function () {
+    beforeEach(function () {
+        ({ indexer, handler, verifyStub, swqStub, deriveGateStub } = armAnchor());
+    });
+    afterEach(function () {
+        disarmAnchor({ verifyStub, swqStub, deriveGateStub });
+    });
 
     it('bundle reward (XANCPUB) canonical: six positional fields with snapshot_block at index 3', function () {
         // The layout keeps SIX fields, round_reference repeated as the snapshot block,
@@ -422,59 +123,6 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         await h2.parse(v0Params({ sections: THREE_CHAINS }), d2, null);
         let secondArgs = indexer.indexerDb.createValidatorReward.lastCall.args;
         assert.deepStrictEqual(firstArgs, secondArgs);
-    });
-
-    // At/above ANCHOR_ACTIVATION the wire set is exactly {0, 1, 2}, so every
-    // pre-restart byte - the per-chain anchors AND the old bundle/archive-head pair a
-    // not-yet-redeployed hub might still emit - falls out of the unknown-version check.
-    it('the pre-restart versions no longer parse at all, v6 and v7 included', async function () {
-        for (const v of [3, 4, 5, 6, 7]) {
-            let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: v, COIN: 'DOGE' });
-            await handler.parse(['' + v, 'BTC', 'regtest'], data, null);
-            assert.strictEqual(data['STATUS'], 'invalid: VERSION (unknown)',
-                'ANCHOR v' + v + ' is retired; its parser is deleted, not merely unused');
-        }
-    });
-
-    // The activation gate runs BEFORE the format table, so a wire that is
-    // well-formed under the live set is still invalid when it was mined below the
-    // restart height. Keyed on the anchor's OWN DOGE height, never on SNAPSHOT_BLOCK.
-    it('a v0 mined BELOW ANCHOR_ACTIVATION is invalid whatever it decodes to', async function () {
-        let h = handlerOn('testnet');
-        let below = aact.ANCHOR_ACTIVATION.testnet - 1;
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE', BLOCK_INDEX: below });
-        await h.parse(v0Params({ network: 'testnet', sections: THREE_CHAINS }), data, null);
-        assert.strictEqual(data['STATUS'], 'invalid: ANCHOR before activation');
-        assert.ok(indexer.indexerDb.createValidatorReward.notCalled,
-            'a pre-activation anchor pays nothing: the gate runs ahead of every body parser');
-        // One block higher the same bytes are the live wire.
-        let data2 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE',
-                                     BLOCK_INDEX: aact.ANCHOR_ACTIVATION.testnet });
-        await h.parse(v0Params({ network: 'testnet', sections: THREE_CHAINS }), data2, null);
-        assert.strictEqual(data2['STATUS'], 'valid', 'the threshold block itself is active');
-    });
-
-    it('the activation gate covers EVERY version and fails closed on a junk height', async function () {
-        let h = handlerOn('testnet');
-        let below = aact.ANCHOR_ACTIVATION.testnet - 1;
-        // A v1 and a v2 below the height are 'before activation', not 'VERSION (unknown)':
-        // the same bytes meant something else on the pre-restart wire, so no shape check
-        // on them means anything down there.
-        let d1 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE', BLOCK_INDEX: below });
-        await h.parse(v1Params(ARCHIVE_JSON, { network: 'testnet' }), d1, null);
-        assert.strictEqual(d1['STATUS'], 'invalid: ANCHOR before activation');
-        let d2 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', BLOCK_INDEX: below });
-        await h.parse(['2', '9', '1', '3', 'BBBB'], d2, null);
-        assert.strictEqual(d2['STATUS'], 'invalid: ANCHOR before activation');
-        // A retired byte below the height reports the activation reason too: the gate is
-        // first, so the version table never gets to speak.
-        let d7 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 7, COIN: 'DOGE', BLOCK_INDEX: below });
-        await h.parse(['7', 'BTC', 'testnet'], d7, null);
-        assert.strictEqual(d7['STATUS'], 'invalid: ANCHOR before activation');
-        // Fail closed: a non-numeric height is not a reason to admit an anchor.
-        let dj = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE', BLOCK_INDEX: 'not-a-height' });
-        await h.parse(v0Params({ network: 'testnet', sections: THREE_CHAINS }), dj, null);
-        assert.strictEqual(dj['STATUS'], 'invalid: ANCHOR before activation');
     });
 
     // ── v1: the archive head, its publisher tail and anchor_archive reward derivation ──
@@ -503,6 +151,15 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
                   '|0|1|' + crc32Hex(ARCHIVE_JSON) + '|1';
         let expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, 'BTC|regtest|500|0|0', 0, raw);
         assert.strictEqual(verifyStub.firstCall.args[0], expected);
+    });
+});
+
+describe('Anchor (ANCHOR) @regression @tier3', function () {
+    beforeEach(function () {
+        ({ indexer, handler, verifyStub, swqStub, deriveGateStub } = armAnchor());
+    });
+    afterEach(function () {
+        disarmAnchor({ verifyStub, swqStub, deriveGateStub });
     });
 
     // ARCHIVE_REWARD gates reward derivation ONLY, never the wire shape: v1 IS the
@@ -556,6 +213,15 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         await handler.parse(p, data, null);
         assert.strictEqual(data['STATUS'], 'invalid: PUBLISHER format');
     });
+});
+
+describe('Anchor (ANCHOR) @regression @tier3', function () {
+    beforeEach(function () {
+        ({ indexer, handler, verifyStub, swqStub, deriveGateStub } = armAnchor());
+    });
+    afterEach(function () {
+        disarmAnchor({ verifyStub, swqStub, deriveGateStub });
+    });
 
     it('v1 keeps the anchor valid but SKIPS the reward when PUBLISHER is not in the oracle_publish set', async function () {
         // Snapshot = {A}; attestation quorum from A is valid, but the named PUBLISHER is B.
@@ -588,209 +254,5 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         let raw = ['XANCPUB', 'anchor_archive', '3', '100', PUBKEY_A, '10.00000000'].join('|');
         let expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, 'XANCPUB|archive|regtest|3|100', 0, raw);
         assert.strictEqual(handler.rewardCanonical(d), expected);
-    });
-
-    it('v1 replay guard: a match_batch_seq below the recorded max is stale', async function () {
-        // Both watermarks are behind-worthy: seq 2 < 3 AND the payload's checkpoint
-        // seq (0) is behind the newest archive's (5). made the second half
-        // load-bearing, so a fixture that only pinned the batch seq would now pass
-        // for the wrong reason.
-        indexer.indexerDb.getArchiveReplayWatermarks.resolves({ batchSeq: 3, checkpointSeq: 5 });
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
-        await handler.parse(v1Params(ARCHIVE_JSON, { batch_seq: '2' }), data, null);
-        assert.ok(String(data['STATUS']).startsWith('invalid: MATCH_BATCH_SEQ (stale'));
-        assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
-    });
-
-    // The rebase resets the hub's dense batch-seq allocator
-    // (StateAnchorPublisher._getNextBatchSeq counts its own tables) while this
-    // watermark, read from replayed anchor_actions, returns to the pre-rebase max.
-    // Both directions are pinned here because the two failures are opposite and
-    // equally bad: reject the fresh batch and the archive rail is dead for as many
-    // batches as history had; admit the old one and a stale archive can be replayed.
-    it('v1 replay guard: a restarted batch seq is ACCEPTED when its wrapper checkpoint advances', async function () {
-        indexer.indexerDb.getArchiveReplayWatermarks.resolves({ batchSeq: 40, checkpointSeq: 900000 });
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
-        // Post-rebase: the hub's counter restarted at 0, but checkpoint_seq is
-        // snapshot_block and the chain kept moving.
-        await handler.parse(v1Params(ARCHIVE_JSON, { batch_seq: '0', seq: '961000' }), data, null);
-        assert.strictEqual(data['STATUS'], 'valid');
-    });
-
-    it('v1 replay guard: a stale batch seq with a stale checkpoint is still rejected', async function () {
-        indexer.indexerDb.getArchiveReplayWatermarks.resolves({ batchSeq: 40, checkpointSeq: 900000 });
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
-        // A genuine replay is signature-bound to its original canonical, so it can
-        // only carry the OLD checkpoint seq. That is what still catches it.
-        await handler.parse(v1Params(ARCHIVE_JSON, { batch_seq: '12', seq: '880000' }), data, null);
-        assert.ok(String(data['STATUS']).startsWith('invalid: MATCH_BATCH_SEQ (stale'));
-    });
-
-    it('v1 replay guard: a second batch riding the SAME checkpoint is not treated as stale', async function () {
-        indexer.indexerDb.getArchiveReplayWatermarks.resolves({ batchSeq: 40, checkpointSeq: 961000 });
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
-        // Equal, not ahead: one cadence can publish a second batch draining leftover
-        // rows, and the guard elsewhere already treats an equal seq as the tolerated
-        // duplicate case rather than a replay.
-        await handler.parse(v1Params(ARCHIVE_JSON, { batch_seq: '2', seq: '961000' }), data, null);
-        assert.strictEqual(data['STATUS'], 'valid');
-    });
-
-    it('v1 replay guard: the reward rail rides the same exemption, so a restarted batch still derives its reward', async function () {
-        indexer.indexerDb.getArchiveReplayWatermarks.resolves({ batchSeq: 40, checkpointSeq: 900000 });
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
-        await handler.parse(v1Params(ARCHIVE_JSON, { batch_seq: '0', seq: '961000' }), data, null);
-        assert.strictEqual(data['STATUS'], 'valid');
-        assert.ok(indexer.indexerDb.createValidatorReward.called);
-    });
-
-    it('determinism: two independent parses of identical v1 bytes derive the identical archive reward row', async function () {
-        let h2 = new Anchor(indexer);
-        let d1 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
-        let d2 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
-        await handler.parse(v1Params(ARCHIVE_JSON), d1, null);
-        let firstArgs = indexer.indexerDb.createValidatorReward.lastCall.args;
-        await h2.parse(v1Params(ARCHIVE_JSON), d2, null);
-        let secondArgs = indexer.indexerDb.createValidatorReward.lastCall.args;
-        assert.deepStrictEqual(firstArgs, secondArgs);
-    });
-
-    it('replay guard: a checkpoint_seq below the recorded max is stale; equal is allowed (a v0 section and its v1 archive share a seq)', async function () {
-        indexer.indexerDb.getMaxAnchorCheckpointSeq.resolves(5);
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
-        await handler.parse(v1Params(ARCHIVE_JSON, { seq: '4' }), data, null);
-        assert.ok(String(data['STATUS']).startsWith('invalid: CHECKPOINT_SEQ (stale'));
-
-        let data2 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE', ACTION_INDEX: 2 });
-        await handler.parse(v1Params(ARCHIVE_JSON, { seq: '5' }), data2, null);
-        assert.strictEqual(data2['STATUS'], 'valid');
-    });
-
-    it('replay guard: a v1 match_batch_seq below the recorded max is stale', async function () {
-        indexer.indexerDb.getArchiveReplayWatermarks.resolves({ batchSeq: 3, checkpointSeq: 5 });
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
-        await handler.parse(v1Params(ARCHIVE_JSON, { batch_seq: '2' }), data, null);
-        assert.ok(String(data['STATUS']).startsWith('invalid: MATCH_BATCH_SEQ (stale'));
-    });
-
-    it('v1 single-chunk: CRC binds the archive, valid blob accepted, mismatch rejected', async function () {
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });
-        await handler.parse(v1Params(ARCHIVE_JSON), data, null);
-        assert.strictEqual(data['STATUS'], 'valid');
-        // v1 canonical appends the archive fields. EQUIV active in regtest: the v1
-        // ROUND_ID appends batch_seq (=0 here) to the v0 round id so v0 and v1 get
-        // DISTINCT equivocation keys (so the pair never reads as a false equivocation); VIEW=0.
-        let raw = ['XCHECKPOINT', 'BTC', 'regtest', '500', HASH('0'), HASH('1'), HASH('2'), HASH('3'), '0', '100',
-                        '0', '1', crc32Hex(ARCHIVE_JSON), '1'].join('|');
-        let expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, 'BTC|regtest|500|0|0', 0, raw);
-        assert.strictEqual(verifyStub.firstCall.args[0], expected);
-
-        let data2 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE', ACTION_INDEX: 2 });
-        await handler.parse(v1Params(ARCHIVE_JSON, { crc: 'deadbeef' }), data2, null);
-        assert.ok(String(data2['STATUS']).startsWith('invalid: BATCH_CRC32 (archive mismatch)'));
-    });
-
-    it('v2 continuation stores, orphans without a parent v1, and rejects duplicates', async function () {
-        // Orphan: no parent v1 for batch 9
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE' });
-        await handler.parse(['2', '9', '1', '3', gz64('x')], data, null);
-        assert.strictEqual(data['STATUS'], 'orphan');
-
-        // Parent present, fresh chunk from the head's OWN publisher → valid. `source` is
-        // the head author the chunk is bound to; createBaseData's SOURCE is the
-        // chunk author, so the two must match for the chunk to be authenticated at all.
-        indexer.indexerDb.getAnchorV1ByBatchSeq.resolves({ action_index: 1, total_chunks: 3, archive_b64: 'AAA', batch_crc32: 'deadbeef', source: PUBLISHER });
-        let data2 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 3 });
-        await handler.parse(['2', '9', '1', '3', 'BBBB'], data2, null);
-        assert.strictEqual(data2['STATUS'], 'valid');
-
-        // Duplicate chunk index → invalid
-        indexer.indexerDb.getAnchorChunks.resolves([{ chunk_index: 1, archive_b64: 'BBBB' }]);
-        let data3 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 4 });
-        await handler.parse(['2', '9', '1', '3', 'BBBB'], data3, null);
-        assert.ok(String(data3['STATUS']).startsWith('invalid: CHUNK_INDEX (duplicate)'));
-    });
-
-    // ── Chunk-slot poisoning. "Authenticated by its parent v1" must mean more than
-    //    that a parent exists with matching geometry, or the FIRST broadcast into a slot
-    //    wins permanently: a junk chunk takes the slot, the real publisher's chunk is
-    //    rejected as a duplicate, and the batch can never reassemble. ─────────────────
-    describe('v2 chunk authorship (#3075)', function () {
-
-        const headOf = (source) => ({ action_index: 1, total_chunks: 3, archive_b64: 'AAA', batch_crc32: 'deadbeef', source });
-
-        it('rejects a chunk whose author is not the archive head publisher', async function () {
-            indexer.indexerDb.getAnchorV1ByBatchSeq.resolves(headOf(PUBLISHER));
-            let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 7, SOURCE: OUTSIDER });
-            await handler.parse(['2', '9', '1', '3', 'BBBB'], data, null);
-            assert.strictEqual(data['STATUS'], 'invalid: SOURCE (not the archive head publisher)');
-        });
-
-        it('the real publisher keeps its slot: an outsider chunk no longer makes it a duplicate', async function () {
-            // The denial the finding describes, driven end to end. The junk chunk is
-            // rejected on authorship, so it is NOT in the occupancy set getAnchorChunks
-            // returns (that query excludes 'invalid: ...' rows), and the legitimate chunk
-            // for the same index parses 'valid' instead of 'invalid: CHUNK_INDEX (duplicate)'.
-            indexer.indexerDb.getAnchorV1ByBatchSeq.resolves(headOf(PUBLISHER));
-            let junk = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 8, SOURCE: OUTSIDER });
-            await handler.parse(['2', '9', '1', '3', 'JUNK'], junk, null);
-            assert.ok(String(junk['STATUS']).startsWith('invalid: SOURCE'));
-
-            let real = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 9, SOURCE: PUBLISHER });
-            await handler.parse(['2', '9', '1', '3', 'BBBB'], real, null);
-            assert.strictEqual(real['STATUS'], 'valid');
-        });
-
-        it('fails closed when the head author cannot be resolved at all', async function () {
-            // A head whose actions/index_addresses linkage is missing yields source null.
-            // Waving the chunk through then would authenticate it against nothing.
-            indexer.indexerDb.getAnchorV1ByBatchSeq.resolves(headOf(null));
-            let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 10 });
-            await handler.parse(['2', '9', '1', '3', 'BBBB'], data, null);
-            assert.strictEqual(data['STATUS'], 'invalid: SOURCE (archive head author unresolvable)');
-        });
-
-        it('geometry still outranks authorship, so the pre-#3075 verdict is unchanged', async function () {
-            // TOTAL_CHUNKS is checked first: a wrong-geometry chunk from the right
-            // publisher must keep reporting the geometry reason, not the new one.
-            indexer.indexerDb.getAnchorV1ByBatchSeq.resolves(headOf(PUBLISHER));
-            let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 11 });
-            await handler.parse(['2', '9', '1', '4', 'BBBB'], data, null);
-            assert.ok(String(data['STATUS']).startsWith('invalid: TOTAL_CHUNKS'));
-        });
-
-        it('an orphan chunk is still stored unjudged: there is no head to authenticate against', async function () {
-            // Legitimate early chunks exist (the head can land last), so an
-            // orphan must NOT be rejected on authorship. Excluding a junk orphan is the
-            // read path's job (ARCHIVE_CHUNK_SET_SQL), not this one's.
-            indexer.indexerDb.getAnchorV1ByBatchSeq.resolves(null);
-            let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 12, SOURCE: OUTSIDER });
-            await handler.parse(['2', '9', '1', '3', 'BBBB'], data, null);
-            assert.strictEqual(data['STATUS'], 'orphan');
-        });
-    });
-
-    it('v2 reassembly: the final chunk triggers CRC verification and flags a bad batch', async function () {
-        let json = ARCHIVE_JSON;
-        let b64  = gz64(json);
-        let cut1 = Math.ceil(b64.length / 3), cut2 = 2 * cut1;
-        let parent = { action_index: 1, total_chunks: 3, archive_b64: b64.slice(0, cut1), batch_crc32: crc32Hex(json), source: PUBLISHER };
-        indexer.indexerDb.getAnchorV1ByBatchSeq.resolves(parent);
-        // First call per parse = duplicate guard (before this chunk is stored);
-        // second call = reassembly read (after the store).
-        let chunk1 = { chunk_index: 1, archive_b64: b64.slice(cut1, cut2) };
-        let chunk2 = { chunk_index: 2, archive_b64: b64.slice(cut2) };
-        let calls = 0;
-        indexer.indexerDb.getAnchorChunks.callsFake(async () => (++calls % 2 === 1) ? [chunk1] : [chunk1, chunk2]);
-        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 5 });
-        await handler.parse(['2', '9', '2', '3', b64.slice(cut2)], data, null);
-        assert.strictEqual(data['STATUS'], 'valid');
-        assert.ok(indexer.indexerDb.setAnchorArchiveStatus.notCalled);        // CRC matched: no flag
-
-        // Same reassembly with a corrupted parent CRC → batch flagged invalid_archive
-        parent.batch_crc32 = '00000000';
-        let data2 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 6 });
-        await handler.parse(['2', '9', '2', '3', b64.slice(cut2)], data2, null);
-        assert.ok(indexer.indexerDb.setAnchorArchiveStatus.calledWith(1, 'invalid_archive'));
     });
 });
