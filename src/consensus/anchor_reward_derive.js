@@ -57,7 +57,10 @@ const swq     = require('../stake_weighted_quorum.js');
 const eq      = require('../equivocation_header.js');
 const ar      = require('../anchor_reward_activation.js');
 const arKey   = require('../actions/anchor/anchor_reward_key.js');
-const { getLogger } = require('../observability/index.js');
+// The proof-and-mint step and the logical-reward grouping live beside this file in
+// anchor_reward_derive/. Every activation read (ar) stays here.
+const { AnchorProofUnavailableError, mintProvenRow } = require('./anchor_reward_derive/mint_row.js');
+const { groupByLogicalReward } = require('./anchor_reward_derive/reward_groups.js');
 // No coin-registry require here on purpose: nothing inside the block transaction may read a
 // field the registry advertises as operator-tunable (see minConfirmations below).
 
@@ -139,14 +142,34 @@ async function verifyAttestation(indexerDb, row){
         : (attSigners.length >= ((oracleN <= 1) ? 1 : Math.max(2 * Math.floor((oracleN - 1) / 3) + 1, Math.ceil((oracleN + 1) / 2))));
 }
 
-// Thrown when a matured reward cannot be PROVEN either way at this block (no DOGE
-// visibility, DOGE unreachable, or the anchor is not yet buried deep enough). The block
-// loop catches it, does not advance, and retries the block: deferring is the only outcome
-// that keeps every node deriving the identical set at the identical height. Deriving
-// without the proof would pay for an anchor that may never have landed; SKIPPING would make
-// the reward set depend on one node's network luck and fork the ledger just as badly.
-class AnchorProofUnavailableError extends Error {
-    constructor(message){ super(message); this.name = 'AnchorProofUnavailableError'; }
+// The two flag-days a mirrored row must be past before it may mint, each read at the
+// row's own snapshot_block and network.
+function rowGatesActive(row){
+    // Gate PER ROW on its own snapshot_block so an inert mainnet/testnet placeholder
+    // keeps this byte-neutral until the operator arms the derive flag-day.
+    if(!ar.isAnchorRewardDeriveActive(Number(row.snapshot_block), String(row.network))) return false;
+    // And gate on the reward FAMILY's own flag-day, which is a different question from
+    // WHERE derivation happens. ANCHOR_REWARD_DERIVE_ACTIVATION only relocates the mint
+    // from the DOGE indexer to this one; whether the family pays at all is
+    // ANCHOR_REWARD_ACTIVATION / ARCHIVE_REWARD_ACTIVATION, and the protocol is explicit
+    // that below the archive flag-day a v1 indexes its checkpoint and archive valid but
+    // "never derives an anchor_archive reward even with a full attestation"
+    // (xchain-documentation/protocol/actions/anchor.md). The relocation gate is armed at
+    // genesis on every network while the family gates are not, so without this the only
+    // thing between a below-flag-day attestation row and a COLLECT-spendable
+    // validator_rewards row is the hub's own leader-side family check: one honest
+    // producer, and no consumer-side defence at all against a rogue or mis-built hub.
+    // The mirror is transport, not trust - the same rule the XANCPUB re-verification and
+    // the DOGE mined-proof below exist for - so the consumer re-derives this gate too.
+    //
+    // The split is the SAME one the amount pick below makes, deliberately: anchor_archive
+    // rides the archive flag-day and every other anchor family (anchor_bundle and the
+    // per-chain anchor_<CHAIN>) rides the anchor flag-day. Keying it off a whitelist of
+    // known reward types instead would silently stop paying a family added later, which
+    // is a worse failure than the one this closes.
+    return (String(row.reward_type) === 'anchor_archive')
+        ? ar.isArchiveRewardActive(Number(row.snapshot_block), String(row.network))
+        : ar.isAnchorRewardActive(Number(row.snapshot_block), String(row.network));
 }
 
 // Derive all matured, not-yet-derived anchor/archive rewards from the mirrored
@@ -181,95 +204,22 @@ async function deriveAnchorRewards(indexerDb, config, blockIndex, proof){
     // same default, so a hub can never attest shallower than this gate will mint.
     let minConfirmations = ar.ANCHOR_REWARD_DOGE_MIN_CONFIRMATIONS;
 
-    // Group by the logical reward (reward_type, round_reference, round_qualifier): every
-    // attesting publisher for a round must be inserted BEFORE reconcile, so a failover
-    // double-publish collapses to the smallest-pubkey winner (identical to the DOGE on-chain
-    // path anchor.js drives).
-    //
-    // The qualifier is in the key because for 'anchor_archive' the pair (reward_type,
-    // round_reference) does NOT name one logical reward: round_reference is MATCH_BATCH_SEQ,
-    // a dense hub counter a wipe-and-replay rebase reissues (anchor_reward_key.js). Two
-    // distinct archive anchors sharing a reissued seq landed in ONE group, so the single
-    // reconcile that group ran collapsed them to one winner across two snapshots and deleted
-    // a real publisher's pay. Split by qualifier, each snapshot's archive reward reconciles
-    // as its own single-winner group, which is what the attestation quorum actually attested.
-    let groups = new Map();
-    for(let row of rows){
-        let key = row.reward_type + '|' + row.round_reference + '|' +
-                  arKey.rewardRoundQualifier(row.reward_type, row.snapshot_block);
-        if(!groups.has(key)) groups.set(key, []);
-        groups.get(key).push(row);
-    }
+    // Group by the logical reward (reward_type, round_reference, round_qualifier); see
+    // groupByLogicalReward in anchor_reward_derive/reward_groups.js for why the qualifier
+    // is part of the key and why every publisher is inserted before reconcile.
+    let groups = groupByLogicalReward(rows);
 
     let derived = 0;
     for(let [, groupRows] of groups){
         let anyWritten = false;
         for(let row of groupRows){
-            // Gate PER ROW on its own snapshot_block so an inert mainnet/testnet placeholder
-            // keeps this byte-neutral until the operator arms the derive flag-day.
-            if(!ar.isAnchorRewardDeriveActive(Number(row.snapshot_block), String(row.network))) continue;
-            // And gate on the reward FAMILY's own flag-day, which is a different question from
-            // WHERE derivation happens. ANCHOR_REWARD_DERIVE_ACTIVATION only relocates the mint
-            // from the DOGE indexer to this one; whether the family pays at all is
-            // ANCHOR_REWARD_ACTIVATION / ARCHIVE_REWARD_ACTIVATION, and the protocol is explicit
-            // that below the archive flag-day a v1 indexes its checkpoint and archive valid but
-            // "never derives an anchor_archive reward even with a full attestation"
-            // (xchain-documentation/protocol/actions/anchor.md). The relocation gate is armed at
-            // genesis on every network while the family gates are not, so without this the only
-            // thing between a below-flag-day attestation row and a COLLECT-spendable
-            // validator_rewards row is the hub's own leader-side family check: one honest
-            // producer, and no consumer-side defence at all against a rogue or mis-built hub.
-            // The mirror is transport, not trust - the same rule the XANCPUB re-verification and
-            // the DOGE mined-proof below exist for - so the consumer re-derives this gate too.
-            //
-            // The split is the SAME one the amount pick below makes, deliberately: anchor_archive
-            // rides the archive flag-day and every other anchor family (anchor_bundle and the
-            // per-chain anchor_<CHAIN>) rides the anchor flag-day. Keying it off a whitelist of
-            // known reward types instead would silently stop paying a family added later, which
-            // is a worse failure than the one this closes.
-            let familyActive = (String(row.reward_type) === 'anchor_archive')
-                ? ar.isArchiveRewardActive(Number(row.snapshot_block), String(row.network))
-                : ar.isAnchorRewardActive(Number(row.snapshot_block), String(row.network));
-            if(!familyActive) continue;
+            if(!rowGatesActive(row)) continue;
             if(!await verifyAttestation(indexerDb, row)) continue;
-            // The mirror says this reward's anchor was mined. Prove it against DOGE
-            // ourselves before minting: the mirror is transport, and the hub that wrote the
-            // row is exactly the party the reward pays. 'rejected' is chain-determined and
-            // fleet-uniform, so it skips this row permanently; 'unknown' is a local
-            // visibility failure, so it defers the whole block rather than letting this
-            // node's reward set diverge from its peers'.
-            let verdict = await (proof ? proof.proveMined({
-                txid:            row.doge_anchor_txid,
-                rewardType:      String(row.reward_type),
-                roundReference:  Number(row.round_reference),
-                snapshotBlock:   Number(row.snapshot_block),
-                publisher:       String(row.publisher).toLowerCase(),
-                network:         String(row.network),
-                minConfirmations: minConfirmations
-            }) : 'unknown');
-            if(verdict === 'unknown')
-                throw new AnchorProofUnavailableError(
-                    'anchor reward ' + row.reward_type + '/' + row.round_reference + ' (publisher ' +
-                    String(row.publisher).toLowerCase() + ') matured at BTC block ' + blockIndex +
-                    ' but its DOGE anchor ' + (row.doge_anchor_txid || '<none>') + ' could not be proven mined; ' +
-                    'deferring the block (wire DOGE_INDEXER_URL on this indexer if this persists)');
-            if(verdict !== 'verified'){
-                getLogger().warn('anchor reward ' + row.reward_type + '/' + row.round_reference + ' publisher ' +
-                             String(row.publisher).toLowerCase() + ': DOGE anchor proof REJECTED (' +
-                             (row.doge_anchor_txid || '<no txid>') + '); no reward derived');
-                continue;
-            }
+            // Prove the row's DOGE anchor mined, then mint it (anchor_reward_derive/mint_row.js).
+            // An anchor that cannot be proven either way throws AnchorProofUnavailableError,
+            // which defers the whole block.
             let amount = (String(row.reward_type) === 'anchor_archive') ? ar.ARCHIVE_REWARD_AMOUNT : ar.ANCHOR_REWARD_AMOUNT;
-            // block_index = snapshot_block (the earn-block, where the stake source resolves);
-            // derive_block_index = the current BTC block, which is where the row is actually
-            // minted. Without the second stamp a reorg to any height in (snapshot_block,
-            // blockIndex] orphans the minting block yet leaves the reward in place, because the
-            // rollback delete only scopes on block_index.
-            let ok = await indexerDb.createValidatorReward(
-                String(row.publisher).toLowerCase(), Number(row.round_reference), String(row.reward_type),
-                amount, Number(row.snapshot_block), true, Number(blockIndex),
-                arKey.rewardRoundQualifier(row.reward_type, row.snapshot_block));
-            if(ok) anyWritten = true;
+            if(await mintProvenRow(indexerDb, row, { blockIndex, proof, minConfirmations, amount })) anyWritten = true;
         }
         if(anyWritten){
             let first = groupRows[0];
