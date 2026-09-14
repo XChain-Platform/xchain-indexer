@@ -34,19 +34,9 @@ if (NODE_MAJOR < 22 || (NODE_MAJOR === 22 && NODE_MINOR < 12)) {
 
 // Load required libraries
 const mariadb = require('mariadb');
-const path    = require('path');
 // Module-level state and pure helpers that the split keeps in one place, so the class
 // and every mixin read the same instance of each.
 const { requireStakeWeight } = require('./shared.js');
-
-// The class body lives in database/, and a class body is evaluated with its class: drop any
-// cached part before the parts are required, so every evaluation of this entry re-reads the
-// config and the activation modules its parts capture, exactly as the one-file class body
-// did. Suites that re-evaluate this module against a fresh environment rely on that
-// (test/helpers/fresh_config.js, the admission-binding purge); a service evaluates the entry
-// once, so there the loop finds nothing to drop. Only this entry requires the parts.
-const PART_DIR = path.join(__dirname, 'database') + path.sep;
-for(const key of Object.keys(require.cache)) if(key.startsWith(PART_DIR)) delete require.cache[key];
 
 // The state the constructor builds, one helper per concern (database/instance_state.js).
 const { connectionParams, connectionPoolParams, initIndexIdState, initReadMemos,

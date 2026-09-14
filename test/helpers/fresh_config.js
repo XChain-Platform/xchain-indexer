@@ -24,7 +24,15 @@
 
 'use strict';
 
+const path = require('path');
+
 const CONFIG_PATH = require.resolve('../../src/config.js');
+// src/db/index.js assembles the Database class from its database/ parts, and those parts
+// destructure config and activation modules at their own load. Re-evaluating the entry
+// alone would reuse the cached parts, so a src/db target reloads the whole tree.
+const SRC_DB_DIR = path.resolve(__dirname, '../../src/db') + path.sep;
+
+const underSrcDb = (p) => p.startsWith(SRC_DB_DIR);
 
 /**
  * Require `modulePath` (absolute, or resolvable from here) with a freshly
@@ -32,11 +40,16 @@ const CONFIG_PATH = require.resolve('../../src/config.js');
  */
 function requireWithFreshConfig(modulePath) {
     const target = require.resolve(modulePath);
-    const saved = [CONFIG_PATH, target].map((p) => [p, require.cache[p]]);
+    const dbTree = underSrcDb(target);
+    const paths = [CONFIG_PATH, target];
+    if (dbTree) for (const p of Object.keys(require.cache)) if (underSrcDb(p) && p !== target) paths.push(p);
+    const saved = paths.map((p) => [p, require.cache[p]]);
     for (const [p] of saved) delete require.cache[p];
     try {
         return require(target);
     } finally {
+        // Drop what the fresh load cached under src/db too, so the tree is exactly as found.
+        if (dbTree) for (const p of Object.keys(require.cache)) if (underSrcDb(p)) delete require.cache[p];
         for (const [p, entry] of saved) {
             if (entry === undefined) delete require.cache[p];
             else require.cache[p] = entry;
