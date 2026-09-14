@@ -25,66 +25,45 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
-describe('Chaos: Block Processing Resilience', function () {
-    this.timeout(10000);
+let indexer, mockActions;
 
-    let indexer, mockActions;
+/**
+ * Helper: simulate processing a single block the way XChainIndexer does.
+ * Extracted from the main loop to test the block processing logic in isolation.
+ */
+async function processBlock(ctx, blockTransactions, blockTime, blockIndex) {
+    const config = ctx.indexer.config;
+    config['BLOCK_PROCESS_TIMEOUT'] = config['BLOCK_PROCESS_TIMEOUT'] || 5000;
 
-    beforeEach(function () {
-        indexer = createMockIndexer();
+    await ctx.indexer.indexerDb.beginTransaction();
+    try {
+        let blockProcessing = (async () => {
+            for (const tx of blockTransactions)
+                await ctx.actions.processTransaction(tx);
 
-        // Mock the actions class
-        mockActions = {
-            processTransaction: sinon.stub().resolves(),
-        };
+            await ctx.indexer.util.processExpirations(ctx.actions, ctx.indexer.indexerDb, blockIndex, blockTime);
+            await ctx.indexer.util.processCancellations(ctx.actions, ctx.indexer.indexerDb, blockIndex, blockTime);
 
-        // Mock utility lifecycle methods
-        sinon.stub(indexer.util, 'processExpirations').resolves();
-        sinon.stub(indexer.util, 'processCancellations').resolves();
-        sinon.stub(indexer.util, 'processMarketUpdates').resolves();
-    });
+            let [ledger, actions] = await ctx.indexer.indexerDb.createBlock(blockIndex, blockTime);
 
-    afterEach(function () {
-        sinon.restore();
-    });
+            await ctx.indexer.util.processMarketUpdates(ctx.indexer.indexerDb, blockIndex, blockTime);
+            await ctx.indexer.indexerDb.sanityCheck(blockIndex);
 
-    /**
-     * Helper: simulate processing a single block the way XChainIndexer does.
-     * Extracted from the main loop to test the block processing logic in isolation.
-     */
-    async function processBlock(ctx, blockTransactions, blockTime, blockIndex) {
-        const config = ctx.indexer.config;
-        config['BLOCK_PROCESS_TIMEOUT'] = config['BLOCK_PROCESS_TIMEOUT'] || 5000;
+            return [ledger, actions];
+        })();
 
-        await ctx.indexer.indexerDb.beginTransaction();
-        try {
-            let blockProcessing = (async () => {
-                for (const tx of blockTransactions)
-                    await ctx.actions.processTransaction(tx);
+        let [ledger, actions] = await ctx.indexer.util.withTimeout(
+            blockProcessing, config['BLOCK_PROCESS_TIMEOUT'], 'block ' + blockIndex
+        );
 
-                await ctx.indexer.util.processExpirations(ctx.actions, ctx.indexer.indexerDb, blockIndex, blockTime);
-                await ctx.indexer.util.processCancellations(ctx.actions, ctx.indexer.indexerDb, blockIndex, blockTime);
-
-                let [ledger, actions] = await ctx.indexer.indexerDb.createBlock(blockIndex, blockTime);
-
-                await ctx.indexer.util.processMarketUpdates(ctx.indexer.indexerDb, blockIndex, blockTime);
-                await ctx.indexer.indexerDb.sanityCheck(blockIndex);
-
-                return [ledger, actions];
-            })();
-
-            let [ledger, actions] = await ctx.indexer.util.withTimeout(
-                blockProcessing, config['BLOCK_PROCESS_TIMEOUT'], 'block ' + blockIndex
-            );
-
-            await ctx.indexer.indexerDb.commitTransaction();
-            return { success: true, ledger, actions };
-        } catch (error) {
-            await ctx.indexer.indexerDb.rollbackTransaction();
-            ctx.indexer.util.logError('Error while parsing block data :', error);
-            return { success: false, error };
-        }
+        await ctx.indexer.indexerDb.commitTransaction();
+        return { success: true, ledger, actions };
+    } catch (error) {
+        await ctx.indexer.indexerDb.rollbackTransaction();
+        ctx.indexer.util.logError('Error while parsing block data :', error);
+        return { success: false, error };
     }
+}
 
     /**
      * Helper: faithfully mirror the inner catch-up `while` loop in XChainIndexer.run(),
@@ -127,6 +106,27 @@ describe('Chaos: Block Processing Resilience', function () {
         return { attempted, committed, lastIndexerBlock };
     }
 
+describe('Chaos: Block Processing Resilience', function () {
+    this.timeout(10000);
+
+    beforeEach(function () {
+        indexer = createMockIndexer();
+
+        // Mock the actions class
+        mockActions = {
+            processTransaction: sinon.stub().resolves(),
+        };
+
+        // Mock utility lifecycle methods
+        sinon.stub(indexer.util, 'processExpirations').resolves();
+        sinon.stub(indexer.util, 'processCancellations').resolves();
+        sinon.stub(indexer.util, 'processMarketUpdates').resolves();
+    });
+
+    afterEach(function () {
+        sinon.restore();
+    });
+
     it('BK-01: query error during block processing triggers transaction rollback', async function () {
         mockActions.processTransaction.rejects(new Error('DB write failed'));
         const tx = createBaseData({ ACTION: 'SEND' });
@@ -153,6 +153,28 @@ describe('Chaos: Block Processing Resilience', function () {
         const result2 = await processBlock(ctx, [tx], 1700000005, 101);
         assert.strictEqual(result2.success, true);
         assert.ok(indexer.indexerDb.commitTransaction.calledOnce, 'Second block should commit');
+    });
+});
+
+describe('Chaos: Block Processing Resilience', function () {
+    this.timeout(10000);
+
+    beforeEach(function () {
+        indexer = createMockIndexer();
+
+        // Mock the actions class
+        mockActions = {
+            processTransaction: sinon.stub().resolves(),
+        };
+
+        // Mock utility lifecycle methods
+        sinon.stub(indexer.util, 'processExpirations').resolves();
+        sinon.stub(indexer.util, 'processCancellations').resolves();
+        sinon.stub(indexer.util, 'processMarketUpdates').resolves();
+    });
+
+    afterEach(function () {
+        sinon.restore();
     });
 
     it('BK-03: watchdog timeout triggers rollback on stuck block', async function () {
@@ -192,6 +214,28 @@ describe('Chaos: Block Processing Resilience', function () {
         assert.ok(indexer.indexerDb.rollbackTransaction.calledOnce);
         assert.ok(indexer.indexerDb.commitTransaction.notCalled);
     });
+});
+
+describe('Chaos: Block Processing Resilience', function () {
+    this.timeout(10000);
+
+    beforeEach(function () {
+        indexer = createMockIndexer();
+
+        // Mock the actions class
+        mockActions = {
+            processTransaction: sinon.stub().resolves(),
+        };
+
+        // Mock utility lifecycle methods
+        sinon.stub(indexer.util, 'processExpirations').resolves();
+        sinon.stub(indexer.util, 'processCancellations').resolves();
+        sinon.stub(indexer.util, 'processMarketUpdates').resolves();
+    });
+
+    afterEach(function () {
+        sinon.restore();
+    });
 
     it('BK-06: commitTransaction failure triggers rollback', async function () {
         indexer.indexerDb.commitTransaction.rejects(new Error('commit failed'));
@@ -222,6 +266,28 @@ describe('Chaos: Block Processing Resilience', function () {
             assert.ok(e.message.includes('rollback also failed'));
         }
     });
+});
+
+describe('Chaos: Block Processing Resilience', function () {
+    this.timeout(10000);
+
+    beforeEach(function () {
+        indexer = createMockIndexer();
+
+        // Mock the actions class
+        mockActions = {
+            processTransaction: sinon.stub().resolves(),
+        };
+
+        // Mock utility lifecycle methods
+        sinon.stub(indexer.util, 'processExpirations').resolves();
+        sinon.stub(indexer.util, 'processCancellations').resolves();
+        sinon.stub(indexer.util, 'processMarketUpdates').resolves();
+    });
+
+    afterEach(function () {
+        sinon.restore();
+    });
 
     it('BK-08: multiple transactions processed in same block all complete', async function () {
         const txs = [
@@ -250,6 +316,28 @@ describe('Chaos: Block Processing Resilience', function () {
         assert.deepStrictEqual(committed, [], 'no block should commit when block 100 fails');
         assert.strictEqual(lastIndexerBlock, 99, 'counter must NOT advance past the failed block');
         assert.ok(indexer.indexerDb.commitTransaction.notCalled, 'nothing should commit');
+    });
+});
+
+describe('Chaos: Block Processing Resilience', function () {
+    this.timeout(10000);
+
+    beforeEach(function () {
+        indexer = createMockIndexer();
+
+        // Mock the actions class
+        mockActions = {
+            processTransaction: sinon.stub().resolves(),
+        };
+
+        // Mock utility lifecycle methods
+        sinon.stub(indexer.util, 'processExpirations').resolves();
+        sinon.stub(indexer.util, 'processCancellations').resolves();
+        sinon.stub(indexer.util, 'processMarketUpdates').resolves();
+    });
+
+    afterEach(function () {
+        sinon.restore();
     });
 
     it('BK-10: @regression a transient failure is retried on the next pass with no gap in committed blocks', async function () {

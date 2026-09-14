@@ -25,10 +25,10 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createChaosDb, FakeConnection } = require('../setup/harness');
 
+let db, conn;
+
 describe('Chaos: Query Error Propagation', function () {
     this.timeout(10000);
-
-    let db, conn;
 
     beforeEach(function () {
         db = createChaosDb();
@@ -81,6 +81,19 @@ describe('Chaos: Query Error Propagation', function () {
         conn.query.rejects(new Error('syntax error'));
         await db.doQuery('INVALID SQL');
         assert.ok(conn.release.calledOnce, 'Should release connection after non-tx error');
+    });
+});
+
+describe('Chaos: Query Error Propagation', function () {
+    this.timeout(10000);
+
+    beforeEach(function () {
+        db = createChaosDb();
+        conn = db.pool.connection;
+    });
+
+    afterEach(function () {
+        sinon.restore();
     });
 
     it('QP-06: connection NOT released after error inside transaction', async function () {

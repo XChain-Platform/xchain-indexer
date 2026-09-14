@@ -24,10 +24,10 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createChaosDb, FakeConnection } = require('../setup/harness');
 
+let db;
+
 describe('Chaos: Circuit Breaker', function () {
     this.timeout(10000);
-
-    let db;
 
     afterEach(function () {
         sinon.restore();
@@ -74,6 +74,14 @@ describe('Chaos: Circuit Breaker', function () {
         }
         assert.strictEqual(db.circuitState, 'open');
         assert.strictEqual(db.circuitFailures, 5);
+    });
+});
+
+describe('Chaos: Circuit Breaker', function () {
+    this.timeout(10000);
+
+    afterEach(function () {
+        sinon.restore();
     });
 
     it('CB-05: open state rejects immediately without attempting connection', async function () {
@@ -126,6 +134,14 @@ describe('Chaos: Circuit Breaker', function () {
             assert.ok(e.message.includes('Circuit breaker opened'));
         }
         assert.strictEqual(db.circuitState, 'open');
+    });
+});
+
+describe('Chaos: Circuit Breaker', function () {
+    this.timeout(10000);
+
+    afterEach(function () {
+        sinon.restore();
     });
 
     it('CB-09: circuit breaker is per-Database-instance', async function () {
