@@ -104,7 +104,7 @@ function historyFor(network, override){
 // for a consensus caller: it means "this node cannot know the bar", and the
 // responsible set must come back empty rather than be computed against an
 // invented floor of 0, which would silently widen the serving set. That is the
-// same posture xchain-hub CapabilitySnapshot.resolveMinStake takes (#S-F3).
+// same posture xchain-hub CapabilitySnapshot._resolveMinStake takes (#S-F3).
 //
 // Falls back to the GENESIS floor, never to a bar of its own invention, on
 // anything it cannot evaluate (unparseable height, malformed entry, unknown

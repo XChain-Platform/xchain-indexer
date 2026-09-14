@@ -34,7 +34,7 @@
  * so any rule shaped like "skip a member that looks silent" forks the set
  * between two honest hubs. This ladder is therefore a pure function of chain
  * height, exactly like the leader-rotation and model-fallback ladders it sits
- * beside (xchain-hub/src/attestation/escalation.js): the set widens on a fixed
+ * beside (xchain-hub/src/attestation_escalation.js): the set widens on a fixed
  * schedule whether or not anyone is actually down, and a healthy round
  * finalizes inside the first segment, before any widening is visible at all.
  *

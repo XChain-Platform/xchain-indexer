@@ -32,7 +32,7 @@
  *
  * banned-math is in scope for the same reason and on the same bit, which is easy to
  * miss because it reads the global object through its OWN single-hop matcher rather
- * than the shared one: xchain-vm/src/lint_core.js isMathObjectRef resolves its
+ * than the shared one: xchain-vm/src/lint-core.js isMathObjectRef resolves its
  * qualifying-object leg through isGlobalObjectRef under this epoch, and
  * findBannedMathCalls is handed the same flag (lint-core.js validateSyntax, the
  * `globalAlias` argument syntax.js maps enforceLintGlobalAlias onto).
