@@ -17,93 +17,73 @@ const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Coinpay_Expire = require('../../../src/actions/coinpay_expire.js');
 
+const SELLER = '1SellerAddressXXXXXXXXXXXXXXXbR3kNE';
+const BUYER  = '1BuyerAddressXXXXXXXXXXXXXXXXfUzXFr';
+const SWEEP  = '1SweepDestinationXXXXXXXXXXXXXXXXXWA';
+let indexer, actionsCtx, handler;
+
+function makeObligation(overrides = {}) {
+    return { ACTION_INDEX: 42, COIN_AMOUNT: '0.001', ...overrides };
+}
+
+function makeSellerOrder(overrides = {}) {
+    return {
+        ACTION_INDEX: 10, SOURCE: SELLER, GIVE_TICK: 'TEST', GIVE_REMAINING: '50',
+        ORDER_STATUS: 'open', GIVE_OWNERSHIP: null, ...overrides,
+    };
+}
+
+function makeCoinOrder(overrides = {}) {
+    return {
+        ACTION_INDEX: 11, SOURCE: BUYER, GIVE_TICK: null,   // coin side
+        GIVE_REMAINING: '0.001', ORDER_STATUS: 'open', GIVE_OWNERSHIP: null,
+        ...overrides,
+    };
+}
+
+// The native match escrows the SELLER's token leg. Seller is the original (get) order
+// (get_action_index=10), so its token side is give_amount ('50' TEST); the coin leg
+// (get_amount, '0.001') equals the obligation's COIN_AMOUNT and must NOT be released.
+function makeMatchAmounts(overrides = {}) {
+    return {
+        give_action_index: 11, get_action_index: 10,
+        give_amount: '50',      // token leg (what the seller escrowed)
+        get_amount: '0.001',   // native-coin leg (== obligation COIN_AMOUNT)
+        ...overrides,
+    };
+}
+
+function addExpireStubs(db) {
+    db.getCoinpayObligationInfo = sinon.stub().resolves(makeObligation());
+    db.getOrderMatchOrders      = sinon.stub().resolves({ give_action_index: 11, get_action_index: 10 });
+    db.getOrderMatchAmounts     = sinon.stub().resolves(makeMatchAmounts());
+    db.getOrderInfo             = sinon.stub();
+    db.getOrderInfo.withArgs(sinon.match.any, 11).resolves(makeCoinOrder());
+    db.getOrderInfo.withArgs(sinon.match.any, 10).resolves(makeSellerOrder());
+    db.createActionIndex        = sinon.stub().resolves(99);
+    db.createCoinpayExpire      = sinon.stub().resolves();
+    db.createCoinpayStatus      = sinon.stub().resolves();
+    db.createOrderStatus        = sinon.stub().resolves();
+    db.getPendingCoinpayObligationsByOrder = sinon.stub().resolves([]);
+    db.getOrderSweepDestination = sinon.stub().resolves(null);
+    db.clearTokenEscrow         = sinon.stub().resolves();
+}
+
+function setupExpireFixture() {
+    indexer = createMockIndexer();
+    addExpireStubs(indexer.indexerDb);
+    actionsCtx = {
+        config: indexer.config, util: indexer.util, mapper: indexer.mapper,
+        decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb,
+        protocolChanges: indexer.protocolChanges,   // isEnabled -> true (regtest genesis) by default
+    };
+    handler = new Coinpay_Expire(actionsCtx);
+    indexer.util.resetLists();
+}
+
 describe('Coinpay_Expire (COINPAY_EXPIRE) @regression @tier2', function () {
-    let indexer, actionsCtx, handler;
-
-    const SELLER = '1SellerAddressXXXXXXXXXXXXXXXbR3kNE';
-    const BUYER  = '1BuyerAddressXXXXXXXXXXXXXXXXfUzXFr';
-    const SWEEP  = '1SweepDestinationXXXXXXXXXXXXXXXXXWA';
-
-    function makeObligation(overrides = {}) {
-        return {
-            ACTION_INDEX: 42,
-            COIN_AMOUNT: '0.001',
-            ...overrides,
-        };
-    }
-
-    function makeSellerOrder(overrides = {}) {
-        return {
-            ACTION_INDEX:   10,
-            SOURCE:         SELLER,
-            GIVE_TICK:      'TEST',
-            GIVE_REMAINING: '50',
-            ORDER_STATUS:   'open',
-            GIVE_OWNERSHIP: null,
-            ...overrides,
-        };
-    }
-
-    function makeCoinOrder(overrides = {}) {
-        return {
-            ACTION_INDEX:   11,
-            SOURCE:         BUYER,
-            GIVE_TICK:      null,   // coin side
-            GIVE_REMAINING: '0.001',
-            ORDER_STATUS:   'open',
-            GIVE_OWNERSHIP: null,
-            ...overrides,
-        };
-    }
-
-    // The native match escrows the SELLER's token leg. Seller is the original (get) order
-    // (get_action_index=10), so its token side is give_amount ('50' TEST); the coin leg
-    // (get_amount, '0.001') equals the obligation's COIN_AMOUNT and must NOT be released.
-    function makeMatchAmounts(overrides = {}) {
-        return {
-            give_action_index: 11,
-            get_action_index:  10,
-            give_amount:       '50',      // token leg (what the seller escrowed)
-            get_amount:        '0.001',   // native-coin leg (== obligation COIN_AMOUNT)
-            ...overrides,
-        };
-    }
-
-    function addExpireStubs(db) {
-        db.getCoinpayObligationInfo = sinon.stub().resolves(makeObligation());
-        db.getOrderMatchOrders      = sinon.stub().resolves({ give_action_index: 11, get_action_index: 10 });
-        db.getOrderMatchAmounts     = sinon.stub().resolves(makeMatchAmounts());
-        db.getOrderInfo             = sinon.stub();
-        db.getOrderInfo.withArgs(sinon.match.any, 11).resolves(makeCoinOrder());
-        db.getOrderInfo.withArgs(sinon.match.any, 10).resolves(makeSellerOrder());
-        db.createActionIndex        = sinon.stub().resolves(99);
-        db.createCoinpayExpire      = sinon.stub().resolves();
-        db.createCoinpayStatus      = sinon.stub().resolves();
-        db.createOrderStatus        = sinon.stub().resolves();
-        db.getPendingCoinpayObligationsByOrder = sinon.stub().resolves([]);
-        db.getOrderSweepDestination = sinon.stub().resolves(null);
-        db.clearTokenEscrow         = sinon.stub().resolves();
-    }
-
-    beforeEach(function () {
-        indexer = createMockIndexer();
-        addExpireStubs(indexer.indexerDb);
-
-        actionsCtx = {
-            config:         indexer.config,
-            util:           indexer.util,
-            mapper:         indexer.mapper,
-            decoderDb:      indexer.decoderDb,
-            indexerDb:      indexer.indexerDb,
-            protocolChanges: indexer.protocolChanges,   // isEnabled -> true (regtest genesis) by default
-        };
-        handler = new Coinpay_Expire(actionsCtx);
-        indexer.util.resetLists();
-    });
-
-    afterEach(function () {
-        sinon.restore();
-    });
+    beforeEach(setupExpireFixture);
+    afterEach(function () { sinon.restore(); });
 
     // ─── Early-exit guards ────────────────────────────────────────────────
 
@@ -131,6 +111,12 @@ describe('Coinpay_Expire (COINPAY_EXPIRE) @regression @tier2', function () {
         });
 
     });
+
+});
+
+describe('Coinpay_Expire (COINPAY_EXPIRE) @regression @tier2', function () {
+    beforeEach(setupExpireFixture);
+    afterEach(function () { sinon.restore(); });
 
     // ─── Normal expiry ────────────────────────────────────────────────────
 
@@ -185,6 +171,12 @@ describe('Coinpay_Expire (COINPAY_EXPIRE) @regression @tier2', function () {
 
     });
 
+});
+
+describe('Coinpay_Expire (COINPAY_EXPIRE) @regression @tier2', function () {
+    beforeEach(setupExpireFixture);
+    afterEach(function () { sinon.restore(); });
+
     describe('escrow-release amount (CP-EXPIRE-1)', function () {
 
         it('releases the SELLER token leg (give/get amount), NOT the obligation COIN_AMOUNT', async function () {
@@ -229,6 +221,12 @@ describe('Coinpay_Expire (COINPAY_EXPIRE) @regression @tier2', function () {
 
     });
 
+});
+
+describe('Coinpay_Expire (COINPAY_EXPIRE) @regression @tier2', function () {
+    beforeEach(setupExpireFixture);
+    afterEach(function () { sinon.restore(); });
+
     // ─── Seller order state transitions ─────────────────────────────────
 
     describe('seller order state transitions', function () {
@@ -259,6 +257,15 @@ describe('Coinpay_Expire (COINPAY_EXPIRE) @regression @tier2', function () {
             assert.ok(expiredCall, 'seller order should be finalised to expired');
         });
 
+    });
+});
+
+describe('Coinpay_Expire (COINPAY_EXPIRE) @regression @tier2', function () {
+    beforeEach(setupExpireFixture);
+    afterEach(function () { sinon.restore(); });
+
+    describe('seller order state transitions', function () {
+
         it('does NOT finalise seller when obligations still remain', async function () {
             const cancellingOrder = makeSellerOrder({ ORDER_STATUS: 'cancelling', GIVE_REMAINING: '20' });
             indexer.indexerDb.getOrderInfo.withArgs(sinon.match.any, 10).resolves(cancellingOrder);
@@ -284,6 +291,12 @@ describe('Coinpay_Expire (COINPAY_EXPIRE) @regression @tier2', function () {
         });
 
     });
+
+});
+
+describe('Coinpay_Expire (COINPAY_EXPIRE) @regression @tier2', function () {
+    beforeEach(setupExpireFixture);
+    afterEach(function () { sinon.restore(); });
 
     // ─── Sweep-destination routing ────────────────────────────────────────
 
