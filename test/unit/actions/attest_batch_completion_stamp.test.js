@@ -143,6 +143,49 @@ async function land(h, enc, wireIndex, actionIndex, source){
     return data;
 }
 
+async function writeTimeRefusals(){
+    const cases = [];
+    // Off the batch rail.
+    {
+        const { handler: h } = batchHandler('BTC');
+        const { enc } = chunkedBatch(2);
+        const data = batchData();
+        await h.parse(wireParams(enc.wires[0]), data, null);
+        cases.push(data['STATUS']);
+    }
+    // A head for another network.
+    {
+        const { handler: h } = batchHandler('DOGE');
+        const rows = [batchRow(0), batchRow(1)];
+        const enc = abw.encodeAttestBatch({
+            network: 'testnet', window_start: 1700000000, window_end: 1700003600,
+            row_count: 2, btc_block_height: ANCHOR, rows,
+            sigs: [{ pubkey: PUBKEY_A, sig: SIG_A }],
+        });
+        const data = batchData();
+        await h.parse(wireParams(enc.wires[0]), data, null);
+        cases.push(data['STATUS']);
+    }
+    // A structurally broken head.
+    {
+        const { handler: h } = batchHandler('DOGE');
+        const data = batchData();
+        await h.parse(['5', 'not-a-key'], data, null);
+        cases.push(data['STATUS']);
+    }
+    // A SECOND head for a window this publisher already headed: the case that makes a
+    // blanket reset unsafe, because it sits in the reset's exact join shape.
+    {
+        const { handler: h, db } = batchHandler('DOGE');
+        chunkStore(db);
+        const { enc } = chunkedBatch(2);
+        await land(h, enc, 0, 71);
+        const dup = await land(h, enc, 0, 73);
+        cases.push(dup['STATUS']);
+    }
+    return cases;
+}
+
 describe('ATTEST v5 head: the batch-completion marker @regression', function(){
 
     beforeEach(function(){ sinon.stub(ed25519, 'verify').returns(true); });
@@ -200,50 +243,18 @@ describe('ATTEST v5 head: the batch-completion marker @regression', function(){
             'an incomplete batch is not a failed one, so there is no stamp and nothing to reset');
     });
 
+});
+
+describe('ATTEST v5 head: the batch-completion marker @regression', function(){
+
+    beforeEach(function(){ sinon.stub(ed25519, 'verify').returns(true); });
+    afterEach(function(){ sinon.restore(); });
+
     // The other half of the distinction. A head that is terminal because it was terminal
     // when it was written must be unrecoverable by the reset, or the reorg revives a head
     // that was never valid.
     it('never marks a verdict written on the head itself', async function(){
-        const cases = [];
-
-        // Off the batch rail.
-        {
-            const { handler: h } = batchHandler('BTC');
-            const { enc } = chunkedBatch(2);
-            const data = batchData();
-            await h.parse(wireParams(enc.wires[0]), data, null);
-            cases.push(data['STATUS']);
-        }
-        // A head for another network.
-        {
-            const { handler: h } = batchHandler('DOGE');
-            const rows = [batchRow(0), batchRow(1)];
-            const enc = abw.encodeAttestBatch({
-                network: 'testnet', window_start: 1700000000, window_end: 1700003600,
-                row_count: 2, btc_block_height: ANCHOR, rows,
-                sigs: [{ pubkey: PUBKEY_A, sig: SIG_A }],
-            });
-            const data = batchData();
-            await h.parse(wireParams(enc.wires[0]), data, null);
-            cases.push(data['STATUS']);
-        }
-        // A structurally broken head.
-        {
-            const { handler: h } = batchHandler('DOGE');
-            const data = batchData();
-            await h.parse(['5', 'not-a-key'], data, null);
-            cases.push(data['STATUS']);
-        }
-        // A SECOND head for a window this publisher already headed: the case that makes a
-        // blanket reset unsafe, because it sits in the reset's exact join shape.
-        {
-            const { handler: h, db } = batchHandler('DOGE');
-            chunkStore(db);
-            const { enc } = chunkedBatch(2);
-            await land(h, enc, 0, 71);
-            const dup = await land(h, enc, 0, 73);
-            cases.push(dup['STATUS']);
-        }
+        const cases = await writeTimeRefusals();
         // A single-wire head whose own quorum fails.
         {
             const { handler: h } = batchHandler('DOGE');

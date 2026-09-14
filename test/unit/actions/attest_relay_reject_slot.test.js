@@ -126,72 +126,66 @@ function makeAttestsTable() {
     return { rows, run };
 }
 
+let indexer, handler, table, warn;
+
+function setupRelayFixture() {
+    indexer = createMockIndexer();
+    table   = makeAttestsTable();
+
+    // A real Database, so createAttestationRequest and the two relay lookups are
+    // the shipped implementations. The pool is replaced before any connect.
+    const db = new Database('127.0.0.1', 3306, 'x', 'u', 'p',
+                            { config: indexer.config, util: indexer.util });
+    db.pool = { getConnection: sinon.stub().resolves({}) };
+    sinon.stub(db, 'doQuery').callsFake(table.run);
+    sinon.stub(db, 'doQueryStrict').callsFake(table.run);
+    sinon.stub(db, 'createStatus').resolves(1);
+    sinon.stub(db, 'getAddressId').resolves(null);
+
+    // Everything the v3 path needs that is not the attests table itself.
+    db.getValidatorsByCapability   = sinon.stub().resolves([{ pubkey: PUBKEY_A }]);
+    db.getStakeWeightsByCapability = sinon.stub().resolves([{ pubkey: PUBKEY_A, source: 'SA', weight: '100' }]);
+    db.hasCapability               = sinon.stub().resolves(true);
+    db.getContract                 = sinon.stub().resolves({ contract_index: 5 });
+    indexer.indexerDb = db;
+
+    handler = new Attest({
+        config: indexer.config, util: indexer.util, mapper: indexer.mapper,
+        decoderDb: indexer.decoderDb, indexerDb: db,
+        actionExecute: { parse: sinon.stub().resolves() },
+        protocolChanges: {
+            isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true),
+        },
+    });
+    indexer.config['COIN'] = 'BTC';
+    indexer.util.resetLists();
+
+    sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+    sinon.stub(ed25519, 'verify').returns(true);
+    sinon.stub(attestRelay, 'isAttestRelayActive').returns(true);
+    // Keep the dropped-row warning out of the suite's output; it is also the
+    // product's own signal that the defect fired, so the legacy case asserts on it.
+    warn = sinon.stub(console, 'warn');
+}
+
+// The griefer's wire and then the federation's, in that order, into one table.
+async function runGriefThenRelay() {
+    const griefData = createBaseData({ ACTION: 'ATTEST', FORMAT: 3,
+                                       BLOCK_INDEX: 900000, ACTION_INDEX: 10 });
+    await handler.parse(v3Params({ providerId: 'not_a_registered_provider' }), griefData, null);
+
+    const relayData = createBaseData({ ACTION: 'ATTEST', FORMAT: 3,
+                                       BLOCK_INDEX: 900001, ACTION_INDEX: 11 });
+    await handler.parse(v3Params(), relayData, null);
+
+    return { griefData, relayData };
+}
+
+const pendingRows = () => table.rows.filter(r => r.request_status === 'pending');
+
 describe('a refused ATTEST v3 and the request_id slot @regression @tier1', function () {
-
-    let indexer, handler, table, warn;
-
-    beforeEach(function () {
-        indexer = createMockIndexer();
-        table   = makeAttestsTable();
-
-        // A real Database, so createAttestationRequest and the two relay lookups are
-        // the shipped implementations. The pool is replaced before any connect.
-        const db = new Database('127.0.0.1', 3306, 'x', 'u', 'p',
-                                { config: indexer.config, util: indexer.util });
-        db.pool = { getConnection: sinon.stub().resolves({}) };
-        sinon.stub(db, 'doQuery').callsFake(table.run);
-        sinon.stub(db, 'doQueryStrict').callsFake(table.run);
-        sinon.stub(db, 'createStatus').resolves(1);
-        sinon.stub(db, 'getAddressId').resolves(null);
-
-        // Everything the v3 path needs that is not the attests table itself.
-        db.getValidatorsByCapability   = sinon.stub().resolves([{ pubkey: PUBKEY_A }]);
-        db.getStakeWeightsByCapability = sinon.stub().resolves([{ pubkey: PUBKEY_A, source: 'SA', weight: '100' }]);
-        db.hasCapability               = sinon.stub().resolves(true);
-        db.getContract                 = sinon.stub().resolves({ contract_index: 5 });
-        indexer.indexerDb = db;
-
-        handler = new Attest({
-            config:    indexer.config,
-            util:      indexer.util,
-            mapper:    indexer.mapper,
-            decoderDb: indexer.decoderDb,
-            indexerDb: db,
-            actionExecute:   { parse: sinon.stub().resolves() },
-            protocolChanges: {
-                isDefined: sinon.stub().returns(true),
-                isEnabled: sinon.stub().resolves(true),
-            },
-        });
-        indexer.config['COIN'] = 'BTC';
-        indexer.util.resetLists();
-
-        sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
-        sinon.stub(ed25519, 'verify').returns(true);
-        sinon.stub(attestRelay, 'isAttestRelayActive').returns(true);
-        // Keep the dropped-row warning out of the suite's output; it is also the
-        // product's own signal that the defect fired, so the legacy case asserts on it.
-        warn = sinon.stub(console, 'warn');
-    });
-
-    afterEach(function () {
-        sinon.restore();
-    });
-
-    // The griefer's wire and then the federation's, in that order, into one table.
-    async function runGriefThenRelay() {
-        const griefData = createBaseData({ ACTION: 'ATTEST', FORMAT: 3,
-                                           BLOCK_INDEX: 900000, ACTION_INDEX: 10 });
-        await handler.parse(v3Params({ providerId: 'not_a_registered_provider' }), griefData, null);
-
-        const relayData = createBaseData({ ACTION: 'ATTEST', FORMAT: 3,
-                                           BLOCK_INDEX: 900001, ACTION_INDEX: 11 });
-        await handler.parse(v3Params(), relayData, null);
-
-        return { griefData, relayData };
-    }
-
-    const pendingRows = () => table.rows.filter(r => r.request_status === 'pending');
+    beforeEach(setupRelayFixture);
+    afterEach(function () { sinon.restore(); });
 
     it('below the flag day the refusal is stored and the honest relay never persists', async function () {
         sinon.stub(relayRejectSlot, 'isAttestRelayRejectSlotActive').returns(false);
@@ -225,6 +219,12 @@ describe('a refused ATTEST v3 and the request_id slot @regression @tier1', funct
         assert.ok(!warn.getCalls().some(c => String(c.args[0]).includes('duplicate v0 for request_id')),
             'nothing was dropped');
     });
+
+});
+
+describe('a refused ATTEST v3 and the request_id slot @regression @tier1', function () {
+    beforeEach(setupRelayFixture);
+    afterEach(function () { sinon.restore(); });
 
     it('an admitted relay still holds its id against a second admitted one', async function () {
         // The exactly-once rule the flag day must not loosen: withholding refusals is
