@@ -25,71 +25,38 @@
  *   Phase 3 – Init new indexer and processBlocks (detects reorg, rolls back,
  *              reprocesses replacement blocks).
  *   Phase 4 – Assert the final indexer state reflects replacement data only.
+ *
+ * Cases 5, 6 and 10 live in 05_reorg.test/reindex_integrity.test.js and cases 7 to 9 in
+ * 05_reorg.test/successive_and_partial.test.js, under this file's describe title; the
+ * actors, block helper and hooks are in 05_reorg.test/helpers/reorg_chain.js.
  */
 
 const assert = require('assert');
-const {
-    decoderQuery, indexerQuery,
-    createDatabases, createDecoderSchema,
-    resetDecoderDb, resetIndexerDb, closeAll,
-} = require('../setup/db-connection');
+const { decoderQuery, indexerQuery } = require('../setup/db-connection');
 const DecoderSeeder = require('../setup/decoder-seeder');
-const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../setup/indexer-launcher');
+const { initIndexer, processBlocks, destroyIndexer } = require('../setup/indexer-launcher');
 const { seedGas } = require('../setup/gas-seeder');
 const helpers = require('../setup/assertion-helpers');
-
-// ---------------------------------------------------------------------------
-// Addresses (30-char strings, safe for the indexer's address validation)
-// ---------------------------------------------------------------------------
-const ADDR1 = 'msK1rsgNVFPM4cR3X5rngczTKa6EtT4WKD';
-const ADDR2 = 'mjifPngDYQ6HHPNQdGk1kQuFkJWEiQksQp';
-const ADDR3 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi';
-
-// Base block time (Unix timestamp)
-const T0 = 1700000000;
-const BLK = 600; // seconds per block
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Delete decoder blocks >= blockIndex (and their transactions / outputs).
- * Call this after seeding a reorg event but before seeding replacement blocks.
- */
-async function deleteDecoderBlocksFrom(blockIndex) {
-    await decoderQuery(
-        'DELETE FROM transaction_outputs WHERE tx_index IN ' +
-        '(SELECT tx_index FROM transactions WHERE block_index >= ?)',
-        [blockIndex]
-    );
-    await decoderQuery('DELETE FROM transactions WHERE block_index >= ?', [blockIndex]);
-    await decoderQuery('DELETE FROM blocks WHERE block_index >= ?', [blockIndex]);
-}
+const { ADDR1, ADDR2, ADDR3, T0, BLK, deleteDecoderBlocksFrom, fileSchemaHooks, freshChain } = require('./05_reorg.test/helpers/reorg_chain');
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
+// The scenario is written as consecutive blocks that all carry the same describe title, so
+// no block exceeds the readability limit while every full test title stays what it was.
+// Every block registers the same three hooks, so each test still runs under all of them;
+// the bodies live once, in the helper named below. The hooks are passed by name rather than wrapped, so `this`
+// is still the mocha context and their own timeouts still apply.
+// Their bodies live in 05_reorg.test/helpers/reorg_chain.js, shared with the parts beside
+// this file; this file's own scoped schemas are bound here.
+const { createFileSchemas, closeFileSchemas } = fileSchemaHooks(__filename);
+
 describe('05 – Chain Reorganization @regression @tier3', function () {
     this.timeout(60000);
-
-    before(async function () {
-        this.timeout(30000);
-        await createDatabases(__filename);
-        await createDecoderSchema();
-    });
-
-    after(async function () {
-        await destroyFileIndexers(__filename);
-        await closeAll();
-    });
-
-    beforeEach(async function () {
-        this.timeout(15000);
-        await resetDecoderDb();
-        await resetIndexerDb();
-    });
+    before(createFileSchemas);
+    after(closeFileSchemas);
+    beforeEach(freshChain);
 
     // -----------------------------------------------------------------------
     // 1. Simple reorg: 5 blocks indexed, reorg to block 102, verify rollback
@@ -134,6 +101,14 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
         await helpers.assertBlockCount(indexerQuery, 4); // blocks 100, 101, 102
     });
 
+});
+
+describe('05 – Chain Reorganization @regression @tier3', function () {
+    this.timeout(60000);
+    before(createFileSchemas);
+    after(closeFileSchemas);
+    beforeEach(freshChain);
+
     // -----------------------------------------------------------------------
     // 2. Reorg with balance changes: SEND in reorged block reverted
     // -----------------------------------------------------------------------
@@ -170,6 +145,14 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
         await helpers.assertBalance(indexerQuery, ADDR1, 'BREV', '600');
         await helpers.assertBalance(indexerQuery, ADDR2, 'BREV', null); // no balance row
     });
+
+});
+
+describe('05 – Chain Reorganization @regression @tier3', function () {
+    this.timeout(60000);
+    before(createFileSchemas);
+    after(closeFileSchemas);
+    beforeEach(freshChain);
 
     // -----------------------------------------------------------------------
     // 3. Reorg replaces data: replacement blocks have DIFFERENT sends
@@ -211,6 +194,14 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
         await helpers.assertBalance(indexerQuery, ADDR3, 'RPLD', '750');
     });
 
+});
+
+describe('05 – Chain Reorganization @regression @tier3', function () {
+    this.timeout(60000);
+    before(createFileSchemas);
+    after(closeFileSchemas);
+    beforeEach(freshChain);
+
     // -----------------------------------------------------------------------
     // 4. Reorg to first block (effectively clears all indexed data)
     // -----------------------------------------------------------------------
@@ -251,240 +242,4 @@ describe('05 – Chain Reorganization @regression @tier3', function () {
         await helpers.assertBlockCount(indexerQuery, 2);
     });
 
-    // -----------------------------------------------------------------------
-    // 5. Sanity check passes after reorg: supply consistency after rollback
-    // -----------------------------------------------------------------------
-    it('5. sanity check passes after rollback and reindex', async function () {
-        const seeder = new DecoderSeeder(decoderQuery);
-        // Fee era: ISSUEs below need gas; seed XCHAIN to the actors first
-        await seedGas(seeder, { blockIndex: 499, addresses: [ADDR1, ADDR2, ADDR3] });
-
-        // Phase 1
-        await seeder.seedBlock(500, T0,           [{ source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|SANX|2000000|500|0|Sanity check' }]);
-        await seeder.seedBlock(501, T0 + BLK,     [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|SANX|500' }]);
-        await seeder.seedBlock(502, T0 + BLK * 2, [
-            { source: ADDR1, destination: ADDR2, amount: '0', data: 'SEND|0|SANX|100|' + ADDR2 },
-        ]);
-        await seeder.seedBlock(503, T0 + BLK * 3, [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|SANX|300' }]);
-
-        let indexer = await initIndexer();
-        await processBlocks(indexer);
-        await destroyIndexer(indexer);
-
-        // Phase 2: reorg at 502, remove the SEND
-        await seeder.seedReorgEvent([502]);
-        await deleteDecoderBlocksFrom(502);
-        await seeder.seedBlock(502, T0 + BLK * 2, [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|SANX|200' }]);
-        await seeder.seedBlock(503, T0 + BLK * 3, [{ source: ADDR1, destination: ADDR3, amount: '0', data: 'SEND|0|SANX|50|' + ADDR3 }]);
-
-        // Phase 3
-        indexer = await initIndexer();
-        await processBlocks(indexer);
-        await destroyIndexer(indexer);
-
-        // Phase 4: supply = 500 + 200 = 700; ADDR1 = 700-50 = 650, ADDR3 = 50
-        await helpers.assertTokenSupply(indexerQuery, 'SANX', '700');
-        await helpers.assertBalance(indexerQuery, ADDR1, 'SANX', '650');
-        await helpers.assertBalance(indexerQuery, ADDR3, 'SANX', '50');
-
-        // Full sanity check: ledger consistency
-        await helpers.assertSanity(indexerQuery, 'SANX');
-    });
-
-    // -----------------------------------------------------------------------
-    // 6. Block hash chain is valid (non-null) after reorg and reindex
-    // -----------------------------------------------------------------------
-    it('6. block hash chain is valid and non-null after reorg', async function () {
-        const seeder = new DecoderSeeder(decoderQuery);
-        // Fee era: ISSUEs below need gas; seed XCHAIN to the actors first
-        await seedGas(seeder, { blockIndex: 599, addresses: [ADDR1, ADDR2, ADDR3] });
-
-        // Phase 1
-        await seeder.seedBlock(600, T0,           [{ source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|HASH|500000|500|0|Hash chain test' }]);
-        await seeder.seedBlock(601, T0 + BLK,     [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|HASH|500' }]);
-        await seeder.seedBlock(602, T0 + BLK * 2, [{ source: ADDR1, destination: ADDR2, amount: '0', data: 'SEND|0|HASH|100|' + ADDR2 }]);
-        await seeder.seedBlock(603, T0 + BLK * 3, [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|HASH|200' }]);
-
-        let indexer = await initIndexer();
-        await processBlocks(indexer);
-        await destroyIndexer(indexer);
-
-        // Phase 2: reorg at 602
-        await seeder.seedReorgEvent([602]);
-        await deleteDecoderBlocksFrom(602);
-        await seeder.seedBlock(602, T0 + BLK * 2, [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|HASH|50' }]);
-        await seeder.seedBlock(603, T0 + BLK * 3, [{ source: ADDR1, destination: ADDR2, amount: '0', data: 'SEND|0|HASH|25|' + ADDR2 }]);
-        await seeder.seedBlock(604, T0 + BLK * 4, [{ source: ADDR2, destination: null, amount: '0', data: 'MINT|0|HASH|100' }]);
-
-        // Phase 3
-        indexer = await initIndexer();
-        await processBlocks(indexer);
-        await destroyIndexer(indexer);
-
-        // Phase 4: all blocks must have non-null ledger and actions hashes
-        await helpers.assertHashChain(indexerQuery);
-        await helpers.assertBlockCount(indexerQuery, 6); // 600-604
-    });
-
-    // -----------------------------------------------------------------------
-    // 7. Multiple reorgs: two successive reorgs handled correctly
-    // -----------------------------------------------------------------------
-    it('7. two successive reorgs converge to correct final state', async function () {
-        const seeder = new DecoderSeeder(decoderQuery);
-        // Fee era: ISSUEs below need gas; seed XCHAIN to the actors first
-        await seedGas(seeder, { blockIndex: 699, addresses: [ADDR1, ADDR2, ADDR3] });
-
-        // Phase 1: four blocks
-        await seeder.seedBlock(700, T0,           [{ source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|DBLX|1000000|1000|0|Double reorg' }]);
-        await seeder.seedBlock(701, T0 + BLK,     [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|DBLX|1000' }]);
-        await seeder.seedBlock(702, T0 + BLK * 2, [{ source: ADDR1, destination: ADDR2, amount: '0', data: 'SEND|0|DBLX|500|' + ADDR2 }]);
-        await seeder.seedBlock(703, T0 + BLK * 3, [{ source: ADDR2, destination: ADDR3, amount: '0', data: 'SEND|0|DBLX|200|' + ADDR3 }]);
-
-        let indexer = await initIndexer();
-        await processBlocks(indexer);
-        await destroyIndexer(indexer);
-
-        // FIRST reorg at 702
-        await seeder.seedReorgEvent([702]);
-        await deleteDecoderBlocksFrom(702);
-        await seeder.seedBlock(702, T0 + BLK * 2, [{ source: ADDR1, destination: ADDR2, amount: '0', data: 'SEND|0|DBLX|300|' + ADDR2 }]);
-        await seeder.seedBlock(703, T0 + BLK * 3, [{ source: ADDR2, destination: ADDR3, amount: '0', data: 'SEND|0|DBLX|150|' + ADDR3 }]);
-
-        indexer = await initIndexer();
-        await processBlocks(indexer);
-        await destroyIndexer(indexer);
-
-        // After first reorg: ADDR1=700, ADDR2=150, ADDR3=150
-        await helpers.assertBalance(indexerQuery, ADDR1, 'DBLX', '700');
-        await helpers.assertBalance(indexerQuery, ADDR2, 'DBLX', '150');
-        await helpers.assertBalance(indexerQuery, ADDR3, 'DBLX', '150');
-
-        // SECOND reorg at 703: undo the last SEND
-        await seeder.seedReorgEvent([703]);
-        await deleteDecoderBlocksFrom(703);
-        await seeder.seedBlock(703, T0 + BLK * 3, [{ source: ADDR1, destination: ADDR3, amount: '0', data: 'SEND|0|DBLX|700|' + ADDR3 }]);
-
-        indexer = await initIndexer();
-        await processBlocks(indexer);
-        await destroyIndexer(indexer);
-
-        // After second reorg: ADDR1 sent all 700 to ADDR3
-        await helpers.assertBalance(indexerQuery, ADDR1, 'DBLX', null); // zero balance (row removed)
-        await helpers.assertBalance(indexerQuery, ADDR2, 'DBLX', '300'); // unchanged from post-first-reorg
-        await helpers.assertBalance(indexerQuery, ADDR3, 'DBLX', '700');
-    });
-
-    // -----------------------------------------------------------------------
-    // 8. Reorg preserves actions from non-reorged blocks
-    // -----------------------------------------------------------------------
-    it('8. actions in blocks before reorg point are preserved', async function () {
-        const seeder = new DecoderSeeder(decoderQuery);
-        // Fee era: ISSUEs below need gas; seed XCHAIN to the actors first
-        await seedGas(seeder, { blockIndex: 799, addresses: [ADDR1, ADDR2, ADDR3] });
-
-        // Phase 1
-        await seeder.seedBlock(800, T0,           [{ source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|PRSV|100000|100|0|Preserve test' }]);
-        await seeder.seedBlock(801, T0 + BLK,     [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|PRSV|100' }]);
-        await seeder.seedBlock(802, T0 + BLK * 2, [{ source: ADDR1, destination: ADDR2, amount: '0', data: 'SEND|0|PRSV|50|' + ADDR2 }]);
-        await seeder.seedBlock(803, T0 + BLK * 3, [{ source: ADDR2, destination: ADDR1, amount: '0', data: 'SEND|0|PRSV|10|' + ADDR1 }]);
-
-        let indexer = await initIndexer();
-        await processBlocks(indexer);
-        await destroyIndexer(indexer);
-
-        // Reorg only at 803
-        await seeder.seedReorgEvent([803]);
-        await deleteDecoderBlocksFrom(803);
-        await seeder.seedBlock(803, T0 + BLK * 3, [{ source: ADDR2, destination: ADDR3, amount: '0', data: 'SEND|0|PRSV|20|' + ADDR3 }]);
-
-        indexer = await initIndexer();
-        await processBlocks(indexer);
-        await destroyIndexer(indexer);
-
-        // Blocks 800-802 preserved: ADDR1=50, ADDR2 sent 20 to ADDR3 → ADDR2=30, ADDR3=20
-        await helpers.assertBalance(indexerQuery, ADDR1, 'PRSV', '50');
-        await helpers.assertBalance(indexerQuery, ADDR2, 'PRSV', '30');
-        await helpers.assertBalance(indexerQuery, ADDR3, 'PRSV', '20');
-
-        // Verify the original ISSUE/MINT actions are still present
-        const issueIdx = await helpers.getLastActionIndexByType(indexerQuery, 'ISSUE');
-        assert.ok(issueIdx !== null, 'ISSUE action should still exist after partial reorg');
-    });
-
-    // -----------------------------------------------------------------------
-    // 9. Reorg with empty replacement blocks
-    // -----------------------------------------------------------------------
-    it('9. reorg with empty replacement blocks leaves only pre-reorg data', async function () {
-        const seeder = new DecoderSeeder(decoderQuery);
-        // Fee era: ISSUEs below need gas; seed XCHAIN to the actors first
-        await seedGas(seeder, { blockIndex: 899, addresses: [ADDR1, ADDR2, ADDR3] });
-
-        // Phase 1
-        await seeder.seedBlock(900, T0,           [{ source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|EMPT|500000|500|0|Empty reorg test' }]);
-        await seeder.seedBlock(901, T0 + BLK,     [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|EMPT|500' }]);
-        await seeder.seedBlock(902, T0 + BLK * 2, [{ source: ADDR1, destination: ADDR2, amount: '0', data: 'SEND|0|EMPT|300|' + ADDR2 }]);
-
-        let indexer = await initIndexer();
-        await processBlocks(indexer);
-        await destroyIndexer(indexer);
-
-        await helpers.assertBalance(indexerQuery, ADDR1, 'EMPT', '200');
-        await helpers.assertBalance(indexerQuery, ADDR2, 'EMPT', '300');
-
-        // Phase 2: reorg at 902, replace with empty block
-        await seeder.seedReorgEvent([902]);
-        await deleteDecoderBlocksFrom(902);
-        await seeder.seedBlock(902, T0 + BLK * 2, []); // empty block
-
-        indexer = await initIndexer();
-        await processBlocks(indexer);
-        await destroyIndexer(indexer);
-
-        // SEND rolled back; ADDR1 has all 500, ADDR2 has nothing
-        await helpers.assertBalance(indexerQuery, ADDR1, 'EMPT', '500');
-        await helpers.assertBalance(indexerQuery, ADDR2, 'EMPT', null);
-        await helpers.assertTokenSupply(indexerQuery, 'EMPT', '500');
-        await helpers.assertSanity(indexerQuery, 'EMPT');
-    });
-
-    // -----------------------------------------------------------------------
-    // 10. Action indexes are monotonically increasing after reorg + reindex
-    // -----------------------------------------------------------------------
-    it('10. action_indexes are monotonically increasing after reorg', async function () {
-        const seeder = new DecoderSeeder(decoderQuery);
-        // Fee era: ISSUEs below need gas; seed XCHAIN to the actors first
-        await seedGas(seeder, { blockIndex: 999, addresses: [ADDR1, ADDR2, ADDR3] });
-
-        // Phase 1
-        await seeder.seedBlock(1000, T0,           [{ source: ADDR1, destination: null, amount: '0', data: 'ISSUE|0|MONO|1000000|1000|0|Monotonic test' }]);
-        await seeder.seedBlock(1001, T0 + BLK,     [{ source: ADDR1, destination: null, amount: '0', data: 'MINT|0|MONO|500' }]);
-        await seeder.seedBlock(1002, T0 + BLK * 2, [{ source: ADDR1, destination: ADDR2, amount: '0', data: 'SEND|0|MONO|100|' + ADDR2 }]);
-        await seeder.seedBlock(1003, T0 + BLK * 3, [{ source: ADDR1, destination: ADDR2, amount: '0', data: 'SEND|0|MONO|100|' + ADDR2 }]);
-
-        let indexer = await initIndexer();
-        await processBlocks(indexer);
-        await destroyIndexer(indexer);
-
-        // Phase 2: reorg at 1002
-        await seeder.seedReorgEvent([1002]);
-        await deleteDecoderBlocksFrom(1002);
-        await seeder.seedBlock(1002, T0 + BLK * 2, [{ source: ADDR1, destination: ADDR3, amount: '0', data: 'SEND|0|MONO|200|' + ADDR3 }]);
-        await seeder.seedBlock(1003, T0 + BLK * 3, [{ source: ADDR1, destination: ADDR3, amount: '0', data: 'SEND|0|MONO|100|' + ADDR3 }]);
-
-        indexer = await initIndexer();
-        await processBlocks(indexer);
-        await destroyIndexer(indexer);
-
-        // Verify all action_indexes are strictly increasing
-        const rows = await indexerQuery(
-            'SELECT action_index FROM actions ORDER BY action_index ASC'
-        );
-        assert.ok(rows.length >= 4, 'Should have at least 4 action records');
-        for (let i = 1; i < rows.length; i++) {
-            const prev = Number(rows[i - 1].action_index);
-            const curr = Number(rows[i].action_index);
-            assert.ok(curr > prev,
-                `action_index not strictly increasing: ${prev} then ${curr}`);
-        }
-    });
 });
