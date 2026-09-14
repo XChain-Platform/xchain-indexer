@@ -91,8 +91,10 @@ describe('rollcall_proof_client', function () {
             assert.strictEqual(r.decided, false, 'should have deferred on ' + JSON.stringify(bad));
         }
     });
+});
 
-    // (5) manifest mismatch -- checked BEFORE emptiness can be mistaken for information
+// (5) manifest mismatch -- checked BEFORE emptiness can be mistaken for information
+describe('rollcall_proof_client', function () {
     it('defers when the peer\'s action-manifest hash differs, which is the stale-decoder signal', async function () {
         let r = await clientWith(goodReply({ manifest_hash: 'f'.repeat(64) })).fetchSigners(ask);
         assert.strictEqual(r.decided, false);
@@ -136,9 +138,11 @@ describe('rollcall_proof_client', function () {
         assert.strictEqual(r.decided, false);
         assert.match(r.reason, /ROLLCALL_DOGE_MATURITY/);
     });
+});
 
-    // An EMPTY answer under a satisfied gate is a real "none", not a deferral: that
-    // is what lets a genuinely absent federation close an epoch unrolled.
+// An EMPTY answer under a satisfied gate is a real "none", not a deferral: that
+// is what lets a genuinely absent federation close an epoch unrolled.
+describe('rollcall_proof_client', function () {
     it('treats an empty signer map under a satisfied gate as a positive "none"', async function () {
         let r = await clientWith(goodReply({ signers: {}, publishers: {} })).fetchSigners(ask);
         assert.strictEqual(r.decided, true, r.reason);
@@ -162,12 +166,14 @@ describe('rollcall_proof_client', function () {
         await c2.fetchSigners(ask);
         assert.strictEqual(calls2, 2, 'an unknown must NOT be memoized');
     });
+});
 
-    // The memo key is the COMPLETE request. maxBlockTime comes from the window-end block's
-    // block_time, which a BTC reorg rewrites while the epoch's ledger hash survives, and the
-    // client outlives rollback, so an epoch-only key answered the post-reorg request with the
-    // pre-reorg cut and signer set: a replaying indexer and a fresh one then derive different
-    // quorum, gates, rewards and absences off the same chain.
+// The memo key is the COMPLETE request. maxBlockTime comes from the window-end block's
+// block_time, which a BTC reorg rewrites while the epoch's ledger hash survives, and the
+// client outlives rollback, so an epoch-only key answered the post-reorg request with the
+// pre-reorg cut and signer set: a replaying indexer and a fresh one then derive different
+// quorum, gates, rewards and absences off the same chain.
+describe('rollcall_proof_client', function () {
     describe('memo key covers the whole request', function () {
 
         // Answers hcut 50 on the first call and 60 on every call after it, so a reused memo
@@ -223,10 +229,12 @@ describe('rollcall_proof_client', function () {
             assert.strictEqual(c.calls, 2, 'array boundaries must survive the key');
         });
     });
+});
 
-    // ROLLCALL v1: the close chooses which canonical it verifies against by whether
-    // the row carries a GATES string, so the field has to survive the transport with
-    // "absent" and "present" still distinguishable.
+// ROLLCALL v1: the close chooses which canonical it verifies against by whether
+// the row carries a GATES string, so the field has to survive the transport with
+// "absent" and "present" still distinguishable.
+describe('rollcall_proof_client', function () {
     describe('the ROLLCALL v1 GATES passthrough', function () {
 
         const KEY   = 'aa'.repeat(32);
@@ -276,7 +284,9 @@ describe('rollcall_proof_client', function () {
             assert.strictEqual(r.signers[KEY], null);
         });
     });
+});
 
+describe('rollcall_proof_client', function () {
     it('exports its own error class, distinct from the anchor rail\'s', function () {
         let e = new RollcallProofUnavailableError('x');
         assert.strictEqual(e.name, 'RollcallProofUnavailableError');
