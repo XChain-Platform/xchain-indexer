@@ -25,20 +25,10 @@ const {
     createMockIndexer,
 } = require('../setup/harness');
 
-describe('Mutation : Tier 2: State Management @tier2', function () {
-    let util;
+let util;
 
-    beforeEach(function () {
-        util = new Utility();
-    });
-
-    afterEach(function () {
-        sinon.restore();
-    });
-
-    // ── SDL: Statement Deletion in consolidateLedgerRecords ──────────────
-
-    describe('SDL: consolidateLedgerRecords', function () {
+function registerStateMutationGroup1() {
+describe('SDL: consolidateLedgerRecords', function () {
         it('SDL-400: bcadd removed : only last amount kept (no consolidation)', function () {
             // Mutant: skips bcadd, always overwrites with latest amount
             sinon.stub(util, 'consolidateLedgerRecords').callsFake(function (records) {
@@ -77,8 +67,10 @@ describe('Mutation : Tier 2: State Management @tier2', function () {
             assert.ok(mutated, 'SDL-400 survived');
         });
     });
+}
 
-    describe('SDL: consolidateLedgerRecords', function () {
+function registerStateMutationGroup2() {
+describe('SDL: consolidateLedgerRecords', function () {
         it('SDL-401: single record : no consolidation needed (equivalent)', function () {
             // With a single record, bcadd is never called : equivalent mutant
             sinon.stub(util, 'consolidateLedgerRecords').callsFake(function (records) {
@@ -110,10 +102,10 @@ describe('Mutation : Tier 2: State Management @tier2', function () {
             // Expected: equivalent : single record doesn't trigger consolidation
         });
     });
+}
 
-    // ── ACR: Array/Collection in consolidateLedgerRecords ────────────────
-
-    describe('ACR: Array Index Mutations', function () {
+function registerStateMutationGroup3() {
+describe('ACR: Array Index Mutations', function () {
         it('ACR-200: destructuring swap [amount, tick, address] instead of [tick, amount, address]', function () {
             operators.ACR.consolidateSwapTickAmount(util);
 
@@ -162,8 +154,10 @@ describe('Mutation : Tier 2: State Management @tier2', function () {
             assert.ok(tickIsWrong, 'ACR-201 survived');
         });
     });
+}
 
-    describe('ACR: Array Index Mutations', function () {
+function registerStateMutationGroup4() {
+describe('ACR: Array Index Mutations', function () {
         it('ACR-202: different ticks consolidated correctly (not swapped)', function () {
             const records = [
                 ['TICK_A', '100', 'addr1'],
@@ -183,10 +177,10 @@ describe('Mutation : Tier 2: State Management @tier2', function () {
             assert.strictEqual(result.length, 2, 'ACR-202: different ticks should not be merged');
         });
     });
+}
 
-    // ── SBR: Separator mutation in consolidateLedgerRecords ──────────────
-
-    describe('SBR: Separator Mutations', function () {
+function registerStateMutationGroup5() {
+describe('SBR: Separator Mutations', function () {
 
         it('SBR-400: \\0 separator changed to | : pipe collision possible', function () {
             // Mutant: uses '|' as separator instead of '\0'
@@ -226,10 +220,10 @@ describe('Mutation : Tier 2: State Management @tier2', function () {
             assert.ok(hasCollision, 'SBR-400 survived');
         });
     });
+}
 
-    // ── AOR: debitBalances mutations ─────────────────────────────────────
-
-    describe('AOR: debitBalances Arithmetic', function () {
+function registerStateMutationGroup6() {
+describe('AOR: debitBalances Arithmetic', function () {
 
         it('AOR-400: debitBalances bcsub→bcadd : balance increases', function () {
             operators.AOR.subToAdd(util);
@@ -264,10 +258,10 @@ describe('Mutation : Tier 2: State Management @tier2', function () {
             // Expected: equivalent : 1000-0 = 1000+0 = 1000
         });
     });
+}
 
-    // ── PRM: addAddressTicker mutations ──────────────────────────────────
-
-    describe('PRM: addAddressTicker', function () {
+function registerStateMutationGroup7() {
+describe('PRM: addAddressTicker', function () {
 
         it('PRM-400: addAddressTicker correctly associates address → tick', function () {
             util.addAddressTicker('addr1', 'TICK_A');
@@ -303,10 +297,10 @@ describe('Mutation : Tier 2: State Management @tier2', function () {
             assert.strictEqual(count, 1, 'PRM-401: tick should not be duplicated');
         });
     });
+}
 
-    // ── BCR: Rollback boundary mutations ─────────────────────────────────
-
-    describe('BCR: Rollback Boundary', function () {
+function registerStateMutationGroup8() {
+describe('BCR: Rollback Boundary', function () {
 
         it('BCR-400: Rollback class uses >= for block_index comparison', async function () {
             const indexer = createMockIndexer();
@@ -349,4 +343,42 @@ describe('Mutation : Tier 2: State Management @tier2', function () {
             assert.ok(usesGte, 'BCR-400 survived: rollback does not use >= for block_index');
         });
     });
+}
+
+describe('Mutation : Tier 2: State Management @tier2', function () {
+    beforeEach(function () {
+        util = new Utility();
+    });
+
+    afterEach(function () {
+        sinon.restore();
+    });
+
+    // ── SDL: Statement Deletion in consolidateLedgerRecords ──────────────
+
+    registerStateMutationGroup1()
+
+    registerStateMutationGroup2()
+
+    // ── ACR: Array/Collection in consolidateLedgerRecords ────────────────
+
+    registerStateMutationGroup3()
+
+    registerStateMutationGroup4()
+
+    // ── SBR: Separator mutation in consolidateLedgerRecords ──────────────
+
+    registerStateMutationGroup5()
+
+    // ── AOR: debitBalances mutations ─────────────────────────────────────
+
+    registerStateMutationGroup6()
+
+    // ── PRM: addAddressTicker mutations ──────────────────────────────────
+
+    registerStateMutationGroup7()
+
+    // ── BCR: Rollback boundary mutations ─────────────────────────────────
+
+    registerStateMutationGroup8()
 });
