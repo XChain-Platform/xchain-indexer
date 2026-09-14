@@ -36,60 +36,63 @@ const Vote = require('../../../src/actions/vote.js');
 const SOURCE_ADDR   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const DELEGATE_ADDR = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
 
+let indexer, actionsCtx, handler;
+
+function setupVote() {
+    indexer = createMockIndexer();
+    actionsCtx = {
+        config:    indexer.config,
+        util:      indexer.util,
+        mapper:    indexer.mapper,
+        decoderDb: indexer.decoderDb,
+        indexerDb: indexer.indexerDb,
+        protocolChanges: {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        },
+    };
+    handler = new Vote(actionsCtx);
+    indexer.util.resetLists();
+
+    // Happy-path stubs shared by the create/ballot/delegate paths so the
+    // only variable under test is the sleep gate / DELEGATE_TO format.
+    indexer.indexerDb.getTokenInfo.resolves({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0, SUPPLY: '1000' });
+    indexer.indexerDb.createTicker.resolves(1);
+    indexer.indexerDb.getAddressBalances.resolves({ 1: '100' });
+    indexer.indexerDb.createPoll           = sinon.stub().resolves();
+    indexer.indexerDb.createBallot         = sinon.stub().resolves();
+    indexer.indexerDb.createVoteDelegation = sinon.stub().resolves();
+    indexer.indexerDb.getPoll = sinon.stub().resolves({
+        action_index: 100, poll_status: 'open', end_block: 200, tick_id: 1,
+        options: '["yes","no"]', tally_mode: 'approval', max_selections: 1,
+    });
+}
+
+function restoreSinon() {
+    sinon.restore();
+}
+
+// Gate stub: VOTE_RESPECTS_SLEEP flips per test; every other change active.
+function gateStub(active) {
+    return sinon.stub().callsFake(async (name) =>
+        name === 'VOTE_RESPECTS_SLEEP' ? active : true);
+}
+
+function baseData(overrides = {}) {
+    return createBaseData({ ACTION: 'VOTE', BLOCK_INDEX: 100, ACTION_INDEX: 50,
+                            SOURCE: SOURCE_ADDR, ...overrides });
+}
+
+// VERSION|TICK|END_BLOCK|OPTIONS|... (signaling poll, no callback fields)
+const CREATE_PARAMS   = ['0', 'TEST', '200', 'yes,no', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
+// VERSION|POLL_REF|BALLOT|MEMO
+const BALLOT_PARAMS   = ['1', '100', '0', ''];
+// VERSION|TICK|DELEGATE_TO|MEMO
+function delegateParams(target) { return ['3', 'TEST', target, '']; }
+
 describe('VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1', function () {
-    let indexer, actionsCtx, handler;
-
-    beforeEach(function () {
-        indexer = createMockIndexer();
-        actionsCtx = {
-            config:    indexer.config,
-            util:      indexer.util,
-            mapper:    indexer.mapper,
-            decoderDb: indexer.decoderDb,
-            indexerDb: indexer.indexerDb,
-            protocolChanges: {
-                isDefined: sinon.stub().returns(true),
-                isEnabled: sinon.stub().resolves(true),
-            },
-        };
-        handler = new Vote(actionsCtx);
-        indexer.util.resetLists();
-
-        // Happy-path stubs shared by the create/ballot/delegate paths so the
-        // only variable under test is the sleep gate / DELEGATE_TO format.
-        indexer.indexerDb.getTokenInfo.resolves({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0, SUPPLY: '1000' });
-        indexer.indexerDb.createTicker.resolves(1);
-        indexer.indexerDb.getAddressBalances.resolves({ 1: '100' });
-        indexer.indexerDb.createPoll           = sinon.stub().resolves();
-        indexer.indexerDb.createBallot         = sinon.stub().resolves();
-        indexer.indexerDb.createVoteDelegation = sinon.stub().resolves();
-        indexer.indexerDb.getPoll = sinon.stub().resolves({
-            action_index: 100, poll_status: 'open', end_block: 200, tick_id: 1,
-            options: '["yes","no"]', tally_mode: 'approval', max_selections: 1,
-        });
-    });
-
-    afterEach(function () {
-        sinon.restore();
-    });
-
-    // Gate stub: VOTE_RESPECTS_SLEEP flips per test; every other change active.
-    function gateStub(active) {
-        return sinon.stub().callsFake(async (name) =>
-            name === 'VOTE_RESPECTS_SLEEP' ? active : true);
-    }
-
-    function baseData(overrides = {}) {
-        return createBaseData({ ACTION: 'VOTE', BLOCK_INDEX: 100, ACTION_INDEX: 50,
-                                SOURCE: SOURCE_ADDR, ...overrides });
-    }
-
-    // VERSION|TICK|END_BLOCK|OPTIONS|... (signaling poll, no callback fields)
-    const CREATE_PARAMS   = ['0', 'TEST', '200', 'yes,no', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
-    // VERSION|POLL_REF|BALLOT|MEMO
-    const BALLOT_PARAMS   = ['1', '100', '0', ''];
-    // VERSION|TICK|DELEGATE_TO|MEMO
-    function delegateParams(target) { return ['3', 'TEST', target, '']; }
+    beforeEach(setupVote);
+    afterEach(restoreSinon);
 
     describe('gate ACTIVE: a sleeping SOURCE is rejected on every user-broadcast version', function () {
 
@@ -135,7 +138,11 @@ describe('VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1', fun
             }
         });
     });
+});
 
+describe('VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1', function () {
+    beforeEach(setupVote);
+    afterEach(restoreSinon);
     describe('gate INACTIVE: legacy acceptance preserved (byte-identical replay)', function () {
 
         beforeEach(function () {
@@ -158,7 +165,11 @@ describe('VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1', fun
             }
         });
     });
+});
 
+describe('VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1', function () {
+    beforeEach(setupVote);
+    afterEach(restoreSinon);
     describe('v2 finalize is system-synthesized and exempt from the sleep gate', function () {
 
         it('finalize never consults isActionAllowed', async function () {
@@ -170,7 +181,11 @@ describe('VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1', fun
             assert.ok(indexer.indexerDb.isActionAllowed.notCalled, 'a synthetic finalize must stay exempt');
         });
     });
+});
 
+describe('VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1', function () {
+    beforeEach(setupVote);
+    afterEach(restoreSinon);
     describe('v3 DELEGATE_TO isCryptoAddress validation (same activation)', function () {
 
         it('gate ACTIVE: malformed DELEGATE_TO → invalid, no delegation row', async function () {
@@ -218,7 +233,11 @@ describe('VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1', fun
             assert.strictEqual(data.STATUS, 'invalid: DELEGATE_TO (cannot delegate to self)');
         });
     });
+});
 
+describe('VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1', function () {
+    beforeEach(setupVote);
+    afterEach(restoreSinon);
     describe('flag-day registration', function () {
 
         it('VOTE_RESPECTS_SLEEP is registered as a 0.2.0 gate on the ratified 2026-08-07 anchor', function () {

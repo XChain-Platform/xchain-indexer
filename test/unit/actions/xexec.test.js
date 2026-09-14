@@ -25,74 +25,77 @@ const PUBKEY_A = 'a'.repeat(64);
 const SIG_A    = '1'.repeat(128);
 const CALL_ID  = 'c'.repeat(64);
 
+let indexer, actionsCtx, handler, executeStub;
+
+// A dispatch row mirroring the hub's cross_chain_calls phase='dispatch' shape.
+// BTC is THIS chain, so it is the call's TARGET here.
+function makeDispatch(overrides = {}) {
+    return {
+        id:                    7,
+        call_id:               CALL_ID,
+        phase:                 'dispatch',
+        snapshot_block:        150,
+        network:               'regtest',
+        source_chain:          'DOGE',
+        source_action_index:   41,
+        source_contract_index: 5,
+        target_chain:          'BTC',
+        target_contract_index: 99,
+        method:                'onArrival',
+        params_json:           '["x","y"]',
+        gas_limit:             50000,
+        cross_hops:            1,
+        effective_time:        1700000000,
+        status:                'finalized',
+        validator_signatures:  JSON.stringify([{ pubkey: PUBKEY_A, sig: SIG_A }]),
+        ...overrides,
+    };
+}
+
+const ctx = () => ({ ACTION: 'XEXEC', BLOCK_INDEX: 200, BLOCK_TIME: 1700000100 });
+
+function setupXexec() {
+    indexer = createMockIndexer();
+    const db = indexer.indexerDb;
+    db.hasCapability                  = sinon.stub().resolves(true);
+    db.getValidatorsByCapability      = sinon.stub().resolves([{ pubkey: PUBKEY_A }]);
+    // regtest activates STAKE_WEIGHTED_QUORUM at genesis, so parse() takes the
+    // stake-weighted branch. One validator = one source: 3·tally(100) > 2·S(100) iff
+    // that signer is valid: reproduces the single-validator legacy outcome.
+    db.getStakeWeightsByCapability    = sinon.stub().resolves([{ pubkey: PUBKEY_A, source: 'S1', weight: '100' }]);
+    db.recordCrossChainCallExecution  = sinon.stub().resolves();
+    db.recordCrossChainCallRejection  = sinon.stub().resolves();
+    db.createSavepoint                = sinon.stub().resolves('sp1');
+    db.releaseSavepoint               = sinon.stub().resolves();
+    db.rollbackToSavepoint            = sinon.stub().resolves();
+
+    // The injected EXECUTE: default to a successful run that surfaces a
+    // return value + billed gas the way actions/execute/index.js does.
+    executeStub = { parse: sinon.stub().callsFake(async (params, data) => {
+        data['STATUS']           = 'valid';
+        data['VM_RETURN_VALUE']  = '"hello"';
+        data['VM_GAS_BILLED']    = 12345;
+    }) };
+
+    actionsCtx = {
+        config:        indexer.config,
+        util:          indexer.util,
+        mapper:        indexer.mapper,
+        decoderDb:     indexer.decoderDb,
+        indexerDb:     indexer.indexerDb,
+        actionExecute: executeStub,
+    };
+    handler = new Xexec(actionsCtx);
+    indexer.util.resetLists();
+}
+
+function restoreSinon() {
+    sinon.restore();
+}
+
 describe('Xexec (XEXEC) @regression @tier3', function () {
-    let indexer, actionsCtx, handler, executeStub;
-
-    // A dispatch row mirroring the hub's cross_chain_calls phase='dispatch' shape.
-    // BTC is THIS chain, so it is the call's TARGET here.
-    function makeDispatch(overrides = {}) {
-        return {
-            id:                    7,
-            call_id:               CALL_ID,
-            phase:                 'dispatch',
-            snapshot_block:        150,
-            network:               'regtest',
-            source_chain:          'DOGE',
-            source_action_index:   41,
-            source_contract_index: 5,
-            target_chain:          'BTC',
-            target_contract_index: 99,
-            method:                'onArrival',
-            params_json:           '["x","y"]',
-            gas_limit:             50000,
-            cross_hops:            1,
-            effective_time:        1700000000,
-            status:                'finalized',
-            validator_signatures:  JSON.stringify([{ pubkey: PUBKEY_A, sig: SIG_A }]),
-            ...overrides,
-        };
-    }
-
-    const ctx = () => ({ ACTION: 'XEXEC', BLOCK_INDEX: 200, BLOCK_TIME: 1700000100 });
-
-    beforeEach(function () {
-        indexer = createMockIndexer();
-        const db = indexer.indexerDb;
-        db.hasCapability                  = sinon.stub().resolves(true);
-        db.getValidatorsByCapability      = sinon.stub().resolves([{ pubkey: PUBKEY_A }]);
-        // regtest activates STAKE_WEIGHTED_QUORUM at genesis, so parse() takes the
-        // stake-weighted branch. One validator = one source: 3·tally(100) > 2·S(100) iff
-        // that signer is valid: reproduces the single-validator legacy outcome.
-        db.getStakeWeightsByCapability    = sinon.stub().resolves([{ pubkey: PUBKEY_A, source: 'S1', weight: '100' }]);
-        db.recordCrossChainCallExecution  = sinon.stub().resolves();
-        db.recordCrossChainCallRejection  = sinon.stub().resolves();
-        db.createSavepoint                = sinon.stub().resolves('sp1');
-        db.releaseSavepoint               = sinon.stub().resolves();
-        db.rollbackToSavepoint            = sinon.stub().resolves();
-
-        // The injected EXECUTE: default to a successful run that surfaces a
-        // return value + billed gas the way actions/execute/index.js does.
-        executeStub = { parse: sinon.stub().callsFake(async (params, data) => {
-            data['STATUS']           = 'valid';
-            data['VM_RETURN_VALUE']  = '"hello"';
-            data['VM_GAS_BILLED']    = 12345;
-        }) };
-
-        actionsCtx = {
-            config:        indexer.config,
-            util:          indexer.util,
-            mapper:        indexer.mapper,
-            decoderDb:     indexer.decoderDb,
-            indexerDb:     indexer.indexerDb,
-            actionExecute: executeStub,
-        };
-        handler = new Xexec(actionsCtx);
-        indexer.util.resetLists();
-    });
-
-    afterEach(function () {
-        sinon.restore();
-    });
+    beforeEach(setupXexec);
+    afterEach(restoreSinon);
 
     it('verifies sigs over the dispatch canonical, runs the target at depth 0 under the caller-funded ceiling', async function () {
         const stub = sinon.stub(ed25519, 'verify').returns(true);
@@ -120,7 +123,11 @@ describe('Xexec (XEXEC) @regression @tier3', function () {
         assert.strictEqual(data['TX_HASH'],
             crypto.createHash('sha256').update('XCALL:regtest:BTC:' + CALL_ID, 'utf8').digest('hex'));
     });
+});
 
+describe('Xexec (XEXEC) @regression @tier3', function () {
+    beforeEach(setupXexec);
+    afterEach(restoreSinon);
     it('records the execution outcome (ok + capped base64 payload) OUTSIDE the run savepoint', async function () {
         sinon.stub(ed25519, 'verify').returns(true);
         await handler.parse(null, Object.assign(ctx(), { CALL: makeDispatch() }), null);
@@ -165,7 +172,11 @@ describe('Xexec (XEXEC) @regression @tier3', function () {
             assert.strictEqual(status, expected, JSON.stringify(outcome));
         }
     });
+});
 
+describe('Xexec (XEXEC) @regression @tier3', function () {
+    beforeEach(setupXexec);
+    afterEach(restoreSinon);
     it('an oversize return becomes payload_too_large with an EMPTY payload (state stands)', async function () {
         sinon.stub(ed25519, 'verify').returns(true);
         executeStub.parse.callsFake(async (params, data) => {
@@ -203,7 +214,11 @@ describe('Xexec (XEXEC) @regression @tier3', function () {
         assert.ok(executeStub.parse.calledOnce, 'quorate dispatch must inject');
         assert.ok(indexer.indexerDb.recordCrossChainCallRejection.notCalled);
     });
+});
 
+describe('Xexec (XEXEC) @regression @tier3', function () {
+    beforeEach(setupXexec);
+    afterEach(restoreSinon);
     it('refuses insufficient signatures (no execution, no record; the call stays pending)', async function () {
         sinon.stub(ed25519, 'verify').returns(false);
         await handler.parse(null, Object.assign(ctx(), { CALL: makeDispatch() }), null);
@@ -257,7 +272,11 @@ describe('Xexec (XEXEC) @regression @tier3', function () {
         await handler.parse(null, Object.assign(ctx(), { CALL: makeDispatch({ target_chain: 'LTC' }) }), null);
         assert.ok(executeStub.parse.notCalled);
     });
+});
 
+describe('Xexec (XEXEC) @regression @tier3', function () {
+    beforeEach(setupXexec);
+    afterEach(restoreSinon);
     it('a thrown execution still records an error result after rolling back', async function () {
         sinon.stub(ed25519, 'verify').returns(true);
         executeStub.parse.rejects(new Error('worker died'));

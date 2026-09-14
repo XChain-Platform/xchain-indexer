@@ -19,55 +19,57 @@ const Swap = require('../../../src/actions/swap.js');
 
 const VALID_GET_ADDRESS = 'mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp';
 
-describe('Swap action handler @regression @tier2', function () {
-    let indexer, actionsCtx, handler;
+let indexer, actionsCtx, handler;
 
-    beforeEach(function () {
-        indexer = createMockIndexer();
-        actionsCtx = {
-            config: indexer.config,
-            util: indexer.util,
-            mapper: indexer.mapper,
-            decoderDb: indexer.decoderDb,
-            indexerDb: indexer.indexerDb,
-            protocolChanges: {
-                isDefined: sinon.stub().returns(true),
-                isEnabled: sinon.stub().resolves(true),
-            },
-            processAction: sinon.stub().resolves(),
-        };
-        handler = new Swap(actionsCtx);
-        indexer.util.resetLists();
+function setupSwap() {
+    indexer = createMockIndexer();
+    actionsCtx = {
+        config: indexer.config,
+        util: indexer.util,
+        mapper: indexer.mapper,
+        decoderDb: indexer.decoderDb,
+        indexerDb: indexer.indexerDb,
+        protocolChanges: {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        },
+        processAction: sinon.stub().resolves(),
+    };
+    handler = new Swap(actionsCtx);
+    indexer.util.resetLists();
 
-        // Default token infos for GIVE and GET
-        const giveToken = createTokenInfo({ TICK: 'GIVE', TICK_ID: 1, DECIMALS: 0 });
-        const getToken  = createTokenInfo({ TICK: 'GET',  TICK_ID: 2, DECIMALS: 0 });
-        indexer.indexerDb.getTokenInfo.callsFake(async (tick) => {
-            if (tick === 'GIVE') return giveToken;
-            if (tick === 'GET')  return getToken;
-            return null;
-        });
-
-        // Give source enough balance (includes fee tick id 99)
-        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000', 99: '1000' });
-        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-        indexer.indexerDb.getTickerId.resolves(99);
+    // Default token infos for GIVE and GET
+    const giveToken = createTokenInfo({ TICK: 'GIVE', TICK_ID: 1, DECIMALS: 0 });
+    const getToken  = createTokenInfo({ TICK: 'GET',  TICK_ID: 2, DECIMALS: 0 });
+    indexer.indexerDb.getTokenInfo.callsFake(async (tick) => {
+        if (tick === 'GIVE') return giveToken;
+        if (tick === 'GET')  return getToken;
+        return null;
     });
 
-    function makeCreateParams(giveTick, giveAmt, getTick, getAmt, expiration, memo) {
-        // Format 0: VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_OWNERSHIP|GET_COIN|GET_TICK|GET_AMOUNT|GET_OWNERSHIP|GET_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO
-        return ['0', 'BTC', giveTick, String(giveAmt), '', 'BTC', getTick, String(getAmt), '', '', String(expiration || ''), '', '', memo || ''];
-    }
+    // Give source enough balance (includes fee tick id 99)
+    indexer.indexerDb.getAddressBalances.resolves({ 1: '1000', 2: '1000', 99: '1000' });
+    indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+    indexer.indexerDb.getTickerId.resolves(99);
+}
 
-    function makeCancelParams(swapActionIndex, memo) {
-        return ['1', String(swapActionIndex), memo || ''];
-    }
+function makeCreateParams(giveTick, giveAmt, getTick, getAmt, expiration, memo) {
+    // Format 0: VERSION|GIVE_COIN|GIVE_TICK|GIVE_AMOUNT|GIVE_OWNERSHIP|GET_COIN|GET_TICK|GET_AMOUNT|GET_OWNERSHIP|GET_ADDRESS|EXPIRATION|ALLOW_LIST|BLOCK_LIST|MEMO
+    return ['0', 'BTC', giveTick, String(giveAmt), '', 'BTC', getTick, String(getAmt), '', '', String(expiration || ''), '', '', memo || ''];
+}
 
-    function makeEditParams(swapActionIndex, expiration, memo) {
-        return ['2', String(swapActionIndex), String(expiration || ''), '', '', memo || ''];
-    }
+function makeCancelParams(swapActionIndex, memo) {
+    return ['1', String(swapActionIndex), memo || ''];
+}
 
-    const FUTURE_EXPIRATION = 9999999999;
+function makeEditParams(swapActionIndex, expiration, memo) {
+    return ['2', String(swapActionIndex), String(expiration || ''), '', '', memo || ''];
+}
+
+const FUTURE_EXPIRATION = 9999999999;
+
+describe('Swap action handler @regression @tier2', function () {
+    beforeEach(setupSwap);
 
     // ─── Create swap (format 0) ───────────────────────────────────────
 
@@ -122,7 +124,10 @@ describe('Swap action handler @regression @tier2', function () {
         await handler.parse(params, data, null);
         assert.ok(data['STATUS'].includes('EXPIRATION'), `Expected EXPIRATION error, got: ${data['STATUS']}`);
     });
+});
 
+describe('Swap action handler @regression @tier2', function () {
+    beforeEach(setupSwap);
     // ─── Cancel swap (format 1) ───────────────────────────────────────
 
     it('cancels a valid open swap', async function () {
@@ -172,7 +177,10 @@ describe('Swap action handler @regression @tier2', function () {
         await handler.parse(params, data, null);
         assert.ok(data['STATUS'].includes('SOURCE'), `Expected SOURCE not owner error, got: ${data['STATUS']}`);
     });
+});
 
+describe('Swap action handler @regression @tier2', function () {
+    beforeEach(setupSwap);
     // ─── Edit swap (format 2) ─────────────────────────────────────────
 
     it('edits a valid open swap expiration', async function () {
@@ -208,7 +216,6 @@ describe('Swap action handler @regression @tier2', function () {
 
     it('legacy getExpirationFee path when UNIFIED_FEES disabled', async function () {
         actionsCtx.protocolChanges.isEnabled = sinon.stub().resolves(false);
-
         const data = createBaseData({ ACTION: 'SWAP', FORMAT: 0, BLOCK_TIME: 1700000000 });
         const params = makeCreateParams('GIVE', '10', 'GET', '5', FUTURE_EXPIRATION, '');
         await handler.parse(params, data, null);
@@ -216,7 +223,10 @@ describe('Swap action handler @regression @tier2', function () {
         // Status valid or invalid: coverage of the legacy fee path is the goal
         assert.ok(indexer.indexerDb.createSwap.calledOnce, 'createSwap should be called');
     });
+});
 
+describe('Swap action handler @regression @tier2', function () {
+    beforeEach(setupSwap);
     // ─── Ownership-give create path (lines 394-398, 304-308) ──────────
 
     describe('GIVE_OWNERSHIP=1 (ownership swap)', function () {
@@ -254,7 +264,10 @@ describe('Swap action handler @regression @tier2', function () {
             assert.strictEqual(data['STATUS'], 'valid');
         });
     });
+});
 
+describe('Swap action handler @regression @tier2', function () {
+    beforeEach(setupSwap);
     // ─── Native coin fee paths (lines 321-331) ────────────────────────
 
     describe('native coin fee payment', function () {
@@ -269,7 +282,6 @@ describe('Swap action handler @regression @tier2', function () {
             const data = createBaseData({ ACTION: 'SWAP', FORMAT: 0, BLOCK_TIME: 1700000000 });
             const params = makeCreateParams('GIVE', '10', 'GET', '5', FUTURE_EXPIRATION, '');
             await handler.parse(params, data, null);
-
             assert.strictEqual(data['STATUS'], 'valid');
         });
 
@@ -283,7 +295,6 @@ describe('Swap action handler @regression @tier2', function () {
             const data = createBaseData({ ACTION: 'SWAP', FORMAT: 0, BLOCK_TIME: 1700000000 });
             const params = makeCreateParams('GIVE', '10', 'GET', '5', FUTURE_EXPIRATION, '');
             await handler.parse(params, data, null);
-
             assert.ok(data['STATUS'].startsWith('invalid'));
         });
 
@@ -298,7 +309,10 @@ describe('Swap action handler @regression @tier2', function () {
             assert.ok(data['STATUS'].includes('insufficient fee'));
         });
     });
+});
 
+describe('Swap action handler @regression @tier2', function () {
+    beforeEach(setupSwap);
     // ─── GET_OWNERSHIP bid validations (lines 215-219) ───────────────
 
     describe('GET_OWNERSHIP=1 (bid for ownership)', function () {
@@ -347,7 +361,10 @@ describe('Swap action handler @regression @tier2', function () {
             assert.ok(data['STATUS'].includes('unsupported'));
         });
     });
+});
 
+describe('Swap action handler @regression @tier2', function () {
+    beforeEach(setupSwap);
     // ─── Ownership-give cancel (lines 413-415) ────────────────────────
 
     describe('cancel with GIVE_OWNERSHIP=1', function () {

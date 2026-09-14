@@ -17,61 +17,73 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fi
 
 const Swap_Match = require('../../../src/actions/swap_match.js');
 
-describe('Swap_Match action handler @regression @tier2', function () {
-    let indexer, actionsCtx, handler;
+let indexer, actionsCtx, handler;
 
-    function makeSwapInfo(overrides) {
-        return {
-            ACTION_INDEX: 10,
-            SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
-            SWAP_STATUS: 'open',
-            GIVE_COIN: 'BTC', GIVE_TICK: 'GIVE', GIVE_AMOUNT: '10',
-            GET_COIN: 'BTC',  GET_TICK: 'GET',   GET_AMOUNT: '5',
-            GET_ADDRESS: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
-            ALLOW_LIST: null, BLOCK_LIST: null,
-            ...overrides,
-        };
-    }
+function makeSwapInfo(overrides) {
+    return {
+        ACTION_INDEX: 10,
+        SOURCE: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
+        SWAP_STATUS: 'open',
+        GIVE_COIN: 'BTC', GIVE_TICK: 'GIVE', GIVE_AMOUNT: '10',
+        GET_COIN: 'BTC',  GET_TICK: 'GET',   GET_AMOUNT: '5',
+        GET_ADDRESS: 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH',
+        ALLOW_LIST: null, BLOCK_LIST: null,
+        ...overrides,
+    };
+}
 
-    function makeMatchInfo(overrides) {
-        return {
-            ACTION_INDEX: 20,
-            SOURCE: 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
-            // Reciprocal mirror of makeSwapInfo: gives what the swap wants (GET), gets what the
-            // swap gives (GIVE); coins mirror too (production getSwapInfo always returns coins).
-            GIVE_COIN: 'BTC', GIVE_TICK: 'GET',  GIVE_AMOUNT: '5',
-            GET_COIN: 'BTC',  GET_TICK: 'GIVE',  GET_AMOUNT: '10',
-            GET_ADDRESS: 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
-            ALLOW_LIST: null, BLOCK_LIST: null,
-            ...overrides,
-        };
-    }
+function makeMatchInfo(overrides) {
+    return {
+        ACTION_INDEX: 20,
+        SOURCE: 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
+        // Reciprocal mirror of makeSwapInfo: gives what the swap wants (GET), gets what the
+        // swap gives (GIVE); coins mirror too (production getSwapInfo always returns coins).
+        GIVE_COIN: 'BTC', GIVE_TICK: 'GET',  GIVE_AMOUNT: '5',
+        GET_COIN: 'BTC',  GET_TICK: 'GIVE',  GET_AMOUNT: '10',
+        GET_ADDRESS: 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM',
+        ALLOW_LIST: null, BLOCK_LIST: null,
+        ...overrides,
+    };
+}
 
-    beforeEach(function () {
-        indexer = createMockIndexer();
-        actionsCtx = {
-            config: indexer.config,
-            util: indexer.util,
-            mapper: indexer.mapper,
-            decoderDb: indexer.decoderDb,
-            indexerDb: indexer.indexerDb,
-            protocolChanges: {
-                isDefined: sinon.stub().returns(true),
-                isEnabled: sinon.stub().resolves(true),
-            },
-            processAction: sinon.stub().resolves(),
-        };
-        handler = new Swap_Match(actionsCtx);
-        indexer.util.resetLists();
+function setupSwapMatch() {
+    indexer = createMockIndexer();
+    actionsCtx = {
+        config: indexer.config,
+        util: indexer.util,
+        mapper: indexer.mapper,
+        decoderDb: indexer.decoderDb,
+        indexerDb: indexer.indexerDb,
+        protocolChanges: {
+            isDefined: sinon.stub().returns(true),
+            isEnabled: sinon.stub().resolves(true),
+        },
+        processAction: sinon.stub().resolves(),
+    };
+    handler = new Swap_Match(actionsCtx);
+    indexer.util.resetLists();
 
-        const giveToken = createTokenInfo({ TICK: 'GIVE', TICK_ID: 1, DECIMALS: 0, ALLOW_LIST: null, BLOCK_LIST: null });
-        const getToken  = createTokenInfo({ TICK: 'GET',  TICK_ID: 2, DECIMALS: 0, ALLOW_LIST: null, BLOCK_LIST: null });
-        indexer.indexerDb.getTokenInfo.callsFake(async (tick) => {
-            if (tick === 'GIVE') return giveToken;
-            if (tick === 'GET')  return getToken;
-            return null;
-        });
+    const giveToken = createTokenInfo({ TICK: 'GIVE', TICK_ID: 1, DECIMALS: 0, ALLOW_LIST: null, BLOCK_LIST: null });
+    const getToken  = createTokenInfo({ TICK: 'GET',  TICK_ID: 2, DECIMALS: 0, ALLOW_LIST: null, BLOCK_LIST: null });
+    indexer.indexerDb.getTokenInfo.callsFake(async (tick) => {
+        if (tick === 'GIVE') return giveToken;
+        if (tick === 'GET')  return getToken;
+        return null;
     });
+}
+
+// Helper: re-stub getTokenInfo so GET / GIVE tokens carry a list id, and
+// getList returns the list contents for that id.
+function withTokenLists({ getList, giveList }) {
+    indexer.indexerDb.getTokenInfo.callsFake(async (tick) => {
+        if (tick === 'GET')  return createTokenInfo({ TICK: 'GET',  ALLOW_LIST: getList?.allow ?? null, BLOCK_LIST: getList?.block ?? null });
+        if (tick === 'GIVE') return createTokenInfo({ TICK: 'GIVE', ALLOW_LIST: giveList?.allow ?? null, BLOCK_LIST: giveList?.block ?? null });
+        return null;
+    });
+}
+
+describe('Swap_Match action handler @regression @tier2', function () {
+    beforeEach(setupSwapMatch);
 
     // ─── Returns early when swap is missing ───────────────────────────
 
@@ -126,7 +138,10 @@ describe('Swap_Match action handler @regression @tier2', function () {
         const statuses = indexer.indexerDb.createSwapStatus.args.map(a => a[2]);
         assert.ok(statuses.every(s => s === 'complete'), `Expected all complete, got: ${statuses}`);
     });
+});
 
+describe('Swap_Match action handler @regression @tier2', function () {
+    beforeEach(setupSwapMatch);
     // ─── Only first valid match is used ──────────────────────────────
 
     it('uses first valid match and ignores subsequent matches', async function () {
@@ -157,7 +172,10 @@ describe('Swap_Match action handler @regression @tier2', function () {
         await handler.parse(null, data, null);
         assert.ok(indexer.indexerDb.createSwapMatch.notCalled, 'Should not match when address is blocked');
     });
+});
 
+describe('Swap_Match action handler @regression @tier2', function () {
+    beforeEach(setupSwapMatch);
     // Reciprocity gate. swapInfo wants GET; a candidate whose GIVE side is a DIFFERENT
     // token (reverse-leg mismatch the incomplete findSwapMatches predicate would return) must be
     // skipped, not settled - else the taker is credited a token the maker never escrowed (an
@@ -184,7 +202,10 @@ describe('Swap_Match action handler @regression @tier2', function () {
         await handler.parse(null, data, null);
         assert.ok(indexer.indexerDb.createSwapMatch.notCalled);
     });
+});
 
+describe('Swap_Match action handler @regression @tier2', function () {
+    beforeEach(setupSwapMatch);
     // ─── Side-effect checks ───────────────────────────────────────────
 
     it('calls mapper.createMappings when a match is found', async function () {
@@ -215,7 +236,10 @@ describe('Swap_Match action handler @regression @tier2', function () {
         await handler.parse(null, data, null);
         assert.ok(indexer.mapper.createMappings.notCalled);
     });
+});
 
+describe('Swap_Match action handler @regression @tier2', function () {
+    beforeEach(setupSwapMatch);
     // ─── Ownership-transfer settlement sides (GIVE_OWNERSHIP = 1) ─────────
     // The default tests cover the balance-escrow path. An ownership offer only
     // matches another ownership offer (the GIVE/GET_OWNERSHIP mirror filter), so
@@ -245,7 +269,10 @@ describe('Swap_Match action handler @regression @tier2', function () {
         await handler.parse(null, data, null);
         assert.ok(indexer.indexerDb.createSwapMatch.notCalled);
     });
+});
 
+describe('Swap_Match action handler @regression @tier2', function () {
+    beforeEach(setupSwapMatch);
     // ─── SWAP_ACTION_INDEX selects the swap to resolve ────────────────────
     it('resolves the swap by SWAP_ACTION_INDEX when present', async function () {
         const swapInfo  = makeSwapInfo();
@@ -259,16 +286,6 @@ describe('Swap_Match action handler @regression @tier2', function () {
     });
 
     // ─── Token ALLOW/BLOCK list filtering (rejects the match) ─────────────
-    // Helper: re-stub getTokenInfo so GET / GIVE tokens carry a list id, and
-    // getList returns the list contents for that id.
-    function withTokenLists({ getList, giveList }) {
-        indexer.indexerDb.getTokenInfo.callsFake(async (tick) => {
-            if (tick === 'GET')  return createTokenInfo({ TICK: 'GET',  ALLOW_LIST: getList?.allow ?? null, BLOCK_LIST: getList?.block ?? null });
-            if (tick === 'GIVE') return createTokenInfo({ TICK: 'GIVE', ALLOW_LIST: giveList?.allow ?? null, BLOCK_LIST: giveList?.block ?? null });
-            return null;
-        });
-    }
-
     it('rejects a match absent from the GET-token ALLOW_LIST', async function () {
         withTokenLists({ getList: { allow: 11 } });
         indexer.indexerDb.getList.callsFake(async (id) => (id === 11 ? ['1OtherOnlyXXXXXXXXXXXXXXXXXXXXXXXX'] : []));
@@ -288,7 +305,10 @@ describe('Swap_Match action handler @regression @tier2', function () {
         await handler.parse(null, data, null);
         assert.ok(indexer.indexerDb.createSwapMatch.notCalled);
     });
+});
 
+describe('Swap_Match action handler @regression @tier2', function () {
+    beforeEach(setupSwapMatch);
     it('rejects a match absent from the GIVE-token ALLOW_LIST', async function () {
         withTokenLists({ giveList: { allow: 13 } });
         indexer.indexerDb.getList.callsFake(async (id) => (id === 13 ? ['1OtherOnlyXXXXXXXXXXXXXXXXXXXXXXXX'] : []));
@@ -328,7 +348,10 @@ describe('Swap_Match action handler @regression @tier2', function () {
         await handler.parse(null, data, null);
         assert.ok(indexer.indexerDb.createSwapMatch.notCalled);
     });
+});
 
+describe('Swap_Match action handler @regression @tier2', function () {
+    beforeEach(setupSwapMatch);
     it('rejects when the swap address is on the match BLOCK_LIST', async function () {
         const matchInfo = makeMatchInfo({ BLOCK_LIST: 41 });
         indexer.indexerDb.getList.callsFake(async (id) => (id === 41 ? ['mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH'] : []));
