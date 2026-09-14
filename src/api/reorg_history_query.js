@@ -17,7 +17,7 @@
  * anchor_action_query.js layout: request validation, the SQL, and the row ->
  * response mapping.
  *
- * WHY THIS EXISTS (REORG-OLDHASH-UNVERIFIED-1):
+ * WHY THIS EXISTS (reorg old hashes go unverified):
  * xchain-hub's ReorgHandler currently accepts a peer's reorg announcement after
  * confirming only that the announced NEW hash is what its own node serves at the
  * reorg height. It never confirms the announced OLD hash was ever canonical there,

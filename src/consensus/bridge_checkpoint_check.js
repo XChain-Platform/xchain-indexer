@@ -12,9 +12,9 @@
  *
  **********************************************************************
  *
- * XChain Platform - D2: the escrow cross-check against the anchored state checkpoint.
+ * XChain Platform - the escrow cross-check against the anchored state checkpoint.
  *
- * WHAT THIS IS. The trust boundary of the bridge. Milestone 1 is a hub-trusted mint: off
+ * WHAT THIS IS. The trust boundary of the bridge. Without it the bridge is a hub-trusted mint: off
  * the origin chain the hub supplies BOTH the transfer record and the capability roster
  * that verifies it, so a compromised hub can mint on the destination with nothing held in
  * escrow on the origin. This module makes the destination indexer prove, before it mints,
@@ -22,15 +22,15 @@
  * at least what is about to be minted. That reduces the assumption to "the cross_chain
  * quorum AND the checkpoint quorum both lied", the assumption the cross-chain DEX and every
  * validator action already rest on. Nothing arms on mainnet before this is built.
- * Spec: the base bridge spec sections 5, 8, 12 and work row 17; D2, D19, D46.
+ * The two rules below fix how the proof travels and what it proves.
  *
- * THE PROOF IS TRANSPORT, NEVER A CANONICAL FIELD (D19). It arrives in ctx.proof, fetched
+ * THE PROOF IS TRANSPORT, NEVER A CANONICAL FIELD. It arrives in ctx.proof, fetched
  * beside the row or by the indexer itself, and is no part of the signed content canonical.
- * That is exactly what lets D2 land without changing one canonical or invalidating one
+ * That is exactly what lets this cross-check arm without changing one canonical or invalidating one
  * signature: every canonical field is a byte-match obligation forever. Nothing in here
  * reads or writes a signed field, and nothing in here is signed.
  *
- * WHY A BALANCE PROOF AND NOT A NEW COMMITMENT (D46). The escrow is an ordinary balance at
+ * WHY A BALANCE PROOF AND NOT A NEW COMMITMENT. The escrow is an ordinary balance at
  * ADDRESS.BRIDGE_<dest_chain> on the origin chain, so it already rides balances_root, which
  * already rides the state_root the checkpoint quorum signs. No new subtree, no new hash
  * input, no flag day for the commitment itself.
@@ -84,15 +84,15 @@ const stateSubtree = require('../state_subtree_activation.js');
 const coinAdapter = require('../coins/to_indexer_config.js');
 
 // Role prefix of the escrow address on the ORIGIN chain: one protocol address per
-// destination chain, ADDRESS.BRIDGE_<DEST_COIN> (spec section 5). Unspendable because no
+// destination chain, ADDRESS.BRIDGE_<DEST_COIN>. Unspendable because no
 // key exists, which is what lets it be an ordinary balance rather than an escrow row.
 const ESCROW_ROLE_PREFIX = 'BRIDGE_';
 
-// The chain the escrow lives on for this milestone's tick. XCHAIN is minted on BTC and
-// nowhere else, v0 locks are BTC only and v1 burns are non-BTC only (spec section 4), so the
+// The chain the escrow lives on for the XCHAIN tick. XCHAIN is minted on BTC and
+// nowhere else, v0 locks are BTC only and v1 burns are non-BTC only, so the
 // escrow addresses are roles in the BTC coin bundle and the leg follows from src_chain alone.
 // The token bridge generalizes this to the tick's OWN origin chain; that generalization is
-// its lane's, not this one's, and the constant is named here so it is a one-line change
+// that code's job, not this module's, and the constant is named here so it is a one-line change
 // rather than a hunt through the conditions.
 const ESCROW_CHAIN = 'BTC';
 
@@ -196,7 +196,7 @@ function resolveEscrowAddress(originChain, destChain, network){
 }
 
 /**
- * THE D2 HOOK. Prove the origin-chain escrow behind a transfer against the state checkpoint
+ * THE ESCROW CROSS-CHECK HOOK. Prove the origin-chain escrow behind a transfer against the state checkpoint
  * the origin chain's quorum signed, before this chain mints.
  *
  * Synchronous and pure by design: everything it needs is the row plus the envelope the
@@ -267,7 +267,7 @@ function verifyEscrowAgainstCheckpoint(row, ctx){
     // from a burn on the other side. A row naming neither side as this chain is not ours.
     if(thisChain !== destChain) return fail(ESCROW_PROOF_REASON.NOT_THIS_CHAIN);
 
-    // Direction is DERIVED and is never a column (D19). The OUT leg releases an escrow that
+    // Direction is DERIVED and is never a column. The OUT leg releases an escrow that
     // is an ordinary balance on this very chain, where the local ledger is authoritative and
     // the would-go-negative refusal in the settle pass is the guard: a remote checkpoint can
     // add nothing to a balance this node holds itself.
@@ -277,7 +277,7 @@ function verifyEscrowAgainstCheckpoint(row, ctx){
     // exemption is keyed on THIS chain being the escrow chain and never on the row's
     // src_chain, and that ordering is the whole point. Read the other way round, a forged row
     // naming any non-escrow source chain would derive as an "out leg" and mint here with no
-    // cross-check at all, which is precisely the forgery D2 exists to stop. A mint can only
+    // cross-check at all, which is precisely the forgery this cross-check exists to stop. A mint can only
     // come from a lock on the escrow chain, so a source chain that is not it is refused.
     if(srcChain !== ESCROW_CHAIN) return fail(ESCROW_PROOF_REASON.IN_LEG_ORIGIN);
 
@@ -415,7 +415,7 @@ function verifyEscrowAgainstCheckpoint(row, ctx){
         return fail(ESCROW_PROOF_REASON.PROOF_INVALID);
 
     // The escrow must already hold at least what this transfer is about to mint. It is an
-    // inequality and not an equality on purpose (D65): a stray credit to the escrow address
+    // inequality and not an equality on purpose: a stray credit to the escrow address
     // is a surplus and harms nobody, while a deficit is the direction in which somebody
     // else's units would have nothing behind them.
     if(claimed < amount)

@@ -25,20 +25,20 @@
  * is the liveness-eviction rail's problem, not this one, so the bootstrap epoch
  * right after arming filters nobody.
  *
- * WHY SUBSET AND NOT EQUALITY (spec §7.1, D46-D48). The roll-call is signed at
+ * WHY SUBSET AND NOT EQUALITY. The roll-call is signed at
  * epoch E and this filter runs at a request block H up to a full epoch later.
  * Any gate arming inside (E, H] would break EQUALITY for every honest validator
  * at once. Under subset, a gate armed after E is simply absent from the list,
  * which is a true statement about that validator's build at the time it signed.
  * gatesHash is the commitment to what was signed; it is never the comparand.
  *
- * WHY THE SELECTION IS BY close_block (D92). db.getRollcallGatesForFilter picks
+ * WHY THE SELECTION IS BY close_block. db.getRollcallGatesForFilter picks
  * the epoch by the block its close LANDED at, never by epoch height alone. The
  * rows exist from the block the filter first reads them at, so a replay of the
  * same block reads exactly what the live run read; picking by epoch height would
  * let a replay see an epoch whose rows the live run had not yet written.
  *
- * WHY THIS IS ONE HELPER AND NOT THREE COPIES (D86). Three paths must derive the
+ * WHY THIS IS ONE HELPER AND NOT THREE COPIES. Three paths must derive the
  * same set or the fleet forks: v0 admission in actions/attest/index.js, the reorg
  * recompute in rollback.js, and the getcapabilityvalidators RPC the hub's
  * CapabilitySnapshot calls. The hub carries no twin of this logic; it receives an

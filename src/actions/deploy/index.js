@@ -78,7 +78,7 @@ const MAX_DEPLOY_CHUNKS = PROTO.MAX_DEPLOY_CHUNKS;
 const GAS_CEILING = 1000000;
 
 // The status a chunked assembler (v2/v3) lands with when its group is not complete yet
-// (DEPLOY_DEFERRED_ASSEMBLY, R2.3): its rows exist at its own action, but the contract is
+// (DEPLOY_DEFERRED_ASSEMBLY): its rows exist at its own action, but the contract is
 // deployed later, by the action that completes the group. Written once and NEVER mutated -
 // a status flip would be an in-place mutation needing bespoke rollback and a hash rule.
 // db.js repeats this literal in the pending-assembler lookup, the same way the seven
@@ -283,10 +283,10 @@ class Deploy {
         // Buffer.from is lenient, so we round-trip to reject non-canonical base64 deterministically.)
         let code = '';
         // A chunk verdict this assembler must not commit to until the fee and sleeping checks
-        // have run (R2). Both stay null pre-activation and on every inline deploy, so the path
+        // have run (deferred assembly). Both stay null pre-activation and on every inline deploy, so the path
         // below is the one this file has always taken.
-        let pendingCodeHash = null;  // R2.3: land pending under the DECLARED hash
-        let deferredError   = null;  // R2.2: a verdict the fee/sleeping rejects still win over
+        let pendingCodeHash = null;  // deferred: land pending under the DECLARED hash
+        let deferredError   = null;  // duplicate pending: a verdict the fee/sleeping rejects still win over
         // Assemble the contract's code from its stored chunks when this deploy is chunked
         if(!error && isChunked){
             let declaredHash = String(data['CODE_HASH_PARAM']);
@@ -295,12 +295,12 @@ class Deploy {
             // exclusive, so an assembler assembles from carriers strictly below it.
             let assembly = await this.chunkStore.assembleCode(data['SOURCE'], declaredHash, data['ACTION_INDEX']);
             code = assembly.code;
-            // R2, post-activation and only for a group that is NOT complete yet ('no chunks' /
+            // Deferred assembly, post-activation and only for a group that is NOT complete yet ('no chunks' /
             // 'missing chunk i'). Every other assembly verdict (bad hash format, count out of
             // range, bad base64, assembly mismatch) is terminal: the group cannot be repaired by
             // a later carrier, since dedup keeps the LOWEST action_index for each position.
             if(assembly.incomplete && await this.actions.protocolChanges.isEnabled('DEPLOY_DEFERRED_ASSEMBLY', data['BLOCK_INDEX'])){
-                // One pending assembler per group (D4): without this, a second pending assembler
+                // One pending assembler per group: without this, a second pending assembler
                 // would be re-armed by any later duplicate slice and deploy a surprise second
                 // contract. The lookup is bounded below this action, so it never sees itself.
                 let pending = await this.indexerDb.getPendingDeployAssembler(data['SOURCE'], declaredHash, data['ACTION_INDEX']);
@@ -407,10 +407,10 @@ class Deploy {
      *                         action_index < this action and so cannot see them.
      *                       - pendingCodeHash: this action is a chunked assembler whose group
      *                         is not complete yet, so it lands PENDING under that declared hash
-     *                         instead of deploying (R2.3). The fee and sleeping checks still
+     *                         instead of deploying. The fee and sleeping checks still
      *                         run and their rejects win; the base fee is still charged.
      *                       - deferredError: a verdict held until after those same two checks
-     *                         (R2.2's duplicate-pending), so a fee-mode or sleeping reject wins
+     *                         (the duplicate-pending verdict), so a fee-mode or sleeping reject wins
      *                         over it exactly as it does for a pending landing.
      */
     async runDeployment(data, wire, error = null, options = {}){
@@ -419,7 +419,7 @@ class Deploy {
         let { skipBaseFee = false, skipSleeping = false, assemblerActionIndex = null, feePaymentMode: paidFeePaymentMode = null,
               pendingDebits = [], pendingCodeHash = null, deferredError = null } = options;
 
-        // The held chunk verdict (R2). While one is held no deployment happens - no VM work, no
+        // The held chunk verdict (deferred assembly). While one is held no deployment happens - no VM work, no
         // derived address, no constructor - but the fee and sleeping checks below still run,
         // which is the whole point of holding it: post-activation an early assembler on a
         // native-fee chain with no fee output is 'invalid: insufficient fee (native coin output
@@ -674,7 +674,7 @@ class Deploy {
         if(!error && !skipBaseFee && tokenInfo && feePaymentMode === 2)
             balances = this.util.debitBalances(balances, tokenInfo['TICK_ID'], fee);
 
-        // D3, the one divergence from an inline deploy, and it exists only because A and C are
+        // This is the one divergence from an inline deploy, and it exists only because A and C are
         // different actions: the source can be drained between them. Before the constructor runs
         // at C it must still hold the worst-case constructor spend, on top of whatever this same
         // action already owes. Only in XCHAIN mode - a deployment whose base fee was paid by a
@@ -722,8 +722,8 @@ class Deploy {
 
         // When does the constructor run? Below DEPLOY_INIT_STRICT: only when
         // CONSTRUCTOR_PARAMS is non-empty (legacy truthy), so a contract exporting
-        // `initialize` deployed with no params silently never initialised (the F-14
-        // footgun) yet still committed 'valid'. At/after the flag-day (Option C): run
+        // `initialize` deployed with no params silently never initialised (the no-init
+        // footgun) yet still committed 'valid'. At/after the flag-day: run
         // `initialize` whenever the contract exports it, regardless of params. This
         // makes the constructor impossible to silently skip - a zero-arg initialize
         // runs with no args, and an arg-expecting one deployed with none throws inside
@@ -786,7 +786,7 @@ class Deploy {
                 // A constructor is a root execution: emitted cross-contract calls
                 // run at depth 1, same as calls emitted by a user EXECUTE.
                 callDepth:        0,
-                // Explicit top-level ceiling (VM-EMIT-2): a constructor is a root
+                // Explicit top-level ceiling: a constructor is a root
                 // execution, so it runs under the same GAS_CEILING as a top-level
                 // EXECUTE. Passing it explicitly (instead of relying on the VM's
                 // constructor-time default) keeps the ceiling the clamp below
@@ -1004,7 +1004,7 @@ class Deploy {
             fee = this.util.bcmul(totalGas, this.config['GAS_PRICE'], 8);
         }
 
-        // D3's split, applied to both halves of the same number: a deferred deployment's base
+        // The deferred deployment's split, applied to both halves of the same number: a deferred deployment's base
         // component was charged at the assembler, so this action charges - and records as
         // gas_used - only the constructor gas it actually ran. A's base plus C's constructor
         // therefore sum to the single charge an inline deploy of the same source pays, and each
@@ -1062,7 +1062,7 @@ class Deploy {
         // iterates credit ticks, so the debit-only tick is invisible to the balances
         // projection, leaving balance = ledger + 1 and tripping the supply SanityError.
         // (a pending landing is the one status other than 'valid' that still pays: it is an
-        // accepted action awaiting its carriers, and D15 charges it the base fee at A).
+        // accepted action awaiting its carriers, and it is charged the base fee at A).
         if((!error || landedPending) && tokenInfo && feePaymentMode === 2)
             debits.push([gas, fee, data['SOURCE']]);
 

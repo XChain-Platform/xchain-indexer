@@ -130,7 +130,7 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
                             ? (indexer.stallReason || 'decoder_reorg_halt: decoder wrote a REORG_HALT marker; full decoder resync required')
                             : (indexer.stallReason || null),
         decoderReorgHalted: !!indexer.decoderReorgHalted,
-        // PLATFORM-TRAIN ACTIVATION (release-management section 13). The one field here
+        // PLATFORM-TRAIN ACTIVATION. The one field here
         // that reports a fault BEFORE it happens: `pending` means the signed release
         // manifest names a rule-set version this build does not implement and the boundary
         // is still ahead, so the monitor can alert while there is still a rolling-upgrade

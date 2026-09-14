@@ -58,7 +58,7 @@ class Cross_Settle {
     }
 
     // Canonical signing string. MUST byte-match the hub's CrossChainDexEngine._canonicalMatch.
-    // Phase B appends the fill fields after `network` (Phase-A field order preserved):
+    // The partial-fill form appends the fill fields after `network` (the full-fill field order is kept):
     // a_amount/b_amount are the FILL settled by THIS match; *_kind + *_filled_before bind
     // sequential partial fills apart.
     canonical(m){
@@ -82,7 +82,7 @@ class Cross_Settle {
         // its '|' separator holds whatever the royalty gate did before it. Must byte-match the
         // hub, which appends the same field in the same position.
         raw += ah.admissionCanonicalField('CrossChainDex', m.network, m.snapshot_block, ah.columnsAdmitBlocks(m));
-        // EQUIV (WI-2 bump 2): VIEW = the row's persisted finalizing_view (the view the
+        // EQUIV header: VIEW = the row's persisted finalizing_view (the view the
         // hub round finalized at; == pending.view when the quorum sigs were taken). TAG=XDEX,
         // ROUND_ID=match_id. Gate on the row's snapshot_block + network. Must byte-match the hub.
         if(eq.isEquivHeaderActive(m.snapshot_block, m.network))
@@ -205,7 +205,7 @@ class Cross_Settle {
         }
 
         // ORDER leg → partial-fill settlement (release the fill, decrement remaining, complete
-        // only when fully filled). SWAP leg falls through to the Phase-A full-release path.
+        // only when fully filled). SWAP leg falls through to the full-release path.
         if(localKind === 'order')
             return await this.settleOrderLeg(data, m, coin, localActionIndex, giveTick, giveAmount, getAmount, getTick, giveOwnership, payoutAddr, counterpartyCoin, localInfo);
 

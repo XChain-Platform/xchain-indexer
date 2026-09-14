@@ -10,7 +10,7 @@
  *
  **********************************************************************
  *
- * escrow_leaf_journal WRITER (SPV sub-tree spec §3 Stage B).
+ * escrow_leaf_journal WRITER (SPV sub-tree Stage B, the escrow locked leaf).
  *
  * SOURCE-ONLY, and deliberately NOT a twin. xchain-sync REPLICATES the rows this
  * writes (`stream:block`) rather than recomputing them. The follower still
@@ -337,7 +337,7 @@ async function priorTotals(db, keys){
 // the resulting absolute totals against whatever the journal holds. That is what
 // lets the leaf arm with no operational backfill: the replay lands as ordinary
 // journal rows, replicates, and both twins full-build from the journal exactly
-// as on any other block. A §7 shadow window that already populated the journal
+// as on any other block. A shadow dry-run window that already populated the journal
 // below the armed height is corrected rather than trusted (armed wins): a key
 // whose shadow value equals the replay writes nothing, a drifted one gets a
 // correction row. The replay also cross-checks its per-tick totals against SQL

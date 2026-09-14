@@ -30,7 +30,7 @@
  * wire layout, its chunking and its caps live in ../attest_batch_wire.js, which
  * xchain-hub carries a byte-identical twin of.
  *
- * v3/v4 are the cross-chain delivery legs (spec §12, framework Phase 5). All
+ * v3/v4 are the cross-chain delivery legs. All
  * `attestation` capability stake lives on BTC, so an ATTEST emitted by an LTC or
  * DOGE contract has no responsible set of its own and cannot be fulfilled where
  * it landed. v3 materializes such a request ONTO BTC, giving it a real BTC
@@ -214,7 +214,7 @@ class Attest {
 
         // Per-version format strings
         this.formats = {};
-        // FEE_TICK|FEE_AMOUNT are optional trailing fields (E1 paid-attestation
+        // FEE_TICK|FEE_AMOUNT are optional trailing fields (paid-attestation
         // wire prep): absent on the wire → null, and the SDK serializer trims
         // trailing empties, so feeless requests stay byte-identical to the
         // 8-field format. v1 consensus accepts only FEE_TICK == GAS (XCHAIN);
@@ -322,7 +322,7 @@ class Attest {
         if(!error && !this.providerRegistry.isDeadlineAllowed(data['PROVIDER_ID'], parseInt(data['BLOCK_INDEX']), deadlineBlock))
             error = 'invalid: DEADLINE (outside provider window)';
 
-        // Optional request fee (E1). XCHAIN-only in v1: the validator_rewards →
+        // Optional request fee. XCHAIN-only in v1: the validator_rewards →
         // COLLECT payout chain is GAS-denominated, so consensus pins FEE_TICK to
         // the GAS tick. The field exists on the wire so post-launch multi-tick
         // support is a rule loosening, not a format change.
@@ -427,7 +427,7 @@ class Attest {
         // path runs verbatim so replay stays bit-identical. Deterministic: the set
         // derives from block-anchored stake state every validator replays alike.
         // The computed set is reused as the pinned RESPONSIBLE_SET_JSON below.
-        // Framework Phase 5 (spec §12): the origin-side half of the cross-chain relay.
+        // Cross-chain relay: the origin-side half of the cross-chain relay.
         // On LTC/DOGE _computeResponsibleSet returns [] by construction (attestation
         // stake is BTC-only), and ATTEST_ADMISSION is already satisfied there on local
         // height, so today EVERY off-BTC request is rejected at admission. At/above
@@ -451,7 +451,7 @@ class Attest {
         // use; see attest_admission_activation.js for why the two differ and why the
         // difference must not be "corrected" without its own flag-day.
         if(!error && !relayOrigin && attestAdmission.isAttestAdmissionActive(data['BLOCK_INDEX'], this.config['NETWORK'])){
-            // The rules-aware filter (spec §7.4) reports how many keys it removed
+            // The rules-aware filter reports how many keys it removed
             // through this out-parameter; nothing else about the call moves.
             let gatesStats = {};
             admissionSet = await this.computeResponsibleSet(
@@ -459,7 +459,7 @@ class Attest {
                 undefined, gatesStats);
             let neededSlots = Math.max(1, Number(data['REDUNDANCY']) || 1);
             if(admissionSet.length < neededSlots){
-                // FAIL CLOSED with the reason that is actually true (D61). A set that
+                // FAIL CLOSED with the reason that is actually true. A set that
                 // was never large enough and a set the rules filter shrank need
                 // different literals: the first is a staking problem the requester can
                 // do nothing about, the second names a fleet that has not rolled a call
@@ -476,7 +476,7 @@ class Attest {
             }
         }
 
-        // Framework spec §11.1 per-block admission caps (flag-day gated). An admitted
+        // Per-block admission caps (flag-day gated). An admitted
         // request obliges REDUNDANCY validators to make a provider call, which for the
         // `llm` provider is a real invoice on each operator's own vendor account, while
         // the requester pays the same flat VM_ATTEST_REQUEST gas either way. Fees bound
@@ -550,7 +550,7 @@ class Attest {
                     ' : fee=' + (feePresent ? data['FEE_AMOUNT'] + ' ' + data['FEE_TICK'] : 'none') +
                     ' : ' + data['STATUS']);
 
-        // ATT-RECOMP-1: pin the responsible set AS-OF this request's block so the reorg
+        // Pin the responsible set AS-OF this request's block so the reorg
         // missed_count recompute (rollback._recomputeAttestationValidatorStats) reads the
         // historical set verbatim rather than re-deriving it against the CURRENT mutable
         // stakes.amount (a later SURVIVING slash reduces it, so a bare re-derive charges
@@ -677,7 +677,7 @@ class Attest {
         // Verification proper lives in attest_response_verify.js: ONE implementation
         // that this chain path and the hub-mirror applier both call, so the two
         // delivery routes can never reach different verdicts on the same artifact
-        // (spec attest-response-mirror.md §4.3). Everything consensus-relevant lives
+        // (on-chain or hub mirror). Everything consensus-relevant lives
         // there, comments included; what stays here is the wire parsing above and the
         // persistence below.
         //
@@ -687,7 +687,7 @@ class Attest {
         //              ladder, which is evaluated at the RESPONSE's own height on
         //              purpose. On this path that is the v1 action's block.
         //   gateBlock  where ATTEST_CANONICAL_LOWERCASE_ID is evaluated. Today, and
-        //              here, the v1 ACTION's block (D57); the module must not re-key it.
+        //              here, the v1 ACTION's block; the module must not re-key it.
         //   computeResponsibleSet  injected, because it is a method over this.config,
         //              this.providerRegistry and this.indexerDb, and every site that
         //              computes a request's responsible set has to use the one derivation.
@@ -774,7 +774,7 @@ class Attest {
                 let newRequestStatus = (responseStatus === 'ok') ? 'fulfilled' : 'errored';
                 await this.indexerDb.updateAttestationRequestStatus(data['REQUEST_ID'], newRequestStatus, data['BLOCK_INDEX']);
 
-                // Fee disposition (E1). Release/refund rows are written at THIS
+                // Fee disposition. Release/refund rows are written at THIS
                 // v1 action_index, so a reorg of the v1 removes them generically
                 // and the v0 escrow (earlier action_index) survives intact.
                 await this.settleRequestFee(request, data, newRequestStatus);
@@ -813,7 +813,7 @@ class Attest {
     }
 
     // Is this request's response served by the hub mirror rather than by an on-chain
-    // ATTEST v1? Keyed on the REQUEST's own block (§7.1), read from the LOCAL v0 row
+    // ATTEST v1? Keyed on the REQUEST's own block, read from the LOCAL v0 row
     // and never from anything a hub states.
     //
     // NAMED SEAM, three callers by design: this file's mirror applier (its own gate),
@@ -827,7 +827,7 @@ class Attest {
         return arm.isResponseMirrorActive(request.block_index, this.config['NETWORK']);
     }
 
-    // THE MIRROR APPLIER (response-mirror design §4.1/§4.4). Applies one finalized
+    // THE MIRROR APPLIER. Applies one finalized
     // response that arrived through the hub mirror instead of on a validator-paid
     // transaction, at the block the binding rule picked
     // (utility.selectApplicableAttestationResponses, which is where the rule lives).
@@ -898,12 +898,12 @@ class Attest {
         if(echoHash !== String(row.response_hash || '').toLowerCase())
             return skip('response_hash does not match the stored body');
 
-        // ONE verifier for both delivery routes (§4.3). Nothing about the height the
+        // ONE verifier for both delivery routes. Nothing about the height the
         // signatures are checked at is reachable from here: the module buries the LOCAL
         // request row's own block itself. `atBlock`/`gateBlock` are the APPLYING block,
         // which is this synthesized action's own block, so the widening ladder and the
         // lower-case-id gate are evaluated exactly where the chain path evaluates them
-        // (D57). requestIdRaw equals requestId because a mirror row's id is lower-case
+        // as well. requestIdRaw equals requestId because a mirror row's id is lower-case
         // hex by construction: there is no wire case to preserve.
         //
         // effectiveTime is the mirror row's SIGNED effective_time, and it is passed because
@@ -961,7 +961,7 @@ class Attest {
         data['VALID_SIGS']       = verdict.validSigs;
         data['STATUS']           = 'valid';
         // Same inlined JSON the chain path stores, so a mirror-fed node's row and a
-        // chain-fed node's row are byte-identical (AT2 asserts exactly that).
+        // chain-fed node's row are byte-identical (a test asserts exactly that).
         data['VALIDATOR_SIGNATURES'] = verdict.verifiedSigs.length
             ? JSON.stringify(verdict.verifiedSigs.map(s => ({ pubkey: s.pubkey, sig: s.sig })))
             : null;
@@ -1063,7 +1063,7 @@ class Attest {
         // replay skipped re-synthesizing the v2 row)
         await this.indexerDb.updateAttestationRequestStatus(requestId, 'expired', data['BLOCK_INDEX']);
 
-        // Refund the request fee (E1); never reached the responsible set's quorum.
+        // Refund the request fee; never reached the responsible set's quorum.
         await this.settleRequestFee(request, data, 'expired');
 
         // Mark missed_count on each responsible validator (deterministic by SHA256(request_id || pubkey))
@@ -1556,7 +1556,7 @@ class Attest {
     // `stats` is an OPTIONAL out-parameter, mutated by the rules-aware gate filter
     // below with { dropped, epochHeight, closeBlock, needed }. It exists so the v0
     // admission caller can tell "the snapshot was always this small" from "the rules
-    // filter shrank it", which are two different rejection literals (D61). The return
+    // filter shrank it", which are two different rejection literals. The return
     // shape is untouched, so every existing caller passes nothing and is unaffected.
     async computeResponsibleSet(requestId, redundancy, blockIndex, providerId, widen, stats){
         // The SWQ gate is BTC-ANCHORED, so only evaluate it where `blockIndex`
@@ -1610,7 +1610,7 @@ class Attest {
             ? await this.indexerDb.getStakeWeightsByCapability('attestation', resolveBlock)
             : await this.indexerDb.getValidatorsByCapability('attestation', resolveBlock);
         if(!validators || validators.length === 0) return [];
-        // RULES-AWARE FILTER (spec §7.4, D59). Applied ONCE, here: after the capability
+        // RULES-AWARE FILTER. Applied ONCE, here: after the capability
         // read and before both the provider floor and the hash ranking, so a slot the
         // filter frees is filled by the next qualifying validator instead of leaving a
         // hole in the draw. The hub receives an already-filtered set from
@@ -1682,7 +1682,7 @@ class Attest {
         return validators.filter(v => pmsh.meetsProviderFloor(v && v.weight, floor));
     }
 
-    // Cross-chain relay (spec §12, framework Phase 5)
+    // Cross-chain relay helpers
 
     // True when `request` is one leg of a relay whose contract lives on ANOTHER
     // chain, i.e. the BTC row a v3 materialized. The callback paths consult this
@@ -1959,7 +1959,7 @@ class Attest {
                     ' : snapshot=' + snapshotBlock +
                     ' : ' + data['STATUS']);
 
-        // Pin the responsible set as-of THIS block, the same ATT-RECOMP-1 rule a
+        // Pin the responsible set as-of THIS block, the same pin-as-of-block rule a
         // native v0 follows. This is the anchor the whole model exists to provide:
         // block_index here is a genuine BTC height, so the set (and the block-echo
         // determinism check that reads it back) resolves exactly as it would for a
@@ -2134,7 +2134,7 @@ class Attest {
         return await this.injectExpiredCallback(request, responseData);
     }
 
-    // Settle the request fee escrowed at v0 (E1 paid attestations). Runs at the
+    // Settle the request fee escrowed at v0 (paid attestations). Runs at the
     // terminal flip and writes ledger rows at the SETTLING action's action_index
     // (the v1 response or the synthesized v2 expire), so a reorg of the settle
     // action removes them generically while the v0 escrow row survives.
@@ -2143,7 +2143,7 @@ class Attest {
     //                          decimals; remainder dust stays in the pool;
     //                          COLLECT only ever pays what validator_rewards
     //                          reference, so the pool stays solvent). At/above
-    //                          ATTEST_BROADCAST_FEE the spec §11 leader
+    //                          ATTEST_BROADCAST_FEE the leader
     //                          broadcast-fee reimbursement is carved out FIRST
     //                          and the split runs on what is left; the pool
     //                          credit stays the FULL escrow either way, so the
@@ -2190,11 +2190,11 @@ class Attest {
             // WHO IS PAID. Below the zero-conf height the split is the recomputed
             // responsible set, unchanged. At and above it the escrow is split among the
             // validators whose signatures the accepted response actually carries
-            // (spec §4.3, D12 ruled a): the V2 ladder seats a headroom member on EVERY
+            // by design, because the slot-widening ladder seats a headroom member on EVERY
             // request, and a member that need never sign would otherwise take a share
-            // off each validator that did. `responsible` is still the set the §11
+            // off each validator that did. `responsible` is still the set the broadcast-fee
             // carve-out is measured against and is still the ASSIGNED set the expiry
-            // charge faults (§4.2), so neither the assignment plane nor missed_count
+            // charge faults, so neither the assignment plane nor missed_count
             // moves with this.
             let paid = responsible;
             if(zc.isZeroConfActive(Number(request.block_index), this.config['NETWORK']))
@@ -2210,7 +2210,7 @@ class Attest {
                 );
                 let feeCap = Math.min(8, gasDecimals);
 
-                // §11 leader broadcast-fee reimbursement, flag-day gated. Carved out of the
+                // Leader broadcast-fee reimbursement, flag-day gated. Carved out of the
                 // escrow BEFORE the split, because it reimburses a cost the broadcaster
                 // already paid a miner rather than rewarding the work the split pays for.
                 // Below the gate it is '0' and the split sees the whole fee, byte-identically
@@ -2228,7 +2228,7 @@ class Attest {
                 if(this.util.bcgt(broadcastFee, '0')){
                     splitPool = this.util.bcsub(feeAmount, broadcastFee, feeCap);
                     // The broadcaster is a responsible-set member, so it collects this row
-                    // ON TOP of its equal share below ("additionally receives", spec §11).
+                    // ON TOP of its equal share below ("additionally receives").
                     // A distinct reward_type keeps the two rows apart under the
                     // (source, pubkey, type, round_reference) unique key.
                     await this.indexerDb.createValidatorReward(
@@ -2270,7 +2270,7 @@ class Attest {
 
     // The pubkeys the fulfilled split pays at and above the zero-conf height: the
     // verified signers inlined on the settling response row, deduped, lower-cased and
-    // sorted ascending (D70). The order is the WRITE order of the validator_rewards
+    // sorted ascending. The order is the WRITE order of the validator_rewards
     // rows, so it is sorted rather than left in the hub-authored order the row carries:
     // two nodes replaying the same row must emit the same rows in the same sequence.
     //
@@ -2279,7 +2279,7 @@ class Attest {
     // routes above the height pay signers. The v4 relay path deliberately stores null
     // there (its signatures are cross_chain relay signatures, not the attestation
     // quorum, :2010), and so does any row whose signature list failed to parse: those
-    // fall back to the recomputed responsible set and say so (D90). The fallback is a
+    // fall back to the recomputed responsible set and say so. The fallback is a
     // pure function of the same row and local state, so every node takes it together.
     signerPaySet(request, data, responsible){
         let raw    = data ? data['VALIDATOR_SIGNATURES'] : null;
@@ -2314,7 +2314,7 @@ class Attest {
     }
 
     // The XCHAIN-denominated broadcast-fee reimbursement owed to the leader for this
-    // fulfilled settle (spec §11), or '0' when the flag-day has not armed, no price is
+    // fulfilled settle, or '0' when the flag-day has not armed, no price is
     // available, or the escrow cannot cover a positive amount. Never throws and never
     // fails a settle: every unusable input resolves to '0' and the legacy full-escrow
     // split runs unchanged.
@@ -2393,7 +2393,7 @@ class Attest {
 
         // Escrow is the hard ceiling. An author whose escrow is thinner than the
         // allowance reimburses what there is and the split gets nothing, which is the
-        // §11 ordering: the broadcaster's out-of-pocket cost is settled before the
+        // fee-first ordering: the broadcaster's out-of-pocket cost is settled before the
         // reward it is not owed.
         if(this.util.bcgt(reimbursement, feeAmount))
             reimbursement = this.util.bcmulfloor(feeAmount, '1', feeCap);
@@ -2443,7 +2443,7 @@ class Attest {
             SOURCE:      'C:' + chain + ':' + request.contract_index
         }, true);
 
-        // SOURCE = contract address so xchain.getSourceAddress() === xchain.getContractAddress() (spec §4.3).
+        // SOURCE = contract address so xchain.getSourceAddress() === xchain.getContractAddress().
         // The v1 response rode a real broadcast tx, so its TX_HASH is passed through;
         // post-SYNTH_EXEC_TX_HASH the builder throws rather than let a hashless
         // context reach the VM.

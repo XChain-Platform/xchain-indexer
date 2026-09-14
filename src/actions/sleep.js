@@ -110,7 +110,7 @@ class Sleep {
         // pause (SLEEP|1|-1|TICK -> isTickSleeping forever), stranding every holder's balance. Gated
         // (tightens validity): flips fleet-wide at one coordinated block; pre-launch chains at genesis.
         //
-        // IS_GENESIS IS EXEMPT (policy spec D10). A bridged copy is created with LOCK_SLEEP
+        // IS_GENESIS IS EXEMPT (for policy inheritance). A bridged copy is created with LOCK_SLEEP
         // set, so nobody can ever sleep the copy by hand - but policy inheritance has to be
         // able to materialize the ORIGIN's sleep state onto that copy, and it does so with an
         // injected SLEEP format 1 routed through processTransaction(tx, true). Without this

@@ -550,7 +550,7 @@ class Bet {
         this.util.addAddressTicker(feedInfo['SOURCE'], feedInfo['TICK']);
     }
 
-    // Parimutuel settlement (spec section 7, consensus-critical). All arithmetic in
+    // Parimutuel settlement (consensus-critical). All arithmetic in
     // mathjs bignumber via the house bc* helpers; every division/floor at the feed
     // tick's DECIMALS. The pool predicate is normative: only bet_status='open' rows
     // are summed, and every summed row leaves 'open' in this same action.

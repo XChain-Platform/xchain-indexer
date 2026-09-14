@@ -90,7 +90,7 @@ class Xexec {
         // bound by effective_time is the split the admission design removes. Empty below the
         // producer activation (legacy bytes unchanged); a modern row with no columns REFUSES.
         raw += ah.admissionCanonicalField('CrossChainCall', c.network, c.snapshot_block, ah.columnsAdmitBlocks(c));
-        // EQUIV (WI-2 bump 2): TAG=XCALL, ROUND_ID = sha256('XCALLROUND|dispatch|'+call_id)
+        // EQUIV header: TAG=XCALL, ROUND_ID = sha256('XCALLROUND|dispatch|'+call_id)
         // (phase folded in, so dispatch/result get distinct keys), VIEW = finalizing_view.
         if(eq.isEquivHeaderActive(c.snapshot_block, c.network))
             return eq.buildEquivCanonical(eq.ENGINE_TAGS.XCALL,
@@ -169,7 +169,7 @@ class Xexec {
             ? swq.meetsStakeThreshold(validators, validSigners)
             : (validSigners.length >= ((N <= 1) ? 1 : Math.max(2 * Math.floor((N - 1) / 3) + 1, Math.ceil((N + 1) / 2))));
         if(!quorumMet){
-            // Quorum starvation (XDISP-1): the mirrored row's signature set does not
+            // Quorum starvation: the mirrored row's signature set does not
             // meet quorum against the pinned snapshot. NOT terminal: signature sets
             // are per-hub and hubs gossip more signatures over time, so the call
             // stays effective + unexecuted and retries every block. Record the

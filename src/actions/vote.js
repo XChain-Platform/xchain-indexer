@@ -151,7 +151,7 @@ class Vote {
 
         // quadratic REQUIRES a dust floor: sqrt(a)+sqrt(b) > sqrt(a+b), so without
         // a per-voter floor a holder could split across addresses to inflate total
-        // quadratic weight. MIN_VOTE_BALANCE raises that sybil cost (Section 12.1).
+        // quadratic weight. MIN_VOTE_BALANCE raises the cost of that sybil split.
         // Sybil-resistant, not sybil-proof (documented).
         if(!error && data['WEIGHT_MODE'] === 'quadratic'){
             if(this.util.isNull(data['MIN_VOTE_BALANCE']) || !this.util.bcgt(data['MIN_VOTE_BALANCE'], 0))
@@ -190,7 +190,7 @@ class Vote {
         if(!error && !this.util.isNull(data['QUESTION']) && String(data['QUESTION']).length > this.config['MAX_MESSAGE_LENGTH'])
             error = 'invalid: QUESTION (length)';
 
-        // DEPOSIT (optional anti-spam escrow, Section 15): GAS the creator locks at
+        // DEPOSIT (optional anti-spam escrow): GAS the creator locks at
         // creation, refunded on 'finalized' or forfeited to the DONATE1 treasury on
         // 'failed_quorum' (released by VOTE v2). Normalize to a numeric string ('0'
         // = none) and enforce the POLL_DEPOSIT_MIN floor. The actual escrow happens
@@ -215,7 +215,7 @@ class Vote {
         // Carry the normalized deposit so createPoll stores a clean '0' when absent.
         data['DEPOSIT'] = deposit;
 
-        // Binding poll / callback-on-finalize (optional, Section 14): a poll may name
+        // Binding poll / callback-on-finalize (optional): a poll may name
         // a contract method that v2 finalization invokes with the result. Blank
         // CALLBACK_CONTRACT = a signaling poll. When set, the method + firing rule are
         // validated here; GAS_ESCROW (optional XCHAIN) is escrowed below alongside the
@@ -482,7 +482,7 @@ class Vote {
         if(result)
             await this.settleDeposit(poll, data, result.poll_status);
 
-        // Binding poll (Section 14): fire the contract callback when its CALLBACK_ON
+        // Binding poll: fire the contract callback when its CALLBACK_ON
         // gate is met - 'always' on any finalization, 'pass' only on a finalized win.
         // A failed callback does NOT un-finalize the poll (see _injectCallbackExecute).
         if(result && !this.util.isNull(poll.callback_contract_index)){

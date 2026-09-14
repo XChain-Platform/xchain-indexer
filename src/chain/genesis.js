@@ -46,7 +46,7 @@ const crypto = require('crypto');
 
 const { getLogger } = require('../observability/index.js');
 let GenesisDump = require('./genesis_dump');
-// Every lock a bridged row carries (xchain-token-bridge.md section 6). The copy is keyless
+// Every lock a bridged row carries, fixed at creation. The copy is keyless
 // by design, so these are set once at creation and can never be changed afterwards: nobody
 // can mint it, rename it, sleep it or attach a callback to it. LOCK_MAX_SUPPLY is NOT in the
 // set and must not be added: issue.js refuses a lock with no positive cap, and a bridged row
@@ -501,7 +501,7 @@ class Genesis {
     async injectGasToken(gas, blockToParse, blockTime){
         let tick = this.config['GAS']; // 'XCHAIN'
         // Routed through the shared creation helper so the BTC genesis row and the row the
-        // bridge creates off BTC come out of ONE code path (xchain-bridge.md section 9, D66):
+        // bridge creates off BTC come out of ONE code path:
         // two independent paths would drift, and a drifted parameter is a different token row
         // on two chains, which is a different ledger hash. The parameter set is the same
         // object the bridge passes, so "byte-identical" is a fact of the code, not a promise.
@@ -524,7 +524,7 @@ class Genesis {
     /**
      * The gas token parameter set, in one place, for both creation sites: this chain's
      * genesis pass on BTC mainnet and the bridge's first XBRIDGE v2 in-leg on DOGE/LTC.
-     * Callers MUST NOT retype these values (D66: the XCHAIN call site passes the
+     * Callers MUST NOT retype these values (the XCHAIN call site passes the
      * byte-identical set, and that is a hard obligation, not a preference).
      *
      * @param {string} [owner] - the owning address; defaults to this chain's ADDRESS.GAS
@@ -736,7 +736,7 @@ class Genesis {
 
     /**
      * Create the two rows a bridged token needs on THIS chain, as
-     * the token bridge spec section 6 specifies them, and enforce the
+     * the bridge protocol defines them, and enforce the
      * existing-row rules. Called by the settle pass on a v5 in-leg, before any
      * credit; the caller logs the single refusal line naming the transfer id.
      *
@@ -747,7 +747,7 @@ class Genesis {
      *    keyless). One per origin chain per destination chain, ever.
      * 2. The child row `<ORIGIN>.<NAME>`: the same owner and locks, DECIMALS from the signed
      *    record, uncapped (a copied cap would go stale on the origin's next MINT). Nothing
-     *    else is copied from the origin (D19).
+     *    else is copied from the origin.
      *
      * EXISTING ROWS. A root owned by anyone but the bridge role address refuses the leg: that
      * is only possible on a chain that squatted the name before the reserved-tick guard
@@ -756,7 +756,7 @@ class Genesis {
      * only have been created by the bridge (issue.js's parent gate refuses any other source).
      * A child whose DECIMALS already match applies; different decimals with SUPPLY 0
      * re-parameterize the row (the rule issue.js gives every token: decimals move until
-     * supply exists); different decimals WITH supply refuse and apply nothing (D16).
+     * supply exists); different decimals WITH supply refuse and apply nothing.
      *
      * @param {Object} params - { origin, name, decimals, owner }: the origin chain's coin
      *                          symbol, the origin's native tick (never rooted), the signed

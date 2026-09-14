@@ -11,7 +11,7 @@
  **********************************************************************
  *
  * The ATTEST response canonical, in both eras
- * (the ATTEST response-mirror design, §3.1).
+ * (the legacy era and the response-mirror era).
  *
  * The legacy canonical is five fields concatenated with NO separator:
  *
@@ -62,7 +62,7 @@
  * makes every mirror-era signature fail to verify, which presents as a dead
  * federation rather than as a missing feature, so the twin is test-pinned.
  *
- * THE ADMISSION ERA (the time-keyed mirror barrier family, section 5.5). The hub
+ * THE ADMISSION ERA (the time-keyed mirror barrier family). The hub
  * appends one more field AFTER the twin's bytes and BEFORE the EQUIV wrapper: the
  * row's per-chain admission map, '|' plus `CODE:digits` in ASCII order, era-keyed
  * on the REQUEST's own block through the mirror-admission producer activation

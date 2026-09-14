@@ -40,7 +40,7 @@
 // credits a chain-specific string into the ledger delta and the same action would
 // otherwise hash differently on BTC than on DOGE. Adding a role moves no historical
 // hash: these addresses are new and hold nothing below XCHAIN_BRIDGE_ACTIVATION, so
-// no pre-activation ledger row can match one (base spec D10).
+// no pre-activation ledger row can ever match one.
 const coinAdapter = require('../coins/to_indexer_config.js');
 
 const ROLE_FIELDS = ['BURN', 'GAS', 'DONATE1', 'DONATE2', 'REWARD',

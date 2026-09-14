@@ -372,7 +372,7 @@ class Xcall {
         // legacy bytes are unchanged; a modern row with no columns REFUSES rather than
         // rebuilding legacy bytes no honest quorum signed.
         raw += ah.admissionCanonicalField('CrossChainCall', r.network, r.snapshot_block, ah.columnsAdmitBlocks(r));
-        // EQUIV (WI-2 bump 2): TAG=XCALL, ROUND_ID = sha256('XCALLROUND|result|'+call_id)
+        // EQUIV header (the equivocation flag day): TAG=XCALL, ROUND_ID = sha256('XCALLROUND|result|'+call_id)
         // (distinct from the dispatch key), VIEW = finalizing_view.
         if(eq.isEquivHeaderActive(r.snapshot_block, r.network))
             return eq.buildEquivCanonical(eq.ENGINE_TAGS.XCALL,

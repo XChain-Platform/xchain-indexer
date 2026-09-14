@@ -67,7 +67,7 @@ class DeployChunk {
      * strings) because two callers need it: the assembling DEPLOY v2/v3, which passes its own
      * action_index (so it assembles strictly from carriers that precede it), and a carrier
      * completing a pending group, which passes its own index + 1 so its own slice is part of
-     * its own assembly (D12; without the +1 every out-of-order group would fail 'missing chunk').
+     * its own assembly (without the +1 every out-of-order group would fail 'missing chunk').
      *
      * @returns {{code: string, error: ?string, incomplete: boolean}} `incomplete` marks the two
      *          verdicts a LATER carrier can still repair (no chunks / a missing position). Every
@@ -265,9 +265,9 @@ class DeployChunk {
         if(!error && tokenInfo && feePaymentMode === 2)
             debits.push([gas, fee, data['SOURCE']]);
 
-        // R1 (DEPLOY_DEFERRED_ASSEMBLY): this carrier may be the slice that completes a group
+        // Deferred assembly (DEPLOY_DEFERRED_ASSEMBLY): this carrier may be the slice that completes a group
         // whose assembler already landed pending, in which case the contract deploys HERE, at
-        // this action, and this action's rows are the contract's (D1: the contract's index and
+        // this action, and this action's rows are the contract's (the contract's index and
         // its permanent C:<CHAIN>:<index> address are this carrier's). Only a VALID carrier can
         // complete a group - an invalid one was never part of the assembly - and only the FIRST
         // action to complete it deploys: a later duplicate slice finds the assembler already
@@ -281,7 +281,7 @@ class DeployChunk {
                 // assembly. An incomplete group is not this carrier's business: it is stored,
                 // the assembler stays pending, and whichever carrier closes the last gap
                 // deploys. Any other assembly verdict is terminal and IS deployed at C, which
-                // writes the execution row naming the assembler and so consumes it (R4): a
+                // writes the execution row naming the assembler and so consumes it: a
                 // group that assembles to the wrong bytes must not stay pending forever.
                 let assembly = await this.assembleCode(data['SOURCE'], data['CODE_HASH'], Number(data['ACTION_INDEX']) + 1);
                 if(!assembly.incomplete){
@@ -300,8 +300,8 @@ class DeployChunk {
                         cooldownBlocks:    this.util.isNull(assembler.cooldown_blocks) ? null : Number(assembler.cooldown_blocks),
                         slashDestination:  slashDestination
                     }, assembly.error, {
-                        skipBaseFee:          true,   // the assembler paid it (D3/D15)
-                        skipSleeping:         true,   // this carrier just ran the same check (D16)
+                        skipBaseFee:          true,   // the assembler already paid the base fee
+                        skipSleeping:         true,   // this carrier just ran the same sleeping check
                         assemblerActionIndex: assembler.action_index,
                         feePaymentMode:       assembler.fee_payment_mode,
                         // This carrier's own fee rides the deployment's single ledger write.

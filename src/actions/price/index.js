@@ -171,7 +171,7 @@ class Price {
                 if(!Number.isFinite(roundCount) || roundCount < 1)
                     throw new Error('invalid ROUND_COUNT');
 
-                // ROUND_COUNT bound, resolved BEFORE the loop that consumes it (D15). The count
+                // ROUND_COUNT bound, resolved BEFORE the loop that consumes it. The count
                 // is attacker-supplied and drives the loop, so an unbounded value is a parse-loop
                 // denial of service on EVERY indexing node in the federation, reached by a single
                 // cheap transaction. Checking it after the loop would mean the work had already
@@ -259,7 +259,7 @@ class Price {
                     rounds.push(entry);
                 }
 
-                // THE HEADER ANCHOR IS CONSTRAINED TO THE LAST ROUND'S OWN ANCHOR (section 4).
+                // THE HEADER ANCHOR IS CONSTRAINED TO THE LAST ROUND'S OWN ANCHOR.
                 // Both quorum gates below (sig-tally and stake-weighted) resolve on this one
                 // value, and the straddle rule inspects only the per-round anchors, so an
                 // unconstrained header would let a colluding signing quorum pick which consensus
@@ -289,7 +289,7 @@ class Price {
             }
         }
 
-        // 3. STRADDLE RULE (D7), a deliberate departure from v0.
+        // 3. STRADDLE RULE, a deliberate departure from v0.
         //
         // v0 resolves the sig-tally and stake-weighted-quorum flag days on each round's OWN
         // anchor. A batch resolves them ONCE, on the batch anchor, so a window straddling
@@ -413,7 +413,7 @@ class Price {
             }
         }
 
-        // 5. STORAGE. round_number carries FIRST_ROUND (D21: the column is indexed and every
+        // 5. STORAGE. round_number carries FIRST_ROUND (because the column is indexed and every
         // existing read treats it as "the round this action is about"), sigs_json carries the
         // batch signature set, and pair_count/pairs_json/sig_count are left unset so they
         // store NULL: on a v2 row those three would describe only one round out of the window.
@@ -436,7 +436,7 @@ class Price {
         // 6. HUB PUSH through the same durable transactional outbox v0 and v1 use. The
         // pending_hub_pushes row is written through the OPEN block transaction so it commits
         // atomically with the prices row and rolls back with it. `price_batch` is DURABLE
-        // rather than disposable (D12): a batch is the SOLE carrier of every round in its
+        // rather than disposable: a batch is the SOLE carrier of every round in its
         // window for a chain-only node, so retiring one after the attempt cap would destroy
         // an hour of price history rather than a single re-derivable round.
         if(!error && this.hubClient && this.hubClient.enabled){

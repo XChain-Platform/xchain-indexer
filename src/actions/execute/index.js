@@ -184,7 +184,7 @@ class Execute {
         // Verify CONTRACT_ACTION_INDEX is a canonical integer index (see deposit.js).
         // Host-derived reentrant calls (emitted EXECUTE / XEXEC) pass integer indexes,
         // which String() renders canonically, so this only rejects malformed wire input.
-        // EXEC-1, gated by CONTRACT_INDEX_CANONICAL (the same flag-day STAKE/UNSTAKE/DELEGATE
+        // Gated by CONTRACT_INDEX_CANONICAL (the same flag-day STAKE/UNSTAKE/DELEGATE
         // use): at/after it a non-canonical wire index ('007') or one past the safe-integer
         // range is rejected here. The VM hashes Number(contractIndex) into the attestation
         // request_id preimage (xchain-vm/gateway.js) while the host re-hashes the raw EMITTER
@@ -1088,7 +1088,7 @@ class Execute {
         // (delegate) has no emission param mapping, so buildActionParams would hand
         // _parseDelegate a mis-mapped v0 layout. The VM gateway already rejects both
         // at emit time; re-check host-side as defense in depth against an older
-        // bundled VM, matching the guard-emission checks above (VM-EMIT-1).
+        // bundled VM, matching the guard-emission checks above.
         if(action === 'VOTE' && Number(params.version) > 1)
             throw new Error('emitted VOTE version ' + params.version + ' is not emittable (only v0 create / v1 ballot)');
         let emissionFormat = (action === 'VOTE') ? (Number(params.version) || 0) : 0;
@@ -1261,7 +1261,7 @@ class Execute {
             case 'FILE':
                 // FORMAT: VERSION|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH|GATE_MIN_AMOUNT|COMPRESSION
                 // Trailing gated-file fields default to empty (public file); a contract may set
-                // them to emit a token-gated FILE. PC-29 added GATE_MIN_AMOUNT as the ninth:
+                // them to emit a token-gated FILE. GATE_MIN_AMOUNT is the ninth field:
                 // emitted FILEs must carry it too, or a contract-emitted gated FILE would be
                 // silently unconditional while the wire format says otherwise. The arity guard
                 // in test/unit/emission-params-arity.test.js is what caught this.

@@ -14,8 +14,8 @@
  *
  * XChain Platform - bridge settle pass (system-injected, mirror-driven)
  *
- * BUILT. The seam's module shape, function names, parameter sets, return shapes and the D2
- * hook are unchanged; the bodies are here. verifyEscrowAgainstCheckpoint is the one door into
+ * BUILT. This module's shape, function names, parameter sets, return shapes and the escrow
+ * check hook are stable; the bodies are here. verifyEscrowAgainstCheckpoint is the one door into
  * bridge_checkpoint_check.js, whose proof this pass fetches through bridge_proof_client.js
  * before calling it. The pass driver processBridgeSettlePass is what XChainIndexer.js calls.
  *
@@ -46,7 +46,7 @@
  * (and waitForPolicySync), which run behind waitForSnapshotSync, so the capability rows the
  * quorum is verified against are already present.
  *
- * TRUST, STATED PLAINLY. In milestone 1 a compromised hub supplies BOTH the record and the
+ * TRUST, STATED PLAINLY. In the hub-trusted mint a compromised hub supplies BOTH the record and the
  * roster that verifies it: off the origin chain the validator set itself is resolved from
  * the mirrored capability_snapshots. That is why verifyEscrowAgainstCheckpoint exists and
  * why nothing arms on mainnet before it is built.
@@ -57,9 +57,9 @@
  * hashes forward rather than back. The invariant read reports the deficit and the watch
  * raises CRIT.
  *
- * Spec: the base bridge spec sections 6 to 9 and row 17 (D2);
- * the token bridge spec section 5; the token bridge policy spec
- * sections 4 to 6.
+ * Scope: the transfer settle legs, the quorum check and the escrow cross-check;
+ * the bridged token rows an in leg creates; the token policy
+ * snapshot legs and their apply order.
  *
  ********************************************************************/
 
@@ -105,8 +105,8 @@ const SETTLE_REASON = {
     POLICY_LEG:      'an injected policy leg did not apply',
 };
 
-// The injected policy legs, ordinal per leg. CONSENSUS-VISIBLE and pinned by the policy spec
-// section 4: the ordinal is the synthetic transaction's vout, so it decides the action index
+// The injected policy legs, ordinal per leg. CONSENSUS-VISIBLE and pinned for every node
+// forever: the ordinal is the synthetic transaction's vout, so it decides the action index
 // each leg takes, and a reordering here would give two nodes different action indexes for the
 // same snapshot. Legs with nothing to do are not injected, which is why the ordinal is fixed
 // per LEG rather than assigned by counting the legs that ran.
@@ -127,7 +127,7 @@ const LIST_EDIT_REMOVE  = '2';
 
 // Synthetic transaction hash prefixes. They separate the injected families so one pass's hash
 // can never collide with another's: 'GENESIS-' is genesis.js's, 'XPOLICY-' is the policy
-// spec's (D11) and 'XBRIDGE-' is this pass's token-row creation. The policy prefix plus 48
+// pass's and 'XBRIDGE-' is this pass's token-row creation. The policy prefix plus 48
 // characters of the snapshot id is 56 characters, inside the 64-character unique prefix of
 // index_transactions.hash.
 const POLICY_TX_PREFIX = 'XPOLICY-';
@@ -152,11 +152,11 @@ function sha256(s){ return crypto.createHash('sha256').update(String(s), 'utf8')
  *
  * Below the consumer activation for (ctx.coin, ctx.network) at ctx.blockIndex this is
  * `effective_time <= ?` byte for byte, one binding, so the SQL a pre-train node issues is the
- * SQL this node issues. Above it, the C33 form for THIS chain's column, never a bare comparison
+ * SQL this node issues. Above it, the null-safe admission form for THIS chain's column, never a bare comparison
  * on the nullable column: a bare `admit_block_<c> <= ?` evaluates to NULL for every legacy row
  * and silently drops it, which is a silent consensus change. The IS NULL arm is what lets a row
  * finalized below the producer activation, and a row whose map does not name this chain, bind
- * exactly as they do today at every height (C38).
+ * exactly as they do today at every height.
  *
  * The same clause text lives in db.js for the match, call and attest-response selects; the
  * admission-binding suite pins the two spellings equal so they cannot drift apart.
@@ -208,7 +208,7 @@ function transferCanonical(row){
 /**
  * The signed content canonical of a policy snapshot, wrapped by the equivocation header.
  * MUST byte-match the hub. `sleeping` is deliberately ABSENT: it is committed through
- * policy_hash alone (policy spec D17), so repeating it here would be a second, divergent
+ * policy_hash alone, so repeating it here would be a second, divergent
  * commitment of the same fact.
  *
  * @param {Object} row - a policy_snapshots row
@@ -224,7 +224,7 @@ function policyCanonical(row){
     // A policy snapshot is the sharp case: its consuming select carries NO chain clause, so
     // the hub stamps every chain the federation serves and this rebuilds exactly the columns
     // that are set. A chain added after the row was signed is simply absent from its map and
-    // binds there by the legacy effective_time rule, safe by construction (C38).
+    // binds there by the legacy effective_time rule, safe by construction.
     const admitted = raw + ah.admissionCanonicalField('CrossChainPolicy', row.network, row.snapshot_block,
                                                       ah.columnsAdmitBlocks(row));
     if(eq.isEquivHeaderActive(row.snapshot_block, row.network))
@@ -239,7 +239,7 @@ function policyCanonical(row){
  *   ALLOW|<n or ->|<addr>|...|BLOCK|<m or ->|<addr>|...|SLEEP|<0 or 1>
  *
  * `-` means the origin row has no such list at all; `0` means it has an EMPTY one, and the
- * two are not the same thing (policy spec D7: an empty allow list is deny-everyone under
+ * two are not the same thing (an empty allow list is deny-everyone under
  * isActionAllowed, while an absent one is no gate at all).
  *
  * THE ARRAYS ARE HASHED AS GIVEN, never re-sorted. Sorting first would make an out-of-order
@@ -379,10 +379,10 @@ async function isSettled(indexerDb, id, kind){
  * release) applies". The hub guards the same rule at finalization, but a duplicate that escapes
  * a future hub, a mesh running an older build or a later regression would otherwise mint or
  * release a second time here, and a double mint is the one direction the invariant cannot
- * recover from (there is no destination-side unwind, D16).
+ * recover from (there is no destination-side unwind).
  *
  * KEYED ON THE SOURCE LEG ALONE, never on transfer_id. transfer_id carries snapshot_block by
- * design (spec section 6), so two rows naming one leg differ in id, and an id-keyed test is
+ * design, so two rows naming one leg differ in id, and an id-keyed test is
  * exactly the hole the measured duplicates came through: eleven finalized rows for seven source
  * legs, all eleven distinct ids.
  *
@@ -427,7 +427,7 @@ async function recordSettlement(indexerDb, actionIndex, id, kind, blockIndex, ro
 // network or chain id, an escrow that would go negative, a second settlement for one source leg)
 // names a fact about the ROW that does not change from one pass to the next, so a row sitting
 // refused in the due set would otherwise re-log the same event every pass forever; that is what
-// storms the log and is what AT4's "exactly one refusal" rules out. Terminal call sites use
+// storms the log and is what the "exactly one refusal" requirement rules out. Terminal call sites use
 // _warnOnce below instead of _warn.
 function log(kind, id, message){
     getLogger().info('\t ' + kind + ' : ' + String(id).substring(0, 16) + '... : ' + message);
@@ -439,7 +439,7 @@ function warn(kind, id, message){
 // Per-process memo of the last TERMINAL refusal reason logged for (kind, id), so a row that sits
 // refused in the due set logs once instead of once per settle pass. Keyed on the log label
 // ('XBRIDGE' or 'XPOLICY') rather than on the settlements table's 'transfer'/'policy' kind so a
-// transfer id and a snapshot id that happen to collide in the id column (spec section 6) never
+// transfer id and a snapshot id that happen to collide in the id column never
 // collide here either. Bounded so a long-running indexer cannot grow this without limit: past
 // the cap, inserting a brand-new id evicts the oldest entry first (a plain FIFO over insertion
 // order), which only costs one extra line for an id that has not refused in a very long while,
@@ -572,7 +572,7 @@ async function applyBridgeTransfer(row, ctx){
 
     // The destination leg is always THIS chain's leg: an in leg mints here from a lock on the
     // origin, an out leg releases escrow here from a burn on the other side. Direction is
-    // DERIVED from the row and is never a column (D19).
+    // DERIVED from the row and is never a column.
     if(destChain !== String(ctx.coin || ''))
         return out(false, SETTLE_REASON.NOT_OURS);
 
@@ -631,7 +631,7 @@ async function applyBridgeTransfer(row, ctx){
         return out(false, SETTLE_REASON.QUORUM);
     }
 
-    // THE D2 HOOK, called UNCONDITIONALLY and AFTER quorum verification but BEFORE any effect.
+    // THE ESCROW CHECK HOOK, called UNCONDITIONALLY and AFTER quorum verification but BEFORE any effect.
     // Unconditional on purpose: the module decides for itself which legs need a proof (an out
     // leg passes, because the escrow it releases is a local balance this node is authoritative
     // over), so there is no branch here that could be gated wrong. ok:false applies NOTHING.
@@ -642,7 +642,7 @@ async function applyBridgeTransfer(row, ctx){
         return out(false, SETTLE_REASON.ESCROW_PROOF);
     }
 
-    // DIRECTION IS DERIVED FROM THE ROW and is never a column (D19). The base spec states the
+    // DIRECTION IS DERIVED FROM THE ROW and is never a column. The transfer rules state the
     // derivation outright: `src_chain === 'BTC'` is a LOCK, and a lock on the escrow chain is
     // what an in leg mints against. Everything else is a burn on the other side, whose escrow
     // this chain releases.
@@ -668,13 +668,13 @@ async function applyBridgeTransfer(row, ctx){
 
     if(isInLeg){
         // IN leg: this chain MINTS. The token row is created lazily by the first in-leg, which
-        // is what keeps genesis byte-identical on every chain (base spec D8/D11).
+        // is what keeps genesis byte-identical on every chain.
         const genesis = new Genesis(ctx.actions, db, ctx.config, util);
         const injectCtx = { blockIndex: ctx.blockIndex, blockTime: ctx.blockTime, txHashPrefix: BRIDGE_TX_PREFIX };
         if(tick === gasTick){
             // The byte-identical _injectGasToken parameter set, taken from the ONE place that
             // owns it. Retyping the values here is the drift the helper exists to prevent
-            // (D66): a drifted parameter is a different token row, which is a different
+            // because a drifted parameter is a different token row, which is a different
             // ledger hash on two chains.
             await genesis.injectProtocolToken(genesis.gasTokenParams(), injectCtx);
             localTick = gasTick;
@@ -806,7 +806,7 @@ async function applyPolicySnapshot(row, ctx){
         return out(false, SETTLE_REASON.ROW_FIELDS, true);
 
     // TERMINAL versus CARRIED, and the split is the whole error policy of this function
-    // (policy spec D19). Only a hash, signature, `network` or `btc_chain_id` failure is
+    // for policy snapshots. Only a hash, signature, `network` or `btc_chain_id` failure is
     // terminal: those are properties of the ROW that no later block can change. Everything
     // else - a seq not yet applyable, a copy that does not exist here yet, a capability
     // snapshot still arriving - carries forward, because a later block can change it.
@@ -831,12 +831,12 @@ async function applyPolicySnapshot(row, ctx){
         return out(false, SETTLE_REASON.ALREADY_APPLIED, false);
 
     // APPLY ORDER IS BY policy_seq, and it needs its own guard rather than riding the due-set
-    // sort. effective_time is NOT monotonic across seq (D18), so seq 2 can become due at an
+    // sort. effective_time is NOT monotonic across seq, so seq 2 can become due at an
     // earlier block than seq 1: the per-block sort orders what is due TOGETHER and says nothing
     // about two snapshots that come due in different blocks. Applying them out of order
     // materializes the STALE membership last and leaves the copy enforcing a policy the origin
     // has already replaced, permanently. So an earlier finalized seq that this chain has not
-    // recorded carries this row forward (D19: a missing earlier seq is CARRIED, never terminal).
+    // recorded carries this row forward (a missing earlier seq is CARRIED, never terminal).
     const earlier = await db.mirrorDb().getEarlierFinalizedPolicySnapshots(row.network, origin, name, seq);
     for(const e of (earlier || [])){
         if(!await isSettled(db, e.snapshot_id, 'policy')){
@@ -848,7 +848,7 @@ async function applyPolicySnapshot(row, ctx){
     // MEMBERSHIP IS TRANSPORT, NOT SIGNATURE. The arrays arrive beside the row and are bound
     // to it only through policy_hash, so the hash is recomputed from them here and a mismatch
     // refuses the row. Malformed transport is a hash-class failure: it cannot be read as an
-    // empty list, because empty and absent mean opposite things under isActionAllowed (D7).
+    // empty list, because empty and absent mean opposite things under isActionAllowed.
     const allow = parseMembership(row.allow_list);
     const block = parseMembership(row.block_list);
     if(allow === false || block === false){
@@ -856,7 +856,7 @@ async function applyPolicySnapshot(row, ctx){
                   SETTLE_REASON.POLICY_HASH + ' (membership transport is not a JSON array) : terminal');
         return out(false, SETTLE_REASON.POLICY_HASH, true);
     }
-    // Order is VERIFIED, never repaired (D13). Re-sorting here would silently accept a row
+    // Order is VERIFIED, never repaired. Re-sorting here would silently accept a row
     // whose hash the fleet computed over a different byte string.
     if(!verifyMembershipOrder(allow) || !verifyMembershipOrder(block)){
         warnOnce('XPOLICY', id, SETTLE_REASON.POLICY_ORDER, SETTLE_REASON.POLICY_ORDER + ' : terminal');
@@ -928,7 +928,7 @@ async function applyPolicySnapshot(row, ctx){
     // additions is two actions, which is exactly why the removal and the addition have
     // separate ordinals. A null target injects nothing at all and leaves the copy's field
     // NULL: an absent origin list is no gate, and materializing it as an EMPTY list would
-    // turn it into deny-everyone (D7).
+    // turn it into deny-everyone.
     const applyList = async (target, existingIndex, createOrRemoveOrdinal, addOrdinal) => {
         if(target === null) return { created: null };
         if(isNull(existingIndex)){
@@ -952,7 +952,7 @@ async function applyPolicySnapshot(row, ctx){
         return { created: null };
     };
 
-    // A leg the chain REFUSED is neither of D19's carried cases (those are about ordering) and
+    // A leg the chain REFUSED is neither of the error rule's carried cases (those are about ordering) and
     // it is not one of its terminal ones either, so the rule has to be reasoned out rather than
     // looked up. It turns on whether a retry could duplicate work:
     //   - nothing landed yet: nothing to duplicate, so CARRY. A later block retries for free.
@@ -961,7 +961,7 @@ async function applyPolicySnapshot(row, ctx){
     //                         leg that failed. That loop mints fresh action indexes on every
     //                         node on every block, forever. So the snapshot is RECORDED and
     //                         never retried, loudly: the cross_settle rule that a row which can
-    //                         no longer progress is recorded so it stops being re-evaluated.
+    //                         make no further progress is recorded so it stops being re-evaluated.
     // The copy is then left with whatever legs did land and no pointer; the applied-policy read
     // and the invariant watch are what surface it.
     const legFailure = async (which) => {
@@ -1043,10 +1043,10 @@ async function applyPolicySnapshot(row, ctx){
 }
 
 /**
- * THE D2 HOOK: prove the source-chain escrow behind a transfer against the anchored BTC
+ * THE ESCROW CHECK HOOK: prove the source-chain escrow behind a transfer against the anchored BTC
  * state checkpoint before the destination mints.
  *
- * WHY IT EXISTS. Milestone 1 is a hub-trusted mint: off the origin chain the hub supplies
+ * WHY IT EXISTS. Without it a mint is hub-trusted: off the origin chain the hub supplies
  * both the transfer record and the capability roster that verifies it, so a compromised hub
  * can mint on the destination with nothing held on the origin. This check reduces the
  * assumption to "the cross_chain quorum AND the checkpoint quorum both lied", which is the
@@ -1055,15 +1055,15 @@ async function applyPolicySnapshot(row, ctx){
  *
  * THE PROOF IS TRANSPORT, NEVER A CANONICAL FIELD. It is fetched beside the row or by the
  * indexer itself (the anchor proof client), and is NOT part of the signed content canonical.
- * That is what lets D2 land later without changing one canonical or invalidating one
+ * That is what lets the escrow check arm without changing one canonical or invalidating one
  * signature: every canonical field is a byte-match obligation forever.
  *
  * WHAT IT PROVES. The escrow balance at row.snapshot_block, proven against the balances_root
  * the anchored BTC checkpoint carries at that height. The escrow is an ordinary balance at
  * ADDRESS.BRIDGE_<dest_chain>, so it rides that root with no new subtree.
  *
- * NO LONGER A STUB. The seam shipped this returning ok:true so the hook could be called
- * unconditionally while the real check was still being built; it now delegates, and the
+ * ONE NAMED DOOR. The settle pass calls this hook on every leg, so the hook stays called
+ * unconditionally while the real check lives in its own module; this delegates, and the
  * delegation is the whole body on purpose. Keeping one named door here means the settle pass
  * has exactly one call site to audit and the check keeps its own file, its own suite and its
  * own falsification drill. ctx.proof is populated by fetchProofForTransfer below BEFORE this
@@ -1223,7 +1223,7 @@ async function duePolicySnapshots(ctx){
     const db   = ctx.indexerDb;
     // No chain clause, deliberately: every chain reads every snapshot. In the admission era
     // THIS chain's column decides, and a row whose map never named this chain has that column
-    // NULL and binds by the clock, which is C38's fail-closed direction for a chain added later.
+    // NULL and binds by the clock, which is the fail-closed direction for a chain added later.
     const bind = mirrorBindClause(ctx);
     const rows = await db.mirrorDb().getFinalizedPolicySnapshots(ctx.network, bind);
     if(rows.length === 0) return [];

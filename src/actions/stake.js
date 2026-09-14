@@ -359,7 +359,7 @@ class Stake {
                 guardFee = result.guardFee;
         }
 
-        // STAKE-2: when the staked TICK is the GAS token, the stake AMOUNT and the controller
+        // Combined GAS debit: when the staked TICK is the GAS token, the stake AMOUNT and the controller
         // guard-fee BOTH debit GAS, but each was balance-checked independently against the same
         // snapshot, so their sum could exceed the balance and drive GAS negative. Re-verify the
         // COMBINED debit against the single GAS balance. Naturally inert below the CONTROLLER_GUARD

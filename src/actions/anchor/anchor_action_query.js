@@ -97,7 +97,7 @@ function archiveChunkCoverage(chunks, totalChunks) {
 // anchor-gossip gate: without them this RPC answers "is THIS CHECKPOINT anchored
 // at depth", which does not bind the specific announced transaction. With them it
 // answers "did THIS txid (of THIS anchor version) land for this checkpoint",
-// which is what closes XANC-ELECTED-FORGE-1 (a Byzantine ELECTED publisher
+// which is what closes the forged-anchor gap (a Byzantine ELECTED publisher
 // announcing a real-but-different or never-mined txid).
 function validateAnchorActionParams({ chain, network, block_index, checkpoint_seq, txid, version }) {
     if (typeof chain !== 'string' || !chain || typeof network !== 'string' || !network)

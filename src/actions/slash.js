@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * XChain Platform Action - SLASH (WI-2 bump 2: equivocation slashing)
+ * XChain Platform Action - SLASH (equivocation slashing)
  *
  * A PERMISSIONLESS, submitter-driven proof that a capability validator
  * EQUIVOCATED (signed two CONFLICTING values for the same protocol slot
@@ -20,7 +20,7 @@
  * verified deterministically on every BTC indexer with no cross-chain data,
  * so the burn is identical fleet-wide.
  *
- * FORMAT (spec §4.1.1):
+ * FORMAT (one wire version):
  *   v0 - VERSION|CAPABILITY|OFFENDER_PUBKEY|MSG_A|SIG_A|MSG_B|SIG_B
  *
  *   CAPABILITY      the membership label the equivocation was in (cross_chain /
@@ -40,9 +40,9 @@
  *
  * SOUNDNESS: the burn only fires when ALL hold:
  *   1. both messages carry the EQUIV header and share the EXACT same key prefix
- *      `EQUIV|<EQUIV_KEY>||` (same engine, round, AND view; the R-3 defence: an
+ *      `EQUIV|<EQUIV_KEY>||` (same engine, round, AND view; the view-change defence: an
  *      honest view change re-signs under a DIFFERENT view, so it can never be
- *      paired here; and v0/v1 checkpoints have DISTINCT keys, the R-4 fix, so
+ *      paired here; and v0/v1 checkpoints have DISTINCT keys, so
  *      they can never be falsely paired either);
  *   2. their <CONTENT> differs (identical bytes = the same message, e.g. PREPARE
  *      then COMMIT, which is not equivocation);
@@ -61,15 +61,15 @@
  * route the remainder to the governance treasury (BURN sentinel until set), and
  * record a capability_slash_events audit row. BTC-only (capability stake is BTC-only).
  *
- * SCOPE NOTES (carried for the reviewer; see the Phase-C handover):
- *   - XCONFIG IS slashable (WI-2 bump 2, Phase-A amendment): the XCONFIG signed content
+ * SCOPE NOTES (what this action covers and what it leaves out):
+ *   - XCONFIG IS slashable: the XCONFIG signed content
  *     carries the round's locked snapshot_block as `snapshot_block|config_digest`, so the
  *     proof alone yields the membership block. Because config-change PBFT is authorized by
  *     the WHOLE federation (not a capability subset; see xchain-hub Consensus._lockSnapshot),
  *     it carries the sentinel CAPABILITY label 'config' and membership resolves against
  *     getActiveValidators(snapshot_block), not a capability set. The whole bond still burns
  *     (slashCapabilityStake is capability-agnostic). Inert until the EQUIV flag-day.
- *   - Bounty/treasury amounts are governance config (Phase D). Absent config this
+ *   - Bounty/treasury amounts are governance config. Absent config this
  *     defaults to a PURE BURN (bounty 0, no treasury credit). Sound, just no payout.
  *   - PERMANENT disqualification: a slashed pubkey is barred from the effective signer set
  *     GLOBALLY and permanently. db._effectiveCapabilitySetSql / _stakeWeightsSql / hasCapability
@@ -232,7 +232,7 @@ class Slash {
         }
 
         // CAPABILITY must be the one the engine maps to (derived, not trusted). XCONFIG
-        // maps to the sentinel 'config' capability (Phase-A amendment; membership resolves
+        // maps to the sentinel 'config' capability (membership resolves
         // against getActiveValidators, see below). Only an unknown/unmapped engine has no
         // slashable membership here → reject.
         let capability = null;
@@ -266,7 +266,7 @@ class Slash {
         // is the declared height unchanged, so pre-flag-day acceptance is byte-identical.
         let snapshotBlock = null, resolveBlock = null;
         if(!error){
-            // SLASH-2: at/after SLASH_ORACLE_ROUND_DISCRIMINATED, an XORACLE pair
+            // At/after SLASH_ORACLE_ROUND_DISCRIMINATED, an XORACLE pair
             // must agree on the oracle round carried in-content. Gated, not unconditional,
             // because narrowing which proofs burn a bond is a consensus acceptance rule.
             let oracleRoundGate = await this.actions.protocolChanges.isEnabled('SLASH_ORACLE_ROUND_DISCRIMINATED', data['BLOCK_INDEX']);
@@ -324,7 +324,7 @@ class Slash {
 
         if(status === 'valid'){
             // Burn the whole bond (active stakes + cooldown unstakes); returns total XCHAIN burned.
-            // SLASH-1: at/after SLASH_BURNS_PENDING_STAKE (EQUIV-height-gated) burn pending-activation
+            // At/after SLASH_BURNS_PENDING_STAKE (EQUIV-height-gated) burn pending-activation
             // stakes too, so an equivocator's just-submitted top-up can't survive the burn.
             let burnPending = await this.actions.protocolChanges.isEnabled('SLASH_BURNS_PENDING_STAKE', data['BLOCK_INDEX']);
 
@@ -353,7 +353,7 @@ class Slash {
             let burn   = await this.indexerDb.slashCapabilityStake(pubkeyId, data['BLOCK_INDEX'], data['ACTION_INDEX'], burnPending, ownerSourceId);
             let burned = burn.total;
 
-            // Bounty / treasury split. Governance config (Phase D); absent → pure burn.
+            // Bounty / treasury split. Governance config; absent → pure burn.
             let split = this.bountyTreasurySplit(capability, burned);
 
             let gas = this.config['GAS'];
@@ -423,7 +423,7 @@ class Slash {
             // the CHECKPOINT and ATTEST legs below carry.
             [eq.ENGINE_TAGS.BRIDGE]:     2,   // XBRIDGE|transfer_id|snapshot_block|tick|...
             [eq.ENGINE_TAGS.POLICY]:     2,   // XPOLICY|snapshot_id|snapshot_block|origin_chain|...
-            [eq.ENGINE_TAGS.CONFIG]:     0,   // XCONFIG content = snapshot_block|config_digest (Phase-A amendment: block carried in-content so config equivocation is slashable)
+            [eq.ENGINE_TAGS.CONFIG]:     0,   // XCONFIG content = snapshot_block|config_digest (block carried in-content so config equivocation is slashable)
         };
         if(FIELD[engineTag] !== undefined){
             let i  = FIELD[engineTag];
@@ -554,7 +554,7 @@ class Slash {
         return { error: 'invalid: ENGINE_TAG (no snapshot_block rule)' };
     }
 
-    // Bounty/treasury split for a burned bond. Governance-configured (Phase D). The submitter's
+    // Bounty/treasury split for a burned bond. Governance-configured. The submitter's
     // bounty = clamp(BOUNTY_BPS·burned, BOUNTY_FLOOR, BOUNTY_CAP), never exceeding the bond; the
     // remainder goes to TREASURY_ADDRESS, or is BURNED when unset. Config shape:
     //   config.STAKING.CAPABILITIES[capability].SLASH  for the 5 capability-scoped engines, or

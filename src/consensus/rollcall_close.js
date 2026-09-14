@@ -10,7 +10,7 @@
  *
  **********************************************************************
  *
- * ROLLCALL epoch close and the eviction rule (validator liveness eviction, §3.4).
+ * ROLLCALL epoch close and the eviction rule (validator liveness eviction).
  *
  * Runs BTC-side, once per block, inside the block transaction, in the anchor
  * reward derive's slot: after processCrossChainCalls, before

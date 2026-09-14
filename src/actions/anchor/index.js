@@ -118,7 +118,7 @@ class Anchor {
                     String(d['CHECKPOINT_SEQ']), String(d['SNAPSHOT_BLOCK'])].join('|');
         // A checkpoint ROUND_ID is chain|network|block|checkpoint_seq; the archive head
         // appends batch_seq so the checkpoint and archive canonicals (which share
-        // checkpoint_seq) get DISTINCT equivocation keys (R-4 false-slash fix). Must
+        // checkpoint_seq) get DISTINCT equivocation keys (so no honest validator is falsely slashed). Must
         // byte-match the hub.
         let roundId = d['CHAIN'] + '|' + d['NETWORK'] + '|' + d['BLOCK_INDEX_CHECKPOINTED'] + '|' + d['CHECKPOINT_SEQ'];
         if(Number(d['FORMAT']) === 1){
@@ -132,19 +132,19 @@ class Anchor {
         } else if(Number(d['FORMAT']) === 0){
             // Append the root suffix UNCONDITIONALLY, alone among the four canonical
             // builders: hub (_checkpointRootSuffix), SDK and explorer all gate it on
-            // isCheckpointCommitmentActive. Deliberate, recorded as decision D41 in
-            // the anchor-bundle-per-network spec.
+            // isCheckpointCommitmentActive. The divergence is deliberate and
+            // belongs to the per-network anchor bundle.
             //
             // Parity therefore rests on a PRODUCER-side invariant, not on a shared gate:
             // no bundle may carry a section whose OWN snapshot block is below
             // CHECKPOINT_COMMITMENT_ACTIVATION. Nothing enforces that here or in the hub's
-            // D8 skip, which drops a row on root ABSENCE only, and roots appear at the
+            // rootless-row skip, which drops a row on root ABSENCE only, and roots appear at the
             // EARLIER per-chain STATE_COMMITMENT gate. So the invariant is a deployment
             // fact (every checkpoint the live federations cut is far past the height),
             // not a code property.
             //
             // Fail-closed if it ever breaks: the hub signed such a row rootless, so every
-            // section signature fails and D15 takes the whole bundle down. It never
+            // section signature fails and the all-or-nothing verdict takes the whole bundle down. It never
             // adopts unsigned roots.
             //
             // `d` is ONE section, rebuilt with the header NETWORK and with SNAPSHOT_BLOCK =
@@ -163,14 +163,14 @@ class Anchor {
     // (ar.ANCHOR_REWARD_AMOUNT), NEVER taken from the wire. A distinct 'XANCPUB|...' roundId
     // prefix gives the attestation its OWN equivocation family, so a validator that signs both
     // the checkpoint root canonical and this reward attestation in the same round is never
-    // falsely slashable (same R-4 reasoning as the checkpoint/archive roundId split above).
+    // falsely slashable (same false-slash reasoning as the checkpoint/archive roundId split above).
     rewardCanonical(d){
         // Archive leg (v1): the attested tuple is the anchor_archive reward, keyed on
         // MATCH_BATCH_SEQ (the archive round number) with the frozen ARCHIVE amount. MUST
         // byte-match the hub's StateAnchorPublisher._archiveAttestationCanonical. The
         // 'XANCPUB|archive|...' roundId is disjoint from the bundle's ('XANCPUB|bundle|...')
         // and from the retired per-chain family ('XANCPUB|BTC|...'), so the attestation
-        // families can never equivocation-collide (same R-4 reasoning as the checkpoint
+        // families can never equivocation-collide (same false-slash reasoning as the checkpoint
         // roundId splits above).
         if(Number(d['FORMAT']) === 1){
             let base = ['XANCPUB', 'anchor_archive', String(d['MATCH_BATCH_SEQ']),
@@ -586,7 +586,7 @@ class Anchor {
     // idx_anchor_checkpoint and getMaxAnchorCheckpointSeq(chain, network) keep working
     // with no query change.
     //
-    // Verdict is ALL-OR-NOTHING (spec D15). The publisher signed for every section, and
+    // Verdict is ALL-OR-NOTHING. The publisher signed for every section, and
     // the stale-seq guard is strictly-less, so the only stale section is a replay or a
     // forgery rather than an ordinary cadence gap. One bad section therefore invalidates
     // the whole action ('invalid: SECTION n <reason>') and writes NO reward; a partially
@@ -621,7 +621,7 @@ class Anchor {
         const SECTION_FIXED_FIELDS = 13;
         let sections = [];
         let cursor   = 4;
-        // Chains already claimed by an earlier section of THIS bundle, for the D39
+        // Chains already claimed by an earlier section of THIS bundle, for the one-section-per-chain
         // duplicate guard below. Scoped to the walk so it cannot leak across actions.
         let seenChains = new Set();
         if(!error){
@@ -638,7 +638,7 @@ class Anchor {
                     CONTRACT_HASH:             String(params[cursor + 5] || '').toLowerCase(),
                     CHECKPOINT_SEQ:            params[cursor + 6],
                     // The section's OWN snapshot block. The bundle header's is the MAX over
-                    // sections (D6), and a lagging chain rides at its own; signatures were
+                    // sections, and a lagging chain rides at its own; signatures were
                     // produced over this one, so the canonical and the oracle_publish set
                     // both resolve here rather than at the header's.
                     SNAPSHOT_BLOCK:            params[cursor + 7],
@@ -671,7 +671,7 @@ class Anchor {
             }
         }
 
-        // The header block is the election and attestation block, and §2.1 fixes it as the
+        // The header block is the election and attestation block, and the bundle format fixes it as the
         // MAX over the sections. Checked rather than assumed: a header block higher than
         // every section's would move the attestation round (and the reward's earn block)
         // onto an oracle_publish set no section's signatures were ever bound to.
@@ -706,7 +706,7 @@ class Anchor {
         // less, exactly as the archive leg reads it: an equal seq is a signature-bound
         // re-broadcast that can only produce a duplicate row, while a genuinely lower seq
         // is something the hub's selector cannot emit (its MAX subquery only ever climbs),
-        // so it is a replay or a forgery. Under D15 it takes the whole bundle down.
+        // so it is a replay or a forgery. Under the all-or-nothing verdict it takes the whole bundle down.
         if(!error){
             for(let s of sections){
                 let maxSeq = await this.indexerDb.getMaxAnchorCheckpointSeq(s.CHAIN, s.NETWORK);
@@ -873,10 +873,10 @@ class Anchor {
     // is the duplicate.
     validateSectionShape(s, seenChains){
         if(ALLOWED_CHAINS.indexOf(s.CHAIN) === -1) return 'CHAIN (unknown)';
-        // D39: one chain, one section. The hub's selector groups by (chain, network) and
+        // One chain, one section. The hub's selector groups by (chain, network) and
         // can only ever produce one row per chain per bundle, so a repeat is malformed or
         // forged. It must take the whole bundle down rather than be skipped, for the same
-        // reason a stale section does (D15): a second section for a chain is a SECOND
+        // reason a stale section does (all-or-nothing): a second section for a chain is a SECOND
         // checkpoint claim under one publisher signature, and every per-chain reader
         // (idx_anchor_checkpoint, getanchoraction, the SDK's chain filter, the explorer's
         // per-chain table) resolves a checkpoint identity to a row without knowing a
@@ -890,7 +890,7 @@ class Anchor {
         for(let f of ['BLOCK_HASH', 'LEDGER_HASH', 'ACTIONS_HASH', 'CONTRACT_HASH']){
             if(!/^[0-9a-f]{64}$/.test(String(s[f]))) return f + ' (format)';
         }
-        // Roots are REQUIRED: a v0 bundle is root-bearing by construction (§2.1), so a
+        // Roots are REQUIRED: a v0 bundle is root-bearing by construction, so a
         // rootless section is malformed rather than a legacy shape to tolerate.
         if(!/^[0-9a-f]{64}$/.test(String(s.STATE_ROOT)))        return 'STATE_ROOT (format)';
         if(!/^[0-9a-f]{64}$/.test(String(s.BLOCK_MERKLE_ROOT))) return 'BLOCK_MERKLE_ROOT (format)';

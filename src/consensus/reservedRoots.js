@@ -15,7 +15,7 @@
  * RESERVED_FUTURE_ROOTS: chain tickers held free so that a chain XChain
  * integrates later still owns its root on every ledger that exists by then.
  *
- * The hole it closes (R8, RULED 2026-09-11): a token root is
+ * The hole it closes: a token root is
  * first-come, so a squatter can take the root of a chain we have not
  * integrated yet for one issuance fee, and the bridge names every foreign
  * asset <ROOT>.<TICK>. Reserving a root reserves its whole ROOT.* subtree
@@ -33,10 +33,10 @@
  *
  * MEASURED, not assumed (the reserved chain roots survey,
  * 2026-09-11: 120 names, 720 explorer probes over the six live chains, plus both
- * genesis manifests, D48). Never re-probe this; read the report.
+ * genesis manifests). Never re-probe this; read the report.
  *
  * Enforced in xchain-indexer/src/actions/issue.js beside the reserved guard,
- * case-folded per D13, reusing the existing verdict 'invalid: TICK (reserved)',
+ * case-folded, reusing the existing verdict 'invalid: TICK (reserved)',
  * and keyed on TICK_NAMESPACE_ACTIVATION (./tick_namespace_activation.js) so no
  * indexed ISSUE anywhere changes verdict on replay.
  *
@@ -46,7 +46,7 @@
  * parity assert a single deepStrictEqual instead of a set comparison that would pass
  * while one side silently reordered and the other silently dropped a name.
  *
- * Spec: the token bridge spec section 3, R8, D48, D49, D50.
+ * Serves the token bridge, which names every foreign asset <ROOT>.<TICK>.
  *
  ********************************************************************/
 
@@ -56,9 +56,9 @@
 // 2026-09-11, alphabetical, followed by the 6 that are squatted in the mainnet genesis
 // manifests and leave through the manifest edit. The two groups are kept in
 // that order, and apart, because their provenance differs: the first 47 are reserved
-// outright, while for the last 6 this guard only blocks NEW issuance and the section 6
+// outright, while for the last 6 this guard only blocks NEW issuance and the bridge's
 // 'existing row not owned by the bridge role' refusal is the safety net until the
-// genesis-track row lands (D50).
+// genesis manifest edit lands.
 //
 // Frozen so that a caller holding the array cannot mutate the reserved set at runtime;
 // a membership test that could be edited in place is not a consensus rule.
@@ -75,7 +75,7 @@ const RESERVED_FUTURE_ROOTS = Object.freeze([
 // is derived from it, never maintained beside it, so the two cannot disagree.
 const RESERVED_FUTURE_ROOT_SET = new Set(RESERVED_FUTURE_ROOTS);
 
-// Is `tick` a reserved future chain root? Case-folded per D13, because every tick lookup
+// Is `tick` a reserved future chain root? Case-folded, because every tick lookup
 // in the database is LOWER(tick): an exact-case test would leave 'eth' free to take the
 // row that getTokenInfo('ETH') then returns. A non-string fails closed (false) rather
 // than throwing inside a verdict path.

@@ -165,7 +165,7 @@ class Delegate {
     // DELEGATE v1: rotate signing key for a contract-targeted stake.
     // Scoped to (target_contract_index, tick); pubkey-collision check is restricted to
     // contract_* tables so a single pubkey CAN serve as both a capability validator
-    // and a contract staker simultaneously (see plan §12.5).
+    // and a contract staker simultaneously.
     async parseContractDelegate(params, data, error){
 
         // Extract params
@@ -184,7 +184,7 @@ class Delegate {
             error = 'invalid: SIGNING_PUBKEY (format)';
         if(!error && this.util.isNull(data['TARGET_CONTRACT_INDEX']))
             error = 'invalid: TARGET_CONTRACT_INDEX (required)';
-        // STAKE-1 (gated by CONTRACT_INDEX_CANONICAL): reject non-canonical leading zeros at/after the flag-day.
+        // Gated by CONTRACT_INDEX_CANONICAL: reject non-canonical leading zeros at/after the flag-day.
         let idxRe = (await this.actions.protocolChanges.isEnabled('CONTRACT_INDEX_CANONICAL', data['BLOCK_INDEX'])) ? /^[1-9]\d*$/ : /^[0-9]+$/;
         if(!error && (!idxRe.test(String(data['TARGET_CONTRACT_INDEX'])) || Number(data['TARGET_CONTRACT_INDEX']) <= 0))
             error = 'invalid: TARGET_CONTRACT_INDEX (format)';
@@ -325,7 +325,7 @@ class Delegate {
             data['DEACTIVATION_BLOCK'] = parseInt(data['BLOCK_INDEX']) + activationDelay;
             await this.indexerDb.createStakeKeyRevocation(data);
         } else {
-            // DEL-1 (gated by DELEGATE_REVOKE_NO_REINSERT): mirror the v3 contract-revoke path -
+            // Gated by DELEGATE_REVOKE_NO_REINSERT: mirror the v3 contract-revoke path -
             // deactivate the PARENT delegation only, do NOT insert a fresh row. The legacy path
             // (createRevokeDelegation -> createDelegation) INSERTed a status=valid, activation_block=0
             // delegations row, so a second revoke before the first matured extended the revoked key's
@@ -380,7 +380,7 @@ class Delegate {
             error = 'invalid: SIGNING_PUBKEY (format)';
         if(!error && this.util.isNull(data['TARGET_CONTRACT_INDEX']))
             error = 'invalid: TARGET_CONTRACT_INDEX (required)';
-        // STAKE-1 (gated by CONTRACT_INDEX_CANONICAL): reject non-canonical leading zeros at/after the flag-day.
+        // Gated by CONTRACT_INDEX_CANONICAL: reject non-canonical leading zeros at/after the flag-day.
         let idxRe = (await this.actions.protocolChanges.isEnabled('CONTRACT_INDEX_CANONICAL', data['BLOCK_INDEX'])) ? /^[1-9]\d*$/ : /^[0-9]+$/;
         if(!error && (!idxRe.test(String(data['TARGET_CONTRACT_INDEX'])) || Number(data['TARGET_CONTRACT_INDEX']) <= 0))
             error = 'invalid: TARGET_CONTRACT_INDEX (format)';

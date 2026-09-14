@@ -61,7 +61,7 @@ class Coinpay {
     // pool, so a batch settling two obligations to one seller must pay that seller both
     // obligations' worth in a single output. That is the shape the pool arithmetic below
     // already assumes ("surplus above the owed amount stays in the pool for a sibling
-    // obligation to the same address") and is why the A5 invariant still binds per address.
+    // obligation to the same address") and is why the pool invariant still binds per address.
     findPaymentOutput(txOutputs, address){
         if(!txOutputs || !Array.isArray(txOutputs) || this.util.isNull(address))
             return null;
@@ -173,7 +173,7 @@ class Coinpay {
         }
 
         // Which pool this obligation draws on, and this is the whole reason the tally is
-        // no longer a single scalar.
+        // kept per address, not as a single scalar.
         //
         // coinAmountConsumed was correct while every consumer drew on ONE output: COINPAY
         // and coin-paid DISPENSE both spent the surviving row's COIN_DESTINATION output and
@@ -186,7 +186,7 @@ class Coinpay {
         // So the model is per-ADDRESS, with the existing scalar kept as the cell for one
         // address - the row's own COIN_DESTINATION. That address's arithmetic is then
         // untouched (paidAmount IS data['COIN_AMOUNT'], the tally IS coinAmountConsumed),
-        // which preserves R5's driven behavior byte for byte and keeps the pool that
+        // which preserves the single-address behavior byte for byte and keeps the pool that
         // actions/dispense.js shares through the same key. Every OTHER payee gets its own
         // cell in coinPayeeConsumed, created lazily here rather than seeded in batch.js,
         // and one payee's exhausted output can never invalidate a sibling paid separately.

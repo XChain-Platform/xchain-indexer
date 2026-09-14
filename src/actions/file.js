@@ -29,7 +29,7 @@
  * - GATE_TICKER       - (optional) Token ticker gating this file. Empty = public.
  * - ENCRYPTION_METHOD - (optional) 1 = AES-256-GCM. Required when GATE_TICKER set.
  * - KEY_HASH          - (optional) hex sha256(K), 64 chars. Required when GATE_TICKER set.
- * - GATE_MIN_AMOUNT   - (optional, PC-29) minimum GATE_TICKER balance a recipient
+ * - GATE_MIN_AMOUNT   - (optional) minimum GATE_TICKER balance a recipient
  *                       must hold to be given the key. Absent/empty = no threshold.
  * - COMPRESSION       - (optional) payload compression codec. Absent/empty = raw
  *                       (every historical FILE); '1' = deflate-raw.
@@ -40,7 +40,7 @@
  *
  ********************************************************************/
 
-// PC-29: wire bound on GATE_MIN_AMOUNT (matches the SDK validator and the
+// Wire bound on GATE_MIN_AMOUNT (matches the SDK validator and the
 // gated_files.gate_min_amount column width), and the fixed comparison scale the
 // wallet uses. Vendored byte-identical from xchain-documentation/protocol/constants.js.
 const { THRESHOLD_SCALE } = require('../protocol/constants.js');
@@ -61,12 +61,12 @@ class File {
 
         // Define list of known FORMATS
         this.formats = {};
-        // PC-29: optional NINTH field, the unlock threshold. The eight-field form is
+        // Optional NINTH field, the unlock threshold. The eight-field form is
         // byte-identical, so historical FILEs replay unchanged.
         //
         // Optional TENTH field, COMPRESSION, deliberately absent from every
         // validation below because compression is PRESENTATIONAL, not consensus
-        // (spec §5.5): FILE validity never inspects rawData content, so an indexer
+        // state: FILE validity never inspects rawData content, so an indexer
         // that has never heard of this field produces identical verdicts and
         // identical state, and parsing it changes nothing about what is valid.
         // COMPRESSION therefore MUST NOT be validated: an indexer that rejected a
@@ -77,7 +77,7 @@ class File {
         //
         // There is also deliberately no gated_files/files column for it: serve
         // paths derive COMPRESSION from the stored ACTION STRING at serve time
-        // (spec §5.1), not a parsed-at-ingest column, so a FILE compressed before
+        // rather than from a parsed-at-ingest column, so a FILE compressed before
         // an indexer upgrade is never stored marker-less and served as deflated
         // garbage forever, even after the upgrade. The action string is already
         // preserved verbatim, so a column would only invite the parsed-at-ingest trap.
@@ -163,7 +163,7 @@ class File {
                 else if(await this.indexerDb.isOwnershipEscrowed(data['GATE_TICKER']))
                     error = 'invalid: GATE_TICKER (ownership escrowed)';
 
-                // PC-29: GATE_MIN_AMOUNT is validated STRICT. A present but invalid
+                // GATE_MIN_AMOUNT is validated STRICT. A present but invalid
                 // threshold REJECTS the FILE rather than being dropped, since a
                 // FILE is immutable and dropping would let the publisher believe
                 // a threshold was in force when the chain recorded none. This is
@@ -175,7 +175,7 @@ class File {
                 if(!error && !this.util.isNull(data['GATE_MIN_AMOUNT']) &&
                    String(data['GATE_MIN_AMOUNT']).length > 0){
                     let raw = String(data['GATE_MIN_AMOUNT']);
-                    // Format rules, byte-for-byte the SDK's stateless set (spec §5.2).
+                    // Format rules, byte-for-byte the SDK's stateless validation set.
                     // Length first, so a pathological input never reaches the regexes below.
                     if(raw.length > GATE_MIN_AMOUNT_MAX_LENGTH)
                         error = 'invalid: GATE_MIN_AMOUNT';

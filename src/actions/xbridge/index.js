@@ -30,7 +30,7 @@
  *      tick_id, source_id, dest_chain, dest_address_id (v0/v3) or origin_address_id
  *      (v1/v4), amount, decimals, min_depth, memo, status_id, block_index.
  *   2. `Database.setTokenBridged(tick, blockIndex)` for the token spec's `tokens.bridged`
- *      bit (section 8), set by the first applied v3 lock. `createToken` derives every
+ *      bit, set by the first applied v3 lock. `createToken` derives every
  *      tokens column from the issues rows and this one is not derivable from an ISSUE,
  *      so it needs its own setter.
  *
@@ -59,11 +59,11 @@
  * are unchanged on every chain.
  *
  * Two closures do NOT gate on either activation and hold on every non-BTC chain from the
- * commit that lands them (base spec D62): ISSUE of the GAS tick off BTC, and DESTROY of
+ * commit that lands them: ISSUE of the GAS tick off BTC, and DESTROY of
  * the GAS tick off BTC. They live in issue.js and destroy.js, not here.
  *
- * Spec: the base bridge spec sections 4 to 9; the token bridge spec
- * sections 5 to 7. Docs: xchain-documentation/protocol/actions/xbridge.md.
+ * The coin bridge (v0 to v2) and the token bridge (v3 to v5) share one docs page;
+ * see xchain-documentation/protocol/actions/xbridge.md.
  *
  ********************************************************************/
 
@@ -122,7 +122,7 @@ const FEE_INSUFFICIENT   = 'invalid: insufficient funds (FEE)';
  * before DEST_COIN: a destination the issuer never opted into is a fact about the TOKEN.
  */
 const VERDICTS = {
-    // Shared gates (base spec D6).
+    // Shared gates, common to every version.
     BEFORE_ACTIVATION:   'invalid: XBRIDGE before activation',        // below XCHAIN_BRIDGE_ACTIVATION for this CHAIN (coin-keyed) / TOKEN_BRIDGE_ACTIVATION for this network
     UNKNOWN_VERSION:     'invalid: VERSION (unknown)',                // a version byte outside 0-5; a KNOWN version below its gate is BEFORE_ACTIVATION instead
     BTC_ONLY:            'invalid: XBRIDGE (BTC only)',               // v0 broadcast on any chain other than BTC; the literal the five BTC-only handlers share
@@ -130,24 +130,24 @@ const VERDICTS = {
     V2_SYSTEM_INJECTED:  'invalid: XBRIDGE v2 is system-injected',    // a BROADCAST v2 on any chain, as a broadcast XCALL v2 is refused
     V5_SYSTEM_INJECTED:  'invalid: XBRIDGE v5 is system-injected',    // a BROADCAST v5 on any chain, the v2 rule carried to the general formats
 
-    // Field refusals (base spec section 4, v0 and v1).
+    // Field refusals for v0 and v1.
     DEST_COIN:           'invalid: DEST_COIN',                        // not a supported coin, or equal to this chain's coin
     DEST_ADDRESS:        'invalid: DEST_ADDRESS',                     // fails isCryptoAddress(address, DEST_COIN, network)
     AMOUNT:              'invalid: AMOUNT',                           // not a positive decimal, or more fractional digits than the token's DECIMALS
     INSUFFICIENT_FUNDS:  'invalid: insufficient funds',               // the source's balance of the tick on this chain is short
 
-    // Tick refusals (token spec section 5), in the spec's precedence order.
+    // Tick refusals, in the token bridge's refusal precedence order.
     TICK_NOT_NATIVE:     'invalid: TICK (not native here)',                     // v3 on a bridged row, or on a chain that is not the row's origin
     TICK_USE_V0:         'invalid: TICK (use XBRIDGE v0)',                      // v3 of the GAS tick; XCHAIN keeps v0
     TICK_SUBASSET:       'invalid: TICK (subassets are not bridgeable yet)',    // a dotted name; the prefix walk is a later milestone
     TICK_TOO_LONG:       'invalid: TICK (too long to bridge)',                  // <ORIGIN>.<NAME> would exceed the destination's tick length
-    TICK_NOT_BRIDGEABLE: 'invalid: TICK (not bridgeable to DEST_COIN)',         // DEST_COIN is not in the origin row's BRIDGE_CHAINS (section 7)
+    TICK_NOT_BRIDGEABLE: 'invalid: TICK (not bridgeable to DEST_COIN)',         // DEST_COIN is not in the origin row's BRIDGE_CHAINS opt-in list
     TICK_NOT_BRIDGED:    'invalid: TICK (not bridged)',                         // v4 on a native row
 
     // Address refusals for the formats whose address field is not DEST_ADDRESS. NOT named
     // verbatim in either spec: they follow v0's field-named convention (`invalid: <FIELD>`),
-    // which is the only shape the base spec's refusal list uses. L3 owns confirming these
-    // two literals against the manifest and the docs page before the first signed row.
+    // which is the only shape the base refusal list uses. The manifest and the docs page must name these
+    // two literals verbatim before the first signed row.
     BTC_ADDRESS:         'invalid: BTC_ADDRESS',                      // v1: fails isCryptoAddress(address, 'BTC', network)
     ORIGIN_ADDRESS:      'invalid: ORIGIN_ADDRESS',                   // v4: fails isCryptoAddress(address, <origin>, network)
 
@@ -296,7 +296,7 @@ class XBridge {
         }
 
         // Protocol fee: the flat XBRIDGE_BASE gas entry for every user-broadcast version
-        // (base spec D3, token spec R5). Charged AFTER the amount was debited from the
+        // (coin and token formats alike). Charged AFTER the amount was debited from the
         // in-memory balance above, so on BTC - where the fee is paid out of the same
         // XCHAIN balance a v0 lock moves - AMOUNT and the fee must fit together and a
         // source cannot spend one balance twice.
@@ -334,7 +334,7 @@ class XBridge {
         // `decimals` into the transfer record, and applies max(platform depth, min_depth)
         // from the stamped value rather than re-reading the origin row at poll time, so a
         // later format 7 edit can never make an accepted lock un-signable and two
-        // followers can never disagree (token spec D24). Carried on the invalid row too,
+        // followers can never disagree. Carried on the invalid row too,
         // so the record says what the action asked for.
         xbridge['DECIMALS']  = data['DECIMALS'];
         xbridge['MIN_DEPTH'] = data['MIN_DEPTH'];
@@ -377,9 +377,9 @@ class XBridge {
             await this.indexerDb.updateTokens(tickers);
 
             // MISSING WRITER 2 (see the file header): the first applied v3 sets the origin row's
-            // `bridged` bit, which is never cleared in milestone 1, so emptying
+            // `bridged` bit, which is never cleared, so emptying
             // BRIDGE_CHAINS after bridging cannot reopen the policy door while copies are
-            // outstanding (token spec section 8).
+            // outstanding on another chain.
             if(format === 3)
                 await this.indexerDb.setTokenBridged(ctx.tick, data['BLOCK_INDEX']);
         }
@@ -433,7 +433,7 @@ class XBridge {
 
         // A dotted native name cannot be rooted: the parent split takes everything before
         // the LAST dot, so `BTC.PEPE.CASH` would need a `BTC.PEPE` row the bridge never
-        // creates. The prefix walk that lifts this is a later milestone (token spec D15).
+        // creates. Lifting this needs a prefix walk the bridge does not implement.
         // This also catches a subasset of THIS chain's own coin root, which parseBridgedTick
         // deliberately returns null for.
         if(String(tick).indexOf('.') !== -1)
@@ -442,7 +442,7 @@ class XBridge {
         // The rooted form on the destination is `<THIS COIN>.<TICK>`, so a native tick
         // longer than MAX_TICK_LENGTH minus the root and the dot cannot be bridged at all
         // (246 characters for BTC and LTC, 245 for DOGE). Refused at lock time so no
-        // transfer can strand (token spec D14).
+        // transfer can strand on the destination.
         let rooted = String(ctx.coin).length + 1 + String(tick).length;
         if(rooted > this.config['MAX_TICK_LENGTH'])
             return { valid: false, verdict: VERDICTS.TICK_TOO_LONG, origin: null };
@@ -492,8 +492,8 @@ class XBridge {
     }
 
     /**
-     * Is `destCoin` in the origin row's BRIDGE_CHAINS opt-in list? Default is OFF (token
-     * spec R4): an unset, empty or `-` field bridges nowhere. The list is a comma list of
+     * Is `destCoin` in the origin row's BRIDGE_CHAINS opt-in list? Default is OFF:
+     * an unset, empty or `-` field bridges nowhere. The list is a comma list of
      * destination coins stored as the raw wire string, compared verbatim so the refusal
      * matches what the issuer actually wrote.
      *
@@ -596,7 +596,7 @@ class XBridge {
      * A v3 lock ALSO stamps the origin row's DECIMALS and MIN_DEPTH as read at its own
      * block onto its own action row (a later edit of the origin row can then never make an
      * accepted lock un-signable, and no two followers can disagree) and sets the origin
-     * row's `bridged` bit, which is never cleared in milestone 1.
+     * row's `bridged` bit, which is never cleared once set.
      *
      * v3 consults isActionAllowed for the source and tick the way SEND does: a sleeping or
      * list-blocked source cannot lock.

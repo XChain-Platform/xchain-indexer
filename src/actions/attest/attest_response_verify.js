@@ -11,7 +11,7 @@
  **********************************************************************
  *
  * The ATTEST response verifier, ONE implementation for both delivery paths
- * (the ATTEST response-mirror design, §4.3).
+ * (the on-chain ATTEST v1 path and the hub mirror).
  *
  * WHY THIS IS A MODULE AND NOT A METHOD. Today an attestation response reaches an
  * indexer as an on-chain ATTEST v1 transaction. Above the response-mirror flag day
@@ -23,7 +23,7 @@
  * there is exactly one copy and both callers call it.
  *
  * THIS FILE ADDED NO BEHAVIOUR WHEN IT WAS CREATED. It is the verify block lifted
- * verbatim out of actions/attest/index.js `_parseResponse`, with the heights it used to
+ * verbatim out of actions/attest/index.js `_parseResponse`, with the heights the handler would
  * read off the surrounding scope turned into parameters. Its byte-behaviour is
  * pinned by test/unit/actions/attest_response_verify_vectors.test.js, whose
  * expected canonicals and error strings were CAPTURED from the pre-extraction
@@ -77,7 +77,7 @@ const { buildResponseCanonicalRaw } = require('../../consensus/attest_response_c
 //                      never be two different computations.
 //   effectiveTime      null selects the LEGACY canonical (the chain path never sets
 //                      this); a canonical-integer-spelled number selects the MIRROR
-//                      era and is appended, signed, inside the canonical (spec §3.1).
+//                      era and is appended, signed, inside the canonical.
 //                      A row that fails to spell it canonically cannot have been
 //                      produced by an honest leader (the hub bounds it before
 //                      signing), so that failure is treated exactly like any other
@@ -152,7 +152,7 @@ async function verifyAttestationResponse(input){
     let snapshotBlock = srb.buriedSnapshotBlock(declaredBlock, network);
 
     // Build canonical signing message (UTF-8 Buffer). At/above the EQUIV flag-day
-    // (WI-2 bump 2) the raw string is wrapped in the uniform header (TAG=XATTEST,
+    // the raw string is wrapped in the uniform header (TAG=XATTEST,
     // ROUND_ID=request_id, VIEW=0, no view change), gated on the request's block +
     // network; below it, the bare bytes. Byte-matches AttestationConsensus._buildCanonical.
     let responseHash = crypto.createHash('sha256').update(responseBodyBytes).digest('hex');
@@ -164,9 +164,9 @@ async function verifyAttestationResponse(input){
     // bytes verify on an upgraded node and fork the fleet.
     //
     // `gateBlock` IS the action's own block, and the change is block-TIME keyed rather
-    // than height keyed (protocol_changes.js). Spec §4.3 says this is evaluated at the
-    // request's block "as the hub does"; it is wrong on both counts (the hub has no such
-    // gate and lowercases unconditionally), and inventory D57 records that. The mirror
+    // than height keyed (protocol_changes.js). Evaluating this at the
+    // request's block "as the hub does" is wrong on both counts (the hub has no such
+    // gate and lowercases unconditionally). The mirror
     // path's synthesized action is minted at the applying block, so passing that block
     // here keeps the identical evaluation without re-keying anything.
     let canonId  = (await protocolChanges.isEnabled('ATTEST_CANONICAL_LOWERCASE_ID', gateBlock))
@@ -175,7 +175,7 @@ async function verifyAttestationResponse(input){
     // concatenation byte for byte (the whole reason this call stands in for a
     // hand-rolled string in the handler: one spelling of the canonical, shared with
     // the hub twin); a canonical-integer-spelled number appends it, signed, as the
-    // mirror-era field (§3.1). The module THROWS rather than silently accepting a
+    // mirror-era field. The module THROWS rather than silently accepting a
     // non-canonical spelling, because a value that round-trips through Number() and
     // back is not the bytes an honest leader would have signed. That throw must
     // never reach the caller as an exception: a hub-authored row is untrusted input,
@@ -302,7 +302,7 @@ async function verifyAttestationResponse(input){
         // responsible set (admission, the persisted RESPONSIBLE_SET_JSON, the expiry
         // missed_count charge, the fulfilled fee split, and here) resolves ONE set.
         //
-        // WIDENED at the RESPONSE's own height (spec 8.2 liveness ladder). The set is
+        // WIDENED at the RESPONSE's own height (the liveness ladder). The set is
         // still RESOLVED at the declared height, so which validators are ranked is
         // unchanged; the ladder only decides how far down that ranking a signature is
         // admitted. Evaluating it at `atBlock` rather than at the declared height is what
@@ -323,7 +323,7 @@ async function verifyAttestationResponse(input){
         verifiedSigs = verifiedSigs.filter(s => responsible.has(s.pubkey));
         validSigs    = verifiedSigs.length;
 
-        // Quorum: only REDUNDANCY validators are responsible for fetching (spec §8.2)
+        // Quorum: only REDUNDANCY validators are responsible for fetching
         let redundancy = request ? Number(request.redundancy) : 0;
         if(validSigs < redundancy)
             error = 'invalid: insufficient valid signatures (' + validSigs + '/' + redundancy + ')';
