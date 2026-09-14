@@ -65,8 +65,9 @@ class Broadcast {
         // params = String(str).split('|');
         // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 
-        // Validate that format is known
         let format = data['FORMAT'];
+
+        // Validate that format is known
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
