@@ -10,13 +10,13 @@
  *
  **********************************************************************
  *
- * tokens.supply state_hash class (F-1 closure; flag-day gated, ARMED 2026-07-07).
+ * tokens.supply state_hash class (stale-supply gap closure; flag-day gated, ARMED 2026-07-07).
  *
  * The hash twin of the updated_rows tokens-supply replication class: supply is
- * mutated IN PLACE on a surviving token row, so before this class a follower
- * silently dropping the supply upsert served a stale supply with no halt (the
- * known F-1 gap). Asserts: (a) the per-chain gate; (b) below-threshold blocks
- * keep the preimage byte-identical to the pre-feature shape; (c) when active,
+ * mutated IN PLACE on a surviving token row, so without this class a follower
+ * silently dropping the supply upsert serves a stale supply with no halt (the
+ * known stale-supply gap). Asserts: (a) the per-chain gate; (b) below-threshold blocks
+ * keep the preimage byte-identical to the ungated shape; (c) when active,
  * a dropped or divergent supply yields a DIFFERENT state_hash so the follower
  * HALTS at the block whose ledger activity moved the supply. Call-order mock
  * harness, mirroring the poll-finalize and index-map class tests.

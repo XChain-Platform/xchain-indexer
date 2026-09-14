@@ -43,7 +43,7 @@ const BLOCK_TIME   = 1700010000;
 
 // Round 41's batch landed two blocks ago; round 42 finalized 9 minutes ago and its
 // batch has not been mined at all. reference_block on a landed row is the landing
-// block on the LANDING chain (D8), which is why it is not the discriminator here.
+// block on the LANDING chain, which is why it is not the discriminator here.
 const ROUND_41_LANDED = {
     coin_pair: 'DOGE/USD', price: '0.085', round_number: 41,
     block_timestamp: BLOCK_TIME - 3000, reference_block: 6279900,

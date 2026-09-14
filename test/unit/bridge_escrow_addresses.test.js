@@ -6,8 +6,8 @@
 // This file is part of XChain Platform. Licensed under the GNU Affero
 // General Public License v3.0 or later; see LICENSE.md.
 
-// CONSENSUS guard for the XBRIDGE escrow constants (base spec section 5, token
-// spec R3). The escrow is an ordinary balance at ADDRESS.BRIDGE_<COIN>, so a
+// CONSENSUS guard for the XBRIDGE escrow constants, on every coin and
+// network. The escrow is an ordinary balance at ADDRESS.BRIDGE_<COIN>, so a
 // malformed literal is not a config typo: it is an address the chain can never
 // pay out of and a supply on the destination with nothing behind it. Three ways
 // that can go wrong, all guarded here:
@@ -143,7 +143,7 @@ describe('XBRIDGE escrow constants (consensus)', function () {
         for (const coin of COINS) {
             for (const network of NETWORKS) {
                 const cfg = require('../../src/coins/to_indexer_config.js').toIndexerConfig(coin, network);
-                // 5,000 gas = 0.05 XCHAIN at the initial GAS_PRICE (base spec D3),
+                // 5,000 gas = 0.05 XCHAIN at the initial GAS_PRICE,
                 // sized at SWEEP_BASE so the smallest bridge action still buys an
                 // above-dust native-coin fee output on LTC and DOGE.
                 assert.strictEqual(cfg.GAS_SCHEDULE.XBRIDGE_BASE, 5000,

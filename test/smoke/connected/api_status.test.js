@@ -11,14 +11,14 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Smoke test: REST /status endpoint (SM-05)
+ * Smoke test: REST /status endpoint (lag and sync flag)
  *
  * Starts a minimal Express server mounting the same GET /status route as
  * api.js, backed by a stub indexer, then verifies the endpoint reports the
  * indexer tip, decoder tip, computed lag, and sync flag over a plain GET.
  * Does NOT start the indexer loop or connect to any database.
  *
- * SM-05: GET /status exposes quantitative indexer→decoder lag
+ * Covers: GET /status exposes quantitative indexer→decoder lag
  */
 
 'use strict';
@@ -156,7 +156,7 @@ describe('Smoke: REST /status', function () {
     }
 
     // -------------------------------------------------------------------------
-    // SM-05: lag is computable from the public API surface
+    // Lag is computable from the public API surface
     // -------------------------------------------------------------------------
     it('SM-05: GET /status reports indexer/decoder tips, lag, and sync flag', async function () {
         const indexer = {
@@ -178,7 +178,7 @@ describe('Smoke: REST /status', function () {
     });
 
     // -------------------------------------------------------------------------
-    // SM-05b: lag is null (not a misleading number) before the first poll cycle
+    // Lag is null (not a misleading number) before the first poll cycle
     // populates lastDecoderBlock
     // -------------------------------------------------------------------------
     it('SM-05b: GET /status reports null lag when the decoder tip is unknown', async function () {
@@ -267,7 +267,7 @@ describe('Smoke: REST /status', function () {
     });
 
     // -------------------------------------------------------------------------
-    // SM-05g: the testnet4 future-stamped-block steady state. A miner
+    // The testnet4 future-stamped-block steady state. A miner
     // stamping each block ~20 min ahead of wall clock pins lag at ~6 blocks
     // indefinitely, so isSynced is false and degraded is true forever on an indexer
     // that is committing every processable block within milliseconds. /status has to

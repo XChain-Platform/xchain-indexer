@@ -10,8 +10,8 @@
  *
  **********************************************************************
  *
- * contract_state_root derivation conformance (SPV sub-tree spec §3 Stage A;
- * design in).
+ * contract_state_root derivation conformance for the SPV state sub-tree
+ * (its contract-state half).
  *
  * Four jobs, in descending order of what they would cost if they failed:
  *
@@ -92,7 +92,7 @@ class FakeDb {
         row.contract_state_root = contractStateRoot;
         this.roots.set(blockIndex, row);
     }
-    // The §7 shadow column: a separate value on the same row, deliberately not the
+    // The shadow column: a separate value on the same row, deliberately not the
     // committed one (the explorer reassembles proofs from that).
     storeShadow(blockIndex, shadowRoot){
         const row = this.roots.get(blockIndex) || {};

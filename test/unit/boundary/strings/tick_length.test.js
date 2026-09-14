@@ -76,7 +76,7 @@ describe('Tick name boundary tests @regression @tier3', function () {
 
     afterEach(function () { sinon.restore(); });
 
-    // STR-01 pins the minimum-length boundary at 1 char below the flag. R8 moves the
+    // The minimum-length case pins the boundary at 1 char below the flag. The namespace rule moves the
     // floor for a NEW top-level CREATE to 4 chars, activation-keyed
     // (TICK_NAMESPACE_ACTIVATION, regtest 0). The boundary still needs both a
     // below-the-flag reading (the old floor never moved, mainnet sits at the

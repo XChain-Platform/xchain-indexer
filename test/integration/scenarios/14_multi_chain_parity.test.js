@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Integration tests - 14: MULTI-CHAIN FULL-STATE PARITY (P3, test-framework
+ * Integration tests - 14: MULTI-CHAIN FULL-STATE PARITY (test-framework
  * program)
  *
  * The protocol's promise: action processing is chain-parameterized only
@@ -51,7 +51,7 @@
  *      Their POSITIONS (ids) must still match; referencing rows compare raw.
  *   4. the per-block replication-integrity STATE hash, which is a CONSEQUENCE
  *      of artifact 3 and is the one hash that cannot be normalized away. See
- *      the block comment on the hash-chain test below: since P4 (05d6056) the
+ *      the block comment on the hash-chain test below: the
  *      state-hash preimage folds the index map in RAW (stateHash.js selects
  *      `id, address FROM index_addresses WHERE block_index = ?`), so the
  *      per-coin DONATE1 string reaches the digest even though artifact 3
@@ -244,7 +244,7 @@ describe('14 – Multi-chain full-state parity @regression @tier1', function () 
         // The hub-signed consensus triple (ledger/actions/contracts) resolves every
         // surrogate id to a canonical string before hashing, so it is genuinely
         // coin-agnostic and stays fully compared. The replication-integrity STATE hash
-        // is the one that does not: since the id-determinism P4 change ("fold index-map
+        // is the one that does not: under the id-determinism change ("fold index-map
         // into state_hash", ^id compaction) its preimage folds the index map in RAW - stateHash.js
         // selects `id, address FROM index_addresses WHERE block_index = ?` - so the
         // address STRING itself reaches the digest.
@@ -257,8 +257,8 @@ describe('14 – Multi-chain full-state parity @regression @tier1', function () 
         // the artifact this suite's header already documents as normalized for the TABLE
         // comparison. There is no equivalent normalization hook inside a finished hash.
         //
-        // So cross-coin state-hash equality stopped being a true property when P4 landed;
-        // it was never a property this corpus could hold. Nothing real is lost: what P4
+        // So cross-coin state-hash equality is not a true property once the index map folds in;
+        // it is not a property this corpus can hold. Nothing real is lost: what that change
         // promoted to a follower halt is SAME-chain state-hash parity, and that is still
         // asserted, by 13-cross-node-equivalence and 16-rollback-replay-idempotency.
         assertHashChainsEqual(chains.BTC, chains.LTC,  'BTC', 'LTC',  { skipStateHash: true });

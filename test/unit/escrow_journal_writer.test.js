@@ -10,8 +10,8 @@
  *
  **********************************************************************
  *
- * escrow_leaf_journal writer conformance (SPV sub-tree spec §3 Stage B,
- * stage B1, ledger-attribution design).
+ * escrow_leaf_journal writer conformance (SPV sub-tree Stage B,
+ * attributing ledger rows to their locker).
  *
  * THE ATTRIBUTION VECTORS ARE THE IMPORTANT TESTS HERE. The writer's totals are
  * the ledger's own rows re-keyed to their locker, so per-tick sums are conserved
@@ -173,7 +173,7 @@ describe('escrow journal writer: attribution exhaustiveness @regression', functi
     // found that; this now finds it statically.
     function mintedActions(src, file){
         // The action the file is named for, which is the one its escrows.push
-        // sites run under. Since M3 a handler is either <name>.js or a directory
+        // sites run under. A handler is either <name>.js or a directory
         // <name>/ holding index.js plus named parts, so the owning action is the
         // FIRST path segment of a nested file: execute/slash_emission.js carries
         // the EXECUTE contract-slash release and mints EXECUTE, not
@@ -192,8 +192,8 @@ describe('escrow journal writer: attribution exhaustiveness @regression', functi
     it('every action an escrow-pushing handler can mint has a frozen attribution rule', function(){
         const dir = path.resolve(__dirname, '../../src/actions');
         const all = new Set();
-        // Recursive since M3: the nine largest handlers became directories, and the
-        // EXECUTE contract-slash release now lives in a named part beside its
+        // Recursive: the nine largest handlers are directories, and the
+        // EXECUTE contract-slash release lives in a named part beside its
         // index.js, so a flat read would stop seeing the one site this guard was
         // widened to catch and would pass vacuously.
         const handlerFiles = (d, prefix) => fs.readdirSync(d, { withFileTypes: true })

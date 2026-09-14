@@ -164,7 +164,7 @@ describe('Order_Match action handler @regression @tier2', function () {
         sinon.assert.calledOnce(indexer.indexerDb.createOrderMatch);
     });
 
-    // OM-1: reciprocity gate. The order wants PEPECASH; a candidate whose GIVE side is a DIFFERENT
+    // Reciprocity gate. The order wants PEPECASH; a candidate whose GIVE side is a DIFFERENT
     // token (reverse-leg mismatch that the incomplete findOrderMatches predicate would return) must
     // be skipped, not settled - otherwise the taker is credited a token the maker never escrowed
     // (an unbounded mint out of the global escrow pool).

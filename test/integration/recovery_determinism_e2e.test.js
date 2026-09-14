@@ -12,9 +12,9 @@
  *
  **********************************************************************
  *
- * RECOVERY-DETERMINISM E2E (consensus) - F1a P3 acceptance gate.
+ * RECOVERY-DETERMINISM E2E (consensus) - deterministic id-map gate.
  *
- * The full cross-node proof that recovery is deterministic after F1a: build a
+ * The full cross-node proof that recovery is deterministic for the id map: build a
  * from-genesis node A and a recovered node B over the IDENTICAL chain, where the
  * only difference is HOW the anchor reward arrives:
  *
@@ -26,15 +26,15 @@
  *     recovery_pending_rewards), THEN the BTC reindex replays the identical chain
  *     (createAddress assigning the deterministic ids) and materializes the reward
  *     under that deterministic source_id when it reaches the block the reward was
- *     originally derived at.
+ *     first derived at.
  *
- * Asserts the three P3 invariants:
+ * Asserts the three recovery invariants:
  *   (1) computeIndexMapChecksum(A) == computeIndexMapChecksum(B)   (the id map)
  *   (2) validator_rewards rows byte-identical A vs B                (reward parity)
  *   (3) getUnclaimedRewardTotal(source) equal A vs B               (COLLECT total)
  *
- * Pre-F1a this forked: recovery's out-of-band pre-seed offset node B's whole id
- * map, so (1) and (2) diverged. Needs a real MariaDB; set TEST_DB_HOST/PORT/USER/
+ * Without a deterministic id map this forks: an out-of-band pre-seed offsets node B's whole id
+ * map, so (1) and (2) diverge. Needs a real MariaDB; set TEST_DB_HOST/PORT/USER/
  * PASS (self-skips without TEST_DB_PASS). Runs in CI via the integration tier's
  * test/integration/** glob, which provides the DB service.
  *
@@ -114,8 +114,8 @@ const ARCHIVE_PUBLISHER = 'DArchivePublisher0000000000000000';
 // re-confirms that a contract-heavy chain reindexes byte-identically across the recovery
 // boundary: node A deploys it from-genesis, node B deploys the SAME contract after the
 // real AnchorRecovery pre-seed, and their `contracts` + `deploy_chunks` rows must match
-// row-for-row - including source_id, which is an index_addresses id (the F1a determinism
-// guarantee that recovery's out-of-band pre-seed does not offset the id map, now proven to
+// row-for-row - including source_id, which is an index_addresses id (the recovery determinism
+// guarantee that recovery's out-of-band pre-seed does not offset the id map, here proven to
 // carry through to a contract's on-chain deployer binding). Node B records its carriers in a
 // DIFFERENT physical order than node A, so the match also pins the assembler's
 // ORDER BY chunk_index, action_index against a real engine (delivery-order independence).
@@ -123,7 +123,7 @@ const CONTRACT_DEPLOYER = 'btc1qAaa';   // created in CHAIN block 1 (has a deter
 const CONTRACT_BLOCK    = 5;            // after EARN/COLLECT so the deploy never perturbs the reward assertions
 // `meta` first, because this handler's protocolChanges stub answers enabled for every
 // gate, CONTRACT_META_REQUIRED included, and a nameless assembled source is then
-// `invalid: CONTRACT_MANIFEST (meta required)` at the completing piece (spec 2.1/2.3).
+// `invalid: CONTRACT_MANIFEST (meta required)` at the completing piece of the assembled source.
 const CONTRACT_CODE     = "module.exports = { meta: { name: 'Recovery Fixture',"
                         + " description: 'Chunked-deploy recovery byte-identity fixture.', version: '1.0.0' },"
                         + ' run: function(state, params) { return { value: 42 }; } };'
@@ -218,7 +218,7 @@ async function deployChunkedContract(db, insertOrder) {
 }
 
 // contracts rows, status resolved to its STRING (index_statuses ids are per-DB surrogates and
-// NOT part of the F1a id-map guarantee, so compare by status text; source_id IS an
+// NOT part of the recovery id-map guarantee, so compare by status text; source_id IS an
 // index_addresses id and IS guaranteed identical, so it stays in the comparison).
 async function contractRows(db) {
     const rows = await db.doQuery(
@@ -451,11 +451,11 @@ describe('Recovery-determinism e2e (consensus) @integration', function () {
         assert.ok(util.bcgt(totA, '0'), 'the reward must actually be collectable (> 0)');
     });
 
-    // P4: with the index-map class ARMED in state_hash, the recovered node must produce a
+    // Armed check: with the index-map class ARMED in state_hash, the recovered node must produce a
     // per-block state_hash byte-identical to the from-genesis node (no false halt), and the
     // class must actually be folded in (armed hash differs from the inert hash). This is the
     // enforcement the advisory checksum is promoted to: a divergent id map would change
-    // state_hash and HALT the follower; an identical map (the F1a guarantee) does not.
+    // state_hash and HALT the follower; an identical map (the recovery guarantee) does not.
     it('(4) P4 armed: per-block state_hash is identical A vs B, and the id map is enforced', async function () {
         const opts = (network) => ({ activationDelay: null, gasTick: 'XCHAIN', network });
         const prev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;
@@ -488,7 +488,7 @@ describe('Recovery-determinism e2e (consensus) @integration', function () {
         assert.strictEqual(cA[0].code, CONTRACT_CODE, 'assembled code equals the deployed source');
         assert.strictEqual(cA[0].code_hash, CONTRACT_HASH, 'code_hash is sha256 of the assembled source');
         assert.strictEqual(cA[0].status, 'valid');
-        // source_id is an index_addresses id: identical only because F1a keeps the id map
+        // source_id is an index_addresses id: identical only because recovery keeps the id map
         // aligned across the recovery pre-seed. Pin it to the deployer's deterministic id.
         const deployerIdA = String(await A.getAddressId(CONTRACT_DEPLOYER));
         const deployerIdB = String(await Bbtc.getAddressId(CONTRACT_DEPLOYER));

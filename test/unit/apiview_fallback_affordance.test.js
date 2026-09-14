@@ -17,7 +17,7 @@
  * committedView() (api/health.js). Nothing else may take that shape. apiView() is
  * what gives a read an independent pooled connection that sees only committed
  * state, so a silent raw-db fallback on a federation READ would re-open the
- * dirty read the REORG-1 guards exist to prevent.
+ * dirty read the committed-read guards exist to prevent.
  *
  * The concrete failure this guards: an e2e double carrying only
  * doQuery/getPubkeyId/getStatusId hit stake_source.js and died on

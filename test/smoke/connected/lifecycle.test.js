@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Smoke tests: Indexer lifecycle (SM-14, SM-15)
+ * Smoke tests: Indexer lifecycle and sync flag
  *
  * Creates a real XChainIndexer instance connected to the live databases,
  * exercises the start/stop lifecycle, and verifies the synced flag.
@@ -19,8 +19,8 @@
  * Requires running MariaDB instances with decoder and indexer databases
  * already created and populated (or empty; empty is fine).
  *
- * SM-14: stop() causes start() to resolve cleanly
- * SM-15: isSynced() becomes true when the indexer is caught up
+ * stop() causes start() to resolve cleanly
+ * isSynced() becomes true when the indexer is caught up
  *
  * Notes:
  *   - start() runs an infinite while(true) loop; we fire it without await,
@@ -80,7 +80,7 @@ async function closeIndexerPools(indexer) {
 describe('Smoke: indexer lifecycle @regression @tier3', function () {
 
     // -------------------------------------------------------------------------
-    // SM-14: stop() causes start() to resolve cleanly
+    // stop() causes start() to resolve cleanly
     // -------------------------------------------------------------------------
     it('SM-14: stop() causes start() to resolve without rejecting', async function () {
         this.timeout(15000);
@@ -92,7 +92,7 @@ describe('Smoke: indexer lifecycle @regression @tier3', function () {
 
         // Wait until the loop has initialised and caught up (isSynced flips true)
         // so stop() lands on a running loop, not one still initialising. Bounded;
-        // if it never syncs we still fall through to stop() — SM-14 only pins that
+        // if it never syncs we still fall through to stop(); this test only pins that
         // stop() resolves start(), not that the indexer reached sync.
         await waitUntil(() => indexer.isSynced(), 10000, 200);
 
@@ -107,7 +107,7 @@ describe('Smoke: indexer lifecycle @regression @tier3', function () {
     });
 
     // -------------------------------------------------------------------------
-    // SM-15: isSynced() becomes true when caught up
+    // isSynced() becomes true when caught up
     // -------------------------------------------------------------------------
     it('SM-15: isSynced() returns true once the indexer has caught up', async function () {
         this.timeout(15000);

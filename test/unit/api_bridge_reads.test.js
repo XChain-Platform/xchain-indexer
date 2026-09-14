@@ -24,8 +24,8 @@
  * built with the actual escrow balance leaf, db.doQueryStrict is stubbed to answer
  * state_tree_nodes / state_tree_roots / state_checkpoints exactly the way the real
  * tables would at one pinned height, and the resulting envelope is fed straight
- * into bridge_checkpoint_check.verifyEscrowAgainstCheckpoint (D2's own verifier,
- * landed and tested, never touched by this lane) and must come back ok:true.
+ * into bridge_checkpoint_check.verifyEscrowAgainstCheckpoint (the checkpoint verifier itself,
+ * already tested on its own and not modified here) and must come back ok:true.
  */
 
 'use strict';
@@ -56,7 +56,7 @@ function newDb(){
 
 afterEach(function(){ sinon.restore(); });
 
-// ── api.js registration: open reads (base spec D44) ─────────────────────────
+// ── api.js registration: open reads ─────────────────────────
 
 describe('bridge reads are registered open (base spec D44) @regression @tier1', function(){
     const OPEN_METHODS = ['getpendingbridgetransfers', 'getbridgetransfer', 'getbridgebalances', 'getbridgeescrowproof'];
@@ -92,7 +92,7 @@ describe('bridge reads are registered open (base spec D44) @regression @tier1', 
     // the hub reads it (CrossChainBridgeEngine.js:_maybeFinalizeTransfer,
     // row.push_generation). Checked the api_pushgeneration_stamping.test.js way:
     // the real handler body must read the generation and it must come BEFORE the
-    // rows are read (HUB-RETRACT-1), never grepped for the bare identifier alone.
+    // rows are read, never grepped for the bare identifier alone.
     it('getpendingbridgetransfers reads push_generation BEFORE the rows (HUB-RETRACT-1)', function(){
         const start = API_SRC.indexOf('async getpendingbridgetransfers(');
         assert.ok(start !== -1);

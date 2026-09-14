@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// (attestation framework Phase 5, spec §12): the cross-chain relay legs.
+// Attestation framework: the cross-chain relay legs.
 //
 // What these tests are actually protecting, in priority order:
 //   1. INERTNESS. The whole item ships gated. Below ATTEST_RELAY_ACTIVATION a v3

@@ -207,7 +207,7 @@ describe('Security: remediated dependency advisories @regression @tier4', functi
             'expected a bounded, truncated result rather than an unbounded expansion');
     });
 
-    // ADV-2 reads the lockfile, which only describes what a fresh install would
+    // The lockfile assertions read the lockfile, which only describes what a fresh install would
     // produce. axios is the one entry here that services load at runtime, so ask
     // the module actually on disk what it is as well: a node_modules left stale
     // by a partial install satisfies every lockfile assertion above.
@@ -220,7 +220,7 @@ describe('Security: remediated dependency advisories @regression @tier4', functi
             `installed axios is ${axios.VERSION}, inside the vulnerable range (fixed in 1.18.0)`);
     });
 
-    // Same reasoning as ADV-5, for the one entry in this list every service
+    // Same reasoning as the axios check above, for the one entry in this list every service
     // opens a socket with. mariadb's `exports` block hides its own
     // package.json from require() and the module exports no version constant,
     // so read the installed manifest off disk instead.

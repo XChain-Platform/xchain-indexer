@@ -40,10 +40,10 @@ describe('Batch @regression @tier3', function () {
             actionAliases:   { TRANSFER: 'SEND', ADDR: 'ADDRESS', DROP: 'AIRDROP', CAST: 'BROADCAST', MSG: 'MESSAGE' },
         };
         handler = new Batch(actionsCtx);
-        // R4's aggregate gas pre-check reads the SOURCE's gas balance, and the bare mock
+        // The spam collapse's aggregate gas pre-check reads the SOURCE's gas balance, and the bare mock
         // returns {} (a source holding nothing), which would make every ISSUE batch below a
         // no-gas batch. Model the ordinary case - a funded source - so the assertions in this
-        // file keep testing what they were written to test; the R4 block funds per test.
+        // file keep testing what they were written to test; the spam-collapse block funds per test.
         // Keyed by the mock getTickerId's fixed id 1.
         indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
         indexer.util.resetLists();
@@ -601,7 +601,7 @@ describe('Batch @regression @tier3', function () {
             it('gate ON: MINT is never child-exempt; a dotted TICK counts like any other', async function () {
                 // The dotted-TICK exemption is an ISSUE rule (one parent plus its children),
                 // never a MINT rule. Two MINTs of ONE dotted tick are still two MINTs of one
-                // token; two MINTs of DIFFERENT dotted tokens are two distinct tokens under D7,
+                // token; two MINTs of DIFFERENT dotted tokens are two distinct tokens under the MINT cap,
                 // and it is the resolved id that says so, not the dot.
                 indexer.indexerDb.getTickerId.callsFake(async (tick) =>
                     (String(tick) === 'JDOG.1') ? 11 : (String(tick) === 'JDOG.2') ? 12 : null);
@@ -679,7 +679,7 @@ describe('Batch @regression @tier3', function () {
             handler = new Batch(actionsCtx);
         }
 
-        // n distinct child issuances under one parent: the spam shape R4 collapses.
+        // n distinct child issuances under one parent: the spam shape the collapse rule targets.
         function children(n) {
             const out = [];
             for (let i = 1; i <= n; i++) out.push('ISSUE|0|JDOG.' + i);
@@ -745,7 +745,7 @@ describe('Batch @regression @tier3', function () {
         it('gate ON: the cheapest sub-command sets the bar, not the sum', async function () {
             // A parent plus one child needs 1.5 in total but only 0.5 to land the cheaper of
             // the two. A sum-based predicate would reject this batch and destroy work that
-            // really would have succeeded; acceptance test A6 (K affordable => K valid) is the
+            // really would have succeeded; the rule (K affordable => K valid) is the
             // same invariant stated on-chain.
             const data = await run(true, ['ISSUE|0|JDOG', 'ISSUE|0|JDOG.1'], CHILD_FEE);
 
@@ -1210,7 +1210,7 @@ describe('Batch @regression @tier3', function () {
 
             beforeEach(function () {
                 stubTickerTable(TABLE);
-                // Fund the source so R4's aggregate gas pre-check is not what decides these.
+                // Fund the source so the spam collapse's aggregate gas pre-check is not what decides these.
                 indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
             });
 
@@ -1267,12 +1267,12 @@ describe('Batch @regression @tier3', function () {
         });
 
         /*
-         * R2b: among per-ACTION caps, the error names the action whose FIRST sub-command appears
+         * Among per-ACTION caps, the error names the action whose FIRST sub-command appears
          * EARLIEST in the command list.
          *
          * The status string is consensus, so which of two broken caps names it is a rule and not
-         * a formatting choice. It used to be settled by whatever order `for...in` handed back the
-         * tally, which happened to be first appearance; these tests own it, so a future refactor
+         * a formatting choice. Left implicit, it is settled by whatever order `for...in` hands back the
+         * tally, which happens to be first appearance; these tests own it, so a future refactor
          * to a Map, a sort, or a second counting pass fails HERE instead of forking a chain.
          *
          * Every pair is stated in BOTH directions on purpose. One direction alone is satisfied
@@ -1323,7 +1323,7 @@ describe('Batch @regression @tier3', function () {
 
             it('MINT takes its turn by first appearance despite its substituted count', async function () {
                 // MINT is the one cap compared against a per-DISTINCT-TOKEN maximum rather than
-                // the raw occurrence count (D7); the substitution must not move its place.
+                // the raw occurrence count; the substitution must not move its place.
                 const onMint = await run(true, repeatMints.concat(issues));
                 assert.strictEqual(onMint['STATUS'], 'invalid: MINT (limit)');
 
@@ -1430,7 +1430,7 @@ describe('Batch @regression @tier3', function () {
 
         describe('the empty table is arithmetically the count cap it replaces', function () {
 
-            // This is the design's own proof and acceptance test A1 in unit form: with every
+            // This is the design's own proof, stated in unit form: with every
             // weight at the default 1, the SUM over a batch IS its command count, so the budget
             // check cannot decide any ordinary batch differently from the cap it replaces.
 
@@ -1598,7 +1598,7 @@ describe('Batch @regression @tier3', function () {
 
             const VM_WEIGHT = 30;
 
-            // A funded source with the GAS token seeded. At/after this same flag the R4 spam
+            // A funded source with the GAS token seeded. At/after this same flag the widened spam
             // collapse prices EXECUTE at its acceptance floor, so an unfunded all-EXECUTE batch
             // would collapse to one invalid record for a reason that has nothing to do with the
             // budget. Paying its way is what makes "valid" here mean "the WEIGHT admitted it".
@@ -1609,7 +1609,7 @@ describe('Batch @regression @tier3', function () {
                 indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
             }
 
-            // The R7 helper's gate stub does not know the VM actions, and an unknown ACTION
+            // The weighted-budget helper's gate stub does not know the VM actions, and an unknown ACTION
             // reports 'invalid: ACTION (unknown)' instead of the budget string. This block needs
             // them known, so a VALID verdict is a real verdict rather than an activation artefact.
             function stubVmGates(weightsOn) {
@@ -1693,7 +1693,7 @@ describe('Batch @regression @tier3', function () {
             });
 
             it('9 EXECUTEs exceed it, as ONE record rather than nine', async function () {
-                // The hole D8 exists to close: today 250 EXECUTEs are admitted, each of which
+                // The hole the VM weight closes: without it 250 EXECUTEs are admitted, each of which
                 // may emit up to 50 fee-exempt VM-originated ISSUEs.
                 const data = await runVm(true, execs(9));
 
@@ -1706,7 +1706,7 @@ describe('Batch @regression @tier3', function () {
             it('XEXEC cannot dodge the bound by being the other spelling', async function () {
                 // XEXEC runs the same contract code an EXECUTE does, so leaving it at the default
                 // 1 would bound the VM class for one spelling and leave it unbounded for the
-                // other. This is deliberately the OPPOSITE of its treatment in the R4 fee
+                // other. This is deliberately the OPPOSITE of its treatment in the spam-collapse fee
                 // predicate, where XEXEC is fee-less and pricing it would over-charge.
                 const data = await runVm(true, xexecs(9));
 
@@ -1732,7 +1732,7 @@ describe('Batch @regression @tier3', function () {
             });
 
             it('one DEPLOY may still carry companions, up to 220 of them', async function () {
-                // 30 + 220 = 250. The COST half of D5: a DEPLOY is no longer free to sit beside
+                // 30 + 220 = 250. The COST half of the DEPLOY rule: a DEPLOY is not free to sit beside
                 // 249 sub-commands, but it is nowhere near the solo-batch action that weighing it
                 // at the whole budget would have made it.
                 const data = await runVm(true, deploys(1).concat(sends(220)));
@@ -1748,7 +1748,7 @@ describe('Batch @regression @tier3', function () {
             });
 
             it('A3: two DEPLOYs still reject as "invalid: DEPLOY (limit)", weights and all', async function () {
-                // The acceptance criterion the spec's "D5 is subsumed" claim was written for.
+                // The case that tests whether the weight subsumes the DEPLOY cap.
                 // Two DEPLOYs weigh 60, well inside the budget, so the verdict still comes from
                 // the per-action cap loop and the consensus STRING does not move. That is why
                 // gatedActionLimits['DEPLOY'] stays: no weight can reproduce a conjunction of
@@ -1916,7 +1916,7 @@ describe('Batch @regression @tier3', function () {
         }
 
         it('gate OFF: an all-ORDER no-gas batch keeps the pre-flag verdict, N records and all', async function () {
-            // The pre-D10 predicate bails on the first non-ISSUE sub-command, so this batch is
+            // The unwidened predicate bails on the first non-ISSUE sub-command, so this batch is
             // valid and every command runs. This is the byte-identity half of the pair: the
             // widening may not move a single verdict below its own flag.
             const data = await run(false, repeat(orderCreate, 3, EXP_PAID), '0.00000000');
@@ -2065,7 +2065,7 @@ describe('Batch @regression @tier3', function () {
 
         it('gate ON: a missing positional-layout seam is UNKNOWN cost, never a collapse', async function () {
             // An Actions without setActionParamHandler (an older build, a partial double) must
-            // degrade to the pre-D10 verdict rather than to a hardcoded position.
+            // degrade to the unwidened verdict rather than to a hardcoded position.
             stubGates(true);
             delete actionsCtx.setActionParamHandler;
             handler = new Batch(actionsCtx);
@@ -2201,7 +2201,7 @@ describe('Batch @regression @tier3', function () {
         });
 
         it('gate ON: an EXECUTE beside an unpriceable sub-command still lets the batch through', async function () {
-            // SEND's cost is not knowable here, and one unknown is enough to bail: R4 collapses
+            // SEND's cost is not knowable here, and one unknown is enough to bail: the collapse fires
             // only when EVERY sub-command is provably fee-bearing.
             gasTokenExists();
             const data = await run(true, [exec(0), 'SEND|0|TEST|10|' + SOURCE], '0.00000000');
@@ -2285,7 +2285,7 @@ describe('Batch @regression @tier3', function () {
         });
 
         // The floor's ONE database read is the fork seam. nominalExecuteFee catches so a
-        // deterministic failure degrades to the pre-D10 null verdict instead of halting the
+        // deterministic failure degrades to the unwidened null verdict instead of halting the
         // block loop, but null is also what a transient DB fault produces, and null short-
         // circuits the predicate to false: the faulted node writes 'valid' and dispatches every
         // sub-command while a healthy peer writes one collapsed invalid record. That is a
@@ -2325,7 +2325,7 @@ describe('Batch @regression @tier3', function () {
             it('the benign older-schema gaps (1146, 1054) are still absorbed as UNKNOWN', async function () {
                 // faultGuard leaves these two to the caller: a missing table or column is an
                 // older-schema gap, not a transient fault, so every node on that schema answers
-                // the same way and the pre-D10 null verdict stays deterministic.
+                // the same way and the unwidened null verdict stays deterministic.
                 for(const errno of [1146, 1054]){
                     gasTokenThrows(dbError(errno));
                     const data = await run(true, repeat(exec, 3), '0.00000000');

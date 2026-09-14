@@ -13,7 +13,7 @@
 //
 // These vectors were CAPTURED by driving the real _parseResponse handler BEFORE
 // the verify block was factored out into src/actions/attest/attest_response_verify.js
-// (the ATTEST response-mirror design, §4.3 row 7), and they are
+// (for the ATTEST response mirror), and they are
 // asserted against the refactored path afterwards. That is the whole point of the
 // file: the extraction is a pure refactor, so every byte it produces must be the
 // byte the chain path produced at the commit before it.
@@ -312,7 +312,7 @@ describe('ATTEST v1 response verification: captured byte vectors @regression @ti
         });
 
         it('the lower-case gate is evaluated at the ACTION block, not the request block', async function () {
-            // D57: today the gate reads data['BLOCK_INDEX'] and is block-TIME keyed. The
+            // Keying rule: the gate reads data['BLOCK_INDEX'] and is block-TIME keyed. The
             // extraction exposes that block as a parameter and must not re-key it.
             const isEnabled = sinon.stub().resolves(true);
             handler.actions.protocolChanges.isEnabled = isEnabled;
@@ -542,12 +542,12 @@ describe('ATTEST v1 response verification: captured byte vectors @regression @ti
     });
 
     // -----------------------------------------------------------------------
-    // MIRROR-ERA CANONICAL (row 33, spec §3.1/§4.3). The chain path above never
+    // MIRROR-ERA CANONICAL. The chain path above never
     // sets `effectiveTime` at all, so it stays on the legacy canonical (proved by
     // every vector above staying green, unchanged). These vectors call the shared
-    // module directly, the way the mirror applier (`_applyMirroredResponse`, row 17)
-    // does, since the applier's own wiring is another builder's row and out of this
-    // file's jail; what is in scope is that the module itself selects the era it is
+    // module directly, the way the mirror applier (`_applyMirroredResponse`)
+    // does, since the applier's own wiring is a separate concern outside this
+    // file's scope; what is covered is that the module itself selects the era it is
     // told to, and never crashes on a row that cannot spell its own effective time.
     // -----------------------------------------------------------------------
 

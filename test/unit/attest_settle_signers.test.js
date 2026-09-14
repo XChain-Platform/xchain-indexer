@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// Zero-conf flip, §4.3 / D12: at and above ATTEST_ZERO_CONF the fulfilled ATTEST
+// Zero-conf flip: at and above ATTEST_ZERO_CONF the fulfilled ATTEST
 // fee splits among the VERIFIED SIGNERS of the accepted response, sorted by
 // pubkey, instead of the whole widened responsible set. Below the height the
 // split is the recomputed set, exactly as before. Driven through
@@ -121,7 +121,7 @@ describe('ATTEST fee settle: pay the verified signers above the zero-conf height
 
     it('above the height: only the three signers are paid, sorted by pubkey, at floor(pool/3)', async function () {
         // Written C, A, B on purpose: the hub authors the row in its own order and the
-        // write order of validator_rewards must not inherit it (D70).
+        // write order of validator_rewards must not inherit it.
         const sigs = JSON.stringify([
             { pubkey: PUBKEY_C, sig: SIG(3) },
             { pubkey: PUBKEY_A, sig: SIG(1) },

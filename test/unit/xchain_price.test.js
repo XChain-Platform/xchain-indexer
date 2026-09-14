@@ -17,7 +17,7 @@
  * spec's implementation sketch: the pure formula, no wiring).
  *
  * This arithmetic will feed native-coin fee validation on LTC and DOGE, so the
- * cases below cover the manipulation shapes the spec's §5 threat model names,
+ * cases below cover the manipulation shapes the price feed's threat model names,
  * not merely "does the average work": wash-trading in BOTH directions (cheap
  * fees vs griefing those chains into unusability), recyclable self-dealt volume,
  * and giveaway fills.
@@ -34,7 +34,7 @@ const { deriveXchainRate, referenceRateFromUsd, toUsd } = require('../../src/con
 const fill = (xchainAmount, coinAmount, venue = 'dex') => ({ xchainAmount, coinAmount, venue });
 
 // The reference the band is anchored on: 0.00001 BTC per XCHAIN, which at
-// 200,000 USD/BTC is the $2.00 D2 bootstrap.
+// 200,000 USD/BTC is the $2.00 bootstrap price.
 const REF = '0.00001';
 
 describe('XCHAIN price derivation from realized fills @regression', function () {
@@ -221,8 +221,8 @@ describe('XCHAIN price derivation from realized fills @regression', function () 
         });
     });
 
-    // The BTC-side notional (D2's threshold quantity) and the unwinsorized VWAP
-    // (§10 step 6). Neither reaches the published price, so nothing else in this
+    // The BTC-side notional (the bootstrap threshold quantity) and the unwinsorized VWAP
+    // (the pre-winsorize audit trail). Neither reaches the published price, so nothing else in this
     // file would notice them being wrong.
     describe('volume and the pre-winsorize audit trail', function () {
 
@@ -312,7 +312,7 @@ describe('XCHAIN price derivation from realized fills @regression', function () 
     describe('the USD leg', function () {
 
         it('multiplies the on-chain rate by the round\'s own BTC/USD', function () {
-            // 0.00001 BTC per XCHAIN at 200,000 USD/BTC => $2.00, the D2 bootstrap.
+            // 0.00001 BTC per XCHAIN at 200,000 USD/BTC => $2.00, the bootstrap price.
             assert.strictEqual(toUsd(util, '0.00001000', '200000.00000000'), '2.00000000');
         });
 

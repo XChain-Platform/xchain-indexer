@@ -192,7 +192,7 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
     });
 
     it('still stops the page at the first unappliable row', async function () {
-        // BOOTSTRAP-HOLE-1. Batching must not let a bad row be stepped over: an apply that
+        // Batching must not let a bad row be stepped over: an apply that
         // throws has to leave that row and everything after it unapplied, and report the
         // table not-drained so _bootstrapAll retries with the barrier shut.
         const { sync, rows } = makeSync({ batchApplyRows: 1000 });

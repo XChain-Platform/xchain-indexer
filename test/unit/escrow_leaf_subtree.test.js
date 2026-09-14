@@ -10,8 +10,8 @@
  *
  **********************************************************************
  *
- * XCHAIN_ESC locked-balance leaf conformance (SPV sub-tree spec §3 Stage B,
- * stage B1).
+ * XCHAIN_ESC locked-balance leaf conformance (SPV sub-tree Stage B,
+ * the escrow locked leaf).
  *
  * The load-bearing assertion is INERTNESS, and it matters more here than it did
  * for Stage A. Stage A lit a top-level slot that was EMPTY on every chain, so a
@@ -475,7 +475,7 @@ describe('XCHAIN_ESC locked leaf: strict reads @regression', function(){
     });
 
     it('a faulting live-set read THROWS rather than rebuilding balances_root with no locked leaves', async function(){
-        // The quiet fork spec §3-B item 2 names: a full rebuild that silently
+        // The quiet fork this test guards against: a full rebuild that silently
         // drops every locked leaf looks exactly like a healthy v1 root.
         const db = new FakeDb();
         db.write(500, ADDR, TICK, M.canonicalAmount('5'));

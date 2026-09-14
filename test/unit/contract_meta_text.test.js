@@ -16,7 +16,7 @@
 const assert = require('assert');
 const cm     = require('../../src/actions/deploy/contract_meta.js');
 
-// Build the manifest report shape the VM wrapper emits (seam S1) around a meta value.
+// Build the manifest report shape the VM wrapper emits around a meta value.
 function report(meta, overrides = {}) {
     let json = null, metaType = 'undefined', metaError = false, metaOversize = false;
     if (meta !== undefined) {

@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// AT7: every `invalid:` reason the ROLLCALL handler can return, falsified once
+// Every `invalid:` reason the ROLLCALL handler can return, falsified once
 // on the chain that judges it.
 //
 // The handler decides STRUCTURE ONLY, and that boundary is the thing worth
@@ -306,7 +306,7 @@ describe('ROLLCALL handler (§3.3) - AT7 reason falsification', function(){
 
         it('a signature over a DIFFERENT gate list does not verify', async function(){
             // Signers sign the PUBLISHER's list, so a build one gate ahead signs other
-            // bytes and is simply absent for the epoch (§7.2: roll BETWEEN epochs).
+            // bytes and is simply absent for the epoch (roll BETWEEN epochs).
             armGates();
             let other = GATES + ',zzz_module.ZZZ_EXPORT';
             let sigs  = [{ pubkey: signer.pubkey, sig: signForV1(signer, EPOCH, LEDGER, other) }];

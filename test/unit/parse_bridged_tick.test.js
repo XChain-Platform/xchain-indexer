@@ -12,13 +12,13 @@
  *
  **********************************************************************
  * utility.parseBridgedTick: the origin-rooted namespace reader
- * (the token bridge spec sections 3 and 6, its D15).
+ * (a bridged copy lives one level under its origin root).
  *
  * A bridged copy is named `<ORIGIN>.<NAME>` on the destination chain, so
  * `BTC.PEPECASH` read on DOGE is PEPECASH, native to BTC. The helper returns
  * { origin, name } only when all three hold, else null:
  *   - the tick carries EXACTLY one dot (a dotted native name is a subasset,
- *     which milestone 1 refuses at lock time rather than mis-rooting here),
+ *     which the bridge refuses at lock time rather than mis-rooting here),
  *   - the prefix names a supported coin,
  *   - that coin is not THIS chain's coin (a row rooted at the local coin is a
  *     subasset of the local reserved root, never a bridged copy).
@@ -77,8 +77,8 @@ describe('utility.parseBridgedTick: the origin-rooted bridged-tick reader @regre
     it('refuses more than one dot, so a subasset never mis-parses as bridged', function(){
         const doge = utilFor('DOGE');
         // The parent split takes everything before the LAST dot, so BTC.PEPE.CASH would
-        // need a BTC.PEPE row the bridge never creates. Milestone 1 refuses it at lock
-        // time (D15); here it simply is not a bridged tick.
+        // need a BTC.PEPE row the bridge never creates. The bridge opt-in refuses it at lock
+        // time; here it simply is not a bridged tick.
         assert.strictEqual(doge.parseBridgedTick('BTC.PEPE.CASH'), null);
         assert.strictEqual(doge.parseBridgedTick('BTC.A.B.C'), null);
     });

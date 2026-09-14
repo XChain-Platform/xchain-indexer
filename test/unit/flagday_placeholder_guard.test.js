@@ -200,7 +200,7 @@ describe('flag-day placeholder guard @regression @tier1', function () {
     });
 
     it('SLASH_ORACLE_ROUND_DISCRIMINATED mainnet_block equals EQUIV_HEADER_ACTIVATION.mainnet', function () {
-        // Same duplicated-literal hazard as SLASH-1 above: the XORACLE round-discrimination
+        // Same duplicated-literal hazard as SLASH_BURNS_PENDING_STAKE above: the XORACLE round-discrimination
         // gate is anchored to the EQUIV flag-day HEIGHT, so a re-arm of that anchor must not
         // leave this gate behind on the old height, which would reopen the window where an
         // honest price validator's two distinct rounds at one BTC tip burn its whole bond.

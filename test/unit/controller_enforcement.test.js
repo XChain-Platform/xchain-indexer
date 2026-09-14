@@ -13,7 +13,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Programmable policy layer: Phase B enforcement helper.
+ * Programmable policy layer: the token-handler enforcement helper.
  *
  * Utility.maybeRunControllerGuard is the single enforcement point the token handlers
  * (SEND/ORDER/SWAP/DISPENSER) call at their validated→settlement boundary. These tests
@@ -241,10 +241,10 @@ describe('Programmable policy layer : Phase B enforcement @regression', function
             assert.ok(data._GUARDED_TICKS && data._GUARDED_TICKS['AAA'] === true);
         });
 
-        // Phase C: MINT and STAKE were routable-but-never-invoked stubs (the handlers didn't call
-        // the guard). mint.js / stake.js v3 now invoke maybeRunControllerGuard, so a `mint`/`stake`
+        // MINT and STAKE route to their own classes, and their handlers call
+        // the guard: mint.js / stake.js v3 invoke maybeRunControllerGuard, so a `mint`/`stake`
         // (or `all`-fallback) binding gates supply creation / contract staking. Pin that the helper
-        // routes each action to its class and actually runs the guard (no longer inert).
+        // routes each action to its class and actually runs the guard (the guard is live, not inert).
         function mkClassCapturingDb(effective, captured){
             return {
                 config: { GAS_SCHEDULE: { VM_GUARD_GAS_CEILING: 200000 }, GAS_PRICE: '0.00001', GAS: 'XCHAIN' },
@@ -279,7 +279,7 @@ describe('Programmable policy layer : Phase B enforcement @regression', function
         }
     });
 
-    // Phase C: the SOURCE-outbound self-gate calls maybeRunAddressControllerGuard with the SENDER's
+    // The SOURCE-outbound self-gate calls maybeRunAddressControllerGuard with the SENDER's
     // own address as the subject (symmetric `transfer` binding : same call, address = SOURCE). Pin
     // that the helper gates an outbound move by the source account's own controller.
     describe('maybeRunAddressControllerGuard : SOURCE-outbound self-gate (symmetric transfer)', function () {

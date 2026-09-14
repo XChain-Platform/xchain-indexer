@@ -97,7 +97,7 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
         // before N-1 and no valid response. R1's responsible set (redundancy 1
         // over a single-validator capability set = [pkA]) earns pkA one miss.
         // No responsible_set_json here: these rows exercise the LEGACY fallback (the
-        // recompute re-derives via the stubbed capability lookups). The ATT-RECOMP-1
+        // recompute re-derives via the stubbed capability lookups). The recompute-bypass
         // test below adds the persisted set to prove the re-derive is bypassed.
         expiredReqs = [
             { request_id: 'r1'.repeat(32), provider_id: PROV, redundancy: 1, block_index: 20, deadline_block: 50 },

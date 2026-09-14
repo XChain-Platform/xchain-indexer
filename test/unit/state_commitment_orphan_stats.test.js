@@ -14,7 +14,7 @@
  * test/unit/state_commitment_orphan_stats.test.js
  *
  * Read-only orphan-count observability for the COW state_tree_nodes store
- * (SPV spec 4.3). reportOrphanStats marks reachability from the UNION of every
+ * (the SPV state tree). reportOrphanStats marks reachability from the UNION of every
  * RETAINED state_tree_roots row (because the explorer serves SPV proofs against
  * historical roots) and reports total/reachable/orphan WITHOUT deleting. These
  * tests build real SMT trees, then drop a root from the "retained" set to create

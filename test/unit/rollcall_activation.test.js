@@ -122,7 +122,7 @@ describe('rollcall_activation', function () {
             );
         });
 
-        // D96: flagdayPlaceholderGuard cannot take a null map, so the lock lives here.
+        // flagdayPlaceholderGuard cannot take a null map, so the lock lives here.
         it('MAINNET IS ARMED AT GENESIS: ROLLCALL_ACTIVATION.mainnet is 0', function () {
             // Ruled 2026-09-09: mainnet carries 0 validators, 0 stakes and 0 roll-calls
             // (measured that day), so every epoch below the tip closes empty and eviction

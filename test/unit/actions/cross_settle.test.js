@@ -71,7 +71,7 @@ describe('Cross_Settle action handler @regression @tier1', function () {
     }
 
     // A cross_chain validator snapshot of size N that INCLUDES every pubkey that
-    // signed `match`; WI-1 counts only snapshot members (snapPubkeys.has), and
+    // signed `match`; the quorum counts only snapshot members (snapPubkeys.has), and
     // pads to N with distinct non-signing keys so N drives the (legacy, swqStub-
     // pinned) majority-floor quorum. A bare placeholder snapshot (e.g. [{}])
     // deliberately omits the signers, modelling a non-member.
@@ -100,7 +100,7 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         indexer.util.resetLists();
 
         // These cases assert legacy COUNT quorum (the live mainnet path, whose
-        // activation height is a far-future placeholder). On regtest, WI-1
+        // activation height is a far-future placeholder). On regtest, the
         // stake-weighted quorum is active at every block, so pin the legacy path
         // explicitly : the validator mocks below carry no source/weight and the
         // weighted predicate diverges from the majority floor at N=3. Weighted
@@ -368,14 +368,14 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         assert.ok(indexer.indexerDb.recordCrossChainSettlement.calledOnce);
     });
 
-    // ─── ORDER leg: partial-fill settlement (Phase B) ─────────────────────
+    // ─── ORDER leg: partial-fill settlement ─────────────────────
     describe('ORDER leg (partial fills)', function () {
         beforeEach(function () {
             indexer.indexerDb.recordCrossChainOrderFill = sinon.stub().resolves();
             indexer.indexerDb.getOrderInfo.resolves({ SOURCE: '1SrcOrderXXXXXXXXXXXXXXXXXXXXYs6gYt', ORDER_STATUS: 'open' });
             indexer.indexerDb.getOrderAmountsRemaining.resolves(['90', '45']);  // still remaining by default
             // The cross_chain snapshot is wired per-test (snapFor) once the match
-            // is signed, so it includes the order's signer (WI-1 membership).
+            // is signed, so it includes the order's signer (snapshot membership).
         });
 
         const orderMatch = (o) => makeMatch({ a_kind: 'order', b_kind: 'order', ...o });

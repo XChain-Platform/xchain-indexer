@@ -640,7 +640,7 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', functi
     });
 
     // The per-chain leg is RETIRED with its wires. Its already-attested rewards stay
-    // recorded and are never re-derived (spec D9), so what this proof client owes them is a
+    // recorded and are never re-derived, so what this proof client owes them is a
     // deterministic permanent NO rather than an 'unknown' that would wedge the block loop
     // waiting for an anchor no live wire can ever carry.
     describe('_judge: the retired per-chain leg', function () {

@@ -39,7 +39,7 @@ const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
 
-// Each carrier names its OWN src-relative path, because the M3 feature directories are
+// Each carrier names its OWN src-relative path, because the feature directories are
 // an xchain-indexer layout: the canonical sits under consensus/ here while the three
 // vendored copies stay flat. One shared path would silently drop the canonical out of
 // the comparison, leaving the three siblings agreeing with each other while the file

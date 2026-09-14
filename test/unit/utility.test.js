@@ -222,7 +222,7 @@ describe('Utility @regression @tier1', function () {
         });
 
         it('DOES expire when the only result row is finalized-but-unverifiable (Byzantine mirror cannot deadlock the callback)', async function () {
-            // XRES-1: a hub mirror can hold a phase=result/status=finalized row with invalid
+            // Result expiry: a hub mirror can hold a phase=result/status=finalized row with invalid
             // signatures. processResult rejects it every block and never records a callback, so it
             // is never pruned from the effective set. If mere presence suppressed expiry the request
             // would deadlock forever (and nodes mirroring different hubs would diverge on the v2

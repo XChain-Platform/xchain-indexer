@@ -10,8 +10,8 @@
  *
  **********************************************************************
  *
- * D2: the escrow cross-check against the anchored state checkpoint
- * (the base bridge spec row 17; D2, D19, D46).
+ * The escrow cross-check against the anchored state checkpoint
+ * (proven before the destination chain mints).
  *
  * WHAT THESE TESTS ARE FOR. The positive case is built from REAL cryptography, never from
  * a hand-written expectation: a sparse Merkle tree is populated with the escrow leaf, its
@@ -47,7 +47,7 @@ const CHK    = require('../../src/consensus/bridge_checkpoint_check.js');
 
 const R = CHK.ESCROW_PROOF_REASON;
 
-// The rail's shape: XCHAIN locked on BTC to a DOGE address, DOGE mints (spec AT1).
+// The rail's shape: XCHAIN locked on BTC to a DOGE address, DOGE mints.
 const NETWORK     = 'regtest';
 const ORIGIN      = 'BTC';
 const DEST        = 'DOGE';

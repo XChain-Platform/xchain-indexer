@@ -14,12 +14,12 @@
  * test/unit/native_fee_batch_ledger.test.js
  *
  * Batch-cumulative native-fee accounting inside util.validateNativeCoinFee
- * (BATCH_ISSUANCE_LIMITS, R5).
+ * (BATCH_ISSUANCE_LIMITS).
  *
  * TX_OUTPUTS is transaction-level state that the batch loop preserves across every
- * sub-command and nothing decrements, so each of N fee-bearing sub-commands used to
- * judge the SAME untouched fee output from zero: one ORDER's fee validated a hundred
- * ORDERs. batch.js now seeds data['BATCH_VALUE_LEDGER'] as a base key and this
+ * sub-command and nothing decrements, so each of N fee-bearing sub-commands would,
+ * without a shared tally, judge the SAME untouched fee output from zero: one ORDER's fee would validate a hundred
+ * ORDERs. So batch.js seeds data['BATCH_VALUE_LEDGER'] as a base key and this
  * validator tallies nativeFeeConsumed into it.
  *
  * What only this suite can catch:

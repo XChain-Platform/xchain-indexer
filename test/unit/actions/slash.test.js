@@ -8,8 +8,8 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// SLASH action handler: the deterministic equivocation verifier (WI-2 bump 2,
-// Phase C). Exercises the consensus-critical accept/reject decision with REAL
+// SLASH action handler: the deterministic equivocation verifier for
+// capability stakes. Exercises the consensus-critical accept/reject decision with REAL
 // Ed25519 signatures and a stubbed DB (no mariadb → runs on any Node). The burn
 // itself (slashCapabilityStake) is unit-tested separately; here we assert the
 // verifier only fires on a genuine equivocation and rejects every near-miss.
@@ -118,7 +118,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
 
         assert.strictEqual(d['STATUS'], 'valid');
         assert.ok(indexer.indexerDb.slashCapabilityStake.calledOnce, 'slashCapabilityStake must be called once');
-        // 4th arg is burnPending (SLASH-1): true here since the mock flag defaults on.
+        // 4th arg is burnPending: true here since the mock flag defaults on.
         // 5th is ownerSourceId: null because this offender stakes in its own name.
         assert.deepStrictEqual(indexer.indexerDb.slashCapabilityStake.firstCall.args, [7, 200, 999, true, null]);
         assert.ok(indexer.indexerDb.createCapabilitySlashEvent.calledOnce, 'an audit event must be written');
@@ -386,7 +386,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
     });
 
-    // ── XCONFIG (the 6th engine: whole-federation membership; Phase-A amendment) ──
+    // ── XCONFIG (the 6th engine: whole-federation membership) ──
     // Config content = `snapshot_block|config_digest`; equivocation = same (seq, view),
     // same snapshot_block, DIFFERENT digest. Membership resolves against getActiveValidators
     // (the whole federation), labelled with the sentinel capability 'config'.
@@ -731,7 +731,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
 
     it('ACCEPTS a bundle-leg XANCPUB equivocation (anchor_bundle scope, ANCHOR v0)', async function () {
         // The bundle canonical repeats SNAPSHOT_BLOCK as its round_reference, keeping the
-        // SIX positional fields (D22) so this branch finds the block at index 3 with no
+        // SIX positional fields so this branch finds the block at index 3 with no
         // third case in slash.js. Two attested publishers for one bundle round is a
         // reward-attestation double-sign exactly as on the per-chain and archive legs.
         const round = 'XANCPUB|bundle|regtest|100';
@@ -979,7 +979,7 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         assert.deepStrictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args, ['attestation', buried(90)]);
     });
 
-    // ── Bounty / treasury split (Phase D mechanism; governance config + BURN default) ──
+    // ── Bounty / treasury split (governance config + BURN default) ──
     describe('bountyTreasurySplit', function () {
         function withSlashConfig(cfg) {
             indexer.config.STAKING = { CAPABILITIES: { cross_chain: { MIN_STAKE: '5000', SLASH: cfg } } };

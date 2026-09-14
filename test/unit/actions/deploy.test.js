@@ -18,7 +18,7 @@ const { getTestConfig } = require('../../fixtures/config');
 
 const Deploy = require('../../../src/actions/deploy/index.js');
 // The SLASH writer a constructor's emissions route through. Stubbed at the module
-// seam because DEPLOY no longer reaches into the Execute instance for it (M3 row 8).
+// seam because DEPLOY does not reach into the Execute instance for it.
 const slashEmission = require('../../../src/actions/execute/slash_emission.js');
 
 // Minimal valid JS contract code (base64-encoded)

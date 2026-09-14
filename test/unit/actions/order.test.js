@@ -168,7 +168,7 @@ describe('Order action handler @regression @tier2', function () {
         });
 
         it('cross-chain order (GET_COIN != COIN) is accepted when CROSS_CHAIN_DEX is enabled and does NOT match locally', async function () {
-            // Phase B: the GIVE side escrows locally; matching + settlement are federation-driven,
+            // Cross-chain ORDER: the GIVE side escrows locally; matching + settlement are federation-driven,
             // so the local ORDER_MATCH path is skipped (the counterparty lives on another chain).
             const params = makeParams(`0|BTC|RAREPEPE|1||LTC|PEPECASH|10||${OWNER_ADDR}|${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
@@ -328,7 +328,7 @@ describe('Order action handler @regression @tier2', function () {
             sinon.assert.notCalled(actionsCtx.processAction);
         });
 
-        // ORDER-AMT-1 hardening: a non-ownership, non-cross-chain order must ask for a
+        // Positive-ask hardening: a non-ownership, non-cross-chain order must ask for a
         // strictly-positive GET_AMOUNT (an empty or zero ask escrows GIVE for nothing).
         it('empty GET_AMOUNT returns invalid (must be positive)', async function () {
             const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|||${OWNER_ADDR}|${EXPIRATION}|||`);

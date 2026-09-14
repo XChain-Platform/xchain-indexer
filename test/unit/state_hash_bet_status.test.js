@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// BET status-flip state_hash class (P4). The latch, the feed terminal
+// BET status-flip state_hash class. The latch, the feed terminal
 // flip and the per-bet settlement flip are in-place mutations on SURVIVING
 // rows - the exact class invisible to action-scoped hashing. Asserts: (a) the
 // per-chain gate; (b) the inert default leaves the preimage byte-identical to

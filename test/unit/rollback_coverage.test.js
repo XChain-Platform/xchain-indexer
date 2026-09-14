@@ -267,7 +267,7 @@ describe('Rollback coverage guard @regression', function () {
             ? path.resolve(process.env.XCHAIN_SYNC_PATH)
             : path.resolve(__dirname, '..', '..', '..', 'xchain-sync');
         const REQUIRE_SIBLINGS = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
-        // Each twin is a PAIR of src-relative paths, because the M3 feature directories
+        // Each twin is a PAIR of src-relative paths, because the indexer's feature directories
         // are an xchain-indexer layout and xchain-sync's copies stay flat: merkle.js sits
         // under consensus/ here and at src/merkle.js there. A single shared path would
         // read a file that does not exist on the sync side and turn the guard into a

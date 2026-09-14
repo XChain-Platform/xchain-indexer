@@ -31,7 +31,7 @@
  *      protects, so an operator who installed past the npm warning gets a
  *      message naming the version and the fix instead of ERR_REQUIRE_ESM.
  *
- * Ported from the xchain-hub REG-VAL-001 guard, which fixed the same defect
+ * Ported from the matching xchain-hub regression guard, which fixed the same defect
  * on that service first.
  ********************************************************************/
 

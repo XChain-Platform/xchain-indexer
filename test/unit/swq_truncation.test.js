@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/swq_truncation.test.js
  *
- * CONSENSUS-SAFETY GUARD for SWQ-TRUNC-1: the stake-weighted quorum predicate
+ * CONSENSUS-SAFETY GUARD for snapshot truncation: the stake-weighted quorum predicate
  * must FAIL CLOSED on a truncated snapshot. getStakeWeightsByCapability caps its
  * result and marks the returned array `truncated`; a truncated set has silently-
  * dropped sources, so S is under-counted and a reduced 2/3 bar could finalize a

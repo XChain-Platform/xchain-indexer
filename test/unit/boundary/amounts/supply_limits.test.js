@@ -88,7 +88,7 @@ function makeIssueParams(overrides = {}) {
 describe('Supply & amount boundary tests @regression @tier1', function () {
 
     // -----------------------------------------------------------------------
-    // AMT-01 & AMT-02 & AMT-03 & AMT-04: ISSUE supply limits
+    // ISSUE supply limits: minimum, maximum, over-maximum and zero supply
     // -----------------------------------------------------------------------
 
     describe('AMT-01: Issue token with minimum supply', function () {
@@ -231,7 +231,7 @@ describe('Supply & amount boundary tests @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // AMT-05 & AMT-06: MINT at supply boundary
+    // MINT at supply boundary: exactly to MAX_SUPPLY and 1 unit over
     // -----------------------------------------------------------------------
 
     describe('AMT-05: MINT exactly to MAX_SUPPLY', function () {
@@ -312,7 +312,7 @@ describe('Supply & amount boundary tests @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // AMT-07 & AMT-08: SEND balance boundaries
+    // SEND balance boundaries: drain to zero and 1 unit over
     // -----------------------------------------------------------------------
 
     describe('AMT-07: SEND entire balance (drain to zero)', function () {
@@ -381,7 +381,7 @@ describe('Supply & amount boundary tests @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // AMT-09: DESTROY entire supply
+    // DESTROY entire supply
     // -----------------------------------------------------------------------
 
     describe('AMT-09: DESTROY entire supply', function () {
@@ -421,7 +421,7 @@ describe('Supply & amount boundary tests @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // AMT-10: Maximum precision arithmetic (18 decimals)
+    // Maximum precision arithmetic (18 decimals)
     // -----------------------------------------------------------------------
 
     describe('AMT-10: Maximum precision arithmetic (18 decimals)', function () {
@@ -463,7 +463,7 @@ describe('Supply & amount boundary tests @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // AMT-11: MINT at per-address cap (MINT_ADDRESS_MAX)
+    // MINT at per-address cap (MINT_ADDRESS_MAX)
     // -----------------------------------------------------------------------
 
     describe('AMT-11: MINT at per-address cap', function () {

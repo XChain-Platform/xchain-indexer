@@ -15,7 +15,7 @@
  *
  * Indexer-side mirror of xchain-hub/test/unit/equivocation_header.test.js.
  *
- * CONSENSUS-CRITICAL: the EQUIV header (WI-2 bump 2) is prefixed onto every signed
+ * CONSENSUS-CRITICAL: the EQUIV equivocation header is prefixed onto every signed
  * consensus canonical at/above the flag-day; the indexer re-derives those canonicals
  * to re-verify quorum signatures (cross_settle, xexec, xcall, anchor, price, attest)
  * and to verify SLASH equivocation proofs. The hub keeps a byte-equivalent copy; the

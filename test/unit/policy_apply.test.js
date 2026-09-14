@@ -11,7 +11,7 @@
  **********************************************************************
  *
  * Token-policy inheritance: applying a finalized policy_snapshots row to the bridged copy
- * (the token bridge policy spec sections 4 to 6).
+ * (the apply half of policy inheritance).
  *
  * WHAT THESE TESTS ARE FOR. The injected legs are CONSENSUS-VISIBLE: each is a synthetic
  * transaction whose vout is a pinned ordinal, so the action index every node assigns to every
@@ -210,7 +210,7 @@ describe('policy apply: token-policy inheritance onto a bridged copy', function(
             const awake  = BS.policyCanonical(makeSnapshot([], { sleeping: false }));
             const asleep = BS.policyCanonical(makeSnapshot([], { sleeping: true }));
             // The two canonicals differ ONLY through policy_hash: `sleeping` is not a field of
-            // the canonical (D17), so the two strings differ in exactly one position, the hash.
+            // the canonical, so the two strings differ in exactly one position, the hash.
             assert.notStrictEqual(awake, asleep);
             const fa = awake.split('|'), fb = asleep.split('|');
             assert.strictEqual(fa.length, fb.length);

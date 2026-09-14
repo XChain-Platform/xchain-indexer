@@ -254,7 +254,7 @@ describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
             assert.strictEqual(Number(execRow().ACTION_INDEX), 902);
             assert.strictEqual(Number(execRow().CONTRACT_INDEX), 902);
             assert.strictEqual(execRow().ASSEMBLER_ACTION_INDEX, 700);
-            // The contract's permanent derived address is the COMPLETING action's (D1).
+            // The contract's permanent derived address is the COMPLETING action's.
             assert.ok(db.createAddress.getCalls().some(c => c.args[0] === 'C:BTC:902'));
             // The carrier keeps its own verdict; the deployment's lives on the contract rows.
             assert.strictEqual(data['STATUS'], 'valid');
@@ -348,7 +348,7 @@ describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
             assert.strictEqual(totalDebited(), 0);   // native: neither leg debits XCHAIN
 
             // Matches an inline native deploy of the same source exactly: neither ever
-            // debits XCHAIN, because constructor gas is charged only in XCHAIN mode (D3/D15).
+            // debits XCHAIN, because constructor gas is charged only in XCHAIN mode.
             build({ chunkRows: [] });
             indexer.util.detectFeePaymentMode = () => 'native';
             indexer.util.validateNativeCoinFee = async () => ({ valid: true, nativeCoinAmount: '0.001', nativeCoin: 'BTC', oracleRound: 7 });
@@ -391,7 +391,7 @@ describe('Deferred chunked DEPLOY assembly @regression @tier2', function () {
             const gasInline = Number(execRow().GAS_USED);
 
             assert.strictEqual(gasAtA, 100000);      // VM_DEPLOY_BASE
-            assert.strictEqual(gasAtC, CTOR_GAS);    // constructor only (D3 split)
+            assert.strictEqual(gasAtC, CTOR_GAS);    // constructor only (the deploy gas split)
             assert.strictEqual(gasInline, 100000 + CTOR_GAS);
             assert.strictEqual(gasAtA + gasAtC, gasInline);
         });

@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// BET action handler (spec, P4).
+// BET action handler.
 // Mock-based: validation matrix for all four formats, the section-7 worked
 // settlement example (exact payouts / fee / dust / conservation), the
 // normative open-bet pool predicate, the zero-floor payout rule, the

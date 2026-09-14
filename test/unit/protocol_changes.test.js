@@ -607,9 +607,9 @@ describe('ProtocolChanges @regression @tier3', function () {
     });
 
     // ─── redesign: LOCK_NULL_PRIOR_UNSET ships ungated ───────────────
-    // Built under the v1 three-key train and registered on its Key A block TIME
-    // (1796083200 / 2026-12-01). The redesign (spec §0) replaced the activation
-    // surface with a mandatory fleet-wide wipe-and-replay rebase, so this rule ships
+    // No v1 three-key train registration applies, and no Key A block TIME
+    // (1796083200 / 2026-12-01) arms it. A mandatory rebase stands in for the activation
+    // surface as a fleet-wide wipe-and-replay, so this rule ships
     // plain. A reintroduced flag day here is a divergence window: nodes replaying
     // before and after the date would disagree.
     describe('LOCK_NULL_PRIOR_UNSET is ungated (redesign)', function () {

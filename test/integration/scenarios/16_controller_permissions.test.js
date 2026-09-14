@@ -56,7 +56,7 @@ const b64 = s => Buffer.from(s, 'utf8').toString('base64');
 const sha = s => crypto.createHash('sha256').update(s).digest('hex');
 
 // CONTRACT_META_REQUIRED is genesis-active on regtest, so every fixture below that
-// must reach a NON-meta verdict carries `meta` as the first export key (spec 2.1).
+// must reach a NON-meta verdict carries `meta` as the first export key.
 // The two deliberate exceptions are named at their definitions.
 const META_A = "meta:{ name:'Manifest A', description:'Permissions-manifest fixture.', version:'1.0.0' }";
 const MANIFEST_C = `module.exports={ ${META_A}, permissions:['SEND','ISSUE'], maxTakeBps:300, guard:function(){ return {}; } };`;
@@ -66,7 +66,7 @@ const BARE_C     = "module.exports={ meta:{ name:'Bare', description:'No permiss
 // Deliberately nameless AND malformed on maxTakeBps: the meta verdict is evaluated
 // after the permissions/maxTakeBps branches and only under !error, so this contract
 // must keep reporting today's maxTakeBps string. That precedence is consensus
-// (spec 2.3, D34/D35) and this is its integration-tier vector.
+// behavior, and this is its integration-tier vector.
 const BAD_C      = "module.exports={ permissions:['SEND'], maxTakeBps:2.5, guard:function(){ return {}; } };";
 // Well-formed on every earlier axis and nameless: the one contract here whose
 // rejection is the meta rule itself.
@@ -77,7 +77,7 @@ const NAMELESS_C = "module.exports={ permissions:['SEND'], maxTakeBps:300, guard
 // denied → the deploy is rejected and token CTORNEG is never created. POS permits ISSUE → its
 // constructor's ISSUE goes through → the deploy is valid and token CTORPOS exists. Together they
 // prove the allowlist discriminates against a LIVE-persisted manifest (a balance-based guard
-// emission would pass even with the allowlist disabled (the e2e E2 false-green this avoids).
+// emission would pass even with the allowlist disabled (the e2e false-green this avoids).
 // A COMPLETE, valid ISSUE emission: when the allowlist permits it the token is really
 // created (a bare {tick} ISSUE is rejected for missing fields, which would make the negative
 // case a false green of its own).
@@ -157,7 +157,7 @@ describe('Phase E permissions manifest: deploy persistence (real DB + real VM) @
         assert.deepStrictEqual(JSON.parse(row.permissions), ['SEND', 'ISSUE'], 'permissions persisted as a JSON array');
         assert.strictEqual(Number(row.max_take_bps), 300, 'maxTakeBps persisted');
         // The meta the same manifest read extracted lands in its own columns on the
-        // contracts row (spec 2.5: written only for a valid deploy whose meta conforms).
+        // contracts row (written only for a valid deploy whose meta conforms).
         assert.strictEqual(row.meta_name,        'Manifest A');
         assert.strictEqual(row.meta_description, 'Permissions-manifest fixture.');
         assert.strictEqual(row.meta_version,     '1.0.0');

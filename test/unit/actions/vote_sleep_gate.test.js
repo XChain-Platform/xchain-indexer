@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/actions/vote_sleep_gate.test.js
  *
- * (VOTE-SLEEP-1): VOTE respects the self-sleep gate. All three
+ * VOTE respects the self-sleep gate. All three
  * user-broadcast versions (v0 create, v1 ballot, v3 delegate) must reject a
  * sleeping SOURCE at/after the VOTE_RESPECTS_SLEEP flag-day and preserve the
  * legacy (permissive) acceptance below it; v2 finalize is system-synthesized

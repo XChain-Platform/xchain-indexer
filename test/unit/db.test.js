@@ -782,7 +782,7 @@ describe('Database.getValidatorsByCapability() threshold source @regression @tie
     // The effective-set union binds the HAVING threshold twice: once for the
     // stake-key branch (arg 6) and once for the delegated-key source-aggregate
     // branch (arg 10). Both MUST carry the same resolved threshold. (Indices 6/10,
-    // not 5/9: WI-2 bump 2 inserted a slash-exclusion blockIndex arg in each branch.)
+    // not 5/9: each branch carries a slash-exclusion blockIndex arg.)
     function thresholdArgs() {
         const a = db.doQuery.firstCall.args[1];
         return [a[6], a[10]];
@@ -842,8 +842,8 @@ describe('Database.getActiveCapabilityCount() threshold source @regression @tier
     });
 
     // Same effective-set union as getValidatorsByCapability: the threshold
-    // binds at args 6 (stake-key branch) and 10 (delegated-key branch). (Shifted
-    // from 5/9 by the WI-2 bump 2 slash-exclusion blockIndex arg in each branch.)
+    // binds at args 6 (stake-key branch) and 10 (delegated-key branch). (Not
+    // 5/9, because of the slash-exclusion blockIndex arg in each branch.)
     function thresholdArgs() {
         const a = db.doQuery.firstCall.args[1];
         return [a[6], a[10]];
@@ -887,7 +887,7 @@ describe('Database.hasCapability() threshold source @regression @tier1', functio
             getStatusId:         sinon.stub().resolves(1),
             getPubkeyId:         sinon.stub().resolves(3),
             getLatestBlockIndex: sinon.stub().resolves(100),
-            // Not slashed (WI-2 bump 2 permanent-disqualification guard): stubbed so the
+            // Not slashed (the permanent-disqualification guard): stubbed so the
             // threshold-source assertions exercise the stake/delegated branches; the
             // disqualification path has its own dedicated coverage.
             _isPubkeySlashedAt:  sinon.stub().resolves(false),

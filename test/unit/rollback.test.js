@@ -932,7 +932,7 @@ describe('Rollback @regression @tier3', function () {
             'updateTokens must receive GAS + the contract tick even on an action-empty range');
     });
 
-    // ─── REORG-2: consensus range reads use the throw-on-fault variant ──────────
+    // ─── Consensus range reads use the throw-on-fault variant ──────────
     it('reads firstActionIndex / lastActionIndex via doQueryStrict (fault must abort, not empty)', async function () {
         // The mock aliases doQueryStrict to the doQuery stub, so assert the range reads went
         // through the strict entry point by making it throw and confirming rollback propagates.
@@ -948,10 +948,10 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(idx.indexerDb.beginTransaction.notCalled, 'no transaction (hence no delete) may begin after a failed range read');
     });
 
-    // ─── HUB-RETRACT-6 / HUB-RETRACT-1: a failed push-generation bump rolls the transaction back ─────
+    // ─── A failed push-generation bump rolls the transaction back ─────
     // With the bump failed there is no fence value that can separate a re-published row (at a
     // recycled action_index) from an orphan, so degrading to an un-fenced retraction would wipe
-    // canonical rows. The bump now runs INSIDE the rollback transaction (before commit), so a failure
+    // canonical rows. The bump runs INSIDE the rollback transaction (before commit), so a failure
     // throws into the transaction catch: every delete is rolled back, commit never happens, and no
     // retraction is delivered. The driver retries the reorg idempotently.
     it('rolls back the transaction and issues no retraction when bumpPushGeneration fails', async function () {
@@ -972,7 +972,7 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(idx.indexerDb.markHubPushDelivered.notCalled, 'no write-ahead row may be marked delivered after a failed bump');
     });
 
-    // ─── HUB-RETRACT-1: the fence bump is issued inside the transaction, before commit ─────
+    // ─── The fence bump is issued inside the transaction, before commit ─────
     it('bumps the push generation inside the transaction (after beginTransaction, before commit)', async function () {
         const idx = createMockIndexer();
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
@@ -989,7 +989,7 @@ describe('Rollback @regression @tier3', function () {
         assert.ok(bumpOrder.calledBefore(commitOrder), 'bump must run BEFORE commitTransaction');
     });
 
-    // ─── HUB-RETRACT-2: retractions are write-ahead-staged in-tx, then delivered + dropped on success ─────
+    // ─── Retractions are write-ahead-staged in-tx, then delivered + dropped on success ─────
     it('write-aheads all three retractions inside the tx and marks each delivered on live success', async function () {
         const hubClient = { enabled: true, retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
@@ -1013,7 +1013,7 @@ describe('Rollback @regression @tier3', function () {
         assert.deepStrictEqual(delivered, [1, 2, 3], 'every successfully delivered write-ahead row must be dropped');
     });
 
-    // ─── IDX-1: anchor invalid_archive reset interns 'unverified' before the UPDATE ─────
+    // ─── Anchor invalid_archive reset interns 'unverified' before the UPDATE ─────
     it('interns unverified via createStatus before the anchor invalid_archive reset UPDATE', async function () {
         indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]); // firstActionIndex
         indexer.indexerDb.doQuery.resolves([]);
@@ -1050,7 +1050,7 @@ describe('Rollback @regression @tier3', function () {
             'one member today and the splice is what carries the next one');
     });
 
-    // ─── PRICE-SNAP-1: price_snapshots delete is reference_chain-qualified and BTC-only ─────
+    // ─── price_snapshots delete is reference_chain-qualified and BTC-only ─────
     it('qualifies the price_snapshots reorg delete by reference_chain and runs it only on BTC', async function () {
         // Mock config coin is BTC.
         indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
@@ -1075,7 +1075,7 @@ describe('Rollback @regression @tier3', function () {
             'a DOGE indexer must not run the BTC-anchored price_snapshots delete');
     });
 
-    // ─── IDX-2: markets zombie (pair first-traded only in the orphaned range, ticks survive) ─────
+    // ─── Markets zombie (pair first-traded only in the orphaned range, ticks survive) ─────
     it('deletes a zombie markets row whose only orders were orphaned but whose ticks survive', async function () {
         // Read phase: an ORDER pair (give_tick_id 7 / get_tick_id 9) is collected; both ticks survive.
         indexer.indexerDb.doQuery.callsFake(async (query) => {

@@ -11,11 +11,11 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Integration: programmable-policy layer, Phase C enforcement surfaces.
+ * Integration: programmable-policy layer, MINT, STAKE and outbound enforcement surfaces.
  *
  * Drives real bind + action flows through the full indexer pipeline (decoder seed ->
  * processBlocks) against a real MariaDB + the real (isolated-vm) VM. Proves the three
- * Phase C enforcement points the unit tests mock, here over real DB rows + a real
+ * enforcement points the unit tests mock, here over real DB rows + a real
  * guard VM:
  *   1. MINT: a `mint`-class token controller gates supply creation (deny reverts the
  *      mint; allow commits and the block passes the supply sanity check).
@@ -56,7 +56,7 @@ const b64 = s => Buffer.from(s, 'utf8').toString('base64');
 const sha = s => crypto.createHash('sha256').update(s).digest('hex');
 
 // CONTRACT_META_REQUIRED is genesis-active on regtest: a guard contract that must
-// deploy `valid` to be bound as a controller carries `meta` (spec 2.1).
+// deploy `valid` to be bound as a controller carries `meta`.
 const DENY   = "module.exports={ meta:{ name:'Deny Guard', description:'Reverts every gated action.', version:'1.0.0' }, guard:function(){ xchain.revert('policy denied'); } };";
 const ALLOW  = "module.exports={ meta:{ name:'Allow Guard', description:'Permits every gated action.', version:'1.0.0' }, guard:function(){ return {}; } };";
 const TARGET = "module.exports={ meta:{ name:'Stake Target', description:'Stakeable contract used as a STAKE target.', version:'1.0.0' }, guard:function(){ return {}; }, noop:function(){} };"; // stakeable target

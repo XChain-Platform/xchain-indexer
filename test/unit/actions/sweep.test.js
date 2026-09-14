@@ -88,7 +88,7 @@ describe('Sweep @regression @tier3', function () {
             assert.ok(indexer.indexerDb.createSweep.calledOnce);
         });
 
-        // SWEEP-1: a null/empty DESTINATION must be rejected. Left unchecked it credits every
+        // A null/empty DESTINATION must be rejected. Left unchecked it credits every
         // swept balance to a NULL address_id that updateBalances skips, breaking the per-block
         // supply invariant and halting the fleet (SanityError). Reject it, and never emit a
         // NULL-address credit.

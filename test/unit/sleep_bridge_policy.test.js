@@ -15,7 +15,7 @@
  **********************************************************************
  * test/unit/sleep_bridge_policy.test.js
  *
- * SLEEP's half of policy inheritance (policy spec section 12 row 2).
+ * SLEEP's half of policy inheritance (the LOCK_SLEEP exemption).
  *
  * A bridged copy is created with LOCK_SLEEP set, so nobody can ever pause the copy
  * by hand. That lock is also, unamended, a refusal of the one thing the copy exists

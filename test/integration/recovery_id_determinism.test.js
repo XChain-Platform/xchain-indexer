@@ -12,14 +12,14 @@
  *
  **********************************************************************
  *
- * RECOVERY ID-DETERMINISM DRILL (consensus) - F1a acceptance.
+ * RECOVERY ID-DETERMINISM DRILL (consensus): staged reward recovery.
  *
  * THE PRIMITIVE (test 1, characterization): createAddress() OUTSIDE a block tx takes the
  * legacy AUTO_INCREMENT / NULL-block_index path and occupies low ids. getNextAddressId() is
  * MAX(id)+1 over ALL rows, so those low ids offset every subsequent in-block deterministic
  * id. This is WHY recovery must never assign ids out-of-band before the reindex.
  *
- * THE FIX (test 2, F1a acceptance): recovery.js no longer calls createAddress at restore
+ * THE FIX (test 2, staged recovery): recovery.js does not call createAddress at restore
  * time. It STAGES each archived reward in recovery_pending_rewards keyed by the raw source
  * address string (assigning no id). During the reindex, when the source address first gets
  * its deterministic in-block id, createAddress's apply hook materializes the staged reward
@@ -127,7 +127,7 @@ async function legacyPreseedMap() {
 // _applyPendingRewardsDueAtBlock once per block; this fixture drives just that one.
 const DUE_BLOCK = STAGED_REWARD.block_index + ar.ANCHOR_REWARD_MIRROR_MATURITY;
 
-// The F1a recovery path: stage the archived reward by raw string (what recovery.js now does),
+// The staged recovery path: stage the archived reward by raw string (what recovery.js does),
 // then run the identical in-block reindex sequence, then let the reindex reach the reward's
 // original derive height. Returns { map, rewards, staged, earlyRewards }.
 async function recoveryMap() {
@@ -179,7 +179,7 @@ describe('Recovery id-determinism (consensus) @integration', function () {
     });
 
     // THE PRIMITIVE (characterization): out-of-tx createAddress offsets the deterministic id
-    // space. This is the hazard F1a removes from recovery; createAddress itself is unchanged.
+    // space. This is the hazard staged recovery removes; createAddress itself is unchanged.
     it('primitive: out-of-tx createAddress offsets the deterministic id map', async function () {
         const genesis = await genesisMap();
         const legacy  = await legacyPreseedMap();
@@ -191,7 +191,7 @@ describe('Recovery id-determinism (consensus) @integration', function () {
         }
     });
 
-    // F1a ACCEPTANCE: the real recovery path (stage by string, no id) reproduces the
+    // STAGED RECOVERY: the real recovery path (stage by string, no id) reproduces the
     // from-genesis id map EXACTLY, and materializes the staged reward under the deterministic
     // source_id when the source address first gets its in-block id.
     it('F1a acceptance: staged-recovery id map is IDENTICAL to from-genesis', async function () {
@@ -228,7 +228,7 @@ describe('Recovery id-determinism (consensus) @integration', function () {
         assert.strictEqual(Number(staged[0].applied_block), DUE_BLOCK);
     });
 
-    // Defense-in-depth: a NULL-block (out-of-band) id is NOT resolvable as a wire ^id (F2
+    // Defense-in-depth: a NULL-block (out-of-band) id is NOT resolvable as a wire ^id (the block-stamp
     // gate in resolveAddressRef), while an in-block id is. Confirms the gate is live.
     it('F2 gate: resolveAddressRef resolves only block-stamped ids', async function () {
         await freshSchema();

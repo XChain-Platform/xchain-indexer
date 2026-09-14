@@ -397,7 +397,7 @@ describe('HubPushQueue', function(){
             assert.strictEqual(indexer.indexerDb.markHubPushDelivered.calledWith(2), true);
         });
 
-        // ─── price_batch (PRICE batch push, D12) ─────
+        // ─── price_batch (PRICE batch push) ─────
         it('calls pushPriceBatch for price_batch rows and marks delivered', async function(){
             let indexer = makeIndexer();
             let q = new HubPushQueue(indexer);
@@ -451,7 +451,7 @@ describe('HubPushQueue', function(){
                 'a failed attest_batch row must stay queued, never be dropped');
         });
 
-        // ─── attest_batch_retraction (reorg un-lands an ATTEST batch, spec §6.3 row 55) ─────
+        // ─── attest_batch_retraction (reorg un-lands an ATTEST batch) ─────
         it('calls retractAttestBatch for attest_batch_retraction rows and marks delivered', async function(){
             let indexer = makeIndexer();
             let q = new HubPushQueue(indexer);
@@ -607,7 +607,7 @@ describe('HubPushQueue', function(){
             assert.ok(warnMsg.includes('attempt 1/10'), 'expected "attempt 1/10" in: ' + warnMsg);
         });
 
-        // ─── Retractions are exempt from the attempt cap (HUB-RETRACT-5) ─────
+        // ─── Retractions are exempt from the attempt cap ─────
         // A reorg retraction is the ONLY remaining record that the hub must prune an orphaned
         // range; retiring it to 'failed' after maxAttempts (a hub outage overlapping a reorg)
         // permanently strands stale prices / 'finalized' XCALL+DEX rows on the hub. Retractions
@@ -660,7 +660,7 @@ describe('HubPushQueue', function(){
         });
     });
 
-    // ─── HUB-RETRACT-3: pause() waits for an in-flight drain ─────
+    // ─── pause() waits for an in-flight drain ─────
     describe('pause() awaits in-flight drain', function(){
         it('does not resolve until a drain that is mid-attempt finishes', async function(){
             let indexer = makeIndexer();

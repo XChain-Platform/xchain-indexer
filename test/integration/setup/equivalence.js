@@ -150,8 +150,8 @@ async function readHashChain(queryFn) {
  *  opts.skipStateHash compares only the hub-signed consensus triple
  *  (ledger/actions/contracts) and leaves the replication-integrity state hash
  *  alone. ONLY correct for two chains that are not required to assign the same
- *  index ids in the first place, i.e. runs of DIFFERENT coins: since P4
- *  (05d6056) the state hash folds the index map in, and the index map is
+ *  index ids in the first place, i.e. runs of DIFFERENT coins: because
+ *  the state hash folds the index map in, and the index map is
  *  coin-bound by construction (DONATE1 / GAS / FEE_DESTINATION are per-coin
  *  constants), so two coins processing the same corpus legitimately hash
  *  different addresses. For two nodes on the SAME chain the state hash is the

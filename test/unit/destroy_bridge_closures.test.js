@@ -24,7 +24,7 @@
  *   - XCHAIN off BTC     -> 'invalid: TICK (use XBRIDGE v1)'
  *   - a bridged copy     -> 'invalid: TICK (use XBRIDGE v4)'
  *
- * Both are UNCONDITIONAL, not activation-keyed (base spec D62): no off-BTC XCHAIN
+ * Both are UNCONDITIONAL, not activation-keyed: no off-BTC XCHAIN
  * row exists to destroy, and no <ORIGIN>.<NAME> row can exist before the bridge
  * creates one, so neither refusal can move a historical verdict.
  ********************************************************************/

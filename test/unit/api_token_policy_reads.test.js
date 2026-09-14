@@ -10,8 +10,8 @@
  *
  **********************************************************************
  *
- * Token bridge policy reads (the token bridge policy spec,
- * section 3, D3, D5, D7, D15): the "as of a block" read-path resolvers
+ * Token bridge policy reads, as the API serves them:
+ * the "as of a block" read-path resolvers
  * (getListAtBlock, isTickSleepingAtBlock), gettokenpolicy / getappliedpolicy, and
  * the XPOLICY canonical membership hash.
  *
@@ -47,7 +47,7 @@ function newDb(){
 
 afterEach(function(){ sinon.restore(); });
 
-// ── api.js registration: open reads (policy spec D15) ────────────────────────
+// ── api.js registration: the policy reads are open ────────────────────────
 
 describe('policy reads are registered open (token-bridge-policy spec D15) @regression @tier1', function(){
     const OPEN_METHODS = ['gettokenpolicy', 'getappliedpolicy'];

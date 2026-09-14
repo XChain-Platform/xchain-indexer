@@ -15,14 +15,14 @@
  **********************************************************************
  * test/unit/issue_bridge_optin.test.js
  *
- * ISSUE's half of the two bridge specs and the policy-inheritance milestone:
+ * ISSUE's half of the two bridge specs and the policy-inheritance activation:
  *
  *   - FORMAT 7, the issuer's bridge opt-in (BRIDGE_CHAINS, MIN_DEPTH, LOCK_BRIDGE),
  *     admitted only at/above TOKEN_BRIDGE_ACTIVATION and invisible below it;
- *   - the MILESTONE-1 POLICY EXCLUSION in both directions, with the list half
+ *   - the POLICY EXCLUSION in both directions, with the list half
  *     lifting at TOKEN_POLICY_INHERITANCE_ACTIVATION and the controller half never
- *     lifting here (policy spec R1);
- *   - the R2 ceiling on a bridgeable token's list membership;
+ *     lifting here;
+ *   - the ceiling on a bridgeable token's list membership;
  *   - the CASE-FOLDED reserved-tick guard with the regtest exemption narrowed to the
  *     GAS tick and a system-injected exemption;
  *   - the BRIDGE-OWNED closure: an XCHAIN ISSUE off BTC is refused unconditionally,
@@ -185,7 +185,7 @@ describe('ISSUE token-bridge opt-in and policy exclusion @regression @consensus'
         });
     });
 
-    // Token spec section 3 and D15. A bridged row lives one level under its origin chain's
+    // Dotted native names are refused. A bridged row lives one level under its origin chain's
     // root (BTC.PEPECASH on DOGE), so a DOTTED native name would need a rooted copy of its
     // own parent and the bridge creates exactly one level. The opt-in is refused as well as
     // the v3 lock, so such a token is never advertised as bridgeable in the first place.
@@ -259,7 +259,7 @@ describe('ISSUE token-bridge opt-in and policy exclusion @regression @consensus'
 
         // Precedence, pinned because a verdict string is consensus: the tick-shape refusal
         // is decided before the policy exclusion, so a dotted AND list-bound token reads as
-        // a subasset rather than as policy-bound. The spec's own refusal order (section 5)
+        // a subasset rather than as policy-bound. The ISSUE refusal order
         // puts the tick-shape refusals ahead of everything the fields decide.
         it('outranks the policy exclusion on a token that is both', async function(){
             const { status } = await run({

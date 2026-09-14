@@ -126,7 +126,7 @@ describe('Issue: caret-dot TICK rejection and ticker-intern gating @regression @
 
         // "^12.5" trips the parent/child split too (it contains a '.'), so the parent
         // "^12" must resolve and be owned by SOURCE for the ISSUE to reach the caret-id
-        // check at all - exactly the coincidence review F4 describes ("also looks like a
+        // check at all - exactly the coincidence worth naming ("also looks like a
         // child issuance").
         function stubOwnedParent(indexer, parentTick){
             indexer.indexerDb.getTokenInfo = sinon.stub().callsFake(async (tick) => {
@@ -210,7 +210,7 @@ describe('Issue: caret-dot TICK rejection and ticker-intern gating @regression @
     describe('Defect B: no free ticker interning once an ISSUE has already errored', function(){
 
         // A dotted child TICK against an UNKNOWN parent fails at the parent-unknown
-        // check, well before the main TICK's getTokenInfo call - the exact shape R1's
+        // check, well before the main TICK's getTokenInfo call - the exact shape the
         // dotted-child exemption lets a BATCH repeat up to ~250 times per transaction.
         function stubUnknownParentAndRecordSuppressState(indexer){
             const calls = [];

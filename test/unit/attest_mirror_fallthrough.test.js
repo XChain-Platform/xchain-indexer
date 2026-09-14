@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// THE APPLIER FALL-THROUGH (zero-confirmation-flip spec §5, D11 and D34-D38, D89).
+// THE APPLIER FALL-THROUGH (zero-confirmation flip).
 //
 // Before the zero-conf height the applier picked ONE mirror row per request and, if
 // that row failed verification, wrote nothing and re-picked the same inert row at
@@ -22,7 +22,7 @@
 //     (effective_time, response_hash), and its head is the row the old rule chose;
 //   * below the height the item is the old single-choice object, with no candidates
 //     key, so a mixed fleet cannot fork on a request below the flag day;
-//   * the pass dispatches a request AT MOST ONCE (hostile F1: the handler re-gates on
+//   * the pass dispatches a request AT MOST ONCE (the handler re-gates on
 //     an in-memory MIRROR_REQUEST snapshot, so a second dispatch would bind twice) and
 //     STOPS at the first candidate that binds;
 //   * an all-inert request writes nothing and is selected again, unchanged, next block.

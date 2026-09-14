@@ -179,7 +179,7 @@ describe('anchor-action-query: buildAnchorActionResponse()', function () {
     });
 });
 
-// ── txid / version narrowing (XANC-ELECTED-FORGE-1) ──────────────────────────
+// ── txid / version narrowing (elected-publisher forgery) ──────────────────────────
 // Without these filters getanchoraction answers "this checkpoint is anchored",
 // which an elected publisher satisfies while announcing a never-mined or
 // real-but-different txid. These guard the filter that binds the announced tx.

@@ -70,7 +70,7 @@ const uncompressedParams = body => ['2'].concat(body);
 const compressedParams   = body => ['2', comp.PRICE_BATCH_COMPRESSION_MARKER,
                                     comp.compressPriceBatchBody(body.join('|'))];
 
-// A six-round window, the shape section 7's publisher assembles at the default
+// A six-round window, the shape the batch publisher assembles at the default
 // ORACLE_BATCH_WINDOW_ROUNDS of 6.
 function sixRounds(overrides = {}){
     const first  = overrides.firstRound !== undefined ? overrides.firstRound : 100;
@@ -328,7 +328,7 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
             }
         });
 
-        // THE DoS BOUND (D15). The count is attacker-supplied and drives the parse loop on
+        // THE DoS BOUND on batch size. The count is attacker-supplied and drives the parse loop on
         // every indexing node, so it is bounded BEFORE the loop runs. This case is the
         // behavioural pin: the batch below is otherwise perfect (real signatures over the
         // real canonical, quorate, ascending, in-window), so with the bound it is INVALID
@@ -944,7 +944,7 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
     // -----------------------------------------------------------------------
     describe('rewards', function () {
 
-        // THE PIN for D30. The oracle_round derivation lives inline in _parseV0 and is not
+        // THE PIN for zero batch rewards. The oracle_round derivation lives inline in _parseV0 and is not
         // shared code, so _parseV0 simply never calls it. Without this test a later
         // refactor that hoisted the derivation into a shared helper would silently start
         // paying six rounds' worth of rewards per batch, on chain, with no failing test.

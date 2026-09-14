@@ -28,7 +28,7 @@ const ReportGenerator = require('../setup/report-generator');
 // (processExpirations -> getExpiredItems, cross-chain settlement, cooldown
 // completion) re-scan a growth-unbounded standing set on EVERY block, so their
 // cost rises with accumulated history rather than with the current block's work.
-// See (P1-P6).
+// Each such sweep is a known per-block scan cost.
 //
 // This scenario deliberately does NOT reset. It measures block-time on a young
 // database, GROWS the standing set (thousands of still-open DEX orders that the
@@ -51,7 +51,7 @@ const GROW_BLOCKS    = parseInt(process.env.PERF_GROWN_GROW_BLOCKS    || '175');
 const ORDERS_PER_BLOCK = parseInt(process.env.PERF_GROWN_ORDERS_PER_BLOCK || '20');
 // Primary regression ceiling: grown / young median TOTAL block time. Generous by
 // design (see header): current code is O(accumulated) on several per-block paths
-// (expiry sweep P1, per-ticker supply SUM P5), so total block time genuinely rises
+// (the expiry sweep, the per-ticker supply SUM), so total block time genuinely rises
 // with the standing set. Observed ~1.5x at this scale; the ceiling exists to catch
 // a gross regression (an added N+1, a dropped composite index), not to assert the
 // paths are already O(1). Override to tighten once those sweeps are indexed.

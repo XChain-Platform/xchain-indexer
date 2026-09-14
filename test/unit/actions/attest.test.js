@@ -131,7 +131,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         // 'valid'; the gate's own describe below re-enables it. (regtest arms the
         // gate at genesis, so this must be stubbed off here, mirroring swq above.)
         sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(false);
-        // Same treatment for the §11 broadcast-fee carve-out: regtest arms it at genesis, so
+        // Same treatment for the leader broadcast-fee carve-out: regtest arms it at genesis, so
         // the fixtures above would otherwise settle through the carve-out path and every
         // legacy split assertion would move. Its own describe below re-enables it.
         sinon.stub(attestBcastFee, 'isAttestBroadcastFeeActive').returns(false);
@@ -213,7 +213,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             // height it is RESOLVED at is that block BURIED by CANONICAL_REORG_BUFFER,
             // because that is where the hub's CapabilitySnapshot resolved it; regtest arms
             // the burial gate at genesis. The anchor is still the request block, not a
-            // later one, which is what ATT-RECOMP-1 is about.
+            // later one, which is exactly what this case pins.
             assert.ok(indexer.indexerDb.getValidatorsByCapability.calledWith(
                     'attestation', srb.buriedSnapshotBlock(data['BLOCK_INDEX'], 'regtest')),
                 'responsible set must be computed at the request block, buried by the reorg buffer');
@@ -355,7 +355,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
                 'expected CONTRACT_INDEX (unknown) rejection, got: ' + data['STATUS']);
         });
 
-        // Framework spec §11.1 per-block admission caps. Armed at genesis on
+        // Per-block admission caps on ATTEST requests. Armed at genesis on
         // regtest, which is the network this harness runs as, so these exercise the live
         // path. The counts come from the DB stub, which is what the real query returns
         // for "admitted earlier in this block".
@@ -1157,7 +1157,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
     });
 
     // ───────────────────────────────────────────────────────────────────────
-    // E1: request fees (FEE_TICK|FEE_AMOUNT optional trailing fields)
+    // Request fees (FEE_TICK|FEE_AMOUNT optional trailing fields)
     // ───────────────────────────────────────────────────────────────────────
     describe('E1: request fees', function () {
 
@@ -1418,7 +1418,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             });
         });
 
-        // Spec §11 leader broadcast-fee reimbursement. The escrow now pays the
+        // Leader broadcast-fee reimbursement. The escrow pays the
         // broadcaster its native-coin cost back BEFORE the equal split, converted to XCHAIN
         // at the settle block's oracle price, bounded by a per-provider cap, and gated on a
         // flag-day so replay below the height is byte-identical to the pre-flag ledger.
@@ -1830,7 +1830,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
     });
 
     // ───────────────────────────────────────────────────────────────────────
-    // STAKE_WEIGHTED_QUORUM: source-deduped responsible-set selection (WI-1)
+    // STAKE_WEIGHTED_QUORUM: source-deduped responsible-set selection
     // The within-subset quorum stays count-based; only the SELECTION dedupes by
     // staking source so a source's delegated keys can't occupy multiple slots.
     // ───────────────────────────────────────────────────────────────────────

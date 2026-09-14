@@ -26,7 +26,7 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
 
     function addExecuteStubs(db) {
         // The stored source of a contract that deployed at/after CONTRACT_META_REQUIRED
-        // always carries `meta` (spec 2.1), so the fixture does too. The EXECUTE path
+        // always carries `meta`, so the fixture does too. The EXECUTE path
         // never re-evaluates meta (the verdict lives in actions/deploy/index.js alone), so this
         // is fixture realism, not a behaviour this suite asserts.
         db.getContract             = sinon.stub().resolves({ contract_index: CONTRACT, code: "module.exports={meta:{name:'Execute Fixture',description:'A unit-test contract fixture.',version:'1.0.0'}}", status_id: 1 });
@@ -521,7 +521,7 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
         // ── XCALL emission host-side guards (defense-in-depth vs a compromised VM) ──
         // All four throw before buildActionParams, so minimal emission params suffice.
 
-        // VM-EMIT-1: only VOTE v0 (create) / v1 (ballot) are emittable. v2
+        // Only VOTE v0 (create) / v1 (ballot) are emittable. v2
         // (finalize) and v3 (delegate) are gateway-rejected; re-blocked host-side as
         // defense in depth against an older/compromised bundled VM.
         it('throws on an emitted VOTE v2 (finalize) - host-side re-block', async function () {

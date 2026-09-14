@@ -11,7 +11,7 @@
  **********************************************************************
  *
  * The XBRIDGE settle pass: applying this chain's leg of a finalized transfer
- * (the base bridge spec sections 6 to 9, work rows 6 and 17).
+ * (quorum, escrow cross-check, idempotency and per-block cap).
  *
  * WHAT THESE TESTS ARE FOR. Every quorum case is built from REAL Ed25519 keys and REAL
  * signatures over the module's OWN canonical, so a passing quorum means the same arithmetic
@@ -23,7 +23,7 @@
  * turns the case red on the EFFECT rather than on a message:
  *   - the idempotency filter        (an already-settled id moves no units)
  *   - the escrow would-go-negative  (an out leg short of escrow moves no units)
- *   - the D2 cross-check ok:false   (a refused proof moves no units and mints no action)
+ *   - the escrow check ok:false     (a refused proof moves no units and mints no action)
  *   - the per-block cap             (the 26th due transfer is not in the slice)
  * A fifth property has a case of its own because it is the one thing that must NOT be a
  * refusal: a checkpoint this node does not hold yet STALLS the pass.
@@ -105,7 +105,7 @@ const OTHER_HOLDER = 'mSomeOtherHolderXXXXXXXXXXXXXXXXXX';
 const CP_HEIGHT    = 1205;      // the first checkpoint at or after SNAPSHOT
 
 // A full, VALID escrow proof envelope for `balance` of `tick`, built from the real sparse
-// Merkle tree and the real state-root assembly, the way L17's own suite builds one: the root
+// Merkle tree and the real state-root assembly, the way the escrow cross-check's own suite builds one: the root
 // is a real root and the inclusion proof comes out of merkle.js, so "the cross-check passed"
 // means the same arithmetic a producing node does.
 function buildProof(balance, tick){
@@ -474,7 +474,7 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             assert.strictEqual(state.credits.length, 1);
         });
 
-        // GUARD 3 of 4: the D2 cross-check.
+        // GUARD 3 of 4: the escrow cross-check.
         it('applies NOTHING when the escrow cross-check returns ok:false', async function(){
             const keys = [makeKey(), makeKey(), makeKey()];
             const row  = makeTransfer(keys, {});
@@ -561,7 +561,7 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
         // Two finalized rows for ONE source leg: different transfer_id AND different
         // snapshot_block, which is the shape measured on the rail (eleven finalized rows for
         // seven source actions, 120 minted against 80 locked). The id-keyed idempotency filter
-        // cannot see it, because snapshot_block is inside transfer_id by design (spec section 6),
+        // cannot see it, because snapshot_block is inside transfer_id by design,
         // so both rows are legitimately-signed, distinct, unapplied rows to every earlier guard.
         function duplicatePair(keys, overrides){
             const base = Object.assign({}, overrides || {});
@@ -599,7 +599,7 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
                 validators: snapshotSet(keys),
                 tokens: { XCHAIN: { TICK_ID: 7, DECIMALS: 8, SUPPLY: '100' } },
                 // Deliberately enough escrow for BOTH releases, so the would-go-negative guard
-                // cannot be what stops the second one: this is the AT2 shape, a burn of 2
+                // cannot be what stops the second one: this is the duplicate-release shape, a burn of 2
                 // releasing 4 out of an escrow that could afford it.
                 balances: { 7: '50.00000000' },
                 mirrorTransfers: pair

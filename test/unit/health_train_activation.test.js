@@ -13,7 +13,7 @@
  **********************************************************************
  * Health publishes the train activation verdict, including BEFORE it fires.
  *
- * Section 13.4 makes the announcement part of the mechanism, not a nicety: "a halt
+ * The train design makes the announcement part of the mechanism, not a nicety: "a halt
  * that surprises the operator is a publication failure, not a gate failure". So the
  * assertion that matters here is the PENDING one, on a node that is still perfectly
  * healthy and still advancing: it must already carry the height and the rule-set

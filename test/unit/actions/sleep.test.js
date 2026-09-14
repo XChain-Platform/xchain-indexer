@@ -169,7 +169,7 @@ describe('Sleep @regression @tier3', function () {
             assert.ok(data['STATUS'].includes('invalid'));
         });
 
-        // SLEEP-1: a LOCK_SLEEP=1 token carries an immutable "cannot be paused" guarantee.
+        // Sleep lock: a LOCK_SLEEP=1 token carries an immutable "cannot be paused" guarantee.
         it('LOCK_SLEEP=1 token cannot be slept even by its owner → invalid (flag on)', async function () {
             const tokenInfo = createTokenInfo({ TICK: 'TEST', TICK_ID: 1, OWNER, LOCK_SLEEP: 1 });
             indexer.indexerDb.getTokenInfo.resolves(tokenInfo);

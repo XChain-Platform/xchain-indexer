@@ -278,7 +278,7 @@ describe('activation ladder fork-avoiding constraints (the bridge train cut)', f
         });
 
         it('goes red, naming both hour figures, at the measured breaking band (destination slowed past 3x)', function () {
-            // Row 36 measured C4 breaking at a 2.95x to 3.00x destination slowdown against a 9.0h
+            // Measurement shows C4 breaking at a 2.95x to 3.00x destination slowdown against a 9.0h
             // origin lead; 3.1x (9.3h) is past the band.
             assert.throws(() => assertC4Hours(9.3, 9.0, 'destination slowed 3.1x'),
                 /C4 \(arming order\) violated, destination arms 9\.3h after the cut, after the BTC origin's 9h/,

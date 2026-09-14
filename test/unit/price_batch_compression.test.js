@@ -82,7 +82,7 @@ function buildRealisticV2Body(sigCount){
     }
 
     // Hex pubkeys and signatures are near-incompressible, so the signature set
-    // sets the floor on what deflate can achieve and drives section 8's ceiling.
+    // sets the floor on what deflate can achieve and drives the signer-count ceiling.
     out.push(String(SIGS));
     for(let s = 0; s < SIGS; s++){
         out.push(hex(64, s * 7 + 1));
@@ -191,7 +191,7 @@ describe('price_batch_compression: round trip @regression', function(){
         // Real oracle data is dominated by repeated pair names, so it must beat
         // 2:1 comfortably; a regression below this means the body shape changed.
         assert.ok(r.ratio > 2, 'ratio collapsed to ' + r.ratio);
-        // Section 8's N ceiling rests on the per-signer cost AFTER deflate and
+        // The signer-count N ceiling rests on the per-signer cost AFTER deflate and
         // AFTER base64, not on the deflate size alone. Measure the increment
         // rather than restating the estimate.
         const q3 = c.compressPriceBatchBody(buildRealisticV2Body(3));

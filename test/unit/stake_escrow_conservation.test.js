@@ -142,7 +142,7 @@ describe('a contract stake locks tokens rather than destroying them', function()
     // releasing is a pure mint, and it strands the burned bond in the staker's escrow.
     // Whole-ledger deltas live in actions/slash.test.js; these are the cross-file shapes.
     const slashSrc   = fs.readFileSync(path.join(SRC, 'actions/slash.js'), 'utf8');
-    // The VM slash writer left Execute as a private method in M3 and is now its own
+    // The VM slash writer is not a private method of Execute but its own
     // module under the EXECUTE handler, shared with DEPLOY (a constructor emits SLASH).
     const executeSrc = fs.readFileSync(path.join(SRC, 'actions/execute/slash_emission.js'), 'utf8');
 

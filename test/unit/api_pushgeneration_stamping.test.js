@@ -27,7 +27,7 @@
  * Two properties are guarded here:
  *   1. the field is actually emitted (checked by EXECUTING the real response
  *      literal, not by grepping for the identifier), and
- *   2. the generation is read BEFORE the rows (HUB-RETRACT-1). A rollback bumps
+ *   2. the generation is read BEFORE the rows. A rollback bumps
  *      the generation atomically with deleting the orphaned rows, so gen-first is
  *      safe wherever that commit lands; rows-then-gen could read a pre-commit
  *      orphan and stamp it with the post-commit generation, letting it escape the

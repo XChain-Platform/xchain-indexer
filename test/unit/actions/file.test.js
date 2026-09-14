@@ -133,7 +133,7 @@ describe('File action handler @regression @tier3', function () {
                 overrides.gateTicker     || 'TEST',
                 overrides.encMethod      !== undefined ? String(overrides.encMethod) : '1',
                 overrides.keyHash        || VALID_HASH,
-                // PC-29 ninth field. Omitted unless a test supplies one, so the
+                // GATE_MIN_AMOUNT, the ninth field. Omitted unless a test supplies one, so the
                 // eight-field form stays exercised by every other case here.
                 ...(overrides.minAmount !== undefined ? [String(overrides.minAmount)] : []),
             ];
@@ -160,7 +160,7 @@ describe('File action handler @regression @tier3', function () {
         });
 
         /*************************************************************
-         * PC-29: GATE_MIN_AMOUNT is validated STRICT.
+         * GATE_MIN_AMOUNT is validated STRICT.
          *
          * A present-but-invalid threshold REJECTS the FILE rather than being
          * dropped. Dropping would be the dangerous choice: a FILE is IMMUTABLE,
@@ -234,7 +234,7 @@ describe('File action handler @regression @tier3', function () {
                     'nothing would weigh a balance against, so it must not be storable');
             });
 
-            // ── Shared vector fixture (spec section 6.5) ──────────────────────
+            // ── Shared vector fixture ──────────────────────
             // The tests above are this repo's own reading of the rules. These run the
             // SAME vectors the SDK and the wallet run, from a byte-identical file, so
             // the three implementations are pinned to one another instead of to three
@@ -357,7 +357,7 @@ describe('File action handler @regression @tier3', function () {
     //
     // The whole point of these tests is a NEGATIVE: the field is parsed and
     // stored and can never, under any value, change a validity verdict.
-    // Compression is presentational (spec §5.5); a reader that rejected a
+    // Compression is presentational; a reader that rejected a
     // malformed code while shipped indexers ignored it would fork validity
     // across the fleet.
     // ------------------------------------------------------------------

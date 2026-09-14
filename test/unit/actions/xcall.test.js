@@ -596,7 +596,7 @@ describe('Xcall (XCALL) @regression @tier3', function () {
         });
     });
 
-    // XRES-1: the deadline-expiry gate (utility.processCrossChainCalls pass 3) must suppress
+    // Result expiry: the deadline-expiry gate (utility.processCrossChainCalls pass 3) must suppress
     // expiry ONLY for results that legitimately defer or verify - never on mere row presence,
     // or a Byzantine/buggy hub mirror could deadlock the requester's callback (and diverge
     // indexers on the synthesized v2 action). resultSuppressesExpiry mirrors processResult's

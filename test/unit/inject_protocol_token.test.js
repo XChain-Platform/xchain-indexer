@@ -9,15 +9,15 @@
 // contact legal@dankest.llc.
 
 // The shared protocol-token creation helper and the bridged root/child rows it builds:
-// the base bridge spec row 4 and section 9, the token bridge spec
-// row 4 and section 6.
+// one code path for the gas token row on every chain, and the
+// origin-rooted copies a bridge in leg needs.
 //
 // What these cases hold, and why each one is consensus and not housekeeping:
 //   - the ISSUE format 0 field ORDER and the trailing-field trim, because the wire string is
 //     what the handler parses and what enters actions_hash;
 //   - the synthetic tx hash per family, because it is the transaction identity a reindex
 //     must reproduce and two injections may never collide on it;
-//   - the existing-row rules of section 6 (a root owned by a squatter, and the decimals
+//   - the existing-row rules (a root owned by a squatter, and the decimals
 //     rule), because each of them decides whether a mint happens at all.
 //
 // The pipeline is stubbed on purpose. This file pins what genesis.js SYNTHESIZES; what

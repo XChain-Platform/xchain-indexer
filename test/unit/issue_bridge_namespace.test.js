@@ -15,17 +15,17 @@
  **********************************************************************
  * test/unit/issue_bridge_namespace.test.js
  *
- * The TICK NAMESPACE rules (token-bridge spec section 3, R8) and the
- * acceptance cases AT6 names for them. Two rules on one activation:
+ * The TICK NAMESPACE rules and the
+ * cases that pin each of them. Two rules on one activation:
  *
  *   1. a FOUR-CHARACTER FLOOR on a new top-level name, refused with the existing
  *      'invalid: TICK (length)' string, measured on the FULL tick and creation only;
- *   2. RESERVED_FUTURE_ROOTS joined to the reserved guard, case-folded per D13, with
+ *   2. RESERVED_FUTURE_ROOTS joined to the reserved guard, case-folded, with
  *      the existing 'invalid: TICK (reserved)' string reused.
  *
  * WHAT THESE CASES ARE FOR, beyond "the guard fires": both rules are keyed on
  * TICK_NAMESPACE_ACTIVATION precisely because the length and reserved checks run
- * BEFORE the fee and budget checks (D49), so an ISSUE of a short or listed name that
+ * BEFORE the fee and budget checks, so an ISSUE of a short or listed name that
  * a live chain already refused on fee would flip its verdict string on replay if the
  * guard were unconditional. That is why every positive case here has a negative twin
  * driven with the predicate off: the below-the-flag reading is the real obligation,
@@ -78,7 +78,7 @@ function create(tick){
 }
 
 // ISSUE format 1 (DESCRIPTION edit): an edit of a row that already exists, which is
-// what the "creation only" half of R8 (c) protects.
+// what the "creation only" half of the length floor protects.
 function edit(tick){
     return ['1', tick, 'edited description', ''];
 }
@@ -144,7 +144,7 @@ describe('ISSUE tick namespace: the four-character floor and the reserved future
 
         it('lets the reserved verdict win over the length verdict when a name is both', async function(){
             // ETH is three characters AND a listed chain code. The reserved string says WHY
-            // the name is held, which is the answer an issuer can act on; AT6 pins it.
+            // the name is held, which is the answer an issuer can act on; this case pins it.
             assert.strictEqual(await run({ params: create('ETH') }), 'invalid: TICK (reserved)');
             assert.strictEqual(await run({ params: create('ABC') }), 'invalid: TICK (length)');
         });

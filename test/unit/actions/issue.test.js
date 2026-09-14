@@ -315,13 +315,13 @@ describe('Issue handler @regression @tier1', function () {
             assert.ok(data.STATUS.startsWith('invalid'));
         });
 
-        // R8: TICK_NAMESPACE_ACTIVATION puts a four-character floor on a NEW
+        // TICK_NAMESPACE_ACTIVATION puts a four-character floor on a NEW
         // top-level CREATE. Regtest activates at 0, so the default network in this file
         // (set at module load, above) is at-or-above the flag and 'A' is now refused.
         // The below-the-flag twin proves the guard is gated, not baked in: it drives the
         // same params on mainnet, which parks at the 9999999999 sentinel, so the legacy
         // MIN_TICK_LENGTH=1 verdict still stands there. See
-        // xchain-indexer/test/unit/issue_bridge_namespace.test.js for the fuller AT6 suite.
+        // xchain-indexer/test/unit/issue_bridge_namespace.test.js for the fuller namespace suite.
         it('1-char TICK at/above the namespace flag -> invalid: TICK (length)', async function () {
             const params = makeFormat0Params({ TICK: 'A' });
             const data   = makeData({ FORMAT: 0, BLOCK_INDEX: LOW_BLOCK });
@@ -1017,8 +1017,8 @@ describe('Issue handler @regression @tier1', function () {
         });
     });
 
-    // ISSUE-1: cumulative MINT_SUPPLY cap. A re-ISSUE's MINT_SUPPLY mints fresh supply on top
-    // of what already exists; the single-shot MINT_SUPPLY>MAX_SUPPLY guard ignored that, letting
+    // Cumulative MINT_SUPPLY cap. A re-ISSUE's MINT_SUPPLY mints fresh supply on top
+    // of what already exists; the single-shot MINT_SUPPLY>MAX_SUPPLY guard ignores that and would let
     // an owner inflate past MAX_SUPPLY by repeating ISSUE with MINT_SUPPLY. The check is gated on
     // ISSUE_MINT_SUPPLY_CUMULATIVE_CAP.
     describe('ISSUE-1: cumulative MINT_SUPPLY cap @regression @security', function () {
@@ -1074,7 +1074,7 @@ describe('Issue handler @regression @tier1', function () {
     });
 
     // the wallet's COLLECTIBLE and MEME wizard templates promise a supply that can
-    // never grow. ISSUE-1's cumulative cap keeps that promise, but it is GATED - at genesis on
+    // never grow. The cumulative MINT_SUPPLY cap keeps that promise, but it is GATED - at genesis on
     // testnet/regtest, on a flag day on mainnet - so a token that leans on it is only fixed
     // where the flag has already flipped. LOCK_MINT_SUPPLY is the token's own version of the
     // same refusal, checked at issue.js ~367, BEFORE the gated cap at ~383. These tests pin

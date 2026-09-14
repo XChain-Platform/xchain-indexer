@@ -191,7 +191,7 @@ describe('Delegate (DELEGATE) @regression @tier2', function () {
             const data = delegateData({ FORMAT: 2 });
             await handler.parse(['2', VALID_PUBKEY], data, null);
             assert.strictEqual(data['STATUS'], 'valid');
-            // DEL-1 (DELEGATE_REVOKE_NO_REINSERT active by default in the mock): the revoke mirrors
+            // DELEGATE_REVOKE_NO_REINSERT (active by default in the mock): the revoke mirrors
             // the v3 path - deactivate the parent only, do NOT insert a fresh delegations row.
             assert.ok(indexer.indexerDb.setDelegationDeactivation.calledOnce);
             assert.ok(indexer.indexerDb.createRevokeDelegation.notCalled);

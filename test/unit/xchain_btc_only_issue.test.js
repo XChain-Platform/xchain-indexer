@@ -19,7 +19,7 @@
  * rejects an XCHAIN ISSUE with 'invalid: TICK (BTC-only)' on any non-BTC chain.
  * ISSUE of XCHAIN remains GAS-only on every chain; this test isolates the chain gate.
  *
- * THE REGTEST EXEMPTION IS GONE (xchain-bridge spec section 4, D62). Once the
+ * THERE IS NO REGTEST EXEMPTION. Once the
  * bridge exists, every XCHAIN unit off BTC is the shadow of an escrow balance held
  * on BTC, so the only thing that may create supply there is the mirror's XBRIDGE v2
  * in-leg. The refusal is unconditional off BTC from every source including the GAS

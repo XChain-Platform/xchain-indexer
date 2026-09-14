@@ -12,7 +12,7 @@
  *
  **********************************************************************
  * The controller-guard gas reservation is keyed on the CHAIN, not on whether
- * an XCHAIN row happens to exist on it (xchain-bridge.md section 9, D36).
+ * an XCHAIN row happens to exist on it.
  *
  * Today the reservation at utility._invokeController is skipped off BTC only
  * as an accident of state: getTokenInfo('XCHAIN') returns null on LTC and
@@ -22,10 +22,10 @@
  * controller-guarded action from a source holding no XCHAIN would flip from
  * valid to 'invalid: insufficient funds (guard gas)' with no flag day naming
  * the change. utility.isGuardGasReserved makes the rule explicit and BTC-only
- * until milestone 2's XCHAIN_FEE_MODE_ALL_CHAINS flag day widens it.
+ * until the XCHAIN_FEE_MODE_ALL_CHAINS flag day widens it.
  *
  * This file pins the predicate and the one reservation site that reads it.
- * The replay witness for the verdicts themselves (base AT9) is in
+ * The replay witness for the verdicts themselves is in
  * verdict_witness_gas_row.test.js.
  ********************************************************************/
 
@@ -73,7 +73,7 @@ function opts(overrides){
         proceedsTick: 'PAY',
         // The state the bridge changes: gasInfo null before the XCHAIN row exists
         // on this chain, a real row afterwards. gasBalances empty = a source that
-        // holds no XCHAIN, the AT9 subject.
+        // holds no XCHAIN, the verdict witness subject.
         gasInfo:      { TICK_ID: 7 },
         gasBalances:  {},
         seq:          0,

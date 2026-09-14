@@ -83,7 +83,7 @@ function v0Params(overrides = {}) {
     return p;
 }
 
-// A three-chain bundle in wire order (sections CHAIN ascending, D5): the AT1 shape.
+// A three-chain bundle in wire order (sections CHAIN ascending): the standard bundle shape.
 const THREE_CHAINS = [{ chain: 'BTC',  block_index: '500' },
                       { chain: 'DOGE', block_index: '600' },
                       { chain: 'LTC',  block_index: '700' }];
@@ -146,7 +146,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         handler = new Anchor(indexer);
         verifyStub = sinon.stub(ed25519, 'verify').returns(true);
         // These cases assert legacy COUNT quorum (the live mainnet path, whose
-        // activation is a far-future placeholder). Regtest has WI-1 stake-weighted
+        // activation is a far-future placeholder). Regtest has stake-weighted
         // quorum active at every block, so pin the legacy path: the oracle_publish
         // mocks here carry no source/weight. Weighted coverage: stake_weighted_quorum.test.js.
         swqStub = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
@@ -196,7 +196,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         }
         // The signed section canonical is the per-chain XCHECKPOINT + root suffix, rebuilt
         // with the HEADER network (the section's own network field is off the wire) and
-        // EQUIV-wrapped (regtest, WI-2 bump 2).
+        // EQUIV-wrapped (the regtest EQUIV header).
         let raw = ['XCHECKPOINT', 'BTC', 'regtest', '500', HASH('0'), HASH('1'), HASH('2'), HASH('3'), '0', '100',
                    HASH('d'), '1', HASH('e'), '1'].join('|');
         let expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, 'BTC|regtest|500|0', 0, raw);
@@ -216,7 +216,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
     });
 
     it('v0 rejects a header SNAPSHOT_BLOCK that is not the section maximum', async function () {
-        // D6: the bundle block is the MAX over sections, because it is where the election
+        // The bundle block is the MAX over sections, because it is where the election
         // and the attestation resolve. A higher header would move the attestation round
         // onto a set no section signature is bound to.
         let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
@@ -289,7 +289,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
             'the verdict is one column on N rows: never a mix');
     });
 
-    // ── AT7: one bad section takes the whole bundle down, with zero rewards ──────────
+    // ── one bad section takes the whole bundle down, with zero rewards ──────────
     it('AT7: one STALE section invalidates the WHOLE bundle and writes no reward', async function () {
         // The chain-scoped watermark says every chain is already anchored at seq 5. BTC and
         // DOGE re-broadcast at 5 (equal is tolerated), LTC arrives at 4, which the hub's
@@ -401,7 +401,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
     });
 
     it('bundle reward (XANCPUB) canonical: six positional fields with snapshot_block at index 3', function () {
-        // D22: the layout keeps SIX fields, round_reference repeated as the snapshot block,
+        // The layout keeps SIX fields, round_reference repeated as the snapshot block,
         // so slash.js's XANCPUB branch (index 3) judges a bundle equivocation with no third
         // case. A five-field draft would have made every bundle equivocation read
         // 'invalid: snapshot_block'.
@@ -424,7 +424,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         assert.deepStrictEqual(firstArgs, secondArgs);
     });
 
-    // AT4: at/above ANCHOR_ACTIVATION the wire set is exactly {0, 1, 2}, so every
+    // At/above ANCHOR_ACTIVATION the wire set is exactly {0, 1, 2}, so every
     // pre-restart byte - the per-chain anchors AND the old bundle/archive-head pair a
     // not-yet-redeployed hub might still emit - falls out of the unknown-version check.
     it('the pre-restart versions no longer parse at all, v6 and v7 included', async function () {
@@ -436,7 +436,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         }
     });
 
-    // AT4: the activation gate runs BEFORE the format table, so a wire that is
+    // The activation gate runs BEFORE the format table, so a wire that is
     // well-formed under the live set is still invalid when it was mined below the
     // restart height. Keyed on the anchor's OWN DOGE height, never on SNAPSHOT_BLOCK.
     it('a v0 mined BELOW ANCHOR_ACTIVATION is invalid whatever it decodes to', async function () {
@@ -522,7 +522,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
             'the deleted rejection must not come back');
     });
 
-    // AT4: the degraded archive round. The hub emits a v1 whose tail carries
+    // The degraded archive round. The hub emits a v1 whose tail carries
     // ATTEST_SIG_COUNT 0 when the attestation quorum was unreachable; a degraded round
     // must cost the federation its reward, never its checkpoint.
     it('v1 with ATTEST_SIG_COUNT 0 is valid, stores NULL attestations and derives NO reward', async function () {
@@ -679,7 +679,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         assert.strictEqual(data['STATUS'], 'valid');
         // v1 canonical appends the archive fields. EQUIV active in regtest: the v1
         // ROUND_ID appends batch_seq (=0 here) to the v0 round id so v0 and v1 get
-        // DISTINCT equivocation keys (R-4 false-slash fix); VIEW=0.
+        // DISTINCT equivocation keys (so the pair never reads as a false equivocation); VIEW=0.
         let raw = ['XCHECKPOINT', 'BTC', 'regtest', '500', HASH('0'), HASH('1'), HASH('2'), HASH('3'), '0', '100',
                         '0', '1', crc32Hex(ARCHIVE_JSON), '1'].join('|');
         let expected = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, 'BTC|regtest|500|0|0', 0, raw);

@@ -43,7 +43,7 @@ const STUB = { config: {}, decoderDb: null, indexerDb: null, util: null, mapper:
 // Load every action handler that declares `this.formats`, keyed by action name.
 function loadFormats() {
     const out = {};
-    // Since M3 a handler is either <name>.js or <name>/index.js, so the entry a name
+    // A handler is either <name>.js or <name>/index.js, so the entry a name
     // resolves to has to be asked for by name: a flat .js filter alone drops the nine
     // biggest actions and every assertion below would run over a smaller set while
     // still reading green.

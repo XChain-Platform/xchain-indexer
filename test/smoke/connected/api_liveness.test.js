@@ -11,13 +11,13 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Smoke test: API liveness (SM-04)
+ * Smoke test: API liveness (JSON-RPC ping)
  *
  * Starts a minimal Express server using the same middleware and JSON-RPC
  * controller as api.js, then verifies the ping endpoint returns a success
  * response. Does NOT start the indexer loop or connect to any database.
  *
- * SM-04: JSON-RPC ping returns success
+ * Checks that the JSON-RPC ping returns success
  */
 
 'use strict';
@@ -102,7 +102,7 @@ describe('Smoke: API liveness', function () {
     });
 
     // -------------------------------------------------------------------------
-    // SM-04: JSON-RPC ping returns success
+    // JSON-RPC ping returns success
     // -------------------------------------------------------------------------
     it('SM-04: JSON-RPC ping returns HTTP 200 with status:success', async function () {
         const { status, body } = await postJsonRpc(port, 'ping');

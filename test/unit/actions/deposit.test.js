@@ -104,7 +104,7 @@ describe('Deposit (DEPOSIT) @regression @tier2', function () {
             assert.ok(String(data['STATUS']).includes('CONTRACT_ACTION_INDEX (format)'));
         });
 
-        // DEPOSIT-1: leading-zero forms coerce to the real contract id in SQL but derive a
+        // Leading-zero forms coerce to the real contract id in SQL but derive a
         // distinct custody address ('C:BTC:07' != 'C:BTC:7'), silently stranding the deposit.
         it('rejects a leading-zero CONTRACT_ACTION_INDEX (07) as (format)', async function () {
             const data = depositData({ FORMAT: 0 });

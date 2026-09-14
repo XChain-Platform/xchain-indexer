@@ -24,7 +24,7 @@
  * This was observed live: BTC↔DOGE forked at block 306 with byte-identical rows in different
  * order. Fix ffd061a added full-row secondary sort keys so every SELECTed column participates
  * in the ORDER BY, giving a total order on the hashed projection.
- * See §2.
+ * The tests below pin that order.
  *
  * Technique mirrors db_queries.test.js: stub doQuery on a prototype-borrowed Database so the
  * real getBlockHashes logic runs against injected rows; no live MariaDB required. Because the

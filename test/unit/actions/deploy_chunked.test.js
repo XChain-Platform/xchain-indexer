@@ -103,8 +103,8 @@ describe('Chunked DEPLOY: v4 carrier handler @regression @tier2', function () {
     });
 });
 
-// assembleCode is the ONE primitive both R1 (a carrier completing its own group at C, bound
-// C + 1) and R2 (an assembler landing pending/invalid, bound its own action_index) call, so
+// assembleCode is the ONE primitive both the carrier path (a carrier completing its own group at C, bound
+// C + 1) and the assembler path (an assembler landing pending/invalid, bound its own action_index) call, so
 // its `incomplete` flag - the switch between a repairable landing and a terminal one - and its
 // `beforeActionIndex` bound are pinned directly here rather than only indirectly through the
 // full parse() pipeline in deploy_deferred.test.js.
@@ -276,7 +276,7 @@ describe('Chunked DEPLOY : DEPLOY v2/v3 assembly @regression @tier2', function (
         // NOT correlated to chunk_index. Assembly keys strictly on chunk_index (position) and
         // walks 0..total-1, so the reassembled bytes and the CODE_HASH are identical regardless
         // of the row/delivery order. Guards the chunked-DEPLOY assembled-code path against any
-        // accidental dependence on result-set ordering (TP-02 chunked-deploy determinism).
+        // accidental dependence on result-set ordering (chunked-deploy determinism).
         const ordered  = chunkRows(CODE, 4);
         const shuffled = [ordered[2], ordered[0], ordered[3], ordered[1]];
         indexer.indexerDb.getDeployChunksForAssembly.resolves(shuffled);

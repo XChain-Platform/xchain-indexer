@@ -13,7 +13,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Programmable policy layer: Phase D royalty/fee split (applyProceedsSplit).
+ * Programmable policy layer: royalty/fee split (applyProceedsSplit).
  *
  * A controlled-token sale guard returns payoutLegs [{to, bps}] at create; the protocol
  * applies them to the SELLER's proceeds at each match via Utility.applyProceedsSplit.

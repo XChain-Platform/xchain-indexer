@@ -69,7 +69,7 @@ function makeDispenserInfo(overrides = {}) {
 describe('DISPENSE edge-case tests @regression @tier2', function () {
 
     // -----------------------------------------------------------------------
-    // DSP-01: Payment exactly equal to GET_AMOUNT → multiplier=1, valid
+    // Payment exactly equal to GET_AMOUNT → multiplier=1, valid
     // -----------------------------------------------------------------------
 
     describe('DSP-01: Payment exactly equal to GET_AMOUNT → multiplier=1, dispense valid', function () {
@@ -116,7 +116,7 @@ describe('DISPENSE edge-case tests @regression @tier2', function () {
     });
 
     // -----------------------------------------------------------------------
-    // DSP-02: Payment 1 satoshi below GET_AMOUNT → multiplier=0, fails
+    // Payment 1 satoshi below GET_AMOUNT → multiplier=0, fails
     // -----------------------------------------------------------------------
 
     describe('DSP-02: Payment 1 satoshi below GET_AMOUNT → insufficient funds', function () {
@@ -159,7 +159,7 @@ describe('DISPENSE edge-case tests @regression @tier2', function () {
     });
 
     // -----------------------------------------------------------------------
-    // DSP-03: Payment for multiplier > GIVE_REMAINING → while loop reduces multiplier
+    // Payment for multiplier > GIVE_REMAINING → while loop reduces multiplier
     // -----------------------------------------------------------------------
 
     describe('DSP-03: Payment implies multiplier=10 but GIVE_REMAINING=50 caps to 5', function () {
@@ -212,7 +212,7 @@ describe('DISPENSE edge-case tests @regression @tier2', function () {
     });
 
     // -----------------------------------------------------------------------
-    // DSP-04: After dispense GIVE_REMAINING < GIVE_AMOUNT → auto-close
+    // After dispense GIVE_REMAINING < GIVE_AMOUNT → auto-close
     // -----------------------------------------------------------------------
 
     describe('DSP-04: GIVE_REMAINING=15, one dispense of 10 leaves 5 < GIVE_AMOUNT(10) → auto-close', function () {
@@ -268,7 +268,7 @@ describe('DISPENSE edge-case tests @regression @tier2', function () {
     });
 
     // -----------------------------------------------------------------------
-    // DSP-05: GIVE_REMAINING === GIVE_AMOUNT → one dispense empties, auto-close
+    // Exactly equal: GIVE_REMAINING === GIVE_AMOUNT → one dispense empties, auto-close
     // -----------------------------------------------------------------------
 
     describe('DSP-05: GIVE_REMAINING=GIVE_AMOUNT → dispense succeeds and dispenser closes', function () {

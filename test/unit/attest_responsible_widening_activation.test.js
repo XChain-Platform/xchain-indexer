@@ -36,7 +36,7 @@ const REQ      = 150699;
 const DEADLINE = 150709;
 
 // Stage-1 (pre-zero-conf) heights: regtest arms ATTEST_ZERO_CONF_ACTIVATION at 0
-// (D91), so every regtest request now runs the V2 ladder below. Stage-1 numbers are
+// (the zero-conf flag), so every regtest request runs the V2 ladder below. Stage-1 numbers are
 // asserted on testnet instead, at or above the widening height (150780) where
 // zero-conf stays the null (unratified) sentinel.
 const REQ_S1      = 150780;
@@ -106,7 +106,7 @@ describe('attest_responsible_widening (indexer copy)', function () {
             assert.strictEqual(wid.widenSlots(height + 500, height - 1, height + 29, net), 0,
                 net + ': a request below the height must never widen');
             // At the flag day: the ladder runs normally. Derived from the maps, never a
-            // hardcoded network list (D91): where zero-conf is armed on the request's own
+            // hardcoded network list: where zero-conf is armed on the request's own
             // block the ladder runs V2 and the ceiling is headroom + maxSlots; where it is
             // not, the ceiling is stage-1's bare maxSlots.
             const zcActive = zc.isZeroConfActive(height, net);
@@ -154,7 +154,7 @@ describe('attest_responsible_widening (indexer copy)', function () {
 describe('attest_responsible_widening: the V2 ladder (zero-conf armed, D27, D28)', function () {
 
     before(function () {
-        // regtest arms ATTEST_ZERO_CONF_ACTIVATION at 0 (D91), so REQ/DEADLINE (BTC
+        // regtest arms ATTEST_ZERO_CONF_ACTIVATION at 0, so REQ/DEADLINE (BTC
         // testnet4's measured incident block numbers, reused here as arbitrary regtest
         // heights) run the V2 branch of widenSlots.
         assert.strictEqual(zc.isZeroConfActive(REQ, 'regtest'), true);

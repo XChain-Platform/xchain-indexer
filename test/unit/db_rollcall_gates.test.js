@@ -9,9 +9,9 @@
 // test/unit/db_rollcall_gates.test.js
 //
 // The three db.js helpers the rules-aware attestation filter rides on
-// (attest-zero-confirmation-flip spec §7.3, §7.4, D85, D92): the
+// (part of the attestation zero-confirmation flip): the
 // getRollcallGatesForFilter read, the insertRollcallGates write, and the `gates`
-// column insertRollcallSigners now carries.
+// column insertRollcallSigners carries.
 //
 // Mock-based (doQuery stubbed), on the pattern of db_rollcalls_public_reads.test.js:
 // the unit tier cannot see a database, so the SQL shape and the bound arguments are

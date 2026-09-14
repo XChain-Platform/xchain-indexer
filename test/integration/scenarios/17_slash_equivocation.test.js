@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Integration: LIVE SLASH equivocation drill + cross-node determinism (WI-2 bump 2).
+ * Integration: LIVE SLASH equivocation drill + cross-node determinism for the burn.
  *
  * Drives a real equivocation end-to-end through the REAL indexer against a real DB:
  *   1. STAKE a validator's capability bond (6000 XCHAIN → qualifies for cross_chain,
@@ -196,7 +196,7 @@ describe('Integration: live SLASH equivocation drill + determinism @regression @
         assert.deepStrictEqual(second.events, firstRun.events);
     });
 
-    // Permanent disqualification (WI-2 bump 2): a slashed key may never re-qualify, even on a
+    // Permanent disqualification: a slashed key may never re-qualify, even on a
     // FRESH stake from a DIFFERENT source: the exclusion is keyed on the signing key, global,
     // and permanent. Drives STAKE → SLASH → re-STAKE(same key, new source) and asserts the key
     // stays out of EVERY effective-set read (capability set, whole-federation set, per-key test).
@@ -256,8 +256,8 @@ describe('Integration: live SLASH equivocation drill + determinism @regression @
         }
     });
 
-    // XCONFIG (the 6th engine): config-change equivocation is slashable via the Phase-A
-    // amendment: the signed content carries the round's locked snapshot_block as
+    // XCONFIG (the 6th engine): config-change equivocation is slashable because
+    // the signed content carries the round's locked snapshot_block as
     // `snapshot_block|digest`, and membership resolves against the WHOLE federation
     // (getActiveValidators), not a capability subset. The bond still burns whole.
     it('an XCONFIG equivocation burns the bond via whole-federation membership', async function () {

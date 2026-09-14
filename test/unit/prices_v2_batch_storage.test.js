@@ -19,7 +19,7 @@
  *
  *   1. Database.createPrice() must carry the four fields through BOTH its
  *      INSERT and its UPDATE arm. Missing one arm is the classic defect here
- *      (spec: oracle-price-batching.md D20/D21, section 5.6).
+ *      for a new column set like this one.
  *   2. Rollback.rollback() must clear them on a reorg exactly as it clears
  *      the v0 fields. It does so via the SAME mechanism (the generic
  *      dataTables wholesale `DELETE FROM prices WHERE action_index >= ?`),
@@ -76,9 +76,9 @@ function makePriceDb(existsRows) {
     return db;
 }
 
-// A representative batch action's data, shaped the way _parseV0 (row 6,
-// out of scope here) is expected to hand it to createPrice: ROUND set to
-// FIRST_ROUND (D21), plus the four new v2 fields.
+// A representative batch action's data, shaped the way _parseV0 (tested
+// elsewhere) is expected to hand it to createPrice: ROUND set to
+// FIRST_ROUND, plus the four new v2 fields.
 const V2_DATA = {
     ACTION_INDEX:       901,
     STATUS:             'valid',

@@ -34,7 +34,7 @@ const M = RETRACTION_SIGNING_ACTIVATION.mainnet;
 describe('retraction_signing_activation boundary tests @regression @tier1', function () {
 
     // -----------------------------------------------------------------------
-    // RSA-B01: off-by-one across the mainnet flag-day (inclusive at threshold)
+    // Off-by-one across the mainnet flag-day (inclusive at threshold)
     // -----------------------------------------------------------------------
     describe('RSA-B01: flag-day off-by-one', function () {
         it('one block below the threshold is inactive', function () {
@@ -49,7 +49,7 @@ describe('retraction_signing_activation boundary tests @regression @tier1', func
     });
 
     // -----------------------------------------------------------------------
-    // RSA-B02: zero and negative snapshot_block
+    // Zero and negative snapshot_block
     // -----------------------------------------------------------------------
     describe('RSA-B02: zero / negative snapshot_block', function () {
         it('block 0 is below a positive mainnet threshold → inactive', function () {
@@ -67,7 +67,7 @@ describe('retraction_signing_activation boundary tests @regression @tier1', func
     });
 
     // -----------------------------------------------------------------------
-    // RSA-B03: fractional truncation at the threshold (parseInt drops the
+    // Fractional truncation at the threshold (parseInt drops the
     // fraction, so the effective boundary is the integer part)
     // -----------------------------------------------------------------------
     describe('RSA-B03: fractional values truncate toward the integer part', function () {
@@ -82,7 +82,7 @@ describe('retraction_signing_activation boundary tests @regression @tier1', func
     });
 
     // -----------------------------------------------------------------------
-    // RSA-B04: malformed-but-plausible wire strings (values arrive as strings)
+    // Malformed-but-plausible wire strings (values arrive as strings)
     // -----------------------------------------------------------------------
     describe('RSA-B04: malformed-but-plausible strings', function () {
         it('leading/trailing whitespace around a valid height still parses', function () {
@@ -99,7 +99,7 @@ describe('retraction_signing_activation boundary tests @regression @tier1', func
     });
 
     // -----------------------------------------------------------------------
-    // RSA-B05: overflow / extreme magnitudes
+    // Overflow / extreme magnitudes
     // -----------------------------------------------------------------------
     describe('RSA-B05: extreme magnitudes', function () {
         it('MAX_SAFE_INTEGER and a huge decimal string are far above the threshold → active', function () {
@@ -118,7 +118,7 @@ describe('retraction_signing_activation boundary tests @regression @tier1', func
     });
 
     // -----------------------------------------------------------------------
-    // RSA-B06: unknown / malformed network fails safe even at an extreme block
+    // Unknown / malformed network fails safe even at an extreme block
     // -----------------------------------------------------------------------
     describe('RSA-B06: unknown / malformed network', function () {
         it('an unknown network is off even far above any threshold', function () {

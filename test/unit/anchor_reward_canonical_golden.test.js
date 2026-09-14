@@ -99,7 +99,7 @@ describe('XANCPUB reward canonical: derive copy vs the frozen wire format @regre
 
     it('post-flag-day bundle: EQUIV-wrapped, bundle round-id family, frozen ANCHOR amount', function () {
         // ANCHOR v7: round_reference IS the snapshot block, so fields 2 and 3 repeat it.
-        // The SIX-field layout is load-bearing (D22): slash.js reads snapshot_block at
+        // The SIX-field layout is load-bearing: slash.js reads snapshot_block at
         // index 3 for every XANCPUB family, so a five-field bundle canonical would make
         // every bundle equivocation read 'invalid: snapshot_block'.
         assert.strictEqual(derive.rewardCanonical(row({ reward_type: 'anchor_bundle', round_reference: 100 })),

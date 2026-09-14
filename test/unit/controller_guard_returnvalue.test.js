@@ -17,7 +17,7 @@
  * JSON-SERIALIZED STRING (the contract wrapper JSON-stringifies the contract's
  * return inside the isolate), but runControllerGuard read it as an object
  * (`typeof ret === 'object'`), so the payoutLegs branch was dead code and the
- * guard's royalty/fee legs were silently dropped (Phase D royalty was a no-op).
+ * guard's royalty/fee legs were silently dropped (the royalty split had no effect).
  * The original royalty unit test fed a mock returnValue as an OBJECT, so it
  * never exercised the real string shape (mock-vs-reality). This pins the string
  * path end-to-end through runControllerGuard. Pure (fakes the VM + DB); runs on
@@ -38,7 +38,7 @@ describe('runControllerGuard: guard returnValue parsing (royalty payoutLegs) @re
         const indexer = createMockIndexer();
         const db = indexer.indexerDb;
         // The stored source of a contract that deployed at/after CONTRACT_META_REQUIRED
-        // always carries `meta` (spec 2.1), so the fixture does too. The EXECUTE path
+        // always carries `meta`, so the fixture does too. The EXECUTE path
         // never re-evaluates meta (the verdict lives in actions/deploy.js alone), so this
         // is fixture realism, not a behaviour this suite asserts.
         db.getContract               = sinon.stub().resolves({ code: "module.exports={meta:{name:'Guard',description:'Controller guard fixture.',version:'1.0.0'},guard:function(){}};", status_id: 7 });

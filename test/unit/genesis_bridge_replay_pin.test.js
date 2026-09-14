@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
-// Genesis replay pin for the bridge's shared token-row helper (xchain-bridge.md row 4, D66).
+// Genesis replay pin for the bridge's shared token-row helper, frozen byte for byte.
 //
 // _injectGasToken routes through Genesis.injectProtocolToken so the BTC genesis row and
 // the row the bridge creates off BTC come out of ONE code path, rather than building the
@@ -87,7 +87,7 @@ describe('genesis gas-token replay pin (bridge row-4 helper) @regression', funct
     }
 
     it('the genesis call site and the bridge call site agree byte for byte on DOGE', async function () {
-        // The obligation D66 states: the XCHAIN row the bridge creates off BTC is the row
+        // The obligation this pins: the XCHAIN row the bridge creates off BTC is the row
         // genesis writes on BTC, with only the coin differing in the hash prefix.
         const viaGenesis = harness('DOGE');
         await viaGenesis.genesis.injectGasToken('DOGE-gas-address', 10, 20);

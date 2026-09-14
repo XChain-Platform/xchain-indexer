@@ -13,7 +13,7 @@
  **********************************************************************
  *
  * Rollback: the reorg retraction for a landed ATTEST v5/v6 batch push
- * (the ATTEST response-mirror design, §6.3, frontier row 55).
+ * (the ATTEST response mirror).
  *
  * A batch that landed on the DOGE rail told a hub to stamp a batch link on every
  * response it carried. When a reorg orphans that batch, the chain behind the link

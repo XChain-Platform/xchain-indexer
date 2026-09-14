@@ -65,11 +65,11 @@ const GATES = [
     // ATTEST v1 or through the hub mirror. It also selects which CANONICAL the responsible set
     // signs, so a one-sided edit forks attestation settlement AND signature admission at once.
     ['attest_response_mirror_activation.js',           'ATTEST_RESPONSE_MIRROR_ACTIVATION'],
-    // The zero-confirmation flip's ONE height (spec attest-zero-confirmation-flip.md §8, D9,
-    // D19): a one-sided edit forks confirmationsFor's leader/model index, the V2 ladder
+    // The zero-confirmation flip's ONE height, which gates three paths:
+    // a one-sided edit forks confirmationsFor's leader/model index, the V2 ladder
     // selector and the applier fall-through all at once, on whichever side reads the stale copy.
     ['attest_zero_conf_activation.js',                  'ATTEST_ZERO_CONF_ACTIVATION'],
-    // Not an activation MAP but the stage-2 ladder constants the same height selects (D30):
+    // Not an activation MAP but the stage-2 ladder constants the same height selects:
     // headroom, startOffset and maxSlots decide WHO MAY SIGN above the flag-day exactly as
     // ATTEST_RESPONSIBLE_WIDENING does below it, so a one-sided edit forks v1 signature
     // admission the same way a one-sided height edit would.
@@ -94,7 +94,7 @@ const GATES = [
     // the node. A one-sided edit forks fee validity between a hub-connected node and a
     // chain-only node at the boundary, which is the divergence the gate exists to close.
     ['price_fee_batch_landed_activation.js', 'PRICE_FEE_BATCH_LANDED_ACTIVATION'],
-    // The PLATFORM TRAIN gate (release-management section 13), keyed by platform version
+    // The PLATFORM TRAIN gate, keyed by platform version
     // rather than by feature. A one-sided edit here is worse than a one-sided feature-gate
     // edit: this map is what decides whether a node HALTS at a train boundary or applies
     // the block under the old rules, so a drifted copy is a node that forks at the one
@@ -133,7 +133,7 @@ const GATES = [
     ['protocol/constants.js',              'XBRIDGE_MAX_PER_BLOCK'],
     ['protocol/constants.js',              'XPOLICY_MAX_PER_BLOCK'],
     ['protocol/constants.js',              'XPOLICY_MAX_MEMBERS'],
-    // The tick-namespace flag day (R8). It re-verdicts nothing below itself, but at
+    // The tick-namespace flag day. It re-verdicts nothing below itself, but at
     // the boundary it decides whether an ISSUE of a short or listed name is 'invalid: TICK
     // (length)' / 'invalid: TICK (reserved)' or a live token row, so a one-sided height edit
     // has one node holding a root the next node just sold.
@@ -168,7 +168,7 @@ const GATES = [
     // which is precisely the split a drill exists to rehearse and must never be its default.
     ['mirror_admission_activation.js',     'MIRROR_ADMISSION_REGTEST_ENV'],
     ['mirror_admission_activation.js',     'MIRROR_ADMISSION_REGTEST_ARMED_HEIGHT'],
-    // The family's anchor-attest member (anchor-attest-barrier-future-block.md section 8). The
+    // The family's anchor-attest member. The
     // margin is a LEDGER-adjacent input in the same sense as ANCHOR_REWARD_MIRROR_MATURITY: it
     // decides the block at which the barrier opens, so two nodes applying different values
     // certify completeness at different heights for the identical mirror.
@@ -283,7 +283,7 @@ describe('activation-gate constant parity to canonical constants.js @regression'
         assert.strictEqual(m.admissionCanonicalField('PARITY', 'mainnet', 1, null), '');
     });
 
-    // §3.2 b, D9: the indexer half of the height-ordering invariant the hub asserts at boot
+    // The indexer half of the height-ordering invariant the hub asserts at boot
     // (attest_zero_conf_activation.assertZeroConfOrdering). Read straight off the canon, not
     // off the local copies, so this case would catch a canon that itself violated the rule.
     // Runs over EVERY network the canon declares, never a hardcoded list, so a network added
@@ -306,7 +306,7 @@ describe('activation-gate constant parity to canonical constants.js @regression'
         }
     });
 
-    // Token-bridge spec section 8, D25: the general formats ride the XCHAIN bridge's engine,
+    // Token-bridge ordering: the general formats ride the XCHAIN bridge's engine,
     // its mirrored bridge_transfers table and its settle pass, so v3 can never be legal on a
     // chain where v0 is not. Read straight off the canon, not off the local copies, so a
     // canon that itself violated the rule is caught.
@@ -342,7 +342,7 @@ describe('activation-gate constant parity to canonical constants.js @regression'
             'not vacuous: the coin-keyed slots must be compared, not just the bare network keys');
     });
 
-    // Policy spec section 9, D28, invariant one of two: inheritance cannot arm before the
+    // Policy ordering, invariant one of two: inheritance cannot arm before the
     // token bridge, because there are no bridged copies for a policy to bind until v3 locks
     // are legal, and a snapshot signed with nothing to apply it to is a row every destination
     // carries forward forever. Read off the canon, not the local copies, so a canon that
@@ -393,8 +393,8 @@ describe('activation-gate constant parity to canonical constants.js @regression'
         assert.ok(compared >= 4, 'not vacuous: expected at least the three mainnet chain keys plus regtest, compared ' + compared);
     });
 
-    // Token spec section 3, R8: the namespace is deliberately NOT keyed on the bridge's own
-    // height, because the bridge arms only after the base spec's D2 checkpoint cross-check
+    // Tick namespace ordering: the namespace is deliberately NOT keyed on the bridge's own
+    // height, because the bridge arms only after the base bridge's checkpoint cross-check
     // while the namespace has to close BEFORE anyone squats, not after. Sizing it after the
     // bridge would leave a window in which foreign assets are being rooted on this chain and
     // the roots they need are still purchasable, which is the one ordering that defeats the

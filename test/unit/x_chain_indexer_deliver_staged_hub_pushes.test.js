@@ -82,7 +82,7 @@ describe('XChainIndexer._deliverStagedHubPushes()', function(){
         assert.strictEqual(indexer.indexerDb.markHubPushDelivered.calledWith(2), true);
     });
 
-    // ─── price_batch (PRICE batch push, D12): the arm this row adds ─────
+    // ─── price_batch (PRICE batch push): the price_batch dispatch arm ─────
     it('dispatches price_batch entries to pushPriceBatch and marks delivered', async function(){
         let payload = {
             source_chain:     'BTC',

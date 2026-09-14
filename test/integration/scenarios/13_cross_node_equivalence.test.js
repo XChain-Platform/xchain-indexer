@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Integration tests: 13 - CROSS-NODE EQUIVALENCE (P2a, test-framework program)
+ * Integration tests: 13 - CROSS-NODE EQUIVALENCE (consensus fork detection)
  *
  * Two INDEPENDENT indexer instances (separate indexer DBs) process the SAME
  * decoder DB. The consensus property: their resolved hash chains must be
@@ -236,7 +236,7 @@ describe('13 – Cross-node equivalence @regression @tier1', function () {
     // This is the seam that most directly detects silent consensus forking:
     // it asserts cross-node ledger-hash equivalence after a reorg whose
     // orphaned branch minted novel entities. It was skipped 2026-06-12 as a
-    // CONFIRMED CONSENSUS FORK (P2a finding #1: getBlockHashes folded raw
+    // CONFIRMED CONSENSUS FORK (getBlockHashes folded raw
     // index_* ids into the hash while rollback never deleted index_* rows,
     // so a survivor kept an orphan's index_* row, the next new entity took
     // the id after it, and a fresh resync gave that same entity a lower id;

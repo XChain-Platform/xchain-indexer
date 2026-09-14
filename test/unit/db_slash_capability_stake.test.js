@@ -11,9 +11,9 @@
  **********************************************************************
  * test/unit/db_slash_capability_stake.test.js
  *
- * SLASH-1: slashCapabilityStake Pass 1 filtered `activation_block <= block`, so an
- * equivocator's pending-activation top-up (debited at STAKE time) escaped the bond
- * burn and could later be UNSTAKEd/refunded. At/after the SLASH_BURNS_PENDING_STAKE
+ * slashCapabilityStake Pass 1 filtering on `activation_block <= block` alone lets an
+ * equivocator's pending-activation top-up (debited at STAKE time) escape the bond
+ * burn and be UNSTAKEd/refunded later. At/after the SLASH_BURNS_PENDING_STAKE
  * flag-day the caller passes burnPending=true and the whole locked bond burns,
  * activated or not. These mock-based tests (doQuery stubbed) lock the query shape in
  * both regimes and confirm a pending row is zeroed when burnPending is set.

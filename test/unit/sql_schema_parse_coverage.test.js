@@ -21,7 +21,7 @@
  * parseExpectedColumns(), whose regex only recognizes a `CREATE TABLE ... ) ENGINE`
  * definition. If a source file can't be parsed (e.g. a missing ENGINE clause), the
  * reconciler SILENTLY skips that whole table; this is exactly how cross_chain_matches
- * shipped without its Phase B partial-fill columns on databases created before the
+ * shipped without its partial-fill columns on databases created before the
  * release.
  *
  * This locks the invariant: every table source in src/sql/ MUST be parseable into

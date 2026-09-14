@@ -10,7 +10,7 @@
  *
  **********************************************************************
  *
- * ATTEST v0 per-block admission caps (framework spec §11.1).
+ * ATTEST v0 per-block admission caps.
  *
  * The gate is consensus-visible, so the load-bearing assertions here are the
  * INERT ones: an unratified network must read as off at EVERY height, because

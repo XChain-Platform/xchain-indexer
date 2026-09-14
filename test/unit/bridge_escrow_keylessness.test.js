@@ -6,8 +6,8 @@
 // This file is part of XChain Platform. Licensed under the GNU Affero
 // General Public License v3.0 or later; see LICENSE.md.
 
-// CONSENSUS guard for what the XBRIDGE escrow addresses actually ARE, base spec
-// section 5. A comment that says "the readable text IS the hash160, so spending
+// CONSENSUS guard for what the XBRIDGE escrow addresses actually ARE, and what
+// they are not. A comment that says "the readable text IS the hash160, so spending
 // would need a preimage break" is false: the readable text lives in the base58
 // STRING, and the decoded 20 bytes are
 // whatever that string happens to encode. Measured 2026-09-12,

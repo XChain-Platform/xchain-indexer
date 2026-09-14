@@ -1187,10 +1187,10 @@ describe('HubDbSync mirror-table cold-start (missing table) @regression @tier2',
 
 describe('HubDbSync bootstrap fail-closed on partial drain / holes @regression @tier1', function () {
 
-    // BOOTSTRAP-HOLE-1: on an apply failure mid-page the cursor must not advance past the
+    // No mirror holes: on an apply failure mid-page the cursor must not advance past the
     // failed row (directly or via a later row in the page), or the next retry's since_id =
     // SELECT MAX(id) skips it forever and, once the retry drains clean, the heartbeat gate
-    // opens over a permanent mirror hole. BOOTSTRAP-FLAG-PARTIAL-DRAIN: a partial drain must
+    // opens over a permanent mirror hole. Likewise, a partial drain must
     // not arm the *Bootstrapped flag, or the barrier's empty/content fast path opens against
     // an incomplete mirror and forks.
     it('stops the page at the first apply failure and does not arm the barrier', async function () {
@@ -1232,7 +1232,7 @@ describe('HubDbSync bootstrap fail-closed on partial drain / holes @regression @
         assert.ok(refresh.calledOnce, 'a full drain arms the barrier');
     });
 
-    // CATCHUP-SCHEMA-BYPASS-1: the hub_ready_max_id catch-up fetch must honor the same
+    // Catch-up schema guard: the hub_ready_max_id catch-up fetch must honor the same
     // schema_version fail-closed as the main page loop; a mismatched catch-up page marks
     // the table not-drained rather than applying rows of an unknown shape.
     it('a schema-mismatched catch-up page fails closed (not drained)', async function () {
@@ -1601,7 +1601,7 @@ describe('HubDbSync._applyRetraction closed-range parity @regression @tier3', fu
 });
 
 // ---------------------------------------------------------------------------
-// XCALL-RETRACT-1 receive-side guards. row:deleted events are unsigned
+// Retraction receive-side guards. row:deleted events are unsigned
 // and the hub's push*reorg RPCs forward the caller's claim verbatim, so the
 // mirror must not treat them as ground truth: retractions claiming a reorg of
 // OUR OWN chain are checked against our own push_generations authority, and
@@ -2494,7 +2494,7 @@ describe('HubDbSync height watermark wire contract @regression @tier1', function
     });
 });
 
-// ── The stall detector's HEIGHT dimension (C20) ──
+// ── The stall detector's HEIGHT dimension ──
 //
 // watermarkStallVerdict compares two wall-clock seconds values and nothing height-shaped,
 // so a hub whose heights map froze while its ts kept ticking reads 'ok' forever and only the

@@ -59,7 +59,7 @@ describe('UtxoTracker boundary tests @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // UTX-B01: minimum valid height (genesis, block 0)
+    // Minimum valid height (genesis, block 0)
     // -----------------------------------------------------------------------
     describe('UTX-B01: height 0 (genesis)', function () {
         it('height 0 is a valid number and is returned, not treated as absent', async function () {
@@ -72,7 +72,7 @@ describe('UtxoTracker boundary tests @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // UTX-B02: negative height is forwarded (no non-negativity guard)
+    // Negative height is forwarded (no non-negativity guard)
     // -----------------------------------------------------------------------
     describe('UTX-B02: negative height', function () {
         it('a negative height passes the numeric guard and is returned verbatim', async function () {
@@ -85,7 +85,7 @@ describe('UtxoTracker boundary tests @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // UTX-B03: fractional / non-integer height is forwarded (no integer guard)
+    // Fractional / non-integer height is forwarded (no integer guard)
     // -----------------------------------------------------------------------
     describe('UTX-B03: fractional height', function () {
         it('a non-integer height is a number and is returned unrounded', async function () {
@@ -98,7 +98,7 @@ describe('UtxoTracker boundary tests @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // UTX-B04 / UTX-B05: NaN and Infinity satisfy `typeof === 'number'`
+    // Non-finite heights: NaN and Infinity satisfy `typeof === 'number'`
     // -----------------------------------------------------------------------
     describe('UTX-B04: NaN height', function () {
         it('NaN is typeof "number" and is NOT filtered out', async function () {
@@ -122,7 +122,7 @@ describe('UtxoTracker boundary tests @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // UTX-B06: very large heights (MAX_SAFE_INTEGER and beyond)
+    // Very large heights (MAX_SAFE_INTEGER and beyond)
     // -----------------------------------------------------------------------
     describe('UTX-B06: extreme large heights', function () {
         it('MAX_SAFE_INTEGER is returned verbatim', async function () {
@@ -144,7 +144,7 @@ describe('UtxoTracker boundary tests @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // UTX-B07: non-number heights collapse to null
+    // Non-number heights collapse to null
     // -----------------------------------------------------------------------
     describe('UTX-B07: non-number height → null', function () {
         const cases = [
@@ -173,10 +173,10 @@ describe('UtxoTracker boundary tests @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // UTX-B07b: the same non-number heights THROW at/after the oracle-shape
+    // Strict shape: the same non-number heights THROW at/after the oracle-shape
     // flag-day (src/dispenser_freshness_shape_activation.js). The null above is
     // fail-open into a consensus-relevant fresh-address verdict, so the edge moves
-    // only behind the gate, and the numeric edge drawn in B01-B06 does not move at
+    // only behind the gate, and the numeric edge drawn in the numeric cases above does not move at
     // all: those values already fail closed in the caller's height comparison.
     // -----------------------------------------------------------------------
     describe('UTX-B07b: non-number height → throw under strictShape', function () {
@@ -225,7 +225,7 @@ describe('UtxoTracker boundary tests @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // UTX-B08: malformed-but-plausible address inputs are forwarded verbatim
+    // Malformed-but-plausible address inputs are forwarded verbatim
     // -----------------------------------------------------------------------
     describe('UTX-B08: edge address inputs forwarded verbatim', function () {
         it('an empty-string address is passed straight through in params', async function () {
@@ -252,7 +252,7 @@ describe('UtxoTracker boundary tests @regression @tier1', function () {
     });
 
     // -----------------------------------------------------------------------
-    // UTX-B09: constructor enabled/disabled boundary on the port value
+    // Constructor enabled/disabled boundary on the port value
     // -----------------------------------------------------------------------
     describe('UTX-B09: constructor port boundary', function () {
         it('port 0 is falsy → client disabled, endpoint null, _call throws', async function () {

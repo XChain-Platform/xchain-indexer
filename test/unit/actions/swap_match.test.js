@@ -158,7 +158,7 @@ describe('Swap_Match action handler @regression @tier2', function () {
         assert.ok(indexer.indexerDb.createSwapMatch.notCalled, 'Should not match when address is blocked');
     });
 
-    // SWAP-MATCH-1: reciprocity gate. swapInfo wants GET; a candidate whose GIVE side is a DIFFERENT
+    // Reciprocity gate. swapInfo wants GET; a candidate whose GIVE side is a DIFFERENT
     // token (reverse-leg mismatch the incomplete findSwapMatches predicate would return) must be
     // skipped, not settled - else the taker is credited a token the maker never escrowed (an
     // unbounded mint out of the global escrow pool).

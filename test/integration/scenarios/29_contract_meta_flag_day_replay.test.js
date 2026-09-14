@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Integration: CONTRACT_META_REQUIRED flag day, the REPLAY half of AT2.
+ * Integration: CONTRACT_META_REQUIRED flag day, the REPLAY half of the verdict checks in deploy_contract_meta.test.js.
  *
  * The consensus risk a new deploy verdict carries is not that it rejects the
  * contracts it is meant to reject: it is that it silently moves a verdict the
@@ -24,7 +24,7 @@
  *   1. Below the flag day a NAMELESS contract still deploys `valid` and stores
  *      four NULL meta columns, and a contract that happens to carry a conforming
  *      `meta` gets its columns for free (the verdict is gated, the extraction is
- *      not: see actions/deploy.js and spec 2.3 "below the flag day").
+ *      not: see actions/deploy.js, where the below-flag-day branch lives).
  *   2. Two INDEPENDENT indexer nodes replaying that pre-activation corpus from
  *      genesis produce byte-identical databases and an identical resolved hash
  *      chain (setup/equivalence.js).
@@ -36,7 +36,7 @@
  * block-TIME keyed (protocol_changes.js addChange, resolved through the decoder's
  * block_time). regtest arms it at 0, so on regtest there is no below-flag block to
  * replay at all: the regtest-active half is 16-controller-permissions. testnet
- * arms it at a future instant (1789257600, spec 2.4), which is a real block time
+ * arms it at a future instant (1789257600), which is a real block time
  * a decoder row can hold (block_time is BIGINT UNSIGNED on both schemas), so a
  * seeded block above it activates the rule on the same chain that carries the
  * blocks below it. That is strictly stronger than comparing two networks: the
@@ -53,7 +53,7 @@
  * across the flag day with a short run of blocks, and the first of them carries a
  * nameless deploy that must still read `valid` precisely because its own stamp is
  * above the flag day while the median below it is not. That is the same arithmetic
- * spec 2.4 puts on the release re-pin ("strictly above the tip and the tip's
+ * the release re-pin rule applies ("strictly above the tip and the tip's
  * median-time-past at re-pin").
  *
  * Run (disposable MariaDB; bin/run-db-tiers.sh provisions one):

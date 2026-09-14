@@ -11,11 +11,11 @@
  **********************************************************************
  * test/unit/db_swq_source_cap.test.js
  *
- * SWQ-TRUNC-1 liveness half (source-cap flag-day). The source-keyed stake-weight
+ * Stake-weight truncation, liveness half (source-cap flag-day). The source-keyed stake-weight
  * query feeds the hashed stakes_root. Below SWQ_SOURCE_CAP_ACTIVATION it uses the
  * legacy uncapped key-row LIMIT; at/after it uses a windowed cap on DISTINCT
- * staking SOURCES (+ a per-source key bound) so one key-spamming source can no
- * longer evict honest sources. These are mock-based (doQuery stubbed) and lock:
+ * staking SOURCES (+ a per-source key bound) so one key-spamming source cannot
+ * evict honest sources. These are mock-based (doQuery stubbed) and lock:
  *   - the GATE: which query shape is emitted below vs at/after the activation height;
  *   - the ARG shape: the over-fetch bounds (maxSources+1, maxKeys) vs the legacy LIMIT;
  *   - the TRUNCATION semantics: truncated ONLY when a source beyond maxSources

@@ -129,8 +129,8 @@ describe('Withdraw handler @regression @tier2', function () {
         });
     });
 
-    // WITHDRAW-1: WITHDRAW was the sole token-moving handler that never checked whether the TICK
-    // is asleep, and shared the /^\d+$/ gate that admits leading-zero (phantom-address) indexes.
+    // WITHDRAW, like every other token-moving handler, must check whether the TICK
+    // is asleep, and must not share the /^\d+$/ gate that admits leading-zero (phantom-address) indexes.
     describe('WITHDRAW-1: sleeping-tick + canonical-index enforcement @regression @security', function () {
 
         it('sleeping TICK → invalid (mirror of DEPOSIT)', async function () {

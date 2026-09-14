@@ -11,16 +11,16 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Smoke tests: Database connectivity (SM-05 through SM-09)
+ * Smoke tests: Database connectivity (five checks)
  *
  * Requires a running MariaDB instance with the decoder and indexer databases
  * already created. Reads credentials from .env at the project root.
  *
- * SM-05: Decoder DB pool connects
- * SM-06: Indexer DB pool connects
- * SM-07: Indexer DB schema exists
- * SM-08: Indexer DB tables exist
- * SM-09: Decoder DB is readable
+ * 1. Decoder DB pool connects
+ * 2. Indexer DB pool connects
+ * 3. Indexer DB schema exists
+ * 4. Indexer DB tables exist
+ * 5. Decoder DB is readable
  */
 
 'use strict';
@@ -83,7 +83,7 @@ describe('Smoke: database connectivity @regression @tier3', function () {
     });
 
     // -------------------------------------------------------------------------
-    // SM-05: Decoder DB pool connects
+    // Check 1: Decoder DB pool connects
     // -------------------------------------------------------------------------
     it('SM-05: decoder DB pool connects and releases a connection', async function () {
         const conn = await decoderPool.getConnection();
@@ -92,7 +92,7 @@ describe('Smoke: database connectivity @regression @tier3', function () {
     });
 
     // -------------------------------------------------------------------------
-    // SM-06: Indexer DB pool connects
+    // Check 2: Indexer DB pool connects
     // -------------------------------------------------------------------------
     it('SM-06: indexer DB pool connects and releases a connection', async function () {
         const conn = await indexerPool.getConnection();
@@ -100,7 +100,7 @@ describe('Smoke: database connectivity @regression @tier3', function () {
     });
 
     // -------------------------------------------------------------------------
-    // SM-07: Indexer DB schema exists
+    // Check 3: Indexer DB schema exists
     // -------------------------------------------------------------------------
     it('SM-07: indexer DB schema exists in information_schema', async function () {
         const conn = await indexerPool.getConnection();
@@ -118,7 +118,7 @@ describe('Smoke: database connectivity @regression @tier3', function () {
     });
 
     // -------------------------------------------------------------------------
-    // SM-08: Indexer DB tables exist
+    // Check 4: Indexer DB tables exist
     // -------------------------------------------------------------------------
     it('SM-08: indexer DB has required tables', async function () {
         const conn = await indexerPool.getConnection();
@@ -144,7 +144,7 @@ describe('Smoke: database connectivity @regression @tier3', function () {
     });
 
     // -------------------------------------------------------------------------
-    // SM-09: Decoder DB is readable
+    // Check 5: Decoder DB is readable
     // -------------------------------------------------------------------------
     it('SM-09: decoder DB is readable (MAX block_index query succeeds)', async function () {
         const conn = await decoderPool.getConnection();

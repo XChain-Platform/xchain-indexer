@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
-// (DIVIDEND-1) regression: the legacy db-hits fee accumulators in
+// Regression: the legacy db-hits fee accumulators in
 // dividend.js / callback.js / sweep.js used `db_hits += this.util.bcmul(...)`.
 // bcmul returns a Decimal, so `+=` string-concatenated instead of adding
 // (e.g. 3 + "4" -> "34"), massively inflating the fee passed to

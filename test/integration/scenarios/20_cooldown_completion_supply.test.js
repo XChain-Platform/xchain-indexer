@@ -134,7 +134,7 @@ describe('Unstake cooldown completion: GAS supply conservation (real DB + real V
         assert.strictEqual(Number(await balanceOf(A1, GAS)) - liquidBefore, Number(STAKE_AMT),
             'released bond credited back to the staker');
 
-        // F-21: the return credit must hash into the COOLDOWN block, not the UNSTAKE's origin
+        // The return credit must hash into the COOLDOWN block, not the UNSTAKE's origin
         // block. Assert the credit's action lives at the cooldown-end block (via a synthetic
         // UNSTAKE completion action) rather than at UNSTAKE_BLOCK. This is the property that
         // makes ledger_hash agree with balances_root and with a recompute-from-final-state.

@@ -21,8 +21,8 @@
 //
 // The fixture's `bundle` deliberately lists its sections (LTC, BTC, DOGE) and one
 // signature list OUT of the wire's order, so a test that merely echoed fixture order
-// would fail: the ordering rules (sections CHAIN ascending, pairs PUBKEY ascending,
-// D5) are what make two publishers emit identical bytes for one bundle.
+// would fail: the ordering rules (sections CHAIN ascending, pairs PUBKEY ascending)
+// are what make two publishers emit identical bytes for one bundle.
 
 process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
@@ -234,7 +234,7 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
             const got  = JSON.parse(row['VALIDATOR_SIGNATURES']);
             assert.strictEqual(got.length, want.length);
             // Compared as a SET: the fixture's BTC section lists its pairs out of PUBKEY
-            // order on purpose, and the wire carries them sorted (D5).
+            // order on purpose, and the wire carries them sorted by PUBKEY.
             assert.deepStrictEqual(
                 got.map(s => s.pubkey).sort(),
                 want.map(s => s.pubkey).sort());
@@ -255,7 +255,7 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
         assert.strictEqual(qualifier, 0, 'a bundle round_reference only advances, so qualifier is 0');
 
         // The bytes the attestation quorum signed, six positional fields with
-        // round_reference repeated as the snapshot block (D22).
+        // round_reference repeated as the snapshot block field.
         const eq = require('../../../src/equivocation_header.js');
         const canonical = handler.rewardCanonical(data);
         const expected  = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT,

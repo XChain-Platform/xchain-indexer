@@ -111,7 +111,7 @@ describe('Escrow release negation parity @regression @tier1', function () {
         // in any handler fails here without needing a per-handler behavioral repro.
         const actionsDir = path.join(__dirname, '../../../src/actions');
         const offenders  = [];
-        // Recursive since M3: the nine largest handlers are <name>/index.js with named
+        // Recursive by design: the nine largest handlers are <name>/index.js with named
         // parts beside them, so a flat read would stop scanning exactly the biggest
         // ledger-writing handlers and this pin would silently cover less each time an
         // action grows into a directory.

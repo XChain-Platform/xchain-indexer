@@ -30,7 +30,7 @@ const Utility        = require('../../src/utility.js');
 // hub serialization both tests verify against.
 const { makeKeypair, signHex, buildBatch, rawMatch, rawCall, SNAPSHOT_BLOCK } = require('../fixtures/anchor-archive.js');
 
-// Stake-weighted quorum (WI-1) is active for every regtest snapshot_block
+// Stake-weighted quorum is active for every regtest snapshot_block
 // (STAKE_WEIGHTED_QUORUM_ACTIVATION.regtest = 0), so recovery takes the weighted
 // predicate, which needs the indexer's bcmath. Each archived snapshot below
 // carries a DISTINCT source at equal weight, so the source-deduped threshold
@@ -216,13 +216,13 @@ function memDb(v1s, v2s, opts) {
 
 // BTC indexer stub. The two cross-checks resolve the SAME db.js methods at two different
 // thresholds, and the stub models them apart:
-//   minStake '0'  -> REC-EXIST-1 delegated-key admission (_verifyStakes stage 2): the
+//   minStake '0'  -> existence check's delegated-key admission (_verifyStakes stage 2): the
 //                    delegation-aware effective signer set. Backed by opts.effective,
 //                    defaulting to `staked`. A key in `effective` but NOT in `staked` models a
 //                    DELEGATED-only signer: authorized by a staked source, no stakes row of its
 //                    own. Stage 2 runs only for keys the direct query rejected, so with no
 //                    `effective` override the resolver is never reached for existence.
-//   anything else -> REC-SUBSET-1 completeness (_verifyCompleteness): the qualifying set at
+//   anything else -> the completeness check (_verifyCompleteness): the qualifying set at
 // the threshold recovery reconstructed as of the snapshot block
 //                    or null when this handle carries no coin config, in which case db.js
 //                    applies its own local floor. Backed by
@@ -245,7 +245,7 @@ function btcDbStub(staked, opts) {
     let effective = (opts.effective || staked).map(p => String(p).toLowerCase());
     let capSets = opts.capSets || {};
     // The source(s) a key is really bound to on chain; an archived row must claim one of
-    // them to pass REC-BIND-1. Mirrors the fixture's per-key formula. opts.bindings
+    // them to pass the key-source binding check. Mirrors the fixture's per-key formula. opts.bindings
     // overrides it per key, and takes an ARRAY for a key backed by more than one source.
     let boundSources = (pk) => {
         let b = (opts.bindings && opts.bindings[pk] !== undefined)
@@ -273,7 +273,7 @@ function btcDbStub(staked, opts) {
         async doQuery(sql, params) {
             if (String(sql).includes('capability_slash_debits'))
                 return (opts.slashRestores || []).map(r => ({ source: r.source, restored: String(r.restored) }));
-            // REC-BIND-1's (pubkey, source) probe, told apart from the delegation-blind
+            // The key-source binding check's (pubkey, source) probe, told apart from the delegation-blind
             // existence query by its `ia.address = ?` leg. Answering it on the PUBKEY alone
             // would make this stub incapable of ever saying no, so it matches the pair: the
             // stakes leg answers for a directly-staked key, the delegations leg for a
@@ -313,7 +313,7 @@ function rawStakeHandleStub(staked, opts) {
     };
     return { async doQuery(sql, params) {
         let pk = String(params[0]).toLowerCase();
-        // REC-BIND-1 runs on a bare handle too (it needs no resolver), so this stub has to
+        // The binding check runs on a bare handle too (it needs no resolver), so this stub has to
         // answer the pair probe on the PAIR, not on the pubkey alone.
         if (/ia\.address\s*=\s*\?/.test(String(sql)))
             return (set.has(pk) && boundSources(pk).includes(String(params[1]))) ? [{ 1: 1 }] : [];
@@ -329,7 +329,7 @@ function capSetFromKeys(keys, weight) {
     return keys.map(k => ({ pubkey: k.pubkey, source: 'src_' + k.pubkey.slice(0, 16), weight: w }));
 }
 
-// BTC indexer stub for the reward restore. F1a: recovery STAGES archived rewards by raw
+// BTC indexer stub for the reward restore. Recovery STAGES archived rewards by raw
 // source-address string into recovery_pending_rewards (assigning NO index id), so the stub
 // captures that INSERT. It must NOT call createAddress/getOrCreatePubkeyId at restore time;
 // expose them as poisoned to assert the id-assignment path is gone (the apply hook assigns
@@ -715,7 +715,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         assert.strictEqual(report.verified, 1);
     });
 
-    // REC-BIND-1: the archive decides which SOURCE a signing key speaks for, and under
+    // Key-source binding: the archive decides which SOURCE a signing key speaks for, and under
     // weighted quorum the source carries the stake. Existence answers "is this key staked
     // somewhere" and weighted completeness reduces the archive to source -> amount before it
     // looks, so signing-key identity left the weighted path entirely and an attacker holding
@@ -1059,7 +1059,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             assert.strictEqual(btcDb.rewards.length, 2);
             assert.strictEqual(btcDb.rewards[0].reward_type, 'anchor_BTC');
             assert.strictEqual(btcDb.rewards[0].amount, '10.00000000');
-            // F1a: staged by RAW source-address string (no id), to be materialized under the
+            // Staged by RAW source-address string (no id), to be materialized under the
             // deterministic source_id by the reindex apply hook.
             assert.strictEqual(btcDb.rewards[0].source_address, '1StakeAddr');
         });

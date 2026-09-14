@@ -11,10 +11,10 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * The platform-train consensus activation gate (release-management section 13).
+ * The platform-train consensus activation gate.
  *
  * WHAT IS ACTUALLY BEING ASSERTED. Not that a field is set, but the two BEHAVIOURS
- * the section rules and the ~30 per-feature flag days beside it cannot provide:
+ * this gate provides and the ~30 per-feature flag days beside it cannot provide:
  *
  *   1. A node whose code carries no entry for the rule set its signed manifest
  *      requires DOES NOT APPLY the first block at or above the activation height.

@@ -8,8 +8,8 @@
 //
 // test/unit/rollcall_gates_filter.test.js
 //
-// The rules-aware attestation capability filter (attest-zero-confirmation-flip
-// spec §7.4, D59-D62, D86, D92) and the two call sites this row wires it into:
+// The rules-aware attestation capability filter, part of the attest zero-confirmation flip,
+// and the two call sites that use it:
 // the v0 admission reason literal in actions/attest.js and the
 // getcapabilityvalidators RPC's height reconstruction in api.js.
 //
@@ -113,7 +113,7 @@ describe('rollcall_gates_filter: the rules-aware attestation capability filter @
         });
 
         it('keeps a validator whose rolled list is a strict SUPERSET of the active set', async function () {
-            // The whole point of D48: a build that knows gates armed after the epoch
+            // The whole point of the superset rule: a build that knows gates armed after the epoch
             // closed is still a build that knows every gate governing this request.
             const db  = dbDouble(epochRow(960, 990, [[PK_A, NEEDED.concat(['future_module.FUTURE_GATE'])]]));
             const out = await armed.filterByRolledGates({
@@ -136,7 +136,7 @@ describe('rollcall_gates_filter: the rules-aware attestation capability filter @
 
         it('keeps a validator with NO row in the rolled epoch', async function () {
             // Never-rolled and not-yet-rolled are the liveness-eviction rail's problem,
-            // so the bootstrap epoch right after arming filters nobody (spec §7.4).
+            // so the bootstrap epoch right after arming filters nobody.
             const db  = dbDouble(epochRow(960, 990, [[PK_A, NEEDED.slice()]]));
             const stats = {};
             const out = await armed.filterByRolledGates({
@@ -310,10 +310,10 @@ describe('rollcall_gates_filter: the rules-aware attestation capability filter @
 });
 
 // ---------------------------------------------------------------------------
-// The v0 admission reason literal (spec §7.4, D61). The gate at actions/attest.js
+// The v0 admission reason literal. The gate at actions/attest.js
 // must fire the rules-aware literal whenever the filter dropped somebody, and the
 // generic one otherwise. Driven through the REAL handler with the module-instance
-// stub convention actions/attest.test.js uses; that suite is another row's surface,
+// stub convention actions/attest.test.js uses; that suite is a separate file,
 // so the new literal is pinned here.
 // ---------------------------------------------------------------------------
 

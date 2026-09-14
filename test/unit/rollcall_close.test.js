@@ -11,7 +11,7 @@
  **********************************************************************
  *
  * The ROLLCALL epoch close: quorum gate, absence pinning, the K-streak and
- * eviction (§3.4).
+ * eviction.
  *
  * WHAT THESE TESTS ARE FOR. An absence costs a live validator its stake, so
  * every case where the close could be WRONG matters more than the case where it
@@ -288,7 +288,7 @@ describe('ROLLCALL epoch close (§3.4)', function(){
         });
 
         it('does not count a VALID signature whose row mislabels the ledger_hash', async function(){
-            // The strictness §3.4 step 3 asks for, and it is not redundant with the
+            // The strictness the close rule asks for, and it is not redundant with the
             // signature check: this signature verifies perfectly over this indexer's own
             // canonical, and only the row's carried ledger_hash field disagrees. The row
             // must be internally consistent to count, so a mislabeled row is discarded
@@ -353,7 +353,7 @@ describe('ROLLCALL epoch close (§3.4)', function(){
         });
 
         it('ENDS the streak on a demonstrated presence, so a recovered validator is never evicted', async function(){
-            // This is AT2's shape: absent, then present, then absent. The middle epoch
+            // This is the flaky-hub shape: absent, then present, then absent. The middle epoch
             // must break the streak, or an intermittent hub is evicted for being flaky.
             let fed = federation(4);
             let db  = dbFor(fed);
@@ -609,7 +609,7 @@ describe('ROLLCALL epoch close (§3.4)', function(){
         });
     });
 
-    // ROLLCALL v1 (§7.3, D85). At or above ROLLCALL_GATES_ACTIVATION the signed
+    // ROLLCALL v1. At or above ROLLCALL_GATES_ACTIVATION the signed
     // canonical commits to sha256(GATES) and a ROLLED epoch records each verified
     // signer's list, because rollcall_gates is the only BTC-side artifact the
     // rules-aware attestation set can read.
@@ -617,7 +617,7 @@ describe('ROLLCALL epoch close (§3.4)', function(){
     // Every case here is about the eviction cost of getting the FORM wrong: a row
     // whose form disagrees with its epoch is not a valid signer, and a signer that
     // signed a different list verified against nothing, so both are absences and
-    // two absences evict. That is the price §7.2 names for rolling a fleet across
+    // two absences evict. That is the price of rolling a fleet across
     // an epoch, and it must fall out of the code, not out of a comment.
     describe('ROLLCALL v1: the gates canonical and the rollcall_gates write (§7.3, D85)', function(){
 

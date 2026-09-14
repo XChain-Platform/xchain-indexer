@@ -189,12 +189,12 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
 
         const actionIndex = await getLastActionIndexByType(indexerQuery, 'ISSUE');
         assert.ok(actionIndex !== null);
-        // The regtest exemption is the GAS tick alone (token bridge section 3): the
+        // The regtest exemption is the GAS tick alone: the
         // coin roots BTC, LTC
         // and DOGE are the parents of every origin-rooted bridged copy, the bridge
-        // creates each root row itself, and regtest is the only venue milestone 1
-        // runs on, so a squatted root there would break the drill the milestone is
-        // proven by. One expectation on every network now.
+        // creates each root row itself, and regtest is the only venue the bridge drill
+        // runs on, so a squatted root there would break the drill the bridge is
+        // proven by. One expectation holds on every network.
         await assertActionStatus(indexerQuery, 'issues', actionIndex, 'invalid: TICK (reserved)');
     });
 

@@ -352,7 +352,7 @@ describe('Airdrop @regression @tier2', function () {
 
     });
 
-    // AIRDROP-1: a leg that fails AFTER its TICK debit (e.g. at the fee
+    // A leg that fails AFTER its TICK debit (e.g. at the fee
     // check) must not leave that debit applied to the shared balances, or the next
     // leg airdropping the same tick is measured against an under-counted balance
     // and wrongly rejected with insufficient TICK instead of its real verdict.

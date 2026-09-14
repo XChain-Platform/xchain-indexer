@@ -8,7 +8,7 @@
 // This file is part of XChain Platform. Licensed under the GNU Affero
 // General Public License v3.0 or later; see LICENSE.md.
 
-// EQUIV header (WI-2 bump 2) - oracle/price (XORACLE) round-trip.
+// EQUIV header: oracle/price (XORACLE) round-trip.
 // CONSENSUS-CRITICAL: ed25519.buildPriceV0Payload is the on-chain verifier twin of
 // the hub OracleConsensus / PriceAggregator builders. They MUST produce byte-identical
 // bytes. XORACLE has no view change (VIEW=0); the gate keys on the round's BTC block

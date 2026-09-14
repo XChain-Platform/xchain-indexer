@@ -182,7 +182,7 @@ async function processBlocks(indexer) {
         // block): createAddress/createTicker default block_index to this.blockIndex,
         // so without this the harness stamps block_index=NULL and the reorg rollback
         // (DELETE WHERE block_index >= ?) matches nothing, blinding the 05-reorg suite
-        // to the F-1/F-2 index-id bug class.
+        // to the out-of-band index-id bug class.
         indexer.indexerDb.blockIndex = lastIndexerBlock;
         try {
             // Mirror production (XChainIndexer.js, first statement inside the block's

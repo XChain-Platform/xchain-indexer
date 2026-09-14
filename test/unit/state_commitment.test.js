@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Persistent SMT engine conformance (SPV spec §4). Asserts the incremental,
+ * Persistent SMT engine conformance for SPV state roots. Asserts the incremental,
  * content-addressed PersistentSMT produces byte-identical roots to the in-memory
  * SparseMerkleTree reference in merkle.js across inserts, updates, and deletes,
  * and that proofs generated from the persistent store verify. Deterministic
@@ -252,7 +252,7 @@ describe('stateCommitment: missing prior root falls back to full recompute (item
     });
 });
 
-// Escrow ARMING block after a §7 shadow window.
+// Escrow ARMING block after a shadow window.
 //
 // The failure this pins: the arming replay writes no journal row for a key whose
 // locked total is unchanged since the shadow window, so touchedEscrowKeys(arming)

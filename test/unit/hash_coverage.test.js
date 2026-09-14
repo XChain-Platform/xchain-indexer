@@ -104,7 +104,7 @@ describe('Hash coverage guard @regression', function () {
             'credits',        // backdated cooldown refund credits class
             'anchor_actions', // invalid_archive stamp class
             'polls',          // finalization-flip class (flag-day gated; structural binding below)
-            'tokens',         // supply-refresh class (F-1 closure; flag-day gated; structural binding below)
+            'tokens',         // supply-refresh class (stale-supply gap closure; flag-day gated; structural binding below)
             'bet_feeds',      // BET latch + terminal-flip class (flag-day gated; structural binding below)
             'bets',           // BET settlement-flip class (same flag-day; structural binding below)
         ]);

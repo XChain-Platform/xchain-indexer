@@ -20,8 +20,8 @@
  * predicate that selects unsettled obligations prices it off trades nobody paid for.
  *
  * EVERY ROW FIXTURE BELOW IS A REAL ROW, dumped from XChain_BTC_Regtest_Indexer on
- * 2026-07-25, not a hand-written approximation of one. The spec requires
- * this (§10 step 1): hand-written fixtures share their author's misreading of the
+ * 2026-07-25, not a hand-written approximation of one. Real rows are required
+ * because hand-written fixtures share their author's misreading of the
  * unit convention, and a satoshi-vs-decimal misread prices fees off by 1e8. Where a
  * fixture needs to be an XCHAIN row, only the ticker id is swapped, to XCHAIN's real
  * id on that database (1); the amount strings and the row shape are untouched.

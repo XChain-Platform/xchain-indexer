@@ -11,14 +11,14 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Base AT9, the verdict witness (the base bridge spec section 15).
+ * The bridge verdict witness for a source holding no XCHAIN.
  *
  * "A controller-guarded ORDER, SEND and DISPENSER on DOGE regtest from a
  *  source with no XCHAIN carry the same verdict before and after the XCHAIN
  *  row exists on that chain."
  *
  * The XCHAIN row off BTC is created by the first XBRIDGE v2 in-leg on that
- * chain (section 9), at whatever block that lands. Nothing else about the
+ * chain, at whatever block that lands. Nothing else about the
  * chain changes at that block, so no verdict may change at it either: a
  * verdict that moves without a flag day forks any node that mirrors the
  * transfer a block later than its peer.
@@ -29,7 +29,7 @@
  * BEFORE (gasInfo null) and AFTER (a real row, source balance zero), and
  * asserts the verdict is byte-identical off BTC.
  *
- * Two layers, because AT9 names three action classes that share one
+ * Two layers, because the witness names three action classes that share one
  * enforcement point:
  *   1. the shared chokepoint, utility.maybeRunControllerGuard, driven for the
  *      ORDER_CREATE, SEND (transfer) and DISPENSER_CREATE classes,
@@ -98,7 +98,7 @@ describe('base AT9: the XCHAIN row appearing off BTC moves no verdict @regressio
                 proceedsTick: 'PAY',
                 data:         { BLOCK_INDEX: 100, ACTION_INDEX: 1, SOURCE: SOURCE, COIN: coin },
                 gasInfo:      gasInfo,
-                gasBalances:  {},   // the AT9 subject: a source holding no XCHAIN
+                gasBalances:  {},   // the witness subject: a source holding no XCHAIN
             });
             // guardFee is a bignumber; normalize so the two worlds compare as values.
             return { error: res.error, guardFee: util.bcstr(res.guardFee), payoutLegs: res.payoutLegs };
@@ -132,11 +132,11 @@ describe('base AT9: the XCHAIN row appearing off BTC moves no verdict @regressio
 
     describe('the real SEND handler on DOGE regtest', function(){
 
-        // SEND is the one AT9 action whose whole verdict is reachable in a unit test:
+        // SEND is the one witnessed action whose whole verdict is reachable in a unit test:
         // it charges no protocol fee, so no native-fee refusal masks the guard branch
         // the way it would on ORDER and DISPENSER off BTC (both validate the fee before
         // running the guard). Those two are witnessed at the chokepoint above and on the
-        // rail in Phase 3.
+        // regtest rail.
         function buildHandler(coin, gasRowExists){
             const cfg     = configFor(coin);
             const indexer = createMockIndexer();
@@ -211,7 +211,7 @@ describe('base AT9: the XCHAIN row appearing off BTC moves no verdict @regressio
         // fee output), which is the one fee path that reaches the XCHAIN-balance branch
         // off BTC. That branch does not read getTokenInfo at all: the tick id comes from
         // createFeesObject, which calls getTickerId. The bridge's row creation flips that
-        // id from null to a real one, so this pins that the verdict for the AT9 subject,
+        // id from null to a real one, so this pins that the verdict for the witness subject,
         // a source with no XCHAIN, is the same on both sides of the flip.
         it('an emission fee refusal is identical whether the GAS ticker id exists or not', async function(){
             const cfg  = configFor('DOGE');

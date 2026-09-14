@@ -149,7 +149,7 @@ describe('PRICE v0 canonical: three-way twin parity', function () {
                 ed25519.buildPriceBatchPayload(7, 7, 5, twin, NETWORK));
         });
 
-        // D36: v2 has no pre-flag-day history to stay bit-identical with, and the bare
+        // v2 has no pre-flag-day history to stay bit-identical with, and the bare
         // JSON form is the shape that breaks SLASH's "an ORACLE-tagged canonical always
         // carries `round`" invariant. v0 at this height would be headerless.
         it('wraps in the EQUIV header unconditionally, with no activation gate', function () {

@@ -10,7 +10,7 @@
  *
  **********************************************************************
  *
- * Index-map state_hash class (id-determinism P4).
+ * Index-map state_hash class (id determinism).
  *
  * Promotes the index_addresses / index_tickers id->string MAP into the
  * replication-integrity state_hash, GATED on the chain's local block_index and

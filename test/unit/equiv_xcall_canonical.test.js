@@ -8,7 +8,7 @@
 // This file is part of XChain Platform. Licensed under the GNU Affero
 // General Public License v3.0 or later; see LICENSE.md.
 
-// EQUIV header (WI-2 bump 2): cross-chain call (XCALL) round-trip.
+// EQUIV header: cross-chain call (XCALL) round-trip.
 // CONSENSUS-CRITICAL: the dispatch canonical (xexec._canonical) and the result
 // canonical (xcall._resultCanonical) are rebuilt to re-verify quorum sigs and MUST
 // byte-match the hub CrossChainCallEngine._canonicalMatch + the archive/recovery

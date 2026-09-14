@@ -12,7 +12,7 @@
  * test/unit/db_rollcalls_public_reads.test.js
  *
  * Two plain public BTC-indexer reads over the roll-call tables (validator
- * liveness eviction spec, D97): db.getRollcalls (JSON-RPC getrollcalls) and
+ * liveness eviction): db.getRollcalls (JSON-RPC getrollcalls) and
  * db.getRollcallAbsencesBySource (JSON-RPC getrollcallabsences). The writer
  * (rollcall_close.js) and the tables are already landed; this file proves
  * only the read side: the limit clamp, the DESC ordering, the absent_count

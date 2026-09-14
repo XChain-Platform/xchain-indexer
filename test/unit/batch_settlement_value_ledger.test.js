@@ -14,7 +14,7 @@
  * test/unit/batch_settlement_value_ledger.test.js
  *
  * Batch-cumulative SETTLEMENT-VALUE and ORACLE-FEE accounting against the shared
- * data['BATCH_VALUE_LEDGER'] (BATCH_ISSUANCE_LIMITS, R5b; sibling of the
+ * data['BATCH_VALUE_LEDGER'] (BATCH_ISSUANCE_LIMITS; sibling of the
  * native-fee half covered by native_fee_batch_ledger.test.js).
  *
  * Three call sites share one defect shape: COIN_AMOUNT and TX_OUTPUTS are

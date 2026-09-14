@@ -104,7 +104,7 @@ describe('two-EXECUTE BATCH ATTEST request_id collision @regression @tier1', fun
         batch = new Batch(actionsCtx);
         indexer.util.resetLists();
         indexer.indexerDb.isActionAllowed.resolves(true);
-        // At/after BATCH_COST_WEIGHTING the R4 spam collapse prices EXECUTE at its acceptance
+        // At/after BATCH_COST_WEIGHTING the aggregate spam collapse prices EXECUTE at its acceptance
         // floor (batch.js vmBaseFeeActions), so a two-EXECUTE batch from a source that cannot
         // cover it collapses to ONE invalid record and no sub-command reaches a handler. Every
         // gate is ON in this fixture, so the SOURCE is funded and the GAS token seeded: these

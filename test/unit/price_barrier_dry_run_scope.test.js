@@ -161,7 +161,7 @@ describe('the price barrier is scoped to consensus, not to "a context exists"', 
             }
         })(srcDir);
 
-        // The dispatch loader is 'actions/index.js' since M3; both opt-outs are still its
+        // The dispatch loader is 'actions/index.js', and both opt-outs are its
         // two dryRunAction sites, so the pin follows the file rather than losing them.
         assert.deepStrictEqual(optOuts, ['actions/index.js:dryRunAction', 'actions/index.js:dryRunAction'],
             'unexpected consensus opt-out(s), or the known two moved: ' + optOuts.join(', '));

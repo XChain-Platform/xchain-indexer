@@ -55,7 +55,7 @@ const b64 = s => Buffer.from(s, 'utf8').toString('base64');
 const sha = s => crypto.createHash('sha256').update(s).digest('hex');
 
 // CONTRACT_META_REQUIRED is genesis-active on regtest: a guard contract that must
-// deploy `valid` to be bound as a controller carries `meta` (spec 2.1).
+// deploy `valid` to be bound as a controller carries `meta`.
 const DENY  = "module.exports={ meta:{ name:'Deny Guard', description:'Reverts every gated transfer.', version:'1.0.0' }, guard:function(){ xchain.revert('policy denied'); } };";
 const ALLOW = "module.exports={ meta:{ name:'Allow Guard', description:'Permits every gated transfer.', version:'1.0.0' }, guard:function(){ return {}; } };";
 

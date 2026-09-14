@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/db_cross_chain_call_rejections.test.js
  *
- * XDISP-1: quorum-starved dispatch visibility. Pins the node-local rejection
+ * Quorum-starved dispatch visibility. Pins the node-local rejection
  * diagnostics helpers:
  *   - recordCrossChainCallRejection upserts one row per call_id (attempts
  *     accumulate, last_block advances) with a bounded detail string;

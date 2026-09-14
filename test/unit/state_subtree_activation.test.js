@@ -10,8 +10,8 @@
  *
  **********************************************************************
  *
- * Reserved state_root sub-tree gate conformance (SPV spec §4.1, §10 D1; design
- * in).
+ * Reserved state_root sub-tree gate conformance, for SPV light
+ * clients.
  *
  * The load-bearing assertion here is the INERTNESS one: the three-argument
  * assembleStateRoot must produce a state_root byte-identical to the old
@@ -116,7 +116,7 @@ describe('state_root reserved sub-trees: slot list @regression', function(){
     });
 
     it('there is no escrow sub-root: the locked leaf lives inside balances_root', function(){
-        // SPV spec §4.2 D2 (revised): escrow is a parallel LEAF under escrowKey's
+        // SPV state root: escrow is a parallel LEAF under escrowKey's
         // XCHAIN_ESC domain in the balances sub-tree, never a sixth slot.
         assert.ok(M.STATE_SUBTREES.every(n => !/escrow/i.test(n)));
         assert.strictEqual(typeof M.escrowKey, 'function');
@@ -267,9 +267,9 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
         assert.strictEqual(SUB.isEscrowLockedLeafActive(0, 'testnet', 'BTC'), true);
         // Scratch-arm both: shadow answers true only BETWEEN its own height and
         // the armed height, so each height uses exactly one column and nothing
-        // ever computes twice (spec §7; same contract as isSubtreeShadowActive).
-        // Snapshot both keys, because BTC:regtest now carries a REAL armed height and
-        // the cleanup below used to `delete` them. While the map was empty, delete and
+        // ever computes twice (same contract as isSubtreeShadowActive).
+        // Snapshot both keys, because BTC:regtest carries a REAL armed height and
+        // the cleanup below restores them rather than a `delete`. With an empty map, delete and
         // restore were indistinguishable; the moment a height exists, deleting it
         // silently DISARMS the chain for every later test in the process. That is not
         // hypothetical: it is exactly what the Stage A arming hit, and it presented as
@@ -366,7 +366,7 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
             assert.ok(SUB.ESCROW_LOCKED_LEAF_ACTIVATION[key] >= stageA,
                 'Stage B must not arm below the Stage A height on ' + key);
         }
-        // The §7 shadow window, which is deliberately NOT the same kind of entry as
+        // The shadow window, which is deliberately NOT the same kind of entry as
         // the two maps above: it commits nothing, so it is not a flag day, but it
         // does start the source's journal writer on the named chain and it must be
         // registered here for the same reason arming is - so that opening one is a
@@ -548,7 +548,7 @@ describe('state_root reserved sub-trees: gateSubRoots @regression', function(){
     it('an armed escrow leaf flips the derived version to 2 (leaf-set changes are never version-invisible)', function(){
         // Stage B moves the contents of balances_root, not the slot list, but a
         // changed committed leaf set must be visible in state_root_version all
-        // the same (design doc §3 Stage B, version decision).
+        // the same.
         try {
             SUB.ESCROW_LOCKED_LEAF_ACTIVATION['DOGE:regtest'] = 700;
             assert.strictEqual(SUB.isEscrowLockedLeafActive(700, 'regtest', 'DOGE'), true);
@@ -681,7 +681,7 @@ describe('assembleStateRoot: reserved-slot carrier is real @regression', functio
     });
 
     it('stateRootProof verifies a reserved sub-root against the assembled root', function(){
-        // The §4.4 sub_root_path a light client would use once a slot is armed.
+        // The sub_root_path a light client would use once a slot is armed.
         const extra = { ownership_root: rootFor('own'), tokens_root: rootFor('tok'), contract_state_root: rootFor('cst') };
         const subRoots = Object.assign({ balances_root: bal, stakes_root: stk }, extra);
         const root = SC.assembleStateRoot(bal, stk, extra);

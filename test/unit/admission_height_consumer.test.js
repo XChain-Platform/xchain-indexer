@@ -207,7 +207,7 @@ describe('mirror-admission height barriers: ARMED @regression @tier1', function 
         assert.deepStrictEqual(sync.heightWatermarks.cross_chain_matches, { BTC: B });
     });
 
-    // The one member that keeps BOTH certificates (R3 (b)), and the reason it must: its height
+    // The one member that keeps BOTH certificates, and the reason it must: its height
     // watermark can be held for up to 6 h by one stuck DOGE anchor, which is WORSE than the
     // clock it replaces, so the clock form stays as a floor and either one releases the block.
     describe('the anchor-attest member keeps both certificates', function () {

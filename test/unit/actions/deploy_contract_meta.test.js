@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// AT2: every verdict row of CONTRACT_META_REQUIRED driven through the real DEPLOY
+// Contract meta: every verdict row of CONTRACT_META_REQUIRED driven through the real DEPLOY
 // handler, plus the storage half (which META_* values reach createContract) and the
 // below-flag-day half (today's verdicts, byte for byte, and the columns still filled
 // for a conforming value). The grammar itself is unit-tested in
@@ -31,7 +31,7 @@ const VALID_CODE_B64 = Buffer.from(VALID_CODE, 'utf8').toString('base64');
 
 const GOOD_META = { name: 'Escrow', description: 'Two-party escrow with an arbiter', version: '1.0.0' };
 
-// Mirror of the xchain-vm CONTRACT_WRAPPER meta report (seam S1): the isolate decides
+// Mirror of the xchain-vm CONTRACT_WRAPPER meta report: the isolate decides
 // metaType, serialises inside the isolate, and caps at 4096 UTF-16 code units.
 function metaReportFor(meta) {
     if (meta === undefined)

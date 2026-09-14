@@ -32,7 +32,7 @@
  *   - the tally is per-ADDRESS, so one payee's exhausted output can never
  *     invalidate a sibling obligation paid separately (the failure a single
  *     scalar would have produced);
- *   - the A5 invariant still binds PER PAYEE on the new path: one payment's worth
+ *   - the one-payment-one-obligation invariant still binds PER PAYEE on the new path: one payment's worth
  *     to one seller settles ONE of that seller's obligations, never two;
  *   - the shared scalar coinAmountConsumed still covers the row's own
  *     COIN_DESTINATION output, byte for byte, so actions/dispense.js keeps seeing
@@ -65,7 +65,7 @@ const PAYEE_B = 'payeeAddressBBBB222222222222';
 const PAYEE_C = 'payeeAddressCCCC333333333333';
 
 // Obligations, keyed by ORDER_MATCH_ACTION_INDEX. Two sellers, and two obligations
-// against the SAME seller so the per-payee A5 invariant is observable.
+// against the SAME seller so the per-payee one-payment-one-obligation invariant is observable.
 const OBLIGATIONS = {
     900: { ACTION_INDEX: 900, COINPAY_STATUS: 'pending_coinpay', PAYEE_ADDRESS: PAYEE_A, COIN_AMOUNT: '5.00000000', EXPIRATION: 9999999999 },
     901: { ACTION_INDEX: 901, COINPAY_STATUS: 'pending_coinpay', PAYEE_ADDRESS: PAYEE_B, COIN_AMOUNT: '3.00000000', EXPIRATION: 9999999999 },

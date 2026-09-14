@@ -33,7 +33,7 @@ const path   = require('path');
 // version a root-level security bump believes it already replaced, and the
 // mismatch is invisible in `npm ls`. The same rot has been found here twice:
 // this repo's snapshot froze at a version the VM had long since renumbered
-// past, exactly as xchain-e2e-test's ADV-9 guard caught for its own staged
+// past, exactly as xchain-e2e-test's sibling-tree advisory guard caught for its own staged
 // siblings (test/unit/security/configuration/sibling-tree-advisories.test.js).
 // This is that guard, ported.
 describe('Security: bundled sibling lockfile snapshots @regression @tier4', function () {

@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/xchain_bridge_activation_coin_keys.test.js
  *
- * The XCHAIN bridge flag day is keyed '<COIN>:<network>' (spec section 14, row 28), not one
+ * The XCHAIN bridge flag day is keyed '<COIN>:<network>' (one slot per chain), not one
  * height per network. The bridge arms on three chains whose tips differ by orders of
  * magnitude (TBTC about 152,110, TLTC about 4,884,193, TDOGE about 67,889,993 measured
  * 2026-09-12), so a single testnet number is already passed on two of them at boot and
@@ -65,7 +65,7 @@ describe('XCHAIN_BRIDGE_ACTIVATION coin-keyed flag day @regression', function ()
         });
 
         it('parks every mainnet and testnet slot on the sentinel and keeps regtest genesis-active', function () {
-            // Nothing in this row sizes a height. Mainnet waits on the D2 checkpoint
+            // Nothing in this test sizes a height. Mainnet waits on the checkpoint
             // cross-check, testnet on the arming train, and regtest stays 0 so the e2e rail
             // exercises the armed rule from genesis and no regtest replay hash moves.
             for (const net of ['mainnet', 'testnet']) {

@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/db_slash_capability_stake_burn.test.js
  *
- * Capability-stake equivocation burn (WI-2 bump 2, Phase B). slashCapabilityStake
+ * Capability-stake equivocation burn. slashCapabilityStake
  * burns a validator's WHOLE XCHAIN bond on a proven equivocation: Pass 1 over active
  * `stakes`, Pass 2 over cooldown-locked `unstakes`. The same deactivation-window guard
  * as the contract path prevents the mid-cooldown double-count (a deactivated stakes

@@ -13,7 +13,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Programmable policy layer: Phase A binding wire contract.
+ * Programmable policy layer: binding wire contract.
  *
  * The table model (token_controllers / address_controllers) routes ONE action-class
  * per action to a guard contract. These tests pin the wire/field contract for that

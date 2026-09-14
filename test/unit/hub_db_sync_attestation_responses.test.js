@@ -14,7 +14,7 @@
  * test/unit/hub_db_sync_attestation_responses.test.js
  *
  * attestation_responses mirror registration (the ATTEST response-mirror
- * design, §2.2, §4.2, decisions D24/D55).
+ * design, not an on-chain response transaction).
  *
  * The finalized ATTEST response reaches every indexer through hub_db_sync
  * instead of through a validator-paid on-chain transaction, which puts three
@@ -28,13 +28,13 @@
  *      request_id) and a wire id kept here can land on a locally-assigned PK
  *      where INSERT IGNORE drops a real response with no error.
  *   3. FULL_REPAGE_TABLES membership, which FOLLOWS FROM (2) rather than from
- *      any in-place upgrade (D55): once the ids are locally assigned, a
+ *      any in-place upgrade: once the ids are locally assigned, a
  *      since_id = MAX(local id) cursor is not a position in the followed hub's
  *      id space at all.
  *   4. The frozen watermark grace and its regtest-only env seam.
- *   5. The one-column batch-link upsert. Every signed column is fixed at first
+ *   5. The one-column batch-link upsert. Every signed column is fixed by the first
  *      insert, and only batch_action_index (the display link to the on-chain
- *      v5/v6 batch, D78) can be filled later, from NULL, once.
+ *      v5/v6 batch) can be filled later, from NULL, once.
  *
  * These are driven against the real methods, not asserted against the
  * declarations: every test below reads the SQL the mirror would actually issue
@@ -243,7 +243,7 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
             'too broad and this suite would pass for the wrong reason');
     });
 
-    // ── the one-column batch-link upsert (D78) ──
+    // ── the one-column batch-link upsert ──
 
     it('generates an upsert whose ONLY assignment is a first-stamp-wins batch_action_index', async function () {
         const { sync, queries } = makeSync();
@@ -401,7 +401,7 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
             'capability_snapshots satisfaction is a live per-block query, never a cached scalar');
     });
 
-    // ── the cursor that follows from the strip (D55) ──
+    // ── the cursor that follows from the id strip ──
 
     it('bootstraps attestation_responses from since_id 0 even when the local table holds high ids', async function () {
         const { sync } = makeSync({ localMaxId: 987654 });

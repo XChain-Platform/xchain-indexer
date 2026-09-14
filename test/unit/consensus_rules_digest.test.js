@@ -76,7 +76,7 @@ describe('consensus_rules_digest (indexer copy)', function () {
     });
 });
 
-// The zero-confirmation flip's three appended SHARED_GATES rows (§8), plus the two
+// The zero-confirmation flip's three appended SHARED_GATES rows, plus the two
 // helpers a ROLLCALL v1 publisher and the rules-aware capability set filter both read.
 // The hub copy carries the load-bearing knownGateKeys()/activeGatesAt() cases; this is
 // the indexer's own instance of the same guard, so a one-sided edit here cannot pass by

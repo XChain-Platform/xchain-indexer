@@ -43,7 +43,7 @@
 // cost may grow as fast as the ledger does (linear, which is what HEAD does), and
 // the gate trips when it grows FASTER (something super-linear was introduced).
 // The sharp, scale-free gate is the third one: the number of queries the indexer
-// issues per transaction must not grow at all. That is the review's P14 fan-out,
+// issues per transaction must not grow at all. That is the per-transaction query fan-out,
 // and it is what an accidental N+1 moves first.
 //
 // SIZING. The review's headline figure is a 50k-transaction mempool. Because the

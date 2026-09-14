@@ -15,7 +15,7 @@
  *
  * Unit coverage for the getreorghistory RPC's pure logic (api.js delegates to it;
  * startApi is not importable). This RPC is the evidence source for the hub's
- * REORG-OLDHASH-UNVERIFIED-1 fix, so the tests focus on the property the hub relies
+ * unverified-old-hash reorg guard, so the tests focus on the property the hub relies
  * on: `matched` is true ONLY when the exact (block_index, block_hash) pair was
  * really orphaned by a single reorg event. A false positive here re-opens the
  * fake-reorg rollback; a false negative breaks real reorg propagation.

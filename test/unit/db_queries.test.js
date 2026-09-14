@@ -518,8 +518,8 @@ describe('Database getTicker/getTickerId @regression @tier1', function () {
 // createTicker(), which returns null for an unresolvable TICK (empty, or a ^<id>
 // reference to a ticker that does not exist). With NOT NULL on the column, that
 // INSERT threw ER_BAD_NULL_ERROR and the block-processing retry loop hard-wedged
-// every indexer (a single crafted tx could halt the fleet; F-18 sibling, found by
-// the 2026-07-07 flag-day transition drill). Columns are now nullable
+// every indexer (a single crafted tx could halt the fleet, as shown by
+// the 2026-07-07 flag-day transition drill). Columns are nullable
 // (2026-07-07-tick-id-columns-nullable migration); these guard that each writer
 // emits its INSERT with tick_id=null instead of throwing.
 describe('Database detail-row writers tolerate a null tick_id @regression @tier1', function () {

@@ -31,16 +31,16 @@
  * NULL).
  *
  * The fix treats an unset prior as unlocked, which CHANGES WHICH ACTIONS ARE VALID.
- * It was originally built behind a LOCK_NULL_PRIOR_UNSET flag-day on the v1
- * three-key train (Key A / shared mainnet block TIME 1796083200). The
- * REDESIGN (spec §0) retired that activation surface: the platform has not launched,
+ * It does not sit behind a LOCK_NULL_PRIOR_UNSET flag-day on the v1
+ * three-key train (Key A / shared mainnet block TIME 1796083200). No
+ * activation surface applies to it: the platform has not launched,
  * all derived state is operator-owned, and the batch ships ungated behind one
- * mandatory fleet-wide wipe-and-replay rebase instead. So the rule is now
- * registered with all-zero gates on every network, and the Key A constant is gone.
+ * mandatory fleet-wide wipe-and-replay rebase. So the rule is
+ * registered with all-zero gates on every network, with no Key A constant.
  *
  * The handler still resolves the rule through isEnabled(), which simply always
- * returns true for it now. That keeps the two verdict branches testable, which
- * matters: the gate-OFF branch is the PRE-BATCH verdict, and the §3.1 snapshot
+ * returns true for it. That keeps the two verdict branches testable, which
+ * matters: the gate-OFF branch is the PRE-BATCH verdict, and the replay snapshot
  * diff needs it reproducible to adjudicate any historical LOCK whose validity
  * flips on replay.
  *
@@ -260,9 +260,9 @@ describe('LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
 
         afterEach(function () { sinon.restore(); });
 
-        // The registration is UNGATED after the redesign, so the gate-off branch is
-        // no longer reachable in production. It is still pinned here on purpose: it is the
-        // pre-batch verdict the §3.1 snapshot diff compares replayed state against, so it
+        // The registration is UNGATED on every network, so the gate-off branch is
+        // unreachable in production. It is still pinned here on purpose: it is the
+        // pre-batch verdict the replay snapshot diff compares replayed state against, so it
         // has to stay reproducible to adjudicate any LOCK whose validity flips.
         it('gate OFF (pre-batch verdict): rejected with the (locked) text', async function () {
             const { handler } = makeHandler(false);
@@ -330,10 +330,10 @@ describe('LOCK_NULL_PRIOR_UNSET @regression @tier1', function () {
             assert.strictEqual(makeChanges().isDefined('LOCK_NULL_PRIOR_UNSET'), true);
         });
 
-        // Was: "it arms on the train anchor (2026-12-01)". The redesign
-        // (spec §0) replaced the v1 three-key activation surface with a mandatory
+        // No train anchor (2026-12-01) arms this rule. The rebase design
+        // uses no v1 three-key activation surface, only a mandatory
         // fleet-wide wipe-and-replay rebase, so this rule ships ungated and the Key A
-        // anchor is retired. Reintroducing a flag day here is a divergence window,
+        // anchor does not apply. Reintroducing a flag day here is a divergence window,
         // because a node replaying before the date and one replaying after would
         // compute different validity for the same historical LOCK.
         it('it ships UNGATED on every network (redesign, spec §0)', function () {

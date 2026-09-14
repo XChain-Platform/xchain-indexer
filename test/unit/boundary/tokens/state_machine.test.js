@@ -89,7 +89,7 @@ describe('Token state machine boundary tests @regression @tier2', function () {
     afterEach(function () { sinon.restore(); });
 
     // -------------------------------------------------------------------------
-    // TOK-01: Issue reserved tick 'BTC' from non-GAS address → invalid
+    // Issue reserved tick 'BTC' from non-GAS address → invalid
     // -------------------------------------------------------------------------
 
     describe('TOK-01: Issue reserved tick from non-GAS address', function () {
@@ -109,7 +109,7 @@ describe('Token state machine boundary tests @regression @tier2', function () {
     });
 
     // -------------------------------------------------------------------------
-    // TOK-02: Issue 'XCHAIN' from GAS address → valid
+    // Issue 'XCHAIN' from GAS address → valid
     // -------------------------------------------------------------------------
 
     describe('TOK-02: Issue GAS token from GAS address', function () {
@@ -130,7 +130,7 @@ describe('Token state machine boundary tests @regression @tier2', function () {
     });
 
     // -------------------------------------------------------------------------
-    // TOK-03: Set LOCK_MINT then attempt MINT → MINT rejected
+    // Set LOCK_MINT then attempt MINT → MINT rejected
     // -------------------------------------------------------------------------
 
     describe('TOK-03: LOCK_MINT=1 blocks subsequent MINT', function () {
@@ -164,7 +164,7 @@ describe('Token state machine boundary tests @regression @tier2', function () {
     });
 
     // -------------------------------------------------------------------------
-    // TOK-04: Attempt to unset LOCK_MINT (1 → 0) → invalid
+    // Attempt to unset LOCK_MINT (1 → 0) → invalid
     // -------------------------------------------------------------------------
 
     describe('TOK-04: Cannot unset LOCK_MINT once enabled', function () {
@@ -192,7 +192,7 @@ describe('Token state machine boundary tests @regression @tier2', function () {
     });
 
     // -------------------------------------------------------------------------
-    // TOK-05: Change DECIMALS after supply > 0 → invalid
+    // Change DECIMALS after supply > 0 → invalid
     // -------------------------------------------------------------------------
 
     describe('TOK-05: DECIMALS are immutable after supply is issued', function () {
@@ -220,7 +220,7 @@ describe('Token state machine boundary tests @regression @tier2', function () {
     });
 
     // -------------------------------------------------------------------------
-    // TOK-06: Set MAX_SUPPLY below current SUPPLY → invalid
+    // Set MAX_SUPPLY below current SUPPLY → invalid
     // -------------------------------------------------------------------------
 
     describe('TOK-06: MAX_SUPPLY cannot be set below current SUPPLY', function () {
@@ -249,7 +249,7 @@ describe('Token state machine boundary tests @regression @tier2', function () {
     });
 
     // -------------------------------------------------------------------------
-    // TOK-07: Sub-token issuance without parent → invalid
+    // Sub-token issuance without parent → invalid
     // -------------------------------------------------------------------------
 
     describe('TOK-07: Sub-token requires existing parent', function () {
@@ -270,7 +270,7 @@ describe('Token state machine boundary tests @regression @tier2', function () {
     });
 
     // -------------------------------------------------------------------------
-    // TOK-08: Sub-token issuance by non-owner → invalid
+    // Sub-token issuance by non-owner → invalid
     // -------------------------------------------------------------------------
 
     describe('TOK-08: Sub-token must be issued by parent token owner', function () {
@@ -295,7 +295,7 @@ describe('Token state machine boundary tests @regression @tier2', function () {
     });
 
     // -------------------------------------------------------------------------
-    // TOK-09: Tick with ^ prefix non-numeric body → invalid
+    // Tick with ^ prefix non-numeric body → invalid
     // -------------------------------------------------------------------------
 
     describe('TOK-09: ^-prefixed TICK must have a numeric body', function () {
@@ -313,7 +313,7 @@ describe('Token state machine boundary tests @regression @tier2', function () {
     });
 
     // -------------------------------------------------------------------------
-    // TOK-10: LOCK_MAX_SUPPLY requires a declared MAX_SUPPLY cap, not minted supply
+    // LOCK_MAX_SUPPLY requires a declared MAX_SUPPLY cap, not minted supply
     // -------------------------------------------------------------------------
 
     describe('TOK-10: LOCK_MAX_SUPPLY guard : declared cap, not minted supply', function () {

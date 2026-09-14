@@ -11,7 +11,7 @@
  **********************************************************************
  *
  * The indexer's binding rule and its canonical twins under the mirror-admission
- * flag day (the time-keyed mirror barrier family, sections 5.5 and 5.6, row 5).
+ * flag day (the time-keyed mirror barrier family).
  *
  * WHAT IS DRIVEN, IN BOTH ARMS. Every predicate and every twin below is run with the
  * activation INERT (today's behaviour, byte for byte) and ARMED on regtest, at height 0
@@ -29,7 +29,7 @@
  *     verifying as legacy.
  *   - The mirrored selects (match, two call reads in both mirror topologies, the attest
  *     response read, the bridge transfer and policy selects) issue their pre-train SQL
- *     text byte for byte below the activation and the C33 form above it, asserted as
+ *     text byte for byte below the activation and the guarded height form above it, asserted as
  *     literal strings against a capturing stub database.
  *   - The attest-response bind predicate binds by admit_block_btc above the activation
  *     and by effective_time below it, with every other clause untouched.
@@ -146,7 +146,7 @@ function load(activation) {
 const sha = (s) => crypto.createHash('sha256').update(s, 'utf8').digest('hex');
 
 // The stored admission map: BTC and DOGE stamped, LTC left NULL (its map never named
-// LTC), which is exactly the C38 shape. Encoded in ASCII order.
+// LTC), which is exactly the shape where a NULL column falls back to the clock rule. Encoded in ASCII order.
 const COLS  = { admit_block_btc: 799004, admit_block_ltc: null, admit_block_doge: 5000004 };
 const FIELD = 'BTC:799004,DOGE:5000004';
 const NO_COLS = { admit_block_btc: null, admit_block_ltc: null, admit_block_doge: null };
@@ -475,7 +475,7 @@ const LEGACY_SQL = {
          WHERE status = 'finalized' AND network = ? AND effective_time <= ?`
 };
 
-// The C33 form for a column, with the outer parentheses the selects compose it under.
+// The guarded height form (c33) for a column, with the outer parentheses the selects compose it under.
 const c33 = (col, p) => '((' + (p || '') + col + ' IS NULL AND ' + (p || '') + 'effective_time <= ?) OR (' +
                         (p || '') + col + ' IS NOT NULL AND ' + (p || '') + col + ' <= ?))';
 

@@ -72,7 +72,7 @@ describe('HubDbSync attestation-response barrier @regression @tier1', function (
 
     // The wake path, end to end and through the real release site. A barrier that only
     // adds a waitFor... method blocks every block until its own timeout, because nothing
-    // re-evaluates the waiter when the watermark moves (spec decision D68).
+    // re-evaluates the waiter when the watermark moves forward.
     it('a pending waiter is woken by _advanceWatermark, not only by its timeout', async function () {
         this.timeout(3000);
         const { sync } = makeSync();
@@ -235,7 +235,7 @@ describe('attest_response_sync_barrier defer site @regression @tier1', function 
         assert.strictEqual(ix.stallReason, null, 'a satisfied barrier does not stall the loop');
     });
 
-    // AT0's second half: no attestation stake or request exists off BTC, so arming the
+    // The off-BTC half: no attestation stake or request exists off BTC, so arming the
     // barrier there would wedge two live chains on a mirror they never read.
     it('does NOT consult the barrier on LTC', async function () {
         const ix = makeIndexer('LTC', 'reject');

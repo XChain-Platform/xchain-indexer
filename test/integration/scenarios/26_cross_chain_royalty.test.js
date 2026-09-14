@@ -62,7 +62,7 @@ const b64  = s => Buffer.from(s, 'utf8').toString('base64');
 const sha  = s => crypto.createHash('sha256').update(s).digest('hex');
 
 // CONTRACT_META_REQUIRED is genesis-active on regtest: a guard contract that must
-// deploy `valid` to be bound as a controller carries `meta` (spec 2.1).
+// deploy `valid` to be bound as a controller carries `meta`.
 const ROYAL  = `module.exports={ meta:{ name:'Royalty Guard', description:'Pays a 25 percent royalty leg on every trade.', version:'1.0.0' }, guard:function(){ return { payoutLegs: [{ to: '${LEGADDR}', bps: 2500 }] }; } };`;
 const SEGLEG = `module.exports={ meta:{ name:'Segwit Leg Guard', description:'Pays a royalty leg to a segwit address.', version:'1.0.0' }, guard:function(){ return { payoutLegs: [{ to: '${SEGLEG_ADDR}', bps: 2500 }] }; } };`;
 

@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// THE HUB-MIRROR ATTEST RESPONSE APPLIER (response-mirror design §4.1/§4.4).
+// THE HUB-MIRROR ATTEST RESPONSE APPLIER (mirrored responses bound at a block).
 //
 // Two units, deliberately tested apart:
 //   utility.selectApplicableAttestationResponses  the BINDING RULE. Which mirrored
@@ -151,7 +151,7 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
 
         it('applies two rows in one block in (request block_index, action_index) order, whatever the insertion order', function () {
             // Ordering is read from the LOCAL request rows. The ids are chosen so that a
-            // request_id collation ORDER (the trap §4.1 names) and the insertion order
+            // request_id collation ORDER (a known ordering trap) and the insertion order
             // both disagree with the correct one.
             const earlyId = 'f'.repeat(64);   // request block 90, action 10  -> applies FIRST
             const lateId  = '0'.repeat(64);   // request block 95, action 20  -> applies SECOND
@@ -299,7 +299,7 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
             assert.strictEqual(data['FORMAT'], 1);
             assert.strictEqual(data['IS_SYNTHETIC'], true);
             assert.strictEqual(data['BLOCK_INDEX'], 100);
-            // D60: _settleRequestFee reaches the fee-oracle read through BLOCK_TIME.
+            // _settleRequestFee reaches the fee-oracle read through BLOCK_TIME.
             assert.strictEqual(data['BLOCK_TIME'], BLOCK_TIME);
             assert.strictEqual(data['TX_INDEX'], null, 'a mirror-applied response has no transaction');
             assert.strictEqual(data['TX_VOUT'], null);
@@ -356,7 +356,7 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
         const PAGE = 500;
         const CAP  = 10;
 
-        // `n` pending requests in the §4.1 order, with a mirror row only for the indexes
+        // `n` pending requests in local request-row order, with a mirror row only for the indexes
         // in `withResponse`, so the applicable rows sit at chosen distances into the read.
         function fixture(n, withResponse) {
             const requests = [], rows = [], applicableIds = [];
@@ -680,7 +680,7 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
         });
 
         it('settles the request fee at the synthesized action, which carries BLOCK_TIME (D60)', async function () {
-            // D60 named the fee-ORACLE read as the reason the synthesized action must
+            // The fee-ORACLE read is the first reason the synthesized action must
             // carry BLOCK_TIME. Above the mirror height that read is gone with the
             // broadcast-fee carve-out (nobody broadcast anything to be reimbursed for),
             // so BLOCK_TIME's remaining consumer on this path is the injected callback
