@@ -31,10 +31,17 @@
  *
  ********************************************************************/
 
-const consolidationLegAmount = require('../consolidation_leg_amount_activation.js');
-const gatedHandoffRef        = require('../gated_handoff_ref_activation.js');
+// The handler's phases, grouped by concern and installed onto Send.prototype below: legs.js
+// reads the wire into legs and consolidates them, prefetch.js makes the once-per-action
+// reads, validate.js and gated_handoff.js judge a leg, controller_guard.js runs the bound
+// guards, settle.js records each leg and closes the action
+const legsPart            = require('./send/legs.js');
+const prefetchPart        = require('./send/prefetch.js');
+const validatePart        = require('./send/validate.js');
+const gatedHandoffPart    = require('./send/gated_handoff.js');
+const controllerGuardPart = require('./send/controller_guard.js');
+const settlePart          = require('./send/settle.js');
 
-const { getLogger } = require('../observability/index.js');
 class Send {
 
     // Handle constructing a class instance
@@ -56,181 +63,27 @@ class Send {
 
     // Handle parsing the SEND transaction
     async parse(params, data, error){
-        /*****************************************************************
-         * DEBUGGING - Force params
-         ****************************************************************/
-        // Example payloads by FORMAT version:
-        // let str = '0|JDOG|1|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev';
-        // let str = '0|JDOG|1|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|Testing Memos';
-        // let str = '1|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9';
-        // let str = '1|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|Testing Memos2';
-        // let str = '1|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|3|1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8';
-        // let str = '1|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|3|1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8|Testing Memos3';
-        // let str = '2|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|TEST|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9';
-        // let str = '2|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|TEST|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|Testing Memos4';
-        // let str = '2|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|TEST|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|BACON|3|1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8';
-        // let str = '2|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|TEST|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|BACON|3|1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8|Testing Memos5';
-        // let str = '3|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|Testing Memos1|BRRR|5|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|Testing Memos11|TEST|1|1BoogrfDADPLQpq8LMASmWQUVYDp4t2hF9|Testing Memos2|BACON|3|1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8|Testing Memos3';
-        // params = String(str).split('|');
-        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
+        // Read the wire into legs (send/legs.js)
+        let sends;
+        ({ error, sends } = this.readSendLegs(params, data, error));
 
-        // Validate that format is known
-        let format = data['FORMAT'];
-        if(!error && (format===null || this.formats[format] === undefined ))
-            error = 'invalid: VERSION (unknown)';
+        // Token info, preferences and gated packs, once per distinct key (send/prefetch.js)
+        let ctx = await this.prefetchSendContext(sends, data);
 
-        // Array of sends [TICK, AMOUNT, DESTINATION, MEMO]
-        let sends = [];
+        // Consolidate sends by DESTINATION and TICK (send/legs.js)
+        sends = this.consolidateSendLegs(sends, ctx.ticks, data);
 
-        // Extract memo
-        let memo = null;
-        let last = params.length - 1;
-        for(let idx in params)
-            if(idx==last && ((format==0 && idx==4) || (format==1 && idx%2==0) || (format==2 && idx%3==1)))
-                memo = params[idx];
-
-        // If we encountered an invalid version error add it to the sends list so we create a record of it in sends
-        if(error)
-            sends.push([params[0], params[1], memo]);
-
-        let lastIdx = params.length - 1;
-        for(let idx in params){
-            // Force index to integer value (for-in yields string keys)
-            idx = parseInt(idx);
-
-            // Single Send
-            if(format==0 && idx==0)
-                sends.push([params[1], params[2], params[3], memo]);
-
-            // Multi-Send (Brief)
-            if(format==1 && idx>1 && idx%2==1)
-                sends.push([params[1], params[idx-1], params[idx], memo]);
-
-            // Multi-Send (Full)
-            if(format==2 && idx>0 && idx%3==1 && idx < lastIdx)
-                sends.push([params[idx], params[(idx+1)], params[idx+2], memo]);
-
-            // Multi-Send (Full) with Multiple Memos
-            if(format==3 && idx>0 && idx%4==1 && idx < lastIdx)
-                sends.push([params[idx], params[idx+1], params[idx+2], params[idx+3]]);
-        }
-
-        // Get token data for every TICK (reduces duplicated sql queries)
-        let ticks = {};
-        for(let send of sends){
-            let tick = send[0];
-            if(ticks[tick] === undefined)
-                ticks[tick] = await this.indexerDb.getTokenInfo(tick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
-        }
-
-        // Get address preferences for all destination addresses (used in MEMO requirement check)
-        let preferences = {};
-        for(let send of sends){
-            let destination = send[2];
-            if(!preferences[destination])
-                preferences[destination] = await this.indexerDb.getAddressPreferences(destination, data['BLOCK_INDEX'], data['ACTION_INDEX']);
-        }
-
-        // Get active gated key hashes for every TICK (reduces duplicated sql queries).
-        // The gate is a property of the TICK, not of the leg, so an N-recipient SEND
-        // needs O(distinct ticks) queries, not one per leg. Same dedupe pattern as
-        // `ticks` and `preferences` above; SEND runs on every ~5s index tick, so the
-        // per-leg form scaled per-block DB work with recipient count.
-        let gatedPacks = {};
-        for(let send of sends){
-            let tick = send[0];
-            if(gatedPacks[tick] === undefined)
-                gatedPacks[tick] = await this.indexerDb.getGatedPackThresholds(tick);
-        }
-
-        // Consolidate sends by DESTINATION and TICK.
-        //
-        // A leg whose RAW amount fails its tick's format is held OUT of the merge, on its own key,
-        // so it reaches the per-leg format check below instead of being summed into a total that
-        // passes. bcadd formats to the tick's DECIMALS, so two 0.5 legs of a 0-decimals token
-        // merged to '1' and settled while either leg alone was rejected. Gated per chain
-        // (consolidation_leg_amount_activation.js): below the threshold the legacy key and merge
-        // run unchanged and historical replay stays byte-identical.
-        //
-        // Above the threshold BOTH key shapes are prefixed ('k' merge key, 'i' held-out leg), so a
-        // DESTINATION chosen to spell a held-out leg's key cannot collide with one. Prefixing every
-        // key uniformly leaves insertion order (and so the emitted record order) unchanged.
-        let legAmountRule = consolidationLegAmount.isConsolidationLegAmountActive(data['BLOCK_TIME'], this.config['NETWORK']);
-        let keys = {};
-        for(let idx in sends){
-            let [tick, amount, destination, memo] = sends[idx];
-            let key = destination + '|' + tick;
-            if(legAmountRule)
-                key = (ticks[tick] && !this.util.isValidAmountFormat(ticks[tick]['DECIMALS'], amount, data['BLOCK_TIME']))
-                    ? 'i|' + idx
-                    : 'k|' + key;
-            if(!this.util.isNull(keys[key]))
-                amount = this.util.bcadd(amount, keys[key][1], ticks[tick] && ticks[tick]['DECIMALS']);
-            keys[key] = [tick, amount, destination, memo];
-        }
-
-        // Update sends using consolidated info
-        sends = [];
-        for(let key in keys)
-            sends.push(keys[key]);
-
-        // Gated-file handoff rule: the destination's PRE-SEND balance, snapshotted once here,
-        // before any leg of this action settles. Scoping by (BLOCK_INDEX, ACTION_INDEX)
-        // is what makes the snapshot base right: it includes every preceding
-        // transaction in the block AND every preceding action in this transaction, so
-        // two SEND actions of the same tick in one transaction COMPOUND rather than
-        // both reading the pre-transaction balance. Validating against pre-tx state
-        // would reopen the split-the-amount bypass one level up.
-        //
-        // Only fetched when the tick actually has gated packs: an ungated SEND must not
-        // pay for a destination-balance read on every leg.
-        let destBalances = {};
-        for(let send of sends){
-            let [tick, , destination] = send;
-            if((gatedPacks[tick] || []).length === 0) continue;
-            if(destBalances[destination] !== undefined) continue;
-            destBalances[destination] = await this.indexerDb.getAddressBalances(
-                destination, null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
-        }
-
-        // Get source address balances
-        let balances = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
-
-        // Controller-bound token gas context. A SEND of a token whose `transfer` class is bound to
-        // a controller runs that contract's `guard` before settling; the SOURCE pays the (bounded)
-        // guard gas. Load the SOURCE's GAS balance once so a multi-send debits it cumulatively
-        // across controlled legs (maybeRunControllerGuard reserves the ceiling against it).
-        let gasTick      = this.config['GAS'];
-        let gasInfo      = await this.indexerDb.getTokenInfo(gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
-        let gasBalances  = await this.indexerDb.getAddressBalances(data['SOURCE'], gasTick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        // Destination balances for the gated-file handoff rule, then the SOURCE-side context
+        // every leg shares (send/prefetch.js)
+        ctx.destBalances = await this.loadDestinationBalances(sends, ctx.gatedPacks, data);
+        Object.assign(ctx, await this.loadSourceContext(data));
 
         // Store original error value
-        let origError = error;
-
-        // SOURCE sleeping-state check is byte-identical for every leg (same SOURCE, same
-        // BLOCK_INDEX, tick arg null), so run it once here instead of once per leg. Read-only,
-        // so hoisting it out of the loop does not change any leg's validation outcome; each leg
-        // still gates on it under its own !error guard below. Same motive as the ticks/
-        // preferences/gatedKeyHashes dedupe above: SEND runs on every ~5s index tick and the
-        // per-leg form scaled per-block DB work with recipient count.
-        let sourceActionAllowed = await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']);
-
-        // Memoize the TICK sleeping-state check per distinct tick. The check depends only on
-        // (TICK, BLOCK_INDEX); BLOCK_INDEX is fixed for the tx, so a repeated tick reuses the
-        // first result. A multi-send of the same tick to N recipients now costs one query, not N.
-        let tickActionAllowed = {};
-
-        // Memoize the SOURCE-side allow/block-list check per distinct tick, same motive.
-        // It depends only on (SOURCE, TICK): SOURCE is fixed for the whole action (send is
-        // an alias of data and only TICK/AMOUNT/DESTINATION are re-set per leg), and the
-        // call passes no block_index, so the answer cannot change across legs of one tick.
-        // Each miss costs a getTokenInfo plus up to two getList reads, so a Multi-Send
-        // (Brief) to N recipients was paying up to 3N round-trips for one answer.
-        let sourceTickAllowed = {};
+        ctx.origError = error;
 
         // Array of credits and debits
-        let credits = [],
-            debits  = [];
+        ctx.credits = [];
+        ctx.debits  = [];
 
         // Loop through sends and process each
         for(let idx in sends){
@@ -238,344 +91,60 @@ class Send {
             // Parse in the send information
             let info = sends[idx];
 
-            // Reset error to the original value (per-leg validation restarts from origError)
-            error = origError;
-
-            // Guard gas fee billed to SOURCE for this leg (0 = uncontrolled token)
-            let guardFee = 0;
-
-            // `send` aliases `data`: mutating it below also mutates the shared transaction
-            // object, which the multi-leg loop relies on for each leg's downstream calls.
-            let send = data;
-
-            // Update transaction data object with send values
-            send['TICK']        = info[0];
-            send['AMOUNT']      = info[1];
-            send['DESTINATION'] = info[2];
-            send['MEMO']        = info[3];
-
-            // Convert NUMBER fields from string value to number value so comparisons are mathematical
-            if(!error)
-                send = this.util.setNumberFormats(send);
-
-            // Get information on token
-            let tokenInfo = ticks[send['TICK']];
-
-            /*****************************************************************
-             * TICK Validations
-             ****************************************************************/
-
-            // Validate TICK exists
-            if(!error && !tokenInfo)
-                error = 'invalid: TICK (unknown)';
-
-            /*************************************************************
-             * FORMAT Validations
-             ************************************************************/
-
-            // Verify AMOUNT format
-            if(!error && !this.util.isNull(send['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], send['AMOUNT'], data['BLOCK_TIME']))
-                error = "invalid: AMOUNT (format)";
-
-            // Verify DESTINATION address format
-            if(!error && !this.util.isNull(send['DESTINATION']) && !this.util.isCryptoAddress(send['DESTINATION']))
-                error = "invalid: DESTINATION (format)";
-
-            /*************************************************************
-             * General Validations
-             ************************************************************/
-            // Verify SOURCE is not sleeping (hoisted, byte-identical across legs)
-            if(!error && sourceActionAllowed == false)
-                error = 'invalid: SOURCE (sleeping)';
-
-            // Verify TICK is not sleeping (memoized per distinct tick for the tx's BLOCK_INDEX)
-            if(!error){
-                if(tickActionAllowed[send['TICK']] === undefined)
-                    tickActionAllowed[send['TICK']] = await this.indexerDb.isActionAllowed(null, send['TICK'], send['BLOCK_INDEX']);
-                if(tickActionAllowed[send['TICK']] == false)
-                    error = 'invalid: TICK (sleeping)';
-            }
-
-            // Verify TICK action is allowed from SOURCE (allow/block lists, memoized per distinct tick)
-            if(!error){
-                if(sourceTickAllowed[send['TICK']] === undefined)
-                    sourceTickAllowed[send['TICK']] = await this.indexerDb.isActionAllowed(send['SOURCE'], send['TICK']);
-                if(sourceTickAllowed[send['TICK']] == false)
-                    error = 'invalid: SOURCE (not authorized)';
-            }
-
-            // Verify TICK action is allowed to DESTINATION (allow/block lists)
-            if(!error && await this.indexerDb.isActionAllowed(send['DESTINATION'], send['TICK']) == false)
-                error = 'invalid: DESTINATION (not authorized)';
-
-            // Verify no pipe in MEMO (pipe is field delimiter)
-            if(!error && String(send['MEMO']).indexOf('|')!=-1)
-                error = 'invalid: MEMO (pipe)';
-
-            // Verify no semicolon in MEMO (semicolon is action delimiter)
-            if(!error && String(send['MEMO']).indexOf(';')!=-1)
-                error = 'invalid: MEMO (semicolon)';
-
-            // Verify MEMO is shorter than MAX_MEMO_LENGTH
-            if(!error && String(send['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
-                error = 'invalid: MEMO (length)';
-
-            // Verify MEMO if destination address preferences require a memo
-            if(!error && preferences[send['DESTINATION']]['REQUIRE_MEMO']==1 && this.util.isNull(send['MEMO']))
-                error = 'invalid: MEMO (required)';
-
-            // Verify SOURCE has enough balances to cover send AMOUNT
-            if(!error && !this.util.hasBalance(balances, tokenInfo['TICK_ID'], send['AMOUNT']))
-                error = 'invalid: insufficient funds';
-
-            // Gated-content rule: if TICK has any active gated FILEs, this
-            // SEND must be inside the same tx as a MESSAGE v2 addressed to
-            // DESTINATION carrying the key handoff payload. The indexer only
-            // checks structural presence; the wallet verifies cryptographic
-            // correctness at unlock time.
-            // See xchain-documentation/protocol/token-gated-content.md.
-            if(!error){
-                let packs = gatedPacks[send['TICK']] || [];
-                if(packs.length > 0){
-                    // Gated-file handoff rule: the handoff is CONDITIONAL. A gated FILE on a tick does
-                    // NOT make every send of it require a handoff; a pack only compels
-                    // one when the recipient will actually end up able to unlock it, judged on
-                    // POST-SEND balance (pre-send balance + everything this action sends them),
-                    // since a recipient who already holds enough crosses the threshold on any
-                    // transfer and one who holds nothing may not cross it even on a large one.
-                    // The "everything this action sends them" half is already exact here, and it
-                    // is worth saying why because it looks like a gap: legs were CONSOLIDATED by
-                    // (DESTINATION, TICK) further up, so send['AMOUNT'] is the TOTAL for this
-                    // pair, not one leg. That consolidation is what closes the
-                    // split-120-into-two-60s bypass; it is structural rather than something this
-                    // block re-derives, and a test vector pins it so a future de-consolidation
-                    // cannot silently reopen it. Self-send is deliberately NOT special-cased:
-                    // the rule applies literally, the resulting overcount is accepted for
-                    // determinism, and a sender's self-addressed MESSAGE satisfies the requirement.
-                    let destBal = destBalances[send['DESTINATION']] || {};
-                    let held    = destBal[tokenInfo['TICK_ID']];
-                    if(this.util.isNull(held)) held = '0';
-                    let postSend = this.util.bcadd(held, send['AMOUNT'], 18);
-
-                    // Rule 4: a pack is REQUIRED when it is unconditional (no
-                    // threshold at all) or the post-send balance reaches its
-                    // threshold. Rule 5: the MESSAGE is required iff ANY pack is.
-                    let required = false;
-                    for(let pack of packs){
-                        if(pack.threshold === null){ required = true; break; }
-                        if(!this.util.bclt(postSend, pack.threshold)){ required = true; break; }
-                    }
-
-                    if(required){
-                        let siblings = data['SIBLING_ACTIONS'] || [];
-                        let foundHandoff = false;
-
-                        // Siblings hold WIRE parameters (batch.js splits the raw command and
-                        // resolves no address references), while the SDK compacts a MESSAGE
-                        // DESTINATION to `^<id>` for any already-indexed recipient, so a byte
-                        // compare misses the ordinary wallet-composed handoff. Above the flag
-                        // day a caret spelling is resolved first; plane and arming state in
-                        // gated_handoff_ref_activation.js.
-                        let refRule = gatedHandoffRef.isGatedHandoffRefActive(data['BLOCK_TIME'], this.config['NETWORK']);
-
-                        for(let s of siblings){
-                            if(s.action !== 'MESSAGE') continue;
-                            // MESSAGE v2 fields: VERSION|COIN|DESTINATION|ENCRYPTED_MESSAGE
-                            // (s.params[0]=VERSION, [1]=COIN, [2]=DESTINATION, [3]=ENCRYPTED_MESSAGE)
-                            let ver  = String(s.params[0] || '');
-                            let dest = String(s.params[2] || '');
-                            if(ver !== '2') continue;
-
-                            // Caret-only, so a full-address handoff costs no extra read, and
-                            // fail-closed on both edges: a rejected reference and a value still
-                            // caret-prefixed after resolution match nothing.
-                            if(refRule && dest.substring(0,1) === '^'){
-                                let destRef = await this.indexerDb.resolveAddressRefChecked(dest, data['BLOCK_INDEX']);
-                                if(destRef.rejected) continue;
-                                dest = String(destRef.value || '');
-                                if(dest.substring(0,1) === '^') continue;
-                            }
-
-                            if(dest === send['DESTINATION']){
-                                foundHandoff = true;
-                                break;
-                            }
-                        }
-                        if(!foundHandoff)
-                            error = 'invalid: gated token transfer requires key handoff message';
-                    }
-                }
-            }
-
-            // Controller-bound token: defer to the bound contract's `guard` method
-            // before the transfer settles. The guard may DENY (revert) or run
-            // programmable side effects (state writes, royalty/fee emissions). It is
-            // the final gate: all other validation has passed when it runs, so an
-            // allow leads directly to a valid send. SOURCE must have reserved the
-            // guard gas ceiling fee (mirrors the cross-contract-call reservation) so
-            // a cheap/denied guard never drives GAS negative; the actual metered fee
-            // is billed in the valid block below.
-            //
-            // `balances` (all ticks) and `gasBalances` (GAS only) are two independent
-            // in-memory snapshots. When the token being sent IS the gas token they both
-            // track the exact same underlying balance, so reserving/debiting the guard
-            // fee against the separate `gasBalances` snapshot lets AMOUNT and guardFee
-            // each pass their checks against a full, undebited copy of the same balance
-            // and be spent twice. Mirror the airdrop/dividend/sweep pattern: when the
-            // send tick equals the gas tick, reserve and debit the guard fee against a
-            // clone of `balances` that is already pre-debited by this leg's AMOUNT, so a
-            // single balance must cover AMOUNT + guardFee together.
-            let sameTick = !!(gasInfo && tokenInfo && String(gasInfo['TICK_ID']) === String(tokenInfo['TICK_ID']));
-            let baseGasBalances = gasBalances;
-            if(sameTick && !error)
-                baseGasBalances = this.util.debitBalances(Object.assign({}, balances), tokenInfo['TICK_ID'], send['AMOUNT']);
-
-            // Run the token's controller guard, if bound, before the transfer settles
-            if(!error && tokenInfo){
-                let result = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {
-                    actionType:  'SEND',
-                    tick:        send['TICK'],
-                    from:        send['SOURCE'],
-                    to:          send['DESTINATION'],
-                    amount:      send['AMOUNT'],
-                    data:        send,
-                    gasInfo:     gasInfo,
-                    gasBalances: baseGasBalances,
-                    seq:         parseInt(idx) || 0
-                });
-                if(result.error)
-                    error = 'invalid: ' + result.error;
-                else
-                    guardFee = result.guardFee;
-            }
-
-            // SOURCE-side gate: the SENDER's own `transfer` address-controller may gate its OUTBOUND
-            // transfers (self-imposed spending controls: velocity, allowlists, compliance). Runs
-            // after the token's guard, before the recipient gate. A single `transfer` address binding
-            // it fires whether the account is SOURCE (here) or DESTINATION (below); the
-            // guard distinguishes direction via its from/to (from === subject ⇒ outbound). SOURCE pays
-            // the guard gas, reserved cumulatively after this leg's token guardFee (a shallow clone, so
-            // gasBalances only commits in the valid block) so GAS can't be driven negative.
-            if(!error && !this.util.isNull(send['SOURCE'])){
-                let reserveBalances = baseGasBalances;
-                if(gasInfo && this.util.bcgt(guardFee, 0))
-                    reserveBalances = this.util.debitBalances(Object.assign({}, baseGasBalances), gasInfo['TICK_ID'], guardFee);
-                let outbound = await this.util.maybeRunAddressControllerGuard(this.actions, this.indexerDb, {
-                    actionType:  'SEND',
-                    actionClass: 'transfer',
-                    address:     send['SOURCE'],
-                    tick:        send['TICK'],
-                    from:        send['SOURCE'],
-                    to:          send['DESTINATION'],
-                    amount:      send['AMOUNT'],
-                    data:        send,
-                    gasInfo:     gasInfo,
-                    gasBalances: reserveBalances,
-                    seq:         parseInt(idx) || 0
-                });
-                if(outbound.error)
-                    error = 'invalid: ' + outbound.error;
-                else
-                    guardFee = this.util.bcadd(guardFee, outbound.guardFee, 8);
-            }
-
-            // Recipient-side gate: the DESTINATION's own `transfer` address-controller may refuse an
-            // incoming direct SEND it didn't solicit (spam/compliance). Refusal reverts this leg;
-            // SOURCE pays the guard gas. Its reservation runs against the GAS balance ALREADY reduced
-            // by this leg's token guardFee (a shallow clone, so gasBalances only commits in the valid
-            // block), keeping the two-guard reservation cumulative so GAS can't be driven negative.
-            // DEX/dispense deliveries are solicited pulls, not direct sends, so they are never gated.
-            if(!error && !this.util.isNull(send['DESTINATION'])){
-                let reserveBalances = baseGasBalances;
-                if(gasInfo && this.util.bcgt(guardFee, 0))
-                    reserveBalances = this.util.debitBalances(Object.assign({}, baseGasBalances), gasInfo['TICK_ID'], guardFee);
-                let recip = await this.util.maybeRunAddressControllerGuard(this.actions, this.indexerDb, {
-                    actionType:  'SEND',
-                    actionClass: 'transfer',
-                    address:     send['DESTINATION'],
-                    tick:        send['TICK'],
-                    from:        send['SOURCE'],
-                    to:          send['DESTINATION'],
-                    amount:      send['AMOUNT'],
-                    data:        send,
-                    gasInfo:     gasInfo,
-                    gasBalances: reserveBalances,
-                    seq:         parseInt(idx) || 0
-                });
-                if(recip.error)
-                    error = 'invalid: ' + recip.error;
-                else
-                    guardFee = this.util.bcadd(guardFee, recip.guardFee, 8);
-            }
-
-            // Adjust balances to reduce by SEND AMOUNT
-            if(!error)
-                balances = this.util.debitBalances(balances, tokenInfo['TICK_ID'], send['AMOUNT']);
-
-            // Determine final status
-            let status = (error) ? error : 'valid';
-            data['STATUS'] = send['STATUS'] = status;
-
-            getLogger().info("\t SEND : " + send['TICK'] + ' : ' + this.util.logAmount(send['AMOUNT']) + ' : ' + send['DESTINATION'] + ' : '+ data['STATUS']);
-
-            await this.indexerDb.createSend(send);
-
-            this.util.addAddressTicker(data['SOURCE'], send['TICK']);
-
-            // If this was a valid transaction, then add records to the credits and debits array
-            if(status=='valid'){
-
-                // Store the DESTINATION and TICK in addresses list
-                this.util.addAddressTicker(send['DESTINATION'], send['TICK']);
-
-                // Add ticker and amount to debits array
-                debits.push([send['TICK'], send['AMOUNT'], send['SOURCE']]);
-
-                // Add ticker, amount, and destination to credits array
-                credits.push([send['TICK'], send['AMOUNT'], send['DESTINATION']]);
-
-                // Bill the controller-guard gas to SOURCE (in GAS). Reduce the
-                // in-memory GAS balance so a later controlled leg in this same
-                // multi-send sees the spend when it re-checks its reservation.
-                if(this.util.bcgt(guardFee, 0)){
-                    debits.push([gasTick, guardFee, send['SOURCE']]);
-                    this.util.addAddressTicker(send['SOURCE'], gasTick);
-                    if(gasInfo){
-                        // When the sent tick IS the gas tick, debit the guard fee out of the same
-                        // `balances` snapshot that AMOUNT was already debited from above, so
-                        // AMOUNT + guardFee together are enforced against one balance. Otherwise
-                        // (unchanged) debit the independent `gasBalances` snapshot.
-                        if(sameTick)
-                            balances = this.util.debitBalances(balances, gasInfo['TICK_ID'], guardFee);
-                        else
-                            gasBalances = this.util.debitBalances(gasBalances, gasInfo['TICK_ID'], guardFee);
-                    }
-                }
-            }
+            await this.processSendLeg(idx, info, data, ctx);
         }
 
-        // Process any transaction ledger changes (credits / debits)
-        await this.util.processTransactionLedgerChanges(this.indexerDb, data, credits, debits);
-
-        // Get a list of tickers & addresses
-        let tickers   = this.util.getTickersList(),
-            addresses = Object.keys(this.util.getAddressesList());
-
-        // Update address balances and token supply. updateTokens is required because a
-        // controller guardFee is burned as a GAS debit with no offsetting credit (above);
-        // tokens.supply (GAS) must be recomputed from the ledger or the per-block sanityCheck
-        // (ledger == supply == balances) trips and halts the indexer. Mirrors the other
-        // guarded handlers (order.js/swap.js/dispenser.js) and execute.js.
-        await this.indexerDb.updateBalances(addresses);
-        await this.indexerDb.updateTokens(tickers);
-
-        // Create action mappings
-        await this.mapper.createMappings(data);
-
-        // Check if any sends triggered dispensers
-        await this.util.processDispenserSends(this.actions, this.indexerDb, data);
-
+        // Ledger, balances, supply, mappings and dispenser triggers (send/settle.js)
+        await this.finishSend(data, ctx);
     }
+
+    // Judge and settle one consolidated leg. Every leg restarts from the action's original
+    // error, and the balances on ctx are what the next leg is measured against.
+    async processSendLeg(idx, info, data, ctx){
+
+        // Reset error to the original value (per-leg validation restarts from origError)
+        let error = ctx.origError;
+
+        // `send` aliases `data`: mutating it below also mutates the shared transaction
+        // object, which the multi-leg loop relies on for each leg's downstream calls.
+        let send = data;
+
+        // Update transaction data object with send values
+        send['TICK']        = info[0];
+        send['AMOUNT']      = info[1];
+        send['DESTINATION'] = info[2];
+        send['MEMO']        = info[3];
+
+        // Convert NUMBER fields from string value to number value so comparisons are mathematical
+        if(!error)
+            send = this.util.setNumberFormats(send);
+
+        // Get information on token
+        let tokenInfo = ctx.ticks[send['TICK']];
+
+        // TICK, FORMAT and general validations (send/validate.js)
+        error = await this.validateSendLeg(send, tokenInfo, data, ctx, error);
+
+        // Gated-content rule: the key handoff MESSAGE (send/gated_handoff.js)
+        error = await this.checkGatedHandoff(send, tokenInfo, data, ctx, error);
+
+        // The token's controller guard, then the SOURCE-side and recipient-side address guards
+        // (send/controller_guard.js)
+        let guard = await this.runSendGuards(idx, send, tokenInfo, ctx, error);
+
+        // Debit, final status, the SEND record and the staged ledger rows (send/settle.js)
+        await this.settleSendLeg(send, tokenInfo, data, ctx, guard.error, guard);
+    }
+}
+
+// Install the phase methods from send/ NON-ENUMERABLE, the shape the class body they came
+// from produced: parse() reaches them as this.<method>, suites can stub them through
+// Send.prototype, and for-in over a handler stays empty. Same install as dispenser_close.js
+// and db/index.js use.
+for(const part of [legsPart, prefetchPart, validatePart, gatedHandoffPart, controllerGuardPart, settlePart]){
+    const descriptors = Object.getOwnPropertyDescriptors(part);
+    for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;
+    Object.defineProperties(Send.prototype, descriptors);
 }
 
 module.exports = Send;
