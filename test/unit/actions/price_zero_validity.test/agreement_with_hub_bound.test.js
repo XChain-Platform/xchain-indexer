@@ -73,6 +73,16 @@ describe('PRICE price-range flag day @regression @tier3', function () {
             for(const price of ['', 'abc', 'NaN', undefined, null, {}])
                 assert.strictEqual(priceRange.isPriceInHubRange(price), false, String(price));
         });
+    });
+});
+
+// The drift alarm, in its own same-title block so the value-by-value cases
+// above stay within the function length limit; the harness hook is per test,
+// so this test runs under exactly the setup it had.
+describe('PRICE price-range flag day @regression @tier3', function () {
+    usePriceRangeHarness();
+
+    describe('agreement with the hub bound', function () {
 
         it('still carries the same expression the hub carries, when the hub tree is present', function () {
             // Drift alarm rather than the oracle: the transcription above is what grades
