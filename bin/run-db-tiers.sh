@@ -38,7 +38,7 @@
 #   bin/run-db-tiers.sh                       # integration tier (default)
 #   bin/run-db-tiers.sh unit integration      # both, in order
 #   bin/run-db-tiers.sh --keep integration    # leave the database up afterwards
-#   bin/run-db-tiers.sh -- test/integration/scenarios/14_multi_chain_parity.test.js
+#   bin/run-db-tiers.sh -- test/integration/scenarios/parity/14_multi_chain_parity.test.js
 #                                             # one file, straight to mocha
 #
 # ENVIRONMENT (all optional; each falls back to the sibling monorepo layout)

@@ -130,7 +130,7 @@ describe('Utility @regression @tier1', function () {
     beforeEach(freshUtil);
 
     // The SDK<->indexer isValidAmountFormat fragment-parity drift guard (item
-    // 5346) lives in test/integration/scenarios/15_sdk_parity.test.js: it needs
+    // 5346) lives in test/integration/scenarios/parity/15_sdk_parity.test.js: it needs
     // a real xchain-sdk checkout, which the unit tier's shared reusable CI
     // workflow does not have (the integration workflow checks the sdk out to
     // .xchain-sdk and sets XCHAIN_SDK_PATH).
