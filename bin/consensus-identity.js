@@ -30,6 +30,12 @@
  *   consensus_rules_digest        sha256 over the DECIDED HEIGHTS of the gates
  *                                  the hub also evaluates. Comparable across
  *                                  repos, and it answers "same rules?".
+ *   carrier_logic_digest           sha256 over the sorted id=hash lines of
+ *                                  bin/pins/carrier-logic.json, the token-stream
+ *                                  pin of every carrier's LOGIC. Read from the
+ *                                  pin, not the tree: the pin's own guard
+ *                                  measures the tree, so this answers "same
+ *                                  pinned logic?" and moves only on a re-pin.
  *   state_hash                     the stored hash at the regtest tip, or at a
  *                                  named height. The only one of the four that
  *                                  needs a database, and the only one that
@@ -115,6 +121,7 @@ function codeIdentity(network) {
     const { computeArmedMapFingerprint } = require('../src/consensus/armed_map/armed_map_fingerprint.js');
     const { computeArmedMapFingerprintV2 } = require('../src/consensus/armed_map/fingerprint_v2.js');
     const { computeConsensusRulesDigest, knownGateKeys, ABSENT } = require('../src/consensus_rules_digest.js');
+    const logicPin = require('./lib/carrier_logic_pin.js');
 
     const hashes = coins.consensusHashes(network);
     const rules = computeConsensusRulesDigest();
@@ -146,6 +153,7 @@ function codeIdentity(network) {
         consensus_rules_gates: rules.gates,
         gates_field: gatesField,
         gates_field_hash: crypto.createHash('sha256').update(gatesField, 'utf8').digest('hex'),
+        carrier_logic_digest: logicPin.digest(logicPin.readPin(REPO_ROOT)),
     };
 }
 
@@ -307,6 +315,7 @@ async function main() {
     console.log(`consensus_rules_digest:        ${identity.consensus_rules_digest}`);
     console.log(`gates_field:                   ${identity.gates_field}`);
     console.log(`gates_field_hash:              ${identity.gates_field_hash}`);
+    console.log(`carrier_logic_digest:          ${identity.carrier_logic_digest}`);
     console.log(`  shared gates:                ${identity.consensus_rules_gates_resolved} resolved, `
                 + `${identity.consensus_rules_gates_absent} absent`);
     // Named, not just counted: an absent gate is a legitimate reading of a build that
