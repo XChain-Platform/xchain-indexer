@@ -74,6 +74,63 @@ function isUsableFill(util, fill) {
     }
 }
 
+// The reference rate must be present and strictly positive to anchor the band.
+// An unparseable reference is unusable in the same way a missing one is.
+function isUsableReference(util, refRate) {
+    if (!refRate) return false;
+    try {
+        return util.bcgt(refRate, '0');
+    } catch (e) {
+        return false;
+    }
+}
+
+// Winsorized volume-weighted average:
+//
+//     sum(wrate(f) * xchain(f)) / sum(xchain(f))
+//
+// For a fill INSIDE the band, wrate(f) * xchain(f) is exactly coin(f), because
+// wrate(f) = coin(f)/xchain(f). So an in-band fill contributes its coin amount
+// with NO division and therefore no per-fill rounding at all. Only a clamped
+// fill needs a multiply, and there the band edge is the intended value rather
+// than the fill's own. This keeps the common path exact, which is what makes
+// the result bit-identical across nodes rather than merely close.
+//
+// (The unwinsorized identity sum(coin)/sum(xchain) does NOT hold once any fill
+// is clamped, which is the price of the §5 defence and is worth paying.)
+//
+// One pass over the usable fills, adding in fill order at RATE_PRECISION, which
+// is exactly the order and precision the sums were always taken in.
+function sumWinsorizedFills(util, usable, lower, upper) {
+    let totalXchain = '0';
+    let numerator   = '0';
+    let clampedCount = 0;
+    // BTC-side notional, summed pre-winsorize. This is the D2 threshold quantity
+    // and the §10.6 volume metric, and it is deliberately NOT `numerator`: for a
+    // clamped fill the numerator carries the band edge, not the BTC actually paid,
+    // so reusing it would let a clamped wash print inflate the very measurement
+    // that decides whether the market is real enough to supersede the bootstrap.
+    let totalCoin = '0';
+
+    for (let f of usable) {
+        let rate = util.bcdiv(f.coinAmount, f.xchainAmount, RATE_PRECISION);
+        let contribution;
+        if (util.bclt(rate, lower)) {
+            contribution = util.bcmul(lower, f.xchainAmount, RATE_PRECISION);
+            clampedCount++;
+        } else if (util.bcgt(rate, upper)) {
+            contribution = util.bcmul(upper, f.xchainAmount, RATE_PRECISION);
+            clampedCount++;
+        } else {
+            contribution = f.coinAmount;    // exact, no division
+        }
+        numerator   = util.bcadd(numerator, contribution, RATE_PRECISION);
+        totalXchain = util.bcadd(totalXchain, f.xchainAmount, RATE_PRECISION);
+        totalCoin   = util.bcadd(totalCoin, f.coinAmount, RATE_PRECISION);
+    }
+    return { totalXchain, numerator, clampedCount, totalCoin };
+}
+
 /**
  * Derive the XCHAIN/BTC rate from a set of realized fills.
  *
@@ -110,12 +167,7 @@ function deriveXchainRate(util, fills, refRate, opts = {}) {
     // near-zero cost). Fail closed to the caller's bootstrap instead. In practice
     // a reference always exists: the bootstrap price supplies it for the first
     // derived round, and the move clamp applies to that first print like any other.
-    if (!refRate) return null;
-    try {
-        if (!util.bcgt(refRate, '0')) return null;
-    } catch (e) {
-        return null;
-    }
+    if (!isUsableReference(util, refRate)) return null;
 
     let band  = opts.bandFactor || WINSOR_BAND_FACTOR;
     let lower = util.bcdiv(refRate, band, RATE_PRECISION);
@@ -125,45 +177,7 @@ function deriveXchainRate(util, fills, refRate, opts = {}) {
     let droppedCount = fills.length - usable.length;
     if (usable.length === 0) return null;
 
-    // Winsorized volume-weighted average:
-    //
-    //     sum(wrate(f) * xchain(f)) / sum(xchain(f))
-    //
-    // For a fill INSIDE the band, wrate(f) * xchain(f) is exactly coin(f), because
-    // wrate(f) = coin(f)/xchain(f). So an in-band fill contributes its coin amount
-    // with NO division and therefore no per-fill rounding at all. Only a clamped
-    // fill needs a multiply, and there the band edge is the intended value rather
-    // than the fill's own. This keeps the common path exact, which is what makes
-    // the result bit-identical across nodes rather than merely close.
-    //
-    // (The unwinsorized identity sum(coin)/sum(xchain) does NOT hold once any fill
-    // is clamped, which is the price of the §5 defence and is worth paying.)
-    let totalXchain = '0';
-    let numerator   = '0';
-    let clampedCount = 0;
-    // BTC-side notional, summed pre-winsorize. This is the D2 threshold quantity
-    // and the §10.6 volume metric, and it is deliberately NOT `numerator`: for a
-    // clamped fill the numerator carries the band edge, not the BTC actually paid,
-    // so reusing it would let a clamped wash print inflate the very measurement
-    // that decides whether the market is real enough to supersede the bootstrap.
-    let totalCoin = '0';
-
-    for (let f of usable) {
-        let rate = util.bcdiv(f.coinAmount, f.xchainAmount, RATE_PRECISION);
-        let contribution;
-        if (util.bclt(rate, lower)) {
-            contribution = util.bcmul(lower, f.xchainAmount, RATE_PRECISION);
-            clampedCount++;
-        } else if (util.bcgt(rate, upper)) {
-            contribution = util.bcmul(upper, f.xchainAmount, RATE_PRECISION);
-            clampedCount++;
-        } else {
-            contribution = f.coinAmount;    // exact, no division
-        }
-        numerator   = util.bcadd(numerator, contribution, RATE_PRECISION);
-        totalXchain = util.bcadd(totalXchain, f.xchainAmount, RATE_PRECISION);
-        totalCoin   = util.bcadd(totalCoin, f.coinAmount, RATE_PRECISION);
-    }
+    let { totalXchain, numerator, clampedCount, totalCoin } = sumWinsorizedFills(util, usable, lower, upper);
 
     if (!util.bcgt(totalXchain, '0')) return null;
 
