@@ -45,28 +45,10 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon  = require('sinon');
-const crypto = require('crypto');
-
-const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
-
-const Batch  = require('../../../src/actions/batch/index.js');
-const Attest = require('../../../src/actions/attest/index.js');
-const swq    = require('../../../src/stake_weighted_quorum.js');
-const attestAdmission = require('../../../src/attest_admission_activation.js');
 const { rootDiscriminator } = require('../../../src/consensus/batch_root_discriminator.js');
-
-const SOURCE   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-const TX_HASH  = 'a'.repeat(64);
-const TX_VOUT  = 0;
-const CONTRACT = 7;
-
-// The request_id preimage, written out here the way the VM writes it
-// (xchain-vm/src/gateway.js attestation.request). ROOT is hashed as the raw string
-// it arrives as: NEVER Number()-coerced, or '3.10' and '3.1' fold together.
-const deriveReqId = (txHash, root, emitterPath, contractIndex, position) =>
-    crypto.createHash('sha256')
-        .update(String(txHash) + ':' + String(root) + ':' + String(emitterPath) + ':' + String(contractIndex) + ':' + String(position))
-        .digest('hex');
+const {
+    TX_HASH, TX_VOUT, CONTRACT, deriveReqId, freshBatchSuite, runTwoExecuteBatch,
+} = require('./batch_execute_attest.test/helpers/batch_execute_attest_suite.js');
 
 // Cross-repo golden pins for the COMPOSITE root form, the shape this regression is
 // about. Literal on purpose: the same two hexes are asserted against the real VM
@@ -82,85 +64,35 @@ const GOLDEN_BATCH_REQUEST_IDS = {
     '100.1': '0d7fba0bc1917aa1e74e90dfcce0db0a352094b0587eddc468f228a9dcca17b9',
 };
 
-describe('two-EXECUTE BATCH ATTEST request_id collision @regression @tier1', function(){
+let suite;
+function freshSuite() {
+    suite = freshBatchSuite();
+}
 
-    let indexer, actionsCtx, batch;
-
-    beforeEach(function(){
-        indexer = createMockIndexer();
-        actionsCtx = {
-            config:          indexer.config,
-            util:            indexer.util,
-            mapper:          indexer.mapper,
-            decoderDb:       indexer.decoderDb,
-            indexerDb:       indexer.indexerDb,
-            protocolChanges: {
-                isDefined: sinon.stub().returns(true),
-                isEnabled: sinon.stub().resolves(true),
-            },
-            processAction:   sinon.stub().resolves(),
-            actionAliases:   { TRANSFER: 'SEND', ADDR: 'ADDRESS', DROP: 'AIRDROP', CAST: 'BROADCAST', MSG: 'MESSAGE' },
-        };
-        batch = new Batch(actionsCtx);
-        indexer.util.resetLists();
-        indexer.indexerDb.isActionAllowed.resolves(true);
-        // At/after BATCH_COST_WEIGHTING the aggregate spam collapse prices EXECUTE at its acceptance
-        // floor (batch.js vmBaseFeeActions), so a two-EXECUTE batch from a source that cannot
-        // cover it collapses to ONE invalid record and no sub-command reaches a handler. Every
-        // gate is ON in this fixture, so the SOURCE is funded and the GAS token seeded: these
-        // tests are about ROOT DERIVATION, and what they claim is that a BATCH does not bound
-        // EXECUTE BY COUNT, which is exactly as true for a source that pays its way. Left to
-        // the bare mock they would keep passing only because its GAS token does not exist,
-        // which is an incidental reason and would break on the next fixture change.
-        indexer.indexerDb.getTokenInfo
-            .withArgs('XCHAIN', sinon.match.any, sinon.match.any)
-            .resolves(createTokenInfo({ TICK: 'XCHAIN', TICK_ID: 1, DECIMALS: 8 }));
-        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000000' });
-    });
-
-    afterEach(function(){
-        sinon.restore();
-    });
-
-    // Drives the real Batch handler over two same-contract EXECUTE subcommands and
-    // returns what each subcommand's handler was handed. batch.js mutates ONE data
-    // object across the loop, so each dispatch is snapshotted as it happens.
-    async function runTwoExecuteBatch(){
-        const commands = 'EXECUTE|0|' + CONTRACT + '|ping|;EXECUTE|0|' + CONTRACT + '|pong|';
-        const data = createBaseData({
-            ACTION: 'BATCH', FORMAT: 0, SOURCE, TX_HASH, TX_VOUT,
-            TX_DATA: 'BATCH|0|' + commands,
-        });
-        const seen = [];
-        actionsCtx.processAction.callsFake(async (action, params, d) => {
-            seen.push({ action, TX_VOUT: d['TX_VOUT'], BATCH_POSITION: d['BATCH_POSITION'] });
-        });
-        await batch.parse(['0', commands], data, null);
-        assert.strictEqual(data['STATUS'], 'valid', 'fixture must be a valid two-command BATCH');
-        return seen;
-    }
-
+function batchShapeCases() {
     it('a BATCH does NOT bound EXECUTE, so two of them really do reach the handler', async function(){
-        const seen = await runTwoExecuteBatch();
+        const seen = await runTwoExecuteBatch(suite);
         assert.strictEqual(seen.length, 2);
         assert.deepStrictEqual(seen.map(s => s.action), ['EXECUTE', 'EXECUTE']);
     });
 
     it('both subcommands share ONE TX_VOUT, which is why TX_VOUT alone cannot name a root', async function(){
-        const seen = await runTwoExecuteBatch();
+        const seen = await runTwoExecuteBatch(suite);
         assert.strictEqual(seen[0].TX_VOUT, seen[1].TX_VOUT,
             'actions.js assigns TX_VOUT once per transaction; if this ever stops being true the ' +
             'discriminator is still correct, but the defect it fixes would have changed shape');
     });
 
     it('batch.js stamps each subcommand its own 0-based BATCH_POSITION', async function(){
-        const seen = await runTwoExecuteBatch();
+        const seen = await runTwoExecuteBatch(suite);
         assert.deepStrictEqual(seen.map(s => s.BATCH_POSITION), [0, 1],
             'the position is the only content-derived value that separates the two roots');
     });
+}
 
+function requestIdCases() {
     it('the two roots derive DISTINCT request_ids with the gate ON', async function(){
-        const seen  = await runTwoExecuteBatch();
+        const seen  = await runTwoExecuteBatch(suite);
         const ids   = seen.map(s => deriveReqId(TX_HASH,
             rootDiscriminator(s.TX_VOUT, s.BATCH_POSITION, true), '', CONTRACT, 0));
         assert.notStrictEqual(ids[0], ids[1],
@@ -168,126 +100,28 @@ describe('two-EXECUTE BATCH ATTEST request_id collision @regression @tier1', fun
     });
 
     it('the two roots COLLIDE with the gate OFF, which is the history replay must reproduce', async function(){
-        const seen = await runTwoExecuteBatch();
+        const seen = await runTwoExecuteBatch(suite);
         const ids  = seen.map(s => deriveReqId(TX_HASH,
             rootDiscriminator(s.TX_VOUT, s.BATCH_POSITION, false), '', CONTRACT, 0));
         assert.strictEqual(ids[0], ids[1],
             'below the flag day the preimage is the historical one, collision included; a node ' +
             'that "fixed" this ungated would derive request_ids mainnet never wrote');
     });
+}
 
+function goldenVectorCase() {
     it('golden vector: the composite roots hash to the checked-in cross-repo hexes', function(){
         for(const [root, expected] of Object.entries(GOLDEN_BATCH_REQUEST_IDS))
             assert.strictEqual(deriveReqId('abc123', root, '', 7, 0), expected,
                 'composite request_id preimage drifted; xchain-vm/src/gateway.js must move in lockstep');
     });
+}
 
-    let attest, attestCtx;
+describe('two-EXECUTE BATCH ATTEST request_id collision @regression @tier1', function () {
+    beforeEach(freshSuite);
+    afterEach(function () { sinon.restore(); });
 
-    // ATTEST v0 as execute.processEmission stamps it for a subcommand's first emission.
-    function v0(root, requestId){
-        const data = createBaseData({
-            ACTION: 'ATTEST', FORMAT: 0, IS_EMISSION: true, TX_HASH, TX_VOUT,
-            EMITTER: CONTRACT, EMITTER_POSITION: 0, EMITTER_PATH: '',
-            ROOT_ACTION_INDEX: root, BLOCK_INDEX: 100,
-        });
-        const params = ['0', requestId, 'http_get', 'q', 'onResult', '[]', '3', '50'];
-        return { data, params };
-    }
-
-    describe('the REAL ATTEST v0 handler accepts each subcommand request', function(){
-        beforeEach(function(){
-            const db = indexer.indexerDb;
-            db.getContract                       = sinon.stub().resolves({ contract_index: CONTRACT });
-            db.createAttestationRequest          = sinon.stub().resolves();
-            db.getAttestationAdmissionCounts = sinon.stub().resolves({ total: 0, byContract: 0 });
-            db.getAttestationRequestById         = sinon.stub().resolves(null);
-            db.hasCapability                     = sinon.stub().resolves(true);
-            db.getValidatorsByCapability         = sinon.stub().resolves([{ pubkey: 'a'.repeat(64) }]);
-            db.getStakeWeightsByCapability       = sinon.stub().resolves([{ pubkey: 'a'.repeat(64), source: 'SA', weight: '100' }]);
-            attestCtx = {
-                config:        indexer.config,
-                util:          indexer.util,
-                mapper:        indexer.mapper,
-                decoderDb:     indexer.decoderDb,
-                indexerDb:     db,
-                actionExecute: { parse: sinon.stub().resolves() },
-                protocolChanges: {
-                    isDefined: sinon.stub().returns(true),
-                    isEnabled: sinon.stub().resolves(true),
-                },
-            };
-            attest = new Attest(attestCtx);
-            // Same defaults the ATTEST suite uses: legacy count path, admission gate off,
-            // so a redundancy-3 request against a one-validator snapshot stays 'valid'.
-            sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
-            sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(false);
-        });
-
-        it('accepts a composite-root request, so the host re-derivation matches the VM', async function(){
-            const root  = rootDiscriminator(TX_VOUT, 1, true);
-            const reqId = deriveReqId(TX_HASH, root, '', CONTRACT, 0);
-            const { data, params } = v0(root, reqId);
-            await attest.parse(params, data, null);
-            assert.strictEqual(data['STATUS'], 'valid',
-                'a rejection means the handler folded or reformatted the composite root and no ' +
-                'longer agrees with xchain-vm/src/gateway.js');
-        });
-
-        it('rejects a request whose id was derived from the OTHER subcommand root', async function(){
-            // The precise failure the discriminator prevents: subcommand 1 presenting the
-            // id subcommand 0 already owns. Before the fix both subcommands legitimately
-            // derived that id and the second insert was silently dropped; now the second
-            // root hashes to something else and the mismatched id is refused outright.
-            const wrong = deriveReqId(TX_HASH, rootDiscriminator(TX_VOUT, 0, true), '', CONTRACT, 0);
-            const { data, params } = v0(rootDiscriminator(TX_VOUT, 1, true), wrong);
-            await attest.parse(params, data, null);
-            assert.ok(String(data['STATUS']).includes('REQUEST_ID'),
-                'expected a REQUEST_ID derivation rejection, got: ' + data['STATUS']);
-        });
-    });
-
-    describe('the REAL ATTEST v0 handler accepts each subcommand request', function(){
-        beforeEach(function(){
-            const db = indexer.indexerDb;
-            db.getContract                       = sinon.stub().resolves({ contract_index: CONTRACT });
-            db.createAttestationRequest          = sinon.stub().resolves();
-            db.getAttestationAdmissionCounts = sinon.stub().resolves({ total: 0, byContract: 0 });
-            db.getAttestationRequestById         = sinon.stub().resolves(null);
-            db.hasCapability                     = sinon.stub().resolves(true);
-            db.getValidatorsByCapability         = sinon.stub().resolves([{ pubkey: 'a'.repeat(64) }]);
-            db.getStakeWeightsByCapability       = sinon.stub().resolves([{ pubkey: 'a'.repeat(64), source: 'SA', weight: '100' }]);
-            attestCtx = {
-                config:        indexer.config,
-                util:          indexer.util,
-                mapper:        indexer.mapper,
-                decoderDb:     indexer.decoderDb,
-                indexerDb:     db,
-                actionExecute: { parse: sinon.stub().resolves() },
-                protocolChanges: {
-                    isDefined: sinon.stub().returns(true),
-                    isEnabled: sinon.stub().resolves(true),
-                },
-            };
-            attest = new Attest(attestCtx);
-            // Same defaults the ATTEST suite uses: legacy count path, admission gate off,
-            // so a redundancy-3 request against a one-validator snapshot stays 'valid'.
-            sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
-            sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(false);
-        });
-
-        it('both subcommands are inserted as SEPARATE requests', async function(){
-            for(const position of [0, 1]){
-                const root  = rootDiscriminator(TX_VOUT, position, true);
-                const { data, params } = v0(root, deriveReqId(TX_HASH, root, '', CONTRACT, 0));
-                await attest.parse(params, data, null);
-                assert.strictEqual(data['STATUS'], 'valid');
-            }
-            const created = attestCtx.indexerDb.createAttestationRequest;
-            assert.strictEqual(created.callCount, 2);
-            const ids = created.getCalls().map(c => String(c.args[0]['REQUEST_ID']));
-            assert.notStrictEqual(ids[0], ids[1],
-                'the second subcommand must own a request row of its own, not inherit the first');
-        });
-    });
+    batchShapeCases();
+    requestIdCases();
+    goldenVectorCase();
 });
