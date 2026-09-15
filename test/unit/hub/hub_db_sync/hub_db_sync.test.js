@@ -35,7 +35,7 @@ describe('HubDbSync price-sync barrier @regression @tier3', function () {
 
     it('_refreshPriceSyncHeight adopts MAX(reference_block) from the local mirror', async function () {
         const { sync } = makeSync(123);
-        await sync._refreshPriceSyncHeight();
+        await sync.refreshPriceSyncHeight();
         assert.strictEqual(sync.priceSyncHeight, 123);
     });
 
@@ -52,7 +52,7 @@ describe('HubDbSync price-sync barrier @regression @tier3', function () {
         const hubDb = { doQuery };
         const sync = new HubDbSync(hubDb, { hubUrl: 'http://hub.test' });
 
-        await sync._refreshPriceSyncHeight();
+        await sync.refreshPriceSyncHeight();
 
         assert.strictEqual(doQuery.callCount, 2, 'expected exactly two doQuery calls, one per MAX');
         for (let call of doQuery.getCalls()) {
@@ -70,7 +70,7 @@ describe('HubDbSync price-sync barrier @regression @tier3', function () {
         const { sync, doQuery } = makeSync(0);
         sync.priceSyncHeight = 50;
         doQuery.rejects(new Error("Table 'price_snapshots' doesn't exist"));
-        await sync._refreshPriceSyncHeight();
+        await sync.refreshPriceSyncHeight();
         assert.strictEqual(sync.priceSyncHeight, 50, 'height must not reset on query failure');
     });
 
@@ -90,7 +90,7 @@ describe('HubDbSync price-sync barrier @regression @tier3', function () {
         assert.strictEqual(sync._priceWaiters.length, 1);
         // A subsequent sync delivers a round anchored at/after the target.
         doQuery.callsFake(async () => [{ h: 120 }]);
-        await sync._refreshPriceSyncHeight();
+        await sync.refreshPriceSyncHeight();
         const got = await pending;
         assert.strictEqual(got, 120);
         assert.strictEqual(sync._priceWaiters.length, 0, 'waiter should be cleared on resolve');
@@ -108,7 +108,7 @@ describe('HubDbSync price-sync barrier @regression @tier3', function () {
 
     it('waitForPriceSyncHeight self-heals on timeout when the DB caught up but in-memory height was stale (2026-06-13 regression)', async function () {
         // In-memory priceSyncHeight only advances when a stream/bootstrap event drives
-        // _refreshPriceSyncHeight; a missed refresh on a stream/reconnect edge can leave
+        // refreshPriceSyncHeight; a missed refresh on a stream/reconnect edge can leave
         // it frozen behind a local mirror DB that is actually current. Before this fix,
         // every tip block then deferred the full timeout even though the data was present
         // (BTC mainnet: in-memory stuck at the restart block while price_snapshots had
@@ -291,23 +291,23 @@ describe('HubDbSync stream-position watermark @regression @tier3', function () {
         sync.priceBootstrapped = true;
         sync.priceSyncHeight   = 0;                       // no rounds exist anywhere
         sync.streamWatermark   = 1000 + 60;
-        assert.strictEqual(sync._priceSyncSatisfied(5, 1000), true);
+        assert.strictEqual(sync.priceSyncSatisfied(5, 1000), true);
     });
 
     it('price barrier still defers while the watermark is short of grace', function () {
         const sync = makeWatermarkSync();
         sync.priceBootstrapped = true;
         sync.streamWatermark   = 1000 + 59;
-        assert.strictEqual(sync._priceSyncSatisfied(5, 1000), false);
+        assert.strictEqual(sync.priceSyncSatisfied(5, 1000), false);
     });
 
     it('price barrier ignores the watermark for legacy callers that pass no blockTime', function () {
         const sync = makeWatermarkSync();
         sync.priceBootstrapped = true;
         sync.streamWatermark   = 10_000_000;
-        assert.strictEqual(sync._priceSyncSatisfied(5, undefined), false, 'row path only without blockTime');
+        assert.strictEqual(sync.priceSyncSatisfied(5, undefined), false, 'row path only without blockTime');
         sync.priceSyncHeight = 5;
-        assert.strictEqual(sync._priceSyncSatisfied(5, undefined), true);
+        assert.strictEqual(sync.priceSyncSatisfied(5, undefined), true);
     });
 
     it('oracle barrier releases a stale armed row via the watermark (#1984 deadlock)', function () {
@@ -346,7 +346,7 @@ describe('HubDbSync stream-position watermark @regression @tier3', function () {
     it('_bootstrapAll opens the heartbeat gate and adopts the OLDEST per-table watermark only when every table drains', async function () {
         const sync = makeWatermarkSync();
         const marks = { price_snapshots: 900, oracle_prices: 880, cross_chain_matches: 910, cross_chain_calls: 915, capability_snapshots: 905, state_checkpoints: 920, anchor_reward_attestations: 925, attestation_responses: 930, bridge_transfers: 935, policy_snapshots: 940 };
-        sinon.stub(sync, '_bootstrapTable').callsFake(async (table) => marks[table]);
+        sinon.stub(sync, 'bootstrapTable').callsFake(async (table) => marks[table]);
         await sync.bootstrapAll();
         assert.strictEqual(sync._bootstrapDrained, true);
         assert.strictEqual(sync.streamWatermark, 880, 'min across tables; no table may be certified past its own drain');
@@ -354,7 +354,7 @@ describe('HubDbSync stream-position watermark @regression @tier3', function () {
 
     it('_bootstrapAll keeps the gate closed when any table fails to drain', async function () {
         const sync = makeWatermarkSync();
-        sinon.stub(sync, '_bootstrapTable').callsFake(async (table) =>
+        sinon.stub(sync, 'bootstrapTable').callsFake(async (table) =>
             table === 'oracle_prices' ? null : 900);      // partial page / apply error
         await sync.bootstrapAll();
         assert.strictEqual(sync._bootstrapDrained, false);
@@ -372,7 +372,7 @@ describe('HubDbSync stream-position watermark @regression @tier3', function () {
         // oracle_prices only relocated the stall to the match barrier, so assert it is LAST.
         const sync = makeWatermarkSync();
         const order = [];
-        sinon.stub(sync, '_bootstrapTable').callsFake(async (table) => { order.push(table); return 900; });
+        sinon.stub(sync, 'bootstrapTable').callsFake(async (table) => { order.push(table); return 900; });
         await sync.bootstrapAll();
         const pi = order.indexOf('price_snapshots');
         assert.ok(pi !== -1, 'price_snapshots bootstrapped');

@@ -31,7 +31,7 @@ function makeSync(maxReferenceBlock) {
 // ('2026-06-16T10:33:01.000Z'). MariaDB strict mode rejects the 'T'/'Z' form
 // for a DATETIME column (ER_TRUNCATED_WRONG_VALUE, 22007) and silently kills
 // the mirror; BTC indexers stalled at 'price mirror at 0' once the oracle
-// resumed finalizing rounds. _applyRow must reformat ISO datetimes to MySQL
+// resumed finalizing rounds. applyRow must reformat ISO datetimes to MySQL
 // 'YYYY-MM-DD HH:MM:SS' (UTC) and leave every other value untouched.
 
 function makeApplySync(localCols) {
@@ -68,7 +68,7 @@ describe('HubDbSync _applyRow datetime coercion @regression @tier2', function ()
     it('reformats an ISO-8601 created_at (T/Z) to MySQL DATETIME', async function () {
         const cols = ['round_number', 'coin_pair', 'status', 'created_at'];
         const { sync, doQuery } = makeApplySync(cols);
-        await sync._applyRow('price_snapshots',
+        await sync.applyRow('price_snapshots',
             { round_number: 5, coin_pair: 'BTC/USD', status: 'finalized', created_at: '2026-06-16T10:33:01.000Z' });
         assert.strictEqual(argFor(doQuery, 'price_snapshots', 'created_at', cols), '2026-06-16 10:33:01');
     });
@@ -76,14 +76,14 @@ describe('HubDbSync _applyRow datetime coercion @regression @tier2', function ()
     it('normalizes a non-UTC offset to UTC wall-clock', async function () {
         const cols = ['id', 'created_at'];
         const { sync, doQuery } = makeApplySync(cols);
-        await sync._applyRow('oracle_prices', { id: 1, created_at: '2026-06-16T12:33:01+02:00' });
+        await sync.applyRow('oracle_prices', { id: 1, created_at: '2026-06-16T12:33:01+02:00' });
         assert.strictEqual(argFor(doQuery, 'oracle_prices', 'created_at', cols), '2026-06-16 10:33:01');
     });
 
     it('leaves an already-MySQL-format datetime untouched', async function () {
         const cols = ['id', 'created_at'];
         const { sync, doQuery } = makeApplySync(cols);
-        await sync._applyRow('oracle_prices', { id: 1, created_at: '2026-06-14 00:00:00' });
+        await sync.applyRow('oracle_prices', { id: 1, created_at: '2026-06-14 00:00:00' });
         assert.strictEqual(argFor(doQuery, 'oracle_prices', 'created_at', cols), '2026-06-14 00:00:00');
     });
 
@@ -91,7 +91,7 @@ describe('HubDbSync _applyRow datetime coercion @regression @tier2', function ()
         const cols = ['coin_pair', 'consensus_proof'];
         const { sync, doQuery } = makeApplySync(cols);
         const proof = '[{"pubkey":"4a523cf4ae4f","sig":"deadbeef"}]';
-        await sync._applyRow('oracle_prices', { coin_pair: 'BTC/USD', consensus_proof: proof });
+        await sync.applyRow('oracle_prices', { coin_pair: 'BTC/USD', consensus_proof: proof });
         assert.strictEqual(argFor(doQuery, 'oracle_prices', 'coin_pair', cols), 'BTC/USD');
         assert.strictEqual(argFor(doQuery, 'oracle_prices', 'consensus_proof', cols), proof);
     });
@@ -99,7 +99,7 @@ describe('HubDbSync _applyRow datetime coercion @regression @tier2', function ()
     it('passes numeric and null values through unchanged', async function () {
         const cols = ['reference_block', 'price'];
         const { sync, doQuery } = makeApplySync(cols);
-        await sync._applyRow('oracle_prices', { reference_block: 800000, price: null });
+        await sync.applyRow('oracle_prices', { reference_block: 800000, price: null });
         assert.strictEqual(argFor(doQuery, 'oracle_prices', 'reference_block', cols), 800000);
         assert.strictEqual(argFor(doQuery, 'oracle_prices', 'price', cols), null);
     });
@@ -110,7 +110,7 @@ describe('HubDbSync _applyRow datetime coercion @regression @tier2', function ()
             id: 'int(11)', memo: 'varchar(255)', created_at: 'timestamp'
         });
         const memo = '2026-06-16T10:33:01+09:00';
-        await sync._applyRow('oracle_prices',
+        await sync.applyRow('oracle_prices',
             { id: 1, memo: memo, created_at: '2026-06-16T10:33:01.000Z' });
         assert.strictEqual(argFor(doQuery, 'oracle_prices', 'memo', cols), memo,
             'a VARCHAR memo must mirror byte-verbatim');
@@ -123,7 +123,7 @@ describe('HubDbSync _applyRow datetime coercion @regression @tier2', function ()
     it('still reformats a DATETIME column when the type is known', async function () {
         const cols = ['id', 'created_at'];
         const { sync, doQuery } = makeTypedApplySync({ id: 'int(11)', created_at: 'datetime' });
-        await sync._applyRow('oracle_prices', { id: 1, created_at: '2026-06-16T12:33:01+02:00' });
+        await sync.applyRow('oracle_prices', { id: 1, created_at: '2026-06-16T12:33:01+02:00' });
         assert.strictEqual(argFor(doQuery, 'oracle_prices', 'created_at', cols), '2026-06-16 10:33:01');
     });
 
@@ -135,7 +135,7 @@ describe('HubDbSync _applyRow datetime coercion @regression @tier2', function ()
         assert.strictEqual(sync.cachedColumnType('oracle_prices', 'created_at'), '');
         const cols = ['id', 'created_at'];
         const { sync: s2, doQuery } = makeApplySync(cols);
-        await s2._applyRow('oracle_prices', { id: 1, created_at: '2026-06-16T10:33:01.000Z' });
+        await s2.applyRow('oracle_prices', { id: 1, created_at: '2026-06-16T10:33:01.000Z' });
         assert.strictEqual(argFor(doQuery, 'oracle_prices', 'created_at', cols), '2026-06-16 10:33:01');
     });
 });
@@ -146,7 +146,7 @@ describe('HubDbSync mirror-table cold-start (missing table) @regression @tier2',
     // bootstrapping before the indexer's verifyTables() had created price_snapshots.
     // doQuery swallows the 1146 (missing table) for non-transactional reads and
     // returns [], so localColumns cached an EMPTY column set for the whole process
-    // lifetime; every _applyRow then filtered to zero columns and silently no-op'd
+    // lifetime; every applyRow then filtered to zero columns and silently no-op'd
     // (while still counting the row as "applied", hence "bootstrapped 44614 rows"),
     // the mirror stayed at 0, and the BTC-only price barrier deferred every block
     // until a process restart. The fix: never cache an empty/failed column lookup,
@@ -163,8 +163,8 @@ describe('HubDbSync mirror-table cold-start (missing table) @regression @tier2',
     it('_bootstrapTable bails to retry (returns null) when the mirror table is absent', async function () {
         const doQuery = sinon.stub().resolves([]);              // table missing -> empty SHOW COLUMNS
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
-        const httpGet = sinon.stub(sync, '_httpGet');
-        assert.strictEqual(await sync._bootstrapTable('price_snapshots'), null,
+        const httpGet = sinon.stub(sync, 'httpGet');
+        assert.strictEqual(await sync.bootstrapTable('price_snapshots'), null,
             'an absent table must report not-drained so bootstrapAll schedules a retry');
         assert.strictEqual(httpGet.callCount, 0,
             'must not fetch from the hub at all when the local table is absent');
@@ -176,13 +176,13 @@ describe('HubDbSync mirror-table cold-start (missing table) @regression @tier2',
         doQuery.onCall(1).resolves([{ Field: 'id' }, { Field: 'status' }]);  // round 2 SHOW COLUMNS: present
         doQuery.resolves([{ max_id: null }]);                                // subsequent MAX(id)
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
-        sinon.stub(sync, '_applyRow').resolves();
-        sinon.stub(sync, '_refreshPriceSyncHeight').resolves();
-        sinon.stub(sync, '_httpGet').resolves({ rows: [{ id: 1 }], watermark: 77 });
+        sinon.stub(sync, 'applyRow').resolves();
+        sinon.stub(sync, 'refreshPriceSyncHeight').resolves();
+        sinon.stub(sync, 'httpGet').resolves({ rows: [{ id: 1 }], watermark: 77 });
 
-        assert.strictEqual(await sync._bootstrapTable('price_snapshots'), null,
+        assert.strictEqual(await sync.bootstrapTable('price_snapshots'), null,
             'round 1: table absent -> not-drained');
-        assert.strictEqual(await sync._bootstrapTable('price_snapshots'), 77,
+        assert.strictEqual(await sync.bootstrapTable('price_snapshots'), 77,
             'round 2: table now present -> drains cleanly (no restart needed)');
     });
 });
@@ -200,15 +200,15 @@ describe('HubDbSync bootstrap fail-closed on partial drain / holes @regression @
         doQuery.withArgs(sinon.match(/MAX\(id\)/)).resolves([{ max_id: 0 }]);
         doQuery.resolves([]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
-        sinon.stub(sync, '_httpGet').resolves({ rows: [{ id: 1 }, { id: 2 }, { id: 3 }], watermark: 99 });
+        sinon.stub(sync, 'httpGet').resolves({ rows: [{ id: 1 }, { id: 2 }, { id: 3 }], watermark: 99 });
         const applied = [];
-        sinon.stub(sync, '_applyRow').callsFake(async (t, row) => {
+        sinon.stub(sync, 'applyRow').callsFake(async (t, row) => {
             if (row.id === 2) throw new Error('unappliable row');
             applied.push(row.id);
         });
-        const refresh = sinon.stub(sync, '_refreshPriceSyncHeight').resolves();
+        const refresh = sinon.stub(sync, 'refreshPriceSyncHeight').resolves();
 
-        const result = await sync._bootstrapTable('price_snapshots');
+        const result = await sync.bootstrapTable('price_snapshots');
 
         assert.strictEqual(result, null, 'a hole must report not-drained');
         assert.deepStrictEqual(applied, [1],
@@ -223,11 +223,11 @@ describe('HubDbSync bootstrap fail-closed on partial drain / holes @regression @
         doQuery.withArgs(sinon.match(/MAX\(id\)/)).resolves([{ max_id: 0 }]);
         doQuery.resolves([]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
-        sinon.stub(sync, '_httpGet').resolves({ rows: [{ id: 1 }], watermark: 77 });
-        sinon.stub(sync, '_applyRow').resolves();
-        const refresh = sinon.stub(sync, '_refreshPriceSyncHeight').resolves();
+        sinon.stub(sync, 'httpGet').resolves({ rows: [{ id: 1 }], watermark: 77 });
+        sinon.stub(sync, 'applyRow').resolves();
+        const refresh = sinon.stub(sync, 'refreshPriceSyncHeight').resolves();
 
-        const result = await sync._bootstrapTable('price_snapshots');
+        const result = await sync.bootstrapTable('price_snapshots');
 
         assert.strictEqual(result, 77, 'clean drain returns the watermark');
         assert.ok(refresh.calledOnce, 'a full drain arms the barrier');
@@ -245,13 +245,13 @@ describe('HubDbSync bootstrap fail-closed on partial drain / holes @regression @
         doQuery.resolves([{ max_id: 5 }]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
         sync._readyMaxIds = { oracle_prices: 100 };            // hub advertises rows past our local max
-        const httpGet = sinon.stub(sync, '_httpGet');
+        const httpGet = sinon.stub(sync, 'httpGet');
         httpGet.onFirstCall().resolves({ rows: [], watermark: 10 });          // main page: clean short drain
         httpGet.onSecondCall().resolves({ rows: [{ id: 6 }], schema_version: 999999 });  // catch-up: mismatch
-        sinon.stub(sync, '_applyRow').resolves();
+        sinon.stub(sync, 'applyRow').resolves();
         const refresh = sinon.stub(sync, 'refreshOracleSyncTimestamp').resolves();
 
-        const result = await sync._bootstrapTable('oracle_prices');
+        const result = await sync.bootstrapTable('oracle_prices');
 
         assert.strictEqual(result, null, 'a schema-mismatched catch-up must mark the table not-drained');
         assert.ok(refresh.notCalled, 'and must not arm the barrier');

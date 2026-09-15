@@ -38,7 +38,7 @@ describe('HubDbSync poll-mode watermark fail-closed (ITEM 2476) @regression @tie
         sync._pollMode = true;
         // Each mirrored table drains cleanly (returns a per-table watermark), i.e. the
         // mirror path still runs: bootstrapping/mirroring is not skipped in poll mode.
-        const bootstrapTable = sinon.stub(sync, '_bootstrapTable').callsFake(async () => 900);
+        const bootstrapTable = sinon.stub(sync, 'bootstrapTable').callsFake(async () => 900);
         const warn = sinon.stub(console, 'warn');
         try {
             await sync.bootstrapAll();
@@ -66,7 +66,7 @@ describe('HubDbSync poll-mode watermark fail-closed (ITEM 2476) @regression @tie
             anchor_reward_attestations: 925, attestation_responses: 930,
             bridge_transfers: 935, policy_snapshots: 940,
         };
-        sinon.stub(sync, '_bootstrapTable').callsFake(async (table) => marks[table]);
+        sinon.stub(sync, 'bootstrapTable').callsFake(async (table) => marks[table]);
         await sync.bootstrapAll();
         assert.strictEqual(sync._bootstrapDrained, true);
         assert.strictEqual(sync.streamWatermark, 880, 'WS path must advance to min across tables, unchanged');

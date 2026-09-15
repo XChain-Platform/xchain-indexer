@@ -13,7 +13,7 @@
  *
  * bridge_transfers is a hub-mirrored, federation-co-signed table: the indexer only
  * SELECTs it, and the authoritative unwind is the hub's retraction (hub_db_sync.js
- * _applyRetraction, under the mandatory push_generation fence). But a reorg concurrent
+ * applyRetraction, under the mandatory push_generation fence). But a reorg concurrent
  * with a hub blip leaves 'finalized' transfers for the orphaned range serving locally
  * until the hub reconnects, and the bridge settle pass reads exactly those rows. That is
  * the window cross_chain_calls and cross_chain_matches already close with their own local

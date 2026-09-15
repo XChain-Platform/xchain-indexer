@@ -18,7 +18,7 @@ const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
 
     // A HubDbSync over a fake local mirror. `local` is the simulated table content as
     // {id, round_number, coin_pair, status} rows; applied rows land in it through the
-    // stubbed _applyRow the same way the real upsert would (insert-or-replace on the
+    // stubbed applyRow the same way the real upsert would (insert-or-replace on the
     // natural key), so the drain's own effect on the mirror is modelled, not assumed.
     function makeSync(local) {
         const rows = (local || []).map(r => Object.assign({}, r));
@@ -58,7 +58,7 @@ const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
         // the two existing purges cannot defend it, so the fixture must reproduce it.
         sinon.stub(sync, 'localColumns').resolves(
             new Set(['id', 'round_number', 'coin_pair', 'price', 'reference_block', 'block_timestamp', 'status']));
-        sinon.stub(sync, '_applyRow').callsFake(async (t, row) => {
+        sinon.stub(sync, 'applyRow').callsFake(async (t, row) => {
             const i = rows.findIndex(r => String(r.round_number) === String(row.round_number) &&
                                           String(r.coin_pair) === String(row.coin_pair));
             if (i === -1) { rows.push(Object.assign({}, row, { id: nextId++ })); return; }
@@ -77,7 +77,7 @@ const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
 
 // Serve a hub table honestly over the ascending since_id page walk.
 function stubHub(sync, hubRows) {
-    sinon.stub(sync, '_httpGet').callsFake(async (path) => {
+    sinon.stub(sync, 'httpGet').callsFake(async (path) => {
         const since = Number(/since_id=(\d+)/.exec(path)[1]);
         return { rows: hubRows.filter(r => Number(r.id) > since), watermark: 5000 };
     });
@@ -111,7 +111,7 @@ describe('HubDbSync price mirror repoint @regression @tier2', function () {
         stubHub(sync, [finalized(1, 1, 'XCHAIN/USD', 1), finalized(2, 2, 'XCHAIN/USD', 2),
                        finalized(3, 3, 'XCHAIN/USD', 3)]);
 
-        assert.strictEqual(await sync._bootstrapTable('price_snapshots'), 5000, 'drain should complete');
+        assert.strictEqual(await sync.bootstrapTable('price_snapshots'), 5000, 'drain should complete');
 
         const survivors = rows.map(r => Number(r.round_number)).sort((a, b) => a - b);
         assert.deepStrictEqual(survivors, [1, 2, 3],
@@ -126,7 +126,7 @@ describe('HubDbSync price mirror repoint @regression @tier2', function () {
         const { sync } = makeSync([finalized(500, 900, 'XCHAIN/USD', 880000)]);
         stubHub(sync, [finalized(1, 1, 'XCHAIN/USD', 7)]);
 
-        await sync._bootstrapTable('price_snapshots');
+        await sync.bootstrapTable('price_snapshots');
         assert.strictEqual(sync.priceSyncHeight, 7,
             'height must come from the hub this mirror follows');
     });
@@ -136,7 +136,7 @@ describe('HubDbSync price mirror repoint @regression @tier2', function () {
                                                finalized(2, 2, 'XCHAIN/USD', 2)]);
         stubHub(sync, [finalized(1, 1, 'XCHAIN/USD', 1), finalized(2, 2, 'XCHAIN/USD', 2)]);
 
-        await sync._bootstrapTable('price_snapshots');
+        await sync.bootstrapTable('price_snapshots');
         assert.strictEqual(seen.deletes.length, 0, 'a converged mirror must not be touched');
         assert.strictEqual(rows.length, 2);
     });
@@ -157,7 +157,7 @@ describe('HubDbSync price mirror repoint @regression @tier2', function () {
               reference_block: 2, block_timestamp: 1002, status: 'skipped' }
         ]);
 
-        await sync._bootstrapTable('price_snapshots');
+        await sync.bootstrapTable('price_snapshots');
         const r2 = rows.filter(r => Number(r.round_number) === 2);
         assert.ok(!r2.some(r => r.status === 'finalized'),
             'a finalized row the hub holds as skipped is not this hub\'s row');
@@ -172,7 +172,7 @@ describe('HubDbSync price mirror repoint @regression @tier2', function () {
         ]);
         stubHub(sync, [finalized(1, 1, 'XCHAIN/USD', 1)]);
 
-        await sync._bootstrapTable('price_snapshots');
+        await sync.bootstrapTable('price_snapshots');
         assert.ok(rows.some(r => Number(r.round_number) === 77 && r.status === 'skipped'),
             'skipped rows are not reconciled');
     });
@@ -181,7 +181,7 @@ describe('HubDbSync price mirror repoint @regression @tier2', function () {
         const { sync, rows } = makeSync([finalized(500, 900, 'XCHAIN/USD', 880)]);
         stubHub(sync, []);
 
-        await sync._bootstrapTable('price_snapshots');
+        await sync.bootstrapTable('price_snapshots');
         assert.deepStrictEqual(rows, [], 'a hub holding nothing means the mirror holds nothing');
     });
 
@@ -190,10 +190,10 @@ describe('HubDbSync price mirror repoint @regression @tier2', function () {
         // A drain that stopped on an apply error has not seen every row the hub holds.
         const { sync, rows, seen } = makeSync([finalized(500, 900, 'XCHAIN/USD', 880)]);
         stubHub(sync, [finalized(1, 1, 'XCHAIN/USD', 1)]);
-        sync._applyRow.restore();
-        sinon.stub(sync, '_applyRow').rejects(new Error('bad row'));
+        sync.applyRow.restore();
+        sinon.stub(sync, 'applyRow').rejects(new Error('bad row'));
 
-        assert.strictEqual(await sync._bootstrapTable('price_snapshots'), null,
+        assert.strictEqual(await sync.bootstrapTable('price_snapshots'), null,
             'an apply error must report the table not drained');
         assert.strictEqual(seen.deletes.length, 0, 'a holed drain must delete nothing');
         assert.strictEqual(rows.length, 1);
@@ -206,7 +206,7 @@ describe('HubDbSync price mirror repoint @regression @tier2', function () {
     it('never reconciles a table that is not price_snapshots', async function () {
         const { sync, seen } = makeSync([]);
         stubHub(sync, [{ id: 1, status: 'finalized' }]);
-        await sync._bootstrapTable('oracle_prices');
+        await sync.bootstrapTable('oracle_prices');
         assert.strictEqual(seen.selects.length, 0, 'the pass is price_snapshots-only');
     });
 
@@ -218,8 +218,8 @@ describe('HubDbSync price mirror repoint @regression @tier2', function () {
         stubHub(sync, [finalized(1, 1, 'XCHAIN/USD', 1)]);
         // Break the read-back side only: the local table reports rounds under a
         // different pair spelling, exactly as a column rename would.
-        sync._applyRow.restore();
-        sinon.stub(sync, '_applyRow').resolves();
+        sync.applyRow.restore();
+        sinon.stub(sync, 'applyRow').resolves();
         sync.hubDb.doQuery = sinon.stub().callsFake(async (sql) => {
             if (/^SELECT id, round_number, coin_pair FROM price_snapshots/.test(sql))
                 return [{ id: 9, round_number: 1, coin_pair: 'xchain/usd' }];
@@ -228,7 +228,7 @@ describe('HubDbSync price mirror repoint @regression @tier2', function () {
             return [];
         });
 
-        await sync._bootstrapTable('price_snapshots');
+        await sync.bootstrapTable('price_snapshots');
         assert.strictEqual(seen.deletes.length, 0, 'a total mismatch is a bug signal, not contamination');
     });
 
@@ -241,7 +241,7 @@ describe('HubDbSync price mirror repoint @regression @tier2', function () {
                 throw new Error('mirror read failed');
             return real(sql, args);
         });
-        assert.strictEqual(await sync._bootstrapTable('price_snapshots'), 5000,
+        assert.strictEqual(await sync.bootstrapTable('price_snapshots'), 5000,
             'a failed reconciliation must not report the table undrained');
     });
 
@@ -251,7 +251,7 @@ describe('HubDbSync price mirror repoint @regression @tier2', function () {
         const { sync, rows, seen } = makeSync([finalized(500, 900, 'XCHAIN/USD', 880),
                                                finalized(501, 1, 'LTC/USD', 1)]);
         stubHub(sync, [finalized(1, 1, 'XCHAIN/USD', 1), finalized(2, 2, 'XCHAIN/USD', 2)]);
-        await sync._reconcileForeignPriceRounds(new Set(), false, 2);
+        await sync.reconcileForeignPriceRounds(new Set(), false, 2);
 
         assert.ok(seen.selects.includes('ceiling'), 'the fallback must use the ceiling read');
         assert.ok(!rows.some(r => Number(r.round_number) === 900), 'round 900 is above the ceiling');

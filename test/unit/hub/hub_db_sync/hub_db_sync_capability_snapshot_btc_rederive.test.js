@@ -126,7 +126,7 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
             const { sync, inserted }  = syncFor(db);
             const forged = snapshotRow({ signing_pubkey: 'ffff', source: 'attacker' });
 
-            const applied = await sync._applyRow('capability_snapshots', forged);
+            const applied = await sync.applyRow('capability_snapshots', forged);
 
             assert.strictEqual(applied, false, 'a disprovable row must be refused, not applied');
             assert.strictEqual(inserted.length, 0, 'nothing may reach the mirror table');
@@ -138,7 +138,7 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
             const { db }             = dbFor('BTC');
             const { sync, inserted } = syncFor(db);
 
-            const applied = await sync._applyRow('capability_snapshots',
+            const applied = await sync.applyRow('capability_snapshots',
                 snapshotRow({ amount: '500000.00000000' }));
 
             assert.strictEqual(applied, false);
@@ -151,7 +151,7 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
             const { db }             = dbFor('BTC');
             const { sync, inserted } = syncFor(db);
 
-            const applied = await sync._applyRow('capability_snapshots',
+            const applied = await sync.applyRow('capability_snapshots',
                 snapshotRow({ signing_pubkey: 'aa11', source: 'src2', amount: '4000.00000000' }));
 
             assert.strictEqual(applied, false);
@@ -162,7 +162,7 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
             const { db }             = dbFor('BTC');
             const { sync, inserted } = syncFor(db);
 
-            const applied = await sync._applyRow('capability_snapshots',
+            const applied = await sync.applyRow('capability_snapshots',
                 snapshotRow({ amount: 'lots' }));
 
             assert.strictEqual(applied, false);
@@ -175,7 +175,7 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
             const { db }             = dbFor('BTC');
             const { sync, inserted } = syncFor(db);
 
-            await sync._applyRow('capability_snapshots', snapshotRow());
+            await sync.applyRow('capability_snapshots', snapshotRow());
 
             assert.strictEqual(inserted.length, 1, 'the honest row must still be mirrored');
             assert.match(inserted[0].sql, /INSERT IGNORE INTO capability_snapshots/);
@@ -185,9 +185,9 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
             const { db }             = dbFor('BTC');
             const { sync, inserted } = syncFor(db);
 
-            await sync._applyRow('capability_snapshots',
+            await sync.applyRow('capability_snapshots',
                 snapshotRow({ signing_pubkey: 'cc33', source: 'src3', amount: '3000.00000000' }));
-            await sync._applyRow('capability_snapshots',
+            await sync.applyRow('capability_snapshots',
                 snapshotRow({ signing_pubkey: 'dd44', source: 'src3', amount: '3000.00000000' }));
 
             assert.strictEqual(inserted.length, 2, 'DELEGATE v0 is additive: both keys are honest rows');
@@ -199,7 +199,7 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
             const { db }             = dbFor('BTC');
             const { sync, inserted } = syncFor(db);
 
-            await sync._applyRow('capability_snapshots', snapshotRow({ amount: '05000.0' }));
+            await sync.applyRow('capability_snapshots', snapshotRow({ amount: '05000.0' }));
 
             assert.strictEqual(inserted.length, 1);
         });
@@ -210,7 +210,7 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
             const { db }             = dbFor('BTC', { tip: SNAP_BLOCK - 1 });
             const { sync, inserted } = syncFor(db);
 
-            await sync._applyRow('capability_snapshots',
+            await sync.applyRow('capability_snapshots',
                 snapshotRow({ signing_pubkey: 'ffff', source: 'nobody' }));
 
             assert.strictEqual(inserted.length, 1, 'an unreached block is unknown, never a forgery');
@@ -222,7 +222,7 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
             const { db, seen }       = dbFor('DOGE');
             const { sync, inserted } = syncFor(db);
 
-            await sync._applyRow('capability_snapshots',
+            await sync.applyRow('capability_snapshots',
                 snapshotRow({ signing_pubkey: 'ffff', source: 'attacker' }));
 
             assert.strictEqual(inserted.length, 1);
@@ -235,7 +235,7 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
             // The explorer's vendored display mirror: no indexer db, no re-derivation.
             const { sync, inserted } = syncFor(null);
 
-            await sync._applyRow('capability_snapshots',
+            await sync.applyRow('capability_snapshots',
                 snapshotRow({ signing_pubkey: 'ffff', source: 'attacker' }));
 
             assert.strictEqual(inserted.length, 1);
@@ -247,7 +247,7 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
             sinon.stub(db, 'verifyCapabilitySnapshotRow').rejects(new Error('mirror db down'));
             sinon.stub(console, 'warn');
 
-            await sync._applyRow('capability_snapshots',
+            await sync.applyRow('capability_snapshots',
                 snapshotRow({ signing_pubkey: 'ffff', source: 'attacker' }));
 
             assert.strictEqual(inserted.length, 1, 'a failed re-derivation is not evidence of a forgery');
@@ -259,7 +259,7 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
             sync.localColumns.restore();
             sinon.stub(sync, 'localColumns').resolves(new Set(['id', 'checkpoint_seq']));
 
-            await sync._applyRow('state_checkpoints', { id: 4, checkpoint_seq: 9 });
+            await sync.applyRow('state_checkpoints', { id: 4, checkpoint_seq: 9 });
 
             assert.strictEqual(seen.stakeQueries.length, 0);
         });

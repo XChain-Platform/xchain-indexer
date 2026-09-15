@@ -19,7 +19,7 @@ const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
 const COLS = ['id', 'round_number', 'coin_pair', 'price', 'reference_block', 'block_timestamp', 'status'];
 
     // A HubDbSync over a fake local mirror that applies the REAL statements this module
-    // emits. Unlike the bound suite (which stubs _applyRow to model the upsert), this one
+    // emits. Unlike the bound suite (which stubs applyRow to model the upsert), this one
     // decodes `INSERT INTO price_snapshots ... VALUES (...), (...)` back into rows, so a
     // batched drain and a per-row drain are measured through the same door and can be
     // compared row for row.
@@ -77,7 +77,7 @@ const COLS = ['id', 'round_number', 'coin_pair', 'price', 'reference_block', 'bl
     }
 
 function stubHub(sync, hubRows) {
-    sinon.stub(sync, '_httpGet').callsFake(async (path) => {
+    sinon.stub(sync, 'httpGet').callsFake(async (path) => {
         const since = Number(/since_id=(\d+)/.exec(path)[1]);
         return { rows: hubRows.filter(r => Number(r.id) > since), watermark: 5000 };
     });
@@ -110,7 +110,7 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
         const { sync, rows, stmts } = makeSync({ batchApplyRows: 50 });
         stubHub(sync, hubTable(500));
 
-        assert.strictEqual(await sync._bootstrapTable('price_snapshots'), 5000, 'drain should complete');
+        assert.strictEqual(await sync.bootstrapTable('price_snapshots'), 5000, 'drain should complete');
         assert.strictEqual(rows.length, 500, 'every row the hub served must reach the mirror');
         assert.strictEqual(stmts.length, 10, '500 rows at 50 per chunk is 10 statements, not 500');
         assert.ok(stmts.every(s => s.rows === 50), 'every statement should carry a full chunk');
@@ -136,11 +136,11 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
 
         const batched = makeSync({ batchApplyRows: 64 });
         stubHub(batched.sync, table);
-        await batched.sync._bootstrapTable('price_snapshots');
+        await batched.sync.bootstrapTable('price_snapshots');
 
         const perRow = makeSync({ batchApply: false });
         stubHub(perRow.sync, table);
-        await perRow.sync._bootstrapTable('price_snapshots');
+        await perRow.sync.bootstrapTable('price_snapshots');
 
         assert.ok(perRow.stmts.every(s => s.rows === 1), 'the control must really be per-row');
         assert.ok(batched.stmts.length < perRow.stmts.length, 'and the batched drain must really batch');
@@ -174,7 +174,7 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
 
         // And the per-row applier really does emit priceUpsertSql(cols, 1).
         const { sync, doQuery } = makeSync({ batchApply: false });
-        await sync._applyRow('price_snapshots', { round_number: 1, coin_pair: 'XCHAIN/USD',
+        await sync.applyRow('price_snapshots', { round_number: 1, coin_pair: 'XCHAIN/USD',
                                                   price: '1.00', status: 'finalized' });
         assert.strictEqual(doQuery.firstCall.args[0], one);
     });
@@ -187,7 +187,7 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
         const { sync, rows, stmts } = makeSync({ batchApplyRows: 25 }, false);
         stubHub(sync, hubTable(100));
 
-        assert.strictEqual(await sync._bootstrapTable('price_snapshots'), 5000);
+        assert.strictEqual(await sync.bootstrapTable('price_snapshots'), 5000);
         assert.strictEqual(rows.length, 100, 'every row must still reach the mirror');
         assert.ok(stmts.some(s => s.rows > 1), 'the batch was attempted');
         assert.strictEqual(stmts.filter(s => s.rows === 1).length, 100,
@@ -200,15 +200,15 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
         // table not-drained so bootstrapAll retries with the barrier shut.
         const { sync, rows } = makeSync({ batchApplyRows: 1000 });
         stubHub(sync, hubTable(40));
-        const real = sync._applyRow.bind(sync);
-        sinon.stub(sync, '_applyRow').callsFake(async (t, row) => {
+        const real = sync.applyRow.bind(sync);
+        sinon.stub(sync, 'applyRow').callsFake(async (t, row) => {
             if (Number(row.id) === 17) throw new Error('column does not exist');
             return real(t, row);
         });
         // Force the per-row path, which is where a throwing apply is visible at all.
         sinon.stub(sync, 'applyRowsBatched').resolves(false);
 
-        assert.strictEqual(await sync._bootstrapTable('price_snapshots'), null,
+        assert.strictEqual(await sync.bootstrapTable('price_snapshots'), null,
             'a holed drain must not be certified');
         assert.strictEqual(rows.length, 16, 'nothing at or after the bad row may be applied');
         assert.ok(rows.every(r => Number(r.id) < 17));
@@ -255,7 +255,7 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
 
         const { sync } = makeSync({ batchApplyRows: 10, bootstrapProgressMs: 15000 });
         stubHub(sync, hubTable(100));
-        await sync._bootstrapTable('price_snapshots');
+        await sync.bootstrapTable('price_snapshots');
 
         const progress = logged.filter(l => /bootstrapping price_snapshots/.test(l));
         assert.ok(progress.length >= 2, 'a long drain must report more than once');
@@ -276,7 +276,7 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
 
         const { sync } = makeSync({ batchApplyRows: 10 });   // default 15s interval
         stubHub(sync, hubTable(30));
-        await sync._bootstrapTable('price_snapshots');
+        await sync.bootstrapTable('price_snapshots');
 
         assert.strictEqual(logged.filter(l => /bootstrapping price_snapshots/.test(l)).length, 0);
         assert.ok(logged.some(l => /bootstrapped 30 rows into price_snapshots/.test(l)),
@@ -293,7 +293,7 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
         const { sync } = makeSync();
         sync._readyMaxIds = { price_snapshots: 411747 };
         stubHub(sync, hubTable(5));
-        await sync._bootstrapTable('price_snapshots');
+        await sync.bootstrapTable('price_snapshots');
 
         assert.ok(logged.some(l => /draining price_snapshots from id 0 \(the hub reports 411747/.test(l)),
             'the drain must announce the size the hub told it about');
@@ -304,7 +304,7 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
         // operator who suspects it can take it out of the picture without a code change.
         const { sync, stmts } = makeSync({ batchApply: false });
         stubHub(sync, hubTable(40));
-        await sync._bootstrapTable('price_snapshots');
+        await sync.bootstrapTable('price_snapshots');
         assert.ok(stmts.every(s => s.rows === 1), 'every statement must be a single row');
 
         const prev = process.env.HUB_SYNC_BATCH_APPLY;
@@ -312,7 +312,7 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
         try {
             const env = makeSync();
             stubHub(env.sync, hubTable(40));
-            await env.sync._bootstrapTable('price_snapshots');
+            await env.sync.bootstrapTable('price_snapshots');
             assert.ok(env.stmts.every(s => s.rows === 1), 'HUB_SYNC_BATCH_APPLY=false must disable it too');
         } finally {
             if (prev === undefined) delete process.env.HUB_SYNC_BATCH_APPLY;

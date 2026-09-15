@@ -54,7 +54,7 @@ describe('bridge mirror registration @regression @tier1', function () {
         // before the one unbounded table drains), so both are asserted together.
         const { sync } = makeSync();
         const seen = [];
-        sinon.stub(sync, '_bootstrapTable').callsFake(async (table) => { seen.push(table); return 900; });
+        sinon.stub(sync, 'bootstrapTable').callsFake(async (table) => { seen.push(table); return 900; });
 
         await sync.bootstrapAll();
 
@@ -102,7 +102,7 @@ describe('bridge mirror registration @regression @tier1', function () {
 
 describe('bridge mirror registration @regression @tier1', function () {
     it('the retraction key columns the DELETE names exist in the mirrored DDL', function () {
-        // The price_snapshots class of bug: _applyRetraction built a DELETE against columns
+        // The price_snapshots class of bug: applyRetraction built a DELETE against columns
         // the mirror twin did not have, every reorg deletion threw ER_BAD_FIELD_ERROR, and
         // the retraction path swallowed it. Read the real SQL rather than trusting the map.
         const columns = (table) => new Set(
@@ -113,7 +113,7 @@ describe('bridge mirror registration @regression @tier1', function () {
 
         const transfers = columns('bridge_transfers');
         for (const c of ['src_chain', 'src_action_index', 'push_generation', 'effective_time', 'status'])
-            assert.ok(transfers.has(c), 'bridge_transfers.sql is missing `' + c + '`, which _applyRetraction ' +
+            assert.ok(transfers.has(c), 'bridge_transfers.sql is missing `' + c + '`, which applyRetraction ' +
                 'or the bridge barrier names');
 
         const snapshots = columns('policy_snapshots');

@@ -22,7 +22,7 @@
  *
  *   1. HUB_STATE_TABLES membership, which is also what puts the table in the
  *      bootstrap drain loop (the loop concatenates the class arrays).
- *   2. The natural-key id strip in _applyRow. Every hub that holds the
+ *   2. The natural-key id strip in applyRow. Every hub that holds the
  *      finalized artifact writes its OWN row and gossips it, so two hubs carry
  *      different ids for one logical row; identity is UNIQUE (network,
  *      request_id) and a wire id kept here can land on a locally-assigned PK
@@ -63,7 +63,7 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
     it('_bootstrapAll drains attestation_responses, which is what HUB_STATE_TABLES membership buys', async function () {
         const { sync } = makeSync();
         const drained = [];
-        sinon.stub(sync, '_bootstrapTable').callsFake(async (table) => { drained.push(table); return 1; });
+        sinon.stub(sync, 'bootstrapTable').callsFake(async (table) => { drained.push(table); return 1; });
         sinon.stub(sync, 'advanceWatermark');
         await sync.bootstrapAll();
         assert.ok(drained.indexOf('attestation_responses') !== -1,
@@ -76,7 +76,7 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
     it('_applyRow strips the hub id from an attestation_responses row', async function () {
         const { sync, queries } = makeSync();
         const row = responseRow();
-        await sync._applyRow('attestation_responses', row);
+        await sync.applyRow('attestation_responses', row);
 
         const inserts = insertFor(queries, 'attestation_responses');
         assert.strictEqual(inserts.length, 1, 'exactly one INSERT for the row');
@@ -98,7 +98,7 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
         const { sync, queries } = makeSync();
         const row = responseRow();
         delete row.batch_action_index;                   // a hub that does not serve the column yet
-        await sync._applyRow('attestation_responses', row);
+        await sync.applyRow('attestation_responses', row);
         assert.ok(/^INSERT IGNORE INTO attestation_responses /.test(insertFor(queries, 'attestation_responses')[0].sql),
             'with no link on the wire there is nothing to upsert, and the plain insert keeps a hub that ' +
             'predates the column working unchanged');
@@ -113,7 +113,7 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
 
     it('_applyRow KEEPS the id for state_checkpoints, the id-parity control in the same class', async function () {
         const { sync, queries } = makeSync();
-        await sync._applyRow('state_checkpoints', { id: 77, network: 'regtest', chain: 'BTC',
+        await sync.applyRow('state_checkpoints', { id: 77, network: 'regtest', chain: 'BTC',
                                                    block_index: 5, state_hash: 'e'.repeat(64), checkpoint_seq: 3 });
         const cols = /\(([^)]*)\) VALUES/.exec(insertFor(queries, 'state_checkpoints')[0].sql)[1]
             .split(',').map(s => s.trim());
@@ -126,7 +126,7 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
 
     it('generates an upsert whose ONLY assignment is a first-stamp-wins batch_action_index', async function () {
         const { sync, queries } = makeSync();
-        await sync._applyRow('attestation_responses', responseRow());
+        await sync.applyRow('attestation_responses', responseRow());
         const sql = insertFor(queries, 'attestation_responses')[0].sql;
 
         assert.ok(/^INSERT INTO attestation_responses /.test(sql),
@@ -145,13 +145,13 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
     it('a re-delivered row cannot rewrite a signed column', async function () {
         const { sync, stored } = makeStoredSync();
         const first = responseRow();
-        await sync._applyRow('attestation_responses', first);
+        await sync.applyRow('attestation_responses', first);
 
         const forged = responseRow();
         forged.signatures       = '[{"pubkey":"' + 'e'.repeat(64) + '","sig":"' + 'f'.repeat(128) + '"}]';
         forged.response_payload = '{"ok":false}';
         forged.status           = 'expired';
-        await sync._applyRow('attestation_responses', forged);
+        await sync.applyRow('attestation_responses', forged);
 
         assert.strictEqual(stored().signatures, first.signatures,
             'the stored signature set must survive a re-delivery: the row is transport, the applier ' +
@@ -169,13 +169,13 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
 
     it('fills a NULL link from a re-delivery and stamps the applied v1 row through the request id', async function () {
         const { sync, stored, setter } = makeStoredSync();
-        await sync._applyRow('attestation_responses', responseRow());
+        await sync.applyRow('attestation_responses', responseRow());
         assert.strictEqual(stored().batch_action_index, null, 'the row mirrors before its batch lands');
         assert.strictEqual(setter.callCount, 0, 'nothing to carry while the link is NULL');
 
         const linked = responseRow();
         linked.batch_action_index = 4242;
-        await sync._applyRow('attestation_responses', linked);
+        await sync.applyRow('attestation_responses', linked);
 
         assert.strictEqual(stored().batch_action_index, 4242, 'the stamp must land on the mirrored row');
         assert.strictEqual(setter.callCount, 1,
@@ -189,11 +189,11 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
         const { sync, stored, setter } = makeStoredSync();
         const first = responseRow();
         first.batch_action_index = 4242;
-        await sync._applyRow('attestation_responses', first);
+        await sync.applyRow('attestation_responses', first);
 
         const second = responseRow();
         second.batch_action_index = 9999;
-        await sync._applyRow('attestation_responses', second);
+        await sync.applyRow('attestation_responses', second);
 
         assert.strictEqual(stored().batch_action_index, 4242, 'first stamp wins, as COALESCE says');
         assert.strictEqual(setter.callCount, 2, 'the link is re-asserted, never recomputed');
@@ -206,7 +206,7 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
         const { sync, queries } = makeSync();
         const linked = responseRow();
         linked.batch_action_index = 4242;
-        await sync._applyRow('attestation_responses', linked);
+        await sync.applyRow('attestation_responses', linked);
         assert.strictEqual(queries.filter(q => /^SELECT batch_action_index/.test(q.sql)).length, 0,
             'the explorer vendors this same client against a pool with no indexer and no attests table; ' +
             'the mirrored row still applies there, only the local stamp is skipped');

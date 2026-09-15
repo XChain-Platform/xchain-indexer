@@ -38,8 +38,19 @@ const path = require('path');
 
 const INDEXER_SRC = require('../../../helpers/indexer_class_source.js')
     .readIndexerClassSource();
-const SYNC_SRC = fs.readFileSync(
-    path.resolve(__dirname, '../../../../src/hub/hub_db_sync.js'), 'utf8');
+// The hub-mirror client is an entry plus a directory of parts (src/hub/hub_db_sync/),
+// and the fields and methods this suite reads live in the parts, so the text under
+// scan is the entry and every part joined. Walked, not listed: a part added later
+// carries its assignments into the scan without an edit here.
+function readTreeSource(dir) {
+    return fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))
+        .map((e) => (e.isDirectory() ? readTreeSource(path.join(dir, e.name))
+                                     : (e.name.endsWith('.js') ? fs.readFileSync(path.join(dir, e.name), 'utf8') : '')))
+        .join('\n');
+}
+const SYNC_ENTRY = path.resolve(__dirname, '../../../../src/hub/hub_db_sync.js');
+const SYNC_SRC = fs.readFileSync(SYNC_ENTRY, 'utf8') + '\n' +
+    readTreeSource(path.resolve(__dirname, '../../../../src/hub/hub_db_sync'));
 
 // Every `this.stallReason = '<name>';` in the block loop is immediately followed by
 // the matching `this.stallClearsAt = ...;`, so a non-greedy pair scan reads the
@@ -147,7 +158,9 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
             // directCallGraceS lives on the indexer, not on HubDbSync: the direct barrier
             // runs precisely when there is no HubDbSync instance to read one off.
             const src = (field === 'directCallGraceS') ? INDEXER_SRC : SYNC_SRC;
-            assert.ok(new RegExp('this\\.' + field + '\\s*=').test(src),
+            // The parts set instance fields through the constructor's `sync` argument
+            // (src/hub/hub_db_sync/watermark_state.js), the indexer through `this`.
+            assert.ok(new RegExp('(?:this|sync)\\.' + field + '\\s*=').test(src),
                 field + ' (used by ' + reason + ') is not assigned in its owning module');
         }
     });
@@ -159,7 +172,9 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
         // call at different blocks.
         assert.ok(/resolveWatermarkGrace\(\s*\n?\s*HUB_SYNC_WATERMARK_GRACE_S\.call,\s*'HUB_SYNC_CALL_GRACE_S'/.test(INDEXER_SRC),
             'directCallGraceS must be resolved through hub_db_sync resolveWatermarkGrace on the frozen call grace');
-        assert.ok(/module\.exports\.resolveWatermarkGrace\s*=/.test(SYNC_SRC),
+        // Attached to the class before the one `module.exports = HubDbSync`, so the
+        // consumer's `require(...).resolveWatermarkGrace` is exactly that assignment.
+        assert.ok(/\bHubDbSync\.resolveWatermarkGrace\s*=/.test(SYNC_SRC),
             'hub_db_sync must export resolveWatermarkGrace for the direct barrier to share it');
     });
 });
@@ -172,7 +187,7 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
 // every advance.
 const REQUIRED_WATERMARK_RELEASES = [
     'releasePriceWaiters',
-    '_releasePriceTimeWaiters',
+    'releasePriceTimeWaiters',
     'releaseOracleWaiters',
     'releaseMatchWaiters',
     'releaseCallWaiters',
@@ -183,7 +198,7 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
 
     it('every curated barrier registers its release call inside _advanceWatermark', function () {
         const m = /advanceWatermark\([^)]*\)\s*\{([\s\S]*?)\n    \}/.exec(SYNC_SRC);
-        assert.ok(m, 'advanceWatermark method not found in hub_db_sync.js');
+        assert.ok(m, 'advanceWatermark method not found in the hub_db_sync entry or its parts');
         const body = m[1];
         for (const call of REQUIRED_WATERMARK_RELEASES) {
             assert.ok(body.includes(call + '('),
@@ -199,7 +214,7 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
     // defect as the one above on the axis the family actually opens on.
     it('every curated barrier registers its release call inside _releaseHeightWaiters', function () {
         const m = /releaseHeightWaiters\([^)]*\)\s*\{([\s\S]*?)\n    \}/.exec(SYNC_SRC);
-        assert.ok(m, 'releaseHeightWaiters method not found in hub_db_sync.js');
+        assert.ok(m, 'releaseHeightWaiters method not found in the hub_db_sync entry or its parts');
         const body = m[1];
         for (const call of REQUIRED_WATERMARK_RELEASES) {
             assert.ok(body.includes(call + '('),

@@ -42,31 +42,31 @@ describe('HubDbSync time-keyed price barrier (H-3) @regression @tier3', function
 
     it('_refreshPriceSyncHeight adopts MAX(block_timestamp) alongside the height', async function () {
         const { sync } = makeTimeSync(123, 5000);
-        await sync._refreshPriceSyncHeight();
+        await sync.refreshPriceSyncHeight();
         assert.strictEqual(sync.priceSyncHeight, 123);
         assert.strictEqual(sync.priceSyncMaxTimestamp, 5000);
     });
 
     it('resolves immediately when the mirror already holds a round at/past the block time', async function () {
         const { sync } = makeTimeSync(123, 5000);
-        await sync._refreshPriceSyncHeight();
+        await sync.refreshPriceSyncHeight();
         const got = await sync.waitForPriceSyncTime(4000, 1000);
         assert.strictEqual(got, 5000);
     });
 
     it('resolves once a later sync raises the mirror max timestamp', async function () {
         const { sync, doQuery } = makeTimeSync(0, 0);
-        await sync._refreshPriceSyncHeight();
+        await sync.refreshPriceSyncHeight();
         const pending = sync.waitForPriceSyncTime(4000, 2000);
         doQuery.callsFake(async () => [{ h: 10, ts: 4500 }]);
-        await sync._refreshPriceSyncHeight();
+        await sync.refreshPriceSyncHeight();
         const got = await pending;
         assert.strictEqual(got, 4500);
     });
 
     it('resolves via the stream watermark when the hub has covered blockTime + grace', async function () {
         const { sync } = makeTimeSync(0, 0);
-        await sync._refreshPriceSyncHeight();
+        await sync.refreshPriceSyncHeight();
         const pending = sync.waitForPriceSyncTime(4000, 2000);
         sync.advanceWatermark(4000 + sync.priceWatermarkGraceS);
         const got = await pending;
@@ -75,7 +75,7 @@ describe('HubDbSync time-keyed price barrier (H-3) @regression @tier3', function
 
     it('rejects on timeout while the mirror and watermark stay behind', async function () {
         const { sync } = makeTimeSync(0, 0);
-        await sync._refreshPriceSyncHeight();
+        await sync.refreshPriceSyncHeight();
         await assert.rejects(
             sync.waitForPriceSyncTime(4000, 50),
             /price time-sync barrier timed out/
@@ -84,7 +84,7 @@ describe('HubDbSync time-keyed price barrier (H-3) @regression @tier3', function
 
     it('self-heals on timeout when the DB caught up but the in-memory timestamp was stale', async function () {
         const { sync, doQuery } = makeTimeSync(0, 0);
-        await sync._refreshPriceSyncHeight();
+        await sync.refreshPriceSyncHeight();
         doQuery.callsFake(async () => [{ h: 10, ts: 9000 }]);   // DB is current; memory is stale
         const got = await sync.waitForPriceSyncTime(4000, 50);
         assert.strictEqual(got, 9000, 'timeout path must re-read the mirror before rejecting');

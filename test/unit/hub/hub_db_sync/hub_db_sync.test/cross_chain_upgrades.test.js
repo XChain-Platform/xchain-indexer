@@ -28,7 +28,7 @@ function makeSync(maxReferenceBlock) {
 
 function registerCrossChainUpgradeGroup1(CC_COLS, makeApplySync, callRow, updateClause) { it('lifts push_generation with GREATEST, so a stale finalized row can never lower the fence', async function () {
         const { sync, doQuery } = makeApplySync(CC_COLS);
-        await sync._applyRow('cross_chain_calls', callRow(7));
+        await sync.applyRow('cross_chain_calls', callRow(7));
         const clause = updateClause(doQuery);
         assert.ok(/`push_generation` = GREATEST\(COALESCE\(`push_generation`, 0\), COALESCE\(VALUES\(`push_generation`\), 0\)\)/.test(clause),
             'the reorg fence must be monotonic: ' + clause);
@@ -36,7 +36,7 @@ function registerCrossChainUpgradeGroup1(CC_COLS, makeApplySync, callRow, update
 
 function registerCrossChainUpgradeGroup2(CC_COLS, makeApplySync, callRow, updateClause) { it('never assigns push_generation through the status gate', async function () {
         const { sync, doQuery } = makeApplySync(CC_COLS);
-        await sync._applyRow('cross_chain_calls', callRow(7));
+        await sync.applyRow('cross_chain_calls', callRow(7));
         const clause = updateClause(doQuery);
         assert.ok(!/`push_generation` = IF\(VALUES\(status\)/.test(clause),
             'a status-gated assignment takes the fence wherever the incoming row points it');
@@ -44,7 +44,7 @@ function registerCrossChainUpgradeGroup2(CC_COLS, makeApplySync, callRow, update
 
 function registerCrossChainUpgradeGroup3(CC_COLS, makeApplySync, callRow, updateClause) { it('still upgrades content only when the INCOMING row is finalized, and never the unique key', async function () {
         const { sync, doQuery } = makeApplySync(CC_COLS);
-        await sync._applyRow('cross_chain_calls', callRow(7));
+        await sync.applyRow('cross_chain_calls', callRow(7));
         const clause = updateClause(doQuery);
         assert.ok(/`effective_time` = IF\(VALUES\(status\) = 'finalized'.*?, VALUES\(`effective_time`\), `effective_time`\)/.test(clause), clause);
         assert.ok(/status = IF\(VALUES\(status\) = 'finalized'.*?, 'finalized', status\)/.test(clause), clause);
@@ -55,7 +55,7 @@ function registerCrossChainUpgradeGroup3(CC_COLS, makeApplySync, callRow, update
 
 function registerCrossChainUpgradeGroup4(CC_COLS, makeApplySync, callRow, updateClause) { it('gates content on the incoming generation too, so a stale finalized page cannot overwrite newer terms', async function () {
         const { sync, doQuery } = makeApplySync(CC_COLS);
-        await sync._applyRow('cross_chain_calls', callRow(7));
+        await sync.applyRow('cross_chain_calls', callRow(7));
         const clause = updateClause(doQuery);
         const gate = "VALUES\\(status\\) = 'finalized' AND COALESCE\\(VALUES\\(`push_generation`\\), 0\\) >= COALESCE\\(`push_generation`, 0\\)";
         for (const col of ['effective_time', 'validator_signatures', 'snapshot_block', 'target_chain']) {
@@ -73,7 +73,7 @@ function registerCrossChainUpgradeGroup5(CC_COLS, makeApplySync, callRow, update
         // column compare the incoming generation against itself and the gate would never
         // refuse anything.
         const { sync, doQuery } = makeApplySync(CC_COLS);
-        await sync._applyRow('cross_chain_calls', callRow(7));
+        await sync.applyRow('cross_chain_calls', callRow(7));
         const clause = updateClause(doQuery);
         const fenceAt = clause.indexOf('`push_generation` = GREATEST');
         assert.ok(fenceAt > 0, 'fence assignment present: ' + clause);
@@ -86,7 +86,7 @@ function registerCrossChainUpgradeGroup5(CC_COLS, makeApplySync, callRow, update
 
 function registerCrossChainUpgradeGroup6(CC_COLS, makeApplySync, callRow, updateClause) { it('omits the fence assignment when the mirror table carries no push_generation column', async function () {
         const { sync, doQuery } = makeApplySync(['call_id', 'phase', 'status', 'effective_time']);
-        await sync._applyRow('cross_chain_calls',
+        await sync.applyRow('cross_chain_calls',
             { call_id: 'C1', phase: 'dispatch', status: 'finalized', effective_time: 1000 });
         const clause = updateClause(doQuery);
         assert.ok(!/push_generation/.test(clause), 'a pre-migration mirror must not be handed a column it lacks');
@@ -149,7 +149,7 @@ describe('HubDbSync _applyRow cross_chain_calls generation fence @regression @ti
 
 function registerCrossChainUpgradeGroup7(CM_COLS, makeApplySync, matchRow, updateClauseOf) { it('uses an ON DUPLICATE KEY UPDATE upsert (not INSERT IGNORE) for cross_chain_matches', async function () {
         const { sync, doQuery } = makeApplySync(CM_COLS);
-        await sync._applyRow('cross_chain_matches', matchRow('d0ge'.repeat(16)));
+        await sync.applyRow('cross_chain_matches', matchRow('d0ge'.repeat(16)));
         const insert = doQuery.getCalls().find(c => /cross_chain_matches/.test(c.args[0]) && /INSERT/.test(c.args[0]));
         assert.ok(insert, 'an INSERT must run');
         assert.ok(/ON DUPLICATE KEY UPDATE/.test(insert.args[0]), 'must be an upsert');
@@ -158,7 +158,7 @@ function registerCrossChainUpgradeGroup7(CM_COLS, makeApplySync, matchRow, updat
 
 function registerCrossChainUpgradeGroup8(CM_COLS, makeApplySync, matchRow, updateClauseOf) { it('converges the revive content on a version gate, so a missed retract/revive cannot strand the mirror (#3211)', async function () {
         const { sync, doQuery } = makeApplySync(CM_COLS);
-        await sync._applyRow('cross_chain_matches', matchRow('d0ge'.repeat(16)));
+        await sync.applyRow('cross_chain_matches', matchRow('d0ge'.repeat(16)));
         const clause = updateClauseOf(doQuery);
         // The gate: strictly newer effective_time wins; at a tie the non-finalized
         // (retracted) version wins, because a retraction leaves effective_time untouched
@@ -179,7 +179,7 @@ function registerCrossChainUpgradeGroup9(CM_COLS, makeApplySync, matchRow, updat
         // half-applied row. Assigning the two gate columns last (status, then effective_time)
         // makes every assignment agree on one verdict. Verified end-to-end against MariaDB.
         const { sync, doQuery } = makeApplySync(CM_COLS);
-        await sync._applyRow('cross_chain_matches', matchRow('d0ge'.repeat(16)));
+        await sync.applyRow('cross_chain_matches', matchRow('d0ge'.repeat(16)));
         const clause = updateClauseOf(doQuery);
         const gatedOrder = CM_COLS.filter(c => new RegExp('`' + c + '` = IF\\(\\(VALUES').test(clause))
             .sort((a, b) => clause.indexOf('`' + a + '` = IF((VALUES') - clause.indexOf('`' + b + '` = IF((VALUES'));
@@ -189,7 +189,7 @@ function registerCrossChainUpgradeGroup9(CM_COLS, makeApplySync, matchRow, updat
 
 function registerCrossChainUpgradeGroup10(CM_COLS, makeApplySync, matchRow, updateClauseOf) { it('never reassigns the row key or the hub id, and keeps anchor_txid first-stamp-wins', async function () {
         const { sync, doQuery } = makeApplySync(CM_COLS);
-        await sync._applyRow('cross_chain_matches', matchRow('d0ge'.repeat(16)));
+        await sync.applyRow('cross_chain_matches', matchRow('d0ge'.repeat(16)));
         const clause = updateClauseOf(doQuery);
         assert.ok(/anchor_txid = COALESCE\(anchor_txid, VALUES\(anchor_txid\)\)/.test(clause),
             'anchor_txid stays first-stamp-wins, outside the version gate');
@@ -204,7 +204,7 @@ function registerCrossChainUpgradeGroup10(CM_COLS, makeApplySync, matchRow, upda
 
 function registerCrossChainUpgradeGroup11(CM_COLS, makeApplySync, matchRow, updateClauseOf) { it('the per-leg reorg fences only ever move UP (a lowered fence would invite a stale delete)', async function () {
         const { sync, doQuery } = makeApplySync(CM_COLS);
-        await sync._applyRow('cross_chain_matches', matchRow(null));
+        await sync.applyRow('cross_chain_matches', matchRow(null));
         const clause = updateClauseOf(doQuery);
         for (const col of ['a_push_generation', 'b_push_generation']) {
             assert.ok(new RegExp('`' + col + '` = GREATEST\\(COALESCE\\(`' + col + '`, 0\\), COALESCE\\(VALUES\\(`' + col + '`\\), 0\\)\\)').test(clause),
@@ -215,7 +215,7 @@ function registerCrossChainUpgradeGroup11(CM_COLS, makeApplySync, matchRow, upda
 
 function registerCrossChainUpgradeGroup12(CM_COLS, makeApplySync, matchRow, updateClauseOf) { it('re-delivery of an unstamped row is a no-op against a stamped local row', async function () {
         const { sync, doQuery } = makeApplySync(CM_COLS);
-        await sync._applyRow('cross_chain_matches', matchRow(null));
+        await sync.applyRow('cross_chain_matches', matchRow(null));
         const sql = doQuery.getCalls().find(c => /ON DUPLICATE KEY UPDATE/.test(c.args[0])).args[0];
         // COALESCE(anchor_txid, VALUES(anchor_txid)): local non-NULL wins, and a NULL
         // incoming value cannot regress it; the branch itself is what guarantees this,
@@ -228,7 +228,7 @@ function registerCrossChainUpgradeGroup13(CM_COLS, makeApplySync, matchRow, upda
         let row = matchRow('ff00'.repeat(16));
         row.batch_seq = 7;             // hub-side-only archive bookkeeping
         row.archived_status = 'finalized';
-        await sync._applyRow('cross_chain_matches', row);
+        await sync.applyRow('cross_chain_matches', row);
         const sql = doQuery.getCalls().find(c => /INSERT/.test(c.args[0])).args[0];
         assert.ok(!sql.includes('batch_seq'), 'hub-only column dropped');
         assert.ok(!sql.includes('archived_status'), 'hub-only column dropped');
@@ -237,7 +237,7 @@ function registerCrossChainUpgradeGroup13(CM_COLS, makeApplySync, matchRow, upda
 
 function registerCrossChainUpgradeGroup14(CM_COLS, makeApplySync, matchRow, updateClauseOf) { it('falls back to the anchor-stamp-only upgrade when the row carries no version columns (older hub)', async function () {
         const { sync, doQuery } = makeApplySync(['match_id', 'status', 'anchor_txid']);
-        await sync._applyRow('cross_chain_matches', { match_id: 'b'.repeat(64), status: 'finalized', anchor_txid: 'ab'.repeat(32) });
+        await sync.applyRow('cross_chain_matches', { match_id: 'b'.repeat(64), status: 'finalized', anchor_txid: 'ab'.repeat(32) });
         const clause = updateClauseOf(doQuery);
         // With no effective_time there is no version to compare, so never guess: keep the
         // narrow stamp upgrade rather than clobbering content on an unordered feed.
@@ -246,7 +246,7 @@ function registerCrossChainUpgradeGroup14(CM_COLS, makeApplySync, matchRow, upda
 
 function registerCrossChainUpgradeGroup15(CM_COLS, makeApplySync, matchRow, updateClauseOf) { it('falls back to INSERT IGNORE if the row carries no anchor_txid column', async function () {
         const { sync, doQuery } = makeApplySync(['match_id', 'status']);
-        await sync._applyRow('cross_chain_matches', { match_id: 'b'.repeat(64), status: 'finalized' });
+        await sync.applyRow('cross_chain_matches', { match_id: 'b'.repeat(64), status: 'finalized' });
         const insert = doQuery.getCalls().find(c => /INSERT/.test(c.args[0]));
         assert.ok(/^INSERT IGNORE/.test(insert.args[0]), 'no anchor_txid → plain idempotent insert');
     }); }

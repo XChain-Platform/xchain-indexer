@@ -33,7 +33,7 @@
  *   LEDGER     - a dated mode=auto migration MODIFYs each to that charset, so a long-lived
  *                database converges unattended (alterTableForDrift adds a missing column
  *                and never retypes an existing one).
- *   INGEST     - the real _applyRow, driven through a connection stub that enforces the
+ *   INGEST     - the real applyRow, driven through a connection stub that enforces the
  *                server's utf8mb3 rejection against the DECLARED charset of each column it
  *                is handed. The stub reads src/sql/attestation_responses.sql, so reverting
  *                the schema edit turns this arm red rather than leaving the guard passing
@@ -243,7 +243,7 @@ describe('the ATTEST response mirror holds every body the on-chain path holds @r
         it('applies a response whose body and meta carry a 4-byte character', async function () {
             const doQuery = makeStrictServer();
             const sync    = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test', network: 'regtest' });
-            await sync._applyRow('attestation_responses', responseRow('{"emoji":"' + EMOJI + '"}', 'model=' + EMOJI));
+            await sync.applyRow('attestation_responses', responseRow('{"emoji":"' + EMOJI + '"}', 'model=' + EMOJI));
 
             const insert = doQuery.getCalls()
                 .map(c => insertBindings(c.args[0], c.args[1]))
@@ -262,7 +262,7 @@ describe('the ATTEST response mirror holds every body the on-chain path holds @r
             // resolves, the stub is accepting everything and the arm above is vacuous.
             const row = responseRow('{"ok":true}', '');
             row.signer_pubkeys = '["' + EMOJI + '"]';
-            await assert.rejects(() => sync._applyRow('attestation_responses', row),
+            await assert.rejects(() => sync.applyRow('attestation_responses', row),
                 (err) => err.errno === 1366);
         });
     });

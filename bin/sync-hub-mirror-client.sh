@@ -9,13 +9,20 @@
 # sibling repos, so each bundles a byte-identical copy; this script keeps them
 # in sync (same pattern as xchain-hub/bin/sync-coins.sh for the coin registry).
 #
-# Vendored set: the client (hub_db_sync.js), the schema-version lockstep
-# constant (hub-schema-version.js), the dependency-free modules the client
-# requires by relative path (price_batching_floor_activation.js; a consumer
-# without them fails at require on boot), and the mirror-table SQL twins the
-# client's ensureTables() creates for consumers without their own schema
-# machinery (the explorer's copies land under src/sql/hub-mirror/ so they are
-# obviously not the explorer's own tables).
+# Vendored set: the client entry (hub_db_sync.js) and its parts directory
+# (hub_db_sync/, every .js under it, subdirectories included: the entry installs
+# them onto its prototype and resolves nothing outside the set), the
+# schema-version lockstep constant (hub-schema-version.js), the dependency-free
+# modules the client requires by relative path (price_batching_floor_activation.js;
+# a consumer without them fails at require on boot), and the mirror-table SQL
+# twins the client's ensureTables() creates for consumers without their own
+# schema machinery (the explorer's copies land under src/sql/hub-mirror/ so they
+# are obviously not the explorer's own tables).
+#
+# The parts directory is synced as a SET, not file by file: --check compares
+# every part on both sides AND refuses a part present on only one side, so a
+# part added here and forgotten in the consumer, or one deleted here and left
+# behind there, fails the check rather than boarding the consumer as a stray.
 #
 # The vendored copies MIRROR THE CANONICAL DIRECTORY DEPTH, which is why there
 # are two client sets below. hub_db_sync.js lives at src/hub/ and reaches its
@@ -37,6 +44,7 @@ SRC="$HERE/../src"
 ROOT="$(cd "$HERE/../.." && pwd)"
 
 HUB_FILES="hub_db_sync.js hub-schema-version.js"
+HUB_DIRS="hub_db_sync"
 DEP_FILES="price_batching_floor_activation.js mirror_admission_activation.js"
 SQL_FILES="price_snapshots.sql oracle_prices.sql cross_chain_matches.sql cross_chain_calls.sql capability_snapshots.sql state_checkpoints.sql anchor_reward_attestations.sql attestation_responses.sql bridge_transfers.sql policy_snapshots.sql"
 SERVICES="xchain-explorer"
@@ -58,6 +66,38 @@ for svc in $SERVICES; do
         else
             mkdir -p "$hubdest"
             cp "$SRC/hub/$f" "$hubdest/$f"
+        fi
+    done
+    for d in $HUB_DIRS; do
+        # The relative paths of every part on each side, sorted, so the two sets can be
+        # compared as text and a one-sided part is named rather than passed over.
+        canon_parts="$(cd "$SRC/hub/$d" && find . -type f -name '*.js' | sort)"
+        if [ "$CHECK" -eq 1 ]; then
+            if [ ! -d "$hubdest/$d" ]; then
+                echo "DRIFT: $svc/src/hub/$d/ is missing (canonical xchain-indexer/src/hub/$d/ has $(echo "$canon_parts" | wc -l | tr -d ' ') parts)"
+                drift=1
+                continue
+            fi
+            local_parts="$(cd "$hubdest/$d" && find . -type f -name '*.js' | sort)"
+            if [ "$canon_parts" != "$local_parts" ]; then
+                echo "DRIFT: $svc/src/hub/$d/ holds a different part set from canonical xchain-indexer/src/hub/$d/:"
+                diff <(echo "$canon_parts") <(echo "$local_parts") | sed 's/^/    /'
+                drift=1
+            fi
+            for p in $canon_parts; do
+                if [ -f "$hubdest/$d/$p" ] && ! cmp -s "$SRC/hub/$d/$p" "$hubdest/$d/$p"; then
+                    echo "DRIFT: $svc/src/hub/$d/${p#./} differs from canonical xchain-indexer/src/hub/$d/${p#./}"
+                    drift=1
+                fi
+            done
+        else
+            # Replace the whole directory so a part retired here does not linger there.
+            rm -rf "$hubdest/$d"
+            mkdir -p "$hubdest/$d"
+            (cd "$SRC/hub/$d" && find . -type f -name '*.js' -print0 | while IFS= read -r -d '' p; do
+                mkdir -p "$hubdest/$d/$(dirname "$p")"
+                cp "$SRC/hub/$d/$p" "$hubdest/$d/$p"
+            done)
         fi
     done
     for f in $DEP_FILES; do

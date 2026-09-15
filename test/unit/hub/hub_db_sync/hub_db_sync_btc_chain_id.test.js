@@ -53,7 +53,7 @@ function makeSync(opts) {
 
 // Serve one snapshot page: the hub's rows plus the envelope's own chain-id statement.
 function stubHub(sync, rows, chainId, watermark) {
-    return sinon.stub(sync, '_httpGet').callsFake(async () => ({
+    return sinon.stub(sync, 'httpGet').callsFake(async () => ({
         rows: rows, btc_chain_id: chainId, watermark: (watermark === undefined ? 4242 : watermark)
     }));
 }
@@ -81,19 +81,19 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
         const { sync, seen } = makeSync({});
         await sync.setExpectedBtcChainId(CHAIN_NEW, 'local');
 
-        assert.strictEqual(await sync._applyRow('cross_chain_matches', matchRow(1, CHAIN_OLD)), false,
+        assert.strictEqual(await sync.applyRow('cross_chain_matches', matchRow(1, CHAIN_OLD)), false,
             'a relic row must report that it was not applied');
         assert.strictEqual(inserts(seen).length, 0, 'a refused row must never reach the database');
 
-        await sync._applyRow('cross_chain_matches', matchRow(2, null));
-        await sync._applyRow('cross_chain_matches', matchRow(3, CHAIN_NEW));
+        await sync.applyRow('cross_chain_matches', matchRow(2, null));
+        await sync.applyRow('cross_chain_matches', matchRow(3, CHAIN_NEW));
         assert.strictEqual(inserts(seen).length, 2,
             'a NULL id (written before the column existed) and this chain\'s own id both apply');
     });
 
     it('applies every row while no expectation is known yet', async function () {
         const { sync, seen } = makeSync({});
-        await sync._applyRow('cross_chain_matches', matchRow(1, CHAIN_OLD));
+        await sync.applyRow('cross_chain_matches', matchRow(1, CHAIN_OLD));
         assert.strictEqual(inserts(seen).length, 1,
             'the fence refuses only on positive evidence, never on ignorance of this chain');
     });
@@ -101,7 +101,7 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
     it('fences only the cross-chain tables', async function () {
         const { sync, seen } = makeSync({ columns: ['id', 'network', 'btc_chain_id'] });
         await sync.setExpectedBtcChainId(CHAIN_NEW, 'local');
-        await sync._applyRow('state_checkpoints', { id: 1, network: 'regtest', btc_chain_id: CHAIN_OLD });
+        await sync.applyRow('state_checkpoints', { id: 1, network: 'regtest', btc_chain_id: CHAIN_OLD });
         assert.strictEqual(inserts(seen).length, 1, 'no other mirrored table carries this identity');
     });
 
@@ -113,7 +113,7 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
         stubHub(sync, [matchRow(1, CHAIN_OLD), matchRow(2, CHAIN_OLD), matchRow(3, null), matchRow(4, CHAIN_NEW)],
                 CHAIN_NEW);
 
-        const mark = await sync._bootstrapTable('cross_chain_matches');
+        const mark = await sync.bootstrapTable('cross_chain_matches');
 
         assert.strictEqual(mark, 4242, 'a relic is not a hole: the drain completes and the watermark stands');
         const applied = inserts(seen);
@@ -151,7 +151,7 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
                              'bridge_transfers', 'policy_snapshots']) {
             const { sync } = makeSync({});
             stubHub(sync, [], CHAIN_NEW);
-            await sync._bootstrapTable(table);
+            await sync.bootstrapTable(table);
             assert.strictEqual(sync._expectedBtcChainId, CHAIN_NEW, table + ' envelope must arm the fence');
             assert.strictEqual(sync._btcChainIdSource, 'hub', 'an envelope value is second-hand, never local');
         }
@@ -161,7 +161,7 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
         sinon.stub(console, 'log');
         const { sync } = makeSync({ columns: ['id', 'network'] });
         stubHub(sync, [], CHAIN_NEW);
-        await sync._bootstrapTable('state_checkpoints');
+        await sync.bootstrapTable('state_checkpoints');
         assert.strictEqual(sync._expectedBtcChainId, null);
     });
 
@@ -203,7 +203,7 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
         sinon.stub(console, 'log');
         const { sync, seen } = makeSync({ deleted: 2 });
         await sync.setExpectedBtcChainId(CHAIN_OLD, 'hub');
-        const httpGet = sinon.stub(sync, '_httpGet').resolves({ rows: [], btc_chain_id: CHAIN_NEW });
+        const httpGet = sinon.stub(sync, 'httpGet').resolves({ rows: [], btc_chain_id: CHAIN_NEW });
         seen.sql.length = 0;
 
         await sync.handleRowEvent({ type: 'row:inserted', table: 'cross_chain_matches', row: matchRow(7, CHAIN_NEW) });
@@ -220,7 +220,7 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
         sinon.stub(console, 'log');
         const { sync, seen } = makeSync({});
         await sync.setExpectedBtcChainId(CHAIN_OLD, 'hub');
-        const httpGet = sinon.stub(sync, '_httpGet').resolves({ rows: [], btc_chain_id: CHAIN_OLD });
+        const httpGet = sinon.stub(sync, 'httpGet').resolves({ rows: [], btc_chain_id: CHAIN_OLD });
         seen.sql.length = 0;
 
         await sync.handleRowEvent({ type: 'row:inserted', table: 'cross_chain_matches', row: matchRow(7, CHAIN_NEW) });
@@ -242,7 +242,7 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
         sinon.stub(console, 'log');
         const { sync, seen } = makeSync({});
         await sync.setExpectedBtcChainId(CHAIN_NEW, 'local');
-        const httpGet = sinon.stub(sync, '_httpGet').resolves({ rows: [], btc_chain_id: CHAIN_OLD });
+        const httpGet = sinon.stub(sync, 'httpGet').resolves({ rows: [], btc_chain_id: CHAIN_OLD });
         seen.sql.length = 0;
 
         await sync.handleRowEvent({ type: 'row:inserted', table: 'cross_chain_matches', row: matchRow(9, CHAIN_OLD) });

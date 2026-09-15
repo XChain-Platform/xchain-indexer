@@ -37,7 +37,7 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
             'silently covers nothing');
         for (const table of siblings) {
             const { sync, queries } = makeSync({ columns: { [table]: ['id', 'network', 'batch_action_index'] } });
-            await sync._applyRow(table, { id: 5, network: 'regtest', batch_action_index: 7 });
+            await sync.applyRow(table, { id: 5, network: 'regtest', batch_action_index: 7 });
             assert.ok(new RegExp('^INSERT IGNORE INTO ' + table + ' ').test(insertFor(queries, table)[0].sql),
                 table + ' is append-only with no column mutated after insert; the upsert is scoped to the ' +
                 'one table whose link the hub stamps later, and a table name is the only thing scoping it');
@@ -115,9 +115,9 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
     it('bootstraps attestation_responses from since_id 0 even when the local table holds high ids', async function () {
         const { sync } = makeSync({ localMaxId: 987654 });
         const paths = [];
-        sinon.stub(sync, '_httpGet').callsFake(async (path) => { paths.push(path); return { rows: [], watermark: 1 }; });
+        sinon.stub(sync, 'httpGet').callsFake(async (path) => { paths.push(path); return { rows: [], watermark: 1 }; });
 
-        await sync._bootstrapTable('attestation_responses');
+        await sync.bootstrapTable('attestation_responses');
 
         assert.strictEqual(paths.length, 1, 'one page fetched (an empty page is a short page)');
         assert.ok(/since_id=0&/.test(paths[0]),
@@ -136,9 +136,9 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
     it('bootstraps state_checkpoints from MAX(local id), the id-parity cursor control', async function () {
         const { sync } = makeSync({ localMaxId: 987654 });
         const paths = [];
-        sinon.stub(sync, '_httpGet').callsFake(async (path) => { paths.push(path); return { rows: [], watermark: 1 }; });
+        sinon.stub(sync, 'httpGet').callsFake(async (path) => { paths.push(path); return { rows: [], watermark: 1 }; });
 
-        await sync._bootstrapTable('state_checkpoints');
+        await sync.bootstrapTable('state_checkpoints');
 
         assert.ok(/since_id=987654&/.test(paths[0]),
             'state_checkpoints keeps hub-id parity and must page incrementally; if this also re-pages, ' +
@@ -147,8 +147,8 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
 
     it('purges foreign-network rows before reading the cursor, which needs the network column', async function () {
         const { sync, queries } = makeSync({ localMaxId: 0, network: 'testnet' });
-        sinon.stub(sync, '_httpGet').callsFake(async () => ({ rows: [], watermark: 1 }));
-        await sync._bootstrapTable('attestation_responses');
+        sinon.stub(sync, 'httpGet').callsFake(async () => ({ rows: [], watermark: 1 }));
+        await sync.bootstrapTable('attestation_responses');
         const purge = queries.filter(q => /^DELETE FROM attestation_responses WHERE network <> \?/.test(q.sql));
         assert.strictEqual(purge.length, 1,
             're-pointing an indexer at a hub on another network must clear the rows the previous hub ' +

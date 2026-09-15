@@ -8,11 +8,11 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
-// HubDbSync._httpGet must always settle, so mirror bootstrap can release its guard.
+// HubDbSync.httpGet must always settle, so mirror bootstrap can release its guard.
 //
 // The measured failure: a hub restarting in the middle of a snapshot body aborts the
 // RESPONSE, not the request, so `req.on('error')` never fires and `res.on('end')`
-// never fires. _httpGet carried handlers for neither, and a probe against the
+// never fires. httpGet carried handlers for neither, and a probe against the
 // pre-fix client sat PENDING past 40s - beyond the 30000ms socket option, which is an
 // IDLE-socket timer and cannot fire on a socket that is already gone. bootstrapAll
 // awaits that request with `_bootstrapping` latched and clears the flag only in its
@@ -77,8 +77,8 @@ describe('HubDbSync snapshot-request settling', function(){
 
     it('rejects a truncated snapshot body instead of hanging forever', async function(){
         hub = await startHub(truncatingHub);
-        let outcome = await settledWithin(makeSync(hub.url)._httpGet('/hub-db/snapshot/oracle_prices'), 3000);
-        assert.notStrictEqual(outcome, 'pending', 'the truncated snapshot left _httpGet pending');
+        let outcome = await settledWithin(makeSync(hub.url).httpGet('/hub-db/snapshot/oracle_prices'), 3000);
+        assert.notStrictEqual(outcome, 'pending', 'the truncated snapshot left httpGet pending');
         assert.notStrictEqual(outcome, 'resolved', 'a truncated body must not read as a snapshot page');
         assert.match(outcome.message, /before the body was complete|hub response error/);
     });
@@ -94,7 +94,7 @@ describe('HubDbSync snapshot-request settling', function(){
         });
         let sync = makeSync(hub.url);
         sync.httpDeadlineMs = 800;
-        let outcome = await settledWithin(sync._httpGet('/hub-db/snapshot/oracle_prices'), 4000);
+        let outcome = await settledWithin(sync.httpGet('/hub-db/snapshot/oracle_prices'), 4000);
         clearInterval(ticker);
         assert.notStrictEqual(outcome, 'pending', 'a drip-fed body outlived the deadline');
         assert.match(outcome.message, /exceeded its 800ms deadline/);
@@ -105,7 +105,7 @@ describe('HubDbSync snapshot-request settling', function(){
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ rows: [], schema_version: null }));
         });
-        assert.deepStrictEqual(await makeSync(hub.url)._httpGet('/hub-db/snapshot/oracle_prices'),
+        assert.deepStrictEqual(await makeSync(hub.url).httpGet('/hub-db/snapshot/oracle_prices'),
             { rows: [], schema_version: null });
     });
 });
@@ -124,7 +124,7 @@ describe('HubDbSync snapshot-request settling', function(){
         // Every table's fetch goes through the real transport; the per-table try/catch
         // in bootstrapAll turns each rejection into "not drained". `running` is false,
         // so no retry timer is armed and the flag is the only thing under test.
-        sync._bootstrapTable = () => sync._httpGet('/hub-db/snapshot/oracle_prices');
+        sync.bootstrapTable = () => sync.httpGet('/hub-db/snapshot/oracle_prices');
         let warn = console.warn;
         console.warn = () => {};
         try {

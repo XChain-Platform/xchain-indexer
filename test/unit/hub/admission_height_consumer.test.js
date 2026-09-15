@@ -35,6 +35,7 @@ const path   = require('path');
 const ARMED_MODULES = [
     '../../../src/mirror_admission_activation.js',
     '../../../src/anchor_reward_activation.js',
+    '../../../src/hub/hub_db_sync/watermarks.js',   // the client part that closes over the resolver
     '../../../src/hub/hub_db_sync.js',
     '../../../src/XChainIndexer.js'
 ];
@@ -124,8 +125,8 @@ describeArmed(function () {
             attestation_responses:      { BTC: B - 1 },
             anchor_reward_attestations: { BTC: B - 144 }
         });
-        assert.strictEqual(sync._priceSyncSatisfied(B, futureStamp), true, 'price height');
-        assert.strictEqual(sync._priceTimeSyncSatisfied(futureStamp, B), true, 'price time');
+        assert.strictEqual(sync.priceSyncSatisfied(B, futureStamp), true, 'price height');
+        assert.strictEqual(sync.priceTimeSyncSatisfied(futureStamp, B), true, 'price time');
         assert.strictEqual(sync.oracleSyncSatisfied(futureStamp, B), true, 'oracle');
         assert.strictEqual(sync.matchSyncSatisfied(futureStamp, B), true, 'match');
         assert.strictEqual(sync.callSyncSatisfied(futureStamp, B), true, 'call');
@@ -144,8 +145,8 @@ describeArmed(function () {
         const { sync } = makeSync(armed.HubDbSync);
         sync.streamWatermark = 10 ** 9;                   // decades past any grace
         heights(sync, {});                                 // published, and empty
-        assert.strictEqual(sync._priceSyncSatisfied(B, 1000), false, 'price height');
-        assert.strictEqual(sync._priceTimeSyncSatisfied(1000, B), false, 'price time');
+        assert.strictEqual(sync.priceSyncSatisfied(B, 1000), false, 'price height');
+        assert.strictEqual(sync.priceTimeSyncSatisfied(1000, B), false, 'price time');
         assert.strictEqual(sync.oracleSyncSatisfied(1000, B), false, 'oracle');
         assert.strictEqual(sync.matchSyncSatisfied(1000, B), false, 'match');
         assert.strictEqual(sync.callSyncSatisfied(1000, B), false, 'call');
@@ -296,7 +297,7 @@ describeArmed(function () {
             const { sync, doQuery } = makeSync(armed.HubDbSync);
             doQuery.resolves([]);
             heights(sync, {});
-            await sync._snapshotSyncSatisfied(1000, B);
+            await sync.snapshotSyncSatisfied(1000, B);
             const sql = doQuery.getCall(0).args[0];
             const args = doQuery.getCall(0).args[1];
             assert.ok(sql.includes('m.admit_block_btc IS NULL AND m.effective_time <= ?'), sql);
@@ -312,7 +313,7 @@ describeArmed(function () {
             const { sync, doQuery } = makeSync(armed.HubDbSync);
             // Armed at height 0, so an unreadable B cannot even reach the predicate through the
             // activation; drive the guard directly with an armed-but-unreadable pair.
-            assert.strictEqual(await sync._snapshotSyncSatisfied(1000, 'not-a-height'), true,
+            assert.strictEqual(await sync.snapshotSyncSatisfied(1000, 'not-a-height'), true,
                 'an unreadable B is INERT, which is the legacy rule, not an admission filter');
             const sql = doQuery.getCall(0).args[0];
             assert.ok(sql.includes("m.effective_time <= ?"), sql);
@@ -360,8 +361,8 @@ describe('mirror-admission height barriers: UNARMED (today\'s rule, byte for byt
         const { sync } = makeSync(HubDbSync);
         sync.streamWatermark = 1000 + 4800;                 // past the largest grace
         assert.deepStrictEqual(sync.heightWatermarks, {}, 'no heights map, and none needed');
-        assert.strictEqual(sync._priceSyncSatisfied(B, 1000), true);
-        assert.strictEqual(sync._priceTimeSyncSatisfied(1000, B), true);
+        assert.strictEqual(sync.priceSyncSatisfied(B, 1000), true);
+        assert.strictEqual(sync.priceTimeSyncSatisfied(1000, B), true);
         assert.strictEqual(sync.oracleSyncSatisfied(1000, B), true);
         assert.strictEqual(sync.matchSyncSatisfied(1000, B), true);
         assert.strictEqual(sync.callSyncSatisfied(1000, B), true);
@@ -382,7 +383,7 @@ describe('mirror-admission height barriers: UNARMED (today\'s rule, byte for byt
     it('the snapshot filter is the byte-identical effective_time comparison', async function () {
         const { sync, doQuery } = makeSync(HubDbSync);
         doQuery.resolves([]);
-        await sync._snapshotSyncSatisfied(1000, B);
+        await sync.snapshotSyncSatisfied(1000, B);
         const sql = doQuery.getCall(0).args[0];
         assert.ok(sql.includes("WHERE m.status = 'finalized' AND (m.effective_time <= ?)"), sql);
         assert.ok(!sql.includes('admit_block'), sql);

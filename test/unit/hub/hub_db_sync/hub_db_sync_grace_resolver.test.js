@@ -78,11 +78,11 @@ describe('HubDbSync watermark-grace resolver @regression @tier1', function () {
         sync.priceSyncMaxTimestamp = 0;   // mirror holds nothing at/past blockTime
 
         sync.streamWatermark = blockTime + 4800 - 1;
-        assert.strictEqual(sync._priceTimeSyncSatisfied(blockTime), false,
+        assert.strictEqual(sync.priceTimeSyncSatisfied(blockTime), false,
             'one second short of the grace must still defer');
 
         sync.streamWatermark = blockTime + 4800;
-        assert.strictEqual(sync._priceTimeSyncSatisfied(blockTime), true,
+        assert.strictEqual(sync.priceTimeSyncSatisfied(blockTime), true,
             'the escape opens exactly at blockTime + 4800');
     });
 

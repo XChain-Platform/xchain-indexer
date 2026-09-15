@@ -49,7 +49,7 @@ describe('HubDbSync mirror-write confirmation and the apply-failure watermark la
             const hubDb = { doQuery: sinon.stub().resolves([]), doQueryStrict: sinon.stub().resolves({ affectedRows: 1 }) };
             const sync  = makeSync(hubDb);
 
-            await sync._applyRow('policy_snapshots', ROW);
+            await sync.applyRow('policy_snapshots', ROW);
 
             assert.strictEqual(hubDb.doQueryStrict.callCount, 1,
                 'the INSERT must go through doQueryStrict; doQuery swallows the error that makes this a mirror hole');
@@ -58,7 +58,7 @@ describe('HubDbSync mirror-write confirmation and the apply-failure watermark la
         });
 
         it('propagates a failed write instead of returning as though the row landed', async function () {
-            // The pre-fix shape: doQuery resolves [] on a swallowed SQL error and _applyRow
+            // The pre-fix shape: doQuery resolves [] on a swallowed SQL error and applyRow
             // resolved, so the caller believed the row was mirrored. With the write on the
             // strict primitive the rejection reaches the caller, which is what lets the
             // latch below ever be set.
@@ -66,7 +66,7 @@ describe('HubDbSync mirror-write confirmation and the apply-failure watermark la
             const hubDb = { doQuery: sinon.stub().resolves([]), doQueryStrict: sinon.stub().rejects(boom) };
             const sync  = makeSync(hubDb);
 
-            await assert.rejects(() => sync._applyRow('policy_snapshots', ROW), /ER_LOCK_DEADLOCK/);
+            await assert.rejects(() => sync.applyRow('policy_snapshots', ROW), /ER_LOCK_DEADLOCK/);
         });
 
         it('still writes through doQuery when the connection exposes no strict primitive', async function () {
@@ -75,7 +75,7 @@ describe('HubDbSync mirror-write confirmation and the apply-failure watermark la
             const hubDb = { doQuery: sinon.stub().resolves({ affectedRows: 1 }) };
             const sync  = makeSync(hubDb);
 
-            await sync._applyRow('policy_snapshots', ROW);
+            await sync.applyRow('policy_snapshots', ROW);
 
             assert.strictEqual(hubDb.doQuery.callCount, 1);
         });
@@ -84,7 +84,7 @@ describe('HubDbSync mirror-write confirmation and the apply-failure watermark la
             const hubDb = { doQuery: sinon.stub().resolves([]), doQueryStrict: sinon.stub().resolves([]) };
             const sync  = makeSync(hubDb);
 
-            await sync._applyRow('policy_snapshots', ROW);
+            await sync.applyRow('policy_snapshots', ROW);
             assert.ok(hubDb.doQueryStrict.calledOnce, 'sanity: the row write takes the strict path');
             assert.strictEqual(hubDb.doQuery.callCount, 0, 'sanity: the write never touches doQuery');
 
@@ -163,7 +163,7 @@ describe('HubDbSync mirror-write confirmation and the apply-failure watermark la
 
         it('keeps the failed event buffered, reports not-drained, and sets the latch', async function () {
             const sync = makeSync({ doQuery: sinon.stub().resolves([]) });
-            sync._applyRow = sinon.stub().rejects(new Error('write failed'));
+            sync.applyRow = sinon.stub().rejects(new Error('write failed'));
             sync._pendingPriceEvents = [{ type: 'row:inserted', row: { round_number: 7 } }];
 
             const drainedOk = await sync.flushPendingPriceEvents();
@@ -175,7 +175,7 @@ describe('HubDbSync mirror-write confirmation and the apply-failure watermark la
 
         it('leaves the latch clear when every buffered event applies', async function () {
             const sync = makeSync({ doQuery: sinon.stub().resolves([]) });
-            sync._applyRow = sinon.stub().resolves();
+            sync.applyRow = sinon.stub().resolves();
             sync._pendingPriceEvents = [{ type: 'row:inserted', row: { round_number: 7 } }];
 
             const drainedOk = await sync.flushPendingPriceEvents();

@@ -10,7 +10,7 @@
 //
 // A REBUILT HUB DATABASE, against a real MariaDB.
 //
-// WHY THIS CANNOT BE A UNIT TEST. The unit suite stubs _applyRow, so it can prove the
+// WHY THIS CANNOT BE A UNIT TEST. The unit suite stubs applyRow, so it can prove the
 // bootstrap cursor restarts and that the hub's rows were OFFERED, but never that they
 // LANDED. The whole defect lives in the difference: the mirror apply is id-parity
 // INSERT IGNORE, so when a rebuilt hub reuses id 1 for a new checkpoint, the stale local
@@ -108,7 +108,7 @@ async function seedPreResetMirror(ids) {
 function makeSync(hubRows, advertisedCeiling) {
     const sync = new HubDbSync(db, { hubUrl: 'http://hub.test', network: NETWORK });
     if (advertisedCeiling !== undefined) sync._readyMaxIds = { state_checkpoints: advertisedCeiling };
-    sinon.stub(sync, '_httpGet').callsFake(async (p) => {
+    sinon.stub(sync, 'httpGet').callsFake(async (p) => {
         const since = Number(/since_id=(\d+)/.exec(p)[1]);
         return { rows: hubRows.filter((r) => r.id > since), watermark: 4242 };
     });
@@ -134,7 +134,7 @@ function registerRebuiltMirrorTests1() {
         await seedPreResetMirror([11241, 11242, 11243]);
         const hubRows = [row(1, 'BTC', 124, 118), row(2, 'LTC', 124, 101), row(3, 'DOGE', 124, 102)];
 
-        await makeSync(hubRows, 3)._bootstrapTable('state_checkpoints');
+        await makeSync(hubRows, 3).bootstrapTable('state_checkpoints');
 
         const after = await mirrorState();
         assert.deepStrictEqual(after.ids, [1, 2, 3],
@@ -157,7 +157,7 @@ function registerRebuiltMirrorTests1() {
         assert.strictEqual(before.maxSeq, 11003, 'pre-condition: the stale rows own ids 1-3');
 
         const hubRows = [row(1, 'BTC', 124, 118), row(2, 'LTC', 124, 101), row(3, 'DOGE', 124, 102)];
-        await makeSync(hubRows, 3)._bootstrapTable('state_checkpoints');
+        await makeSync(hubRows, 3).bootstrapTable('state_checkpoints');
 
         const after = await mirrorState();
         assert.deepStrictEqual(after.ids, [1, 2, 3], 'the mirror must hold the rebuilt hub rows');
@@ -175,7 +175,7 @@ function registerRebuiltMirrorTests2() {
         await seedPreResetMirror([1, 2, 3]);
 
         const hubRows = [row(1, 'BTC', 124, 118), row(2, 'LTC', 124, 101), row(3, 'DOGE', 124, 102)];
-        await makeSync(hubRows, 3)._bootstrapTable('state_checkpoints');
+        await makeSync(hubRows, 3).bootstrapTable('state_checkpoints');
 
         const conn = await db.getConnection();
         let landed;
@@ -200,11 +200,11 @@ function registerRebuiltMirrorTests2() {
 
         const sync = new HubDbSync(db, { hubUrl: 'http://hub.test', network: NETWORK });
         sync._readyMaxIds = { state_checkpoints: 3 };
-        sinon.stub(sync, '_httpGet').callsFake(async (p) => {
+        sinon.stub(sync, 'httpGet').callsFake(async (p) => {
             const since = Number(/since_id=(\d+)/.exec(p)[1]);
             return { rows: hubRows.filter((r) => r.id > since && r.id === 3), watermark: 4242 };
         });
-        await sync._bootstrapTable('state_checkpoints');
+        await sync.bootstrapTable('state_checkpoints');
 
         const after = await mirrorState();
         assert.deepStrictEqual(after.ids, [1, 2, 3], 'an unserved id is not a retired id');
@@ -221,7 +221,7 @@ function registerRebuiltMirrorTests3() {
         const hubRows = [row(1, 'BTC', 11001, 3901), row(2, 'BTC', 11002, 3902), row(3, 'BTC', 11003, 3903)];
         await seedPreResetMirror([1, 2, 3]);
 
-        await makeSync(hubRows, 3)._bootstrapTable('state_checkpoints');
+        await makeSync(hubRows, 3).bootstrapTable('state_checkpoints');
 
         const after = await mirrorState();
         assert.deepStrictEqual(after.ids, [1, 2, 3], 'a mirror that matches its source must not be rebuilt');
@@ -233,7 +233,7 @@ function registerRebuiltMirrorTests3() {
     it('clears the mirror when the rebuilt hub is still empty and advertises a ceiling of 0', async function () {
         await seedPreResetMirror([11241, 11242, 11243]);
 
-        await makeSync([], 0)._bootstrapTable('state_checkpoints');
+        await makeSync([], 0).bootstrapTable('state_checkpoints');
 
         const after = await mirrorState();
         assert.deepStrictEqual(after.ids, [], 'an empty source means an empty mirror, not a preserved one');
@@ -243,7 +243,7 @@ function registerRebuiltMirrorTests3() {
     it('leaves the mirror untouched when the hub advertises no ceiling', async function () {
         await seedPreResetMirror([11241, 11242, 11243]);
 
-        await makeSync([row(11244, 'BTC', 11244, 3999)], undefined)._bootstrapTable('state_checkpoints');
+        await makeSync([row(11244, 'BTC', 11244, 3999)], undefined).bootstrapTable('state_checkpoints');
 
         const after = await mirrorState();
         assert.deepStrictEqual(after.ids, [11241, 11242, 11243, 11244],
@@ -254,7 +254,7 @@ function registerRebuiltMirrorTests3() {
     it('resumes incrementally and deletes nothing when the mirror is in the hub id space', async function () {
         await seedPreResetMirror([11241, 11242, 11243]);
 
-        await makeSync([row(11244, 'BTC', 11244, 3999)], 11244)._bootstrapTable('state_checkpoints');
+        await makeSync([row(11244, 'BTC', 11244, 3999)], 11244).bootstrapTable('state_checkpoints');
 
         const after = await mirrorState();
         assert.deepStrictEqual(after.ids, [11241, 11242, 11243, 11244],

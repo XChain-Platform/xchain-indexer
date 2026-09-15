@@ -141,9 +141,9 @@ describe('BTC price barrier covers time as well as height @regression @tier1', f
         sync.priceSyncMaxTimestamp = roundStampedAt;
         sync.streamWatermark       = 0;
 
-        assert.strictEqual(sync._priceSyncSatisfied(blockHeight, blockTime), true,
+        assert.strictEqual(sync.priceSyncSatisfied(blockHeight, blockTime), true,
             'the height barrier opens on a single round anchored at this height');
-        assert.strictEqual(sync._priceTimeSyncSatisfied(blockTime), false,
+        assert.strictEqual(sync.priceTimeSyncSatisfied(blockTime), false,
             'yet the mirror does NOT hold every round with block_timestamp <= blockTime: ' +
             'this gap is the fork window, and it is why BTC needs both barriers');
     });
@@ -154,10 +154,10 @@ describe('BTC price barrier covers time as well as height @regression @tier1', f
         const blockTime = 1700007200;
 
         sync.priceSyncMaxTimestamp = blockTime - 1;
-        assert.strictEqual(sync._priceTimeSyncSatisfied(blockTime), false);
+        assert.strictEqual(sync.priceTimeSyncSatisfied(blockTime), false);
 
         sync.priceSyncMaxTimestamp = blockTime;
-        assert.strictEqual(sync._priceTimeSyncSatisfied(blockTime), true);
+        assert.strictEqual(sync.priceTimeSyncSatisfied(blockTime), true);
     });
 
     // Widening must not wedge a BTC chain that has no rounds yet, which is the
@@ -168,9 +168,9 @@ describe('BTC price barrier covers time as well as height @regression @tier1', f
         sync.priceSyncMaxTimestamp = 0;
         const blockTime = 1700000000;
 
-        assert.strictEqual(sync._priceTimeSyncSatisfied(blockTime), false);
+        assert.strictEqual(sync.priceTimeSyncSatisfied(blockTime), false);
         sync.streamWatermark = blockTime + sync.priceWatermarkGraceS;
-        assert.strictEqual(sync._priceTimeSyncSatisfied(blockTime), true,
+        assert.strictEqual(sync.priceTimeSyncSatisfied(blockTime), true,
             'the watermark escape must open the barrier with zero local rounds, or a ' +
             'BTC chain with no price federation would never advance');
     });

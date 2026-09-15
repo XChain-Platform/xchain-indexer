@@ -235,7 +235,7 @@ describe('HubDbSync height watermark wire contract @regression @tier1', function
     it('a full bootstrap drain installs the map the snapshot pages carried', async function () {
         const { sync } = makeSync(0);
         sync._pollMode = false;
-        sync._bootstrapTable = async function () {
+        sync.bootstrapTable = async function () {
             this._pendingBootstrapHeights = { oracle_prices: { BTC: 77 } };
             return 12345;
         };
@@ -249,7 +249,7 @@ describe('HubDbSync height watermark wire contract @regression @tier1', function
     it('poll mode installs NO height map, exactly as it advances no watermark', async function () {
         const { sync } = makeSync(0);
         sync._pollMode = true;
-        sync._bootstrapTable = async function () {
+        sync.bootstrapTable = async function () {
             this._pendingBootstrapHeights = { oracle_prices: { BTC: 77 } };
             return 12345;
         };
@@ -262,7 +262,7 @@ describe('HubDbSync height watermark wire contract @regression @tier1', function
         const { sync } = makeSync(0);
         sync._pollMode = false;
         sync._readyHeights = { policy_snapshots: { DOGE: 9 } };
-        sync._bootstrapTable = async function () { return 12345; };
+        sync.bootstrapTable = async function () { return 12345; };
         await sync.bootstrapAll();
         assert.deepStrictEqual(sync.heightWatermarks, { policy_snapshots: { DOGE: 9 } });
     });

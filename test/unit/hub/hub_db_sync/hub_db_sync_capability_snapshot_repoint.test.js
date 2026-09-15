@@ -17,7 +17,7 @@ const sinon = require('sinon');
 const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
 
     // A HubDbSync over a fake local mirror. `local` is the simulated table content;
-    // applied rows land in it through the stubbed _applyRow the same way the real apply
+    // applied rows land in it through the stubbed applyRow the same way the real apply
     // would (id-less INSERT IGNORE on uq_cap_snap, local AUTO_INCREMENT), so the drain's
     // own effect on the mirror - including the ids it assigns - is modelled, not assumed.
     function makeSync(local, opts) {
@@ -57,7 +57,7 @@ const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
         // cannot defend this table, so the fixture must reproduce it.
         sinon.stub(sync, 'localColumns').resolves(
             new Set(['id', 'snapshot_block', 'capability', 'signing_pubkey', 'amount', 'source']));
-        sinon.stub(sync, '_applyRow').callsFake(async (t, row) => {
+        sinon.stub(sync, 'applyRow').callsFake(async (t, row) => {
             if (opts && opts.refuseApply) return false;         // chain-identity fence refusal
             const i = rows.findIndex(r => String(r.snapshot_block) === String(row.snapshot_block) &&
                                           String(r.capability) === String(row.capability) &&
@@ -73,7 +73,7 @@ const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
 
 // Serve a hub table honestly over the ascending since_id page walk.
 function stubHub(sync, hubRows) {
-    sinon.stub(sync, '_httpGet').callsFake(async (path) => {
+    sinon.stub(sync, 'httpGet').callsFake(async (path) => {
         const since = Number(/since_id=(\d+)/.exec(path)[1]);
         return { rows: hubRows.filter(r => Number(r.id) > since), watermark: 5000 };
     });
@@ -85,7 +85,7 @@ function snap(id, block, pubkey, source) {
 }
 
 // A bootstrap never dropped capability_snapshots rows the current hub does not carry
-// on its own. The table has no `network` column, so _mirrorNetworkScope returns null and
+// on its own. The table has no `network` column, so mirrorNetworkScope returns null and
 // both purge paths are unreachable, and being a FULL_REPAGE table its cursor is forced
 // to 0 so the id-ceiling fence never runs either. The re-page then converges only the
 // uq_cap_snap keys the two hubs SHARE; a row from a retired hub at a block boundary the
@@ -103,7 +103,7 @@ describe('HubDbSync capability snapshot mirror repoint @regression @tier2', func
                                          snap(3, 90000, 'aa')]);
         stubHub(sync, [snap(11, 90000, 'aa'), snap(12, 90001, 'aa')]);
 
-        assert.strictEqual(await sync._bootstrapTable('capability_snapshots'), 5000, 'drain should complete');
+        assert.strictEqual(await sync.bootstrapTable('capability_snapshots'), 5000, 'drain should complete');
 
         const blocks = rows.map(r => Number(r.snapshot_block)).sort((a, b) => a - b);
         assert.deepStrictEqual(blocks, [90000, 90001],
@@ -118,7 +118,7 @@ describe('HubDbSync capability snapshot mirror repoint @regression @tier2', func
         const { sync, rows } = makeSync([snap(1, 90000, 'aa', 'srcA'), snap(2, 90000, 'aa', 'srcB')]);
         stubHub(sync, [snap(11, 90000, 'aa', 'srcA'), snap(12, 90000, 'aa', 'srcB')]);
 
-        await sync._bootstrapTable('capability_snapshots');
+        await sync.bootstrapTable('capability_snapshots');
         assert.strictEqual(rows.length, 2, 'both sources are held by this hub');
         assert.deepStrictEqual(rows.map(r => r.source).sort(), ['srcA', 'srcB']);
     });
@@ -127,7 +127,7 @@ describe('HubDbSync capability snapshot mirror repoint @regression @tier2', func
         const { sync, rows, seen } = makeSync([snap(1, 90000, 'aa'), snap(2, 90001, 'aa')]);
         stubHub(sync, [snap(11, 90000, 'aa'), snap(12, 90001, 'aa')]);
 
-        await sync._bootstrapTable('capability_snapshots');
+        await sync.bootstrapTable('capability_snapshots');
         assert.strictEqual(seen.deletes.length, 0, 'a converged mirror must not be touched');
         assert.strictEqual(rows.length, 2);
     });
@@ -136,7 +136,7 @@ describe('HubDbSync capability snapshot mirror repoint @regression @tier2', func
         const { sync, rows } = makeSync([snap(1, 957439, 'aa')]);
         stubHub(sync, []);
 
-        await sync._bootstrapTable('capability_snapshots');
+        await sync.bootstrapTable('capability_snapshots');
         assert.deepStrictEqual(rows, [], 'a hub holding nothing means the mirror holds nothing');
     });
 });
@@ -151,7 +151,7 @@ describe('HubDbSync capability snapshot mirror repoint @regression @tier2', func
         const { sync, rows } = makeSync([snap(1, 90000, 'aa')]);
         stubHub(sync, [snap(11, 90000, 'aa')]);
         const preMax = 1;
-        // Simulate the live arrival by inserting it directly, exactly as _applyRow would.
+        // Simulate the live arrival by inserting it directly, exactly as applyRow would.
         rows.push({ id: 500, snapshot_block: 90002, capability: 'cross_chain',
                     signing_pubkey: 'cc', amount: '100', source: 'src1' });
 
@@ -166,10 +166,10 @@ describe('HubDbSync capability snapshot mirror repoint @regression @tier2', func
         // Absence from the served set only proves anything after a complete re-page.
         const { sync, rows, seen } = makeSync([snap(1, 957439, 'aa')]);
         stubHub(sync, [snap(11, 90000, 'aa')]);
-        sync._applyRow.restore();
-        sinon.stub(sync, '_applyRow').rejects(new Error('bad row'));
+        sync.applyRow.restore();
+        sinon.stub(sync, 'applyRow').rejects(new Error('bad row'));
 
-        assert.strictEqual(await sync._bootstrapTable('capability_snapshots'), null,
+        assert.strictEqual(await sync.bootstrapTable('capability_snapshots'), null,
             'an apply error must report the table not drained');
         assert.strictEqual(seen.deletes.length, 0, 'a holed drain must delete nothing');
         assert.strictEqual(rows.length, 1);
@@ -178,7 +178,7 @@ describe('HubDbSync capability snapshot mirror repoint @regression @tier2', func
     it('never reconciles a table that is not capability_snapshots', async function () {
         const { sync, seen } = makeSync([]);
         stubHub(sync, [{ id: 1 }]);
-        await sync._bootstrapTable('oracle_prices');
+        await sync.bootstrapTable('oracle_prices');
         assert.strictEqual(seen.selects.length, 0, 'the pass is capability_snapshots-only');
         assert.strictEqual(seen.deletes.length, 0);
     });
@@ -202,7 +202,7 @@ describe('HubDbSync capability snapshot mirror repoint @regression @tier2', func
             return real(sql, args);
         });
 
-        await sync._bootstrapTable('capability_snapshots');
+        await sync.bootstrapTable('capability_snapshots');
         assert.strictEqual(seen.deletes.length, 0, 'a total mismatch is a bug signal, not contamination');
     });
 
@@ -215,7 +215,7 @@ describe('HubDbSync capability snapshot mirror repoint @regression @tier2', func
                 throw new Error('mirror read failed');
             return real(sql, args);
         });
-        assert.strictEqual(await sync._bootstrapTable('capability_snapshots'), 5000,
+        assert.strictEqual(await sync.bootstrapTable('capability_snapshots'), 5000,
             'a failed reconciliation must not report the table undrained');
     });
 
@@ -225,7 +225,7 @@ describe('HubDbSync capability snapshot mirror repoint @regression @tier2', func
         const { sync, rows } = makeSync([snap(1, 90000, 'aa')], { refuseApply: true });
         stubHub(sync, [snap(11, 90000, 'aa')]);
 
-        await sync._bootstrapTable('capability_snapshots');
+        await sync.bootstrapTable('capability_snapshots');
         assert.strictEqual(rows.length, 1, 'the hub serves this key, so the local row stands');
     });
 
@@ -250,7 +250,7 @@ describe('HubDbSync capability snapshot mirror repoint @regression @tier2', func
         const { sync, rows, seen } = makeSync([]);
         stubHub(sync, [snap(11, 90000, 'aa')]);
 
-        await sync._bootstrapTable('capability_snapshots');
+        await sync.bootstrapTable('capability_snapshots');
         assert.strictEqual(seen.deletes.length, 0, 'nothing predates the drain');
         assert.strictEqual(rows.length, 1);
     });

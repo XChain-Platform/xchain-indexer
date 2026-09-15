@@ -26,12 +26,12 @@ function makeSync(maxReferenceBlock) {
     return { sync, hubDb, doQuery };
 }
 
-// _applyRetraction mirrors the hub's reorg delete onto the local copy. When the broadcast
+// applyRetraction mirrors the hub's reorg delete onto the local copy. When the broadcast
 // carries to_action_index (a deferred/closed-range retraction, item 5296) the replica MUST
 // bound its delete identically or it diverges from the hub. The first doQuery call is the delete.
 function registerRetractionGuardGroup1(makeApply) { it('open-ended delete for price_snapshots when no to_action_index', async function () {
         const { sync, calls } = makeApply();
-        await sync._applyRetraction({ table: 'price_snapshots', source_chain: 'BTC', from_action_index: 50 });
+        await sync.applyRetraction({ table: 'price_snapshots', source_chain: 'BTC', from_action_index: 50 });
         assert.match(calls[0].sql, /source_action_index >= \?/);
         assert.ok(!/<= \?/.test(calls[0].sql), 'must stay open-ended');
         assert.deepStrictEqual(calls[0].args, ['BTC', 50]);
@@ -39,40 +39,40 @@ function registerRetractionGuardGroup1(makeApply) { it('open-ended delete for pr
 
 function registerRetractionGuardGroup2(makeApply) { it('bounded delete for price_snapshots when to_action_index present', async function () {
         const { sync, calls } = makeApply();
-        await sync._applyRetraction({ table: 'price_snapshots', source_chain: 'BTC', from_action_index: 50, to_action_index: 75 });
+        await sync.applyRetraction({ table: 'price_snapshots', source_chain: 'BTC', from_action_index: 50, to_action_index: 75 });
         assert.match(calls[0].sql, /source_action_index >= \? AND source_action_index <= \?/);
         assert.deepStrictEqual(calls[0].args, ['BTC', 50, 75]);
     }); }
 
 function registerRetractionGuardGroup3(makeApply) { it('bounded delete for oracle_prices keys on action_index', async function () {
         const { sync, calls } = makeApply();
-        await sync._applyRetraction({ table: 'oracle_prices', source_chain: 'LTC', from_action_index: 1, to_action_index: 9 });
+        await sync.applyRetraction({ table: 'oracle_prices', source_chain: 'LTC', from_action_index: 1, to_action_index: 9 });
         assert.match(calls[0].sql, /action_index >= \? AND action_index <= \?/);
         assert.deepStrictEqual(calls[0].args, ['LTC', 1, 9]);
     }); }
 
 function registerRetractionGuardGroup4(makeApply) { it('REFUSES an unfenced delete for cross_chain_calls', async function () {
         const { sync, calls } = makeApply();
-        await sync._applyRetraction({ table: 'cross_chain_calls', source_chain: 'BTC', from_action_index: 10, to_action_index: 20 });
+        await sync.applyRetraction({ table: 'cross_chain_calls', source_chain: 'BTC', from_action_index: 10, to_action_index: 20 });
         assert.strictEqual(calls.length, 0, 'no DELETE may run for an unfenced quorum-class retraction');
     }); }
 
 function registerRetractionGuardGroup5(makeApply) { it('REFUSES an unfenced delete for cross_chain_matches', async function () {
         const { sync, calls } = makeApply();
-        await sync._applyRetraction({ table: 'cross_chain_matches', source_chain: 'BTC', from_action_index: 10, to_action_index: 20 });
+        await sync.applyRetraction({ table: 'cross_chain_matches', source_chain: 'BTC', from_action_index: 10, to_action_index: 20 });
         assert.strictEqual(calls.length, 0, 'no DELETE may run for an unfenced quorum-class retraction');
     }); }
 
 function registerRetractionGuardGroup6(makeApply) { it('gen-fenced delete for price_snapshots adds push_generation <= ?', async function () {
         const { sync, calls } = makeApply();
-        await sync._applyRetraction({ table: 'price_snapshots', source_chain: 'BTC', from_action_index: 50, to_action_index: 75, retraction_generation: 5 });
+        await sync.applyRetraction({ table: 'price_snapshots', source_chain: 'BTC', from_action_index: 50, to_action_index: 75, retraction_generation: 5 });
         assert.match(calls[0].sql, /source_action_index >= \? AND source_action_index <= \? AND push_generation <= \?/);
         assert.deepStrictEqual(calls[0].args, ['BTC', 50, 75, 5]);
     }); }
 
 function registerRetractionGuardGroup7(makeApply) { it('gen-fenced open-ended delete for oracle_prices (gen but no to_action_index)', async function () {
         const { sync, calls } = makeApply();
-        await sync._applyRetraction({ table: 'oracle_prices', source_chain: 'LTC', from_action_index: 1, retraction_generation: 7 });
+        await sync.applyRetraction({ table: 'oracle_prices', source_chain: 'LTC', from_action_index: 1, retraction_generation: 7 });
         assert.match(calls[0].sql, /action_index >= \? AND push_generation <= \?/);
         assert.ok(!/action_index <= \?/.test(calls[0].sql), 'no closed-range clause');
         assert.deepStrictEqual(calls[0].args, ['LTC', 1, 7]);
@@ -80,14 +80,14 @@ function registerRetractionGuardGroup7(makeApply) { it('gen-fenced open-ended de
 
 function registerRetractionGuardGroup8(makeApply) { it('gen-fenced delete for cross_chain_calls adds push_generation <= ?', async function () {
         const { sync, calls } = makeApply();
-        await sync._applyRetraction({ table: 'cross_chain_calls', source_chain: 'BTC', from_action_index: 10, to_action_index: 20, retraction_generation: 3 });
+        await sync.applyRetraction({ table: 'cross_chain_calls', source_chain: 'BTC', from_action_index: 10, to_action_index: 20, retraction_generation: 3 });
         assert.match(calls[0].sql, /source_action_index >= \? AND source_action_index <= \? AND push_generation <= \?/);
         assert.deepStrictEqual(calls[0].args, ['BTC', 10, 20, 3]);
     }); }
 
 function registerRetractionGuardGroup9(makeApply) { it('gen-fenced PER-LEG delete for cross_chain_matches (a_/b_push_generation)', async function () {
         const { sync, calls } = makeApply();
-        await sync._applyRetraction({ table: 'cross_chain_matches', source_chain: 'BTC', from_action_index: 10, to_action_index: 20, retraction_generation: 4 });
+        await sync.applyRetraction({ table: 'cross_chain_matches', source_chain: 'BTC', from_action_index: 10, to_action_index: 20, retraction_generation: 4 });
         assert.match(calls[0].sql, /a_action_index <= \? AND a_push_generation <= \?/);
         assert.match(calls[0].sql, /b_action_index <= \? AND b_push_generation <= \?/);
         assert.deepStrictEqual(calls[0].args, ['BTC', 10, 20, 4, 'BTC', 10, 20, 4]);
@@ -142,52 +142,52 @@ const deletes = (calls) => calls.filter(c => /^DELETE/.test(c.sql));
 describe('HubDbSync._applyRetraction receive-side guards @regression @tier1', function () {
     it('accepts an own-chain retraction whose fence is below our rollback generation', async function () {
         const { sync, calls } = makeApply(async () => 6);
-        await sync._applyRetraction({ table: 'cross_chain_calls', source_chain: 'BTC', from_action_index: 10, retraction_generation: 5 });
+        await sync.applyRetraction({ table: 'cross_chain_calls', source_chain: 'BTC', from_action_index: 10, retraction_generation: 5 });
         assert.strictEqual(deletes(calls).length, 1, 'legitimate backstop delete must apply');
     });
 
     it('REFUSES an own-chain retraction at/above our rollback generation (forged reorg)', async function () {
         const { sync, calls } = makeApply(async () => 6);
-        await sync._applyRetraction({ table: 'cross_chain_calls', source_chain: 'BTC', from_action_index: 10, retraction_generation: 6 });
-        await sync._applyRetraction({ table: 'cross_chain_calls', source_chain: 'BTC', from_action_index: 10, retraction_generation: 999 });
+        await sync.applyRetraction({ table: 'cross_chain_calls', source_chain: 'BTC', from_action_index: 10, retraction_generation: 6 });
+        await sync.applyRetraction({ table: 'cross_chain_calls', source_chain: 'BTC', from_action_index: 10, retraction_generation: 999 });
         assert.strictEqual(deletes(calls).length, 0, 'no rollback of ours produced these fences');
     });
 
     it('REFUSES an own-chain retraction when never rolled back (generation 0)', async function () {
         const { sync, calls } = makeApply(async () => 0);
-        await sync._applyRetraction({ table: 'oracle_prices', source_chain: 'BTC', from_action_index: 1, retraction_generation: 0 });
+        await sync.applyRetraction({ table: 'oracle_prices', source_chain: 'BTC', from_action_index: 1, retraction_generation: 0 });
         assert.strictEqual(deletes(calls).length, 0);
     });
 
     it('fails CLOSED when the own-generation read throws', async function () {
         const { sync, calls } = makeApply(async () => { throw new Error('db down'); });
-        await sync._applyRetraction({ table: 'cross_chain_calls', source_chain: 'BTC', from_action_index: 10, retraction_generation: 1 });
+        await sync.applyRetraction({ table: 'cross_chain_calls', source_chain: 'BTC', from_action_index: 10, retraction_generation: 1 });
         assert.strictEqual(deletes(calls).length, 0);
     });
 
     it('REFUSES an unfenced own-chain retraction even for non-quorum tables', async function () {
         const { sync, calls } = makeApply(async () => 6);
-        await sync._applyRetraction({ table: 'oracle_prices', source_chain: 'BTC', from_action_index: 1 });
+        await sync.applyRetraction({ table: 'oracle_prices', source_chain: 'BTC', from_action_index: 1 });
         assert.strictEqual(deletes(calls).length, 0, 'our own retractions are always fenced');
     });
 
     it('other-chain retractions skip the own-generation check but track monotonicity', async function () {
         const { sync, calls } = makeApply(async () => 0);
-        await sync._applyRetraction({ table: 'cross_chain_calls', source_chain: 'LTC', from_action_index: 10, retraction_generation: 7 });
+        await sync.applyRetraction({ table: 'cross_chain_calls', source_chain: 'LTC', from_action_index: 10, retraction_generation: 7 });
         assert.strictEqual(deletes(calls).length, 1, 'no local authority for LTC; fenced delete applies');
         // Stale replay below the tracked generation is dropped...
-        await sync._applyRetraction({ table: 'cross_chain_calls', source_chain: 'LTC', from_action_index: 10, retraction_generation: 6 });
+        await sync.applyRetraction({ table: 'cross_chain_calls', source_chain: 'LTC', from_action_index: 10, retraction_generation: 6 });
         assert.strictEqual(deletes(calls).length, 1, 'stale replay must be skipped');
         // ...equal-generation redelivery is idempotent and still applied.
-        await sync._applyRetraction({ table: 'cross_chain_calls', source_chain: 'LTC', from_action_index: 10, retraction_generation: 7 });
+        await sync.applyRetraction({ table: 'cross_chain_calls', source_chain: 'LTC', from_action_index: 10, retraction_generation: 7 });
         assert.strictEqual(deletes(calls).length, 2, 'same-generation redelivery stays idempotent');
     });
 
     it('monotonicity is tracked per (table, source_chain), not globally', async function () {
         const { sync, calls } = makeApply(async () => 0);
-        await sync._applyRetraction({ table: 'cross_chain_calls', source_chain: 'LTC', from_action_index: 10, retraction_generation: 9 });
-        await sync._applyRetraction({ table: 'cross_chain_matches', source_chain: 'LTC', from_action_index: 10, retraction_generation: 2 });
-        await sync._applyRetraction({ table: 'cross_chain_calls', source_chain: 'DOGE', from_action_index: 10, retraction_generation: 1 });
+        await sync.applyRetraction({ table: 'cross_chain_calls', source_chain: 'LTC', from_action_index: 10, retraction_generation: 9 });
+        await sync.applyRetraction({ table: 'cross_chain_matches', source_chain: 'LTC', from_action_index: 10, retraction_generation: 2 });
+        await sync.applyRetraction({ table: 'cross_chain_calls', source_chain: 'DOGE', from_action_index: 10, retraction_generation: 1 });
         assert.strictEqual(deletes(calls).length, 3, 'independent keys must not shadow each other');
     });
 });
@@ -195,9 +195,9 @@ describe('HubDbSync._applyRetraction receive-side guards @regression @tier1', fu
 describe('HubDbSync._applyRetraction receive-side guards @regression @tier1', function () {
     it('without the hook (explorer vendored mirror) other-chain legacy behavior is unchanged', async function () {
         const { sync, calls } = makeApply();
-        await sync._applyRetraction({ table: 'oracle_prices', source_chain: 'LTC', from_action_index: 1 });
+        await sync.applyRetraction({ table: 'oracle_prices', source_chain: 'LTC', from_action_index: 1 });
         assert.strictEqual(deletes(calls).length, 1, 'unfenced non-quorum retraction stays compatible');
-        await sync._applyRetraction({ table: 'oracle_prices', source_chain: 'BTC', from_action_index: 1 });
+        await sync.applyRetraction({ table: 'oracle_prices', source_chain: 'BTC', from_action_index: 1 });
         assert.strictEqual(deletes(calls).length, 2, 'own-chain check needs the hook; without it legacy applies');
     });
 });

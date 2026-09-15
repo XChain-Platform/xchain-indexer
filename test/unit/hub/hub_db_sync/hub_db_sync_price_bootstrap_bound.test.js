@@ -21,7 +21,7 @@ const HORIZON  = 2000000000;                       // the consumer's horizon, in
 const LOOKBACK = HubDbSync.PRICE_MIRROR_LOOKBACK_S;
 
 // A HubDbSync over a fake local mirror, shaped like the repoint suite's: applied rows
-// land in `rows` through the stubbed _applyRow the way the real upsert would, so what
+// land in `rows` through the stubbed applyRow the way the real upsert would, so what
 // the drain did to the mirror is modelled rather than asserted about.
 function makeSync(local, options) {
     const rows = (local || []).map(r => Object.assign({}, r));
@@ -57,7 +57,7 @@ function makeSync(local, options) {
     }, options || {}));
     sinon.stub(sync, 'localColumns').resolves(
         new Set(['id', 'round_number', 'coin_pair', 'price', 'reference_block', 'block_timestamp', 'status']));
-    sinon.stub(sync, '_applyRow').callsFake(async (t, row) => {
+    sinon.stub(sync, 'applyRow').callsFake(async (t, row) => {
         const i = rows.findIndex(r => String(r.round_number) === String(row.round_number) &&
                                       String(r.coin_pair) === String(row.coin_pair));
         if (i === -1) { rows.push(Object.assign({}, row, { id: nextId++ })); return; }
@@ -69,7 +69,7 @@ function makeSync(local, options) {
 }
 
 function stubHub(sync, hubRows) {
-    sinon.stub(sync, '_httpGet').callsFake(async (path) => {
+    sinon.stub(sync, 'httpGet').callsFake(async (path) => {
         const since = Number(/since_id=(\d+)/.exec(path)[1]);
         return { rows: hubRows.filter(r => Number(r.id) > since), watermark: 5000 };
     });
@@ -149,7 +149,7 @@ describe('HubDbSync price bootstrap bound @regression @tier2', function () {
         const { sync, rows } = makeSync([]);
         stubHub(sync, hubTable(deep, near, future));
 
-        assert.strictEqual(await sync._bootstrapTable('price_snapshots'), 5000, 'drain should complete');
+        assert.strictEqual(await sync.bootstrapTable('price_snapshots'), 5000, 'drain should complete');
 
         assert.strictEqual(rows.length, near + future,
             'only the rounds inside the mirror floor may be applied');
@@ -166,7 +166,7 @@ describe('HubDbSync price bootstrap bound @regression @tier2', function () {
         const { sync, rows } = makeSync([], { getPriceMirrorHorizon: undefined });
         stubHub(sync, hubTable(40, 5, 2));
 
-        await sync._bootstrapTable('price_snapshots');
+        await sync.bootstrapTable('price_snapshots');
         assert.strictEqual(rows.length, 47, 'an unbounded consumer mirrors every row');
         assert.strictEqual(sync._priceMirrorFloorTs, 0, 'and declares no floor');
     });
@@ -179,7 +179,7 @@ describe('HubDbSync price bootstrap bound @regression @tier2', function () {
         });
         stubHub(sync, hubTable(40, 5, 2));
 
-        await sync._bootstrapTable('price_snapshots');
+        await sync.bootstrapTable('price_snapshots');
         assert.strictEqual(rows.length, 47);
     });
 });
@@ -191,7 +191,7 @@ describe('HubDbSync price bootstrap bound @regression @tier2', function () {
         const { sync, rows } = makeSync([], { getPriceMirrorHorizon: async () => null });
         stubHub(sync, hubTable(40, 5, 2));
 
-        await sync._bootstrapTable('price_snapshots');
+        await sync.bootstrapTable('price_snapshots');
         assert.strictEqual(rows.length, 47);
     });
 
@@ -203,7 +203,7 @@ describe('HubDbSync price bootstrap bound @regression @tier2', function () {
         const { sync } = makeSync([]);
         stubHub(sync, hubTable(300, 10, 2));            // only 10 rounds inside the lookback
 
-        assert.strictEqual(await sync._bootstrapTable('price_snapshots'), null,
+        assert.strictEqual(await sync.bootstrapTable('price_snapshots'), null,
             'a mirror shallower than a consensus read can reach must not be certified');
         assert.strictEqual(sync._priceMirrorLookbackS, LOOKBACK * 4, 'the span must widen for the retry');
         assert.strictEqual(sync._priceMirrorFloorTs, 0, 'and no floor may be published');
@@ -215,7 +215,7 @@ describe('HubDbSync price bootstrap bound @regression @tier2', function () {
         const { sync, rows } = makeSync([]);
         stubHub(sync, hubTable(0, 12, 3));
 
-        assert.strictEqual(await sync._bootstrapTable('price_snapshots'), 5000);
+        assert.strictEqual(await sync.bootstrapTable('price_snapshots'), 5000);
         assert.strictEqual(rows.length, 15, 'nothing was below the floor, so nothing was bound out');
         assert.strictEqual(sync._priceMirrorLookbackS, LOOKBACK, 'no widening on a complete drain');
     });
@@ -229,7 +229,7 @@ describe('HubDbSync price bootstrap bound @regression @tier2', function () {
         const { sync, rows, seen } = makeSync([Object.assign({}, old, { id: 900 })]);
         stubHub(sync, [old].concat(hubTable(0, 1300, 2).map(r => (r.id += 10, r.round_number += 10, r))));
 
-        assert.strictEqual(await sync._bootstrapTable('price_snapshots'), 5000);
+        assert.strictEqual(await sync.bootstrapTable('price_snapshots'), 5000);
         assert.strictEqual(seen.deletes.length, 0, 'a bounded drain deletes nothing');
         assert.ok(rows.some(r => Number(r.id) === 900),
             'pre-existing history below the floor must survive the bounded drain');
@@ -245,7 +245,7 @@ describe('HubDbSync price bootstrap bound @regression @tier2', function () {
         // so the barrier must stop certifying and the table must be re-mirrored in full.
         const { sync } = makeSync([]);
         stubHub(sync, hubTable(400, 1400, 5));
-        await sync._bootstrapTable('price_snapshots');
+        await sync.bootstrapTable('price_snapshots');
         const floor = sync._priceMirrorFloorTs;
         assert.ok(floor > 0);
 
@@ -254,9 +254,9 @@ describe('HubDbSync price bootstrap bound @regression @tier2', function () {
         sync.priceSyncHeight = 999999;                  // the height barrier would otherwise open
 
         sync.notePriceMirrorFloor(floor - 1);
-        assert.strictEqual(sync._priceSyncSatisfied(1, floor - 1), false,
+        assert.strictEqual(sync.priceSyncSatisfied(1, floor - 1), false,
             'the height barrier must stop certifying');
-        assert.strictEqual(sync._priceTimeSyncSatisfied(floor - 1), false,
+        assert.strictEqual(sync.priceTimeSyncSatisfied(floor - 1), false,
             'and so must the time barrier');
         assert.strictEqual(sync._priceMirrorBoundDisabled, true, 'the bound is abandoned');
         await new Promise(resolve => setImmediate(resolve));
@@ -266,7 +266,7 @@ describe('HubDbSync price bootstrap bound @regression @tier2', function () {
     it('leaves the barriers alone for a block at or above the floor', async function () {
         const { sync } = makeSync([]);
         stubHub(sync, hubTable(400, 1400, 5));
-        await sync._bootstrapTable('price_snapshots');
+        await sync.bootstrapTable('price_snapshots');
         const floor = sync._priceMirrorFloorTs;
 
         sync.notePriceMirrorFloor(floor);
@@ -279,7 +279,7 @@ describe('HubDbSync price bootstrap bound @regression @tier2', function () {
         sync._priceMirrorRefloor = true;
         stubHub(sync, hubTable(5, 5, 2));
 
-        await sync._bootstrapTable('price_snapshots');
+        await sync.bootstrapTable('price_snapshots');
         assert.strictEqual(sync._priceMirrorRefloor, false,
             'a drain that bound nothing IS the full mirror the re-floor was waiting for');
     });
@@ -297,7 +297,7 @@ describe('HubDbSync price bootstrap bound @regression @tier2', function () {
         const { sync, rows } = makeSync([]);
         stubHub(sync, hubTableWithIdlePair());
 
-        assert.strictEqual(await sync._bootstrapTable('price_snapshots'), 5000, 'drain should complete');
+        assert.strictEqual(await sync.bootstrapTable('price_snapshots'), 5000, 'drain should complete');
 
         const idle = rows.filter(r => String(r.coin_pair) === 'DOGE/USD');
         assert.strictEqual(idle.length, 1,
@@ -337,11 +337,11 @@ describe('HubDbSync price bootstrap bound @regression @tier2', function () {
 
         const bounded = makeSync([]);
         stubHub(bounded.sync, hubRows);
-        assert.strictEqual(await bounded.sync._bootstrapTable('price_snapshots'), 5000);
+        assert.strictEqual(await bounded.sync.bootstrapTable('price_snapshots'), 5000);
 
         const full = makeSync([], { getPriceMirrorHorizon: undefined });
         stubHub(full.sync, hubRows);
-        assert.strictEqual(await full.sync._bootstrapTable('price_snapshots'), 5000);
+        assert.strictEqual(await full.sync.bootstrapTable('price_snapshots'), 5000);
 
         assert.deepStrictEqual(latestByPair(bounded.rows), latestByPair(full.rows),
             'a bounded mirror and a full mirror must name the same latest round for every pair');
@@ -352,7 +352,7 @@ describe('HubDbSync price bootstrap bound @regression @tier2', function () {
     it('bounds nothing on any other mirrored table', async function () {
         const { sync } = makeSync([]);
         stubHub(sync, [{ id: 1, status: 'finalized', block_timestamp: 1 }]);
-        await sync._bootstrapTable('oracle_prices');
-        assert.strictEqual(sync._applyRow.callCount, 1, 'oracle_prices is not bounded');
+        await sync.bootstrapTable('oracle_prices');
+        assert.strictEqual(sync.applyRow.callCount, 1, 'oracle_prices is not bounded');
     });
 });

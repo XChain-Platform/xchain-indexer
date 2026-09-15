@@ -81,14 +81,14 @@ describe('HubDbSync._applyRetraction signed retractions @regression @tier1', fun
         const evt = signedEvent(undefined);
         delete evt.retraction_signatures;
         delete evt.snapshot_block;
-        await sync._applyRetraction(evt);
+        await sync.applyRetraction(evt);
         assert.strictEqual(deletes.length, 0, 'unsigned quorum-class deletion must not run past the gate');
     });
 
     it('APPLIES a correctly signed retraction (1-of-1 snapshot), proving canonical parity with the hub', async function () {
         const s = makeSigner();
         const { sync, deletes } = makeSigned({ snapRows: [{ signing_pubkey: s.pubkey, amount: '100', source: 'srcA' }] });
-        await sync._applyRetraction(signedEvent([{ pubkey: s.pubkey, sig: s.sign(GOLDEN_CANONICAL) }]));
+        await sync.applyRetraction(signedEvent([{ pubkey: s.pubkey, sig: s.sign(GOLDEN_CANONICAL) }]));
         assert.strictEqual(deletes.length, 1, 'a valid quorum-signed retraction must apply');
         assert.match(deletes[0].sql, /DELETE FROM cross_chain_calls/);
     });
@@ -96,7 +96,7 @@ describe('HubDbSync._applyRetraction signed retractions @regression @tier1', fun
     it('REFUSES when the wire generation is tampered after signing (fence is signature-bound)', async function () {
         const s = makeSigner();
         const { sync, deletes } = makeSigned({ snapRows: [{ signing_pubkey: s.pubkey, amount: '100', source: 'srcA' }] });
-        await sync._applyRetraction(signedEvent(
+        await sync.applyRetraction(signedEvent(
             [{ pubkey: s.pubkey, sig: s.sign(GOLDEN_CANONICAL) }],
             { retraction_generation: 999999 }));   // replay with an inflated fence
         assert.strictEqual(deletes.length, 0, 'an inflated-generation replay must fail signature verification');
@@ -105,7 +105,7 @@ describe('HubDbSync._applyRetraction signed retractions @regression @tier1', fun
     it('REFUSES a signer outside the mirrored snapshot', async function () {
         const member = makeSigner(), stranger = makeSigner();
         const { sync, deletes } = makeSigned({ snapRows: [{ signing_pubkey: member.pubkey, amount: '100', source: 'srcA' }] });
-        await sync._applyRetraction(signedEvent([{ pubkey: stranger.pubkey, sig: stranger.sign(GOLDEN_CANONICAL) }]));
+        await sync.applyRetraction(signedEvent([{ pubkey: stranger.pubkey, sig: stranger.sign(GOLDEN_CANONICAL) }]));
         assert.strictEqual(deletes.length, 0);
     });
 
@@ -115,12 +115,12 @@ describe('HubDbSync._applyRetraction signed retractions @regression @tier1', fun
         const sigsOf = (n) => signers.slice(0, n).map(s => ({ pubkey: s.pubkey, sig: s.sign(GOLDEN_CANONICAL) }));
         {
             const { sync, deletes } = makeSigned({ snapRows });
-            await sync._applyRetraction(signedEvent(sigsOf(2)));
+            await sync.applyRetraction(signedEvent(sigsOf(2)));
             assert.strictEqual(deletes.length, 0, '2 of 4 sources is sub-quorum (600 !> 2/3 of 400*... 3*200 > 2*400 is false)');
         }
         {
             const { sync, deletes } = makeSigned({ snapRows });
-            await sync._applyRetraction(signedEvent(sigsOf(3)));
+            await sync.applyRetraction(signedEvent(sigsOf(3)));
             assert.strictEqual(deletes.length, 1, '3 of 4 sources meets the weighted bar');
         }
     });
@@ -128,7 +128,7 @@ describe('HubDbSync._applyRetraction signed retractions @regression @tier1', fun
     it('REFUSES when no snapshot rows exist at the claimed snapshot_block', async function () {
         const s = makeSigner();
         const { sync, deletes } = makeSigned({ snapRows: [] });
-        await sync._applyRetraction(signedEvent([{ pubkey: s.pubkey, sig: s.sign(GOLDEN_CANONICAL) }]));
+        await sync.applyRetraction(signedEvent([{ pubkey: s.pubkey, sig: s.sign(GOLDEN_CANONICAL) }]));
         assert.strictEqual(deletes.length, 0);
     });
 });
@@ -142,7 +142,7 @@ describe('HubDbSync._applyRetraction signed retractions @regression @tier1', fun
             maxSnapshotBlock: 990000, network: 'mainnet'
         });
         const canonical = 'XRETRACTV1|cross_chain_calls|DOGE|42|99|7|5000';   // sb 5000 < 963000
-        await sync._applyRetraction(signedEvent([{ pubkey: s.pubkey, sig: s.sign(canonical) }]));
+        await sync.applyRetraction(signedEvent([{ pubkey: s.pubkey, sig: s.sign(canonical) }]));
         assert.strictEqual(deletes.length, 0);
     });
 
@@ -151,7 +151,7 @@ describe('HubDbSync._applyRetraction signed retractions @regression @tier1', fun
         const evt = signedEvent(undefined);
         delete evt.retraction_signatures;
         delete evt.snapshot_block;
-        await sync._applyRetraction(evt);
+        await sync.applyRetraction(evt);
         assert.strictEqual(deletes.length, 1, 'no network wired -> legacy behavior (explorer vendored mirror, older wiring)');
     });
 
@@ -166,7 +166,7 @@ describe('HubDbSync._applyRetraction signed retractions @regression @tier1', fun
         const evt = signedEvent(undefined);
         delete evt.retraction_signatures;
         delete evt.snapshot_block;
-        await sync._applyRetraction(evt);
+        await sync.applyRetraction(evt);
         assert.strictEqual(deletes.length, 1, 'pre-bootstrap there is no signer set to verify against');
     });
 
@@ -180,7 +180,7 @@ describe('HubDbSync._applyRetraction signed retractions @regression @tier1', fun
     it('counts a snapshot member whose VALID signature is ordered AFTER a garbage one (verify-then-mark)', async function () {
         const s = makeSigner();
         const { sync, deletes } = makeSigned({ snapRows: [{ signing_pubkey: s.pubkey, amount: '100', source: 'srcA' }] });
-        await sync._applyRetraction(signedEvent([
+        await sync.applyRetraction(signedEvent([
             { pubkey: s.pubkey, sig: 'ab'.repeat(64) },            // well-formed length, does not verify
             { pubkey: s.pubkey, sig: s.sign(GOLDEN_CANONICAL) }    // the real one, ordered second
         ]));
@@ -196,7 +196,7 @@ describe('HubDbSync._applyRetraction signed retractions @regression @tier1', fun
         const { sync, deletes } = makeSigned({ snapRows });
         // Two real signers, one of them repeated: 2 of 4 sources is still sub-quorum.
         // Were the repeat counted twice, the weighted tally would cross the 2/3 bar.
-        await sync._applyRetraction(signedEvent([
+        await sync.applyRetraction(signedEvent([
             { pubkey: signers[0].pubkey, sig: signers[0].sign(GOLDEN_CANONICAL) },
             { pubkey: signers[0].pubkey, sig: signers[0].sign(GOLDEN_CANONICAL) },
             { pubkey: signers[1].pubkey, sig: signers[1].sign(GOLDEN_CANONICAL) }
@@ -207,7 +207,7 @@ describe('HubDbSync._applyRetraction signed retractions @regression @tier1', fun
     it('an invalid signature alone still fails the quorum (verify gate is not weakened)', async function () {
         const s = makeSigner();
         const { sync, deletes } = makeSigned({ snapRows: [{ signing_pubkey: s.pubkey, amount: '100', source: 'srcA' }] });
-        await sync._applyRetraction(signedEvent([
+        await sync.applyRetraction(signedEvent([
             { pubkey: s.pubkey, sig: 'ab'.repeat(64) },
             { pubkey: s.pubkey, sig: 'cd'.repeat(64) }
         ]));

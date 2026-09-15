@@ -112,18 +112,18 @@ describe('price barrier decoupled from the fee flag-day @regression @tier1', fun
     it('the widened barrier still opens on the watermark with no local rounds', async function () {
         // The reason widening is safe: a chain that has never seen a price round,
         // or is sitting in a round gap, must not freeze its tip. Case 2 of
-        // _priceTimeSyncSatisfied opens once the hub confirms it has streamed
+        // priceTimeSyncSatisfied opens once the hub confirms it has streamed
         // everything through blockTime + grace.
         const sync = new HubDbSync({ doQuery: async () => [{ h: 0, ts: 0 }] }, { hubUrl: 'http://hub.invalid' });
         sync.priceBootstrapped = true;
         sync.priceSyncMaxTimestamp = 0;
 
         const blockTime = 1700000000;
-        assert.strictEqual(sync._priceTimeSyncSatisfied(blockTime), false,
+        assert.strictEqual(sync.priceTimeSyncSatisfied(blockTime), false,
             'a behind mirror with a frozen watermark must defer');
 
         sync.streamWatermark = blockTime + sync.priceWatermarkGraceS;
-        assert.strictEqual(sync._priceTimeSyncSatisfied(blockTime), true,
+        assert.strictEqual(sync.priceTimeSyncSatisfied(blockTime), true,
             'the watermark escape must open the barrier with zero local rounds');
     });
 

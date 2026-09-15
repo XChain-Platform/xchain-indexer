@@ -28,7 +28,7 @@ function makeSync(maxReferenceBlock) {
 
 function registerPriceOracleUpgradeGroup1(PS_COLS, makeApplySync, finalizedRow) { it('uses an ON DUPLICATE KEY UPDATE upsert (not INSERT IGNORE) for price_snapshots', async function () {
         const { sync, doQuery } = makeApplySync(PS_COLS);
-        await sync._applyRow('price_snapshots', finalizedRow());
+        await sync.applyRow('price_snapshots', finalizedRow());
         const insert = doQuery.getCalls().find(c => /price_snapshots/.test(c.args[0]) && /INSERT/.test(c.args[0]));
         assert.ok(insert, 'an INSERT must run');
         assert.ok(/ON DUPLICATE KEY UPDATE/.test(insert.args[0]), 'must be an upsert');
@@ -37,7 +37,7 @@ function registerPriceOracleUpgradeGroup1(PS_COLS, makeApplySync, finalizedRow) 
 
 function registerPriceOracleUpgradeGroup2(PS_COLS, makeApplySync, finalizedRow) { it('guards every column on VALUES(status)=finalized and never reassigns the unique-key columns', async function () {
         const { sync, doQuery } = makeApplySync(PS_COLS);
-        await sync._applyRow('price_snapshots', finalizedRow());
+        await sync.applyRow('price_snapshots', finalizedRow());
         const sql = doQuery.getCalls().find(c => /ON DUPLICATE KEY UPDATE/.test(c.args[0])).args[0];
         // price upgrades only when the incoming row is finalized
         assert.ok(/`price` = IF\(VALUES\(status\) = 'finalized', VALUES\(`price`\), `price`\)/.test(sql));
@@ -54,7 +54,7 @@ function registerPriceOracleUpgradeGroup3(PS_COLS, makeApplySync, finalizedRow) 
         const { sync, doQuery } = makeApplySync(['round_number', 'coin_pair', 'price', 'status']);
         let row = finalizedRow();
         row.hub_only_audit = 'xyz';
-        await sync._applyRow('price_snapshots', row);
+        await sync.applyRow('price_snapshots', row);
         const sql = doQuery.getCalls().find(c => /INSERT/.test(c.args[0])).args[0];
         assert.ok(!sql.includes('hub_only_audit'), 'unknown column dropped');
         assert.ok(/ON DUPLICATE KEY UPDATE/.test(sql));
@@ -62,7 +62,7 @@ function registerPriceOracleUpgradeGroup3(PS_COLS, makeApplySync, finalizedRow) 
 
 function registerPriceOracleUpgradeGroup4(PS_COLS, makeApplySync, finalizedRow) { it('falls back to INSERT IGNORE if the row carries no status column', async function () {
         const { sync, doQuery } = makeApplySync(['round_number', 'coin_pair']);
-        await sync._applyRow('price_snapshots', { round_number: 5, coin_pair: 'BTC/USD' });
+        await sync.applyRow('price_snapshots', { round_number: 5, coin_pair: 'BTC/USD' });
         const insert = doQuery.getCalls().find(c => /INSERT/.test(c.args[0]));
         assert.ok(/^INSERT IGNORE/.test(insert.args[0]), 'no status → plain idempotent insert');
     }); }
@@ -72,7 +72,7 @@ describe('HubDbSync _applyRow price_snapshots skipped→finalized upgrade @regre
     // The hub upserts a 'skipped' placeholder round to 'finalized' when a peer
     // chain salvages it (PriceAggregator.receiveValidatedRound) and broadcasts the
     // row. A plain INSERT IGNORE on the mirror would drop that upgrade and strand
-    // the replica at price=NULL. _applyRow must upgrade in place, keyed on the
+    // the replica at price=NULL. applyRow must upgrade in place, keyed on the
     // INCOMING status, and never clobber an already-finalized local row.
 
     const PS_COLS = ['id', 'round_number', 'coin_pair', 'price', 'reference_block',
@@ -105,7 +105,7 @@ describe('HubDbSync _applyRow price_snapshots skipped→finalized upgrade @regre
 
 function registerPriceOracleUpgradeGroup5(OP_COLS, makeApplySync, oracleRow) { it('uses an ON DUPLICATE KEY UPDATE upsert (not INSERT IGNORE) for oracle_prices', async function () {
         const { sync, doQuery } = makeApplySync(OP_COLS);
-        await sync._applyRow('oracle_prices', oracleRow(1));
+        await sync.applyRow('oracle_prices', oracleRow(1));
         const insert = doQuery.getCalls().find(c => /oracle_prices/.test(c.args[0]) && /INSERT/.test(c.args[0]));
         assert.ok(insert, 'an INSERT must run');
         assert.ok(/ON DUPLICATE KEY UPDATE/.test(insert.args[0]), 'must be an upsert');
@@ -114,7 +114,7 @@ function registerPriceOracleUpgradeGroup5(OP_COLS, makeApplySync, oracleRow) { i
 
 function registerPriceOracleUpgradeGroup6(OP_COLS, makeApplySync, oracleRow) { it('guards every column on VALUES(push_generation) >= push_generation and never reassigns the unique-key columns', async function () {
         const { sync, doQuery } = makeApplySync(OP_COLS);
-        await sync._applyRow('oracle_prices', oracleRow(1));
+        await sync.applyRow('oracle_prices', oracleRow(1));
         const sql = doQuery.getCalls().find(c => /ON DUPLICATE KEY UPDATE/.test(c.args[0])).args[0];
         // a payload column upgrades only when the incoming generation wins
         assert.ok(/`value` = IF\(VALUES\(`push_generation`\) >= `push_generation`, VALUES\(`value`\), `value`\)/.test(sql));
@@ -131,7 +131,7 @@ function registerPriceOracleUpgradeGroup7(OP_COLS, makeApplySync, oracleRow) { i
         const { sync, doQuery } = makeApplySync(['source_chain', 'action_index', 'value', 'push_generation']);
         let row = oracleRow(2);
         row.hub_only_audit = 'xyz';
-        await sync._applyRow('oracle_prices', row);
+        await sync.applyRow('oracle_prices', row);
         const sql = doQuery.getCalls().find(c => /INSERT/.test(c.args[0])).args[0];
         assert.ok(!sql.includes('hub_only_audit'), 'unknown column dropped');
         assert.ok(/ON DUPLICATE KEY UPDATE/.test(sql));
@@ -139,7 +139,7 @@ function registerPriceOracleUpgradeGroup7(OP_COLS, makeApplySync, oracleRow) { i
 
 function registerPriceOracleUpgradeGroup8(OP_COLS, makeApplySync, oracleRow) { it('falls back to INSERT IGNORE if the row carries no push_generation column', async function () {
         const { sync, doQuery } = makeApplySync(['source_chain', 'action_index', 'value']);
-        await sync._applyRow('oracle_prices', { source_chain: 'LTC', action_index: 42, value: '1.23' });
+        await sync.applyRow('oracle_prices', { source_chain: 'LTC', action_index: 42, value: '1.23' });
         const insert = doQuery.getCalls().find(c => /INSERT/.test(c.args[0]));
         assert.ok(/^INSERT IGNORE/.test(insert.args[0]), 'no push_generation → plain idempotent insert');
     }); }
@@ -151,7 +151,7 @@ describe('HubDbSync _applyRow oracle_prices generation upgrade @regression @tier
     // plain INSERT IGNORE on the mirror would no-op against the stale lower-generation row,
     // leaving push_generation old, so the generation-fenced retraction (push_generation <=
     // pre-bump) then deletes the freshly re-published row and the price goes permanently
-    // missing on this replica. _applyRow must upgrade in place keyed on push_generation,
+    // missing on this replica. applyRow must upgrade in place keyed on push_generation,
     // mirroring the price_snapshots / cross_chain_calls upgrade paths.
 
     const OP_COLS = ['id', 'source_chain', 'action_index', 'coin', 'tick', 'fiat',

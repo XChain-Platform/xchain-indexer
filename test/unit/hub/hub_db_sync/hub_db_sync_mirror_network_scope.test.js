@@ -39,7 +39,7 @@ const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
         });
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test', network: opts.network });
         sinon.stub(sync, 'localColumns').resolves(new Set(opts.columns || ['id', 'network', 'chain']));
-        sinon.stub(sync, '_applyRow').resolves();
+        sinon.stub(sync, 'applyRow').resolves();
         return { sync, seen, doQuery };
     }
 
@@ -48,7 +48,7 @@ const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
 // live hub behaves.
 function stubHub(sync, ids, watermark) {
     const rows = ids.map((id) => ({ id: id, network: 'testnet' }));
-    return sinon.stub(sync, '_httpGet').callsFake(async (path) => {
+    return sinon.stub(sync, 'httpGet').callsFake(async (path) => {
         const since = Number(/since_id=(\d+)/.exec(path)[1]);
         return { rows: rows.filter((r) => r.id > since), watermark: watermark };
     });
@@ -64,7 +64,7 @@ function sinceIds(httpGet) {
 // asks for rows past the end of the hub's table and the drain reports zero rows on every
 // attempt) and they occupy the ids the current hub's own rows carry (so the id-parity
 // INSERT IGNORE apply drops the real row without an error). This suite drives that whole
-// shape through _bootstrapTable.
+// shape through bootstrapTable.
 describe('HubDbSync mirror network scope @regression @tier2', function () {
     afterEach(function () { sinon.restore(); });
 
@@ -75,20 +75,20 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
         const hubIds = Array.from({ length: 66 }, (_, i) => i + 1);
         const httpGet = stubHub(sync, hubIds, 4242);
 
-        const mark = await sync._bootstrapTable('state_checkpoints');
+        const mark = await sync.bootstrapTable('state_checkpoints');
 
         assert.strictEqual(seen.deletes.length, 1, 'the foreign rows must be cleared');
         assert.match(seen.deletes[0].sql, /^DELETE FROM state_checkpoints WHERE network <> \?$/);
         assert.deepStrictEqual(seen.deletes[0].args, ['testnet']);
         assert.deepStrictEqual(sinceIds(httpGet), [0], 'the cursor must not be seeded from a foreign id');
-        assert.strictEqual(sync._applyRow.callCount, 66, 'every row the hub holds must be mirrored');
+        assert.strictEqual(sync.applyRow.callCount, 66, 'every row the hub holds must be mirrored');
         assert.strictEqual(mark, 4242);
     });
 
     it('clears the foreign rows BEFORE reading the cursor', async function () {
         const { sync, seen } = makeSync({ network: 'testnet', foreign: 132, unscopedMax: 132, scopedMax: null });
         stubHub(sync, [1, 2], 7);
-        await sync._bootstrapTable('state_checkpoints');
+        await sync.bootstrapTable('state_checkpoints');
         assert.strictEqual(seen.order[0], 'delete', 'a cursor read before the purge reads the foreign rows');
     });
 
@@ -96,10 +96,10 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
         const { sync, seen } = makeSync({ network: 'testnet', foreign: 0, unscopedMax: 40, scopedMax: 40 });
         const httpGet = stubHub(sync, [10, 20, 40, 45, 50], 900);
 
-        const mark = await sync._bootstrapTable('state_checkpoints');
+        const mark = await sync.bootstrapTable('state_checkpoints');
 
         assert.deepStrictEqual(sinceIds(httpGet), [40], 'a clean mirror must still resume, not re-page');
-        assert.strictEqual(sync._applyRow.callCount, 2, 'only rows above the cursor are fetched');
+        assert.strictEqual(sync.applyRow.callCount, 2, 'only rows above the cursor are fetched');
         assert.strictEqual(mark, 900);
         assert.ok(seen.maxIds.every((q) => q.scoped), 'the cursor read is network-scoped');
     });
@@ -108,9 +108,9 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
         const { sync } = makeSync({ network: 'testnet', foreign: 0, unscopedMax: null, scopedMax: null });
         const httpGet = stubHub(sync, [1, 2, 3], 11);
 
-        assert.strictEqual(await sync._bootstrapTable('state_checkpoints'), 11);
+        assert.strictEqual(await sync.bootstrapTable('state_checkpoints'), 11);
         assert.deepStrictEqual(sinceIds(httpGet), [0]);
-        assert.strictEqual(sync._applyRow.callCount, 3);
+        assert.strictEqual(sync.applyRow.callCount, 3);
     });
 });
 
@@ -119,7 +119,7 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
 
     // Two separate claims, and the delete is the one that needs justifying.
     //
-    // _purgeForeignNetworkRows sets the bar: page contents may never justify a delete,
+    // purgeForeignNetworkRows sets the bar: page contents may never justify a delete,
     // because a filtered endpoint, a paging hole or a partial drain can each make a valid
     // row LOOK unserved. The tests below hold that line, and nothing here relaxes it.
     //
@@ -131,7 +131,7 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
     //
     // Restarting the cursor alone leaves the mirror broken: the apply is id-parity
     // INSERT IGNORE, so the hub's real row 5 is silently dropped by a stale local row 5
-    // that a rebuilt hub's id space now reuses. _applyRow is stubbed in this file, so a
+    // that a rebuilt hub's id space now reuses. applyRow is stubbed in this file, so a
     // callCount assertion proves rows were OFFERED and never that they landed; the
     // integration suite covers the collision against a real database.
     it('clears the scope and re-pages when the local cursor sits above the hub ceiling', async function () {
@@ -141,10 +141,10 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
         sync._readyMaxIds = { state_checkpoints: 20 };
         const httpGet = stubHub(sync, Array.from({ length: 20 }, (_, i) => i + 1), 55);
 
-        const mark = await sync._bootstrapTable('state_checkpoints');
+        const mark = await sync.bootstrapTable('state_checkpoints');
 
         assert.deepStrictEqual(sinceIds(httpGet), [0], 'a cursor above the hub ceiling must start over');
-        assert.strictEqual(sync._applyRow.callCount, 20);
+        assert.strictEqual(sync.applyRow.callCount, 20);
         assert.strictEqual(mark, 55);
         const scopePurge = seen.deletes.filter((d) => / WHERE network = \?$/.test(d.sql));
         assert.strictEqual(scopePurge.length, 1,
@@ -164,7 +164,7 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
         sync._readyMaxIds = { state_checkpoints: 0 };
         const httpGet = stubHub(sync, [], 77);
 
-        const mark = await sync._bootstrapTable('state_checkpoints');
+        const mark = await sync.bootstrapTable('state_checkpoints');
 
         assert.deepStrictEqual(sinceIds(httpGet), [0], 'an empty source is still a position: start over');
         const scopePurge = seen.deletes.filter((d) => / WHERE network = \?$/.test(d.sql));
@@ -186,7 +186,7 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
         sync._readyMaxIds = undefined;                        // an older hub, silent on max_ids
         const httpGet = stubHub(sync, [41, 42], 88);
 
-        await sync._bootstrapTable('state_checkpoints');
+        await sync.bootstrapTable('state_checkpoints');
 
         assert.deepStrictEqual(sinceIds(httpGet), [40], 'with no ceiling the cursor is all we have; resume');
         assert.strictEqual(seen.deletes.filter((d) => / WHERE network = \?$/.test(d.sql)).length, 0,
@@ -202,7 +202,7 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
         sync._readyMaxIds = { state_checkpoints: 20 };
         const httpGet = stubHub(sync, [1, 2], 33);
 
-        await sync._bootstrapTable('state_checkpoints');
+        await sync.bootstrapTable('state_checkpoints');
 
         assert.deepStrictEqual(sinceIds(httpGet), [0], 'the cursor must still restart');
         assert.strictEqual(seen.deletes.length, 0, 'an unscoped delete would clear the whole table');
@@ -215,7 +215,7 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
         sync._readyMaxIds = { oracle_prices: 5 };
         const httpGet = stubHub(sync, [41], 99);
 
-        await sync._bootstrapTable('state_checkpoints');
+        await sync.bootstrapTable('state_checkpoints');
 
         assert.deepStrictEqual(sinceIds(httpGet), [40]);
         assert.strictEqual(seen.deletes.filter((d) => / WHERE network = \?$/.test(d.sql)).length, 0,
@@ -227,7 +227,7 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
         sync._readyMaxIds = { state_checkpoints: 20 };
         const httpGet = stubHub(sync, [20, 21, 22], 60);
 
-        await sync._bootstrapTable('state_checkpoints');
+        await sync.bootstrapTable('state_checkpoints');
         assert.deepStrictEqual(sinceIds(httpGet), [20], 'an equal ceiling is a valid position, not a mismatch');
     });
 });
@@ -241,7 +241,7 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
         const { sync, seen } = makeSync({ network: undefined, foreign: 0, unscopedMax: 132, scopedMax: null });
         const httpGet = stubHub(sync, [1, 2, 3], 5);
 
-        await sync._bootstrapTable('state_checkpoints');
+        await sync.bootstrapTable('state_checkpoints');
 
         assert.strictEqual(seen.deletes.length, 0, 'no network, no deletion');
         assert.ok(seen.maxIds.every((q) => !q.scoped), 'no network, no scoped read');
@@ -255,7 +255,7 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
         });
         const httpGet = stubHub(sync, [7, 8], 3);
 
-        await sync._bootstrapTable('oracle_prices');
+        await sync.bootstrapTable('oracle_prices');
 
         assert.strictEqual(seen.deletes.length, 0, 'a table without the column cannot be scoped');
         assert.ok(seen.maxIds.every((q) => !q.scoped));
@@ -267,7 +267,7 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
         sync._readyMaxIds = { state_checkpoints: 66 };
         stubHub(sync, Array.from({ length: 66 }, (_, i) => i + 1), 8);
 
-        await sync._bootstrapTable('state_checkpoints');
+        await sync.bootstrapTable('state_checkpoints');
 
         assert.ok(seen.maxIds.length >= 2, 'the catch-up re-reads the local max');
         assert.ok(seen.maxIds.every((q) => q.scoped && q.args[0] === 'testnet'),
@@ -281,7 +281,7 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
             return [{ max_id: null }];
         });
         stubHub(sync, [1, 2], 12);
-        assert.strictEqual(await sync._bootstrapTable('state_checkpoints'), 12);
-        assert.strictEqual(sync._applyRow.callCount, 2);
+        assert.strictEqual(await sync.bootstrapTable('state_checkpoints'), 12);
+        assert.strictEqual(sync.applyRow.callCount, 2);
     });
 });

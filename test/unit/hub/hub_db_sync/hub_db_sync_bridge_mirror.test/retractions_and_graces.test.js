@@ -85,7 +85,7 @@ describe('bridge mirror retraction @regression @tier1', function () {
         // row:deleted arrives unsigned over the hub stream. Without the quorum-class rule a
         // compromised hub key wipes co-signed transfers out of every mirror.
         const { sync, calls } = makeApply();
-        await sync._applyRetraction({ table: 'bridge_transfers', source_chain: 'BTC', from_action_index: 10 });
+        await sync.applyRetraction({ table: 'bridge_transfers', source_chain: 'BTC', from_action_index: 10 });
         assert.strictEqual(calls.length, 0, 'no DELETE may run for an unfenced quorum-class retraction');
     });
 
@@ -93,7 +93,7 @@ describe('bridge mirror retraction @regression @tier1', function () {
         // Not source_chain: bridge_transfers spells its source leg src_chain, and the wrong
         // name is errno 1054, swallowed, leaving the retracted row mirrored and appliable.
         const { sync, calls } = makeApply();
-        await sync._applyRetraction({ table: 'bridge_transfers', source_chain: 'BTC',
+        await sync.applyRetraction({ table: 'bridge_transfers', source_chain: 'BTC',
                                       from_action_index: 50, retraction_generation: 3 });
         assert.match(calls[0].sql, /DELETE FROM bridge_transfers WHERE src_chain = \?/);
         assert.match(calls[0].sql, /src_action_index >= \?/);
@@ -105,7 +105,7 @@ describe('bridge mirror retraction @regression @tier1', function () {
 
     it('bounds the delete when the event carries to_action_index', async function () {
         const { sync, calls } = makeApply();
-        await sync._applyRetraction({ table: 'bridge_transfers', source_chain: 'LTC', from_action_index: 4,
+        await sync.applyRetraction({ table: 'bridge_transfers', source_chain: 'LTC', from_action_index: 4,
                                       to_action_index: 9, retraction_generation: 1 });
         assert.match(calls[0].sql, /src_action_index >= \? AND src_action_index <= \?/);
         assert.deepStrictEqual(calls[0].args, ['LTC', 4, 9, 1]);
@@ -116,7 +116,7 @@ describe('bridge mirror retraction @regression @tier1', function () {
         // the maximum leaves that scalar high, and a high scalar opens the barrier over
         // transfers that are gone.
         const { sync, calls } = makeApply({ coin: 'DOGE' });
-        await sync._applyRetraction({ table: 'bridge_transfers', source_chain: 'BTC',
+        await sync.applyRetraction({ table: 'bridge_transfers', source_chain: 'BTC',
                                       from_action_index: 50, retraction_generation: 3 });
         assert.ok(calls.some(c => /MAX\(effective_time\)/i.test(c.sql) && /bridge_transfers/.test(c.sql)),
             'the bridge watermark must be re-read after a retraction');
@@ -128,8 +128,8 @@ describe('bridge mirror retraction @regression @tier1', function () {
         // A superseding policy arrives as a new row at a higher policy_seq. There is no
         // deletion shape for this table, which is why it carries no RETRACTION_COLUMNS entry.
         const { sync, calls } = makeApply();
-        await sync._applyRetraction({ table: 'policy_snapshots', source_chain: 'BTC', from_action_index: 1 });
-        await sync._applyRetraction({ table: 'policy_snapshots', source_chain: 'BTC', from_action_index: 1,
+        await sync.applyRetraction({ table: 'policy_snapshots', source_chain: 'BTC', from_action_index: 1 });
+        await sync.applyRetraction({ table: 'policy_snapshots', source_chain: 'BTC', from_action_index: 1,
                                       retraction_generation: 2 });
         assert.deepStrictEqual(calls.filter(c => /DELETE/i.test(c.sql)), [],
             'policy_snapshots must never be deleted from the mirror');

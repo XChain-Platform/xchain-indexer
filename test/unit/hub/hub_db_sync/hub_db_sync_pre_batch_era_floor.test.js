@@ -60,7 +60,7 @@ function makeSync(floorS) {
     sync.streamWatermark       = 0;
     // The barrier self-heals off the DB before rejecting; the fake mirror answers
     // nothing, so stub the refresh out rather than assert on a no-op query.
-    sinon.stub(sync, '_refreshPriceSyncHeight').resolves();
+    sinon.stub(sync, 'refreshPriceSyncHeight').resolves();
     if (floorS !== undefined) sync._priceEraFloorS = floorS;
     return sync;
 }
