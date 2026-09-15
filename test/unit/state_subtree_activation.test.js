@@ -87,6 +87,32 @@ function isArmedChain(coin, network){
 // Deterministic stand-in sub-roots (any 32-byte hex works; these are not real trees).
 function rootFor(tag){ return M.toHex(M.sha256(Buffer.from('subroot:' + tag, 'utf8'))); }
 
+// Scratch-arm BOTH escrow-leaf maps on BTC:regtest for the duration of fn, then
+// restore them. Snapshot both keys, because BTC:regtest carries a REAL armed
+// height and the cleanup restores it rather than a `delete`. With an empty map,
+// delete and restore were indistinguishable; the moment a height exists,
+// deleting it silently DISARMS the chain for every later test in the process.
+// That is not hypothetical: it is exactly what the Stage A arming hit, and it
+// presented as an armed-height assertion failing while the same gate answered
+// armed elsewhere in the run.
+function withScratchEscrowHeights(shadowHeight, armedHeight, fn){
+    const hadShadow = Object.prototype.hasOwnProperty.call(SUB.ESCROW_LOCKED_LEAF_SHADOW, 'BTC:regtest');
+    const priorShadow = SUB.ESCROW_LOCKED_LEAF_SHADOW['BTC:regtest'];
+    const hadArmed = Object.prototype.hasOwnProperty.call(SUB.ESCROW_LOCKED_LEAF_ACTIVATION, 'BTC:regtest');
+    const priorArmed = SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'];
+    try {
+        SUB.ESCROW_LOCKED_LEAF_SHADOW['BTC:regtest']     = shadowHeight;
+        SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'] = armedHeight;
+        return fn();
+    } finally {
+        // RESTORE, never delete: see the snapshot comment above.
+        if(hadShadow) SUB.ESCROW_LOCKED_LEAF_SHADOW['BTC:regtest'] = priorShadow;
+        else delete SUB.ESCROW_LOCKED_LEAF_SHADOW['BTC:regtest'];
+        if(hadArmed) SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'] = priorArmed;
+        else delete SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'];
+    }
+}
+
 // THE NET UNDER ALL OF IT. Every scratch-arm helper here restores what it
 // touched, and this proves the whole file did: a delete-instead-of-restore is
 // invisible to the test that commits it (its own assertions pass) and surfaces
@@ -165,6 +191,10 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
         assert.strictEqual(SUB.isSubtreeActive('contract_state_root', 10000, 'mainnet', 'BTC'), false,
             'arming regtest must not arm mainnet at the REGTEST height');
     });
+});
+
+// Same title, continued: the readability limit splits the block, not the suite.
+describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @regression', function(){
 
     it('all three testnet chains arm contract_state_root from GENESIS', function(){
         // Replaced BTC:testnet's 146500 boundary (2026-07-30), which the 2026-08-10
@@ -207,6 +237,10 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
         assert.strictEqual(SUB.isEscrowLockedLeafActive(0, 'mainnet', 'BTC'), false,
             'Stage B must not ride along with a Stage A arming');
     });
+});
+
+// Same title, continued: the readability limit splits the block, not the suite.
+describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @regression', function(){
 
     it('MAINNET IS UNARMED for every slot, at every height (the launch guard)', function(){
         // The one assertion that must never be relaxed by a venue exercise.
@@ -242,6 +276,10 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
         assert.strictEqual(SUB.isEscrowLockedLeafActive(11199, 'regtest', 'BTC'), false);
         assert.strictEqual(SUB.isEscrowLockedLeafActive(11200, 'regtest', 'BTC'), true);
     });
+});
+
+// Same title, continued: the readability limit splits the block, not the suite.
+describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @regression', function(){
 
     it('the escrow-leaf SHADOW window is CLOSED everywhere, and ARMED WINS when both maps name a height', function(){
         // The map is empty, so the predicate must answer false on every chain at
@@ -271,20 +309,7 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
         // Scratch-arm both: shadow answers true only BETWEEN its own height and
         // the armed height, so each height uses exactly one column and nothing
         // ever computes twice (same contract as isSubtreeShadowActive).
-        // Snapshot both keys, because BTC:regtest carries a REAL armed height and
-        // the cleanup below restores them rather than a `delete`. With an empty map, delete and
-        // restore were indistinguishable; the moment a height exists, deleting it
-        // silently DISARMS the chain for every later test in the process. That is not
-        // hypothetical: it is exactly what the Stage A arming hit, and it presented as
-        // an armed-height assertion failing while the same gate answered armed
-        // elsewhere in the run.
-        const hadShadow = Object.prototype.hasOwnProperty.call(SUB.ESCROW_LOCKED_LEAF_SHADOW, 'BTC:regtest');
-        const priorShadow = SUB.ESCROW_LOCKED_LEAF_SHADOW['BTC:regtest'];
-        const hadArmed = Object.prototype.hasOwnProperty.call(SUB.ESCROW_LOCKED_LEAF_ACTIVATION, 'BTC:regtest');
-        const priorArmed = SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'];
-        try {
-            SUB.ESCROW_LOCKED_LEAF_SHADOW['BTC:regtest']     = 500;
-            SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'] = 800;
+        withScratchEscrowHeights(500, 800, () => {
             assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(499, 'regtest', 'BTC'), false);
             assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(500, 'regtest', 'BTC'), true);
             assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(799, 'regtest', 'BTC'), true);
@@ -295,18 +320,16 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
             assert.strictEqual(SUB.stateRootVersion(800, 'regtest', 'BTC'), 2);
             // Chain-local, as every map here is.
             assert.strictEqual(SUB.isEscrowLockedLeafShadowActive(600, 'regtest', 'LTC'), false);
-        } finally {
-            // RESTORE, never delete: see the snapshot comment above.
-            if(hadShadow) SUB.ESCROW_LOCKED_LEAF_SHADOW['BTC:regtest'] = priorShadow;
-            else delete SUB.ESCROW_LOCKED_LEAF_SHADOW['BTC:regtest'];
-            if(hadArmed) SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'] = priorArmed;
-            else delete SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'];
-        }
+        });
         // And the real armed set survived this test, which is the assertion that
         // catches a regression in the restore itself.
         assert.strictEqual(SUB.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'], 11200,
             'restored to the real armed height, not wiped');
     });
+});
+
+// Same title, continued: the readability limit splits the block, not the suite.
+describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @regression', function(){
 
     it('stateRootVersion reports 1 everywhere EXCEPT at and above an armed height', function(){
         for(const coin of COINS)

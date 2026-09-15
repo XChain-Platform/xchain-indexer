@@ -127,69 +127,75 @@ class FakeDb {
         this.strictSql.push(sql);
         return await this.run(sql, args);
     }
+    // Dispatch by table. Each table's semantics live in their own method below,
+    // and none of them awaits anything: the fake answers synchronously, so the
+    // only suspension a caller sees is the one on doQuery / doQueryStrict.
     async run(sql, args){
         // Fault injection: model a transient DB fault. doQueryStrict propagates
         // it; doQuery would have swallowed it into [] outside a transaction.
         if(this.failOn && sql.indexOf(this.failOn) !== -1)
             throw new Error('injected DB fault');
-        if(sql.indexOf('state_tree_nodes') !== -1){
-            if(sql.indexOf('INSERT') === 0 || sql.indexOf('INSERT') > -1 && sql.indexOf('SELECT') === -1){
-                // Consume args in (hash, left, right) TRIPLES, not just the first
-                // one: DbNodeStore.putMany batches a whole path into one multi-row
-                // INSERT IGNORE. Reading only args[0..2] would store row
-                // one and silently drop the rest, and a fake that drops writes does
-                // not fail loudly - _descend reads a missing node as an EMPTY
-                // subtree, so the next block emits a truncated root that still
-                // looks like a hash. That is the exact fault this file's own
-                // `smt()` comment warns about, arriving through the DB fake instead.
-                for(let i = 0; i + 2 < args.length; i += 3)
-                    if(!this.nodes.has(args[i]))
-                        this.nodes.set(args[i], { left_hash: args[i + 1], right_hash: args[i + 2] });
-                return [];
-            }
-            const n = this.nodes.get(args[0]);
-            return n ? [n] : [];
-        }
-        if(sql.indexOf('FROM state_tree_roots') !== -1){
-            // The derivation selects ONE column aliased to `r`, choosing committed
-            // vs shadow by which name the SQL carries. Honour that here, or the
-            // shadow tests would silently read the committed column.
-            const row = this.roots.get(args[2]);
-            if(!row) return [];
-            const col = (sql.indexOf('contract_state_root_shadow') !== -1)
-                ? 'contract_state_root_shadow' : 'contract_state_root';
-            return [{ r: (row[col] == null) ? null : row[col] }];
-        }
-        if(sql.indexOf('FROM contract_state') !== -1){
-            this.stateQueries++;
-            // Distinct keys written by one block.
-            if(sql.indexOf('SELECT DISTINCT') === 0){
-                const seen = new Map();
-                for(const r of this.rows)
-                    if(r.block_index === args[0])
-                        seen.set(r.contract_index + '' + r.state_key,
-                                 { contract_index: r.contract_index, state_key: r.state_key });
-                return Array.from(seen.values());
-            }
-            // Latest row for one key: highest id wins, tombstones included.
-            if(sql.indexOf('ORDER BY id DESC LIMIT 1') !== -1){
-                let best = null;
-                for(const r of this.rows)
-                    if(r.contract_index === args[0] && r.state_key === args[1] && (!best || r.id > best.id)) best = r;
-                return best ? [{ state_value: best.state_value }] : [];
-            }
-            // Full live set: MAX(id) per (contract_index, state_key), tombstones
-            // NOT filtered here (the caller applies the mapping).
-            const max = new Map();
-            for(const r of this.rows){
-                const k = r.contract_index + '' + r.state_key;
-                const cur = max.get(k);
-                if(!cur || r.id > cur.id) max.set(k, r);
-            }
-            return Array.from(max.values()).map(r => ({ contract_index: r.contract_index,
-                                                        state_key: r.state_key, state_value: r.state_value }));
-        }
+        if(sql.indexOf('state_tree_nodes') !== -1) return this.runNodeStore(sql, args);
+        if(sql.indexOf('FROM state_tree_roots') !== -1) return this.runRootsRead(sql, args);
+        if(sql.indexOf('FROM contract_state') !== -1) return this.runContractState(sql, args);
         throw new Error('FakeDb: unexpected query ' + sql.slice(0, 60));
+    }
+    runNodeStore(sql, args){
+        if(sql.indexOf('INSERT') === 0 || sql.indexOf('INSERT') > -1 && sql.indexOf('SELECT') === -1){
+            // Consume args in (hash, left, right) TRIPLES, not just the first
+            // one: DbNodeStore.putMany batches a whole path into one multi-row
+            // INSERT IGNORE. Reading only args[0..2] would store row
+            // one and silently drop the rest, and a fake that drops writes does
+            // not fail loudly - _descend reads a missing node as an EMPTY
+            // subtree, so the next block emits a truncated root that still
+            // looks like a hash. That is the exact fault this file's own
+            // `smt()` comment warns about, arriving through the DB fake instead.
+            for(let i = 0; i + 2 < args.length; i += 3)
+                if(!this.nodes.has(args[i]))
+                    this.nodes.set(args[i], { left_hash: args[i + 1], right_hash: args[i + 2] });
+            return [];
+        }
+        const n = this.nodes.get(args[0]);
+        return n ? [n] : [];
+    }
+    runRootsRead(sql, args){
+        // The derivation selects ONE column aliased to `r`, choosing committed
+        // vs shadow by which name the SQL carries. Honour that here, or the
+        // shadow tests would silently read the committed column.
+        const row = this.roots.get(args[2]);
+        if(!row) return [];
+        const col = (sql.indexOf('contract_state_root_shadow') !== -1)
+            ? 'contract_state_root_shadow' : 'contract_state_root';
+        return [{ r: (row[col] == null) ? null : row[col] }];
+    }
+    runContractState(sql, args){
+        this.stateQueries++;
+        // Distinct keys written by one block.
+        if(sql.indexOf('SELECT DISTINCT') === 0){
+            const seen = new Map();
+            for(const r of this.rows)
+                if(r.block_index === args[0])
+                    seen.set(r.contract_index + '' + r.state_key,
+                             { contract_index: r.contract_index, state_key: r.state_key });
+            return Array.from(seen.values());
+        }
+        // Latest row for one key: highest id wins, tombstones included.
+        if(sql.indexOf('ORDER BY id DESC LIMIT 1') !== -1){
+            let best = null;
+            for(const r of this.rows)
+                if(r.contract_index === args[0] && r.state_key === args[1] && (!best || r.id > best.id)) best = r;
+            return best ? [{ state_value: best.state_value }] : [];
+        }
+        // Full live set: MAX(id) per (contract_index, state_key), tombstones
+        // NOT filtered here (the caller applies the mapping).
+        const max = new Map();
+        for(const r of this.rows){
+            const k = r.contract_index + '' + r.state_key;
+            const cur = max.get(k);
+            if(!cur || r.id > cur.id) max.set(k, r);
+        }
+        return Array.from(max.values()).map(r => ({ contract_index: r.contract_index,
+                                                    state_key: r.state_key, state_value: r.state_value }));
     }
 }
 
@@ -224,6 +230,10 @@ describe('contract_state_root: inertness @regression', function(){
             for(const key of Object.keys(SUB.STATE_SUBTREE_ACTIVATION[slot]))
                 assert.ok(!/mainnet/.test(key), slot + ' is armed on mainnet (' + key + ')');
     });
+});
+
+// Same title, continued: the readability limit splits the block, not the suite.
+describe('contract_state_root: inertness @regression', function(){
 
     it('an INERT chain issues ZERO contract_state queries and offers no candidate', async function(){
         // Now scoped around the armed chain rather than deleted: every OTHER
@@ -265,6 +275,10 @@ describe('contract_state_root: inertness @regression', function(){
         assert.strictEqual(await SC.reservedSubRootCandidates(below, 'BTC', 'regtest', 9999), null);
         assert.strictEqual(below.stateQueries, 0);
     });
+});
+
+// Same title, continued: the readability limit splits the block, not the suite.
+describe('contract_state_root: inertness @regression', function(){
 
     it('every GENESIS-armed testnet chain queries from block 0, with no below-arming region', async function(){
         // LTC and DOGE testnet had no entry in this map at all before the genesis

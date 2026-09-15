@@ -158,6 +158,10 @@ describe('XCHAIN_ESC locked leaf: inertness @regression', function(){
                         coin + '/' + network + '@' + h);
                 }
     });
+});
+
+// Same title, continued: the readability limit splits the block, not the suite.
+describe('XCHAIN_ESC locked leaf: inertness @regression', function(){
 
     it('an inert chain issues ZERO journal queries from the full rebuild', async function(){
         // balances_root must keep its exact v1 leaf set below an armed height, and
@@ -270,6 +274,10 @@ describe('XCHAIN_ESC locked leaf: journal reads @regression', function(){
         assert.strictEqual(await ESC.latestLockedAmount(db, ADDR, TICK, 150), '2');
         assert.strictEqual(await ESC.latestLockedAmount(db, ADDR, TICK), '2');
     });
+});
+
+// Same title, continued: the readability limit splits the block, not the suite.
+describe('XCHAIN_ESC locked leaf: journal reads @regression', function(){
 
     it('the touched set is per LOCKER, and only for blocks that changed a total', async function(){
         const db = new FakeDb();
