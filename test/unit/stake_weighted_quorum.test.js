@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/stake_weighted_quorum.test.js
  *
- * Indexer-side mirror of xchain-hub/test/unit/stake_weighted_quorum.test.js.
+ * Indexer-side mirror of xchain-hub/test/unit/consensus/stake_weighted_quorum.test.js.
  *
  * CONSENSUS-CRITICAL: this predicate decides every cross-chain settlement gate
  * (cross_settle, xexec, xcall, anchor) + the recovery verifier under

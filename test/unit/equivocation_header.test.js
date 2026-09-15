@@ -13,7 +13,7 @@
  **********************************************************************
  * test/unit/equivocation_header.test.js
  *
- * Indexer-side mirror of xchain-hub/test/unit/equivocation_header.test.js.
+ * Indexer-side mirror of xchain-hub/test/unit/consensus/equivocation_header.test.js.
  *
  * CONSENSUS-CRITICAL: the EQUIV equivocation header is prefixed onto every signed
  * consensus canonical at/above the flag-day; the indexer re-derives those canonicals
