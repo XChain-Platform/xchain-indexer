@@ -27,6 +27,7 @@ const M = require('../consensus/merkle.js');
 const { getLogger } = require('../observability/index.js');
 const { canonicalAmountOf, leafOrNull } = require('./leaf_values.js');
 const { getNetBalance, ledgerKeysForBlock } = require('../db/state_commitment/ledger_reads.js');
+const { readEnvNow } = require('../config.js'); // per call, never a load-time snapshot: a running node flips these guards
 
 // ---- Touched-set guard ------------------------------------------------------
 //
@@ -87,7 +88,7 @@ async function enforceTouchedSet(db, blockIndex, touched){
     const applied = new Set(touched);
     const missing = [...expected].filter(k => !applied.has(k));
 
-    if(process.env.INDEXER_SMT_TOUCH_AUDIT === '1'){
+    if(readEnvNow('INDEXER_SMT_TOUCH_AUDIT') === '1'){
         const extra = [...applied].filter(k => !expected.has(k));
         if(extra.length)
             getLogger().info('SMT-TOUCH-AUDIT block=' + blockIndex +
@@ -101,7 +102,7 @@ async function enforceTouchedSet(db, blockIndex, touched){
         ': the ledger moved ' + missing.length + ' key(s) the commitment did not apply, so ' +
         'balances_root would be committed incomplete. keys=' + detail +
         ' (balances-root leaf-completeness guard)';
-    if(process.env.INDEXER_TOUCH_GUARD === 'warn'){
+    if(readEnvNow('INDEXER_TOUCH_GUARD') === 'warn'){
         getLogger().error(msg + ' [INDEXER_TOUCH_GUARD=warn: COMMITTING ANYWAY, this node will ' +
             'diverge from any node that full-rebuilds]');
         return;
@@ -164,7 +165,7 @@ async function assertCommittedLeaves(db, smt, chain, network, blockIndex, balanc
         absent.length + ' key(s) the ledger moved have NO leaf in the committed balances_root ' +
         'while their net is non-zero, so balances_root would be committed incomplete. ' +
         'keys=' + JSON.stringify(absent) + ' (leaf-presence guard)';
-    if(process.env.INDEXER_TOUCH_GUARD === 'warn'){
+    if(readEnvNow('INDEXER_TOUCH_GUARD') === 'warn'){
         getLogger().error(msg + ' [INDEXER_TOUCH_GUARD=warn: COMMITTING ANYWAY, this node will ' +
             'diverge from any node that full-rebuilds]');
         return;

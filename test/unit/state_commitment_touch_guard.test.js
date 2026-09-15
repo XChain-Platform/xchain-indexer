@@ -68,7 +68,7 @@ describe('touched-set guard @regression', function(){
         const body = touchGuardBody();
         assert.ok(!/INDEXER_SMT_TOUCH_AUDIT[^\n]*\)\s*return;/.test(body),
             'the guard must not return early on an audit flag');
-        assert.ok(!/^\s*if\s*\(process\.env\.INDEXER_TOUCH_GUARD[^\n]*\)\s*return;/m.test(body),
+        assert.ok(!/^\s*if\s*\((?:process\.env\.|readEnvNow\(')INDEXER_TOUCH_GUARD[^\n]*\)\s*return;/m.test(body),
             'the guard must not be switched off wholesale by an env var');
     });
 
@@ -89,7 +89,7 @@ describe('touched-set guard @regression', function(){
 
     it('reports extra only under the audit flag, because it is noisy by design', function(){
         const body = touchGuardBody();
-        assert.ok(/INDEXER_SMT_TOUCH_AUDIT === '1'[\s\S]{0,400}extra/.test(body),
+        assert.ok(/readEnvNow\('INDEXER_SMT_TOUCH_AUDIT'\) === '1'[\s\S]{0,400}extra/.test(body),
             'extra reporting is gated so healthy chains do not log escrow keys every block');
     });
 
@@ -112,7 +112,7 @@ describe('touched-set guard @regression', function(){
 
     it('has an operational downgrade that is documented as divergence, not a knob', function(){
         const body = touchGuardBody();
-        assert.ok(/INDEXER_TOUCH_GUARD === 'warn'/.test(body), 'a safety valve must exist');
+        assert.ok(/readEnvNow\('INDEXER_TOUCH_GUARD'\) === 'warn'/.test(body), 'a safety valve must exist');
         assert.ok(/diverge/.test(body),
             'the warn path must say plainly that the node commits a root it knows is incomplete');
     });
