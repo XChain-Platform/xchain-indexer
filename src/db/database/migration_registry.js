@@ -79,7 +79,7 @@ const planLedgerRenames = function(appliedNames){
 // correctness argument, not an optimization. A mode=manual file legitimately sits
 // unapplied behind the frontier for as long as the operator defers it (eleven such
 // files ship today), so it is indistinguishable at runtime from a backdated one and
-// guarding it would hard-fail `node src/migration/migrate.js` on every aged fleet DB. An auto
+// guarding it would hard-fail `node src/db/migration/migrate.js` on every aged fleet DB. An auto
 // file has no such state: it applies unattended at the first startup that sees it,
 // so an unapplied auto file behind the frontier is always newly backdated.
 //
@@ -91,7 +91,7 @@ const planLedgerRenames = function(appliedNames){
 // that row forever with no heal path. An undated name sorts ABOVE every 2026-*
 // name in ASCII ('a' 0x61 > '2' 0x32), so taking the max over raw names would
 // make the frontier a garbage maximum that every ordinary new migration sorts
-// below, hard-failing `node src/migration/migrate.js` on exactly the aged fleet DBs this
+// below, hard-failing `node src/db/migration/migrate.js` on exactly the aged fleet DBs this
 // guard must not break.
 const backdatedFrontierViolation = function(pendingName, appliedNames){
     let frontier = null;

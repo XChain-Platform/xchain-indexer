@@ -22,8 +22,8 @@
  * ones that must not run unattended across a validator fleet). Idempotent and
  * ledger-tracked (schema_migrations), so re-running only applies what's pending.
  *
- *   node src/migration/migrate.js                   # or: npm run migrate
- *   node src/migration/migrate.js --file <name.sql> # scope the run to named file(s)
+ *   node src/db/migration/migrate.js                   # or: npm run migrate
+ *   node src/db/migration/migrate.js --file <name.sql> # scope the run to named file(s)
  *
  * Reads INDEXER_DB_* from the service environment (.env). Run with the indexer
  * process stopped if a pending migration's header says so.
@@ -33,11 +33,11 @@
 const dotenv   = require('dotenv');
 dotenv.config();
 
-const Database = require('../db');
-const config   = require('../config.js');
-const Utility  = require('../utility.js');
+const Database = require('..');
+const config   = require('../../config.js');
+const Utility  = require('../../utility.js');
 
-const { CONFIG_ENV } = require('../config.js');
+const { CONFIG_ENV } = require('../../config.js');
 // Parse `--file <name>` / `--file=<name>` / `-f <name>` occurrences into a list of
 // migration filenames to scope the run to. Values may be comma-separated. Returns []
 // when no targeting flag is present (the default apply-everything behavior).

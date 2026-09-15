@@ -200,7 +200,7 @@ describe('committed mode=auto migrations contain no destructive DDL @regression 
             const offender = destructiveOf(statementsOf(raw));
             assert.strictEqual(offender, null,
                 file + ' is tagged mode=auto but contains destructive DDL: "' + String(offender).slice(0, 120) +
-                '". Re-tag it mode=manual (applied via `node src/migration/migrate.js`) - a destructive ' +
+                '". Re-tag it mode=manual (applied via `node src/db/migration/migrate.js`) - a destructive ' +
                 'statement must never auto-run unattended against validator DBs.');
         });
     });

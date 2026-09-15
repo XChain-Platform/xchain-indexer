@@ -58,7 +58,7 @@ module.exports = {
             // guard cannot reason about, so leave it to the column's own contract.
             if(len == null || Number.isNaN(len)) return;
             if(len < UNCOMPRESSED_PUBKEY_HEX_LENGTH){
-                // Name the exact file. The old text said only "node src/migration/migrate.js", which
+                // Name the exact file. The old text said only "node src/db/migration/migrate.js", which
                 // on an aged fleet DB means "apply every pending manual migration" - nine of
                 // them on mainnet in August 2026, one a DROP COLUMN - so the operator either
                 // ran far more than the halt required or had to work out which file it meant
@@ -66,7 +66,7 @@ module.exports = {
                 throw new Error(
                     'pubkeys.pubkey holds ' + len + ' chars but VARCHAR(' + UNCOMPRESSED_PUBKEY_HEX_LENGTH + ') is required ' +
                     'for uncompressed keys; narrower silently NULLs or truncates the source_pubkey seam field. ' +
-                    'Run the pending migration: node src/migration/migrate.js --file ' +
+                    'Run the pending migration: node src/db/migration/migrate.js --file ' +
                     Database.startupAssertedMigrationFile('assertPubkeyColumnIsUncompressedWide')
                 );
             }
@@ -110,9 +110,9 @@ module.exports = {
     // deploy refuse before it recreates a container instead of after (see that constant).
     async assertRewardUniqueKeyCarriesQualifier(){
         // Name the exact file in every halt, for the same reason the pubkey halt above
-        // does: a bare `node src/migration/migrate.js` on an aged fleet database means "apply every
+        // does: a bare `node src/db/migration/migrate.js` on an aged fleet database means "apply every
         // pending manual migration", which is never what a scoped recovery wants.
-        const remedy = ' Run the pending migration: node src/migration/migrate.js --file ' +
+        const remedy = ' Run the pending migration: node src/db/migration/migrate.js --file ' +
             Database.startupAssertedMigrationFile('assertRewardUniqueKeyCarriesQualifier');
         let conn;
         try {
@@ -189,10 +189,10 @@ module.exports = {
     // is not evidence of a missing table, the same convention as the two assertions above.
     async assertBridgeTablesPresent(){
         const REQUIRED = ['bridge_transfers', 'bridge_settlements', 'policy_snapshots'];
-        // Name the exact file in the halt: a bare `node src/migration/migrate.js` on an aged fleet
+        // Name the exact file in the halt: a bare `node src/db/migration/migrate.js` on an aged fleet
         // database means "apply every pending manual migration", which is never what a
         // scoped recovery wants.
-        const remedy = ' Run the pending migration: node src/migration/migrate.js --file ' +
+        const remedy = ' Run the pending migration: node src/db/migration/migrate.js --file ' +
             Database.startupAssertedMigrationFile('assertBridgeTablesPresent');
         let conn;
         try {

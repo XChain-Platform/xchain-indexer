@@ -145,13 +145,13 @@ async function checkAppliedChecksum(conn, file, checksum, appliedByName, include
         // diverges from what the committed file describes.
         const msg = 'runMigrations: ' + file + ' was already applied but its content CHANGED (checksum mismatch: recorded ' +
             appliedByName.get(file) + ', current ' + checksum + '). Migrations are immutable once applied.';
-        // Operator path (`node src/migration/migrate.js`, includeManual) and opt-in strict
+        // Operator path (`node src/db/migration/migrate.js`, includeManual) and opt-in strict
         // mode fail closed so a diverged schema is caught in CI / by an operator
         // instead of silently continuing. Default auto-startup stays non-fatal
         // (console.error, not warn) to avoid a surprise fleet-wide boot failure.
         if(includeManual || CONFIG_ENV.MIGRATION_STRICT_CHECKSUM === '1'){
             // Tailor the remedy to which branch actually fired. The operator path
-            // (includeManual, `node src/migration/migrate.js`) ALWAYS fails closed by design, so
+            // (includeManual, `node src/db/migration/migrate.js`) ALWAYS fails closed by design, so
             // MIGRATION_STRICT_CHECKSUM has no effect there - telling the operator to
             // clear it just loops them back to the same error. Only the passive
             // startup path opted into strict mode via MIGRATION_STRICT_CHECKSUM=1 can
@@ -199,7 +199,7 @@ async function gateUnappliedMigration(self, conn, file, checksum, mode, result, 
     }
 
     if(mode !== 'auto' && !includeManual){
-        getLogger().info('runMigrations: PENDING (gated, mode=' + mode + '): ' + file + ' - apply with `node src/migration/migrate.js`.');
+        getLogger().info('runMigrations: PENDING (gated, mode=' + mode + '): ' + file + ' - apply with `node src/db/migration/migrate.js`.');
         result.pending.push(file);
         return true;
     }
@@ -238,7 +238,7 @@ async function applyMigrationFile(self, conn, file, raw, checksum, mode, result)
         if(offender){
             throw new Error('runMigrations: ' + file + ' is tagged mode=auto but contains destructive DDL: "' +
                 offender.slice(0, 160) + (offender.length > 160 ? '...' : '') + '". ' +
-                'Re-tag the file `-- xchain:migration mode=manual` and apply it deliberately via `node src/migration/migrate.js`.');
+                'Re-tag the file `-- xchain:migration mode=manual` and apply it deliberately via `node src/db/migration/migrate.js`.');
         }
     }
     getLogger().info('runMigrations: applying ' + file + ' (mode=' + mode + ', ' + statements.length + ' statement(s))...');
@@ -298,7 +298,7 @@ module.exports = {
         }
 
         if(result.applied.length) getLogger().info('runMigrations: ' + result.applied.length + ' migration(s) applied to ' + this.dbName + '.');
-        if(result.pending.length) getLogger().info('runMigrations: ' + result.pending.length + ' manual migration(s) pending for ' + this.dbName + ' - run `node src/migration/migrate.js` to apply.');
+        if(result.pending.length) getLogger().info('runMigrations: ' + result.pending.length + ' manual migration(s) pending for ' + this.dbName + ' - run `node src/db/migration/migrate.js` to apply.');
         return result;
     },
 

@@ -37,19 +37,25 @@ const underSrcDb = (p) => p.startsWith(SRC_DB_DIR);
 /**
  * Require `modulePath` (absolute, or resolvable from here) with a freshly
  * evaluated src/config.js. Returns the fresh module exports.
+ *
+ * `opts.keep` names absolute paths the src/db purge must leave alone: a caller
+ * may have seeded a fake module under src/db/ (e.g. the migrate CLI's fake
+ * Database) before calling this, and a target that itself lives under src/db/
+ * would otherwise have that fake evicted along with the rest of the tree.
  */
-function requireWithFreshConfig(modulePath) {
+function requireWithFreshConfig(modulePath, opts = {}) {
+    const keep = new Set(opts.keep || []);
     const target = require.resolve(modulePath);
     const dbTree = underSrcDb(target);
     const paths = [CONFIG_PATH, target];
-    if (dbTree) for (const p of Object.keys(require.cache)) if (underSrcDb(p) && p !== target) paths.push(p);
+    if (dbTree) for (const p of Object.keys(require.cache)) if (underSrcDb(p) && p !== target && !keep.has(p)) paths.push(p);
     const saved = paths.map((p) => [p, require.cache[p]]);
     for (const [p] of saved) delete require.cache[p];
     try {
         return require(target);
     } finally {
         // Drop what the fresh load cached under src/db too, so the tree is exactly as found.
-        if (dbTree) for (const p of Object.keys(require.cache)) if (underSrcDb(p)) delete require.cache[p];
+        if (dbTree) for (const p of Object.keys(require.cache)) if (underSrcDb(p) && !keep.has(p)) delete require.cache[p];
         for (const [p, entry] of saved) {
             if (entry === undefined) delete require.cache[p];
             else require.cache[p] = entry;

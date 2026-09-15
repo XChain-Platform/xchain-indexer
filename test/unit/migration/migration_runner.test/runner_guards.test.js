@@ -130,7 +130,7 @@ describe('runMigrations() backdated-migration guard @regression @tier1', functio
 
     // The carve-out that keeps the guard shippable. A mode=manual file legitimately sits
     // unapplied behind the frontier for as long as the operator defers it, so guarding it
-    // would make `node src/migration/migrate.js` throw on every aged fleet DB.
+    // would make `node src/db/migration/migrate.js` throw on every aged fleet DB.
     it('a deferred mode=manual migration is exempt and still applies on the operator path', async function () {
         const ledger = ledgerOfAll();
         ledger.delete(EARLY_MANUAL);
@@ -147,7 +147,7 @@ describe('runMigrations() backdated-migration guard @regression @tier1', functio
     // and 1c728c5 carries an undated add_controller_bound_token_columns.sql row that no
     // rename heals, and undated sorts above every 2026-* name. Before the filter this made
     // the frontier garbage and threw on the operator path for an ordinary new migration -
-    // the same hard-fail of `node src/migration/migrate.js` on an aged fleet DB that the manual
+    // the same hard-fail of `node src/db/migration/migrate.js` on an aged fleet DB that the manual
     // carve-out above exists to prevent, reintroduced from the ledger side.
     it('an undated legacy ledger row does not fail the operator path for a normal new migration', async function () {
         const files  = allFiles();

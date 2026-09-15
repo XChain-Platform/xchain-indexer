@@ -176,7 +176,7 @@ const MIGRATION_CHECKSUM_REBASELINES = {
     // The same 758fc1db comment cleanup (internal-reference scrub) caught three more
     // already-applied files, and unlike the entry above these were never rebaselined, so
     // every aged testnet/regtest DB logged `content CHANGED` on each start AND - the part
-    // that actually bites - `node src/migration/migrate.js` FAILED CLOSED on the first of them, which
+    // that actually bites - `node src/db/migration/migrate.js` FAILED CLOSED on the first of them, which
     // made the whole pending manual backlog unappliable on those hosts. Found 2026-08-26
     // while working that backlog; the startup warning had been dismissed as noise for two
     // weeks, which is exactly the failure mode a guard that always fires produces.
@@ -226,7 +226,7 @@ const MIGRATION_CHECKSUM_REBASELINES = {
 // that needs a MIGRATION_CHECKSUM_REBASELINES entry whose documented contract is that the
 // executable SQL is byte-identical across pinned revisions. A runner-side predicate keeps
 // both properties intact and covers every invocation route (startup, blanket
-// `node src/migration/migrate.js`, and a targeted `--file` rollout), since all three funnel through
+// `node src/db/migration/migrate.js`, and a targeted `--file` rollout), since all three funnel through
 // this loop. Mirrors xchain-decoder/src/db.js.
 const MIGRATION_PRECONDITIONS = {
     // Widens pubkeys.pubkey to hold an uncompressed key (130 hex chars). It is

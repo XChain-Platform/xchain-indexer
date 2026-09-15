@@ -42,7 +42,7 @@ describe('bin/reachability.js', function () {
             const report = reach.analyse({ siblings: false });
             assert.ok(report.summary.runtimeEntryPoints.includes('src/api.js'),
                 'the Dockerfile CMD must be an entry point');
-            assert.ok(report.summary.runtimeEntryPoints.includes('src/migration/migrate.js'),
+            assert.ok(report.summary.runtimeEntryPoints.includes('src/db/migration/migrate.js'),
                 'npm run migrate starts a node process and is a runtime path');
         });
 

@@ -266,7 +266,7 @@ describe('MIGRATION_CHECKSUM_REBASELINES[validator-rewards derive_block_index] @
 
 // The deploy-precondition retag changed this file's sha256 the same way, and every
 // database that applied it by hand records the pre-tag hash. Without the entry the
-// immutability guard logs `content CHANGED` on every boot and `node src/migration/migrate.js`
+// immutability guard logs `content CHANGED` on every boot and `node src/db/migration/migrate.js`
 // fails closed, which strands the whole pending manual backlog on that host.
 describe('MIGRATION_CHECKSUM_REBASELINES[validator-rewards round_qualifier] @regression @tier1', function () {
 

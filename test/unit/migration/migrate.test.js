@@ -6,7 +6,7 @@
 // This file is part of XChain Platform. Licensed under the GNU Affero
 // General Public License v3.0 or later; see LICENSE.md.
 
-// Unit coverage for src/migration/migrate.js: the operator migration CLI that
+// Unit coverage for src/db/migration/migrate.js: the operator migration CLI that
 // also applies pending `manual` migrations. It self-executes on run and connects
 // to the indexer DB, so it is exercised as a child process. The safety guard
 // under test needs no database: when the INDEXER_DB_* environment is not
@@ -20,7 +20,7 @@ const sinon = require('sinon');
 const { execFileSync } = require('child_process');
 
 const DB_PATH      = require.resolve('../../../src/db');
-const MIGRATE_PATH = require.resolve('../../../src/migration/migrate.js');
+const MIGRATE_PATH = require.resolve('../../../src/db/migration/migrate.js');
 const DOTENV_PATH  = require.resolve('dotenv');
 const { requireWithFreshConfig } = require('../../helpers/fresh_config.js');
 
@@ -126,8 +126,10 @@ function loadMigrateWith(fakeDbClass) {
         exports: { config: () => ({ parsed: {} }) }
     };
     // migrate.js reads INDEXER_DB_* from src/config.js's load-time CONFIG_ENV
-    // snapshot, so config.js is re-evaluated after beforeEach pins them.
-    requireWithFreshConfig(MIGRATE_PATH);
+    // snapshot, so config.js is re-evaluated after beforeEach pins them. The CLI
+    // now lives under src/db/, so keep the fake Database seeded above out of
+    // the src/db purge, or the real Database loads and main() hangs on a connect.
+    requireWithFreshConfig(MIGRATE_PATH, { keep: [DB_PATH] });
 }
 
 describe('migrate CLI --file targeting @regression', function () {

@@ -71,7 +71,7 @@ function warnPrefixDrift(table, key, idx, live){
             d.col + ' live ' + (d.have === null ? 'full-column' : '(' + d.have + ')') +
             ' vs declared ' + (d.want === null ? 'full-column' : '(' + d.want + ')')).join('; ');
         getLogger().warn('Schema drift on ' + table + ': index on (' + key + ') differs in prefix width: ' + desc +
-            '. Not auto-healed (UNIQUE index rebuild is gated manual); run the pending manual migration via node src/migration/migrate.js to converge.');
+            '. Not auto-healed (UNIQUE index rebuild is gated manual); run the pending manual migration via node src/db/migration/migrate.js to converge.');
     }
 }
 
@@ -93,7 +93,7 @@ function warnNameCollision(table, key, idx, byName){
         : 'a differently-defined index';
     getLogger().warn('Schema drift on ' + table + ': declared ' + (idx.unique ? 'UNIQUE ' : idx.fulltext ? 'FULLTEXT ' : '') +
         'index ' + idx.name + ' on (' + key + ') cannot be applied - the name is already held by ' + liveDesc +
-        '. Not auto-healed (never DROP an index we did not create); apply a manual migration via node src/migration/migrate.js to converge.');
+        '. Not auto-healed (never DROP an index we did not create); apply a manual migration via node src/db/migration/migrate.js to converge.');
 }
 
 // A declared index absent live: added the way the source declares it, deduping first when
@@ -188,7 +188,7 @@ module.exports = {
                 getLogger().warn('Schema shape drift on ' + table + ': live index(es) ' +
                     undeclared.map(i => (i.unique ? 'UNIQUE ' : i.fulltext ? 'FULLTEXT ' : '') + i.name + ' (' + i.columns.join(',') + ')').join('; ') +
                     ' are declared by NO SQL source. Not auto-healed (never DROP an index we did not create); ' +
-                    'converge with a dated migration via node src/migration/migrate.js, or restore the declaration to ' + file + '.');
+                    'converge with a dated migration via node src/db/migration/migrate.js, or restore the declaration to ' + file + '.');
                 recordShapeDrift(this.schemaShapeDrift, table, 'indexes', undeclared);
             }
         } catch(e){

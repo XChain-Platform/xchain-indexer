@@ -43,7 +43,7 @@ const XC805 = {
 };
 
 // The three files the 758fc1db internal-reference scrub caught. Their entries were
-// missing until 2026-08-26, and the cost was not the log noise: `node src/migration/migrate.js`
+// missing until 2026-08-26, and the cost was not the log noise: `node src/db/migration/migrate.js`
 // fails CLOSED on a checksum mismatch, so the first of these made the entire pending
 // manual backlog unappliable on every aged testnet/regtest host.
 const SCRUBBED = {
@@ -96,7 +96,7 @@ describe('Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1', function 
     Object.entries(SCRUBBED).forEach(function ([file, recorded]) {
         it(file + ': heals from its pre-scrub revision', function () {
             const r = Database.MIGRATION_CHECKSUM_REBASELINES[file];
-            assert.ok(r, file + ' must have a rebaseline entry - without it `node src/migration/migrate.js` ' +
+            assert.ok(r, file + ' must have a rebaseline entry - without it `node src/db/migration/migrate.js` ' +
                 'fails closed on any DB that applied the pre-scrub revision, taking every OTHER ' +
                 'pending manual migration down with it.');
             assert.ok([].concat(r.from).includes(recorded),

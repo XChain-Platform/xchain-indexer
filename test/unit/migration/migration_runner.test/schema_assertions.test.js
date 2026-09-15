@@ -66,7 +66,7 @@ describe('runMigrations() pubkey-width assertion @regression @tier1', function (
     it('throws with the remedy when pubkeys.pubkey is too narrow for an uncompressed key', async function () {
         await assert.rejects(
             () => quietly(() => makeDb(66).runMigrations({ only: '2026-07-24-pubkeys-widen-uncompressed.sql' })),
-            /pubkeys\.pubkey holds 66 chars but VARCHAR\(130\) is required[\s\S]*node src\/migration\/migrate\.js/);
+            /pubkeys\.pubkey holds 66 chars but VARCHAR\(130\) is required[\s\S]*node src\/db\/migration\/migrate\.js/);
     });
 
     it('passes at the migrated width', async function () {
@@ -125,7 +125,7 @@ describe('runMigrations() bridge-tables assertion @regression @tier1', function 
     it('halts naming the migration file when every bridge table is absent', async function () {
         await assert.rejects(
             () => quietly(() => makeDb([]).runMigrations({})),
-            /bridge_transfers, bridge_settlements, policy_snapshots are absent[\s\S]*node src\/migration\/migrate\.js --file 2026-09-12-bridge-tables\.sql/);
+            /bridge_transfers, bridge_settlements, policy_snapshots are absent[\s\S]*node src\/db\/migration\/migrate\.js --file 2026-09-12-bridge-tables\.sql/);
     });
 
     // A partially migrated database is the shape a scoped --file rollout actually leaves,
