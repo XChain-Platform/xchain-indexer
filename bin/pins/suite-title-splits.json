@@ -81,6 +81,10 @@
       "test/unit/actions/airdrop.test/fee_payment_mode.test.js",
       "test/unit/actions/airdrop.test/recipient_lists.test.js"
     ],
+    "test/unit/actions/amount_representability.test.js": [
+      "test/unit/actions/amount_representability.test.js",
+      "test/unit/actions/amount_representability.test/representability_rules.test.js"
+    ],
     "test/unit/actions/anchor.test.js": [
       "test/unit/actions/anchor.test.js",
       "test/unit/actions/anchor.test/v0_bundle.test.js",
@@ -141,6 +145,10 @@
       "test/unit/actions/batch.test/spam_collapse_creates.test.js",
       "test/unit/actions/batch.test/spam_collapse_execute.test.js"
     ],
+    "test/unit/actions/batch_execute_attest.test.js": [
+      "test/unit/actions/batch_execute_attest.test.js",
+      "test/unit/actions/batch_execute_attest.test/attest_acceptance.test.js"
+    ],
     "test/unit/actions/bet.test.js": [
       "test/unit/actions/bet.test.js",
       "test/unit/actions/bet.test/place_and_cancel.test.js",
@@ -157,6 +165,10 @@
       "test/unit/actions/coinpay.test.js",
       "test/unit/actions/coinpay.test/order_finalisation.test.js",
       "test/unit/actions/coinpay.test/roles_and_ownership.test.js"
+    ],
+    "test/unit/actions/consolidation_leg_amount.test.js": [
+      "test/unit/actions/consolidation_leg_amount.test.js",
+      "test/unit/actions/consolidation_leg_amount.test/leg_validation.test.js"
     ],
     "test/unit/actions/cross_settle.test.js": [
       "test/unit/actions/cross_settle.test.js",
@@ -185,6 +197,10 @@
       "test/unit/actions/deploy_contract_meta.test/precedence.test.js",
       "test/unit/actions/deploy_contract_meta.test/storage.test.js"
     ],
+    "test/unit/actions/destroy.test.js": [
+      "test/unit/actions/destroy.test.js",
+      "test/unit/actions/destroy.test/destroy_behaviors.test.js"
+    ],
     "test/unit/actions/dispense.test.js": [
       "test/unit/actions/dispense.test.js",
       "test/unit/actions/dispense.test/auto_close.test.js",
@@ -202,6 +218,10 @@
       "test/unit/actions/dispenser.test/freshness_oracle_shape.test.js",
       "test/unit/actions/dispenser.test/create_paths.test.js",
       "test/unit/actions/dispenser.test/oracle_fee.test.js"
+    ],
+    "test/unit/actions/dispenser_amount_positivity.test.js": [
+      "test/unit/actions/dispenser_amount_positivity.test.js",
+      "test/unit/actions/dispenser_amount_positivity.test/settlement.test.js"
     ],
     "test/unit/actions/dividend.test.js": [
       "test/unit/actions/dividend.test.js",
@@ -301,6 +321,10 @@
       "test/unit/actions/sweep.test/escrows.test.js",
       "test/unit/actions/sweep.test/all_flags.test.js"
     ],
+    "test/unit/actions/uncapped_max_supply.test.js": [
+      "test/unit/actions/uncapped_max_supply.test.js",
+      "test/unit/actions/uncapped_max_supply.test/issue_registration.test.js"
+    ],
     "test/unit/actions/unstake.test.js": [
       "test/unit/actions/unstake.test.js",
       "test/unit/actions/unstake.test/contract_targeted.test.js",
@@ -357,10 +381,33 @@
       "test/unit/anchor_reward_derive.test/anchor_reward_derive_btc_side.test.js",
       "test/unit/anchor_reward_derive.test/anchor_reward_derive_set_is.test.js"
     ],
+    "test/unit/barrier_hold_ceiling.test.js": [
+      "test/unit/barrier_hold_ceiling.test.js",
+      "test/unit/barrier_hold_ceiling.test/indexer_reaction.test.js",
+      "test/unit/barrier_hold_ceiling.test/resync_and_reporting.test.js"
+    ],
+    "test/unit/batch_probe_preflight.test.js": [
+      "test/unit/batch_probe_preflight.test.js",
+      "test/unit/batch_probe_preflight.test/dispatch_guard.test.js",
+      "test/unit/batch_probe_preflight.test/oracle_fee_disclosure.test.js"
+    ],
+    "test/unit/batch_settlement_value_ledger.test.js": [
+      "test/unit/batch_settlement_value_ledger.test.js",
+      "test/unit/batch_settlement_value_ledger.test/dispense.test.js",
+      "test/unit/batch_settlement_value_ledger.test/oracle_fees.test.js"
+    ],
+    "test/unit/boundary/addresses/validation.test.js": [
+      "test/unit/boundary/addresses/validation.test.js",
+      "test/unit/boundary/addresses/validation.test/encoded_destinations.test.js"
+    ],
     "test/unit/boundary/amounts/supply_limits.test.js": [
       "test/unit/boundary/amounts/supply_limits.test.js",
       "test/unit/boundary/amounts/supply_limits.test/mint_supply.test.js",
       "test/unit/boundary/amounts/supply_limits.test/send_and_destroy.test.js"
+    ],
+    "test/unit/boundary/tokens/state_machine.test.js": [
+      "test/unit/boundary/tokens/state_machine.test.js",
+      "test/unit/boundary/tokens/state_machine.test/sub_tokens_and_supply_lock.test.js"
     ],
     "test/unit/bridge_checkpoint_check.test.js": [
       "test/unit/bridge_checkpoint_check.test.js",
@@ -386,10 +433,24 @@
       "test/unit/consensus_params.test.js",
       "test/unit/consensus_params.test/vm_coupling.test.js"
     ],
+    "test/unit/consensus_rules_digest.test.js": [
+      "test/unit/consensus_rules_digest.test.js",
+      "test/unit/consensus_rules_digest.test/active_gates.test.js",
+      "test/unit/consensus_rules_digest.test/coin_keyed_bridge.test.js"
+    ],
     "test/unit/controller_enforcement.test.js": [
       "test/unit/controller_enforcement.test.js",
       "test/unit/controller_enforcement.test/guard_activation.test.js",
       "test/unit/controller_enforcement.test/guard_routing.test.js"
+    ],
+    "test/unit/db.test.js": [
+      "test/unit/db.test.js",
+      "test/unit/db.test/continued_normalization.test.js",
+      "test/unit/db.test/get_block_index.test.js",
+      "test/unit/db.test/reorg_identity.test.js",
+      "test/unit/db.test/validator_capabilities.test.js",
+      "test/unit/db.test/vm_contract_state_and_block_time.test.js",
+      "test/unit/db.test/write_decoder_and_mappings.test.js"
     ],
     "test/unit/db_queries.test.js": [
       "test/unit/db_queries.test.js",
@@ -433,6 +494,10 @@
       "test/unit/fee_quote.test/chain_time_anchoring.test.js",
       "test/unit/fee_quote.test/compute_fee_quote.test.js",
       "test/unit/fee_quote.test/static_quotes.test.js"
+    ],
+    "test/unit/hash_coverage.test.js": [
+      "test/unit/hash_coverage.test.js",
+      "test/unit/hash_coverage.test/content_parity.test.js"
     ],
     "test/unit/hub_client.test.js": [
       "test/unit/hub_client.test.js",
