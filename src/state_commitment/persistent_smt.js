@@ -55,6 +55,9 @@ const M = require('../consensus/merkle.js');
 // blocks below that issue them.
 const NODE_ROWS    = require('../db/subtree/node_store_rows.js');
 const ORPHAN_READS = require('../db/subtree/orphan_stats_reads.js');
+// The one environment read the orphan walk re-takes on every call, through the
+// config home so this twin block carries no environment read of its own.
+const { readEnvNow } = require('../config.js');
 
 const EMPTY_ROOT_HEX = M.toHex(M.EMPTY_SMT_ROOT);   // root of an empty depth-256 SMT
 const EMPTY0_HEX     = M.toHex(M.EMPTY[0]);
@@ -336,7 +339,7 @@ const EMPTY_CONSTANTS = (function(){
 // reachabilityEstimated: true when the walk stopped at the cap.
 async function reportOrphanStats(query, chain, network, opts){
     opts = opts || {};
-    const maxNodes  = opts.maxNodes  || parseInt(process.env.STATE_TREE_METRIC_MAX_NODES, 10) || 2000000;
+    const maxNodes  = opts.maxNodes  || parseInt(readEnvNow('STATE_TREE_METRIC_MAX_NODES'), 10) || 2000000;
     // One placeholder per hash, so the batch must stay well inside max_allowed_packet
     // and the server's prepared-statement placeholder ceiling; 1000 CHAR(64) hashes is
     // ~66KB of SQL text and one uq_node_hash range scan.
