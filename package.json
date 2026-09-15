@@ -63,6 +63,7 @@
     "ci:full": "bash bin/ci-full.sh"
   },
   "devDependencies": {
+    "acorn": "8.18.0",
     "c8": "^11.0.0",
     "fast-check": "^4.6.0",
     "mocha": "^11.7.5",

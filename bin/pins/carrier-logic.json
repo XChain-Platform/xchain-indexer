@@ -1,0 +1,902 @@
+{
+  "version": 1,
+  "entries": {
+    "amount_representability_activation": {
+      "path": "src/amount_representability_activation.js",
+      "hash": "f798bfe2f4fff1473687057672501fd6d7609a34faf76c34dd862aec0d4759b3",
+      "twins": []
+    },
+    "anchor_activation": {
+      "path": "src/anchor_activation.js",
+      "hash": "0abda43b33c01eb7b4f73a454580fad5d5e384fc7e33ff3df17ff162de0c3fb9",
+      "twins": []
+    },
+    "anchor_reward_activation": {
+      "path": "src/anchor_reward_activation.js",
+      "hash": "86111420cc854b916e6903af02154ff4abe62b2265adf7ff3c0f069b786354c6",
+      "twins": [
+        "xchain-hub"
+      ]
+    },
+    "archive_batch_author_activation": {
+      "path": "src/archive_batch_author_activation.js",
+      "hash": "dfce8ee611f7c210391acf97c29f52f14da6e308d2f9e42a5a88023525b770d0",
+      "twins": []
+    },
+    "archive_head_unverified_gate_activation": {
+      "path": "src/archive_head_unverified_gate_activation.js",
+      "hash": "1904c41b1b4c4572438a4419bb4c94e896dd7087b442706a1bcc5b5117c98e20",
+      "twins": []
+    },
+    "archive_rollback_author_scope_activation": {
+      "path": "src/archive_rollback_author_scope_activation.js",
+      "hash": "308b96595f1f9dbb6954e5eb6bdc2df7c5e351dcaed2ad5b6b190352bd5e1cff",
+      "twins": [
+        "xchain-sync"
+      ]
+    },
+    "attest_admission_activation": {
+      "path": "src/attest_admission_activation.js",
+      "hash": "7ab1d3161acaf922d94420504069b7d246c735bc3efdecae813839307fbce43a",
+      "twins": []
+    },
+    "attest_broadcast_fee_activation": {
+      "path": "src/attest_broadcast_fee_activation.js",
+      "hash": "7f67c948b95c42dc91f9c95aabeebcbb45ec1b6eb3777def02d1a2bce2dc930d",
+      "twins": []
+    },
+    "attest_relay_activation": {
+      "path": "src/attest_relay_activation.js",
+      "hash": "57e4412c8e0b30b226f4b3952528104a7d8d8f9fea9eeb2e151745731e33d380",
+      "twins": [
+        "xchain-hub"
+      ]
+    },
+    "attest_relay_reject_slot_activation": {
+      "path": "src/attest_relay_reject_slot_activation.js",
+      "hash": "c187651efa1ac6d4904a66c7eafcceb62a402a4914829960eb4159583e411f7f",
+      "twins": []
+    },
+    "attest_request_cap_activation": {
+      "path": "src/attest_request_cap_activation.js",
+      "hash": "79b51ad233874985796ad647952a26fe0f8b9ae3c53ab3c1a153ca36c95218f0",
+      "twins": []
+    },
+    "attest_response_mirror_activation": {
+      "path": "src/attest_response_mirror_activation.js",
+      "hash": "3fcee694c8f8698eb4ad8b20f17c8b9385887c3bdf8f51c6bc3fb5c3c2d7c979",
+      "twins": []
+    },
+    "attest_responsible_widening_activation": {
+      "path": "src/attest_responsible_widening_activation.js",
+      "hash": "79b0109f2ad52ef5507a055d8d96c2321b80533d26b8649e08ced99cffccaf4f",
+      "twins": []
+    },
+    "attest_zero_conf_activation": {
+      "path": "src/attest_zero_conf_activation.js",
+      "hash": "129e6d49442877ea15f616bd03da3f9addbecd05696521c2b2a9d9c2ad896387",
+      "twins": []
+    },
+    "attestation/providerMinStakeHistory": {
+      "path": "src/attestation/providerMinStakeHistory.js",
+      "hash": "7793a30970e04d5f8b905b593bcfcf29b421242f9f594ed2c056a3c49880b33c",
+      "twins": []
+    },
+    "capability_min_stake_history": {
+      "path": "src/capability_min_stake_history.js",
+      "hash": "643bb3aef9f96fe74908b798036acdb49f817e925fb44c451ddd5e3e5c02deae",
+      "twins": []
+    },
+    "caret_ref_strict_activation": {
+      "path": "src/caret_ref_strict_activation.js",
+      "hash": "7e27a1873a45681f5a2aa4fcceac8fcb29e0c2dd8b5b982cebcc60e03e688996",
+      "twins": []
+    },
+    "checkpoint_commitment_activation": {
+      "path": "src/checkpoint_commitment_activation.js",
+      "hash": "b145c3bff9dece6741a8b24a2979a02607c1daf83f98383d4fe29b99170b574c",
+      "twins": [
+        "xchain-hub",
+        "xchain-sync"
+      ]
+    },
+    "consensus_rules_digest": {
+      "path": "src/consensus_rules_digest.js",
+      "hash": "b598ebd8b2ff03b1047ef84833993d6402ebbb7eb42555e3ea08443d1c0ec885",
+      "twins": [
+        "xchain-hub"
+      ]
+    },
+    "consolidation_leg_amount_activation": {
+      "path": "src/consolidation_leg_amount_activation.js",
+      "hash": "ac82f5c25b3078dfe3d4871cb8b19cf7939e456e8e2823df4c2319a9698f3a99",
+      "twins": []
+    },
+    "cross_chain_royalty_activation": {
+      "path": "src/cross_chain_royalty_activation.js",
+      "hash": "b1ab31073b7f65685a35c92bfaa9fe7f4d567b35e9ff8f57bf8de6a11e6d9ee3",
+      "twins": []
+    },
+    "dispense_cancelling_match_activation": {
+      "path": "src/dispense_cancelling_match_activation.js",
+      "hash": "1ec8a1be2009e53915ad7a2e7a509132d730c6c5311d7c76c77d41141764b240",
+      "twins": []
+    },
+    "dispense_payment_tally_scale_activation": {
+      "path": "src/dispense_payment_tally_scale_activation.js",
+      "hash": "740d76d52c92b7984315e8660678027d81d6c696ca42d83a85fb40f0aee379f9",
+      "twins": []
+    },
+    "dispenser_amount_positivity_activation": {
+      "path": "src/dispenser_amount_positivity_activation.js",
+      "hash": "a49cbd2e8e9789caa9b1956ba35c72c4fde009bd2ffad22960c88d6252d7f5d9",
+      "twins": []
+    },
+    "dispenser_caps_activation": {
+      "path": "src/dispenser_caps_activation.js",
+      "hash": "9905360802213e557529b2ddb5e7be50f7428b8db8fbbaf222276d217522278f",
+      "twins": []
+    },
+    "dispenser_freshness_activation": {
+      "path": "src/dispenser_freshness_activation.js",
+      "hash": "5e1f5486fb9aeb2283bd4bc5d9bf9bfab793ac48dd2425a89ba78c064830091a",
+      "twins": []
+    },
+    "dispenser_freshness_shape_activation": {
+      "path": "src/dispenser_freshness_shape_activation.js",
+      "hash": "12f7027a7e9b08275f9ae9cde4edc9437c29c251520e8a2e9c9a19d190c83990",
+      "twins": []
+    },
+    "dispenser_give_amount_activation": {
+      "path": "src/dispenser_give_amount_activation.js",
+      "hash": "ca05706487f4f4fa44d338eb143d57c317be86505f775877a5204ff2a7423246",
+      "twins": []
+    },
+    "dispenser_oracle_price_activation": {
+      "path": "src/dispenser_oracle_price_activation.js",
+      "hash": "9c3f564e39dae11b4965baca2d97d34847598ba7653ec8f2c65f84cf6b26d9fe",
+      "twins": []
+    },
+    "dispenser_ownership_cancel_activation": {
+      "path": "src/dispenser_ownership_cancel_activation.js",
+      "hash": "619ae92b7fbcf79390deeee273e7b04d806ca3de751b167a6ed7038e73ecbd41",
+      "twins": []
+    },
+    "dispenser_send_amount_compare_activation": {
+      "path": "src/dispenser_send_amount_compare_activation.js",
+      "hash": "338843af9ea6c876035999dc65e13130b844f95a0c776da721ec723bef90b791",
+      "twins": []
+    },
+    "equivocation_header": {
+      "path": "src/equivocation_header.js",
+      "hash": "d14b27eda669b5429c97cc2fc212c0fee5dea8f2bd14797deb3a272be9b3cdc9",
+      "twins": [
+        "xchain-sync"
+      ]
+    },
+    "gated_handoff_ref_activation": {
+      "path": "src/gated_handoff_ref_activation.js",
+      "hash": "2150a31d3636c27ac52a868131c8c75114ec61be125ab50c0cfd089804ce1091",
+      "twins": []
+    },
+    "ledger_amount_precision_activation": {
+      "path": "src/ledger_amount_precision_activation.js",
+      "hash": "5e2e97f5177eaa4d921b2521d91d3b5db309ade2e245c49cb53d5a30c7729065",
+      "twins": []
+    },
+    "list_edit_resolution_activation": {
+      "path": "src/list_edit_resolution_activation.js",
+      "hash": "fb5e1836cb13f27e50c55a4bbaa41a1166ee04e6aa1d078f046db7ea2fb3befa",
+      "twins": []
+    },
+    "list_owner_activation": {
+      "path": "src/list_owner_activation.js",
+      "hash": "ac7d17b356dbd7c305f683c42e90b3fbcc4d61eb164dff6a509198bfc7c08f3d",
+      "twins": []
+    },
+    "mirror_admission_activation": {
+      "path": "src/mirror_admission_activation.js",
+      "hash": "93a04fe0769c9a972e5728b47228153c1caef1967faf20a8fff3b94523b02bd6",
+      "twins": []
+    },
+    "oracle_preload_causality_activation": {
+      "path": "src/oracle_preload_causality_activation.js",
+      "hash": "71ba988a582c59439ca7830391293b8845f4fae7a1ef6cad6c4c5a2e3642369b",
+      "twins": []
+    },
+    "oracle_snapshot_age_causality_activation": {
+      "path": "src/oracle_snapshot_age_causality_activation.js",
+      "hash": "e83e927e3c6801898d02c92f019c1f085a46bcc2efea1320d973f198f07a86bd",
+      "twins": []
+    },
+    "oracle_stale_round_visibility_activation": {
+      "path": "src/oracle_stale_round_visibility_activation.js",
+      "hash": "e195298799412fd8004a332a29603ff6b435afae2d24315e727dbeb537efa71a",
+      "twins": []
+    },
+    "price_batching_floor_activation": {
+      "path": "src/price_batching_floor_activation.js",
+      "hash": "9c9394c66767fa84e07d4c6c23f112f256e57877f8509590b864b16d2e1f90dd",
+      "twins": []
+    },
+    "price_fee_batch_landed_activation": {
+      "path": "src/price_fee_batch_landed_activation.js",
+      "hash": "e675c773cd7c402c8bb52115884748511fd1e022c171484eefc736b9a65f6b61",
+      "twins": []
+    },
+    "price_pair_activation": {
+      "path": "src/price_pair_activation.js",
+      "hash": "dc60249620f6e4ce79d856c5e089b03280d404e87912d9e88eac121bfeba8c1f",
+      "twins": [
+        "xchain-hub"
+      ]
+    },
+    "price_scale_activation": {
+      "path": "src/price_scale_activation.js",
+      "hash": "c4c7797cbf8b30fbcc2a299383677e451e1602ac2a15c24a012cb15df624365a",
+      "twins": []
+    },
+    "price_sig_tally_activation": {
+      "path": "src/price_sig_tally_activation.js",
+      "hash": "93e63cf9a7a257be98a7d00b19f883322b2a99b7eba31e4baf8bf5765ea8cd80",
+      "twins": [
+        "xchain-hub"
+      ]
+    },
+    "price_zero_validity_activation": {
+      "path": "src/price_zero_validity_activation.js",
+      "hash": "7b0be4934442bda7662e5bb796cb0c1ad5a129030f785a115238a6b647695add",
+      "twins": []
+    },
+    "protocol/constants": {
+      "path": "src/protocol/constants.js",
+      "hash": "38571df776ebeb4e8ea1a2f7621330138cf569a4b1e05fdba129e9b4b11538f0",
+      "twins": []
+    },
+    "protocol_changes": {
+      "path": "src/protocol_changes.js",
+      "hash": "8e06189278b7d3cf84acf54aed12d6cc98d10baecdb0c5822749cacc29021ee3",
+      "twins": []
+    },
+    "retraction_signing_activation": {
+      "path": "src/retraction_signing_activation.js",
+      "hash": "0acdcf181b8be769110e0714410e1e7c5f1d1ac4630585849fc07367422e1259",
+      "twins": [
+        "xchain-hub"
+      ]
+    },
+    "rollcall_activation": {
+      "path": "src/rollcall_activation.js",
+      "hash": "6911a21e0db24ad19873e48c5c32d2454451cbf43f30ee250896f8459f6390b7",
+      "twins": []
+    },
+    "rollcall_gates_activation": {
+      "path": "src/rollcall_gates_activation.js",
+      "hash": "7c104d6d1dedc04b072e681c36aba56fa4ce7dde92a728573b73e2636ec4ee6f",
+      "twins": []
+    },
+    "slash_grid_activation": {
+      "path": "src/slash_grid_activation.js",
+      "hash": "cd13b7e04d391ee61af4011f2bcaafc1040ce592ab34de436ba87c1d7eb5f874",
+      "twins": []
+    },
+    "slash_ledger_consolidation_activation": {
+      "path": "src/slash_ledger_consolidation_activation.js",
+      "hash": "736281d51ce6f048d092f9c31a11a28b77eb41446e08d55df621aed338438ad1",
+      "twins": []
+    },
+    "snapshot_reorg_buffer": {
+      "path": "src/snapshot_reorg_buffer.js",
+      "hash": "5f493b9e43175503529876c05143ec064ab3a6e9b6e176cb5e91e828ad71104c",
+      "twins": [
+        "xchain-hub"
+      ]
+    },
+    "stake_key_reuse_activation": {
+      "path": "src/stake_key_reuse_activation.js",
+      "hash": "096d8b92144775b23d73d3fd37bd647d3980f7466067fa0829e92f81256e697e",
+      "twins": []
+    },
+    "stake_weight_collation_activation": {
+      "path": "src/stake_weight_collation_activation.js",
+      "hash": "169836edebfe98a9d131e3c8b295669260e2ab5e9d07bc020a0129c720cb5b4b",
+      "twins": [
+        "xchain-sync"
+      ]
+    },
+    "stake_weighted_quorum": {
+      "path": "src/stake_weighted_quorum.js",
+      "hash": "da0af9b4eb48cb18657250bdee8bd86f59108af39a599530a89f6c100c44fd80",
+      "twins": [
+        "xchain-sync"
+      ]
+    },
+    "stateHash": {
+      "path": "src/stateHash.js",
+      "hash": "93ebdd554ab209a63db33a3e8403726d345e1f5e765b29a23a9e80e178a222a8",
+      "twins": [
+        "xchain-sync"
+      ]
+    },
+    "state_commitment_activation": {
+      "path": "src/state_commitment_activation.js",
+      "hash": "7719117296d358be9b3a4e3142b6b4c611f5b7ebf683f40040016fda9e9de643",
+      "twins": [
+        "xchain-sync"
+      ]
+    },
+    "state_key_collation_activation": {
+      "path": "src/state_key_collation_activation.js",
+      "hash": "537ba4b260e00196b546d29cbda6342d0760efc6cb4d143045fb64dcd4c68482",
+      "twins": [
+        "xchain-sync"
+      ]
+    },
+    "state_subtree_activation": {
+      "path": "src/state_subtree_activation.js",
+      "hash": "a33913fec0939990ba9d2550843965d6bfdcbf6bf40354358aa21e4c1fdc185d",
+      "twins": [
+        "xchain-sync"
+      ]
+    },
+    "sweep_zero_leg_activation": {
+      "path": "src/sweep_zero_leg_activation.js",
+      "hash": "940771c7745bf84f2ad41412fb61261425b4f13e0aea587f1d924e4b83932d37",
+      "twins": []
+    },
+    "swq_source_cap_activation": {
+      "path": "src/swq_source_cap_activation.js",
+      "hash": "620854dd7934a2e24de8175dd55efb1c5aa55e712e931b12c9317ffc1cfebc29",
+      "twins": [
+        "xchain-sync"
+      ]
+    },
+    "tick_namespace_activation": {
+      "path": "src/tick_namespace_activation.js",
+      "hash": "4a6dfe7a02847b30a79b9cad82902c70d07e6aa21ded70923178881d4816ff2d",
+      "twins": []
+    },
+    "token_bridge_activation": {
+      "path": "src/token_bridge_activation.js",
+      "hash": "42af166a8f6887fb527a44db2d5cf5993214ac8f6d93522f16f0939c71c61ce9",
+      "twins": [
+        "xchain-hub"
+      ]
+    },
+    "token_policy_activation": {
+      "path": "src/token_policy_activation.js",
+      "hash": "088c6ac6db5e4884c590426c8357c75eebd082b22070bc8d956a6168373bfaef",
+      "twins": [
+        "xchain-hub"
+      ]
+    },
+    "train_activation": {
+      "path": "src/train_activation.js",
+      "hash": "ce8c9e40354e772996e6ff052e6601c8a564b0a0e25b9e853aa238d424545450",
+      "twins": [
+        "xchain-sync"
+      ]
+    },
+    "vm_deploy_lint_pkg3_activation": {
+      "path": "src/vm_deploy_lint_pkg3_activation.js",
+      "hash": "1339b374ef5aa1181b5cc55efe211618fb8d510e34d2699c0329cb935b804ef6",
+      "twins": []
+    },
+    "vm_exec_lint_activation": {
+      "path": "src/vm_exec_lint_activation.js",
+      "hash": "09c161d9a62234a9ce7eff54f3d5fa2a1e6a584162d4f71d465bb19f58af22b0",
+      "twins": []
+    },
+    "vm_lint_global_alias_activation": {
+      "path": "src/vm_lint_global_alias_activation.js",
+      "hash": "bc00da09019803d1e818a7730f74e5c4e007ad2ad128db8aa3f5a73f1b8c32dd",
+      "twins": []
+    },
+    "xchain_bridge_activation": {
+      "path": "src/xchain_bridge_activation.js",
+      "hash": "dd477c70e57afe302942baa4575b1304f5a96e9f4b8266c1406569ce3ff98e68",
+      "twins": [
+        "xchain-hub"
+      ]
+    }
+  },
+  "repins": [
+    {
+      "id": "amount_representability_activation",
+      "from": null,
+      "to": "f798bfe2f4fff1473687057672501fd6d7609a34faf76c34dd862aec0d4759b3",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "anchor_activation",
+      "from": null,
+      "to": "0abda43b33c01eb7b4f73a454580fad5d5e384fc7e33ff3df17ff162de0c3fb9",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "anchor_reward_activation",
+      "from": null,
+      "to": "86111420cc854b916e6903af02154ff4abe62b2265adf7ff3c0f069b786354c6",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "archive_batch_author_activation",
+      "from": null,
+      "to": "dfce8ee611f7c210391acf97c29f52f14da6e308d2f9e42a5a88023525b770d0",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "archive_head_unverified_gate_activation",
+      "from": null,
+      "to": "1904c41b1b4c4572438a4419bb4c94e896dd7087b442706a1bcc5b5117c98e20",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "archive_rollback_author_scope_activation",
+      "from": null,
+      "to": "308b96595f1f9dbb6954e5eb6bdc2df7c5e351dcaed2ad5b6b190352bd5e1cff",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "attest_admission_activation",
+      "from": null,
+      "to": "7ab1d3161acaf922d94420504069b7d246c735bc3efdecae813839307fbce43a",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "attest_broadcast_fee_activation",
+      "from": null,
+      "to": "7f67c948b95c42dc91f9c95aabeebcbb45ec1b6eb3777def02d1a2bce2dc930d",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "attest_relay_activation",
+      "from": null,
+      "to": "57e4412c8e0b30b226f4b3952528104a7d8d8f9fea9eeb2e151745731e33d380",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "attest_relay_reject_slot_activation",
+      "from": null,
+      "to": "c187651efa1ac6d4904a66c7eafcceb62a402a4914829960eb4159583e411f7f",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "attest_request_cap_activation",
+      "from": null,
+      "to": "79b51ad233874985796ad647952a26fe0f8b9ae3c53ab3c1a153ca36c95218f0",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "attest_response_mirror_activation",
+      "from": null,
+      "to": "3fcee694c8f8698eb4ad8b20f17c8b9385887c3bdf8f51c6bc3fb5c3c2d7c979",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "attest_responsible_widening_activation",
+      "from": null,
+      "to": "79b0109f2ad52ef5507a055d8d96c2321b80533d26b8649e08ced99cffccaf4f",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "attest_zero_conf_activation",
+      "from": null,
+      "to": "129e6d49442877ea15f616bd03da3f9addbecd05696521c2b2a9d9c2ad896387",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "attestation/providerMinStakeHistory",
+      "from": null,
+      "to": "7793a30970e04d5f8b905b593bcfcf29b421242f9f594ed2c056a3c49880b33c",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "capability_min_stake_history",
+      "from": null,
+      "to": "643bb3aef9f96fe74908b798036acdb49f817e925fb44c451ddd5e3e5c02deae",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "caret_ref_strict_activation",
+      "from": null,
+      "to": "7e27a1873a45681f5a2aa4fcceac8fcb29e0c2dd8b5b982cebcc60e03e688996",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "checkpoint_commitment_activation",
+      "from": null,
+      "to": "b145c3bff9dece6741a8b24a2979a02607c1daf83f98383d4fe29b99170b574c",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "consensus_rules_digest",
+      "from": null,
+      "to": "b598ebd8b2ff03b1047ef84833993d6402ebbb7eb42555e3ea08443d1c0ec885",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "consolidation_leg_amount_activation",
+      "from": null,
+      "to": "ac82f5c25b3078dfe3d4871cb8b19cf7939e456e8e2823df4c2319a9698f3a99",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "cross_chain_royalty_activation",
+      "from": null,
+      "to": "b1ab31073b7f65685a35c92bfaa9fe7f4d567b35e9ff8f57bf8de6a11e6d9ee3",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "dispense_cancelling_match_activation",
+      "from": null,
+      "to": "1ec8a1be2009e53915ad7a2e7a509132d730c6c5311d7c76c77d41141764b240",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "dispense_payment_tally_scale_activation",
+      "from": null,
+      "to": "740d76d52c92b7984315e8660678027d81d6c696ca42d83a85fb40f0aee379f9",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "dispenser_amount_positivity_activation",
+      "from": null,
+      "to": "a49cbd2e8e9789caa9b1956ba35c72c4fde009bd2ffad22960c88d6252d7f5d9",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "dispenser_caps_activation",
+      "from": null,
+      "to": "9905360802213e557529b2ddb5e7be50f7428b8db8fbbaf222276d217522278f",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "dispenser_freshness_activation",
+      "from": null,
+      "to": "5e1f5486fb9aeb2283bd4bc5d9bf9bfab793ac48dd2425a89ba78c064830091a",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "dispenser_freshness_shape_activation",
+      "from": null,
+      "to": "12f7027a7e9b08275f9ae9cde4edc9437c29c251520e8a2e9c9a19d190c83990",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "dispenser_give_amount_activation",
+      "from": null,
+      "to": "ca05706487f4f4fa44d338eb143d57c317be86505f775877a5204ff2a7423246",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "dispenser_oracle_price_activation",
+      "from": null,
+      "to": "9c3f564e39dae11b4965baca2d97d34847598ba7653ec8f2c65f84cf6b26d9fe",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "dispenser_ownership_cancel_activation",
+      "from": null,
+      "to": "619ae92b7fbcf79390deeee273e7b04d806ca3de751b167a6ed7038e73ecbd41",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "dispenser_send_amount_compare_activation",
+      "from": null,
+      "to": "338843af9ea6c876035999dc65e13130b844f95a0c776da721ec723bef90b791",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "equivocation_header",
+      "from": null,
+      "to": "d14b27eda669b5429c97cc2fc212c0fee5dea8f2bd14797deb3a272be9b3cdc9",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "gated_handoff_ref_activation",
+      "from": null,
+      "to": "2150a31d3636c27ac52a868131c8c75114ec61be125ab50c0cfd089804ce1091",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "ledger_amount_precision_activation",
+      "from": null,
+      "to": "5e2e97f5177eaa4d921b2521d91d3b5db309ade2e245c49cb53d5a30c7729065",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "list_edit_resolution_activation",
+      "from": null,
+      "to": "fb5e1836cb13f27e50c55a4bbaa41a1166ee04e6aa1d078f046db7ea2fb3befa",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "list_owner_activation",
+      "from": null,
+      "to": "ac7d17b356dbd7c305f683c42e90b3fbcc4d61eb164dff6a509198bfc7c08f3d",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "mirror_admission_activation",
+      "from": null,
+      "to": "93a04fe0769c9a972e5728b47228153c1caef1967faf20a8fff3b94523b02bd6",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "oracle_preload_causality_activation",
+      "from": null,
+      "to": "71ba988a582c59439ca7830391293b8845f4fae7a1ef6cad6c4c5a2e3642369b",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "oracle_snapshot_age_causality_activation",
+      "from": null,
+      "to": "e83e927e3c6801898d02c92f019c1f085a46bcc2efea1320d973f198f07a86bd",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "oracle_stale_round_visibility_activation",
+      "from": null,
+      "to": "e195298799412fd8004a332a29603ff6b435afae2d24315e727dbeb537efa71a",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "price_batching_floor_activation",
+      "from": null,
+      "to": "9c9394c66767fa84e07d4c6c23f112f256e57877f8509590b864b16d2e1f90dd",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "price_fee_batch_landed_activation",
+      "from": null,
+      "to": "e675c773cd7c402c8bb52115884748511fd1e022c171484eefc736b9a65f6b61",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "price_pair_activation",
+      "from": null,
+      "to": "dc60249620f6e4ce79d856c5e089b03280d404e87912d9e88eac121bfeba8c1f",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "price_scale_activation",
+      "from": null,
+      "to": "c4c7797cbf8b30fbcc2a299383677e451e1602ac2a15c24a012cb15df624365a",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "price_sig_tally_activation",
+      "from": null,
+      "to": "93e63cf9a7a257be98a7d00b19f883322b2a99b7eba31e4baf8bf5765ea8cd80",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "price_zero_validity_activation",
+      "from": null,
+      "to": "7b0be4934442bda7662e5bb796cb0c1ad5a129030f785a115238a6b647695add",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "protocol/constants",
+      "from": null,
+      "to": "38571df776ebeb4e8ea1a2f7621330138cf569a4b1e05fdba129e9b4b11538f0",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "protocol_changes",
+      "from": null,
+      "to": "8e06189278b7d3cf84acf54aed12d6cc98d10baecdb0c5822749cacc29021ee3",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "retraction_signing_activation",
+      "from": null,
+      "to": "0acdcf181b8be769110e0714410e1e7c5f1d1ac4630585849fc07367422e1259",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "rollcall_activation",
+      "from": null,
+      "to": "6911a21e0db24ad19873e48c5c32d2454451cbf43f30ee250896f8459f6390b7",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "rollcall_gates_activation",
+      "from": null,
+      "to": "7c104d6d1dedc04b072e681c36aba56fa4ce7dde92a728573b73e2636ec4ee6f",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "slash_grid_activation",
+      "from": null,
+      "to": "cd13b7e04d391ee61af4011f2bcaafc1040ce592ab34de436ba87c1d7eb5f874",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "slash_ledger_consolidation_activation",
+      "from": null,
+      "to": "736281d51ce6f048d092f9c31a11a28b77eb41446e08d55df621aed338438ad1",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "snapshot_reorg_buffer",
+      "from": null,
+      "to": "5f493b9e43175503529876c05143ec064ab3a6e9b6e176cb5e91e828ad71104c",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "stake_key_reuse_activation",
+      "from": null,
+      "to": "096d8b92144775b23d73d3fd37bd647d3980f7466067fa0829e92f81256e697e",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "stake_weight_collation_activation",
+      "from": null,
+      "to": "169836edebfe98a9d131e3c8b295669260e2ab5e9d07bc020a0129c720cb5b4b",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "stake_weighted_quorum",
+      "from": null,
+      "to": "da0af9b4eb48cb18657250bdee8bd86f59108af39a599530a89f6c100c44fd80",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "stateHash",
+      "from": null,
+      "to": "93ebdd554ab209a63db33a3e8403726d345e1f5e765b29a23a9e80e178a222a8",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "state_commitment_activation",
+      "from": null,
+      "to": "7719117296d358be9b3a4e3142b6b4c611f5b7ebf683f40040016fda9e9de643",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "state_key_collation_activation",
+      "from": null,
+      "to": "537ba4b260e00196b546d29cbda6342d0760efc6cb4d143045fb64dcd4c68482",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "state_subtree_activation",
+      "from": null,
+      "to": "a33913fec0939990ba9d2550843965d6bfdcbf6bf40354358aa21e4c1fdc185d",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "sweep_zero_leg_activation",
+      "from": null,
+      "to": "940771c7745bf84f2ad41412fb61261425b4f13e0aea587f1d924e4b83932d37",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "swq_source_cap_activation",
+      "from": null,
+      "to": "620854dd7934a2e24de8175dd55efb1c5aa55e712e931b12c9317ffc1cfebc29",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "tick_namespace_activation",
+      "from": null,
+      "to": "4a6dfe7a02847b30a79b9cad82902c70d07e6aa21ded70923178881d4816ff2d",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "token_bridge_activation",
+      "from": null,
+      "to": "42af166a8f6887fb527a44db2d5cf5993214ac8f6d93522f16f0939c71c61ce9",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "token_policy_activation",
+      "from": null,
+      "to": "088c6ac6db5e4884c590426c8357c75eebd082b22070bc8d956a6168373bfaef",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "train_activation",
+      "from": null,
+      "to": "ce8c9e40354e772996e6ff052e6601c8a564b0a0e25b9e853aa238d424545450",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "vm_deploy_lint_pkg3_activation",
+      "from": null,
+      "to": "1339b374ef5aa1181b5cc55efe211618fb8d510e34d2699c0329cb935b804ef6",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "vm_exec_lint_activation",
+      "from": null,
+      "to": "09c161d9a62234a9ce7eff54f3d5fa2a1e6a584162d4f71d465bb19f58af22b0",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "vm_lint_global_alias_activation",
+      "from": null,
+      "to": "bc00da09019803d1e818a7730f74e5c4e007ad2ad128db8aa3f5a73f1b8c32dd",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    },
+    {
+      "id": "xchain_bridge_activation",
+      "from": null,
+      "to": "dd477c70e57afe302942baa4575b1304f5a96e9f4b8266c1406569ce3ff98e68",
+      "reason": "activation-registry row 27: initial carrier logic pin",
+      "date": "2026-09-15"
+    }
+  ]
+}
