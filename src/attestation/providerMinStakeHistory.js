@@ -42,7 +42,7 @@
  * ARMING IS A COORDINATED FLEET ACT, NOT AN EDIT HERE. PROVIDER_MIN_STAKE_
  * ACTIVATIONS is empty on every network: no ATTESTATION_PROVIDER governance
  * proposal has ever activated, so the floor at every block is the genesis
- * value shipped in provider_registry.js PROVIDERS, which equals the hub's
+ * value shipped in providerRegistry.js PROVIDERS, which equals the hub's
  * ProviderRegistry DEFAULTS. Adding an entry changes which validators are
  * responsible, so it must land in the SAME coordinated release as the
  * matching hub-side governance activation. Never add an entry to "match" a
