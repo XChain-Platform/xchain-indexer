@@ -15,7 +15,7 @@
  * XChain Indexer - Database mixin part: polls (VM snapshot)
  *
  * The consensus-visible snapshot of finalized poll results the VM reads.
- * A part of the polls mixin: src/db/polls.js merges it into the one method set that
+ * A part of the polls mixin: src/db/polls/index.js merges it into the one method set that
  * db/index.js installs onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

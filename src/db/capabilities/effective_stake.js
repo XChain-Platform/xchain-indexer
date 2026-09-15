@@ -16,7 +16,7 @@
  *
  * The read-only effective-set view of one pubkey's stake (federation self-qualification),
  * through its direct-stake path and its delegated-key path.
- * Merged into the capabilities mixin by db/capabilities.js, which db/index.js installs
+ * Merged into the capabilities mixin by db/capabilities/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

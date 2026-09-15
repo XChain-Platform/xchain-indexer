@@ -206,11 +206,11 @@ const SIDE_MARK = '###LAP-SIDE###'; // child -> parent report line
 // or disappears has moved the blast radius of the gate and must be re-surveyed before
 // the rollback table can be trusted.
 const READER_FILES = [
-    'src/db/balances.js',
-    'src/db/credits.js',
-    'src/db/escrows.js',
-    'src/db/misc.js',
-    'src/db/tokens.js',
+    'src/db/balances/index.js',
+    'src/db/credits/index.js',
+    'src/db/escrows/index.js',
+    'src/db/misc/index.js',
+    'src/db/tokens/index.js',
 ];
 
 // --- the old side -----------------------------------------------------------
@@ -239,67 +239,67 @@ const SITES = [
         file,
         label: 'the require of the activation module in ' + path.basename(file),
         restores: false,
-        head: "const ledgerPrecision = require('../ledger_amount_precision_activation');\n",
+        head: "const ledgerPrecision = require('../../ledger_amount_precision_activation');\n",
         legacy: '',
     })),
     {
-        file: 'src/db/balances.js',
+        file: 'src/db/balances/index.js',
         label: 'getTokenSupplyBalance: the supply sums at the exact ledger scale',
         restores: true,
         head: "`SELECT ` + ledgerPrecision.exactSumSql('amount') + ` as supply FROM balances",
         legacy: '`SELECT SUM(CAST(amount AS DECIMAL(60, ` + decimals + `))) as supply FROM balances',
     },
     {
-        file: 'src/db/balances.js',
+        file: 'src/db/balances/index.js',
         label: 'getTokenSupplyBalance: the supply is taken raw again',
         restores: true,
         head: '            supply = this.util.bcstr(this.util.bcadd(results[0].supply, 0, decimals));',
         legacy: '            supply = results[0].supply;',
     },
     {
-        file: 'src/db/escrows.js',
+        file: 'src/db/escrows/index.js',
         label: 'getTokenSupplyEscrow: the supply sums at the exact ledger scale',
         restores: true,
         head: "`SELECT ` + ledgerPrecision.exactSumSql('amount') + ` as supply FROM escrows",
         legacy: '`SELECT SUM(CAST(amount AS DECIMAL(60, ` + decimals + `))) as supply FROM escrows',
     },
     {
-        file: 'src/db/escrows.js',
+        file: 'src/db/escrows/index.js',
         label: 'getTokenSupplyEscrow: the supply is taken raw again',
         restores: true,
         head: '            supply = this.util.bcstr(this.util.bcadd(results[0].supply, 0, decimals));',
         legacy: '            supply = results[0].supply;',
     },
     {
-        file: 'src/db/credits.js',
+        file: 'src/db/credits/index.js',
         label: 'getTokenSupply: the shared exact SUM expression',
         restores: false,
         head: "        let sumExpr = ledgerPrecision.exactSumSql('m.amount');\n",
         legacy: '',
     },
     {
-        file: 'src/db/credits.js',
+        file: 'src/db/credits/index.js',
         label: 'getTokenSupply: the credits sum casts to the tick scale',
         restores: true,
         head: '` + sumExpr + ` as credits',
         legacy: 'SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as credits',
     },
     {
-        file: 'src/db/credits.js',
+        file: 'src/db/credits/index.js',
         label: 'getTokenSupply: the debits sum casts to the tick scale',
         restores: true,
         head: '` + sumExpr + ` as debits',
         legacy: 'SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as debits',
     },
     {
-        file: 'src/db/credits.js',
+        file: 'src/db/credits/index.js',
         label: 'getTokenSupply: the escrows sum casts to the tick scale',
         restores: true,
         head: '` + sumExpr + ` as escrows',
         legacy: 'SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as escrows',
     },
     {
-        file: 'src/db/credits.js',
+        file: 'src/db/credits/index.js',
         label: 'getTokenSupply: the supply is netted at the tick scale',
         restores: true,
         head: '        let exact = ledgerPrecision.LEDGER_AMOUNT_PRECISION;\n' +
@@ -307,7 +307,7 @@ const SITES = [
         legacy: '        supply = this.util.bcadd(this.util.bcsub(credits, debits, decimals), escrows, decimals);',
     },
     {
-        file: 'src/db/credits.js',
+        file: 'src/db/credits/index.js',
         label: 'getHolders: the tick precision lookup comes back',
         restores: true,
         head: "        let holderSumExpr = ledgerPrecision.exactSumSql('m.amount');\n" +
@@ -315,28 +315,28 @@ const SITES = [
         legacy: '        let decimals = await this.getTokenDecimalPrecision(tick_id);\n',
     },
     {
-        file: 'src/db/credits.js',
+        file: 'src/db/credits/index.js',
         label: 'getHolders: the credits sum casts to the tick scale',
         restores: true,
         head: '` + holderSumExpr + ` as credits,',
         legacy: 'SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as credits,',
     },
     {
-        file: 'src/db/credits.js',
+        file: 'src/db/credits/index.js',
         label: 'getHolders: the debits sum casts to the tick scale',
         restores: true,
         head: '` + holderSumExpr + ` as debits,',
         legacy: 'SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as debits,',
     },
     {
-        file: 'src/db/credits.js',
+        file: 'src/db/credits/index.js',
         label: 'getHolders: a holding is netted at the tick scale',
         restores: true,
         head: '                let balance = this.util.bcsub(holders[row.address], row.debits, exact);',
         legacy: '                let balance = this.util.bcsub(holders[row.address], row.debits, decimals);',
     },
     {
-        file: 'src/db/misc.js',
+        file: 'src/db/misc/index.js',
         label: 'createLedgerChangeRecord: the WRITE-side quantization scale',
         restores: true,
         head: '        let decimals = ledgerPrecision.ledgerWriteScale(\n' +
@@ -345,7 +345,7 @@ const SITES = [
         legacy: '        let decimals = await this.getTokenDecimalPrecision(tick_id);',
     },
     {
-        file: 'src/db/misc.js',
+        file: 'src/db/misc/index.js',
         label: 'getAddressCreditDebit: the running total rounds per row',
         restores: true,
         head: '                    data[row.tick_id] = this.util.bcadd(\n' +
@@ -353,7 +353,7 @@ const SITES = [
         legacy: '                    data[row.tick_id] = this.util.bcadd(data[row.tick_id], row.amount, row.decimals);',
     },
     {
-        file: 'src/db/tokens.js',
+        file: 'src/db/tokens/index.js',
         label: 'sanityCheck: tick ids are grouped by decimal scale again',
         restores: true,
         head: '        let idToTick = {};\n' +
@@ -375,7 +375,7 @@ const SITES = [
                 '        }',
     },
     {
-        file: 'src/db/tokens.js',
+        file: 'src/db/tokens/index.js',
         label: 'sanityCheck: one grouped SUM per distinct decimal scale',
         restores: true,
         head: '        let sumByTick = async (table, joinActions) => {\n' +
@@ -412,7 +412,7 @@ const SITES = [
                 '        };',
     },
     {
-        file: 'src/db/tokens.js',
+        file: 'src/db/tokens/index.js',
         label: 'sanityCheck: the ledger projection is netted at the tick scale',
         restores: true,
         head: '            let ledger  = this.util.bcnum(this.util.bcadd(\n' +

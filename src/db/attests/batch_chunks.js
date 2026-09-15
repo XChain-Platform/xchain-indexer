@@ -16,7 +16,7 @@
  *
  * The ATTEST batch chunk-table read, and the verdict stamp a failed reassembly leaves
  * on the batch head.
- * Merged into the attests mixin by db/attests.js, which db/index.js installs
+ * Merged into the attests mixin by db/attests/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

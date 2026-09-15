@@ -16,7 +16,7 @@
  *
  * The contract-stake SLASH deduction across contract_stakes and contract_unstakes, and
  * the per-row debit journal that lets a reorg restore the amounts it reduced.
- * Merged into the contracts mixin by db/contracts.js, which db/index.js installs
+ * Merged into the contracts mixin by db/contracts/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

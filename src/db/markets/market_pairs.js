@@ -15,7 +15,7 @@
  * XChain Indexer - Database mixin part: markets / market_pairs
  *
  * The market pairs a block touched, collected from its order-family actions.
- * Merged into the markets mixin by db/markets.js, which db/index.js installs
+ * Merged into the markets mixin by db/markets/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

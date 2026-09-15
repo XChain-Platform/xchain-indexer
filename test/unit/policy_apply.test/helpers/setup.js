@@ -20,7 +20,7 @@ const eq      = require('../../../../src/equivocation_header.js');
 const BS      = require('../../../../src/consensus/bridge_settle.js');
 const Utility = require('../../../../src/utility.js');
 const { XPOLICY_MAX_PER_BLOCK } = require('../../../../src/protocol/constants.js');
-const bridgeSettlementsMixin = require('../../../../src/db/bridge_settlements.js');
+const bridgeSettlementsMixin = require('../../../../src/db/bridge_settlements/index.js');
 
 // The pass reaches both the local settlements ledger and the mirror through the
 // db/bridge_settlements methods, so the doubles below carry the REAL ones bound over their

@@ -18,7 +18,7 @@
 
 'use strict';
 
-const escrowJournalMixin = require('../../../../src/db/escrow_journal.js');
+const escrowJournalMixin = require('../../../../src/db/escrow_journal/index.js');
 
 // The writer reaches the ledger through the db/escrow_journal methods, so the stub below
 // carries the REAL ones bound over its own doQuery. Every SQL branch it matches on is

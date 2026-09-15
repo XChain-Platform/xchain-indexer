@@ -16,7 +16,7 @@
  *
  * The multi-row request listings: the pending queue the hub polls, the materialized
  * relay legs, and the capped deadline-expiry sweep.
- * Merged into the attests mixin by db/attests.js, which db/index.js installs
+ * Merged into the attests mixin by db/attests/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

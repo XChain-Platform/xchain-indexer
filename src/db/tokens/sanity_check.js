@@ -16,7 +16,7 @@
  *
  * The per-block supply check: every tick a block touched must carry the same
  * supply in tokens, in the credit/debit/escrow ledger, and in balances plus escrows.
- * Merged into the tokens mixin by db/tokens.js, which db/index.js installs
+ * Merged into the tokens mixin by db/tokens/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

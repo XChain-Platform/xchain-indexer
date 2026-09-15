@@ -16,7 +16,7 @@
  *
  * The paged JSON-RPC read surface over bet_feeds and bets, and the per-outcome pool
  * sums of one feed.
- * Merged into the bets mixin by db/bets.js, which db/index.js installs
+ * Merged into the bets mixin by db/bets/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

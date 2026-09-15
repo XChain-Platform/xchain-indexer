@@ -16,7 +16,7 @@
  *
  * The contract-targeted STAKE v3 / UNSTAKE v1 / DELEGATE v1 record writers and the
  * active-stake reads over contract_stakes.
- * Merged into the contracts mixin by db/contracts.js, which db/index.js installs
+ * Merged into the contracts mixin by db/contracts/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

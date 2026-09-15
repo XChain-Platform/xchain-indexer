@@ -15,7 +15,7 @@
  * XChain Indexer - Database mixin part: orders (cross-chain offers)
  *
  * The open cross-chain offer book the xchain-hub federation matches against (XCC-2).
- * A part of the orders mixin: src/db/orders.js merges it into the one method set that
+ * A part of the orders mixin: src/db/orders/index.js merges it into the one method set that
  * db/index.js installs onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

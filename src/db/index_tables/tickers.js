@@ -16,7 +16,7 @@
  *
  * The index_tickers reads and the dense-id writer behind every tick id, and the strict
  * light-client name resolvers that map a tick or address id back to its canonical name.
- * Merged into the index_tables mixin by db/index_tables.js, which db/index.js installs
+ * Merged into the index_tables mixin by db/index_tables/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

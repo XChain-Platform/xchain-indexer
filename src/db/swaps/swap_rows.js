@@ -15,7 +15,7 @@
  * XChain Indexer - Database mixin part: swaps / swap_rows
  *
  * The upserts of one SWAP offer and of its status, cancel and expire rows.
- * Merged into the swaps mixin by db/swaps.js, which db/index.js installs
+ * Merged into the swaps mixin by db/swaps/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

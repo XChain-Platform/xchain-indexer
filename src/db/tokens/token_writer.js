@@ -15,7 +15,7 @@
  * XChain Indexer - Database mixin part: tokens / token_writer
  *
  * The upsert of one token's derived state into the tokens table.
- * Merged into the tokens mixin by db/tokens.js, which db/index.js installs
+ * Merged into the tokens mixin by db/tokens/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

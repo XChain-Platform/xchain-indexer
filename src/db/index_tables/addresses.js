@@ -16,7 +16,7 @@
  *
  * The index_addresses reads and the dense-id writer behind every address id: the
  * wire ^<id> lookup and resolver, the prior-activity probe and the orphan-id startup probe.
- * Merged into the index_tables mixin by db/index_tables.js, which db/index.js installs
+ * Merged into the index_tables mixin by db/index_tables/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

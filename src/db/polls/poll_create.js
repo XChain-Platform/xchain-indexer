@@ -15,7 +15,7 @@
  * XChain Indexer - Database mixin part: polls (poll create)
  *
  * The VOTE v0 write that creates or re-applies a poll definition row.
- * A part of the polls mixin: src/db/polls.js merges it into the one method set that
+ * A part of the polls mixin: src/db/polls/index.js merges it into the one method set that
  * db/index.js installs onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

@@ -18,7 +18,7 @@
  * hub-mirrored price_snapshots table. Each of its four reads runs from a module-private
  * helper below, taking the Database instance as `db`; the query text, the argument lists
  * and the order the reads run in are unchanged. A part of the prices mixin:
- * src/db/prices.js merges it into the one method set that db/index.js installs onto
+ * src/db/prices/index.js merges it into the one method set that db/index.js installs onto
  * Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

@@ -24,7 +24,7 @@
 const assert = require('assert');
 const M = require('../../src/consensus/merkle.js');
 const R = require('../../src/chain/retention.js');
-const stateTreeMixin = require('../../src/db/state_tree.js');
+const stateTreeMixin = require('../../src/db/state_tree/index.js');
 
 const EMPTY = M.toHex(M.EMPTY[256]);   // an EMPTY subtree constant (skipped by the mark)
 const A = 'a'.repeat(64);   // new tip root's balances_root

@@ -16,7 +16,7 @@
  *
  * DELEGATE v1 signing-key rotations: materializing them onto contract_stakes and
  * contract_unstakes, reverting revoked ones, and their reorg-restore journal.
- * Merged into the contracts mixin by db/contracts.js, which db/index.js installs
+ * Merged into the contracts mixin by db/contracts/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

@@ -16,7 +16,7 @@
  *
  * The read of one SWAP offer with its latest status and valid edits folded in,
  * and the upsert of the swap_edits rows that read folds.
- * Merged into the swaps mixin by db/swaps.js, which db/index.js installs
+ * Merged into the swaps mixin by db/swaps/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

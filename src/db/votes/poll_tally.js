@@ -15,7 +15,7 @@
  * XChain Indexer - Database mixin part: votes (poll tally)
  *
  * The weighted tally of a poll's current ballots at its measure block.
- * A part of the votes mixin: src/db/votes.js merges it into the one method set that
+ * A part of the votes mixin: src/db/votes/index.js merges it into the one method set that
  * db/index.js installs onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

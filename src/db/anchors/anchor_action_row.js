@@ -16,7 +16,7 @@
  *
  * The column coercion for one anchor_actions row: every value an ANCHOR wire carried,
  * bounded to what its column can store, in the order createAnchorAction binds them.
- * Required by db/anchors.js and not a mixin part, so it adds no prototype method.
+ * Required by db/anchors/index.js and not a mixin part, so it adds no prototype method.
  *
  ********************************************************************/
 

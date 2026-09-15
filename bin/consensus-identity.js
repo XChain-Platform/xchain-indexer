@@ -149,7 +149,7 @@ function codeIdentity(network) {
  *
  * The query lives here rather than behind a named db method because the database
  * class exposes none that returns the stored state hash: the column is written by
- * db/blocks.js createBlock and read back only by the replication compare in
+ * db/blocks/index.js createBlock and read back only by the replication compare in
  * another service.
  */
 async function readStateHash(opts) {

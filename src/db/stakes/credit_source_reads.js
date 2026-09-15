@@ -25,7 +25,7 @@ module.exports = {
 
     // The source address that a signing pubkey resolves to through a STAKE, as of a block.
     // Backs the getstakesourcebypubkey federation RPC, whose delegation fallback lives in
-    // db/delegations.js.
+    // db/delegations/index.js.
     //
     // The predicates here mirror the effective-capability-set active-row rules exactly: a key
     // COUNTED in the set at this block (and so earning the reward being archived) must always

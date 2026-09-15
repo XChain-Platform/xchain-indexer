@@ -15,7 +15,7 @@
  * XChain Indexer - Database mixin part: transactions (decoder block data)
  *
  * The read of one block's transactions and outputs from the xchain-decoder database.
- * A part of the transactions mixin: src/db/transactions.js merges it into the one method
+ * A part of the transactions mixin: src/db/transactions/index.js merges it into the one method
  * set that db/index.js installs onto Database.prototype, so call sites stay
  * this.db.<method>().
  *

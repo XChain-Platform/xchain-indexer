@@ -69,7 +69,7 @@ describe('bin/reachability.js', function () {
             // Nothing in src/db/index.js names a mixin as a literal, so withdrawing
             // the declared edge drops all three assertions at once and every mixin
             // reads unreferenced across the platform.
-            const mixin = report.files['src/db/sends.js'];
+            const mixin = report.files['src/db/sends/index.js'];
             assert.deepStrictEqual(mixin.requiredByInRepo, ['src/db/index.js'],
                 'a mixin is held by the install loop and by nothing else');
             assert.strictEqual(mixin.reachableFromIndexerRuntime, true,

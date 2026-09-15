@@ -15,7 +15,7 @@
  * XChain Indexer - Database mixin part: issues / issue_writer
  *
  * The upsert of one ISSUE action into the issues table.
- * Merged into the issues mixin by db/issues.js, which db/index.js installs
+ * Merged into the issues mixin by db/issues/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

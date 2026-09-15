@@ -46,7 +46,7 @@ function chunked(list, size){
     return out;
 }
 // The placeholder-list builder that pairs with chunked() lives beside the statements it
-// fills, in src/db/escrow_journal.js, because every IN and VALUES list is built there.
+// fills, in src/db/escrow_journal/index.js, because every IN and VALUES list is built there.
 
 // Latest journal value for a SET of keys: Map of `address \t tick` -> bc string,
 // '0' when the key is absent or tombstoned. The read is unbounded in height

@@ -39,7 +39,7 @@ const BLOCK_HASH_RE = /^[0-9a-fA-F]{64}$/;
 // Reorgs are rare; a hub asking "was this hash orphaned at this height" needs a
 // handful of recent events, not the chain's whole history. Bounded so a peer can
 // never make an indexer serialize an unbounded events scan. The page itself is served
-// newest-first (getReorgEventsSince in src/db/events.js states why), so these bounds decide
+// newest-first (getReorgEventsSince in src/db/events/index.js states why), so these bounds decide
 // how far back one answer can reach, not which end of the history it starts from.
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT     = 1000;

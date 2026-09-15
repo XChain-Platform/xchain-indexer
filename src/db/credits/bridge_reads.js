@@ -15,7 +15,7 @@
  * XChain Indexer - Database mixin part: credits, the bridge reads
  *
  * The getbridgebalances and getbridgeescrowproof reads over the credits/debits
- * ledger. Merged into the credits mixin by db/credits.js, which db/index.js installs
+ * ledger. Merged into the credits mixin by db/credits/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

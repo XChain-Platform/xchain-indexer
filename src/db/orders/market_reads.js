@@ -14,7 +14,7 @@
  *
  * XChain Indexer - orders: the steps of getMarketInfo
  *
- * The reads and folds getMarketInfo in src/db/orders.js runs, in order, as plain functions over
+ * The reads and folds getMarketInfo in src/db/orders/index.js runs, in order, as plain functions over
  * the Database instance it passes in. Not a mixin part: nothing here installs onto the prototype.
  * The method keeps its class read, the native-decimals static and the sideOf translation, and
  * hands them in, so this file never requires db/index.js and cannot change its load order.

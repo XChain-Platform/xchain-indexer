@@ -15,7 +15,7 @@
  * XChain Indexer - Database mixin part: orders (order rows)
  *
  * The writes to orders and to the per-order statuses, expiries, edits and cancels.
- * A part of the orders mixin: src/db/orders.js merges it into the one method set that
+ * A part of the orders mixin: src/db/orders/index.js merges it into the one method set that
  * db/index.js installs onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

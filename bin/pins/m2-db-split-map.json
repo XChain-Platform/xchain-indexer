@@ -674,7 +674,7 @@
         "why": "dominant table actions, DDL family actions"
       }
     ],
-    "src/db/addresses.js": [
+    "src/db/addresses/index.js": [
       {
         "method": "createAddressOption",
         "lines": 32,
@@ -694,7 +694,7 @@
         "why": "dominant table address_controllers, DDL family addresses"
       }
     ],
-    "src/db/airdrops.js": [
+    "src/db/airdrops/index.js": [
       {
         "method": "createAirdrop",
         "lines": 44,
@@ -702,7 +702,7 @@
         "why": "dominant table airdrops, DDL family airdrops"
       }
     ],
-    "src/db/anchors.js": [
+    "src/db/anchors/index.js": [
       {
         "method": "getPendingAnchorRewardAttestations",
         "lines": 36,
@@ -746,7 +746,7 @@
         "why": "dominant table anchor_actions, DDL family anchors"
       }
     ],
-    "src/db/attests.js": [
+    "src/db/attests/index.js": [
       {
         "method": "getAttestationDataForVM",
         "lines": 51,
@@ -862,7 +862,7 @@
         "why": "dominant table attests, DDL family attests"
       }
     ],
-    "src/db/balances.js": [
+    "src/db/balances/index.js": [
       {
         "method": "getTokenSupplyBalance",
         "lines": 16,
@@ -888,7 +888,7 @@
         "why": "dominant table balances, DDL family balances"
       }
     ],
-    "src/db/batches.js": [
+    "src/db/batches/index.js": [
       {
         "method": "createBatch",
         "lines": 24,
@@ -896,7 +896,7 @@
         "why": "dominant table batches, DDL family batches"
       }
     ],
-    "src/db/bets.js": [
+    "src/db/bets/index.js": [
       {
         "method": "createBetFeed",
         "lines": 59,
@@ -1000,7 +1000,7 @@
         "why": "dominant table bet_feeds, DDL family bets"
       }
     ],
-    "src/db/blocks.js": [
+    "src/db/blocks/index.js": [
       {
         "method": "getBlockIndex",
         "lines": 24,
@@ -1062,7 +1062,7 @@
         "why": "dominant table blocks, DDL family blocks"
       }
     ],
-    "src/db/bridges.js": [
+    "src/db/bridges/index.js": [
       {
         "method": "getPendingBridgeTransfers",
         "lines": 35,
@@ -1082,7 +1082,7 @@
         "why": "dominant table bridge_settlements, DDL family bridges"
       }
     ],
-    "src/db/broadcasts.js": [
+    "src/db/broadcasts/index.js": [
       {
         "method": "createBroadcast",
         "lines": 41,
@@ -1090,7 +1090,7 @@
         "why": "dominant table broadcasts, DDL family broadcasts"
       }
     ],
-    "src/db/callbacks.js": [
+    "src/db/callbacks/index.js": [
       {
         "method": "createCallback",
         "lines": 40,
@@ -1098,7 +1098,7 @@
         "why": "dominant table callbacks, DDL family callbacks"
       }
     ],
-    "src/db/capabilities.js": [
+    "src/db/capabilities/index.js": [
       {
         "method": "_resolveActiveStakeSourceId",
         "lines": 38,
@@ -1160,7 +1160,7 @@
         "why": "dominant table capability_slash_events, DDL family capabilities"
       }
     ],
-    "src/db/coinpays.js": [
+    "src/db/coinpays/index.js": [
       {
         "method": "createCoinpayObligation",
         "lines": 42,
@@ -1204,7 +1204,7 @@
         "why": "dominant table coinpays, DDL family coinpays"
       }
     ],
-    "src/db/contracts.js": [
+    "src/db/contracts/index.js": [
       {
         "method": "createContractStake",
         "lines": 35,
@@ -1350,7 +1350,7 @@
         "why": "dominant table contract_permissions, DDL family contracts"
       }
     ],
-    "src/db/credits.js": [
+    "src/db/credits/index.js": [
       {
         "method": "getPollTallyInputWatermark",
         "lines": 14,
@@ -1388,7 +1388,7 @@
         "why": "dominant table credits, DDL family credits"
       }
     ],
-    "src/db/cross_chain.js": [
+    "src/db/cross_chain/index.js": [
       {
         "method": "getEffectiveUnsettledMatches",
         "lines": 39,
@@ -1450,7 +1450,7 @@
         "why": "dominant table cross_chain_call_callbacks, DDL family cross_chain"
       }
     ],
-    "src/db/delegations.js": [
+    "src/db/delegations/index.js": [
       {
         "method": "createDelegation",
         "lines": 28,
@@ -1488,7 +1488,7 @@
         "why": "dominant table delegations, DDL family delegations"
       }
     ],
-    "src/db/deploys.js": [
+    "src/db/deploys/index.js": [
       {
         "method": "recordDeployChunk",
         "lines": 23,
@@ -1502,7 +1502,7 @@
         "why": "dominant table deploy_chunks, DDL family deploys"
       }
     ],
-    "src/db/deposits.js": [
+    "src/db/deposits/index.js": [
       {
         "method": "createDeposit",
         "lines": 28,
@@ -1510,7 +1510,7 @@
         "why": "dominant table deposits, DDL family deposits"
       }
     ],
-    "src/db/destroys.js": [
+    "src/db/destroys/index.js": [
       {
         "method": "createDestroy",
         "lines": 53,
@@ -1518,7 +1518,7 @@
         "why": "dominant table destroys, DDL family destroys"
       }
     ],
-    "src/db/dispensers.js": [
+    "src/db/dispensers/index.js": [
       {
         "method": "createDispenser",
         "lines": 64,
@@ -1622,7 +1622,7 @@
         "why": "dominant table dispenser_statuses, DDL family dispensers"
       }
     ],
-    "src/db/dispenses.js": [
+    "src/db/dispenses/index.js": [
       {
         "method": "createDispense",
         "lines": 47,
@@ -1636,7 +1636,7 @@
         "why": "dominant table dispenses, DDL family dispenses"
       }
     ],
-    "src/db/dividends.js": [
+    "src/db/dividends/index.js": [
       {
         "method": "createDividend",
         "lines": 40,
@@ -1644,7 +1644,7 @@
         "why": "dominant table dividends, DDL family dividends"
       }
     ],
-    "src/db/escrows.js": [
+    "src/db/escrows/index.js": [
       {
         "method": "getTokenSupplyEscrow",
         "lines": 14,
@@ -1658,7 +1658,7 @@
         "why": "escrowed balances across dispensers, orders and swaps; no single family"
       }
     ],
-    "src/db/events.js": [
+    "src/db/events/index.js": [
       {
         "method": "getReorgsSince",
         "lines": 87,
@@ -1708,7 +1708,7 @@
         "why": "dominant table events, DDL family events"
       }
     ],
-    "src/db/fees.js": [
+    "src/db/fees/index.js": [
       {
         "method": "getFeeRecord",
         "lines": 7,
@@ -1722,7 +1722,7 @@
         "why": "dominant table fees, DDL family fees"
       }
     ],
-    "src/db/files.js": [
+    "src/db/files/index.js": [
       {
         "method": "createFile",
         "lines": 39,
@@ -1754,7 +1754,7 @@
         "why": "dominant table gated_files, DDL family files"
       }
     ],
-    "src/db/full_node_verifications.js": [
+    "src/db/full_node_verifications/index.js": [
       {
         "method": "createNodeProofVerification",
         "lines": 21,
@@ -1774,7 +1774,7 @@
         "why": "dominant table full_node_verifications, DDL family full_node_verifications"
       }
     ],
-    "src/db/hub_pushes.js": [
+    "src/db/hub_pushes/index.js": [
       {
         "method": "getPushGeneration",
         "lines": 4,
@@ -1824,7 +1824,7 @@
         "why": "dominant table pending_hub_pushes, DDL family hub_pushes"
       }
     ],
-    "src/db/index_tables.js": [
+    "src/db/index_tables/index.js": [
       {
         "method": "getTransactionId",
         "lines": 17,
@@ -2018,7 +2018,7 @@
         "why": "dominant table index_statuses, DDL family index_tables"
       }
     ],
-    "src/db/issues.js": [
+    "src/db/issues/index.js": [
       {
         "method": "getTokenInfo",
         "lines": 141,
@@ -2050,7 +2050,7 @@
         "why": "dominant table issues, DDL family issues"
       }
     ],
-    "src/db/links.js": [
+    "src/db/links/index.js": [
       {
         "method": "createLink",
         "lines": 41,
@@ -2058,7 +2058,7 @@
         "why": "dominant table links, DDL family links"
       }
     ],
-    "src/db/lists.js": [
+    "src/db/lists/index.js": [
       {
         "method": "getListType",
         "lines": 12,
@@ -2120,7 +2120,7 @@
         "why": "dominant table list_items_invalid, DDL family lists"
       }
     ],
-    "src/db/mappings.js": [
+    "src/db/mappings/index.js": [
       {
         "method": "createActionMapping",
         "lines": 39,
@@ -2140,7 +2140,7 @@
         "why": "dominant table mappings_files, DDL family mappings"
       }
     ],
-    "src/db/markets.js": [
+    "src/db/markets/index.js": [
       {
         "method": "getMarkets",
         "lines": 117,
@@ -2172,7 +2172,7 @@
         "why": "dominant table markets, DDL family markets"
       }
     ],
-    "src/db/messages.js": [
+    "src/db/messages/index.js": [
       {
         "method": "createMessage",
         "lines": 43,
@@ -2180,7 +2180,7 @@
         "why": "dominant table messages, DDL family messages"
       }
     ],
-    "src/db/mints.js": [
+    "src/db/mints/index.js": [
       {
         "method": "getSelfMintedAmount",
         "lines": 19,
@@ -2194,7 +2194,7 @@
         "why": "dominant table mints, DDL family mints"
       }
     ],
-    "src/db/misc.js": [
+    "src/db/misc/index.js": [
       {
         "method": "createLedgerChangeRecord",
         "lines": 95,
@@ -2220,7 +2220,7 @@
         "why": "controller table is a parameter over token_controllers/address_controllers"
       }
     ],
-    "src/db/orders.js": [
+    "src/db/orders/index.js": [
       {
         "method": "createOrder",
         "lines": 62,
@@ -2324,7 +2324,7 @@
         "why": "dominant table order_statuses, DDL family orders"
       }
     ],
-    "src/db/polls.js": [
+    "src/db/polls/index.js": [
       {
         "method": "createPoll",
         "lines": 63,
@@ -2392,7 +2392,7 @@
         "why": "dominant table polls, DDL family polls"
       }
     ],
-    "src/db/prices.js": [
+    "src/db/prices/index.js": [
       {
         "method": "createPrice",
         "lines": 62,
@@ -2430,7 +2430,7 @@
         "why": "dominant table price_snapshots, DDL family prices"
       }
     ],
-    "src/db/pubkeys.js": [
+    "src/db/pubkeys/index.js": [
       {
         "method": "createPubkey",
         "lines": 5,
@@ -2438,7 +2438,7 @@
         "why": "dominant table pubkeys, DDL family pubkeys"
       }
     ],
-    "src/db/rewards.js": [
+    "src/db/rewards/index.js": [
       {
         "method": "_probeRecoveryPending",
         "lines": 12,
@@ -2482,7 +2482,7 @@
         "why": "dominant table reward_claims, DDL family rewards"
       }
     ],
-    "src/db/rollcalls.js": [
+    "src/db/rollcalls/index.js": [
       {
         "method": "insertRollcallSigners",
         "lines": 22,
@@ -2550,7 +2550,7 @@
         "why": "dominant table rollcall_absences, DDL family rollcalls"
       }
     ],
-    "src/db/sends.js": [
+    "src/db/sends/index.js": [
       {
         "method": "createSend",
         "lines": 58,
@@ -2558,7 +2558,7 @@
         "why": "dominant table sends, DDL family sends"
       }
     ],
-    "src/db/slashes.js": [
+    "src/db/slashes/index.js": [
       {
         "method": "createSlashEvent",
         "lines": 16,
@@ -2566,7 +2566,7 @@
         "why": "dominant table slash_events, DDL family slashes"
       }
     ],
-    "src/db/sleeps.js": [
+    "src/db/sleeps/index.js": [
       {
         "method": "isAddressSleeping",
         "lines": 28,
@@ -2702,7 +2702,7 @@
         "why": "dominant table stakes, DDL family stakes"
       }
     ],
-    "src/db/swaps.js": [
+    "src/db/swaps/index.js": [
       {
         "method": "createSwap",
         "lines": 62,
@@ -2758,7 +2758,7 @@
         "why": "dominant table swap_matches, DDL family swaps"
       }
     ],
-    "src/db/sweeps.js": [
+    "src/db/sweeps/index.js": [
       {
         "method": "createSweep",
         "lines": 46,
@@ -2766,7 +2766,7 @@
         "why": "dominant table sweeps, DDL family sweeps"
       }
     ],
-    "src/db/tokens.js": [
+    "src/db/tokens/index.js": [
       {
         "method": "getTokenSupplyToken",
         "lines": 10,
@@ -2828,7 +2828,7 @@
         "why": "dominant table token_controllers, DDL family tokens"
       }
     ],
-    "src/db/transactions.js": [
+    "src/db/transactions/index.js": [
       {
         "method": "getDecoderBlockData",
         "lines": 74,
@@ -2860,7 +2860,7 @@
         "why": "dominant table transactions, DDL family transactions"
       }
     ],
-    "src/db/votes.js": [
+    "src/db/votes/index.js": [
       {
         "method": "createVoteDelegation",
         "lines": 14,
@@ -2886,7 +2886,7 @@
         "why": "dominant table votes, DDL family votes"
       }
     ],
-    "src/db/withdrawals.js": [
+    "src/db/withdrawals/index.js": [
       {
         "method": "createWithdrawal",
         "lines": 28,
@@ -2894,7 +2894,7 @@
         "why": "dominant table withdrawals, DDL family withdrawals"
       }
     ],
-    "src/db/xbridges.js": [
+    "src/db/xbridges/index.js": [
       {
         "method": "createXbridge",
         "lines": 58,
@@ -2908,7 +2908,7 @@
         "why": "dominant table xbridges, DDL family xbridges"
       }
     ],
-    "src/db/xcalls.js": [
+    "src/db/xcalls/index.js": [
       {
         "method": "createCrossChainCallRequest",
         "lines": 14,

@@ -15,7 +15,7 @@
  * XChain Indexer - Database mixin part: dispensers, the writers
  *
  * The create/update writers for dispensers and its status, edit, close, cancel and
- * expire tables. Merged into the dispensers mixin by db/dispensers.js, which
+ * expire tables. Merged into the dispensers mixin by db/dispensers/index.js, which
  * db/index.js installs onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

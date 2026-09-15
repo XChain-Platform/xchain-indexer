@@ -51,7 +51,7 @@ const BS     = requireDisarmed('../../../../src/consensus/bridge_settle.js');
 const M      = require('../../../../src/consensus/merkle.js');
 const SUB    = require('../../../../src/state_subtree_activation.js');
 const Utility = require('../../../../src/utility.js');
-const bridgeSettlementsMixin = require('../../../../src/db/bridge_settlements.js');
+const bridgeSettlementsMixin = require('../../../../src/db/bridge_settlements/index.js');
 
 // Give a connection double the REAL db/bridge_settlements methods, bound over its own
 // doQuery. The settle pass reaches both the local ledger and the mirror through those

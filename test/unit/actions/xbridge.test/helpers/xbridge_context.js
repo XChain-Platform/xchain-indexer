@@ -59,8 +59,8 @@ function makeHandler(opts){
     let mapper    = { createMappings: sinon.stub().resolves() };
 
     // The two database writers the handler calls (see its file header): the
-    // xbridges action row in src/db/xbridges.js and the tokens.bridged setter in
-    // src/db/tokens.js. Stubbed here so the payload each one receives is pinned by test.
+    // xbridges action row in src/db/xbridges/index.js and the tokens.bridged setter in
+    // src/db/tokens/index.js. Stubbed here so the payload each one receives is pinned by test.
     indexerDb.createXbridge    = sinon.stub().resolves();
     indexerDb.setTokenBridged  = sinon.stub().resolves();
 

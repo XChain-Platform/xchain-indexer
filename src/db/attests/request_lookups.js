@@ -16,7 +16,7 @@
  *
  * Single-request reads of ATTEST v0 rows (by request id, by relay origin, admitted
  * only), the per-block admission counts, and the request_status flip.
- * Merged into the attests mixin by db/attests.js, which db/index.js installs
+ * Merged into the attests mixin by db/attests/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

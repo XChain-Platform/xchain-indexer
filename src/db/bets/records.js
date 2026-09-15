@@ -16,7 +16,7 @@
  *
  * The create-or-update writers for bet_feeds, bets, bet_cancels, bet_resolves and the
  * two status-history tables (bet_feed_statuses, bet_statuses).
- * Merged into the bets mixin by db/bets.js, which db/index.js installs
+ * Merged into the bets mixin by db/bets/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

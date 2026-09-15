@@ -16,7 +16,7 @@
  *
  * The serializable per-contract stake snapshot the VM reads through getStake,
  * getTotalStaked and getStakers.
- * Merged into the contracts mixin by db/contracts.js, which db/index.js installs
+ * Merged into the contracts mixin by db/contracts/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

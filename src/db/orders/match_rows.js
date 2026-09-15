@@ -15,7 +15,7 @@
  * XChain Indexer - Database mixin part: orders (match rows)
  *
  * The order_matches rows: local matches, their COINPay status, cross-chain fills, and the reads that settle them.
- * A part of the orders mixin: src/db/orders.js merges it into the one method set that
+ * A part of the orders mixin: src/db/orders/index.js merges it into the one method set that
  * db/index.js installs onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

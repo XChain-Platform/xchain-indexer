@@ -16,7 +16,7 @@
  *
  * The three action-indexed writers of the consolidated attests table: the ATTEST v0
  * request row, the v1 response row and the v5/v6 batch audit row.
- * Merged into the attests mixin by db/attests.js, which db/index.js installs
+ * Merged into the attests mixin by db/attests/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

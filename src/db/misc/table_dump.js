@@ -16,7 +16,7 @@
  *
  * The table-parameterized schema reads and row copies the genesis dump walks the
  * whole schema with.
- * Merged into the misc mixin by db/misc.js, which db/index.js installs
+ * Merged into the misc mixin by db/misc/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

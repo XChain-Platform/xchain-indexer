@@ -16,7 +16,7 @@
  *
  * The end-of-block cooldown sweep over unstakes and contract_unstakes, and the status
  * write that closes the swept rows.
- * Merged into the contracts mixin by db/contracts.js, which db/index.js installs
+ * Merged into the contracts mixin by db/contracts/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

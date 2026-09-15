@@ -15,7 +15,7 @@
  * XChain Indexer - Database mixin part: orders (order info)
  *
  * The reads the matcher and settlement build an order from: candidate matches, the order row with its edits, and the amounts still open.
- * A part of the orders mixin: src/db/orders.js merges it into the one method set that
+ * A part of the orders mixin: src/db/orders/index.js merges it into the one method set that
  * db/index.js installs onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

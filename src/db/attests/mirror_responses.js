@@ -16,7 +16,7 @@
  *
  * The hub-mirrored response read pair (local requests still awaiting a response, mirror
  * rows by request id) and the two stamps a response row takes after it applies.
- * Merged into the attests mixin by db/attests.js, which db/index.js installs
+ * Merged into the attests mixin by db/attests/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

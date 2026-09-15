@@ -16,7 +16,7 @@
  *
  * The counter-offer lookup a new SWAP runs, and the upsert of the swap_matches
  * row a settled pairing writes.
- * Merged into the swaps mixin by db/swaps.js, which db/index.js installs
+ * Merged into the swaps mixin by db/swaps/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

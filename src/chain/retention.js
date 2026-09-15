@@ -138,7 +138,7 @@ async function pruneStateRoots(db, chain, network, cfg){
 // contract_state_root is NULL on every inert row and IS NOT NULL drops those, so
 // the union is unchanged until a chain arms the slot.
 //
-// The union itself is db.getRetainedStateSubtreeRoots (src/db/state_tree.js),
+// The union itself is db.getRetainedStateSubtreeRoots (src/db/state_tree/index.js),
 // which carries the same argument beside the SQL it constrains.
 async function computeReachable(db, chain, network){
     const rows = await db.readAllStateTreeNodes();

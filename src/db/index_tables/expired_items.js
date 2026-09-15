@@ -16,7 +16,7 @@
  *
  * The per-block sweep that lists the open orders, swaps and dispensers whose effective
  * expiration has passed.
- * Merged into the index_tables mixin by db/index_tables.js, which db/index.js installs
+ * Merged into the index_tables mixin by db/index_tables/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

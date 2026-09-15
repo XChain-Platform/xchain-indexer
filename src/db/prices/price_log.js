@@ -15,7 +15,7 @@
  * XChain Indexer - Database mixin part: prices (PRICE action log)
  *
  * The writer and the batch-window read over the `prices` table, the raw on-chain PRICE
- * action log. A part of the prices mixin: src/db/prices.js merges it into the one method
+ * action log. A part of the prices mixin: src/db/prices/index.js merges it into the one method
  * set that db/index.js installs onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/

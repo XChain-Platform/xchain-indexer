@@ -20,7 +20,7 @@
 
 const assert = require('assert');
 
-const bridgeSettlementsMixin = require('../../../../src/db/bridge_settlements.js');
+const bridgeSettlementsMixin = require('../../../../src/db/bridge_settlements/index.js');
 const { NETWORK } = require('./arms.js');
 
 // The settle pass reaches the mirror through the db/bridge_settlements methods, so a

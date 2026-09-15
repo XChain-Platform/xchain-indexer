@@ -15,7 +15,7 @@
  * XChain Indexer - Database mixin part: transactions (action data)
  *
  * The one-row summary of an action, read with the statement its action type names.
- * A part of the transactions mixin: src/db/transactions.js merges it into the one method
+ * A part of the transactions mixin: src/db/transactions/index.js merges it into the one method
  * set that db/index.js installs onto Database.prototype, so call sites stay
  * this.db.<method>().
  *

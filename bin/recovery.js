@@ -133,7 +133,7 @@ class AnchorRecovery {
         // STATUS to 'valid'); do NOT loosen this to a LEFT JOIN accepting NULL, which reopens the hole.
         // match_batch_seq is NOT unique: the parseCheckpoint replay guard admits an EQUAL
         // MATCH_BATCH_SEQ (a permissionless re-broadcast or failover double-publish stores a
-        // second v1 head for the same batch, db/anchors.js 'match_batch_seq is NOT unique'). The
+        // second v1 head for the same batch, db/anchors/index.js 'match_batch_seq is NOT unique'). The
         // rebuild below is order-dependent (latest-status-wins per match_id; finalized-wins full
         // overwrite per (call_id,phase)), so equal-seq heads MUST replay in a deterministic total
         // order or two nodes persist divergent finalized content. Break the tie on action_index

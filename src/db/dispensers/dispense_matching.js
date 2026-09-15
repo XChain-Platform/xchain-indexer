@@ -16,7 +16,7 @@
  *
  * Which open dispensers a token SEND or a native payment hits, and which closed
  * dispenser a payment that hit nothing was aimed at. Merged into the dispensers mixin
- * by db/dispensers.js, which db/index.js installs onto Database.prototype, so call
+ * by db/dispensers/index.js, which db/index.js installs onto Database.prototype, so call
  * sites stay this.db.<method>().
  *
  ********************************************************************/

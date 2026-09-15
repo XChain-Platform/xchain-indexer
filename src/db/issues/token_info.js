@@ -15,7 +15,7 @@
  * XChain Indexer - Database mixin part: issues / token_info
  *
  * The token state a tick resolves to, replayed from its valid ISSUE rows in action order.
- * Merged into the issues mixin by db/issues.js, which db/index.js installs
+ * Merged into the issues mixin by db/issues/index.js, which db/index.js installs
  * onto Database.prototype, so call sites stay this.db.<method>().
  *
  ********************************************************************/
