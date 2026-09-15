@@ -25,7 +25,6 @@ process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
-const fs     = require('fs');
 const path   = require('path');
 const sinon  = require('sinon');
 
@@ -241,11 +240,12 @@ describe('VOTE self-sleep gate + DELEGATE_TO validation @regression @tier1', fun
     describe('flag-day registration', function () {
 
         it('VOTE_RESPECTS_SLEEP is registered as a 0.2.0 gate on the ratified 2026-08-07 anchor', function () {
-            const src = fs.readFileSync(
-                path.join(__dirname, '..', '..', '..', '..', 'src', 'protocol_changes.js'), 'utf8');
-            const m = src.match(/this\.addChange\('VOTE_RESPECTS_SLEEP', '0\.2\.0',(\d+)/);
-            assert.ok(m, 'VOTE_RESPECTS_SLEEP must be registered as a 0.2.0 time-gated change');
-            assert.strictEqual(parseInt(m[1]), 1786060800,
+            // Read from the built table: the rows live in src/protocol_changes/changes_*.js.
+            const ProtocolChanges = require(path.join(__dirname, '..', '..', '..', '..', 'src', 'protocol_changes.js'));
+            const row = new ProtocolChanges({ config: {}, util: {} }).changes.VOTE_RESPECTS_SLEEP;
+            assert.ok(row && row.version_major === 0 && row.version_minor === 2 && row.version_revision === 0,
+                'VOTE_RESPECTS_SLEEP must be registered as a 0.2.0 time-gated change');
+            assert.strictEqual(row.mainnet_time, 1786060800,
                 'mainnet timestamp must be the ratified coordinated anchor; a divergent value is a fork');
         });
     });

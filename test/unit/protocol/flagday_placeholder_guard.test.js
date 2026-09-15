@@ -84,15 +84,17 @@ const XC104_TS_GATES = [
     'VM_LINT_HARDENING',
 ];
 
-const pcSource = fs.readFileSync(path.join(SRC, 'protocol_changes.js'), 'utf8');
+// The time table as the class builds it under the manifest stub: the rows live in
+// src/protocol_changes/changes_*.js now, so the guard reads values, not source text.
+const pcTable = new (require(path.join(SRC, 'protocol_changes.js')))({ config: {}, util: {} }).changes;
+const is020 = (row) => row && row.version_major === 0 && row.version_minor === 2 && row.version_revision === 0;
 
 describe('flag-day placeholder guard @regression @tier1', function () {
     it('the timestamp gates are armed on the ratified 2026-08-07 anchor', function () {
         for (const gate of XC104_TS_GATES) {
-            const m = pcSource.match(new RegExp(
-                "this\\.addChange\\('" + gate + "', '0\\.2\\.0',(\\d+)"));
-            assert.ok(m, gate + ' must be registered as a 0.2.0 time-gated change');
-            assert.strictEqual(parseInt(m[1]), RATIFIED_ANCHOR_TS,
+            const row = pcTable[gate];
+            assert.ok(is020(row), gate + ' must be registered as a 0.2.0 time-gated change');
+            assert.strictEqual(row.mainnet_time, RATIFIED_ANCHOR_TS,
                 gate + ' mainnet timestamp must be the ratified anchor; a divergent value is a fork');
         }
     });
@@ -114,9 +116,9 @@ describe('flag-day placeholder guard @regression @tier1', function () {
         // these two silently becoming something else, still reddens exactly as before. Do
         // not widen this to a bare count.
         const RATIFIED_OCCUPANTS = ['CROSS_CHAIN_ROYALTY', 'REST_PATTERN_METER'];
-        const lines = pcSource.split('\n')
-            .filter(l => l.includes(String(ROYALTY_CREATE_SIDE)))
-            .filter(l => /this\.addChange\(/.test(l));
+        const lines = Object.entries(pcTable)
+            .filter(([, row]) => Object.values(row).includes(ROYALTY_CREATE_SIDE))
+            .map(([name]) => "'" + name + "'");
         assert.strictEqual(lines.length, RATIFIED_OCCUPANTS.length,
             'exactly ' + RATIFIED_OCCUPANTS.length + ' addChange entries may sit at 1798761600 (' +
             RATIFIED_OCCUPANTS.join(' + ') + '); got: ' + lines.join(' | '));
@@ -202,10 +204,9 @@ describe('flag-day placeholder guard @regression @tier1', function () {
         // 961000 is duplicated in protocol_changes.js rather than derived from the shared map.
         // Bind the two so a re-arm of the EQUIV anchor cannot silently leave this gate behind.
         const equivMainnet = require(path.join(SRC, 'equivocation_header.js')).EQUIV_HEADER_ACTIVATION.mainnet;
-        const m = pcSource.match(new RegExp(
-            "this\\.addChange\\('SLASH_BURNS_PENDING_STAKE', '0\\.2\\.0',\\d+,\\d+,\\d+,(\\d+)"));
-        assert.ok(m, 'SLASH_BURNS_PENDING_STAKE must be registered with a mainnet_block gate');
-        assert.strictEqual(parseInt(m[1]), equivMainnet,
+        const row = pcTable.SLASH_BURNS_PENDING_STAKE;
+        assert.ok(is020(row) && row.mainnet_block > 0, 'SLASH_BURNS_PENDING_STAKE must be registered with a mainnet_block gate');
+        assert.strictEqual(row.mainnet_block, equivMainnet,
             'SLASH_BURNS_PENDING_STAKE mainnet_block must equal EQUIV_HEADER_ACTIVATION.mainnet; divergence reopens the burn-pending window the gate exists to close');
     });
 
@@ -215,10 +216,9 @@ describe('flag-day placeholder guard @regression @tier1', function () {
         // leave this gate behind on the old height, which would reopen the window where an
         // honest price validator's two distinct rounds at one BTC tip burn its whole bond.
         const equivMainnet = require(path.join(SRC, 'equivocation_header.js')).EQUIV_HEADER_ACTIVATION.mainnet;
-        const m = pcSource.match(new RegExp(
-            "this\\.addChange\\('SLASH_ORACLE_ROUND_DISCRIMINATED', '0\\.2\\.0',\\d+,\\d+,\\d+,(\\d+)"));
-        assert.ok(m, 'SLASH_ORACLE_ROUND_DISCRIMINATED must be registered with a mainnet_block gate');
-        assert.strictEqual(parseInt(m[1]), equivMainnet,
+        const row = pcTable.SLASH_ORACLE_ROUND_DISCRIMINATED;
+        assert.ok(is020(row) && row.mainnet_block > 0, 'SLASH_ORACLE_ROUND_DISCRIMINATED must be registered with a mainnet_block gate');
+        assert.strictEqual(row.mainnet_block, equivMainnet,
             'SLASH_ORACLE_ROUND_DISCRIMINATED mainnet_block must equal EQUIV_HEADER_ACTIVATION.mainnet');
     });
 });

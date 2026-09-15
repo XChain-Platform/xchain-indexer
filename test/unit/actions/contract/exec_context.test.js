@@ -280,14 +280,14 @@ describe('execContext (injected-execution TX_HASH seam) @regression @tier2', fun
 
     describe('protocol_changes registration', function () {
         it('SYNTH_EXEC_TX_HASH is registered on the ratified 2026-08-07 anchor, regtest/testnet genesis', function () {
-            const fs = require('fs');
-            const path = require('path');
-            const src = fs.readFileSync(path.join(__dirname, '../../../../src/protocol_changes.js'), 'utf8');
-            const m = src.match(/this\.addChange\('SYNTH_EXEC_TX_HASH', '0\.2\.0',(\d+),(\d+),(\d+)/);
-            assert.ok(m, 'SYNTH_EXEC_TX_HASH must be registered as a 0.2.0 time-gated change');
-            assert.strictEqual(parseInt(m[1]), 1786060800, 'mainnet timestamp must be the ratified anchor');
-            assert.strictEqual(parseInt(m[2]), 0, 'testnet activates at genesis');
-            assert.strictEqual(parseInt(m[3]), 0, 'regtest activates at genesis');
+            // Read from the built table: the rows live in src/protocol_changes/changes_*.js.
+            const ProtocolChanges = require('../../../../src/protocol_changes.js');
+            const row = new ProtocolChanges({ config: {}, util: {} }).changes.SYNTH_EXEC_TX_HASH;
+            assert.ok(row && row.version_major === 0 && row.version_minor === 2 && row.version_revision === 0,
+                'SYNTH_EXEC_TX_HASH must be registered as a 0.2.0 time-gated change');
+            assert.strictEqual(row.mainnet_time, 1786060800, 'mainnet timestamp must be the ratified anchor');
+            assert.strictEqual(row.testnet_time, 0, 'testnet activates at genesis');
+            assert.strictEqual(row.regtest_time, 0, 'regtest activates at genesis');
         });
 
         it('the exported gate name and tags are stable consensus identifiers', function () {
