@@ -1904,7 +1904,7 @@
         },
         {
           "repo": "xchain-decoder",
-          "file": "xchain-decoder/test/unit/batch_sub_command_output_capture_activation.test.js",
+          "file": "xchain-decoder/test/unit/protocol/batch_sub_command_output_capture_activation.test.js",
           "line": 226,
           "kind": "text",
           "form": "text",
@@ -3038,7 +3038,7 @@
         },
         {
           "repo": "xchain-decoder",
-          "file": "xchain-decoder/test/unit/dispenser_field_offsets.test.js",
+          "file": "xchain-decoder/test/unit/protocol/dispenser_field_offsets.test.js",
           "line": 20,
           "kind": "text",
           "form": "text",
@@ -3046,7 +3046,7 @@
         },
         {
           "repo": "xchain-decoder",
-          "file": "xchain-decoder/test/unit/dispenser_field_offsets.test.js",
+          "file": "xchain-decoder/test/unit/protocol/dispenser_field_offsets.test.js",
           "line": 68,
           "kind": "join",
           "form": "join",
@@ -3054,7 +3054,7 @@
         },
         {
           "repo": "xchain-decoder",
-          "file": "xchain-decoder/test/unit/dispenser_gate.test.js",
+          "file": "xchain-decoder/test/unit/xchain_decoder/dispenser_gate.test.js",
           "line": 16,
           "kind": "text",
           "form": "text",
@@ -3062,7 +3062,7 @@
         },
         {
           "repo": "xchain-decoder",
-          "file": "xchain-decoder/test/unit/dispenser_lifecycle_mirror.test.js",
+          "file": "xchain-decoder/test/unit/protocol/dispenser_lifecycle_mirror.test.js",
           "line": 415,
           "kind": "text",
           "form": "text",
@@ -3070,7 +3070,7 @@
         },
         {
           "repo": "xchain-decoder",
-          "file": "xchain-decoder/test/unit/dispenser_lifecycle_mirror.test.js",
+          "file": "xchain-decoder/test/unit/protocol/dispenser_lifecycle_mirror.test.js",
           "line": 561,
           "kind": "text",
           "form": "text",
@@ -6151,7 +6151,7 @@
         },
         {
           "repo": "xchain-decoder",
-          "file": "xchain-decoder/test/unit/dispenser_lifecycle_mirror.test.js",
+          "file": "xchain-decoder/test/unit/protocol/dispenser_lifecycle_mirror.test.js",
           "line": 513,
           "kind": "text",
           "form": "text",
@@ -6803,7 +6803,7 @@
         },
         {
           "repo": "xchain-decoder",
-          "file": "xchain-decoder/test/unit/dispenser_cancel_grace_activation.test.js",
+          "file": "xchain-decoder/test/unit/protocol/dispenser_cancel_grace_activation.test.js",
           "line": 51,
           "kind": "text",
           "form": "root-var",
@@ -6812,7 +6812,7 @@
         },
         {
           "repo": "xchain-decoder",
-          "file": "xchain-decoder/test/unit/dispenser_cancel_grace_activation.test.js",
+          "file": "xchain-decoder/test/unit/protocol/dispenser_cancel_grace_activation.test.js",
           "line": 67,
           "kind": "text",
           "form": "text",
@@ -11409,7 +11409,7 @@
         },
         {
           "repo": "xchain-decoder",
-          "file": "xchain-decoder/test/unit/batch_sub_command_output_capture_activation.test.js",
+          "file": "xchain-decoder/test/unit/protocol/batch_sub_command_output_capture_activation.test.js",
           "line": 59,
           "kind": "join",
           "form": "join",
@@ -11417,7 +11417,7 @@
         },
         {
           "repo": "xchain-decoder",
-          "file": "xchain-decoder/test/unit/batch_sub_command_output_capture_activation.test.js",
+          "file": "xchain-decoder/test/unit/protocol/batch_sub_command_output_capture_activation.test.js",
           "line": 105,
           "kind": "text",
           "form": "text",
@@ -11425,7 +11425,7 @@
         },
         {
           "repo": "xchain-decoder",
-          "file": "xchain-decoder/test/unit/oracle_fee_output_activation_conformance.test.js",
+          "file": "xchain-decoder/test/unit/protocol/oracle_fee_output_activation_conformance.test.js",
           "line": 46,
           "kind": "join",
           "form": "join",
@@ -11433,7 +11433,7 @@
         },
         {
           "repo": "xchain-decoder",
-          "file": "xchain-decoder/test/unit/oracle_fee_output_activation_conformance.test.js",
+          "file": "xchain-decoder/test/unit/protocol/oracle_fee_output_activation_conformance.test.js",
           "line": 84,
           "kind": "text",
           "form": "text",
@@ -16162,7 +16162,7 @@
         },
         {
           "repo": "xchain-decoder",
-          "file": "xchain-decoder/test/unit/dispenser_expiry_realign.test.js",
+          "file": "xchain-decoder/test/unit/protocol/dispenser_expiry_realign.test.js",
           "line": 15,
           "kind": "text",
           "form": "text",
