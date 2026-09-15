@@ -44,10 +44,10 @@
       "test/smoke/connected/api_status.test.js",
       "test/smoke/connected/api_status.test/hub_mirror.test.js"
     ],
-    "test/unit/actions.test.js": [
-      "test/unit/actions.test.js",
-      "test/unit/actions.test/process_transaction_parsing.test.js",
-      "test/unit/actions.test/process_action_dispatch.test.js"
+    "test/unit/action_dispatch/actions.test.js": [
+      "test/unit/action_dispatch/actions.test.js",
+      "test/unit/action_dispatch/actions.test/process_transaction_parsing.test.js",
+      "test/unit/action_dispatch/actions.test/process_action_dispatch.test.js"
     ],
     "test/unit/actions/attest.test.js": [
       "test/unit/actions/attest.test.js",
@@ -110,36 +110,36 @@
       "test/unit/admission_binding.test/attest_bind_predicate.test.js",
       "test/unit/admission_binding.test/call_presence.test.js"
     ],
-    "test/unit/anchor_action_query.test.js": [
-      "test/unit/anchor_action_query.test.js",
-      "test/unit/anchor_action_query.test/anchor_action_query_getanchorconfirmations.test.js",
-      "test/unit/anchor_action_query.test/anchor_action_query_section_vs.test.js"
+    "test/unit/anchor/anchor_action_query.test.js": [
+      "test/unit/anchor/anchor_action_query.test.js",
+      "test/unit/anchor/anchor_action_query.test/anchor_action_query_getanchorconfirmations.test.js",
+      "test/unit/anchor/anchor_action_query.test/anchor_action_query_section_vs.test.js"
     ],
-    "test/unit/anchor_proof_client.test.js": [
-      "test/unit/anchor_proof_client.test.js",
-      "test/unit/anchor_proof_client.test/anchorproofclient_doge_anchor_visibility_regression.test.js",
-      "test/unit/anchor_proof_client.test/anchorproofclient_doge_anchor_visibility_regression_2.test.js",
-      "test/unit/anchor_proof_client.test/anchorproofclient_doge_anchor_visibility_regression_3.test.js"
+    "test/unit/anchor/anchor_proof_client.test.js": [
+      "test/unit/anchor/anchor_proof_client.test.js",
+      "test/unit/anchor/anchor_proof_client.test/anchorproofclient_doge_anchor_visibility_regression.test.js",
+      "test/unit/anchor/anchor_proof_client.test/anchorproofclient_doge_anchor_visibility_regression_2.test.js",
+      "test/unit/anchor/anchor_proof_client.test/anchorproofclient_doge_anchor_visibility_regression_3.test.js"
     ],
-    "test/unit/anchor_reward_derive.test.js": [
-      "test/unit/anchor_reward_derive.test.js",
-      "test/unit/anchor_reward_derive.test/anchor_reward_derive_btc_side.test.js",
-      "test/unit/anchor_reward_derive.test/anchor_reward_derive_set_is.test.js"
+    "test/unit/anchor/anchor_reward_derive.test.js": [
+      "test/unit/anchor/anchor_reward_derive.test.js",
+      "test/unit/anchor/anchor_reward_derive.test/anchor_reward_derive_btc_side.test.js",
+      "test/unit/anchor/anchor_reward_derive.test/anchor_reward_derive_set_is.test.js"
     ],
-    "test/unit/barrier_hold_ceiling.test.js": [
-      "test/unit/barrier_hold_ceiling.test.js",
-      "test/unit/barrier_hold_ceiling.test/indexer_reaction.test.js",
-      "test/unit/barrier_hold_ceiling.test/resync_and_reporting.test.js"
+    "test/unit/hub/barrier_hold_ceiling.test.js": [
+      "test/unit/hub/barrier_hold_ceiling.test.js",
+      "test/unit/hub/barrier_hold_ceiling.test/indexer_reaction.test.js",
+      "test/unit/hub/barrier_hold_ceiling.test/resync_and_reporting.test.js"
     ],
-    "test/unit/batch_probe_preflight.test.js": [
-      "test/unit/batch_probe_preflight.test.js",
-      "test/unit/batch_probe_preflight.test/dispatch_guard.test.js",
-      "test/unit/batch_probe_preflight.test/oracle_fee_disclosure.test.js"
+    "test/unit/action_dispatch/batch_probe_preflight.test.js": [
+      "test/unit/action_dispatch/batch_probe_preflight.test.js",
+      "test/unit/action_dispatch/batch_probe_preflight.test/dispatch_guard.test.js",
+      "test/unit/action_dispatch/batch_probe_preflight.test/oracle_fee_disclosure.test.js"
     ],
-    "test/unit/batch_settlement_value_ledger.test.js": [
-      "test/unit/batch_settlement_value_ledger.test.js",
-      "test/unit/batch_settlement_value_ledger.test/dispense.test.js",
-      "test/unit/batch_settlement_value_ledger.test/oracle_fees.test.js"
+    "test/unit/db/markets/batch_settlement_value_ledger.test.js": [
+      "test/unit/db/markets/batch_settlement_value_ledger.test.js",
+      "test/unit/db/markets/batch_settlement_value_ledger.test/dispense.test.js",
+      "test/unit/db/markets/batch_settlement_value_ledger.test/oracle_fees.test.js"
     ],
     "test/unit/boundary/addresses/validation.test.js": [
       "test/unit/boundary/addresses/validation.test.js",
@@ -154,25 +154,25 @@
       "test/unit/boundary/tokens/state_machine.test.js",
       "test/unit/boundary/tokens/state_machine.test/sub_tokens_and_supply_lock.test.js"
     ],
-    "test/unit/bridge_checkpoint_check.test.js": [
-      "test/unit/bridge_checkpoint_check.test.js",
-      "test/unit/bridge_checkpoint_check.test/proof_and_row_guards.test.js",
-      "test/unit/bridge_checkpoint_check.test/version_checks.test.js"
+    "test/unit/bridge/bridge_checkpoint_check.test.js": [
+      "test/unit/bridge/bridge_checkpoint_check.test.js",
+      "test/unit/bridge/bridge_checkpoint_check.test/proof_and_row_guards.test.js",
+      "test/unit/bridge/bridge_checkpoint_check.test/version_checks.test.js"
     ],
-    "test/unit/bridge_settle.test.js": [
-      "test/unit/bridge_settle.test.js",
-      "test/unit/bridge_settle.test/refusals.test.js",
-      "test/unit/bridge_settle.test/source_leg.test.js",
-      "test/unit/bridge_settle.test/due_set_and_checkpoints.test.js",
-      "test/unit/bridge_settle.test/slash_and_pass_order.test.js",
-      "test/unit/bridge_settle.test/refusal_logging.test.js"
+    "test/unit/bridge/bridge_settle.test.js": [
+      "test/unit/bridge/bridge_settle.test.js",
+      "test/unit/bridge/bridge_settle.test/refusals.test.js",
+      "test/unit/bridge/bridge_settle.test/source_leg.test.js",
+      "test/unit/bridge/bridge_settle.test/due_set_and_checkpoints.test.js",
+      "test/unit/bridge/bridge_settle.test/slash_and_pass_order.test.js",
+      "test/unit/bridge/bridge_settle.test/refusal_logging.test.js"
     ],
-    "test/unit/config.test.js": [
-      "test/unit/config.test.js",
-      "test/unit/config.test/hub_overlay.test.js",
-      "test/unit/config.test/hub_overlay_poll.test.js",
-      "test/unit/config.test/hub_overlay_poll_cursor.test.js",
-      "test/unit/config.test/env_overrides.test.js"
+    "test/unit/config/config.test.js": [
+      "test/unit/config/config.test.js",
+      "test/unit/config/config.test/hub_overlay.test.js",
+      "test/unit/config/config.test/hub_overlay_poll.test.js",
+      "test/unit/config/config.test/hub_overlay_poll_cursor.test.js",
+      "test/unit/config/config.test/env_overrides.test.js"
     ],
     "test/unit/consensus_params.test.js": [
       "test/unit/consensus_params.test.js",
@@ -183,56 +183,56 @@
       "test/unit/consensus_rules_digest.test/active_gates.test.js",
       "test/unit/consensus_rules_digest.test/coin_keyed_bridge.test.js"
     ],
-    "test/unit/controller_enforcement.test.js": [
-      "test/unit/controller_enforcement.test.js",
-      "test/unit/controller_enforcement.test/guard_activation.test.js",
-      "test/unit/controller_enforcement.test/guard_routing.test.js"
+    "test/unit/contracts/controller_enforcement.test.js": [
+      "test/unit/contracts/controller_enforcement.test.js",
+      "test/unit/contracts/controller_enforcement.test/guard_activation.test.js",
+      "test/unit/contracts/controller_enforcement.test/guard_routing.test.js"
     ],
-    "test/unit/db.test.js": [
-      "test/unit/db.test.js",
-      "test/unit/db.test/continued_normalization.test.js",
-      "test/unit/db.test/get_block_index.test.js",
-      "test/unit/db.test/reorg_identity.test.js",
-      "test/unit/db.test/validator_capabilities.test.js",
-      "test/unit/db.test/vm_contract_state_and_block_time.test.js",
-      "test/unit/db.test/write_decoder_and_mappings.test.js"
+    "test/unit/db/db.test.js": [
+      "test/unit/db/db.test.js",
+      "test/unit/db/db.test/continued_normalization.test.js",
+      "test/unit/db/db.test/get_block_index.test.js",
+      "test/unit/db/db.test/reorg_identity.test.js",
+      "test/unit/db/db.test/validator_capabilities.test.js",
+      "test/unit/db/db.test/vm_contract_state_and_block_time.test.js",
+      "test/unit/db/db.test/write_decoder_and_mappings.test.js"
     ],
-    "test/unit/db_queries.test.js": [
-      "test/unit/db_queries.test.js",
-      "test/unit/db_queries.test/action_index.test.js",
-      "test/unit/db_queries.test/attestations.test.js",
-      "test/unit/db_queries.test/delegations_and_rewards.test.js",
-      "test/unit/db_queries.test/hub_push_and_capabilities.test.js",
-      "test/unit/db_queries.test/index_lookups.test.js",
-      "test/unit/db_queries.test/market_and_balances.test.js",
-      "test/unit/db_queries.test/market_writers.test.js",
-      "test/unit/db_queries.test/message_writers.test.js",
-      "test/unit/db_queries.test/schema_ddl.test.js",
-      "test/unit/db_queries.test/schema_parsing.test.js",
-      "test/unit/db_queries.test/stake_and_contract_writers.test.js",
-      "test/unit/db_queries.test/stakes.test.js",
-      "test/unit/db_queries.test/state_reads.test.js",
-      "test/unit/db_queries.test/tickers_and_supply.test.js",
-      "test/unit/db_queries.test/token_writers.test.js"
+    "test/unit/db/db_queries.test.js": [
+      "test/unit/db/db_queries.test.js",
+      "test/unit/db/db_queries.test/action_index.test.js",
+      "test/unit/db/db_queries.test/attestations.test.js",
+      "test/unit/db/db_queries.test/delegations_and_rewards.test.js",
+      "test/unit/db/db_queries.test/hub_push_and_capabilities.test.js",
+      "test/unit/db/db_queries.test/index_lookups.test.js",
+      "test/unit/db/db_queries.test/market_and_balances.test.js",
+      "test/unit/db/db_queries.test/market_writers.test.js",
+      "test/unit/db/db_queries.test/message_writers.test.js",
+      "test/unit/db/db_queries.test/schema_ddl.test.js",
+      "test/unit/db/db_queries.test/schema_parsing.test.js",
+      "test/unit/db/db_queries.test/stake_and_contract_writers.test.js",
+      "test/unit/db/db_queries.test/stakes.test.js",
+      "test/unit/db/db_queries.test/state_reads.test.js",
+      "test/unit/db/db_queries.test/tickers_and_supply.test.js",
+      "test/unit/db/db_queries.test/token_writers.test.js"
     ],
-    "test/unit/db_xbridge_writers.test.js": [
-      "test/unit/db_xbridge_writers.test.js",
-      "test/unit/db_xbridge_writers.test/handler_end_to_end.test.js",
-      "test/unit/db_xbridge_writers.test/token_bridged.test.js"
+    "test/unit/bridge/db_xbridge_writers.test.js": [
+      "test/unit/bridge/db_xbridge_writers.test.js",
+      "test/unit/bridge/db_xbridge_writers.test/handler_end_to_end.test.js",
+      "test/unit/bridge/db_xbridge_writers.test/token_bridged.test.js"
     ],
-    "test/unit/dispenser_value_accounting.test.js": [
-      "test/unit/dispenser_value_accounting.test.js",
-      "test/unit/dispenser_value_accounting.test/multi_dispenser.test.js",
-      "test/unit/dispenser_value_accounting.test/send_triggered.test.js"
+    "test/unit/db/markets/dispenser_value_accounting.test.js": [
+      "test/unit/db/markets/dispenser_value_accounting.test.js",
+      "test/unit/db/markets/dispenser_value_accounting.test/multi_dispenser.test.js",
+      "test/unit/db/markets/dispenser_value_accounting.test/send_triggered.test.js"
     ],
     "test/unit/emission_issuance_limits.test.js": [
       "test/unit/emission_issuance_limits.test.js",
       "test/unit/emission_issuance_limits.test/issue_budget.test.js"
     ],
-    "test/unit/escrow_journal_writer.test.js": [
-      "test/unit/escrow_journal_writer.test.js",
-      "test/unit/escrow_journal_writer.test/attribution_vectors.test.js",
-      "test/unit/escrow_journal_writer.test/journal_totals.test.js"
+    "test/unit/bridge/escrow_journal_writer.test.js": [
+      "test/unit/bridge/escrow_journal_writer.test.js",
+      "test/unit/bridge/escrow_journal_writer.test/attribution_vectors.test.js",
+      "test/unit/bridge/escrow_journal_writer.test/journal_totals.test.js"
     ],
     "test/unit/fee_quote.test.js": [
       "test/unit/fee_quote.test.js",
@@ -240,139 +240,139 @@
       "test/unit/fee_quote.test/compute_fee_quote.test.js",
       "test/unit/fee_quote.test/static_quotes.test.js"
     ],
-    "test/unit/hash_coverage.test.js": [
-      "test/unit/hash_coverage.test.js",
-      "test/unit/hash_coverage.test/content_parity.test.js"
+    "test/unit/hub/hash_coverage.test.js": [
+      "test/unit/hub/hash_coverage.test.js",
+      "test/unit/hub/hash_coverage.test/content_parity.test.js"
     ],
-    "test/unit/hub_client.test.js": [
-      "test/unit/hub_client.test.js",
-      "test/unit/hub_client.test/push_methods.test.js",
-      "test/unit/hub_client.test/hub_rejection.test.js",
-      "test/unit/hub_client.test/retractions.test.js",
-      "test/unit/hub_client.test/call_http.test.js"
+    "test/unit/hub/hub_client.test.js": [
+      "test/unit/hub/hub_client.test.js",
+      "test/unit/hub/hub_client.test/push_methods.test.js",
+      "test/unit/hub/hub_client.test/hub_rejection.test.js",
+      "test/unit/hub/hub_client.test/retractions.test.js",
+      "test/unit/hub/hub_client.test/call_http.test.js"
     ],
-    "test/unit/hub_db_sync.test.js": [
-      "test/unit/hub_db_sync.test.js",
-      "test/unit/hub_db_sync.test/anchor_and_height_watermarks.test.js",
-      "test/unit/hub_db_sync.test/barriers_and_watchdog.test.js",
-      "test/unit/hub_db_sync.test/bootstrap_pagination.test.js",
-      "test/unit/hub_db_sync.test/buffer_and_scoping.test.js",
-      "test/unit/hub_db_sync.test/cross_chain_upgrades.test.js",
-      "test/unit/hub_db_sync.test/datetime_and_cold_start.test.js",
-      "test/unit/hub_db_sync.test/ensure_tables.test.js",
-      "test/unit/hub_db_sync.test/price_and_oracle_upgrades.test.js",
-      "test/unit/hub_db_sync.test/retraction_guards.test.js",
-      "test/unit/hub_db_sync.test/signed_retractions.test.js"
+    "test/unit/hub/hub_db_sync/hub_db_sync.test.js": [
+      "test/unit/hub/hub_db_sync/hub_db_sync.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync.test/anchor_and_height_watermarks.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync.test/barriers_and_watchdog.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync.test/bootstrap_pagination.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync.test/buffer_and_scoping.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync.test/cross_chain_upgrades.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync.test/datetime_and_cold_start.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync.test/ensure_tables.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync.test/price_and_oracle_upgrades.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync.test/retraction_guards.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync.test/signed_retractions.test.js"
     ],
-    "test/unit/hub_db_sync_attestation_responses.test.js": [
-      "test/unit/hub_db_sync_attestation_responses.test.js",
-      "test/unit/hub_db_sync_attestation_responses.test/status_and_grace.test.js"
+    "test/unit/hub/hub_db_sync/hub_db_sync_attestation_responses.test.js": [
+      "test/unit/hub/hub_db_sync/hub_db_sync_attestation_responses.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync_attestation_responses.test/status_and_grace.test.js"
     ],
-    "test/unit/hub_db_sync_bridge_mirror.test.js": [
-      "test/unit/hub_db_sync_bridge_mirror.test.js",
-      "test/unit/hub_db_sync_bridge_mirror.test/retractions_and_graces.test.js"
+    "test/unit/hub/hub_db_sync/hub_db_sync_bridge_mirror.test.js": [
+      "test/unit/hub/hub_db_sync/hub_db_sync_bridge_mirror.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync_bridge_mirror.test/retractions_and_graces.test.js"
     ],
-    "test/unit/hub_push_queue.test.js": [
-      "test/unit/hub_push_queue.test.js",
-      "test/unit/hub_push_queue.test/delivery_and_failures.test.js"
+    "test/unit/hub/hub_push_queue.test.js": [
+      "test/unit/hub/hub_push_queue.test.js",
+      "test/unit/hub/hub_push_queue.test/delivery_and_failures.test.js"
     ],
-    "test/unit/issue_bridge_optin.test.js": [
-      "test/unit/issue_bridge_optin.test.js",
-      "test/unit/issue_bridge_optin.test/policy_guards.test.js"
+    "test/unit/bridge/issue_bridge_optin.test.js": [
+      "test/unit/bridge/issue_bridge_optin.test.js",
+      "test/unit/bridge/issue_bridge_optin.test/policy_guards.test.js"
     ],
-    "test/unit/issue_caret_dot_and_intern.test.js": [
-      "test/unit/issue_caret_dot_and_intern.test.js",
-      "test/unit/issue_caret_dot_and_intern.test/parent_lookup.test.js"
+    "test/unit/db/ledger/issue_caret_dot_and_intern.test.js": [
+      "test/unit/db/ledger/issue_caret_dot_and_intern.test.js",
+      "test/unit/db/ledger/issue_caret_dot_and_intern.test/parent_lookup.test.js"
     ],
-    "test/unit/migration_precondition_baseline.test.js": [
-      "test/unit/migration_precondition_baseline.test.js",
-      "test/unit/migration_precondition_baseline.test/runner_branches.test.js"
+    "test/unit/migration/migration_precondition_baseline.test.js": [
+      "test/unit/migration/migration_precondition_baseline.test.js",
+      "test/unit/migration/migration_precondition_baseline.test/runner_branches.test.js"
     ],
-    "test/unit/migration_runner.test.js": [
-      "test/unit/migration_runner.test.js",
-      "test/unit/migration_runner.test/v017_renames.test.js",
-      "test/unit/migration_runner.test/leg_ordinal_rename.test.js",
-      "test/unit/migration_runner.test/destructive_guard.test.js",
-      "test/unit/migration_runner.test/sql_split_and_frontier.test.js",
-      "test/unit/migration_runner.test/checksum_guards.test.js",
-      "test/unit/migration_runner.test/runner_guards.test.js",
-      "test/unit/migration_runner.test/schema_assertions.test.js"
+    "test/unit/migration/migration_runner.test.js": [
+      "test/unit/migration/migration_runner.test.js",
+      "test/unit/migration/migration_runner.test/v017_renames.test.js",
+      "test/unit/migration/migration_runner.test/leg_ordinal_rename.test.js",
+      "test/unit/migration/migration_runner.test/destructive_guard.test.js",
+      "test/unit/migration/migration_runner.test/sql_split_and_frontier.test.js",
+      "test/unit/migration/migration_runner.test/checksum_guards.test.js",
+      "test/unit/migration/migration_runner.test/runner_guards.test.js",
+      "test/unit/migration/migration_runner.test/schema_assertions.test.js"
     ],
-    "test/unit/policy_apply.test.js": [
-      "test/unit/policy_apply.test.js",
-      "test/unit/policy_apply.test/injected_and_due.test.js"
+    "test/unit/bridge/policy_apply.test.js": [
+      "test/unit/bridge/policy_apply.test.js",
+      "test/unit/bridge/policy_apply.test/injected_and_due.test.js"
     ],
-    "test/unit/price_admission_wire_carrier.test.js": [
-      "test/unit/price_admission_wire_carrier.test.js",
-      "test/unit/price_admission_wire_carrier.test/additional_batch_guards.test.js"
+    "test/unit/price/price_admission_wire_carrier.test.js": [
+      "test/unit/price/price_admission_wire_carrier.test.js",
+      "test/unit/price/price_admission_wire_carrier.test/additional_batch_guards.test.js"
     ],
-    "test/unit/price_batch_compression.test.js": [
-      "test/unit/price_batch_compression.test.js",
-      "test/unit/price_batch_compression.test/rejections_and_determinism.test.js"
+    "test/unit/price/price_batch_compression.test.js": [
+      "test/unit/price/price_batch_compression.test.js",
+      "test/unit/price/price_batch_compression.test/rejections_and_determinism.test.js"
     ],
-    "test/unit/price_v2_payload_twin_parity.test.js": [
-      "test/unit/price_v2_payload_twin_parity.test.js",
-      "test/unit/price_v2_payload_twin_parity.test/admission_edge_cases.test.js"
+    "test/unit/price/price_v2_payload_twin_parity.test.js": [
+      "test/unit/price/price_v2_payload_twin_parity.test.js",
+      "test/unit/price/price_v2_payload_twin_parity.test/admission_edge_cases.test.js"
     ],
     "test/unit/protocol_changes.test.js": [
       "test/unit/protocol_changes.test.js",
       "test/unit/protocol_changes.test/vm_activation_gates.test.js",
       "test/unit/protocol_changes.test/controller_guard_and_consensus_pins.test.js"
     ],
-    "test/unit/recovery.test.js": [
-      "test/unit/recovery.test.js",
-      "test/unit/recovery.test/stake_cross_checks.test.js",
-      "test/unit/recovery.test/completeness.test.js",
-      "test/unit/recovery.test/archived_rewards.test.js",
-      "test/unit/recovery.test/xcall_relay_rows.test.js",
-      "test/unit/recovery.test/quorum_verified_parity.test.js"
+    "test/unit/recovery/recovery.test.js": [
+      "test/unit/recovery/recovery.test.js",
+      "test/unit/recovery/recovery.test/stake_cross_checks.test.js",
+      "test/unit/recovery/recovery.test/completeness.test.js",
+      "test/unit/recovery/recovery.test/archived_rewards.test.js",
+      "test/unit/recovery/recovery.test/xcall_relay_rows.test.js",
+      "test/unit/recovery/recovery.test/quorum_verified_parity.test.js"
     ],
-    "test/unit/rollback.test.js": [
-      "test/unit/rollback.test.js",
-      "test/unit/rollback.test/anchor_rewards.test.js",
-      "test/unit/rollback.test/attestation_and_escrow.test.js",
-      "test/unit/rollback.test/hub_retractions.test.js",
-      "test/unit/rollback.test/maturity_reversal.test.js",
-      "test/unit/rollback.test/transaction_and_rearm.test.js"
+    "test/unit/rollback/rollback.test.js": [
+      "test/unit/rollback/rollback.test.js",
+      "test/unit/rollback/rollback.test/anchor_rewards.test.js",
+      "test/unit/rollback/rollback.test/attestation_and_escrow.test.js",
+      "test/unit/rollback/rollback.test/hub_retractions.test.js",
+      "test/unit/rollback/rollback.test/maturity_reversal.test.js",
+      "test/unit/rollback/rollback.test/transaction_and_rearm.test.js"
     ],
     "test/unit/rollback_coverage.test.js": [
       "test/unit/rollback_coverage.test.js",
       "test/unit/rollback_coverage.test/slash_restore_twin.test.js"
     ],
-    "test/unit/rollcall_close.test.js": [
-      "test/unit/rollcall_close.test.js",
-      "test/unit/rollcall_close.test/k_streak_and_eviction.test.js",
-      "test/unit/rollcall_close.test/reward_election_and_ordering.test.js",
-      "test/unit/rollcall_close.test/rollcall_v1_gates.test.js"
+    "test/unit/rollcall/rollcall_close.test.js": [
+      "test/unit/rollcall/rollcall_close.test.js",
+      "test/unit/rollcall/rollcall_close.test/k_streak_and_eviction.test.js",
+      "test/unit/rollcall/rollcall_close.test/reward_election_and_ordering.test.js",
+      "test/unit/rollcall/rollcall_close.test/rollcall_v1_gates.test.js"
     ],
-    "test/unit/rollcall_gates_filter.test.js": [
-      "test/unit/rollcall_gates_filter.test.js",
-      "test/unit/rollcall_gates_filter.test/call_sites.test.js"
+    "test/unit/rollcall/rollcall_gates_filter.test.js": [
+      "test/unit/rollcall/rollcall_gates_filter.test.js",
+      "test/unit/rollcall/rollcall_gates_filter.test/call_sites.test.js"
     ],
-    "test/unit/snapshot_reorg_buffer.test.js": [
-      "test/unit/snapshot_reorg_buffer.test.js",
-      "test/unit/snapshot_reorg_buffer.test/verifier_and_recovery.test.js"
+    "test/unit/recovery/snapshot_reorg_buffer.test.js": [
+      "test/unit/recovery/snapshot_reorg_buffer.test.js",
+      "test/unit/recovery/snapshot_reorg_buffer.test/verifier_and_recovery.test.js"
     ],
-    "test/unit/sql_schema_column_parity.test.js": [
-      "test/unit/sql_schema_column_parity.test.js",
-      "test/unit/sql_schema_column_parity.test/baseline.test.js",
-      "test/unit/sql_schema_column_parity.test/table_bodies.test.js"
+    "test/unit/migration/sql_schema_column_parity.test.js": [
+      "test/unit/migration/sql_schema_column_parity.test.js",
+      "test/unit/migration/sql_schema_column_parity.test/baseline.test.js",
+      "test/unit/migration/sql_schema_column_parity.test/table_bodies.test.js"
     ],
-    "test/unit/sql_schema_index_parity.test.js": [
-      "test/unit/sql_schema_index_parity.test.js",
-      "test/unit/sql_schema_index_parity.test/baseline.test.js"
+    "test/unit/migration/sql_schema_index_parity.test.js": [
+      "test/unit/migration/sql_schema_index_parity.test.js",
+      "test/unit/migration/sql_schema_index_parity.test/baseline.test.js"
     ],
-    "test/unit/stall_health.test.js": [
-      "test/unit/stall_health.test.js",
-      "test/unit/stall_health.test/barrier_mapping.test.js"
+    "test/unit/xchain_indexer/stall_health.test.js": [
+      "test/unit/xchain_indexer/stall_health.test.js",
+      "test/unit/xchain_indexer/stall_health.test/barrier_mapping.test.js"
     ],
-    "test/unit/state_commitment_batched_node_writes.test.js": [
-      "test/unit/state_commitment_batched_node_writes.test.js",
-      "test/unit/state_commitment_batched_node_writes.test/stakes_memo.test.js"
+    "test/unit/state_commitment/state_commitment_batched_node_writes.test.js": [
+      "test/unit/state_commitment/state_commitment_batched_node_writes.test.js",
+      "test/unit/state_commitment/state_commitment_batched_node_writes.test/stakes_memo.test.js"
     ],
-    "test/unit/state_hash_archive_invalid.test.js": [
-      "test/unit/state_hash_archive_invalid.test.js",
-      "test/unit/state_hash_archive_invalid.test/state_hash_anchor_invalid_class.test.js"
+    "test/unit/state_commitment/state_hash_archive_invalid.test.js": [
+      "test/unit/state_commitment/state_hash_archive_invalid.test.js",
+      "test/unit/state_commitment/state_hash_archive_invalid.test/state_hash_anchor_invalid_class.test.js"
     ],
     "test/unit/utility.test.js": [
       "test/unit/utility.test.js",
@@ -390,9 +390,9 @@
       "test/unit/vm_gas_parity.test.js",
       "test/unit/vm_gas_parity.test/source_tree_scan.test.js"
     ],
-    "test/unit/xchain_price_query.test.js": [
-      "test/unit/xchain_price_query.test.js",
-      "test/unit/xchain_price_query.test/xchain_price_derivation_fill_selection.test.js"
+    "test/unit/price/xchain_price_query.test.js": [
+      "test/unit/price/xchain_price_query.test.js",
+      "test/unit/price/xchain_price_query.test/xchain_price_derivation_fill_selection.test.js"
     ],
     "test/unit/flagday_placeholder_guard.test.js": [
       "test/unit/flagday_placeholder_guard.test.js",
