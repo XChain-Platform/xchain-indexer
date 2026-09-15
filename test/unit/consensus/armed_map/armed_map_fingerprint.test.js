@@ -18,7 +18,7 @@ const assert = require('assert');
 const crypto = require('crypto');
 const fs     = require('fs');
 const path   = require('path');
-const { computeArmedMapFingerprint } = require('../../../../src/armed_map_fingerprint');
+const { computeArmedMapFingerprint } = require('../../../../src/consensus/armed_map/armed_map_fingerprint');
 
 describe('armedMapFingerprint', function () {
     it('covers every *_activation.js gate file plus the fixed carriers', function () {
@@ -64,7 +64,7 @@ describe('armedMapFingerprint', function () {
         assert.deepStrictEqual(uncovered, [], 'these src/ files declare an activation ' +
             'map but sit outside the armed-map fingerprint, so a deployed process on a ' +
             'stale copy of one is invisible to the fleet sweep: ' + uncovered.join(', ') +
-            ' (add each to FIXED_GATE_FILES in src/armed_map_fingerprint.js, and in xchain-sync\'s copy, in BOTH ' +
+            ' (add each to FIXED_GATE_FILES in src/consensus/armed_map/armed_map_fingerprint.js, and in xchain-sync\'s copy, in BOTH ' +
             'repos, and redeploy both fleets in one wave)');
     });
 

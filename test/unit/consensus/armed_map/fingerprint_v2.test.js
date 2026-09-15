@@ -116,7 +116,7 @@ function removeTree(dir) {
 const READ_SCRIPT = [
     "const path = require('path');",
     "const out = require(path.resolve('src/consensus/armed_map/fingerprint_v2.js')).computeArmedMapFingerprintV2();",
-    "const v1 = require(path.resolve('src/armed_map_fingerprint.js')).computeArmedMapFingerprint().fingerprint;",
+    "const v1 = require(path.resolve('src/consensus/armed_map/armed_map_fingerprint.js')).computeArmedMapFingerprint().fingerprint;",
     "if (process.argv[1] === 'load-main') require(path.resolve('src/XChainIndexer.js'));",
     'process.stdout.write(JSON.stringify({ hex: out.hex, count: out.count, reason: out.reason, v1 }));',
 ].join('\n');

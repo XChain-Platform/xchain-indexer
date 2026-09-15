@@ -26,7 +26,7 @@
 // fatal error, the freshly-read indexed-block height, and the current epoch
 // ms). Async only for the hub_push_queue stats fetch; all other fields are
 // derived synchronously from already-resolved values.
-const { computeArmedMapFingerprint } = require('../armed_map_fingerprint');
+const { computeArmedMapFingerprint } = require('../consensus/armed_map/armed_map_fingerprint');
 const { computeArmedMapFingerprintV2 } = require('../consensus/armed_map/fingerprint_v2');
 const { computeConsensusRulesDigest } = require('../consensus_rules_digest');
 const { barrierHoldMs, barrierCeilingExceeded } = require('../XChainIndexer');

@@ -41,7 +41,7 @@ const crypto = require('crypto');
 
 // The gate set is a naming convention PLUS an explicit list, and the list is
 // the part that carries the weight. The convention is every *_activation.js in
-// this directory, enumerated at call time so a new per-gate arming twin joins
+// src/ (SRC_DIR below), enumerated at call time so a new per-gate arming twin joins
 // the set the moment it lands. That alone is not the invariant it reads as:
 // several of the highest-consequence armed maps in the tree live in files the
 // convention does not match (EQUIV_HEADER_ACTIVATION in equivocation_header.js,
@@ -53,14 +53,14 @@ const crypto = require('crypto');
 // correctly-armed peer, which is exactly the straggler this module exists to
 // expose.
 //
-// Entries are posix-separated paths relative to this directory; a top-level
+// Entries are posix-separated paths relative to src/; a top-level
 // carrier keeps its bare filename as its key, so per-file cross-service
 // comparisons of the existing entries are unchanged. ONE list serves both
 // repos: an entry naming a carrier this repo does not have drops out of its
 // set, which is what lets the two copies stay byte-identical twins. Nothing
 // here is self-policing, so the enforcement is a test, not this comment:
-// test/unit/armedMapFingerprint.test.js scans src/ for activation-map
-// DECLARATIONS and fails on any carrier the set does not cover.
+// test/unit/consensus/armed_map/armed_map_fingerprint.test.js scans src/ for
+// activation-map DECLARATIONS and fails on any carrier the set does not cover.
 const FIXED_GATE_FILES = [
     'protocol_changes.js',
     'stateHash.js',
@@ -73,11 +73,16 @@ const FIXED_GATE_FILES = [
     'attestation/providerMinStakeHistory.js'
 ];
 
+// The hashed tree is src/, not the directory this module sits in: the keys
+// above are src-relative names and the fleet compares them by name, so the
+// module can live anywhere under src/ without moving a single hash.
+const SRC_DIR = path.join(__dirname, '..', '..');
+
 let cached = null;
 
 function computeArmedMapFingerprint(){
     if(cached) return cached;
-    const dir = __dirname;
+    const dir = SRC_DIR;
     const names = Array.from(new Set(
         fs.readdirSync(dir).filter(f => f.endsWith('_activation.js')).concat(FIXED_GATE_FILES)
     )).sort();
