@@ -15,9 +15,10 @@ const fs     = require('fs');
 const path   = require('path');
 
 // Companion to dependency_advisories.test.js, and deliberately a separate file:
-// that one is byte-identical across every sibling repo that carries it and
-// describes what a fresh install WOULD resolve, while this hazard lives in the
-// part of the lockfile a fresh install does not re-resolve.
+// that one describes what a fresh install WOULD resolve, while this hazard lives
+// in the part of the lockfile a fresh install does not re-resolve. The companion
+// is NOT a declared twin: eleven sibling repos carry a copy, those copies hold
+// nine distinct contents at their origins, and no guard compares them.
 //
 // This repo depends on xchain-vm as a local path (file:./xchain-vm). The
 // directory is gitignored and staged at build time from the canonical sibling,
