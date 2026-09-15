@@ -19,7 +19,7 @@
  * map the router dispatches on.
  *
  * buildActionParams() below deliberately touches no instance state: the arity
- * guard (test/unit/emission_params.test.js) calls it off the prototype with a
+ * guard (test/unit/contracts/emission_params.test.js) calls it off the prototype with a
  * null receiver, which is what lets it compare every emittable action's params
  * against that handler's formats[0] without constructing the whole loader.
  *

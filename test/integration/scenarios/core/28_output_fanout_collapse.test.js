@@ -19,7 +19,7 @@
  * output_fanout.collapseOutputFanout) so the action executes exactly once.
  *
  * This file exists to keep the integration HARNESS honest about that, not to test
- * output_fanout.js itself (test/unit/output_fanout.test.js does that). The launcher
+ * output_fanout.js itself (test/unit/chain/output_fanout.test.js does that). The launcher
  * used to omit the collapse, so every scenario in this tier silently modelled a
  * multi-output data-bearing transaction as executing once PER OUTPUT - a harness
  * that disagrees with the fleet about how many times a transaction runs, and one

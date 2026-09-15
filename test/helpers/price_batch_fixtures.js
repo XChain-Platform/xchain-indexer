@@ -14,8 +14,8 @@
  * test/helpers/price_batch_fixtures.js
  *
  * The PRICE v0 compression fixtures shared by
- * test/unit/price_batch_compression.test.js and the parts under
- * test/unit/price_batch_compression.test/, so every part measures and mangles the
+ * test/unit/price/price_batch_compression.test.js and the parts under
+ * test/unit/price/price_batch_compression.test/, so every part measures and mangles the
  * same bodies and the same base64 spellings.
  *
  ********************************************************************/

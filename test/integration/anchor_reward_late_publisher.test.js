@@ -17,7 +17,7 @@
  *
  * getPendingAnchorRewardAttestations() decides which mirrored attestations ever
  * reach reconcileAnchorRewardWinner(), and its whole content is a correlated
- * NOT EXISTS. Its unit sibling (test/unit/db_queries.test.js) stubs doQuery and
+ * NOT EXISTS. Its unit sibling (test/unit/db/db_queries.test/attestations.test.js) stubs doQuery and
  * can therefore only assert the SQL's SHAPE - it never asks MariaDB anything. For
  * a raw predicate that is not enough twice over:
  *

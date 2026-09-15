@@ -38,7 +38,7 @@ const SUB = require('../state_subtree_activation.js');
 // and merkle.stateRoot() maps a null/absent/empty-root slot to the identical
 // EMPTY_SMT_ROOT leaf, so this is byte-identical to the old two-argument
 // assembly on every chain. The equality is asserted, not assumed, in
-// test/unit/stateSubtreeActivation.test.js.
+// test/unit/state_subtree_activation.test.js.
 function assembleStateRoot(balancesRootHex, stakesRootHex, extraSubRoots){
     const subRoots = { balances_root: balancesRootHex, stakes_root: stakesRootHex };
     if(extraSubRoots){

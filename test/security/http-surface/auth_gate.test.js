@@ -15,7 +15,7 @@
  * Root http-surface security suite: the REAL middleware stack of src/api.js,
  * booted and driven over HTTP.
  *
- * What makes this suite different from test/unit/api_auth_batch.test.js is the
+ * What makes this suite different from test/unit/api/api_auth_batch.test.js is the
  * subject. That file re-declares the gate (its own WRITE_METHODS /
  * FEDERATION_READ_METHODS sets and a plain `!==` key compare) and drives the
  * copy, so it asserts nothing about the shipped code and has already drifted
@@ -40,7 +40,7 @@
  * each boot an ephemeral port, so the suite is safe to run concurrently.
  *
  * Layer coverage: auth-gate fail-closed, batch smuggling, rate-limit 429 and
- * helmet headers. The cors layer is covered by test/unit/cors_origin.test.js,
+ * helmet headers. The cors layer is covered by test/unit/api/cors_origin.test.js,
  * which drives the real middleware the same way, and is not duplicated here.
  * The rate-limit and helmet cases run from auth_gate.test/rate_limit_headers.test.js
  * through the same harness.

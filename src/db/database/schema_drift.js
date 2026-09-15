@@ -45,7 +45,7 @@ async function addMissingColumn(db, table, expected, i, liveByName){
     // for a surrogate key - only a dated migration is. A migration that adds
     // one must never be squashed or baselined as "the reconciler already did
     // it" (attest_validator_stats.id, 2026-08-19). Pinned by
-    // test/unit/schema_drift_column_order.test.js.
+    // test/unit/migration/schema_drift_column_order.test.js.
     if(exp.notNull && !exp.hasDefault){
         getLogger().info('Schema drift on ' + table + '.' + exp.name + ': column missing live, source is NOT NULL with no DEFAULT - cannot backfill existing rows safely. Skipping; add manually.');
         return;

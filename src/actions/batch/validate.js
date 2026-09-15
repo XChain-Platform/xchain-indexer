@@ -32,13 +32,13 @@ async function resolveGates(data){
     // exemption and the batch-cumulative value ledger below. Resolved once per BATCH,
     // like `normalize`, so every gated site in this handler and every sub-command the
     // dispatch loop runs sees ONE verdict. The gate is registered at or after
-    // BATCH_SUBACTION_NORMALIZATION (asserted in test/unit/batchIssuanceLimitsGate),
+    // BATCH_SUBACTION_NORMALIZATION (asserted in test/unit/protocol/batch_issuance_limits_gate.test.js),
     // so wherever this is true, sub-command params are already normalized.
     let limitsActive = await this.protocolChanges.isEnabled('BATCH_ISSUANCE_LIMITS', data['BLOCK_INDEX']);
     // BATCH_COST_WEIGHTING flag-day: the flat command cap becomes a budget over per-action
     // cost weights. Resolved once per BATCH like the two above, so every gated site sees ONE
     // verdict. Registered at or after BATCH_ISSUANCE_LIMITS (asserted in
-    // test/unit/batch_cost_weighting_gate.test.js), so wherever this is true the classification
+    // test/unit/fees/batch_cost_weighting_gate.test.js), so wherever this is true the classification
     // and normalization the weight scan reads from are already in force.
     let weightsActive = await this.protocolChanges.isEnabled('BATCH_COST_WEIGHTING', data['BLOCK_INDEX']);
     return { normalize, limitsActive, weightsActive };

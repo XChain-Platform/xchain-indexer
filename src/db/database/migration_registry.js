@@ -133,7 +133,7 @@ const DEPLOY_PRECONDITION_TAG = 'deploy-precondition=required';
 // DEPLOY_PRECONDITION_TAG in each listed migration's own header, which the deploy
 // tool (xchain-node's MigrationPreconditionService) reads out of the source tree it
 // is about to deploy and checks against the target DB's schema_migrations BEFORE the
-// container is recreated. test/unit/migration_preconditions.test.js keeps the halves
+// container is recreated. test/unit/migration/migration_preconditions.test.js keeps the halves
 // in step: every entry here must exist, be mode=manual, and carry the tag.
 //
 // ADDING A STARTUP ASSERTION: register it here and tag its migration file, or the

@@ -133,7 +133,7 @@ module.exports = {
     //
     // FROZEN VOCABULARY: the returned tokens are the closed set
     // xchain-vm/src/consensus_runtime.js CONSENSUS_STATUS_TOKENS. Adding/splitting a token is a
-    // consensus change (bump CONSENSUS_VERSION). Guarded by test/unit/consensus_params.test.js.
+    // consensus change (bump CONSENSUS_VERSION). Guarded by test/unit/consensus/consensus_params.test.js.
     vmFailureStatus(vmError){
         let msg = String(vmError || '');
         if(msg.startsWith('revert:')) return 'reverted';

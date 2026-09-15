@@ -40,7 +40,7 @@
 --
 -- AFTER action_index matches the definition's column position, so both schema-construction
 -- paths produce a byte-identical SHOW CREATE TABLE (pinned by
--- test/unit/sql-schema-column-parity.test.js).
+-- test/unit/migration/sql_schema_column_parity.test.js).
 --
 -- HOW TO RUN
 --   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-08-28-anchor-actions-section-index-pk.sql

@@ -24,7 +24,7 @@
  * Why the middleware is rebuilt here rather than imported: startApi() in
  * src/api.js is not importable — it opens live MariaDB connections and starts
  * the block loop. So, matching the reconstruction pattern already used by
- * test/unit/api_auth_batch.test.js, the security middleware chain is rebuilt
+ * test/unit/api/api_auth_batch.test.js, the security middleware chain is rebuilt
  * from the same pieces the app uses. The CORS leg imports the REAL
  * src/api/cors_origin.js (parseCorsOrigin), so a regression in that module fails
  * this suite. The auth gate mirrors the guard in src/api.js and MUST be kept

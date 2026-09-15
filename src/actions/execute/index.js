@@ -207,7 +207,7 @@ class Execute {
     // MUST match the format strings in each handler's this.formats[0]. The per-action
     // mappings live in ./action_params.js by family; what stays here is the label for
     // every emittable action, because this switch IS the emittable set: the truncation
-    // coverage guard (test/unit/execute_emission_truncation.test.js) reads these case
+    // coverage guard (test/unit/contracts/execute_emission_truncation.test.js) reads these case
     // labels off this function to check that every action a contract can emit is
     // either amount-mapped or declared amountless. Moving the labels into the family
     // functions would leave that guard reading an empty set and passing on anything.

@@ -11,7 +11,7 @@
 // contact legal@dankest.llc.
 
 // Publisher-faithful ANCHOR archive builder, shared between the AnchorRecovery
-// unit round-trip (test/unit/recovery.test.js) and the recovery-determinism
+// unit round-trip (test/unit/recovery/recovery.test.js) and the recovery-determinism
 // integration e2e (test/integration/recovery_determinism_e2e.test.js). Builds an
 // archive batch exactly as the hub's StateAnchorPublisher serializes it (fixed key
 // order, gzip+base64url, CRC32, chunking, REAL Ed25519 signatures + EQUIV canonical),

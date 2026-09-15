@@ -32,7 +32,7 @@ const ProtocolChanges = require('../../../../src/protocol_changes.js');
 
 // The two declaration shapes that make a file a carrier. ACTIVATION_MAP is the
 // activation-map rule the platform's code-structure gate grades with, and
-// CARRIER_DECL is v1's carrier scan (test/unit/armed_map_fingerprint.test.js:48),
+// CARRIER_DECL is v1's carrier scan (test/unit/consensus/armed_map/armed_map_fingerprint.test.js:47),
 // each given a capture group here so a hit names the declared export.
 const ACTIVATION_MAP = /\b([A-Z][A-Z0-9_]*_ACTIVATION)\s*=\s*\{/g;
 const CARRIER_DECL = /^\s*(?:const|let|var)\s+([A-Z0-9_]*ACTIVATIONS?[A-Z0-9_]*)\s*=\s*(?:Object\.freeze\()?\{/gm;

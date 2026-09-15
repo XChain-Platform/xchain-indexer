@@ -18,7 +18,7 @@
  *
  * It embeds canonical INPUTS and computes the expected OUTPUTS with the REAL
  * src/consensus/merkle.js, so the committed JSON authentically locks the scheme. The unit
- * test (test/unit/merkle.test.js) reloads the JSON, recomputes from the same
+ * test (test/unit/consensus/merkle.test.js) reloads the JSON, recomputes from the same
  * inputs, and asserts byte-equality. xchain-sync/src/merkle.js is the byte-
  * identical twin; its own copy of this golden + the e2e recompute scenario are
  * the cross-repo drift guard.

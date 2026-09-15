@@ -26,7 +26,7 @@
  * escrowed against no row of its own.
  *
  * The remedy is the per-subcommand root discriminator (flag-day gated; see
- * test/unit/batch_root_discriminator_gate.test.js for the registration). This suite is
+ * test/unit/consensus/batch_root_discriminator_gate.test.js for the registration). This suite is
  * the end-to-end regression the defect never had: the REAL Batch handler stamps the
  * positions, the REAL discriminator turns them into root tokens, and the REAL ATTEST
  * v0 handler accepts each resulting request_id, which it does only when its own

@@ -16,7 +16,7 @@
 // ones an operator sees, so they are asserted at the ACTION layer over row sets:
 // one key, one row set, two heights, and the STATUS the handler writes. The SQL
 // that produces those row sets is pinned separately, by text and by bind args,
-// in test/unit/db_queries.test.js against the real Database method. Neither half
+// in test/unit/db/db_queries.test/stakes.test.js against the real Database method. Neither half
 // stands alone: this file would pass against a double that disagreed with the
 // query, and that file would pass against a query no caller reached. Read the
 // two together.
@@ -27,7 +27,7 @@
 //   reuseBlockingOnly         - every row regardless of activation state, minus
 //                               the rows deactivated AND past cooldown
 // A drift between the transcription and the SQL is exactly what the query-shape
-// cases in db_queries.test.js exist to catch.
+// cases in test/unit/db/db_queries.test/stakes.test.js exist to catch.
 
 process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';

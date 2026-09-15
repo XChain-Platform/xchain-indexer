@@ -22,7 +22,7 @@
 # buildAndUp), so dev/prod/test images are never stale. This script covers the one
 # case xchain-node does NOT: a developer running the indexer's unit tests in-place,
 # where a leftover ./xchain-vm from a prior run can drift behind the canonical sibling
-# and redden test/unit/consensus_params.test.js (CONSENSUS_VERSION mismatch).
+# and redden test/unit/consensus/consensus_params.test.js (CONSENSUS_VERSION mismatch).
 #
 # Source of truth: the canonical sibling checkout ../xchain-vm (override with
 # XCHAIN_VM_SOURCE). This is a LOCAL DEV convenience only; it is not part of the

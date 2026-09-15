@@ -39,7 +39,7 @@ const { resolveRootDiscriminator } = require('../../consensus/batch_root_discrim
 // actions with no tick-denominated amount are absent (CALLBACK/XCALL/EXECUTE/BROADCAST/
 // COINPAY/FILE/LINK/LIST/MESSAGE/SWEEP); COINPAY's amount is a native-coin value, not a tick.
 // SLASH is handled inline, not here. KEEP IN SYNC with buildActionParams: the emission-map
-// coverage test (test/unit/execute_emission_truncation.test.js) fails if a new amount-bearing
+// coverage test (test/unit/contracts/execute_emission_truncation.test.js) fails if a new amount-bearing
 // emittable action is missing here.
 const EMISSION_AMOUNT_FIELDS = {
     SEND:      [{ amount: 'quantity',   tick: 'tick' }],

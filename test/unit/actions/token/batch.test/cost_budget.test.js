@@ -34,7 +34,7 @@ const ADDR = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
 // on. `weightsOn` implying `limitsOn` mirrors that nesting rather than testing a
 // window the handler cannot enter. (The registered instants no longer state the
 // ordering on mainnet, where the 2026-09-09 genesis arm put weighting at 0 below the
-// issuance gate's 2026-08-16; test/unit/batch_cost_weighting_gate.test.js drives the
+// issuance gate's 2026-08-16; test/unit/fees/batch_cost_weighting_gate.test.js drives the
 // nesting through this handler for exactly that reason.)
 function stubGates(limitsOn, weightsOn) {
     const known = ['BATCH', 'SEND', 'MESSAGE', 'ADDRESS', 'AIRDROP', 'BROADCAST', 'ISSUE', 'MINT', 'DEPLOY'];

@@ -73,7 +73,7 @@ async function gatherStakeEntries(db, blockIndex){
 //
 // The memo is sound because buildFull is a PURE function of its entries: the node
 // store is content-addressed, so the same entry set always yields the same root.
-// stateCommitment.test.js pins both halves of that - equality with the merkle.js
+// test/unit/state_commitment/state_commitment.test.js pins both halves of that - equality with the merkle.js
 // reference, and insert-order independence.
 //
 // Every way this can be wrong is a way it rebuilds. It shortcuts ONLY when the

@@ -13,7 +13,7 @@
 // The database stubs the AnchorRecovery suites drive recovery against: the DOGE
 // indexer's anchor_actions / cross_chain_* query surface, the BTC indexer's stake
 // and capability resolvers, and the BTC reward staging table. They live here
-// because test/unit/recovery.test.js and the parts under test/unit/recovery.test/ all
+// because test/unit/recovery/recovery.test.js and the parts under test/unit/recovery/recovery.test/ all
 // feed the same archives through them, so one copy keeps every part judging
 // recovery against the same model of the schema.
 

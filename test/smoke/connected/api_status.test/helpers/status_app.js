@@ -26,7 +26,7 @@ const helmet     = require('helmet');
 
 // Standalone copy of src/XChainIndexer.js stallWedged (the smoke harness deliberately
 // reconstructs the route rather than importing the module, which pulls in native DB
-// deps). The canonical function is unit-tested in test/unit/stall_health.test.js.
+// deps). The canonical function is unit-tested in test/unit/xchain_indexer/stall_health.test.js.
 function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null){
     if(!stallReason) return false;
     if(lastBlockCommittedAt == null) return false;
@@ -35,7 +35,7 @@ function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClear
 }
 
 // Standalone copies of the status discriminators, same rationale as above; the
-// canonical functions are unit-tested in test/unit/stall_health.test.js.
+// canonical functions are unit-tested in test/unit/xchain_indexer/stall_health.test.js.
 function waitingOnFutureBlock(stallReason, stallClearsAtMs, now){
     if(!stallReason) return false;
     if(!Number.isFinite(stallClearsAtMs)) return false;

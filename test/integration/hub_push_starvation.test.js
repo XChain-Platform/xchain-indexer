@@ -21,7 +21,7 @@
  * head-of-line blocking. The fix pushes the backoff due-time predicate into
  * the SQL itself (MariaDB dialect: DATE_SUB/POW/LEAST), so this must run
  * against a real MariaDB instance to prove the dialect is correct; a stubbed
- * connection (see test/unit/db_queries.test.js) can only assert the SQL text
+ * connection (see test/unit/db/db_queries.test/hub_push_and_capabilities.test.js) can only assert the SQL text
  * shape, not that MariaDB actually evaluates it as intended.
  */
 

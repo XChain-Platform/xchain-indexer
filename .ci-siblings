@@ -6,7 +6,7 @@
 # so the run reports green having exercised none of them. Measured 2026-08-12
 # across the nine gated repos, this was the ONE whose roster was already
 # complete, so its venue counts already equal a full local checkout's. See
-# test/unit/sibling-coverage.test.js, which reports the surface this file leaves
+# test/unit/repo_guards/sibling_coverage.test.js, which reports the surface this file leaves
 # uncovered and now fails if a guard's sibling is ever added without a line here.
 #
 # ci-dispatch.sh ships each of these at its origin/master (falling back to local
