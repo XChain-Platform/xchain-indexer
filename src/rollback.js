@@ -161,11 +161,12 @@ class Rollback {
         let firstActionIndex      = scope.firstActionIndex;
         let lastActionIndex       = scope.lastActionIndex;
 
-        let markets = await this.collectAffectedEntities(firstActionIndex);
-
-        // Get lists of addresses, tickers, and transactions (collected during read phase above)
-        let addresses = this.util.getAddressesList();
-        let tickers   = this.util.getTickersList();
+        // collectAffectedEntities captures the addresses/tickers lists itself, in the same
+        // synchronous tail as its own last row-absorb (no await between fill and capture): a
+        // concurrent fee-quote dry-run resets/refills these same shared indexer.util lists
+        // (processAction -> resetLists), so a read taken after an extra await here could see a
+        // foreign or incomplete set. See the AWAIT-POINT rule (finding 3f12c42f/92357c37).
+        let { markets, addresses, tickers } = await this.collectAffectedEntities(firstActionIndex);
 
         // The push-generation fence and the durable retraction rows the transaction stages
         // (stageHubRetractions carries the reasoning for both), read after the commit by the
@@ -392,6 +393,12 @@ class Rollback {
     // The addresses, tickers and DEX market pairs the orphaned range touched, read into
     // the util lists (and the returned pair array) before any delete removes the rows
     // that name them, so the post-delete balance/supply/market recompute can find them.
+    // The addresses/tickers lists are captured here, in this method's own tail, rather
+    // than left for the caller to read after awaiting this call: this.util's lists are
+    // shared with the fee-quote dry-run path (processAction -> resetLists), so a caller-side
+    // read separated from the last row-absorb by even one await could observe a list the
+    // dry-run reset or refilled in between. Capturing before return keeps zero yield points
+    // between the last absorb and the read, matching this method's pre-split shape.
     async collectAffectedEntities(firstActionIndex){
         let query, args;
         // Placeholder for market pairs
@@ -427,7 +434,12 @@ class Rollback {
                 }
             }
         }
-        return markets;
+
+        // Capture in the same synchronous tail as the loop above, with no await between the
+        // last absorb and this read (see the method comment above).
+        let addresses = this.util.getAddressesList();
+        let tickers   = this.util.getTickersList();
+        return { markets, addresses, tickers };
     }
 
     // The read-phase query for one rolled-back table, or false when the table names no
