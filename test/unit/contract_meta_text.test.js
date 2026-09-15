@@ -11,7 +11,7 @@
 // CONTRACT_META_REQUIRED: the text grammar and the seven-row verdict ladder,
 // exercised directly on src/actions/deploy/contract_meta.js. The deploy-path half (which string
 // a real DEPLOY lands, and what reaches createContract) lives in
-// test/unit/actions/deploy_contract_meta.test.js.
+// test/unit/actions/contract/deploy_contract_meta.test.js.
 
 const assert = require('assert');
 const cm     = require('../../src/actions/deploy/contract_meta.js');

@@ -11,7 +11,7 @@
 // FIAT dispenser reverse price matching.
 //
 // Both matchers decide a CONSENSUS verdict: how many units a bare coin payment
-// buys, and whether the dispense is valid at all. dispense.test.js covers the
+// buys, and whether the dispense is valid at all. actions/market/dispense.test.js covers the
 // four action-level outcomes but stubs both matchers outright, so until now the
 // arithmetic that actually settles the money had no direct test. These are the
 // parts that fork a ledger if they drift: window bounds, the newest-first

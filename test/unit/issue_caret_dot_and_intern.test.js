@@ -47,7 +47,7 @@ const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH'; // createBaseData's default
 const GATE   = 'BATCH_ISSUANCE_LIMITS';
 
 // Below the 862633 ISSUANCE_FEE mainnet activation block, so new-token issuance
-// needs no GAS balance (mirrors test/unit/actions/issue.test.js's LOW_BLOCK).
+// needs no GAS balance (mirrors test/unit/actions/token/issue.test.js's LOW_BLOCK).
 const LOW_BLOCK = 100;
 
 function makeActionsCtx(indexer, { batchLimitsActive = true } = {}) {
@@ -73,7 +73,7 @@ function makeActionsCtx(indexer, { batchLimitsActive = true } = {}) {
 
 /**
  * Build the params array for format 0 (full). Mirrors
- * test/unit/actions/issue.test.js's makeFormat0Params so a plain new-token
+ * test/unit/actions/token/issue.test.js's makeFormat0Params so a plain new-token
  * ISSUE reaches STATUS 'valid' with no unrelated field failures.
  */
 function makeFormat0Params(overrides = {}) {

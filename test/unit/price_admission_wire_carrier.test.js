@@ -112,7 +112,7 @@ function armTwins() {
 }
 
 // ---------------------------------------------------------------------------
-// The on-chain batch wire, assembled exactly as price_batch.test.js assembles it:
+// The on-chain batch wire, assembled exactly as actions/price/price_batch.test.js assembles it:
 // `body` is the field list AFTER "PRICE|0|".
 // ---------------------------------------------------------------------------
 function newIdentity() {

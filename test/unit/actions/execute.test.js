@@ -68,8 +68,8 @@ describe('Execute (EXECUTE) @regression @tier2', function () {
         });
 
         it('rejects a non-numeric CONTRACT_ACTION_INDEX as (format), not a crash', async function () {
-            // Regression twin of deposit.test.js: junk here previously reached the
-            // BIGINT row write and wedged block processing under strict SQL mode.
+            // Regression twin of stake/deposit.test.js: without this check, junk here
+            // reaches the BIGINT row write and wedges block processing under strict SQL mode.
             const data = executeData({ FORMAT: 0 });
             await handler.parse(['0', 'null', 'run', ''], data, null);
             assert.ok(String(data['STATUS']).includes('CONTRACT_ACTION_INDEX (format)'));

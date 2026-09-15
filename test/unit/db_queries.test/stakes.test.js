@@ -211,7 +211,7 @@ describe('Database.getActiveStakeByPubkey() @regression @tier1', function () {
 describe('Database.getActiveStakeByPubkey() @regression @tier1', function () {
     // STAKE v1 key-reuse mode (src/stake_key_reuse_activation.js). These cases pin the
     // SQL TEXT and the bind args; the verdicts that SQL produces are driven at the action
-    // layer in test/unit/actions/stake_key_reuse.test.js, and the two halves are written
+    // layer in test/unit/actions/stake/stake_key_reuse.test.js, and the two halves are written
     // to be read together.
     describe('reuseBlockingOnly mode', function () {
         async function capture(blockIndex) {

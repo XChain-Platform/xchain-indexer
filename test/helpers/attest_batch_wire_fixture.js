@@ -8,8 +8,8 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// Fixtures of the ATTEST v5/v6 batch wire suite (test/unit/actions/attest_batch_wire.test.js
-// and test/unit/actions/attest_batch_wire.test/batch_wire_integrity.test.js). Like the cases, they use the
+// Fixtures of the ATTEST v5/v6 batch wire suite (test/unit/actions/attest/attest_batch_wire.test.js
+// and test/unit/actions/attest/attest_batch_wire.test/batch_wire_integrity.test.js). Like the cases, they use the
 // exported API of src/actions/attest/attest_batch_wire.js alone.
 
 const assert = require('assert');

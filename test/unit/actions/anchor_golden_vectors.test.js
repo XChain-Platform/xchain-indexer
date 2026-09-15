@@ -109,7 +109,7 @@ function setupAnchorFixture() {
     swqStub = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
     // pin the derive-relocation gate OFF so these vectors exercise the DOGE-side
     // reward write (the below-gate / mainnet behavior). The live regtest/testnet
-    // path skips that write; its own case is in anchor.test.js.
+    // path skips that write; its own case is in anchor/anchor.test.js.
     deriveGateStub = sinon.stub(arMod, 'isAnchorRewardDeriveActive').returns(false);
 }
 
