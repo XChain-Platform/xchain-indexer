@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * test/unit/rollback_coverage.test.js
+ * test/unit/rollback/rollback_coverage.test.js
  *
  * Rollback coverage guard.
  *
@@ -42,11 +42,11 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 const sinon  = require('sinon');
-const { createMockIndexer } = require('../../fixtures/mocks');
-const Rollback              = require('../../../src/rollback.js');
-const lifecycle             = require('../../../src/hub/table_lifecycle.js');
-const { siblingCheckout }   = require('../../helpers/sibling_checkout.js');
-const SQL_DIR = path.join(__dirname, '../../../src/sql');
+const { createMockIndexer } = require('../../../fixtures/mocks');
+const Rollback              = require('../../../../src/rollback.js');
+const lifecycle             = require('../../../../src/hub/table_lifecycle.js');
+const { siblingCheckout }   = require('../../../helpers/sibling_checkout.js');
+const SQL_DIR = path.join(__dirname, '../../../../src/sql');
 const UNIVERSE = fs.readdirSync(SQL_DIR)
     .filter(f => f.endsWith('.sql'))
     .map(f => f.slice(0, -'.sql'.length))
@@ -57,7 +57,7 @@ const LOOKUP_TABLES = new Set(lifecycle.tablesWhere(t => t.rollback === 'lookup'
 const isLookupTable = (t) => LOOKUP_TABLES.has(t);
 const SYNC_ROOT = process.env.XCHAIN_SYNC_PATH
     ? path.resolve(process.env.XCHAIN_SYNC_PATH)
-    : path.resolve(__dirname, '..', '..', '..', '..', 'xchain-sync');
+    : path.resolve(__dirname, '..', '..', '..', '..', '..', 'xchain-sync');
 const REQUIRE_SIBLINGS = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 let rollback;
 function rollbackHooks() {
@@ -103,7 +103,7 @@ describe('Rollback coverage guard @regression', function () {
                 return lits.map(l => l.slice(1, -1)).join('').replace(/\s+/g, ' ').trim();
             }
             assert.strictEqual(
-                slashRestoreSql(path.join(__dirname, '../../../src/rollback.js')),
+                slashRestoreSql(path.join(__dirname, '../../../../src/rollback.js')),
                 slashRestoreSql(syncPath),
                 'the contract slash-restore SQL drifted between xchain-indexer and xchain-sync; keep it identical');
         });

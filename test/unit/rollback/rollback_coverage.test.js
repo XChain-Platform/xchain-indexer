@@ -11,7 +11,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * test/unit/rollback_coverage.test.js
+ * test/unit/rollback/rollback_coverage.test.js
  *
  * Rollback coverage guard.
  *
@@ -45,17 +45,17 @@ const fs     = require('fs');
 const path   = require('path');
 const sinon  = require('sinon');
 
-const { createMockIndexer } = require('../fixtures/mocks');
-const Rollback              = require('../../src/rollback.js');
-const lifecycle             = require('../../src/hub/table_lifecycle.js');
+const { createMockIndexer } = require('../../fixtures/mocks');
+const Rollback              = require('../../../src/rollback.js');
+const lifecycle             = require('../../../src/hub/table_lifecycle.js');
 // Decides whether a sync twin path may be trusted before the reciprocal guard reads it.
-const { siblingCheckout }   = require('../helpers/sibling_checkout.js');
+const { siblingCheckout }   = require('../../helpers/sibling_checkout.js');
 
 // ---------------------------------------------------------------------------
 // The universe: every table the indexer creates, straight from src/sql/.
 // Mirrors db.js verifyTables() exactly (all *.sql, name = filename minus .sql).
 // ---------------------------------------------------------------------------
-const SQL_DIR = path.join(__dirname, '../../src/sql');
+const SQL_DIR = path.join(__dirname, '../../../src/sql');
 const UNIVERSE = fs.readdirSync(SQL_DIR)
     .filter(f => f.endsWith('.sql'))
     .map(f => f.slice(0, -'.sql'.length))
@@ -77,7 +77,7 @@ const LOOKUP_TABLES = new Set(lifecycle.tablesWhere(t => t.rollback === 'lookup'
 const isLookupTable = (t) => LOOKUP_TABLES.has(t);
 const SYNC_ROOT = process.env.XCHAIN_SYNC_PATH
     ? path.resolve(process.env.XCHAIN_SYNC_PATH)
-    : path.resolve(__dirname, '..', '..', '..', 'xchain-sync');
+    : path.resolve(__dirname, '..', '..', '..', '..', 'xchain-sync');
 const REQUIRE_SIBLINGS = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 
 
@@ -254,7 +254,7 @@ describe('Rollback coverage guard @regression', function () {
         // classification could silently outlive a removed sweep (the very failure
         // that re-opened the orphaned-only-address zombie balance), so assert the
         // `DELETE FROM <table> ... NOT IN (SELECT id FROM <index>)` is present in source.
-        const src = fs.readFileSync(path.join(__dirname, '../../src/rollback.js'), 'utf8');
+        const src = fs.readFileSync(path.join(__dirname, '../../../src/rollback.js'), 'utf8');
         const missing = ORPHAN_SWEEPS.filter(({ table, index }) => {
             const re = new RegExp(`DELETE\\s+FROM\\s+${table}\\b[\\s\\S]{0,400}?SELECT\\s+id\\s+FROM\\s+${index}\\b`, 'i');
             return !re.test(src);
@@ -310,7 +310,7 @@ describe('Rollback coverage guard @regression', function () {
                     return;
                 }
                 assert.strictEqual(
-                    fs.readFileSync(path.join(__dirname, '../../src/' + twin), 'utf8'),
+                    fs.readFileSync(path.join(__dirname, '../../../src/' + twin), 'utf8'),
                     fs.readFileSync(syncPath, 'utf8'),
                     twin + ' drifted between xchain-indexer and xchain-sync; keep the twin byte-identical');
             });
