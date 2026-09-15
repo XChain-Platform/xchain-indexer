@@ -81,6 +81,14 @@ describe('capability validator request steps', function () {
         });
     });
 
+});
+
+// Same suite title, second block: one describe callback per four step groups is
+// over the 60-line limit, and a sibling block keeps every full title identical
+// while a part file would not.
+describe('capability validator request steps', function () {
+    afterEach(function () { sinon.restore(); });
+
     describe('notYetIndexedError()', function () {
         it('returns null when the requested block equals the latest block', async function () {
             const db = { getLatestBlockIndex: sinon.stub().resolves(42) };
