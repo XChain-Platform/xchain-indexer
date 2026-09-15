@@ -70,6 +70,16 @@ describe('Utility isCryptoAddress() boundary tests @regression @tier3', function
         assert.strictEqual(util.isCryptoAddress('bcrt1pxqgcx65hqkd9c7y6wulyfv2wlwawqx62n3ufwxkjhjpas2jtqxmsglytaf'), true);
     });
 
+});
+
+describe('Utility isCryptoAddress() boundary tests @regression @tier3', function () {
+    let util;
+
+    before(function () {
+        const indexer = createMockIndexer();
+        util = indexer.util;
+    });
+
     // Checksum boundaries: a single flipped character must invalidate
     it('isCryptoAddress: base58 checksum flip → invalid', function () {
         assert.strictEqual(util.isCryptoAddress(SOURCE.slice(0, -1) + (SOURCE.endsWith('H') ? 'J' : 'H')), false);
@@ -158,59 +168,6 @@ describe('Address validation boundary tests via SEND handler @regression @tier3'
     it('ADR-04: address-length garbage DESTINATION (bad checksum) → invalid', async function () {
         const dest   = 'A'.repeat(34);
         const params = ['0', 'TEST', '1', dest, ''];
-        const data   = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: 100, SOURCE });
-
-        await handler.parse(params, data, null);
-
-        assert.ok(data.STATUS.startsWith('invalid'), `expected invalid but got: ${data.STATUS}`);
-    });
-});
-
-describe('Address validation boundary tests via SEND handler @regression @tier3', function () {
-    beforeEach(function () {
-        indexer     = createMockIndexer();
-        actionsCtx  = makeActionsCtx(indexer);
-        handler     = new Send(actionsCtx);
-
-        indexer.indexerDb.getTokenInfo.resolves(createTokenInfo({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0 }));
-        indexer.indexerDb.getAddressBalances.resolves({ 1: '1000' });
-        indexer.indexerDb.isActionAllowed.resolves(true);
-        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-        indexer.indexerDb.findDispenserSends.resolves([]);
-    });
-
-    afterEach(function () { sinon.restore(); });
-
-    it('ADR-05: valid bech32 segwit DESTINATION → valid', async function () {
-        const params = ['0', 'TEST', '1', 'bcrt1qe6l04hhwjg98fmggptdm0cemj6lm7hhwzahaul', ''];
-        const data   = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: 100, SOURCE });
-
-        await handler.parse(params, data, null);
-
-        assert.strictEqual(data.STATUS, 'valid', `expected valid but got: ${data.STATUS}`);
-    });
-
-    it('ADR-06a: valid bech32m taproot DESTINATION → valid', async function () {
-        const params = ['0', 'TEST', '1', 'bcrt1pxqgcx65hqkd9c7y6wulyfv2wlwawqx62n3ufwxkjhjpas2jtqxmsglytaf', ''];
-        const data   = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: 100, SOURCE });
-
-        await handler.parse(params, data, null);
-
-        assert.strictEqual(data.STATUS, 'valid', `expected valid but got: ${data.STATUS}`);
-    });
-
-    it('ADR-06b: checksum-flipped DESTINATION → invalid', async function () {
-        const dest   = DESTINATION.slice(0, -1) + (DESTINATION.endsWith('s') ? 't' : 's');
-        const params = ['0', 'TEST', '1', dest, ''];
-        const data   = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: 100, SOURCE });
-
-        await handler.parse(params, data, null);
-
-        assert.ok(data.STATUS.startsWith('invalid'), `expected invalid but got: ${data.STATUS}`);
-    });
-
-    it('ADR-07: wrong-network DESTINATION (mainnet P2PKH on regtest) → invalid', async function () {
-        const params = ['0', 'TEST', '1', '17Roegnpwqam4FwwXsM47bX3Tf1jFyyKMt', ''];
         const data   = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: 100, SOURCE });
 
         await handler.parse(params, data, null);

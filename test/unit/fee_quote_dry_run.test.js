@@ -16,6 +16,7 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const Utility = require('../../src/utility.js');
 const Actions = require('../../src/actions/index.js');
+const { makeIndexerDb } = require('./fee_quote_dry_run.test/helpers/indexer_db.js');
 
 const FEE_DEST = 'feeDestinationAddr111111111111111';
 
@@ -36,49 +37,12 @@ function makeCtx({ status = 'valid', actionIndex = 55, feeAmount = '1.00000000',
     util.config['FEE_TOLERANCE_MIN']            = '0.95';
     util.config['FEE_TOLERANCE_MAX']            = '1.10';
     util.config['ORACLE_MAX_PRICE_AGE_SECONDS'] = 1800;
+    let opts = { feeAmount, prices, addressId, tickId, addressBalances, balanceThrows };
     let ctx = {
         util,
         config: util.config,
         _calls: calls,
-        indexerDb: {
-            getLatestBlockIndex: async () => 100,
-            getBlockTime:        async () => 1000,
-            beginTransaction:    async () => { calls.begin++; calls.order.push('begin'); },
-            rollbackTransaction: async () => { calls.rollback++; calls.order.push('rollback'); },
-            // Watchdog-fence surface: the dry-run reads the epoch after
-            // beginTransaction and runs processTransaction under it. The stub
-            // mirrors the real Database contract (fixed epoch, pass-through run).
-            // BOTH fence entry points are stubbed. dryRunAction runs under
-            // runInDryRunEpoch (the no-consensus-authority variant),
-            // never runInTxEpoch; stubbing only the latter made every call here throw
-            // `runInDryRunEpoch is not a function` inside the try, which the handler
-            // reports as a dry-run error, so the whole file went red without naming the
-            // missing surface. Keep runInTxEpoch too: it is the real Database's default
-            // and a future caller that takes it must not silently lose its stub.
-            currentTxEpoch:      () => 0,
-            runInTxEpoch:        (epoch, fn) => fn(),
-            runInDryRunEpoch:    (epoch, fn) => fn(),
-            // Fee-balance surface. getAddressId is the READ-ONLY id lookup (null for
-            // an address the ledger has never seen); createAddress is stubbed only so the test
-            // can prove the balance read never reaches it.
-            getAddressId:        async (addr) => { calls.order.push('getAddressId:' + addr); return addressId; },
-            createAddress:       async () => { calls.createdAddresses++; return 999; },
-            getTickerId:         async (tick) => { calls.order.push('getTickerId:' + tick); return tickId; },
-            getAddressBalances:  async (id) => {
-                calls.order.push('getAddressBalances:' + id);
-                if(balanceThrows) throw new Error('balance read exploded');
-                return addressBalances;
-            },
-            // The handler-staged fee row, readable only between begin and rollback.
-            getFeeRecord:        async (ai) => {
-                calls.order.push('getFeeRecord:' + ai);
-                return (feeAmount == null) ? null : { amount: feeAmount, gas_cost: 0, gas_price: '0', xchain_amount: feeAmount, payment_mode: 1 };
-            },
-            getLatestPrice:      async (pair) => {
-                if(prices[pair] == null) return null;
-                return { price: prices[pair], roundNumber: 7, block_timestamp: 1000 };
-            }
-        },
+        indexerDb: makeIndexerDb(opts, calls),
         // Stubbed handler run: records the synthetic tx and stamps STATUS like a real handler.
         processTransaction: async (tx) => {
             calls.processed = tx;
@@ -141,6 +105,9 @@ describe('_dryRunAction (shared dry-run engine)', () => {
             probeFeeDestination: FEE_DEST, feeProbe: true, timeoutMs: 300000 });
         assert.strictEqual(calls.processed.fee_probe, true);
     });
+});
+
+describe('_dryRunAction (shared dry-run engine)', () => {
 
     it('a run that was NOT asked to probe is not marked (feequotedryrun keeps real behaviour)', async () => {
         // The raw regtest RPC exists to reproduce what a real broadcast would do with the
@@ -193,6 +160,29 @@ describe('_dryRunAction (shared dry-run engine)', () => {
         assert.strictEqual(calls.begin, 1, 'transaction opened for a fresh source');
         assert.strictEqual(r.status, 'invalid: insufficient funds', 'handler judged it');
     });
+});
+
+describe('_dryRunAction (shared dry-run engine)', () => {
+
+    it('bounds a hung handler with the caller timeout and releases the lock', async () => {
+        let { ctx, calls } = makeCtx({ processHangs: true });
+        let r = await ctx.dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'src1', timeoutMs: 50, label: 'feequote ISSUE' });
+        assert.ok(/timeout|exceeded/i.test(r.error), 'error reports the watchdog timeout: ' + r.error);
+        assert.strictEqual(r.status, null);
+        assert.strictEqual(calls.begin, 1);
+        assert.strictEqual(calls.rollback, 1, 'lock released via rollback once the watchdog fires (no indefinite wedge)');
+    });
+
+    it('handler throws: rollback still runs in finally (no lock leak)', async () => {
+        let { ctx, calls } = makeCtx({ processThrows: true });
+        let r = await ctx.dryRunAction.call(ctx, { action: 'EXECUTE', params: ['0', 'c'], source: 'src1', timeoutMs: 300000 });
+        assert.ok(/handler threw/.test(r.error), 'error reports the throw');
+        assert.strictEqual(calls.begin, 1, 'transaction was opened');
+        assert.strictEqual(calls.rollback, 1, 'rollback runs in finally even on throw');
+    });
+});
+
+describe('_dryRunAction (shared dry-run engine)', () => {
 
     // The fee-token balance the pre-flight needs to tell a payer WHY an XCHAIN-settled
     // fee would fail. Read inside the same transaction as the handler, and read-only.
@@ -250,23 +240,6 @@ describe('_dryRunAction (shared dry-run engine)', () => {
             assert.strictEqual(r.xchainFee, '1.00000000');
             assert.strictEqual(calls.rollback, 1);
         });
-    });
-
-    it('bounds a hung handler with the caller timeout and releases the lock', async () => {
-        let { ctx, calls } = makeCtx({ processHangs: true });
-        let r = await ctx.dryRunAction.call(ctx, { action: 'ISSUE', params: ['0', 'NEWTOK'], source: 'src1', timeoutMs: 50, label: 'feequote ISSUE' });
-        assert.ok(/timeout|exceeded/i.test(r.error), 'error reports the watchdog timeout: ' + r.error);
-        assert.strictEqual(r.status, null);
-        assert.strictEqual(calls.begin, 1);
-        assert.strictEqual(calls.rollback, 1, 'lock released via rollback once the watchdog fires (no indefinite wedge)');
-    });
-
-    it('handler throws: rollback still runs in finally (no lock leak)', async () => {
-        let { ctx, calls } = makeCtx({ processThrows: true });
-        let r = await ctx.dryRunAction.call(ctx, { action: 'EXECUTE', params: ['0', 'c'], source: 'src1', timeoutMs: 300000 });
-        assert.ok(/handler threw/.test(r.error), 'error reports the throw');
-        assert.strictEqual(calls.begin, 1, 'transaction was opened');
-        assert.strictEqual(calls.rollback, 1, 'rollback runs in finally even on throw');
     });
 });
 

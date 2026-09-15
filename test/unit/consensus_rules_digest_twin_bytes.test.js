@@ -54,6 +54,9 @@ const path   = require('path');
 const crd    = require('../../src/consensus_rules_digest.js');
 // Decides whether the hub twin path may be trusted before the byte compare reads it.
 const { siblingCheckout } = require('../helpers/sibling_checkout.js');
+const {
+    normalise, TWIN_HEADER_IN_MINE, TWIN_HEADER_IN_HUB, TWIN_HEADER_PREFIX
+} = require('./consensus_rules_digest_twin_bytes.test/helpers/twin_bytes.js');
 
 const REPO_ROOT    = path.join(__dirname, '..', '..');
 const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(REPO_ROOT, '..');
@@ -62,58 +65,22 @@ const HUB_COPY     = path.join(HUB_DIR, 'src', 'consensus_rules_digest.js');
 const MY_COPY      = path.join(REPO_ROOT, 'src', 'consensus_rules_digest.js');
 const STRICT       = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 
-// The ONLY line that may differ, enumerated as the full text of both sides
-// rather than as a pattern. Each copy names the other repo here; a copy that
-// names ITSELF, or names a third repo, or spells the line any other way, fails
-// the enumeration below instead of being quietly normalised away.
-const TWIN_HEADER_IN_MINE = ' * BYTE-TWIN of xchain-hub/src/consensus_rules_digest.js. The two copies';
-const TWIN_HEADER_IN_HUB  = ' * BYTE-TWIN of xchain-indexer/src/consensus_rules_digest.js. The two copies';
-
-// What both declared headers collapse to for the comparison. It is not a legal
-// line of either file, so a copy cannot smuggle it in to widen the window.
-const HEADER_SENTINEL = ' * BYTE-TWIN of <twin>/src/consensus_rules_digest.js. The two copies';
-
-// The prefix that makes a line a twin declaration at all. Counting these is how
-// the guard proves its normalisation window is exactly one line wide: a second
-// declaration, anywhere, would be a line the comparison silently stopped
-// covering.
-const TWIN_HEADER_PREFIX = ' * BYTE-TWIN of ';
-
-// Replace the one declared header with the sentinel, asserting on the way that
-// it appears exactly once and reads exactly as expected. Everything the
-// comparison then sees is untouched source.
-function normalise(text, expectedHeader, label) {
-    const lines = text.split('\n');
-    const declared = [];
-    for (let i = 0; i < lines.length; i += 1) {
-        if (lines[i].startsWith(TWIN_HEADER_PREFIX)) declared.push(i);
+function requireHub() {
+    // Refuses an absent hub and a lane symlink into a live main checkout alike:
+    // the latter reads a peer's uncommitted bytes, which prove nothing either way.
+    const hubCheckout = siblingCheckout(__dirname, HUB_COPY);
+    if (!hubCheckout.usable) {
+        if (STRICT) {
+            assert.fail('xchain-hub sibling checkout unusable: ' + hubCheckout.reason
+                + ' (set XCHAIN_HUB_DIR at a checkout to prove this guard ran)');
+        }
+        this.skip();
     }
-    assert.strictEqual(declared.length, 1,
-        label + ' must carry exactly one BYTE-TWIN declaration, found ' + declared.length
-        + '; the normalisation window is one line wide and this copy moved it');
-    assert.strictEqual(lines[declared[0]], expectedHeader,
-        label + ' twin header line ' + (declared[0] + 1) + ' is not the declared text.\n'
-        + '  expected: ' + expectedHeader + '\n'
-        + '  actual:   ' + lines[declared[0]]);
-    assert.ok(!text.includes(HEADER_SENTINEL),
-        label + ' already contains the comparison sentinel, which would hide a real difference');
-    lines[declared[0]] = HEADER_SENTINEL;
-    return lines.join('\n');
 }
 
 describe('consensus_rules_digest: hub twin bytes and hub-side entry points', function () {
-
     before(function () {
-        // Refuses an absent hub and a lane symlink into a live main checkout alike:
-        // the latter reads a peer's uncommitted bytes, which prove nothing either way.
-        const hubCheckout = siblingCheckout(__dirname, HUB_COPY);
-        if (!hubCheckout.usable) {
-            if (STRICT) {
-                assert.fail('xchain-hub sibling checkout unusable: ' + hubCheckout.reason
-                    + ' (set XCHAIN_HUB_DIR at a checkout to prove this guard ran)');
-            }
-            this.skip();
-        }
+        requireHub.call(this);
     });
 
     // The claim the file's own header makes, finally enforced. Gate-value
@@ -163,6 +130,10 @@ describe('consensus_rules_digest: hub twin bytes and hub-side entry points', fun
         assert.notStrictEqual(TWIN_HEADER_IN_MINE, TWIN_HEADER_IN_HUB,
             'the exception exists because the two headers differ; if they stop differing, delete it');
     });
+});
+
+describe('consensus_rules_digest: hub twin bytes and hub-side entry points', function () {
+    before(requireHub);
 
     // The second half of the row. require() here is deliberate and load-bearing:
     // a hub copy that throws on load reds this case, where the digest comparison
@@ -195,6 +166,11 @@ describe('consensus_rules_digest: hub twin bytes and hub-side entry points', fun
         assert.ok(hub.activeGatesAt(1e9, 'regtest').length > 0,
             'the hub copy reports no active gates at all on regtest, which cannot be right');
     });
+
+});
+
+describe('consensus_rules_digest: hub twin bytes and hub-side entry points', function () {
+    before(requireHub);
 
     // knownGateKeys is the other helper off the digest path: it is the GATES
     // field a ROLLCALL v1 publisher puts on the wire, so a hub copy broken here

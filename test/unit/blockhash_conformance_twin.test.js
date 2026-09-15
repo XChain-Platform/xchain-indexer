@@ -52,6 +52,7 @@ const assert  = require('assert');
 const fs      = require('fs');
 const path    = require('path');
 const { concatSrcTreeFiles } = require('../helpers/src_tree_files');
+const { makeLoadPair } = require('./blockhash_conformance_twin.test/helpers/pair_loader.js');
 
 // Sibling resolution + hard-fail policy: same conventions as the reciprocal
 // twin guard in rollback_coverage.test.js. Skip when the sibling checkout is
@@ -142,15 +143,9 @@ function indexerSource(rel){
     return concatSrcTreeFiles(full);
 }
 
-describe('consensus block-hash conformance twins (static drift-lock) @regression', function(){
+const loadPair = makeLoadPair({ fs, requireSibling, syncFile, indexerSource });
 
-    function loadPair(ctx, syncRel, indexerRel){
-        if(!requireSibling(ctx, syncFile(syncRel))) return null;
-        return {
-            sync:    fs.readFileSync(syncFile(syncRel), 'utf8'),
-            indexer: indexerSource(indexerRel)
-        };
-    }
+describe('consensus block-hash conformance twins (static drift-lock) @regression', function(){
 
     it('BLOCK_HASH_VERSION is identical across indexer db.js and sync BlockHasher.js', function(){
         const pair = loadPair(this, 'src/client/block_hasher.js', 'src/db');
@@ -200,6 +195,9 @@ describe('consensus block-hash conformance twins (static drift-lock) @regression
                 'before hashing; a missing loop leaks the per-chain address encoding into the hash on one side only');
         }
     });
+});
+
+describe('consensus block-hash conformance twins (static drift-lock) @regression', function(){
 
     it('the hash-assembly tail (chaining + hash_version fold) is identical', function(){
         const pair = loadPair(this, 'src/client/block_hasher.js', 'src/db');
