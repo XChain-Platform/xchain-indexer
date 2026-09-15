@@ -31,6 +31,7 @@ const M   = require('../../../src/consensus/merkle.js');
 const CST = require('../../../src/consensus/contract_state_subtree.js');
 
 const { FakeDb, EMPTY, armedAt, CHAIN, NETWORK } = require('./helpers/fake_db');
+const { runChain, SCHEDULE, advance } = require('./helpers/chain_schedule');
 
 describe('contract_state_root: frozen row-to-leaf mapping @regression', function(){
 
@@ -99,33 +100,6 @@ describe('contract_state_root: key derivation @regression', function(){
 });
 
 describe('contract_state_root: incremental equals full build @regression', function(){
-
-    // A block's writes land BEFORE its root is computed, and no later block's
-    // rows exist yet. That ordering is production's, and it is a real
-    // precondition rather than a fixture convenience: latestStateValue reads the
-    // newest row for a key with no as-of-height filter, so computing a
-    // historical block's root while later rows exist would read the future. The
-    // balances path (getNetBalance sums all credits/debits) has the identical
-    // property, and every caller of both satisfies it because roots are computed
-    // once, inside the block that produces them.
-    async function runChain(db, schedule, from, to){
-        for(let h = from; h <= to; h++){
-            for(const w of (schedule[h] || [])) db.write(h, w[0], w[1], w[2]);
-            db.storeRoot(h, await CST.resolveContractStateRoot(db, db.smt(), CHAIN, NETWORK, h));
-        }
-        return db.roots.get(to).contract_state_root;
-    }
-
-    const SCHEDULE = {
-        100: [[7, 'alpha', '"a1"'], [7, 'beta', '"b1"']],
-        101: [[7, 'alpha', '"a2"'],                       // overwrite
-              [8, 'alpha', '"other"']],                   // same key, different contract
-        102: [[7, 'beta',  null]],                        // delete
-        103: [[7, 'gamma', '']],                          // the defensive empty-string case
-        104: [[8, 'alpha', '"other2"']]
-    };
-
-    async function advance(db, from, to){ return runChain(db, {}, from, to); }
 
     it('threading block by block lands on the same root as one full build', async function(){
         const db = new FakeDb();

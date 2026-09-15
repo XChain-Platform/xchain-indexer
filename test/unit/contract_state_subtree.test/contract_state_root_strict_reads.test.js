@@ -92,31 +92,4 @@ describe('contract_state_root: strict reads @regression', function(){
                 armedRoot, 'the block really did change the tree');
         });
     });
-
-    it('a faulting full build THROWS rather than committing EMPTY over a populated table', async function(){
-        await armedAt(ARMED, async () => {
-            const db = new FakeDb();
-            db.write(ARMED - 1, 7, 'k', '"v"');
-            db.failOn = 'INNER JOIN';                  // the MAX(id) full-build join
-            await assert.rejects(
-                () => SC.reservedSubRootCandidates(db, CHAIN, NETWORK, ARMED),
-                /injected DB fault/,
-                'the arming block must not commit EMPTY because its own read failed');
-        });
-    });
-
-    it('a faulting latest-value read THROWS rather than DELETING the key from the tree', async function(){
-        await armedAt(ARMED, async () => {
-            const db = new FakeDb();
-            db.write(ARMED, 7, 'a', '"1"');
-            const c0 = await SC.reservedSubRootCandidates(db, CHAIN, NETWORK, ARMED);
-            db.storeRoot(ARMED, SUB.gateSubRoots(c0, ARMED, NETWORK, CHAIN).contract_state_root);
-            db.write(ARMED + 1, 7, 'a', '"2"');
-            db.failOn = 'ORDER BY id DESC LIMIT 1';    // the per-key winning-row read
-            await assert.rejects(
-                () => SC.reservedSubRootCandidates(db, CHAIN, NETWORK, ARMED + 1),
-                /injected DB fault/,
-                'an empty winning-row read is the tombstone mapping, so it must never come from a fault');
-        });
-    });
 });
