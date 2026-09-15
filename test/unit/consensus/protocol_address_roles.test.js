@@ -6,7 +6,7 @@
 // This file is part of XChain Platform. Licensed under the GNU Affero
 // General Public License v3.0 or later; see LICENSE.md.
 
-// CONSENSUS guard for src/consensus/protocolAddressRoles.js. The block-hash preimage
+// CONSENSUS guard for src/consensus/protocol_address_roles.js. The block-hash preimage
 // substitutes protocol special addresses for their role token so identical
 // actions hash identically across chains. Two ways that map can silently break
 // consensus, both guarded here:
@@ -18,7 +18,7 @@
 //      repos must satisfy.
 
 const assert = require('assert');
-const { ROLE_BY_ADDRESS, canonicalizeHashAddress, ROLE_FIELDS } = require('../../../src/consensus/protocolAddressRoles');
+const { ROLE_BY_ADDRESS, canonicalizeHashAddress, ROLE_FIELDS } = require('../../../src/consensus/protocol_address_roles');
 
 const COINS    = ['BTC', 'LTC', 'DOGE'];
 const NETWORKS = ['mainnet', 'testnet', 'regtest'];

@@ -33,7 +33,7 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const Utility = require('../../../src/utility.js');
 const coins   = require('../../../src/coins');
-const { ROLE_BY_ADDRESS } = require('../../../src/consensus/protocolAddressRoles.js');
+const { ROLE_BY_ADDRESS } = require('../../../src/consensus/protocol_address_roles.js');
 
 const COINS    = ['BTC', 'LTC', 'DOGE'];
 const NETWORKS = ['mainnet', 'testnet', 'regtest'];

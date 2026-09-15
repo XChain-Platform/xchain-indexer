@@ -20,7 +20,7 @@
  ********************************************************************/
 
 const { buildStateHashData, ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../stateHash');
-const { canonicalizeHashAddress } = require('../consensus/protocolAddressRoles');
+const { canonicalizeHashAddress } = require('../consensus/protocol_address_roles');
 const stateKeyCollation = require('../state_key_collation_activation');
 // Per-block cap on the ATTEST deadline-expiry sweep. Vendored
 // byte-identical from xchain-documentation/protocol/constants.js, same convention
@@ -103,7 +103,7 @@ module.exports = {
         // hash below AND the block_merkle_root (which reuses these stashed rows) see the
         // same canonical strings; balances still track the real address (rows are not
         // mutated in the DB, only this gathered copy used for hashing). See
-        // protocolAddressRoles.js; xchain-sync/src/client/block_hasher.js mirrors this byte-for-byte.
+        // protocol_address_roles.js; xchain-sync/src/client/block_hasher.js mirrors this byte-for-byte.
         for (const row of ledger.credits) row.address = canonicalizeHashAddress(row.address);
         for (const row of ledger.debits)  row.address = canonicalizeHashAddress(row.address);
         for (const row of ledger.escrows) row.address = canonicalizeHashAddress(row.address);
