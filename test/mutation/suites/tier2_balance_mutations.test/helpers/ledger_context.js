@@ -59,12 +59,9 @@ function createLedgerTestContext() {
     const util = new Utility();
     const queries = [];
 
-    // createLedgerChangeRecord quantizes the amount before the upsert, reading the
-    // tick's decimals and the block it writes at (ledger_amount_precision_activation).
-    // The mock stands at block 0 on the regtest config getTestConfig() sets, where the
-    // exact-ledger rule is armed, so the stored amount is the 18 dp exact figure the
-    // real indexer writes; a context without these two members throws before the
-    // whitelist or the INSERT is ever reached and every case reads as a false red.
+    // Stand the mock at block 0 on the harness's regtest config: createLedgerChangeRecord
+    // quantizes through ledger_amount_precision_activation from the tick's decimals and the
+    // block, so without these two members it throws before the whitelist or the INSERT.
     const ctx = {
         config,
         util,
