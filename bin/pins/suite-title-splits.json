@@ -17,31 +17,6 @@
       "test/integration/attest_relay_identity.test/attest_relay_identity_request_id.test.js",
       "test/integration/attest_relay_identity.test/attest_relay_identity_migration.test.js"
     ],
-    "test/integration/scenarios/01_block_discovery.test.js": [
-      "test/integration/scenarios/01_block_discovery.test.js",
-      "test/integration/scenarios/01_block_discovery.test/edge_cases.test.js",
-      "test/integration/scenarios/01_block_discovery.test/synchronization.test.js"
-    ],
-    "test/integration/scenarios/02_issue_mint_send.test.js": [
-      "test/integration/scenarios/02_issue_mint_send.test.js",
-      "test/integration/scenarios/02_issue_mint_send.test/destroy.test.js",
-      "test/integration/scenarios/02_issue_mint_send.test/mint.test.js",
-      "test/integration/scenarios/02_issue_mint_send.test/send.test.js"
-    ],
-    "test/integration/scenarios/03_order_dispenser.test.js": [
-      "test/integration/scenarios/03_order_dispenser.test.js",
-      "test/integration/scenarios/03_order_dispenser.test/dispenser.test.js"
-    ],
-    "test/integration/scenarios/04_complex_actions.test.js": [
-      "test/integration/scenarios/04_complex_actions.test.js",
-      "test/integration/scenarios/04_complex_actions.test/list_airdrop.test.js",
-      "test/integration/scenarios/04_complex_actions.test/sweep_destroy.test.js"
-    ],
-    "test/integration/scenarios/05_reorg.test.js": [
-      "test/integration/scenarios/05_reorg.test.js",
-      "test/integration/scenarios/05_reorg.test/reindex_integrity.test.js",
-      "test/integration/scenarios/05_reorg.test/successive_and_partial.test.js"
-    ],
     "test/mutation/suites/tier1_action_mutations.test.js": [
       "test/mutation/suites/tier1_action_mutations.test.js",
       "test/mutation/suites/tier1_action_mutations.test/destroy_handler.test.js",
@@ -653,6 +628,31 @@
     "test/unit/flagday_placeholder_guard.test.js": [
       "test/unit/flagday_placeholder_guard.test.js",
       "test/unit/flagday_placeholder_guard.test/sibling_named_exports.test.js"
+    ],
+    "test/integration/scenarios/core/01_block_discovery.test.js": [
+      "test/integration/scenarios/core/01_block_discovery.test.js",
+      "test/integration/scenarios/core/01_block_discovery.test/edge_cases.test.js",
+      "test/integration/scenarios/core/01_block_discovery.test/synchronization.test.js"
+    ],
+    "test/integration/scenarios/core/02_issue_mint_send.test.js": [
+      "test/integration/scenarios/core/02_issue_mint_send.test.js",
+      "test/integration/scenarios/core/02_issue_mint_send.test/destroy.test.js",
+      "test/integration/scenarios/core/02_issue_mint_send.test/mint.test.js",
+      "test/integration/scenarios/core/02_issue_mint_send.test/send.test.js"
+    ],
+    "test/integration/scenarios/core/03_order_dispenser.test.js": [
+      "test/integration/scenarios/core/03_order_dispenser.test.js",
+      "test/integration/scenarios/core/03_order_dispenser.test/dispenser.test.js"
+    ],
+    "test/integration/scenarios/core/04_complex_actions.test.js": [
+      "test/integration/scenarios/core/04_complex_actions.test.js",
+      "test/integration/scenarios/core/04_complex_actions.test/list_airdrop.test.js",
+      "test/integration/scenarios/core/04_complex_actions.test/sweep_destroy.test.js"
+    ],
+    "test/integration/scenarios/core/05_reorg.test.js": [
+      "test/integration/scenarios/core/05_reorg.test.js",
+      "test/integration/scenarios/core/05_reorg.test/reindex_integrity.test.js",
+      "test/integration/scenarios/core/05_reorg.test/successive_and_partial.test.js"
     ]
   },
   "titleDeltas": []
