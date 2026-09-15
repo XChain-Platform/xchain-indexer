@@ -22,7 +22,7 @@
  *
  ********************************************************************/
 
-const stateCommitment    = require('../stateCommitment.js');
+const stateCommitment    = require('../state_commitment/index.js');
 const stateCommitAct     = require('../state_commitment_activation.js');
 const anchorRewardDerive = require('../consensus/anchor_reward_derive.js');
 const bridgeSettle       = require('../consensus/bridge_settle.js');

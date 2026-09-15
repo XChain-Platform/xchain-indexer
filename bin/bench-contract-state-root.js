@@ -79,7 +79,7 @@
 'use strict';
 
 const CST = require('../src/consensus/contract_state_subtree.js');
-const SC  = require('../src/stateCommitment.js');
+const SC  = require('../src/state_commitment/index.js');
 
 function parseArgs(argv){
     const out = { synthetic: null, db: null, chain: 'BTC', network: 'regtest', persist: false,

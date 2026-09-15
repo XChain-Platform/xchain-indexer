@@ -21,7 +21,7 @@
 'use strict';
 
 const M   = require('../../../../src/consensus/merkle.js');
-const SC  = require('../../../../src/stateCommitment.js');
+const SC  = require('../../../../src/state_commitment/index.js');
 const SUB = require('../../../../src/state_subtree_activation.js');
 
 const { CHAIN, NETWORK } = require('./fake_db');

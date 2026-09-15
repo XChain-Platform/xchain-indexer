@@ -24,7 +24,7 @@
 
 const assert = require('assert');
 const M   = require('../../../src/consensus/merkle.js');
-const SC  = require('../../../src/stateCommitment.js');
+const SC  = require('../../../src/state_commitment/index.js');
 const SUB = require('../../../src/state_subtree_activation.js');
 
 // Snapshot of the REAL armed heights, taken before any test mutates the map, so
@@ -247,7 +247,7 @@ describe('state_root reserved sub-trees: gateSubRoots @regression', function(){
         // and accepts any extraSubRoots object), so the routing is pinned at the
         // source level: every call site passes the extraSubRoots local, and that
         // local is only ever assigned from SUB.gateSubRoots().
-        const src = require('fs').readFileSync(require('path').resolve(__dirname, '../../../src/stateCommitment.js'), 'utf8');
+        const src = require('fs').readFileSync(require('path').resolve(__dirname, '../../../src/state_commitment/index.js'), 'utf8');
         const sites = src.match(/assembleStateRoot\(\s*[A-Za-z_$][\w$]*\s*,\s*[A-Za-z_$][\w$]*\s*,\s*[A-Za-z_$][\w$]*\s*\)/g) || [];
         assert.ok(sites.length >= 1, 'no three-argument assembleStateRoot site found in stateCommitment.js');
         for(const s of sites)

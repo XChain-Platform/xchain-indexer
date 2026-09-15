@@ -25,7 +25,7 @@
  */
 'use strict';
 
-const SC = require('../../../../src/stateCommitment.js');
+const SC = require('../../../../src/state_commitment/index.js');
 
 const CHAIN = 'BTC', NETWORK = 'regtest';
 const ADDR  = '1LockerAaaaaaaaaaaaaaaaaaaaaaaaaaa';

@@ -22,7 +22,7 @@
  * the Database prototype.
  *
  * M-17: every read here uses doQueryStrict, never doQuery. See the note above
- * DbNodeStore in src/stateCommitment.js for why a fail-soft [] is a WRONG
+ * DbNodeStore in src/state_commitment/persistent_smt.js for why a fail-soft [] is a WRONG
  * answer on these paths rather than an error signal.
  *
  ********************************************************************/
@@ -59,7 +59,7 @@ async function getNetBalance(db, address, tick){
 
 // Every (address, tick) with a nonzero net across the whole ledger, as
 // { address, tick, net } rows: the input of the flag-day full balances build
-// (stateCommitment/full_balances_root.js).
+// (state_commitment/full_balances_root.js).
 async function getNonzeroNetBalances(db){
     return db.doQueryStrict(
         `SELECT a.address AS address, t.tick AS tick, CAST(SUM(s.amt) AS CHAR) AS net FROM (
@@ -76,7 +76,7 @@ async function getNonzeroNetBalances(db){
 // The (address, tick) keys THIS block's ledger moved, as canonical strings
 // resolved through the index tables, which is the same derivation the
 // commitment's own key uses. Shared by the touched-set guard and the
-// leaf-presence assertion (stateCommitment/touch_guards.js) so the two can
+// leaf-presence assertion (state_commitment/touch_guards.js) so the two can
 // never drift into disagreeing about what the block moved.
 //
 // doQueryStrict, never doQuery: inside the block transaction a failed read

@@ -26,7 +26,7 @@
 const assert = require('assert');
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 const M   = require('../../../src/consensus/merkle.js');
-const SC  = require('../../../src/stateCommitment.js');
+const SC  = require('../../../src/state_commitment/index.js');
 const ESC = require('../../../src/consensus/escrow_leaf_subtree.js');
 
 const { FakeDb, CHAIN, NETWORK, ADDR, TICK } = require('./helpers/fake_db');
@@ -83,7 +83,9 @@ describe('XCHAIN_ESC locked leaf: the §7 shadow thread @regression', function()
         // The whole safety argument of the window is one-directional data flow:
         // balancesEscrowShadow is written to its own column and nowhere else.
         const fs = require('fs'), path = require('path');
-        for(const p of ['../../../src/stateCommitment.js', '../../../../xchain-sync/src/stateCommitment.js']){
+        // The follower candidate is named at both of its spellings, its directory entry and the
+        // flat file it replaced, so a sibling on either layout is read; only one ever exists.
+        for(const p of ['../../../src/state_commitment/index.js', '../../../../xchain-sync/src/state_commitment/index.js', '../../../../xchain-sync/src/stateCommitment.js']){
             let src;
             // The sync candidate is a sibling reference: an absent sibling still
             // falls through to the catch below, as it always has, but a present

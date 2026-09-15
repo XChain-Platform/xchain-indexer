@@ -40,13 +40,13 @@ const assert = require('assert');
 const path   = require('path');
 const fs     = require('fs');
 
-const SC      = require('../../../src/stateCommitment.js');
+const SC      = require('../../../src/state_commitment/index.js');
 const M       = require('../../../src/consensus/merkle.js');
 const Utility = require('../../../src/utility.js');
 
-const SRC = fs.readFileSync(path.resolve(__dirname, '../../../src/stateCommitment.js'), 'utf8');
+const SRC = fs.readFileSync(path.resolve(__dirname, '../../../src/state_commitment/index.js'), 'utf8');
 // The call sites stay in stateCommitment.js (SRC); the guard bodies are a named part.
-const GUARDS = fs.readFileSync(path.resolve(__dirname, '../../../src/stateCommitment/touch_guards.js'), 'utf8');
+const GUARDS = fs.readFileSync(path.resolve(__dirname, '../../../src/state_commitment/touch_guards.js'), 'utf8');
 const touchGuardBody = () => GUARDS.slice(GUARDS.indexOf('async function enforceTouchedSet'),
     GUARDS.indexOf('// ---- Post-commit leaf-presence assertion'));
 

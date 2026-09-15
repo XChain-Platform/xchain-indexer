@@ -16,7 +16,7 @@
  *
  * The from-scratch balances_root over every nonzero net, plus the XCHAIN_ESC
  * locked leaves once they arm. Part of the block commitment that
- * src/stateCommitment.js orchestrates; its buildFullBalancesRoot supplies the
+ * src/state_commitment/index.js orchestrates; its buildFullBalancesRoot supplies the
  * persistent SMT this build writes through.
  *
  ********************************************************************/
@@ -29,7 +29,7 @@ const ESC    = require('../consensus/escrow_leaf_subtree.js');
 const LEDGER = require('../db/state_commitment/ledger_reads.js');
 const { leafOrNull } = require('./leaf_values.js');
 
-// Root of an empty depth-256 SMT: the same value src/stateCommitment.js exports
+// Root of an empty depth-256 SMT: the same value src/state_commitment/index.js exports
 // as EMPTY_ROOT_HEX, derived here from merkle.js rather than required back from
 // the module that requires this one.
 const EMPTY_ROOT_HEX = M.toHex(M.EMPTY_SMT_ROOT);

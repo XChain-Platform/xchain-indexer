@@ -17,7 +17,7 @@
  * The two per-block roots assembled from inputs rather than threaded through
  * the persistent SMT: the top-level state_root over the gated sub-roots, and
  * the block-content Merkle root over the block's canonical rows. Part of the
- * block commitment that src/stateCommitment.js orchestrates; the one call site
+ * block commitment that src/state_commitment/index.js orchestrates; the one call site
  * that hands assembleStateRoot its gated sub-roots stays in that file, where
  * the frozen twin suites pin it by path.
  *

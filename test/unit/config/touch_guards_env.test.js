@@ -31,9 +31,9 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
-const { enforceTouchedSet } = require('../../../src/stateCommitment/touch_guards.js');
+const { enforceTouchedSet } = require('../../../src/state_commitment/touch_guards.js');
 
-const GUARDS_PATH = path.resolve(__dirname, '../../../src/stateCommitment/touch_guards.js');
+const GUARDS_PATH = path.resolve(__dirname, '../../../src/state_commitment/touch_guards.js');
 
 // A block whose ledger moved one key the commitment never applied: the fault
 // the guard exists to refuse.

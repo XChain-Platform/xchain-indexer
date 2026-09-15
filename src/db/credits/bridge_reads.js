@@ -25,7 +25,7 @@
 // path commits, never a rebuilt in-memory tree, so a proof this method hands out can only
 // ever match what was actually committed.
 const bridgeMerkle = require('../../consensus/merkle.js');
-const bridgeStateCommitment = require('../../stateCommitment.js');
+const bridgeStateCommitment = require('../../state_commitment/index.js');
 // state_root_version is a DERIVED-per-height quantity (api.js getblockhashes is the ONLY
 // place it is MINTED), never the static merkle.STATE_ROOT_VERSION constant: a static
 // comparison refuses every checkpoint cut once a sub-tree slot arms. getBridgeEscrowProof

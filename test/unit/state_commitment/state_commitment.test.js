@@ -24,7 +24,7 @@
 
 const assert = require('assert');
 const M  = require('../../../src/consensus/merkle.js');
-const SC = require('../../../src/stateCommitment.js');
+const SC = require('../../../src/state_commitment/index.js');
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
 // Deterministic pseudo-random key + amount derived from an index.

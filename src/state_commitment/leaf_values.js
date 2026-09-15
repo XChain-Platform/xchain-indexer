@@ -16,7 +16,7 @@
  *
  * The canonical-amount and value-leaf helpers every balances and stakes leaf
  * passes through (SPV spec §4.2). Part of the block commitment that
- * src/stateCommitment.js orchestrates; the net each leaf commits is read by
+ * src/state_commitment/index.js orchestrates; the net each leaf commits is read by
  * db/state_commitment/ledger_reads.js getNetBalance.
  *
  ********************************************************************/

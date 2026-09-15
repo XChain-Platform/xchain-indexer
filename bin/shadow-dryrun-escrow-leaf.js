@@ -51,7 +51,7 @@
 
 const EJW = require('../src/consensus/escrowJournalWriter.js');
 const ESC = require('../src/consensus/escrow_leaf_subtree.js');
-const SC  = require('../src/stateCommitment.js');
+const SC  = require('../src/state_commitment/index.js');
 const M   = require('../src/consensus/merkle.js');
 
 function parseArgs(argv){

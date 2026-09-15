@@ -16,7 +16,7 @@
  *
  * The BTC stakes sub-tree: its leaf set from the capability stake weights, and
  * the rebuild-only-on-change memo over the persistent SMT build. Part of the
- * block commitment that src/stateCommitment.js orchestrates.
+ * block commitment that src/state_commitment/index.js orchestrates.
  *
  ********************************************************************/
 
@@ -25,7 +25,7 @@
 const M = require('../consensus/merkle.js');
 const { ZERO_CANON, canonicalAmountOf } = require('./leaf_values.js');
 
-// Root of an empty depth-256 SMT: the same value src/stateCommitment.js exports
+// Root of an empty depth-256 SMT: the same value src/state_commitment/index.js exports
 // as EMPTY_ROOT_HEX, derived here from merkle.js rather than required back from
 // the module that requires this one.
 const EMPTY_ROOT_HEX = M.toHex(M.EMPTY_SMT_ROOT);

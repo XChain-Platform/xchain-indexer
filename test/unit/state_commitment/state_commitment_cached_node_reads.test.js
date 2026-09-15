@@ -46,7 +46,7 @@
 
 const assert = require('assert');
 const M  = require('../../../src/consensus/merkle.js');
-const SC = require('../../../src/stateCommitment.js');
+const SC = require('../../../src/state_commitment/index.js');
 
 function keyFor(i){ return M.sha256(Buffer.from('xc-smt-read-cache:' + i, 'utf8')); }
 function leafFor(i){ return M.toHex(M.amountLeaf(String(i * 7 + 2) + '.00000000')); }

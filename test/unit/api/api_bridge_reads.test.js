@@ -39,7 +39,7 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../../fixtures/config');
 const Utility  = require('../../../src/utility');
 const Database = require('../../../src/db');
-const SC  = require('../../../src/stateCommitment.js');
+const SC  = require('../../../src/state_commitment/index.js');
 const M   = require('../../../src/consensus/merkle.js');
 const CHK = require('../../../src/consensus/bridge_checkpoint_check.js');
 

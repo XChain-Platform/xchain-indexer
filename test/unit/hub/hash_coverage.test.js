@@ -43,12 +43,12 @@ const stateHash = require('../../../src/stateHash.js');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '../../..', rel), 'utf8');
 
-// The state commitment is an entry plus a parts directory (src/stateCommitment/),
+// The state commitment is an entry (index.js) plus its parts in src/state_commitment/,
 // and the node-store SQL that names state_tree_nodes lives in the persistent_smt
 // part, so a pin on the feature reads the entry and every part as one text: the
 // entry alone would satisfy a table-name pin on its header prose.
-const readStateCommitment = () => read('src/stateCommitment.js') +
-    concatSrcTreeFiles(path.join(__dirname, '../../..', 'src', 'stateCommitment'));
+const readStateCommitment = () =>
+    concatSrcTreeFiles(path.join(__dirname, '../../..', 'src', 'state_commitment'));
 
 // The Database class is a directory of per-family mixins, so a scan over the class
 // concatenates every file in a fixed order instead of reading one path.
@@ -198,7 +198,7 @@ describe('Hash coverage guard @regression', function () {
         const leaf = read('src/consensus/escrow_leaf_subtree.js');
         assert.ok(/FROM escrow_leaf_journal j/.test(leaf),
             'escrow_leaf_subtree.js no longer reads escrow_leaf_journal; its state_commitment declaration is stale');
-        const commit = read('src/stateCommitment.js');
+        const commit = read('src/state_commitment/index.js');
         assert.ok(commit.indexOf('applyEscrowLeaves') !== -1,
             'stateCommitment.js no longer applies the escrow leaves into balances_root');
         const act = require('../../../src/state_subtree_activation.js');

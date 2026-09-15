@@ -21,7 +21,7 @@
  *
  ********************************************************************/
 
-const stateCommitment = require('../stateCommitment.js');
+const stateCommitment = require('../state_commitment/index.js');
 const retention       = require('../chain/retention.js');
 const { CONFIG_ENV }  = require('../config.js');
 const { getLogger }   = require('../observability/index.js');

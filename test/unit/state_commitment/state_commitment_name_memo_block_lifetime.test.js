@@ -31,7 +31,7 @@
 'use strict';
 
 const assert = require('assert');
-const SC = require('../../../src/stateCommitment.js');
+const SC = require('../../../src/state_commitment/index.js');
 
 // Mock db routing computeAndStoreRoots' queries by SQL shape, with the real name
 // memo surface bolted on. chain LTC keeps the BTC-only stakes path out.

@@ -22,7 +22,7 @@
 
 const assert = require('assert');
 const M  = require('../../../../src/consensus/merkle.js');
-const SC = require('../../../../src/stateCommitment.js');
+const SC = require('../../../../src/state_commitment/index.js');
 const { keyFor, leafFor, CountingStore } = require('./helpers/counting_store.js');
 
 const CHAIN = 'BTC', NETWORK = 'regtest';

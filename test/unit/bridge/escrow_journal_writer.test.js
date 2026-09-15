@@ -145,7 +145,7 @@ describe('escrow journal writer: block-path wiring @regression', function(){
         // chain has already committed the wrong balances_root; if it is wrong at
         // the window start, the whole dry run shadows a journal missing every
         // position opened before the window.
-        const sc = fs.readFileSync(path.resolve(__dirname, '../../../src/stateCommitment.js'), 'utf8');
+        const sc = fs.readFileSync(path.resolve(__dirname, '../../../src/state_commitment/index.js'), 'utf8');
         assert.ok(/EJW\.writeEscrowJournal\(db, blockIndex, \{ full: armingBlock \|\| windowStart \}\)/.test(sc),
             'computeAndStoreRoots must call the writer with the arming-or-window-start flag');
         // The TRUE arming block must full-replay even when a shadow ran right up
@@ -163,11 +163,15 @@ describe('escrow journal writer: block-path wiring @regression', function(){
     it('the FOLLOWER never writes the journal (it replicates)', function(){
         // An absent follower still fails on the read below, as it always has. A present one
         // reached through a lane symlink into a live main checkout is refused instead of read.
-        const followerVerdict = siblingCheckout(__dirname, '../../../../xchain-sync/src/stateCommitment.js');
+        // The follower module sits at src/state_commitment/index.js, or at the flat
+        // src/stateCommitment.js in a sibling from before that move; read whichever it has.
+        const followerRel = ['../../../../xchain-sync/src/state_commitment/index.js', '../../../../xchain-sync/src/stateCommitment.js']
+            .find((rel) => fs.existsSync(path.resolve(__dirname, rel))) || '../../../../xchain-sync/src/state_commitment/index.js';
+        const followerVerdict = siblingCheckout(__dirname, followerRel);
         if (!followerVerdict.usable && fs.existsSync(followerVerdict.path))
             return skipOrFail(this, followerVerdict, 'the follower never-writes-the-journal pin');
         const follower = fs.readFileSync(
-            path.resolve(__dirname, '../../../../xchain-sync/src/stateCommitment.js'), 'utf8');
+            path.resolve(__dirname, followerRel), 'utf8');
         assert.ok(!/writeEscrowJournal/.test(follower),
             'xchain-sync must not write escrow_leaf_journal; it replicates the source\'s rows');
     });

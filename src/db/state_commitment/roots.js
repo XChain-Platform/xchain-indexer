@@ -24,7 +24,7 @@
  * Both are strict (doQueryStrict). A fail-soft [] on the prior-root read would
  * degrade every block into a full rebuild, and a swallowed row write would leave
  * the next block with no root to thread from; see the M-17 note at the head of
- * DbNodeStore in src/stateCommitment/persistent_smt.js.
+ * DbNodeStore in src/state_commitment/persistent_smt.js.
  *
  ********************************************************************/
 

@@ -42,7 +42,7 @@
 const assert = require('assert');
 const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
 const M   = require('../../src/consensus/merkle.js');
-const SC  = require('../../src/stateCommitment.js');
+const SC  = require('../../src/state_commitment/index.js');
 const SUB = require('../../src/state_subtree_activation.js');
 const ESC = require('../../src/consensus/escrow_leaf_subtree.js');
 

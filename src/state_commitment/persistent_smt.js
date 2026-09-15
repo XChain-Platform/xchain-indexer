@@ -13,7 +13,7 @@
  **********************************************************************
  *
  * Light-client state commitment: the persistent node store and SMT engine
- * (SPV spec §4), the part of stateCommitment.js that xchain-sync carries as
+ * (SPV spec §4), the part of the state commitment that xchain-sync carries as
  * BYTE twins.
  *
  * Three regions of this file are the consensus contract with the follower
@@ -29,7 +29,7 @@
  * What lives here and why it is one file: the node store defines what a row IS,
  * the engine is the only reader and writer of those rows, and the orphan walk
  * counts them. The per-block orchestration that drives the engine stays in
- * src/stateCommitment.js, which requires this part and re-exports its classes
+ * src/state_commitment/index.js, which requires this part and re-exports its classes
  * so every existing requirer keeps its import.
  *
  * Node model (consensus-critical):

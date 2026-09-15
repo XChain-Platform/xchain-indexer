@@ -18,11 +18,11 @@
  * root from the full leaf Map). This module is the PERSISTENT, INCREMENTAL twin
  * that must produce byte-identical roots from a content-addressed copy-on-write
  * node store (`state_tree_nodes`). The golden vectors + the persistent-vs-reference
- * fuzz test (test/unit/stateCommitment.test.js) lock the equality; the xchain-sync
+ * fuzz test (test/unit/state_commitment/state_commitment.test.js) lock the equality; the xchain-sync
  * follower keeps its own byte-identical copy and HALTS on divergence.
  *
  * The derivations the block commitment composes live beside this file as named
- * parts: stateCommitment/ holds the leaf values, stakes_root, state_root and
+ * parts: this directory holds the leaf values, stakes_root, state_root and
  * block_merkle_root, the full balances build, the two completeness guards and,
  * in persistent_smt.js, the node stores, the SMT engine and the orphan
  * observability walk (the three blocks xchain-sync carries as byte twins, with
@@ -36,20 +36,20 @@
 
 'use strict';
 
-const M = require('./consensus/merkle.js');
-const SUB = require('./state_subtree_activation.js');
-const CST = require('./consensus/contract_state_subtree.js');
-const ESC = require('./consensus/escrow_leaf_subtree.js');
-const EJW = require('./consensus/escrowJournalWriter.js');   // SOURCE ONLY: the follower replicates these rows
-const { getLogger } = require('./observability/index.js');
-const { leafOrNull } = require('./stateCommitment/leaf_values.js');
-const { gatherStakeEntries, buildStakesRoot, resetStakesMemo } = require('./stateCommitment/stakes_root.js');
-const { assembleStateRoot, extraSubRootColumn, computeBlockMerkleRoot } = require('./stateCommitment/state_root.js');
-const FULL = require('./stateCommitment/full_balances_root.js');
-const { enforceTouchedSet, assertCommittedLeaves } = require('./stateCommitment/touch_guards.js');
-const { getNetBalance } = require('./db/state_commitment/ledger_reads.js');
-const { getPriorBalancesRoot, storeStateTreeRoots } = require('./db/state_commitment/roots.js');
-const PSMT = require('./stateCommitment/persistent_smt.js');
+const M = require('../consensus/merkle.js');
+const SUB = require('../state_subtree_activation.js');
+const CST = require('../consensus/contract_state_subtree.js');
+const ESC = require('../consensus/escrow_leaf_subtree.js');
+const EJW = require('../consensus/escrowJournalWriter.js');   // SOURCE ONLY: the follower replicates these rows
+const { getLogger } = require('../observability/index.js');
+const { leafOrNull } = require('./leaf_values.js');
+const { gatherStakeEntries, buildStakesRoot, resetStakesMemo } = require('./stakes_root.js');
+const { assembleStateRoot, extraSubRootColumn, computeBlockMerkleRoot } = require('./state_root.js');
+const FULL = require('./full_balances_root.js');
+const { enforceTouchedSet, assertCommittedLeaves } = require('./touch_guards.js');
+const { getNetBalance } = require('../db/state_commitment/ledger_reads.js');
+const { getPriorBalancesRoot, storeStateTreeRoots } = require('../db/state_commitment/roots.js');
+const PSMT = require('./persistent_smt.js');
 const { EMPTY_ROOT_HEX, DbNodeStore, MemoryNodeStore, PersistentSMT, reportOrphanStats } = PSMT;
 
 // Candidate reserved sub-roots for one block, before gating. Stage A's
@@ -88,7 +88,7 @@ async function shadowSubRoots(db, chain, network, blockIndex){
     return { contract_state_root: await CST.resolveContractStateRoot(db, smt, chain, network, blockIndex, true) };
 }
 
-// The full balances_root build (stateCommitment/full_balances_root.js) over a
+// The full balances_root build (full_balances_root.js beside this file) over a
 // fresh PersistentSMT on this db's node store. The engine lives in this file, so
 // the part takes it as an argument instead of requiring it back from here.
 async function buildFullBalancesRoot(db, chain, network, blockIndex, opts){
@@ -226,7 +226,7 @@ async function balancesRootForBlock(db, smt, chain, network, blockIndex, isActiv
 
 // The incremental branch of balances_root: thread this block's touched spendable
 // leaves and then its locked escrow leaves onto the prior block's root, and run
-// both completeness guards (stateCommitment/touch_guards.js) on the result.
+// both completeness guards (touch_guards.js beside this file) on the result.
 async function threadBalancesRoot(db, smt, chain, network, blockIndex, priorRoot, escShadow){
     let root = priorRoot;
     const touched = db._smtTouched ? Array.from(db._smtTouched) : [];

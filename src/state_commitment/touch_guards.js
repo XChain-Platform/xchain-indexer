@@ -16,7 +16,7 @@
  *
  * The two checks the incremental balances_root thread runs before its root is
  * committed: the touched-set guard and the post-commit leaf-presence assertion.
- * Part of the block commitment that src/stateCommitment.js orchestrates, which
+ * Part of the block commitment that src/state_commitment/index.js orchestrates, which
  * calls both on its incremental branch only.
  *
  ********************************************************************/

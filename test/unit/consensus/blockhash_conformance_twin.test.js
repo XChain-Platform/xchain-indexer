@@ -38,7 +38,7 @@
  *   5. utility jsonStringify + getDataHash (the shared preimage serializer)
  *   6. reportOrphanStats (documented byte-identical twin; compared RAW, header
  *      comment included, unlike the normalized checks). The indexer keeps it in
- *      src/stateCommitment/persistent_smt.js, the follower in its whole-file
+ *      src/state_commitment/persistent_smt.js, the follower in its whole-file
  *      src/stateCommitment.js
  *
  * A one-sided edit to any of these forks every sync validator's recomputed
@@ -230,7 +230,10 @@ describe('consensus block-hash conformance twins (static drift-lock) @regression
         // The indexer half is the persistent_smt part: the entry re-exports the
         // function but no longer carries its text, and a read of the entry would
         // fail on the marker rather than compare nothing.
-        const pair = loadPair(this, 'src/stateCommitment.js', 'src/stateCommitment/persistent_smt.js');
+        // The follower moved to src/state_commitment/index.js; a sibling from before that move
+        // still carries the flat file, so the pair reads whichever spelling it has.
+        const followerRel = fs.existsSync(syncFile('src/state_commitment/index.js')) ? 'src/state_commitment/index.js' : 'src/stateCommitment.js';
+        const pair = loadPair(this, followerRel, 'src/state_commitment/persistent_smt.js');
         if(!pair) return;
         // The twin contract covers the whole block: the "---- Orphan-node
         // observability" header comment THROUGH the end of reportOrphanStats.
@@ -246,7 +249,7 @@ describe('consensus block-hash conformance twins (static drift-lock) @regression
             return tail.slice(0, tail.indexOf(fn) + fn.length);
         }
         assert.strictEqual(
-            extractTwinBlock(pair.indexer, 'xchain-indexer/src/stateCommitment/persistent_smt.js'),
+            extractTwinBlock(pair.indexer, 'xchain-indexer/src/state_commitment/persistent_smt.js'),
             extractTwinBlock(pair.sync, 'xchain-sync/src/stateCommitment.js'),
             'reportOrphanStats block drifted between xchain-indexer persistent_smt.js and xchain-sync stateCommitment.js; ' +
             'the header comment declares it a keep-BYTE-IDENTICAL twin (comments included)');

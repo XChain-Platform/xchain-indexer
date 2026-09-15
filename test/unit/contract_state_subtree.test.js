@@ -57,7 +57,7 @@ const fs     = require('fs');
 const path   = require('path');
 
 const M   = require('../../src/consensus/merkle.js');
-const SC  = require('../../src/stateCommitment.js');
+const SC  = require('../../src/state_commitment/index.js');
 const SUB = require('../../src/state_subtree_activation.js');
 const CST = require('../../src/consensus/contract_state_subtree.js');
 

@@ -48,7 +48,7 @@
 
 const assert = require('assert');
 const M  = require('../../../src/consensus/merkle.js');
-const SC = require('../../../src/stateCommitment.js');
+const SC = require('../../../src/state_commitment/index.js');
 const { keyFor, leafFor, CountingStore, PerNodeStore } = require('./state_commitment_batched_node_writes.test/helpers/counting_store.js');
 
 describe('stateCommitment: batched SMT node writes @regression', function(){
