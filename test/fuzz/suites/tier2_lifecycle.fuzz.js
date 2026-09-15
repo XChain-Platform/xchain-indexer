@@ -28,9 +28,9 @@ const { anyAmount, validAmount, decimalsValue } = require('../generators/helpers
 const { anyTick, validTick } = require('../generators/helpers/ticks');
 const { cryptoAddress } = require('../generators/helpers/addresses');
 
-describe('Tier 2 - Token lifecycle (ISSUE + MINT) @tier2', function () {
-    this.timeout(0);
-    let Issue, Mint, indexer, actionsCtx;
+let Issue, Mint, indexer, actionsCtx;
+function lifecycleHooks(ctx) {
+    ctx.timeout(0);
 
     before(function () {
         Issue = require('../../../src/actions/issue/index.js');
@@ -50,11 +50,14 @@ describe('Tier 2 - Token lifecycle (ISSUE + MINT) @tier2', function () {
     afterEach(function () {
         sinon.restore();
     });
+}
 
-    // Remaining known errors from null property access in complex handler paths
-    function isKnownCrash(err) {
-        return err.message.includes('Cannot read properties');
-    }
+// Remaining known errors from null property access in complex handler paths
+function isKnownCrash(err) {
+    return err.message.includes('Cannot read properties');
+}
+describe('Tier 2 - Token lifecycle (ISSUE + MINT) @tier2', function () {
+    lifecycleHooks(this);
 
     describe('Issue.parse() crash safety', function () {
         it('never throws unexpected errors for fuzzed format 0 params', function () {
@@ -104,6 +107,9 @@ describe('Tier 2 - Token lifecycle (ISSUE + MINT) @tier2', function () {
             ), { numRuns: NUM_RUNS });
         });
     });
+});
+describe('Tier 2 - Token lifecycle (ISSUE + MINT) @tier2', function () {
+    lifecycleHooks(this);
 
     describe('Issue.parse() crash safety', function () {
         it('handles all 6 format versions without crash', async function () {
@@ -130,6 +136,9 @@ describe('Tier 2 - Token lifecycle (ISSUE + MINT) @tier2', function () {
             }
         });
     });
+});
+describe('Tier 2 - Token lifecycle (ISSUE + MINT) @tier2', function () {
+    lifecycleHooks(this);
 
     describe('Mint.parse() crash safety', function () {
         it('never throws unexpected errors for fuzzed params', function () {
@@ -180,6 +189,9 @@ describe('Tier 2 - Token lifecycle (ISSUE + MINT) @tier2', function () {
             ), { numRuns: NUM_RUNS });
         });
     });
+});
+describe('Tier 2 - Token lifecycle (ISSUE + MINT) @tier2', function () {
+    lifecycleHooks(this);
 
     describe('Mint.parse() crash safety', function () {
         it('handles unknown format version', async function () {
@@ -199,6 +211,9 @@ describe('Tier 2 - Token lifecycle (ISSUE + MINT) @tier2', function () {
                 `Unknown format should be rejected, got: ${data.STATUS}`);
         });
     });
+});
+describe('Tier 2 - Token lifecycle (ISSUE + MINT) @tier2', function () {
+    lifecycleHooks(this);
 
     describe('supply arithmetic safety', function () {
         it('bcadd with random supply values never produces NaN', function () {

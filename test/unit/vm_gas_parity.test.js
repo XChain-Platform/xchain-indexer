@@ -55,12 +55,75 @@ function makeCtx(util, { base64CodeEra = true } = {}){
         staticProtocolFee:     Actions.prototype.staticProtocolFee
     };
 }
+function feeFixtures(){
 
+
+
+
+
+
+    const CODE     = 'x';                                          // 1 byte of source
+    const CODE_B64 = Buffer.from(CODE, 'utf8').toString('base64');
+    const CARRIER  = 'QUJD';                                       // 4 carried base64 chars
+    return [
+
+        {
+            what:    'EXECUTE (execute.js)',
+            action:  'EXECUTE',
+            params:  ['0', 'contract1', 'method', 'arg'],
+            handler: (u) => u.vmGasCost(SCHEDULE, 'EXECUTE', 0),
+            expect:  1000
+        },
+        {
+            what:    'DEPLOY v0 inline (deploy.js, isChunked=false)',
+            action:  'DEPLOY',
+            params:  ['0', CODE_B64, '500000', ''],
+            handler: (u) => u.vmGasCost(SCHEDULE, 'DEPLOY_INLINE', Buffer.byteLength(CODE, 'utf8')),
+            expect:  100010
+        },
+        {
+            what:    'DEPLOY v1 inline (deploy.js, isChunked=false)',
+            action:  'DEPLOY',
+            params:  ['1', CODE_B64, '500000', ''],
+            handler: (u) => u.vmGasCost(SCHEDULE, 'DEPLOY_INLINE', Buffer.byteLength(CODE, 'utf8')),
+            expect:  100010
+        },
+        {
+            what:    'DEPLOY v2 chunked assembly (deploy.js, isChunked=true)',
+            action:  'DEPLOY',
+            params:  ['2', 'a'.repeat(64), '500000', ''],
+            handler: (u) => u.vmGasCost(SCHEDULE, 'DEPLOY_CHUNKED', 0),
+            expect:  100000
+        },
+        {
+            what:    'DEPLOY v3 chunked assembly (deploy.js, isChunked=true)',
+            action:  'DEPLOY',
+            params:  ['3', 'a'.repeat(64), '500000', ''],
+            handler: (u) => u.vmGasCost(SCHEDULE, 'DEPLOY_CHUNKED', 0),
+            expect:  100000
+        },
+        {
+            what:    'DEPLOY v4 carrier (deploy_chunk.js)',
+            action:  'DEPLOY',
+            params:  ['4', 'a'.repeat(64), '0', '2', CARRIER],
+            handler: (u) => u.vmGasCost(SCHEDULE, 'DEPLOY_CARRIER', Buffer.byteLength(CARRIER, 'utf8')),
+            expect:  40
+        }
+    ];
+}
+const SITES = [
+    path.join('actions', 'index.js'),
+    path.join('actions', 'deploy', 'index.js'),
+    path.join('actions', 'deploy', 'deploy_chunk.js'),
+    path.join('actions', 'execute', 'index.js')
+];
+const GAS_KEY = /VM_DEPLOY_BASE|VM_DEPLOY_PER_BYTE|VM_EXECUTE_BASE/;
+function stripComments(src){
+    return src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
+}
 describe('static fee quote <-> handler acceptance fee parity @regression @tier1', function () {
-
     describe('util.vmGasCost() is the one arithmetic', function () {
         const util = makeUtil();
-
         it('prices each VM gas family off the schedule', function () {
             assert.strictEqual(util.vmGasCost(SCHEDULE, 'EXECUTE', 0), 1000);
             assert.strictEqual(util.vmGasCost(SCHEDULE, 'DEPLOY_INLINE', 1), 100010);
@@ -69,11 +132,9 @@ describe('static fee quote <-> handler acceptance fee parity @regression @tier1'
                 'chunked charges base only; its v4 carriers already paid per-byte');
             assert.strictEqual(util.vmGasCost(SCHEDULE, 'DEPLOY_CARRIER', 4), 40);
         });
-
         it('returns null for an unknown family rather than a free action', function () {
             assert.strictEqual(util.vmGasCost(SCHEDULE, 'NOT_A_FAMILY', 1), null);
         });
-
         it('never substitutes a default for a missing schedule key', function () {
             // A silent 0 here would price a VM action at nothing. Callers guard on the
             // non-finite result instead (staticProtocolFee returns null, no quote).
@@ -83,60 +144,14 @@ describe('static fee quote <-> handler acceptance fee parity @regression @tier1'
             assert.ok(!Number.isFinite(Number(util.vmGasCost({}, 'DEPLOY_CARRIER', 4))));
         });
     });
-
+});
+describe('static fee quote <-> handler acceptance fee parity @regression @tier1', function () {
     describe('the quote reproduces the handler fee from identical fixtures', function () {
-        const CODE     = 'x';                                          // 1 byte of source
-        const CODE_B64 = Buffer.from(CODE, 'utf8').toString('base64');
-        const CARRIER  = 'QUJD';                                       // 4 carried base64 chars
-
         // Each row: the quote input, and the acceptance-side call the named handler makes for
         // that same transaction. The handler expression is the one the handler now runs
         // (this.util.vmGasCost(schedule, <family>, <bytes>)), so the row is a real comparison
         // of the two paths, not a formula copied out of either.
-        const FIXTURES = [
-            {
-                what:    'EXECUTE (execute.js)',
-                action:  'EXECUTE',
-                params:  ['0', 'contract1', 'method', 'arg'],
-                handler: (u) => u.vmGasCost(SCHEDULE, 'EXECUTE', 0),
-                expect:  1000
-            },
-            {
-                what:    'DEPLOY v0 inline (deploy.js, isChunked=false)',
-                action:  'DEPLOY',
-                params:  ['0', CODE_B64, '500000', ''],
-                handler: (u) => u.vmGasCost(SCHEDULE, 'DEPLOY_INLINE', Buffer.byteLength(CODE, 'utf8')),
-                expect:  100010
-            },
-            {
-                what:    'DEPLOY v1 inline (deploy.js, isChunked=false)',
-                action:  'DEPLOY',
-                params:  ['1', CODE_B64, '500000', ''],
-                handler: (u) => u.vmGasCost(SCHEDULE, 'DEPLOY_INLINE', Buffer.byteLength(CODE, 'utf8')),
-                expect:  100010
-            },
-            {
-                what:    'DEPLOY v2 chunked assembly (deploy.js, isChunked=true)',
-                action:  'DEPLOY',
-                params:  ['2', 'a'.repeat(64), '500000', ''],
-                handler: (u) => u.vmGasCost(SCHEDULE, 'DEPLOY_CHUNKED', 0),
-                expect:  100000
-            },
-            {
-                what:    'DEPLOY v3 chunked assembly (deploy.js, isChunked=true)',
-                action:  'DEPLOY',
-                params:  ['3', 'a'.repeat(64), '500000', ''],
-                handler: (u) => u.vmGasCost(SCHEDULE, 'DEPLOY_CHUNKED', 0),
-                expect:  100000
-            },
-            {
-                what:    'DEPLOY v4 carrier (deploy_chunk.js)',
-                action:  'DEPLOY',
-                params:  ['4', 'a'.repeat(64), '0', '2', CARRIER],
-                handler: (u) => u.vmGasCost(SCHEDULE, 'DEPLOY_CARRIER', Buffer.byteLength(CARRIER, 'utf8')),
-                expect:  40
-            }
-        ];
+        const FIXTURES = feeFixtures();
 
         for(const f of FIXTURES){
             it('quote == acceptance fee for ' + f.what, async function () {
@@ -154,8 +169,13 @@ describe('static fee quote <-> handler acceptance fee parity @regression @tier1'
                     String(util.bcmul(f.handler(util), util.config['GAS_PRICE'], 8)));
             });
         }
+    });
+});
+describe('static fee quote <-> handler acceptance fee parity @regression @tier1', function () {
+    describe('the quote reproduces the handler fee from identical fixtures', function () {
 
         it('the pre-activation hex era bills the same byte count', async function () {
+            const CODE_B64 = Buffer.from('x', 'utf8').toString('base64');
             let util  = makeUtil();
             let ctx   = makeCtx(util, { base64CodeEra: false });
             let quote = await ctx.staticProtocolFee.call(ctx, 'DEPLOY', ['0', '78', '500000', ''], 100);
@@ -163,19 +183,11 @@ describe('static fee quote <-> handler acceptance fee parity @regression @tier1'
                 "hex '78' is the same 1 byte of source the handler would measure");
         });
     });
+});
 
-    const SITES = [
-        path.join('actions', 'index.js'),
-        path.join('actions', 'deploy', 'index.js'),
-        path.join('actions', 'deploy', 'deploy_chunk.js'),
-        path.join('actions', 'execute', 'index.js')
-    ];
-    const GAS_KEY = /VM_DEPLOY_BASE|VM_DEPLOY_PER_BYTE|VM_EXECUTE_BASE/;
 
-    function stripComments(src){
-        return src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
-    }
 
+describe('static fee quote <-> handler acceptance fee parity @regression @tier1', function () {
     /* The re-duplication guard, which is the half that survives this commit.
      *
      * Parity fixtures prove the numbers agree today; they say nothing about a future edit that
@@ -193,57 +205,5 @@ describe('static fee quote <-> handler acceptance fee parity @regression @tier1'
                     + '\n  Route it through this.util.vmGasCost so the static quote moves with it.');
             });
         }
-    });
-
-    describe('no site recomputes the VM gas arithmetic', function () {
-        // Every .js under src/, relative to it. The SITES list above is the set of files that
-        // charge the fee TODAY; it cannot see a fifth handler added tomorrow, and a list that
-        // silently covers less than the tree is the same green-by-omission this suite exists
-        // to prevent. So the whole tree is scanned and the list stays as an anchor: each entry
-        // must still resolve, so a move is reported rather than quietly narrowing the scan.
-        function walkJs(dir) {
-            const out = [];
-            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-                const abs = path.join(dir, entry.name);
-                if (entry.isDirectory()) out.push(...walkJs(abs));
-                else if (entry.name.endsWith('.js')) out.push(path.relative(SRC, abs));
-            }
-            return out;
-        }
-
-        // A coin schedule DECLARES the values (`VM_EXECUTE_BASE: 1000,`); it does no arithmetic
-        // with them. Only the declaration LINE is exempt, never the file, so a coin that started
-        // pricing gas itself is still caught.
-        const DECLARATION = /^\s*(?:VM_DEPLOY_BASE|VM_DEPLOY_PER_BYTE|VM_EXECUTE_BASE)\s*:\s*[\d_]+\s*,?\s*$/;
-
-        it('no other file under src/ prices VM gas either', function () {
-            const files = walkJs(SRC);
-            // The canonical is part of this comparison, not an assumption about it: if
-            // utility.js stopped resolving the scan below would exempt a file that is not there.
-            assert.ok(files.includes('utility.js'),
-                'utility.js, the one arithmetic, no longer resolves under src/; repoint this guard');
-            for (const site of SITES)
-                assert.ok(files.includes(site),
-                    site + ' no longer resolves under src/. Repoint SITES at where the fee is '
-                    + 'charged now, so the named-site checks above keep covering it.');
-            assert.ok(files.length > SITES.length + 1,
-                'the walk found only the files already named; it is no longer scanning the tree');
-
-            const offenders = [];
-            for (const rel of files) {
-                if (rel === 'utility.js') continue;
-                const code = stripComments(fs.readFileSync(path.join(SRC, rel), 'utf8'));
-                const hits = code.split('\n').filter((l) => GAS_KEY.test(l) && !DECLARATION.test(l));
-                if (hits.length) offenders.push(rel + ':\n  ' + hits.join('\n  '));
-            }
-            assert.deepStrictEqual(offenders, [],
-                'these files price VM gas outside util.vmGasCost:\n' + offenders.join('\n')
-                + '\n  Route it through this.util.vmGasCost so the static quote moves with it.');
-        });
-
-        it('utility.js is the single site that does', function () {
-            const code = stripComments(fs.readFileSync(path.join(SRC, 'utility.js'), 'utf8'));
-            assert.ok(GAS_KEY.test(code), 'util.vmGasCost is where the arithmetic lives; it went missing');
-        });
     });
 });

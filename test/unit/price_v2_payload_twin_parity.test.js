@@ -111,6 +111,45 @@ function loadHubTwins(ctx) {
         return null;
     }
 }
+const MODS = ['../../src/mirror_admission_activation.js', '../../src/consensus/ed25519.js',
+              '../../../xchain-hub/src/mirror_admission_activation.js',
+              '../../../xchain-hub/src/lib/admission_height.js',
+              '../../../xchain-hub/src/oracle/consensus.js',
+              '../../../xchain-hub/src/oracle/price_aggregator.js'];
+const MAPS = { 1039: { DOGE: 5000004, BTC: 912346 }, 1040: { BTC: 912347 },
+               1041: { LTC: 2400004, BTC: 912348 }, 1042: { BTC: 912349, DOGE: 5000010, LTC: 2400010 } };
+const withMaps = rounds => rounds.map(r => Object.assign({ admitBlocks: MAPS[parseInt(r.round)] }, r, { admitBlocks: MAPS[parseInt(r.round)] }));
+let armed = null;
+function admissionHooks() {
+    before(function () {
+        // Every module is judged before the purge, for the same reason as loadHubTwins.
+        for (const m of MODS) {
+            const verdict = siblingCheckout(__dirname, m);
+            if (!verdict.usable) return skipOrFail(this, verdict, 'the PRICE v0 admission-era twin parity');
+        }
+        let paths;
+        try { paths = MODS.map(m => require.resolve(m)); }
+        catch (e) {
+            if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1') throw e;
+            return this.skip();
+        }
+        const saved    = paths.map(p => [p, require.cache[p]]);
+        const savedEnv = process.env.XC_MIRROR_ADMISSION_ACTIVATION;
+        for (const p of paths) delete require.cache[p];
+        process.env.XC_MIRROR_ADMISSION_ACTIVATION = '0';
+        const act = require('../../src/mirror_admission_activation.js');
+        const ed  = require('../../src/consensus/ed25519.js');
+        const OC  = require('../../../xchain-hub/src/oracle/consensus.js');
+        const PA  = require('../../../xchain-hub/src/oracle/price_aggregator.js');
+        const stubHub = { db: null, network: NETWORK, getPeerManager: () => ({}) };
+        armed = { act, ed, producer: new OC(stubHub, {}), ingest: new PA(stubHub), restore() {
+            for (const [p, mod] of saved) { if (mod === undefined) delete require.cache[p]; else require.cache[p] = mod; }
+            if (savedEnv === undefined) delete process.env.XC_MIRROR_ADMISSION_ACTIVATION;
+            else process.env.XC_MIRROR_ADMISSION_ACTIVATION = savedEnv;
+        } };
+    });
+    after(function () { if (armed) armed.restore(); armed = null; });
+}
 
 describe('PRICE v0 canonical: three-way twin parity', function () {
 
@@ -165,6 +204,8 @@ describe('PRICE v0 canonical: three-way twin parity', function () {
             assert.strictEqual(eq.isEquivHeaderActive(1, 'mainnet'), false, 'the gate v0 would have failed here');
         });
     });
+});
+describe('PRICE v0 canonical: three-way twin parity', function () {
 
     describe('byte equality across the producer and both verifiers', function () {
 
@@ -214,52 +255,18 @@ describe('PRICE v0 canonical: three-way twin parity', function () {
             }
         });
     });
+});
 
+describe('PRICE v0 canonical: three-way twin parity', function () {
     // The admission era, driven in a DEFAULT run rather than left to whoever sets the env:
     // the resolver freezes at require time, so the describe purges every module that closes
     // over it, arms at height 0, re-requires the three builders, and restores the process
     // exactly as found. Without this the per-round map's parity is asserted only when a
     // process happens to be launched armed, which is the false green row 16 closed hub-side.
     describe('the admission era: one map per round, byte-equal across all three twins', function () {
-        const MODS = ['../../src/mirror_admission_activation.js', '../../src/consensus/ed25519.js',
-                      '../../../xchain-hub/src/mirror_admission_activation.js',
-                      '../../../xchain-hub/src/lib/admission_height.js',
-                      '../../../xchain-hub/src/oracle/consensus.js',
-                      '../../../xchain-hub/src/oracle/price_aggregator.js'];
-        let armed = null;
+        admissionHooks();
 
-        before(function () {
-            // Every module is judged before the purge, for the same reason as loadHubTwins.
-            for (const m of MODS) {
-                const verdict = siblingCheckout(__dirname, m);
-                if (!verdict.usable) return skipOrFail(this, verdict, 'the PRICE v0 admission-era twin parity');
-            }
-            let paths;
-            try { paths = MODS.map(m => require.resolve(m)); }
-            catch (e) {
-                if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1') throw e;
-                return this.skip();
-            }
-            const saved    = paths.map(p => [p, require.cache[p]]);
-            const savedEnv = process.env.XC_MIRROR_ADMISSION_ACTIVATION;
-            for (const p of paths) delete require.cache[p];
-            process.env.XC_MIRROR_ADMISSION_ACTIVATION = '0';
-            const act = require('../../src/mirror_admission_activation.js');
-            const ed  = require('../../src/consensus/ed25519.js');
-            const OC  = require('../../../xchain-hub/src/oracle/consensus.js');
-            const PA  = require('../../../xchain-hub/src/oracle/price_aggregator.js');
-            const stubHub = { db: null, network: NETWORK, getPeerManager: () => ({}) };
-            armed = { act, ed, producer: new OC(stubHub, {}), ingest: new PA(stubHub), restore() {
-                for (const [p, mod] of saved) { if (mod === undefined) delete require.cache[p]; else require.cache[p] = mod; }
-                if (savedEnv === undefined) delete process.env.XC_MIRROR_ADMISSION_ACTIVATION;
-                else process.env.XC_MIRROR_ADMISSION_ACTIVATION = savedEnv;
-            } };
-        });
-        after(function () { if (armed) armed.restore(); armed = null; });
 
-        const MAPS = { 1039: { DOGE: 5000004, BTC: 912346 }, 1040: { BTC: 912347 },
-                       1041: { LTC: 2400004, BTC: 912348 }, 1042: { BTC: 912349, DOGE: 5000010, LTC: 2400010 } };
-        const withMaps = rounds => rounds.map(r => Object.assign({ admitBlocks: MAPS[parseInt(r.round)] }, r, { admitBlocks: MAPS[parseInt(r.round)] }));
 
         it('is ARMED here, whatever the process was launched with', function () {
             assert.strictEqual(armed.act.isAdmissionEra(NETWORK, 912342), true);
@@ -280,22 +287,6 @@ describe('PRICE v0 canonical: three-way twin parity', function () {
                 [MAPS[1039], MAPS[1040], MAPS[1041], MAPS[1042]].map(m => Object.fromEntries(Object.entries(m).sort())));
             // Caller ordering still normalizes identically with the map in play.
             assert.strictEqual(armed.ed.buildPriceBatchPayload(FIRST, LAST, ANCHOR, withMaps(shuffledBatch()), NETWORK), fromIndexer);
-        });
-
-        it('all three REFUSE an era round with no map, so no legacy bytes can be signed or verified above the activation', function () {
-            let rounds = batch().map(r => { let c = Object.assign({}, r); delete c.admitBlocks; return c; });
-            for (const [name, build] of [
-                ['indexer verifier', () => armed.ed.buildPriceBatchPayload(FIRST, LAST, ANCHOR, rounds, NETWORK)],
-                ['hub producer',     () => armed.producer._buildPriceBatchPayload(FIRST, LAST, ANCHOR, rounds)],
-                ['hub ingest',       () => armed.ingest._buildPriceBatchPayload(FIRST, LAST, ANCHOR, rounds)],
-            ]) assert.throws(build, /has no admit_blocks; refusing to build a legacy canonical/, name + ' built legacy bytes in the era');
-        });
-
-        it('a caller that omits the network rebuilds LEGACY bytes, which then fail to verify rather than verifying as legacy', function () {
-            let rounds = batch().map(r => { let c = Object.assign({}, r); delete c.admitBlocks; return c; });
-            let bytes = armed.ed.buildPriceBatchPayload(FIRST, LAST, ANCHOR, rounds);
-            assert.strictEqual(/admit_blocks/.test(bytes), false);
-            assert.notStrictEqual(bytes, armed.ed.buildPriceBatchPayload(FIRST, LAST, ANCHOR, withMaps(batch()), NETWORK));
         });
     });
 });

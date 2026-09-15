@@ -26,9 +26,9 @@ const sinon = require('sinon');
 const { NUM_RUNS, createMockIndexer, createBaseData, makeFuzzActionsCtx } = require('../setup/harness');
 const { batchDataString, issueDataString, sendDataString } = require('../generators/helpers/actions');
 
-describe('Tier 1 - BATCH handler @tier1', function () {
-    this.timeout(0);
-    let Batch, indexer, actionsCtx, handler;
+let Batch, indexer, actionsCtx, handler;
+function batchHooks(ctx) {
+    ctx.timeout(0);
 
     before(function () {
         Batch = require('../../../src/actions/batch/index.js');
@@ -43,15 +43,18 @@ describe('Tier 1 - BATCH handler @tier1', function () {
     afterEach(function () {
         sinon.restore();
     });
+}
 
-    function makeData(txData, overrides = {}) {
-        return createBaseData({
-            ACTION: 'BATCH',
-            FORMAT: 0,
-            TX_DATA: txData,
-            ...overrides,
-        });
-    }
+function makeData(txData, overrides = {}) {
+    return createBaseData({
+        ACTION: 'BATCH',
+        FORMAT: 0,
+        TX_DATA: txData,
+        ...overrides,
+    });
+}
+describe('Tier 1 - BATCH handler @tier1', function () {
+    batchHooks(this);
 
     describe('never throws for fuzzed BATCH inputs', function () {
         it('handles grammar-based batch data strings', function () {
@@ -93,6 +96,9 @@ describe('Tier 1 - BATCH handler @tier1', function () {
             ), { numRuns: 20 }); // fewer runs (each iteration is expensive)
         });
     });
+});
+describe('Tier 1 - BATCH handler @tier1', function () {
+    batchHooks(this);
 
     describe('structural invariants', function () {
         it('createBatch is always called exactly once', function () {
@@ -150,6 +156,9 @@ describe('Tier 1 - BATCH handler @tier1', function () {
             );
         });
     });
+});
+describe('Tier 1 - BATCH handler @tier1', function () {
+    batchHooks(this);
 
     describe('structural invariants', function () {
         it('multiple MINT actions are rejected (limit=1)', async function () {
@@ -162,6 +171,9 @@ describe('Tier 1 - BATCH handler @tier1', function () {
             );
         });
     });
+});
+describe('Tier 1 - BATCH handler @tier1', function () {
+    batchHooks(this);
 
     describe('format edge cases', function () {
         it('unknown format sets error status', async function () {

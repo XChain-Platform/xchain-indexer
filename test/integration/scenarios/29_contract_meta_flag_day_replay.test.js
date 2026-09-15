@@ -66,7 +66,8 @@
 'use strict';
 
 const assert = require('assert');
-const crypto = require('crypto');
+const { chainDigest, rowFor, assertNoMetaColumns, restoreEnv } = require('./29_contract_meta_flag_day_replay.test/helpers/scenario_assertions.js');
+const postVerdictTests = require('./29_contract_meta_flag_day_replay.test/post_activation_verdicts.test.js');
 const { createDatabases, createDecoderSchema, resetIndexerDbB,
         decoderQuery, indexerQuery, indexerBQuery, indexerDbNameB,
         closeAll } = require('../setup/db-connection');
@@ -115,11 +116,7 @@ const T_FILL = [10000000001, 10000000002, 10000000003];
 const T_POST = 10000000004;
 
 const b64 = s => Buffer.from(s, 'utf8').toString('base64');
-const sha = s => crypto.createHash('sha256').update(s).digest('hex');
-// One number over a resolved hash chain, so the before/after comparison is readable
-// in the run output. The ASSERTION is assertHashChainsEqual, which names the first
-// divergent block; this only makes the same fact visible.
-const chainDigest = chain => sha(JSON.stringify(chain));
+
 
 // The frozen consensus token, written literally rather than imported from
 // src/actions/deploy/contract_meta.js: a test that reads the string out of the code under test
@@ -139,31 +136,15 @@ const NAMELESS_POST = "module.exports={ guard:function(){ return {}; }, era:'pos
 const NAMED_PRE     = `module.exports={ ${META}, guard:function(){ return {}; }, era:'pre'  };`;
 const NAMED_POST    = `module.exports={ ${META}, guard:function(){ return {}; }, era:'post' };`;
 
-describe('29 - CONTRACT_META_REQUIRED flag day: pre-activation replay + activation @regression @tier1', function () {
-    this.timeout(600000);
 
-    let seeder, nodeA;
-    let prevCoin, prevNetwork;
-    let preChainA = null;   // resolved hash chain after the pre-activation corpus only
+let seeder, nodeA;
+let prevCoin, prevNetwork;
+let preChainA = null;   // resolved hash chain after the pre-activation corpus only
+let postChainA = null;
 
-    /** One contract row, addressed by the sha256 of its source. */
-    async function rowFor(queryFn, code) {
-        const h = sha(code);
-        const rows = await queryFn(
-            `SELECT c.action_index, c.code_hash, c.block_index,
-                    s.status AS status,
-                    c.meta_name, c.meta_description, c.meta_version, c.meta_json
-             FROM contracts c
-             LEFT JOIN index_statuses s ON s.id = c.status_id`, []);
-        return rows.find(r => r.code_hash === h);
-    }
 
-    function assertNoMetaColumns(row, label) {
-        assert.strictEqual(row.meta_name,        null, label + ': meta_name is NULL');
-        assert.strictEqual(row.meta_description, null, label + ': meta_description is NULL');
-        assert.strictEqual(row.meta_version,     null, label + ': meta_version is NULL');
-        assert.strictEqual(row.meta_json,        null, label + ': meta_json is NULL');
-    }
+function scenarioHooks(ctx) {
+    ctx.timeout(600000);
 
     before(async function () {
         // Real DEPLOY needs the isolated-vm-backed xchain-vm; skip rather than
@@ -205,10 +186,27 @@ describe('29 - CONTRACT_META_REQUIRED flag day: pre-activation replay + activati
         restoreEnv('INDEXER_NETWORK', prevNetwork);
     });
 
-    function restoreEnv(name, value) {
-        if (value === undefined) delete process.env[name];
-        else process.env[name] = value;
-    }
+}
+function postHooks() {
+    before(async function () {
+        if (!nodeA) return this.skip();
+        // The filler blocks exist so MTP (the value isEnabled actually compares)
+        // crosses the flag day at B_POST. The FIRST one carries a nameless deploy
+        // on purpose: its raw stamp is already above the flag day while its MTP is
+        // not, so its verdict says which clock the gate reads.
+        for (let i = 0; i < B_FILL.length; i++)
+            await seeder.seedBlock(B_FILL[i], T_FILL[i], i === 0
+                ? [{ source: DEPLOYER, data: `DEPLOY|0|${b64(NAMELESS_MTP)}|300000|` }]
+                : []);
+        await seeder.seedBlock(B_POST, T_POST, [
+            { source: DEPLOYER, data: `DEPLOY|0|${b64(NAMELESS_POST)}|300000|` },
+            { source: DEPLOYER, data: `DEPLOY|0|${b64(NAMED_POST)}|300000|` },
+        ]);
+        await processBlocks(nodeA);
+        postChainA = await readHashChain(indexerQuery);
+    });
+}
+function belowFlagDayTests() {
 
     // ------------------------------------------------------------------
     // Below the flag day: historic verdicts, and free storage
@@ -252,31 +250,11 @@ describe('29 - CONTRACT_META_REQUIRED flag day: pre-activation replay + activati
             await destroyIndexer(nodeB);
         }
     });
+}
+function postReplayTests() {
 
-    // ------------------------------------------------------------------
-    // Crossing the flag day on the SAME chain
-    // ------------------------------------------------------------------
 
-    describe('after the flag-day block time arrives', function () {
-        let postChainA = null;
 
-        before(async function () {
-            if (!nodeA) return this.skip();
-            // The filler blocks exist so MTP (the value isEnabled actually compares)
-            // crosses the flag day at B_POST. The FIRST one carries a nameless deploy
-            // on purpose: its raw stamp is already above the flag day while its MTP is
-            // not, so its verdict says which clock the gate reads.
-            for (let i = 0; i < B_FILL.length; i++)
-                await seeder.seedBlock(B_FILL[i], T_FILL[i], i === 0
-                    ? [{ source: DEPLOYER, data: `DEPLOY|0|${b64(NAMELESS_MTP)}|300000|` }]
-                    : []);
-            await seeder.seedBlock(B_POST, T_POST, [
-                { source: DEPLOYER, data: `DEPLOY|0|${b64(NAMELESS_POST)}|300000|` },
-                { source: DEPLOYER, data: `DEPLOY|0|${b64(NAMED_POST)}|300000|` },
-            ]);
-            await processBlocks(nodeA);
-            postChainA = await readHashChain(indexerQuery);
-        });
 
         it('every PRE-activation block hash is byte-identical to the pre-activation replay', function () {
             assert.ok(postChainA.length > preChainA.length,
@@ -300,37 +278,20 @@ describe('29 - CONTRACT_META_REQUIRED flag day: pre-activation replay + activati
             assert.strictEqual(named.status, 'valid');
             assert.strictEqual(named.meta_name, 'Escrow');
         });
+}
 
-        it('the gate reads PROTOCOL time: a block stamped past the flag day is still below it while its MTP is', async function () {
-            // B_FILL[0]'s own timestamp is above CONTRACT_META_REQUIRED_TESTNET_TIME,
-            // but db.getBlockTime medians the blocks below it, and that median is still
-            // a pre-activation stamp. A gate wired to the raw stamp would reject here;
-            // the rule is not armed until MTP crosses, which is what the release re-pin
-            // is written against.
-            const row = await rowFor(indexerQuery, NAMELESS_MTP);
-            assert.ok(row, 'the future-stamped nameless contract was deployed');
-            assert.strictEqual(Number(row.block_index), B_FILL[0]);
-            assert.strictEqual(row.status, 'valid',
-                'MTP, not the raw stamp, decides activation; got: ' + row.status);
-            assertNoMetaColumns(row, 'future-stamped nameless');
-        });
 
-        it('at/after the flag day the same nameless shape is REJECTED with the meta-required string', async function () {
-            const row = await rowFor(indexerQuery, NAMELESS_POST);
-            assert.ok(row, 'the nameless post-activation contract row exists with its verdict');
-            assert.strictEqual(row.status, META_REQUIRED,
-                'a nameless deploy at/after the flag day is rejected, got: ' + row.status);
-            assertNoMetaColumns(row, 'post-activation nameless');
-        });
 
-        it('at/after the flag day a named deploy is valid and carries its meta columns', async function () {
-            const row = await rowFor(indexerQuery, NAMED_POST);
-            assert.ok(row, 'the named post-activation contract was deployed');
-            assert.strictEqual(row.status, 'valid',
-                'a conforming meta deploys valid at/after the flag day, got: ' + row.status);
-            assert.strictEqual(row.meta_name,        'Escrow');
-            assert.strictEqual(row.meta_description, 'Two-party escrow with an arbiter.');
-            assert.strictEqual(row.meta_version,     '1.0.0');
-        });
+describe('29 - CONTRACT_META_REQUIRED flag day: pre-activation replay + activation @regression @tier1', function () {
+    scenarioHooks(this);
+    belowFlagDayTests();
+    // ------------------------------------------------------------------
+    // Crossing the flag day on the SAME chain
+    // ------------------------------------------------------------------
+    describe('after the flag-day block time arrives', function () {
+        postHooks();
+        postReplayTests();
+        postVerdictTests({ assert, rowFor, indexerQuery, NAMELESS_MTP, B_FILL,
+            assertNoMetaColumns, NAMELESS_POST, META_REQUIRED, NAMED_POST });
     });
 });

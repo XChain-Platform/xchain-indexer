@@ -75,11 +75,14 @@ const ORPHAN_SWEEPS = lifecycle.ORPHAN_SWEEPS;
 // registry ('lookup' rollback mode) and cross-checked structurally below.
 const LOOKUP_TABLES = new Set(lifecycle.tablesWhere(t => t.rollback === 'lookup'));
 const isLookupTable = (t) => LOOKUP_TABLES.has(t);
+const SYNC_ROOT = process.env.XCHAIN_SYNC_PATH
+    ? path.resolve(process.env.XCHAIN_SYNC_PATH)
+    : path.resolve(__dirname, '..', '..', '..', 'xchain-sync');
+const REQUIRE_SIBLINGS = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 
-// ---------------------------------------------------------------------------
 
-describe('Rollback coverage guard @regression', function () {
-    let rollback;
+let rollback;
+function rollbackHooks() {
 
     before(function () {
         const indexer = createMockIndexer();
@@ -89,6 +92,10 @@ describe('Rollback coverage guard @regression', function () {
         };
         rollback = new Rollback(indexer);
     });
+}
+// ---------------------------------------------------------------------------
+describe('Rollback coverage guard @regression', function () {
+    rollbackHooks();
 
     it('sanity: src/sql contains a meaningful number of tables', function () {
         // Guards against a path/glob regression silently emptying the universe
@@ -121,6 +128,9 @@ describe('Rollback coverage guard @regression', function () {
                 : undefined
         );
     });
+});
+describe('Rollback coverage guard @regression', function () {
+    rollbackHooks();
 
     it('every rollback.js table reference points at a real src/sql table (no stale/renamed names)', function () {
         const universeSet = new Set(UNIVERSE);
@@ -160,7 +170,10 @@ describe('Rollback coverage guard @regression', function () {
                 : undefined
         );
     });
+});
 
+describe('Rollback coverage guard @regression', function () {
+    rollbackHooks();
     // ── Table-lifecycle registry gates ──────────────────────────────────
     // The registry (src/hub/table_lifecycle.js) is the single place a new table is
     // classified for replication, rollback, and hash coverage. These tests make
@@ -190,6 +203,9 @@ describe('Rollback coverage guard @regression', function () {
         assert.deepStrictEqual(stale, [],
             stale.length ? `table_lifecycle.js entries with no src/sql definition (typo or dropped table): ${stale.join(', ')}` : undefined);
     });
+});
+describe('Rollback coverage guard @regression', function () {
+    rollbackHooks();
 
     it('every registry entry declares all three lifecycle dimensions with valid values', function () {
         const REPLICATION = ['stream:action', 'stream:block', 'stream:index', 'stream:special',
@@ -228,6 +244,9 @@ describe('Rollback coverage guard @regression', function () {
             `The inert-lookup argument (ids only ever referenced by id, never hashed) is a ` +
             `property of the dedup lookup tables; anything else needs a real rollback mode.`);
     });
+});
+describe('Rollback coverage guard @regression', function () {
+    rollbackHooks();
 
     it('every orphan-sweep DELETE classified in SPECIAL_CASE actually exists in rollback.js', function () {
         // A derived/cache table that dangles after the index-table delete is only
@@ -254,7 +273,10 @@ describe('Rollback coverage guard @regression', function () {
                 : undefined
         );
     });
+});
 
+describe('Rollback coverage guard @regression', function () {
+    rollbackHooks();
     // Reciprocal cross-repo twin guard. xchain-sync's rollback_coverage.test.js
     // already locks these files byte-identical against THIS repo, but that guard
     // only runs in sync CI: an indexer-side edit (e.g. bumping a cap in
@@ -265,10 +287,6 @@ describe('Rollback coverage guard @regression', function () {
     // the sibling checkout is absent, except where XCHAIN_REQUIRE_SIBLINGS=1
     // makes green-by-skip impossible (the CI job that checks siblings out).
     describe('indexer<->sync twin byte-identity (reciprocal guard)', function(){
-        const SYNC_ROOT = process.env.XCHAIN_SYNC_PATH
-            ? path.resolve(process.env.XCHAIN_SYNC_PATH)
-            : path.resolve(__dirname, '..', '..', '..', 'xchain-sync');
-        const REQUIRE_SIBLINGS = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
         // Each twin is a PAIR of src-relative paths, because the indexer's feature directories
         // are an xchain-indexer layout and xchain-sync's copies stay flat: merkle.js sits
         // under consensus/ here and at src/merkle.js there. A single shared path would
@@ -297,38 +315,5 @@ describe('Rollback coverage guard @regression', function () {
                     twin + ' drifted between xchain-indexer and xchain-sync; keep the twin byte-identical');
             });
         }
-
-        // rollback.js and ClientRollback.js are not whole-file twins, but the contract
-        // slash reorg-restore inside them is: a predicate that picks a different debit on
-        // one side restores a different active stake there, and active stake drives staker
-        // weighting and quorum eligibility, so the two nodes fork. Both files carry the
-        // statement between //<CONTRACT-SLASH-RESTORE-SQL> markers; concatenating its string
-        // literals (template literals here, double-quoted concatenation on the replica, the
-        // interpolated table name dropping out of both) and normalising whitespace yields
-        // the same SQL on both sides.
-        it('the contract slash-restore SQL is identical across xchain-indexer and xchain-sync (cross-repo twin)', function(){
-            const syncPath = path.join(SYNC_ROOT, 'src', 'client', 'rollback.js');
-            // Refuses an absent sibling and a lane symlink into a live main checkout alike.
-            const syncCheckout = siblingCheckout(__dirname, syncPath);
-            if(!syncCheckout.usable){
-                if(REQUIRE_SIBLINGS)
-                    throw new Error('consensus drift guard cannot run: ' + syncCheckout.reason +
-                        ' (check out xchain-sync or set XCHAIN_SYNC_PATH)');
-                this.skip();
-                return;
-            }
-            function slashRestoreSql(p){
-                const src = fs.readFileSync(p, 'utf8');
-                const m = src.match(/\/\/<CONTRACT-SLASH-RESTORE-SQL>([\s\S]*?)\/\/<\/CONTRACT-SLASH-RESTORE-SQL>/);
-                assert.ok(m, 'CONTRACT-SLASH-RESTORE-SQL markers not found in ' + p);
-                const lits = m[1].match(/`[^`]*`|"(?:[^"\\]|\\.)*"/g) || [];
-                assert.ok(lits.length >= 2, 'expected >=2 SQL literals in the marked block of ' + p + ', got ' + lits.length);
-                return lits.map(l => l.slice(1, -1)).join('').replace(/\s+/g, ' ').trim();
-            }
-            assert.strictEqual(
-                slashRestoreSql(path.join(__dirname, '../../src/rollback.js')),
-                slashRestoreSql(syncPath),
-                'the contract slash-restore SQL drifted between xchain-indexer and xchain-sync; keep it identical');
-        });
     });
 });

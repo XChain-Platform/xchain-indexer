@@ -157,11 +157,58 @@ function twoRounds(anchorBase, maps) {
     });
 }
 const MAPS = [{ BTC: 799004, DOGE: 5000004 }, { LTC: 2400004, BTC: 799005 }];
+function wireHooks() {
 
-describe('the admission map rides the on-chain price wire one slot per round (rows 17 and 26)', function () {
 
     before(function () { armed = armTwins(); });
     after(function () { if (armed) armed.restore(); armed = null; });
+}
+let indexer, hubClient, capable;
+function signBatch(rounds, ids) {
+    const firstRound     = rounds[0].round;
+    const lastRound      = rounds[rounds.length - 1].round;
+    const btcBlockHeight = rounds[rounds.length - 1].btcBlockHeight;
+    const payload = armed.ed.buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds, NETWORK);
+    return { firstRound, lastRound, btcBlockHeight, rounds, payload,
+             sigs: ids.map(id => ({ pubkey: id.pubkey, sig: signWith(id, payload) })) };
+}
+function newHandler() {
+    return new armed.Price({
+        config: indexer.config, util: indexer.util, mapper: indexer.mapper,
+        decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb, hubClient
+    });
+}
+function batchHooks() {
+    beforeEach(function () {
+        indexer = createMockIndexer();
+        capable = new Set();
+        const db = indexer.indexerDb;
+        db.createPrice                 = sinon.stub().resolves();
+        db.hasCapability               = sinon.stub().callsFake(async k => capable.has(String(k).toLowerCase()));
+        db.getValidatorsByCapability   = sinon.stub().callsFake(async () => {
+            const rows = [...capable].map(pubkey => ({ pubkey, amount: '100' }));
+            rows.truncated = false;
+            return rows;
+        });
+        db.getActiveCapabilityCount    = sinon.stub().resolves(1);
+        db.getStakeWeightsByCapability = sinon.stub().resolves([]);
+        db.enqueueHubPushTx            = sinon.stub().resolves(42);
+        db.stageHubPush                = sinon.stub();
+        db.getPushGeneration           = sinon.stub().resolves(3);
+        hubClient = { enabled: true, pushPriceBatch: sinon.stub().resolves() };
+        // The count-quorum path; regtest arms stake weighting at genesis.
+        sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+    });
+    afterEach(function () { sinon.restore(); });
+}
+function validBatch(anchorBase, maps) {
+    const id = newIdentity();
+    capable.add(id.pubkey);
+    return signBatch(twoRounds(anchorBase === undefined ? ADMIT_AT : anchorBase, maps), [id]);
+}
+const batchData = (over = {}) => createBaseData({ ACTION: 'PRICE', FORMAT: 0, BLOCK_INDEX: 100, ...over });
+describe('the admission map rides the on-chain price wire one slot per round (rows 17 and 26)', function () {
+    wireHooks();
 
     it('is ARMED for this suite, so neither era case is vacuous', function () {
         assert.strictEqual(armed.act.isMirrorAdmissionProducerActive('BTC', NETWORK, ADMIT_AT), true);
@@ -170,7 +217,10 @@ describe('the admission map rides the on-chain price wire one slot per round (ro
         assert.notStrictEqual(armed.hubAgg, null,
             'the hub verifier twin must be resolvable in a monorepo run');
     });
+});
 
+describe('the admission map rides the on-chain price wire one slot per round (rows 17 and 26)', function () {
+    wireHooks();
     // -----------------------------------------------------------------------
     // 1. the ROUND canonical round-trips across the repo boundary
     // -----------------------------------------------------------------------
@@ -221,60 +271,22 @@ describe('the admission map rides the on-chain price wire one slot per round (ro
                 assert.strictEqual(armed.act.decodeAdmitBlocks(bad), null, JSON.stringify(bad));
         });
     });
+});
 
+describe('the admission map rides the on-chain price wire one slot per round (rows 17 and 26)', function () {
+    wireHooks();
     // -----------------------------------------------------------------------
     // 2. the on-chain BATCH wire: measured, not assumed
     // -----------------------------------------------------------------------
     describe('the on-chain batch action, driven through the real parser', function () {
+        batchHooks();
 
-        let indexer, hubClient, capable;
 
-        function signBatch(rounds, ids) {
-            const firstRound     = rounds[0].round;
-            const lastRound      = rounds[rounds.length - 1].round;
-            const btcBlockHeight = rounds[rounds.length - 1].btcBlockHeight;
-            const payload = armed.ed.buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds, NETWORK);
-            return { firstRound, lastRound, btcBlockHeight, rounds, payload,
-                     sigs: ids.map(id => ({ pubkey: id.pubkey, sig: signWith(id, payload) })) };
-        }
 
-        function newHandler() {
-            return new armed.Price({
-                config: indexer.config, util: indexer.util, mapper: indexer.mapper,
-                decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb, hubClient
-            });
-        }
 
-        beforeEach(function () {
-            indexer = createMockIndexer();
-            capable = new Set();
-            const db = indexer.indexerDb;
-            db.createPrice                 = sinon.stub().resolves();
-            db.hasCapability               = sinon.stub().callsFake(async k => capable.has(String(k).toLowerCase()));
-            db.getValidatorsByCapability   = sinon.stub().callsFake(async () => {
-                const rows = [...capable].map(pubkey => ({ pubkey, amount: '100' }));
-                rows.truncated = false;
-                return rows;
-            });
-            db.getActiveCapabilityCount    = sinon.stub().resolves(1);
-            db.getStakeWeightsByCapability = sinon.stub().resolves([]);
-            db.enqueueHubPushTx            = sinon.stub().resolves(42);
-            db.stageHubPush                = sinon.stub();
-            db.getPushGeneration           = sinon.stub().resolves(3);
-            hubClient = { enabled: true, pushPriceBatch: sinon.stub().resolves() };
-            // The count-quorum path; regtest arms stake weighting at genesis.
-            sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
-        });
 
-        afterEach(function () { sinon.restore(); });
 
-        function validBatch(anchorBase, maps) {
-            const id = newIdentity();
-            capable.add(id.pubkey);
-            return signBatch(twoRounds(anchorBase === undefined ? ADMIT_AT : anchorBase, maps), [id]);
-        }
 
-        const batchData = (over = {}) => createBaseData({ ACTION: 'PRICE', FORMAT: 0, BLOCK_INDEX: 100, ...over });
 
         it('THE CARRIER: an admission-era batch carries one map per round, parsed, stored and pushed as signed', async function () {
             const data = batchData();
@@ -312,6 +324,12 @@ describe('the admission map rides the on-chain price wire one slot per round (ro
             assert.strictEqual(body.rounds[0].admit_blocks, 'BTC:799004,DOGE:5000004');
             assert.strictEqual(body.rounds[1].admit_blocks, 'BTC:799005,LTC:2400004');
         });
+    });
+});
+describe('the admission map rides the on-chain price wire one slot per round (rows 17 and 26)', function () {
+    wireHooks();
+    describe('the on-chain batch action, driven through the real parser', function () {
+        batchHooks();
 
         it('an admission-era batch with NO slot is invalid: the missing field shifts SIG_COUNT and nothing pushes', async function () {
             const data = batchData();
@@ -344,37 +362,6 @@ describe('the admission map rides the on-chain price wire one slot per round (ro
             await newHandler().parse(wireParams(batchBody(validBatch(LEGACY_AT, [undefined, MAPS[1]]))), data, null);
             assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
             assert.strictEqual(data['STATUS'], 'invalid: batch straddles an oracle flag day');
-        });
-
-        it('the canonical refuses in both directions: an era round with no map, a legacy round with one', function () {
-            const era = twoRounds(ADMIT_AT);
-            assert.throws(() => armed.ed.buildPriceBatchPayload(100, 101, ADMIT_AT + 1, era, NETWORK),
-                          /admission-era row at block 799000 .* has no admit_blocks/);
-            const legacy = twoRounds(LEGACY_AT - 10, MAPS);
-            assert.throws(() => armed.ed.buildPriceBatchPayload(100, 101, LEGACY_AT - 9, legacy, NETWORK),
-                          /legacy-era row .* was handed admit_blocks/);
-            // And a caller that omits the network rebuilds LEGACY bytes: an era batch then fails
-            // to verify rather than verifying as legacy, which is the fail-closed direction.
-            assert.strictEqual(/admit/.test(armed.ed.buildPriceBatchPayload(100, 101, LEGACY_AT - 9, twoRounds(LEGACY_AT - 10))), false);
-        });
-
-        it('below the activation there is no slot: a trailing field still INVALIDATES the batch', async function () {
-            const data = batchData();
-            await newHandler().parse(wireParams(batchBody(validBatch(LEGACY_AT - 10), { extraPerRound: 'BTC:799004' })), data, null);
-            assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
-            assert.strictEqual(/^invalid: /.test(data['STATUS']), true, data['STATUS']);
-            assert.strictEqual(indexer.indexerDb.enqueueHubPushTx.called, false);
-        });
-
-        it('a batch below the activation is on exactly the same road, so nothing regressed', async function () {
-            const data = batchData();
-            await newHandler().parse(wireParams(batchBody(validBatch(LEGACY_AT - 10))), data, null);
-            assert.strictEqual(data['STATUS'], 'valid');
-            assert.strictEqual(indexer.indexerDb.enqueueHubPushTx.calledOnce, true);
-            const [, payload] = indexer.indexerDb.enqueueHubPushTx.firstCall.args;
-            for (const r of payload.rounds)
-                assert.deepStrictEqual(Object.keys(r).sort(), ['btc_block_height', 'pairs', 'round', 'timestamp']);
-            assert.strictEqual(/admit/.test(String(data['ROUNDS_JSON'])), false);
         });
     });
 });

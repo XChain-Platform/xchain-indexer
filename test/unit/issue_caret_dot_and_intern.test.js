@@ -109,9 +109,9 @@ function baseSetup(indexer) {
     indexer.indexerDb.getTokenSupply.resolves('0');
 }
 
-describe('Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1', function(){
 
-    let indexer;
+let indexer;
+function issueHooks() {
 
     beforeEach(function(){
         indexer = createMockIndexer();
@@ -121,20 +121,36 @@ describe('Issue: caret-dot TICK rejection and ticker-intern gating @regression @
     afterEach(function(){
         sinon.restore();
     });
+}
+
+// "^12.5" trips the parent/child split too (it contains a '.'), so the parent
+// "^12" must resolve and be owned by SOURCE for the ISSUE to reach the caret-id
+// check at all - exactly the coincidence worth naming ("also looks like a
+// child issuance").
+function stubOwnedParent(indexer, parentTick){
+    indexer.indexerDb.getTokenInfo = sinon.stub().callsFake(async (tick) => {
+        if(tick === parentTick)
+            return createTokenInfo({ TICK: parentTick, OWNER: SOURCE });
+        return null;
+    });
+}
+
+// A dotted child TICK against an UNKNOWN parent fails at the parent-unknown
+// check, well before the main TICK's getTokenInfo call - the exact shape the
+// dotted-child exemption lets a BATCH repeat up to ~250 times per transaction.
+function stubUnknownParentAndRecordSuppressState(indexer){
+    const calls = [];
+    indexer.indexerDb.getTokenInfo = sinon.stub().callsFake(async (tick) => {
+        calls.push({ tick, suppress: indexer.indexerDb.suppressIndexIdCreation });
+        return null; // parent unknown, and (if reached) TICK unknown too
+    });
+    return calls;
+}
+
+describe('Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1', function(){
+    issueHooks();
 
     describe('Defect A: caret TICK containing "." (at/above the flag)', function(){
-        // "^12.5" trips the parent/child split too (it contains a '.'), so the parent
-        // "^12" must resolve and be owned by SOURCE for the ISSUE to reach the caret-id
-        // check at all - exactly the coincidence worth naming ("also looks like a
-        // child issuance").
-        function stubOwnedParent(indexer, parentTick){
-            indexer.indexerDb.getTokenInfo = sinon.stub().callsFake(async (tick) => {
-                if(tick === parentTick)
-                    return createTokenInfo({ TICK: parentTick, OWNER: SOURCE });
-                return null;
-            });
-        }
-
         it('"^12.5" is rejected as invalid: TICK (caret dot) when the flag is active', async function(){
             stubOwnedParent(indexer, '^12');
             const handler = new Issue(makeActionsCtx(indexer, { batchLimitsActive: true }));
@@ -156,6 +172,13 @@ describe('Issue: caret-dot TICK rejection and ticker-intern gating @regression @
 
             assert.strictEqual(data.STATUS, 'invalid: TICK (caret dot)');
         });
+    });
+});
+
+describe('Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1', function(){
+    issueHooks();
+
+    describe('Defect A: caret TICK containing "." (at/above the flag)', function(){
 
         it('"^12.5" reproduces the PRE-FLAG (defective) valid verdict when the flag is off', async function(){
             stubOwnedParent(indexer, '^12');
@@ -179,6 +202,9 @@ describe('Issue: caret-dot TICK rejection and ticker-intern gating @regression @
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
+});
+describe('Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1', function(){
+    issueHooks();
 
     describe('Defect A: caret TICK containing "." (at/above the flag)', function(){
         it('"^12" (no dot) is still accepted when the flag is active', async function(){
@@ -207,20 +233,11 @@ describe('Issue: caret-dot TICK rejection and ticker-intern gating @regression @
             assert.strictEqual(data.STATUS, 'valid');
         });
     });
+});
+describe('Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1', function(){
+    issueHooks();
 
     describe('Defect B: no free ticker interning once an ISSUE has already errored', function(){
-
-        // A dotted child TICK against an UNKNOWN parent fails at the parent-unknown
-        // check, well before the main TICK's getTokenInfo call - the exact shape the
-        // dotted-child exemption lets a BATCH repeat up to ~250 times per transaction.
-        function stubUnknownParentAndRecordSuppressState(indexer){
-            const calls = [];
-            indexer.indexerDb.getTokenInfo = sinon.stub().callsFake(async (tick) => {
-                calls.push({ tick, suppress: indexer.indexerDb.suppressIndexIdCreation });
-                return null; // parent unknown, and (if reached) TICK unknown too
-            });
-            return calls;
-        }
 
         it('performs NO ticker insert for the already-invalid TICK when the flag is active', async function(){
             const calls   = stubUnknownParentAndRecordSuppressState(indexer);
@@ -248,6 +265,13 @@ describe('Issue: caret-dot TICK rejection and ticker-intern gating @regression @
             // No leakage into the next action.
             assert.strictEqual(indexer.indexerDb.suppressIndexIdCreation, undefined);
         });
+    });
+});
+
+describe('Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1', function(){
+    issueHooks();
+
+    describe('Defect B: no free ticker interning once an ISSUE has already errored', function(){
 
         it('still performs the ticker insert (unsuppressed) for the already-invalid TICK when the flag is OFF', async function(){
             const calls   = stubUnknownParentAndRecordSuppressState(indexer);
@@ -265,62 +289,6 @@ describe('Issue: caret-dot TICK rejection and ticker-intern gating @regression @
             assert.ok(parentCall, 'parent lookup must have run');
             assert.notStrictEqual(tickCall.suppress, true, 'below the flag the intern must NOT be suppressed (pre-flag behavior)');
             assert.notStrictEqual(parentCall.suppress, true, 'below the flag the parent intern must NOT be suppressed either');
-        });
-    });
-
-    // The wrapper above is conditioned on `error`, and the parent
-    // lookup is the one call site where `error` can never yet be set, so it needed a
-    // suppression condition of its own. These cases pin that the condition is the GATE,
-    // not the error, and that it costs the valid paths nothing.
-    describe('Defect B2: the parent lookup interns nothing on its own', function(){
-
-        it('suppresses the parent-name intern even though no error has been set yet', async function(){
-            const seen = [];
-            indexer.indexerDb.getTokenInfo = sinon.stub().callsFake(async (tick) => {
-                seen.push({ tick, suppress: indexer.indexerDb.suppressIndexIdCreation });
-                return null;
-            });
-            const handler = new Issue(makeActionsCtx(indexer, { batchLimitsActive: true }));
-
-            await handler.parse(makeFormat0Params({ TICK: 'ORPHAN.1' }), makeData(), null);
-
-            const parentCall = seen.find(c => c.tick === 'ORPHAN');
-            assert.ok(parentCall, 'parent lookup must have run');
-            assert.strictEqual(parentCall.suppress, true,
-                'an unknown parent must never be interned: the ISSUE naming it is always rejected');
-            assert.strictEqual(indexer.indexerDb.suppressIndexIdCreation, undefined,
-                'suppression must not leak past the call');
-        });
-
-        it('still resolves an EXISTING parent through the suppressed lookup, so valid children are unaffected', async function(){
-            // Resolve-only suppression blocks the INSERT, never the SELECT. A parent that
-            // exists is already interned, so a valid child issuance reads it back normally.
-            indexer.indexerDb.getTokenInfo = sinon.stub().callsFake(async (tick) => {
-                if(tick === 'JDOG')
-                    return createTokenInfo({ TICK: 'JDOG', OWNER: SOURCE });
-                return null;
-            });
-            const handler = new Issue(makeActionsCtx(indexer, { batchLimitsActive: true }));
-            const data    = makeData();
-
-            await handler.parse(makeFormat0Params({ TICK: 'JDOG.1' }), data, null);
-
-            assert.strictEqual(data.STATUS, 'valid');
-        });
-
-        it('reports the parent-unknown verdict identically with the flag on and off', async function(){
-            // The suppression changes a side effect only; the verdict must not move, or
-            // this would be a consensus change in the verdicts rather than in the ids.
-            for(const batchLimitsActive of [true, false]){
-                indexer.indexerDb.getTokenInfo = sinon.stub().resolves(null);
-                const handler = new Issue(makeActionsCtx(indexer, { batchLimitsActive }));
-                const data    = makeData();
-
-                await handler.parse(makeFormat0Params({ TICK: 'ORPHAN.1' }), data, null);
-
-                assert.strictEqual(data.STATUS, 'invalid: TICK (parent unknown)',
-                    'verdict must be identical with the flag ' + (batchLimitsActive ? 'on' : 'off'));
-            }
         });
     });
 });

@@ -28,9 +28,9 @@ const { validAmount, anyAmount } = require('../generators/helpers/amounts');
 const { validTick, anyTick } = require('../generators/helpers/ticks');
 const { cryptoAddress } = require('../generators/helpers/addresses');
 
-describe('Tier 3 - State transition edge cases @tier3', function () {
-    this.timeout(0);
-    let Send, indexer, actionsCtx, util;
+let Send, indexer, actionsCtx, util;
+function stateHooks(ctx) {
+    ctx.timeout(0);
 
     before(function () {
         Send = require('../../../src/actions/send/index.js');
@@ -54,10 +54,13 @@ describe('Tier 3 - State transition edge cases @tier3', function () {
     afterEach(function () {
         sinon.restore();
     });
+}
 
-    function isKnownCrash(err) {
-        return err.message.includes('Cannot read properties');
-    }
+function isKnownCrash(err) {
+    return err.message.includes('Cannot read properties');
+}
+describe('Tier 3 - State transition edge cases @tier3', function () {
+    stateHooks(this);
 
     describe('Send handler crash safety', function () {
         it('never throws for any (amount, destination) combination', function () {
@@ -103,6 +106,9 @@ describe('Tier 3 - State transition edge cases @tier3', function () {
             ), { numRuns: NUM_RUNS });
         });
     });
+});
+describe('Tier 3 - State transition edge cases @tier3', function () {
+    stateHooks(this);
 
     describe('Send handler crash safety', function () {
         it('handles all 4 send format versions', async function () {
@@ -126,6 +132,9 @@ describe('Tier 3 - State transition edge cases @tier3', function () {
             }
         });
     });
+});
+describe('Tier 3 - State transition edge cases @tier3', function () {
+    stateHooks(this);
 
     describe('hasBalance(balances, tick_id, amount)', function () {
         it('never throws for any (balance, amount) combination', function () {
@@ -170,6 +179,9 @@ describe('Tier 3 - State transition edge cases @tier3', function () {
             ), { numRuns: NUM_RUNS });
         });
     });
+});
+describe('Tier 3 - State transition edge cases @tier3', function () {
+    stateHooks(this);
 
     describe('debitBalances(balances, tick_id, amount)', function () {
         it('never throws for any inputs', function () {
@@ -182,6 +194,9 @@ describe('Tier 3 - State transition edge cases @tier3', function () {
             ), { numRuns: NUM_RUNS });
         });
     });
+});
+describe('Tier 3 - State transition edge cases @tier3', function () {
+    stateHooks(this);
 
     describe('isValidLock(tokenInfo, data, lock)', function () {
         it('never throws for any (tokenInfo, data, lock) combination', function () {
@@ -229,6 +244,9 @@ describe('Tier 3 - State transition edge cases @tier3', function () {
             assert.strictEqual(util.isValidLock(tokenInfo, data, 'LOCK_MINT'), true);
         });
     });
+});
+describe('Tier 3 - State transition edge cases @tier3', function () {
+    stateHooks(this);
 
     describe('consolidateLedgerRecords(records)', function () {
         it('never throws for any records array', function () {
@@ -280,6 +298,9 @@ describe('Tier 3 - State transition edge cases @tier3', function () {
             assert.strictEqual(result.length, 2); // TICK1+addr1 consolidated, TICK2+addr1 separate
         });
     });
+});
+describe('Tier 3 - State transition edge cases @tier3', function () {
+    stateHooks(this);
 
     describe('getFormatVersion edge cases', function () {
         it('returns 0 for empty string and undefined', function () {

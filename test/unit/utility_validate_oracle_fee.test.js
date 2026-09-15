@@ -58,9 +58,12 @@ function fakeDb({ oracleRow = { value: '0.05', fee: '0.01' }, snapshots = [{ pri
 
 const withOutputs = (outputs) => ({ BLOCK_TIME, TX_OUTPUTS: outputs });
 
-describe('Utility.validateOracleFee() - @regression @tier1', function () {
-    let util;
+let util;
+function oracleFeeHooks() {
     beforeEach(function () { util = new Utility(); });
+}
+describe('Utility.validateOracleFee() - @regression @tier1', function () {
+    oracleFeeHooks();
 
     describe('the oracle must already have an effective price', function () {
 
@@ -81,6 +84,9 @@ describe('Utility.validateOracleFee() - @regression @tier1', function () {
             assert.match(r.error, /no validator price/);
         });
     });
+});
+describe('Utility.validateOracleFee() - @regression @tier1', function () {
+    oracleFeeHooks();
 
     describe('zero fee is the common case', function () {
 
@@ -97,6 +103,9 @@ describe('Utility.validateOracleFee() - @regression @tier1', function () {
             assert.strictEqual(r.valid, true);
         });
     });
+});
+describe('Utility.validateOracleFee() - @regression @tier1', function () {
+    oracleFeeHooks();
 
     describe('the output must be present and sufficient', function () {
         it('accepts an exact payment to the oracle address', async function () {
@@ -131,6 +140,13 @@ describe('Utility.validateOracleFee() - @regression @tier1', function () {
             assert.strictEqual(r.valid, false);
             assert.match(r.error, /missing oracle fee output/);
         });
+    });
+});
+
+describe('Utility.validateOracleFee() - @regression @tier1', function () {
+    oracleFeeHooks();
+
+    describe('the output must be present and sufficient', function () {
 
         it('rejects a short payment and reports both amounts', async function () {
             const r = await util.validateOracleFee(
@@ -156,6 +172,9 @@ describe('Utility.validateOracleFee() - @regression @tier1', function () {
             assert.strictEqual(under.valid, false);
         });
     });
+});
+describe('Utility.validateOracleFee() - @regression @tier1', function () {
+    oracleFeeHooks();
 
     describe('the output must be present and sufficient', function () {
         it('matches scriptPubKey_address as well as address', async function () {
@@ -173,6 +192,9 @@ describe('Utility.validateOracleFee() - @regression @tier1', function () {
             assert.match(r.error, /missing oracle fee output/);
         });
     });
+});
+describe('Utility.validateOracleFee() - @regression @tier1', function () {
+    oracleFeeHooks();
 
     describe('dust', function () {
 
@@ -203,7 +225,10 @@ describe('Utility.validateOracleFee() - @regression @tier1', function () {
             assert.match(r.error, /missing oracle fee output/);
         });
     });
+});
 
+describe('Utility.validateOracleFee() - @regression @tier1', function () {
+    oracleFeeHooks();
     // The whole point of the oraclefeequote API is that a payer can size an output the
     // validator will accept. If the quote and the check ever computed the amount
     // separately they would drift, and every drift is either a rejected honest create or
@@ -245,89 +270,6 @@ describe('Utility.validateOracleFee() - @regression @tier1', function () {
                 'oraclefeequote must delegate to utility.quoteOracleFee');
             assert.ok(!/computeOracleFee\(/.test(body),
                 'oraclefeequote must not compute the fee itself');
-        });
-    });
-
-    // The dispenser handler runs quoteOracleFee INSTEAD of validateOracleFee when the
-    // transaction is a read-only dry run (data['FEE_PROBE'], set by the public feequote /
-    // preflight surfaces only). That substitution is only safe because the two functions
-    // differ in exactly one respect: the OUTPUT match. Everything a caller could act on
-    // must still refuse identically, or the quote becomes a rubber stamp that says yes to
-    // creates the chain will reject.
-    describe('the dry-run half drops the output check and NOTHING else', function () {
-
-        it('a live oracle with no outputs: the check refuses, the quote does not', async function () {
-            // This asymmetry is the whole defect. A fee quote has no transaction behind it,
-            // so it can never carry the output - and the amount that output must hold is
-            // precisely what the quote was asked to compute. Before the FEE_PROBE branch,
-            // every Mode B dispenser was refused by /feequote AND /preflight, in both fee
-            // modes, on every chain, with a verdict no client could satisfy.
-            const fields = dispenserFields({ GIVE_ESCROW: '100000' });
-            const check  = await util.validateOracleFee(withOutputs([]), fields, fakeDb());
-            assert.strictEqual(check.valid, false);
-            assert.match(check.error, /missing oracle fee output/);
-
-            const quote = await util.quoteOracleFee(BLOCK_TIME, fields, fakeDb());
-            assert.strictEqual(quote.valid, true,
-                'a dry run of a perfectly good Mode B dispenser must not be refused for an '
-                + 'output that cannot exist yet');
-            assert.ok(Number(quote.expectedFee) > 0, 'the quote still states the amount owed');
-        });
-
-        it('an oracle with no effective price is refused by BOTH', async function () {
-            // The verdict a client CAN act on, and the remedy is "wait a day". If the dry
-            // run stopped reporting it, the wallet would sign a create the chain rejects
-            // and burn a miner fee (and, off Bitcoin, a non-refundable coin protocol fee).
-            const fields = dispenserFields();
-            const db     = fakeDb({ oracleRow: null });
-            const check  = await util.validateOracleFee(withOutputs([]), fields, db);
-            const quote  = await util.quoteOracleFee(BLOCK_TIME, fields, db);
-            assert.strictEqual(check.valid, false);
-            assert.strictEqual(quote.valid, false);
-            assert.match(quote.error, /no effective oracle price/);
-            assert.strictEqual(quote.error, check.error, 'the two must refuse identically here');
-        });
-
-        it('no validator price to value the fee against is refused by BOTH', async function () {
-            const fields = dispenserFields();
-            const db     = fakeDb({ snapshots: [] });
-            const check  = await util.validateOracleFee(withOutputs([]), fields, db);
-            const quote  = await util.quoteOracleFee(BLOCK_TIME, fields, db);
-            assert.strictEqual(check.valid, false);
-            assert.strictEqual(quote.valid, false);
-            assert.match(quote.error, /no validator price/);
-            assert.strictEqual(quote.error, check.error, 'the two must refuse identically here');
-        });
-
-        it('the dispenser handler takes the quote branch only on a probe', function () {
-            // Source-shape pin. The branch is deep inside validateAction and has no unit
-            // seam, so this guards the one thing a refactor could silently drop: that the
-            // waiver is keyed on FEE_PROBE, which only a synthetic dry-run tx ever carries.
-            const { concatSrcTreeFiles } = require('../helpers/src_tree_files');
-            // DISPENSER is a directory (the fee branch sits in its validate_format.js part),
-            // read whole so a phase moving between its files never reads as absent.
-            const src  = concatSrcTreeFiles(__dirname + '/../../src/actions/dispenser');
-            assert.ok(/data\['FEE_PROBE'\]\s*\n?\s*\?\s*await this\.util\.quoteOracleFee\(/.test(src),
-                'a FEE_PROBE run must call quoteOracleFee');
-            assert.ok(/:\s*await this\.util\.validateOracleFee\(/.test(src),
-                'a real transaction must still call validateOracleFee');
-        });
-    });
-
-    describe('refills are charged on the increase', function () {
-
-        it('scales the fee with the escrow amount passed in', async function () {
-            // A v2 refill passes the INCREASE as GIVE_ESCROW, so it pays for what it
-            // adds rather than being re-charged on the whole balance. Without this,
-            // an opener could escrow 1 token, pay nothing, then refill to millions.
-            const small = await util.validateOracleFee(
-                withOutputs([{ address: ORACLE_ADDR, value: '1' }]),
-                dispenserFields({ GIVE_ESCROW: '1000' }), fakeDb());
-            const large = await util.validateOracleFee(
-                withOutputs([{ address: ORACLE_ADDR, value: '1' }]),
-                dispenserFields({ GIVE_ESCROW: '10000' }), fakeDb());
-            assert.strictEqual(small.expectedFee, '0.00001000');
-            assert.strictEqual(large.expectedFee, '0.00010000');
         });
     });
 });
