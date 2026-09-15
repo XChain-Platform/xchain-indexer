@@ -297,7 +297,9 @@ describe('Rollback coverage guard @regression', function () {
                                        ['state_commitment_activation.js', 'state_commitment_activation.js'],
                                        ['swq_source_cap_activation.js', 'swq_source_cap_activation.js'],
                                        ['state_key_collation_activation.js', 'state_key_collation_activation.js'],
-                                       ['hub/table_lifecycle.js', 'table_lifecycle.js']]){
+                                       ['hub/table_lifecycle.js', 'table_lifecycle.js'],
+                                       ['hub/table_lifecycle/action_tables.js', 'table_lifecycle/action_tables.js'],
+                                       ['hub/table_lifecycle/block_and_special_tables.js', 'table_lifecycle/block_and_special_tables.js']]){
             it(twin + ' is byte-identical across xchain-indexer and xchain-sync (cross-repo twin)', function(){
                 const syncPath = path.join(SYNC_ROOT, 'src', syncTwin);
                 // Refuses an absent sibling and a lane symlink into a live main checkout alike.
