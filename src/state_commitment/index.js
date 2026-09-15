@@ -40,7 +40,7 @@ const M = require('../consensus/merkle.js');
 const SUB = require('../state_subtree_activation.js');
 const CST = require('../consensus/contract_state_subtree.js');
 const ESC = require('../consensus/escrow_leaf_subtree.js');
-const EJW = require('../consensus/escrowJournalWriter.js');   // SOURCE ONLY: the follower replicates these rows
+const EJW = require('../consensus/escrow_journal_writer.js');   // SOURCE ONLY: the follower replicates these rows
 const { getLogger } = require('../observability/index.js');
 const { leafOrNull } = require('./leaf_values.js');
 const { gatherStakeEntries, buildStakesRoot, resetStakesMemo } = require('./stakes_root.js');
@@ -146,7 +146,7 @@ async function computeAndStoreRoots(db, chain, network, blockIndex, isActivation
 // nine recipient-keyed release sites re-keyed to their locker) from having
 // to exist twice and agree byte-for-byte. The writer derives each key's
 // total from the block's own escrows LEDGER rows, never from family
-// aggregates or status predicates (see escrowJournalWriter.js for why).
+// aggregates or status predicates (see escrow_journal_writer.js for why).
 //
 // The ARMING BLOCK gets a full-history replay of the escrows ledger instead
 // of this block's rows. That is what lets the leaf arm with no operational
@@ -189,7 +189,7 @@ async function balancesRootForBlock(db, smt, chain, network, blockIndex, isActiv
     // The ARMING BLOCK full-builds too. The incremental branch applies
     // escrow leaves from touchedEscrowKeys(armingBlock), i.e. only journal rows
     // stamped at THIS height, while the arming replay deliberately writes no row for
-    // a key whose total is unchanged (escrowJournalWriter.js `if(eq(prior,next))
+    // a key whose total is unchanged (escrow_journal_writer.js `if(eq(prior,next))
     // continue`). After a §7 SHADOW window has already populated the journal, every
     // still-unchanged live lock therefore gets no arming-height row, and it is not in
     // the prior committed root either (block-1 committed the v1 leaf set), so it never

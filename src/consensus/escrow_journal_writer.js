@@ -90,14 +90,14 @@
 'use strict';
 
 // The frozen attribution rules (who a row is locked by) and the named pass steps
-// writeEscrowJournal runs, in escrowJournalWriter/. Split out because this file
+// writeEscrowJournal runs, in escrow_journal_writer/. Split out because this file
 // passed the 400-line readability limit, not because anything about the design
 // changed: every rule and every step is the code that stood here, moved whole, and
 // the export shape below is unchanged, so every requirer and both text guards read
 // the same names. The guards read the entry AND the parts as one text (the idiom
 // stake.js already established), so nothing moved out from under them.
-const A = require('./escrowJournalWriter/attribution.js');
-const P = require('./escrowJournalWriter/journal_pass.js');
+const A = require('./escrow_journal_writer/attribution.js');
+const P = require('./escrow_journal_writer/journal_pass.js');
 
 // Append one row per key whose total actually CHANGED. Runs on the SOURCE inside
 // the block transaction, before the commitment hook, so the derivation in
@@ -130,7 +130,7 @@ async function writeEscrowJournal(db, blockIndex, opts){
     const scope = full ? null : blockIndex;
 
     // The steps below run in exactly the order the inline pass ran them in, and each
-    // one is that block moved whole into escrowJournalWriter/journal_pass.js: the
+    // one is that block moved whole into escrow_journal_writer/journal_pass.js: the
     // sequence of db reads and writes is what the escrow call tape pins.
     const rows = await P.gatherEscrowRows(db, scope, full, blockIndex);
     if(!rows.length) return 0;

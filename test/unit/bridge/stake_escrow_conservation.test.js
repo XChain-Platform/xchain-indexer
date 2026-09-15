@@ -60,12 +60,12 @@ const stakeSrc   = [path.join(SRC, 'actions/stake/index.js')]
         .map(f => path.join(STAKE_PARTS, f)))
     .map(f => fs.readFileSync(f, 'utf8')).join('\n');
 const utilSrc    = fs.readFileSync(path.join(SRC, 'utility.js'), 'utf8');
-// The journal writer is an entry plus parts too: escrowJournalWriter.js sequences the pass,
-// escrowJournalWriter/journal_pass.js holds its steps, escrowJournalWriter/attribution.js
+// The journal writer is an entry plus parts too: escrow_journal_writer.js sequences the pass,
+// escrow_journal_writer/journal_pass.js holds its steps, escrow_journal_writer/attribution.js
 // holds SELF_ATTRIBUTING and the RESOLVERS this file slices. Same entry-plus-parts read as
 // STAKE above, so a rule moving between the entry and a part stays visible, never absent.
-const JOURNAL_PARTS = path.join(SRC, 'consensus', 'escrowJournalWriter');
-const journalSrc = [path.join(SRC, 'consensus', 'escrowJournalWriter.js')]
+const JOURNAL_PARTS = path.join(SRC, 'consensus', 'escrow_journal_writer');
+const journalSrc = [path.join(SRC, 'consensus', 'escrow_journal_writer.js')]
     .concat(fs.readdirSync(JOURNAL_PARTS).filter(f => f.endsWith('.js')).sort()
         .map(f => path.join(JOURNAL_PARTS, f)))
     .map(f => fs.readFileSync(f, 'utf8')).join('\n');
@@ -129,7 +129,7 @@ describe('a contract stake locks tokens rather than destroying them', function()
     });
 
     it('classifies STAKE and UNSTAKE in the escrow journal, or the writer halts on them', function(){
-        // Not a style point. escrowJournalWriter throws on an escrow-writing action type it
+        // Not a style point. escrow_journal_writer throws on an escrow-writing action type it
         // cannot attribute, and on a live indexer that is a STOP, not a bad row - so the
         // classification has to land in the same change as the rows themselves.
         const i = journalSrc.indexOf('const SELF_ATTRIBUTING');

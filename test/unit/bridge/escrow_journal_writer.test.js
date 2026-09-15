@@ -36,7 +36,7 @@ const fs     = require('fs');
 const path   = require('path');
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
-const W = require('../../../src/consensus/escrowJournalWriter.js');
+const W = require('../../../src/consensus/escrow_journal_writer.js');
 const { SO, RC, T1, makeDb, esc } = require('./escrow_journal_writer.test/helpers/journal_db.js');
 
 // Action names an escrow-pushing handler can mint, DERIVED from the handler
@@ -90,7 +90,7 @@ describe('escrow journal writer: attribution exhaustiveness @regression', functi
                 all.add(a);
                 assert.ok(W.SELF_ATTRIBUTING.has(a) || W.RESOLVERS[a],
                     'action ' + a + ' (minted by ' + f + ', which pushes escrow rows) has no attribution rule; ' +
-                    'classify it in escrowJournalWriter.js before any chain containing it is armed');
+                    'classify it in escrow_journal_writer.js before any chain containing it is armed');
             }
         }
         // Sanity that the derivation itself still sees the family it must: if a
@@ -180,10 +180,10 @@ describe('escrow journal writer: block-path wiring @regression', function(){
         // The failure mode this design retired: recomputing what "locked" means.
         // Comments are stripped so prose about the old design cannot trip it.
         // Entry plus every part, read as one text. Scanning the entry alone would pass
-        // vacuously the moment a banned read moved into escrowJournalWriter/: this
+        // vacuously the moment a banned read moved into escrow_journal_writer/: this
         // guard grades ABSENCE, so a narrower read is a weaker guard that still looks green.
-        const WRITER = path.resolve(__dirname, '../../../src/consensus/escrowJournalWriter.js');
-        const PARTS  = path.resolve(__dirname, '../../../src/consensus/escrowJournalWriter');
+        const WRITER = path.resolve(__dirname, '../../../src/consensus/escrow_journal_writer.js');
+        const PARTS  = path.resolve(__dirname, '../../../src/consensus/escrow_journal_writer');
         const src  = [WRITER]
             .concat(fs.readdirSync(PARTS).filter(f => f.endsWith('.js')).sort()
                 .map(f => path.join(PARTS, f)))

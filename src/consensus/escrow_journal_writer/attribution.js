@@ -13,9 +13,9 @@
  * escrow_leaf_journal WRITER, part: the frozen ATTRIBUTION RULES.
  *
  * Which address a given escrow ledger row is LOCKED BY. Split out of
- * escrowJournalWriter.js so the entry holds the pass and this holds the rules;
+ * escrow_journal_writer.js so the entry holds the pass and this holds the rules;
  * every rule, table and halt message is carried verbatim, and the entry
- * re-exports all of it, so `require('escrowJournalWriter.js')` is unchanged.
+ * re-exports all of it, so `require('escrow_journal_writer.js')` is unchanged.
  *
  * The two guards that read this text (test/unit/escrow_journal_writer.test.js
  * banned-identifier scan, test/unit/stake_escrow_conservation.test.js
@@ -118,7 +118,7 @@ const RESOLVERS = {
         if(!rows || rows.length !== 1)
             throw new Error('escrowJournal: EXECUTE escrow row at action ' + row.action_index +
                             ' is not a contract-slash release for ' + row.address + '/' + row.tick +
-                            '; classify the site in escrowJournalWriter.js before any block containing it is processed');
+                            '; classify the site in escrow_journal_writer.js before any block containing it is processed');
         return row.address;
     }
 };
@@ -178,7 +178,7 @@ async function attributeRow(db, row){
     const resolver = RESOLVERS[row.action_name];
     if(!resolver)
         throw new Error('escrowJournal: action type ' + row.action_name + ' writes escrow rows but has no attribution rule; ' +
-                        'classify it in escrowJournalWriter.js before any block containing it is processed');
+                        'classify it in escrow_journal_writer.js before any block containing it is processed');
     return resolver(db, row);
 }
 

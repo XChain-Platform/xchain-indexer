@@ -49,7 +49,7 @@
 
 'use strict';
 
-const EJW = require('../src/consensus/escrowJournalWriter.js');
+const EJW = require('../src/consensus/escrow_journal_writer.js');
 const ESC = require('../src/consensus/escrow_leaf_subtree.js');
 const SC  = require('../src/state_commitment/index.js');
 const M   = require('../src/consensus/merkle.js');

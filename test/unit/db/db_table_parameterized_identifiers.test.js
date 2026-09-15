@@ -27,7 +27,7 @@
 const assert = require('assert');
 const misc   = require('../../../src/db/misc');
 const escrowJournal = require('../../../src/db/escrow_journal');
-const writer = require('../../../src/consensus/escrowJournalWriter');
+const writer = require('../../../src/consensus/escrow_journal_writer');
 
 // A recording connection. Nothing here validates anything, so any statement that
 // reaches `issued` got past the guard under test.

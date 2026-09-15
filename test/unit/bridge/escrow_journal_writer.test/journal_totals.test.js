@@ -21,7 +21,7 @@
 const assert = require('assert');
 
 const M = require('../../../../src/consensus/merkle.js');
-const W = require('../../../../src/consensus/escrowJournalWriter.js');
+const W = require('../../../../src/consensus/escrow_journal_writer.js');
 const { SO, SM, RC, T1, T2, makeDb, esc } = require('./helpers/journal_db.js');
 
 describe('escrow journal writer: the COINPAY lifecycle, both directions @regression', function(){
