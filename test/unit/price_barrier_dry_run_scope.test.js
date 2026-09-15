@@ -134,14 +134,14 @@ describe('the price barrier is scoped to consensus, not to "a context exists"', 
         const srcDir  = path.join(__dirname, '..', '..', 'src');
         const optOuts = [];
 
-        // Each opt-out is identified by file plus the method that encloses it, not by a line
-        // number: a pinned line reddens on any unrelated edit above it (a boot gate added at
-        // the top of actions.js did exactly that), which taught the reflex of re-pinning the
-        // numbers instead of reading what moved. The enclosing method is what the assertion
-        // actually cares about, and it only changes when a real new caller appears.
+        // Each opt-out is identified by file plus the class method or module-level function
+        // that encloses it, not by a line number: a pinned line reddens on any unrelated edit
+        // above it (a boot gate added at the top of actions.js did exactly that), which taught
+        // the reflex of re-pinning the numbers instead of reading what moved. The enclosing
+        // function is what the assertion cares about; it changes only for a real new caller.
         const enclosingMethod = (lines, index) => {
             for (let i = index; i >= 0; i--) {
-                const m = /^\s{4}(?:async\s+)?([A-Za-z_$][\w$]*)\s*\(/.exec(lines[i]);
+                const m = /^(?:\s{4}(?:async\s+)?|(?:async\s+)?function\s+)([A-Za-z_$][\w$]*)\s*\(/.exec(lines[i]);
                 if (m) return m[1];
             }
             return '(top level)';
@@ -162,9 +162,9 @@ describe('the price barrier is scoped to consensus, not to "a context exists"', 
             }
         })(srcDir);
 
-        // The dispatch loader is 'actions/index.js', and both opt-outs are its
-        // two dryRunAction sites, so the pin follows the file rather than losing them.
-        assert.deepStrictEqual(optOuts, ['actions/index.js:dryRunAction', 'actions/index.js:dryRunAction'],
+        // The dry-run engine lives in 'actions/actions_class/quote_surfaces.js', and both opt-outs
+        // are its two dryRunAction sites, so the pin follows the file rather than losing them.
+        assert.deepStrictEqual(optOuts, Array(2).fill('actions/actions_class/quote_surfaces.js:dryRunAction'),
             'unexpected consensus opt-out(s), or the known two moved: ' + optOuts.join(', '));
     });
 });

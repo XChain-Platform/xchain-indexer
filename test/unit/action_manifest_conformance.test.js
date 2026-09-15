@@ -39,7 +39,7 @@ function manifestSlice(flag) {
 // Built per call so no lastIndex state is ever shared between the cases below.
 function dispatchRe() { return /if\s*\(\s*action\s*==\s*'([A-Z_]+)'\s*\)\s*await\s+this\.[A-Za-z0-9_]+\.parse\s*\(/g; }
 function localIndexerSet() {
-    const src = decomment(fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'actions', 'index.js'), 'utf8'));
+    const src = decomment(fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'actions', 'actions_class', 'dispatch.js'), 'utf8'));
     const names = [...new Set([...src.matchAll(dispatchRe())].map(x => x[1]))];
     return names.filter(n => n !== 'UNKNOWN').sort(); // UNKNOWN is the catch-all sentinel, not an action
 }
@@ -145,7 +145,7 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
             const unclassified = localIndexerSet().filter(
                 a => !Object.prototype.hasOwnProperty.call(EXPECTED_FEE_QUOTE_CLASS, a));
             assert.deepStrictEqual(unclassified, [],
-                'These actions are dispatched by src/actions/index.js but no one decided their fee-quote class, ' +
+                'These actions are dispatched by src/actions/actions_class/dispatch.js but no one decided their fee-quote class, ' +
                 'so classifyFeeQuoteAction silently defaults them to `quotable` and the PUBLIC feequote ' +
                 'endpoint will dry-run them. If an action runs caller code in the VM it belongs in ' +
                 'FEE_QUOTE_DENYLIST; if it stages no priceable fee it belongs in FEE_QUOTE_EXEMPT. Then ' +
@@ -170,7 +170,7 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
             const dispatched = new Set(localIndexerSet());
             const orphans = Object.keys(EXPECTED_FEE_QUOTE_CLASS).filter(a => !dispatched.has(a));
             assert.deepStrictEqual(orphans, [],
-                'This map classifies actions src/actions/index.js no longer dispatches, so the entries are dead ' +
+                'This map classifies actions src/actions/actions_class/dispatch.js no longer dispatches, so the entries are dead ' +
                 'weight that would silently re-waive (a1) if a name were ever reused: ' + JSON.stringify(orphans));
         });
     });
@@ -246,7 +246,7 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
             const undecided = localIndexerSet().filter(
                 a => !Object.prototype.hasOwnProperty.call(EXPECTED_PROBE_FORBIDDEN, a));
             assert.deepStrictEqual(undecided, [],
-                'These actions are dispatched by src/actions/index.js but nobody decided whether the PUBLIC ' +
+                'These actions are dispatched by src/actions/actions_class/dispatch.js but nobody decided whether the PUBLIC ' +
                 'BATCH pre-flight may run them as a sub-command, so they default to ALLOWED. If the ' +
                 'action can reach the VM (directly, or by injecting an EXECUTE the way ATTEST/VOTE/XCALL ' +
                 'do) add it to PROBE_VM_REACHING_ACTIONS in src/actions/index.js. Then record the decision ' +
