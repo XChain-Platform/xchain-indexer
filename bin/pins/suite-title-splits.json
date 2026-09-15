@@ -653,6 +653,26 @@
       "test/unit/actions/bridge/xbridge.test/v1_burn.test.js",
       "test/unit/actions/bridge/xbridge.test/v3_lock.test.js",
       "test/unit/actions/bridge/xbridge.test/v4_burn.test.js"
+    ],
+    "test/unit/contract_state_subtree.test/contract_state_root_arming_boundary.test.js": [
+      "test/unit/contract_state_subtree.test/contract_state_root_arming_boundary.test.js",
+      "test/unit/contract_state_subtree.test/contract_state_root_orphan_and_snapshot.test.js"
+    ],
+    "test/unit/contract_state_subtree.test/contract_state_root_incremental_equals.test.js": [
+      "test/unit/contract_state_subtree.test/contract_state_root_incremental_equals.test.js",
+      "test/unit/contract_state_subtree.test/contract_state_root_shadow_derivation.test.js"
+    ],
+    "test/unit/contract_state_subtree.test/contract_state_root_strict_reads.test.js": [
+      "test/unit/contract_state_subtree.test/contract_state_root_strict_reads.test.js",
+      "test/unit/contract_state_subtree.test/contract_state_root_strict_read_faults.test.js"
+    ],
+    "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_the.test.js": [
+      "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_the.test.js",
+      "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_shadow_thread.test.js"
+    ],
+    "test/unit/state_subtree_activation.test/state_root_reserved_sub_trees.test.js": [
+      "test/unit/state_subtree_activation.test/state_root_reserved_sub_trees.test.js",
+      "test/unit/state_subtree_activation.test/state_root_reserved_sub_trees_armed_set.test.js"
     ]
   },
   "titleDeltas": []
