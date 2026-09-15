@@ -335,9 +335,9 @@
       "test/unit/rollback/rollback.test/maturity_reversal.test.js",
       "test/unit/rollback/rollback.test/transaction_and_rearm.test.js"
     ],
-    "test/unit/rollback_coverage.test.js": [
-      "test/unit/rollback_coverage.test.js",
-      "test/unit/rollback_coverage.test/slash_restore_twin.test.js"
+    "test/unit/rollback/rollback_coverage.test.js": [
+      "test/unit/rollback/rollback_coverage.test.js",
+      "test/unit/rollback/rollback_coverage.test/slash_restore_twin.test.js"
     ],
     "test/unit/rollcall/rollcall_close.test.js": [
       "test/unit/rollcall/rollcall_close.test.js",
