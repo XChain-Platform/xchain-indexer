@@ -15,7 +15,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
-const Dispenser_Close = require('../../../src/actions/dispenser_close.js');
+const Dispenser_Close = require('../../../src/actions/dispenser_close/index.js');
 const ocg      = require('../../../src/dispenser_ownership_cancel_activation.js');
 const FLAG_DAY = ocg.DISPENSER_OWNERSHIP_CANCEL_ACTIVATION.mainnet; // 1786060800
 const SOURCE   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';

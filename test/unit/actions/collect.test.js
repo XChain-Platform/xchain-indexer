@@ -16,7 +16,7 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
-const Collect = require('../../../src/actions/collect.js');
+const Collect = require('../../../src/actions/collect/index.js');
 const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 let indexer, actionsCtx, handler;
 

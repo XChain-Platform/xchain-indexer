@@ -26,16 +26,16 @@
 const address          = require('../address.js');
 const airdrop          = require('../airdrop/index.js');
 const batch            = require('../batch/index.js');
-const bet              = require('../bet.js');
+const bet              = require('../bet/index.js');
 const bet_expire       = require('../bet_expire.js');
 const broadcast        = require('../broadcast.js');
-const callback         = require('../callback.js');
-const coinpay          = require('../coinpay.js');
+const callback         = require('../callback/index.js');
+const coinpay          = require('../coinpay/index.js');
 const coinpay_expire   = require('../coinpay_expire.js');
 const destroy          = require('../destroy/index.js');
 const dispenser        = require('../dispenser/index.js');
-const dispenser_close  = require('../dispenser_close.js');
-const dispenser_expire = require('../dispenser_expire.js');
+const dispenser_close  = require('../dispenser_close/index.js');
+const dispenser_expire = require('../dispenser_expire/index.js');
 const dispense         = require('../dispense/index.js');
 const dividend         = require('../dividend/index.js');
 const file             = require('../file.js');
@@ -45,15 +45,15 @@ const list             = require('../list.js');
 const message          = require('../message.js');
 const mint             = require('../mint/index.js');
 const order            = require('../order/index.js');
-const order_expire     = require('../order_expire.js');
-const order_match      = require('../order_match.js');
+const order_expire     = require('../order_expire/index.js');
+const order_match      = require('../order_match/index.js');
 const sleep            = require('../sleep.js');
 const send             = require('../send/index.js');
 const swap             = require('../swap/index.js');
-const swap_expire      = require('../swap_expire.js');
-const swap_match       = require('../swap_match.js');
+const swap_expire      = require('../swap_expire/index.js');
+const swap_match       = require('../swap_match/index.js');
 const cross_settle     = require('../cross_settle/index.js');
-const sweep            = require('../sweep.js');
+const sweep            = require('../sweep/index.js');
 const unknown          = require('../unknown.js');
 
 // VM actions
@@ -61,14 +61,14 @@ const deploy             = require('../deploy/index.js');
 const execute            = require('../execute/index.js');
 const deposit            = require('../deposit.js');
 const withdraw           = require('../withdraw.js');
-const vote               = require('../vote.js');
+const vote               = require('../vote/index.js');
 
 // Staking actions
-const stake              = require('../stake.js');
-const unstake            = require('../unstake.js');
-const delegate           = require('../delegate.js');
-const collect            = require('../collect.js');
-const slash              = require('../slash.js');
+const stake              = require('../stake/index.js');
+const unstake            = require('../unstake/index.js');
+const delegate           = require('../delegate/index.js');
+const collect            = require('../collect/index.js');
+const slash              = require('../slash/index.js');
 
 // PRICE action (validator snapshots and user oracle prices)
 const price              = require('../price/index.js');
@@ -84,13 +84,13 @@ const anchor             = require('../anchor/index.js');
 // Cross-chain contract calls: XCALL (source-chain request/expiry) + XEXEC
 // (target-chain mirror-driven execution injection)
 const xcall              = require('../xcall/index.js');
-const xexec              = require('../xexec.js');
+const xexec              = require('../xexec/index.js');
 
 // Cross-chain token bridge: XBRIDGE (v0/v3 lock, v1/v4 burn, v2/v5 mirror-injected settle)
 const xbridge            = require('../xbridge/index.js');
 
 // Full-node possession-proof verdict (verified-validator tier)
-const nodeproof          = require('../nodeproof.js');
+const nodeproof          = require('../nodeproof/index.js');
 const rollcall           = require('../rollcall/index.js');
 
 // The handlers that need no VM, constructed before the constructor loads and gates it.

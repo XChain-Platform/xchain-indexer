@@ -1,4 +1,4 @@
-const { getLogger } = require('../observability/index.js');
+const { getLogger } = require('../../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -33,8 +33,8 @@ const { getLogger } = require('../observability/index.js');
  ********************************************************************/
 
 // Wire-field validation and settlement, installed onto Unstake.prototype below
-const validatePart = require('./unstake/validate.js');
-const settlePart   = require('./unstake/settle.js');
+const validatePart = require('./validate.js');
+const settlePart   = require('./settle.js');
 
 class Unstake {
 

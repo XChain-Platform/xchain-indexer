@@ -31,7 +31,7 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
         // BEFORE the signature check in parse(), so a deliberately invalid signature is enough
         // to separate "mapped" from "not slashable" without building a real equivocation.
         function slashProbe(tag, roundId, contentA, contentB){
-            const Slash = require('../../../src/actions/slash.js');
+            const Slash = require('../../../src/actions/slash/index.js');
             const cfg   = { COIN: 'BTC', NETWORK: NETWORK, GAS: 'XCHAIN' };
             const s = new Slash({ config: cfg, decoderDb: {}, util: new Utility(cfg),
                                   mapper: { createMappings: async () => {} },
@@ -59,7 +59,7 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
         });
 
         it('resolves each bridge canonical slot from snapshot_block at field index 2', async function(){
-            const Slash = require('../../../src/actions/slash.js');
+            const Slash = require('../../../src/actions/slash/index.js');
             const cfg   = { COIN: 'BTC', NETWORK: NETWORK, GAS: 'XCHAIN' };
             const s = new Slash({ config: cfg, decoderDb: {}, indexerDb: {}, util: new Utility(cfg), mapper: {} });
             // Without a field entry this returns 'invalid: ENGINE_TAG (no snapshot_block rule)'

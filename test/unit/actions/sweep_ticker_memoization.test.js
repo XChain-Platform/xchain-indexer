@@ -24,7 +24,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
-const Sweep = require('../../../src/actions/sweep.js');
+const Sweep = require('../../../src/actions/sweep/index.js');
 
 const SOURCE      = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const DESTINATION = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';

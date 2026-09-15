@@ -49,7 +49,7 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 const assert = require('assert');
 
 const Utility = require('../../src/utility.js');
-const Coinpay = require('../../src/actions/coinpay.js');
+const Coinpay = require('../../src/actions/coinpay/index.js');
 
 // What batch.js seeds once BATCH_ISSUANCE_LIMITS is enabled, verbatim. coinPayeeConsumed
 // is absent on purpose: coinpay.js creates that cell lazily, so its APPEARANCE is itself

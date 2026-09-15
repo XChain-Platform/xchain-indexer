@@ -31,8 +31,8 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
-const Dispenser_Close  = require('../../../src/actions/dispenser_close.js');
-const Dispenser_Expire = require('../../../src/actions/dispenser_expire.js');
+const Dispenser_Close  = require('../../../src/actions/dispenser_close/index.js');
+const Dispenser_Expire = require('../../../src/actions/dispenser_expire/index.js');
 
 // Statuses a dispenser can legitimately carry when a settlement handler first runs.
 // close is entered at 'cancelling' (utility.processCancellations) and at 'open' (the

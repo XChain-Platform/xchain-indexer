@@ -19,7 +19,7 @@ const crypto = require('crypto');
 const { createMockIndexer, createBaseData } = require('../../../../fixtures/mocks');
 const eq    = require('../../../../../src/equivocation_header.js');
 const srb   = require('../../../../../src/snapshot_reorg_buffer.js');
-const Slash = require('../../../../../src/actions/slash.js');
+const Slash = require('../../../../../src/actions/slash/index.js');
 
 // The height the verifier must RESOLVE a proof's set at, given the RAW height the proof
 // declares. A proof carries the raw height because that is what the hub put on the wire;

@@ -32,12 +32,12 @@
  ********************************************************************/
 
 // The handler's phases, grouped by concern and installed onto Sweep.prototype below
-const validatePart        = require('./sweep/validate.js');
-const feesPart            = require('./sweep/fees.js');
-const controllerGuardPart = require('./sweep/controller_guard.js');
-const settlePart          = require('./sweep/settle.js');
+const validatePart        = require('./validate.js');
+const feesPart            = require('./fees.js');
+const controllerGuardPart = require('./controller_guard.js');
+const settlePart          = require('./settle.js');
 
-const { getLogger } = require('../observability/index.js');
+const { getLogger } = require('../../observability/index.js');
 class Sweep {
 
     // Handle constructing a class instance

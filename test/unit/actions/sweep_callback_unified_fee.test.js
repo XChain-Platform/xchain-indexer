@@ -50,8 +50,8 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
 
-const Sweep    = require('../../../src/actions/sweep.js');
-const Callback = require('../../../src/actions/callback.js');
+const Sweep    = require('../../../src/actions/sweep/index.js');
+const Callback = require('../../../src/actions/callback/index.js');
 const coins    = require('../../../src/coins');
 
 const GATE = 'UNIFIED_FEES_SWEEP_CALLBACK';

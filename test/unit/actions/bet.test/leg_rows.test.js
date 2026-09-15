@@ -20,7 +20,7 @@ const sinon = require('sinon');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../fixtures/mocks');
 const { ORACLE, ALICE, T0, feedInfo, makeCreateParams } = require('./helpers/bet_fixtures.js');
 
-const Bet = require('../../../../src/actions/bet.js');
+const Bet = require('../../../../src/actions/bet/index.js');
 
 let indexer, actionsCtx, handler, ledgerSpy;
 

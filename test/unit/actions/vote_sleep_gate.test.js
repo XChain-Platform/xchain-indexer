@@ -30,7 +30,7 @@ const path   = require('path');
 const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
-const Vote = require('../../../src/actions/vote.js');
+const Vote = require('../../../src/actions/vote/index.js');
 
 // Base58 testnet/regtest-format addresses (shared params), valid on BTC regtest.
 const SOURCE_ADDR   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';

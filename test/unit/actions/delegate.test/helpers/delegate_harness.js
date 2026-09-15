@@ -17,7 +17,7 @@
 const sinon  = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../../../fixtures/mocks');
 
-const Delegate = require('../../../../../src/actions/delegate.js');
+const Delegate = require('../../../../../src/actions/delegate/index.js');
 
 const VALID_PUBKEY  = 'a'.repeat(64);   // 64 lowercase hex chars (Ed25519)
 const VALID_PUBKEY2 = 'b'.repeat(64);

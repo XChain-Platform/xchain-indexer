@@ -118,7 +118,7 @@ describe('federation READ connection isolation @regression @tier1', function () 
             'getfullnodeverifiers must resolve the capability set in one read');
         assert.match(handler, /capSet \? capSet\.has\(pk\) : await db\.hasCapability\(/,
             'the per-pubkey probe must survive ONLY as the truncated-read fallback');
-        const nodeproofSrc = fs.readFileSync(path.join(__dirname, '../../src/actions/nodeproof.js'), 'utf8');
+        const nodeproofSrc = fs.readFileSync(path.join(__dirname, '../../src/actions/nodeproof/index.js'), 'utf8');
         assert.match(nodeproofSrc, /getValidatorsByCapability\('full_node', blockIndex\)/,
             'nodeproof.js _eligibleVerifierSet must use the same batched read');
         assert.match(nodeproofSrc, /capSet \? capSet\.has\(pk\) : await this\.indexerDb\.hasCapability\(/,

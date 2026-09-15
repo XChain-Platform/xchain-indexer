@@ -18,7 +18,7 @@
 const sinon  = require('sinon');
 const { createMockIndexer } = require('../../../../fixtures/mocks');
 
-const Coinpay = require('../../../../../src/actions/coinpay.js');
+const Coinpay = require('../../../../../src/actions/coinpay/index.js');
 
 const PAYEE   = '1PayeeAddressXXXXXXXXXXXXXXXXWgU1QK';
 const SELLER  = '1SellerAddressXXXXXXXXXXXXXXXbR3kNE';

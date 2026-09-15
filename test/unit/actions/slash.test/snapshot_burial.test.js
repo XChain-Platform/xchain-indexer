@@ -19,7 +19,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 const srb   = require('../../../../src/snapshot_reorg_buffer.js');
-const Slash = require('../../../../src/actions/slash.js');
+const Slash = require('../../../../src/actions/slash/index.js');
 const {
     buried, params, data, dexProof, configProof, useSlashHarness,
 } = require('./helpers/slash_harness.js');

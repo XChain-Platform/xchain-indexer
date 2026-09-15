@@ -79,17 +79,17 @@
  *
  ********************************************************************/
 
-const ed25519 = require('../consensus/ed25519.js');
-const srb     = require('../snapshot_reorg_buffer.js');
+const ed25519 = require('../../consensus/ed25519.js');
+const srb     = require('../../snapshot_reorg_buffer.js');
 
-const { getLogger } = require('../observability/index.js');
+const { getLogger } = require('../../observability/index.js');
 // The proof's own parts. The handler keeps the chain-facing rules (signatures,
 // membership, idempotency, settlement) and delegates the rules that are purely
 // about the submitted bytes or about payout policy.
 const { CONFIG_CAPABILITY, readProofWire, deriveEquivKey,
-        capabilityForEngine } = require('./slash/proof_wire.js');
-const { resolveSlot: resolveProofSlot } = require('./slash/resolve_slot.js');
-const { bountyTreasurySplit: splitBountyTreasury } = require('./slash/bounty.js');
+        capabilityForEngine } = require('./proof_wire.js');
+const { resolveSlot: resolveProofSlot } = require('./resolve_slot.js');
+const { bountyTreasurySplit: splitBountyTreasury } = require('./bounty.js');
 
 class Slash {
 

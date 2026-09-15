@@ -21,8 +21,8 @@
 // The handler's phases, grouped by concern and installed onto Order_Match.prototype below:
 // match.js (the per-candidate gates and fillMatch) and settle.js (booking and settlement).
 // The fill-amount arithmetic stays in this file, below parse().
-const matchPart  = require('./order_match/match.js');
-const settlePart = require('./order_match/settle.js');
+const matchPart  = require('./match.js');
+const settlePart = require('./settle.js');
 
 class Order_Match {
 

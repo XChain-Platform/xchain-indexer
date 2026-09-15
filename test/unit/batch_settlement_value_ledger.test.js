@@ -39,7 +39,7 @@
 
 'use strict';
 
-const Coinpay = require('../../src/actions/coinpay.js');
+const Coinpay = require('../../src/actions/coinpay/index.js');
 const { assert, seedLedger, makeUtil } =
     require('./batch_settlement_value_ledger.test/helpers/value_ledger.js');
 

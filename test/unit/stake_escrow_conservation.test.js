@@ -49,14 +49,14 @@ const SRC = path.resolve(__dirname, '../../src');
 // Read the shipped sources. These are ledger-shape invariants spread across three
 // files that must agree with each other; a stub-driven unit test of any one of them
 // in isolation would pass while the trio disagreed.
-// The STAKE handler is an entry plus parts: stake.js keeps the class, the capability
+// The STAKE handler is an entry plus parts: stake/index.js keeps the class, the capability
 // path lives in stake/capability_stake.js and the contract path in
 // stake/contract_stake.js. Reading the entry alone would find neither ledger block,
 // so the entry and every part are read as one text, parts in name order, which puts
 // the capability block first and the contract block last.
 const STAKE_PARTS = path.join(SRC, 'actions', 'stake');
-const stakeSrc   = [path.join(SRC, 'actions/stake.js')]
-    .concat(fs.readdirSync(STAKE_PARTS).filter(f => f.endsWith('.js')).sort()
+const stakeSrc   = [path.join(SRC, 'actions/stake/index.js')]
+    .concat(fs.readdirSync(STAKE_PARTS).filter(f => f.endsWith('.js') && f !== 'index.js').sort()
         .map(f => path.join(STAKE_PARTS, f)))
     .map(f => fs.readFileSync(f, 'utf8')).join('\n');
 const utilSrc    = fs.readFileSync(path.join(SRC, 'utility.js'), 'utf8');
@@ -164,7 +164,7 @@ describe('a contract stake locks tokens rather than destroying them', function()
     // A SLASH DISPOSES OF LOCKED TOKENS, SO IT MUST UNLOCK THEM. Redirecting without
     // releasing is a pure mint, and it strands the burned bond in the staker's escrow.
     // Whole-ledger deltas live in actions/slash.test.js; these are the cross-file shapes.
-    const slashSrc   = fs.readFileSync(path.join(SRC, 'actions/slash.js'), 'utf8');
+    const slashSrc   = fs.readFileSync(path.join(SRC, 'actions/slash/index.js'), 'utf8');
     // The VM slash writer is not a private method of Execute but its own
     // module under the EXECUTE handler, shared with DEPLOY (a constructor emits SLASH).
     const executeSrc = fs.readFileSync(path.join(SRC, 'actions/execute/slash_emission.js'), 'utf8');

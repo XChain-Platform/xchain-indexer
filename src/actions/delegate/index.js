@@ -1,4 +1,4 @@
-const { getLogger } = require('../observability/index.js');
+const { getLogger } = require('../../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -33,8 +33,8 @@ const { getLogger } = require('../observability/index.js');
  ********************************************************************/
 
 // Wire-field validation and settlement, installed onto Delegate.prototype below
-const validatePart = require('./delegate/validate.js');
-const settlePart   = require('./delegate/settle.js');
+const validatePart = require('./validate.js');
+const settlePart   = require('./settle.js');
 
 class Delegate {
 

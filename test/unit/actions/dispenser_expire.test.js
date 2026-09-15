@@ -15,7 +15,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
-const Dispenser_Expire = require('../../../src/actions/dispenser_expire.js');
+const Dispenser_Expire = require('../../../src/actions/dispenser_expire/index.js');
 
 let indexer, actionsCtx, handler;
 

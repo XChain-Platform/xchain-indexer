@@ -58,7 +58,7 @@ describe('DEX fill quantization parity, indexer half (#3145/#3146) @regression @
             // Source-level pin, mirroring the hub half. These are the numbers the hub is
             // being aligned to, so a silent drop to a lower precision here would make the
             // hub "wrong" against a target that had moved.
-            const src = fs.readFileSync(path.join(__dirname, '../../src/actions/order_match.js'), 'utf8');
+            const src = fs.readFileSync(path.join(__dirname, '../../src/actions/order_match/index.js'), 'utf8');
             const muls = src.match(/bcmul\((?:max_get|max_give),\s*orderInfo\['(?:GET|GIVE)_PRICE'\],\s*(\d+)\)/g) || [];
             assert.strictEqual(muls.length, 2, 'expected exactly the two clamp multiplications');
             for (const m of muls) assert.match(m, /,\s*64\)$/);
@@ -87,7 +87,7 @@ describe('DEX fill quantization parity, indexer half (#3145/#3146) @regression @
             // This is the leg the spec claimed was missing here. It is present, and it is
             // what the hub cannot yet reproduce; if it were ever removed, the two engines
             // would agree by both being wrong, which no value-level test would catch.
-            const src = fs.readFileSync(path.join(__dirname, '../../src/actions/order_match.js'), 'utf8');
+            const src = fs.readFileSync(path.join(__dirname, '../../src/actions/order_match/index.js'), 'utf8');
             assert.match(src, /give_amount\s*=\s*this\.util\.bcround\(give_amount,\s*giveDecimals\)/,
                 'give side must be quantized to its own tick decimals');
             assert.match(src, /get_amount\s*=\s*this\.util\.bcround\(get_amount,\s*getDecimals\)/,

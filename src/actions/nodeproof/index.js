@@ -30,13 +30,13 @@
  *
  ********************************************************************/
 
-const ed25519  = require('../consensus/ed25519.js');
-const eq       = require('../equivocation_header.js');
-const srb      = require('../snapshot_reorg_buffer.js');
-const validate = require('./nodeproof/validate.js');
-const settle   = require('./nodeproof/settle.js');
+const ed25519  = require('../../consensus/ed25519.js');
+const eq       = require('../../equivocation_header.js');
+const srb      = require('../../snapshot_reorg_buffer.js');
+const validate = require('./validate.js');
+const settle   = require('./settle.js');
 
-const { getLogger } = require('../observability/index.js');
+const { getLogger } = require('../../observability/index.js');
 class NodeProof {
 
     constructor(action){

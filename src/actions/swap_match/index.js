@@ -19,8 +19,8 @@
  ********************************************************************/
 
 // The handler's phases, grouped by concern and installed onto Swap_Match.prototype below
-const matchPart  = require('./swap_match/match.js');
-const settlePart = require('./swap_match/settle.js');
+const matchPart  = require('./match.js');
+const settlePart = require('./settle.js');
 
 class Swap_Match {
 

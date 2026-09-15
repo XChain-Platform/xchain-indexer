@@ -18,7 +18,7 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../fixtures/mocks');
 
-const OrderMatch = require('../../../../src/actions/order_match.js');
+const OrderMatch = require('../../../../src/actions/order_match/index.js');
 
 function makeActionsCtx(indexer) {
     return {

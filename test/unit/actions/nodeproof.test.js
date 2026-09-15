@@ -140,7 +140,7 @@ describe('NodeProof (NODEPROOF) @regression @tier3', function () {
         // Pinning the VERIFIER alone would be strictly worse than doing nothing: it
         // would diverge from a still-bare PRODUCER on any future non-uniform input.
         // The hub's four PASS sorts and this one move together or not at all.
-        const src = fs.readFileSync(path.join(__dirname, '../../../src/actions/nodeproof.js'), 'utf8');
+        const src = fs.readFileSync(path.join(__dirname, '../../../src/actions/nodeproof/index.js'), 'utf8');
         assert.match(src, /passList\.slice\(\)\.sort\(\s*\n?\s*\(a, b\) => Buffer\.compare\(/,
             'the indexer verdict canonical must sort PASS with the byte comparator');
         // The hub producer must be a trusted sibling, never a lane symlink into a live main checkout.

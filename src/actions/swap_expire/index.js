@@ -1,4 +1,4 @@
-const { getLogger } = require('../observability/index.js');
+const { getLogger } = require('../../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -20,7 +20,7 @@ const { getLogger } = require('../observability/index.js');
  ********************************************************************/
 
 // The settlement phase, installed onto Swap_Expire.prototype below
-const settlePart = require('./swap_expire/settle.js');
+const settlePart = require('./settle.js');
 
 class Swap_Expire {
 

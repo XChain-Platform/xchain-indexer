@@ -44,24 +44,24 @@
  ********************************************************************/
 
 const crypto  = require('crypto');
-const eq      = require('../equivocation_header.js');
-const ah      = require('../mirror_admission_activation.js');
+const eq      = require('../../equivocation_header.js');
+const ah      = require('../../mirror_admission_activation.js');
 // Read from the vendored protocol constants, not re-exported through
 // actions/xcall: an action that requires another action makes the two
 // load-order dependent, and the hop ceiling is protocol data rather than
 // xcall's to own.
-const XCALL_MAX_HOPS = require('../protocol/constants.js').XCALL_MAX_HOPS;
+const XCALL_MAX_HOPS = require('../../protocol/constants.js').XCALL_MAX_HOPS;
 
-const { getLogger } = require('../observability/index.js');
+const { getLogger } = require('../../observability/index.js');
 // The dispatch quorum check and the savepointed target run (./xexec/). Each is called
 // with this handler as the receiver, so both read this.indexerDb / this.actions unchanged.
-const dispatchQuorum = require('./xexec/dispatch_quorum.js');
-const runTarget      = require('./xexec/run_target.js');
+const dispatchQuorum = require('./dispatch_quorum.js');
+const runTarget      = require('./run_target.js');
 // Return payloads are mirrored to every indexer AND ANCHOR-archived on DOGE,
 // so they are hard-capped. Oversize yields status 'payload_too_large' with an
 // empty payload (deterministic truncation rule). Vendored single source of
 // truth: ../protocol/constants.js (XCALL_MAX_RETURN_BYTES).
-const XCALL_MAX_RETURN_BYTES = require('../protocol/constants.js').XCALL_MAX_RETURN_BYTES;
+const XCALL_MAX_RETURN_BYTES = require('../../protocol/constants.js').XCALL_MAX_RETURN_BYTES;
 
 class Xexec {
 

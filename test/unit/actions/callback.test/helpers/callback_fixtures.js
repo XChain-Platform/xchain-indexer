@@ -16,7 +16,7 @@
 const sinon = require('sinon');
 const { createMockIndexer, createTokenInfo } = require('../../../../fixtures/mocks');
 
-const Callback = require('../../../../../src/actions/callback.js');
+const Callback = require('../../../../../src/actions/callback/index.js');
 
 const OWNER   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const OTHER   = '1OtherAddressXXXXXXXXXXXXXXXXVtKwXp';

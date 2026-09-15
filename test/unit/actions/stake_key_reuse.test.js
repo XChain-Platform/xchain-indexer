@@ -37,7 +37,7 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
 
-const Stake          = require('../../../src/actions/stake.js');
+const Stake          = require('../../../src/actions/stake/index.js');
 const configModule   = require('../../../src/config.js');
 const stakeKeyReuse  = require('../../../src/stake_key_reuse_activation.js');
 

@@ -21,7 +21,7 @@ const {
     makeActionsCtx, makeOrderInfo, makeMatchInfo,
 } = require('./helpers/order_match_harness.js');
 
-const Order_Match = require('../../../../src/actions/order_match.js');
+const Order_Match = require('../../../../src/actions/order_match/index.js');
 
 let indexer, actionsCtx, orderMatch, ledgerSpy;
 

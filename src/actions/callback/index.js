@@ -1,4 +1,4 @@
-const { getLogger } = require('../observability/index.js');
+const { getLogger } = require('../../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -27,10 +27,10 @@ const { getLogger } = require('../observability/index.js');
  * 
  ********************************************************************/
 
-// The TICK, general and funding validations (./callback/validate.js). Each is called with
+// The TICK, general and funding validations (./validate.js). Each is called with
 // this handler as the receiver, so the checks read this.indexerDb / this.util /
 // this.config unchanged and the error they settle on does not depend on the file.
-const validate = require('./callback/validate.js');
+const validate = require('./validate.js');
 
 class Callback {
 

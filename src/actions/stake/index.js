@@ -36,8 +36,8 @@
  *
  ********************************************************************/
 
-const capabilityStake = require('./stake/capability_stake.js');
-const contractStake   = require('./stake/contract_stake.js');
+const capabilityStake = require('./capability_stake.js');
+const contractStake   = require('./contract_stake.js');
 
 class Stake {
 

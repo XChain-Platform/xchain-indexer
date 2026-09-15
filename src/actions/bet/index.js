@@ -1,4 +1,4 @@
-const { getLogger } = require('../observability/index.js');
+const { getLogger } = require('../../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -54,10 +54,10 @@ const { getLogger } = require('../observability/index.js');
  ********************************************************************/
 
 // The handler's phases, grouped by concern and installed onto Bet.prototype below
-const createFeedPart = require('./bet/create_feed.js');
-const validatePart   = require('./bet/validate.js');
-const feesPart       = require('./bet/fees.js');
-const settlePart     = require('./bet/settle.js');
+const createFeedPart = require('./create_feed.js');
+const validatePart   = require('./validate.js');
+const feesPart       = require('./fees.js');
+const settlePart     = require('./settle.js');
 
 class Bet {
 

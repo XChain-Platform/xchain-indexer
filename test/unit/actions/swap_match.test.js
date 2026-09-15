@@ -15,7 +15,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
 
-const Swap_Match = require('../../../src/actions/swap_match.js');
+const Swap_Match = require('../../../src/actions/swap_match/index.js');
 
 let indexer, actionsCtx, handler;
 

@@ -29,8 +29,8 @@ const sinon = require('sinon');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
 
 const Dividend = require('../../../src/actions/dividend/index.js');
-const Callback = require('../../../src/actions/callback.js');
-const Sweep    = require('../../../src/actions/sweep.js');
+const Callback = require('../../../src/actions/callback/index.js');
+const Sweep    = require('../../../src/actions/sweep/index.js');
 
 let indexer, actionsCtx, feeStub;
 

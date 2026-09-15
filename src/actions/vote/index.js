@@ -31,16 +31,16 @@
  *
  ********************************************************************/
 
-const { getLogger } = require('../observability/index.js');
+const { getLogger } = require('../../observability/index.js');
 
 // The phases of this handler, in ./vote/. Each part is called with the handler as its
 // receiver (fn.call(this, ...)), so the parts read this.indexerDb / this.util /
 // this.actions unchanged. What the rest of the indexer and the suites reach through the
 // handler (parse, the per-version phases, settleDeposit, processDueCallbacks and
 // injectCallbackExecute) stays a real method on Vote.prototype.
-const validate        = require('./vote/validate.js');
-const bindingCallback = require('./vote/binding_callback.js');
-const settle          = require('./vote/settle.js');
+const validate        = require('./validate.js');
+const bindingCallback = require('./binding_callback.js');
+const settle          = require('./settle.js');
 class Vote {
 
     // Handle constructing a class instance
@@ -192,7 +192,7 @@ class Vote {
     }
 
     // Release a poll's creation deposit at finalization (body, and the refund or forfeit
-    // rule, in ./vote/settle.js). It stays a method because the finalize path reaches it
+    // rule, in ./settle.js). It stays a method because the finalize path reaches it
     // through the handler.
     async settleDeposit(poll, data, terminalStatus){
         return settle.settleDeposit.call(this, poll, data, terminalStatus);

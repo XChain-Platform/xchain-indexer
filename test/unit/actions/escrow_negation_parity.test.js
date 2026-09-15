@@ -17,8 +17,8 @@ const path   = require('path');
 const sinon  = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
-const Order_Expire = require('../../../src/actions/order_expire.js');
-const Swap_Expire  = require('../../../src/actions/swap_expire.js');
+const Order_Expire = require('../../../src/actions/order_expire/index.js');
+const Swap_Expire  = require('../../../src/actions/swap_expire/index.js');
 
 // 18-decimal remaining whose tail an IEEE-754 round-trip provably drops.
 const HI = '1000000.123456789012345678';

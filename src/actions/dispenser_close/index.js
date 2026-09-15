@@ -18,14 +18,14 @@
  *
  ********************************************************************/
 
-const divergenceMetrics = require('../chain/dispenser_divergence_metrics.js');
+const divergenceMetrics = require('../../chain/dispenser_divergence_metrics.js');
 
 // The handler's phases, grouped by concern and installed onto Dispenser_Close.prototype below:
 // close.js decides where the escrow goes, settle.js moves it and records the close
-const closePart  = require('./dispenser_close/close.js');
-const settlePart = require('./dispenser_close/settle.js');
+const closePart  = require('./close.js');
+const settlePart = require('./settle.js');
 
-const { getLogger } = require('../observability/index.js');
+const { getLogger } = require('../../observability/index.js');
 class Dispenser_Close {
 
     // Handle constructing a class instance

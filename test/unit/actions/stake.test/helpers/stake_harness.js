@@ -20,7 +20,7 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../../fixtures/mocks');
 
-const Stake = require('../../../../../src/actions/stake.js');
+const Stake = require('../../../../../src/actions/stake/index.js');
 
 // ---------------------------------------------------------------------------
 // Constants

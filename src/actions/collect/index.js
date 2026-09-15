@@ -1,4 +1,4 @@
-const { getLogger } = require('../observability/index.js');
+const { getLogger } = require('../../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -34,8 +34,8 @@ const { getLogger } = require('../observability/index.js');
  ********************************************************************/
 
 // The handler's phases, grouped by concern and installed onto Collect.prototype below
-const validatePart = require('./collect/validate.js');
-const settlePart   = require('./collect/settle.js');
+const validatePart = require('./validate.js');
+const settlePart   = require('./settle.js');
 
 class Collect {
 

@@ -32,7 +32,7 @@ const { buildInjectedExecContext, synthesizeTxHash, SYNTH_EXEC_TX_HASH, SYNTH_TA
 const { rethrowIfInfraFault } = require('../../../src/consensus/fault_guard.js');
 
 const Attest = require('../../../src/actions/attest/index.js');
-const Vote   = require('../../../src/actions/vote.js');
+const Vote   = require('../../../src/actions/vote/index.js');
 const Xcall  = require('../../../src/actions/xcall/index.js');
 
 const sha256hex = (s) => crypto.createHash('sha256').update(s).digest('hex');

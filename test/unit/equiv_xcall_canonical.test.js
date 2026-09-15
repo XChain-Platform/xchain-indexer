@@ -40,7 +40,7 @@ function requireDisarmed(mods){
     }
 }
 // xexec requires xcall, so xcall is purged first and both are re-required in one pass.
-const [Xcall, Xexec] = requireDisarmed(['../../src/actions/xcall/index.js', '../../src/actions/xexec.js']);
+const [Xcall, Xexec] = requireDisarmed(['../../src/actions/xcall/index.js', '../../src/actions/xexec/index.js']);
 
 const mkAction = () => ({ config:{}, decoderDb:null, indexerDb:null, util:null, mapper:null });
 const xexec = new Xexec(mkAction());

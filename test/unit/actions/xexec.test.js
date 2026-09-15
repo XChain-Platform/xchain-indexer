@@ -17,7 +17,7 @@ const crypto = require('crypto');
 
 const { createMockIndexer } = require('../../fixtures/mocks');
 
-const Xexec   = require('../../../src/actions/xexec.js');
+const Xexec   = require('../../../src/actions/xexec/index.js');
 const ed25519 = require('../../../src/consensus/ed25519.js');
 const eq      = require('../../../src/equivocation_header.js');
 

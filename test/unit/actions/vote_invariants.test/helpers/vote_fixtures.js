@@ -22,7 +22,7 @@
 const sinon = require('sinon');
 
 const { createMockIndexer } = require('../../../../fixtures/mocks');
-const Vote = require('../../../../../src/actions/vote.js');
+const Vote = require('../../../../../src/actions/vote/index.js');
 
 // A fresh mock indexer, action context and VOTE handler, rebuilt before every
 // case, with the savepoint and poll-write stubs every block relies on.

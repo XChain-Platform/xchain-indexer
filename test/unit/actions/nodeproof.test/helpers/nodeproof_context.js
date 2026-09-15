@@ -21,7 +21,7 @@ const crypto = require('crypto');
 
 const { createMockIndexer, createBaseData } = require('../../../../fixtures/mocks');
 
-const NodeProof = require('../../../../../src/actions/nodeproof.js');
+const NodeProof = require('../../../../../src/actions/nodeproof/index.js');
 // Same cached module NodeProof references; stubbing verify() controls which
 // verifier signatures the handler accepts toward quorum.
 const ed25519   = require('../../../../../src/consensus/ed25519.js');

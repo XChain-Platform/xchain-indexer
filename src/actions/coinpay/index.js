@@ -1,4 +1,4 @@
-const { getLogger } = require('../observability/index.js');
+const { getLogger } = require('../../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -35,9 +35,9 @@ const { getLogger } = require('../observability/index.js');
 // The handler's phases, grouped by concern and installed onto Coinpay.prototype below:
 // validate.js (the pending obligation), payment_pool.js (which payment it draws on and
 // what is left) and settle.js (the record, the roles, the token release, the orders)
-const validatePart    = require('./coinpay/validate.js');
-const paymentPoolPart = require('./coinpay/payment_pool.js');
-const settlePart      = require('./coinpay/settle.js');
+const validatePart    = require('./validate.js');
+const paymentPoolPart = require('./payment_pool.js');
+const settlePart      = require('./settle.js');
 
 class Coinpay {
 

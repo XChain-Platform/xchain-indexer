@@ -44,7 +44,7 @@ function dbSource(){
 }
 
 
-const Coinpay = require(path.resolve(__dirname, '../../src/actions/coinpay.js'));
+const Coinpay = require(path.resolve(__dirname, '../../src/actions/coinpay/index.js'));
 
 // Record every status write the handler makes, in order.
 function recordingDb() {
@@ -63,7 +63,7 @@ describe('COINPAY settlement clears its ORDER_MATCH', () => {
         // The source is the contract here: the settlement tail must reach
         // updateOrderMatchStatus with the obligation's action index.
         const src = require('fs').readFileSync(
-            path.resolve(__dirname, '../../src/actions/coinpay.js'), 'utf8');
+            path.resolve(__dirname, '../../src/actions/coinpay/index.js'), 'utf8');
         assert.ok(/updateOrderMatchStatus\(\s*obligationInfo\['ACTION_INDEX'\],\s*'valid'\s*\)/.test(src),
             'coinpay.js does not clear the match through updateOrderMatchStatus');
         assert.ok(!/createOrderStatus\(\s*data\['ACTION_INDEX'\],\s*obligationInfo\['ACTION_INDEX'\]/.test(src),
@@ -72,7 +72,7 @@ describe('COINPAY settlement clears its ORDER_MATCH', () => {
 
     it('the obligation is still marked fulfilled alongside it', () => {
         const src = require('fs').readFileSync(
-            path.resolve(__dirname, '../../src/actions/coinpay.js'), 'utf8');
+            path.resolve(__dirname, '../../src/actions/coinpay/index.js'), 'utf8');
         assert.ok(/createCoinpayStatus\([^)]*'fulfilled'\)/.test(src),
             'the obligation must still be marked fulfilled');
     });
