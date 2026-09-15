@@ -72,7 +72,7 @@
  *   - Bounty/treasury amounts are governance config. Absent config this
  *     defaults to a PURE BURN (bounty 0, no treasury credit). Sound, just no payout.
  *   - PERMANENT disqualification: a slashed pubkey is barred from the effective signer set
- *     GLOBALLY and permanently. db._effectiveCapabilitySetSql / _stakeWeightsSql / hasCapability
+ *     GLOBALLY and permanently. db.effectiveCapabilitySetSql / _stakeWeightsSql / hasCapability
  *     exclude any key in capability_slash_events (block-gated, reorg-safe), so a fresh re-stake
  *     of a slashed key never re-qualifies in any capability. The burn here zeroes the CURRENT
  *     bond; the query exclusion makes it permanent.

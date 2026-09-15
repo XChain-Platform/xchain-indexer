@@ -64,7 +64,7 @@ module.exports = {
     // into a permanent, silent consensus omission, so the read throws instead and
     // the block is retried.
     // Cached address_id -> canonical address resolver, the address-axis twin of
-    // _smtTickName and subject to exactly the same rules: an ABSENCE is never
+    // smtTickName and subject to exactly the same rules: an ABSENCE is never
     // cached, the read is STRICT so a transient fault throws instead of being
     // indistinguishable from "no such address", and the cache is only valid
     // WITHIN a chain segment. A rollback frees dense ids for reuse, so
@@ -81,7 +81,7 @@ module.exports = {
         return name;
     },
 
-    async _smtTickName(tick_id){
+    async smtTickName(tick_id){
         if(!this._smtTickNameCache) this._smtTickNameCache = new Map();
         if(this._smtTickNameCache.has(tick_id)) return this._smtTickNameCache.get(tick_id);
         let rows = await this.doQueryStrict("SELECT tick FROM index_tickers WHERE id=? LIMIT 1", [tick_id]);

@@ -364,7 +364,7 @@ class AnchorRecovery {
     //      key the delegation-blind check already accepted is still accepted.
     //   2. ONLY a key that query rejects is looked up in the delegation-aware effective
     //      signer set. A DELEGATED signing key is authorized by a staked source and holds no
-    //      `stakes` row of its own (db/stakes.js _effectiveCapabilitySetSql / _stakeWeightsSql UNION
+    //      `stakes` row of its own (db/stakes.js effectiveCapabilitySetSql / _stakeWeightsSql UNION
     //      active `delegations`), so a direct-only check rejected the WHOLE batch for any
     //      honest archive carrying a delegated-only validator. That is the bug this closes.
     //

@@ -74,7 +74,7 @@ describe('_smtTouched: the touched key is canonical on BOTH axes @regression', f
         const db = makeDb();
         sinon.stub(db, 'createTicker').resolves(50);
         sinon.stub(db, 'createAddress').resolves(123);          // "^123" resolves to id 123
-        sinon.stub(db, '_smtTickName').resolves(TICK);
+        sinon.stub(db, 'smtTickName').resolves(TICK);
         sinon.stub(db, 'smtAddressName').withArgs(123).resolves(ADDR);
         db._smtTouched = new Set();
 
@@ -92,7 +92,7 @@ describe('_smtTouched: the touched key is canonical on BOTH axes @regression', f
         const db = makeDb();
         sinon.stub(db, 'createTicker').resolves(50);
         sinon.stub(db, 'createAddress').resolves(123);
-        sinon.stub(db, '_smtTickName').resolves(TICK);
+        sinon.stub(db, 'smtTickName').resolves(TICK);
         sinon.stub(db, 'smtAddressName').withArgs(123).resolves(ADDR);
         db._smtTouched = new Set();
 
@@ -105,7 +105,7 @@ describe('_smtTouched: the touched key is canonical on BOTH axes @regression', f
         const db = makeDb();
         sinon.stub(db, 'createTicker').resolves(50);
         sinon.stub(db, 'createAddress').resolves(123);
-        sinon.stub(db, '_smtTickName').resolves(TICK);
+        sinon.stub(db, 'smtTickName').resolves(TICK);
         sinon.stub(db, 'smtAddressName').withArgs(123).resolves(ADDR);
         db._smtTouched = new Set();
 
@@ -124,7 +124,7 @@ describe('_smtTouched: the touched key is canonical on BOTH axes @regression', f
         const db = makeDb();
         sinon.stub(db, 'createTicker').resolves(50);
         sinon.stub(db, 'createAddress').resolves(123);
-        sinon.stub(db, '_smtTickName').resolves(TICK);
+        sinon.stub(db, 'smtTickName').resolves(TICK);
         sinon.stub(db, 'smtAddressName').resolves(null);
         db._smtTouched = new Set();
 
@@ -137,7 +137,7 @@ describe('_smtTouched: the touched key is canonical on BOTH axes @regression', f
         const db = makeDb();
         sinon.stub(db, 'createTicker').resolves(50);
         sinon.stub(db, 'createAddress').resolves(null);
-        sinon.stub(db, '_smtTickName').resolves(TICK);
+        sinon.stub(db, 'smtTickName').resolves(TICK);
         const addrName = sinon.stub(db, 'smtAddressName').resolves(ADDR);
         db._smtTouched = new Set();
 

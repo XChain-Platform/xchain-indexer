@@ -14,7 +14,7 @@
  * Repair a chain whose committed `balances_root` has drifted BELOW a full
  * rebuild of its own ledger.
  *
- * WHY THIS EXISTS. `db._smtTickName` used to cache an ABSENT ticker name, and a
+ * WHY THIS EXISTS. `db.smtTickName` used to cache an ABSENT ticker name, and a
  * cached absence made `createLedgerChangeRecord` skip every later touch for that
  * tick for the connection's lifetime, so the tick's balance leaves were never
  * committed. The cause is fixed (indexer 2db73fa) but a fix does not un-drop the

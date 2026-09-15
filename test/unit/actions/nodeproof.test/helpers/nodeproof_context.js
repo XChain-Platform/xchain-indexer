@@ -52,7 +52,7 @@ const SET_BLOCK = EPOCH - srb.CANONICAL_REORG_BUFFER;   // 282
 
 // Every pubkey this suite uses. The mock resolves the BATCHED capability set over
 // it, mirroring db.js where getValidatorsByCapability and hasCapability answer from
-// the same _effectiveCapabilitySetSql.
+// the same effectiveCapabilitySetSql.
 const ALL_PUBKEYS = [PUBKEY_V, PUBKEY_V2, PUBKEY_P, PUBKEY_P2, PUBKEY_X];
 
 function addNodeProofDbStubs(db) {

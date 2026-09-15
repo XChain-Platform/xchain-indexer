@@ -23,7 +23,7 @@
 
 module.exports = {
 
-    // Effective-set / capability view of a pubkey's stake, mirroring _effectiveCapabilitySetSql.
+    // Effective-set / capability view of a pubkey's stake, mirroring effectiveCapabilitySetSql.
     // Returns { source_id, signing_pubkey_id, signing_pubkey, amount, activation_block, ... } or null.
     //
     // READ-ONLY (federation self-qualification). Used by the getownstake RPC so a hub whose only

@@ -39,7 +39,7 @@ describe('Database.getValidatorsByCapability() threshold source @regression @tie
         db = {
             config,
             getValidatorsByCapability: Database.prototype.getValidatorsByCapability,
-            _effectiveCapabilitySetSql: Database.prototype._effectiveCapabilitySetSql,
+            effectiveCapabilitySetSql: Database.prototype.effectiveCapabilitySetSql,
             getStatusId: sinon.stub().resolves(1),
             doQuery:     sinon.stub().resolves([]),
             // The caller value is honoured verbatim (no clamp), so util.bcgte is
@@ -100,7 +100,7 @@ describe('Database.getActiveCapabilityCount() threshold source @regression @tier
         db = {
             config,
             getActiveCapabilityCount: Database.prototype.getActiveCapabilityCount,
-            _effectiveCapabilitySetSql: Database.prototype._effectiveCapabilitySetSql,
+            effectiveCapabilitySetSql: Database.prototype.effectiveCapabilitySetSql,
             getStatusId: sinon.stub().resolves(1),
             getLatestBlockIndex: sinon.stub().resolves(100),
             doQuery:     sinon.stub().resolves([{ cnt: 0 }]),

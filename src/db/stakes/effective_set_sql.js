@@ -39,7 +39,7 @@ module.exports = {
     // Every PBFT-quorum read (capability snapshots, signature verification, quorum
     // counts) MUST resolve through this one query so all consumers agree -
     // CONSENSUS-CRITICAL: any change here forks validation.
-    _effectiveCapabilitySetSql(valid_id, blockIndex, minStake){
+    effectiveCapabilitySetSql(valid_id, blockIndex, minStake){
         // Permanent disqualification (WI-2 bump 2): a signing key proven to have
         // equivocated is PERMANENTLY barred from the effective signer set - not just
         // until its current bond burns to 0, but against any future re-stake/re-delegation
@@ -101,7 +101,7 @@ module.exports = {
     // One output row per (effective key): { pubkey, source(address), weight(=source
     // aggregate) }. Every key of a source carries the SAME source + weight, so a
     // source-deduped tally counts that stake once. CONSENSUS-CRITICAL - mirrors the
-    // qualification/revocation/delegation semantics of _effectiveCapabilitySetSql.
+    // qualification/revocation/delegation semantics of effectiveCapabilitySetSql.
     _stakeWeightsSql(valid_id, blockIndex, minStake){
         // Precision: DECIMAL(30,8) (22 integer digits, 8 fractional) is sufficient because the
         // staking tick is XCHAIN at 8 decimals and total supply stays far below 10^22; every

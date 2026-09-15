@@ -98,12 +98,12 @@ describe('rollback drops the SMT resolver caches @regression', function(){
         q.onCall(0).resolves([{ tick: 'OLDTICK' }]);
         q.onCall(1).resolves([{ tick: 'NEWTICK' }]);
 
-        assert.strictEqual(await db._smtTickName(277), 'OLDTICK');
-        assert.strictEqual(await db._smtTickName(277), 'OLDTICK', 'cached within the segment');
+        assert.strictEqual(await db.smtTickName(277), 'OLDTICK');
+        assert.strictEqual(await db.smtTickName(277), 'OLDTICK', 'cached within the segment');
 
         db._smtTickNameCache = null;                       // what rollback does
 
-        assert.strictEqual(await db._smtTickName(277), 'NEWTICK',
+        assert.strictEqual(await db.smtTickName(277), 'NEWTICK',
             'after a reorg the same id must resolve to whatever the new chain interned');
         sinon.restore();
     });

@@ -237,7 +237,7 @@ const ledgerChange = {
         // balances_root to their predecessor, and a key was lost permanently
         // only when no later block happened to touch it again.
         if(db._smtTouched && address != null && tick_id != null && address_id != null){
-            let canonTick = await db._smtTickName(tick_id);
+            let canonTick = await db.smtTickName(tick_id);
             let canonAddr = await db.smtAddressName(address_id);
             if(canonTick != null && canonTick !== '' && canonAddr != null && canonAddr !== '')
                 db._smtTouched.add(canonAddr + '\t' + canonTick);

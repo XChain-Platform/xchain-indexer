@@ -116,7 +116,7 @@ module.exports = {
     // the source's ORIGINAL stake signing key - the delegation-row revoke path
     // stays in `delegations`). `deactivation_block` is when the key stops being
     // a valid signer; a LATER re-stake of the same key (higher action_index)
-    // clears the revocation (see _effectiveCapabilitySetSql).
+    // clears the revocation (see effectiveCapabilitySetSql).
     async createStakeKeyRevocation(data){
         data                  = this.normalizeDataValues(data);
         let status_id         = await this.createStatus(data['STATUS']);

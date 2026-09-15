@@ -132,7 +132,7 @@ module.exports = {
         // All callers pass blockIndex; a missing one means "current tip".
         if(blockIndex === undefined || blockIndex === null)
             blockIndex = await this.getLatestBlockIndex();
-        let eff = this._effectiveCapabilitySetSql(valid_id, blockIndex, minStake);
+        let eff = this.effectiveCapabilitySetSql(valid_id, blockIndex, minStake);
         let query = `SELECT COUNT(DISTINCT pubkey) AS cnt FROM (${eff.sql}) eff`;
         let results = await this.doQuery(query, eff.args);
         return results.length > 0 ? Number(results[0].cnt) : 0;
@@ -148,7 +148,7 @@ module.exports = {
     // own a direct stake, and how much" for collision, ownership and unstake-AMOUNT decisions. It
     // deliberately does NOT apply the DELEGATE v2 revocation exclusion or resolve delegated keys to
     // their backing source. Those are capability-membership semantics that belong to the federation
-    // effective-set view (getEffectiveStakeByPubkey / _effectiveCapabilitySetSql), not to stake
+    // effective-set view (getEffectiveStakeByPubkey / effectiveCapabilitySetSql), not to stake
     // ownership: an UNSTAKE on a delegated-only key has no stake rows to deactivate, so crediting
     // the source's aggregate here would inflate balances (the cooldown sweep credits unstakes.AMOUNT
     // regardless of what was deactivated). Keep this query direct-stake-only.
@@ -215,7 +215,7 @@ module.exports = {
         // Same effective-signer resolution as the capability set (DELEGATE
         // additive-until-revoked semantics) with no MIN_STAKE floor: the
         // governance quorum is over every staker's effective keys.
-        let eff = this._effectiveCapabilitySetSql(valid_id, blockIndex, '0');
+        let eff = this.effectiveCapabilitySetSql(valid_id, blockIndex, '0');
         let query = `SELECT pubkey, MAX(total) AS total FROM (${eff.sql}) eff
                      GROUP BY pubkey
                      ORDER BY pubkey
@@ -294,7 +294,7 @@ module.exports = {
         // is a frozen consensus constant; raising it requires a coordinated fleet
         // upgrade, not a per-node override.
         let limit = this.config['VALIDATOR_QUERY_LIMIT'];
-        let eff = this._effectiveCapabilitySetSql(valid_id, blockIndex, minStake);
+        let eff = this.effectiveCapabilitySetSql(valid_id, blockIndex, minStake);
         let query = `SELECT pubkey, MAX(total) AS total FROM (${eff.sql}) eff
                      GROUP BY pubkey
                      ORDER BY pubkey

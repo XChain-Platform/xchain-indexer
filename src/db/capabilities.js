@@ -44,7 +44,7 @@ module.exports = {
     // Resolve the source_id (index_addresses id) of the active staking source
     // backing `pubkey_id` at `blockIndex`, or null. Active-row predicates are
     // IDENTICAL to stake_source.js getStakeSourceByPubkey (and thus to
-    // _effectiveCapabilitySetSql membership): status=valid, activation/deactivation
+    // effectiveCapabilitySetSql membership): status=valid, activation/deactivation
     // window, stake-key revocation, permanent slash. Reward writers MUST use this so
     // the source_id stored during block processing matches the source the ANCHOR
     // archive pins and recovery restores, keeping validator_rewards (block-scoped
@@ -244,7 +244,7 @@ module.exports = {
     // any future re-stake/re-delegation. GLOBAL (capability-agnostic - an equivocating key is
     // byzantine), block-gated for deterministic historical re-derivation, and reorg-safe (the
     // block-scoped event row rolls back ⇒ the key re-qualifies). The SQL counterpart inside
-    // _effectiveCapabilitySetSql / _stakeWeightsSql excludes it from the SET queries; this is
+    // effectiveCapabilitySetSql / _stakeWeightsSql excludes it from the SET queries; this is
     // the per-pubkey check used by hasCapability so both paths agree.
     async isPubkeySlashedAt(pubkeyId, blockIndex){
         if(pubkeyId === null || pubkeyId === undefined) return false;

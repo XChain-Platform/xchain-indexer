@@ -89,7 +89,7 @@ function signBatch(rounds, identities, opts = {}){
 }
 
 // Both capability APIs answer from ONE set, the way db.js drives them from one
-// _effectiveCapabilitySetSql: a case that says who qualifies stays honest
+// effectiveCapabilitySetSql: a case that says who qualifies stays honest
 // whichever path the parser takes (batched set, or the truncation fallback).
 function setCapable(db, capable){
     db.hasCapability.callsFake(async pubkey => capable.has(String(pubkey).toLowerCase()));

@@ -94,7 +94,7 @@ module.exports = {
             blockIndex = await this.getLatestBlockIndex();
         // Permanent disqualification (WI-2 bump 2): an equivocation-slashed key is barred
         // from ALL capabilities - must agree with the effective-set queries
-        // (_effectiveCapabilitySetSql / _stakeWeightsSql), which exclude it too.
+        // (effectiveCapabilitySetSql / _stakeWeightsSql), which exclude it too.
         if(await this.isPubkeySlashedAt(pubkey_id, blockIndex)) return false;
         // Per-pubkey membership test against the SAME effective signer set as
         // getValidatorsByCapability (stake keys minus DELEGATE v2 revocations,

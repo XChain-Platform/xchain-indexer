@@ -267,7 +267,7 @@ async function canonicalRequestId(protocolChanges, gateBlock, requestId, request
 // getStakeWeightsByCapability, whose _stakeWeightsSql qualifies a staking
 // SOURCE on its aggregate and then emits ALL of that source's effective keys,
 // while getValidatorsByCapability / hasCapability qualify each PUBKEY on its
-// own aggregate (_effectiveCapabilitySetSql GROUP BY ip.pubkey HAVING, whose
+// own aggregate (effectiveCapabilitySetSql GROUP BY ip.pubkey HAVING, whose
 // only widening branch is a `delegations` row). A source clearing MIN_STAKE
 // only in aggregate across sub-threshold stake keys is therefore IN the
 // weighted responsible set and OUT of the pubkey-aggregate set, so its valid

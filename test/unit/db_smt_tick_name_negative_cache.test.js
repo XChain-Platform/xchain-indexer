@@ -10,7 +10,7 @@
  *
  **********************************************************************
  *
- * `_smtTickName` must never cache an ABSENCE.
+ * `smtTickName` must never cache an ABSENCE.
  *
  * It resolves tick_id -> canonical tick name for the light-client touched-key
  * set. `createLedgerChangeRecord` skips the touch when the name comes back null,
@@ -67,8 +67,8 @@ describe('_smtTickName: an absence is never cached @regression', function(){
         q.onCall(0).resolves([]);                        // not there yet
         q.onCall(1).resolves([{ tick: 'DECMS4X0D0D1' }]); // interned since
 
-        assert.strictEqual(await db._smtTickName(118), null, 'first call reports the absence honestly');
-        assert.strictEqual(await db._smtTickName(118), 'DECMS4X0D0D1',
+        assert.strictEqual(await db.smtTickName(118), null, 'first call reports the absence honestly');
+        assert.strictEqual(await db.smtTickName(118), 'DECMS4X0D0D1',
             'the absence must NOT have been cached: this is the whole defect');
         assert.strictEqual(q.callCount, 2, 'a miss must re-query rather than answer from cache');
     });
@@ -77,9 +77,9 @@ describe('_smtTickName: an absence is never cached @regression', function(){
         const db = makeDb();
         const q = sinon.stub(db, 'doQueryStrict').resolves([{ tick: 'XCHAIN' }]);
 
-        assert.strictEqual(await db._smtTickName(1), 'XCHAIN');
-        assert.strictEqual(await db._smtTickName(1), 'XCHAIN');
-        assert.strictEqual(await db._smtTickName(1), 'XCHAIN');
+        assert.strictEqual(await db.smtTickName(1), 'XCHAIN');
+        assert.strictEqual(await db.smtTickName(1), 'XCHAIN');
+        assert.strictEqual(await db.smtTickName(1), 'XCHAIN');
         assert.strictEqual(q.callCount, 1, 'a resolved name must be cached, or every ledger row re-queries');
     });
 
@@ -91,8 +91,8 @@ describe('_smtTickName: an absence is never cached @regression', function(){
         q.onCall(0).resolves([{ tick: '' }]);
         q.onCall(1).resolves([{ tick: 'S22CLOCK' }]);
 
-        assert.strictEqual(await db._smtTickName(115), '');
-        assert.strictEqual(await db._smtTickName(115), 'S22CLOCK');
+        assert.strictEqual(await db.smtTickName(115), '');
+        assert.strictEqual(await db.smtTickName(115), 'S22CLOCK');
         assert.strictEqual(q.callCount, 2);
     });
 
@@ -105,7 +105,7 @@ describe('_smtTickName: an absence is never cached @regression', function(){
         sinon.stub(db, 'doQueryStrict').rejects(new Error('injected DB fault'));
         sinon.stub(db, 'doQuery').resolves([]);      // the soft reader must not be consulted
 
-        await assert.rejects(() => db._smtTickName(253), /injected DB fault/);
+        await assert.rejects(() => db.smtTickName(253), /injected DB fault/);
         assert.strictEqual(db.doQuery.callCount, 0,
             'the resolver must not fall back to the fail-soft reader');
     });
@@ -123,8 +123,8 @@ describe('_smtTickName: an absence is never cached @regression', function(){
         q.onCall(0).rejects(new Error('injected DB fault'));
         q.onCall(1).resolves([{ tick: 'TDBIGDCRV' }]);
 
-        await assert.rejects(() => db._smtTickName(253), /injected DB fault/);
-        assert.strictEqual(await db._smtTickName(253), 'TDBIGDCRV',
+        await assert.rejects(() => db.smtTickName(253), /injected DB fault/);
+        assert.strictEqual(await db.smtTickName(253), 'TDBIGDCRV',
             'the retry must resolve, not inherit a poisoned entry');
     });
 
@@ -134,8 +134,8 @@ describe('_smtTickName: an absence is never cached @regression', function(){
         q.withArgs(sinon.match.string, [1]).resolves([{ tick: 'XCHAIN' }]);
         q.withArgs(sinon.match.string, [2]).resolves([{ tick: 'OTHER' }]);
 
-        assert.strictEqual(await db._smtTickName(1), 'XCHAIN');
-        assert.strictEqual(await db._smtTickName(2), 'OTHER');
-        assert.strictEqual(await db._smtTickName(1), 'XCHAIN');
+        assert.strictEqual(await db.smtTickName(1), 'XCHAIN');
+        assert.strictEqual(await db.smtTickName(2), 'OTHER');
+        assert.strictEqual(await db.smtTickName(1), 'XCHAIN');
     });
 });
