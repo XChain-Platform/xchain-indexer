@@ -25,7 +25,7 @@
  ********************************************************************/
 
 const { getLogger } = require('../../observability/index.js');
-const { HUB_SCHEMA_VERSION } = require('../hub-schema-version');
+const { HUB_SCHEMA_VERSION } = require('../hub_schema_version');
 const { REBUILT_SOURCE_IDENTITY_COLUMNS, REBUILT_SOURCE_PROBE_ROWS } = require('./mirror_tables.js');
 
 module.exports = {

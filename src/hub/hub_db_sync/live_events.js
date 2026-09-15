@@ -24,7 +24,7 @@
  ********************************************************************/
 
 const { getLogger } = require('../../observability/index.js');
-const { HUB_SCHEMA_VERSION } = require('../hub-schema-version');
+const { HUB_SCHEMA_VERSION } = require('../hub_schema_version');
 const { CROSS_CHAIN_TABLES } = require('./mirror_tables.js');
 const { PENDING_PRICE_EVENT_CAP } = require('./mirror_bounds.js');
 

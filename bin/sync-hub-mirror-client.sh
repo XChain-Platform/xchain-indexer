@@ -12,7 +12,7 @@
 # Vendored set: the client entry (hub_db_sync.js) and its parts directory
 # (hub_db_sync/, every .js under it, subdirectories included: the entry installs
 # them onto its prototype and resolves nothing outside the set), the
-# schema-version lockstep constant (hub-schema-version.js), the dependency-free
+# schema-version lockstep constant (hub_schema_version.js), the dependency-free
 # modules the client requires by relative path (price_batching_floor_activation.js;
 # a consumer without them fails at require on boot), and the mirror-table SQL
 # twins the client's ensureTables() creates for consumers without their own
@@ -43,7 +43,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="$HERE/../src"
 ROOT="$(cd "$HERE/../.." && pwd)"
 
-HUB_FILES="hub_db_sync.js hub-schema-version.js"
+HUB_FILES="hub_db_sync.js hub_schema_version.js"
 HUB_DIRS="hub_db_sync"
 DEP_FILES="price_batching_floor_activation.js mirror_admission_activation.js"
 SQL_FILES="price_snapshots.sql oracle_prices.sql cross_chain_matches.sql cross_chain_calls.sql capability_snapshots.sql state_checkpoints.sql anchor_reward_attestations.sql attestation_responses.sql bridge_transfers.sql policy_snapshots.sql"
@@ -125,7 +125,7 @@ for svc in $SERVICES; do
 done
 
 # ---- indexer <-> hub HUB_SCHEMA_VERSION lockstep check ----------------------
-# hub-schema-version.js is not vendored FROM the hub (the indexer's copy above
+# hub_schema_version.js is not vendored FROM the hub (the indexer's copy above
 # is the canonical file synced OUT to consumers); the hub keeps its own,
 # independent source file at xchain-hub/src/hub_schema_version.js, and both
 # MUST declare the same HUB_SCHEMA_VERSION value or a hub upgrade can silently
@@ -135,7 +135,7 @@ done
 if [ "$CHECK" -eq 1 ]; then
     HUB_VERSION_FILE="$ROOT/xchain-hub/src/hub_schema_version.js"
     if [ -f "$HUB_VERSION_FILE" ]; then
-        indexer_ver="$(grep -oE 'HUB_SCHEMA_VERSION = [0-9]+' "$SRC/hub/hub-schema-version.js" | grep -oE '[0-9]+$')"
+        indexer_ver="$(grep -oE 'HUB_SCHEMA_VERSION = [0-9]+' "$SRC/hub/hub_schema_version.js" | grep -oE '[0-9]+$')"
         hub_ver="$(grep -oE 'HUB_SCHEMA_VERSION = [0-9]+' "$HUB_VERSION_FILE" | grep -oE '[0-9]+$')"
         if [ -z "$indexer_ver" ] || [ -z "$hub_ver" ]; then
             echo "DRIFT: could not extract HUB_SCHEMA_VERSION from indexer and/or hub source; check both files by hand."

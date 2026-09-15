@@ -130,7 +130,7 @@ function registerMirrorTwinInventoryTests() {
         assert.deepStrictEqual(uninventoried, [],
             'these tables are mirrored from the hub but absent from MIRROR_TWINS, so their BIGINT ' +
             'signedness is unguarded: ' + uninventoried.join(', ') + '. Add each to MIRROR_TWINS (and ' +
-            'bump HUB_SCHEMA_VERSION in all three hub-schema-version.js copies, since a stale consumer ' +
+            'bump HUB_SCHEMA_VERSION in all three hub_schema_version.js copies, since a stale consumer ' +
             'cannot interpret a table it does not have).');
     });
 

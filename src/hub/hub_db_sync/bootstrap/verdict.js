@@ -27,7 +27,7 @@
  ********************************************************************/
 
 const { getLogger } = require('../../../observability/index.js');
-const { HUB_SCHEMA_VERSION } = require('../../hub-schema-version');
+const { HUB_SCHEMA_VERSION } = require('../../hub_schema_version');
 const { CROSS_CHAIN_TABLES, FULL_REPAGE_TABLES } = require('../mirror_tables.js');
 const { PRICE_MIRROR_MIN_PRE_HORIZON_ROUNDS, PRICE_MIRROR_LOOKBACK_GROWTH,
         PRICE_MIRROR_LOOKBACK_MAX_S } = require('../mirror_bounds.js');
