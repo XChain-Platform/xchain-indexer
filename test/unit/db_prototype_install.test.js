@@ -46,7 +46,7 @@ function declaredMixinFiles() {
     const start = src.indexOf('const MIXIN_FILES = [');
     assert.notStrictEqual(start, -1, 'db/index.js no longer declares MIXIN_FILES');
     const block = src.slice(start, src.indexOf('];', start));
-    return block.match(/'\.\/[a-z0-9_]+\.js'/g).map((q) => q.slice(1, -1));
+    return block.match(/'\.\/[a-z0-9_]+(?:\/index)?\.js'/g).map((q) => q.slice(1, -1));
 }
 
 describe('Database prototype install @regression @tier1', function () {
