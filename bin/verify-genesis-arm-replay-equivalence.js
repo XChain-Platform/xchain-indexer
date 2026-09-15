@@ -184,7 +184,11 @@ async function runSide() {
         registry[name] = { mainnet: Number(c.mainnet_time), testnet: Number(c.testnet_time),
                            regtest: Number(c.regtest_time) };
 
-    const fp = require(path.join(root, 'src', 'armedMapFingerprint.js')).computeArmedMapFingerprint();
+    // The OLD side can be a tree from before the v1 module took its snake_case name, so
+    // either spelling is read; the module's bytes and the fingerprint it computes are the same.
+    const fpNew = path.join(root, 'src', 'armed_map_fingerprint.js');
+    const fpModule = fs.existsSync(fpNew) ? fpNew : path.join(root, 'src', 'armedMapFingerprint.js');
+    const fp = require(fpModule).computeArmedMapFingerprint();
 
     // Which vm this process actually loaded, and the bytes of its entry module.
     const vmMain = require.resolve('xchain-vm', { paths: [root] });

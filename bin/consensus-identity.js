@@ -109,7 +109,7 @@ function canonicalJson(value) {
  */
 function codeIdentity(network) {
     const coins = require('../src/coins/index.js');
-    const { computeArmedMapFingerprint } = require('../src/armedMapFingerprint.js');
+    const { computeArmedMapFingerprint } = require('../src/armed_map_fingerprint.js');
     const { computeArmedMapFingerprintV2 } = require('../src/consensus/armed_map/fingerprint_v2.js');
     const { computeConsensusRulesDigest, ABSENT } = require('../src/consensus_rules_digest.js');
 

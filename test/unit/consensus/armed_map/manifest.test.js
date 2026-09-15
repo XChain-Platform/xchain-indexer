@@ -27,7 +27,7 @@ const SRC  = path.join(REPO, 'src');
 
 const manifest = require('../../../../src/consensus/armed_map/manifest.js');
 const { canonicalValue } = require('../../../../src/consensus/armed_map/canonical.js');
-const { computeArmedMapFingerprint } = require('../../../../src/armedMapFingerprint.js');
+const { computeArmedMapFingerprint } = require('../../../../src/armed_map_fingerprint.js');
 const ProtocolChanges = require('../../../../src/protocol_changes.js');
 
 // The two declaration shapes that make a file a carrier. ACTIVATION_MAP is the
