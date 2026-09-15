@@ -75,14 +75,16 @@ describe('armed_map/fingerprint_v2: the running process', function () {
         assert.strictEqual(res.armed_map_rows, undefined, 'the row count belongs to consensus-identity, not health');
     });
 
-    it('is published by consensus-identity --json beside v1, with its row count', function () {
+    it('is published by consensus-identity --json beside v1, with its row map and count', function () {
         const res = spawnSync(process.execPath, [path.join(REPO, 'bin', 'consensus-identity.js'), '--json'],
             { cwd: REPO, encoding: 'utf8' });
         assert.strictEqual(res.status, 0, res.stderr);
         const identity = JSON.parse(res.stdout);
         assert.match(identity.armed_map_fingerprint, HEX64);
         assert.strictEqual(identity.armed_map_fingerprint_v2, v2.computeArmedMapFingerprintV2().hex);
-        assert.strictEqual(identity.armed_map_rows, manifest.ENTRIES.length);
+        // row 6: armed_map_rows is the per-key hash map (so a mismatch names the row) and the count sits beside it
+        assert.strictEqual(identity.armed_map_row_count, manifest.ENTRIES.length);
+        assert.strictEqual(Object.keys(identity.armed_map_rows).length, manifest.ENTRIES.length);
         assert.notStrictEqual(identity.armed_map_fingerprint_v2, identity.armed_map_fingerprint);
     });
 });

@@ -23,7 +23,7 @@
  *                                  and it moves on a comment reformat, which is
  *                                  correct: it answers "same build?".
  *   armed_map_fingerprint_v2       sha256 over the armed VALUES those carriers
- *   and armed_map_rows             resolve to, one row per key, and the count.
+ *   and armed_map_rows             resolve to, one hash per key, plus the count.
  *                                  Unmoved by a comment, rename or move, so it
  *                                  answers "same armed map?"; UNREADABLE when a
  *                                  row fails to resolve, never a plausible hash.
@@ -80,6 +80,8 @@
  *                                                     resolves to the absent
  *                                                     sentinel (the check a
  *                                                     restructure has to survive)
+ *   node bin/consensus-identity.js --compare <pin>    compare the selected pin
+ *                                                     block field by field
  *
  *   XC_ROLLCALL_REGTEST_ACTIVATION=armed XC_ROLLCALL_GATES_REGTEST_ACTIVATION=armed \
  *     node bin/consensus-identity.js
@@ -105,17 +107,19 @@ function canonicalJson(value) {
  * The three values that come from the source tree alone.
  * @returns {{coin_registry_consensus_hash: string, coin_registry_consensus_hashes: object,
  *            armed_map_fingerprint: string, armed_map_fingerprint_v2: string,
- *            armed_map_rows: ?number, consensus_rules_digest: string}}
+ *            armed_map_rows: ?object, armed_map_row_count: ?number,
+ *            consensus_rules_digest: string, gates_field: string, gates_field_hash: string}}
  */
 function codeIdentity(network) {
     const coins = require('../src/coins/index.js');
     const { computeArmedMapFingerprint } = require('../src/consensus/armed_map/armed_map_fingerprint.js');
     const { computeArmedMapFingerprintV2 } = require('../src/consensus/armed_map/fingerprint_v2.js');
-    const { computeConsensusRulesDigest, ABSENT } = require('../src/consensus_rules_digest.js');
+    const { computeConsensusRulesDigest, knownGateKeys, ABSENT } = require('../src/consensus_rules_digest.js');
 
     const hashes = coins.consensusHashes(network);
     const rules = computeConsensusRulesDigest();
     const armedMapV2 = computeArmedMapFingerprintV2();
+    const gatesField = knownGateKeys().join(',');
     // The shape of the measurement, beside the number it produced. A digest taken over a
     // list in which some gate read ABSENT is a different question answered, and nothing
     // about the hash itself says so: 87637dfa and 26ba9cce are equally plausible on sight.
@@ -128,9 +132,10 @@ function codeIdentity(network) {
         coin_registry_consensus_hash: crypto.createHash('sha256').update(canonicalJson(hashes)).digest('hex'),
         coin_registry_consensus_hashes: hashes,
         armed_map_fingerprint: computeArmedMapFingerprint().fingerprint,
-        // The row count is null exactly when v2 reads UNREADABLE: no count is honest then.
+        // The row map and count are null exactly when v2 reads UNREADABLE.
         armed_map_fingerprint_v2: armedMapV2.hex,
-        armed_map_rows: armedMapV2.count === undefined ? null : armedMapV2.count,
+        armed_map_rows: armedMapV2.rows || null,
+        armed_map_row_count: armedMapV2.count === undefined ? null : armedMapV2.count,
         consensus_rules_digest: rules.digest,
         consensus_rules_gates_resolved: Object.keys(rules.gates).length - absent.length,
         consensus_rules_gates_absent: absent.length,
@@ -139,7 +144,51 @@ function codeIdentity(network) {
         // mismatched hashes say nothing about what to fix. It is also what makes
         // an environment-shifted digest diagnosable in one read: see the header.
         consensus_rules_gates: rules.gates,
+        gates_field: gatesField,
+        gates_field_hash: crypto.createHash('sha256').update(gatesField, 'utf8').digest('hex'),
     };
+}
+
+function selectedPinBlock(pin) {
+    const armed = pin.armed_regtest_venue;
+    const env = armed && armed.env ? armed.env : {};
+    const armedNow = Object.keys(env).length > 0
+        && Object.keys(env).every((key) => process.env[key] === String(env[key]));
+    return armedNow ? armed : pin.bare_checkout;
+}
+
+function compareIdentity(pinBlock, fresh) {
+    const results = [];
+    for (const field of Object.keys(pinBlock)) {
+        if (field === 'env') continue;
+        const before = pinBlock[field];
+        const after = fresh[field];
+        if (before && typeof before === 'object' && !Array.isArray(before)) {
+            const keys = Array.from(new Set(Object.keys(before).concat(Object.keys(after || {})))).sort();
+            for (const key of keys) {
+                results.push({ field: field + '.' + key, before: before[key], after: (after || {})[key],
+                    same: before[key] === (after || {})[key] });
+            }
+        } else {
+            results.push({ field, before, after, same: before === after });
+        }
+    }
+    return results;
+}
+
+function printable(value) {
+    return value === undefined ? '<missing>' : JSON.stringify(value);
+}
+
+function runComparison(pinPath, identity) {
+    const pin = JSON.parse(fs.readFileSync(pinPath, 'utf8'));
+    const results = compareIdentity(selectedPinBlock(pin), identity);
+    for (const result of results) {
+        if (result.same) console.log('ok ' + result.field);
+        else console.log('MISMATCH ' + result.field + ': ' + printable(result.before)
+            + ' -> ' + printable(result.after));
+    }
+    if (results.some((result) => !result.same)) process.exitCode = 1;
 }
 
 /**
@@ -213,6 +262,7 @@ function parseArgs(argv) {
         else if (argv[i] === '--db') { opts.db = argv[i + 1]; i += 1; }
         else if (argv[i] === '--at-block') { opts.atBlock = Number(argv[i + 1]); opts.stateHash = true; i += 1; }
         else if (argv[i] === '--assert-no-absent') opts.assertNoAbsent = true;
+        else if (argv[i] === '--compare') { opts.compare = path.resolve(argv[i + 1]); i += 1; }
         else if (argv[i] === '--help' || argv[i] === '-h') opts.help = true;
     }
     return opts;
@@ -220,12 +270,13 @@ function parseArgs(argv) {
 
 async function main() {
     const opts = parseArgs(process.argv.slice(2));
-    if (opts.help) {
-        console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]);
-        return;
-    }
+    if (opts.help) { console.log(fs.readFileSync(__filename, 'utf8').split('*/')[0]); return; }
 
     const identity = codeIdentity(opts.network);
+    if (opts.compare) {
+        runComparison(opts.compare, identity);
+        return;
+    }
     // Absent rather than null when the read was not asked for, so a pin can
     // never be mistaken for a tip that read back empty.
     if (opts.stateHash) identity.tip = await readStateHash(opts);
@@ -252,8 +303,10 @@ async function main() {
     }
     console.log(`armed_map_fingerprint:         ${identity.armed_map_fingerprint}`);
     console.log(`armed_map_fingerprint_v2:      ${identity.armed_map_fingerprint_v2}`);
-    console.log(`armed_map_rows:                ${identity.armed_map_rows}`);
+    console.log(`armed_map_row_count:           ${identity.armed_map_row_count}`);
     console.log(`consensus_rules_digest:        ${identity.consensus_rules_digest}`);
+    console.log(`gates_field:                   ${identity.gates_field}`);
+    console.log(`gates_field_hash:              ${identity.gates_field_hash}`);
     console.log(`  shared gates:                ${identity.consensus_rules_gates_resolved} resolved, `
                 + `${identity.consensus_rules_gates_absent} absent`);
     // Named, not just counted: an absent gate is a legitimate reading of a build that
@@ -281,4 +334,11 @@ if (require.main === module) {
     });
 }
 
-module.exports = { codeIdentity, readStateHash, canonicalJson, REPO_ROOT };
+module.exports = {
+    codeIdentity,
+    readStateHash,
+    canonicalJson,
+    compareIdentity,
+    selectedPinBlock,
+    REPO_ROOT,
+};

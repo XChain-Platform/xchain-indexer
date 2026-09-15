@@ -41,10 +41,19 @@
 
 const { canonicalValue } = require('./canonical.js');
 
-// [stem, loader, exports]. The loader holds a literal relative require so a
-// move is repointed here like at any other requirer, and so nothing loads
-// until collectRows() runs: a carrier that fails to load must become a
-// reason, not a throw out of whatever required this manifest.
+// Read the bundled VM once at manifest load, but defer a load failure until its
+// mirror rows resolve so collectRows() can return the standard poisoned shape.
+let VM_MODULE;
+let VM_LOAD_ERROR;
+try {
+    VM_MODULE = require('xchain-vm');
+} catch (e) {
+    VM_LOAD_ERROR = e;
+}
+
+// [stem, loader, exports]. Each ordinary carrier stays unloaded until
+// collectRows() runs. The VM is the exception above because its module must be
+// read once per manifest load, with any failure still becoming a row reason.
 const MODULES = [
     ['amount_representability_activation', () => require('../../amount_representability_activation.js'),
         ['AMOUNT_REPRESENTABILITY_ACTIVATION', 'AMOUNT_MAX_INTEGER_DIGITS']],
@@ -232,6 +241,20 @@ const PROTOCOL_CHANGE_NAMES = [
     'CONTRACT_META_REQUIRED'
 ];
 
+const VM_EXPORT_NAMES = [
+    'PKG3_SANDBOX_ACTIVATION',
+    'EXEC_LINT_ACTIVATION',
+    'LINT_GLOBAL_ALIAS_ACTIVATION',
+    'BINARY_ALLOC_GATE_BLOCK_TIME',
+    'ASYNC_SURFACE_GATE_BLOCK_TIME',
+    'STATE_KEY_NUL_GATE_BLOCK_TIME',
+    'METERING_EVAL_ORDER_GATE_BLOCK_TIME',
+    'CALL_SPREAD_METER_GATE_BLOCK_TIME',
+    'REST_PATTERN_METER_GATE_BLOCK_TIME',
+    'STATE_KEY_TYPE_GATE_BLOCK_TIME',
+    'VM_LINT_HARDENING_GATE_BLOCK_TIME',
+];
+
 // Built once per process. The stub is the smallest indexer the constructor
 // accepts: the table is a set of literal addChange() calls that read neither
 // config nor util, which test/unit/consensus/armed_map/manifest.test.js proves
@@ -254,6 +277,11 @@ function ownValue(holder, name, where) {
     return holder[name];
 }
 
+function vmValue(name) {
+    if (VM_LOAD_ERROR) throw VM_LOAD_ERROR;
+    return ownValue(VM_MODULE, name, 'xchain-vm');
+}
+
 function buildEntries() {
     const entries = [];
     for (const [stem, load, names] of MODULES) {
@@ -264,6 +292,11 @@ function buildEntries() {
     for (const name of PROTOCOL_CHANGE_NAMES) {
         entries.push(['protocol_changes.changes.' + name,
             () => ownValue(protocolChangesTable(), name, 'protocol_changes.changes')]);
+    }
+    // Mirror the VM-resolved values because the VM enforces them inside this
+    // process independently of the indexer's local activation twins.
+    for (const name of VM_EXPORT_NAMES) {
+        entries.push(['xchain-vm.' + name, () => vmValue(name)]);
     }
     return entries;
 }
@@ -290,4 +323,4 @@ function collectRows() {
     return { ok: true, rows };
 }
 
-module.exports = { ENTRIES, MODULES, PROTOCOL_CHANGE_NAMES, collectRows };
+module.exports = { ENTRIES, MODULES, PROTOCOL_CHANGE_NAMES, VM_EXPORT_NAMES, collectRows };

@@ -142,6 +142,18 @@ describe('armed_map/manifest: collectRows', function () {
         assert.ok(keys.includes('protocol/constants.XBRIDGE_MAX_PER_BLOCK'));
     });
 
+    it('appends the eleven VM mirror rows with the VM values', function () {
+        const vm = require('xchain-vm');
+        const rows = new Map(manifest.collectRows().rows);
+        assert.strictEqual(manifest.VM_EXPORT_NAMES.length, 11);
+        assert.strictEqual(manifest.ENTRIES.length, 301);
+        for (const name of manifest.VM_EXPORT_NAMES) {
+            const key = 'xchain-vm.' + name;
+            assert.ok(rows.has(key), key + ' is missing');
+            assert.deepStrictEqual(rows.get(key), vm[name], key);
+        }
+    });
+
     function withExtraEntry(entry, fn) {
         manifest.ENTRIES.push(entry);
         try { return fn(); } finally { manifest.ENTRIES.pop(); }
