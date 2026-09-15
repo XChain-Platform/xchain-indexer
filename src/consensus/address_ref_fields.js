@@ -25,13 +25,14 @@
  * or removing a field here changes which values become consensus-relevant ids,
  * so it is a wire-format-level change, never a routine edit.
  *
- * A byte-identical copy lives at xchain-sdk/src/addressRefFields.js; a
- * conformance test diffs the two. The SDK only COMPACTS the unconditional
- * single-value fields (see SDK_COMPACTABLE), a strict subset, while the indexer
- * must register ids for the FULL set (including multi-value SEND destinations
- * and type-gated LIST items). The invariant is that the SDK-compacted set stays
- * a subset of the indexer-assigned set: the SDK must never emit a ^id the
- * indexer would not recognise.
+ * BYTE-TWIN carried by two repos, xchain-indexer/src/consensus/address_ref_fields.js
+ * and xchain-sdk/src/addressRefFields.js, with a conformance test on each side that
+ * diffs the two. The SDK only COMPACTS the unconditional single-value fields (see
+ * SDK_COMPACTABLE), a strict subset, while the indexer must register ids for the
+ * FULL set (including multi-value SEND destinations and type-gated LIST items).
+ * The invariant is that the SDK-compacted set stays a subset of the
+ * indexer-assigned set: the SDK must never emit a ^id the indexer would not
+ * recognise.
  *
  * Two single-value fields are held back from compaction even though the indexer
  * assigns them ids, and for the same underlying reason: the DECODER keys work off
