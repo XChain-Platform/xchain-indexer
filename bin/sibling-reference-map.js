@@ -51,10 +51,12 @@
  *              entirely out of this one and is wired into no CI.
  *
  * AND ONE THAT IS NEVER A PATH. src/consensus_rules_digest.js loads its shared
- * gate carriers with `require('./' + mod + '.js')` over a literal list, so no
- * string names the file and a missed move reports the gate ABSENT instead of
- * throwing. Those sites are listed under `dynamicReferences` with the file list
- * they resolve to, form `computed-require`.
+ * gate carriers through `path.join(__dirname, mod + '.js')` bound to a name and
+ * required by that name, over a literal list, so no string names the file and a
+ * missed move reports the gate ABSENT instead of throwing. Those sites, in every
+ * spelling (`'./' + x`, a path.join over __dirname, or a name bound to either),
+ * are listed under `dynamicReferences` with the file list they resolve to, form
+ * `computed-require`.
  *
  * SCOPE. Sibling repos are the `xchain-*` directories beside this checkout
  * (`--siblings <dir>` overrides the search root), listed in `siblingRepos`. That
@@ -817,32 +819,158 @@ function shellReferences(text, lists) {
 }
 
 /**
- * `require('./' + mod + '.js')` over a literal list, which is how
- * src/consensus_rules_digest.js loads its seventeen shared gate carriers. No
- * string names the loaded file, so neither matcher above nor a grep can see the
+ * Requires whose target no string names, which is how src/consensus_rules_digest.js
+ * loads every shared gate carrier. Neither matcher above nor a grep can see the
  * edge, and the digest reports a gate it fails to load as ABSENT instead of
  * throwing: a move that misses one of these is silent all the way to a rules
- * mismatch on the fleet.
+ * mismatch on the fleet. So every spelling counts: `'./' + x`, a path.join or
+ * path.resolve over __dirname, a name bound to either and required later, and a
+ * require of a name bound to nothing literal, which is a site with no candidates.
+ * The variable resolves through the enclosing loop, or, for a parameter of the
+ * enclosing function, through the calls of that function.
  */
 function computedRequireSites(text, dirRel) {
     const lists = collectLoopLists(text);
+    const sites = [...concatRequires(text), ...joinRequires(text), ...boundRequires(text)];
+    return sites.sort((a, b) => a.index - b.index).map((site) => {
+        const items = site.ident ? loopVariableItems(text, lists, site.ident, site.index) : null;
+        const candidates = (items || [])
+            .map((item) => path.posix.normalize(path.posix.join(dirRel, ...site.segs, `${site.pre}${item}${site.post}`)))
+            .filter((p) => p.startsWith('src/'));
+        return {
+            index: site.index,
+            form: 'computed-require',
+            expression: site.expression.replace(/\s+/g, ' ').trim().slice(0, 120),
+            // A bare `require(name)` names its list only when a loop supplies one.
+            listVariable: site.unbound && !items ? null : site.ident,
+            listCandidates: candidates,
+        };
+    });
+}
+
+const QUOTE = '([\'"])';
+
+/**
+ * path.join or path.resolve over __dirname ending in [literal +] variable [+ literal].
+ * `o` is how many groups precede this tail in the regex it is spliced into, so the
+ * quote backreferences still point at their own opening quote once the tail sits
+ * after other groups. Groups after `o`: 1 segments, 4 prefix, 5 variable, 7 suffix.
+ */
+function joinTail(o) {
+    return 'path\\s*\\.\\s*(?:join|resolve)\\s*\\(\\s*__dirname\\s*((?:,\\s*' + QUOTE + '[^\'"]*\\' + (o + 2) + '\\s*)*),'
+        + '\\s*(?:' + QUOTE + '([^\'"]*)\\' + (o + 3) + '\\s*\\+\\s*)?([A-Za-z_$][\\w$]*)'
+        + '\\s*(?:\\+\\s*' + QUOTE + '([^\'"]*)\\' + (o + 6) + ')?\\s*\\)';
+}
+
+/** A relative literal prefix concatenated with a variable. Groups after `o`: 2 prefix, 3 variable, 5 suffix. */
+function concatTail(o) {
+    return QUOTE + '(\\.\\.?\\/[^\'"]*)\\' + (o + 1) + '\\s*\\+\\s*([A-Za-z_$][\\w$]*)'
+        + '\\s*(?:\\+\\s*' + QUOTE + '([^\'"]*)\\' + (o + 4) + ')?';
+}
+
+function literalSegments(list) {
+    return (list.match(/(['"])[^'"]*\1/g) || []).map((s) => s.slice(1, -1));
+}
+
+function concatRequires(text) {
     const out = [];
-    const re = /require\s*\(\s*(['"`])(\.\.?\/[^'"`]*)\1\s*\+\s*([A-Za-z_$][\w$]*)\s*(?:\+\s*(['"`])([^'"`]*)\4)?/g;
+    const re = new RegExp('require\\s*\\(\\s*' + concatTail(0), 'g');
     let m;
     while ((m = re.exec(text)) !== null) {
-        const items = nearestList(lists, m[3], m.index) || [];
-        const candidates = items
-            .map((item) => path.posix.normalize(path.posix.join(dirRel, `${m[2]}${item}${m[5] || ''}`)))
-            .filter((p) => p.startsWith('src/'));
-        out.push({
-            index: m.index,
-            form: 'computed-require',
-            expression: m[0].trim().slice(0, 120),
-            listVariable: m[3],
-            listCandidates: candidates,
-        });
+        out.push({ index: m.index, expression: m[0], segs: [], pre: m[2], ident: m[3], post: m[5] || '' });
     }
     return out;
+}
+
+function joinRequires(text) {
+    const out = [];
+    const re = new RegExp('require\\s*\\(\\s*' + joinTail(0) + '\\s*\\)', 'g');
+    let m;
+    while ((m = re.exec(text)) !== null) {
+        out.push({ index: m.index, expression: m[0], segs: literalSegments(m[1]), pre: m[4] || '', ident: m[5], post: m[7] || '' });
+    }
+    return out;
+}
+
+/**
+ * `require(name)`, resolved through the nearest binding of `name` above it. A
+ * binding to a plain string or an all-literal join names its file outright and
+ * is no site; a name with no binding at all is a site the loop around it may
+ * still resolve, as the db mixin loop does with its literal file list.
+ */
+function boundRequires(text) {
+    const bindings = [];
+    // Group 1 is the bound name; the join tail then holds groups 2 to 8 and the
+    // concatenation groups 9 to 13.
+    const bind = new RegExp('(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*(?:' + joinTail(1) + '|' + concatTail(8) + ')', 'g');
+    let m;
+    while ((m = bind.exec(text)) !== null) {
+        const join = m[6] !== undefined;
+        bindings.push({
+            name: m[1], index: m.index, expression: m[0],
+            segs: join ? literalSegments(m[2]) : [], pre: join ? (m[5] || '') : m[10],
+            ident: join ? m[6] : m[11], post: join ? (m[8] || '') : (m[13] || ''),
+        });
+    }
+    const literal = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:(['"`])[^'"`]*\2|path\s*\.\s*(?:join|resolve)\s*\(\s*__dirname(?:\s*,\s*(['"])[^'"]*\3)*\s*\))\s*[;,\n]/g;
+    while ((m = literal.exec(text)) !== null) bindings.push({ name: m[1], index: m.index, literal: true });
+    const out = [];
+    const use = /\brequire\s*\(\s*([A-Za-z_$][\w$]*)\s*\)/g;
+    while ((m = use.exec(text)) !== null) {
+        const b = nearestBinding(bindings, m[1], m.index);
+        if (b && b.literal) continue;
+        if (b) out.push({ index: m.index, expression: `${b.expression.trim()} ... ${m[0]}`, segs: b.segs, pre: b.pre, ident: b.ident, post: b.post });
+        else out.push({ index: m.index, expression: m[0], segs: [], pre: '', ident: m[1], post: '', unbound: true });
+    }
+    return out;
+}
+
+function nearestBinding(bindings, name, index) {
+    let best = null;
+    for (const b of bindings) if (b.name === name && b.index < index && (!best || b.index > best.index)) best = b;
+    return best;
+}
+
+/**
+ * The list a variable ranges over: an enclosing loop, else (for a parameter of
+ * the enclosing function) every call of that function, a literal argument being
+ * its own item and a variable resolving through the loop around the call.
+ */
+function loopVariableItems(text, lists, ident, index) {
+    const direct = nearestList(lists, ident, index);
+    if (direct) return direct;
+    const fn = enclosingFunction(text, ident, index);
+    if (!fn) return null;
+    const items = [];
+    const call = new RegExp(String.raw`\b${fn.name}\s*\(\s*(?:(['"])([^'"]*)\1|([A-Za-z_$][\w$]*))\s*[,)]`, 'g');
+    let m;
+    while ((m = call.exec(text)) !== null) {
+        if (m.index === fn.index) continue;
+        if (m[2] !== undefined) items.push(m[2]);
+        else items.push(...(nearestList(lists, m[3], m.index) || []));
+    }
+    return items.length ? [...new Set(items)] : null;
+}
+
+const NOT_A_FUNCTION = new Set(['if', 'for', 'while', 'switch', 'catch', 'function', 'return', 'with']);
+
+/** The innermost named function or method whose body holds `index` and whose parameters include `ident`. */
+function enclosingFunction(text, ident, index) {
+    const header = /(?:\bfunction\s+([A-Za-z_$][\w$]*)|(?:^|[\n;{}])[ \t]*(?:async\s+)?([A-Za-z_$][\w$]*))\s*\(([^()]*)\)\s*\{/g;
+    let best = null;
+    let m;
+    while ((m = header.exec(text)) !== null) {
+        const name = m[1] || m[2];
+        if (!name || NOT_A_FUNCTION.has(name)) continue;
+        const params = m[3].split(',').map((p) => p.replace(/=.*$/s, '').trim());
+        if (!params.includes(ident)) continue;
+        const brace = header.lastIndex - 1;
+        const body = bodySlice(text, brace, 200000);
+        if (index <= brace || index >= brace + body.length) continue;
+        const at = m.index + m[0].indexOf(name);
+        if (!best || brace > best.brace) best = { name, index: at, brace };
+    }
+    return best;
 }
 
 /**

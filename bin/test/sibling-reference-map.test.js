@@ -406,6 +406,80 @@ describe('bin/sibling-reference-map.js: the computed require', () => {
         assert.deepStrictEqual(refs.computedRequireSites(src, 'src/db')[0].listCandidates,
             ['src/db/sends.js', 'src/db/stakes.js']);
     });
+
+    it('sees a require of path.join over __dirname, resolved through the calls of its function', () => {
+        const src = [
+            "const path = require('path');",
+            'function loadActivation(moduleName, predicate){',
+            "    try { return require(path.join(__dirname, '..', moduleName + '.js'))[predicate]; } catch (e) { return null; }",
+            '}',
+            "const gates = { bridge: loadActivation('xchain_bridge_activation', 'isOn'), token: loadActivation('token_bridge_activation', 'isOn') };",
+        ].join('\n');
+        const sites = refs.computedRequireSites(src, 'src/cross_chain');
+        assert.strictEqual(sites.length, 1, 'the inline join is one site');
+        assert.strictEqual(sites[0].listVariable, 'moduleName');
+        assert.deepStrictEqual(sites[0].listCandidates, ['src/xchain_bridge_activation.js', 'src/token_bridge_activation.js'],
+            'each literal call argument is an item, and the join walks out of the subdirectory');
+    });
+
+    it('follows a name bound to path.join into the require that loads it, through the loop that calls its function', () => {
+        const src = [
+            "const GATES = [['rollcall_activation', ['A']], ['xcall_activation', ['B']]];",
+            'function loadGateModule(mod){',
+            "    const file = path.join(__dirname, mod + '.js');",
+            '    return require(file);',
+            '}',
+            'function loadAll(){ for (const [mod, names] of GATES) { loadGateModule(mod); } }',
+        ].join('\n');
+        const sites = refs.computedRequireSites(src, 'src');
+        assert.strictEqual(sites.length, 1, 'the bound name and its require are one site');
+        assert.strictEqual(sites[0].listVariable, 'mod');
+        assert.deepStrictEqual(sites[0].listCandidates, ['src/rollcall_activation.js', 'src/xcall_activation.js'],
+            'the carrier list reaches the site through the loop around the call');
+    });
+
+    it('still sees the concatenated form inside its loop', () => {
+        const src = "for (const mod of ['a_activation', 'b_activation']) { m = require('./' + mod + '.js'); }";
+        const sites = refs.computedRequireSites(src, 'src');
+        assert.strictEqual(sites.length, 1);
+        assert.deepStrictEqual(sites[0].listCandidates, ['src/a_activation.js', 'src/b_activation.js']);
+    });
+
+    it('reports a require of an unbound name as a site with no candidates, and a literal binding as none', () => {
+        const sites = refs.computedRequireSites('function load(modulePath){ return require(modulePath); }', 'src/lib');
+        assert.strictEqual(sites.length, 1, 'the hazard is reported even when nothing names the module');
+        assert.strictEqual(sites[0].listVariable, null);
+        assert.deepStrictEqual(sites[0].listCandidates, []);
+        const literal = "const file = path.join(__dirname, 'x.js');\nconst other = './y.js';\nrequire(file); require(other); require('./z.js');";
+        assert.strictEqual(refs.computedRequireSites(literal, 'src').length, 0,
+            'a name bound to a string or an all-literal join names its file, which the text matcher owns');
+    });
+
+    it('resolves a bare require of a loop variable through the literal list the loop names', () => {
+        const src = "const MIXINS = ['./sends.js', './stakes.js'];\nfor(const file of MIXINS) install(require(file));";
+        const sites = refs.computedRequireSites(src, 'src/db');
+        assert.strictEqual(sites.length, 1);
+        assert.strictEqual(sites[0].listVariable, 'file');
+        assert.deepStrictEqual(sites[0].listCandidates, ['src/db/sends.js', 'src/db/stakes.js']);
+    });
+
+    it('sees every gate carrier the rules digest loads in this tree, in its current spelling', () => {
+        const src = path.resolve(__dirname, '../../src');
+        const digestText = fs.readFileSync(path.join(src, 'consensus_rules_digest.js'), 'utf8');
+        // The carriers the digest names, read from its own table rather than from
+        // the detector, so the assertion is against what the file says it loads. A
+        // module carrying several gates has several rows and is one file.
+        const named = [...new Set(refs.arrayLiteralItems(digestText, 'SHARED_GATES', 0))];
+        assert.ok(named.length >= 15, `the digest names its shared gate carriers, saw ${named.length}`);
+        const sites = refs.computedRequireSites(digestText, 'src');
+        assert.strictEqual(sites.length, 1, 'one site loads every shared gate carrier');
+        assert.deepStrictEqual(sites[0].listCandidates.slice().sort(), named.map((mod) => `src/${mod}.js`).sort(),
+            'the candidate list is exactly the carriers the digest table names');
+        const mixins = refs.computedRequireSites(fs.readFileSync(path.join(src, 'db', 'index.js'), 'utf8'), 'src/db');
+        assert.strictEqual(mixins.length, 1, 'the db mixin loop is one site');
+        assert.ok(mixins[0].listCandidates.length >= 30 && mixins[0].listCandidates.every((p) => p.startsWith('src/db/')),
+            `the mixin list resolves to files under src/db, saw ${mixins[0].listCandidates.length}`);
+    });
 });
 
 describe('bin/sibling-reference-map.js: the idioms in the real tree', function () {
