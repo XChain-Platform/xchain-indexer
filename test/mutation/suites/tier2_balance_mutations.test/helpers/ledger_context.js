@@ -59,11 +59,19 @@ function createLedgerTestContext() {
     const util = new Utility();
     const queries = [];
 
+    // createLedgerChangeRecord quantizes the amount before the upsert, reading the
+    // tick's decimals and the block it writes at (ledger_amount_precision_activation).
+    // The mock stands at block 0 on the regtest config getTestConfig() sets, where the
+    // exact-ledger rule is armed, so the stored amount is the 18 dp exact figure the
+    // real indexer writes; a context without these two members throws before the
+    // whitelist or the INSERT is ever reached and every case reads as a false red.
     const ctx = {
         config,
         util,
+        blockIndex: 0,
         createTicker: sinon.stub().resolves(1),
         createAddress: sinon.stub().resolves(1),
+        getTokenDecimalPrecision: sinon.stub().resolves(8),
         doQuery: sinon.stub().callsFake(async (query, args) => {
             queries.push({ query, args: [...args] });
             if (query.trim().startsWith('SELECT')) return []; // No existing record
