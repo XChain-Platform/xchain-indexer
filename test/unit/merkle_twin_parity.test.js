@@ -42,8 +42,8 @@ const crypto = require('crypto');
 const { siblingCheckout, skipOrFail, siblingsRequired } = require('../helpers/sibling_checkout.js');
 
 // Each carrier names its OWN src-relative path, because the feature directories are
-// an xchain-indexer layout: the canonical sits under consensus/ here while the three
-// vendored copies stay flat. One shared path would silently drop the canonical out of
+// an xchain-indexer layout: the canonical sits under consensus/ here while the sync and
+// sdk copies stay flat. One shared path would silently drop the canonical out of
 // the comparison, leaving the three siblings agreeing with each other while the file
 // this repo actually commits roots with went unchecked.
 //
@@ -52,7 +52,8 @@ const { siblingCheckout, skipOrFail, siblingsRequired } = require('../helpers/si
 // worktree or a renamed clone would fail to resolve the canonical it exists to protect. It is
 // pinned separately as OWN_COPY, read straight out of this checkout.
 const SIBLING_CARRIERS = [
-    ['xchain-explorer', 'merkle.js'],
+    // The explorer copy sits under consensus/ or flat at src/; carrierPath picks the one on disk.
+    ['xchain-explorer', ['consensus/merkle.js', 'merkle.js']],
     ['xchain-sync',     'merkle.js'],
     ['xchain-sdk',      'merkle.js'],
 ];
@@ -62,6 +63,21 @@ const SIBLING_CARRIERS = [
 // whether a SIBLING entry beside this checkout may be trusted, and the own copy is not a
 // sibling, it lives inside this checkout, so that question does not apply to it.
 const OWN_COPY = path.resolve(__dirname, '..', '..', 'src', 'consensus', 'merkle.js');
+
+// Resolves a spelling list to its first path on disk. A present checkout holding none fails
+// naming every spelling, since a missing copy would drop out of the comparison unseen; an
+// absent checkout returns the first spelling, which the loop drops like any absent sibling.
+function carrierPath(root, repo, spellings) {
+    if (!Array.isArray(spellings)) return spellings;
+    const hit = spellings.find((rel) => fs.existsSync(path.join(root, repo, 'src', rel)));
+    if (hit) return hit;
+    const checkout = path.join(root, repo);
+    assert.ok(!fs.existsSync(checkout),
+        repo + ' is checked out at ' + checkout + ' but carries merkle.js at neither '
+        + spellings.map((rel) => repo + '/src/' + rel).join(' nor ')
+        + '; repoint its SIBLING_CARRIERS entry at the current path');
+    return spellings[0];
+}
 
 function sha256File(p) {
     return crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
@@ -91,7 +107,8 @@ describe('src/consensus/merkle.js is byte-identical across its four carriers', f
         assert.ok(fs.existsSync(OWN_COPY),
             'the canonical copy did not resolve at ' + OWN_COPY + '; repoint OWN_COPY at its current path');
         found.push(['xchain-indexer/src/consensus/merkle.js', sha256File(OWN_COPY)]);
-        for (const [repo, rel] of SIBLING_CARRIERS) {
+        for (const [repo, spellings] of SIBLING_CARRIERS) {
+            const rel = carrierPath(root, repo, spellings);
             const p = path.join(root, repo, 'src', rel);
             const verdict = siblingCheckout(__dirname, p);
             if (verdict.usable) found.push([repo + '/src/' + rel, sha256File(p)]);
