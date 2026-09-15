@@ -292,6 +292,7 @@
     ],
     "test/unit/actions/price_zero_validity.test.js": [
       "test/unit/actions/price_zero_validity.test.js",
+      "test/unit/actions/price_zero_validity.test/agreement_with_hub_bound.test.js",
       "test/unit/actions/price_zero_validity.test/batch_parser_gate.test.js"
     ],
     "test/unit/actions/send.test.js": [
@@ -648,6 +649,10 @@
     "test/unit/xchain_price_query.test.js": [
       "test/unit/xchain_price_query.test.js",
       "test/unit/xchain_price_query.test/xchain_price_derivation_fill_selection.test.js"
+    ],
+    "test/unit/flagday_placeholder_guard.test.js": [
+      "test/unit/flagday_placeholder_guard.test.js",
+      "test/unit/flagday_placeholder_guard.test/sibling_named_exports.test.js"
     ]
   },
   "titleDeltas": []
