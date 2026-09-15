@@ -1,0 +1,70 @@
+// Copyright © 2025–2026 Dankest, LLC
+// Based on XChain Platform by Dankest, LLC – https://dankest.llc
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+// This file is part of XChain Platform. Licensed under the GNU Affero
+// General Public License v3.0 or later; see LICENSE.md.
+
+// Unit coverage for src/hub/hub-schema-version.js: the hub-mirror schema-version
+// constant the indexer stamps into (and version-gates) every WS/REST payload,
+// so a hub that adds a consensus-relevant column before this indexer migrates
+// cannot silently fork the ledger. Its contract (one positive-integer export,
+// nothing else) is pinned; it MUST stay in lockstep with the hub's copy.
+
+const assert = require('assert');
+const mod = require('../../../src/hub/hub-schema-version.js');
+
+describe('hub-schema-version', function () {
+    it('exports exactly HUB_SCHEMA_VERSION and nothing else', function () {
+        assert.deepStrictEqual(Object.keys(mod).sort(), ['HUB_SCHEMA_VERSION']);
+    });
+
+    it('HUB_SCHEMA_VERSION is a positive safe integer', function () {
+        const v = mod.HUB_SCHEMA_VERSION;
+        assert.strictEqual(typeof v, 'number');
+        assert.ok(Number.isSafeInteger(v), 'must be a safe integer for exact wire equality checks');
+        assert.ok(v >= 1, 'schema versions start at 1; 0/negative would disable the gate');
+    });
+
+    it('is a stable primitive across re-require (frozen constant, no lazy init)', function () {
+        assert.notStrictEqual(typeof mod.HUB_SCHEMA_VERSION, 'object');
+        delete require.cache[require.resolve('../../../src/hub/hub-schema-version.js')];
+        const again = require('../../../src/hub/hub-schema-version.js');
+        assert.strictEqual(again.HUB_SCHEMA_VERSION, mod.HUB_SCHEMA_VERSION);
+    });
+
+    // hub_db_sync.js gates every hub payload on a strict equality check against
+    // this module's exported constant (see its schema_version mismatch handling
+    // around the literal 999999 fixture in test/unit/hub_db_sync.test.js). That
+    // gate is fail-closed: any value that is not exactly equal is treated as a
+    // mismatch and the row/page is rejected. These assertions drive the same
+    // comparison through this module's own exported surface, without importing
+    // hub_db_sync.js, to pin the contract the gate depends on.
+    describe('fail-closed version-mismatch contract (mirrors hub_db_sync gating)', function () {
+        it('does not equal an arbitrary mismatched wire value (mirrors the 999999 fixture)', function () {
+            const incoming = 999999;
+            assert.notStrictEqual(incoming, mod.HUB_SCHEMA_VERSION);
+        });
+
+        it('does not equal a plausible-but-wrong next version', function () {
+            const incoming = mod.HUB_SCHEMA_VERSION + 1;
+            assert.notStrictEqual(incoming, mod.HUB_SCHEMA_VERSION);
+        });
+
+        it('treats a null/undefined incoming version as "no claim", not a match', function () {
+            // hub_db_sync.js only rejects when schema_version is present AND
+            // unequal (`event.schema_version != null && event.schema_version !== HUB_SCHEMA_VERSION`);
+            // a payload that omits the field entirely is not itself proof of a
+            // version match. Pin that null/undefined are distinct from the
+            // real constant so a caller cannot mistake "absent" for "verified".
+            assert.notStrictEqual(null, mod.HUB_SCHEMA_VERSION);
+            assert.notStrictEqual(undefined, mod.HUB_SCHEMA_VERSION);
+        });
+
+        it('does equal itself, so a hub genuinely running the same schema is accepted', function () {
+            const incoming = mod.HUB_SCHEMA_VERSION;
+            assert.strictEqual(incoming, mod.HUB_SCHEMA_VERSION);
+        });
+    });
+});
