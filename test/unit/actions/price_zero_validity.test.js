@@ -47,6 +47,7 @@ const path   = require('path');
 const priceRange = require('../../../src/price_zero_validity_activation.js');
 // Decides whether the hub aggregator source may be trusted before the drift alarm reads it.
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
+const { readSiblingModuleSource } = require('../../helpers/sibling_module_source.js');
 
 const {
     HUB_PRICE_MAX, hubAdmits, RANGE_CASES, TESTNET_GATE, usePriceRangeHarness,
@@ -147,7 +148,11 @@ describe('PRICE price-range flag day @regression @tier3', function () {
             // A lane symlink into a live main checkout is refused like an absent hub.
             const hubCheckout = siblingCheckout(__dirname, hubSrc);
             if(!hubCheckout.usable) return skipOrFail(this, hubCheckout, 'the hub price_aggregator drift alarm');
-            const text = fs.readFileSync(hubSrc, 'utf8');
+            // The aggregator's two v0 ingest sites live in its part files
+            // (price_aggregator/round_validation.js and batch_validation.js) while the
+            // entry keeps the path this alarm names, so the module is read whole. Reading
+            // the entry alone counts zero sites and reads as hub drift the hub never had.
+            const text = readSiblingModuleSource(hubSrc);
             const lower = /!\(parseFloat\(String\(p\.price\)\) > 0\)/g;
             const upper = /!\(parseFloat\(String\(p\.price\)\) < PRICE_MAX\)/g;
             assert.strictEqual((text.match(lower) || []).length, 2,

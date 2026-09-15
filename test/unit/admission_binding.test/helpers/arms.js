@@ -54,18 +54,34 @@ const HUB_MODULES = [
     '../../../../../xchain-hub/src/cross_chain/bridge_engine.js',
     '../../../../../xchain-hub/src/attestation/consensus.js'
 ];
-// src/db/index.js assembles the Database class from parts that capture the activation twin
-// at their own load (database/mirror_reads.js among them), so the whole src/db tree is purged
-// by prefix rather than listed file by file.
-const SRC_DB_DIR = path.resolve(__dirname, '../../../../src/db') + path.sep;
-const underSrcDb = p => p.startsWith(SRC_DB_DIR);
+// A listed module is only its ENTRY. Both services assemble a long module from part files
+// beside it, under a directory spelled exactly as the entry (src/db/database/*.js here,
+// xchain-hub/src/attestation/consensus/canonical.js and lib/admission_height/read_sets.js
+// there), and a part captures the activation twin at its OWN load. Purging the entry alone
+// re-requires a shell whose parts still hold the previous arm, which is how an armed case
+// came back refusing an admission-era canonical the hub was armed for. So every listed
+// module's part tree is purged by prefix, the entry's own directory when the entry is an
+// index.js and the same-stem directory otherwise. An unsplit module has no such directory
+// and contributes nothing.
+function partTreeOf(resolved) {
+    const dir = path.basename(resolved) === 'index.js'
+        ? path.dirname(resolved)
+        : resolved.replace(/\.js$/, '');
+    return dir === resolved ? null : dir + path.sep;
+}
+function purgedTrees(listed) {
+    return listed.map(partTreeOf).filter(Boolean);
+}
+const underPartTree = (p, trees) => trees.some(t => p.startsWith(t));
 
 // Purge, arm (or disarm), re-require, and hand back everything a case needs plus the
 // restore that puts the process back exactly as it was.
 function load(activation) {
     const listed = LOCAL_MODULES.map(m => require.resolve(m))
         .concat(HAVE_HUB ? HUB_MODULES.map(m => require.resolve(m)) : []);
-    const paths = listed.concat(Object.keys(require.cache).filter(p => underSrcDb(p) && !listed.includes(p)));
+    const trees = purgedTrees(listed);
+    const paths = listed.concat(
+        Object.keys(require.cache).filter(p => underPartTree(p, trees) && !listed.includes(p)));
     const saved    = paths.map(p => [p, require.cache[p]]);
     const savedEnv = process.env.XC_MIRROR_ADMISSION_ACTIVATION;
     for (const p of paths) delete require.cache[p];
@@ -96,8 +112,9 @@ function load(activation) {
         };
     }
     h.restore = function () {
-        // Drop what the armed load cached under src/db too, so the tree is exactly as found.
-        for (const p of Object.keys(require.cache)) if (underSrcDb(p)) delete require.cache[p];
+        // Drop what the armed load cached under every purged part tree too, so the tree is
+        // exactly as found.
+        for (const p of Object.keys(require.cache)) if (underPartTree(p, trees)) delete require.cache[p];
         for (const [p, mod] of saved) {
             if (mod === undefined) delete require.cache[p]; else require.cache[p] = mod;
         }

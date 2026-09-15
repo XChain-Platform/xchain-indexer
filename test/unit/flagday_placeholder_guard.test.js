@@ -60,6 +60,8 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 const { siblingCheckout, skipOrFail } = require('../helpers/sibling_checkout.js');
+const { readSiblingModuleSource } = require('../helpers/sibling_module_source.js');
+
 
 const SRC = path.join(__dirname, '..', '..', 'src');
 
@@ -323,9 +325,13 @@ describe('flag-day placeholder guard @regression @tier1', function () {
             const p = path.resolve(__dirname, '../../../xchain-hub/src/validators/governance.js');
             const sibling = siblingCheckout(__dirname, p);
             if (!sibling.usable) return skipOrFail(this, sibling, 'the GOV_SNAPSHOT_ACTIVATION hub pin');
-            const m = fs.readFileSync(p, 'utf8')
+            // The entry keeps the require path while the hub moves method bodies into
+            // same-stem part files beside it, so a declaration that is file-local to the
+            // module can sit in either. Read the module whole (entry plus parts) or a
+            // split that never touched the value reads as a missing declaration.
+            const m = readSiblingModuleSource(p)
                 .match(/const\s+GOV_SNAPSHOT_ACTIVATION\s*=\s*\{\s*mainnet:\s*(\d+)\s*,\s*testnet:\s*(\d+)\s*,\s*regtest:\s*(\d+)\s*\}/);
-            assert.ok(m, 'GOV_SNAPSHOT_ACTIVATION declaration not found in validators/governance.js (renamed or reshaped?)');
+            assert.ok(m, 'GOV_SNAPSHOT_ACTIVATION declaration not found in validators/governance.js or its part files (renamed or reshaped?)');
             assert.strictEqual(parseInt(m[1]), RATIFIED_BTC_HEIGHT,
                 'GOV_SNAPSHOT_ACTIVATION.mainnet is ' + m[1] + ', not the cohort height ' + RATIFIED_BTC_HEIGHT);
             assert.strictEqual(parseInt(m[2]), 0, 'GOV_SNAPSHOT_ACTIVATION.testnet must be genesis-active');
