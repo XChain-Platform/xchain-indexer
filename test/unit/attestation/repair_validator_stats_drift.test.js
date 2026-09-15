@@ -35,7 +35,9 @@ const fs     = require('fs');
 const path   = require('path');
 
 const REPAIR_FILE   = path.join(__dirname, '..', '..', '..', 'scripts', 'repair-validator-stats.js');
-const ROLLBACK_FILE = path.join(__dirname, '..', '..', '..', 'src', 'rollback', 'index.js');
+// The recompute's statements, read as their own file: the extractor below takes the FIRST
+// 'expiredReqs' in the text, and in the module as a whole that name first appears in a part.
+const ROLLBACK_FILE = path.join(__dirname, '..', '..', '..', 'src', 'db', 'rollback', 'attestation_stats.js');
 let repairSrc, rollbackSrc;
 
 function loadSources(){
