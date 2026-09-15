@@ -219,7 +219,7 @@ describe('armed_map/fingerprint_v2: temp-tree falsification of armed values (des
 });
 
 const GUARD = 'test/unit/consensus/armed_map/manifest.test.js';
-const V1_TEST = 'test/unit/armed_map_fingerprint.test.js';
+const V1_TEST = 'test/unit/consensus/armed_map/armed_map_fingerprint.test.js';
 
 // The completeness guard suite, run by mocha against the temp tree at dir.
 function runGuard(dir) {

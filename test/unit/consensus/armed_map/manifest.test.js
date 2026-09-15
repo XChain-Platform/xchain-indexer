@@ -65,7 +65,7 @@ function scanDeclarations() {
 describe('armed_map/manifest: completeness guard', function () {
 
     it('keeps the carrier declaration scan identical to the one v1 enforces', function () {
-        const v1 = fs.readFileSync(path.join(REPO, 'test', 'unit', 'armed_map_fingerprint.test.js'), 'utf8');
+        const v1 = fs.readFileSync(path.join(REPO, 'test', 'unit', 'consensus', 'armed_map', 'armed_map_fingerprint.test.js'), 'utf8');
         const m = v1.match(/const CARRIER_DECL = \/(.+)\/m;/);
         assert.ok(m, 'v1 carrier scan not found; re-cite CARRIER_DECL here');
         assert.strictEqual(CARRIER_DECL.source.replace('([A-Z0-9_]*ACTIVATIONS?[A-Z0-9_]*)',
