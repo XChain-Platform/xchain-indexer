@@ -111,7 +111,7 @@ describe('stateCommitment: batched SMT node writes @regression', function(){
 
 describe('stateCommitment: batched SMT node writes @regression', function(){
     it('the batch is flushed before update() returns, so the next descend sees it', async function(){
-        // buildFull threads the returned root into the next update()'s _descend,
+        // buildFull threads the returned root into the next update()'s descend,
         // which READS the store. Deferring the flush past the return would make
         // shared-prefix keys descend a tree missing its own nodes and silently
         // emit a truncated root.

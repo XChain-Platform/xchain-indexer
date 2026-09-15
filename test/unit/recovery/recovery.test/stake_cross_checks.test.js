@@ -123,7 +123,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         // Two properties in one, both false-reject guards:
         //  - threshold '0', because slashCapabilityStake rewrites stakes.amount in place, so a
         //    MIN_STAKE-thresholded existence resolution would deny a source slashed AFTER the block;
-        //  - getValidatorsByCapability, NOT getStakeWeightsByCapability: _cappedStakeWeightsSql
+        //  - getValidatorsByCapability, NOT getStakeWeightsByCapability: cappedStakeWeightsSql
         //    drops a source's keys past STAKE_WEIGHT_MAX_KEYS_PER_SOURCE (64) and by design does
         //    NOT set truncated, so the weight resolver cannot answer a per-KEY existence question.
         let { v1 } = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys);

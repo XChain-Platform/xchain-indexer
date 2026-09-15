@@ -41,7 +41,7 @@ module.exports = {
     // effective keys, each carrying the source address + the source's aggregate
     // weight, so Σ weight over DISTINCT sources = S. Used by xchain-hub's Consensus
     // when weighting governance/config quorum by stake. CONSENSUS-CRITICAL: shares
-    // the DELEGATE-additive _stakeWeightsSql with getStakeWeightsByCapability, so it
+    // the DELEGATE-additive stakeWeightsSql with getStakeWeightsByCapability, so it
     // resolves identically on every hub (a divergence forks config consensus).
     async getActiveStakeWeights(blockIndex){
         let valid_id = await this.getStatusId('valid');
@@ -96,14 +96,14 @@ module.exports = {
 
     // Run the source-keyed stake-weight query under the cap regime in force for this
     // chain at `blockIndex`, returning { rows:[{pubkey,source,weight}], truncated }.
-    //   at/after SWQ_SOURCE_CAP_ACTIVATION -> windowed source-cap (_cappedStakeWeightsSql):
+    //   at/after SWQ_SOURCE_CAP_ACTIVATION -> windowed source-cap (cappedStakeWeightsSql):
     //       truncated ONLY when a genuinely >maxSources federation is seen; a
     //       key-spamming source is bounded (maxKeys) without truncating.
     //   below it -> legacy uncapped key-row LIMIT: truncated at >= VALIDATOR_QUERY_LIMIT.
-    // The gate (network/coin/blockIndex) + caps + _cappedStakeWeightsSql are byte-mirrored
+    // The gate (network/coin/blockIndex) + caps + cappedStakeWeightsSql are byte-mirrored
     // in xchain-sync so the stakes_root set is identical on both sides of the height.
     async stakeWeightsWithCap(valid_id, blockIndex, minStake, label){
-        let sw = this._stakeWeightsSql(valid_id, blockIndex, minStake);
+        let sw = this.stakeWeightsSql(valid_id, blockIndex, minStake);
         // Ordering collation for BOTH regimes (stake_weight_collation_activation.js);
         // the legacy LIMIT branch truncates on the same order the capped branch ranks on.
         let binCollation = stakeWeightCollation.isStakeWeightBinCollationActive(
@@ -112,7 +112,7 @@ module.exports = {
         if(swqCap.isSwqSourceCapActive(blockIndex, this.config['NETWORK'], this.config['COIN'])){
             let maxSources = swqCap.STAKE_WEIGHT_MAX_SOURCES;
             let maxKeys    = swqCap.STAKE_WEIGHT_MAX_KEYS_PER_SOURCE;
-            let capped = this._cappedStakeWeightsSql(sw, maxSources, maxKeys, binCollation);
+            let capped = this.cappedStakeWeightsSql(sw, maxSources, maxKeys, binCollation);
             let raw = await this.doQuery(capped.sql, capped.args);
             let truncated = raw.some(r => Number(r._sr) > maxSources);
             if(truncated)

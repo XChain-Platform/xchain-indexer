@@ -19,7 +19,7 @@
  * state_commitment_batched_node_writes.test.js): one key update writes SMT_DEPTH
  * rows, which as one statement per row was 12,544 round trips and 25-66s per
  * block on the BTC regtest venue. The READ half stayed unbatched and uncached.
- * _descend walks the key path with one dependent point SELECT per level, and a
+ * descend walks the key path with one dependent point SELECT per level, and a
  * present key's ancestors are never an empty subtree, so a descent never
  * short-circuits: SMT_DEPTH sequential reads, paid once in update() and again
  * in the prove() that assertCommittedLeaves runs back over the same keys, plus
@@ -93,7 +93,7 @@ describe('stateCommitment: cached SMT node reads @regression', function(){
     it('proving a key this instance just wrote costs ZERO store reads', async function(){
         // This is the assertCommittedLeaves shape: every ledger-moved key is
         // descended a second time via prove() against the root just committed,
-        // over nodes _putBatch wrote moments earlier.
+        // over nodes putBatch wrote moments earlier.
         const store = new ReadCountingStore();
         const smt   = new SC.PersistentSMT(store);
         const root  = await smt.update(SC.EMPTY_ROOT_HEX, keyFor(0), leafFor(0));

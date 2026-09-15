@@ -47,7 +47,7 @@ module.exports = {
         // bars it everywhere - an equivocating key has proven byzantine) and block-gated
         // (`cse.block_index <= ?`) so re-deriving a historical block before the slash is
         // byte-identical, and reorg-safe (the slash event rolls back ⇒ eligibility returns).
-        // Applied identically in _stakeWeightsSql and hasCapability so every quorum read agrees.
+        // Applied identically in stakeWeightsSql and hasCapability so every quorum read agrees.
         const slashExcl = (keyCol) =>
             `AND NOT EXISTS (SELECT 1 FROM capability_slash_events cse
                              WHERE cse.signing_pubkey_id = ${keyCol} AND cse.block_index <= ?)`;
@@ -102,7 +102,7 @@ module.exports = {
     // aggregate) }. Every key of a source carries the SAME source + weight, so a
     // source-deduped tally counts that stake once. CONSENSUS-CRITICAL - mirrors the
     // qualification/revocation/delegation semantics of effectiveCapabilitySetSql.
-    _stakeWeightsSql(valid_id, blockIndex, minStake){
+    stakeWeightsSql(valid_id, blockIndex, minStake){
         // Precision: DECIMAL(30,8) (22 integer digits, 8 fractional) is sufficient because the
         // staking tick is XCHAIN at 8 decimals and total supply stays far below 10^22; every
         // same-version node truncates identically, so the stake-weight tally is deterministic.
@@ -160,7 +160,7 @@ module.exports = {
     },
 
     // SWQ source-cap wrapper (SWQ-TRUNC-1 liveness half). Wraps an inner source-keyed
-    // stake-weight builder ({sql,args} from _stakeWeightsSql or the sync AsOf variant)
+    // stake-weight builder ({sql,args} from stakeWeightsSql or the sync AsOf variant)
     // and replaces the raw key-row LIMIT with a windowed cap on the consensus UNIT:
     // DISTINCT staking SOURCES (DENSE_RANK over source) plus a per-source key bound
     // (ROW_NUMBER per source). One source can no longer fill the window and evict
@@ -181,7 +181,7 @@ module.exports = {
     // truncate on, so the collation decides which sources and which keys survive into
     // the hashed stakes_root. Below the height the emitted SQL is byte-identical to
     // what shipped before the gate; the suffix is '' and concatenates away.
-    _cappedStakeWeightsSql(inner, maxSources, maxKeys, binCollation){
+    cappedStakeWeightsSql(inner, maxSources, maxKeys, binCollation){
         let c = stakeWeightCollation.stakeWeightCollate(binCollation);
         let sql = `SELECT r.pubkey AS pubkey, r.source AS source, r.weight AS weight, r._sr AS _sr
                    FROM (

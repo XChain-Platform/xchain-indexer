@@ -43,6 +43,13 @@ const stateHash = require('../../../src/stateHash.js');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '../../..', rel), 'utf8');
 
+// The state commitment is an entry plus a parts directory (src/stateCommitment/),
+// and the node-store SQL that names state_tree_nodes lives in the persistent_smt
+// part, so a pin on the feature reads the entry and every part as one text: the
+// entry alone would satisfy a table-name pin on its header prose.
+const readStateCommitment = () => read('src/stateCommitment.js') +
+    concatSrcTreeFiles(path.join(__dirname, '../../..', 'src', 'stateCommitment'));
+
 // The Database class is a directory of per-family mixins, so a scan over the class
 // concatenates every file in a fixed order instead of reading one path.
 const readDb = () => {
@@ -50,16 +57,21 @@ const readDb = () => {
     return concatSrcTreeFiles(dir);
 };
 
-// The consensus block-hash preimage gathering lives in db.js getBlockHashes.
-// Slice its body (start of the method to the gathered-rows stash it ends on)
-// so the FROM-table assertions below cannot accidentally match unrelated SQL
-// elsewhere in db.js.
+// The consensus block-hash preimage gathering lives in db/actions.js as one method
+// per query, declared in gathering order, and getBlockHashes composes them. Slice
+// the run of gathering methods (the first, credits, through the last hash-class
+// table, withdrawals; the previous-block-hash read that follows is not a hash
+// class) so the FROM-table assertions below cannot accidentally match unrelated
+// SQL elsewhere in the Database class.
 function blockHashBody(){
     const src   = readDb();
-    const start = src.indexOf('async getBlockHashes(');
-    const end   = src.indexOf('this._lastGatheredBlockRows', start);
-    assert.ok(start !== -1 && end > start, 'db.js getBlockHashes body not found; update this guard\'s slicing');
-    return src.slice(start, end);
+    const start = src.indexOf('async getBlockHashCreditRows(');
+    const end   = src.indexOf('async getPreviousBlockHashes(', start);
+    assert.ok(start !== -1 && end > start, 'db/actions.js gathering methods not found; update this guard\'s slicing');
+    // Code only: the FROM-table pins below must bind to the SQL, and a gather whose
+    // header comment says "data from escrows" would otherwise satisfy them with the
+    // query reading any table at all.
+    return src.slice(start, end).split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
 }
 
 describe('Hash coverage guard @regression', function () {
@@ -170,10 +182,10 @@ describe('Hash coverage guard @regression', function () {
         assert.deepStrictEqual(lifecycle.hashClassTables('state_commitment').sort(),
             ['balances', 'escrow_leaf_journal', 'stakes', 'state_tree_nodes', 'state_tree_roots'],
             'state_commitment table set changed; this is an SPV/light-client spec change');
-        const src = read('src/stateCommitment.js');
+        const src = readStateCommitment();
         for (const t of ['balances', 'state_tree_roots', 'state_tree_nodes']) {
             assert.ok(src.indexOf(t) !== -1,
-                `stateCommitment.js no longer references ${t}; the state_commitment declaration is stale`);
+                `the state commitment (entry plus parts) no longer references ${t}; the state_commitment declaration is stale`);
         }
     });
 

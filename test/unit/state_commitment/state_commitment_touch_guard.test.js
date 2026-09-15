@@ -171,7 +171,7 @@ function makeBlockRoute({ nodes, persisted, calls, ledgerKeys, nets, priorRoot }
         if(/INSERT IGNORE INTO state_tree_nodes/.test(sql)){
             // (hash, left, right) triples: putMany batches a whole path into one
             // multi-row statement, so consuming only params[0..2] would
-            // drop every node but the first and leave _descend reading the gaps as
+            // drop every node but the first and leave descend reading the gaps as
             // empty subtrees.
             for(let i = 0; i + 2 < params.length; i += 3)
                 if(!nodes.has(params[i]))
@@ -366,7 +366,10 @@ describe('leaf-presence assertion @regression', function(){
         // matters as much as the check.
         const assertCall = SRC.indexOf('await assertCommittedLeaves(db, smt, chain, network, blockIndex, balancesRoot);');
         const finalRoot  = SRC.indexOf('balancesRoot = root;');
-        const insertRow  = SRC.indexOf('INSERT INTO state_tree_roots');
+        // The row write is db/state_commitment/roots.js storeStateTreeRoots; the
+        // entry's call to it is the point the row leaves this file.
+        const insertRow  = SRC.indexOf('await storeStateTreeRoots(db, chain, network, blockIndex,');
+        assert.ok(insertRow > -1, 'the block path must write the row through storeStateTreeRoots');
         const fullBuild  = SRC.indexOf('balancesRoot = await buildFullBalancesRoot(db, chain, network, blockIndex);');
         assert.ok(assertCall > -1, 'the assertion must be called from the block path');
         assert.ok(assertCall > finalRoot, 'it must prove the root that is about to be committed');

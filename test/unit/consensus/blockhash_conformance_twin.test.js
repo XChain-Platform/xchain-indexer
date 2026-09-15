@@ -36,8 +36,10 @@
  *   3. the BURN/GAS/DONATE/REWARD canonicalization loops
  *   4. the hash-assembly tail (block_index / previous_hash / hash_version fold)
  *   5. utility jsonStringify + getDataHash (the shared preimage serializer)
- *   6. stateCommitment.js reportOrphanStats (documented byte-identical twin;
- *      compared RAW, header comment included, unlike the normalized checks)
+ *   6. reportOrphanStats (documented byte-identical twin; compared RAW, header
+ *      comment included, unlike the normalized checks). The indexer keeps it in
+ *      src/stateCommitment/persistent_smt.js, the follower in its whole-file
+ *      src/stateCommitment.js
  *
  * A one-sided edit to any of these forks every sync validator's recomputed
  * hash on the next real block (durable divergence halt fleet-wide). The
@@ -132,6 +134,8 @@ function sqlLiterals(fnSrc){
     return out;
 }
 
+const indexerGatheringSource = require('./blockhash_conformance_twin.test/helpers/indexer_gathering.js').make({ assert, stripComments, extractFunction, sqlLiterals });
+
 function syncFile(rel){ return path.join(SYNC_ROOT, rel); }
 function indexerFile(rel){ return path.join(INDEXER_ROOT, rel); }
 
@@ -163,8 +167,7 @@ describe('consensus block-hash conformance twins (static drift-lock) @regression
         if(!pair) return;
         const syncFn    = stripComments(extractFunction(pair.sync,
             /async computeBlockHashes\(block_index, network, coin\)\{/, 'block_hasher.js'));
-        const indexerFn = stripComments(extractFunction(pair.indexer,
-            /async getBlockHashes\(block_index\)\{/, 'db.js'));
+        const indexerFn = indexerGatheringSource(pair.indexer);
         const syncSql    = sqlLiterals(syncFn);
         const indexerSql = sqlLiterals(indexerFn);
         assert.ok(indexerSql.length >= 11,
@@ -224,7 +227,10 @@ describe('consensus block-hash conformance twins (static drift-lock) @regression
     });
 
     it('stateCommitment reportOrphanStats block is BYTE-identical (documented twin, comments included)', function(){
-        const pair = loadPair(this, 'src/stateCommitment.js', 'src/stateCommitment.js');
+        // The indexer half is the persistent_smt part: the entry re-exports the
+        // function but no longer carries its text, and a read of the entry would
+        // fail on the marker rather than compare nothing.
+        const pair = loadPair(this, 'src/stateCommitment.js', 'src/stateCommitment/persistent_smt.js');
         if(!pair) return;
         // The twin contract covers the whole block: the "---- Orphan-node
         // observability" header comment THROUGH the end of reportOrphanStats.
@@ -240,9 +246,9 @@ describe('consensus block-hash conformance twins (static drift-lock) @regression
             return tail.slice(0, tail.indexOf(fn) + fn.length);
         }
         assert.strictEqual(
-            extractTwinBlock(pair.indexer, 'xchain-indexer/src/stateCommitment.js'),
+            extractTwinBlock(pair.indexer, 'xchain-indexer/src/stateCommitment/persistent_smt.js'),
             extractTwinBlock(pair.sync, 'xchain-sync/src/stateCommitment.js'),
-            'reportOrphanStats block drifted between xchain-indexer and xchain-sync stateCommitment.js; ' +
+            'reportOrphanStats block drifted between xchain-indexer persistent_smt.js and xchain-sync stateCommitment.js; ' +
             'the header comment declares it a keep-BYTE-IDENTICAL twin (comments included)');
     });
 });

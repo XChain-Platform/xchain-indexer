@@ -333,7 +333,7 @@ describe('Database.getActiveStakeWeights() @regression @tier1', function () {
             { pubkey: 'cc', source: 'src2', weight: '300' },
         ]);
         assert.strictEqual(out.truncated, false);
-        // No MIN_STAKE floor; the _stakeWeightsSql min-stake bind arg is '0'.
+        // No MIN_STAKE floor; the stakeWeightsSql min-stake bind arg is '0'.
         const args = db.doQuery.getCall(0).args[1];
         assert.ok(args.includes('0'), 'expected min_stake 0 among the query args');
     });

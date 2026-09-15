@@ -13,7 +13,7 @@
  *
  * Stake-weight snapshot binary-collation flag-day (see
  * src/stake_weight_collation_activation.js). The window caps in
- * _cappedStakeWeightsSql truncate on an ORDER over index_addresses.address /
+ * cappedStakeWeightsSql truncate on an ORDER over index_addresses.address /
  * index_pubkeys.pubkey, both declared utf8_general_ci (folding), so the
  * collation decides WHICH sources and keys survive into the hashed
  * stakes_root while every sibling consensus read of those columns already
