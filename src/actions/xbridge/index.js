@@ -19,7 +19,7 @@
  * here; the mirror-injected settle legs (v2, v5) live in ../bridge_settle.js.
  *
  * TWO WRITERS THIS HANDLER CALLS, which live in the database layer rather than in
- * this handler (src/db/xbridges.js and src/db/tokens.js), because neither spec nor the
+ * this handler (src/db/xbridges/index.js and src/db/tokens/index.js), because neither spec nor the
  * seam contract places a table writer or a tokens column setter in an action file:
  *
  *   1. `xbridges` action table plus `Database.createXbridge(data)`. Every user-broadcast
