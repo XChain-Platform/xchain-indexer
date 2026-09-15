@@ -50,7 +50,7 @@
 // The GET_ADDRESS permission gate and the owner-authority gate stay HERE on purpose, as
 // methods of this class rather than parts: bin/check-flagday-deploy.sh greps this exact
 // path for the literal dispenser_freshness_activation, and
-// test/unit/bridge/escrow_journal_writer.test.js reads this path for the owner-authority
+// test/unit/escrow_journal_writer.test.js reads this path for the owner-authority
 // comparison that forces the DISPENSER family to resolve through the dispenser row.
 // Both are content pins on this FILE, not on the handler, so moving either block out
 // would retire a guard silently rather than fail.
@@ -222,7 +222,7 @@ class Dispenser {
     ctx.error = error;
     }
 
-    // Kept in this file for the same reason: test/unit/bridge/escrow_journal_writer.test.js reads
+    // Kept in this file for the same reason: test/unit/escrow_journal_writer.test.js reads
     // src/actions/dispenser/index.js and asserts the owner-authority comparison below is still
     // what it was, because that gate is why the whole DISPENSER family must resolve its
     // escrow attribution through the dispenser row rather than the escrow row's address.
