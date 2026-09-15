@@ -26,7 +26,7 @@
 
 const assert = require('assert');
 
-const ProviderRegistry = require('../../../src/attestation/providerRegistry.js');
+const ProviderRegistry = require('../../../src/attestation/provider_registry.js');
 const DEFAULTS         = ProviderRegistry.PROVIDERS;
 
 describe('ProviderRegistry @regression @tier2', function () {

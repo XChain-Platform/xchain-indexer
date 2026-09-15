@@ -26,7 +26,7 @@ const pmsh      = require('./attestation/providerMinStakeHistory.js');
 // recompute must subtract the SAME keys or it charges missed_count to validators
 // the live expiry never held responsible.
 const rgf       = require('./actions/attest/rollcall_gates_filter.js');
-const ProviderRegistry = require('./attestation/providerRegistry.js');
+const ProviderRegistry = require('./attestation/provider_registry.js');
 const lifecycle = require('./hub/table_lifecycle.js');
 // For the market-pair sentinel only. db.js requires nothing from here, so this is
 // a one-way edge; the pair key has to be the same one Database.getMarkets builds or

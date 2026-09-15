@@ -67,7 +67,7 @@ const crypto  = require('crypto');
 // into xchain-hub so the publisher that BUILDS a batch and this parser cannot
 // disagree about its bytes.
 const abw     = require('./attest_batch_wire.js');
-const ProviderRegistry = require('../../attestation/providerRegistry.js');
+const ProviderRegistry = require('../../attestation/provider_registry.js');
 const { ATTEST_BATCH_COMPLETION_STAMP, ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK,
         REQUEST_ID_PREIMAGE_FIELDS } = require('./constants.js');
 
@@ -113,7 +113,7 @@ class Attest {
         this.hubClient = action.hubClient || null;
 
         // Providers are the built-in DEFAULTS (http_get, llm) overlaid with any
-        // ATTESTATION.PROVIDERS block in the coin config (see providerRegistry.js).
+        // ATTESTATION.PROVIDERS block in the coin config (see provider_registry.js).
         this.providerRegistry = new ProviderRegistry(this.config);
 
         // Per-version format strings

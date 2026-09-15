@@ -180,7 +180,7 @@ class ProviderRegistry {
 // The shipped provider table rides ON the exported class rather than alongside it,
 // so the module keeps one export shape while every existing reader stays byte-correct:
 // the hub's cross-repo stake-floor gate and the e2e rollcall-gates suite both read
-// `require(providerRegistry.js).PROVIDERS`, and the export below IS this class object.
+// `require(provider_registry.js).PROVIDERS`, and the export below IS this class object.
 ProviderRegistry.PROVIDERS = PROVIDERS;
 
 module.exports = ProviderRegistry;

@@ -167,7 +167,7 @@ describe('ATTEST broadcast-fee activation (spec §11) @regression', function () 
         it('names an allowance for every provider the indexer registry ships', function () {
             // A provider with no named allowance silently falls to DEFAULT, which is a
             // policy choice that should be made deliberately rather than by omission.
-            const registry = require('../../../src/attestation/providerRegistry.js');
+            const registry = require('../../../src/attestation/provider_registry.js');
             for (const id of Object.keys(registry.PROVIDERS))
                 assert.ok(
                     Object.prototype.hasOwnProperty.call(abf.ATTEST_BROADCAST_FEE_CAP.PROVIDERS, id),

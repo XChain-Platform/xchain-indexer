@@ -27,7 +27,7 @@
  *
  ********************************************************************/
 
-const ProviderRegistry = require('../../attestation/providerRegistry.js');
+const ProviderRegistry = require('../../attestation/provider_registry.js');
 
 // Per-provider deadline windows are built per instance in the constructor
 // (this.providerDeadlineWindows) from the CONFIGURED registry. A module-scoped
