@@ -100,7 +100,14 @@ describe('API-key gate (src/api/auth_gate.js) @regression @tier1', function () {
 
 describe('middleware stack (src/api/middleware.js) @regression @tier1', function () {
     let served;
-    afterEach(async function () { sinon.restore(); if (served) await served.close(); served = null; });
+    // installMiddleware wires the process-wide observability sink, so each case
+    // resets it or the next suite in file order inherits this one's sink.
+    afterEach(async function () {
+        sinon.restore();
+        if (served) await served.close();
+        served = null;
+        observability._resetObservability();
+    });
 
     function appWith(CONFIG_ENV, gate = { INDEXER_API_KEY: 'k1', ALLOW_UNAUTHED: false }) {
         const app = express();
@@ -154,7 +161,14 @@ function indexerAt(view, extra = {}) {
 
 describe('GET /status route (src/api/status_endpoint.js) @regression @tier1', function () {
     let served;
-    afterEach(async function () { sinon.restore(); if (served) await served.close(); served = null; });
+    // installMiddleware wires the process-wide observability sink, so each case
+    // resets it or the next suite in file order inherits this one's sink.
+    afterEach(async function () {
+        sinon.restore();
+        if (served) await served.close();
+        served = null;
+        observability._resetObservability();
+    });
 
     it('answers 200 with the committed height, the in-flight block, the decoder tip and the lag', async function () {
         const indexer = indexerAt(recordingView({ getLatestBlockIndex: 100 }));
