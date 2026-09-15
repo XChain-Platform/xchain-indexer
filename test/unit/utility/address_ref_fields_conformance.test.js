@@ -30,7 +30,7 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
-const INDEXER_FILE = path.join(__dirname, '..', '..', '..', 'src', 'consensus', 'addressRefFields.js');
+const INDEXER_FILE = path.join(__dirname, '..', '..', '..', 'src', 'consensus', 'address_ref_fields.js');
 const SDK_FILE     = path.join(__dirname, '..', '..', '..', '..', 'xchain-sdk', 'src', 'addressRefFields.js');
 // Decides whether the SDK copy may be trusted before the drift guard reads it.
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
@@ -66,7 +66,7 @@ describe('addressRefFields.js conformance (indexer <-> sdk) @regression', functi
         assert.strictEqual(
             sdkSrc,
             indexerSrc,
-            'xchain-indexer/src/addressRefFields.js and xchain-sdk/src/addressRefFields.js have drifted. ' +
+            'xchain-indexer/src/consensus/address_ref_fields.js and xchain-sdk/src/addressRefFields.js have drifted. ' +
             'They define the wire ^<id> consensus surface and MUST be byte-identical; reconcile them.'
         );
     });

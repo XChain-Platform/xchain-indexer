@@ -518,7 +518,10 @@ describe('bin/sibling-reference-map.js: the idioms in the real tree', function (
         assert.ok(file, 'the sdk parity guard resolves at neither spelling');
         const found = refs.scanIndirectIdioms(fs.readFileSync(file, 'utf8'), { shell: false }).found;
         assert.strictEqual(found.length, 1, 'the guard pins exactly one indexer file');
-        assert.ok(/^src\/.*addressRefFields\.js$/.test(found[0].path),
+        // Either spelling of the twin: the indexer's copy took its snake_case name
+        // (src/consensus/address_ref_fields.js) while the sdk guard against an
+        // older indexer still names the camelCase one.
+        assert.ok(/^src\/.*(addressRefFields|address_ref_fields)\.js$/.test(found[0].path),
             `the twin it pins, wherever the restructure has put it: ${found[0].path}`);
         assert.strictEqual(found[0].form, 'root-var');
     });

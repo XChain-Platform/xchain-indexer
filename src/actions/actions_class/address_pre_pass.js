@@ -21,7 +21,7 @@
  ********************************************************************/
 
 // Canonical ADDRESS-reference field map (consensus surface; byte-identical copy in xchain-sdk)
-const { ADDRESS_REF_FIELDS } = require('../../consensus/addressRefFields.js');
+const { ADDRESS_REF_FIELDS } = require('../../consensus/address_ref_fields.js');
 const { getLogger } = require('../../observability/index.js');
 
 // Collect single-value candidate address strings.
@@ -99,7 +99,7 @@ module.exports = {
 
     // Pre-pass: assign deterministic, value-sorted index ids to the NEW wire-field
     // addresses an action introduces. See the call site in processAction and the
-    // consensus note in src/consensus/addressRefFields.js.
+    // consensus note in src/consensus/address_ref_fields.js.
     async assignActionAddressIds(action, params, data, error){
         // Only assign during block processing: createAddress only does explicit-counter
         // (deterministic) assignment inside a transaction. Outside one this is a no-op.
