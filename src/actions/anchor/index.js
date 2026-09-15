@@ -156,7 +156,7 @@ class Anchor {
 
     // Publisher-attestation canonical (XANCPUB): the string the 2f+1 oracle_publish quorum
     // signs to ATTEST which validator earns the anchor reward. MUST byte-match the hub's
-    // StateAnchorPublisher._attestationCanonical. The amount is the FROZEN consensus constant
+    // StateAnchorPublisher.attestationCanonical. The amount is the FROZEN consensus constant
     // (ar.ANCHOR_REWARD_AMOUNT), NEVER taken from the wire. A distinct 'XANCPUB|...' roundId
     // prefix gives the attestation its OWN equivocation family, so a validator that signs both
     // the checkpoint root canonical and this reward attestation in the same round is never
@@ -164,7 +164,7 @@ class Anchor {
     rewardCanonical(d){
         // Archive leg (v1): the attested tuple is the anchor_archive reward, keyed on
         // MATCH_BATCH_SEQ (the archive round number) with the frozen ARCHIVE amount. MUST
-        // byte-match the hub's StateAnchorPublisher._archiveAttestationCanonical. The
+        // byte-match the hub's StateAnchorPublisher.archiveAttestationCanonical. The
         // 'XANCPUB|archive|...' roundId is disjoint from the bundle's ('XANCPUB|bundle|...')
         // and from the retired per-chain family ('XANCPUB|BTC|...'), so the attestation
         // families can never equivocation-collide (same false-slash reasoning as the checkpoint

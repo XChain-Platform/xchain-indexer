@@ -69,8 +69,8 @@ describe('admission binding: the verify-side canonical twins byte-match the hub 
 
             it('drives the hub builders out of the sibling checkout (PENDING here means no sibling, never a silent pass)', function () {
                 if (!HAVE_HUB) { this.skip(); return; }
-                assert.ok(hub !== null && typeof h.hub.Dex.prototype._canonicalMatch === 'function');
-                assert.ok(typeof h.hub.Attest.prototype._buildCanonical === 'function');
+                assert.ok(hub !== null && typeof h.hub.Dex.prototype.canonicalMatch === 'function');
+                assert.ok(typeof h.hub.Attest.prototype.buildCanonical === 'function');
             });
 
             it('is in the arm it says it is, so no case below is vacuous', function () {

@@ -62,7 +62,7 @@ class Cross_Settle {
         this.dismissed = new Map();
     }
 
-    // Canonical signing string. MUST byte-match the hub's CrossChainDexEngine._canonicalMatch.
+    // Canonical signing string. MUST byte-match the hub's CrossChainDexEngine.canonicalMatch.
     // The partial-fill form appends the fill fields after `network` (the full-fill field order is kept):
     // a_amount/b_amount are the FILL settled by THIS match; *_kind + *_filled_before bind
     // sequential partial fills apart.

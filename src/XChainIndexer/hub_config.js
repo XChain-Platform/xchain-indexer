@@ -29,7 +29,7 @@ const { getLogger } = require('../observability/index.js');
 // lowercase coin name ('bitcoin'), never by the ticker config['COIN'] carries ('BTC'):
 // its rows are written from xchain-node's full-name config tree (config/index.js Coin) and
 // every hub-side reader of the same tree maps the ticker through COIN_FULL_NAME first
-// (XChainHub getFeeQuote, _resolveIndexerUrl, db normalizeCoin). Indexing it with the raw
+// (XChainHub getFeeQuote, resolveIndexerUrl, db normalizeCoin). Indexing it with the raw
 // ticker resolves undefined on every poll, so the overlay delivers nothing and says
 // nothing. Falls back to the raw value for a coin absent from the registry.
 //

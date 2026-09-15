@@ -10,7 +10,7 @@
 
 // Frozen ANCHOR canonical wire vectors: the PARSER half of the hub<->indexer
 // byte-identity contract. The hub PRODUCER (xchain-hub StateAnchorPublisher
-// _buildV7Payload) is asserted to reproduce these exact bytes in xchain-hub
+// buildV7Payload) is asserted to reproduce these exact bytes in xchain-hub
 // test/unit/StateAnchorPublisher.test.js against the same vendored
 // anchor_canonical_vectors.json. Here we feed those frozen bytes through the real
 // indexer parser and assert it positionally extracts the fixture fields. If either

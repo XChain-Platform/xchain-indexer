@@ -43,7 +43,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
     });
 
     // The rebase resets the hub's dense batch-seq allocator
-    // (StateAnchorPublisher._getNextBatchSeq counts its own tables) while this
+    // (StateAnchorPublisher.getNextBatchSeq counts its own tables) while this
     // watermark, read from replayed anchor_actions, returns to the pre-rebase max.
     // Both directions are pinned here because the two failures are opposite and
     // equally bad: reject the fresh batch and the archive rail is dead for as many

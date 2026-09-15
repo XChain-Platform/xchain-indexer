@@ -185,7 +185,7 @@ class Xcall {
     }
 
     // Canonical signing string for the result phase; MUST byte-match the hub's
-    // CrossChainCallEngine._canonicalMatch (result branch) and the archive verifier.
+    // CrossChainCallEngine.canonicalMatch (result branch) and the archive verifier.
     resultCanonical(r){
         let raw = [
             'XCALL', 'RESULT', r.call_id, String(r.snapshot_block), r.network || '',

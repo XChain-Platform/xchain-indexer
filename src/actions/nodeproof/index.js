@@ -116,13 +116,13 @@ class NodeProof {
         // DECLARED height: it sizes the quorum divisor and drives the EQUIV flag-day
         // gate below, and it stays RAW because the producing hub also resolves its
         // eligible-verifier set at the raw epoch (FullNodeChallengeRound
-        // `_eligibleVerifiers`). Burying it here alone would make an upgraded verifier
+        // `eligibleVerifiers`). Burying it here alone would make an upgraded verifier
         // accept bytes the rest of the fleet rejects, so that half moves only with the
         // hub, in its own flag day.
         let snapshotBlock = epochHeight;
         // `setBlock` is where PARTICIPATION ATTRIBUTION resolves, and it buries, because
         // the hub locked the CLAIMANT universe there: every CapabilitySnapshot read
-        // subtracts the canonical reorg buffer (`_buriedBlockIndex`), so the nodes the
+        // subtracts the canonical reorg buffer (`buriedBlockIndex`), so the nodes the
         // hub challenges for this epoch are the full_node set at
         // epochHeight - CANONICAL_REORG_BUFFER. Crediting at the raw epoch dropped the
         // verification row for a node whose stake deactivated inside

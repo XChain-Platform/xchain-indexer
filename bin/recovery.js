@@ -886,7 +886,7 @@ class AnchorRecovery {
                     // finalizing_view/effective_time WHERE status='retracted'). A match is NOT
                     // content-immutable per match_id: when a source-chain reorg retracts a
                     // crossing and the SAME crossing re-forms at the same BTC snapshot_block,
-                    // _deriveMatchId yields the identical match_id and the hub revives the row
+                    // deriveMatchId yields the identical match_id and the hub revives the row
                     // with THIS round's effective_time, view and quorum signatures, then
                     // re-archives it, so both versions land in successive batches. A status-only
                     // update here kept the FIRST batch's effective_time (which GATES the
@@ -1106,7 +1106,7 @@ class AnchorRecovery {
         return raw;
     }
 
-    // Hub CrossChainDexEngine._canonicalMatch / indexer cross_settle.canonical.
+    // Hub CrossChainDexEngine.canonicalMatch / indexer cross_settle.canonical.
     matchCanonical(m){
         let raw = [
             'XMATCH', m.match_id, String(m.snapshot_block),
@@ -1127,7 +1127,7 @@ class AnchorRecovery {
         return raw;
     }
 
-    // Hub CrossChainCallEngine._canonicalMatch / indexer verifiers (xexec.js
+    // Hub CrossChainCallEngine.canonicalMatch / indexer verifiers (xexec.js
     // dispatch, xcall.js result).
     callCanonical(c){
         let sha = (s) => crypto.createHash('sha256').update(String(s == null ? '' : s), 'utf8').digest('hex');

@@ -38,8 +38,8 @@ const BASE = { requestId: RID, providerId: 'http_get', responseHash: sha('the at
 function hubCanonical(h, requestBlock, effectiveTime, admitBlocks, network) {
     const A = h.hub.Attest.prototype;
     const self = { hub: { network: network || NETWORK }, pending: null,
-                   _isMirrorEra: A._isMirrorEra, _roundAdmitBlocks: A._roundAdmitBlocks };
-    return A._buildCanonical.call(self, RID, BASE.providerId, BODY, BASE.status, BASE.meta,
+                   isMirrorEra: A.isMirrorEra, roundAdmitBlocks: A.roundAdmitBlocks };
+    return A.buildCanonical.call(self, RID, BASE.providerId, BODY, BASE.status, BASE.meta,
                                   requestBlock, effectiveTime, admitBlocks).toString('utf8');
 }
 // The indexer side, wrapped exactly as attest_response_verify.js wraps it.

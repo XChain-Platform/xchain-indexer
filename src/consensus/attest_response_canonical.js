@@ -66,7 +66,7 @@
  * appends one more field AFTER the twin's bytes and BEFORE the EQUIV wrapper: the
  * row's per-chain admission map, '|' plus `CODE:digits` in ASCII order, era-keyed
  * on the REQUEST's own block through the mirror-admission producer activation
- * (AttestationConsensus._buildCanonical). The hub keeps this twin a pure function
+ * (AttestationConsensus.buildCanonical). The hub keeps this twin a pure function
  * of the response fields and appends that field in the caller; the indexer's
  * caller (attest_response_verify.js) is the verify-side twin of that builder and
  * gets the same field here, keyed on the same block, from the mirrored row's own

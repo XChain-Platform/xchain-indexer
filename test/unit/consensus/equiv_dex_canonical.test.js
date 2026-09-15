@@ -10,7 +10,7 @@
 
 // EQUIV header: cross-chain DEX (XDEX) round-trip.
 // CONSENSUS-CRITICAL: the XMATCH canonical is rebuilt by the hub
-// (CrossChainDexEngine._canonicalMatch, with the live pending.view) and the
+// (CrossChainDexEngine.canonicalMatch, with the live pending.view) and the
 // indexer/archive twins (cross_settle / StateAnchorPublisher / recovery, with the
 // persisted finalizing_view). DEX is view-bearing: putting <view> in the EQUIV
 // header is the view-change defense: a legitimate view change re-signs the SAME content

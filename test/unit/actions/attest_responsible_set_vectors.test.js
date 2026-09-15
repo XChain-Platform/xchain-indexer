@@ -12,8 +12,8 @@
 // Responsible-set canonical-vector conformance (indexer copy).
 //
 // The attestation responsible-set rule is implemented independently in
-// xchain-hub (AttestationRound._computeResponsibleSet,
-// AttestationPublisher._computeResponsible) and here
+// xchain-hub (AttestationRound.computeResponsibleSet,
+// AttestationPublisher.computeResponsible) and here
 // (actions/attest.computeResponsibleSet, mirrored by rollback.responsibleSet).
 // They MUST produce identical ordered output or attestation quorum evaluation
 // forks: the hub signs with S_hub, this indexer filters verified signatures

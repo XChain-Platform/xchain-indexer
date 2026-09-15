@@ -14,8 +14,8 @@
  * test/unit/price/price_v2_payload_twin_parity.test.js
  *
  * The PRICE v0 canonical exists in THREE hand-maintained copies: the producer
- * (xchain-hub OracleConsensus._buildPriceBatchPayload, which signs), the hub's ingest
- * verifier (PriceAggregator._buildPriceBatchPayload) and the on-chain verifier
+ * (xchain-hub OracleConsensus.buildPriceBatchPayload, which signs), the hub's ingest
+ * verifier (PriceAggregator.buildPriceBatchPayload) and the on-chain verifier
  * (xchain-indexer ed25519.buildPriceBatchPayload). A one-byte divergence between any two
  * means the producer signs bytes a verifier never checks: every legitimate batch is
  * rejected, the price rail stalls, and the native-fee / XCHAIN-USD path stalls with it.
@@ -214,8 +214,8 @@ describe('PRICE v0 canonical: three-way twin parity', function () {
             if (!hub) return;
 
             let fromIndexer  = ed25519.buildPriceBatchPayload(FIRST, LAST, ANCHOR, batch(), NETWORK);
-            let fromProducer = hub.producer._buildPriceBatchPayload(FIRST, LAST, ANCHOR, batch());
-            let fromIngest   = hub.ingest._buildPriceBatchPayload(FIRST, LAST, ANCHOR, batch());
+            let fromProducer = hub.producer.buildPriceBatchPayload(FIRST, LAST, ANCHOR, batch());
+            let fromIngest   = hub.ingest.buildPriceBatchPayload(FIRST, LAST, ANCHOR, batch());
 
             assert.strictEqual(fromProducer, fromIndexer,
                 'OracleConsensus (PRODUCER) diverged from the indexer verifier: the hub would sign bytes no indexer checks');
@@ -233,8 +233,8 @@ describe('PRICE v0 canonical: three-way twin parity', function () {
             let expected = ed25519.buildPriceBatchPayload(FIRST, LAST, ANCHOR, batch(), NETWORK);
             for (const [name, canonical] of [
                 ['indexer verifier',  ed25519.buildPriceBatchPayload(FIRST, LAST, ANCHOR, shuffledBatch(), NETWORK)],
-                ['hub producer',      hub.producer._buildPriceBatchPayload(FIRST, LAST, ANCHOR, shuffledBatch())],
-                ['hub ingest',        hub.ingest._buildPriceBatchPayload(FIRST, LAST, ANCHOR, shuffledBatch())],
+                ['hub producer',      hub.producer.buildPriceBatchPayload(FIRST, LAST, ANCHOR, shuffledBatch())],
+                ['hub ingest',        hub.ingest.buildPriceBatchPayload(FIRST, LAST, ANCHOR, shuffledBatch())],
             ]) {
                 assert.strictEqual(canonical, expected, name + ' is sensitive to caller ordering');
             }
@@ -248,8 +248,8 @@ describe('PRICE v0 canonical: three-way twin parity', function () {
             let want   = 'EQUIV|' + eq.ENGINE_TAGS.ORACLE_BATCH + '|1|1|1|0||';
             for (const [name, canonical] of [
                 ['indexer verifier',  ed25519.buildPriceBatchPayload(1, 1, 1, rounds, NETWORK)],
-                ['hub producer',      hub.producer._buildPriceBatchPayload(1, 1, 1, rounds)],
-                ['hub ingest',        hub.ingest._buildPriceBatchPayload(1, 1, 1, rounds)],
+                ['hub producer',      hub.producer.buildPriceBatchPayload(1, 1, 1, rounds)],
+                ['hub ingest',        hub.ingest.buildPriceBatchPayload(1, 1, 1, rounds)],
             ]) {
                 assert.ok(canonical.startsWith(want), name + ' did not wrap below the v0 flag-day: ' + canonical.slice(0, 60));
             }
@@ -275,8 +275,8 @@ describe('PRICE v0 canonical: three-way twin parity', function () {
         it('all three twins emit the identical canonical, the map LAST in each round and spelled by the one encoder', function () {
             let rounds = withMaps(batch());
             let fromIndexer  = armed.ed.buildPriceBatchPayload(FIRST, LAST, ANCHOR, rounds, NETWORK);
-            let fromProducer = armed.producer._buildPriceBatchPayload(FIRST, LAST, ANCHOR, rounds);
-            let fromIngest   = armed.ingest._buildPriceBatchPayload(FIRST, LAST, ANCHOR, rounds);
+            let fromProducer = armed.producer.buildPriceBatchPayload(FIRST, LAST, ANCHOR, rounds);
+            let fromIngest   = armed.ingest.buildPriceBatchPayload(FIRST, LAST, ANCHOR, rounds);
             assert.strictEqual(fromProducer, fromIndexer, 'OracleConsensus diverged from the indexer verifier in the admission era');
             assert.strictEqual(fromIngest,   fromIndexer, 'PriceAggregator diverged from the indexer verifier in the admission era');
             let body = JSON.parse(fromIndexer.slice(PREFIX.length));

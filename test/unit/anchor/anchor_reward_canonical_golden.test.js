@@ -16,7 +16,7 @@
  * CONSENSUS REGRESSION GUARD for the THIRD copy of the XANCPUB reward canonical.
  *
  * The same signed string is built in three independent places:
- *   1. xchain-hub/src/anchor/publisher.js  _attestationCanonical / _archiveAttestationCanonical
+ *   1. xchain-hub/src/anchor/publisher.js  attestationCanonical / archiveAttestationCanonical
  *   2. xchain-indexer/src/actions/anchor.js    Anchor.prototype.rewardCanonical  (DOGE wire-parse side)
  *   3. xchain-indexer/src/consensus/anchor_reward_derive.js  rewardCanonical(row)           (BTC mirror re-derivation)
  *

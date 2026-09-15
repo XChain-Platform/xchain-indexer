@@ -161,7 +161,7 @@ async function verifyAttestationResponse(input){
 // 2. The height the capability set is RESOLVED at is the declared height BURIED by
 //    the canonical reorg buffer, because that is what the hub actually resolved at:
 //    CapabilitySnapshot subtracts CANONICAL_REORG_BUFFER from every height it is
-//    handed (_buriedBlockIndex) while AttestationRound passes the raw
+//    handed (buriedBlockIndex) while AttestationRound passes the raw
 //    request.block_index, so the responsible set the hub signed is the set at
 //    (declared - 6). Verifying at the raw height resolved a DIFFERENT set whenever a
 //    validator's stake activated or deactivated inside (declared - 6, declared],
@@ -183,7 +183,7 @@ function verifyHeights(request, atBlock, network){
 // Build canonical signing message (UTF-8 Buffer). At/above the EQUIV flag-day
 // the raw string is wrapped in the uniform header (TAG=XATTEST,
 // ROUND_ID=request_id, VIEW=0, no view change), gated on the request's block +
-// network; below it, the bare bytes. Byte-matches AttestationConsensus._buildCanonical.
+// network; below it, the bare bytes. Byte-matches AttestationConsensus.buildCanonical.
 //
 // Returns the response hash, the canonical bytes the signatures are checked against, and
 // the verdict, which is the caller's own `error` when the canonical could not be built.

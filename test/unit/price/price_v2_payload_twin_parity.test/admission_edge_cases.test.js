@@ -14,8 +14,8 @@
  * test/unit/price_v2_payload_twin_parity.test.js
  *
  * The PRICE v0 canonical exists in THREE hand-maintained copies: the producer
- * (xchain-hub OracleConsensus._buildPriceBatchPayload, which signs), the hub's ingest
- * verifier (PriceAggregator._buildPriceBatchPayload) and the on-chain verifier
+ * (xchain-hub OracleConsensus.buildPriceBatchPayload, which signs), the hub's ingest
+ * verifier (PriceAggregator.buildPriceBatchPayload) and the on-chain verifier
  * (xchain-indexer ed25519.buildPriceBatchPayload). A one-byte divergence between any two
  * means the producer signs bytes a verifier never checks: every legitimate batch is
  * rejected, the price rail stalls, and the native-fee / XCHAIN-USD path stalls with it.
@@ -135,8 +135,8 @@ describe('PRICE v0 canonical: three-way twin parity', function () {
             let rounds = batch().map(r => { let c = Object.assign({}, r); delete c.admitBlocks; return c; });
             for (const [name, build] of [
                 ['indexer verifier', () => armed.ed.buildPriceBatchPayload(FIRST, LAST, ANCHOR, rounds, NETWORK)],
-                ['hub producer',     () => armed.producer._buildPriceBatchPayload(FIRST, LAST, ANCHOR, rounds)],
-                ['hub ingest',       () => armed.ingest._buildPriceBatchPayload(FIRST, LAST, ANCHOR, rounds)],
+                ['hub producer',     () => armed.producer.buildPriceBatchPayload(FIRST, LAST, ANCHOR, rounds)],
+                ['hub ingest',       () => armed.ingest.buildPriceBatchPayload(FIRST, LAST, ANCHOR, rounds)],
             ]) assert.throws(build, /has no admit_blocks; refusing to build a legacy canonical/, name + ' built legacy bytes in the era');
         });
 

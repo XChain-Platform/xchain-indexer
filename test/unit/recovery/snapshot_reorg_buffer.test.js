@@ -18,7 +18,7 @@
 // This suite is the four-party pin the ledger's verify step asks for: a
 // validator whose stake ACTIVATES or DEACTIVATES inside (N - 6, N] must be
 // resolved IDENTICALLY, for the same declared snapshot_block N, by
-//   1. the hub signer            (xchain-hub CapabilitySnapshot._buriedBlockIndex)
+//   1. the hub signer            (xchain-hub CapabilitySnapshot.buriedBlockIndex)
 //   2. the attestation verifier  (xchain-indexer actions/attest.js)
 //   3. archive recovery          (xchain-indexer recovery.js)
 //   4. the SDK light client      (xchain-sdk light.js followForward)
@@ -132,7 +132,7 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
             // across the boundary and well away from it.
             const cs = new CapabilitySnapshot({ network: 'regtest' });
             for(const h of [0, 3, 6, 7, 993, BURIED, N, N + 1, 250000]){
-                assert.strictEqual(cs._buriedBlockIndex(h), srb.buriedSnapshotBlock(h, 'regtest'),
+                assert.strictEqual(cs.buriedBlockIndex(h), srb.buriedSnapshotBlock(h, 'regtest'),
                     'hub and verifier disagree on the resolved height for declared ' + h);
             }
         });

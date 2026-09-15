@@ -183,9 +183,9 @@ describe('PRICE v0 canonical: the admission field on the indexer verifier', func
             const hub = hubOrSkip(this);
             if (!hub) return;
             const expected = build(ADMIT_AT, admitMap());
-            assert.strictEqual(hub.producer._buildPriceV0Payload(ROUND, TIME, pairs(), ADMIT_AT, admitMap()),
+            assert.strictEqual(hub.producer.buildPriceV0Payload(ROUND, TIME, pairs(), ADMIT_AT, admitMap()),
                 expected, 'the hub PRODUCER would sign bytes this verifier cannot rebuild');
-            assert.strictEqual(hub.ingest._buildPriceV0Payload(ROUND, TIME, pairs(), ADMIT_AT, admitMap()),
+            assert.strictEqual(hub.ingest.buildPriceV0Payload(ROUND, TIME, pairs(), ADMIT_AT, admitMap()),
                 expected, 'the hub ingest verifier diverged from this verifier');
         });
 
@@ -193,8 +193,8 @@ describe('PRICE v0 canonical: the admission field on the indexer verifier', func
             const hub = hubOrSkip(this);
             if (!hub) return;
             const expected = build(LEGACY_AT, undefined);
-            assert.strictEqual(hub.producer._buildPriceV0Payload(ROUND, TIME, pairs(), LEGACY_AT, undefined), expected);
-            assert.strictEqual(hub.ingest._buildPriceV0Payload(ROUND, TIME, pairs(), LEGACY_AT, undefined), expected);
+            assert.strictEqual(hub.producer.buildPriceV0Payload(ROUND, TIME, pairs(), LEGACY_AT, undefined), expected);
+            assert.strictEqual(hub.ingest.buildPriceV0Payload(ROUND, TIME, pairs(), LEGACY_AT, undefined), expected);
         });
     });
 });
@@ -206,9 +206,9 @@ describe('PRICE v0 canonical: the admission field on the indexer verifier', func
             const hub = hubOrSkip(this);
             if (!hub) return;
             for (const twin of [hub.producer, hub.ingest]) {
-                assert.throws(() => twin._buildPriceV0Payload(ROUND, TIME, pairs(), ADMIT_AT, null),
+                assert.throws(() => twin.buildPriceV0Payload(ROUND, TIME, pairs(), ADMIT_AT, null),
                     /refusing to build a legacy canonical/);
-                assert.throws(() => twin._buildPriceV0Payload(ROUND, TIME, pairs(), LEGACY_AT, admitMap()),
+                assert.throws(() => twin.buildPriceV0Payload(ROUND, TIME, pairs(), LEGACY_AT, admitMap()),
                     /refusing to build an admission-era canonical/);
             }
         });

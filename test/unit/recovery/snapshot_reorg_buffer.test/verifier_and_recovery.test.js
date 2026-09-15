@@ -192,7 +192,7 @@ function btcDbAtHeight(){
 }
 
 // The archive a correct hub wrote: the set it RESOLVED (at N-6) stamped with the
-// raw label N, which is exactly what _persistCapabilitySnapshot writes.
+// raw label N, which is exactly what persistCapabilitySnapshot writes.
 const honestArchive = setAt(BURIED).map(pk => ({
     capability: 'oracle_publish', snapshot_block: N,
     signing_pubkey: pk, source: 'src_' + pk.slice(0, 16), amount: '5',

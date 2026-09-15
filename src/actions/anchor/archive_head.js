@@ -39,7 +39,7 @@ async function checkReplayGuards(handler, data, error){
             error = 'invalid: CHECKPOINT_SEQ (stale; replay of an older checkpoint)';
     }
     // The archive half of the guard needs a second condition: MATCH_BATCH_SEQ is a dense
-    // counter the hub allocates from its own tables (StateAnchorPublisher._getNextBatchSeq:
+    // counter the hub allocates from its own tables (StateAnchorPublisher.getNextBatchSeq:
     // MAX(batch_seq)+1 over cross_chain_matches / cross_chain_calls / validator_rewards),
     // and those tables are reset by a wipe-and-replay rebase while this watermark (read
     // from replayed anchor_actions) returns to the pre-rebase maximum. Seq alone cannot

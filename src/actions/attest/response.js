@@ -112,7 +112,7 @@ module.exports = {
 
         // Normalize the id for every non-consensus use (request lookup, responsible-set
         // hash, the stored row): the hub signs the LOWERCASE rid
-        // (AttestationConsensus._buildCanonical) and the only live producer lowercases
+        // (AttestationConsensus.buildCanonical) and the only live producer lowercases
         // before broadcast. The CANONICAL signing bytes themselves are the exception:
         // whether they use the raw wire case or the lowercased id is CONSENSUS
         // BEHAVIOUR. Legacy nodes build the canonical from the RAW wire id,

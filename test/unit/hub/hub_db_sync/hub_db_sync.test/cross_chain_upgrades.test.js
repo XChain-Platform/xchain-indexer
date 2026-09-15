@@ -260,7 +260,7 @@ describe('HubDbSync _applyRow cross_chain_matches convergence upgrade @regressio
     //     bootstrap serves the stamp (divergent mirrors). First-stamp-wins COALESCE.
     //  2. RETRACT -> REVIVE: a source-chain reorg retracts the crossing (mirrored
     //     as a DELETE); the same crossing re-forms at the same snapshot_block, so
-    //     _deriveMatchId yields the identical match_id and the hub revives the row with a
+    //     deriveMatchId yields the identical match_id and the hub revives the row with a
     //     NEW effective_time / finalizing_view / validator_signatures. A mirror that missed
     //     the deletion (disconnected, or the fence/co-signature guards refused the event) kept
     //     the pre-reorg row, and an anchor_txid-only ODKU could never converge it - not on

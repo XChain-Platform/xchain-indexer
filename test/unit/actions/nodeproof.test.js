@@ -82,7 +82,7 @@ describe('NodeProof (NODEPROOF) @regression @tier3', function () {
     // The narrowed remedy for the scenario-18 regression: the ORIGINAL fix buried both
     // planes at once and lost an epoch, because burying the eligible-verifier set alone
     // makes an upgraded verifier accept bytes the rest of the fleet rejects (the hub's
-    // FullNodeChallengeRound._eligibleVerifiers resolves raw). So acceptance stays raw
+    // FullNodeChallengeRound.eligibleVerifiers resolves raw). So acceptance stays raw
     // and only ATTRIBUTION buries: the hub challenged the full_node set CapabilitySnapshot
     // locked at epoch - buffer, so a node whose stake deactivated inside that window was
     // legitimately challenged and quorum-attested, yet a raw credit gate dropped its row.

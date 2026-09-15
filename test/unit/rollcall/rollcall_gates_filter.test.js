@@ -297,7 +297,7 @@ describe('rollcall_gates_filter: the rules-aware attestation capability filter @
             await armed.filterByRolledGates({
                 db, validators: [{ pubkey: PK_A }], requestBlock: H, network: 'regtest' });
             assert.strictEqual(db.calls[0].atOrBelowBlock, srb.buriedSnapshotBlock(H, 'regtest'),
-                'the filter must bury the request block exactly as _computeResponsibleSet does');
+                'the filter must bury the request block exactly as computeResponsibleSet does');
             assert.strictEqual(db.calls[0].atOrBelowBlock, H - srb.CANONICAL_REORG_BUFFER,
                 'regtest arms burial at genesis, so the buried block is H - 6');
         });

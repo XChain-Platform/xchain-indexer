@@ -101,7 +101,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
 
     it('revive-wins: a later batch re-finalizes a retracted match with NEW content (#3208)', async function () {
         // A source-chain reorg retracts a crossing; the SAME crossing re-forms at the same
-        // BTC snapshot_block, so _deriveMatchId yields the identical match_id and the hub
+        // BTC snapshot_block, so deriveMatchId yields the identical match_id and the hub
         // REVIVES the row with this round's effective_time / view / signatures
         // (CrossChainDexEngine._insertMatchRow), re-archiving it in a later batch. A
         // status-only update on the existing-row branch kept batch 0's effective_time - which

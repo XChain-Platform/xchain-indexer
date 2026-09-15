@@ -233,7 +233,7 @@ describe('the admission map rides the on-chain price wire one slot per round (ro
         function hubCanonical(height, map) {
             const PriceAggregator = armed.hubAgg;
             const agg = new PriceAggregator({ db: null, network: NETWORK, getPeerManager: () => ({}) });
-            return agg._buildPriceV0Payload(5, 1700000000, PAIRS, height, map);
+            return agg.buildPriceV0Payload(5, 1700000000, PAIRS, height, map);
         }
 
         it('decodes the producer\'s field to the producer\'s map, byte for byte both ways', function () {
@@ -317,7 +317,7 @@ describe('the admission map rides the on-chain price wire one slot per round (ro
             // The hub's ingest shape: snake-cased rounds with admit_blocks, as the push carries them.
             const pushed = b.rounds.map(r => ({ round: r.round, timestamp: r.timestamp,
                 btcBlockHeight: r.btcBlockHeight, pairs: r.pairs, admitBlocks: r.admitBlocks }));
-            assert.strictEqual(agg._buildPriceBatchPayload(b.firstRound, b.lastRound, b.btcBlockHeight, pushed), b.payload);
+            assert.strictEqual(agg.buildPriceBatchPayload(b.firstRound, b.lastRound, b.btcBlockHeight, pushed), b.payload);
             // And the map is the LAST key of each round, spelled through the one encoder.
             const body = JSON.parse(b.payload.slice(b.payload.indexOf('{')));
             assert.deepStrictEqual(Object.keys(body.rounds[0]), ['round', 'timestamp', 'btc_block_height', 'pairs', 'admit_blocks']);

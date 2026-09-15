@@ -39,7 +39,7 @@ module.exports = {
     // source (one slot per source, keep each source's lowest-hash key) using the
     // source-keyed set; below activation, the legacy per-key selection. The
     // within-subset quorum stays count-based. CONSENSUS-CRITICAL: must match the
-    // hub's AttestationRound._computeResponsibleSet byte-for-byte or validation forks.
+    // hub's AttestationRound.computeResponsibleSet byte-for-byte or validation forks.
     //
     // PROVIDER STAKE FLOOR: on the SAME weighted path, and only there, drop
     // staking sources whose aggregate weight is below the request provider's

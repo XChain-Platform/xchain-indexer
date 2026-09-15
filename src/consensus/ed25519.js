@@ -98,8 +98,8 @@ function buildPriceV0Payload(round, timestamp, pairs, network, btcBlockHeight, a
 
 // Build the canonical signable payload for a PRICE batch: ONE signature set over
 // several rounds. This must match exactly what the hub producer signs
-// (OracleConsensus._buildPriceBatchPayload) and what the hub re-checks on ingest
-// (PriceAggregator._buildPriceBatchPayload).
+// (OracleConsensus.buildPriceBatchPayload) and what the hub re-checks on ingest
+// (PriceAggregator.buildPriceBatchPayload).
 //
 // `rounds` is [{ round, timestamp, btcBlockHeight, pairs }] and each `pairs` entry is
 // { pair | coinPair, price }. The builder sorts the rounds ascending and normalizes each

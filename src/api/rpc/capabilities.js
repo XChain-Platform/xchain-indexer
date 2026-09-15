@@ -47,7 +47,7 @@ function buildCapabilitiesRpc(ctx){
 // WHY block_index + CANONICAL_REORG_BUFFER. `block_index` here is
 // ALREADY the buried block: CapabilitySnapshot.getSnapshot subtracts the
 // buffer before it calls (validators/capability_snapshot.js:238). The filter buries
-// its own argument, exactly as _computeResponsibleSet does, so it must
+// its own argument, exactly as computeResponsibleSet does, so it must
 // be handed the raw request height whose burial is this block_index.
 // Two edges follow. buriedSnapshotBlock clamps at 0, so for the first
 // CANONICAL_REORG_BUFFER blocks of a chain several raw heights bury to

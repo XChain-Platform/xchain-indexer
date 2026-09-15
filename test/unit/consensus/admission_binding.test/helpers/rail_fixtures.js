@@ -131,16 +131,16 @@ function indexerTwins(h) {
 // The hub builders, driven on a stub `this` carrying only what each canonical reads.
 function hubBuilders(h) {
     const C = h.hub.Call.prototype;
-    // _sha256 is the HUB prototype private name this stub has to satisfy: the builder
-// under test lives in xchain-hub and calls this._sha256, so the key stays spelled
+    // sha256 is the HUB prototype private name this stub has to satisfy: the builder
+// under test lives in xchain-hub and calls this.sha256, so the key stays spelled
 // the hub way no matter what this repo renames its own methods to.
-    const callThis = { _sha256: C._sha256, _roundId: C._roundId };
+    const callThis = { sha256: C.sha256, roundId: C.roundId };
     return {
-        match:    (r) => h.hub.Dex.prototype._canonicalMatch.call({}, r, r.finalizing_view),
-        dispatch: (r) => h.hub.Call.prototype._canonicalMatch.call(callThis, r, r.finalizing_view),
-        result:   (r) => h.hub.Call.prototype._canonicalMatch.call(callThis, r, r.finalizing_view),
-        transfer: (r) => h.hub.Bridge.prototype._canonicalMatch.call({}, r, r.finalizing_view),
-        policy:   (r) => h.hub.Bridge.prototype._canonicalMatch.call({}, r, r.finalizing_view)
+        match:    (r) => h.hub.Dex.prototype.canonicalMatch.call({}, r, r.finalizing_view),
+        dispatch: (r) => h.hub.Call.prototype.canonicalMatch.call(callThis, r, r.finalizing_view),
+        result:   (r) => h.hub.Call.prototype.canonicalMatch.call(callThis, r, r.finalizing_view),
+        transfer: (r) => h.hub.Bridge.prototype.canonicalMatch.call({}, r, r.finalizing_view),
+        policy:   (r) => h.hub.Bridge.prototype.canonicalMatch.call({}, r, r.finalizing_view)
     };
 }
 
