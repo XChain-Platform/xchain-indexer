@@ -26,7 +26,7 @@
 // taken from the module rather than re-derived here, so the case folding it applies
 // lives with the list it folds. A name leaves the list only by moving into COINS, and both
 // refuse identically, so nothing re-verdicts on the move.
-const { isReservedFutureRoot } = require('../../consensus/reservedRoots.js');
+const { isReservedFutureRoot } = require('../../consensus/reserved_roots.js');
 
 // The floor on a NEW top-level name at/above TICK_NAMESPACE_ACTIVATION. Measured
 // on the FULL tick, so a child such as ABCD.X passes on its own length. Creation only:
