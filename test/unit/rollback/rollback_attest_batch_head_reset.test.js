@@ -48,7 +48,8 @@ const sinon  = require('sinon');
 
 const { createMockIndexer } = require('../../fixtures/mocks');
 const { mysqlDdlToSqlite }  = require('../../helpers/sqlAnchorDb');
-const Rollback = require('../../../src/rollback.js');
+const { readRollbackSource } = require('../../helpers/rollback_source.js');
+const Rollback = require('../../../src/rollback/index.js');
 const abw      = require('../../../src/actions/attest/attest_batch_wire.js');
 const { ATTEST_BATCH_COMPLETION_STAMP } = require('../../../src/actions/attest/index.js');
 
@@ -200,7 +201,7 @@ describe('ATTEST v5 batch head: the reorg reset for an orphaned completion stamp
         it('carries a marker with no LIKE wildcard, byte-identical in both files', function(){
             assert.strictEqual(/[%_]/.test(ATTEST_BATCH_COMPLETION_STAMP), false,
                 "the marker is spliced into a LIKE pattern: '%' or '_' in it widens the match");
-            const source = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'src', 'rollback.js'), 'utf8');
+            const source = readRollbackSource();
             const copy   = source.match(/const ATTEST_BATCH_COMPLETION_STAMP = '([^']*)';/);
             assert.ok(copy, 'rollback.js must hold its own copy of the marker');
             assert.strictEqual(copy[1], ATTEST_BATCH_COMPLETION_STAMP,

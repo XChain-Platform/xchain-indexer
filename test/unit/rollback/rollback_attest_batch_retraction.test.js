@@ -31,7 +31,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 const { createMockIndexer } = require('../../fixtures/mocks');
 
-const Rollback = require('../../../src/rollback.js');
+const Rollback = require('../../../src/rollback/index.js');
 const abw      = require('../../../src/actions/attest/attest_batch_wire.js');
 
 const FIRST_ACTION = 50;   // lowest action in the orphaned range

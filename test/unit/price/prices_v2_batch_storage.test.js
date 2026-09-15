@@ -44,7 +44,7 @@ const { getTestConfig }     = require('../../fixtures/config');
 const { createMockIndexer } = require('../../fixtures/mocks');
 const Utility                = require('../../../src/utility');
 const Database                = require('../../../src/db');
-const Rollback                 = require('../../../src/rollback.js');
+const Rollback                 = require('../../../src/rollback/index.js');
 
 function makeDb() {
     const config  = getTestConfig();

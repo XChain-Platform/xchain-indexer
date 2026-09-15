@@ -46,10 +46,11 @@ const path   = require('path');
 const sinon  = require('sinon');
 
 const { createMockIndexer } = require('../../fixtures/mocks');
-const Rollback              = require('../../../src/rollback.js');
+const Rollback              = require('../../../src/rollback/index.js');
 const lifecycle             = require('../../../src/hub/table_lifecycle.js');
 // Decides whether a sync twin path may be trusted before the reciprocal guard reads it.
 const { siblingCheckout }   = require('../../helpers/sibling_checkout.js');
+const { readRollbackSource } = require('../../helpers/rollback_source.js');
 
 // ---------------------------------------------------------------------------
 // The universe: every table the indexer creates, straight from src/sql/.
@@ -254,7 +255,7 @@ describe('Rollback coverage guard @regression', function () {
         // classification could silently outlive a removed sweep (the very failure
         // that re-opened the orphaned-only-address zombie balance), so assert the
         // `DELETE FROM <table> ... NOT IN (SELECT id FROM <index>)` is present in source.
-        const src = fs.readFileSync(path.join(__dirname, '../../../src/rollback.js'), 'utf8');
+        const src = readRollbackSource();
         const missing = ORPHAN_SWEEPS.filter(({ table, index }) => {
             const re = new RegExp(`DELETE\\s+FROM\\s+${table}\\b[\\s\\S]{0,400}?SELECT\\s+id\\s+FROM\\s+${index}\\b`, 'i');
             return !re.test(src);

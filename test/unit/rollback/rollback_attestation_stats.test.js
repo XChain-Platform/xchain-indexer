@@ -42,7 +42,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 
 const { createMockIndexer } = require('../../fixtures/mocks');
-const Rollback              = require('../../../src/rollback.js');
+const Rollback              = require('../../../src/rollback/index.js');
 
 const N        = 100;          // rollback target: orphan everything at/after this block
 const VALID_ID = 7;            // arbitrary status id returned for 'valid'

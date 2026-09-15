@@ -43,9 +43,10 @@ const fs     = require('fs');
 const path   = require('path');
 const sinon  = require('sinon');
 const { createMockIndexer } = require('../../../fixtures/mocks');
-const Rollback              = require('../../../../src/rollback.js');
+const Rollback              = require('../../../../src/rollback/index.js');
 const lifecycle             = require('../../../../src/hub/table_lifecycle.js');
 const { siblingCheckout }   = require('../../../helpers/sibling_checkout.js');
+const { readRollbackSource } = require('../../../helpers/rollback_source.js');
 const SQL_DIR = path.join(__dirname, '../../../../src/sql');
 const UNIVERSE = fs.readdirSync(SQL_DIR)
     .filter(f => f.endsWith('.sql'))
@@ -94,8 +95,7 @@ describe('Rollback coverage guard @regression', function () {
                 this.skip();
                 return;
             }
-            function slashRestoreSql(p){
-                const src = fs.readFileSync(p, 'utf8');
+            function slashRestoreSql(src, p){
                 const m = src.match(/\/\/<CONTRACT-SLASH-RESTORE-SQL>([\s\S]*?)\/\/<\/CONTRACT-SLASH-RESTORE-SQL>/);
                 assert.ok(m, 'CONTRACT-SLASH-RESTORE-SQL markers not found in ' + p);
                 const lits = m[1].match(/`[^`]*`|"(?:[^"\\]|\\.)*"/g) || [];
@@ -103,8 +103,8 @@ describe('Rollback coverage guard @regression', function () {
                 return lits.map(l => l.slice(1, -1)).join('').replace(/\s+/g, ' ').trim();
             }
             assert.strictEqual(
-                slashRestoreSql(path.join(__dirname, '../../../../src/rollback.js')),
-                slashRestoreSql(syncPath),
+                slashRestoreSql(readRollbackSource(), 'the rollback module'),
+                slashRestoreSql(fs.readFileSync(syncPath, 'utf8'), syncPath),
                 'the contract slash-restore SQL drifted between xchain-indexer and xchain-sync; keep it identical');
         });
     });

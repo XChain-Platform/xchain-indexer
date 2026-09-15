@@ -40,7 +40,7 @@ const SRC_DIR = path.join(__dirname, '../../../src');
 // that has to survive beside it. Written as src-relative paths and joined per
 // platform, because the health reader lives under the api feature directory and
 // a bare basename would neither match what the walk reports nor open the file.
-const ALLOWED_SITES = ['XChainIndexer.js', 'rollback.js', path.join('api', 'health.js')];
+const ALLOWED_SITES = ['XChainIndexer.js', path.join('rollback', 'index.js'), path.join('api', 'health.js')];
 
 // `typeof <anything>.apiView === 'function'` in either operand order.
 const FALLBACK_SHAPE = /typeof\s+[^;\n]*?\.apiView\s*===?\s*['"]function['"]|['"]function['"]\s*===?\s*typeof\s+[^;\n]*?\.apiView/;

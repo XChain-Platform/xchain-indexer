@@ -116,7 +116,7 @@ describe('ATTEST responsible-set canonical-vector conformance @regression @tier1
     // through computeResponsibleSet, so run the vectors through it too rather than
     // trusting the two to have been edited together.
     describe('rollback._responsibleSet applies the identical rule', function () {
-        const Rollback = require('../../../src/rollback.js');
+        const Rollback = require('../../../src/rollback/index.js');
 
         (vec ? vec.computeResponsibleSet : []).forEach(function (c) {
             it(c.name, function () {

@@ -24,8 +24,6 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon = require('sinon');
-const fs = require('fs');
-const path = require('path');
 
 const { createMockIndexer, createBaseData } = require('../../../fixtures/mocks');
 const Attest = require('../../../../src/actions/attest/index.js');
@@ -33,6 +31,7 @@ const swq = require('../../../../src/stake_weighted_quorum.js');
 const attestAdmission = require('../../../../src/attest_admission_activation.js');
 const srb = require('../../../../src/snapshot_reorg_buffer.js');
 const { PUBKEY_A, deriveReqId, setUpAttestHandler } = require('../../../helpers/attest_fixture.js');
+const { readRollbackSource } = require('../../../helpers/rollback_source.js');
 
 // The handler under test and its mocked indexer, rebuilt before every test.
 let indexer, handler;
@@ -273,7 +272,9 @@ describe('ATTEST responsible-set is BTC-anchored (#3233) @regression @tier1', fu
     // The two implementations are required to agree byte-for-byte; agreeing only by
     // both reaching [] via different routes is how they drift apart later.
     it('rollback.js short-circuits on the SAME condition, not just to the same answer', function () {
-        const src = fs.readFileSync(path.join(__dirname, '../../../../src/rollback.js'), 'utf8');
+        // The recompute's methods and statements span the rollback entry, its parts and
+        // src/db/rollback/, so the pin reads the module as one text.
+        const src = readRollbackSource();
         assert.match(src, /if\(this\.config\['COIN'\] === 'BTC'\)/,
             'the reorg recompute must gate on COIN the way attest.js does, or ' +
             'reorg-recomputed missed_count diverges from the live expiry path');

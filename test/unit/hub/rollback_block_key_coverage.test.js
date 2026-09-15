@@ -17,9 +17,11 @@ const fs     = require('fs');
 const path   = require('path');
 
 const lifecycle = require('../../../src/hub/table_lifecycle.js');
+// The rollback entry, its parts and its statements under src/db/rollback/, read as one
+// text, so the exactly-once and ordering pins hold wherever the statement lives.
+const { readRollbackSource } = require('../../helpers/rollback_source.js');
 
 const SQL_DIR      = path.resolve(__dirname, '../../../src/sql');
-const ROLLBACK_SRC = path.resolve(__dirname, '../../../src/rollback.js');
 
 // Column names declared by a table definition. Deliberately crude: it only has to
 // answer "is this column declared", and the schema-parity suites already own the
@@ -82,7 +84,7 @@ describe('rollback block-key coverage @regression', function () {
                     table + ' must not be in ' + bucket + ': it has no block_index and no action_index');
         }
 
-        const src = fs.readFileSync(ROLLBACK_SRC, 'utf8');
+        const src = readRollbackSource();
         const verdicts = src.indexOf('DELETE FROM rollcalls WHERE close_block >= ?');
         const absences = src.indexOf('DELETE FROM rollcall_absences WHERE close_block >= ?');
         assert.ok(absences !== -1, 'rollback.js must delete rollcall_absences on close_block');
@@ -102,7 +104,7 @@ describe('rollback block-key coverage @regression', function () {
     // the ROLLCALL migration and aborted the very reorg the guard keeps alive. A second
     // copy is a no-op on a migrated database, so nothing behavioural catches it.
     it('the roll-call unwind exists exactly once, inside the schema-gap guard', function () {
-        const src = fs.readFileSync(ROLLBACK_SRC, 'utf8');
+        const src = readRollbackSource();
         for(const stmt of ['DELETE FROM rollcall_absences WHERE close_block >= ?',
                            'DELETE FROM rollcalls WHERE close_block >= ?']){
             assert.strictEqual(src.split(stmt).length - 1, 1,

@@ -317,7 +317,7 @@ describe('BCR: Rollback Boundary', function () {
             indexer.indexerDb.releaseConnection = sinon.stub().resolves();
             indexer.indexerDb.updateBalances = sinon.stub().resolves();
 
-            const Rollback = require('../../../src/rollback.js');
+            const Rollback = require('../../../src/rollback/index.js');
             const rollback = new Rollback(indexer);
 
             try {
@@ -333,7 +333,7 @@ describe('BCR: Rollback Boundary', function () {
 
             registry.record({
                 id: 'BCR-400', operator: 'BCR', target: 'Rollback.rollback',
-                mutation: 'block_index >= boundary check', file: 'src/rollback.js',
+                mutation: 'block_index >= boundary check', file: 'src/rollback/index.js',
                 status: usesGte ? 'killed' : 'survived',
                 killedBy: usesGte ? 'SQL uses >= for block_index' : 'rollback executed queries',
                 description: 'Rollback uses >= for block_index (includes the reorg block)',

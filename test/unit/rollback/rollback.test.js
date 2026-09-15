@@ -15,7 +15,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createMockIndexer } = require('../../fixtures/mocks');
 
-const Rollback = require('../../../src/rollback.js');
+const Rollback = require('../../../src/rollback/index.js');
 
 let indexer, rollback;
 

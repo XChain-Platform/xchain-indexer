@@ -15,7 +15,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createMockIndexer } = require('../../../fixtures/mocks');
 
-const Rollback = require('../../../../src/rollback.js');
+const Rollback = require('../../../../src/rollback/index.js');
 
 // Part of the Rollback suite whose entry is test/unit/rollback.test.js: the
 // attestation request_status reset and the ownership-escrow re-derive, both reorg

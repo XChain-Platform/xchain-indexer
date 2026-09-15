@@ -35,7 +35,7 @@ const fs     = require('fs');
 const path   = require('path');
 
 const REPAIR_FILE   = path.join(__dirname, '..', '..', '..', 'scripts', 'repair-validator-stats.js');
-const ROLLBACK_FILE = path.join(__dirname, '..', '..', '..', 'src', 'rollback.js');
+const ROLLBACK_FILE = path.join(__dirname, '..', '..', '..', 'src', 'rollback', 'index.js');
 let repairSrc, rollbackSrc;
 
 function loadSources(){

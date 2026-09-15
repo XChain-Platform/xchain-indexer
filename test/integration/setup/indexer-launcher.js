@@ -81,7 +81,7 @@ async function initIndexer(opts = {}) {
     const ProtocolChanges = require('../../../src/protocol_changes.js');
     const Mapper   = require('../../../src/chain/mapper.js');
     const Actions  = require('../../../src/actions/index.js');
-    const Rollback = require('../../../src/rollback.js');
+    const Rollback = require('../../../src/rollback/index.js');
     const Genesis  = require('../../../src/chain/genesis.js');
 
     indexer.config = config.getConfig();

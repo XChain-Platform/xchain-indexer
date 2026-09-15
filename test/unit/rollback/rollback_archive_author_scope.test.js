@@ -40,7 +40,7 @@ const sinon  = require('sinon');
 
 const { createMockIndexer } = require('../../fixtures/mocks');
 const { mysqlDdlToSqlite }  = require('../../helpers/sqlAnchorDb');
-const Rollback = require('../../../src/rollback.js');
+const Rollback = require('../../../src/rollback/index.js');
 const {
     ARCHIVE_ROLLBACK_AUTHOR_SCOPE_ACTIVATION,
     ARCHIVE_AUTHOR_SCOPE_JOIN_SQL,

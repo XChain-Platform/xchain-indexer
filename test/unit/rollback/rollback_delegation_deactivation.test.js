@@ -25,7 +25,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 const { createMockIndexer } = require('../../fixtures/mocks');
 
-const Rollback = require('../../../src/rollback.js');
+const Rollback = require('../../../src/rollback/index.js');
 
 // The delegations sweep, identified by its UPDATE target. `UPDATE contract_delegations`
 // and the narrower ROLLCALL repair (`UPDATE delegations d JOIN rollcall_absences`) are

@@ -43,9 +43,10 @@ const path   = require('path');
 const sinon  = require('sinon');
 
 const { createMockIndexer } = require('../../fixtures/mocks');
-const Rollback              = require('../../../src/rollback.js');
+const Rollback              = require('../../../src/rollback/index.js');
 // Decides whether the xchain-sync replica may be trusted before the drift guard reads it.
 const { siblingCheckout } = require('../../helpers/sibling_checkout.js');
+const { readRollbackSource } = require('../../helpers/rollback_source.js');
 
 const ORPHAN_FROM = 50;   // first action_index in the orphaned range
 const REORG_BLOCK = 100;
@@ -67,10 +68,9 @@ async function shippedStatements() {
 }
 
 // The SQL literals between the twin-guard markers of one rollback file.
-function markedSql(file) {
-    const src = fs.readFileSync(file, 'utf8');
+function markedSql(src, label) {
     const m = src.match(/\/\/<CROSS-CHAIN-MIRROR-REORG-DELETE>([\s\S]*?)\/\/<\/CROSS-CHAIN-MIRROR-REORG-DELETE>/);
-    assert.ok(m, 'CROSS-CHAIN-MIRROR-REORG-DELETE markers not found in ' + file);
+    assert.ok(m, 'CROSS-CHAIN-MIRROR-REORG-DELETE markers not found in ' + label);
     return (m[1].match(/`[^`]*`/g) || []).map(l => l.replace(/`/g, '').replace(/\s+/g, ' ').trim());
 }
 
@@ -97,7 +97,7 @@ describe('bridge_transfers reorg pre-delete @regression @tier1', function () {
     });
 
     it('runs inside the marker block, after the two mirrors that already close the window', function () {
-        const lits = markedSql(path.resolve(__dirname, '../../../src/rollback.js'));
+        const lits = markedSql(readRollbackSource(), 'the rollback module');
         assert.deepStrictEqual(
             lits.map(l => (l.match(/^DELETE FROM (\w+)/) || [])[1]),
             ['cross_chain_calls', 'cross_chain_matches', 'bridge_transfers'],
@@ -122,8 +122,8 @@ describe('bridge_transfers reorg pre-delete @regression @tier1', function () {
         // A replica that keeps rows the source deleted serves transfers the source has
         // already dropped, so the two must remove the same rows from the same point.
         assert.deepStrictEqual(
-            markedSql(syncFile),
-            markedSql(path.resolve(__dirname, '../../../src/rollback.js')),
+            markedSql(fs.readFileSync(syncFile, 'utf8'), syncFile),
+            markedSql(readRollbackSource(), 'the rollback module'),
             'the cross-chain mirror reorg deletes drifted between xchain-indexer/src/rollback.js ' +
             'and xchain-sync/src/client/rollback.js; keep them identical');
     });

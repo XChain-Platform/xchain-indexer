@@ -15,7 +15,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createMockIndexer } = require('../../../fixtures/mocks');
 
-const Rollback = require('../../../../src/rollback.js');
+const Rollback = require('../../../../src/rollback/index.js');
 
 // Part of the Rollback suite whose entry is test/unit/rollback.test.js: the hub
 // retraction signals for prices, cross-chain calls and DEX matches, their durable

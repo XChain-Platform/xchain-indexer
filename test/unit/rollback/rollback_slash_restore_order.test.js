@@ -35,7 +35,7 @@ const sinon  = require('sinon');
 const { createMockIndexer } = require('../../fixtures/mocks');
 const { makeMigrationDb }   = require('../../helpers/sqlMigrationDb');
 
-const Rollback = require('../../../src/rollback.js');
+const Rollback = require('../../../src/rollback/index.js');
 
 // The restore statements rollback() actually issues, keyed by stake table.
 async function shippedRestores(){

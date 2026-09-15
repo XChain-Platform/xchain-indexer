@@ -23,6 +23,7 @@ const fs     = require('fs');
 const path   = require('path');
 
 const lifecycle = require('../../../../src/hub/table_lifecycle.js');
+const { readRollbackSource } = require('../../../helpers/rollback_source.js');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '../../../..', rel), 'utf8');
 
@@ -121,10 +122,10 @@ describe('Hash coverage guard @regression', function () {
             // The exclusion must not outlive its reason: it is justified ONLY by the
             // RB-ANCHOR restore minting the id locally on each side. If that INSERT ever
             // names id, both sides agree again and the column belongs back in the preimage.
-            const rbAnchorInsert = (read('src/rollback.js')
+            const rbAnchorInsert = (readRollbackSource()
                 .match(/INSERT IGNORE INTO validator_rewards\s*\n?\s*\(([^)]*)\)/) || [])[1];
             assert.ok(rbAnchorInsert,
-                'the RB-ANCHOR validator_rewards restore INSERT was not found in src/rollback.js; ' +
+                'the RB-ANCHOR validator_rewards restore INSERT was not found in the rollback module; ' +
                 're-check why validator_rewards.id is excluded from the content-parity preimage');
             assert.ok(!/\bid\b/.test(rbAnchorInsert.replace(/_id\b/g, '')),
                 'the RB-ANCHOR restore now names validator_rewards.id, so the two sides no longer ' +

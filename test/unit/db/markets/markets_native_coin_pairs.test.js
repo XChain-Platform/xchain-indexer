@@ -31,7 +31,7 @@ const { getTestConfig }     = require('../../../fixtures/config');
 const { createMockIndexer } = require('../../../fixtures/mocks');
 const Utility               = require('../../../../src/utility');
 const Database              = require('../../../../src/db');
-const Rollback              = require('../../../../src/rollback');
+const Rollback              = require('../../../../src/rollback/index.js');
 
 // Ids used throughout: DOGESWAP is a token, the native coin has no ticker.
 const TOKEN_A = 5;

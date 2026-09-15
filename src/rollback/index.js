@@ -19,27 +19,27 @@
  ********************************************************************/
 
 const crypto    = require('crypto');
-const swq       = require('./stake_weighted_quorum.js');
-const srb       = require('./snapshot_reorg_buffer.js');
-const pmsh      = require('./attestation/providerMinStakeHistory.js');
+const swq       = require('../stake_weighted_quorum.js');
+const srb       = require('../snapshot_reorg_buffer.js');
+const pmsh      = require('../attestation/providerMinStakeHistory.js');
 // The rules-aware capability filter the live attest.js path applies. The reorg
 // recompute must subtract the SAME keys or it charges missed_count to validators
 // the live expiry never held responsible.
-const rgf       = require('./actions/attest/rollcall_gates_filter.js');
-const ProviderRegistry = require('./attestation/provider_registry.js');
-const lifecycle = require('./hub/table_lifecycle.js');
+const rgf       = require('../actions/attest/rollcall_gates_filter.js');
+const ProviderRegistry = require('../attestation/provider_registry.js');
+const lifecycle = require('../hub/table_lifecycle.js');
 // For the market-pair sentinel only. db.js requires nothing from here, so this is
 // a one-way edge; the pair key has to be the same one Database.getMarkets builds or
 // the two collectors disagree about which markets a reorg must recompute.
-const Database  = require('./db');
-const ar        = require('./anchor_reward_activation.js');
-const { ARCHIVE_HEAD_VERSIONS_SQL } = require('./stateHash.js');
-const { archiveAuthorScopeJoin } = require('./archive_rollback_author_scope_activation.js');
+const Database  = require('../db');
+const ar        = require('../anchor_reward_activation.js');
+const { ARCHIVE_HEAD_VERSIONS_SQL } = require('../stateHash.js');
+const { archiveAuthorScopeJoin } = require('../archive_rollback_author_scope_activation.js');
 // Wire versions only, for the ATTEST batch-link retraction below: the head and the
 // continuation are what make an `attests` row part of a batch, and naming them from the
 // wire module keeps the reorg query and the parser reading the same two numbers.
-const abw       = require('./actions/attest/attest_batch_wire.js');
-const { getLogger } = require('./observability/index.js');
+const abw       = require('../actions/attest/attest_batch_wire.js');
+const { getLogger } = require('../observability/index.js');
 // Byte-identical copy of actions/attest.js's ATTEST_BATCH_COMPLETION_STAMP, the marker a
 // completing v6 continuation appends to the verdict it stamps on a surviving v5 head. The
 // reorg reset below restores ONLY marked stamps; the constant is duplicated rather than

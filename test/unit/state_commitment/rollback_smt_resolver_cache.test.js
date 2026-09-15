@@ -37,7 +37,9 @@ process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
-const path   = require('path');
+// The rollback entry, its parts and src/db/rollback/ as one text: the clear and the commit
+// it must follow sit in whichever part holds the post-commit step.
+const { readRollbackSource } = require('../../helpers/rollback_source.js');
 
 describe('rollback drops the SMT resolver caches @regression', function(){
     // The rollback module is large and DB-bound; this suite asserts the one
@@ -45,8 +47,7 @@ describe('rollback drops the SMT resolver caches @regression', function(){
     // pinning at SOURCE level that the rollback really performs it. A behavioural
     // stub of the whole rollback would need a live schema and would not make the
     // invariant any more true.
-    const fs  = require('fs');
-    const src = fs.readFileSync(path.resolve(__dirname, '../../../src/rollback.js'), 'utf8');
+    const src = readRollbackSource();
 
     it('rollback.js clears BOTH resolver caches', function(){
         assert.ok(/_smtTickNameCache\s*=\s*null/.test(src),
