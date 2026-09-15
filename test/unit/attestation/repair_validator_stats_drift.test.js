@@ -51,12 +51,20 @@ function loadSources(){
 // the content up to the closing backtick. We collapse whitespace to make the
 // comparison insensitive to formatting drift.
 function extractExpiredReqsSql(src){
-    // Locate the SELECT block associated with the expiredReqs assignment.
-    // Both files use a backtick template literal passed as the first arg to doQuery.
-    const marker = 'expiredReqs';
-    const idx = src.indexOf(marker);
-    if(idx === -1) throw new Error('Could not find "expiredReqs" in source');
-    // Advance past the marker to find the first backtick (start of SQL template literal).
+    // Locate the SELECT block associated with the expiredReqs assignment. A bare
+    // substring search for "expiredReqs" is order-dependent: a comment mentioning
+    // the name (or its own unrelated backtick literal) placed earlier in the file
+    // would make indexOf() grab the wrong SQL silently, since ROLLBACK_FILE now
+    // points at a single statements file that can carry prose above the real
+    // declaration. Anchor on the actual assignment statement instead, and require
+    // it to be unique, so a reorder that adds an earlier decoy still fails loudly
+    // rather than comparing garbage.
+    const assignRe = /\blet\s+expiredReqs\s*=\s*await\s+db\.doQuery\s*\(/g;
+    const hits = [...src.matchAll(assignRe)];
+    if(hits.length === 0) throw new Error('Could not find the "let expiredReqs = await db.doQuery(" assignment in source');
+    if(hits.length > 1) throw new Error(`Found ${hits.length} "expiredReqs" assignments in source; expected exactly one`);
+    const idx = hits[0].index + hits[0][0].length;
+    // Advance past the assignment to find the first backtick (start of SQL template literal).
     const tick1 = src.indexOf('`', idx);
     if(tick1 === -1) throw new Error('Could not find opening backtick after expiredReqs');
     const tick2 = src.indexOf('`', tick1 + 1);
