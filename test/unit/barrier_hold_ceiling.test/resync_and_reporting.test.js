@@ -105,7 +105,7 @@ describe('HubDbSync.requestResync @regression @tier1', function () {
 // ── The wiring: the ceiling is useless if the block loop never folds the hold ───
 describe('mirror-barrier hold is wired into the block loop @regression @tier1', function () {
 
-    const INDEXER_SRC = fs.readFileSync(path.resolve(__dirname, '../../../src/XChainIndexer.js'), 'utf8');
+    const INDEXER_SRC = require('../../helpers/indexer_class_source.js').readIndexerClassSource();
 
     it('the poll loop folds the hold once the catch-up loop stops', function () {
         assert.ok(/this\.noteBarrierHold\(/.test(INDEXER_SRC),

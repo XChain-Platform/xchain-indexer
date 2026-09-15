@@ -14,7 +14,7 @@
 // the forced mirror resync the crossing drives.
 
 const {
-    assert, fs, path, sinon, HUB_SYNC_BARRIER_HOLD_CEILING_S,
+    assert, sinon, HUB_SYNC_BARRIER_HOLD_CEILING_S,
     resolveBarrierHoldCeilingMs, nextBarrierHold, barrierHoldMs,
     barrierCeilingExceeded, isMirrorBarrierReason, NOW
 } = require('./barrier_hold_ceiling.test/helpers/barrier_hold_ceiling.js');
@@ -155,7 +155,7 @@ describe('nextBarrierHold / barrierHoldMs @regression @tier1', function () {
 // stall reason is judged by this rule instead of drifting past it.
 describe('isMirrorBarrierReason @regression @tier1', function () {
 
-    const INDEXER_SRC = fs.readFileSync(path.resolve(__dirname, '../../src/XChainIndexer.js'), 'utf8');
+    const INDEXER_SRC = require('../helpers/indexer_class_source.js').readIndexerClassSource();
     const REASONS = [...new Set(
         [...INDEXER_SRC.matchAll(/this\.stallReason = '([a-z_]+)'/g)].map(m => m[1]))];
 

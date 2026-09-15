@@ -222,8 +222,8 @@ describe('barrier stallClearsAt grace-field mapping @regression', function () {
     const fs   = require('fs');
     const path = require('path');
 
-    const INDEXER_SRC = fs.readFileSync(
-        path.resolve(__dirname, '../../src/XChainIndexer.js'), 'utf8');
+    const INDEXER_SRC = require('../helpers/indexer_class_source.js')
+        .readIndexerClassSource();
     const SYNC_SRC = fs.readFileSync(
         path.resolve(__dirname, '../../src/hub/hub_db_sync.js'), 'utf8');
 
