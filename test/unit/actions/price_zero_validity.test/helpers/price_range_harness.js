@@ -31,7 +31,7 @@ const priceRange = require('../../../../../src/price_zero_validity_activation.js
 // (`!(parseFloat(String(p.price)) > 0) || !(parseFloat(String(p.price)) < PRICE_MAX)`
 // refuses). This is the ORACLE for every agreement case below: it is written out
 // rather than required so this suite needs no hub checkout, and a drift alarm
-// in price_zero_validity.test.js re-reads the hub source when it is present.
+// in agreement_with_hub_bound.test.js re-reads the hub source when it is present.
 const HUB_PRICE_MAX = 10000000000;
 function hubAdmits(price){
     let p = parseFloat(String(price));
