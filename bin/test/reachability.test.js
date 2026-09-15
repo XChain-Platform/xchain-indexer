@@ -76,7 +76,13 @@ describe('bin/reachability.js', function () {
                 'a mixin is on the boot path through the database module');
             const unheld = Object.keys(report.files)
                 .filter((f) => f.startsWith('src/db/') && !report.files[f].reachableFromIndexerRuntime);
-            assert.deepStrictEqual(unheld, [], 'every file under src/db/ is reached from the runtime');
+            // The one exception is the XCHAIN price SQL: it sits under src/db/ because
+            // that is where SQL lives, but its only caller here is the price query
+            // module, which the indexer itself never boots (the HUB derives the price,
+            // from its byte-identical vendored copies of both files), so it is held by
+            // the query module's suite and by the sibling sweep, never by the runtime.
+            assert.deepStrictEqual(unheld, ['src/db/price/xchain_price_query_sql.js'],
+                'every file under src/db/ but the vendored price SQL is reached from the runtime');
         });
 
         it('applies the declared dynamic edges the static walk cannot see', () => {

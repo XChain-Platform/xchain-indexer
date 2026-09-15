@@ -67,9 +67,41 @@
  * the class of disagreement §4 warns about. SQL drops only the string-degenerate
  * rows (NULL / empty), which every engine agrees on.
  *
+ * The statements themselves are spelled in src/db/price/xchain_price_query_sql.js
+ * (the SQL home) and re-exported from here under their original names, so the
+ * selection suites keep pinning them through this module.
+ *
  ********************************************************************/
 
 'use strict';
+
+const fs   = require('fs');
+const path = require('path');
+
+// The four statements this module runs live under src/db/price/, the SQL home, and are
+// vendored into the hub beside this file. They are resolved from the package root
+// rather than by a relative path because the two repos file THIS module at different
+// depths (src/consensus/ in the indexer, flat src/ in the hub) while both keep the SQL
+// at src/db/price/: a relative require would read differently per copy and break the
+// byte-identity the vendoring depends on. The walk stops at the nearest package.json,
+// the same rule the cross-repo constants guard uses to stay byte-identical across
+// siblings that file it at different depths. A missing SQL module throws here, at
+// load, never silently: there is no fallback path and no catch.
+const REPO_ROOT = (function () {
+    let dir = __dirname;
+    while (!fs.existsSync(path.join(dir, 'package.json'))) {
+        const up = path.dirname(dir);
+        if (up === dir) throw new Error('no package.json above ' + __dirname);
+        dir = up;
+    }
+    return dir;
+})();
+const {
+    XCHAIN_TICK_SQL,
+    COIN_ID_SQL,
+    DISPENSE_FILLS_SQL,
+    DEX_FILLS_SQL,
+} = require(path.join(REPO_ROOT, 'src', 'db', 'price', 'xchain_price_query_sql.js'));
 
 // The venue tag carried on each fill. Not consensus (the formula ignores it); it
 // exists so the §10 step 6 observability row can say where the volume came from.
@@ -107,20 +139,6 @@ function computeWindowBounds(referenceHeight, confirmationBuffer, windowLength) 
         toBlockInclusive:   top,
     };
 }
-
-// Resolve the gas token's ticker id. block_index IS NOT NULL restricts the match
-// to the deterministic set, mirroring db.getTickerId's caret path: an id assigned
-// out-of-band is not a consensus ticker. index_tickers is utf8mb4_bin with a
-// UNIQUE index on tick(200), so this is an exact, case-sensitive, single-row match
-// and subtokens (XCHAIN.FOO) never collide with it.
-const XCHAIN_TICK_SQL =
-    'SELECT id, tick FROM index_tickers WHERE tick = ? AND block_index IS NOT NULL';
-
-// Resolve the native coin's id. Mirrors db.getCoinId's query, spelled here rather
-// than called, so this module needs nothing from its caller's db beyond doQuery.
-// That is what lets the SAME file run in the indexer and, vendored byte-identically,
-// in the hub against a read-only connection to a validator's own indexer database.
-const COIN_ID_SQL = 'SELECT id, coin FROM index_coins WHERE `coin` = ?';
 
 /**
  * Pick the coin id out of COIN_ID_SQL's rows.
@@ -170,68 +188,6 @@ function selectXchainTickId(rows, expectedTick) {
         return { ok: false, error: 'XCHAIN ticker id invalid: ' + row.id };
     return { ok: true, tickId: id };
 }
-
-// Realized dispenses of XCHAIN paid for in native coin.
-//
-// get_tick_id IS NULL is the token-for-token exclusion: a dispense priced in
-// another token is a real trade but not an XCHAIN/BTC one, and its get_amount is
-// denominated in that token. give_coin_id = get_coin_id = <BTC> is the
-// cross-chain exclusion (§11) - both sides must sit on this chain.
-//
-// The dispense's own status is the whole story here, unlike the DEX side: a
-// dispense either happened or it did not. The regtest dump shows 43 'valid' and
-// 14 'invalid: no matching oracle price' out of 57, so this filter is load-bearing.
-// Status is judged on the dispense row alone; a dispenser that later closes or
-// expires does not retroactively un-execute its past dispenses (§3).
-const DISPENSE_FILLS_SQL =
-    `SELECT 'dispense' AS venue, d.action_index, a.block_index,
-            d.give_amount AS xchain_amount, d.get_amount AS coin_amount
-     FROM dispenses d
-     JOIN actions a        ON a.action_index = d.action_index
-     JOIN index_statuses s ON s.id = d.status_id
-     WHERE d.give_tick_id = ?
-       AND d.get_tick_id IS NULL
-       AND d.give_coin_id = ?
-       AND d.get_coin_id  = ?
-       AND s.status = 'valid'
-       AND a.block_index >  ?
-       AND a.block_index <= ?
-       AND d.give_amount IS NOT NULL AND d.give_amount <> ''
-       AND d.get_amount  IS NOT NULL AND d.get_amount  <> ''`;
-
-// Realized DEX fills of XCHAIN against native coin.
-//
-// Anchored on `coinpays`, not on order_matches.status_id - see correction 1 in the
-// header. The JOIN is the settlement proof and the block_index comes from the
-// payment, not the match (correction 2). coinpays.block_index is written from the
-// COINPAY action's own block, and rollback.js deletes coinpays alongside
-// order_matches, so the two never disagree after a reorg.
-//
-// BOTH orientations are selected. An order book carries XCHAIN-for-BTC and
-// BTC-for-XCHAIN as separate rows and the token side lands in whichever column the
-// matcher put it in; the mapper below reads the amounts by which side holds the
-// tick id, never by fixed columns. Requiring the OTHER side's tick_id to be NULL
-// is what pins it to the native-coin side rather than a second token.
-//
-// A row can only be selected once: coinpay.js early-exits unless the obligation is
-// still 'pending_coinpay', so at most one valid coinpays row exists per match.
-const DEX_FILLS_SQL =
-    `SELECT 'dex' AS venue, m.action_index, cp.block_index,
-            m.give_tick_id, m.give_amount, m.get_tick_id, m.get_amount,
-            cp.action_index AS coinpay_action_index
-     FROM order_matches m
-     JOIN coinpays cp       ON cp.obligation_action_index = m.action_index
-     JOIN index_statuses cs ON cs.id = cp.status_id
-     WHERE m.settlement_type = 'coinpay'
-       AND m.give_coin_id = ?
-       AND m.get_coin_id  = ?
-       AND cs.status = 'valid'
-       AND ( (m.give_tick_id = ? AND m.get_tick_id  IS NULL)
-          OR (m.get_tick_id  = ? AND m.give_tick_id IS NULL) )
-       AND cp.block_index >  ?
-       AND cp.block_index <= ?
-       AND m.give_amount IS NOT NULL AND m.give_amount <> ''
-       AND m.get_amount  IS NOT NULL AND m.get_amount  <> ''`;
 
 /**
  * Map a DISPENSE_FILLS_SQL row to a fill. The SQL already pinned the orientation

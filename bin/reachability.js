@@ -158,6 +158,25 @@ const DYNAMIC_EDGES = [
         },
         why: 'the Database mixin install loop requires every MIXIN_FILES row by computed path',
     },
+    {
+        from: 'src/consensus/xchain_price_query.js',
+        // The price query module is vendored byte-identically into the hub, which
+        // files it at a different depth, so it resolves its SQL module from the
+        // package root (path.join(REPO_ROOT, 'src', 'db', 'price', ...)) rather than
+        // by a relative literal. The joined segments are read out of that call so
+        // this edge follows a rename of the SQL module instead of restating it.
+        toList: () => {
+            const declared = fs.readFileSync(path.join(REPO_ROOT, 'src/consensus/xchain_price_query.js'), 'utf8');
+            const call = /require\(path\.join\(REPO_ROOT,([^)]*)\)\)/.exec(declared);
+            if (!call) {
+                throw new Error('src/consensus/xchain_price_query.js no longer resolves its SQL from REPO_ROOT: the price SQL edge cannot be read');
+            }
+            const segments = Array.from(call[1].matchAll(/(['"])([^'"]+)\1/g)).map((m) => m[2]);
+            if (!segments.length) throw new Error('the price SQL require joins no literal segment: the edge is stale');
+            return [path.posix.join(...segments)];
+        },
+        why: 'the price query module requires its SQL from the package root so the hub twin stays byte-identical',
+    },
 ];
 
 const SOURCE_EXT = ['.js'];
