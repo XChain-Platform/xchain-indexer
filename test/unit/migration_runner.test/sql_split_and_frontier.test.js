@@ -205,4 +205,3 @@ describe('committed mode=auto migrations contain no destructive DDL @regression 
         });
     });
 });
-

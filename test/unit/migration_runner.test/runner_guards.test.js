@@ -279,4 +279,3 @@ describe('runMigrations() --file / opts.only scoping @regression @tier1', functi
             'the default path must remain apply-everything');
     });
 });
-

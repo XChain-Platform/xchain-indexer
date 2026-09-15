@@ -38,7 +38,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
 const Issue = require('../../../src/actions/issue/index.js');
-const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';                                   
+const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const GATE   = 'BATCH_ISSUANCE_LIMITS';
 const LOW_BLOCK = 100;
 function makeActionsCtx(indexer, { batchLimitsActive = true } = {}) {

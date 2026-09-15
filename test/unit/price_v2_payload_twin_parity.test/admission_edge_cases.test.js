@@ -36,7 +36,7 @@ const eq      = require('../../../src/equivocation_header.js');
 const adm     = require('../../../src/mirror_admission_activation.js');
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 const NETWORK = 'regtest';
-const ANCHOR = 912345;                                                             
+const ANCHOR = 912345;
 const FIRST  = 1039;
 const LAST   = 1042;
 function batch() {

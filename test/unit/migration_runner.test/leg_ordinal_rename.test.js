@@ -171,4 +171,3 @@ describe('leg-ordinal migration rename: destroys-sends-leg-ordinal @regression @
             'every applied or baselined file, and only those, is recorded in the ledger');
     });
 });
-

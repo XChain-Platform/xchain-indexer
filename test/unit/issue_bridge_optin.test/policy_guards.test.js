@@ -209,4 +209,3 @@ describe('ISSUE token-bridge opt-in and policy exclusion @regression @consensus'
         });
     });
 });
-

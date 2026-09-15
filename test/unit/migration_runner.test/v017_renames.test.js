@@ -157,4 +157,3 @@ describe('v0.17.0 migration rename: contract-meta-columns + cross-chain-btc-chai
         });
     });
 });
-
