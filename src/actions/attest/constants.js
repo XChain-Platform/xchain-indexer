@@ -63,7 +63,7 @@ const BATCH_CHAIN = 'DOGE';
 //
 // It is a SUFFIX so the verdict itself stays first and stays readable: an operator (and
 // every existing reader keyed on the reason's leading text) still sees why the batch
-// failed. Keep it byte-identical to the copy in rollback.js; a test pins the pair.
+// failed. Keep it byte-identical to the copy in src/db/rollback/batch_heads.js; a test pins the pair.
 // It must contain no SQL LIKE wildcard ('%' or '_'), because the reset matches on it.
 const ATTEST_BATCH_COMPLETION_STAMP = ' (stamped on batch completion)';
 
