@@ -531,17 +531,43 @@
       "test/unit/hub_push_queue.test.js",
       "test/unit/hub_push_queue.test/delivery_and_failures.test.js"
     ],
+    "test/unit/issue_bridge_optin.test.js": [
+      "test/unit/issue_bridge_optin.test.js",
+      "test/unit/issue_bridge_optin.test/policy_guards.test.js"
+    ],
+    "test/unit/issue_caret_dot_and_intern.test.js": [
+      "test/unit/issue_caret_dot_and_intern.test.js",
+      "test/unit/issue_caret_dot_and_intern.test/parent_lookup.test.js"
+    ],
     "test/unit/migration_precondition_baseline.test.js": [
       "test/unit/migration_precondition_baseline.test.js",
       "test/unit/migration_precondition_baseline.test/runner_branches.test.js"
+    ],
+    "test/unit/migration_runner.test.js": [
+      "test/unit/migration_runner.test.js",
+      "test/unit/migration_runner.test/v017_renames.test.js",
+      "test/unit/migration_runner.test/leg_ordinal_rename.test.js",
+      "test/unit/migration_runner.test/destructive_guard.test.js",
+      "test/unit/migration_runner.test/sql_split_and_frontier.test.js",
+      "test/unit/migration_runner.test/checksum_guards.test.js",
+      "test/unit/migration_runner.test/runner_guards.test.js",
+      "test/unit/migration_runner.test/schema_assertions.test.js"
     ],
     "test/unit/policy_apply.test.js": [
       "test/unit/policy_apply.test.js",
       "test/unit/policy_apply.test/injected_and_due.test.js"
     ],
+    "test/unit/price_admission_wire_carrier.test.js": [
+      "test/unit/price_admission_wire_carrier.test.js",
+      "test/unit/price_admission_wire_carrier.test/additional_batch_guards.test.js"
+    ],
     "test/unit/price_batch_compression.test.js": [
       "test/unit/price_batch_compression.test.js",
       "test/unit/price_batch_compression.test/rejections_and_determinism.test.js"
+    ],
+    "test/unit/price_v2_payload_twin_parity.test.js": [
+      "test/unit/price_v2_payload_twin_parity.test.js",
+      "test/unit/price_v2_payload_twin_parity.test/admission_edge_cases.test.js"
     ],
     "test/unit/protocol_changes.test.js": [
       "test/unit/protocol_changes.test.js",
@@ -563,6 +589,10 @@
       "test/unit/rollback.test/hub_retractions.test.js",
       "test/unit/rollback.test/maturity_reversal.test.js",
       "test/unit/rollback.test/transaction_and_rearm.test.js"
+    ],
+    "test/unit/rollback_coverage.test.js": [
+      "test/unit/rollback_coverage.test.js",
+      "test/unit/rollback_coverage.test/slash_restore_twin.test.js"
     ],
     "test/unit/rollcall_close.test.js": [
       "test/unit/rollcall_close.test.js",
@@ -587,6 +617,10 @@
       "test/unit/sql_schema_index_parity.test.js",
       "test/unit/sql_schema_index_parity.test/baseline.test.js"
     ],
+    "test/unit/stall_health.test.js": [
+      "test/unit/stall_health.test.js",
+      "test/unit/stall_health.test/barrier_mapping.test.js"
+    ],
     "test/unit/state_commitment_batched_node_writes.test.js": [
       "test/unit/state_commitment_batched_node_writes.test.js",
       "test/unit/state_commitment_batched_node_writes.test/stakes_memo.test.js"
@@ -602,6 +636,14 @@
       "test/unit/utility.test/fees_and_transforms.test.js",
       "test/unit/utility.test/format_and_ledger.test.js",
       "test/unit/utility.test/validation.test.js"
+    ],
+    "test/unit/utility_validate_oracle_fee.test.js": [
+      "test/unit/utility_validate_oracle_fee.test.js",
+      "test/unit/utility_validate_oracle_fee.test/refill_fee.test.js"
+    ],
+    "test/unit/vm_gas_parity.test.js": [
+      "test/unit/vm_gas_parity.test.js",
+      "test/unit/vm_gas_parity.test/source_tree_scan.test.js"
     ],
     "test/unit/xchain_price_query.test.js": [
       "test/unit/xchain_price_query.test.js",
