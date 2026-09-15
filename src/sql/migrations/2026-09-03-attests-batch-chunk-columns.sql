@@ -36,7 +36,7 @@
 -- POSITION matters as much as presence: all eight land AFTER batch_action_index, in the
 -- order src/sql/attests.sql declares them, so a fresh install (definition path) and a
 -- long-lived database (this ledger path) converge on a byte-identical SHOW CREATE TABLE.
--- test/unit/migration/sql_schema_column_parity.test.js fails CI on any divergence.
+-- test/unit/sql-schema-column-parity.test.js fails CI on any divergence.
 --
 -- HOW TO RUN
 --   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-09-03-attests-batch-chunk-columns.sql

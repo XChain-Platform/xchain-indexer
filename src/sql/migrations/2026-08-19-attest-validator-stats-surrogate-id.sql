@@ -34,7 +34,7 @@
 -- in fact safe - the engine backfills the sequence - but the reconciler has no way to say so.
 -- So do NOT read this file as redundant with the reconciler, and do not squash or baseline it
 -- away: every replay-converged replica would be left without the paging primary key the
--- explorer's keyset paging needs. Pinned by test/unit/migration/schema_drift_column_order.test.js.
+-- explorer's keyset paging needs. Pinned by test/unit/schema-drift-column-order.test.js.
 --
 -- FIRST matches the definition's column position, so both schema-construction paths produce a
 -- byte-identical SHOW CREATE TABLE. The existing UNIQUE INDEX validator_pubkey_provider is
