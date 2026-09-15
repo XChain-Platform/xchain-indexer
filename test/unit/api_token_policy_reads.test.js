@@ -27,8 +27,6 @@ process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
-const fs     = require('fs');
-const path   = require('path');
 const crypto = require('crypto');
 const sinon  = require('sinon');
 
@@ -36,7 +34,8 @@ const { getTestConfig } = require('../fixtures/config');
 const Utility  = require('../../src/utility');
 const Database = require('../../src/db');
 
-const API_SRC = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
+const { readApiSource } = require('../helpers/api_source');
+const API_SRC = readApiSource();
 
 function newDb(){
     const config = getTestConfig();

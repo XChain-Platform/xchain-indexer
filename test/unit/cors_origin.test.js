@@ -170,7 +170,7 @@ describe('CORS_ORIGIN allowlist parsing', function () {
 
         it('mounts cors through parseCorsOrigin, never the raw env var', function () {
             const read = (p) => require('fs').readFileSync(require('path').join(__dirname, p), 'utf8')
-            const src = read('../../src/api.js')
+            const src = require('../helpers/api_source').readApiSource()
             // api.js reads the environment through config.js's env view, so the value the
             // parser must wrap is CONFIG_ENV.CORS_ORIGIN; the last assertion follows it back
             // to the env read, so the wiring cannot be satisfied by an unrelated CONFIG_ENV key.

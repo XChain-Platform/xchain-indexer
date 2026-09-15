@@ -41,11 +41,9 @@
 'use strict';
 
 const assert = require('assert');
-const fs     = require('fs');
-const path   = require('path');
 
-const API_PATH = path.join(__dirname, '../../src/api.js');
-const API_SRC  = fs.readFileSync(API_PATH, 'utf8');
+const { readApiSource } = require('../helpers/api_source');
+const API_SRC  = readApiSource();
 
 // Slice one JSON-RPC handler body out of the controller object literal.
 function handlerBody(name) {

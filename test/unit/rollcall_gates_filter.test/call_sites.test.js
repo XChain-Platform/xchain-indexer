@@ -223,7 +223,7 @@ describe('ATTEST v0 admission: the rules-aware REDUNDANCY literal @regression @t
 // ---------------------------------------------------------------------------
 
 describe('api.js getcapabilityvalidators rules filter (source-scan) @regression @tier1', function () {
-    const API_SRC = fs.readFileSync(path.join(__dirname, '../../../src/api.js'), 'utf8');
+    const API_SRC = require('../../helpers/api_source').readApiSource();
 
     // Just the handler body, so a match cannot come from some other method.
     function handlerBody(){

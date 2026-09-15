@@ -260,9 +260,7 @@ describe('Utility.validateOracleFee() - @regression @tier1', function () {
             // Source-shape pin: oraclefeequote must call quoteOracleFee. A future edit
             // that inlines the arithmetic there would reintroduce the drift this
             // structure exists to prevent.
-            const fs   = require('fs');
-            const path = require('path');
-            const src  = fs.readFileSync(path.resolve(__dirname, '../../src/api.js'), 'utf8');
+            const src  = require('../helpers/api_source').readApiSource();
             const start = src.indexOf('async oraclefeequote(');
             assert.ok(start > 0, 'the oraclefeequote endpoint must exist');
             const body = src.slice(start, start + 2000);

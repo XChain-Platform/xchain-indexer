@@ -38,13 +38,12 @@
 'use strict';
 
 const assert = require('assert');
-const fs     = require('fs');
-const path   = require('path');
 
 // api.js is a server entrypoint and exports no controller, so its shape is asserted
 // the same way test/unit/api_federation_read_isolation.test.js asserts its apiView
 // routing: over the source text.
-const API_SRC = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
+const { readApiSource } = require('../helpers/api_source');
+const API_SRC = readApiSource();
 
 // api.js documents its own history in prose, and the retired rail is named in
 // several of those comments on purpose. A call-site assertion therefore has to

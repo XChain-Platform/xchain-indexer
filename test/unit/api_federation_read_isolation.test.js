@@ -35,7 +35,8 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
-const API_SRC = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
+const { readApiSource } = require('../helpers/api_source');
+const API_SRC = readApiSource();
 
 // Parse the authoritative FEDERATION_READ_METHODS set straight from the source so
 // this guard tracks the real gate list instead of a hand-maintained copy.

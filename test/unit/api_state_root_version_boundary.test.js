@@ -45,13 +45,12 @@
 'use strict';
 
 const assert = require('assert');
-const fs     = require('fs');
-const path   = require('path');
 
 const merkle = require('../../src/consensus/merkle.js');
 const SUB    = require('../../src/state_subtree_activation.js');
 
-const API_SRC = fs.readFileSync(path.join(__dirname, '../../src/api.js'), 'utf8');
+const { readApiSource } = require('../helpers/api_source');
+const API_SRC = readApiSource();
 
 // Brace-match the getblockhashes success-response literal: a pure projection of
 // (indexer, stored, blockHash, merkle, stateSubtree), so it needs no DB.
