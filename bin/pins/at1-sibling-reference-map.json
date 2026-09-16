@@ -1,10 +1,10 @@
 {
   "pinMetadata": {
     "tool": "bin/sibling-reference-map.js",
-    "capturedAt": "2026-09-16T08:26:17.153Z",
-    "indexerSha": "c3885add",
+    "capturedAt": "2026-09-16T10:32:16.100Z",
+    "indexerSha": "aec8b07e04b48f4b0d5875721af8b975e0e97656",
     "siblingsRoot": "..",
-    "note": "W5 consolidation (row 21)",
+    "note": "W5 consolidation (row 21), final companion tips",
     "indexerSrcFilesAtBaseSha": [
       "src/XChainIndexer.js",
       "src/XChainIndexer/background_jobs.js",
@@ -905,18 +905,18 @@
     "xchain-websites"
   ],
   "platformToolingSwept": [],
-  "distinctPathCount": 184,
-  "existingPathCount": 107,
-  "referenceCount": 793,
+  "distinctPathCount": 166,
+  "existingPathCount": 119,
+  "referenceCount": 765,
   "referenceCountByKind": {
-    "require": 70,
-    "join": 44,
-    "text": 679
+    "require": 68,
+    "join": 43,
+    "text": 654
   },
   "referenceCountByForm": {
-    "text": 623,
-    "join": 44,
-    "root-var": 86,
+    "text": 598,
+    "join": 43,
+    "root-var": 84,
     "helper": 40,
     "shell-var": 0,
     "shell-arg": 0
@@ -1040,7 +1040,7 @@
         {
           "repo": "xchain-e2e-test",
           "file": "xchain-e2e-test/test/integration/parity/checkpointCommitmentParity.test.js",
-          "line": 61,
+          "line": 70,
           "kind": "require",
           "form": "text",
           "raw": "src/actions/anchor/index.js"
@@ -1082,7 +1082,7 @@
       "referrers": [
         {
           "repo": "xchain-documentation",
-          "file": "xchain-documentation/protocol/reference-impl/snapshot_reorg_buffer.js",
+          "file": "xchain-documentation/protocol/reference-impl/consensus/snapshot_reorg_buffer.js",
           "line": 35,
           "kind": "text",
           "form": "text",
@@ -1098,7 +1098,7 @@
         },
         {
           "repo": "xchain-sdk",
-          "file": "xchain-sdk/src/snapshot_reorg_buffer.js",
+          "file": "xchain-sdk/src/consensus/snapshot_reorg_buffer.js",
           "line": 35,
           "kind": "text",
           "form": "text",
@@ -1158,13 +1158,39 @@
         }
       ]
     },
-    "src/actions/attest/attest_request_cap_gate.js": {
+    "src/actions/attest/attest_broadcast_fee_gate.js": {
       "exists": true,
       "referenceCount": 1,
       "referringRepos": [
+        "xchain-documentation"
+      ],
+      "referrers": [
+        {
+          "repo": "xchain-documentation",
+          "file": "xchain-documentation/protocol/constants.js",
+          "line": 979,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/actions/attest/attest_broadcast_fee_gate.js"
+        }
+      ]
+    },
+    "src/actions/attest/attest_request_cap_gate.js": {
+      "exists": true,
+      "referenceCount": 2,
+      "referringRepos": [
+        "xchain-documentation",
         "xchain-e2e-test"
       ],
       "referrers": [
+        {
+          "repo": "xchain-documentation",
+          "file": "xchain-documentation/protocol/constants.js",
+          "line": 773,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/actions/attest/attest_request_cap_gate.js"
+        },
         {
           "repo": "xchain-e2e-test",
           "file": "xchain-e2e-test/test/actions/attestation_request_cap.test.js",
@@ -1211,7 +1237,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 1616,
+          "line": 922,
           "kind": "text",
           "form": "text",
           "raw": "src/actions/attest/constants.js"
@@ -1254,14 +1280,6 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_006_attest_v3_wire.test.js",
-          "line": 175,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/actions/attest/index.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_007_attest_v4_wire.test.js",
           "line": 174,
           "kind": "text",
           "form": "text",
@@ -1269,8 +1287,16 @@
         },
         {
           "repo": "xchain-hub",
+          "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_007_attest_v4_wire.test.js",
+          "line": 173,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/actions/attest/index.js"
+        },
+        {
+          "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay.test.js",
-          "line": 229,
+          "line": 228,
           "kind": "join",
           "form": "join",
           "raw": "src/actions/attest/index.js"
@@ -1278,7 +1304,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay.test.js",
-          "line": 286,
+          "line": 285,
           "kind": "join",
           "form": "join",
           "raw": "src/actions/attest/index.js"
@@ -1286,7 +1312,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay.test.js",
-          "line": 313,
+          "line": 312,
           "kind": "text",
           "form": "text",
           "raw": "src/actions/attest/index.js"
@@ -1583,7 +1609,7 @@
         {
           "repo": "xchain-e2e-test",
           "file": "xchain-e2e-test/test/integration/parity/crossChainRoyaltyParity.test.js",
-          "line": 44,
+          "line": 48,
           "kind": "require",
           "form": "text",
           "raw": "src/actions/cross_settle/index.js"
@@ -2269,7 +2295,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 778,
+          "line": 570,
           "kind": "text",
           "form": "text",
           "raw": "src/actions/price/price_batch_compression.js"
@@ -2304,7 +2330,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 5387,
+          "line": 3877,
           "kind": "text",
           "form": "text",
           "raw": "src/actions/rollcall/rollcall_canonical.js"
@@ -2463,64 +2489,6 @@
         }
       ]
     },
-    "src/anchor_reward_activation.js": {
-      "exists": false,
-      "referenceCount": 6,
-      "referringRepos": [
-        "xchain-e2e-test",
-        "xchain-hub"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/test/integration/parity/anchorRewardParity.test.js",
-          "line": 54,
-          "kind": "require",
-          "form": "text",
-          "raw": "src/anchor_reward_activation.js"
-        },
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/test/integration/parity/anchorRewardParity.test.js",
-          "line": 106,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/anchor_reward_activation.js"
-        },
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/test/regression/protocol-size-limits.regression.js",
-          "line": 639,
-          "kind": "require",
-          "form": "text",
-          "raw": "src/anchor_reward_activation.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 1179,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/anchor_reward_activation.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/activations/anchor_reward_activation_parity.test.js",
-          "line": 31,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/anchor_reward_activation.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/activations/anchor_reward_activation_parity.test.js",
-          "line": 40,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/anchor_reward_activation.js"
-        }
-      ]
-    },
     "src/api.js": {
       "exists": true,
       "referenceCount": 48,
@@ -2605,7 +2573,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 1057,
+          "line": 750,
           "kind": "text",
           "form": "text",
           "raw": "src/api.js"
@@ -2966,131 +2934,11 @@
         }
       ]
     },
-    "src/attest_admission_activation.js": {
-      "exists": false,
-      "referenceCount": 1,
-      "referringRepos": [
-        "xchain-documentation"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-documentation",
-          "file": "xchain-documentation/protocol/constants.js",
-          "line": 731,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/attest_admission_activation.js"
-        }
-      ]
-    },
-    "src/attest_broadcast_fee_activation.js": {
-      "exists": false,
-      "referenceCount": 1,
-      "referringRepos": [
-        "xchain-documentation"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-documentation",
-          "file": "xchain-documentation/protocol/constants.js",
-          "line": 977,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/attest_broadcast_fee_activation.js"
-        }
-      ]
-    },
-    "src/attest_relay_activation.js": {
-      "exists": false,
-      "referenceCount": 3,
-      "referringRepos": [
-        "xchain-hub"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 1425,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/attest_relay_activation.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/activations/attest_relay_activation.test.js",
-          "line": 44,
-          "kind": "text",
-          "form": "root-var",
-          "raw": "src/attest_relay_activation.js",
-          "via": "INDEXER_DIR"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/activations/attest_relay_activation.test.js",
-          "line": 90,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/attest_relay_activation.js"
-        }
-      ]
-    },
-    "src/attest_relay_reject_slot_activation.js": {
-      "exists": false,
-      "referenceCount": 3,
-      "referringRepos": [
-        "xchain-hub"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 1466,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/attest_relay_reject_slot_activation.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/activations/attest_relay_reject_slot_activation.test.js",
-          "line": 45,
-          "kind": "text",
-          "form": "root-var",
-          "raw": "src/attest_relay_reject_slot_activation.js",
-          "via": "INDEXER_DIR"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/activations/attest_relay_reject_slot_activation.test.js",
-          "line": 96,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/attest_relay_reject_slot_activation.js"
-        }
-      ]
-    },
-    "src/attest_request_cap_activation.js": {
-      "exists": false,
-      "referenceCount": 1,
-      "referringRepos": [
-        "xchain-documentation"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-documentation",
-          "file": "xchain-documentation/protocol/constants.js",
-          "line": 772,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/attest_request_cap_activation.js"
-        }
-      ]
-    },
     "src/attest_response_mirror_activation.js": {
       "exists": false,
-      "referenceCount": 4,
+      "referenceCount": 1,
       "referringRepos": [
-        "xchain-e2e-test",
-        "xchain-hub"
+        "xchain-e2e-test"
       ],
       "referrers": [
         {
@@ -3100,100 +2948,6 @@
           "kind": "text",
           "form": "text",
           "raw": "src/attest_response_mirror_activation.js"
-        },
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/test/unit/attest_legacy_response_path.test.js",
-          "line": 32,
-          "kind": "join",
-          "form": "join",
-          "raw": "src/attest_response_mirror_activation.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 1509,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/attest_response_mirror_activation.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/activations/attest_zero_conf_activation.test.js",
-          "line": 40,
-          "kind": "text",
-          "form": "root-var",
-          "raw": "src/attest_response_mirror_activation.js",
-          "via": "INDEXER_DIR"
-        }
-      ]
-    },
-    "src/attest_responsible_widening_activation.js": {
-      "exists": false,
-      "referenceCount": 4,
-      "referringRepos": [
-        "xchain-e2e-test",
-        "xchain-hub"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/test/attestMirror/mirrorDrillWaits.js",
-          "line": 49,
-          "kind": "require",
-          "form": "text",
-          "raw": "src/attest_responsible_widening_activation.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 1558,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/attest_responsible_widening_activation.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 1878,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/attest_responsible_widening_activation.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/activations/attest_zero_conf_activation.test.js",
-          "line": 39,
-          "kind": "text",
-          "form": "root-var",
-          "raw": "src/attest_responsible_widening_activation.js",
-          "via": "INDEXER_DIR"
-        }
-      ]
-    },
-    "src/attest_zero_conf_activation.js": {
-      "exists": false,
-      "referenceCount": 2,
-      "referringRepos": [
-        "xchain-hub"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 1599,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/attest_zero_conf_activation.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/activations/attest_zero_conf_activation.test.js",
-          "line": 38,
-          "kind": "text",
-          "form": "root-var",
-          "raw": "src/attest_zero_conf_activation.js",
-          "via": "INDEXER_DIR"
         }
       ]
     },
@@ -3325,31 +3079,6 @@
         }
       ]
     },
-    "src/checkpoint_commitment_activation.js": {
-      "exists": false,
-      "referenceCount": 2,
-      "referringRepos": [
-        "xchain-e2e-test"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/test/integration/parity/checkpointCommitmentParity.test.js",
-          "line": 51,
-          "kind": "require",
-          "form": "text",
-          "raw": "src/checkpoint_commitment_activation.js"
-        },
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/test/integration/parity/checkpointCommitmentParity.test.js",
-          "line": 196,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/checkpoint_commitment_activation.js"
-        }
-      ]
-    },
     "src/cloned.js": {
       "exists": false,
       "referenceCount": 1,
@@ -3360,7 +3089,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/bin/test/sibling_reference_map.test.js",
-          "line": 192,
+          "line": 214,
           "kind": "text",
           "form": "root-var",
           "raw": "src/cloned.js",
@@ -3606,7 +3335,7 @@
         {
           "repo": "xchain-documentation",
           "file": "xchain-documentation/protocol/constants.js",
-          "line": 1428,
+          "line": 1430,
           "kind": "text",
           "form": "text",
           "raw": "src/config.js"
@@ -3614,7 +3343,7 @@
         {
           "repo": "xchain-documentation",
           "file": "xchain-documentation/protocol/constants.js",
-          "line": 1435,
+          "line": 1437,
           "kind": "text",
           "form": "text",
           "raw": "src/config.js"
@@ -3663,7 +3392,7 @@
         {
           "repo": "xchain-explorer",
           "file": "xchain-explorer/src/protocol/constants.js",
-          "line": 335,
+          "line": 336,
           "kind": "text",
           "form": "text",
           "raw": "src/config.js"
@@ -3671,7 +3400,7 @@
         {
           "repo": "xchain-explorer",
           "file": "xchain-explorer/src/protocol/constants.js",
-          "line": 342,
+          "line": 343,
           "kind": "text",
           "form": "text",
           "raw": "src/config.js"
@@ -3952,7 +3681,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 1641,
+          "line": 947,
           "kind": "text",
           "form": "text",
           "raw": "src/consensus/attest_response_canonical.js"
@@ -4064,7 +3793,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 6033,
+          "line": 4219,
           "kind": "text",
           "form": "text",
           "raw": "src/consensus/ed25519.js"
@@ -4231,6 +3960,75 @@
         }
       ]
     },
+    "src/consensus/equivocation_header.js": {
+      "exists": true,
+      "referenceCount": 7,
+      "referringRepos": [
+        "xchain-e2e-test",
+        "xchain-explorer",
+        "xchain-hub"
+      ],
+      "referrers": [
+        {
+          "repo": "xchain-e2e-test",
+          "file": "xchain-e2e-test/test/actions/capability_slash.test.js",
+          "line": 22,
+          "kind": "require",
+          "form": "text",
+          "raw": "src/consensus/equivocation_header.js"
+        },
+        {
+          "repo": "xchain-e2e-test",
+          "file": "xchain-e2e-test/test/helpers/attestationHelper.js",
+          "line": 18,
+          "kind": "require",
+          "form": "text",
+          "raw": "src/consensus/equivocation_header.js"
+        },
+        {
+          "repo": "xchain-e2e-test",
+          "file": "xchain-e2e-test/test/helpers/rollcallHelper.js",
+          "line": 499,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/equivocation_header.js"
+        },
+        {
+          "repo": "xchain-e2e-test",
+          "file": "xchain-e2e-test/test/integration/oracleBatchTamper.integration.test.js",
+          "line": 115,
+          "kind": "require",
+          "form": "root-var",
+          "raw": "src/consensus/equivocation_header.js",
+          "via": "INDEXER_ROOT"
+        },
+        {
+          "repo": "xchain-e2e-test",
+          "file": "xchain-e2e-test/test/integration/parity/equivGateInputParity.test.js",
+          "line": 75,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/equivocation_header.js"
+        },
+        {
+          "repo": "xchain-explorer",
+          "file": "xchain-explorer/test/unit/mirror/hub_mirror_client_conformance.test.js",
+          "line": 190,
+          "kind": "text",
+          "form": "root-var",
+          "raw": "src/consensus/equivocation_header.js",
+          "via": "CANON_SRC"
+        },
+        {
+          "repo": "xchain-hub",
+          "file": "xchain-hub/test/unit/consensus/equivocation_header.test.js",
+          "line": 16,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/equivocation_header.js"
+        }
+      ]
+    },
     "src/consensus/escrowLeafSubtree.js": {
       "exists": false,
       "referenceCount": 1,
@@ -4266,6 +4064,92 @@
         }
       ]
     },
+    "src/consensus/gate_registry.js": {
+      "exists": true,
+      "referenceCount": 2,
+      "referringRepos": [
+        "xchain-e2e-test",
+        "xchain-hub"
+      ],
+      "referrers": [
+        {
+          "repo": "xchain-e2e-test",
+          "file": "xchain-e2e-test/test/unit/attest_legacy_response_path.test.js",
+          "line": 34,
+          "kind": "join",
+          "form": "join",
+          "raw": "src/consensus/gate_registry.js"
+        },
+        {
+          "repo": "xchain-hub",
+          "file": "xchain-hub/test/unit/activations/attest_zero_conf_activation.test.js",
+          "line": 45,
+          "kind": "text",
+          "form": "root-var",
+          "raw": "src/consensus/gate_registry.js",
+          "via": "INDEXER_DIR"
+        }
+      ]
+    },
+    "src/consensus/gates/": {
+      "exists": false,
+      "referenceCount": 1,
+      "referringRepos": [
+        "xchain-documentation"
+      ],
+      "referrers": [
+        {
+          "repo": "xchain-documentation",
+          "file": "xchain-documentation/protocol/constants.js",
+          "line": 419,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/gates/"
+        }
+      ]
+    },
+    "src/consensus/gates/anchor_reward_gate.js": {
+      "exists": true,
+      "referenceCount": 4,
+      "referringRepos": [
+        "xchain-e2e-test",
+        "xchain-hub"
+      ],
+      "referrers": [
+        {
+          "repo": "xchain-e2e-test",
+          "file": "xchain-e2e-test/test/integration/parity/anchorRewardParity.test.js",
+          "line": 54,
+          "kind": "require",
+          "form": "text",
+          "raw": "src/consensus/gates/anchor_reward_gate.js"
+        },
+        {
+          "repo": "xchain-e2e-test",
+          "file": "xchain-e2e-test/test/integration/parity/anchorRewardParity.test.js",
+          "line": 106,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/gates/anchor_reward_gate.js"
+        },
+        {
+          "repo": "xchain-e2e-test",
+          "file": "xchain-e2e-test/test/regression/protocol-size-limits.regression.js",
+          "line": 639,
+          "kind": "require",
+          "form": "text",
+          "raw": "src/consensus/gates/anchor_reward_gate.js"
+        },
+        {
+          "repo": "xchain-hub",
+          "file": "xchain-hub/test/unit/activations/anchor_reward_activation_parity.test.js",
+          "line": 31,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/gates/anchor_reward_gate.js"
+        }
+      ]
+    },
     "src/consensus/gates/archive_rollback_author_scope_gate.js": {
       "exists": true,
       "referenceCount": 1,
@@ -4281,6 +4165,205 @@
           "form": "helper",
           "raw": "src/consensus/gates/archive_rollback_author_scope_gate.js",
           "via": "indexerFile"
+        }
+      ]
+    },
+    "src/consensus/gates/attest_responsible_widening_gate.js": {
+      "exists": true,
+      "referenceCount": 4,
+      "referringRepos": [
+        "xchain-e2e-test",
+        "xchain-hub"
+      ],
+      "referrers": [
+        {
+          "repo": "xchain-e2e-test",
+          "file": "xchain-e2e-test/test/attestMirror/mirrorDrillWaits.js",
+          "line": 49,
+          "kind": "require",
+          "form": "text",
+          "raw": "src/consensus/gates/attest_responsible_widening_gate.js"
+        },
+        {
+          "repo": "xchain-hub",
+          "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
+          "line": 905,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/gates/attest_responsible_widening_gate.js"
+        },
+        {
+          "repo": "xchain-hub",
+          "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
+          "line": 1158,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/gates/attest_responsible_widening_gate.js"
+        },
+        {
+          "repo": "xchain-hub",
+          "file": "xchain-hub/test/unit/activations/attest_zero_conf_activation.test.js",
+          "line": 46,
+          "kind": "text",
+          "form": "root-var",
+          "raw": "src/consensus/gates/attest_responsible_widening_gate.js",
+          "via": "INDEXER_DIR"
+        }
+      ]
+    },
+    "src/consensus/gates/mirror_admission_gate.js": {
+      "exists": true,
+      "referenceCount": 2,
+      "referringRepos": [
+        "xchain-hub"
+      ],
+      "referrers": [
+        {
+          "repo": "xchain-hub",
+          "file": "xchain-hub/test/unit/oracle/price/price_v0_canonical_admission.test.js",
+          "line": 53,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/gates/mirror_admission_gate.js"
+        },
+        {
+          "repo": "xchain-hub",
+          "file": "xchain-hub/test/unit/oracle/price/price_v2_payload_twin_parity_single_round.test.js",
+          "line": 135,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/gates/mirror_admission_gate.js"
+        }
+      ]
+    },
+    "src/consensus/gates/price_pair_gate.js": {
+      "exists": true,
+      "referenceCount": 3,
+      "referringRepos": [
+        "xchain-e2e-test",
+        "xchain-hub"
+      ],
+      "referrers": [
+        {
+          "repo": "xchain-e2e-test",
+          "file": "xchain-e2e-test/test/regression/protocol-size-limits.regression.js",
+          "line": 483,
+          "kind": "require",
+          "form": "text",
+          "raw": "src/consensus/gates/price_pair_gate.js"
+        },
+        {
+          "repo": "xchain-hub",
+          "file": "xchain-hub/test/unit/activations/price_pair_activation.test.js",
+          "line": 40,
+          "kind": "text",
+          "form": "root-var",
+          "raw": "src/consensus/gates/price_pair_gate.js",
+          "via": "INDEXER_DIR"
+        },
+        {
+          "repo": "xchain-hub",
+          "file": "xchain-hub/test/unit/activations/price_pair_activation.test.js",
+          "line": 54,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/gates/price_pair_gate.js"
+        }
+      ]
+    },
+    "src/consensus/gates/price_scale_gate.js": {
+      "exists": true,
+      "referenceCount": 1,
+      "referringRepos": [
+        "xchain-hub"
+      ],
+      "referrers": [
+        {
+          "repo": "xchain-hub",
+          "file": "xchain-hub/test/unit/activations/price_scale_activation.test.js",
+          "line": 41,
+          "kind": "text",
+          "form": "root-var",
+          "raw": "src/consensus/gates/price_scale_gate.js",
+          "via": "INDEXER_DIR"
+        }
+      ]
+    },
+    "src/consensus/gates/rollcall_gate.js": {
+      "exists": true,
+      "referenceCount": 3,
+      "referringRepos": [
+        "xchain-e2e-test",
+        "xchain-hub"
+      ],
+      "referrers": [
+        {
+          "repo": "xchain-e2e-test",
+          "file": "xchain-e2e-test/test/regression/protocol-size-limits.regression.js",
+          "line": 752,
+          "kind": "require",
+          "form": "text",
+          "raw": "src/consensus/gates/rollcall_gate.js"
+        },
+        {
+          "repo": "xchain-hub",
+          "file": "xchain-hub/test/unit/activations/rollcall_activation.test.js",
+          "line": 53,
+          "kind": "text",
+          "form": "root-var",
+          "raw": "src/consensus/gates/rollcall_gate.js",
+          "via": "INDEXER_DIR"
+        },
+        {
+          "repo": "xchain-hub",
+          "file": "xchain-hub/test/unit/activations/rollcall_activation.test.js",
+          "line": 339,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/gates/rollcall_gate.js"
+        }
+      ]
+    },
+    "src/consensus/gates/rollcall_gates_gate.js": {
+      "exists": true,
+      "referenceCount": 4,
+      "referringRepos": [
+        "xchain-e2e-test",
+        "xchain-hub"
+      ],
+      "referrers": [
+        {
+          "repo": "xchain-e2e-test",
+          "file": "xchain-e2e-test/test/regression/protocol-size-limits.regression.js",
+          "line": 775,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/gates/rollcall_gates_gate.js"
+        },
+        {
+          "repo": "xchain-e2e-test",
+          "file": "xchain-e2e-test/test/regression/protocol-size-limits.regression.js",
+          "line": 784,
+          "kind": "require",
+          "form": "text",
+          "raw": "src/consensus/gates/rollcall_gates_gate.js"
+        },
+        {
+          "repo": "xchain-hub",
+          "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
+          "line": 3894,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/gates/rollcall_gates_gate.js"
+        },
+        {
+          "repo": "xchain-hub",
+          "file": "xchain-hub/test/unit/activations/attest_zero_conf_activation.test.js",
+          "line": 47,
+          "kind": "text",
+          "form": "root-var",
+          "raw": "src/consensus/gates/rollcall_gates_gate.js",
+          "via": "INDEXER_DIR"
         }
       ]
     },
@@ -4322,11 +4405,54 @@
     },
     "src/consensus/gates/state_subtree_gate.js": {
       "exists": true,
-      "referenceCount": 1,
+      "referenceCount": 6,
       "referringRepos": [
+        "xchain-e2e-test",
+        "xchain-explorer",
         "xchain-sync"
       ],
       "referrers": [
+        {
+          "repo": "xchain-e2e-test",
+          "file": "xchain-e2e-test/bin/seed-contract-state.js",
+          "line": 306,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/gates/state_subtree_gate.js"
+        },
+        {
+          "repo": "xchain-e2e-test",
+          "file": "xchain-e2e-test/bin/seed-contract-state.js",
+          "line": 307,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/gates/state_subtree_gate.js"
+        },
+        {
+          "repo": "xchain-e2e-test",
+          "file": "xchain-e2e-test/bin/seed-escrow-state.js",
+          "line": 178,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/gates/state_subtree_gate.js"
+        },
+        {
+          "repo": "xchain-e2e-test",
+          "file": "xchain-e2e-test/bin/seed-escrow-state.js",
+          "line": 179,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/gates/state_subtree_gate.js"
+        },
+        {
+          "repo": "xchain-explorer",
+          "file": "xchain-explorer/test/unit/mirror/hub_mirror_client_conformance.test.js",
+          "line": 190,
+          "kind": "text",
+          "form": "root-var",
+          "raw": "src/consensus/gates/state_subtree_gate.js",
+          "via": "CANON_SRC"
+        },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/test/unit/rollback_coverage.test.js",
@@ -4358,11 +4484,19 @@
     },
     "src/consensus/gates/train_gate.js": {
       "exists": true,
-      "referenceCount": 1,
+      "referenceCount": 2,
       "referringRepos": [
         "xchain-sync"
       ],
       "referrers": [
+        {
+          "repo": "xchain-sync",
+          "file": "xchain-sync/bin/pins/at1-suite-titles.json",
+          "line": 2593,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/gates/train_gate.js"
+        },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/test/unit/train_activation_twin.test.js",
@@ -4411,7 +4545,7 @@
         {
           "repo": "xchain-e2e-test",
           "file": "xchain-e2e-test/test/integration/parity/checkpointCommitmentParity.test.js",
-          "line": 162,
+          "line": 171,
           "kind": "text",
           "form": "text",
           "raw": "src/consensus/merkle.js"
@@ -4419,7 +4553,7 @@
         {
           "repo": "xchain-e2e-test",
           "file": "xchain-e2e-test/test/integration/parity/checkpointCommitmentParity.test.js",
-          "line": 176,
+          "line": 185,
           "kind": "text",
           "form": "text",
           "raw": "src/consensus/merkle.js"
@@ -4605,13 +4739,101 @@
         }
       ]
     },
+    "src/consensus/snapshot_reorg_buffer.js": {
+      "exists": true,
+      "referenceCount": 3,
+      "referringRepos": [
+        "xchain-e2e-test",
+        "xchain-hub"
+      ],
+      "referrers": [
+        {
+          "repo": "xchain-e2e-test",
+          "file": "xchain-e2e-test/test/actions/capability_slash.test.js",
+          "line": 26,
+          "kind": "require",
+          "form": "text",
+          "raw": "src/consensus/snapshot_reorg_buffer.js"
+        },
+        {
+          "repo": "xchain-e2e-test",
+          "file": "xchain-e2e-test/test/regression/protocol-size-limits.regression.js",
+          "line": 612,
+          "kind": "require",
+          "form": "text",
+          "raw": "src/consensus/snapshot_reorg_buffer.js"
+        },
+        {
+          "repo": "xchain-hub",
+          "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
+          "line": 545,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/snapshot_reorg_buffer.js"
+        }
+      ]
+    },
+    "src/consensus/stake_weighted_quorum.js": {
+      "exists": true,
+      "referenceCount": 3,
+      "referringRepos": [
+        "xchain-e2e-test",
+        "xchain-explorer",
+        "xchain-hub"
+      ],
+      "referrers": [
+        {
+          "repo": "xchain-e2e-test",
+          "file": "xchain-e2e-test/test/helpers/attestationHelper.js",
+          "line": 19,
+          "kind": "require",
+          "form": "text",
+          "raw": "src/consensus/stake_weighted_quorum.js"
+        },
+        {
+          "repo": "xchain-explorer",
+          "file": "xchain-explorer/test/unit/mirror/hub_mirror_client_conformance.test.js",
+          "line": 190,
+          "kind": "text",
+          "form": "root-var",
+          "raw": "src/consensus/stake_weighted_quorum.js",
+          "via": "CANON_SRC"
+        },
+        {
+          "repo": "xchain-hub",
+          "file": "xchain-hub/test/unit/consensus/stake_weighted_quorum.test.js",
+          "line": 25,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/stake_weighted_quorum.js"
+        }
+      ]
+    },
     "src/consensus/state_hash.js": {
       "exists": true,
-      "referenceCount": 2,
+      "referenceCount": 4,
       "referringRepos": [
+        "xchain-documentation",
+        "xchain-e2e-test",
         "xchain-sync"
       ],
       "referrers": [
+        {
+          "repo": "xchain-documentation",
+          "file": "xchain-documentation/concepts/block-hashes.md",
+          "line": 105,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/state_hash.js"
+        },
+        {
+          "repo": "xchain-e2e-test",
+          "file": "xchain-e2e-test/test/sdk/betParity.sdk.test/support/bet_parity_support.js",
+          "line": 21,
+          "kind": "text",
+          "form": "text",
+          "raw": "src/consensus/state_hash.js"
+        },
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/test/unit/rollback_coverage.test.js",
@@ -4642,7 +4864,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 3708,
+          "line": 2647,
           "kind": "text",
           "form": "text",
           "raw": "src/consensus_rules_digest.js"
@@ -4715,40 +4937,6 @@
         }
       ]
     },
-    "src/cross_chain_royalty_activation.js": {
-      "exists": false,
-      "referenceCount": 3,
-      "referringRepos": [
-        "xchain-e2e-test",
-        "xchain-hub"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/test/integration/parity/crossChainRoyaltyParity.test.js",
-          "line": 40,
-          "kind": "require",
-          "form": "text",
-          "raw": "src/cross_chain_royalty_activation.js"
-        },
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/test/integration/parity/crossChainRoyaltyParity.test.js",
-          "line": 76,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/cross_chain_royalty_activation.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 4053,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/cross_chain_royalty_activation.js"
-        }
-      ]
-    },
     "src/db.js": {
       "exists": false,
       "referenceCount": 7,
@@ -4763,14 +4951,14 @@
         {
           "repo": "xchain-documentation",
           "file": "xchain-documentation/protocol/constants.js",
-          "line": 1140,
+          "line": 1142,
           "kind": "text",
           "form": "text",
           "raw": "src/db.js"
         },
         {
           "repo": "xchain-documentation",
-          "file": "xchain-documentation/protocol/reference-impl/snapshot_reorg_buffer.js",
+          "file": "xchain-documentation/protocol/reference-impl/consensus/snapshot_reorg_buffer.js",
           "line": 44,
           "kind": "text",
           "form": "text",
@@ -4794,7 +4982,7 @@
         },
         {
           "repo": "xchain-sdk",
-          "file": "xchain-sdk/src/snapshot_reorg_buffer.js",
+          "file": "xchain-sdk/src/consensus/snapshot_reorg_buffer.js",
           "line": 44,
           "kind": "text",
           "form": "text",
@@ -4987,7 +5175,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 4089,
+          "line": 2918,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -4995,7 +5183,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_000_opt_in_and_flag_day_inertness.test.js",
-          "line": 56,
+          "line": 55,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5003,7 +5191,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_000_opt_in_and_flag_day_inertness.test.js",
-          "line": 96,
+          "line": 95,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5011,7 +5199,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_001_origin_discovery.test.js",
-          "line": 56,
+          "line": 55,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5019,7 +5207,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_001_origin_discovery.test.js",
-          "line": 96,
+          "line": 95,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5027,7 +5215,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_002_refused_home_rows_and_attest_relay.test.js",
-          "line": 56,
+          "line": 59,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5035,7 +5223,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_002_refused_home_rows_and_attest_relay.test.js",
-          "line": 96,
+          "line": 99,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5043,7 +5231,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_003_home_response_discovery.test.js",
-          "line": 56,
+          "line": 55,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5051,7 +5239,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_003_home_response_discovery.test.js",
-          "line": 96,
+          "line": 95,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5059,7 +5247,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_004_validateproposedmatch.test.js",
-          "line": 56,
+          "line": 55,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5067,7 +5255,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_004_validateproposedmatch.test.js",
-          "line": 96,
+          "line": 95,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5075,7 +5263,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_005_validateproposedmatch_response_leg.test.js",
-          "line": 56,
+          "line": 55,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5083,7 +5271,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_005_validateproposedmatch_response_leg.test.js",
-          "line": 96,
+          "line": 95,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5091,7 +5279,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_006_attest_v3_wire.test.js",
-          "line": 56,
+          "line": 55,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5099,7 +5287,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_006_attest_v3_wire.test.js",
-          "line": 96,
+          "line": 95,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5107,7 +5295,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_007_attest_v4_wire.test.js",
-          "line": 56,
+          "line": 55,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5115,7 +5303,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_007_attest_v4_wire.test.js",
-          "line": 96,
+          "line": 95,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5123,7 +5311,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_008_broadcast_wal.test.js",
-          "line": 56,
+          "line": 55,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5131,7 +5319,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_008_broadcast_wal.test.js",
-          "line": 96,
+          "line": 95,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5139,7 +5327,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_009_broadcast.test.js",
-          "line": 56,
+          "line": 55,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5147,7 +5335,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_009_broadcast.test.js",
-          "line": 96,
+          "line": 95,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5155,7 +5343,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_010_broadcast.test.js",
-          "line": 56,
+          "line": 55,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5163,7 +5351,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_010_broadcast.test.js",
-          "line": 96,
+          "line": 95,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5171,7 +5359,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_011_deadline_anchored_eviction.test.js",
-          "line": 56,
+          "line": 55,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5179,7 +5367,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_011_deadline_anchored_eviction.test.js",
-          "line": 96,
+          "line": 95,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5187,7 +5375,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_012_deadline_anchored_eviction.test.js",
-          "line": 56,
+          "line": 55,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5195,7 +5383,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_012_deadline_anchored_eviction.test.js",
-          "line": 96,
+          "line": 95,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5203,7 +5391,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_013_deadline_anchored_eviction.test.js",
-          "line": 56,
+          "line": 55,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5211,7 +5399,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay_013_deadline_anchored_eviction.test.js",
-          "line": 96,
+          "line": 95,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5219,7 +5407,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay.test.js",
-          "line": 56,
+          "line": 55,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5227,7 +5415,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/attestation/relay/attestation_relay.test.js",
-          "line": 96,
+          "line": 95,
           "kind": "text",
           "form": "text",
           "raw": "src/db/index.js"
@@ -5481,80 +5669,13 @@
         }
       ]
     },
-    "src/dispenser_caps_activation.js": {
+    "src/equivocation_header.js": {
       "exists": false,
       "referenceCount": 1,
       "referringRepos": [
-        "xchain-documentation"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-documentation",
-          "file": "xchain-documentation/test/flag-day-literals.test.js",
-          "line": 155,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/dispenser_caps_activation.js"
-        }
-      ]
-    },
-    "src/equivocation_header.js": {
-      "exists": false,
-      "referenceCount": 7,
-      "referringRepos": [
-        "xchain-e2e-test",
         "xchain-hub"
       ],
       "referrers": [
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/test/actions/capability_slash.test.js",
-          "line": 22,
-          "kind": "require",
-          "form": "text",
-          "raw": "src/equivocation_header.js"
-        },
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/test/helpers/attestationHelper.js",
-          "line": 18,
-          "kind": "require",
-          "form": "text",
-          "raw": "src/equivocation_header.js"
-        },
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/test/helpers/rollcallHelper.js",
-          "line": 499,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/equivocation_header.js"
-        },
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/test/integration/oracleBatchTamper.integration.test.js",
-          "line": 115,
-          "kind": "require",
-          "form": "root-var",
-          "raw": "src/equivocation_header.js",
-          "via": "INDEXER_ROOT"
-        },
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/test/integration/parity/equivGateInputParity.test.js",
-          "line": 75,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/equivocation_header.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/consensus/equivocation_header.test.js",
-          "line": 16,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/equivocation_header.js"
-        },
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/consensus/equivocation_header.test.js",
@@ -5644,7 +5765,7 @@
         {
           "repo": "xchain-explorer",
           "file": "xchain-explorer/bin/pins/at1-explorer-identity.json",
-          "line": 7477,
+          "line": 2807,
           "kind": "text",
           "form": "text",
           "raw": "src/hub/"
@@ -5652,7 +5773,7 @@
         {
           "repo": "xchain-explorer",
           "file": "xchain-explorer/bin/pins/at1-explorer-identity.json",
-          "line": 7478,
+          "line": 2808,
           "kind": "text",
           "form": "text",
           "raw": "src/hub/"
@@ -5668,7 +5789,7 @@
         {
           "repo": "xchain-explorer",
           "file": "xchain-explorer/test/unit/mirror/hub_mirror_client_conformance.test.js",
-          "line": 85,
+          "line": 87,
           "kind": "text",
           "form": "text",
           "raw": "src/hub/"
@@ -5710,7 +5831,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 4453,
+          "line": 3159,
           "kind": "text",
           "form": "text",
           "raw": "src/hub/hub_client/request.js"
@@ -5869,7 +5990,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 3659,
+          "line": 2512,
           "kind": "text",
           "form": "text",
           "raw": "src/hub/hub_db_sync/retractions.js"
@@ -5886,7 +6007,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 3667,
+          "line": 2520,
           "kind": "text",
           "form": "text",
           "raw": "src/hub/hub_db_sync/watermark_config.js"
@@ -5912,7 +6033,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 4278,
+          "line": 2984,
           "kind": "text",
           "form": "text",
           "raw": "src/hub/hub_schema_version.js"
@@ -5920,7 +6041,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 4286,
+          "line": 2992,
           "kind": "text",
           "form": "text",
           "raw": "src/hub/hub_schema_version.js"
@@ -5981,40 +6102,6 @@
         }
       ]
     },
-    "src/list_edit_resolution_activation.js": {
-      "exists": false,
-      "referenceCount": 1,
-      "referringRepos": [
-        "xchain-explorer"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-explorer",
-          "file": "xchain-explorer/test/unit/db/readers/db_list_edit_resolution.test.js",
-          "line": 229,
-          "kind": "join",
-          "form": "join",
-          "raw": "src/list_edit_resolution_activation.js"
-        }
-      ]
-    },
-    "src/list_owner_activation.js": {
-      "exists": false,
-      "referenceCount": 1,
-      "referringRepos": [
-        "xchain-documentation"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-documentation",
-          "file": "xchain-documentation/protocol/constants.js",
-          "line": 1647,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/list_owner_activation.js"
-        }
-      ]
-    },
     "src/migration/migrate.js": {
       "exists": false,
       "referenceCount": 1,
@@ -6032,31 +6119,6 @@
         }
       ]
     },
-    "src/mirror_admission_activation.js": {
-      "exists": false,
-      "referenceCount": 2,
-      "referringRepos": [
-        "xchain-hub"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/oracle/price/price_v0_canonical_admission.test.js",
-          "line": 53,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/mirror_admission_activation.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/oracle/price/price_v2_payload_twin_parity_single_round.test.js",
-          "line": 135,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/mirror_admission_activation.js"
-        }
-      ]
-    },
     "src/observability/README.md": {
       "exists": true,
       "referenceCount": 1,
@@ -6067,106 +6129,10 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 4655,
+          "line": 3236,
           "kind": "text",
           "form": "text",
           "raw": "src/observability/README.md"
-        }
-      ]
-    },
-    "src/price_fee_batch_landed_activation.js": {
-      "exists": false,
-      "referenceCount": 1,
-      "referringRepos": [
-        "xchain-documentation"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-documentation",
-          "file": "xchain-documentation/protocol/constants.js",
-          "line": 1419,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/price_fee_batch_landed_activation.js"
-        }
-      ]
-    },
-    "src/price_pair_activation.js": {
-      "exists": false,
-      "referenceCount": 3,
-      "referringRepos": [
-        "xchain-e2e-test",
-        "xchain-hub"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/test/regression/protocol-size-limits.regression.js",
-          "line": 483,
-          "kind": "require",
-          "form": "text",
-          "raw": "src/price_pair_activation.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/activations/price_pair_activation.test.js",
-          "line": 40,
-          "kind": "text",
-          "form": "root-var",
-          "raw": "src/price_pair_activation.js",
-          "via": "INDEXER_DIR"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/activations/price_pair_activation.test.js",
-          "line": 54,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/price_pair_activation.js"
-        }
-      ]
-    },
-    "src/price_scale_activation.js": {
-      "exists": false,
-      "referenceCount": 1,
-      "referringRepos": [
-        "xchain-hub"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/activations/price_scale_activation.test.js",
-          "line": 41,
-          "kind": "text",
-          "form": "root-var",
-          "raw": "src/price_scale_activation.js",
-          "via": "INDEXER_DIR"
-        }
-      ]
-    },
-    "src/price_sig_tally_activation.js": {
-      "exists": false,
-      "referenceCount": 2,
-      "referringRepos": [
-        "xchain-hub"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/activations/price_sig_tally_activation.test.js",
-          "line": 40,
-          "kind": "text",
-          "form": "root-var",
-          "raw": "src/price_sig_tally_activation.js",
-          "via": "INDEXER_DIR"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/activations/price_sig_tally_activation.test.js",
-          "line": 54,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/price_sig_tally_activation.js"
         }
       ]
     },
@@ -6206,7 +6172,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 3828,
+          "line": 2741,
           "kind": "text",
           "form": "text",
           "raw": "src/protocol/constants.js"
@@ -6250,7 +6216,7 @@
         {
           "repo": "xchain-documentation",
           "file": "xchain-documentation/bin/generate-flag-days.js",
-          "line": 768,
+          "line": 771,
           "kind": "text",
           "form": "text",
           "raw": "src/protocol_changes.js"
@@ -6258,7 +6224,7 @@
         {
           "repo": "xchain-documentation",
           "file": "xchain-documentation/protocol/constants.js",
-          "line": 809,
+          "line": 810,
           "kind": "text",
           "form": "text",
           "raw": "src/protocol_changes.js"
@@ -6266,7 +6232,7 @@
         {
           "repo": "xchain-documentation",
           "file": "xchain-documentation/protocol/constants.js",
-          "line": 1330,
+          "line": 1332,
           "kind": "text",
           "form": "text",
           "raw": "src/protocol_changes.js"
@@ -6400,7 +6366,7 @@
         {
           "repo": "xchain-documentation",
           "file": "xchain-documentation/bin/generate-flag-days.js",
-          "line": 730,
+          "line": 733,
           "kind": "text",
           "form": "text",
           "raw": "src/protocol_changes/"
@@ -6408,7 +6374,7 @@
         {
           "repo": "xchain-documentation",
           "file": "xchain-documentation/bin/generate-flag-days.js",
-          "line": 744,
+          "line": 747,
           "kind": "text",
           "form": "text",
           "raw": "src/protocol_changes/"
@@ -6416,7 +6382,7 @@
         {
           "repo": "xchain-documentation",
           "file": "xchain-documentation/bin/generate-flag-days.js",
-          "line": 758,
+          "line": 761,
           "kind": "text",
           "form": "text",
           "raw": "src/protocol_changes/"
@@ -6440,7 +6406,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/consensus/gate_registry.test.js",
-          "line": 160,
+          "line": 168,
           "kind": "text",
           "form": "text",
           "raw": "src/protocol_changes/"
@@ -6576,7 +6542,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/test/unit/consensus/gate_registry.test.js",
-          "line": 154,
+          "line": 162,
           "kind": "text",
           "form": "root-var",
           "raw": "src/protocol_changes/shared_rows_1.js",
@@ -6603,7 +6569,7 @@
       "referrers": [
         {
           "repo": "xchain-documentation",
-          "file": "xchain-documentation/protocol/reference-impl/snapshot_reorg_buffer.js",
+          "file": "xchain-documentation/protocol/reference-impl/consensus/snapshot_reorg_buffer.js",
           "line": 36,
           "kind": "text",
           "form": "text",
@@ -6619,7 +6585,7 @@
         },
         {
           "repo": "xchain-sdk",
-          "file": "xchain-sdk/src/snapshot_reorg_buffer.js",
+          "file": "xchain-sdk/src/consensus/snapshot_reorg_buffer.js",
           "line": 36,
           "kind": "text",
           "form": "text",
@@ -6637,28 +6603,10 @@
         {
           "repo": "xchain-documentation",
           "file": "xchain-documentation/protocol/constants.js",
-          "line": 1691,
+          "line": 1693,
           "kind": "text",
           "form": "text",
           "raw": "src/reservedRoots.js"
-        }
-      ]
-    },
-    "src/retraction_signing_activation.js": {
-      "exists": false,
-      "referenceCount": 1,
-      "referringRepos": [
-        "xchain-explorer"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-explorer",
-          "file": "xchain-explorer/test/unit/mirror/hub_mirror_client_conformance.test.js",
-          "line": 186,
-          "kind": "text",
-          "form": "root-var",
-          "raw": "src/retraction_signing_activation.js",
-          "via": "CANON_SRC"
         }
       ]
     },
@@ -7186,126 +7134,6 @@
         }
       ]
     },
-    "src/rollcall_activation.js": {
-      "exists": false,
-      "referenceCount": 4,
-      "referringRepos": [
-        "xchain-e2e-test",
-        "xchain-hub"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/test/regression/protocol-size-limits.regression.js",
-          "line": 752,
-          "kind": "require",
-          "form": "text",
-          "raw": "src/rollcall_activation.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 5438,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/rollcall_activation.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/activations/rollcall_activation.test.js",
-          "line": 53,
-          "kind": "text",
-          "form": "root-var",
-          "raw": "src/rollcall_activation.js",
-          "via": "INDEXER_DIR"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/activations/rollcall_activation.test.js",
-          "line": 346,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/rollcall_activation.js"
-        }
-      ]
-    },
-    "src/rollcall_gates_activation.js": {
-      "exists": false,
-      "referenceCount": 4,
-      "referringRepos": [
-        "xchain-e2e-test",
-        "xchain-hub"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/test/regression/protocol-size-limits.regression.js",
-          "line": 775,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/rollcall_gates_activation.js"
-        },
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/test/regression/protocol-size-limits.regression.js",
-          "line": 784,
-          "kind": "require",
-          "form": "text",
-          "raw": "src/rollcall_gates_activation.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 5521,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/rollcall_gates_activation.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/activations/attest_zero_conf_activation.test.js",
-          "line": 41,
-          "kind": "text",
-          "form": "root-var",
-          "raw": "src/rollcall_gates_activation.js",
-          "via": "INDEXER_DIR"
-        }
-      ]
-    },
-    "src/snapshot_reorg_buffer.js": {
-      "exists": false,
-      "referenceCount": 3,
-      "referringRepos": [
-        "xchain-e2e-test",
-        "xchain-hub"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/test/actions/capability_slash.test.js",
-          "line": 26,
-          "kind": "require",
-          "form": "text",
-          "raw": "src/snapshot_reorg_buffer.js"
-        },
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/test/regression/protocol-size-limits.regression.js",
-          "line": 612,
-          "kind": "require",
-          "form": "text",
-          "raw": "src/snapshot_reorg_buffer.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 670,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/snapshot_reorg_buffer.js"
-        }
-      ]
-    },
     "src/sql": {
       "exists": false,
       "referenceCount": 48,
@@ -7414,7 +7242,7 @@
         {
           "repo": "xchain-explorer",
           "file": "xchain-explorer/bin/pins/at1-explorer-identity.json",
-          "line": 7482,
+          "line": 2809,
           "kind": "text",
           "form": "text",
           "raw": "src/sql"
@@ -7422,7 +7250,7 @@
         {
           "repo": "xchain-explorer",
           "file": "xchain-explorer/bin/pins/at1-explorer-identity.json",
-          "line": 7483,
+          "line": 2810,
           "kind": "text",
           "form": "text",
           "raw": "src/sql"
@@ -7430,7 +7258,7 @@
         {
           "repo": "xchain-explorer",
           "file": "xchain-explorer/bin/pins/at1-explorer-identity.json",
-          "line": 7484,
+          "line": 2811,
           "kind": "text",
           "form": "text",
           "raw": "src/sql"
@@ -7438,7 +7266,7 @@
         {
           "repo": "xchain-explorer",
           "file": "xchain-explorer/bin/pins/at1-explorer-identity.json",
-          "line": 7485,
+          "line": 2812,
           "kind": "text",
           "form": "text",
           "raw": "src/sql"
@@ -7446,7 +7274,7 @@
         {
           "repo": "xchain-explorer",
           "file": "xchain-explorer/bin/pins/at1-explorer-identity.json",
-          "line": 7486,
+          "line": 2813,
           "kind": "text",
           "form": "text",
           "raw": "src/sql"
@@ -7454,7 +7282,7 @@
         {
           "repo": "xchain-explorer",
           "file": "xchain-explorer/bin/pins/at1-explorer-identity.json",
-          "line": 7487,
+          "line": 2814,
           "kind": "text",
           "form": "text",
           "raw": "src/sql"
@@ -7462,7 +7290,7 @@
         {
           "repo": "xchain-explorer",
           "file": "xchain-explorer/bin/pins/at1-explorer-identity.json",
-          "line": 7488,
+          "line": 2815,
           "kind": "text",
           "form": "text",
           "raw": "src/sql"
@@ -7470,7 +7298,7 @@
         {
           "repo": "xchain-explorer",
           "file": "xchain-explorer/bin/pins/at1-explorer-identity.json",
-          "line": 7489,
+          "line": 2816,
           "kind": "text",
           "form": "text",
           "raw": "src/sql"
@@ -7478,7 +7306,7 @@
         {
           "repo": "xchain-explorer",
           "file": "xchain-explorer/bin/pins/at1-explorer-identity.json",
-          "line": 7490,
+          "line": 2817,
           "kind": "text",
           "form": "text",
           "raw": "src/sql"
@@ -7486,7 +7314,7 @@
         {
           "repo": "xchain-explorer",
           "file": "xchain-explorer/bin/pins/at1-explorer-identity.json",
-          "line": 7491,
+          "line": 2818,
           "kind": "text",
           "form": "text",
           "raw": "src/sql"
@@ -7558,7 +7386,7 @@
         {
           "repo": "xchain-explorer",
           "file": "xchain-explorer/test/unit/mirror/hub_mirror_client_conformance.test.js",
-          "line": 212,
+          "line": 216,
           "kind": "text",
           "form": "text",
           "raw": "src/sql"
@@ -7779,7 +7607,7 @@
         {
           "repo": "xchain-explorer",
           "file": "xchain-explorer/test/unit/mirror/hub_mirror_client_conformance.test.js",
-          "line": 217,
+          "line": 221,
           "kind": "text",
           "form": "text",
           "raw": "src/sql/"
@@ -8214,7 +8042,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 5715,
+          "line": 3971,
           "kind": "text",
           "form": "text",
           "raw": "src/sql/migrations/2026-07-16-mirror-twin-bigint-unsigned-align.sql"
@@ -8231,7 +8059,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 5860,
+          "line": 4116,
           "kind": "text",
           "form": "text",
           "raw": "src/sql/migrations/2026-07-29-state-checkpoints-uq-chain-seq.sql"
@@ -8248,7 +8076,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 5750,
+          "line": 4006,
           "kind": "text",
           "form": "text",
           "raw": "src/sql/oracle_prices.sql"
@@ -8274,7 +8102,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 5801,
+          "line": 4057,
           "kind": "text",
           "form": "text",
           "raw": "src/sql/price_snapshots.sql"
@@ -8282,7 +8110,7 @@
         {
           "repo": "xchain-hub",
           "file": "xchain-hub/bin/pins/at1-sibling-reference-map.json",
-          "line": 5809,
+          "line": 4065,
           "kind": "text",
           "form": "text",
           "raw": "src/sql/price_snapshots.sql"
@@ -8367,49 +8195,6 @@
         }
       ]
     },
-    "src/stake_key_reuse_activation.js": {
-      "exists": false,
-      "referenceCount": 1,
-      "referringRepos": [
-        "xchain-documentation"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-documentation",
-          "file": "xchain-documentation/protocol/constants.js",
-          "line": 1497,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/stake_key_reuse_activation.js"
-        }
-      ]
-    },
-    "src/stake_weighted_quorum.js": {
-      "exists": false,
-      "referenceCount": 2,
-      "referringRepos": [
-        "xchain-e2e-test",
-        "xchain-hub"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/test/helpers/attestationHelper.js",
-          "line": 19,
-          "kind": "require",
-          "form": "text",
-          "raw": "src/stake_weighted_quorum.js"
-        },
-        {
-          "repo": "xchain-hub",
-          "file": "xchain-hub/test/unit/consensus/stake_weighted_quorum.test.js",
-          "line": 25,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/stake_weighted_quorum.js"
-        }
-      ]
-    },
     "src/stateCommitment.js": {
       "exists": false,
       "referenceCount": 5,
@@ -8457,32 +8242,6 @@
           "kind": "text",
           "form": "text",
           "raw": "src/stateCommitment.js"
-        }
-      ]
-    },
-    "src/stateHash.js": {
-      "exists": false,
-      "referenceCount": 2,
-      "referringRepos": [
-        "xchain-documentation",
-        "xchain-e2e-test"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-documentation",
-          "file": "xchain-documentation/concepts/block-hashes.md",
-          "line": 105,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/stateHash.js"
-        },
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/test/sdk/betParity.sdk.test/support/bet_parity_support.js",
-          "line": 21,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/stateHash.js"
         }
       ]
     },
@@ -8571,7 +8330,7 @@
     },
     "src/state_subtree_activation.js": {
       "exists": false,
-      "referenceCount": 9,
+      "referenceCount": 4,
       "referringRepos": [
         "xchain-e2e-test",
         "xchain-explorer",
@@ -8588,40 +8347,8 @@
           "raw": "src/state_subtree_activation.js"
         },
         {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/bin/seed-contract-state.js",
-          "line": 306,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/state_subtree_activation.js"
-        },
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/bin/seed-contract-state.js",
-          "line": 307,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/state_subtree_activation.js"
-        },
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/bin/seed-escrow-state.js",
-          "line": 178,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/state_subtree_activation.js"
-        },
-        {
-          "repo": "xchain-e2e-test",
-          "file": "xchain-e2e-test/bin/seed-escrow-state.js",
-          "line": 179,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/state_subtree_activation.js"
-        },
-        {
           "repo": "xchain-explorer",
-          "file": "xchain-explorer/src/state_subtree_activation.js",
+          "file": "xchain-explorer/src/consensus/gates/state_subtree_gate.js",
           "line": 58,
           "kind": "text",
           "form": "text",
@@ -8629,16 +8356,8 @@
         },
         {
           "repo": "xchain-sdk",
-          "file": "xchain-sdk/src/state_subtree_activation.js",
+          "file": "xchain-sdk/src/consensus/gates/state_subtree_gate.js",
           "line": 58,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/state_subtree_activation.js"
-        },
-        {
-          "repo": "xchain-sdk",
-          "file": "xchain-sdk/test/unit/consensus/state_subtree_constants.test.js",
-          "line": 55,
           "kind": "text",
           "form": "text",
           "raw": "src/state_subtree_activation.js"
@@ -8650,91 +8369,6 @@
           "kind": "text",
           "form": "text",
           "raw": "src/state_subtree_activation.js"
-        }
-      ]
-    },
-    "src/sweep_zero_leg_activation.js": {
-      "exists": false,
-      "referenceCount": 1,
-      "referringRepos": [
-        "xchain-documentation"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-documentation",
-          "file": "xchain-documentation/protocol/constants.js",
-          "line": 1535,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/sweep_zero_leg_activation.js"
-        }
-      ]
-    },
-    "src/tick_namespace_activation.js": {
-      "exists": false,
-      "referenceCount": 1,
-      "referringRepos": [
-        "xchain-documentation"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-documentation",
-          "file": "xchain-documentation/protocol/constants.js",
-          "line": 1664,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/tick_namespace_activation.js"
-        }
-      ]
-    },
-    "src/token_bridge_activation.js": {
-      "exists": false,
-      "referenceCount": 1,
-      "referringRepos": [
-        "xchain-documentation"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-documentation",
-          "file": "xchain-documentation/protocol/constants.js",
-          "line": 1602,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/token_bridge_activation.js"
-        }
-      ]
-    },
-    "src/token_policy_activation.js": {
-      "exists": false,
-      "referenceCount": 1,
-      "referringRepos": [
-        "xchain-documentation"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-documentation",
-          "file": "xchain-documentation/protocol/constants.js",
-          "line": 1620,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/token_policy_activation.js"
-        }
-      ]
-    },
-    "src/train_activation.js": {
-      "exists": false,
-      "referenceCount": 1,
-      "referringRepos": [
-        "xchain-sync"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-sync",
-          "file": "xchain-sync/bin/pins/at1-suite-titles.json",
-          "line": 2153,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/train_activation.js"
         }
       ]
     },
@@ -9143,23 +8777,6 @@
           "raw": "src/utility.js"
         }
       ]
-    },
-    "src/xchain_bridge_activation.js": {
-      "exists": false,
-      "referenceCount": 1,
-      "referringRepos": [
-        "xchain-documentation"
-      ],
-      "referrers": [
-        {
-          "repo": "xchain-documentation",
-          "file": "xchain-documentation/protocol/constants.js",
-          "line": 1568,
-          "kind": "text",
-          "form": "text",
-          "raw": "src/xchain_bridge_activation.js"
-        }
-      ]
     }
   },
   "dynamicReferences": [
@@ -9260,7 +8877,7 @@
     {
       "repo": "xchain-explorer",
       "file": "xchain-explorer/test/unit/mirror/hub_mirror_client_conformance.test.js",
-      "line": 77,
+      "line": 79,
       "form": "root-var",
       "expression": "path.join(CANON_SRC, 'hub', dir)",
       "via": "CANON_SRC"
@@ -9268,7 +8885,7 @@
     {
       "repo": "xchain-explorer",
       "file": "xchain-explorer/test/unit/mirror/hub_mirror_client_conformance.test.js",
-      "line": 82,
+      "line": 84,
       "form": "root-var",
       "expression": "path.join(CANON_SRC, 'hub', dir, p)",
       "via": "CANON_SRC"
@@ -9276,7 +8893,7 @@
     {
       "repo": "xchain-explorer",
       "file": "xchain-explorer/test/unit/mirror/hub_mirror_client_conformance.test.js",
-      "line": 144,
+      "line": 148,
       "form": "root-var",
       "expression": "path.join(CANON_SRC, sub, f)",
       "via": "CANON_SRC"
@@ -9284,7 +8901,7 @@
     {
       "repo": "xchain-explorer",
       "file": "xchain-explorer/test/unit/mirror/hub_mirror_client_conformance.test.js",
-      "line": 214,
+      "line": 218,
       "form": "root-var",
       "expression": "path.join(CANON_SRC, 'sql', f)",
       "via": "CANON_SRC"
@@ -9300,7 +8917,7 @@
     {
       "repo": "xchain-hub",
       "file": "xchain-hub/test/unit/consensus/gate_registry.test.js",
-      "line": 159,
+      "line": 167,
       "form": "root-var",
       "expression": "path.join(INDEXER_PARTS, f)",
       "via": "INDEXER_PARTS"
@@ -9308,7 +8925,7 @@
     {
       "repo": "xchain-hub",
       "file": "xchain-hub/test/unit/oracle/xchain_price_vendor_parity.test.js",
-      "line": 63,
+      "line": 64,
       "form": "root-var",
       "expression": "path.join(INDEXER_DIR, 'src', rel)",
       "via": "INDEXER_DIR"
@@ -9316,7 +8933,7 @@
     {
       "repo": "xchain-hub",
       "file": "xchain-hub/test/unit/oracle/xchain_price_vendor_parity.test.js",
-      "line": 65,
+      "line": 66,
       "form": "root-var",
       "expression": "path.join(INDEXER_DIR, 'src', twinRel)",
       "via": "INDEXER_DIR"
