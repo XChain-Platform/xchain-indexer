@@ -14,7 +14,8 @@
  *
  * The sibling half of the flag-day placeholder gate: the cohort maps that the
  * canonical xchain-documentation/protocol/constants.js pins by named export,
- * the hub-only GOV_SNAPSHOT_ACTIVATION declaration, and the byte identity of
+ * the hub-only GOV_SNAPSHOT_ACTIVATION registry row (or, on a hub that predates
+ * the row, its module-local declaration), and the byte identity of
  * the three retraction_signing_activation.js copies. Part of the suite whose
  * entry is test/unit/flagday_placeholder_guard.test.js; each case is pending
  * when its sibling checkout is absent or refused.
@@ -80,22 +81,25 @@ describe('flag-day placeholder guard @regression @tier1', function () {
 describe('flag-day placeholder guard @regression @tier1', function () {
     describe('sibling copies carry no placeholder regression', function () {
         // GOV_SNAPSHOT_ACTIVATION is the fifth cohort member and the only one
-        // that is hub-only and NOT exported: it is a file-local const inside
-        // Governance.js. Requiring that module from here would drag in the whole hub
-        // engine, so read the declaration out of the source instead. It still has to be
-        // asserted somewhere, because it was the third file named and without this
-        // case nothing in this tree fails when a re-pin passes it by.
+        // that is hub-only and NOT exported: its value lives as a row of the
+        // hub's activation registry, read by key from validators/governance/rules.js.
+        // Requiring that module from here would drag in the whole hub engine, so read
+        // the value out of the source instead. It still has to be asserted somewhere,
+        // because it was the third file named and without this case nothing in this
+        // tree fails when a re-pin passes it by.
         it('xchain-hub/src/validators/governance.js declares GOV_SNAPSHOT_ACTIVATION at the cohort height', function () {
             const p = path.resolve(__dirname, '../../../../../xchain-hub/src/validators/governance.js');
             const sibling = siblingCheckout(__dirname, p);
             if (!sibling.usable) return skipOrFail(this, sibling, 'the GOV_SNAPSHOT_ACTIVATION hub pin');
-            // The entry keeps the require path while the hub moves method bodies into
-            // same-stem part files beside it, so a declaration that is file-local to the
-            // module can sit in either. Read the module whole (entry plus parts) or a
-            // split that never touched the value reads as a missing declaration.
-            const m = readSiblingModuleSource(p)
-                .match(/const\s+GOV_SNAPSHOT_ACTIVATION\s*=\s*\{\s*mainnet:\s*(\d+)\s*,\s*testnet:\s*(\d+)\s*,\s*regtest:\s*(\d+)\s*\}/);
-            assert.ok(m, 'GOV_SNAPSHOT_ACTIVATION declaration not found in validators/governance.js or its part files (renamed or reshaped?)');
+            // The table is a row of the hub's activation registry, in its hub-only
+            // part; the governance module reads it by key. A hub that predates the
+            // row still declares the literal inside the module (entry plus parts).
+            const rowsPath = path.resolve(__dirname, '../../../../../xchain-hub/src/consensus/gate_registry/hub_rows.js');
+            const rowText = fs.existsSync(rowsPath) ? fs.readFileSync(rowsPath, 'utf8') : '';
+            const m = rowText.match(/^addGate\('validators\/governance\/rules\.GOV_SNAPSHOT_ACTIVATION',\s*'height',\s*\{\s*mainnet:\s*(\d+)\s*,\s*testnet:\s*(\d+)\s*,\s*regtest:\s*(\d+)\s*\}\);/m)
+                || readSiblingModuleSource(p)
+                    .match(/const\s+GOV_SNAPSHOT_ACTIVATION\s*=\s*\{\s*mainnet:\s*(\d+)\s*,\s*testnet:\s*(\d+)\s*,\s*regtest:\s*(\d+)\s*\}/);
+            assert.ok(m, 'GOV_SNAPSHOT_ACTIVATION row not found in consensus/gate_registry/hub_rows.js nor declared in validators/governance.js or its part files (renamed or reshaped?)');
             assert.strictEqual(parseInt(m[1]), RATIFIED_BTC_HEIGHT,
                 'GOV_SNAPSHOT_ACTIVATION.mainnet is ' + m[1] + ', not the cohort height ' + RATIFIED_BTC_HEIGHT);
             assert.strictEqual(parseInt(m[2]), 0, 'GOV_SNAPSHOT_ACTIVATION.testnet must be genesis-active');
