@@ -39,9 +39,6 @@ const act = require('../../../src/rollcall_activation.js');
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
 const ACT_PATH = require.resolve('../../../src/rollcall_activation.js');
-// The registry the shim reads its table from: purged with it, so the venue's
-// arming is re-read (activation-registry W3, shared_rows.js registerRows).
-const REGISTRY_PATH = require.resolve('../../../src/protocol_changes.js');
 
 // Re-require the module with ROLLCALL_ACTIVATION resolved against `env`. The
 // map is built at require time on purpose (an activation height that can change
@@ -52,11 +49,9 @@ function loadWithEnv(env){
     if(env === undefined) delete process.env[act.ROLLCALL_REGTEST_ENV];
     else process.env[act.ROLLCALL_REGTEST_ENV] = env;
     delete require.cache[ACT_PATH];
-    delete require.cache[REGISTRY_PATH];
     try { return require(ACT_PATH); }
     finally {
         delete require.cache[ACT_PATH];
-        delete require.cache[REGISTRY_PATH];
         if(saved === undefined) delete process.env[act.ROLLCALL_REGTEST_ENV];
         else process.env[act.ROLLCALL_REGTEST_ENV] = saved;
         require(ACT_PATH);   // restore the shared instance every other suite holds
@@ -259,7 +254,7 @@ describe('rollcall_activation', function () {
             assert.strictEqual(m.ROLLCALL_ACTIVATION.mainnet, 0, 'mainnet must never be env-tunable');
             assert.strictEqual(m.ROLLCALL_ACTIVATION.testnet, 151200, 'testnet must never be env-tunable');
             // The shim reads no environment at all: the one regtest opt-in is applied by
-            // the registry at registration, under exactly this row, env name and armed height.
+            // the registry when the row is read, under exactly this row, env name and armed height.
             const src = fs.readFileSync(ACT_PATH, 'utf8');
             const envReads = src.match(/process\.env/g) || [];
             assert.strictEqual(envReads.length, 0, 'no env read may exist in this file; the regtest opt-in is the registry\'s');

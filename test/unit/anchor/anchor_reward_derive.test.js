@@ -298,7 +298,6 @@ describe('anchor-reward derive set is INVARIANT under the barrier change @regres
     const cfg = { COIN: 'BTC', NETWORK: 'regtest' };
     const MODULES = [
     '../../../src/mirror_admission_activation.js',
-    '../../../src/protocol_changes.js',   // the registry the shims read; purged so the arming is re-read
     '../../../src/anchor_reward_activation.js',
     '../../../src/consensus/anchor_reward_derive.js'
     ];

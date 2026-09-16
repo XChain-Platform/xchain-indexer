@@ -34,9 +34,6 @@ const path   = require('path');
 // Every module that closes over the activation resolver at require time.
 const ARMED_MODULES = [
     '../../../src/mirror_admission_activation.js',
-    // The registry the shim reads its table from: purged with it, so the venue's
-    // arming is re-read (activation-registry W3, shared_rows.js registerRows).
-    '../../../src/protocol_changes.js',
     '../../../src/anchor_reward_activation.js',
     '../../../src/hub/hub_db_sync/watermarks.js',   // the client part that closes over the resolver
     '../../../src/hub/hub_db_sync.js',

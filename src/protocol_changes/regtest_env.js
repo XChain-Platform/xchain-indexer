@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * The one regtest arming grammar, read for the registry at registration.
+ * The one regtest arming grammar, applied by the registry when a row is read.
  *
  * Five gate rows (ROLLCALL, ROLLCALL gates, the two mirror-admission heights
  * and the anchor-attest barrier) let a regtest venue arm their regtest entry
@@ -20,8 +20,9 @@
  * venue carries an armed and an inert indexer and shows them binding the same
  * row at different blocks. Their modules keep their own resolver functions
  * (the exported ones tests drive), but the VALUE a running process applies is
- * the registry row, so the environment is read once here, when the SHARED
- * block is registered, by the same grammar every one of those resolvers uses.
+ * the registry row, so the environment is parsed here, by the same grammar
+ * every one of those resolvers uses, each time shared_rows.js arms a row for
+ * a reader (cached per value, so a refused value is reported once).
  *
  * UNSET SHIPS INERT. Arming a network commits every BTC indexer on it to a
  * wired DOGE peer, so a venue opts in; a BTC-only venue that cannot answer a

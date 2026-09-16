@@ -23,7 +23,9 @@
  * Only the part files beside this one call addGate() and addChange(); every
  * other module reads: get(key), copy(key), has(key), rows(), activeAt(). A miss THROWS,
  * because a row a build lacks is a build defect and not a network state, and
- * a null answer would let a moved carrier read as "not yet active".
+ * a null answer would let a moved carrier read as "not yet active". Every read
+ * passes through one overlay hook, which is where shared_rows.js applies a
+ * regtest venue's arming at the moment of the read (see setReadOverlay).
  *
  * The registry requires nothing project-local but the canonicaliser, which
  * itself requires only crypto, so no feature module can form a cycle with it.
@@ -140,6 +142,29 @@ class GateRegistry {
         // key -> { unit, value }, in insertion order; a Map so no action name
         // off the wire can ever resolve to an inherited member.
         this.entries = new Map();
+        // (key, committed value) -> the value a reader sees. Null until
+        // registerRows() installs the regtest arming, which is applied here at
+        // READ time so a module that reads a row when it loads sees the venue's
+        // environment as it stands at that moment, exactly as its own literal
+        // did, and the fingerprint sees it as it stands when it runs.
+        this.overlay = null;
+    }
+
+    /**
+     * Installs the one read overlay. Registration stays the committed table;
+     * every read (get, copy, rows, activeAt) passes through `fn`.
+     * @param {(key: string, value: *) => *} fn
+     */
+    setReadOverlay(fn) {
+        if (typeof fn !== 'function') throw new Error('setReadOverlay: expected a function');
+        this.overlay = fn;
+    }
+
+    // The one read path: the committed value through the overlay, or as is.
+    read(key) {
+        const row = this.entries.get(key);
+        if (!row) throw new RegistryMissError(key);
+        return this.overlay ? this.overlay(key, row.value) : row.value;
     }
 
     /**
@@ -184,9 +209,7 @@ class GateRegistry {
 
     /** @returns {*} the row's value; throws RegistryMissError on a miss (never null). */
     get(key) {
-        const row = this.entries.get(key);
-        if (!row) throw new RegistryMissError(key);
-        return row.value;
+        return this.read(key);
     }
 
     /**
@@ -210,7 +233,7 @@ class GateRegistry {
     keys() { return [...this.entries.keys()]; }
 
     /** @returns {Array<[string, *]>} every row in insertion order, the fingerprint's input. */
-    rows() { return [...this.entries].map(([key, row]) => [key, row.value]); }
+    rows() { return [...this.entries.keys()].map((key) => [key, this.read(key)]); }
 
     /**
      * The one generic predicate. Resolves the coin key before the network key
@@ -231,7 +254,7 @@ class GateRegistry {
             throw new Error('activeAt: unsupported unit ' + row.unit + ' for ' + key);
         }
         if (typeof network !== 'string') return false;
-        const threshold = resolveThreshold(row.value, network, coin);
+        const threshold = resolveThreshold(this.read(key), network, coin);
         return reached(threshold, row.unit === 'time' ? time : height);
     }
 }

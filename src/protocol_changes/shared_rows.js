@@ -31,8 +31,12 @@
  * an environment variable (the modules' own resolvers document the grammar;
  * regtest_env.js carries it for the registry). The block writes those entries
  * UNPINNED, the inert default, so it stays data that every consumer can copy;
- * this wrapper reads the venue's environment ONCE, at registration, and arms
- * the entry before the row is stored. The bare reading is therefore the block
+ * the registry stores that committed table and this wrapper arms the entry
+ * WHEN THE ROW IS READ, from the environment as it stands at that moment. A
+ * module reading its table at require time therefore sees what its own
+ * literal saw (a test that sets the variable and re-requires the module sees
+ * the new value, with no registry purge), and the fingerprint sees the
+ * environment as it stands when it runs. The bare reading is the block
  * literal and the armed reading is the venue's, exactly what the fingerprint
  * pinned bare and armed before the rows moved here.
  *
@@ -62,27 +66,47 @@ const REGTEST_ARMING = {
         { env: 'XC_MIRROR_ADMISSION_ACTIVATION', label: 'MIRROR ADMISSION', armedHeight: 0, keys: ['regtest'] },
 };
 
-// The table with its regtest entries armed from `env`, or the table itself when
-// the venue named nothing (an unset or refused value leaves UNPINNED in place).
-function armed(key, table, env) {
-    const rule = REGTEST_ARMING[key];
-    if (!rule) return table;
-    const height = regtestHeight(env[rule.env], rule.armedHeight, rule.label, rule.env);
+// The table with its regtest entries armed from `raw`, one env variable's
+// value, or the table itself when the venue named nothing (an unset or refused
+// value leaves UNPINNED in place). Frozen like the committed row it stands for.
+function armed(rule, table, raw) {
+    const height = regtestHeight(raw, rule.armedHeight, rule.label, rule.env);
     if (height === null) return table;
     const out = Object.assign({}, table);
     for (const k of rule.keys) out[k] = height;
-    return out;
+    return Object.freeze(out);
+}
+
+// The read overlay: `env` is read at every call, so it follows the process
+// environment as it changes, and the result is cached per key against the raw
+// string it was armed from, so a refused value warns once per value and a
+// steady environment costs one property read per get().
+function regtestArming(env) {
+    const cache = new Map();
+    return function armAtRead(key, table) {
+        const rule = REGTEST_ARMING[key];
+        if (!rule) return table;
+        const raw = env[rule.env];
+        const hit = cache.get(key);
+        if (hit && hit.raw === raw) return hit.value;
+        const value = armed(rule, table, raw);
+        cache.set(key, { raw, value });
+        return value;
+    };
 }
 
 /**
- * Registers every queued row into `registry`, in part-file order, with the
- * regtest arming of `env` applied to the rows that take it.
- * @param {{addGate: Function}} registry
- * @param {object} [env]  the process environment, or a stand-in
+ * Registers every queued row into `registry`, in part-file order, as the block
+ * commits it, and installs the read overlay that arms the regtest entries from
+ * `env` at the time of each read.
+ * @param {{addGate: Function, setReadOverlay: Function}} registry
+ * @param {object} env  the process environment (the assembler passes it), or
+ *                      a stand-in; read by reference, never copied
  */
 function registerRows(registry, env) {
-    const source = env || process.env;
-    for (const [key, unit, table] of queued) registry.addGate(key, unit, armed(key, table, source));
+    if (env === null || typeof env !== 'object') throw new Error('registerRows: env must be the environment object to arm from');
+    for (const [key, unit, table] of queued) registry.addGate(key, unit, table);
+    registry.setReadOverlay(regtestArming(env));
 }
 
 module.exports = { addGate, UNARMED, UNPINNED, registerRows, REGTEST_ARMING };

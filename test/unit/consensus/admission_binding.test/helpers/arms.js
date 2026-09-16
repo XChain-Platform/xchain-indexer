@@ -37,9 +37,6 @@ if (!HAVE_HUB && siblingsRequired())
 // arming has to purge and re-require all of them or the consumer keeps the old arm.
 const LOCAL_MODULES = [
     '../../../../../src/mirror_admission_activation.js',
-    // The registry the shim reads its table from: purged with it, so the venue's
-    // arming is re-read (activation-registry W3, shared_rows.js registerRows).
-    '../../../../../src/protocol_changes.js',
     '../../../../../src/consensus/attest_response_canonical.js',
     '../../../../../src/actions/xcall/index.js',
     '../../../../../src/actions/xexec/index.js',
