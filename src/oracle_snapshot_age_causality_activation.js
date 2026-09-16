@@ -57,7 +57,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const ORACLE_SNAPSHOT_AGE_CAUSALITY_ACTIVATION = copy('oracle_snapshot_age_causality_activation.ORACLE_SNAPSHOT_AGE_CAUSALITY_ACTIVATION');
 

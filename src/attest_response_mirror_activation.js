@@ -61,7 +61,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const ATTEST_RESPONSE_MIRROR_ACTIVATION = copy('attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION');
 

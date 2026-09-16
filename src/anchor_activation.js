@@ -24,7 +24,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const ANCHOR_ACTIVATION = copy('anchor_activation.ANCHOR_ACTIVATION');
 

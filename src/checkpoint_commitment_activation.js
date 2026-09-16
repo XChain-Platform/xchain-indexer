@@ -48,7 +48,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const CHECKPOINT_COMMITMENT_ACTIVATION = copy('checkpoint_commitment_activation.CHECKPOINT_COMMITMENT_ACTIVATION');
 

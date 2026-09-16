@@ -57,7 +57,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const DISPENSER_ORACLE_PRICE_ACTIVATION = copy('dispenser_oracle_price_activation.DISPENSER_ORACLE_PRICE_ACTIVATION');
 

@@ -47,7 +47,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const TICK_NAMESPACE_ACTIVATION = copy('tick_namespace_activation.TICK_NAMESPACE_ACTIVATION');
 

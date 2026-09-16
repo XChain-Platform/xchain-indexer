@@ -67,7 +67,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const VM_EXEC_LINT_ACTIVATION = copy('vm_exec_lint_activation.VM_EXEC_LINT_ACTIVATION');
 

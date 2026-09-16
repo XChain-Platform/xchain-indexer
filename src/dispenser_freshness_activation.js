@@ -58,7 +58,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const DISPENSER_FRESHNESS_ACTIVATION = copy('dispenser_freshness_activation.DISPENSER_FRESHNESS_ACTIVATION');
 

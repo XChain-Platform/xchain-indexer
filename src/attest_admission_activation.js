@@ -49,7 +49,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const ATTEST_ADMISSION_ACTIVATION = copy('attest_admission_activation.ATTEST_ADMISSION_ACTIVATION');
 

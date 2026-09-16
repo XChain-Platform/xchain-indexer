@@ -126,7 +126,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const ATTEST_REQUEST_CAP_ACTIVATION = copy('attest_request_cap_activation.ATTEST_REQUEST_CAP_ACTIVATION');
 

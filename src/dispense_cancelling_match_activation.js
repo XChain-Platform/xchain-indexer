@@ -45,7 +45,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const DISPENSE_CANCELLING_MATCH_ACTIVATION = copy('dispense_cancelling_match_activation.DISPENSE_CANCELLING_MATCH_ACTIVATION');
 

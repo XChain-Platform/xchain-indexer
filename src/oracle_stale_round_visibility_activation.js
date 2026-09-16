@@ -88,7 +88,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const ORACLE_STALE_ROUND_VISIBILITY_ACTIVATION = copy('oracle_stale_round_visibility_activation.ORACLE_STALE_ROUND_VISIBILITY_ACTIVATION');
 

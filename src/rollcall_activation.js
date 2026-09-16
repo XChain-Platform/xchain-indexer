@@ -55,7 +55,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const ROLLCALL_REGTEST_ARMED_HEIGHT = copy('rollcall_activation.ROLLCALL_REGTEST_ARMED_HEIGHT');
 

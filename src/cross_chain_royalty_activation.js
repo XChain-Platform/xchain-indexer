@@ -40,7 +40,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const CROSS_CHAIN_ROYALTY_ACTIVATION = copy('cross_chain_royalty_activation.CROSS_CHAIN_ROYALTY_ACTIVATION');
 

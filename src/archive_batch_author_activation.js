@@ -62,7 +62,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const ARCHIVE_BATCH_AUTHOR_ACTIVATION = copy('archive_batch_author_activation.ARCHIVE_BATCH_AUTHOR_ACTIVATION');
 

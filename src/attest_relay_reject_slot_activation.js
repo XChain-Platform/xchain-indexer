@@ -83,7 +83,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const ATTEST_RELAY_REJECT_SLOT_ACTIVATION = copy('attest_relay_reject_slot_activation.ATTEST_RELAY_REJECT_SLOT_ACTIVATION');
 

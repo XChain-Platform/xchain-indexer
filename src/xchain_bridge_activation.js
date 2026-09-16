@@ -29,7 +29,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const XCHAIN_BRIDGE_ACTIVATION = copy('xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION');
 

@@ -47,7 +47,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const LIST_EDIT_RESOLUTION_ACTIVATION = copy('list_edit_resolution_activation.LIST_EDIT_RESOLUTION_ACTIVATION');
 

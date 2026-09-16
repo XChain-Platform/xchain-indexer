@@ -61,7 +61,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const CARET_REF_STRICT_ACTIVATION = copy('caret_ref_strict_activation.CARET_REF_STRICT_ACTIVATION');
 

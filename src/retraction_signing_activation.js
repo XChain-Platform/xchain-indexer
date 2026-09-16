@@ -36,7 +36,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const RETRACTION_SIGNING_ACTIVATION = copy('retraction_signing_activation.RETRACTION_SIGNING_ACTIVATION');
 

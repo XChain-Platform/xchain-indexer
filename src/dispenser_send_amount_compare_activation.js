@@ -68,7 +68,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const DISPENSER_SEND_COMPARE_SCALE = copy('dispenser_send_amount_compare_activation.DISPENSER_SEND_COMPARE_SCALE');
 

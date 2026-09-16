@@ -71,7 +71,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const DISPENSER_AMOUNT_POSITIVITY_ACTIVATION = copy('dispenser_amount_positivity_activation.DISPENSER_AMOUNT_POSITIVITY_ACTIVATION');
 

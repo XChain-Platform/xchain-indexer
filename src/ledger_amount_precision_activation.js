@@ -61,7 +61,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const LEDGER_AMOUNT_PRECISION = copy('ledger_amount_precision_activation.LEDGER_AMOUNT_PRECISION');
 

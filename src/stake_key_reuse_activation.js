@@ -141,7 +141,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const STAKE_KEY_REUSE_ACTIVATION = copy('stake_key_reuse_activation.STAKE_KEY_REUSE_ACTIVATION');
 

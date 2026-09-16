@@ -56,7 +56,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const VM_DEPLOY_LINT_PKG3_ACTIVATION = copy('vm_deploy_lint_pkg3_activation.VM_DEPLOY_LINT_PKG3_ACTIVATION');
 

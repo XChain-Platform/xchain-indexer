@@ -68,7 +68,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const ATTEST_ZERO_CONF_ACTIVATION = copy('attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION');
 

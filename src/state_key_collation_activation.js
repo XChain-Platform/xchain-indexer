@@ -56,7 +56,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const STATE_KEY_COLLATION_ACTIVATION = copy('state_key_collation_activation.STATE_KEY_COLLATION_ACTIVATION');
 

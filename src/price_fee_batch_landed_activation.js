@@ -87,7 +87,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const PRICE_FEE_BATCH_LANDED_ACTIVATION = copy('price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION');
 

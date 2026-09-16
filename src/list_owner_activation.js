@@ -39,7 +39,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const LIST_OWNER_ACTIVATION = copy('list_owner_activation.LIST_OWNER_ACTIVATION');
 

@@ -85,7 +85,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const DISPENSE_TALLY_EXACT_SCALE = copy('dispense_payment_tally_scale_activation.DISPENSE_TALLY_EXACT_SCALE');
 

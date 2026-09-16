@@ -29,7 +29,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const TOKEN_POLICY_INHERITANCE_ACTIVATION = copy('token_policy_activation.TOKEN_POLICY_INHERITANCE_ACTIVATION');
 

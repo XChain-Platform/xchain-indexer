@@ -44,7 +44,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const DISPENSER_CAPS_ACTIVATION = copy('dispenser_caps_activation.DISPENSER_CAPS_ACTIVATION');
 

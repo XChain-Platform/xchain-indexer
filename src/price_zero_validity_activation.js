@@ -91,7 +91,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 // The consensus ceiling, read from this repo's copy of the protocol constants so
 // the chain bound and the value the cross-repo equality gate watches cannot

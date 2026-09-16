@@ -80,7 +80,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const PRICE_SIG_TALLY_ACTIVATION = copy('price_sig_tally_activation.PRICE_SIG_TALLY_ACTIVATION');
 

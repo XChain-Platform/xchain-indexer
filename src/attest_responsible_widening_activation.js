@@ -68,7 +68,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 // The stage-2 selector. Required at the top: this module never feeds that one.
 const zc = require('./attest_zero_conf_activation.js');

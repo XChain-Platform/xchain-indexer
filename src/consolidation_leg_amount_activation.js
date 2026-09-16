@@ -58,7 +58,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const CONSOLIDATION_LEG_AMOUNT_ACTIVATION = copy('consolidation_leg_amount_activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION');
 

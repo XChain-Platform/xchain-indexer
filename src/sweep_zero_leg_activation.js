@@ -98,7 +98,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const SWEEP_ZERO_LEG_ACTIVATION = copy('sweep_zero_leg_activation.SWEEP_ZERO_LEG_ACTIVATION');
 

@@ -38,7 +38,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const ANCHOR_REWARD_ACTIVATION = copy('anchor_reward_activation.ANCHOR_REWARD_ACTIVATION');
 

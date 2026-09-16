@@ -69,7 +69,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const SLASH_LEDGER_CONSOLIDATION_ACTIVATION = copy('slash_ledger_consolidation_activation.SLASH_LEDGER_CONSOLIDATION_ACTIVATION');
 

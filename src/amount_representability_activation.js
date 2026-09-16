@@ -110,7 +110,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const AMOUNT_REPRESENTABILITY_ACTIVATION = copy('amount_representability_activation.AMOUNT_REPRESENTABILITY_ACTIVATION');
 

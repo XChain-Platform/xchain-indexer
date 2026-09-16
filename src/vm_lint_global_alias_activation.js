@@ -72,7 +72,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const VM_LINT_GLOBAL_ALIAS_ACTIVATION = copy('vm_lint_global_alias_activation.VM_LINT_GLOBAL_ALIAS_ACTIVATION');
 

@@ -73,7 +73,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const DISPENSER_FRESHNESS_SHAPE_ACTIVATION = copy('dispenser_freshness_shape_activation.DISPENSER_FRESHNESS_SHAPE_ACTIVATION');
 

@@ -78,7 +78,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const SLASH_DEDUCTION_PRECISION = copy('slash_grid_activation.SLASH_DEDUCTION_PRECISION');
 

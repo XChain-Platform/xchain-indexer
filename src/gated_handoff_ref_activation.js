@@ -81,7 +81,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const GATED_HANDOFF_REF_ACTIVATION = copy('gated_handoff_ref_activation.GATED_HANDOFF_REF_ACTIVATION');
 

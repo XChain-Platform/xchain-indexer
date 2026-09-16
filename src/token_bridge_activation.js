@@ -32,7 +32,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const TOKEN_BRIDGE_ACTIVATION = copy('token_bridge_activation.TOKEN_BRIDGE_ACTIVATION');
 

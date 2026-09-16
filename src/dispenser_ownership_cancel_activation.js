@@ -49,7 +49,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const DISPENSER_OWNERSHIP_CANCEL_ACTIVATION = copy('dispenser_ownership_cancel_activation.DISPENSER_OWNERSHIP_CANCEL_ACTIVATION');
 

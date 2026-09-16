@@ -29,7 +29,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('../protocol_changes');
+const { get, copy, activeAt } = require('../consensus/gate_registry');
 
 const MAX_ACTION_DATA_LENGTH = copy('protocol/constants.MAX_ACTION_DATA_LENGTH');
 

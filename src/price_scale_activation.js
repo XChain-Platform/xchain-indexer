@@ -86,7 +86,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const PRICE_SCALE_MAX_DECIMALS = copy('price_scale_activation.PRICE_SCALE_MAX_DECIMALS');
 

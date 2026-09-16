@@ -80,7 +80,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./protocol_changes');
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
 const ORACLE_PRELOAD_CAUSALITY_REFERENCE_COIN = copy('oracle_preload_causality_activation.ORACLE_PRELOAD_CAUSALITY_REFERENCE_COIN');
 
