@@ -12,7 +12,7 @@
  **********************************************************************
  *
  * Arming-block cost AND real-venue attribution conformance for the XCHAIN_ESC
- * locked-balance leaf (SPV sub-tree spec §3 Stage B / §7 step 4).
+ * locked-balance leaf in the SPV state sub-tree.
  *
  * WHAT THE ARMING BLOCK ACTUALLY DOES, which is why this exists. At the first
  * armed height the source runs writeEscrowJournal(full:true): a from-genesis
@@ -61,7 +61,7 @@
 
 'use strict';
 
-const EJW = require('../src/escrowJournalWriter.js');
+const EJW = require('../src/consensus/escrow_journal_writer.js');
 
 function parseArgs(argv){
     const out = { synthetic: null, db: null, chain: 'BTC', network: 'regtest' };
@@ -122,10 +122,35 @@ function syntheticDb(n){
                         tick: 'ALPHA', tick_id: 1, amount: '2' });
         }
     }
+    // index_addresses / index_tickers stand in for the two id tables every address
+    // and tick of a real escrows ledger already has a row in. Ids are handed out on
+    // first sight, which is enough because the writer only ever reads a value back
+    // by the id it was given here. Leaving either set unresolved is NOT a harmless
+    // stub gap: priorTotals returns early when no key resolves, so the journal read
+    // it is measuring would drop out of the figure and the floor would read low.
+    const addrIds = new Map(), tickIds = new Map();
+    const idFor = (map, key) => {
+        if(!map.has(key)) map.set(key, map.size + 1);
+        return map.get(key);
+    };
+    // What the stub actually served, so the run can refuse a figure that skipped a
+    // term instead of printing it. A stub answers by query shape, and a shape that
+    // stops matching returns nothing rather than erroring, which is a silent
+    // under-count in exactly the direction that flatters the bench.
+    const served = { addressResolves: 0, tickResolves: 0, journalReads: 0 };
     return {
         util: UTIL,
+        served,
         async doQuery(sql, args){
             if(sql.indexOf('SELECT COUNT(*) AS n FROM escrows') === 0) return [{ n: rows.length }];
+            if(sql.indexOf('FROM index_addresses a') !== -1){
+                served.addressResolves += 1;
+                return args.map(a => ({ id: idFor(addrIds, String(a)), address: String(a) }));
+            }
+            if(sql.indexOf('FROM index_tickers t') !== -1){
+                served.tickResolves += 1;
+                return args.map(t => ({ id: idFor(tickIds, String(t)), tick: String(t) }));
+            }
             if(sql.indexOf('FROM escrows e') !== -1 && sql.indexOf('GROUP BY e.tick_id') !== -1){
                 let total = '0';
                 for(const r of rows) total = UTIL.bcstr(UTIL.bcadd(total, r.amount, 64));
@@ -135,7 +160,10 @@ function syntheticDb(n){
             if(sql.indexOf('FROM order_matches') !== -1) return matches[args[0]] ? [matches[args[0]]] : [];
             if(sql.indexOf('SELECT addr.address AS address FROM actions a') === 0)
                 return sources[args[0]] ? [{ address: sources[args[0]] }] : [];
-            if(sql.indexOf('FROM escrow_leaf_journal') !== -1) return [];     // empty journal
+            if(sql.indexOf('FROM escrow_leaf_journal') !== -1){
+                served.journalReads += 1;
+                return [];                                                   // empty journal
+            }
             throw new Error('synthetic stub: unexpected query: ' + sql.slice(0, 70));
         }
     };
@@ -150,6 +178,17 @@ async function runSynthetic(sizes){
         const t0 = process.hrtime.bigint();
         const written = await EJW.writeEscrowJournal(db, 1, { full: true, dryRun: true });
         const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+        // Refuse a figure that is missing a term. Each of these queries is part of
+        // the cost being reported, so a zero means the replay took a shorter path
+        // than the one this bench claims to measure and the number is not a floor.
+        for(const [what, count] of Object.entries(db.served))
+            if(count === 0){
+                console.error('bench-escrow-arming-replay: the replay ran no ' + what +
+                    ' at ' + n + ' rows, so the figure omits that term and is not a floor. ' +
+                    'The synthetic stub answers by query shape; a shape the writer no ' +
+                    'longer sends stops being served silently.');
+                process.exit(70);
+            }
         console.log('  ' + String(n).padEnd(10) + ms.toFixed(0).padEnd(9) +
                     (ms / n).toFixed(4).padEnd(10) + written);
     }
@@ -161,8 +200,8 @@ async function runSynthetic(sizes){
 
 async function runDb(opts){
     // Credentials come from the service environment exactly as the Stage A bench
-    // and src/migrate.js read them: never from the command line, never printed.
-    const Database = require('../src/db.js');
+    // and src/db/migration/migrate.js read them: never from the command line, never printed.
+    const Database = require('../src/db');
     const config   = require('../src/config.js');
     const Utility  = require('../src/utility.js');
     const host = process.env.INDEXER_DB_HOST;

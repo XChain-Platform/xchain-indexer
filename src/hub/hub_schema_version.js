@@ -1,0 +1,81 @@
+/*********************************************************************
+ *
+ * Copyright © 2025–2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md. A commercial
+ * license (without AGPL source-disclosure terms) is available -
+ * contact legal@dankest.llc.
+ *
+ **********************************************************************
+ *
+ * XChain Indexer - Hub mirror schema version
+ *
+ * Schema version of the hub-db mirror contract (WS broadcasts + REST
+ * snapshots). The hub stamps every payload with this number; the indexer
+ * refuses to apply rows from a hub running a different version, so a hub that
+ * adds a consensus-relevant column before this indexer migrates cannot
+ * silently fork the ledger. MUST stay in lockstep with
+ * xchain-hub/src/hub_schema_version.js; bump both together whenever the mirror
+ * row shape changes OR the mirror set gains a table (a table this indexer does
+ * not know about fails by omission rather than by column, which forks the ledger
+ * just as quietly).
+ *
+ ********************************************************************/
+
+// v2: capability_snapshots.uq_cap_snap gained `source`, so the hub now
+// mirrors both (source, pubkey) rows for a multi-source key. Lockstep with
+// xchain-hub/src/hub_schema_version.js (already at v2); a v1 indexer must reject
+// the v2 stream until its own uq_cap_snap is widened (2026-07-20 migration).
+//
+// v3: the mirror set gained anchor_reward_attestations (HUB_STATE_TABLES
+// in hub_db_sync.js). It carries the hub's XANCPUB publisher-attestation quorum,
+// from which this indexer derives the COLLECT-spendable anchor/archive reward, so
+// an indexer predating the table under-derives a money rail rather than merely
+// missing history. That table shipped under an unbumped v2, so a pre
+// indexer accepted a current hub instead of failing closed; v3 restores the gate.
+// A v2 indexer must reject the v3 stream until it has applied the 2026-07-21
+// anchor-reward-attestations migration.
+//
+// v4: anchor_reward_attestations gained doge_anchor_txid, the MINED DOGE anchor
+// each attested reward is proof-bound to. This indexer re-proves that txid against
+// the DOGE indexer (getanchorconfirmations) before minting the reward, so a mirror
+// stream without the column leaves it deriving a COLLECT-spendable reward it cannot
+// bind to any landed anchor. A v3 indexer must reject the v4 stream until it has
+// applied the 2026-08-13-anchor-reward-attestations-doge-anchor-txid migration.
+//
+// v5: the mirror set gained attestation_responses (HUB_STATE_TABLES in
+// hub_db_sync.js). It carries a finalized ATTEST response, signed by the
+// responsible set over the mirror-era canonical, so the response no longer
+// needs a validator-paid on-chain ATTEST v1 transaction and its Bitcoin fee
+// (the ATTEST response-mirror design). A v4 indexer does not
+// merely miss rows here: without the table it never learns that a response
+// finalized at all, so the request it is waiting on times out instead of
+// resolving. A v4 indexer must reject the v5 stream until it has applied the
+// 2026-09-03-attestation-responses migration.
+//
+// v6: the mirror set gained bridge_transfers and policy_snapshots (CROSS_CHAIN_TABLES in
+// hub_db_sync.js). bridge_transfers carries the cross_chain quorum's signed transfer
+// record, from which this indexer injects the XBRIDGE settle leg that credits a
+// destination address and moves that chain's supply; policy_snapshots carries the signed
+// origin-token policy the destination materializes onto a bridged copy. A v5 indexer does
+// not merely miss rows here: without bridge_transfers the bridge barrier never opens, so a
+// transfer whose source leg has ALREADY debited on the other chain is never applied, and
+// the escrow behind it is held against nothing. A v5 indexer must reject the v6 stream
+// until it has applied the 2026-09-12-bridge-tables migration.
+//
+// ROLL ORDER MATCHES THE CROSS-CHAIN PRECEDENT'S "hub first" (measured on the
+// regtest rail 2026-09-12). The version check is strict equality in both
+// directions, so a stale reader is not the only failure mode: a v6 explorer
+// against a standing v5 hub refused every
+// mirror row with "HubDbSync: hub schema_version 5 != local 6 for
+// price_snapshots; refusing to apply row". There is no order that avoids the
+// halt window, only which side waits, so the hub rolls FIRST and this indexer
+// follows it back to back with the explorer (regtest measured about 2.5 minutes
+// per indexer image for that window).
+const HUB_SCHEMA_VERSION = 6;
+
+module.exports = { HUB_SCHEMA_VERSION };

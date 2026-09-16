@@ -47,28 +47,9 @@
  *
  ********************************************************************/
 
-// Per-chain activation heights, interpreted against the chain's own
-// block_index. Pinned to the same pre-freeze activation train as
-// BET_STATUS_STATE_HASH_ACTIVATION in stateHash.js: BET members-only markets
-// are the loudest consumer of a mutable list, so the two flip together and
-// operators reason about one boundary. RE-PINNED 2026-07-27 against live tips
-// in lockstep with that map. These two maps must stay equal value for value;
-// the explorer vendors this one byte-identically behind a guard test. CONFIRM
-// again at train assembly: they are only as good as the day measured.
-const LIST_EDIT_RESOLUTION_ACTIVATION = {
-    'BTC:mainnet':  963000,   // tip 959,853 (2026-07-27) + 21d @144/day = 962,877
-    'LTC:mainnet':  3162000,   // tip 3,149,481 + 21d @576/day = 3,161,577
-    'DOGE:mainnet': 6338000,   // tip 6,307,307 + 21d @1440/day = 6,337,547
-    // Testnet is genesis-active as of the 2026-08-10 fresh testnet genesis: the
-    // chain restarts at firstBlock (BTC 147500 / LTC 4855000 / DOGE 67815000) with
-    // no pre-rule history to preserve. Kept value-equal to
-    // CARET_REF_STRICT_ACTIVATION and BET_STATUS_STATE_HASH_ACTIVATION, which CI
-    // asserts, so all three moved in this one change.
-    'BTC:testnet':  0,
-    'LTC:testnet':  0,
-    'DOGE:testnet': 0,
-    regtest: 0,                 // armed from genesis: fresh regtest stacks exercise list edits end to end
-};
+const { get, copy, activeAt } = require('./consensus/gate_registry');
+
+const LIST_EDIT_RESOLUTION_ACTIVATION = copy('list_edit_resolution_activation.LIST_EDIT_RESOLUTION_ACTIVATION');
 
 // Per-chain threshold with a network-wide fallback, byte-for-byte the lookup
 // stateHash.js uses. A coin-less caller (unit fixtures) falls through to the

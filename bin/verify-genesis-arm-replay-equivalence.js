@@ -127,6 +127,7 @@ const fs     = require('fs');
 const os     = require('os');
 const crypto = require('crypto');
 const { execSync, spawn, spawnSync } = require('child_process');
+const { handlerSources, relativeRequireTargets } = require('./lib/handler_spelling.js');
 
 const REPO      = path.resolve(__dirname, '..');
 const SIDE_MARK = '###GA-SIDE###';
@@ -183,7 +184,11 @@ async function runSide() {
         registry[name] = { mainnet: Number(c.mainnet_time), testnet: Number(c.testnet_time),
                            regtest: Number(c.regtest_time) };
 
-    const fp = require(path.join(root, 'src', 'armedMapFingerprint.js')).computeArmedMapFingerprint();
+    // The armed map as THIS side resolved it: fingerprint v2, the hash over the
+    // registry's rows (key -> row hash), so the parent can name the rows the arm
+    // moved. Both sides are W3 or later trees; v1 (file bytes) is gone from them.
+    const v2 = require(path.join(root, 'src', 'consensus', 'armed_map', 'fingerprint_v2.js')).computeArmedMapFingerprintV2();
+    const fp = { fingerprint: v2.hex, rows: v2.rows || {}, reason: v2.reason };
 
     // Which vm this process actually loaded, and the bytes of its entry module.
     const vmMain = require.resolve('xchain-vm', { paths: [root] });
@@ -537,17 +542,15 @@ async function rowsAtBlock(q, block) {
 // it asks isEnabled about, and arm-touched modules it requires. Naming the gate
 // from the divergent action's own reader is what makes a red run actionable.
 function gatesReadBy(treeDir, actionType, movedRegistry, armFiles) {
-    const reader = path.join(treeDir, 'src', 'actions', String(actionType).toLowerCase() + '.js');
-    if (!fs.existsSync(reader)) return { reader: null, registry: [], modules: [] };
-    const text = fs.readFileSync(reader, 'utf8');
+    const { reader, sources } = handlerSources(treeDir, actionType);
     const registry = new Set(), modules = new Set();
-    for (const m of text.matchAll(/isEnabled\(\s*['"]([A-Z0-9_]+)['"]/g))
-        if (movedRegistry.has(m[1])) registry.add(m[1]);
-    for (const m of text.matchAll(/require\(\s*['"]\.\.?\/([\w\/.-]+?)(?:\.js)?['"]\s*\)/g)) {
-        const rel = ('src/' + m[1] + '.js').replace('src/../', '');
-        if (armFiles.has(rel)) modules.add(rel);
+    for (const { file, text } of sources) {
+        for (const m of text.matchAll(/isEnabled\(\s*['"]([A-Z0-9_]+)['"]/g))
+            if (movedRegistry.has(m[1])) registry.add(m[1]);
+        for (const rel of relativeRequireTargets(treeDir, file, text))
+            if (armFiles.has(rel)) modules.add(rel);
     }
-    return { reader: path.relative(treeDir, reader), registry: Array.from(registry), modules: Array.from(modules) };
+    return { reader, registry: Array.from(registry), modules: Array.from(modules) };
 }
 
 // --- sides ------------------------------------------------------------------
@@ -698,8 +701,8 @@ async function main() {
 
     // N3: same harness on both sides.
     for (const rel of ['test/integration/setup/indexer-launcher.js', 'test/integration/setup/db-connection.js',
-                       'test/integration/setup/equivalence.js', 'src/genesis.js', 'src/XChainIndexer.js',
-                       'src/actions.js', 'package.json']) {
+                       'test/integration/setup/equivalence.js', 'src/chain/genesis.js', 'src/XChainIndexer.js',
+                       'src/actions/index.js', 'package.json']) {
         const a = path.join(T.on, rel), b = path.join(T.old, rel);
         const same = fs.existsSync(a) && fs.existsSync(b) && sha256File(a) === sha256File(b);
         check(same, 'N3 identical in both trees: ' + rel, same ? '' : 'the two sides would run different harnesses');
@@ -799,11 +802,15 @@ async function main() {
     const fpOn = reports.ON.fingerprint, fpOld = reports.OLD.fingerprint;
     check(fpOn.fingerprint !== fpOld.fingerprint, 'armed-map fingerprint differs between the sides',
           'OLD ' + fpOld.fingerprint.slice(0, 16) + '... ON ' + fpOn.fingerprint.slice(0, 16) + '...');
-    const gateFilesTouched = Object.keys(fpOn.files).filter(n => armFiles.has('src/' + n));
-    const gateFilesSame = gateFilesTouched.filter(n => fpOn.files[n] === fpOld.files[n]);
-    check(gateFilesTouched.length > 0 && gateFilesSame.length === 0,
-          'every arm-touched gate carrier hashes differently per side (' + gateFilesTouched.length + ' carriers)',
-          gateFilesSame.length ? 'unchanged: ' + gateFilesSame.join(', ') : '');
+    // The rows that moved must carry exactly the registry constants the N1 read
+    // saw move: two independent readings of the same arm, agreeing row by row.
+    const rowsMoved = Object.keys(fpOn.rows).filter(k => fpOn.rows[k] !== fpOld.rows[k]);
+    const changePrefix = 'protocol_changes.changes.';
+    const changesMoved = rowsMoved.filter(k => k.startsWith(changePrefix)).map(k => k.slice(changePrefix.length));
+    const disagree = changesMoved.filter(n => !movedRegistry.has(n)).concat(Array.from(movedRegistry.keys()).filter(n => !changesMoved.includes(n)));
+    check(rowsMoved.length > 0 && disagree.length === 0,
+          'the armed-map rows that moved carry exactly the registry constants the arm moved (' + rowsMoved.length + ' rows)',
+          disagree.length ? 'disagree: ' + disagree.join(', ') : rowsMoved.join(', '));
     if (vmRoot) {
         check(reports.ON.vm.sha256 !== reports.OLD.vm.sha256, 'each side loaded its own vm tree',
               'OLD ' + reports.OLD.vm.main + '\n          ON  ' + reports.ON.vm.main);
@@ -826,7 +833,7 @@ async function main() {
     console.log('  TALLY indexed by type:      ' + JSON.stringify(refTypes));
     const fraction = refActions > 0 ? replayed.ON / refActions : null;
 
-    // ---- G3 ---------------------------------------------------------------
+    // ---- consensus hash chain ---------------------------------------------------------------
     section('G3: consensus hash chain OLD vs ON, from genesis');
     const eq = require(path.join(REPO, 'test', 'integration', 'setup', 'equivalence.js'));
     const chainOLD = await eq.readHashChain(q.OLD);

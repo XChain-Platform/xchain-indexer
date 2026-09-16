@@ -11,8 +11,8 @@
 // contact legal@dankest.llc.
 
 // Publisher-faithful ANCHOR archive builder, shared between the AnchorRecovery
-// unit round-trip (test/unit/recovery.test.js) and the recovery-determinism
-// integration e2e (test/integration/recovery-determinism-e2e.test.js). Builds an
+// unit round-trip (test/unit/recovery/recovery.test.js) and the recovery-determinism
+// integration e2e (test/integration/recovery_determinism_e2e.test.js). Builds an
 // archive batch exactly as the hub's StateAnchorPublisher serializes it (fixed key
 // order, gzip+base64url, CRC32, chunking, REAL Ed25519 signatures + EQUIV canonical),
 // so a single source pins the serialization both tests verify against.
@@ -86,7 +86,7 @@ function serializeCall(c) {
     }
     return out;
 }
-// Byte-identical to recovery._callCanonical / hub StateAnchorPublisher._callCanonical.
+// Byte-identical to recovery.callCanonical / hub StateAnchorPublisher.callCanonical.
 function callCanonical(c) {
     let sha = (s) => crypto.createHash('sha256').update(String(s == null ? '' : s), 'utf8').digest('hex');
     let phase = (c.phase === 'result') ? 'result' : 'dispatch';
@@ -147,8 +147,12 @@ function buildBatch(batchSeq, rawMatches, oracleKeys, crossKeys, opts) {
     // shared weight, which is how a test models an archive a hub built at a
     // GOVERNANCE MIN_STAKE above this node's local floor.
     let snapAmount = String(opts.snapAmount != null ? opts.snapAmount : '5');
-    for (let kp of crossKeys)  snaps.push({ snapshot_block: SNAPSHOT_BLOCK, capability: 'cross_chain',    signing_pubkey: kp.pubkey, source: 'src_' + kp.pubkey.slice(0, 16), amount: snapAmount });
-    for (let kp of oracleKeys) snaps.push({ snapshot_block: SNAPSHOT_BLOCK, capability: 'oracle_publish', signing_pubkey: kp.pubkey, source: 'src_' + kp.pubkey.slice(0, 16), amount: snapAmount });
+    // opts.snapSourceFor(pubkey) overrides the SOURCE an archived row claims for a key.
+    // Default is the per-key formula above; a test models a KEY-BINDING forge by pointing
+    // an attacker key at an honest validator's source, leaving the amount untouched.
+    let sourceFor = opts.snapSourceFor || (pk => 'src_' + pk.slice(0, 16));
+    for (let kp of crossKeys)  snaps.push({ snapshot_block: SNAPSHOT_BLOCK, capability: 'cross_chain',    signing_pubkey: kp.pubkey, source: sourceFor(kp.pubkey), amount: snapAmount });
+    for (let kp of oracleKeys) snaps.push({ snapshot_block: SNAPSHOT_BLOCK, capability: 'oracle_publish', signing_pubkey: kp.pubkey, source: sourceFor(kp.pubkey), amount: snapAmount });
     let callKeys = opts.callKeys || crossKeys;   // calls must be signed by the cross_chain set
     let calls = (opts.calls || []).map(rc => {
         let c = Object.assign({}, rc);
@@ -174,7 +178,7 @@ function buildBatch(batchSeq, rawMatches, oracleKeys, crossKeys, opts) {
         CP.ledger_hash, CP.actions_hash, CP.contract_hash, String(CP.checkpoint_seq), String(SNAPSHOT_BLOCK),
         String(batchSeq), String(matches.length), crc, String(totalChunks)].join('|');
     // EQUIV active in regtest (WI-2 bump 2): the v1 archive ROUND_ID appends batch_seq to
-    // the v0 round id (R-4 distinct-key fix), VIEW=0. Byte-matches recovery._wrapperCanonical.
+    // the v0 round id (R-4 distinct-key fix), VIEW=0. Byte-matches recovery.wrapperCanonical.
     let wrapperCanonical = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT,
         CP.chain + '|' + CP.network + '|' + CP.block_index + '|' + CP.checkpoint_seq + '|' + batchSeq, 0, rawWrapper);
     let wrapperSigs = oracleKeys.slice(0, opts.wrapperSigners || 3)

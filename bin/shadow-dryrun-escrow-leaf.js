@@ -11,10 +11,10 @@
  *
  **********************************************************************
  *
- * SOURCE-SIDE §7 shadow dry run for the XCHAIN_ESC locked leaf (SPV sub-tree
- * spec §7 step 1).
+ * SOURCE-SIDE shadow dry run for the XCHAIN_ESC locked leaf (SPV sub-tree
+ * Stage B, run before arming).
  *
- * WHAT THIS IS, AND WHAT IT IS NOT. §7 asks for a shadow window in which BOTH
+ * WHAT THIS IS, AND WHAT IT IS NOT. Safe arming asks for a shadow window in which BOTH
  * TWINS derive the would-be root for N blocks and are compared. That needs a
  * live follower replaying the same chain, which is an operational venue, not a
  * script. This harness covers the half that does NOT need one, entirely
@@ -49,10 +49,10 @@
 
 'use strict';
 
-const EJW = require('../src/escrowJournalWriter.js');
-const ESC = require('../src/escrowLeafSubtree.js');
-const SC  = require('../src/stateCommitment.js');
-const M   = require('../src/merkle.js');
+const EJW = require('../src/consensus/escrow_journal_writer.js');
+const ESC = require('../src/consensus/escrow_leaf_subtree.js');
+const SC  = require('../src/state_commitment/index.js');
+const M   = require('../src/consensus/merkle.js');
 
 function parseArgs(argv){
     const out = { db: null, chain: 'BTC', network: 'regtest', from: null, to: null };
@@ -81,7 +81,7 @@ function journalOverlay(db){
     const rows = [];                       // {address, tick, locked_amount, block_index, id}
     let nextId = 1;
     // BOTH readers are wrapped. The writer inserts through doQuery while the
-    // reader (escrowLeafSubtree.js) reads through doQueryStrict (M-17), so
+    // reader (escrow_leaf_subtree.js) reads through doQueryStrict, so
     // wrapping only one leaves the other talking to the real database: the
     // reads would then miss every overlaid row and the harness would report a
     // clean "incremental equals replay" over two empty sets.
@@ -141,7 +141,7 @@ function liveSet(rows){
 
 (async () => {
     const opts = parseArgs(process.argv);
-    const Database = require('../src/db.js');
+    const Database = require('../src/db');
     const config   = require('../src/config.js');
     const Utility  = require('../src/utility.js');
     const host = process.env.INDEXER_DB_HOST, port = process.env.INDEXER_DB_PORT;

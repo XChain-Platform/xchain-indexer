@@ -1,0 +1,327 @@
+// Copyright © 2025–2026 Dankest, LLC
+// Based on XChain Platform by Dankest, LLC – https://dankest.llc
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+//
+// This file is part of XChain Platform. Licensed under the GNU Affero
+// General Public License v3.0 or later; see LICENSE.md. A commercial
+// license (without AGPL source-disclosure terms) is available -
+// contact legal@dankest.llc.
+//
+// Regression for the archive reassembly CRC check must fire when the
+// v1 archive head lands AFTER its continuation chunks (chunks-before-head ordering),
+// not only from the chunk side. Before the head-side gate, a corrupt multi-chunk
+// batch whose completing chunk arrives first leaves the head 'valid' with the
+// signed BATCH_CRC32 never verified until a recovery run.
+
+process.env.INDEXER_COIN = 'BTC';
+process.env.INDEXER_NETWORK = 'regtest';
+
+const assert = require('assert');
+const sinon  = require('sinon');
+const zlib   = require('zlib');
+
+const { createMockIndexer, createBaseData } = require('../../../fixtures/mocks');
+
+const Anchor  = require('../../../../src/actions/anchor/index.js');
+const ed25519 = require('../../../../src/consensus/ed25519.js');
+const swq     = require('../../../../src/stake_weighted_quorum.js');
+const gateRegistry = require('../../../../src/consensus/gate_registry');
+const { stubActiveAt } = require('../../../helpers/gate_modules.js');
+const HEAD_GATE_KEY = 'archive_head_unverified_gate_activation.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION';
+const ANCHOR_KEY    = 'anchor_activation.ANCHOR_ACTIVATION';
+
+// A mainnet fixture must be mined AT OR ABOVE the ANCHOR activation height or the
+// activation gate rejects it before any flag day is consulted, and these cases are
+// about the flag day, not the restart.
+const MAINNET_ACTIVE = gateRegistry.get(ANCHOR_KEY).mainnet;
+
+// Mainnet is armed at genesis since the 2026-09-09 ruling, so the network name alone
+// no longer reaches the below-flag arm. Answer THIS key inert for the duration of a
+// call (the registry row is frozen, so the read is stubbed rather than the table
+// edited) and leave the ANCHOR activation gate the fixture heights depend on untouched.
+async function belowFlag(fn) {
+    const stub = stubActiveAt(sinon, HEAD_GATE_KEY, false);
+    try { return await fn(); }
+    finally { stub.restore(); }
+}
+
+const PUBKEY_A = 'a'.repeat(64);
+const SIG      = '1'.repeat(128);
+const HASH     = (c) => c.repeat(64);
+// The lowest DOGE height at which a testnet ANCHOR parses at all: below the v0
+// activation every version is 'invalid: ANCHOR before activation', which would make
+// these reassembly cases pass for the wrong reason.
+const TESTNET_ACTIVE = gateRegistry.get(ANCHOR_KEY).testnet;
+
+function crc32Hex(str) {
+    let buf = Buffer.from(str, 'utf8');
+    let n;
+    if (zlib.crc32) n = zlib.crc32(buf);
+    else {
+        let c, crc = 0xFFFFFFFF;
+        for (let i = 0; i < buf.length; i++) {
+            c = (crc ^ buf[i]) & 0xFF;
+            for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+            crc = (crc >>> 8) ^ c;
+        }
+        n = (crc ^ 0xFFFFFFFF) >>> 0;
+    }
+    return (n >>> 0).toString(16).padStart(8, '0');
+}
+function gz64(str) { return zlib.gzipSync(Buffer.from(str, 'utf8'), { level: 9 }).toString('base64url'); }
+
+// v1 archive head carrying only its own leading blob slice + TOTAL_CHUNKS geometry.
+// The publisher tail is ALWAYS present on a v1; these cases ride the degraded shape
+// (ATTEST_SIG_COUNT 0), so no reward is derived and nothing here depends on the
+// attestation quorum.
+function v1HeadParams(f) {
+    let p = ['1', 'BTC', f.network || 'regtest', '500', HASH('0'), HASH('1'), HASH('2'), HASH('3'),
+             '0', '100', f.batch_seq, '1', f.crc, f.total_chunks, f.head_b64, '1', PUBKEY_A, SIG,
+             PUBKEY_A, '0'];
+    return p;
+}
+
+const ARCHIVE_JSON = JSON.stringify({ v: 1, network: 'regtest', batch_seq: 9, matches: [{ match_id: 'm1' }], capability_snapshots: [] });
+let indexer, handler, verifyStub, swqStub;
+let b64, headSlice, chunk1, chunk2;
+
+function addAnchorDbStubs(db) {
+    db.getValidatorsByCapability  = sinon.stub().resolves([{ pubkey: PUBKEY_A, amount: '1' }]);
+    db.getMaxAnchorCheckpointSeq  = sinon.stub().resolves(null);
+    db.getArchiveReplayWatermarks = sinon.stub().resolves({ batchSeq: null, checkpointSeq: null });
+    db.createAnchorAction         = sinon.stub().resolves();
+    db.getAnchorV1ByBatchSeq      = sinon.stub().resolves(null);
+    db.getAnchorChunks            = sinon.stub().resolves([]);
+    db.setAnchorArchiveStatus     = sinon.stub().resolves();
+    db.createValidatorReward      = sinon.stub().resolves(true);
+    db.reconcileAnchorRewardWinner= sinon.stub().resolves(0);
+}
+
+function setupHeadReassembly() {
+    indexer = createMockIndexer();
+    indexer.config = Object.assign({}, indexer.config, { COIN: 'DOGE', NETWORK: 'regtest' });
+    addAnchorDbStubs(indexer.indexerDb);
+    handler = new Anchor(indexer);
+    verifyStub = sinon.stub(ed25519, 'verify').returns(true);
+    swqStub = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+    b64       = gz64(ARCHIVE_JSON);
+    let cut1  = Math.ceil(b64.length / 3), cut2 = 2 * cut1;
+    headSlice = b64.slice(0, cut1);
+    chunk1    = { chunk_index: 1, archive_b64: b64.slice(cut1, cut2) };
+    chunk2    = { chunk_index: 2, archive_b64: b64.slice(cut2) };
+}
+
+function restoreAnchorStubs() { verifyStub.restore(); swqStub.restore(); }
+
+describe('Anchor head-side reassembly gate @regression', function () {
+    beforeEach(setupHeadReassembly);
+    afterEach(restoreAnchorStubs);
+
+    it('chunks-before-head, corrupt blob: head-side gate flags the head invalid_archive', async function () {
+        // Both continuation chunks already stored (as orphans) before the head lands.
+        indexer.indexerDb.getAnchorChunks.resolves([chunk1, chunk2]);
+        // BATCH_CRC32 does not bind the reassembled blob.
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE', ACTION_INDEX: 7 });
+        await handler.parse(v1HeadParams({ batch_seq: '9', crc: '00000000', total_chunks: '3', head_b64: headSlice }), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');   // the anchor itself stays valid
+        assert.ok(indexer.indexerDb.setAnchorArchiveStatus.calledWith(7, 'invalid_archive'),
+            'head-side reassembly must stamp invalid_archive when the completing chunk landed before the head');
+    });
+
+    it('chunks-before-head, sound blob: head-side gate verifies and does not flag', async function () {
+        indexer.indexerDb.getAnchorChunks.resolves([chunk1, chunk2]);
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE', ACTION_INDEX: 8 });
+        await handler.parse(v1HeadParams({ batch_seq: '9', crc: crc32Hex(ARCHIVE_JSON), total_chunks: '3', head_b64: headSlice }), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+        assert.ok(indexer.indexerDb.setAnchorArchiveStatus.notCalled, 'a CRC-sound reassembly must not be flagged');
+    });
+
+    it('head-first ordering unchanged: no chunks stored yet means no head-side stamp', async function () {
+        indexer.indexerDb.getAnchorChunks.resolves([]);   // head arrives before any chunk
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE', ACTION_INDEX: 9 });
+        await handler.parse(v1HeadParams({ batch_seq: '9', crc: '00000000', total_chunks: '3', head_b64: headSlice }), data, null);
+        assert.ok(indexer.indexerDb.setAnchorArchiveStatus.notCalled,
+            'with the completing chunks not yet present the chunk-side gate (not the head) owns the check');
+    });
+});
+
+// Status axis: a node with no mirrored oracle_publish snapshot stores every v1
+// head 'unverified' (oracleN === 0). The chunk-side path runs regardless of the
+// parent head's status, so the head-side gate must too, or head-last ordering skips
+// the CRC check on exactly those nodes and re-opens the ordering nondeterminism.
+// These two run on regtest, where the widening's flag day is ARMED at 0; the
+// flag-day axis (inert -> deployed 'valid'-only rule) is its own describe below.
+describe('Anchor head-side reassembly gate @regression', function () {
+    beforeEach(setupHeadReassembly);
+    afterEach(restoreAnchorStubs);
+    it('unverified head (snapshot-less node), chunks-before-head, corrupt blob: still flags invalid_archive', async function () {
+        indexer.indexerDb.getValidatorsByCapability.resolves([]); // no snapshot -> head stored 'unverified'
+        indexer.indexerDb.getAnchorChunks.resolves([chunk1, chunk2]);
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE', ACTION_INDEX: 11 });
+        await handler.parse(v1HeadParams({ batch_seq: '9', crc: '00000000', total_chunks: '3', head_b64: headSlice }), data, null);
+        assert.strictEqual(data['STATUS'], 'unverified');
+        assert.ok(indexer.indexerDb.setAnchorArchiveStatus.calledWith(11, 'invalid_archive'),
+            'an unverified head must run the same head-side CRC check as a valid one');
+    });
+
+    it('unverified head, chunks-before-head, sound blob: verifies and does not flag', async function () {
+        indexer.indexerDb.getValidatorsByCapability.resolves([]);
+        indexer.indexerDb.getAnchorChunks.resolves([chunk1, chunk2]);
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE', ACTION_INDEX: 12 });
+        await handler.parse(v1HeadParams({ batch_seq: '9', crc: crc32Hex(ARCHIVE_JSON), total_chunks: '3', head_b64: headSlice }), data, null);
+        assert.strictEqual(data['STATUS'], 'unverified');
+        assert.ok(indexer.indexerDb.setAnchorArchiveStatus.notCalled, 'a CRC-sound unverified reassembly must not be flagged');
+    });
+
+    // Coverage axis: completeness is exact index coverage of {1..TOTAL_CHUNKS-1}, not a
+    // bare chunk count. A stray out-of-range orphan chunk squatting an impossible slot
+    // must neither mask a missing in-range index nor block a genuinely complete set.
+    it('stray out-of-range chunk masking a missing index: count would fire, coverage does not', async function () {
+        // Need indices {1,2}; present are {1} and a stray {5}. Count === 2 === TOTAL_CHUNKS-1
+        // (the old bug) but index 2 is missing, so the batch is NOT complete.
+        let stray = { chunk_index: 5, archive_b64: 'ZZZZ' };
+        indexer.indexerDb.getAnchorChunks.resolves([chunk1, stray]);
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE', ACTION_INDEX: 13 });
+        // Sound CRC for the real (still-incomplete) batch: a false reassembly would mismatch and wrongly flag.
+        await handler.parse(v1HeadParams({ batch_seq: '9', crc: crc32Hex(ARCHIVE_JSON), total_chunks: '3', head_b64: headSlice }), data, null);
+        assert.ok(indexer.indexerDb.setAnchorArchiveStatus.notCalled,
+            'an incomplete batch padded to length by a stray out-of-range chunk must not be reassembled');
+    });
+
+    it('complete set plus a stray out-of-range chunk, corrupt blob: coverage still runs the check', async function () {
+        // {1,2} complete plus a stray {5}: count === 3 !== TOTAL_CHUNKS-1 blocked the check
+        // forever under the old count test; coverage drops the stray and verifies.
+        let stray = { chunk_index: 5, archive_b64: 'ZZZZ' };
+        indexer.indexerDb.getAnchorChunks.resolves([chunk1, chunk2, stray]);
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE', ACTION_INDEX: 14 });
+        await handler.parse(v1HeadParams({ batch_seq: '9', crc: '00000000', total_chunks: '3', head_b64: headSlice }), data, null);
+        assert.ok(indexer.indexerDb.setAnchorArchiveStatus.calledWith(14, 'invalid_archive'),
+            'a complete in-range set must be verified even when an extra out-of-range chunk is present');
+    });
+});
+
+// Build a handler bound to `network`, with the archive chunks already stored.
+function handlerFor(network) {
+    indexer = createMockIndexer();
+    indexer.config = Object.assign({}, indexer.config, { COIN: 'DOGE', NETWORK: network });
+    addAnchorDbStubs(indexer.indexerDb);
+    indexer.indexerDb.getAnchorChunks.resolves([chunk1, chunk2]);
+    return new Anchor(indexer);
+}
+
+// Run a corrupt-CRC head-last arrival on `network` at DOGE height `blockIndex`,
+// returning whether the head-side gate stamped invalid_archive.
+async function stampedAt(network, blockIndex, snapshotless) {
+    handler = handlerFor(network);
+    if (snapshotless) indexer.indexerDb.getValidatorsByCapability.resolves([]);
+    let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE', ACTION_INDEX: 21, BLOCK_INDEX: blockIndex });
+    await handler.parse(v1HeadParams({ network, batch_seq: '9', crc: '00000000', total_chunks: '3', head_b64: headSlice }), data, null);
+    return { stamped: indexer.indexerDb.setAnchorArchiveStatus.calledWith(21, 'invalid_archive'), status: data['STATUS'] };
+}
+
+// The 'unverified' admission is preimage-moving (invalid_archive is projected by
+// stateHash.js class 6) and it does NOT move the two node classes together: a mirrored
+// node whose quorum FAILS gets error set, so the gate never runs and no stamp lands,
+// while a snapshot-less node's same head is 'unverified' with error null and stamps.
+// So it ships behind a per-network height, like every other preimage-moving change
+// in this repo, and must never be re-landed ungated. Mainnet took a genesis height
+// on 2026-09-09 because the indexed mainnet history carries 0 archive chunks
+// (measured 2026-09-09), so the two node classes have no stamp to disagree about
+// and the widening is identity over it.
+describe('Anchor head-side reassembly gate: unverified flag-day @regression', function () {
+    beforeEach(function () {
+        verifyStub = sinon.stub(ed25519, 'verify').returns(true);
+        swqStub    = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+        let b64    = gz64(ARCHIVE_JSON);
+        let cut1   = Math.ceil(b64.length / 3), cut2 = 2 * cut1;
+        headSlice  = b64.slice(0, cut1);
+        chunk1     = { chunk_index: 1, archive_b64: b64.slice(cut1, cut2) };
+        chunk2     = { chunk_index: 2, archive_b64: b64.slice(cut2) };
+    });
+    afterEach(function () { verifyStub.restore(); swqStub.restore(); });
+
+    it('every network is armed at 0, mainnet included since the 2026-09-09 ruling', function () {
+        assert.strictEqual(gateRegistry.get(HEAD_GATE_KEY).mainnet, 0,
+            'mainnet armed at genesis: 0 archive chunks there (measured 2026-09-09), so the ' +
+            'widened head-side gate has no invalid_archive stamp to move');
+        // Either sentinel reads back as "still unarmed" at the GoLiveGate.
+        assert.notStrictEqual(gateRegistry.get(HEAD_GATE_KEY).mainnet, 999999999);
+        assert.notStrictEqual(gateRegistry.get(HEAD_GATE_KEY).mainnet, 9999999999);
+        // Testnet is armed from genesis: its indexer state is rebuilt from the chain, so the
+        // widened gate contradicts nothing already indexed under the narrower rule.
+        assert.strictEqual(gateRegistry.get(HEAD_GATE_KEY).testnet, 0, 'testnet armed at genesis');
+        assert.strictEqual(gateRegistry.get(HEAD_GATE_KEY).regtest, 0, 'regtest armed at genesis');
+    });
+
+    it('the gate read is fail-closed on a junk height or an unknown network', function () {
+        const at = (height, network) => gateRegistry.activeAt(HEAD_GATE_KEY, network, null, height, null);
+        assert.strictEqual(at('nope', 'regtest'), false);
+        assert.strictEqual(at(null, 'regtest'), false);
+        assert.strictEqual(at(0, 'nosuchnet'), false);
+        assert.strictEqual(at(0, 'regtest'), true);
+        assert.strictEqual(at(0, 'testnet'), true);
+        assert.strictEqual(at(0, 'mainnet'), true);
+        assert.strictEqual(at(999999998, 'mainnet'), true);
+        // Fail-closed still binds on mainnet now that its threshold is 0: NaN is not ">= 0".
+        assert.strictEqual(at('nope', 'mainnet'), false);
+    });
+
+    it('gate INERT (mainnet, key pinned inert), unverified head, corrupt blob: deployed valid-only rule stands, no stamp', async function () {
+        let r = await belowFlag(() => stampedAt('mainnet', MAINNET_ACTIVE, true));
+        assert.strictEqual(r.status, 'unverified');
+        assert.strictEqual(r.stamped, false,
+            'below the flag day the head-side gate must keep its deployed valid-only rule, or the widening forks the fleet ungated');
+    });
+
+    it('gate INERT (mainnet, key pinned inert), VALID head, corrupt blob: the always-on half of the gate still stamps', async function () {
+        let r = await belowFlag(() => stampedAt('mainnet', MAINNET_ACTIVE, false));
+        assert.strictEqual(r.status, 'valid');
+        assert.strictEqual(r.stamped, true, 'the flag day governs ONLY the unverified admission, never the valid path');
+    });
+
+    it('gate ARMED (mainnet, shipped map), unverified head, corrupt blob: stamps from genesis', async function () {
+        // The shipped key, driven through the real handler: the same head that produced
+        // no stamp under the pinned-inert arm above now runs the CRC check.
+        let r = await stampedAt('mainnet', MAINNET_ACTIVE, true);
+        assert.strictEqual(r.status, 'unverified');
+        assert.strictEqual(r.stamped, true,
+            'mainnet is armed at 0, so an unverified head runs the same CRC check as a valid one');
+    });
+});
+
+describe('Anchor head-side reassembly gate: unverified flag-day @regression', function () {
+    beforeEach(function () {
+        verifyStub = sinon.stub(ed25519, 'verify').returns(true);
+        swqStub    = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
+        let b64    = gz64(ARCHIVE_JSON);
+        let cut1   = Math.ceil(b64.length / 3), cut2 = 2 * cut1;
+        headSlice  = b64.slice(0, cut1);
+        chunk1     = { chunk_index: 1, archive_b64: b64.slice(cut1, cut2) };
+        chunk2     = { chunk_index: 2, archive_b64: b64.slice(cut2) };
+    });
+    afterEach(function () { verifyStub.restore(); swqStub.restore(); });
+
+    it('gate ARMED (testnet), unverified head, corrupt blob: stamps from genesis', async function () {
+        let r = await stampedAt('testnet', TESTNET_ACTIVE, true);
+        assert.strictEqual(r.status, 'unverified');
+        assert.strictEqual(r.stamped, true,
+            'testnet is armed at 0, so an unverified head runs the same CRC check as a valid one');
+    });
+
+    it('gate ARMED (regtest), unverified head, corrupt blob: stamps', async function () {
+        let r = await stampedAt('regtest', 100, true);
+        assert.strictEqual(r.status, 'unverified');
+        assert.strictEqual(r.stamped, true, 'at/after the flag day an unverified head runs the same CRC check as a valid one');
+    });
+
+    it('the gate is keyed on the HEAD\'s own DOGE height: one block below the threshold is inert', async function () {
+        // A regtest threshold of 500 for this key only; the registry row is frozen.
+        const stub = stubActiveAt(sinon, HEAD_GATE_KEY, false);
+        stub.withArgs(HEAD_GATE_KEY).callsFake((key, network, coin, height) => Number(height) >= 500);
+        try {
+            assert.strictEqual((await stampedAt('regtest', 499, true)).stamped, false, 'one block below the height must be inert');
+            assert.strictEqual((await stampedAt('regtest', 500, true)).stamped, true, 'the threshold block itself is active');
+        } finally { stub.restore(); }
+    });
+});

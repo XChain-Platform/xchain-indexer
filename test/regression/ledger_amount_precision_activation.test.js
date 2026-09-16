@@ -23,7 +23,7 @@
  * DEBITED as 1, and one parent plus 50 children spent 51 XCHAIN instead of the
  * 25.5 the fee schedule charges.
  *
- * `test/unit/db.ledger-amount-precision.test.js` guards the db.js call sites.
+ * `test/unit/db/ledger/db_ledger_amount_precision.test.js` guards the db.js call sites.
  * THIS file guards the flag module itself: the three values a silent edit
  * could move without any db test noticing, because db.js reads all three from
  * here rather than restating them.
@@ -52,10 +52,9 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 
 const Utility         = require('../../src/utility');
-const ledgerPrecision = require('../../src/ledger_amount_precision_activation');
+const ledgerPrecision = require('../../src/consensus/ledger_amount_precision_gate.js');
 
 describe('[regression:p0] exact-ledger flag module @money @regression @tier1', function () {
-
     describe('the exact scale is a pinned constant, not a tunable', function () {
         it('LEDGER_AMOUNT_PRECISION is exactly 18', function () {
             assert.strictEqual(ledgerPrecision.LEDGER_AMOUNT_PRECISION, 18);
@@ -75,7 +74,9 @@ describe('[regression:p0] exact-ledger flag module @money @regression @tier1', f
                 'SUM(CAST(amount AS DECIMAL(60,18)))');
         });
     });
+});
 
+describe('[regression:p0] exact-ledger flag module @money @regression @tier1', function () {
     describe('activation map: the unpinned chains stay unpinned', function () {
         it('has exactly the six coin-qualified live keys plus the bare regtest key', function () {
             // The bare `regtest` key is load-bearing: regtest carries no
@@ -126,7 +127,9 @@ describe('[regression:p0] exact-ledger flag module @money @regression @tier1', f
             assert.strictEqual(ledgerPrecision.LEDGER_AMOUNT_PRECISION_ACTIVATION.regtest, 0);
         });
     });
+});
 
+describe('[regression:p0] exact-ledger flag module @money @regression @tier1', function () {
     describe('threshold edges', function () {
         it('regtest is inert one block BELOW its threshold and live AT it', function () {
             assert.strictEqual(ledgerPrecision.isLedgerAmountPrecisionActive(-1, 'regtest', 'BTC'), false);

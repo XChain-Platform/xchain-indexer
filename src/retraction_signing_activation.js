@@ -36,12 +36,9 @@
  *
  ********************************************************************/
 
-// Per-network activation, interpreted as a BTC-anchored snapshot_block era.
-const RETRACTION_SIGNING_ACTIVATION = {
-    mainnet: 963000,      // ARMED 2026-07-16, RE-PINNED 2026-08-12 off 969500 onto the shared pre-freeze train boundary (tip 959,853 on 07-27 at ~144 blocks/day + 21d); deploy every consumer before this era
-    testnet: 0,
-    regtest: 0,
-};
+const { get, copy, activeAt } = require('./consensus/gate_registry');
+
+const RETRACTION_SIGNING_ACTIVATION = copy('retraction_signing_activation.RETRACTION_SIGNING_ACTIVATION');
 
 // Whether quorum-class retraction broadcasts must be co-signed for an era at
 // `snapshotBlock` on `network`. Below the threshold -> off (legacy unsigned

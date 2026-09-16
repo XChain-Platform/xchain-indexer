@@ -25,10 +25,11 @@
  * ------------------------------------------------------------------------------
  * THE THREE SIDES
  *
- *   OLD  - HEAD's tree with src/actions/batch.js taken from --pre-ref (the parent of
- *          the first weighting commit). That file is the ONLY src file the weighting
- *          commits changed behaviourally, so this is HEAD with exactly this change
- *          removed and nothing else.
+ *   OLD  - HEAD's tree with the BATCH handler taken from --pre-ref (the parent of the
+ *          first weighting commit), at whichever spelling that ref carries it: the flat
+ *          src/actions/batch.js or the directory src/actions/batch/. That handler is the
+ *          ONLY src code the weighting commits changed behaviourally, so this is HEAD
+ *          with exactly this change removed and nothing else.
  *   OFF  - HEAD, with BATCH_COST_WEIGHTING's registered instant moved to the UNARMED
  *          sentinel on every network: a block below the flag instant.
  *   ON   - HEAD with the flag as regtest actually ships it (genesis-active). This is
@@ -87,7 +88,7 @@
  *
  * S9 is the DEPLOY conjunction: a weighted sum cannot express "at most one DEPLOY", so
  * the cap survives beside the weight and must keep reporting its own string.
- * S10-S13 are the D10 half of this flag. Without them the run would measure the budget
+ * S10-S13 are the spam-collapse half of this flag. Without them the run would measure the budget
  * and leave the widened spam collapse - the other consensus change riding this same
  * gate - entirely unmeasured, and pass anyway.
  *
@@ -103,11 +104,13 @@
  *       change is supposed to move.
  *   N3. THE WITNESSES. Specific verdicts on the OLD side are asserted individually, so
  *       "identical" cannot be satisfied by two sides that both did nothing.
- *   N4. THE SUBSTITUTION IS EXACT. Every commit touching src/actions/batch.js between
- *       --pre-ref and HEAD must be either a declared weighting commit or provably
- *       comment-only in that file (checked by inspecting its diff, not by trusting its
- *       subject line). Otherwise the OLD side would silently carry an unrelated
- *       behavioural rollback and the comparison would be about something else.
+ *   N4. THE SUBSTITUTION IS EXACT. Every commit touching the BATCH handler between
+ *       --pre-ref and HEAD must be a declared weighting commit, provably comment-only in
+ *       it, or a proven relocation: a commit that only moves the handler between its file
+ *       and its directory, shown by loading the handler either side of it and comparing
+ *       every member body (never by trusting a subject line). Otherwise the OLD side would
+ *       silently carry an unrelated behavioural rollback and the comparison would be about
+ *       something else.
  *
  * ------------------------------------------------------------------------------
  * WHAT IT DOES NOT COVER - read this before quoting a green run.
@@ -149,6 +152,8 @@ const fs     = require('fs');
 const os     = require('os');
 const crypto = require('crypto');
 const { execSync, spawnSync } = require('child_process');
+const { handlerPaths, handlerFiles, layPreRefHandler, unaccountedHandlerCommits }
+    = require('./lib/handler_spelling.js');
 
 const REPO      = path.resolve(__dirname, '..');
 const GATE      = 'BATCH_COST_WEIGHTING';
@@ -161,6 +166,17 @@ const SIDE_MARK = '###A6-SIDE###'; // child -> parent report line
 // asserted. Short SHAs, resolved through git so an abbreviation change cannot silently
 // drop one from the list.
 const WEIGHTING_COMMITS = ['013c206', 'd627a4b', '2d70b903'];
+
+// The commits that RELOCATED the handler: the split into part files, and the move of the
+// entry into the directory. They rewrite the handler wholesale and decide nothing
+// differently, which no line read can tell apart from a behavioural edit, so each is
+// declared here and then checked (declaredRelocationTablesHold): its admission tables and
+// member names must be identical either side of each. Short SHAs, resolved through git;
+// a rebase of this history renames them, and the tool then reports them as unaccounted
+// rather than passing them silently, which is the safe direction.
+const RELOCATION_COMMITS = ['62300808', 'f179d499'];
+
+const { flat: HANDLER_FLAT, dir: HANDLER_DIR } = handlerPaths('batch');
 
 // Declared before main() so a FAILING check on the synchronous prefix can still print its
 // verdict instead of dying in the temporal dead zone.
@@ -261,7 +277,7 @@ function parseArgs() {
 // wherever an address is validated.
 const A1 = 'mq7tVfobimRUPxPNnyd5mKn11SVmTiLxtu';   // issuer / deployer, funded with gas
 const A2 = 'n4nbVcRRR5sEHyp2VYuLUvCyDmQmBoonoK';   // counterparty, funded with gas
-const A4 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi';   // deliberately holds NO gas (D10)
+const A4 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi';   // deliberately holds NO gas (for the spam-collapse shapes)
 
 const T0    = 1700000000;
 const STEP  = 60;
@@ -279,7 +295,7 @@ const contractCode = tag =>
 const NO_SUCH_CONTRACT = 999999;
 
 // Far enough out to be chargeable: the unified expiration fee is free for the first 90
-// days, so a 200-day ORDER owes a real duration fee and D10 can price it.
+// days, so a 200-day ORDER owes a real duration fee and the widened collapse can price it.
 const ORDER_EXP = T0 + 86400 * 200;
 
 const order   = () => `ORDER|0|BTC|${TOK}|10|0|BTC|${TOK}|20|0|${A1}|${ORDER_EXP}|||`;
@@ -339,36 +355,9 @@ function materializeOldTree(preRef, dir) {
     if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
     fs.mkdirSync(dir, { recursive: true });
     execSync('git archive HEAD | tar -x -C ' + JSON.stringify(dir), { cwd: REPO });
-    const pre = execSync('git show ' + JSON.stringify(preRef + ':src/actions/batch.js'),
-        { cwd: REPO, maxBuffer: 1024 * 1024 * 64 });
-    fs.writeFileSync(path.join(dir, 'src', 'actions', 'batch.js'), pre);
+    layPreRefHandler(REPO, 'batch', preRef, dir);
     fs.symlinkSync(path.join(REPO, 'node_modules'), path.join(dir, 'node_modules'));
     return dir;
-}
-
-// N4. Every commit touching src/actions/batch.js between preRef and HEAD must be a
-// declared weighting commit or comment-only in that file. Returns the offenders, so a
-// caller can name them rather than just refuse.
-function unaccountedBatchCommits(preRef) {
-    const declared = new Set(WEIGHTING_COMMITS.map(
-        s => execSync('git rev-parse ' + JSON.stringify(s), { cwd: REPO }).toString().trim()));
-    const shas = execSync('git log --format=%H ' + JSON.stringify(preRef) + '..HEAD -- src/actions/batch.js',
-        { cwd: REPO }).toString().trim().split('\n').filter(Boolean);
-    const offenders = [];
-    for (const sha of shas) {
-        if (declared.has(sha)) continue;
-        const diff = execSync('git show ' + sha + ' -- src/actions/batch.js',
-            { cwd: REPO, maxBuffer: 1024 * 1024 * 64 }).toString();
-        const changed = diff.split('\n')
-            .filter(l => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l))
-            .map(l => l.slice(1).trim());
-        // A comment-only commit moves nothing the parser sees. Anything else is a
-        // behavioural change the substitution would silently roll back too.
-        const code = changed.filter(l => l !== '' && !/^(\/\/|\*|\/\*)/.test(l));
-        if (code.length)
-            offenders.push({ sha: sha.slice(0, 8), codeLines: code.length, sample: code[0].slice(0, 80) });
-    }
-    return { total: shas.length, declared: declared.size, offenders };
 }
 
 function sha256File(p) {
@@ -513,19 +502,24 @@ async function main() {
 
     // ---- N4: the substitution is exactly this spec's change ----------------
     section('N4 the old side differs from HEAD by exactly this change');
-    const acct = unaccountedBatchCommits(opts.preRef);
+    const acct = unaccountedHandlerCommits(REPO, 'batch', opts.preRef, WEIGHTING_COMMITS, RELOCATION_COMMITS);
     check(acct.offenders.length === 0,
-        'every commit touching src/actions/batch.js since ' + opts.preRef +
-        ' is a weighting commit or comment-only (' + acct.total + ' commits, ' +
-        acct.declared + ' declared)',
+        'every commit touching the BATCH handler since ' + opts.preRef +
+        ' is a weighting commit, comment-only or a declared relocation (' + acct.total +
+        ' commits, ' + acct.declared + ' declared, ' + acct.relocations + ' relocations)',
         acct.offenders.length === 0 ? '' :
             'unaccounted behavioural commits: ' + JSON.stringify(acct.offenders));
     const otherReaders = execSync(
         'git grep -l ' + JSON.stringify(GATE) + ' HEAD -- src/ || true', { cwd: REPO })
         .toString().trim().split('\n').filter(Boolean)
         .map(l => l.replace(/^HEAD:/, '')).sort();
-    check(otherReaders.join(',') === 'src/actions/batch.js,src/protocol_changes.js',
-        'the flag is read from src/actions/batch.js alone (plus its own registration)',
+    // The flag may be read from any file of the handler, flat or under its directory: the
+    // split moved the reader out of the loader, and pinning the loader alone would pass
+    // while a second reader appeared in a part beside it.
+    const strayReaders = otherReaders.filter(f => f !== 'src/protocol_changes.js'
+        && f !== HANDLER_FLAT && !f.startsWith(HANDLER_DIR));
+    check(strayReaders.length === 0 && otherReaders.includes('src/protocol_changes.js'),
+        'the flag is read from the BATCH handler alone (plus its own registration)',
         JSON.stringify(otherReaders));
     if (failures) { console.log('\nFAILED: the old side would not isolate this change'); process.exit(1); }
 
@@ -546,8 +540,8 @@ async function main() {
         const same = fs.existsSync(b) && sha256File(a) === sha256File(b);
         check(same, 'identical in both trees: ' + rel, same ? '' : 'the two sides would run different harnesses');
     }
-    const oldBatch = fs.readFileSync(path.join(oldRoot, 'src', 'actions', 'batch.js'), 'utf8');
-    check(!oldBatch.includes(GATE), 'the OLD side\'s batch.js contains no reader of ' + GATE,
+    const oldBatch = handlerFiles(oldRoot, 'batch').map(f => fs.readFileSync(f, 'utf8')).join('\n');
+    check(!oldBatch.includes(GATE), 'the OLD side\'s BATCH handler contains no reader of ' + GATE,
         oldBatch.includes(GATE) ? '--pre-ref is at or after the weighting work' : '');
     if (failures) { console.log('\nFAILED: old-tree construction'); process.exit(1); }
 
@@ -579,7 +573,7 @@ async function main() {
         const { seedGas } = require(path.join(REPO, 'test/integration/setup/gas-seeder.js'));
         await dbc.createDecoderSchema();
         const seeder = new Seeder(dbc.decoderQuery);
-        // A4 is deliberately absent: D10's shapes need a source that provably cannot pay.
+        // A4 is deliberately absent: the spam-collapse shapes need a source that provably cannot pay.
         await seedGas(seeder, { blockIndex: GAS_B, blockTime: T0 - STEP, addresses: [A1, A2], amount: '1000' });
         const blocks = corpus();
         for (const b of blocks) await seeder.seedBlock(b.block, b.time, b.txs);
@@ -677,7 +671,7 @@ async function main() {
             'S12 2 EXECUTEs from a gasless source: OLD has no VM-floor collapse', wOld.shape('S12'));
     }
 
-    // ---- the A6 assertion -------------------------------------------------
+    // ---- the replay-equivalence assertion -------------------------------------------------
     section('A6: OLD vs HEAD-with-the-flag-unarmed');
     const eq = require(path.join(REPO, 'test/integration/setup/equivalence.js'));
     const stateOLD = await eq.captureDbState(q.OLD, { mode: 'strict' });

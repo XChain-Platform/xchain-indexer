@@ -1,0 +1,336 @@
+/*********************************************************************
+ *
+ * Copyright © 2025–2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md. A commercial
+ * license (without AGPL source-disclosure terms) is available -
+ * contact legal@dankest.llc.
+ *
+ **********************************************************************
+ *
+ * Light-client / SPV Merkle primitives (SPV light-client spec §3-§5)
+ *
+ * Pure, deterministic, DB-free cryptographic primitives for the additive state
+ * commitment (balance/state SMT), the per-block content Merkle root, and the
+ * fixed top-level state root. Everything here is CONSENSUS-CRITICAL once the
+ * §6 flag-day activates: the indexer (producer, src/stateCommitment.js) and the
+ * xchain-sync follower (twin, src/BlockHasher.js) MUST compute byte-identical
+ * roots from it, exactly as db.js getBlockHashes and BlockHasher are a pair.
+ *
+ * BYTE-ALIGNED TWIN: this file is copied verbatim into xchain-sync/src/merkle.js
+ * (and a subset into xchain-sdk for client-side verification). Keep them
+ * identical; the merkle-vectors golden + the xchain-e2e recompute-conformance
+ * scenario guard the pair. Do not introduce wall-clock, locale, or float
+ * dependence: SHA-256 over explicit byte layouts only.
+ *
+ * Hardening (vs the legacy unsigned xchain-sync/src/MerkleTree.js, which is NOT
+ * second-preimage safe and is audit-only): RFC 6962-style domain separation on
+ * leaves (0x00) and internal nodes (0x01), a distinct empty-leaf constant (0x02),
+ * fixed-shape trees (no Bitcoin duplicate-last for odd layers). See spec §2.6, §3.1.
+ *
+ ********************************************************************/
+
+'use strict';
+
+// The byte layer (versions, domain-separated hashes, the EMPTY table, canonical
+// encodings and key derivations) lives in the primitives part beside this file, at
+// the same relative path in every carrier so the four entries stay byte-identical.
+const {
+    MERKLE_VERSION, STATE_ROOT_VERSION, BLOCK_MERKLE_VERSION, SMT_DEPTH, EMPTY, EMPTY_SMT_ROOT,
+    sha256, leafHash, nodeHash, toBuf, toHex,
+    canonicalAmount, joinFields, smtKey, balanceKey, escrowKey, stakeKey, contractStateKey, amountLeaf
+} = require('./merkle/primitives.js');
+
+// ---- stakes_root value leaves (validator-set proof, spec §7) -----------------
+// The weighted quorum (stake_weighted_quorum.meetsStakeThreshold) is SOURCE-deduped:
+// 3·Σ(distinct signer-source weight) > 2·S, with S = Σ over distinct sources. So the
+// stakes_root must let a light client (a) recover each signer's SOURCE (to dedupe)
+// and (b) read the committed total S. Two leaf kinds, both keyed by stakeKey():
+//   member: stakeKey(pubkey, capability)      -> stakeMemberLeaf(source, weight)
+//   total:  stakeKey(STAKE_TOTAL_PUBKEY, cap) -> stakeTotalLeaf(S)
+// STAKE_TOTAL_PUBKEY cannot collide with a real signer (pubkeys are 64-hex).
+const STAKE_TOTAL_PUBKEY = '__total__';
+function stakeMemberLeaf(source, weight){
+    return leafHash(joinFields(['STK', source, canonicalAmount(weight)]));
+}
+function stakeTotalLeaf(total){
+    return leafHash(joinFields(['STKTOTAL', canonicalAmount(total)]));
+}
+// Exact sum of canonical 18-dp amounts via integer (BigInt) scaling, so the
+// source-deduped total S is byte-identical across the indexer + xchain-sync twins
+// regardless of each repo's bignumber config. Returns a canonicalAmount string.
+function sumCanonicalAmounts(amounts){
+    let acc = 0n;
+    for(const a of (amounts || [])){
+        const [i, f] = canonicalAmount(String(a)).split('.');
+        acc += BigInt(i) * 1000000000000000000n + BigInt(f);
+    }
+    const s    = acc.toString();
+    const frac = s.length > 18 ? s.slice(-18) : s.padStart(18, '0');
+    let   intp = s.length > 18 ? s.slice(0, -18) : '0';
+    intp = intp.replace(/^0+(?=\d)/, '');
+    return intp + '.' + frac;
+}
+
+// ---- Bit access on a key path (MSB-first) -----------------------------------
+function bitAt(keyBuf, i){
+    return (keyBuf[i >> 3] >> (7 - (i & 7))) & 1;
+}
+
+// ---- Sparse Merkle Tree (reference, in-memory; §4.1) ------------------------
+// Depth-256, empty-subtree-cached. This is the reference shape the indexer's
+// persistent, incremental state_tree_nodes implementation MUST match root-for-
+// root. Absence == zero (no leaf): "A holds 0 of T" is a non-inclusion proof.
+
+function smtNode(entries, depth){
+    if(entries.length === 0) return EMPTY[SMT_DEPTH - depth];
+    if(depth === SMT_DEPTH)  return entries[0].leaf;     // unique 256-bit path
+    const left = [], right = [];
+    for(const e of entries) (bitAt(e.key, depth) === 0 ? left : right).push(e);
+    return nodeHash(smtNode(left, depth + 1), smtNode(right, depth + 1));
+}
+
+class SparseMerkleTree {
+    constructor(){ this._leaves = new Map(); }   // keyHex -> value-leaf hex (32B)
+
+    // Set a key's value leaf. Pass null/undefined to DELETE (return-to-zero;
+    // delete-on-zero is normative, §4.2). Storing a zero-valued leaf is wrong;
+    // callers must delete instead.
+    set(keyBuf, leafBufOrNull){
+        const k = toHex(keyBuf);
+        if(leafBufOrNull == null) this._leaves.delete(k);
+        else this._leaves.set(k, toHex(leafBufOrNull));
+    }
+    delete(keyBuf){ this._leaves.delete(toHex(keyBuf)); }
+    has(keyBuf){ return this._leaves.has(toHex(keyBuf)); }
+    get size(){ return this._leaves.size; }
+
+    entries(){
+        const out = [];
+        for(const [k, v] of this._leaves) out.push({ key: Buffer.from(k, 'hex'), leaf: Buffer.from(v, 'hex') });
+        return out;
+    }
+
+    root(){ return smtNode(this.entries(), 0); }
+    rootHex(){ return toHex(this.root()); }
+
+    // Membership or non-membership proof for a key. Always 256 siblings (top-down,
+    // siblings[d] is the sibling at depth d). leaf_value is the present value leaf
+    // (membership) or null (non-membership, verifier substitutes EMPTY[0]).
+    prove(keyBuf){
+        const key = toBuf(keyBuf);
+        const siblings = [];
+        let level = this.entries();
+        for(let depth = 0; depth < SMT_DEPTH; depth++){
+            const left = [], right = [];
+            for(const e of level) (bitAt(e.key, depth) === 0 ? left : right).push(e);
+            const goRight   = bitAt(key, depth) === 1;
+            const sibEntries = goRight ? left : right;
+            siblings.push(toHex(smtNode(sibEntries, depth + 1)));
+            level = goRight ? right : left;
+        }
+        const k = toHex(key);
+        const leafValue = this._leaves.has(k) ? this._leaves.get(k) : null;
+        return { key: k, leaf_value: leafValue, siblings, compressed: compressSmtProof(siblings) };
+    }
+}
+
+// Verify an SMT proof against an explicit expected root. leafValueOrNull: hex
+// value leaf for membership, null for non-membership. Rejects on mismatch.
+function verifySmtProof(rootHex, keyBuf, leafValueOrNull, siblings){
+    if(!Array.isArray(siblings) || siblings.length !== SMT_DEPTH) return false;
+    const key = toBuf(keyBuf);
+    let node = leafValueOrNull == null ? EMPTY[0] : toBuf(leafValueOrNull);
+    for(let depth = SMT_DEPTH - 1; depth >= 0; depth--){
+        const sib = toBuf(siblings[depth]);
+        node = bitAt(key, depth) === 0 ? nodeHash(node, sib) : nodeHash(sib, node);
+    }
+    return toHex(node) === toHex(rootHex);
+}
+
+// ---- Compressed SMT proof (§3.1, normative wire form) -----------------------
+// 256-bit bitmap (MSB = depth 0, nearest root); set bit => a real sibling is
+// present, clear bit => the sibling is the constant EMPTY[height] for that depth.
+// The sibling at depth d roots a subtree of height (255 - d), so its empty
+// constant is EMPTY[255 - d].
+function compressSmtProof(siblings){
+    const bitmap = Buffer.alloc(32);
+    const real = [];
+    for(let d = 0; d < SMT_DEPTH; d++){
+        const sib = toBuf(siblings[d]);
+        if(!sib.equals(EMPTY[SMT_DEPTH - 1 - d])){
+            bitmap[d >> 3] |= (1 << (7 - (d & 7)));
+            real.push(toHex(sib));
+        }
+    }
+    return { bitmap: bitmap.toString('hex'), siblings: real };
+}
+function decompressSmtProof(compressed){
+    const bitmap = toBuf(compressed.bitmap);
+    const real = compressed.siblings;
+    const out = new Array(SMT_DEPTH);
+    let ri = 0;
+    for(let d = 0; d < SMT_DEPTH; d++){
+        const set = (bitmap[d >> 3] >> (7 - (d & 7))) & 1;
+        out[d] = set ? real[ri++] : toHex(EMPTY[SMT_DEPTH - 1 - d]);
+    }
+    if(ri !== real.length) throw new Error('merkle: surplus siblings in compressed proof');
+    return out;
+}
+function verifyCompressedSmtProof(rootHex, keyBuf, leafValueOrNull, compressed){
+    return verifySmtProof(rootHex, keyBuf, leafValueOrNull, decompressSmtProof(compressed));
+}
+
+// ---- Fixed binary Merkle (top state root + block-content root) --------------
+// Bottom-up over a vector of 32-byte node values, padded to a power of two with
+// EMPTY[0]. Combined with nodeHash. Leaves are already-hashed values (sub-roots
+// for the state tree, leafHash(rowEncoding) for the block tree).
+function nextPow2(n){ let p = 1; while(p < n) p <<= 1; return p; }
+
+function fixedMerkleRoot(leaves){
+    if(leaves.length === 0) return EMPTY[0];
+    let layer = leaves.map(toBuf);
+    const width = nextPow2(layer.length);
+    while(layer.length < width) layer.push(EMPTY[0]);
+    while(layer.length > 1){
+        const next = [];
+        for(let i = 0; i < layer.length; i += 2) next.push(nodeHash(layer[i], layer[i + 1]));
+        layer = next;
+    }
+    return layer[0];
+}
+
+// Inclusion proof in a fixed binary Merkle: bottom-up siblings + the leaf index.
+function fixedMerkleProof(leaves, index){
+    if(index < 0 || index >= leaves.length) throw new Error('merkle: index out of range');
+    let layer = leaves.map(toBuf);
+    const width = nextPow2(layer.length);
+    while(layer.length < width) layer.push(EMPTY[0]);
+    const siblings = [];
+    let idx = index;
+    while(layer.length > 1){
+        const sibIdx = idx ^ 1;
+        siblings.push(toHex(layer[sibIdx]));
+        const next = [];
+        for(let i = 0; i < layer.length; i += 2) next.push(nodeHash(layer[i], layer[i + 1]));
+        layer = next;
+        idx >>= 1;
+    }
+    return { index, siblings };
+}
+function verifyFixedMerkleProof(rootHex, leafBuf, index, siblings){
+    let node = toBuf(leafBuf);
+    let idx = index;
+    for(const sib of siblings){
+        node = (idx & 1) === 0 ? nodeHash(node, toBuf(sib)) : nodeHash(toBuf(sib), node);
+        idx >>= 1;
+    }
+    return toHex(node) === toHex(rootHex);
+}
+
+// ---- Top-level state root (§4.1) --------------------------------------------
+// Fixed, ordered list of named sub-tree roots. A named-but-absent/disabled
+// sub-tree uses the empty-SMT root EMPTY[SMT_DEPTH]; structural padding to the
+// next power of two uses EMPTY[0] (handled by fixedMerkleRoot). v1 commits
+// balances + stakes; the rest are EMPTY until a later state_root_version (§10 D1).
+const STATE_SUBTREES = ['balances_root', 'stakes_root', 'ownership_root', 'tokens_root', 'contract_state_root'];
+
+function stateRoot(subRoots){
+    const leaves = STATE_SUBTREES.map(name => (subRoots && subRoots[name]) ? toBuf(subRoots[name]) : EMPTY_SMT_ROOT);
+    return fixedMerkleRoot(leaves);
+}
+// Proof that one named sub-root is committed in state_root (the §4.4 sub_root_path).
+function stateRootProof(subRoots, name){
+    const idx = STATE_SUBTREES.indexOf(name);
+    if(idx < 0) throw new Error('merkle: unknown state sub-tree ' + name);
+    const leaves = STATE_SUBTREES.map(n => (subRoots && subRoots[n]) ? toBuf(subRoots[n]) : EMPTY_SMT_ROOT);
+    return fixedMerkleProof(leaves, idx);
+}
+
+// ---- Per-block content leaves (§5.1) ----------------------------------------
+// Frozen cross-kind total order (§5.1): all ledger leaves, then actions, then
+// contracts; within each kind the existing getBlockHashes deterministic order.
+// tx_index NULL is encoded as the empty string (block-hash covers tx-NULL rows).
+// Amount is hashed as the RAW stored string (not canonicalAmount): block_merkle_root
+// is a content commitment over the exact rows, in parity with the consensus
+// ledger_hash, which also hashes the stored amount string. This is required for
+// correctness, not just style: escrow rows are legitimately NEGATIVE (the release
+// idiom: a +amount lock is offset by a -amount release row, so SUM(escrows)=locked),
+// and the non-negative canonicalAmount throws on them. The stored string is already
+// deterministic (createLedgerChangeRecord rounds to tick decimals + mathjs String()),
+// matching contractLeaf, which likewise hashes its amount fields raw.
+function ledgerLeaf(row){
+    return leafHash(joinFields(['L', row.kind, row.action_index, row.address, row.tick, row.amount]));
+}
+function actionsLeaf(row){
+    const txi = (row.tx_index == null) ? '' : row.tx_index;
+    return leafHash(joinFields(['A', row.action_index, txi, row.action]));
+}
+function contractLeaf(subTable, fields){
+    return leafHash(joinFields(['C', subTable, ...fields]));
+}
+// Combined block-content root over an already-ordered leaf vector (§5).
+function blockMerkleRoot(orderedLeaves){
+    return fixedMerkleRoot(orderedLeaves);
+}
+// Build the ordered block-content leaf vector from the canonical per-block rows
+// (the db.getBlockLeafRows shape: { ledger:{credits,debits,escrows}, actions,
+// contracts:{contracts,state,executions,emissions,deposits,withdrawals} }) in the
+// frozen cross-kind total order (§5.1): all ledger leaves (credit, debit, escrow),
+// then actions, then the six contract sub-tables, each in the deterministic order
+// getBlockHashes gathered them. Null fields coerce to '' (matching actionsLeaf's
+// tx_index). This is the SINGLE source of the cross-kind ordering: the indexer
+// commits block_merkle_root with it and the explorer proof server locates a row's
+// leaf index with it, both reading this twin-guarded module so the order can never
+// drift between commit and proof. The leaf index an inclusion proof returns is
+// position-defined here, so the order is consensus-critical and golden-vectored.
+function blockMerkleLeaves(rows){
+    const _c = (x) => (x == null) ? '' : x;
+    const leaves = [];
+    const L = (rows && rows.ledger) || {};
+    for(const kind of ['credit', 'debit', 'escrow']){
+        const arr = L[kind + 's'] || [];   // credits / debits / escrows
+        for(const r of arr)
+            leaves.push(ledgerLeaf({ kind, action_index: r.action_index,
+                address: _c(r.address), tick: _c(r.tick), amount: r.amount }));
+    }
+    for(const r of ((rows && rows.actions) || []))
+        leaves.push(actionsLeaf({ action_index: r.action_index, tx_index: r.tx_index, action: _c(r.action) }));
+    const C = (rows && rows.contracts) || {};
+    for(const r of (C.contracts || []))
+        leaves.push(contractLeaf('contracts', [r.action_index, _c(r.source_address), _c(r.code_hash), _c(r.status)]));
+    for(const r of (C.state || []))
+        leaves.push(contractLeaf('state', [r.contract_index, _c(r.state_key), _c(r.state_value)]));
+    for(const r of (C.executions || []))
+        leaves.push(contractLeaf('executions', [r.action_index, r.contract_index, _c(r.caller_address), _c(r.gas_used), _c(r.status), _c(r.emitted_count)]));
+    for(const r of (C.emissions || []))
+        leaves.push(contractLeaf('emissions', [r.execution_index, _c(r.emitted_action), r.action_index, r.position]));
+    for(const r of (C.deposits || []))
+        leaves.push(contractLeaf('deposits', [r.action_index, r.contract_index, _c(r.source_address), _c(r.tick), r.amount, _c(r.status)]));
+    for(const r of (C.withdrawals || []))
+        leaves.push(contractLeaf('withdrawals', [r.action_index, r.contract_index, _c(r.source_address), _c(r.tick), r.amount, _c(r.status)]));
+    return leaves;
+}
+
+module.exports = {
+    // versions / constants
+    MERKLE_VERSION, STATE_ROOT_VERSION, BLOCK_MERKLE_VERSION, SMT_DEPTH,
+    EMPTY, EMPTY_SMT_ROOT, STATE_SUBTREES,
+    // hashing primitives
+    sha256, leafHash, nodeHash, toBuf, toHex,
+    // encodings
+    canonicalAmount, joinFields, smtKey, balanceKey, escrowKey, stakeKey, contractStateKey, amountLeaf, bitAt,
+    STAKE_TOTAL_PUBKEY, stakeMemberLeaf, stakeTotalLeaf, sumCanonicalAmounts,
+    // SMT
+    SparseMerkleTree, verifySmtProof,
+    compressSmtProof, decompressSmtProof, verifyCompressedSmtProof,
+    // fixed Merkle + state root
+    fixedMerkleRoot, fixedMerkleProof, verifyFixedMerkleProof,
+    stateRoot, stateRootProof,
+    // block content
+    ledgerLeaf, actionsLeaf, contractLeaf, blockMerkleRoot, blockMerkleLeaves
+};

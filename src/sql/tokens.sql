@@ -42,7 +42,14 @@ CREATE TABLE tokens (
     owner_id              BIGINT UNSIGNED,                  -- id of record in index_addresses table
     escrow_action_index   BIGINT UNSIGNED DEFAULT NULL,     -- action_index of ORDER/SWAP/DISPENSER holding ownership in escrow (NULL = ownership not escrowed)
     coin_price            VARCHAR(250) NOT NULL default 0,  -- last  price of 1 token in native coin (BTC, LTC, DOGE, etc)
-    coin_floor            VARCHAR(250) NOT NULL default 0   -- floor price of 1 token in native coin (BTC, LTC, DOGE, etc)
+    coin_floor            VARCHAR(250) NOT NULL default 0,  -- floor price of 1 token in native coin (BTC, LTC, DOGE, etc)
+    -- Token-bridge state, PARSED from ISSUE format 7 (the raw wire strings stay on
+    -- `issues`). Action-derived from issues, so already inside actions_hash; no stateHash
+    -- class is added for them.
+    bridge_chains         VARCHAR(250),                     -- comma list of destination coins this token may be locked to; empty/NULL = not bridgeable (the default, R4)
+    min_depth             BIGINT UNSIGNED,                  -- issuer-raised confirmation depth; effective depth is max(coins.resolveConfirmations(origin, network), min_depth), so raise-only
+    lock_bridge           TINYINT(1) NOT NULL DEFAULT 0,    -- Locks BRIDGE_CHAINS and MIN_DEPTH forever; the holder's assurance against the owner and against a new owner after a TRANSFER
+    bridged               TINYINT(1) NOT NULL DEFAULT 0     -- set by the first applied XBRIDGE v3 lock and never cleared in milestone 1, so emptying BRIDGE_CHAINS cannot reopen policy binding while copies are outstanding
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE        INDEX tick_id              ON tokens (tick_id);

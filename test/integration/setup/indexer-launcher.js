@@ -21,6 +21,7 @@
  */
 
 const { getConnectionParams, activeFileKey, fileKey } = require('./db-connection');
+const { applySystemGas } = require('./gas-seeder');
 
 // Instances handed out by initIndexer() and not yet destroyed, each against the
 // test file whose schemas were active when it was made. Ownership matters:
@@ -45,7 +46,7 @@ process.env.npm_package_name = process.env.npm_package_name || 'xchain-indexer';
 const XChainIndexer = require('../../../src/XChainIndexer.js');
 // Same module the production block loop uses, so the harness cannot drift from
 // the collapse rule it is meant to model (see processBlocks below).
-const { collapseOutputFanout } = require('../../../src/output_fanout.js');
+const { collapseOutputFanout } = require('../../../src/chain/output_fanout.js');
 
 /**
  * Create a configured XChainIndexer instance pointing at the test databases.
@@ -75,13 +76,13 @@ async function initIndexer(opts = {}) {
 
     // Replicate the initialization portion of start() without the while(true) loop
     const config   = require('../../../src/config.js');
-    const Database = require('../../../src/db.js');
+    const Database = require('../../../src/db');
     const Utility  = require('../../../src/utility.js');
     const ProtocolChanges = require('../../../src/protocol_changes.js');
-    const Mapper   = require('../../../src/mapper.js');
-    const Actions  = require('../../../src/actions.js');
-    const Rollback = require('../../../src/rollback.js');
-    const Genesis  = require('../../../src/genesis.js');
+    const Mapper   = require('../../../src/chain/mapper.js');
+    const Actions  = require('../../../src/actions/index.js');
+    const Rollback = require('../../../src/rollback/index.js');
+    const Genesis  = require('../../../src/chain/genesis.js');
 
     indexer.config = config.getConfig();
     // Share the ONE config snapshot exactly like XChainIndexer.start() does: a bare
@@ -181,7 +182,7 @@ async function processBlocks(indexer) {
         // block): createAddress/createTicker default block_index to this.blockIndex,
         // so without this the harness stamps block_index=NULL and the reorg rollback
         // (DELETE WHERE block_index >= ?) matches nothing, blinding the 05-reorg suite
-        // to the F-1/F-2 index-id bug class.
+        // to the out-of-band index-id bug class.
         indexer.indexerDb.blockIndex = lastIndexerBlock;
         try {
             // Mirror production (XChainIndexer.js, first statement inside the block's
@@ -207,6 +208,11 @@ async function processBlocks(indexer) {
             // effective validator-signed cross-chain match. No-op for scenarios without
             // cross_chain_matches rows; scenario 26 injects signed matches directly.
             await indexer.util.processCrossChainSettlements(indexer.actions, indexer.indexerDb, lastIndexerBlock, blockTime);
+            // The fixture's stand-in for the XBRIDGE settle pass, at the pass's pinned
+            // position (XChainIndexer.start: after the cross-chain DEX settlement). Off
+            // BTC the gas preamble arrives here as bridge-shaped credits, because a
+            // broadcast ISSUE of XCHAIN is refused there; see gas-seeder.js.
+            await applySystemGas(indexer, lastIndexerBlock, blockTime);
             await indexer.util.processCancellations(indexer.actions, indexer.indexerDb, lastIndexerBlock, blockTime);
             // Mirror production: clear the per-block VM compilation cache after the last
             // pass that can execute contract code and BEFORE createBlock, so nothing
@@ -242,6 +248,13 @@ async function destroyIndexer(indexer) {
     } catch (e) { /* ignore */ }
     try {
         if (indexer.indexerDb && indexer.indexerDb.pool) await indexer.indexerDb.pool.end();
+    } catch (e) { /* ignore */ }
+    try {
+        // initIndexer()'s `new Actions(indexer)` forks a persistent VM subprocess
+        // (execution: 'subprocess'); without this every scenario file across the
+        // whole integration tier leaked one, and the suite never exited on its
+        // own without --exit.
+        if (indexer.actions && indexer.actions.vm) await indexer.actions.vm.shutdown();
     } catch (e) { /* ignore */ }
 }
 

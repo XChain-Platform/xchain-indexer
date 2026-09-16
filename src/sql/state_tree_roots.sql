@@ -53,3 +53,8 @@ CREATE TABLE state_tree_roots (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE INDEX idx_chain_net_block ON state_tree_roots (chain, network, block_index);
+-- The reorg delete is DELETE ... WHERE block_index >= ? with no chain/network scope
+-- (rollback.js's generic block loop, mirrored by ClientRollback), so block_index has to
+-- LEAD an index or the delete scans the whole root history. Neither key above leads with
+-- it. Standalone form so reconcileTableIndexes can self-heal an aged DB.
+CREATE INDEX block_index ON state_tree_roots (block_index);

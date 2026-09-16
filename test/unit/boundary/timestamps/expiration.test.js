@@ -17,7 +17,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../fixtures/mocks');
-const Order = require('../../../../src/actions/order.js');
+const Order = require('../../../../src/actions/order/index.js');
 
 function makeActionsCtx(indexer) {
     return {
@@ -36,12 +36,12 @@ function makeActionsCtx(indexer) {
 
 function makeParams(str) { return String(str).split('|'); }
 
+let indexer, actionsCtx, handler;
+
+const BLOCK_TIME = 1700000000;
+const SOURCE     = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+
 describe('ORDER and DISPENSER expiration boundary tests @regression @tier2', function () {
-    let indexer, actionsCtx, handler;
-
-    const BLOCK_TIME = 1700000000;
-    const SOURCE     = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
-
     beforeEach(function () {
         indexer    = createMockIndexer();
         actionsCtx = makeActionsCtx(indexer);
@@ -96,8 +96,30 @@ describe('ORDER and DISPENSER expiration boundary tests @regression @tier2', fun
         await handler.parse(params, data, null);
         assert.strictEqual(data.STATUS, 'valid', `expected valid but got: ${data.STATUS}`);
     });
+});
+
+describe('ORDER and DISPENSER expiration boundary tests @regression @tier2', function () {
+    beforeEach(function () {
+        indexer    = createMockIndexer();
+        actionsCtx = makeActionsCtx(indexer);
+        handler    = new Order(actionsCtx);
+
+        indexer.indexerDb.getTokenInfo
+            .withArgs('RAREPEPE', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'RAREPEPE', TICK_ID: 10, DECIMALS: 0 }));
+        indexer.indexerDb.getTokenInfo
+            .withArgs('PEPECASH', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'PEPECASH', TICK_ID: 20, DECIMALS: 0 }));
+        indexer.indexerDb.getAddressBalances.resolves({ 10: '100', 20: '999999' });
+        indexer.indexerDb.isActionAllowed.resolves(true);
+        indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+        indexer.indexerDb.getTickerId.resolves(99);
+    });
+
+    afterEach(function () { sinon.restore(); });
 
     it('TS-05: Missing EXPIRATION uses default (BLOCK_TIME + 90 days) and is valid', async function () {
+        // Leave EXPIRATION empty
         const params = makeParams('0|BTC|RAREPEPE|1||BTC|PEPECASH|10||' + SOURCE + '||||');
         const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE, BLOCK_TIME, COIN: 'BTC' });
         await handler.parse(params, data, null);

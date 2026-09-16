@@ -254,6 +254,10 @@ async function createDecoderSchema() {
         throw new Error('Decoder schema dir not found: ' + DECODER_SQL_DIR +
             '. Set XCHAIN_DECODER_SQL_PATH to the xchain-decoder src/sql directory.');
     }
+    // A wiped decoder DB has no blocks, so no pending bridge-shaped gas seed can
+    // still belong to one; forget them here rather than at consumption, because a
+    // rollback-and-replay of the seeded block must find the seed again.
+    require('./gas-seeder').clearSystemGas();
     const pool = getDecoderPool();
     const conn = await pool.getConnection();
     try {

@@ -17,7 +17,7 @@
 -- because missed_count/slashed_count record absences (a responsible validator
 -- that did NOT sign), which aren't derivable from the response rows themselves.
 -- Counters are written incrementally by the ATTEST handler and recomputed on
--- reorg by Rollback._recomputeAttestationValidatorStats(). See src/rollback.js.
+-- reorg by Rollback.recomputeAttestationValidatorStats(). See src/rollback.js.
 DROP TABLE IF EXISTS attest_validator_stats;
 CREATE TABLE attest_validator_stats (
     id                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, -- surrogate paging cursor: the natural key (validator_pubkey, provider_id) is composite, and last_updated_block is monotonic but NOT unique (a whole responsible set misses in one block), so a keyset page boundary needs this

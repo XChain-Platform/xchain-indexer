@@ -29,7 +29,7 @@
  * - GATE_TICKER       - (optional) Token ticker gating this file. Empty = public.
  * - ENCRYPTION_METHOD - (optional) 1 = AES-256-GCM. Required when GATE_TICKER set.
  * - KEY_HASH          - (optional) hex sha256(K), 64 chars. Required when GATE_TICKER set.
- * - GATE_MIN_AMOUNT   - (optional, PC-29) minimum GATE_TICKER balance a recipient
+ * - GATE_MIN_AMOUNT   - (optional) minimum GATE_TICKER balance a recipient
  *                       must hold to be given the key. Absent/empty = no threshold.
  * - COMPRESSION       - (optional) payload compression codec. Absent/empty = raw
  *                       (every historical FILE); '1' = deflate-raw.
@@ -40,15 +40,18 @@
  *
  ********************************************************************/
 
-// PC-29: wire bound on GATE_MIN_AMOUNT (matches the SDK validator and the
+// Wire bound on GATE_MIN_AMOUNT (matches the SDK validator and the
 // gated_files.gate_min_amount column width), and the fixed comparison scale the
 // wallet uses. Vendored byte-identical from xchain-documentation/protocol/constants.js.
 const { THRESHOLD_SCALE } = require('../protocol/constants.js');
+const { getLogger } = require('../observability/index.js');
 const GATE_MIN_AMOUNT_MAX_LENGTH = 40;
 
 class File {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -56,37 +59,92 @@ class File {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
+        // Define list of known FORMATS
         this.formats = {};
-        // Optional NINTH field, the unlock threshold: the eight-field form is
+        // Optional NINTH field, the unlock threshold. The eight-field form is
         // byte-identical, so historical FILEs replay unchanged.
         //
         // Optional TENTH field, COMPRESSION, deliberately absent from every
         // validation below because compression is PRESENTATIONAL, not consensus
-        // (spec §5.5): FILE validity never inspects rawData content, so parsing
-        // this field changes nothing about what is valid. Validating it would let
-        // an indexer that rejects a malformed value fork VALIDITY against
-        // neighbours that ignore unknown trailing fields (as shipped indexers do),
-        // so unknown/invalid codes must stay inert here and degrade to serve-raw
-        // at the reader.
+        // state: FILE validity never inspects rawData content, so an indexer
+        // that has never heard of this field produces identical verdicts and
+        // identical state, and parsing it changes nothing about what is valid.
+        // COMPRESSION therefore MUST NOT be validated: an indexer that rejected a
+        // malformed value would fork VALIDITY against neighbours that ignore unknown
+        // trailing fields (as shipped indexers do), which is the one consensus break
+        // this field is defined to be incapable of causing. Unknown or invalid codes
+        // stay inert here and degrade to serve-raw at the reader.
         //
         // There is also deliberately no gated_files/files column for it: serve
         // paths derive COMPRESSION from the stored ACTION STRING at serve time
-        // (spec §5.1), not a parsed-at-ingest column, so a FILE compressed before
-        // an indexer upgrade is never stored marker-less and served as garbage
-        // forever. The action string is already preserved verbatim.
+        // rather than from a parsed-at-ingest column, so a FILE compressed before
+        // an indexer upgrade is never stored marker-less and served as deflated
+        // garbage forever, even after the upgrade. The action string is already
+        // preserved verbatim, so a column would only invite the parsed-at-ingest trap.
         this.formats[0] = 'VERSION|NAME|TYPE|TITLE|MEMO|GATE_TICKER|ENCRYPTION_METHOD|KEY_HASH|GATE_MIN_AMOUNT|COMPRESSION';
 
     }
 
+    // Handle parsing the ADDRESS transaction
     async parse(params, data, error){
+        /*****************************************************************
+         * DEBUGGING - Force params
+         ****************************************************************/
+        // Example payloads by FORMAT version:
+        // let str = "0|test.txt|text/plain|Test File|This is a test upload";
+        // let str = "0|xchain.jpg|image/jpeg|XChain Logo|This is the official XChain Logo";
+        // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
+
+        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
+        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
-        // General Validations
+        error = await this.validateFields(data, error);
+
+        // Gated content validations (optional fields appended to format 0)
+
+        let isGated = (!this.util.isNull(data['GATE_TICKER']) && String(data['GATE_TICKER']).length > 0);
+
+        error = await this.validateGatedContent(data, isGated, error);
+
+        // A threshold with no gate is meaningless and must not be storable: it would
+        // sit in gated_files with no gate_ticker to weigh a balance against. Rejected
+        // rather than ignored, for the same immutability reason as above.
+        if(!error && !isGated && !this.util.isNull(data['GATE_MIN_AMOUNT']) &&
+           String(data['GATE_MIN_AMOUNT']).length > 0)
+            error = 'invalid: GATE_MIN_AMOUNT';
+
+        // Determine final status
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        // Print status message
+        getLogger().info("\t FILE : " + data['NAME'] + ' : ' + data['TYPE'] + ' : ' + (isGated ? ('GATE=' + data['GATE_TICKER'] + ' : ') : '') + data['STATUS']);
+
+        // Persisted for every version; gated_files (below) is written only for valid v1 gated files
+        await this.indexerDb.createFile(data);
+
+        // For valid v1 gated files, also persist the gating metadata so
+        // sends of GATE_TICKER can be enforced and wallets can look up the key.
+        if(isGated && status === 'valid')
+            await this.indexerDb.createGatedFile(data);
+
+        // Store the SOURCE in addresses list
+        this.util.addAddressTicker(data['SOURCE']);
+
+        // Create action mappings
+        await this.mapper.createMappings(data);
+
+    }
+
+    // General Validations
+    async validateFields(data, error){
 
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
@@ -116,10 +174,13 @@ class File {
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
-        // Gated content validations (optional fields appended to format 0)
+        return error;
+    }
 
-        let isGated = (!this.util.isNull(data['GATE_TICKER']) && String(data['GATE_TICKER']).length > 0);
+    // Gated content validations (optional fields appended to format 0)
+    async validateGatedContent(data, isGated, error){
 
+        // Validate the gated-content fields, but only when this FILE is actually gated
         if(!error && isGated){
             // ENCRYPTION_METHOD must be 1 (AES-256-GCM) in v1
             if(Number(data['ENCRYPTION_METHOD']) !== 1)
@@ -143,70 +204,59 @@ class File {
                 else if(await this.indexerDb.isOwnershipEscrowed(data['GATE_TICKER']))
                     error = 'invalid: GATE_TICKER (ownership escrowed)';
 
-                // GATE_MIN_AMOUNT is validated STRICT: a present but invalid
-                // threshold REJECTS the FILE rather than being dropped, since a
-                // FILE is immutable and dropping would let the publisher believe
-                // a threshold was in force when the chain recorded none. This is
-                // replay-safe without a flag-day because the SDK drops unknown
-                // positional fields, so no conforming emitter has ever produced a
-                // nine-field FILE. The gate-tick-existence clause the spec leaves
-                // open is moot here: an unknown GATE_TICKER already rejects the
-                // whole FILE above.
-                if(!error && !this.util.isNull(data['GATE_MIN_AMOUNT']) &&
-                   String(data['GATE_MIN_AMOUNT']).length > 0){
-                    let raw = String(data['GATE_MIN_AMOUNT']);
-                    // Format rules, byte-for-byte the SDK's stateless set (spec §5.2).
-                    if(raw.length > GATE_MIN_AMOUNT_MAX_LENGTH)
-                        error = 'invalid: GATE_MIN_AMOUNT';
-                    else if(!/^\d+(\.\d+)?$/.test(raw))
-                        error = 'invalid: GATE_MIN_AMOUNT';
-                    else if(/^0\d/.test(raw))
-                        error = 'invalid: GATE_MIN_AMOUNT';
-                    else if(!/[1-9]/.test(raw))
-                        error = 'invalid: GATE_MIN_AMOUNT';   // every zero spelling
-                    if(!error){
-                        // Divisibility: the STATE-dependent half the SDK cannot do.
-                        // Bounded at min(tick divisibility, THRESHOLD_SCALE) because a
-                        // threshold with more than THRESHOLD_SCALE decimals is
-                        // unrepresentable in the wallet's fixed-scale BigInt compare,
-                        // so the two sides would disagree on the last digit for a value
-                        // neither considers malformed.
-                        let dot      = raw.indexOf('.');
-                        let places   = (dot === -1) ? 0 : (raw.length - dot - 1);
-                        let tickDec  = Number(tokenInfo['DECIMALS']);
-                        if(!Number.isFinite(tickDec)) tickDec = 0;
-                        let maxPlaces = Math.min(tickDec, THRESHOLD_SCALE);
-                        if(places > maxPlaces)
-                            error = 'invalid: GATE_MIN_AMOUNT';
-                    }
-                }
+                error = this.validateGateMinAmount(data, tokenInfo, error);
             }
         }
 
-        // A threshold with no gate is meaningless and must not be storable: it would
-        // sit in gated_files with no gate_ticker to weigh a balance against. Rejected
-        // rather than ignored, for the same immutability reason as above.
-        if(!error && !isGated && !this.util.isNull(data['GATE_MIN_AMOUNT']) &&
-           String(data['GATE_MIN_AMOUNT']).length > 0)
-            error = 'invalid: GATE_MIN_AMOUNT';
+        return error;
+    }
 
-        let status = (error) ? error : 'valid';
-        data['STATUS'] = status;
+    // Threshold rules for a gated FILE's GATE_MIN_AMOUNT field
+    validateGateMinAmount(data, tokenInfo, error){
 
-        console.log("\t FILE : " + data['NAME'] + ' : ' + data['TYPE'] + ' : ' + (isGated ? ('GATE=' + data['GATE_TICKER'] + ' : ') : '') + data['STATUS']);
+        // GATE_MIN_AMOUNT is validated STRICT. A present but invalid
+        // threshold REJECTS the FILE rather than being dropped, since a
+        // FILE is immutable and dropping would let the publisher believe
+        // a threshold was in force when the chain recorded none. This is
+        // replay-safe without a flag-day because the SDK drops unknown
+        // positional fields, so no conforming emitter has ever produced a
+        // nine-field FILE. The gate-tick-existence clause the spec leaves
+        // open is moot here: an unknown GATE_TICKER already rejects the
+        // whole FILE above.
+        if(!error && !this.util.isNull(data['GATE_MIN_AMOUNT']) &&
+           String(data['GATE_MIN_AMOUNT']).length > 0){
+            let raw = String(data['GATE_MIN_AMOUNT']);
+            // Format rules, byte-for-byte the SDK's stateless validation set.
+            // Length first, so a pathological input never reaches the regexes below.
+            if(raw.length > GATE_MIN_AMOUNT_MAX_LENGTH)
+                error = 'invalid: GATE_MIN_AMOUNT';
+            else if(!/^\d+(\.\d+)?$/.test(raw))
+                error = 'invalid: GATE_MIN_AMOUNT';
+            // No leading zeros: '007' and '7' must not be two spellings of one threshold.
+            else if(/^0\d/.test(raw))
+                error = 'invalid: GATE_MIN_AMOUNT';
+            // A zero threshold is not a gate: the field exists to require a nonzero balance.
+            else if(!/[1-9]/.test(raw))
+                error = 'invalid: GATE_MIN_AMOUNT';   // every zero spelling
+            // Verify GATE_MIN_AMOUNT does not use more decimal places than the tick (or the fixed threshold scale) allows
+            if(!error){
+                // Divisibility: the STATE-dependent half the SDK cannot do.
+                // Bounded at min(tick divisibility, THRESHOLD_SCALE) because a
+                // threshold with more than THRESHOLD_SCALE decimals is
+                // unrepresentable in the wallet's fixed-scale BigInt compare,
+                // so the two sides would disagree on the last digit for a value
+                // neither considers malformed.
+                let dot      = raw.indexOf('.');
+                let places   = (dot === -1) ? 0 : (raw.length - dot - 1);
+                let tickDec  = Number(tokenInfo['DECIMALS']);
+                if(!Number.isFinite(tickDec)) tickDec = 0;
+                let maxPlaces = Math.min(tickDec, THRESHOLD_SCALE);
+                if(places > maxPlaces)
+                    error = 'invalid: GATE_MIN_AMOUNT';
+            }
+        }
 
-        // Persisted for every version; gated_files (below) is written only for valid v1 gated files
-        await this.indexerDb.createFile(data);
-
-        // For valid v1 gated files, also persist the gating metadata so
-        // sends of GATE_TICKER can be enforced and wallets can look up the key.
-        if(isGated && status === 'valid')
-            await this.indexerDb.createGatedFile(data);
-
-        this.util.addAddressTicker(data['SOURCE']);
-
-        await this.mapper.createMappings(data);
-
+        return error;
     }
 }
 

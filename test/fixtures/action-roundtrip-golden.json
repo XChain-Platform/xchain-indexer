@@ -47,7 +47,10 @@
         "CONTROLLER": null,
         "ACTION_CLASS": null,
         "COOLDOWN_BLOCKS": null,
-        "UNBIND": null
+        "UNBIND": null,
+        "BRIDGE_CHAINS": null,
+        "MIN_DEPTH": null,
+        "LOCK_BRIDGE": null
       }
     },
     {
@@ -90,7 +93,10 @@
         "CONTROLLER": null,
         "ACTION_CLASS": null,
         "COOLDOWN_BLOCKS": null,
-        "UNBIND": null
+        "UNBIND": null,
+        "BRIDGE_CHAINS": null,
+        "MIN_DEPTH": null,
+        "LOCK_BRIDGE": null
       }
     },
     {

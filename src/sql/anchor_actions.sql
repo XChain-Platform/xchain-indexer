@@ -37,7 +37,7 @@
 -- The live verification source for explorers/wallets is the hub-mirrored
 -- state_checkpoints table; this table exists so a full chain parse alone
 -- recovers every checkpoint + the complete cross-chain match archive
--- (src/recovery.js). Status semantics: 'valid' (sigs verified at quorum),
+-- (bin/recovery.js). Status semantics: 'valid' (sigs verified at quorum),
 -- 'unverified' (no capability snapshot available locally, so recovery
 -- re-verifies from the ARCHIVED snapshots), or an 'invalid: ...' reason.
 --

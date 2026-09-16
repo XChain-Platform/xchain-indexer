@@ -1,0 +1,229 @@
+/*********************************************************************
+ *
+ * Copyright © 2025–2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md. A commercial
+ * license (without AGPL source-disclosure terms) is available -
+ * contact legal@dankest.llc.
+ *
+ **********************************************************************
+ *
+ * MINT validation: the wire parse, the token state a mint is judged against, and the
+ * verdict ladder, in the order the handler has always applied them.
+ *
+ * Every function runs with `this` bound to the Mint handler (./index.js calls each as
+ * fn.call(this, ...)), so it reads the same config, util and indexerDb the entry does,
+ * and a test that stubs one of those on the handler still reaches the call made here.
+ * The database reads keep their original order: read order is consensus, because
+ * getTokenInfo interns an unseen tick and ticker ids feed the ledger hash.
+ *
+ ********************************************************************/
+
+'use strict';
+
+// Wire parse: the FORMAT gate, the positional PARAMS, number formats and the ^<id>
+// DESTINATION. Returns the (possibly replaced) data object with the verdict so far.
+async function parseWire(params, data, error){
+    // Validate that format is known
+    let format = data['FORMAT'];
+    if(!error && (format===null || this.formats[format] === undefined ))
+        error = 'invalid: VERSION (unknown)';
+
+    // Parse PARAMS using given VERSION format and update transaction data object
+    if(!error)
+        data = this.util.setActionParams(data, params, this.formats, format);
+
+    // Convert NUMBER fields from string value to number value so comparisons are mathematical
+    if(!error)
+        data = this.util.setNumberFormats(data);
+
+    // Resolve a compacted ^<id> DESTINATION back to its canonical address before
+    // validation/use, so the SDK's default ^<id> wire form validates and credits
+    // identically to the full address. At/after the address-ref resolution
+    // flag-day an unresolvable reference is a hard reject here; below it the
+    // value is left as-is and the isCryptoAddress check below rejects it (see
+    // caret_ref_strict_activation.js).
+    if(!error){
+        let destRef = await this.indexerDb.resolveAddressRefChecked(data['DESTINATION'], data['BLOCK_INDEX']);
+        data['DESTINATION'] = destRef.value;
+        if(destRef.rejected)
+            error = 'invalid: DESTINATION (unresolvable ^id)';
+    }
+
+    return { data, error };
+}
+
+// The token row, the SOURCE's minted total and the numeric token fields this mint is
+// judged against. The storage clone is taken first, so the mints row keeps the parsed
+// wire values rather than the token fields copied onto data below. Returns the context
+// every later step reads and writes.
+async function loadTokenState(data, error){
+    // Clone the raw data for storage in mints table
+    let mint = Object.assign({}, data);
+
+    // Get information on token
+    let tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+
+    // Get total token minted from this address for the MINT_ADDRESS_MAX check.
+    // At/after the MINT_SELF_MINTED_ONLY flag-day only mints AUTHORED by SOURCE
+    // count (mints table by the action's source); below it the legacy measure
+    // (MINT-action credits to SOURCE) applies, which also counts tokens merely
+    // received as another mint's DESTINATION. See protocol_changes.js for why
+    // the corrected measure must be gated (validity loosening).
+    let minted;
+    if(await this.actions.protocolChanges.isEnabled('MINT_SELF_MINTED_ONLY', data['BLOCK_INDEX']))
+        minted = await this.indexerDb.getSelfMintedAmount(data['TICK'], data['SOURCE'], data['ACTION_INDEX']);
+    else
+        minted = await this.indexerDb.getActionCreditDebitAmount('credits', 'MINT', data['TICK'], data['SOURCE'], data['ACTION_INDEX']);
+
+    // Verify TICK is valid before MINT
+    if(tokenInfo['BLOCK_INDEX']==data['BLOCK_INDEX'] && !(await this.indexerDb.validTickerBeforeTxIndex(data['TICK'], data['ACTION_INDEX'])))
+        tokenInfo = null;
+
+    // Validate TICK exists
+    if(!error && !tokenInfo)
+        error = 'invalid: TICK (unknown)';
+
+    // Validate DESTINATION and SOURCE are different
+    if(data['DESTINATION'] == data['SOURCE'])
+        delete data['DESTINATION'];
+
+    // Update transaction object with basic token details and ensure the values are numbers and not strings
+    if(tokenInfo){
+        data['SUPPLY']           = (tokenInfo && !this.util.isNull(tokenInfo['SUPPLY']))           ? this.util.bcnum(tokenInfo['SUPPLY']) : 0;
+        data['DECIMALS']         = (tokenInfo && !this.util.isNull(tokenInfo['DECIMALS']))         ? this.util.bcnum(tokenInfo['DECIMALS']) : 0;
+        data['MAX_SUPPLY']       = (tokenInfo && !this.util.isNull(tokenInfo['MAX_SUPPLY']))       ? this.util.bcnum(tokenInfo['MAX_SUPPLY']) : 0;
+        data['MAX_MINT']         = (tokenInfo && !this.util.isNull(tokenInfo['MAX_MINT']))         ? this.util.bcnum(tokenInfo['MAX_MINT']) : 0;
+        data['MINT_ADDRESS_MAX'] = (tokenInfo && !this.util.isNull(tokenInfo['MINT_ADDRESS_MAX'])) ? this.util.bcnum(tokenInfo['MINT_ADDRESS_MAX']) : 0;
+        data['MINT_START_BLOCK'] = (tokenInfo && !this.util.isNull(tokenInfo['MINT_START_BLOCK'])) ? this.util.bcnum(tokenInfo['MINT_START_BLOCK']) : 0;
+        data['MINT_STOP_BLOCK']  = (tokenInfo && !this.util.isNull(tokenInfo['MINT_STOP_BLOCK']))  ? this.util.bcnum(tokenInfo['MINT_STOP_BLOCK']) : 0;
+    }
+
+    return { data, mint, tokenInfo, minted, error, guardFee: 0 };
+}
+
+// ACTION, FORMAT and the first General validations: the token's mint lock, the AMOUNT
+// and DESTINATION formats, the two sleep flags and the MEMO rules.
+async function validateTokenRules(ctx){
+    let { data, tokenInfo } = ctx;
+    let error = ctx.error;
+
+    // ACTION Validations
+
+    // Verify MINT is allowed
+    if(!error && !this.util.isNull(tokenInfo['LOCK_MINT']) && tokenInfo['LOCK_MINT']==1)
+        error = "invalid: LOCK_MINT";
+
+    // FORMAT Validations
+
+    // Verify AMOUNT format
+    if(!error && !this.util.isNull(data['AMOUNT']) && !this.util.isValidAmountFormat(tokenInfo['DECIMALS'], data['AMOUNT'], data['BLOCK_TIME']))
+        error = "invalid: AMOUNT (format)";
+
+    // Verify DESTINATION address format
+    if(!error && !this.util.isNull(data['DESTINATION']) && !this.util.isCryptoAddress(data['DESTINATION']))
+        error = "invalid: DESTINATION (format)";
+
+    // General Validations
+
+    // Verify SOURCE is not sleeping
+    if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
+        error = 'invalid: SOURCE (sleeping)';
+
+    // Verify TICK is not sleeping
+    if(!error && await this.indexerDb.isActionAllowed(null, data['TICK'], data['BLOCK_INDEX']) == false)
+        error = 'invalid: TICK (sleeping)';
+
+    // Verify no pipe in MEMO (pipe is field delimiter)
+    if(!error && !this.util.isNull(data['MEMO']) && String(data['MEMO']).indexOf('|')!=-1)
+        error = 'invalid: MEMO (pipe)';
+
+    // Verify no semicolon in MEMO (semicolon is action delimiter)
+    if(!error && !this.util.isNull(data['MEMO']) && String(data['MEMO']).indexOf(';')!=-1)
+        error = 'invalid: MEMO (semicolon)';
+
+    // Verify MEMO is shorter than MAX_MEMO_LENGTH
+    if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
+        error = 'invalid: MEMO (length)';
+
+    ctx.error = error;
+}
+
+// The supply ceilings: the optional per-transaction MAX_MINT cap and MAX_SUPPLY, with the
+// GAS-tick policy note explaining why neither is special-cased for the gas token.
+async function validateSupplyCaps(ctx){
+    let { data } = ctx;
+    let error = ctx.error;
+
+    // Verify AMOUNT is less than MAX_MINT (the OPTIONAL per-tx cap). MAX_MINT is
+    // stored as 0 when the ISSUE omits it (createToken / db.js), and 0 means
+    // "no per-tx cap": the only supply ceiling is MAX_SUPPLY (MINT.md). Guard the
+    // zero case with bcgt(MAX_MINT,0) exactly like the sibling MINT_ADDRESS_MAX /
+    // MINT_START_BLOCK / MINT_STOP_BLOCK checks below; without it bcgt(AMOUNT,0) is
+    // true for any positive AMOUNT and every mint on a no-MAX_MINT token is rejected.
+    if(!error && !this.util.isNull(data['AMOUNT']) && this.util.bcgt(data['MAX_MINT'], 0) && this.util.bcgt(data['AMOUNT'], data['MAX_MINT']))
+        error = 'invalid: AMOUNT > MAX_MINT';
+
+    // GAS-tick mint policy: XCHAIN uses an OPEN MINT (any address may mint), the launch
+    // distribution mechanism. The prior mainnet GAS-address-only backstop was removed so
+    // the public can mint their share. Minting is now governed entirely by the token's own
+    // genesis parameters: MINT_START_BLOCK gates the launch window (pinned to a far-future
+    // sentinel at genesis, lowered by the operator via a GAS-signed ISSUE when the mint
+    // opens), MAX_SUPPLY caps the total (100,000,000), and MAX_MINT / MINT_ADDRESS_MAX
+    // bound per-tx / per-address if set. ISSUE of XCHAIN stays GAS-only + BTC-only
+    // (issue.js), so the token can only ever be created (and its caps/window authored) by
+    // the operator; only the subsequent minting is public.
+
+    // Verify minting AMOUNT will not exceed MAX_SUPPLY. MAX_SUPPLY is stored as 0 when the
+    // ISSUE omits it (createToken / db.js), and 0 is the documented UNCAPPED sentinel: the
+    // token has no supply ceiling. At/after the UNCAPPED_MAX_SUPPLY_ZERO flag-day the
+    // comparison is skipped when no positive cap is declared, guarded by bcgt(MAX_SUPPLY,0)
+    // exactly like the sibling MAX_MINT / MINT_ADDRESS_MAX / MINT_START_BLOCK /
+    // MINT_STOP_BLOCK optional-cap checks. Below it the legacy behaviour stands, where
+    // bcgt(SUPPLY+AMOUNT, 0) is true for any positive AMOUNT, so every mint on an uncapped
+    // token is rejected and the token is unmintable. Gated because the fix is a validity
+    // LOOSENING; see protocol_changes.js for why an ungated flip forks the fleet.
+    // Resolved only on the still-valid path with no cap declared, so an already-rejected
+    // action never spends a decoder-DB read on an activation it cannot use.
+    let uncappedSupply = !error && !this.util.bcgt(data['MAX_SUPPLY'], 0) &&
+        await this.actions.protocolChanges.isEnabled('UNCAPPED_MAX_SUPPLY_ZERO', data['BLOCK_INDEX']);
+    if(!error && !uncappedSupply && this.util.bcgt(this.util.bcadd(data['SUPPLY'],data['AMOUNT'],data['DECIMALS']), this.util.bcadd(data['MAX_SUPPLY'],0,data['DECIMALS'])))
+        error = 'invalid: mint exceeds MAX_SUPPLY';
+
+    ctx.error = error;
+}
+
+// Authority and the mint window: the allow/block lists for SOURCE and DESTINATION, the
+// per-address cap against what SOURCE has already minted, and MINT_START/STOP_BLOCK.
+async function validateAuthorityAndWindow(ctx){
+    let { data, minted } = ctx;
+    let error = ctx.error;
+
+    // Verify TICK action is allowed from SOURCE (allow/block lists)
+    if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], data['TICK']) == false)
+        error = 'invalid: SOURCE (not authorized)';
+
+    // Verify TICK action is allowed to DESTINATION (ALLOW_LIST & BLOCK_LIST)
+    if(!error && !this.util.isNull(data['DESTINATION']) && await this.indexerDb.isActionAllowed(data['DESTINATION'], data['TICK']) == false)
+        error = 'invalid: DESTINATION (not authorized)';
+
+    // Verify minting AMOUNT will not exceed MINT_ADDRESS_MAX
+    if(!error && !this.util.isNull(data['MINT_ADDRESS_MAX']) && this.util.bcgt(data['MINT_ADDRESS_MAX'], 0) && this.util.bcgt(this.util.bcadd(minted, data['AMOUNT'], data['DECIMALS']), data['MINT_ADDRESS_MAX']))
+        error = 'invalid: mint exceeds MINT_ADDRESS_MAX';
+
+    // Verify minting begins at MINT_START_BLOCK
+    if(!error && !this.util.isNull(data['MINT_START_BLOCK']) && this.util.bcgt(data['MINT_START_BLOCK'], 0) && this.util.bclt(data['BLOCK_INDEX'], data['MINT_START_BLOCK']))
+        error = 'invalid: MINT_START_BLOCK';
+
+    // Verify minting ends at MINT_STOP_BLOCK
+    if(!error && !this.util.isNull(data['MINT_STOP_BLOCK']) && this.util.bcgt(data['MINT_STOP_BLOCK'], 0) && this.util.bcgt(data['BLOCK_INDEX'], data['MINT_STOP_BLOCK']))
+        error = 'invalid: MINT_STOP_BLOCK';
+
+    ctx.error = error;
+}
+
+module.exports = { parseWire, loadTokenState, validateTokenRules, validateSupplyCaps, validateAuthorityAndWindow };

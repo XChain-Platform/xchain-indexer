@@ -68,13 +68,9 @@
 
 'use strict';
 
-// Per-network activation height (LOCAL COPY, parity-tested). Compared against
-// the ATTEST v0 request's own BTC block_index.
-const ATTEST_ZERO_CONF_ACTIVATION = {
-    mainnet: null,        // INERT: operator-owned height, unratified. Ratified only after the mirror arms there.
-    testnet: 151800,      // SIZED 2026-09-08 (tip 151483 at 07:32Z, about 5 blocks/h): above the 151324 mirror floor and past the v0.16.0 indexer-then-hub roll; keyed on the request block.
-    regtest: 0,           // ARMED at genesis so the e2e mirror venue exercises the flip
-};
+const { get, copy, activeAt } = require('./consensus/gate_registry');
+
+const ATTEST_ZERO_CONF_ACTIVATION = copy('attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION');
 
 // Networks already reported by the guard in isZeroConfActive, so a per-request
 // per-block path says it once rather than once per row.

@@ -29,6 +29,8 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fi
 const { getTestConfig } = require('../../fixtures/config');
 const Utility = require('../../../src/utility.js');
 
+// ─── MutationRegistry (singleton) ────────────────────────────────────────────
+
 class MutationRegistry {
     constructor() {
         this.results = [];
@@ -82,6 +84,8 @@ class MutationRegistry {
 }
 
 const registry = new MutationRegistry();
+
+// ─── Reporter ────────────────────────────────────────────────────────────────
 
 const OPERATOR_NAMES = {
     AOR: 'Arithmetic Operator Replacement',
@@ -164,6 +168,8 @@ function setupReportHook() {
     });
 }
 
+// ─── Mutation Operator Factories ─────────────────────────────────────────────
+//
 // Each factory takes a target instance (util, handler, db) and returns
 // a sinon stub. Call sinon.restore() in afterEach to clean up.
 
@@ -603,6 +609,8 @@ const operators = {
         },
     },
 };
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
  * Build an actionsCtx object for constructing action handlers.

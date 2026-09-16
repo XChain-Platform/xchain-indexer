@@ -86,27 +86,14 @@
 
 'use strict';
 
-// Decimal-side bound in force at/above the gate. The producers' bcformat width.
-const PRICE_SCALE_MAX_DECIMALS = 8;
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
-// Per-network activation TIME, keyed on the action's own block time.
-//
-// ARMED at genesis on every network, mainnet by the 2026-09-09 ruling on the measurement
-// the header records (0 PRICE actions ever indexed on any mainnet chain).
-const PRICE_SCALE_ACTIVATION = {
-    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 PRICE actions, measured 2026-09-09)
-    testnet: 0,
-    regtest: 0,
-};
+const PRICE_SCALE_MAX_DECIMALS = copy('price_scale_activation.PRICE_SCALE_MAX_DECIMALS');
 
-// The two price-value matchers. Anchored and without the /g flag so .test()
-// carries no lastIndex state between calls.
-//
-// LEGACY is byte-for-byte the pattern both v0 ingest sites carry today; it is
-// what keeps a below-gate replay identical, so it is never "tidied".
-const PRICE_VALUE_RE_LEGACY = /^[0-9]+(\.[0-9]+)?$/;
-const PRICE_VALUE_RE_CANONICAL =
-    new RegExp('^(0|[1-9][0-9]*)(\\.[0-9]{1,' + PRICE_SCALE_MAX_DECIMALS + '})?$');
+const PRICE_SCALE_ACTIVATION = copy('price_scale_activation.PRICE_SCALE_ACTIVATION');
+
+const PRICE_VALUE_RE_LEGACY = copy('price_scale_activation.PRICE_VALUE_RE_LEGACY');
+const PRICE_VALUE_RE_CANONICAL = copy('price_scale_activation.PRICE_VALUE_RE_CANONICAL');
 
 // Whether the canonical form binds for an action at `blockTime` on `network`.
 //

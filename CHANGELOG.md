@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-09-16
+
+### Added
+- The PRICE v0 verifier rebuilds the round's per-chain admission map from the canonical behind the mirror-admission activation, byte-matching the hub's two builders.  
+- The admission canonical encoder moved into the activation twin, so the hub and every indexer build the signed field from one definition per repo.  
+- The PRICE batch action carries a declared per-round admission slot behind the mirror-admission activation, verified against the batch canonical and forwarded to the hub as signed.
+- Consensus: the XBRIDGE action handler for lock, burn and settle transfers, with its action table and writers.
+- Consensus: a migration for the bridge lifecycle tables and the token-bridge ISSUE fields.
+- Consensus: the bridge activation is keyed per chain rather than by one shared network height.
+- The settle pass: a quorum checkpoint cross-check, policy snapshots applied in pinned order, and the bridge read handlers.
+- Token-bridge ISSUE support with its own activation and reserved-name guards.
+- Consensus: the `TRAIN_ACTIVATION` 0.19.0 row and the three per-chain testnet `XCHAIN_BRIDGE_ACTIVATION` heights, sized at the cut from the chain tips and their measured cadences; the consensus identity pin is re-derived to match.
+
+### Changed
+- The match, call, bridge, policy and attest-response verifiers rebuild the hub's signed admission map from the mirrored row's admission columns behind the mirror-admission activation, refusing an admission-era row that carries none.  
+- The mirrored match, call, bridge, policy and attest-response selects and the attest-response bind predicate bind by admission height above the consumer activation, with a legacy row still binding by effective time at every height.  
+- The direct-hub-DB call-presence barrier scopes its coverage read to this coin and, above the activation, waits on the hub's persisted admission height floor instead of the hub clock.
+- The vendored xchain-vm is staged in the perf and coverage jobs so bridge actions build there instead of failing at construction.
+- Audited transitive packages move to their patched releases (lockfile only).
+- The schema-mirror changelog states the hub-first roll order.
+- Restructured under the platform code-structure standard (feature directories, snake_case files, split test suites, restored comments); consensus identity byte-identical and pinned.
+
+### Fixed
+- The eleven mirror-completeness barriers admit mirrored rows by a per-chain height watermark instead of the block's timestamp, so a future-stamped block no longer holds the block loop.  
+- The anchor-reward barrier gains a maturity-horizon bound that can only open it earlier than the clock form it replaces.  
+- A NODEPROOF verdict now credits participation at the buried height the hub locked its claimant set at, so a source whose stake deactivated inside the reorg-buffer window keeps the epoch it answered; the eligible-verifier set and quorum divisor stay at the raw epoch, matching the hub.
+- The PRICE v0 payload builder now accepts a coinPair-keyed pair the same as a pair-keyed one, matching the hub's v0 payload builders byte for byte.
+- The leg-ordinal migration is renamed past every later migration in the tree so it no longer applies out of its dated position and no longer logs a backdating warning at boot.
+- The ledger applies at most one settlement per bridge source leg, so a second finalized transfer naming a lock or burn this chain already paid out is refused rather than deferred and leaves the due set; this is a consensus change for the next major release.  
+- A source-chain reorg now stages and delivers a bridge_transfers retraction beside the price, call and match ones, so a finalized transfer whose lock or burn was orphaned is retracted on the hub instead of minting on the destination chain.
+- The escrow-proof checkpoint is read through the hub-mirror handle, so a distributed deployment can produce one.
+- The `.env.example` lists `DOGE_INDEXER_API_URL` and `DOGE_INDEXER_API_KEY`, since a bitcoin indexer on a roll-call network defers every block from the first epoch close without a Dogecoin read.
+
 ## [0.18.0] - 2026-09-11
 
 ### Added

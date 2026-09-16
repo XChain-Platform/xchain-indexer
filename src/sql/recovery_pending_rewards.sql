@@ -25,7 +25,7 @@ DROP TABLE IF EXISTS recovery_pending_rewards;
 -- Instead recovery now stages each archived reward here keyed by the RAW source address
 -- string + signing pubkey, assigning NO index id. During the reindex the row materializes
 -- into validator_rewards under the deterministic in-block source_id its address takes
--- (db.js createAddress assigns the id; _applyPendingRewardsDueAtBlock lands the reward).
+-- (db.js createAddress assigns the id; applyPendingRewardsDueAtBlock lands the reward).
 -- The counter is never perturbed out-of-band, so a recovered node reproduces the exact
 -- from-genesis id map.
 --
@@ -36,7 +36,7 @@ DROP TABLE IF EXISTS recovery_pending_rewards;
 -- live-derived one to the reorg-scoping delete and to a COLLECT at any height.
 --
 -- This is a restore-time scratch artifact: recovery-local, NOT consensus-hashed and NOT
--- replicated by xchain-sync (excluded from replicatedTables.js and from
+-- replicated by xchain-sync (excluded from schema/replicated_tables.js and from
 -- SnapshotBuilder.OPERATOR_LOCAL_TABLES). source_id is NULL until the row is applied;
 -- the rollback re-arm (rollback.js) resets applied=0 + source_id=NULL when the materialized
 -- source address is rolled out of the index, so a reapply re-runs the hook.

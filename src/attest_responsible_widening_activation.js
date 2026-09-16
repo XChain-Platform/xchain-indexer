@@ -68,69 +68,16 @@
 
 'use strict';
 
+const { get, copy, activeAt } = require('./consensus/gate_registry');
+
 // The stage-2 selector. Required at the top: this module never feeds that one.
 const zc = require('./attest_zero_conf_activation.js');
 
-// Per-network activation height (LOCAL COPY, parity-tested). Compared against
-// the ATTEST v0 request's own BTC block_index.
-// MAINNET IS ARMED AT 0 by the 2026-09-09 ruling. Widening only changes who may sign a
-// round that has already failed to finalize, and 0 attestations have ever been recorded on
-// any mainnet chain (measured 2026-09-09), so no admitted request is reinterpreted; the
-// from-genesis OLD-vs-ON replay per chain is the witness.
-const ATTEST_RESPONSIBLE_WIDENING_ACTIVATION = {
-    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 attestations, measured 2026-09-09)
-    testnet: 150780,      // ARMED 2026-09-02. Tip was 150760 at 17:08Z running 20 min/block, so ~20 blocks (~6.5h). Sized to OUR fleet's deploy wave, not to the community's, and the SAFETY comes from deploy ORDER rather than from this margin: only an upgraded hub can PRODUCE a widened ATTEST v1, so indexers upgraded before hubs leaves no divergence window even if the height arrives mid-deploy.
-    regtest: 0,           // ARMED at genesis so the e2e venue exercises the ladder
-};
+const ATTEST_RESPONSIBLE_WIDENING_ACTIVATION = copy('attest_responsible_widening_activation.ATTEST_RESPONSIBLE_WIDENING_ACTIVATION');
 
-// The ladder's own constants (LOCAL COPY, parity-tested).
-//
-// FROZEN, and deliberately NOT the hub's operator-tunable ATTESTATION_CONFIRMATIONS /
-// ATTESTATION_LEADER_ROTATION_BLOCKS. Those two shape only which hub goes first, which no
-// validator checks; these shape WHO MAY SIGN, which every indexer checks. Sourcing them from
-// per-hub config would let one operator's tuning fork the set. (Above
-// ATTEST_ZERO_CONF_ACTIVATION the hub's confirmations knob is inert anyway: the hub serves
-// at the tip, AttestationRound.confirmationsFor, and its ladders start where this one does.)
-//
-// PROPORTIONAL TO THE REQUEST'S OWN WINDOW, not a fixed block count, and that choice is the
-// whole reason this ladder is usable. A fixed window sized to sit after leader rotation's cap of
-// 3 never fires at all inside a short deadline: the case this exists for (deadlineBlocks 10,
-// confirmations 3) leaves 7 serviceable blocks, and rotation alone consumes every one of them.
-// So the serviceable span is divided into `maxSlots + 1` equal segments, one per widening level,
-// exactly as attestation_escalation.modelIndex divides the same span across approved models. A
-// contract that asks for a long window gets a long grace period before its set widens; one that
-// asks for a short window gets a proportionally short one, and both still widen.
-//
-// maxSlots 2 bounds how far the pool can grow: enough to absorb two dead members of a set, small
-// enough that the deterministic assignment stays the dominant property. The first segment is
-// always the unwidened set, so a healthy round never sees a widened set at all.
-const ATTEST_RESPONSIBLE_WIDENING = {
-    confirmations: 3,
-    maxSlots:      2,
-};
+const ATTEST_RESPONSIBLE_WIDENING = copy('attest_responsible_widening_activation.ATTEST_RESPONSIBLE_WIDENING');
 
-// STAGE 2, selected by ATTEST_ZERO_CONF_ACTIVATION on the request block (LOCAL COPY,
-// parity-tested). Two things change and one does not:
-//
-//   startOffset 0: the ladder starts AT the request block, where the hub now starts its
-//   own leader and model ladders. It is named startOffset rather than confirmations because
-//   it is a ladder-start offset and the hub's ATTESTATION_CONFIRMATIONS is a different knob.
-//
-//   headroom 1: one extra slot from step 0, before any segment has elapsed. The failure
-//   this exists for, measured on testnet, is one member that can never sign: an old key seated in 1
-//   of 7 slots stalls every 3-of-7 draw that includes it at 2 of 3 until the ladder opens,
-//   a third of the deadline window later. Headroom makes such a round finalize inside the
-//   first segment with no clock at all, and keeps the assignment deterministic. The
-//   assigned set (the persisted RESPONSIBLE_SET_JSON, the missed_count charge) is still
-//   the unwidened slice: headroom widens who may EARN, never who is CHARGED.
-//
-//   maxSlots 2 is kept, so the set can reach redundancy + 3: headroom plus two ladder
-//   steps for two dead members.
-const ATTEST_RESPONSIBLE_WIDENING_V2 = {
-    startOffset: 0,
-    headroom:    1,
-    maxSlots:    2,
-};
+const ATTEST_RESPONSIBLE_WIDENING_V2 = copy('attest_responsible_widening_activation.ATTEST_RESPONSIBLE_WIDENING_V2');
 
 // Extra responsible slots at `atBlock` for a request admitted at `requestBlock` with
 // deadline `deadlineBlock`. Returns 0 (the legacy fixed-REDUNDANCY set, byte for byte)

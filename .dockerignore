@@ -6,6 +6,12 @@
 # decimal.js (10.4.3) or contract math diverges and the chain forks.
 node_modules
 **/node_modules
+# src/node_modules is named on its own line because it is the one the image can
+# actually reach: the Dockerfile's `COPY ./src` would otherwise carry a host tree
+# of stale drivers straight past `npm ci` and into /XChainIndexer/src, where Node
+# resolves it BEFORE the hoisted /XChainIndexer/node_modules for every require
+# under src/. The directory is untracked, so a checkout alone never shows it.
+src/node_modules
 
 # VCS / local cruft (do NOT add .env - Dockerfile's `COPY ./.en[v]` copies it on purpose)
 .git

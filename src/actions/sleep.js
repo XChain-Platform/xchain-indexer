@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -30,7 +31,9 @@
 
 class Sleep {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -43,11 +46,23 @@ class Sleep {
         this.formats[1] = 'VERSION|RESUME_BLOCK|TICK|MEMO';
     }
 
+    // Handle parsing the ADDRESS transaction
     async parse(params, data, error){
+        /*****************************************************************
+         * DEBUGGING - Force params
+         ****************************************************************/
+        // Example payloads by FORMAT version:
+        // let str = "0|791495|Pausing actions until block 791495";
+        // let str = "1|791495|JDOG|Pausing actions on JDOG until block 791495";
+        // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
+
+        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
+        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
@@ -55,13 +70,45 @@ class Sleep {
         if(!error)
             data = this.util.setNumberFormats(data);
 
+        // Get information on token (if any)
         let tokenInfo = await this.indexerDb.getTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
+        // Set sleep type based off data format
         data['TYPE'] = (format==1) ? 'TICK' : 'ADDRESS';
 
+        error = await this.validateSleepTarget(data, tokenInfo, error);
+
+        error = await this.validateSleepPolicy(data, tokenInfo, error);
+
+        // Determine final status
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        // Print status message
+        getLogger().info("\t SLEEP : " + data['TICK'] + ' : ' + data['RESUME_BLOCK'] + ' : ' + data['STATUS']);
+
+        // Create record in messages table
+        await this.indexerDb.createSleep(data);
+
+        // Store the SOURCE and TICK in addresses list
+        this.util.addAddressTicker(data['SOURCE'], data['TICK']);
+
+        await this.mapper.createMappings(data);
+
+    }
+
+    /*****************************************************************
+     * TICK Validations
+     ****************************************************************/
+    async validateSleepTarget(data, tokenInfo, error){
+
+        // Validate TICK exists
         if(!error && data['TYPE']=='TICK' && !tokenInfo)
             error = 'invalid: TICK (unknown)';
 
+        /*****************************************************************
+         * FORMAT Validations
+         ****************************************************************/
         // Verify RESUME_BLOCK format
         if(!error && (this.util.isNull(data['RESUME_BLOCK']) || !this.util.isNumeric(data['RESUME_BLOCK'])))
             error = 'invalid: RESUME_BLOCK (format)';
@@ -78,13 +125,28 @@ class Sleep {
         if(!error && data['TYPE']=='TICK' && data['SOURCE']!=tokenInfo['OWNER'])
             error = 'invalid: TICK (not authorized)';
 
+        return error;
+    }
+
+    // Lock, escrow and MEMO rules that decide whether a well-formed SLEEP may take effect
+    async validateSleepPolicy(data, tokenInfo, error){
+
         // Honor the token's LOCK_SLEEP flag. A token issued with LOCK_SLEEP=1 carries an immutable
         // "cannot be paused" guarantee (issue.js), so a TICK sleep of it must be rejected, the same
         // enforcement every other LOCK_* flag gets in its handler (LOCK_MINT in mint.js, LOCK_CALLBACK
         // in callback.js). Without it the owner can permanently freeze a token they promised never to
         // pause (SLEEP|1|-1|TICK -> isTickSleeping forever), stranding every holder's balance. Gated
         // (tightens validity): flips fleet-wide at one coordinated block; pre-launch chains at genesis.
-        if(!error && data['TYPE']=='TICK' && tokenInfo && tokenInfo['LOCK_SLEEP']==1
+        //
+        // IS_GENESIS IS EXEMPT (for policy inheritance). A bridged copy is created with LOCK_SLEEP
+        // set, so nobody can ever sleep the copy by hand - but policy inheritance has to be
+        // able to materialize the ORIGIN's sleep state onto that copy, and it does so with an
+        // injected SLEEP format 1 routed through processTransaction(tx, true). Without this
+        // term the copy's own lock would refuse the inheritance it exists to receive. No
+        // broadcast action ever carries the flag, so no historical verdict moves, and the
+        // owner check above passes on its own because the bridge role address IS the copy's
+        // owner.
+        if(!error && data['TYPE']=='TICK' && !data['IS_GENESIS'] && tokenInfo && tokenInfo['LOCK_SLEEP']==1
            && await this.actions.protocolChanges.isEnabled('SLEEP_RESPECTS_LOCK_SLEEP', data['BLOCK_INDEX']))
             error = 'invalid: LOCK_SLEEP';
 
@@ -100,20 +162,11 @@ class Sleep {
         if(!error && String(data['MEMO']).indexOf(';')!=-1)
             error = 'invalid: MEMO (semicolon)';
 
+        // Verify MEMO is shorter than MAX_MEMO_LENGTH
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
-        let status = (error) ? error : 'valid';
-        data['STATUS'] = status;
-
-        console.log("\t SLEEP : " + data['TICK'] + ' : ' + data['RESUME_BLOCK'] + ' : ' + data['STATUS']);
-
-        await this.indexerDb.createSleep(data);
-
-        this.util.addAddressTicker(data['SOURCE'], data['TICK']);
-
-        await this.mapper.createMappings(data);
-
+        return error;
     }
 }
 

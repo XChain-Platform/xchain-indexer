@@ -1,0 +1,153 @@
+/*********************************************************************
+ *
+ * Copyright © 2025–2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md. A commercial
+ * license (without AGPL source-disclosure terms) is available -
+ * contact legal@dankest.llc.
+ *
+ **********************************************************************
+ * test/unit/anchor/anchor_reward_activation_parity.test.js
+ *
+ * CONSENSUS-CRITICAL twin parity for anchor_reward_activation.js.
+ *
+ * The hub SIGNS the anchor-publish reward into the XANCPUB attestation; the indexer
+ * RE-DERIVES it (never from the wire) at/after the ANCHOR_REWARD flag-day. Both copies
+ * must agree on the activation heights, the frozen reward amount, and the gate predicate,
+ * or the two sides credit rewards on different anchors (fork). This suite enforces:
+ *   1. export parity (map + amount + isAnchorRewardActive behavior), and
+ *   2. source byte-identity APART FROM the single self-referential "twin lives in ..."
+ *      header line, which legitimately names the OTHER copy and so differs per file.
+ * The byte check is what catches accidental comment/logic drift between the twins.
+ ********************************************************************/
+
+'use strict';
+
+const assert = require('assert');
+const fs     = require('fs');
+const path   = require('path');
+
+const indexer = require('../../../src/anchor_reward_activation.js');
+const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
+
+// The self-reference line each copy carries naming its twin (the OTHER file). It is
+// intentionally different per copy and is the only permitted divergence.
+// Matched on the repo-qualified PATH, not on the prose that introduces it: the
+// sentence wraps, so "lives in" ends one line and the path begins the next, and a
+// pattern anchored to the prose matched neither line. It read as green only while
+// the hub copy still pointed at itself, i.e. exactly when the pointer was wrong.
+const TWIN_REF = /xchain-\S+\/src\/anchor_reward_activation\.js/;
+
+describe('anchor_reward_activation twin parity @regression @tier1', function () {
+    it('indexer exports the frozen reward amount and armed BTC mainnet height', function () {
+        assert.strictEqual(indexer.ANCHOR_REWARD_AMOUNT, '10.00000000');
+        assert.strictEqual(indexer.ANCHOR_REWARD_ACTIVATION.mainnet, 961000);
+        assert.strictEqual(indexer.ANCHOR_REWARD_ACTIVATION.regtest, 0);
+    });
+
+    it('indexer exports the frozen ARCHIVE reward amount and its activation map', function () {
+        assert.strictEqual(indexer.ARCHIVE_REWARD_AMOUNT, '10.00000000');
+        assert.strictEqual(indexer.ARCHIVE_REWARD_ACTIVATION.mainnet, 963000);   // re-pinned off an earlier height once the real anchor tip was known
+        assert.strictEqual(indexer.ARCHIVE_REWARD_ACTIVATION.regtest, 0);
+    });
+
+    it('archive gate predicate is height-gated per network (below off, at/above on, unknown off)', function () {
+        assert.strictEqual(indexer.isArchiveRewardActive(962999, 'mainnet'), false);
+        assert.strictEqual(indexer.isArchiveRewardActive(963000, 'mainnet'), true);
+        assert.strictEqual(indexer.isArchiveRewardActive(0, 'regtest'), true);
+        assert.strictEqual(indexer.isArchiveRewardActive(5, 'bogusnet'), false);
+        assert.strictEqual(indexer.isArchiveRewardActive('not-a-number', 'mainnet'), false);
+    });
+
+    // Testnet was armed at 0 by the 2026-08-11 operator ruling (applied 2026-08-14) and
+    // mainnet at 0 by the 2026-09-09 ruling: mainnet carries 0 anchor reward attestations
+    // and 0 validator_rewards rows (measured 2026-09-09), so the COLLECT-spendable history
+    // the null placeholder protected does not exist. Each network's arming is a
+    // RATIFICATION, never a chore, so this suite pins the armed values.
+    it('derive-relocation gate is armed at genesis on every network', function () {
+        assert.strictEqual(indexer.ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet, 0);
+        assert.strictEqual(indexer.ANCHOR_REWARD_DERIVE_ACTIVATION.testnet, 0);
+        assert.strictEqual(indexer.ANCHOR_REWARD_DERIVE_ACTIVATION.regtest, 0);
+        assert.strictEqual(indexer.isAnchorRewardDeriveActive(0, 'mainnet'), true);            // armed at genesis
+        assert.strictEqual(indexer.isAnchorRewardDeriveActive(999999999, 'mainnet'), true);
+        // Still fails closed on an unparseable height, even now that mainnet is armed at 0.
+        assert.strictEqual(indexer.isAnchorRewardDeriveActive('not-a-number', 'mainnet'), false);
+        assert.strictEqual(indexer.isAnchorRewardDeriveActive(0, 'testnet'), true);            // armed at genesis
+        assert.strictEqual(indexer.isAnchorRewardDeriveActive(999999999, 'testnet'), true);
+        assert.strictEqual(indexer.isAnchorRewardDeriveActive(0, 'regtest'), true);
+        assert.strictEqual(indexer.isAnchorRewardDeriveActive(5, 'bogusnet'), false);
+        // An unparseable height still fails closed on an ARMED network: the gate must never
+        // read NaN as "at or above 0".
+        assert.strictEqual(indexer.isAnchorRewardDeriveActive('not-a-number', 'testnet'), false);
+    });
+
+    it('gate predicate is height-gated per network (below off, at/above on, unknown off)', function () {
+        assert.strictEqual(indexer.isAnchorRewardActive(960999, 'mainnet'), false);
+        assert.strictEqual(indexer.isAnchorRewardActive(961000, 'mainnet'), true);
+        assert.strictEqual(indexer.isAnchorRewardActive(0, 'regtest'), true);
+        assert.strictEqual(indexer.isAnchorRewardActive(5, 'bogusnet'), false);
+        assert.strictEqual(indexer.isAnchorRewardActive('not-a-number', 'mainnet'), false);
+    });
+});
+
+describe('anchor_reward_activation twin parity @regression @tier1', function () {
+    // Cross-service parity: resolved by monorepo-relative path, so this only runs in the
+    // monorepo/aggregator checkout; standalone single-repo CI skips (unless a required-
+    // sibling job sets XCHAIN_REQUIRE_SIBLINGS=1, where a missing sibling hard-fails).
+    describe('hub twin cross-check', function () {
+        function loadHub(){
+            const p = '../../../../xchain-hub/src/anchor_reward_activation.js';
+            return { mod: require(p), file: require.resolve(p) };
+        }
+
+        it('hub export map + amount + predicate match the indexer', function () {
+            let hub;
+            // Judged before the require: a lane symlink into a live main checkout is refused.
+            const sibling = siblingCheckout(__dirname, '../../../../xchain-hub/src/anchor_reward_activation.js');
+            if (!sibling.usable) return skipOrFail(this, sibling, 'anchor-reward twin parity');
+            try { hub = loadHub(); }
+            catch (e) {
+                if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                    throw new Error('anchor-reward twin parity cannot run: xchain-hub sibling missing (' + e.message + ')');
+                return this.skip();
+            }
+            assert.deepStrictEqual(hub.mod.ANCHOR_REWARD_ACTIVATION, indexer.ANCHOR_REWARD_ACTIVATION, 'activation map');
+            assert.strictEqual(hub.mod.ANCHOR_REWARD_AMOUNT, indexer.ANCHOR_REWARD_AMOUNT, 'reward amount');
+            assert.deepStrictEqual(hub.mod.ARCHIVE_REWARD_ACTIVATION, indexer.ARCHIVE_REWARD_ACTIVATION, 'archive activation map');
+            assert.strictEqual(hub.mod.ARCHIVE_REWARD_AMOUNT, indexer.ARCHIVE_REWARD_AMOUNT, 'archive reward amount');
+            for(const [sb, net] of [[960999,'mainnet'],[961000,'mainnet'],[0,'regtest'],[5,'bogusnet']]){
+                assert.strictEqual(hub.mod.isAnchorRewardActive(sb, net), indexer.isAnchorRewardActive(sb, net),
+                    'predicate parity @ ' + net + ':' + sb);
+            }
+            for(const [sb, net] of [[962999,'mainnet'],[963000,'mainnet'],[0,'regtest'],[5,'bogusnet']]){
+                assert.strictEqual(hub.mod.isArchiveRewardActive(sb, net), indexer.isArchiveRewardActive(sb, net),
+                    'archive predicate parity @ ' + net + ':' + sb);
+            }
+        });
+
+        it('hub and indexer source are byte-identical apart from the twin-reference line', function () {
+            let hubFile;
+            const sibling = siblingCheckout(__dirname, '../../../../xchain-hub/src/anchor_reward_activation.js');
+            if (!sibling.usable) return skipOrFail(this, sibling, 'anchor-reward twin byte parity');
+            try { hubFile = loadHub().file; }
+            catch (e) {
+                if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                    throw new Error('anchor-reward twin byte parity cannot run: xchain-hub sibling missing (' + e.message + ')');
+                return this.skip();
+            }
+            const norm = (p) => fs.readFileSync(p, 'utf8')
+                .split(/\r?\n/)
+                .map(l => TWIN_REF.test(l) ? '<TWIN-REF>' : l)
+                .join('\n');
+            assert.strictEqual(
+                norm(path.join(__dirname, '../../../src/anchor_reward_activation.js')),
+                norm(hubFile),
+                'anchor_reward_activation.js drifted between hub and indexer (only the "twin lives in ..." line may differ)'
+            );
+        });
+    });
+});

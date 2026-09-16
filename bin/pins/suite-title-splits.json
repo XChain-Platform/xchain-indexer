@@ -1,0 +1,679 @@
+{
+  "note": "The declared test-file splits of the indexer code-structure pass, read by bin/suite-title-map.js --split-map against bin/pins/at1-suite-titles.json. splits maps each pinned test file that became several files to the full list of files its tests now live in, keyed by the path the compare sees after the rename map is applied. For every npm test script that pinned the old file, the titles those files collect together must equal the old file's titles exactly: none lost, none added, none carried by two parts, and none moved into a file the list does not name. A part may keep the old path; a single destination is a rename and belongs in the rename map. A split that also changes a title declares that title in titleDeltas, in the shape the milestone title deltas use, so a difference that is not listed is a regression rather than a restructure.",
+  "row": "T0a",
+  "date": "2026-09-14",
+  "pin": "bin/pins/at1-suite-titles.json",
+  "pin_before_sha256": "43126c11fd28e776d29287028bc1162ddacc1a69212e429e586018ad93c8b285",
+  "compare": "node bin/suite-title-map.js --compare bin/pins/at1-suite-titles.json --split-map bin/pins/suite-title-splits.json",
+  "example": {
+    "test/unit/db_queries.test.js": [
+      "test/unit/db_queries/orders.test.js",
+      "test/unit/db_queries/stakes.test.js"
+    ]
+  },
+  "splits": {
+    "test/integration/attest_relay_identity.test.js": [
+      "test/integration/attest_relay_identity.test.js",
+      "test/integration/attest_relay_identity.test/attest_relay_identity_request_id.test.js",
+      "test/integration/attest_relay_identity.test/attest_relay_identity_migration.test.js"
+    ],
+    "test/mutation/suites/tier1_action_mutations.test.js": [
+      "test/mutation/suites/tier1_action_mutations.test.js",
+      "test/mutation/suites/tier1_action_mutations.test/destroy_handler.test.js",
+      "test/mutation/suites/tier1_action_mutations.test/issue_handler.test.js",
+      "test/mutation/suites/tier1_action_mutations.test/send_value_mutations.test.js"
+    ],
+    "test/mutation/suites/tier1_math_mutations.test.js": [
+      "test/mutation/suites/tier1_math_mutations.test.js",
+      "test/mutation/suites/tier1_math_mutations.test/compound_and_format.test.js",
+      "test/mutation/suites/tier1_math_mutations.test/reorder_return_error.test.js"
+    ],
+    "test/mutation/suites/tier1_validation_mutations.test.js": [
+      "test/mutation/suites/tier1_validation_mutations.test.js",
+      "test/mutation/suites/tier1_validation_mutations.test/value_deletion_return.test.js"
+    ],
+    "test/mutation/suites/tier2_balance_mutations.test.js": [
+      "test/mutation/suites/tier2_balance_mutations.test.js",
+      "test/mutation/suites/tier2_balance_mutations.test/returns_and_sql_filters.test.js"
+    ],
+    "test/security/http-surface/auth_gate.test.js": [
+      "test/security/http-surface/auth_gate.test.js",
+      "test/security/http-surface/auth_gate.test/rate_limit_headers.test.js"
+    ],
+    "test/smoke/connected/api_status.test.js": [
+      "test/smoke/connected/api_status.test.js",
+      "test/smoke/connected/api_status.test/hub_mirror.test.js"
+    ],
+    "test/unit/action_dispatch/actions.test.js": [
+      "test/unit/action_dispatch/actions.test.js",
+      "test/unit/action_dispatch/actions.test/process_transaction_parsing.test.js",
+      "test/unit/action_dispatch/actions.test/process_action_dispatch.test.js"
+    ],
+    "test/unit/actions/attest.test.js": [
+      "test/unit/actions/attest.test.js",
+      "test/unit/actions/attest.test/v0_request_limits.test.js",
+      "test/unit/actions/attest.test/v1_response_signatures.test.js",
+      "test/unit/actions/attest.test/v1_response_responsible_set.test.js",
+      "test/unit/actions/attest.test/request_resolution.test.js",
+      "test/unit/actions/attest.test/request_fees.test.js",
+      "test/unit/actions/attest.test/broadcast_fee_reimbursement.test.js",
+      "test/unit/actions/attest.test/callback_injection.test.js",
+      "test/unit/actions/attest.test/responsible_set_gates.test.js",
+      "test/unit/actions/attest.test/response_mirror_flag_day.test.js",
+      "test/unit/actions/attest.test/response_batch.test.js",
+      "test/unit/actions/attest.test/response_batch_chunks.test.js"
+    ],
+    "test/unit/actions/attest_relay.test.js": [
+      "test/unit/actions/attest_relay.test.js",
+      "test/unit/actions/attest_relay.test/origin_admission.test.js",
+      "test/unit/actions/attest_relay.test/relay_canonicals.test.js",
+      "test/unit/actions/attest_relay.test/relay_request.test.js",
+      "test/unit/actions/attest_relay.test/relay_response.test.js"
+    ],
+    "test/unit/actions/batch_execute_attest.test.js": [
+      "test/unit/actions/batch_execute_attest.test.js",
+      "test/unit/actions/batch_execute_attest.test/attest_acceptance.test.js"
+    ],
+    "test/unit/actions/execute.test.js": [
+      "test/unit/actions/execute.test.js",
+      "test/unit/actions/execute.test/cross_contract.test.js",
+      "test/unit/actions/execute.test/emission_routing.test.js",
+      "test/unit/actions/execute.test/slash_emission.test.js",
+      "test/unit/actions/execute.test/vm_execution.test.js"
+    ],
+    "test/unit/actions/nodeproof.test.js": [
+      "test/unit/actions/nodeproof.test.js",
+      "test/unit/actions/nodeproof.test/capability_gate.test.js",
+      "test/unit/actions/nodeproof.test/challenge_and_window.test.js",
+      "test/unit/actions/nodeproof.test/quorum.test.js"
+    ],
+    "test/unit/actions/price_zero_validity.test.js": [
+      "test/unit/actions/price_zero_validity.test.js",
+      "test/unit/actions/price_zero_validity.test/agreement_with_hub_bound.test.js",
+      "test/unit/actions/price_zero_validity.test/batch_parser_gate.test.js"
+    ],
+    "test/unit/actions/xcall.test.js": [
+      "test/unit/actions/xcall.test.js",
+      "test/unit/actions/xcall.test/process_result.test.js",
+      "test/unit/actions/xcall.test/result_suppresses_expiry.test.js",
+      "test/unit/actions/xcall.test/v0_request_validation.test.js",
+      "test/unit/actions/xcall.test/v2_expire.test.js"
+    ],
+    "test/unit/activations/activation_constants_parity.test.js": [
+      "test/unit/activations/activation_constants_parity.test.js",
+      "test/unit/activations/activation_constants_parity.test/height_ordering.test.js"
+    ],
+    "test/unit/consensus/admission_binding.test.js": [
+      "test/unit/consensus/admission_binding.test.js",
+      "test/unit/consensus/admission_binding.test/attest_response_canonical.test.js",
+      "test/unit/consensus/admission_binding.test/mirrored_selects.test.js",
+      "test/unit/consensus/admission_binding.test/attest_bind_predicate.test.js",
+      "test/unit/consensus/admission_binding.test/call_presence.test.js"
+    ],
+    "test/unit/anchor/anchor_action_query.test.js": [
+      "test/unit/anchor/anchor_action_query.test.js",
+      "test/unit/anchor/anchor_action_query.test/anchor_action_query_getanchorconfirmations.test.js",
+      "test/unit/anchor/anchor_action_query.test/anchor_action_query_section_vs.test.js"
+    ],
+    "test/unit/anchor/anchor_proof_client.test.js": [
+      "test/unit/anchor/anchor_proof_client.test.js",
+      "test/unit/anchor/anchor_proof_client.test/anchorproofclient_doge_anchor_visibility_regression.test.js",
+      "test/unit/anchor/anchor_proof_client.test/anchorproofclient_doge_anchor_visibility_regression_2.test.js",
+      "test/unit/anchor/anchor_proof_client.test/anchorproofclient_doge_anchor_visibility_regression_3.test.js"
+    ],
+    "test/unit/anchor/anchor_reward_derive.test.js": [
+      "test/unit/anchor/anchor_reward_derive.test.js",
+      "test/unit/anchor/anchor_reward_derive.test/anchor_reward_derive_btc_side.test.js",
+      "test/unit/anchor/anchor_reward_derive.test/anchor_reward_derive_set_is.test.js"
+    ],
+    "test/unit/hub/barrier_hold_ceiling.test.js": [
+      "test/unit/hub/barrier_hold_ceiling.test.js",
+      "test/unit/hub/barrier_hold_ceiling.test/indexer_reaction.test.js",
+      "test/unit/hub/barrier_hold_ceiling.test/resync_and_reporting.test.js"
+    ],
+    "test/unit/action_dispatch/batch_probe_preflight.test.js": [
+      "test/unit/action_dispatch/batch_probe_preflight.test.js",
+      "test/unit/action_dispatch/batch_probe_preflight.test/dispatch_guard.test.js",
+      "test/unit/action_dispatch/batch_probe_preflight.test/oracle_fee_disclosure.test.js"
+    ],
+    "test/unit/db/markets/batch_settlement_value_ledger.test.js": [
+      "test/unit/db/markets/batch_settlement_value_ledger.test.js",
+      "test/unit/db/markets/batch_settlement_value_ledger.test/dispense.test.js",
+      "test/unit/db/markets/batch_settlement_value_ledger.test/oracle_fees.test.js"
+    ],
+    "test/unit/boundary/addresses/validation.test.js": [
+      "test/unit/boundary/addresses/validation.test.js",
+      "test/unit/boundary/addresses/validation.test/encoded_destinations.test.js"
+    ],
+    "test/unit/boundary/amounts/supply_limits.test.js": [
+      "test/unit/boundary/amounts/supply_limits.test.js",
+      "test/unit/boundary/amounts/supply_limits.test/mint_supply.test.js",
+      "test/unit/boundary/amounts/supply_limits.test/send_and_destroy.test.js"
+    ],
+    "test/unit/boundary/tokens/state_machine.test.js": [
+      "test/unit/boundary/tokens/state_machine.test.js",
+      "test/unit/boundary/tokens/state_machine.test/sub_tokens_and_supply_lock.test.js"
+    ],
+    "test/unit/bridge/bridge_checkpoint_check.test.js": [
+      "test/unit/bridge/bridge_checkpoint_check.test.js",
+      "test/unit/bridge/bridge_checkpoint_check.test/proof_and_row_guards.test.js",
+      "test/unit/bridge/bridge_checkpoint_check.test/version_checks.test.js"
+    ],
+    "test/unit/bridge/bridge_settle.test.js": [
+      "test/unit/bridge/bridge_settle.test.js",
+      "test/unit/bridge/bridge_settle.test/refusals.test.js",
+      "test/unit/bridge/bridge_settle.test/source_leg.test.js",
+      "test/unit/bridge/bridge_settle.test/due_set_and_checkpoints.test.js",
+      "test/unit/bridge/bridge_settle.test/slash_and_pass_order.test.js",
+      "test/unit/bridge/bridge_settle.test/refusal_logging.test.js"
+    ],
+    "test/unit/config/config.test.js": [
+      "test/unit/config/config.test.js",
+      "test/unit/config/config.test/hub_overlay.test.js",
+      "test/unit/config/config.test/hub_overlay_poll.test.js",
+      "test/unit/config/config.test/hub_overlay_poll_cursor.test.js",
+      "test/unit/config/config.test/env_overrides.test.js"
+    ],
+    "test/unit/consensus/consensus_params.test.js": [
+      "test/unit/consensus/consensus_params.test.js",
+      "test/unit/consensus/consensus_params.test/vm_coupling.test.js"
+    ],
+    "test/unit/consensus/consensus_rules_digest.test.js": [
+      "test/unit/consensus/consensus_rules_digest.test.js",
+      "test/unit/consensus/consensus_rules_digest.test/active_gates.test.js",
+      "test/unit/consensus/consensus_rules_digest.test/coin_keyed_bridge.test.js"
+    ],
+    "test/unit/contracts/controller_enforcement.test.js": [
+      "test/unit/contracts/controller_enforcement.test.js",
+      "test/unit/contracts/controller_enforcement.test/guard_activation.test.js",
+      "test/unit/contracts/controller_enforcement.test/guard_routing.test.js"
+    ],
+    "test/unit/db/db.test.js": [
+      "test/unit/db/db.test.js",
+      "test/unit/db/db.test/continued_normalization.test.js",
+      "test/unit/db/db.test/get_block_index.test.js",
+      "test/unit/db/db.test/reorg_identity.test.js",
+      "test/unit/db/db.test/validator_capabilities.test.js",
+      "test/unit/db/db.test/vm_contract_state_and_block_time.test.js",
+      "test/unit/db/db.test/write_decoder_and_mappings.test.js"
+    ],
+    "test/unit/db/db_queries.test.js": [
+      "test/unit/db/db_queries.test.js",
+      "test/unit/db/db_queries.test/action_index.test.js",
+      "test/unit/db/db_queries.test/attestations.test.js",
+      "test/unit/db/db_queries.test/delegations_and_rewards.test.js",
+      "test/unit/db/db_queries.test/hub_push_and_capabilities.test.js",
+      "test/unit/db/db_queries.test/index_lookups.test.js",
+      "test/unit/db/db_queries.test/market_and_balances.test.js",
+      "test/unit/db/db_queries.test/market_writers.test.js",
+      "test/unit/db/db_queries.test/message_writers.test.js",
+      "test/unit/db/db_queries.test/schema_ddl.test.js",
+      "test/unit/db/db_queries.test/schema_parsing.test.js",
+      "test/unit/db/db_queries.test/stake_and_contract_writers.test.js",
+      "test/unit/db/db_queries.test/stakes.test.js",
+      "test/unit/db/db_queries.test/state_reads.test.js",
+      "test/unit/db/db_queries.test/tickers_and_supply.test.js",
+      "test/unit/db/db_queries.test/token_writers.test.js"
+    ],
+    "test/unit/bridge/db_xbridge_writers.test.js": [
+      "test/unit/bridge/db_xbridge_writers.test.js",
+      "test/unit/bridge/db_xbridge_writers.test/handler_end_to_end.test.js",
+      "test/unit/bridge/db_xbridge_writers.test/token_bridged.test.js"
+    ],
+    "test/unit/db/markets/dispenser_value_accounting.test.js": [
+      "test/unit/db/markets/dispenser_value_accounting.test.js",
+      "test/unit/db/markets/dispenser_value_accounting.test/multi_dispenser.test.js",
+      "test/unit/db/markets/dispenser_value_accounting.test/send_triggered.test.js"
+    ],
+    "test/unit/protocol/emission_issuance_limits.test.js": [
+      "test/unit/protocol/emission_issuance_limits.test.js",
+      "test/unit/protocol/emission_issuance_limits.test/issue_budget.test.js"
+    ],
+    "test/unit/bridge/escrow_journal_writer.test.js": [
+      "test/unit/bridge/escrow_journal_writer.test.js",
+      "test/unit/bridge/escrow_journal_writer.test/attribution_vectors.test.js",
+      "test/unit/bridge/escrow_journal_writer.test/journal_totals.test.js"
+    ],
+    "test/unit/fees/fee_quote.test.js": [
+      "test/unit/fees/fee_quote.test.js",
+      "test/unit/fees/fee_quote.test/chain_time_anchoring.test.js",
+      "test/unit/fees/fee_quote.test/compute_fee_quote.test.js",
+      "test/unit/fees/fee_quote.test/static_quotes.test.js"
+    ],
+    "test/unit/hub/hash_coverage.test.js": [
+      "test/unit/hub/hash_coverage.test.js",
+      "test/unit/hub/hash_coverage.test/content_parity.test.js"
+    ],
+    "test/unit/hub/hub_client.test.js": [
+      "test/unit/hub/hub_client.test.js",
+      "test/unit/hub/hub_client.test/push_methods.test.js",
+      "test/unit/hub/hub_client.test/hub_rejection.test.js",
+      "test/unit/hub/hub_client.test/retractions.test.js",
+      "test/unit/hub/hub_client.test/call_http.test.js"
+    ],
+    "test/unit/hub/hub_db_sync/hub_db_sync.test.js": [
+      "test/unit/hub/hub_db_sync/hub_db_sync.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync.test/anchor_and_height_watermarks.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync.test/barriers_and_watchdog.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync.test/bootstrap_pagination.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync.test/buffer_and_scoping.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync.test/cross_chain_upgrades.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync.test/datetime_and_cold_start.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync.test/ensure_tables.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync.test/price_and_oracle_upgrades.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync.test/retraction_guards.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync.test/signed_retractions.test.js"
+    ],
+    "test/unit/hub/hub_db_sync/hub_db_sync_attestation_responses.test.js": [
+      "test/unit/hub/hub_db_sync/hub_db_sync_attestation_responses.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync_attestation_responses.test/status_and_grace.test.js"
+    ],
+    "test/unit/hub/hub_db_sync/hub_db_sync_bridge_mirror.test.js": [
+      "test/unit/hub/hub_db_sync/hub_db_sync_bridge_mirror.test.js",
+      "test/unit/hub/hub_db_sync/hub_db_sync_bridge_mirror.test/retractions_and_graces.test.js"
+    ],
+    "test/unit/hub/hub_push_queue.test.js": [
+      "test/unit/hub/hub_push_queue.test.js",
+      "test/unit/hub/hub_push_queue.test/delivery_and_failures.test.js"
+    ],
+    "test/unit/bridge/issue_bridge_optin.test.js": [
+      "test/unit/bridge/issue_bridge_optin.test.js",
+      "test/unit/bridge/issue_bridge_optin.test/policy_guards.test.js"
+    ],
+    "test/unit/db/ledger/issue_caret_dot_and_intern.test.js": [
+      "test/unit/db/ledger/issue_caret_dot_and_intern.test.js",
+      "test/unit/db/ledger/issue_caret_dot_and_intern.test/parent_lookup.test.js"
+    ],
+    "test/unit/migration/migration_precondition_baseline.test.js": [
+      "test/unit/migration/migration_precondition_baseline.test.js",
+      "test/unit/migration/migration_precondition_baseline.test/runner_branches.test.js"
+    ],
+    "test/unit/migration/migration_runner.test.js": [
+      "test/unit/migration/migration_runner.test.js",
+      "test/unit/migration/migration_runner.test/v017_renames.test.js",
+      "test/unit/migration/migration_runner.test/leg_ordinal_rename.test.js",
+      "test/unit/migration/migration_runner.test/destructive_guard.test.js",
+      "test/unit/migration/migration_runner.test/sql_split_and_frontier.test.js",
+      "test/unit/migration/migration_runner.test/checksum_guards.test.js",
+      "test/unit/migration/migration_runner.test/runner_guards.test.js",
+      "test/unit/migration/migration_runner.test/schema_assertions.test.js"
+    ],
+    "test/unit/bridge/policy_apply.test.js": [
+      "test/unit/bridge/policy_apply.test.js",
+      "test/unit/bridge/policy_apply.test/injected_and_due.test.js"
+    ],
+    "test/unit/price/price_admission_wire_carrier.test.js": [
+      "test/unit/price/price_admission_wire_carrier.test.js",
+      "test/unit/price/price_admission_wire_carrier.test/additional_batch_guards.test.js"
+    ],
+    "test/unit/price/price_batch_compression.test.js": [
+      "test/unit/price/price_batch_compression.test.js",
+      "test/unit/price/price_batch_compression.test/rejections_and_determinism.test.js"
+    ],
+    "test/unit/price/price_v2_payload_twin_parity.test.js": [
+      "test/unit/price/price_v2_payload_twin_parity.test.js",
+      "test/unit/price/price_v2_payload_twin_parity.test/admission_edge_cases.test.js"
+    ],
+    "test/unit/protocol/protocol_changes.test.js": [
+      "test/unit/protocol/protocol_changes.test.js",
+      "test/unit/protocol/protocol_changes.test/vm_activation_gates.test.js",
+      "test/unit/protocol/protocol_changes.test/controller_guard_and_consensus_pins.test.js"
+    ],
+    "test/unit/recovery/recovery.test.js": [
+      "test/unit/recovery/recovery.test.js",
+      "test/unit/recovery/recovery.test/stake_cross_checks.test.js",
+      "test/unit/recovery/recovery.test/completeness.test.js",
+      "test/unit/recovery/recovery.test/archived_rewards.test.js",
+      "test/unit/recovery/recovery.test/xcall_relay_rows.test.js",
+      "test/unit/recovery/recovery.test/quorum_verified_parity.test.js"
+    ],
+    "test/unit/rollback/rollback.test.js": [
+      "test/unit/rollback/rollback.test.js",
+      "test/unit/rollback/rollback.test/anchor_rewards.test.js",
+      "test/unit/rollback/rollback.test/attestation_and_escrow.test.js",
+      "test/unit/rollback/rollback.test/hub_retractions.test.js",
+      "test/unit/rollback/rollback.test/maturity_reversal.test.js",
+      "test/unit/rollback/rollback.test/transaction_and_rearm.test.js"
+    ],
+    "test/unit/rollback/rollback_coverage.test.js": [
+      "test/unit/rollback/rollback_coverage.test.js",
+      "test/unit/rollback/rollback_coverage.test/slash_restore_twin.test.js"
+    ],
+    "test/unit/rollcall/rollcall_close.test.js": [
+      "test/unit/rollcall/rollcall_close.test.js",
+      "test/unit/rollcall/rollcall_close.test/k_streak_and_eviction.test.js",
+      "test/unit/rollcall/rollcall_close.test/reward_election_and_ordering.test.js",
+      "test/unit/rollcall/rollcall_close.test/rollcall_v1_gates.test.js"
+    ],
+    "test/unit/rollcall/rollcall_gates_filter.test.js": [
+      "test/unit/rollcall/rollcall_gates_filter.test.js",
+      "test/unit/rollcall/rollcall_gates_filter.test/call_sites.test.js"
+    ],
+    "test/unit/recovery/snapshot_reorg_buffer.test.js": [
+      "test/unit/recovery/snapshot_reorg_buffer.test.js",
+      "test/unit/recovery/snapshot_reorg_buffer.test/verifier_and_recovery.test.js"
+    ],
+    "test/unit/migration/sql_schema_column_parity.test.js": [
+      "test/unit/migration/sql_schema_column_parity.test.js",
+      "test/unit/migration/sql_schema_column_parity.test/baseline.test.js",
+      "test/unit/migration/sql_schema_column_parity.test/table_bodies.test.js"
+    ],
+    "test/unit/migration/sql_schema_index_parity.test.js": [
+      "test/unit/migration/sql_schema_index_parity.test.js",
+      "test/unit/migration/sql_schema_index_parity.test/baseline.test.js"
+    ],
+    "test/unit/xchain_indexer/stall_health.test.js": [
+      "test/unit/xchain_indexer/stall_health.test.js",
+      "test/unit/xchain_indexer/stall_health.test/barrier_mapping.test.js"
+    ],
+    "test/unit/state_commitment/state_commitment_batched_node_writes.test.js": [
+      "test/unit/state_commitment/state_commitment_batched_node_writes.test.js",
+      "test/unit/state_commitment/state_commitment_batched_node_writes.test/stakes_memo.test.js"
+    ],
+    "test/unit/state_commitment/state_hash_archive_invalid.test.js": [
+      "test/unit/state_commitment/state_hash_archive_invalid.test.js",
+      "test/unit/state_commitment/state_hash_archive_invalid.test/state_hash_anchor_invalid_class.test.js"
+    ],
+    "test/unit/utility/utility.test.js": [
+      "test/unit/utility/utility.test.js",
+      "test/unit/utility/utility.test/bignumber.test.js",
+      "test/unit/utility/utility.test/block_loop.test.js",
+      "test/unit/utility/utility.test/fees_and_transforms.test.js",
+      "test/unit/utility/utility.test/format_and_ledger.test.js",
+      "test/unit/utility/utility.test/validation.test.js"
+    ],
+    "test/unit/fees/utility_validate_oracle_fee.test.js": [
+      "test/unit/fees/utility_validate_oracle_fee.test.js",
+      "test/unit/fees/utility_validate_oracle_fee.test/refill_fee.test.js"
+    ],
+    "test/unit/fees/vm_gas_parity.test.js": [
+      "test/unit/fees/vm_gas_parity.test.js",
+      "test/unit/fees/vm_gas_parity.test/source_tree_scan.test.js"
+    ],
+    "test/unit/price/xchain_price_query.test.js": [
+      "test/unit/price/xchain_price_query.test.js",
+      "test/unit/price/xchain_price_query.test/xchain_price_derivation_fill_selection.test.js"
+    ],
+    "test/unit/protocol/flagday_placeholder_guard.test.js": [
+      "test/unit/protocol/flagday_placeholder_guard.test.js",
+      "test/unit/protocol/flagday_placeholder_guard.test/sibling_named_exports.test.js"
+    ],
+    "test/integration/scenarios/core/01_block_discovery.test.js": [
+      "test/integration/scenarios/core/01_block_discovery.test.js",
+      "test/integration/scenarios/core/01_block_discovery.test/edge_cases.test.js",
+      "test/integration/scenarios/core/01_block_discovery.test/synchronization.test.js"
+    ],
+    "test/integration/scenarios/core/02_issue_mint_send.test.js": [
+      "test/integration/scenarios/core/02_issue_mint_send.test.js",
+      "test/integration/scenarios/core/02_issue_mint_send.test/destroy.test.js",
+      "test/integration/scenarios/core/02_issue_mint_send.test/mint.test.js",
+      "test/integration/scenarios/core/02_issue_mint_send.test/send.test.js"
+    ],
+    "test/integration/scenarios/core/03_order_dispenser.test.js": [
+      "test/integration/scenarios/core/03_order_dispenser.test.js",
+      "test/integration/scenarios/core/03_order_dispenser.test/dispenser.test.js"
+    ],
+    "test/integration/scenarios/core/04_complex_actions.test.js": [
+      "test/integration/scenarios/core/04_complex_actions.test.js",
+      "test/integration/scenarios/core/04_complex_actions.test/list_airdrop.test.js",
+      "test/integration/scenarios/core/04_complex_actions.test/sweep_destroy.test.js"
+    ],
+    "test/integration/scenarios/core/05_reorg.test.js": [
+      "test/integration/scenarios/core/05_reorg.test.js",
+      "test/integration/scenarios/core/05_reorg.test/reindex_integrity.test.js",
+      "test/integration/scenarios/core/05_reorg.test/successive_and_partial.test.js"
+    ],
+    "test/unit/actions/token/airdrop.test.js": [
+      "test/unit/actions/token/airdrop.test.js",
+      "test/unit/actions/token/airdrop.test/balance_and_rollback.test.js",
+      "test/unit/actions/token/airdrop.test/validation_branches.test.js",
+      "test/unit/actions/token/airdrop.test/fee_payment_mode.test.js",
+      "test/unit/actions/token/airdrop.test/recipient_lists.test.js"
+    ],
+    "test/unit/actions/token/amount_representability.test.js": [
+      "test/unit/actions/token/amount_representability.test.js",
+      "test/unit/actions/token/amount_representability.test/representability_rules.test.js"
+    ],
+    "test/unit/actions/anchor/anchor.test.js": [
+      "test/unit/actions/anchor/anchor.test.js",
+      "test/unit/actions/anchor/anchor.test/v0_bundle.test.js",
+      "test/unit/actions/anchor/anchor.test/activation_gate.test.js",
+      "test/unit/actions/anchor/anchor.test/archive_replay_guard.test.js",
+      "test/unit/actions/anchor/anchor.test/archive_chunks.test.js"
+    ],
+    "test/unit/actions/attest/attest_batch_wire.test.js": [
+      "test/unit/actions/attest/attest_batch_wire.test.js",
+      "test/unit/actions/attest/attest_batch_wire.test/batch_wire_integrity.test.js"
+    ],
+    "test/unit/actions/attest/attest_response_applier.test.js": [
+      "test/unit/actions/attest/attest_response_applier.test.js",
+      "test/unit/actions/attest/attest_response_applier.test/applier_pass.test.js",
+      "test/unit/actions/attest/attest_response_applier.test/bounded_read.test.js",
+      "test/unit/actions/attest/attest_response_applier.test/effects_apply.test.js",
+      "test/unit/actions/attest/attest_response_applier.test/effects_regate_settle.test.js",
+      "test/unit/actions/attest/attest_response_applier.test/per_block_cap.test.js"
+    ],
+    "test/unit/actions/attest/attest_response_verify_vectors.test.js": [
+      "test/unit/actions/attest/attest_response_verify_vectors.test.js",
+      "test/unit/actions/attest/attest_response_verify_vectors.test/capability_read.test.js",
+      "test/unit/actions/attest/attest_response_verify_vectors.test/mirror_era_canonical.test.js",
+      "test/unit/actions/attest/attest_response_verify_vectors.test/pre_verification_errors.test.js",
+      "test/unit/actions/attest/attest_response_verify_vectors.test/widening_step.test.js"
+    ],
+    "test/unit/actions/token/batch.test.js": [
+      "test/unit/actions/token/batch.test.js",
+      "test/unit/actions/token/batch.test/subaction_normalization.test.js",
+      "test/unit/actions/token/batch.test/issuance_limits.test.js",
+      "test/unit/actions/token/batch.test/aggregate_gas.test.js",
+      "test/unit/actions/token/batch.test/deploy_mint_caps.test.js",
+      "test/unit/actions/token/batch.test/limit_composition.test.js",
+      "test/unit/actions/token/batch.test/limit_precedence.test.js",
+      "test/unit/actions/token/batch.test/cost_budget.test.js",
+      "test/unit/actions/token/batch.test/vm_weight.test.js",
+      "test/unit/actions/token/batch.test/spam_collapse_creates.test.js",
+      "test/unit/actions/token/batch.test/spam_collapse_execute.test.js"
+    ],
+    "test/unit/actions/bridge/bet.test.js": [
+      "test/unit/actions/bridge/bet.test.js",
+      "test/unit/actions/bridge/bet.test/place_and_cancel.test.js",
+      "test/unit/actions/bridge/bet.test/resolve.test.js",
+      "test/unit/actions/bridge/bet.test/leg_rows.test.js"
+    ],
+    "test/unit/actions/contract/callback.test.js": [
+      "test/unit/actions/contract/callback.test.js",
+      "test/unit/actions/contract/callback.test/holder_list_filtering.test.js",
+      "test/unit/actions/contract/callback.test/native_fee_payment.test.js",
+      "test/unit/actions/contract/callback.test/validation_guards.test.js"
+    ],
+    "test/unit/actions/market/coinpay.test.js": [
+      "test/unit/actions/market/coinpay.test.js",
+      "test/unit/actions/market/coinpay.test/order_finalisation.test.js",
+      "test/unit/actions/market/coinpay.test/roles_and_ownership.test.js"
+    ],
+    "test/unit/actions/token/consolidation_leg_amount.test.js": [
+      "test/unit/actions/token/consolidation_leg_amount.test.js",
+      "test/unit/actions/token/consolidation_leg_amount.test/leg_validation.test.js"
+    ],
+    "test/unit/actions/bridge/cross_settle.test.js": [
+      "test/unit/actions/bridge/cross_settle.test.js",
+      "test/unit/actions/bridge/cross_settle.test/settlement.test.js",
+      "test/unit/actions/bridge/cross_settle.test/order_leg.test.js",
+      "test/unit/actions/bridge/cross_settle.test/royalty.test.js",
+      "test/unit/actions/bridge/cross_settle.test/dismissal.test.js"
+    ],
+    "test/unit/actions/stake/delegate.test.js": [
+      "test/unit/actions/stake/delegate.test.js",
+      "test/unit/actions/stake/delegate.test/revoke.test.js",
+      "test/unit/actions/stake/delegate.test/contract_targeted.test.js"
+    ],
+    "test/unit/actions/contract/deploy.test.js": [
+      "test/unit/actions/contract/deploy.test.js",
+      "test/unit/actions/contract/deploy.test/code_encoding.test.js",
+      "test/unit/actions/contract/deploy.test/constructor_effects.test.js",
+      "test/unit/actions/contract/deploy.test/constructor_run.test.js",
+      "test/unit/actions/contract/deploy.test/lint_gates.test.js",
+      "test/unit/actions/contract/deploy.test/native_fee.test.js",
+      "test/unit/actions/contract/deploy.test/staking_config.test.js"
+    ],
+    "test/unit/actions/contract/deploy_contract_meta.test.js": [
+      "test/unit/actions/contract/deploy_contract_meta.test.js",
+      "test/unit/actions/contract/deploy_contract_meta.test/below_flag_day.test.js",
+      "test/unit/actions/contract/deploy_contract_meta.test/precedence.test.js",
+      "test/unit/actions/contract/deploy_contract_meta.test/storage.test.js"
+    ],
+    "test/unit/actions/token/destroy.test.js": [
+      "test/unit/actions/token/destroy.test.js",
+      "test/unit/actions/token/destroy.test/destroy_behaviors.test.js"
+    ],
+    "test/unit/actions/market/dispense.test.js": [
+      "test/unit/actions/market/dispense.test.js",
+      "test/unit/actions/market/dispense.test/auto_close.test.js",
+      "test/unit/actions/market/dispense.test/fiat_pricing.test.js",
+      "test/unit/actions/market/dispense.test/lists.test.js",
+      "test/unit/actions/market/dispense.test/oracle_per_token.test.js",
+      "test/unit/actions/market/dispense.test/settlement_records.test.js"
+    ],
+    "test/unit/actions/market/dispenser.test.js": [
+      "test/unit/actions/market/dispenser.test.js",
+      "test/unit/actions/market/dispenser.test/cancel.test.js",
+      "test/unit/actions/market/dispenser.test/edit.test.js",
+      "test/unit/actions/market/dispenser.test/freshness_local.test.js",
+      "test/unit/actions/market/dispenser.test/freshness_legacy.test.js",
+      "test/unit/actions/market/dispenser.test/freshness_oracle_shape.test.js",
+      "test/unit/actions/market/dispenser.test/create_paths.test.js",
+      "test/unit/actions/market/dispenser.test/oracle_fee.test.js"
+    ],
+    "test/unit/actions/market/dispenser_amount_positivity.test.js": [
+      "test/unit/actions/market/dispenser_amount_positivity.test.js",
+      "test/unit/actions/market/dispenser_amount_positivity.test/settlement.test.js"
+    ],
+    "test/unit/actions/token/dividend.test.js": [
+      "test/unit/actions/token/dividend.test.js",
+      "test/unit/actions/token/dividend.test/holder_lists.test.js",
+      "test/unit/actions/token/dividend.test/fee_handling.test.js"
+    ],
+    "test/unit/actions/contract/file.test.js": [
+      "test/unit/actions/contract/file.test.js",
+      "test/unit/actions/contract/file.test/compression.test.js",
+      "test/unit/actions/contract/file.test/record_fields.test.js"
+    ],
+    "test/unit/actions/token/issue.test.js": [
+      "test/unit/actions/token/issue.test.js",
+      "test/unit/actions/token/issue.test/edit_formats_and_lists.test.js",
+      "test/unit/actions/token/issue.test/field_validations.test.js",
+      "test/unit/actions/token/issue.test/mint_supply_cap.test.js",
+      "test/unit/actions/token/issue.test/supply_and_locks.test.js"
+    ],
+    "test/unit/actions/contract/list.test.js": [
+      "test/unit/actions/contract/list.test.js",
+      "test/unit/actions/contract/list.test/edit.test.js",
+      "test/unit/actions/contract/list.test/memo.test.js"
+    ],
+    "test/unit/actions/token/mint.test.js": [
+      "test/unit/actions/token/mint.test.js",
+      "test/unit/actions/token/mint.test/address_cap.test.js",
+      "test/unit/actions/token/mint.test/amounts.test.js",
+      "test/unit/actions/token/mint.test/block_window.test.js",
+      "test/unit/actions/token/mint.test/destination.test.js"
+    ],
+    "test/unit/actions/market/order.test.js": [
+      "test/unit/actions/market/order.test.js",
+      "test/unit/actions/market/order.test/cancel.test.js",
+      "test/unit/actions/market/order.test/create_rules.test.js",
+      "test/unit/actions/market/order.test/edit.test.js",
+      "test/unit/actions/market/order.test/fields_and_fees.test.js"
+    ],
+    "test/unit/actions/market/order_match.test.js": [
+      "test/unit/actions/market/order_match.test.js",
+      "test/unit/actions/market/order_match.test/fills.test.js",
+      "test/unit/actions/market/order_match.test/skips_and_lists.test.js",
+      "test/unit/actions/market/order_match.test/native_coin.test.js",
+      "test/unit/actions/market/order_match.test/ownership.test.js",
+      "test/unit/actions/market/order_match.test/debug_mode.test.js",
+      "test/unit/actions/market/order_match.test/token_lists.test.js",
+      "test/unit/actions/market/order_match.test/escrow_precision.test.js"
+    ],
+    "test/unit/actions/price/price_batch.test.js": [
+      "test/unit/actions/price/price_batch.test.js",
+      "test/unit/actions/price/price_batch.test/structural_checks.test.js",
+      "test/unit/actions/price/price_batch.test/straddle_rule.test.js",
+      "test/unit/actions/price/price_batch.test/batch_anchor_rule.test.js",
+      "test/unit/actions/price/price_batch.test/signature_verification.test.js",
+      "test/unit/actions/price/price_batch.test/storage_and_hub_push.test.js"
+    ],
+    "test/unit/actions/token/send.test.js": [
+      "test/unit/actions/token/send.test.js",
+      "test/unit/actions/token/send.test/caret_handoff_destination.test.js",
+      "test/unit/actions/token/send.test/gated_handoff_threshold.test.js",
+      "test/unit/actions/token/send.test/sleeping_and_multi_send.test.js"
+    ],
+    "test/unit/actions/stake/slash.test.js": [
+      "test/unit/actions/stake/slash.test.js",
+      "test/unit/actions/stake/slash.test/attest_relay.test.js",
+      "test/unit/actions/stake/slash.test/checkpoint_engine.test.js",
+      "test/unit/actions/stake/slash.test/near_miss_rejects.test.js",
+      "test/unit/actions/stake/slash.test/oracle_engines.test.js",
+      "test/unit/actions/stake/slash.test/snapshot_burial.test.js",
+      "test/unit/actions/stake/slash.test/xconfig_engine.test.js"
+    ],
+    "test/unit/actions/stake/stake.test.js": [
+      "test/unit/actions/stake/stake.test.js",
+      "test/unit/actions/stake/stake.test/contract_targeted.test.js",
+      "test/unit/actions/stake/stake.test/signing_key_and_top_up.test.js"
+    ],
+    "test/unit/actions/token/sweep.test.js": [
+      "test/unit/actions/token/sweep.test.js",
+      "test/unit/actions/token/sweep.test/zero_amount_legs.test.js",
+      "test/unit/actions/token/sweep.test/ownerships.test.js",
+      "test/unit/actions/token/sweep.test/escrows.test.js",
+      "test/unit/actions/token/sweep.test/all_flags.test.js"
+    ],
+    "test/unit/actions/token/uncapped_max_supply.test.js": [
+      "test/unit/actions/token/uncapped_max_supply.test.js",
+      "test/unit/actions/token/uncapped_max_supply.test/issue_registration.test.js"
+    ],
+    "test/unit/actions/stake/unstake.test.js": [
+      "test/unit/actions/stake/unstake.test.js",
+      "test/unit/actions/stake/unstake.test/contract_targeted.test.js",
+      "test/unit/actions/stake/unstake.test/partial.test.js"
+    ],
+    "test/unit/actions/stake/vote_invariants.test.js": [
+      "test/unit/actions/stake/vote_invariants.test.js",
+      "test/unit/actions/stake/vote_invariants.test/binding_minimums.test.js",
+      "test/unit/actions/stake/vote_invariants.test/callback_timelock.test.js",
+      "test/unit/actions/stake/vote_invariants.test/poll_tick_visible.test.js"
+    ],
+    "test/unit/actions/stake/withdraw.test.js": [
+      "test/unit/actions/stake/withdraw.test.js",
+      "test/unit/actions/stake/withdraw.test/amount_and_ledger.test.js"
+    ],
+    "test/unit/actions/bridge/xbridge.test.js": [
+      "test/unit/actions/bridge/xbridge.test.js",
+      "test/unit/actions/bridge/xbridge.test/v0_lock.test.js",
+      "test/unit/actions/bridge/xbridge.test/v1_burn.test.js",
+      "test/unit/actions/bridge/xbridge.test/v3_lock.test.js",
+      "test/unit/actions/bridge/xbridge.test/v4_burn.test.js"
+    ],
+    "test/unit/contract_state_subtree.test/contract_state_root_arming_boundary.test.js": [
+      "test/unit/contract_state_subtree.test/contract_state_root_arming_boundary.test.js",
+      "test/unit/contract_state_subtree.test/contract_state_root_orphan_and_snapshot.test.js"
+    ],
+    "test/unit/contract_state_subtree.test/contract_state_root_incremental_equals.test.js": [
+      "test/unit/contract_state_subtree.test/contract_state_root_incremental_equals.test.js",
+      "test/unit/contract_state_subtree.test/contract_state_root_shadow_derivation.test.js"
+    ],
+    "test/unit/contract_state_subtree.test/contract_state_root_strict_reads.test.js": [
+      "test/unit/contract_state_subtree.test/contract_state_root_strict_reads.test.js",
+      "test/unit/contract_state_subtree.test/contract_state_root_strict_read_faults.test.js"
+    ],
+    "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_the.test.js": [
+      "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_the.test.js",
+      "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_shadow_thread.test.js"
+    ],
+    "test/unit/state_subtree_activation.test/state_root_reserved_sub_trees.test.js": [
+      "test/unit/state_subtree_activation.test/state_root_reserved_sub_trees.test.js",
+      "test/unit/state_subtree_activation.test/state_root_reserved_sub_trees_armed_set.test.js"
+    ]
+  },
+  "titleDeltas": []
+}

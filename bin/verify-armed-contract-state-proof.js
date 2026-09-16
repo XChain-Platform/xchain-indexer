@@ -12,7 +12,7 @@
  **********************************************************************
  *
  * End-to-end contract-state proof against an ARMED chain's real committed data
- * (SPV sub-tree spec §3 Stage A items 4-5).
+ * (the contract-state half of the SPV state sub-tree).
  *
  * WHAT THIS PROVES, and it is the last link the unit suites cannot close: that
  * the explorer's proof server, running over a REAL armed chain's
@@ -37,10 +37,12 @@
  *   node bin/verify-armed-contract-state-proof.js --db XChain_BTC_Regtest_Indexer \
  *        --chain BTC --network regtest --height 10000
  *
- * It loads the explorer's proofServer.js and the SDK's light.js from the sibling
- * repos, so the proof is built and verified by the REAL modules rather than
- * copies. On a container without the siblings on disk, copy those files (and
- * their transitive requires) into one directory and pass --modules <dir>.
+ * It loads the explorer's http/proof_server.js and the SDK's light.js from the
+ * sibling repos, so the proof is built and verified by the REAL modules rather
+ * than copies. On a container without the siblings on disk, copy those files
+ * (and their transitive requires) into one directory laid out like src/, so
+ * http/proof_server.js still finds merkle.js one level up, and pass
+ * --modules <dir>.
  *
  *********************************************************************/
 
@@ -69,12 +71,12 @@ function parseArgs(argv){
     // Resolve the explorer's proof server and the SDK's verifier from the
     // sibling repos (the normal monorepo layout). `--modules <dir>` overrides
     // it for a staged container, where the siblings are not on disk and the
-    // files are copied into one flat directory instead.
+    // files are copied into one directory laid out like src/ instead.
     const dir = opts.modules;
     const req = (sib, file) => require(dir ? path.resolve(dir, file)
                                            : path.resolve(__dirname, '..', '..', sib, 'src', file));
-    const ProofServer = req('xchain-explorer', 'proofServer.js');
-    const light       = req('xchain-sdk',      'light.js');
+    const ProofServer = req('xchain-explorer', 'http/proof_server.js');
+    const light       = req('xchain-sdk',      'protocol/light_client.js');
     const SUB         = require('../src/state_subtree_activation.js');
     const mariadb     = require('mariadb');
 

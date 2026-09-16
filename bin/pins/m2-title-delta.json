@@ -1,0 +1,89 @@
+{
+  "note": "The declared delta between the suite title map as pinned at AT1 and the map at the end of milestone M2. AT2 reads identity THROUGH this file: every difference the compare reports is listed here with the row that caused it, so a difference that is not listed is a regression rather than a restructure. Neither row renames a collected test FILE, so the rename set stays empty and the compare needs no --rename-map argument.",
+  "milestone": "M2",
+  "rows": [4, 5],
+  "date": "2026-09-13",
+  "pin_before_sha256": "43126c11fd28e776d29287028bc1162ddacc1a69212e429e586018ad93c8b285",
+  "pin_before_rev": "634dbe5f",
+  "renames": {},
+  "titleDeltas": [
+    {
+      "row": 4,
+      "file": "test/unit/db_prototype_install.test.js",
+      "scripts": [
+        "test",
+        "test:integration",
+        "test:regression",
+        "test:regression:fast",
+        "test:regression:full"
+      ],
+      "added": [
+        "Database prototype install @regression @tier1 carries every declared mixin method, non-enumerable, and nothing enumerable at all",
+        "Database prototype install @regression @tier1 keeps the methods out of a for-in walk over an object that inherits them",
+        "Database prototype install @regression @tier1 lets a mixin method be stubbed and restored on the prototype"
+      ],
+      "why": "the split installs the per-family mixins onto Database.prototype instead of declaring them in a class body, and nothing in the suite noticed the difference: making the install enumerable left 9679 passing and 0 failing. The invariant is a wire shape (an enumerable prototype puts several hundred method names into every for-in, Object.keys and JSON.stringify over an object that inherits it), so row 4 adds the guard the split needs. Falsified: deleting the enumerable:false line turns all three red, restoring the file byte-exact turns them green."
+    },
+    {
+      "row": 5,
+      "file": "test/unit/db_table_parameterized_identifiers.test.js",
+      "added_by": "e834fdce, renamed to snake_case by 7b866551",
+      "scripts": [
+        "test",
+        "test:integration",
+        "test:regression",
+        "test:regression:full"
+      ],
+      "added": [
+        "db escrow_journal mixin: the dispenser-family identifiers @regression every frozen DISPENSER_FAMILY entry passes the assertion and binds its action",
+        "db escrow_journal mixin: the dispenser-family identifiers @regression refuses a hostile table or column and issues nothing",
+        "db misc mixin: table-parameterized identifiers @regression countRowsInTable reads zero from an empty result rather than NaN",
+        "db misc mixin: table-parameterized identifiers @regression passes a well-formed identifier through and binds every value",
+        "db misc mixin: table-parameterized identifiers @regression refuses a hostile COLUMN name too, not just the table",
+        "db misc mixin: table-parameterized identifiers @regression refuses a hostile TABLE name before issuing anything",
+        "db misc mixin: table-parameterized identifiers @regression refuses a non-string identifier rather than stringifying it"
+      ],
+      "why": "row 5 moved the genesis dump's and the escrow journal writer's schema-generic statements onto mixin methods that take a TABLE NAME as an argument. An identifier cannot be bound as a parameter, so those methods interpolate it, and the guard that keeps a hostile identifier out is the only thing standing between the move and an injection. The suite is new because the shape is new: before row 5 the statements were literals with no identifier argument to abuse. It is a new FILE, not a renamed one: no file matching /identifier|parameterized/ exists anywhere in the AT1 pin, so the compare reports file_added and nothing dropped. It carries no @tier1 or @tier4 tag, which is why test:regression:fast does not collect it and only four tiers report the addition.",
+      "no_titles_lost": "nothing dropped anywhere in the compare for this file"
+    },
+    {
+      "row": 5,
+      "file": "test/unit/price-batch-query.test.js",
+      "added_by": "e56aa1c7",
+      "scripts": [
+        "test",
+        "test:integration"
+      ],
+      "dropped": [
+        "price-batch-query (getpricebatches) PRICE_BATCHES_SQL asks only for valid version-0 batch rows overlapping the range"
+      ],
+      "added": [
+        "price-batch-query (getpricebatches) db.getPriceBatchesOverlappingRange asks only for valid version-0 batch rows overlapping the range",
+        "price-batch-query (getpricebatches) db.getPriceBatchesOverlappingRange binds status, last_round, first_round, limit in that order"
+      ],
+      "why": "src/price-batch-query.js exported PRICE_BATCHES_SQL as a string for api.js to run, which left the file's last statement outside src/db. Row 5 moved it verbatim into getPriceBatchesOverlappingRange() on the prices mixin, so the inner describe names the method instead of the vanished constant. Every one of the six assertions in the old case survives verbatim in the renamed one, now read off the SQL the method actually issues through a recording stub rather than off an exported string; the second title is NEW coverage the move made reachable, pinning the bind order (status, last, first, limit) and the backwards range comparison that a text assertion on a constant could never see. Net: one title renamed, one added, none lost."
+    },
+    {
+      "row": 5,
+      "file": "test/unit/reorg-history-query.test.js",
+      "added_by": "4625b145",
+      "scripts": [
+        "test",
+        "test:integration"
+      ],
+      "dropped": [
+        "reorg-history-query: REORG_EVENTS_SQL parameterizes since_id and limit (no interpolation)",
+        "reorg-history-query: REORG_EVENTS_SQL reads only REORG events, newest first, bounded"
+      ],
+      "added": [
+        "db.getReorgEventsSince parameterizes since_id and limit (no interpolation)",
+        "db.getReorgEventsSince reads only REORG events, newest first, bounded"
+      ],
+      "why": "src/reorg-history-query.js exported REORG_EVENTS_SQL for api.js to run against the decoder database, leaving the file's only SQL outside src/db. Row 5 moved it verbatim to getReorgEventsSince() on the events mixin, called on decoderDb. The describe was named `reorg-history-query: REORG_EVENTS_SQL` and is now `db.getReorgEventsSince`, which is why both full titles move together: the two cases pair one for one, the assertions are unchanged (code = 'REORG', ORDER BY id DESC, LIMIT ?, two placeholders) and are now read off the SQL the method issues, with a deepStrictEqual on the bind order added inside the existing case. Net: two titles renamed, none lost, no case removed."
+    }
+  ],
+  "compare_rows": 23,
+  "compare_rows_explained": "5 for row 4 (one added file across the five tiers that collect test/unit/*.test.js), and 18 for row 5: 4 for the new identifier suite (four tiers, since it carries no tier1/tier4 tag and test:regression:fast skips it), 6 for price-batch-query (one dropped plus two added, in each of the two tiers that collect it) and 8 for reorg-history-query (two dropped plus two added, in each of the same two tiers).",
+  "verified_at": "6a8a96213f52f168b921b61a7a4d199b4642729e",
+  "verified_how": "node bin/suite-title-map.js --compare bin/pins/at1-suite-titles.json reported exactly these 23 rows and nothing else."
+}

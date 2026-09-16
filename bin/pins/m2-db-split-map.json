@@ -1,0 +1,2950 @@
+{
+  "note": "Where every method of the old src/db.js landed in src/db/, and why. Written by the split so the cut can be checked instead of re-derived.",
+  "rule": "The mixin is the DDL family of a method dominant table, taken from the src/sql/ file prefix (order_matches.sql and orders.sql are both the orders family). A method with no SQL stays on index.js. A method whose table is a caller-supplied parameter belongs to no family and goes to misc.js. Anything that does not follow from the dominant table carries its reason in the why field.",
+  "scoring": "A write target (INSERT/REPLACE INTO, UPDATE, DELETE FROM, CREATE/ALTER TABLE) scores 10, the FROM table 5, a JOIN 1; an index_* lookup table is weighted at a fifth so a join for an id does not outrank the table being read.",
+  "counts": {
+    "methods": 470,
+    "mixins": 57,
+    "on_index": 100,
+    "statics_on_index": 15
+  },
+  "install": "db/index.js lists every mixin in MIXIN_FILES and installs it with Object.defineProperties(Database.prototype, ..., enumerable:false), which is what the class body produced: 470 own prototype names, none enumerable.",
+  "files": {
+    "src/db/index.js": [
+      {
+        "method": "constructor",
+        "lines": 148,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "verifyDatabase",
+        "lines": 29,
+        "table": null,
+        "why": "schema/migration plumbing; reads information_schema, no protocol table"
+      },
+      {
+        "method": "createDatabase",
+        "lines": 32,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "verifyTables",
+        "lines": 47,
+        "table": null,
+        "why": "schema/migration plumbing; walks every DDL file"
+      },
+      {
+        "method": "schemaShapeSummary",
+        "lines": 15,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "runMigrations",
+        "lines": 13,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "_assertStakeWeightOrderingCollation",
+        "lines": 20,
+        "table": null,
+        "why": "startup schema assertion over information_schema"
+      },
+      {
+        "method": "_runMigrationsInner",
+        "lines": 229,
+        "table": null,
+        "why": "migration driver"
+      },
+      {
+        "method": "_assertPubkeyColumnIsUncompressedWide",
+        "lines": 33,
+        "table": null,
+        "why": "startup schema assertion over information_schema"
+      },
+      {
+        "method": "_assertRewardUniqueKeyCarriesQualifier",
+        "lines": 58,
+        "table": null,
+        "why": "startup schema assertion over information_schema"
+      },
+      {
+        "method": "_assertBridgeTablesPresent",
+        "lines": 31,
+        "table": null,
+        "why": "startup schema assertion over information_schema"
+      },
+      {
+        "method": "_migrationMode",
+        "lines": 23,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "_destructiveAutoStatement",
+        "lines": 140,
+        "table": "balances",
+        "why": "migration statement classifier; the balances hits are the auto-dedupe allowlist it documents"
+      },
+      {
+        "method": "_isIdRepairUpdate",
+        "lines": 23,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "_ensureMigrationsLedger",
+        "lines": 10,
+        "table": null,
+        "why": "migration ledger table, not a protocol table"
+      },
+      {
+        "method": "_migrationPreconditionSkip",
+        "lines": 6,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "parseExpectedColumns",
+        "lines": 47,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "parseInlineIndexes",
+        "lines": 33,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "undeclaredLiveColumns",
+        "lines": 4,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "undeclaredLiveIndexes",
+        "lines": 15,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "alterTableForDrift",
+        "lines": 110,
+        "table": null,
+        "why": "schema reconciler, table name is a parameter"
+      },
+      {
+        "method": "parseExpectedIndexes",
+        "lines": 26,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "reconcileTableIndexes",
+        "lines": 132,
+        "table": null,
+        "why": "schema reconciler, table name is a parameter"
+      },
+      {
+        "method": "dedupeForUniqueIndex",
+        "lines": 13,
+        "table": null,
+        "why": "schema reconciler, table name is a parameter"
+      },
+      {
+        "method": "stripSqlLineComments",
+        "lines": 31,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "splitSqlStatements",
+        "lines": 33,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "createTable",
+        "lines": 35,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "getConnection",
+        "lines": 48,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "releaseConnection",
+        "lines": 6,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "close",
+        "lines": 7,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "_acquireTxLock",
+        "lines": 29,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "_releaseTxLock",
+        "lines": 10,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "currentTxEpoch",
+        "lines": 3,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "runInTxEpoch",
+        "lines": 3,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "runInDryRunEpoch",
+        "lines": 3,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "_assertTxNotFenced",
+        "lines": 6,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "_assertPriceBarrierNotSkipped",
+        "lines": 12,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "beginTransaction",
+        "lines": 19,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "rollbackTransaction",
+        "lines": 21,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "commitTransaction",
+        "lines": 27,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "doQuery",
+        "lines": 31,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "doQueryStrict",
+        "lines": 24,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "normalizeDataValues",
+        "lines": 100,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "_hashReorgData",
+        "lines": 4,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "_reorgCursorIncoherentError",
+        "lines": 5,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "getBlockTime",
+        "lines": 24,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "clearBlockTimeCache",
+        "lines": 7,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "clearSmtNameCaches",
+        "lines": 4,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "pollTallyWatermarkMatches",
+        "lines": 3,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "setPollTallyWatermark",
+        "lines": 3,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "clearPollTallyWatermarkEntry",
+        "lines": 3,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "clearPollTallyWatermark",
+        "lines": 3,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "getBlockLeafRows",
+        "lines": 5,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "_maybeApplyPendingRewards",
+        "lines": 13,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "_restoredRewardDeriveBlock",
+        "lines": 4,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "isCaretRefStrictActive",
+        "lines": 3,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "resolveAddressRefChecked",
+        "lines": 6,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "isDistributed",
+        "lines": 12,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "isValidList",
+        "lines": 6,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "isListEditResolutionActive",
+        "lines": 3,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "createCredit",
+        "lines": 3,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "createDebit",
+        "lines": 3,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "createEscrow",
+        "lines": 3,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "getAddressBalances",
+        "lines": 36,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "updateTokenInfo",
+        "lines": 8,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "isOwnershipEscrowed",
+        "lines": 3,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "validTickerBeforeTxIndex",
+        "lines": 6,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "isAnyCoinAddress",
+        "lines": 10,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "isActionAllowed",
+        "lines": 31,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "getActionCreditDebitAmount",
+        "lines": 9,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "getMarketId",
+        "lines": 4,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "updateMarkets",
+        "lines": 10,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "createRevokeDelegation",
+        "lines": 4,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "_poolQuery",
+        "lines": 8,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "apiView",
+        "lines": 18,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "stageHubPush",
+        "lines": 3,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "takeStagedHubPushes",
+        "lines": 5,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "getActiveStakeWeights",
+        "lines": 11,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "getStakeWeightsByCapability",
+        "lines": 29,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "_stakeWeightsWithCap",
+        "lines": 35,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "verifyCapabilitySnapshotRow",
+        "lines": 48,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "isCapabilityConfigured",
+        "lines": 4,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "_mirrorDb",
+        "lines": 3,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "_mirrorAdmissionActiveAt",
+        "lines": 4,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "_admitColumn",
+        "lines": 3,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "_mirrorBindClause",
+        "lines": 10,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "getAnchorChunks",
+        "lines": 6,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "getArchiveAnchorByContent",
+        "lines": 15,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "_rotateContractStakeKey",
+        "lines": 14,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "controllerEventIfGating",
+        "lines": 8,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "getEffectiveTokenController",
+        "lines": 4,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "getEffectiveAddressController",
+        "lines": 4,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "getEffectiveTokenControllerForGuard",
+        "lines": 6,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "getEffectiveAddressControllerForGuard",
+        "lines": 6,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "getTokenControllers",
+        "lines": 3,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "getAddressControllers",
+        "lines": 3,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "createSavepoint",
+        "lines": 7,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "releaseSavepoint",
+        "lines": 6,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "rollbackToSavepoint",
+        "lines": 6,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      },
+      {
+        "method": "buildVmBalancesAndTokenInfo",
+        "lines": 40,
+        "table": null,
+        "why": "no SQL: constructor, pool, transaction plumbing or a pure helper"
+      }
+    ],
+    "src/db/actions.js": [
+      {
+        "method": "getBlockHashes",
+        "lines": 267,
+        "table": "actions",
+        "why": "dominant table actions, DDL family actions"
+      },
+      {
+        "method": "getNextActionIndex",
+        "lines": 10,
+        "table": "actions",
+        "why": "dominant table actions, DDL family actions"
+      },
+      {
+        "method": "getActionIndex",
+        "lines": 23,
+        "table": "actions",
+        "why": "dominant table actions, DDL family actions"
+      },
+      {
+        "method": "createActionIndex",
+        "lines": 36,
+        "table": "actions",
+        "why": "dominant table actions, DDL family actions"
+      },
+      {
+        "method": "updateActionIndex",
+        "lines": 8,
+        "table": "actions",
+        "why": "dominant table actions, DDL family actions"
+      },
+      {
+        "method": "deleteActionIndex",
+        "lines": 7,
+        "table": "actions",
+        "why": "dominant table actions, DDL family actions"
+      },
+      {
+        "method": "getActionIndexTable",
+        "lines": 22,
+        "table": "actions",
+        "why": "dominant table actions, DDL family actions"
+      },
+      {
+        "method": "isActionIndexParsed",
+        "lines": 4,
+        "table": "actions",
+        "why": "dominant table actions, DDL family actions"
+      },
+      {
+        "method": "getActionInfo",
+        "lines": 15,
+        "table": "actions",
+        "why": "dominant table actions, DDL family actions"
+      },
+      {
+        "method": "getActionType",
+        "lines": 16,
+        "table": "actions",
+        "why": "dominant table actions, DDL family actions"
+      }
+    ],
+    "src/db/addresses/index.js": [
+      {
+        "method": "createAddressOption",
+        "lines": 32,
+        "table": "addresses",
+        "why": "dominant table addresses, DDL family addresses"
+      },
+      {
+        "method": "getAddressPreferences",
+        "lines": 51,
+        "table": "addresses",
+        "why": "dominant table addresses, DDL family addresses"
+      },
+      {
+        "method": "recordAddressControllerEvent",
+        "lines": 8,
+        "table": "address_controllers",
+        "why": "dominant table address_controllers, DDL family addresses"
+      }
+    ],
+    "src/db/airdrops/index.js": [
+      {
+        "method": "createAirdrop",
+        "lines": 44,
+        "table": "airdrops",
+        "why": "dominant table airdrops, DDL family airdrops"
+      }
+    ],
+    "src/db/anchors/index.js": [
+      {
+        "method": "getPendingAnchorRewardAttestations",
+        "lines": 36,
+        "table": "anchor_reward_attestations",
+        "why": "dominant table anchor_reward_attestations, DDL family anchors"
+      },
+      {
+        "method": "createAnchorAction",
+        "lines": 111,
+        "table": "anchor_actions",
+        "why": "dominant table anchor_actions, DDL family anchors"
+      },
+      {
+        "method": "getMaxAnchorCheckpointSeq",
+        "lines": 15,
+        "table": "anchor_actions",
+        "why": "dominant table anchor_actions, DDL family anchors"
+      },
+      {
+        "method": "getAnchorActionByCheckpoint",
+        "lines": 18,
+        "table": "anchor_actions",
+        "why": "dominant table anchor_actions, DDL family anchors"
+      },
+      {
+        "method": "getArchiveReplayWatermarks",
+        "lines": 15,
+        "table": "anchor_actions",
+        "why": "dominant table anchor_actions, DDL family anchors"
+      },
+      {
+        "method": "getAnchorV1ByBatchSeq",
+        "lines": 19,
+        "table": "anchor_actions",
+        "why": "dominant table anchor_actions, DDL family anchors"
+      },
+      {
+        "method": "setAnchorArchiveStatus",
+        "lines": 4,
+        "table": "anchor_actions",
+        "why": "dominant table anchor_actions, DDL family anchors"
+      }
+    ],
+    "src/db/attests/index.js": [
+      {
+        "method": "getAttestationDataForVM",
+        "lines": 51,
+        "table": "attests",
+        "why": "dominant table attests, DDL family attests"
+      },
+      {
+        "method": "createAttestationRequest",
+        "lines": 76,
+        "table": "attests",
+        "why": "dominant table attests, DDL family attests"
+      },
+      {
+        "method": "createAttestationResponse",
+        "lines": 37,
+        "table": "attests",
+        "why": "dominant table attests, DDL family attests"
+      },
+      {
+        "method": "createAttestationBatchAction",
+        "lines": 45,
+        "table": "attests",
+        "why": "dominant table attests, DDL family attests"
+      },
+      {
+        "method": "getAttestBatchChunks",
+        "lines": 27,
+        "table": "attests",
+        "why": "dominant table attests, DDL family attests"
+      },
+      {
+        "method": "setAttestBatchStatus",
+        "lines": 4,
+        "table": "attests",
+        "why": "dominant table attests, DDL family attests"
+      },
+      {
+        "method": "incrementAttestationValidatorStat",
+        "lines": 14,
+        "table": "attest_validator_stats",
+        "why": "dominant table attest_validator_stats, DDL family attests"
+      },
+      {
+        "method": "getAttestationRequestById",
+        "lines": 10,
+        "table": "attests",
+        "why": "dominant table attests, DDL family attests"
+      },
+      {
+        "method": "getAttestationAdmissionCounts",
+        "lines": 15,
+        "table": "attests",
+        "why": "dominant table attests, DDL family attests"
+      },
+      {
+        "method": "getRelayRequestByOrigin",
+        "lines": 10,
+        "table": "attests",
+        "why": "dominant table attests, DDL family attests"
+      },
+      {
+        "method": "getRelayRequestById",
+        "lines": 10,
+        "table": "attests",
+        "why": "dominant table attests, DDL family attests"
+      },
+      {
+        "method": "updateAttestationRequestStatus",
+        "lines": 7,
+        "table": "attests",
+        "why": "dominant table attests, DDL family attests"
+      },
+      {
+        "method": "getPendingAttestationRequests",
+        "lines": 57,
+        "table": "attests",
+        "why": "dominant table attests, DDL family attests"
+      },
+      {
+        "method": "getRelayedAttestationRequests",
+        "lines": 54,
+        "table": "attests",
+        "why": "dominant table attests, DDL family attests"
+      },
+      {
+        "method": "getExpiredAttestationRequests",
+        "lines": 11,
+        "table": "attests",
+        "why": "dominant table attests, DDL family attests"
+      },
+      {
+        "method": "getAttestationRequestsAwaitingMirrorResponse",
+        "lines": 21,
+        "table": "attests",
+        "why": "dominant table attests, DDL family attests"
+      },
+      {
+        "method": "getMirroredAttestationResponses",
+        "lines": 24,
+        "table": "attestation_responses",
+        "why": "dominant table attestation_responses, DDL family attests"
+      },
+      {
+        "method": "setAttestationResponseCallbackIndex",
+        "lines": 6,
+        "table": "attests",
+        "why": "dominant table attests, DDL family attests"
+      },
+      {
+        "method": "setAttestationResponseBatchIndex",
+        "lines": 6,
+        "table": "attests",
+        "why": "dominant table attests, DDL family attests"
+      }
+    ],
+    "src/db/balances/index.js": [
+      {
+        "method": "getTokenSupplyBalance",
+        "lines": 16,
+        "table": "balances",
+        "why": "dominant table balances, DDL family balances"
+      },
+      {
+        "method": "updateBalances",
+        "lines": 32,
+        "table": "balances",
+        "why": "dominant table balances, DDL family balances"
+      },
+      {
+        "method": "updateAddressBalance",
+        "lines": 51,
+        "table": "balances",
+        "why": "dominant table balances, DDL family balances"
+      },
+      {
+        "method": "getAddressTableBalances",
+        "lines": 15,
+        "table": "balances",
+        "why": "dominant table balances, DDL family balances"
+      }
+    ],
+    "src/db/batches/index.js": [
+      {
+        "method": "createBatch",
+        "lines": 24,
+        "table": "batches",
+        "why": "dominant table batches, DDL family batches"
+      }
+    ],
+    "src/db/bets/index.js": [
+      {
+        "method": "createBetFeed",
+        "lines": 59,
+        "table": "bet_feeds",
+        "why": "dominant table bet_feeds, DDL family bets"
+      },
+      {
+        "method": "createBet",
+        "lines": 44,
+        "table": "bets",
+        "why": "dominant table bets, DDL family bets"
+      },
+      {
+        "method": "createBetCancel",
+        "lines": 35,
+        "table": "bet_cancels",
+        "why": "dominant table bet_cancels, DDL family bets"
+      },
+      {
+        "method": "createBetResolve",
+        "lines": 37,
+        "table": "bet_resolves",
+        "why": "dominant table bet_resolves, DDL family bets"
+      },
+      {
+        "method": "createBetFeedStatus",
+        "lines": 32,
+        "table": "bet_feed_statuses",
+        "why": "dominant table bet_feed_statuses, DDL family bets"
+      },
+      {
+        "method": "createBetStatus",
+        "lines": 32,
+        "table": "bet_statuses",
+        "why": "dominant table bet_statuses, DDL family bets"
+      },
+      {
+        "method": "getBetFeedInfo",
+        "lines": 54,
+        "table": "bet_feeds",
+        "why": "dominant table bet_feeds, DDL family bets"
+      },
+      {
+        "method": "getOpenBetsByFeed",
+        "lines": 27,
+        "table": "bets",
+        "why": "dominant table bets, DDL family bets"
+      },
+      {
+        "method": "countOpenBetsByFeed",
+        "lines": 6,
+        "table": "bets",
+        "why": "dominant table bets, DDL family bets"
+      },
+      {
+        "method": "latchBetFeedClosed",
+        "lines": 14,
+        "table": "bet_feeds",
+        "why": "dominant table bet_feeds, DDL family bets"
+      },
+      {
+        "method": "setBetFeedTerminal",
+        "lines": 11,
+        "table": "bet_feeds",
+        "why": "dominant table bet_feeds, DDL family bets"
+      },
+      {
+        "method": "setBetSettled",
+        "lines": 11,
+        "table": "bets",
+        "why": "dominant table bets, DDL family bets"
+      },
+      {
+        "method": "getBetFeedRows",
+        "lines": 54,
+        "table": "bet_feeds",
+        "why": "dominant table bet_feeds, DDL family bets"
+      },
+      {
+        "method": "getBetFeedPools",
+        "lines": 15,
+        "table": "bets",
+        "why": "dominant table bets, DDL family bets"
+      },
+      {
+        "method": "getBetRows",
+        "lines": 45,
+        "table": "bets",
+        "why": "dominant table bets, DDL family bets"
+      },
+      {
+        "method": "getBetFeedsDueLatch",
+        "lines": 13,
+        "table": "bet_feeds",
+        "why": "dominant table bet_feeds, DDL family bets"
+      },
+      {
+        "method": "getBetFeedsDueExpiry",
+        "lines": 16,
+        "table": "bet_feeds",
+        "why": "dominant table bet_feeds, DDL family bets"
+      }
+    ],
+    "src/db/blocks/index.js": [
+      {
+        "method": "getBlockIndex",
+        "lines": 24,
+        "table": "blocks",
+        "why": "dominant table blocks, DDL family blocks"
+      },
+      {
+        "method": "getRawBlockTime",
+        "lines": 30,
+        "table": "blocks",
+        "why": "dominant table blocks, DDL family blocks"
+      },
+      {
+        "method": "getDecoderBlockHash",
+        "lines": 12,
+        "table": "blocks",
+        "why": "dominant table blocks, DDL family blocks"
+      },
+      {
+        "method": "getPreviousBlockTimes",
+        "lines": 19,
+        "table": "blocks",
+        "why": "dominant table blocks, DDL family blocks"
+      },
+      {
+        "method": "getStoredBlockHashes",
+        "lines": 22,
+        "table": "blocks",
+        "why": "dominant table blocks, DDL family blocks"
+      },
+      {
+        "method": "getBlockId",
+        "lines": 8,
+        "table": "blocks",
+        "why": "dominant table blocks, DDL family blocks"
+      },
+      {
+        "method": "createBlock",
+        "lines": 41,
+        "table": "blocks",
+        "why": "dominant table blocks, DDL family blocks"
+      },
+      {
+        "method": "getLatestBlockIndex",
+        "lines": 6,
+        "table": "blocks",
+        "why": "dominant table blocks, DDL family blocks"
+      },
+      {
+        "method": "getRollcallWindowCut",
+        "lines": 9,
+        "table": "blocks",
+        "why": "dominant table blocks, DDL family blocks"
+      },
+      {
+        "method": "getCrossChainDataForVM",
+        "lines": 45,
+        "table": "blocks",
+        "why": "dominant table blocks, DDL family blocks"
+      }
+    ],
+    "src/db/bridges/index.js": [
+      {
+        "method": "getPendingBridgeTransfers",
+        "lines": 35,
+        "table": "bridge_transfers",
+        "why": "dominant table bridge_transfers, DDL family bridges"
+      },
+      {
+        "method": "getBridgeTransferById",
+        "lines": 14,
+        "table": "bridge_transfers",
+        "why": "dominant table bridge_transfers, DDL family bridges"
+      },
+      {
+        "method": "getAppliedPolicySnapshot",
+        "lines": 14,
+        "table": "bridge_settlements",
+        "why": "dominant table bridge_settlements, DDL family bridges"
+      }
+    ],
+    "src/db/broadcasts/index.js": [
+      {
+        "method": "createBroadcast",
+        "lines": 41,
+        "table": "broadcasts",
+        "why": "dominant table broadcasts, DDL family broadcasts"
+      }
+    ],
+    "src/db/callbacks/index.js": [
+      {
+        "method": "createCallback",
+        "lines": 40,
+        "table": "callbacks",
+        "why": "dominant table callbacks, DDL family callbacks"
+      }
+    ],
+    "src/db/capabilities/index.js": [
+      {
+        "method": "_resolveActiveStakeSourceId",
+        "lines": 38,
+        "table": "capability_slash_events",
+        "why": "dominant table capability_slash_events, DDL family capabilities"
+      },
+      {
+        "method": "getEffectiveStakeByPubkey",
+        "lines": 95,
+        "table": "capability_slash_events",
+        "why": "dominant table capability_slash_events, DDL family capabilities"
+      },
+      {
+        "method": "getCapabilitySnapshotWeights",
+        "lines": 22,
+        "table": "capability_snapshots",
+        "why": "dominant table capability_snapshots, DDL family capabilities"
+      },
+      {
+        "method": "getCapabilitySnapshotValidators",
+        "lines": 15,
+        "table": "capability_snapshots",
+        "why": "dominant table capability_snapshots, DDL family capabilities"
+      },
+      {
+        "method": "getCapabilitySnapshotCount",
+        "lines": 10,
+        "table": "capability_snapshots",
+        "why": "dominant table capability_snapshots, DDL family capabilities"
+      },
+      {
+        "method": "isPubkeyInCapabilitySnapshot",
+        "lines": 9,
+        "table": "capability_snapshots",
+        "why": "dominant table capability_snapshots, DDL family capabilities"
+      },
+      {
+        "method": "createCapabilitySlashDebit",
+        "lines": 7,
+        "table": "capability_slash_debits",
+        "why": "dominant table capability_slash_debits, DDL family capabilities"
+      },
+      {
+        "method": "createCapabilitySlashEvent",
+        "lines": 20,
+        "table": "capability_slash_events",
+        "why": "dominant table capability_slash_events, DDL family capabilities"
+      },
+      {
+        "method": "hasCapabilitySlashEvent",
+        "lines": 6,
+        "table": "capability_slash_events",
+        "why": "dominant table capability_slash_events, DDL family capabilities"
+      },
+      {
+        "method": "_isPubkeySlashedAt",
+        "lines": 7,
+        "table": "capability_slash_events",
+        "why": "dominant table capability_slash_events, DDL family capabilities"
+      }
+    ],
+    "src/db/coinpays/index.js": [
+      {
+        "method": "createCoinpayObligation",
+        "lines": 42,
+        "table": "coinpay_obligations",
+        "why": "dominant table coinpay_obligations, DDL family coinpays"
+      },
+      {
+        "method": "createCoinpayStatus",
+        "lines": 31,
+        "table": "coinpay_statuses",
+        "why": "dominant table coinpay_statuses, DDL family coinpays"
+      },
+      {
+        "method": "createCoinpayExpire",
+        "lines": 31,
+        "table": "coinpay_expires",
+        "why": "dominant table coinpay_expires, DDL family coinpays"
+      },
+      {
+        "method": "getCoinpayObligationInfo",
+        "lines": 43,
+        "table": "coinpay_statuses",
+        "why": "dominant table coinpay_statuses, DDL family coinpays"
+      },
+      {
+        "method": "getExpiredCoinpayObligations",
+        "lines": 31,
+        "table": "coinpay_statuses",
+        "why": "dominant table coinpay_statuses, DDL family coinpays"
+      },
+      {
+        "method": "getPendingCoinpayObligationsByOrder",
+        "lines": 28,
+        "table": "coinpay_statuses",
+        "why": "dominant table coinpay_statuses, DDL family coinpays"
+      },
+      {
+        "method": "createCoinpay",
+        "lines": 42,
+        "table": "coinpays",
+        "why": "dominant table coinpays, DDL family coinpays"
+      }
+    ],
+    "src/db/contracts/index.js": [
+      {
+        "method": "createContractStake",
+        "lines": 35,
+        "table": "contract_stakes",
+        "why": "dominant table contract_stakes, DDL family contracts"
+      },
+      {
+        "method": "setContractStakeDeactivationByPubkey",
+        "lines": 13,
+        "table": "contract_stakes",
+        "why": "dominant table contract_stakes, DDL family contracts"
+      },
+      {
+        "method": "getActiveContractStakeByPubkey",
+        "lines": 70,
+        "table": "contract_stakes",
+        "why": "dominant table contract_stakes, DDL family contracts"
+      },
+      {
+        "method": "getContractStakeOwner",
+        "lines": 13,
+        "table": "contract_stakes",
+        "why": "dominant table contract_stakes, DDL family contracts"
+      },
+      {
+        "method": "createContractUnstake",
+        "lines": 34,
+        "table": "contract_unstakes",
+        "why": "dominant table contract_unstakes, DDL family contracts"
+      },
+      {
+        "method": "createContractDelegation",
+        "lines": 33,
+        "table": "contract_delegations",
+        "why": "dominant table contract_delegations, DDL family contracts"
+      },
+      {
+        "method": "materializeContractDelegations",
+        "lines": 100,
+        "table": "contract_delegation_rotations",
+        "why": "dominant table contract_delegation_rotations, DDL family contracts"
+      },
+      {
+        "method": "_contractPubkeyClaimedElsewhere",
+        "lines": 15,
+        "table": "contract_delegations",
+        "why": "dominant table contract_delegations, DDL family contracts"
+      },
+      {
+        "method": "createContractDelegationRotation",
+        "lines": 8,
+        "table": "contract_delegation_rotations",
+        "why": "dominant table contract_delegation_rotations, DDL family contracts"
+      },
+      {
+        "method": "getContractStakeDataForVM",
+        "lines": 75,
+        "table": "contract_stakes",
+        "why": "dominant table contract_stakes, DDL family contracts"
+      },
+      {
+        "method": "slashContractStake",
+        "lines": 103,
+        "table": "contract_unstakes",
+        "why": "dominant table contract_unstakes, DDL family contracts"
+      },
+      {
+        "method": "createContractSlashDebit",
+        "lines": 8,
+        "table": "contract_slash_debits",
+        "why": "dominant table contract_slash_debits, DDL family contracts"
+      },
+      {
+        "method": "sweepCompletedCooldowns",
+        "lines": 46,
+        "table": "contract_unstakes",
+        "why": "dominant table contract_unstakes, DDL family contracts"
+      },
+      {
+        "method": "markCooldownsCompleted",
+        "lines": 16,
+        "table": "contract_unstakes",
+        "why": "dominant table contract_unstakes, DDL family contracts"
+      },
+      {
+        "method": "createContract",
+        "lines": 50,
+        "table": "contracts",
+        "why": "dominant table contracts, DDL family contracts"
+      },
+      {
+        "method": "getContract",
+        "lines": 7,
+        "table": "contracts",
+        "why": "dominant table contracts, DDL family contracts"
+      },
+      {
+        "method": "getPendingDeployAssembler",
+        "lines": 16,
+        "table": "contract_executions",
+        "why": "dominant table contract_executions, DDL family contracts"
+      },
+      {
+        "method": "createContractPermission",
+        "lines": 33,
+        "table": "contract_permissions",
+        "why": "dominant table contract_permissions, DDL family contracts"
+      },
+      {
+        "method": "getContractPermissions",
+        "lines": 13,
+        "table": "contract_permissions",
+        "why": "dominant table contract_permissions, DDL family contracts"
+      },
+      {
+        "method": "createContractExecution",
+        "lines": 51,
+        "table": "contract_executions",
+        "why": "dominant table contract_executions, DDL family contracts"
+      },
+      {
+        "method": "getContractState",
+        "lines": 32,
+        "table": "contract_state",
+        "why": "dominant table contract_state, DDL family contracts"
+      },
+      {
+        "method": "createContractState",
+        "lines": 13,
+        "table": "contract_state",
+        "why": "dominant table contract_state, DDL family contracts"
+      },
+      {
+        "method": "createContractEmission",
+        "lines": 12,
+        "table": "contract_emissions",
+        "why": "dominant table contract_emissions, DDL family contracts"
+      },
+      {
+        "method": "deleteContract",
+        "lines": 7,
+        "table": "contract_permissions",
+        "why": "dominant table contract_permissions, DDL family contracts"
+      }
+    ],
+    "src/db/credits/index.js": [
+      {
+        "method": "getPollTallyInputWatermark",
+        "lines": 14,
+        "table": "credits",
+        "why": "dominant table credits, DDL family credits"
+      },
+      {
+        "method": "getTokenSupply",
+        "lines": 80,
+        "table": "credits",
+        "why": "dominant table credits, DDL family credits"
+      },
+      {
+        "method": "getHolders",
+        "lines": 80,
+        "table": "credits",
+        "why": "dominant table credits, DDL family credits"
+      },
+      {
+        "method": "getTimeWeightedBalances",
+        "lines": 49,
+        "table": "credits",
+        "why": "dominant table credits, DDL family credits"
+      },
+      {
+        "method": "getBridgeBalances",
+        "lines": 43,
+        "table": "credits",
+        "why": "dominant table credits, DDL family credits"
+      },
+      {
+        "method": "getBridgeEscrowProof",
+        "lines": 96,
+        "table": "credits",
+        "why": "dominant table credits, DDL family credits"
+      }
+    ],
+    "src/db/cross_chain/index.js": [
+      {
+        "method": "getEffectiveUnsettledMatches",
+        "lines": 39,
+        "table": "cross_chain_matches",
+        "why": "dominant table cross_chain_matches, DDL family cross_chain"
+      },
+      {
+        "method": "recordCrossChainSettlement",
+        "lines": 8,
+        "table": "cross_chain_settlements",
+        "why": "dominant table cross_chain_settlements, DDL family cross_chain"
+      },
+      {
+        "method": "getEffectiveUndispatchedCalls",
+        "lines": 26,
+        "table": "cross_chain_call_executions",
+        "why": "dominant table cross_chain_call_executions, DDL family cross_chain"
+      },
+      {
+        "method": "getEffectiveUnprocessedCallResults",
+        "lines": 38,
+        "table": "cross_chain_call_callbacks",
+        "why": "dominant table cross_chain_call_callbacks, DDL family cross_chain"
+      },
+      {
+        "method": "recordCrossChainCallExecution",
+        "lines": 11,
+        "table": "cross_chain_call_executions",
+        "why": "dominant table cross_chain_call_executions, DDL family cross_chain"
+      },
+      {
+        "method": "recordCrossChainCallRejection",
+        "lines": 24,
+        "table": "cross_chain_call_rejections",
+        "why": "dominant table cross_chain_call_rejections, DDL family cross_chain"
+      },
+      {
+        "method": "clearCrossChainCallRejection",
+        "lines": 5,
+        "table": "cross_chain_call_rejections",
+        "why": "dominant table cross_chain_call_rejections, DDL family cross_chain"
+      },
+      {
+        "method": "getCrossChainCallRejectionById",
+        "lines": 6,
+        "table": "cross_chain_call_rejections",
+        "why": "dominant table cross_chain_call_rejections, DDL family cross_chain"
+      },
+      {
+        "method": "getCrossChainCallExecutionById",
+        "lines": 6,
+        "table": "cross_chain_call_executions",
+        "why": "dominant table cross_chain_call_executions, DDL family cross_chain"
+      },
+      {
+        "method": "recordCrossChainCallCallback",
+        "lines": 7,
+        "table": "cross_chain_call_callbacks",
+        "why": "dominant table cross_chain_call_callbacks, DDL family cross_chain"
+      }
+    ],
+    "src/db/delegations/index.js": [
+      {
+        "method": "createDelegation",
+        "lines": 28,
+        "table": "delegations",
+        "why": "dominant table delegations, DDL family delegations"
+      },
+      {
+        "method": "setDelegationDeactivation",
+        "lines": 10,
+        "table": "delegations",
+        "why": "dominant table delegations, DDL family delegations"
+      },
+      {
+        "method": "setAllDelegationDeactivationsBySource",
+        "lines": 9,
+        "table": "delegations",
+        "why": "dominant table delegations, DDL family delegations"
+      },
+      {
+        "method": "getStakeSourceForDelegatedPubkey",
+        "lines": 17,
+        "table": "delegations",
+        "why": "dominant table delegations, DDL family delegations"
+      },
+      {
+        "method": "getDelegationByPubkey",
+        "lines": 14,
+        "table": "delegations",
+        "why": "dominant table delegations, DDL family delegations"
+      },
+      {
+        "method": "getActiveDelegation",
+        "lines": 19,
+        "table": "delegations",
+        "why": "dominant table delegations, DDL family delegations"
+      }
+    ],
+    "src/db/deploys/index.js": [
+      {
+        "method": "recordDeployChunk",
+        "lines": 23,
+        "table": "deploy_chunks",
+        "why": "dominant table deploy_chunks, DDL family deploys"
+      },
+      {
+        "method": "getDeployChunksForAssembly",
+        "lines": 10,
+        "table": "deploy_chunks",
+        "why": "dominant table deploy_chunks, DDL family deploys"
+      }
+    ],
+    "src/db/deposits/index.js": [
+      {
+        "method": "createDeposit",
+        "lines": 28,
+        "table": "deposits",
+        "why": "dominant table deposits, DDL family deposits"
+      }
+    ],
+    "src/db/destroys/index.js": [
+      {
+        "method": "createDestroy",
+        "lines": 53,
+        "table": "destroys",
+        "why": "dominant table destroys, DDL family destroys"
+      }
+    ],
+    "src/db/dispensers/index.js": [
+      {
+        "method": "createDispenser",
+        "lines": 64,
+        "table": "dispensers",
+        "why": "dominant table dispensers, DDL family dispensers"
+      },
+      {
+        "method": "createDispenserStatus",
+        "lines": 35,
+        "table": "dispenser_statuses",
+        "why": "dominant table dispenser_statuses, DDL family dispensers"
+      },
+      {
+        "method": "getDispenserInfo",
+        "lines": 98,
+        "table": "dispenser_statuses",
+        "why": "dominant table dispenser_statuses, DDL family dispensers"
+      },
+      {
+        "method": "hasDispenserOriginStanding",
+        "lines": 18,
+        "table": "dispensers",
+        "why": "dominant table dispensers, DDL family dispensers"
+      },
+      {
+        "method": "createDispenserEdit",
+        "lines": 43,
+        "table": "dispenser_edits",
+        "why": "dominant table dispenser_edits, DDL family dispensers"
+      },
+      {
+        "method": "getDispenserEdits",
+        "lines": 41,
+        "table": "dispenser_edits",
+        "why": "dominant table dispenser_edits, DDL family dispensers"
+      },
+      {
+        "method": "createDispenserClose",
+        "lines": 33,
+        "table": "dispenser_closes",
+        "why": "dominant table dispenser_closes, DDL family dispensers"
+      },
+      {
+        "method": "createDispenserCancel",
+        "lines": 35,
+        "table": "dispenser_cancels",
+        "why": "dominant table dispenser_cancels, DDL family dispensers"
+      },
+      {
+        "method": "getDispenserRefillCount",
+        "lines": 9,
+        "table": "dispenser_edits",
+        "why": "dominant table dispenser_edits, DDL family dispensers"
+      },
+      {
+        "method": "getDispenserDispenseCount",
+        "lines": 15,
+        "table": "dispenser_edits",
+        "why": "dominant table dispenser_edits, DDL family dispensers"
+      },
+      {
+        "method": "findCancelledDispensers",
+        "lines": 32,
+        "table": "dispenser_statuses",
+        "why": "dominant table dispenser_statuses, DDL family dispensers"
+      },
+      {
+        "method": "createDispenserExpire",
+        "lines": 32,
+        "table": "dispenser_expires",
+        "why": "dominant table dispenser_expires, DDL family dispensers"
+      },
+      {
+        "method": "findDispenserSends",
+        "lines": 43,
+        "table": "dispenser_statuses",
+        "why": "dominant table dispenser_statuses, DDL family dispensers"
+      },
+      {
+        "method": "findMatchingDispensers",
+        "lines": 76,
+        "table": "dispenser_statuses",
+        "why": "dominant table dispenser_statuses, DDL family dispensers"
+      },
+      {
+        "method": "getClosedDispenserAtAddress",
+        "lines": 29,
+        "table": "dispenser_statuses",
+        "why": "dominant table dispenser_statuses, DDL family dispensers"
+      },
+      {
+        "method": "getDispenserCanceller",
+        "lines": 18,
+        "table": "dispenser_statuses",
+        "why": "dominant table dispenser_statuses, DDL family dispensers"
+      },
+      {
+        "method": "getSweepDestination",
+        "lines": 33,
+        "table": "dispenser_statuses",
+        "why": "dominant table dispenser_statuses, DDL family dispensers"
+      }
+    ],
+    "src/db/dispenses/index.js": [
+      {
+        "method": "createDispense",
+        "lines": 47,
+        "table": "dispenses",
+        "why": "dominant table dispenses, DDL family dispenses"
+      },
+      {
+        "method": "getDispenserAmountRemaining",
+        "lines": 53,
+        "table": "dispenses",
+        "why": "dominant table dispenses, DDL family dispenses"
+      }
+    ],
+    "src/db/dividends/index.js": [
+      {
+        "method": "createDividend",
+        "lines": 40,
+        "table": "dividends",
+        "why": "dominant table dividends, DDL family dividends"
+      }
+    ],
+    "src/db/escrows/index.js": [
+      {
+        "method": "getTokenSupplyEscrow",
+        "lines": 14,
+        "table": "escrows",
+        "why": "dominant table escrows, DDL family escrows"
+      },
+      {
+        "method": "getAddressEscrows",
+        "lines": 98,
+        "table": "dispenser_statuses",
+        "why": "escrowed balances across dispensers, orders and swaps; no single family"
+      }
+    ],
+    "src/db/events/index.js": [
+      {
+        "method": "getReorgsSince",
+        "lines": 87,
+        "table": "events",
+        "why": "dominant table events, DDL family events"
+      },
+      {
+        "method": "isReorgHalted",
+        "lines": 7,
+        "table": "events",
+        "why": "dominant table events, DDL family events"
+      },
+      {
+        "method": "getLastProcessedReorgId",
+        "lines": 34,
+        "table": "events",
+        "why": "dominant table events, DDL family events"
+      },
+      {
+        "method": "getLastProcessedReorgWitness",
+        "lines": 15,
+        "table": "events",
+        "why": "dominant table events, DDL family events"
+      },
+      {
+        "method": "getReorgEventWitness",
+        "lines": 6,
+        "table": "events",
+        "why": "dominant table events, DDL family events"
+      },
+      {
+        "method": "warnOnLegacyReorgCursor",
+        "lines": 21,
+        "table": "events",
+        "why": "dominant table events, DDL family events"
+      },
+      {
+        "method": "createReorg",
+        "lines": 13,
+        "table": "events",
+        "why": "dominant table events, DDL family events"
+      },
+      {
+        "method": "getReorgHealthStats",
+        "lines": 21,
+        "table": "events",
+        "why": "dominant table events, DDL family events"
+      }
+    ],
+    "src/db/fees/index.js": [
+      {
+        "method": "getFeeRecord",
+        "lines": 7,
+        "table": "fees",
+        "why": "dominant table fees, DDL family fees"
+      },
+      {
+        "method": "createFeeRecord",
+        "lines": 50,
+        "table": "fees",
+        "why": "dominant table fees, DDL family fees"
+      }
+    ],
+    "src/db/files/index.js": [
+      {
+        "method": "createFile",
+        "lines": 39,
+        "table": "files",
+        "why": "dominant table files, DDL family files"
+      },
+      {
+        "method": "createGatedFile",
+        "lines": 32,
+        "table": "gated_files",
+        "why": "dominant table gated_files, DDL family files"
+      },
+      {
+        "method": "getGatedFileRaw",
+        "lines": 6,
+        "table": "gated_files",
+        "why": "dominant table gated_files, DDL family files"
+      },
+      {
+        "method": "getGatedPackThresholds",
+        "lines": 31,
+        "table": "gated_files",
+        "why": "dominant table gated_files, DDL family files"
+      },
+      {
+        "method": "getActiveGatedKeyHashes",
+        "lines": 10,
+        "table": "gated_files",
+        "why": "dominant table gated_files, DDL family files"
+      }
+    ],
+    "src/db/full_node_verifications/index.js": [
+      {
+        "method": "createNodeProofVerification",
+        "lines": 21,
+        "table": "full_node_verifications",
+        "why": "dominant table full_node_verifications, DDL family full_node_verifications"
+      },
+      {
+        "method": "getVerifiedFullNodeSet",
+        "lines": 35,
+        "table": "full_node_verifications",
+        "why": "dominant table full_node_verifications, DDL family full_node_verifications"
+      },
+      {
+        "method": "getFullNodeParticipation",
+        "lines": 51,
+        "table": "full_node_verifications",
+        "why": "dominant table full_node_verifications, DDL family full_node_verifications"
+      }
+    ],
+    "src/db/hub_pushes/index.js": [
+      {
+        "method": "getPushGeneration",
+        "lines": 4,
+        "table": "push_generations",
+        "why": "dominant table push_generations, DDL family hub_pushes"
+      },
+      {
+        "method": "bumpPushGeneration",
+        "lines": 6,
+        "table": "push_generations",
+        "why": "dominant table push_generations, DDL family hub_pushes"
+      },
+      {
+        "method": "enqueueHubPush",
+        "lines": 7,
+        "table": "pending_hub_pushes",
+        "why": "dominant table pending_hub_pushes, DDL family hub_pushes"
+      },
+      {
+        "method": "enqueueHubPushTx",
+        "lines": 8,
+        "table": "pending_hub_pushes",
+        "why": "dominant table pending_hub_pushes, DDL family hub_pushes"
+      },
+      {
+        "method": "getPendingHubPushes",
+        "lines": 15,
+        "table": "pending_hub_pushes",
+        "why": "dominant table pending_hub_pushes, DDL family hub_pushes"
+      },
+      {
+        "method": "markHubPushDelivered",
+        "lines": 3,
+        "table": "pending_hub_pushes",
+        "why": "dominant table pending_hub_pushes, DDL family hub_pushes"
+      },
+      {
+        "method": "pruneFailedHubPushes",
+        "lines": 10,
+        "table": "pending_hub_pushes",
+        "why": "dominant table pending_hub_pushes, DDL family hub_pushes"
+      },
+      {
+        "method": "recordHubPushAttempt",
+        "lines": 11,
+        "table": "pending_hub_pushes",
+        "why": "dominant table pending_hub_pushes, DDL family hub_pushes"
+      }
+    ],
+    "src/db/index_tables/index.js": [
+      {
+        "method": "getTransactionId",
+        "lines": 17,
+        "table": "index_transactions",
+        "why": "dominant table index_transactions, DDL family index_tables"
+      },
+      {
+        "method": "createTransaction",
+        "lines": 21,
+        "table": "index_transactions",
+        "why": "dominant table index_transactions, DDL family index_tables"
+      },
+      {
+        "method": "getAddressId",
+        "lines": 35,
+        "table": "index_addresses",
+        "why": "dominant table index_addresses, DDL family index_tables"
+      },
+      {
+        "method": "hasXChainActivityBefore",
+        "lines": 6,
+        "table": "index_addresses",
+        "why": "dominant table index_addresses, DDL family index_tables"
+      },
+      {
+        "method": "getNextAddressId",
+        "lines": 8,
+        "table": "index_addresses",
+        "why": "dominant table index_addresses, DDL family index_tables"
+      },
+      {
+        "method": "warnOnOrphanIndexIds",
+        "lines": 15,
+        "table": "index_addresses",
+        "why": "dominant table index_addresses, DDL family index_tables"
+      },
+      {
+        "method": "createAddress",
+        "lines": 63,
+        "table": "index_addresses",
+        "why": "dominant table index_addresses, DDL family index_tables"
+      },
+      {
+        "method": "resolveAddressRef",
+        "lines": 21,
+        "table": "index_addresses",
+        "why": "dominant table index_addresses, DDL family index_tables"
+      },
+      {
+        "method": "getActionId",
+        "lines": 8,
+        "table": "index_actions",
+        "why": "dominant table index_actions, DDL family index_tables"
+      },
+      {
+        "method": "createAction",
+        "lines": 14,
+        "table": "index_actions",
+        "why": "dominant table index_actions, DDL family index_tables"
+      },
+      {
+        "method": "getTicker",
+        "lines": 8,
+        "table": "index_tickers",
+        "why": "dominant table index_tickers, DDL family index_tables"
+      },
+      {
+        "method": "_smtAddressName",
+        "lines": 9,
+        "table": "index_addresses",
+        "why": "dominant table index_addresses, DDL family index_tables"
+      },
+      {
+        "method": "_smtTickName",
+        "lines": 9,
+        "table": "index_tickers",
+        "why": "dominant table index_tickers, DDL family index_tables"
+      },
+      {
+        "method": "getTickerId",
+        "lines": 37,
+        "table": "index_tickers",
+        "why": "dominant table index_tickers, DDL family index_tables"
+      },
+      {
+        "method": "getNextTickerId",
+        "lines": 8,
+        "table": "index_tickers",
+        "why": "dominant table index_tickers, DDL family index_tables"
+      },
+      {
+        "method": "createTicker",
+        "lines": 49,
+        "table": "index_tickers",
+        "why": "dominant table index_tickers, DDL family index_tables"
+      },
+      {
+        "method": "getStatusId",
+        "lines": 8,
+        "table": "index_statuses",
+        "why": "dominant table index_statuses, DDL family index_tables"
+      },
+      {
+        "method": "createStatus",
+        "lines": 14,
+        "table": "index_statuses",
+        "why": "dominant table index_statuses, DDL family index_tables"
+      },
+      {
+        "method": "getMemoId",
+        "lines": 8,
+        "table": "index_memos",
+        "why": "dominant table index_memos, DDL family index_tables"
+      },
+      {
+        "method": "createMemo",
+        "lines": 16,
+        "table": "index_memos",
+        "why": "dominant table index_memos, DDL family index_tables"
+      },
+      {
+        "method": "getMimeTypeId",
+        "lines": 9,
+        "table": "index_mime_types",
+        "why": "dominant table index_mime_types, DDL family index_tables"
+      },
+      {
+        "method": "createMimeType",
+        "lines": 15,
+        "table": "index_mime_types",
+        "why": "dominant table index_mime_types, DDL family index_tables"
+      },
+      {
+        "method": "getCoinId",
+        "lines": 9,
+        "table": "index_coins",
+        "why": "dominant table index_coins, DDL family index_tables"
+      },
+      {
+        "method": "createCoin",
+        "lines": 15,
+        "table": "index_coins",
+        "why": "dominant table index_coins, DDL family index_tables"
+      },
+      {
+        "method": "getFiatId",
+        "lines": 9,
+        "table": "index_fiats",
+        "why": "dominant table index_fiats, DDL family index_tables"
+      },
+      {
+        "method": "createFiat",
+        "lines": 15,
+        "table": "index_fiats",
+        "why": "dominant table index_fiats, DDL family index_tables"
+      },
+      {
+        "method": "isActionIndexValid",
+        "lines": 19,
+        "table": "index_statuses",
+        "why": "dominant table index_statuses, DDL family index_tables"
+      },
+      {
+        "method": "getAddressById",
+        "lines": 5,
+        "table": "index_addresses",
+        "why": "dominant table index_addresses, DDL family index_tables"
+      },
+      {
+        "method": "getExpiredItems",
+        "lines": 68,
+        "table": "index_statuses",
+        "why": "dominant table index_statuses, DDL family index_tables"
+      },
+      {
+        "method": "getPubkeyId",
+        "lines": 8,
+        "table": "index_pubkeys",
+        "why": "dominant table index_pubkeys, DDL family index_tables"
+      },
+      {
+        "method": "getOrCreatePubkeyId",
+        "lines": 16,
+        "table": "index_pubkeys",
+        "why": "dominant table index_pubkeys, DDL family index_tables"
+      },
+      {
+        "method": "getStatusString",
+        "lines": 9,
+        "table": "index_statuses",
+        "why": "dominant table index_statuses, DDL family index_tables"
+      }
+    ],
+    "src/db/issues/index.js": [
+      {
+        "method": "getTokenInfo",
+        "lines": 141,
+        "table": "issues",
+        "why": "dominant table issues, DDL family issues"
+      },
+      {
+        "method": "getTokenDecimalPrecision",
+        "lines": 25,
+        "table": "issues",
+        "why": "dominant table issues, DDL family issues"
+      },
+      {
+        "method": "createIssue",
+        "lines": 115,
+        "table": "issues",
+        "why": "dominant table issues, DDL family issues"
+      },
+      {
+        "method": "getIssueTick",
+        "lines": 16,
+        "table": "issues",
+        "why": "dominant table issues, DDL family issues"
+      },
+      {
+        "method": "getFirstIssueActionIndex",
+        "lines": 20,
+        "table": "issues",
+        "why": "dominant table issues, DDL family issues"
+      }
+    ],
+    "src/db/links/index.js": [
+      {
+        "method": "createLink",
+        "lines": 41,
+        "table": "links",
+        "why": "dominant table links, DDL family links"
+      }
+    ],
+    "src/db/lists/index.js": [
+      {
+        "method": "getListType",
+        "lines": 12,
+        "table": "lists",
+        "why": "dominant table lists, DDL family lists"
+      },
+      {
+        "method": "getListRootIndex",
+        "lines": 14,
+        "table": "lists",
+        "why": "dominant table lists, DDL family lists"
+      },
+      {
+        "method": "getListHeadIndex",
+        "lines": 15,
+        "table": "lists",
+        "why": "dominant table lists, DDL family lists"
+      },
+      {
+        "method": "getList",
+        "lines": 59,
+        "table": "list_items",
+        "why": "dominant table list_items, DDL family lists"
+      },
+      {
+        "method": "getListAtBlock",
+        "lines": 57,
+        "table": "list_items",
+        "why": "dominant table list_items, DDL family lists"
+      },
+      {
+        "method": "createList",
+        "lines": 37,
+        "table": "lists",
+        "why": "dominant table lists, DDL family lists"
+      },
+      {
+        "method": "getListSource",
+        "lines": 15,
+        "table": "lists",
+        "why": "dominant table lists, DDL family lists"
+      },
+      {
+        "method": "createListEdit",
+        "lines": 21,
+        "table": "list_edits",
+        "why": "dominant table list_edits, DDL family lists"
+      },
+      {
+        "method": "createListItem",
+        "lines": 20,
+        "table": "list_items",
+        "why": "dominant table list_items, DDL family lists"
+      },
+      {
+        "method": "createListItemInvalid",
+        "lines": 21,
+        "table": "list_items_invalid",
+        "why": "dominant table list_items_invalid, DDL family lists"
+      }
+    ],
+    "src/db/mappings/index.js": [
+      {
+        "method": "createActionMapping",
+        "lines": 39,
+        "table": "mappings_actions",
+        "why": "dominant table mappings_actions, DDL family mappings"
+      },
+      {
+        "method": "createActionMappings",
+        "lines": 46,
+        "table": "mappings_actions",
+        "why": "dominant table mappings_actions, DDL family mappings"
+      },
+      {
+        "method": "createFileMapping",
+        "lines": 33,
+        "table": "mappings_files",
+        "why": "dominant table mappings_files, DDL family mappings"
+      }
+    ],
+    "src/db/markets/index.js": [
+      {
+        "method": "getMarkets",
+        "lines": 117,
+        "table": "actions",
+        "why": "returns market rows; the actions hits are the block/action scoping join"
+      },
+      {
+        "method": "getMarketRow",
+        "lines": 16,
+        "table": "markets",
+        "why": "dominant table markets, DDL family markets"
+      },
+      {
+        "method": "createMarket",
+        "lines": 39,
+        "table": "markets",
+        "why": "dominant table markets, DDL family markets"
+      },
+      {
+        "method": "updateMarketInfo",
+        "lines": 55,
+        "table": "markets",
+        "why": "dominant table markets, DDL family markets"
+      },
+      {
+        "method": "getStaleMarkets",
+        "lines": 12,
+        "table": "markets",
+        "why": "dominant table markets, DDL family markets"
+      }
+    ],
+    "src/db/messages/index.js": [
+      {
+        "method": "createMessage",
+        "lines": 43,
+        "table": "messages",
+        "why": "dominant table messages, DDL family messages"
+      }
+    ],
+    "src/db/mints/index.js": [
+      {
+        "method": "getSelfMintedAmount",
+        "lines": 19,
+        "table": "mints",
+        "why": "dominant table mints, DDL family mints"
+      },
+      {
+        "method": "createMint",
+        "lines": 34,
+        "table": "mints",
+        "why": "dominant table mints, DDL family mints"
+      }
+    ],
+    "src/db/misc/index.js": [
+      {
+        "method": "createLedgerChangeRecord",
+        "lines": 95,
+        "table": null,
+        "why": "ledger table is a parameter over credits/debits/escrows"
+      },
+      {
+        "method": "getAddressCreditDebit",
+        "lines": 56,
+        "table": "actions",
+        "why": "ledger table is a parameter over credits/debits"
+      },
+      {
+        "method": "readLatestControllerEvent",
+        "lines": 16,
+        "table": null,
+        "why": "controller table is a parameter over token_controllers/address_controllers"
+      },
+      {
+        "method": "readEffectiveControllerMap",
+        "lines": 24,
+        "table": null,
+        "why": "controller table is a parameter over token_controllers/address_controllers"
+      }
+    ],
+    "src/db/orders/index.js": [
+      {
+        "method": "createOrder",
+        "lines": 62,
+        "table": "orders",
+        "why": "dominant table orders, DDL family orders"
+      },
+      {
+        "method": "createOrderStatus",
+        "lines": 32,
+        "table": "order_statuses",
+        "why": "dominant table order_statuses, DDL family orders"
+      },
+      {
+        "method": "createOrderExpire",
+        "lines": 32,
+        "table": "order_expires",
+        "why": "dominant table order_expires, DDL family orders"
+      },
+      {
+        "method": "findOrderMatches",
+        "lines": 63,
+        "table": "order_statuses",
+        "why": "dominant table order_statuses, DDL family orders"
+      },
+      {
+        "method": "getOrderInfo",
+        "lines": 88,
+        "table": "order_statuses",
+        "why": "dominant table order_statuses, DDL family orders"
+      },
+      {
+        "method": "getOrderEdits",
+        "lines": 30,
+        "table": "order_edits",
+        "why": "dominant table order_edits, DDL family orders"
+      },
+      {
+        "method": "getOrderAmountsRemaining",
+        "lines": 64,
+        "table": "order_matches",
+        "why": "dominant table order_matches, DDL family orders"
+      },
+      {
+        "method": "createOrderEdit",
+        "lines": 41,
+        "table": "order_edits",
+        "why": "dominant table order_edits, DDL family orders"
+      },
+      {
+        "method": "createOrderCancel",
+        "lines": 35,
+        "table": "order_cancels",
+        "why": "dominant table order_cancels, DDL family orders"
+      },
+      {
+        "method": "createOrderMatch",
+        "lines": 49,
+        "table": "order_matches",
+        "why": "dominant table order_matches, DDL family orders"
+      },
+      {
+        "method": "updateOrderMatchStatus",
+        "lines": 5,
+        "table": "order_matches",
+        "why": "dominant table order_matches, DDL family orders"
+      },
+      {
+        "method": "getOrderMatchOrders",
+        "lines": 19,
+        "table": "order_matches",
+        "why": "dominant table order_matches, DDL family orders"
+      },
+      {
+        "method": "getOpenCrossChainOffers",
+        "lines": 151,
+        "table": "order_statuses",
+        "why": "dominant table order_statuses, DDL family orders"
+      },
+      {
+        "method": "recordCrossChainOrderFill",
+        "lines": 13,
+        "table": "order_matches",
+        "why": "dominant table order_matches, DDL family orders"
+      },
+      {
+        "method": "getOrderMatchAmounts",
+        "lines": 23,
+        "table": "order_matches",
+        "why": "dominant table order_matches, DDL family orders"
+      },
+      {
+        "method": "getMarketInfo",
+        "lines": 310,
+        "table": "order_matches",
+        "why": "dominant table order_matches, DDL family orders"
+      },
+      {
+        "method": "getOrderSweepDestination",
+        "lines": 22,
+        "table": "order_statuses",
+        "why": "dominant table order_statuses, DDL family orders"
+      }
+    ],
+    "src/db/polls/index.js": [
+      {
+        "method": "createPoll",
+        "lines": 63,
+        "table": "polls",
+        "why": "dominant table polls, DDL family polls"
+      },
+      {
+        "method": "getPoll",
+        "lines": 5,
+        "table": "polls",
+        "why": "dominant table polls, DDL family polls"
+      },
+      {
+        "method": "setPollDepositResolved",
+        "lines": 3,
+        "table": "polls",
+        "why": "dominant table polls, DDL family polls"
+      },
+      {
+        "method": "setPollCallbackIndex",
+        "lines": 3,
+        "table": "polls",
+        "why": "dominant table polls, DDL family polls"
+      },
+      {
+        "method": "setPollCallbackDue",
+        "lines": 3,
+        "table": "polls",
+        "why": "dominant table polls, DDL family polls"
+      },
+      {
+        "method": "getDueCallbackPolls",
+        "lines": 8,
+        "table": "polls",
+        "why": "dominant table polls, DDL family polls"
+      },
+      {
+        "method": "getDuePolls",
+        "lines": 6,
+        "table": "polls",
+        "why": "dominant table polls, DDL family polls"
+      },
+      {
+        "method": "getArmedPolls",
+        "lines": 12,
+        "table": "polls",
+        "why": "dominant table polls, DDL family polls"
+      },
+      {
+        "method": "finalizePoll",
+        "lines": 44,
+        "table": "poll_results",
+        "why": "dominant table poll_results, DDL family polls"
+      },
+      {
+        "method": "getPollResult",
+        "lines": 34,
+        "table": "poll_results",
+        "why": "dominant table poll_results, DDL family polls"
+      },
+      {
+        "method": "getPollResultsForVM",
+        "lines": 62,
+        "table": "polls",
+        "why": "dominant table polls, DDL family polls"
+      }
+    ],
+    "src/db/prices/index.js": [
+      {
+        "method": "createPrice",
+        "lines": 62,
+        "table": "prices",
+        "why": "dominant table prices, DDL family prices"
+      },
+      {
+        "method": "getOracleDataForVM",
+        "lines": 220,
+        "table": "price_snapshots",
+        "why": "dominant table price_snapshots, DDL family prices"
+      },
+      {
+        "method": "getLatestPrice",
+        "lines": 78,
+        "table": "price_snapshots",
+        "why": "dominant table price_snapshots, DDL family prices"
+      },
+      {
+        "method": "getOraclePrice",
+        "lines": 34,
+        "table": "oracle_prices",
+        "why": "dominant table oracle_prices, DDL family prices"
+      },
+      {
+        "method": "getOraclePricesInTimeRange",
+        "lines": 18,
+        "table": "oracle_prices",
+        "why": "dominant table oracle_prices, DDL family prices"
+      },
+      {
+        "method": "getPricesInTimeRange",
+        "lines": 17,
+        "table": "price_snapshots",
+        "why": "dominant table price_snapshots, DDL family prices"
+      }
+    ],
+    "src/db/pubkeys/index.js": [
+      {
+        "method": "createPubkey",
+        "lines": 5,
+        "table": "pubkeys",
+        "why": "dominant table pubkeys, DDL family pubkeys"
+      }
+    ],
+    "src/db/rewards/index.js": [
+      {
+        "method": "_probeRecoveryPending",
+        "lines": 12,
+        "table": "recovery_pending_rewards",
+        "why": "dominant table recovery_pending_rewards, DDL family rewards"
+      },
+      {
+        "method": "_applyPendingRewardsDueAtBlock",
+        "lines": 35,
+        "table": "recovery_pending_rewards",
+        "why": "dominant table recovery_pending_rewards, DDL family rewards"
+      },
+      {
+        "method": "_applyPendingRewardsForAddress",
+        "lines": 48,
+        "table": "recovery_pending_rewards",
+        "why": "dominant table recovery_pending_rewards, DDL family rewards"
+      },
+      {
+        "method": "createValidatorReward",
+        "lines": 38,
+        "table": "validator_rewards",
+        "why": "dominant table validator_rewards, DDL family rewards"
+      },
+      {
+        "method": "reconcileAnchorRewardWinner",
+        "lines": 52,
+        "table": "validator_rewards",
+        "why": "dominant table validator_rewards, DDL family rewards"
+      },
+      {
+        "method": "createRewardClaim",
+        "lines": 27,
+        "table": "reward_claims",
+        "why": "dominant table reward_claims, DDL family rewards"
+      },
+      {
+        "method": "getUnclaimedRewardTotal",
+        "lines": 34,
+        "table": "reward_claims",
+        "why": "dominant table reward_claims, DDL family rewards"
+      }
+    ],
+    "src/db/rollcalls/index.js": [
+      {
+        "method": "insertRollcallSigners",
+        "lines": 22,
+        "table": "rollcall_signers",
+        "why": "dominant table rollcall_signers, DDL family rollcalls"
+      },
+      {
+        "method": "getRollcallSignersForKeys",
+        "lines": 11,
+        "table": "rollcall_signers",
+        "why": "dominant table rollcall_signers, DDL family rollcalls"
+      },
+      {
+        "method": "insertRollcallGates",
+        "lines": 16,
+        "table": "rollcall_gates",
+        "why": "dominant table rollcall_gates, DDL family rollcalls"
+      },
+      {
+        "method": "getRollcallGatesForFilter",
+        "lines": 20,
+        "table": "rollcall_gates",
+        "why": "dominant table rollcall_gates, DDL family rollcalls"
+      },
+      {
+        "method": "getRollcallPublishers",
+        "lines": 12,
+        "table": "rollcall_signers",
+        "why": "dominant table rollcall_signers, DDL family rollcalls"
+      },
+      {
+        "method": "insertRollcall",
+        "lines": 15,
+        "table": "rollcalls",
+        "why": "dominant table rollcalls, DDL family rollcalls"
+      },
+      {
+        "method": "insertRollcallAbsences",
+        "lines": 16,
+        "table": "rollcall_absences",
+        "why": "dominant table rollcall_absences, DDL family rollcalls"
+      },
+      {
+        "method": "getRolledRollcallEpochs",
+        "lines": 10,
+        "table": "rollcalls",
+        "why": "dominant table rollcalls, DDL family rollcalls"
+      },
+      {
+        "method": "getRollcallAbsenceEpochsForSource",
+        "lines": 11,
+        "table": "rollcall_absences",
+        "why": "dominant table rollcall_absences, DDL family rollcalls"
+      },
+      {
+        "method": "getRollcalls",
+        "lines": 12,
+        "table": "rollcall_absences",
+        "why": "dominant table rollcall_absences, DDL family rollcalls"
+      },
+      {
+        "method": "getRollcallAbsencesBySource",
+        "lines": 14,
+        "table": "rollcall_absences",
+        "why": "dominant table rollcall_absences, DDL family rollcalls"
+      }
+    ],
+    "src/db/sends/index.js": [
+      {
+        "method": "createSend",
+        "lines": 58,
+        "table": "sends",
+        "why": "dominant table sends, DDL family sends"
+      }
+    ],
+    "src/db/slashes/index.js": [
+      {
+        "method": "createSlashEvent",
+        "lines": 16,
+        "table": "slash_events",
+        "why": "dominant table slash_events, DDL family slashes"
+      }
+    ],
+    "src/db/sleeps/index.js": [
+      {
+        "method": "isAddressSleeping",
+        "lines": 28,
+        "table": "sleeps",
+        "why": "dominant table sleeps, DDL family sleeps"
+      },
+      {
+        "method": "isTickSleeping",
+        "lines": 26,
+        "table": "sleeps",
+        "why": "dominant table sleeps, DDL family sleeps"
+      },
+      {
+        "method": "isTickSleepingAtBlock",
+        "lines": 28,
+        "table": "sleeps",
+        "why": "dominant table sleeps, DDL family sleeps"
+      },
+      {
+        "method": "createSleep",
+        "lines": 45,
+        "table": "sleeps",
+        "why": "dominant table sleeps, DDL family sleeps"
+      }
+    ],
+    "src/db/stakes.js": [
+      {
+        "method": "createStake",
+        "lines": 31,
+        "table": "stakes",
+        "why": "dominant table stakes, DDL family stakes"
+      },
+      {
+        "method": "setStakeDeactivationByPubkey",
+        "lines": 10,
+        "table": "stakes",
+        "why": "dominant table stakes, DDL family stakes"
+      },
+      {
+        "method": "createUnstake",
+        "lines": 30,
+        "table": "unstakes",
+        "why": "dominant table unstakes, DDL family stakes"
+      },
+      {
+        "method": "createStakeKeyRevocation",
+        "lines": 24,
+        "table": "stake_key_revocations",
+        "why": "dominant table stake_key_revocations, DDL family stakes"
+      },
+      {
+        "method": "getStakeKeyRevocation",
+        "lines": 12,
+        "table": "stake_key_revocations",
+        "why": "dominant table stake_key_revocations, DDL family stakes"
+      },
+      {
+        "method": "getActiveStakeBySourceAndPubkey",
+        "lines": 13,
+        "table": "stakes",
+        "why": "dominant table stakes, DDL family stakes"
+      },
+      {
+        "method": "getActiveStakeBySource",
+        "lines": 22,
+        "table": "stakes",
+        "why": "dominant table stakes, DDL family stakes"
+      },
+      {
+        "method": "getActiveCapabilityCount",
+        "lines": 32,
+        "table": null,
+        "why": "composed from _effectiveCapabilitySetSql over stakes; no literal table"
+      },
+      {
+        "method": "getActiveStakeByPubkey",
+        "lines": 75,
+        "table": "stakes",
+        "why": "dominant table stakes, DDL family stakes"
+      },
+      {
+        "method": "getActiveValidators",
+        "lines": 32,
+        "table": null,
+        "why": "composed from _effectiveCapabilitySetSql over stakes; no literal table"
+      },
+      {
+        "method": "getValidatorsByCapability",
+        "lines": 50,
+        "table": null,
+        "why": "composed from _effectiveCapabilitySetSql over stakes; no literal table"
+      },
+      {
+        "method": "_effectiveCapabilitySetSql",
+        "lines": 52,
+        "table": "stakes",
+        "why": "dominant table stakes, DDL family stakes"
+      },
+      {
+        "method": "_stakeWeightsSql",
+        "lines": 56,
+        "table": "stakes",
+        "why": "dominant table stakes, DDL family stakes"
+      },
+      {
+        "method": "_cappedStakeWeightsSql",
+        "lines": 14,
+        "table": null,
+        "why": "SQL builder paired with _stakeWeightsSql"
+      },
+      {
+        "method": "hasCapability",
+        "lines": 69,
+        "table": "stakes",
+        "why": "dominant table stakes, DDL family stakes"
+      },
+      {
+        "method": "getSweepableStakeBySource",
+        "lines": 37,
+        "table": "stakes",
+        "why": "dominant table stakes, DDL family stakes"
+      },
+      {
+        "method": "setStakeDeactivationBySourceAndPubkey",
+        "lines": 15,
+        "table": "stakes",
+        "why": "dominant table stakes, DDL family stakes"
+      },
+      {
+        "method": "slashCapabilityStake",
+        "lines": 80,
+        "table": "stakes",
+        "why": "dominant table stakes, DDL family stakes"
+      }
+    ],
+    "src/db/swaps/index.js": [
+      {
+        "method": "createSwap",
+        "lines": 62,
+        "table": "swaps",
+        "why": "dominant table swaps, DDL family swaps"
+      },
+      {
+        "method": "createSwapStatus",
+        "lines": 32,
+        "table": "swap_statuses",
+        "why": "dominant table swap_statuses, DDL family swaps"
+      },
+      {
+        "method": "createSwapCancel",
+        "lines": 35,
+        "table": "swap_cancels",
+        "why": "dominant table swap_cancels, DDL family swaps"
+      },
+      {
+        "method": "createSwapExpire",
+        "lines": 32,
+        "table": "swap_expires",
+        "why": "dominant table swap_expires, DDL family swaps"
+      },
+      {
+        "method": "getSwapInfo",
+        "lines": 79,
+        "table": "swap_statuses",
+        "why": "dominant table swap_statuses, DDL family swaps"
+      },
+      {
+        "method": "getSwapEdits",
+        "lines": 30,
+        "table": "swap_edits",
+        "why": "dominant table swap_edits, DDL family swaps"
+      },
+      {
+        "method": "createSwapEdit",
+        "lines": 47,
+        "table": "swap_edits",
+        "why": "dominant table swap_edits, DDL family swaps"
+      },
+      {
+        "method": "findSwapMatches",
+        "lines": 65,
+        "table": "swap_statuses",
+        "why": "dominant table swap_statuses, DDL family swaps"
+      },
+      {
+        "method": "createSwapMatch",
+        "lines": 47,
+        "table": "swap_matches",
+        "why": "dominant table swap_matches, DDL family swaps"
+      }
+    ],
+    "src/db/sweeps/index.js": [
+      {
+        "method": "createSweep",
+        "lines": 46,
+        "table": "sweeps",
+        "why": "dominant table sweeps, DDL family sweeps"
+      }
+    ],
+    "src/db/tokens/index.js": [
+      {
+        "method": "getTokenSupplyToken",
+        "lines": 10,
+        "table": "tokens",
+        "why": "dominant table tokens, DDL family tokens"
+      },
+      {
+        "method": "createToken",
+        "lines": 127,
+        "table": "tokens",
+        "why": "dominant table tokens, DDL family tokens"
+      },
+      {
+        "method": "updateTokens",
+        "lines": 23,
+        "table": "tokens",
+        "why": "dominant table tokens, DDL family tokens"
+      },
+      {
+        "method": "setTokenEscrow",
+        "lines": 5,
+        "table": "tokens",
+        "why": "dominant table tokens, DDL family tokens"
+      },
+      {
+        "method": "clearTokenEscrow",
+        "lines": 5,
+        "table": "tokens",
+        "why": "dominant table tokens, DDL family tokens"
+      },
+      {
+        "method": "getTokenEscrow",
+        "lines": 10,
+        "table": "tokens",
+        "why": "dominant table tokens, DDL family tokens"
+      },
+      {
+        "method": "sanityCheck",
+        "lines": 148,
+        "table": "tokens",
+        "why": "dominant table tokens, DDL family tokens"
+      },
+      {
+        "method": "getAddressOwnerships",
+        "lines": 25,
+        "table": "tokens",
+        "why": "dominant table tokens, DDL family tokens"
+      },
+      {
+        "method": "setTokenBridged",
+        "lines": 10,
+        "table": "tokens",
+        "why": "dominant table tokens, DDL family tokens"
+      },
+      {
+        "method": "recordTokenControllerEvent",
+        "lines": 8,
+        "table": "token_controllers",
+        "why": "dominant table token_controllers, DDL family tokens"
+      }
+    ],
+    "src/db/transactions/index.js": [
+      {
+        "method": "getDecoderBlockData",
+        "lines": 74,
+        "table": "transactions",
+        "why": "dominant table transactions, DDL family transactions"
+      },
+      {
+        "method": "getNextTxIndex",
+        "lines": 10,
+        "table": "transactions",
+        "why": "dominant table transactions, DDL family transactions"
+      },
+      {
+        "method": "getTxIndex",
+        "lines": 9,
+        "table": "transactions",
+        "why": "dominant table transactions, DDL family transactions"
+      },
+      {
+        "method": "createTxIndex",
+        "lines": 18,
+        "table": "transactions",
+        "why": "dominant table transactions, DDL family transactions"
+      },
+      {
+        "method": "getActionData",
+        "lines": 769,
+        "table": "transactions",
+        "why": "dominant table transactions, DDL family transactions"
+      }
+    ],
+    "src/db/votes/index.js": [
+      {
+        "method": "createVoteDelegation",
+        "lines": 14,
+        "table": "vote_delegations",
+        "why": "dominant table vote_delegations, DDL family votes"
+      },
+      {
+        "method": "getActiveDelegations",
+        "lines": 19,
+        "table": "vote_delegations",
+        "why": "dominant table vote_delegations, DDL family votes"
+      },
+      {
+        "method": "createBallot",
+        "lines": 20,
+        "table": "votes",
+        "why": "dominant table votes, DDL family votes"
+      },
+      {
+        "method": "getPollTally",
+        "lines": 139,
+        "table": "votes",
+        "why": "dominant table votes, DDL family votes"
+      }
+    ],
+    "src/db/withdrawals/index.js": [
+      {
+        "method": "createWithdrawal",
+        "lines": 28,
+        "table": "withdrawals",
+        "why": "dominant table withdrawals, DDL family withdrawals"
+      }
+    ],
+    "src/db/xbridges/index.js": [
+      {
+        "method": "createXbridge",
+        "lines": 58,
+        "table": "xbridges",
+        "why": "dominant table xbridges, DDL family xbridges"
+      },
+      {
+        "method": "_pendingBridgeTransfersSql",
+        "lines": 21,
+        "table": "xbridges",
+        "why": "dominant table xbridges, DDL family xbridges"
+      }
+    ],
+    "src/db/xcalls/index.js": [
+      {
+        "method": "createCrossChainCallRequest",
+        "lines": 14,
+        "table": "xcalls",
+        "why": "dominant table xcalls, DDL family xcalls"
+      },
+      {
+        "method": "getCrossChainCallRequestById",
+        "lines": 9,
+        "table": "xcalls",
+        "why": "dominant table xcalls, DDL family xcalls"
+      },
+      {
+        "method": "updateCrossChainCallRequestStatus",
+        "lines": 7,
+        "table": "xcalls",
+        "why": "dominant table xcalls, DDL family xcalls"
+      },
+      {
+        "method": "setCrossChainCallCallbackIndex",
+        "lines": 5,
+        "table": "xcalls",
+        "why": "dominant table xcalls, DDL family xcalls"
+      },
+      {
+        "method": "getExpiredCrossChainCallRequests",
+        "lines": 11,
+        "table": "xcalls",
+        "why": "dominant table xcalls, DDL family xcalls"
+      },
+      {
+        "method": "getPendingCrossChainCallRequests",
+        "lines": 11,
+        "table": "xcalls",
+        "why": "dominant table xcalls, DDL family xcalls"
+      }
+    ]
+  }
+}

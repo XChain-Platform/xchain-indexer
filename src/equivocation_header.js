@@ -43,45 +43,11 @@
  *
  ********************************************************************/
 
-// Per-network activation height (LOCAL COPY of the canonical map in
-// xchain-documentation/protocol/constants.js, kept equal by the cross-service
-// regression suite). Keyed on the BTC-anchored snapshot_block, NOT the local
-// processing height, so every chain + the hub flip on the same anchor.
-const EQUIV_HEADER_ACTIVATION = {
-    mainnet: 961000,      // ARMED 2026-07-07: BTC anchor ~2026-08-04; deploy hub + ALL indexers (+ sdk/explorer/sync copies) before this height
-    testnet: 0,
-    regtest: 0,
-};
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
-// Fixed per-engine tag (spec §4.1.1). One slashable canonical family per engine.
-const ENGINE_TAGS = {
-    DEX:        'XDEX',
-    XCALL:      'XCALL',
-    ATTEST:     'XATTEST',
-    ORACLE:     'XORACLE',
-    // PRICE batches. A DISTINCT tag from ORACLE, not a reuse: a batch canonical
-    // carries first_round/last_round and no scalar `round`, and SLASH v0 reads
-    // `round` out of an ORACLE-tagged content to judge equivocation, skipping its
-    // distinct-rounds guard when either side lacks one. Under a shared tag an
-    // honest validator that signed one per-round consensus canonical and one batch
-    // at the same BTC anchor would be provably equivocating, for a full bond burn plus permanent
-    // capability disqualification. The batch ROUND_ID is
-    // `<anchor>|<first_round>|<last_round>` (pipes are safe here; equivKey treats
-    // the round id as opaque), so two honest batches that split one window
-    // differently do not collide on one key either.
-    ORACLE_BATCH: 'XORACLEB',
-    CHECKPOINT: 'XCHECKPOINT',
-    CONFIG:     'XCONFIG',
-    NODEPROOF:  'XNODEPROOF',
-    // ROLLCALL presence proofs. Namespacing ONLY, exactly like XNODEPROOF: the
-    // tag is deliberately absent from SLASH's ENGINE_CAPABILITY map, so no
-    // ROLLCALL canonical is a slashable family. Several valid ROLLCALLs per
-    // epoch are expected (a leader's, sweepers', self-publishes), every one
-    // carrying signatures over the SAME canonical for that epoch, so two of
-    // them are never conflicting content for one key. ROUND_ID is the BTC
-    // EPOCH_HEIGHT in decimal, VIEW is 0.
-    ROLLCALL:   'XROLLCALL',
-};
+const EQUIV_HEADER_ACTIVATION = copy('equivocation_header.EQUIV_HEADER_ACTIVATION');
+
+const ENGINE_TAGS = copy('equivocation_header.ENGINE_TAGS');
 
 // Whether the EQUIV header is in effect for a settlement whose BTC-anchored snapshot
 // is at `snapshotBlock` on `network`. Below this -> legacy headerless bytes.

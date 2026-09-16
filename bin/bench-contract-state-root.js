@@ -11,7 +11,7 @@
  *
  **********************************************************************
  *
- * Arming-block cost for contract_state_root (SPV sub-tree spec §3 Stage A item 6).
+ * Arming-block cost for contract_state_root (the first block that commits its sub-tree root).
  *
  * WHAT IS BEING MEASURED AND WHY IT MATTERS. The first block at an armed height
  * runs buildFullContractStateRoot over the WHOLE live contract-state set, on the
@@ -43,7 +43,7 @@
  * a synthetic number that looks comfortable proves nothing about a real arming
  * block.
  *
- * WHY THE SCRATCH MODE EXISTS, since the spec originally deferred this figure to a
+ * WHY THE SCRATCH MODE EXISTS, since this figure would otherwise wait on a
  * venue that does not exist. The storage term is a function of the KEY COUNT alone:
  * every key is the same 256-level copy-on-write descent whatever value hangs off it.
  * So "how much does a real node store cost per key" does NOT need a venue carrying
@@ -68,6 +68,9 @@
  *   node bin/bench-contract-state-root.js --synthetic 500 --shape spread,deep,wide,prefix
  *   node bin/bench-contract-state-root.js --db XChain_BTC_Regtest_Indexer --chain BTC --network regtest
  *
+ * Regtest only. The figure is a per-host cost curve, so a number measured anywhere
+ * else does not transfer to the fleet.
+ *
  * DB and scratch modes read credentials the same way the indexer does (its own
  * config layer), and never take them on the command line.
  *
@@ -75,8 +78,8 @@
 
 'use strict';
 
-const CST = require('../src/contractStateSubtree.js');
-const SC  = require('../src/stateCommitment.js');
+const CST = require('../src/consensus/contract_state_subtree.js');
+const SC  = require('../src/state_commitment/index.js');
 
 function parseArgs(argv){
     const out = { synthetic: null, db: null, chain: 'BTC', network: 'regtest', persist: false,
@@ -148,7 +151,7 @@ function syntheticDb(n, shape){
         rows.push({ contract_index: contract, state_key: key,
                     state_value: JSON.stringify({ i: i, pad: 'x'.repeat(32) }) });
     }
-    // Both readers: the derivation reads strictly (M-17), and a stub carrying
+    // Both readers: the derivation reads strictly, and a stub carrying
     // only doQuery would make buildFullContractStateRoot throw here rather than
     // benchmark anything.
     return { async doQuery(){ return rows; }, async doQueryStrict(){ return rows; } };
@@ -224,7 +227,7 @@ function tableRedirect(db, table){
 }
 
 async function openIndexerDb(opts){
-    const Database = require('../src/db.js');
+    const Database = require('../src/db');
     const config   = require('../src/config.js');
     const Utility  = require('../src/utility.js');
     const host = process.env.INDEXER_DB_HOST;
@@ -313,11 +316,11 @@ async function runSyntheticPersisted(opts){
 }
 
 async function runDb(opts){
-    // Credentials come from the service environment exactly as src/migrate.js reads
+    // Credentials come from the service environment exactly as src/db/migration/migrate.js reads
     // them: never from the command line, never printed. --db only picks the DATABASE
     // NAME (so one host can benchmark any of its chains); everything else is the
     // running indexer's own configuration.
-    const Database = require('../src/db.js');
+    const Database = require('../src/db');
     const config   = require('../src/config.js');
     const Utility  = require('../src/utility.js');
     const host = process.env.INDEXER_DB_HOST;

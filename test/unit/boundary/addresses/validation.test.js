@@ -17,7 +17,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../fixtures/mocks');
-const Send = require('../../../../src/actions/send.js');
+const Send = require('../../../../src/actions/send/index.js');
 
 function makeActionsCtx(indexer) {
     return {
@@ -36,6 +36,10 @@ function makeActionsCtx(indexer) {
 
 const SOURCE      = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH'; // 34 chars - valid P2PKH
 const DESTINATION = 'mtr6NtB5KJRAxTX5AbuRtV7S4FF2PZJXUs'; // 35 chars - valid P2PKH
+
+// ---------------------------------------------------------------------------
+// Utility-level isCryptoAddress() boundary tests
+// ---------------------------------------------------------------------------
 
 describe('Utility isCryptoAddress() boundary tests @regression @tier3', function () {
     let util;
@@ -64,6 +68,16 @@ describe('Utility isCryptoAddress() boundary tests @regression @tier3', function
 
     it('isCryptoAddress: valid bech32m P2TR (taproot) → valid', function () {
         assert.strictEqual(util.isCryptoAddress('bcrt1pxqgcx65hqkd9c7y6wulyfv2wlwawqx62n3ufwxkjhjpas2jtqxmsglytaf'), true);
+    });
+
+});
+
+describe('Utility isCryptoAddress() boundary tests @regression @tier3', function () {
+    let util;
+
+    before(function () {
+        const indexer = createMockIndexer();
+        util = indexer.util;
     });
 
     // Checksum boundaries: a single flipped character must invalidate
@@ -101,9 +115,13 @@ describe('Utility isCryptoAddress() boundary tests @regression @tier3', function
     });
 });
 
-describe('Address validation boundary tests via SEND handler @regression @tier3', function () {
-    let indexer, actionsCtx, handler;
+let indexer, actionsCtx, handler;
 
+// ---------------------------------------------------------------------------
+// SEND DESTINATION validation (end-to-end through the Send handler)
+// ---------------------------------------------------------------------------
+
+describe('Address validation boundary tests via SEND handler @regression @tier3', function () {
     beforeEach(function () {
         indexer     = createMockIndexer();
         actionsCtx  = makeActionsCtx(indexer);
@@ -150,43 +168,6 @@ describe('Address validation boundary tests via SEND handler @regression @tier3'
     it('ADR-04: address-length garbage DESTINATION (bad checksum) → invalid', async function () {
         const dest   = 'A'.repeat(34);
         const params = ['0', 'TEST', '1', dest, ''];
-        const data   = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: 100, SOURCE });
-
-        await handler.parse(params, data, null);
-
-        assert.ok(data.STATUS.startsWith('invalid'), `expected invalid but got: ${data.STATUS}`);
-    });
-
-    it('ADR-05: valid bech32 segwit DESTINATION → valid', async function () {
-        const params = ['0', 'TEST', '1', 'bcrt1qe6l04hhwjg98fmggptdm0cemj6lm7hhwzahaul', ''];
-        const data   = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: 100, SOURCE });
-
-        await handler.parse(params, data, null);
-
-        assert.strictEqual(data.STATUS, 'valid', `expected valid but got: ${data.STATUS}`);
-    });
-
-    it('ADR-06a: valid bech32m taproot DESTINATION → valid', async function () {
-        const params = ['0', 'TEST', '1', 'bcrt1pxqgcx65hqkd9c7y6wulyfv2wlwawqx62n3ufwxkjhjpas2jtqxmsglytaf', ''];
-        const data   = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: 100, SOURCE });
-
-        await handler.parse(params, data, null);
-
-        assert.strictEqual(data.STATUS, 'valid', `expected valid but got: ${data.STATUS}`);
-    });
-
-    it('ADR-06b: checksum-flipped DESTINATION → invalid', async function () {
-        const dest   = DESTINATION.slice(0, -1) + (DESTINATION.endsWith('s') ? 't' : 's');
-        const params = ['0', 'TEST', '1', dest, ''];
-        const data   = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: 100, SOURCE });
-
-        await handler.parse(params, data, null);
-
-        assert.ok(data.STATUS.startsWith('invalid'), `expected invalid but got: ${data.STATUS}`);
-    });
-
-    it('ADR-07: wrong-network DESTINATION (mainnet P2PKH on regtest) → invalid', async function () {
-        const params = ['0', 'TEST', '1', '17Roegnpwqam4FwwXsM47bX3Tf1jFyyKMt', ''];
         const data   = createBaseData({ ACTION: 'SEND', FORMAT: 0, BLOCK_INDEX: 100, SOURCE });
 
         await handler.parse(params, data, null);

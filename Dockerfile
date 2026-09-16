@@ -12,6 +12,9 @@ WORKDIR /XChainIndexer
 RUN npm ci
 
 COPY ./src /XChainIndexer/src
+# The committed carrier logic pin is what health publishes as carrier_logic_digest
+# (src/api/health/carrier_logic.js reads it; without it the field is UNREADABLE).
+COPY ./bin/pins/carrier-logic.json /XChainIndexer/bin/pins/carrier-logic.json
 # Genesis-ledger bootstrap artifacts (Counterparty/Dogeparty name-ownership
 # manifests + precomputed mainnet state dumps). config.js resolves
 # GENESIS_LEDGER_PATH / GENESIS_DUMP_PATH under /XChainIndexer/data/genesis, so

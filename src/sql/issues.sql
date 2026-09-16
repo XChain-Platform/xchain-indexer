@@ -39,8 +39,16 @@ CREATE TABLE issues (
     mint_address_max    VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,             -- Maximum amount of supply an address can MINT
     mint_start_block    VARCHAR(15) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,              -- block_index when MINT transactions are allowed (begin mint)
     mint_stop_block     VARCHAR(15) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,              -- BLOCK_INDEX when MINT transactions are NOT allowed (end mint)
-    memo_id             BIGINT UNSIGNED,          -- id of record in index_memos table 
-    status_id           BIGINT UNSIGNED           -- id of record in index_statuses table
+    memo_id             BIGINT UNSIGNED,          -- id of record in index_memos table
+    status_id           BIGINT UNSIGNED,          -- id of record in index_statuses table
+    -- ISSUE format 7 (token-bridge opt-in). RAW WIRE STRINGS, like every other issues
+    -- column: `issues` records what the action carried, and an EMPTY field means
+    -- "unchanged" (issue.js back-fills it from the current row). A typed NOT NULL column
+    -- here could not express that, and a numeric column would lose the un-parsed wire text.
+    -- The PARSED values live on `tokens` (bridge_chains / min_depth / lock_bridge).
+    bridge_chains       VARCHAR(250) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,     -- comma list of destination coins this token may be locked to, or the sentinel `-` for none
+    min_depth           VARCHAR(15) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,      -- issuer-raised confirmation depth for this token's locks; the effective depth is max(platform default, MIN_DEPTH), so it is raise-only and 0 means no raise
+    lock_bridge         VARCHAR(1) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci        -- Locks BRIDGE_CHAINS and MIN_DEPTH forever (joins fieldList['LOCK'], so the cannot-unset rule comes for free)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
 
 CREATE UNIQUE INDEX action_index       ON issues (action_index);

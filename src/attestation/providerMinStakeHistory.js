@@ -59,22 +59,11 @@
 
 'use strict';
 
+const { get, copy, activeAt } = require('../consensus/gate_registry');
+
 const mathjs = require('mathjs');
 
-// Frozen block-anchored governance min_stake_xchain history, per network, per
-// provider: an ascending list of { activation_block, value } entries, each the
-// floor EFFECTIVE FROM that block until the next entry. Mirrors the shape of
-// xchain-hub ProviderRegistry.providerConfigHistory (whose entries carry
-// min_stake_xchain alongside additional_config) and of MIN_STAKE_ACTIVATIONS
-// in capability_min_stake_history.js.
-//
-// EMPTY on every network. See the header before adding an entry: it is a
-// consensus flag day, not config.
-const PROVIDER_MIN_STAKE_ACTIVATIONS = {
-    mainnet: {},
-    testnet: {},
-    regtest: {},
-};
+const PROVIDER_MIN_STAKE_ACTIVATIONS = copy('attestation/providerMinStakeHistory.PROVIDER_MIN_STAKE_ACTIVATIONS');
 
 // A provider floor is usable only as a plain non-negative decimal string. This is
 // the SAME acceptance regex as xchain-hub ProviderRegistry.normalizeMinStakeXchain,

@@ -27,11 +27,11 @@
  * ------------------------------------------------------------------------------
  * THE THREE SIDES
  *
- *   OLD - HEAD's tree with the ledger-precision work SURGICALLY REMOVED from
- *         src/db.js: every call site of the activation module is rewritten back to
- *         the expression that stood at --pre-ref, and the module file itself is
- *         deleted from the tree so a missed site cannot resolve. This is HEAD with
- *         exactly this change removed and nothing else.
+ *   OLD - HEAD's tree with the ledger-precision work SURGICALLY REMOVED from the
+ *         database mixins that read the activation module: every call site is
+ *         rewritten back to the expression that stood at --pre-ref, and the module
+ *         file itself is deleted from the tree so a missed site cannot resolve.
+ *         This is HEAD with exactly this change removed and nothing else.
  *   OFF - HEAD, with every activation height moved to the UNARMED sentinel, i.e.
  *         a block below the flag instant on every chain.
  *   ON  - HEAD, with every activation height forced to 0. This is the NEGATIVE
@@ -41,23 +41,25 @@
  * databases. OLD vs OFF must be byte-identical, table for table and hash for hash.
  * ON must not be, and the run fails if it is.
  *
- * WHY OLD IS SURGICAL AND NOT A WHOLE OLD TREE. src/db.js is the busiest file in
- * the service and has taken unrelated behavioural commits since the flag landed,
- * so substituting the whole file (the shape a predecessor tool uses for a quiet
- * file) would roll those back too and the comparison would be about something
- * else. Reverse-applying the original commit is no better: a later sweep rewrote
+ * WHY OLD IS SURGICAL AND NOT A WHOLE OLD TREE. The database class is the busiest
+ * code in the service and has taken unrelated behavioural commits since the flag
+ * landed, so substituting whole files (the shape a predecessor tool uses for a
+ * quiet file) would roll those back too and the comparison would be about
+ * something else. Reverse-applying the original commit is no better: a later sweep rewrote
  * comment text inside the very hunks that carry the change, so the patch does not
  * apply cleanly and would have to be forced.
  *
  * So the old side is rebuilt from a table of exact call-site substitutions, and
  * each one is CHECKED rather than trusted:
  *
- *   - the HEAD text being replaced must occur EXACTLY ONCE in HEAD's src/db.js,
- *   - the legacy text being restored must occur VERBATIM in --pre-ref's src/db.js,
- *   - after the rewrite, src/db.js may not mention the activation module at all,
+ *   - the HEAD text being replaced must occur EXACTLY ONCE in the reader file the
+ *     table names for it, so a site that migrates to another mixin turns this red,
+ *   - the legacy text being restored must occur VERBATIM in --pre-ref's database
+ *     source, whether that ref carried it as one file or as the mixin directory,
+ *   - after the rewrite, no reader may execute a mention of the activation module,
  *   - the activation module is DELETED from the old tree, so any site the table
  *     missed fails to resolve at require time instead of quietly staying modern,
- *   - the rewritten file must still parse (node --check).
+ *   - every rewritten file must still parse (node --check).
  *
  * A future edit that adds a call site therefore turns this tool red rather than
  * letting it certify a partial rollback.
@@ -193,59 +195,111 @@ const { execSync, spawnSync } = require('child_process');
 
 const REPO      = path.resolve(__dirname, '..');
 const GATE      = 'LEDGER_AMOUNT_PRECISION';
-const FLAG_REL  = path.join('src', 'ledger_amount_precision_activation.js');
-const FLAG_NAME = 'ledger_amount_precision_activation';
+const FLAG_REL  = path.join('src', 'consensus', 'ledger_amount_precision_gate.js');
+const FLAG_NAME = 'ledger_amount_precision_gate';
 const UNARMED   = 9999999999;       // the house UNARMED sentinel
 const SIDE_MARK = '###LAP-SIDE###'; // child -> parent report line
 
+// The database class is a directory of mixins, so the activation module is required
+// once per mixin that uses it rather than once in a single file. This is the set that
+// may read it, asserted below against what HEAD actually reads: a reader that appears
+// or disappears has moved the blast radius of the gate and must be re-surveyed before
+// the rollback table can be trusted.
+const READER_FILES = [
+    'src/db/balances/index.js',
+    'src/db/credits/index.js',
+    'src/db/escrows/index.js',
+    'src/db/misc/index.js',
+    'src/db/tokens/index.js',
+];
+
 // --- the old side -----------------------------------------------------------
 //
-// One entry per call site of the activation module in src/db.js. `head` is the text
-// HEAD carries and `legacy` is the text --pre-ref carried in its place. Comment lines
-// are excluded from both on purpose: a comment sweep must not be able to break the
-// rollback, and comments cannot change what the code commits.
+// One entry per call site of the activation module. `file` is the reader that carries
+// it, `head` is the text HEAD carries there and `legacy` is the text --pre-ref carried
+// in its place. Comment lines are excluded from both on purpose: a comment sweep must
+// not be able to break the rollback, and comments cannot change what the code commits.
 //
 // `restores` marks the entries whose `legacy` text is expected to appear verbatim in
-// --pre-ref's src/db.js. The two entries that only DELETE a line introduced by the
+// --pre-ref's database source. The entries that only DELETE a line introduced by the
 // change are marked false, and are checked the other way round: their `head` text
 // must be ABSENT from --pre-ref.
+//
+// Naming the file per site is what keeps the count meaningful now that the same text
+// can legitimately stand in more than one mixin: the require line is one call site in
+// each of the five readers, and the balance and escrow supply rewrites are the same
+// two lines of code in two different files.
 //
 // Declared HERE, above the dispatch below, rather than beside the functions that read
 // it: main() is invoked synchronously and its prefix reaches the old-tree build before
 // the module body finishes evaluating, so a table sited further down is still in its
 // temporal dead zone when the first run needs it.
 const SITES = [
-    {
-        label: 'the require of the activation module',
+    ...READER_FILES.map((file) => ({
+        file,
+        label: 'the require of the activation module in ' + path.basename(file),
         restores: false,
-        head: "const ledgerPrecision = require('./ledger_amount_precision_activation');\n",
+        head: "const ledgerPrecision = require('../../consensus/ledger_amount_precision_gate');\n",
         legacy: '',
+    })),
+    {
+        file: 'src/db/balances/index.js',
+        label: 'getTokenSupplyBalance: the supply sums at the exact ledger scale',
+        restores: true,
+        head: "`SELECT ` + ledgerPrecision.exactSumSql('amount') + ` as supply FROM balances",
+        legacy: '`SELECT SUM(CAST(amount AS DECIMAL(60, ` + decimals + `))) as supply FROM balances',
     },
     {
+        file: 'src/db/balances/index.js',
+        label: 'getTokenSupplyBalance: the supply is taken raw again',
+        restores: true,
+        head: '            supply = this.util.bcstr(this.util.bcadd(results[0].supply, 0, decimals));',
+        legacy: '            supply = results[0].supply;',
+    },
+    {
+        file: 'src/db/escrows/index.js',
+        label: 'getTokenSupplyEscrow: the supply sums at the exact ledger scale',
+        restores: true,
+        head: "`SELECT ` + ledgerPrecision.exactSumSql('amount') + ` as supply FROM escrows",
+        legacy: '`SELECT SUM(CAST(amount AS DECIMAL(60, ` + decimals + `))) as supply FROM escrows',
+    },
+    {
+        file: 'src/db/escrows/index.js',
+        label: 'getTokenSupplyEscrow: the supply is taken raw again',
+        restores: true,
+        head: '            supply = this.util.bcstr(this.util.bcadd(results[0].supply, 0, decimals));',
+        legacy: '            supply = results[0].supply;',
+    },
+    {
+        file: 'src/db/credits/index.js',
         label: 'getTokenSupply: the shared exact SUM expression',
         restores: false,
         head: "        let sumExpr = ledgerPrecision.exactSumSql('m.amount');\n",
         legacy: '',
     },
     {
+        file: 'src/db/credits/index.js',
         label: 'getTokenSupply: the credits sum casts to the tick scale',
         restores: true,
         head: '` + sumExpr + ` as credits',
         legacy: 'SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as credits',
     },
     {
+        file: 'src/db/credits/index.js',
         label: 'getTokenSupply: the debits sum casts to the tick scale',
         restores: true,
         head: '` + sumExpr + ` as debits',
         legacy: 'SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as debits',
     },
     {
+        file: 'src/db/credits/index.js',
         label: 'getTokenSupply: the escrows sum casts to the tick scale',
         restores: true,
         head: '` + sumExpr + ` as escrows',
         legacy: 'SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as escrows',
     },
     {
+        file: 'src/db/credits/index.js',
         label: 'getTokenSupply: the supply is netted at the tick scale',
         restores: true,
         head: '        let exact = ledgerPrecision.LEDGER_AMOUNT_PRECISION;\n' +
@@ -253,6 +307,7 @@ const SITES = [
         legacy: '        supply = this.util.bcadd(this.util.bcsub(credits, debits, decimals), escrows, decimals);',
     },
     {
+        file: 'src/db/credits/index.js',
         label: 'getHolders: the tick precision lookup comes back',
         restores: true,
         head: "        let holderSumExpr = ledgerPrecision.exactSumSql('m.amount');\n" +
@@ -260,24 +315,28 @@ const SITES = [
         legacy: '        let decimals = await this.getTokenDecimalPrecision(tick_id);\n',
     },
     {
+        file: 'src/db/credits/index.js',
         label: 'getHolders: the credits sum casts to the tick scale',
         restores: true,
         head: '` + holderSumExpr + ` as credits,',
         legacy: 'SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as credits,',
     },
     {
+        file: 'src/db/credits/index.js',
         label: 'getHolders: the debits sum casts to the tick scale',
         restores: true,
         head: '` + holderSumExpr + ` as debits,',
         legacy: 'SUM(CAST(m.amount AS DECIMAL(60,` + decimals + `))) as debits,',
     },
     {
+        file: 'src/db/credits/index.js',
         label: 'getHolders: a holding is netted at the tick scale',
         restores: true,
         head: '                let balance = this.util.bcsub(holders[row.address], row.debits, exact);',
         legacy: '                let balance = this.util.bcsub(holders[row.address], row.debits, decimals);',
     },
     {
+        file: 'src/db/misc/index.js',
         label: 'createLedgerChangeRecord: the WRITE-side quantization scale',
         restores: true,
         head: '        let decimals = ledgerPrecision.ledgerWriteScale(\n' +
@@ -286,6 +345,7 @@ const SITES = [
         legacy: '        let decimals = await this.getTokenDecimalPrecision(tick_id);',
     },
     {
+        file: 'src/db/misc/index.js',
         label: 'getAddressCreditDebit: the running total rounds per row',
         restores: true,
         head: '                    data[row.tick_id] = this.util.bcadd(\n' +
@@ -293,6 +353,7 @@ const SITES = [
         legacy: '                    data[row.tick_id] = this.util.bcadd(data[row.tick_id], row.amount, row.decimals);',
     },
     {
+        file: 'src/db/tokens/index.js',
         label: 'sanityCheck: tick ids are grouped by decimal scale again',
         restores: true,
         head: '        let idToTick = {};\n' +
@@ -314,6 +375,7 @@ const SITES = [
                 '        }',
     },
     {
+        file: 'src/db/tokens/index.js',
         label: 'sanityCheck: one grouped SUM per distinct decimal scale',
         restores: true,
         head: '        let sumByTick = async (table, joinActions) => {\n' +
@@ -350,6 +412,7 @@ const SITES = [
                 '        };',
     },
     {
+        file: 'src/db/tokens/index.js',
         label: 'sanityCheck: the ledger projection is netted at the tick scale',
         restores: true,
         head: '            let ledger  = this.util.bcnum(this.util.bcadd(\n' +
@@ -389,7 +452,7 @@ async function runSide() {
         // Move the registered heights instead of stubbing the predicate: below the flag
         // it answers false BECAUSE the height has not been reached, and that is the code
         // path a pre-flag block takes. Mutated on the exported map before the launcher
-        // pulls in db.js, and db.js holds a reference to this same object.
+        // pulls in the database mixins, which hold a reference to this same object.
         const flag = require(path.join(root, FLAG_REL));
         const map  = flag.LEDGER_AMOUNT_PRECISION_ACTIVATION;
         for (const key of Object.keys(map)) map[key] = (mode === 'off') ? UNARMED : 0;
@@ -473,39 +536,59 @@ function codeOnly(src) {
         .join('\n');
 }
 
-// Rewrite HEAD's src/db.js back to the pre-flag expressions. Returns the new source
-// plus a per-site report, so the caller can assert on each substitution rather than
-// on the fact that the function ran.
-function rollBackLedgerPrecision(headSrc, preflagSrc) {
-    let out = headSrc;
+// Rewrite HEAD's reader files back to the pre-flag expressions. `headSrcs` maps each
+// reader path to its HEAD text; the return maps the same paths to the rolled-back text,
+// alongside a per-site report so the caller can assert on each substitution rather than
+// on the fact that the function ran. Each site is counted and replaced ONLY inside the
+// file the table names for it, which is what keeps "exactly once" a real constraint now
+// that identical code stands in more than one mixin.
+function rollBackLedgerPrecision(headSrcs, preflagSrc) {
+    const out = Object.assign({}, headSrcs);
     const report = [];
     for (const site of SITES) {
-        const inHead    = occurrences(headSrc, site.head);
+        const fileSrc   = headSrcs[site.file];
+        const inHead    = fileSrc === undefined ? 0 : occurrences(fileSrc, site.head);
         const inPreflag = site.restores ? occurrences(preflagSrc, site.legacy)
                                         : occurrences(preflagSrc, site.head);
-        const ok = inHead === 1 && (site.restores ? inPreflag >= 1 : inPreflag === 0);
-        if (ok) out = out.replace(site.head, site.legacy);
-        report.push({ label: site.label, inHead, inPreflag, restores: site.restores, ok });
+        const ok = fileSrc !== undefined && inHead === 1 &&
+                   (site.restores ? inPreflag >= 1 : inPreflag === 0);
+        if (ok) out[site.file] = out[site.file].replace(site.head, site.legacy);
+        report.push({ file: site.file, label: site.label, inHead, inPreflag,
+                      restores: site.restores, known: fileSrc !== undefined, ok });
     }
-    return { source: out, report };
+    return { sources: out, report };
+}
+
+// The pre-flag side is a historical ref, so it may predate the move of the database
+// class into a directory. Read whichever shape that ref actually carries and join it,
+// rather than assuming today's layout held back then: the table only ever asks whether
+// a legacy string is present somewhere in the pre-flag database source.
+function preflagDatabaseSource(preRef) {
+    const big = { cwd: REPO, maxBuffer: 1024 * 1024 * 128 };
+    const listed = execSync('git ls-tree -r --name-only ' + JSON.stringify(preRef) +
+        ' -- src/db.js src/db/ || true', big).toString().trim().split('\n').filter(Boolean);
+    if (!listed.length)
+        throw new Error(preRef + ' carries neither src/db.js nor src/db/, so the pre-flag ' +
+            'database source cannot be read');
+    return listed.map(f => execSync('git show ' + JSON.stringify(preRef + ':' + f), big).toString())
+        .join('\n');
 }
 
 // Materialize HEAD with `git archive` (a pure read of the object store), then roll the
-// ledger-precision work out of src/db.js and delete the activation module, so a site
-// the table missed cannot resolve at require time.
+// ledger-precision work out of every reader file and delete the activation module, so a
+// site the table missed cannot resolve at require time.
 function materializeOldTree(preRef, dir) {
     if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
     fs.mkdirSync(dir, { recursive: true });
     execSync('git archive HEAD | tar -x -C ' + JSON.stringify(dir), { cwd: REPO });
     fs.symlinkSync(path.join(REPO, 'node_modules'), path.join(dir, 'node_modules'));
 
-    const headSrc = fs.readFileSync(path.join(dir, 'src', 'db.js'), 'utf8');
-    const preflagSrc = execSync('git show ' + JSON.stringify(preRef + ':src/db.js'),
-        { cwd: REPO, maxBuffer: 1024 * 1024 * 64 }).toString();
-    const rolled = rollBackLedgerPrecision(headSrc, preflagSrc);
-    fs.writeFileSync(path.join(dir, 'src', 'db.js'), rolled.source);
+    const headSrcs = {};
+    for (const rel of READER_FILES) headSrcs[rel] = fs.readFileSync(path.join(dir, rel), 'utf8');
+    const rolled = rollBackLedgerPrecision(headSrcs, preflagDatabaseSource(preRef));
+    for (const rel of READER_FILES) fs.writeFileSync(path.join(dir, rel), rolled.sources[rel]);
     fs.rmSync(path.join(dir, FLAG_REL), { force: true });
-    return { root: dir, report: rolled.report, source: rolled.source };
+    return { root: dir, report: rolled.report, sources: rolled.sources };
 }
 
 function sha256File(p) {
@@ -797,13 +880,26 @@ async function main() {
 
     // ---- N4: the old side is exactly this change, removed -------------------
     section('N4 the old side differs from HEAD by exactly this change');
+    // git grep matches prose too, and several unrelated activation modules cite this one
+    // by name in their comments. Comments cannot read a module, so the reader set is the
+    // files whose CODE names it: counting the prose would make this assertion red for a
+    // reason that changes nothing the fleet executes, and a reader that hid the name in a
+    // comment-stripped line would still be counted here.
     const readers = execSync(
         'git grep -l ' + JSON.stringify(FLAG_NAME) + ' HEAD -- src/ || true', { cwd: REPO })
         .toString().trim().split('\n').filter(Boolean)
-        .map(l => l.replace(/^HEAD:/, '')).sort();
-    check(readers.join(',') === 'src/db.js',
-        'src/db.js is the only reader of the activation module',
-        readers.length ? JSON.stringify(readers) : 'no reader found at all, which means the rollback table is stale');
+        .map(l => l.replace(/^HEAD:/, ''))
+        .filter(f => codeOnly(execSync('git show ' + JSON.stringify('HEAD:' + f),
+            { cwd: REPO, maxBuffer: 1024 * 1024 * 64 }).toString()).includes(FLAG_NAME))
+        .sort();
+    check(readers.join(',') === READER_FILES.join(','),
+        'the readers of the activation module are exactly the ' + READER_FILES.length +
+        ' files the rollback table covers',
+        readers.join(',') === READER_FILES.join(',') ? ''
+            : (readers.length
+                ? 'HEAD reads it from ' + JSON.stringify(readers) + ', the table covers ' +
+                  JSON.stringify(READER_FILES)
+                : 'no reader found at all, which means the rollback table is stale'));
     if (failures) { console.log('\nFAILED: the old side would not isolate this change'); process.exit(1); }
 
     const workdir = opts.workdir || path.join(os.tmpdir(), 'xchain-lap-oldtree');
@@ -814,30 +910,41 @@ async function main() {
 
     for (const r of old.report)
         check(r.ok, 'rolled back: ' + r.label,
-            r.ok ? '' : (r.inHead !== 1
-                ? 'the HEAD text occurs ' + r.inHead + ' times in src/db.js (expected exactly 1)'
-                : (r.restores
-                    ? 'the legacy text is not present in ' + opts.preRef + ':src/db.js'
-                    : 'the HEAD text is ALREADY present in ' + opts.preRef +
-                      ':src/db.js, so --pre-ref is at or after this work')));
+            r.ok ? '' : (!r.known
+                ? r.file + ' is not a reader file, so the table names a site the rollback never visits'
+                : (r.inHead !== 1
+                    ? 'the HEAD text occurs ' + r.inHead + ' times in ' + r.file + ' (expected exactly 1)'
+                    : (r.restores
+                        ? 'the legacy text is not present in ' + opts.preRef + "'s database source"
+                        : 'the HEAD text is ALREADY present in ' + opts.preRef +
+                          "'s database source, so --pre-ref is at or after this work"))));
 
     // Completeness, not just correctness: one missed site would leave the old side
-    // running the new rule for that projection and the comparison would be a lie.
-    const code     = codeOnly(old.source);
-    const residual = occurrences(code, 'ledgerPrecision') + occurrences(code, FLAG_NAME);
-    check(residual === 0, 'the rolled-back src/db.js executes no reference to the activation module',
+    // running the new rule for that projection and the comparison would be a lie. Every
+    // reader is swept, so a gap in one mixin cannot hide behind a clean neighbour.
+    let residual = 0, inProse = 0;
+    for (const rel of READER_FILES) {
+        const src  = old.sources[rel];
+        const code = codeOnly(src);
+        const n    = occurrences(code, 'ledgerPrecision') + occurrences(code, FLAG_NAME);
+        if (n) info(rel + ' still executes ' + n + ' reference(s) to the activation module');
+        residual += n;
+        inProse  += occurrences(src, FLAG_NAME) - occurrences(code, FLAG_NAME);
+    }
+    check(residual === 0, 'no rolled-back reader executes a reference to the activation module',
         residual === 0 ? '' : residual + ' residual reference(s) outside comments; the rollback table has a gap');
-    const inProse = occurrences(old.source, FLAG_NAME) - occurrences(code, FLAG_NAME);
     if (inProse > 0)
         info(inProse + ' comment mention(s) of the module survive in the old tree, which is ' +
-             'stale prose and changes nothing the file executes');
+             'stale prose and changes nothing the files execute');
     check(!fs.existsSync(path.join(old.root, FLAG_REL)),
         'the activation module is absent from the old tree, so a missed site cannot resolve');
 
-    const parsed = spawnSync(process.execPath, ['--check', path.join(old.root, 'src', 'db.js')],
-        { encoding: 'utf8' });
-    check(parsed.status === 0, 'the rolled-back src/db.js still parses',
-        parsed.status === 0 ? '' : String(parsed.stderr || '').split('\n').slice(0, 5).join(' '));
+    for (const rel of READER_FILES) {
+        const parsed = spawnSync(process.execPath, ['--check', path.join(old.root, rel)],
+            { encoding: 'utf8' });
+        check(parsed.status === 0, 'the rolled-back ' + rel + ' still parses',
+            parsed.status === 0 ? '' : String(parsed.stderr || '').split('\n').slice(0, 5).join(' '));
+    }
 
     // The harness is identical by construction (the old tree IS HEAD's archive), but a
     // future edit to materializeOldTree could break that quietly, so it is asserted.

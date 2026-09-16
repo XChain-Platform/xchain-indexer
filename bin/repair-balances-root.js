@@ -14,7 +14,7 @@
  * Repair a chain whose committed `balances_root` has drifted BELOW a full
  * rebuild of its own ledger.
  *
- * WHY THIS EXISTS. `db._smtTickName` used to cache an ABSENT ticker name, and a
+ * WHY THIS EXISTS. `db.smtTickName` used to cache an ABSENT ticker name, and a
  * cached absence made `createLedgerChangeRecord` skip every later touch for that
  * tick for the connection's lifetime, so the tick's balance leaves were never
  * committed. The cause is fixed (indexer 2db73fa) but a fix does not un-drop the
@@ -57,8 +57,8 @@
 const path = require('path');
 
 const SRC = path.resolve(__dirname, '..', 'src');
-const M   = require(path.join(SRC, 'merkle.js'));
-const SC  = require(path.join(SRC, 'stateCommitment.js'));
+const M   = require(path.join(SRC, 'consensus', 'merkle.js'));
+const SC  = require(path.join(SRC, 'state_commitment', 'index.js'));
 const SUB = require(path.join(SRC, 'state_subtree_activation.js'));
 
 function parseArgs(){
@@ -85,7 +85,7 @@ function parseArgs(){
 (async () => {
     const opts = parseArgs();
 
-    const Database = require(path.join(SRC, 'db.js'));
+    const Database = require(path.join(SRC, 'db'));
     const config   = require(path.join(SRC, 'config.js'));
     const Utility  = require(path.join(SRC, 'utility.js'));
     const cfg  = config.getConfig(opts.chain, opts.network);

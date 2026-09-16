@@ -69,17 +69,17 @@
  *   3. an exactly-250-command BATCH                 (A2: the cap NOT tripped)
  *   4. two undotted ISSUEs in one BATCH             (A2: the pre-existing limit)
  *   5. a lone caret-dot ISSUE  ^<id>.<n>            (A3)
- *   6. a dotted ISSUE with no parent                (R6: the free ticker intern)
- *   7. a single-ISSUE BATCH from a gasless source   (R4: the aggregate pre-check)
+ *   6. a dotted ISSUE with no parent                (the free ticker intern)
+ *   7. a single-ISSUE BATCH from a gasless source   (the aggregate gas pre-check)
  *   8. TWO dispensers behind ONE paid address       (row 19: ordinary-path tally)
  *   9. a SEND that triggers a dispenser, overpaid   (row 18/20: get_amount)
- *  10. 3 ORDERs paying ONE ORDER's native-coin fee  (R5: the fee ledger)
- *  11. the same 3 ORDERs paying three ORDERs' worth (R5: N worth funds N)
- *  12. 3 Mode B DISPENSERs on ONE oracle fee output   (R5b: validateOracleFee)
- *  13. 2 Mode B DISPENSERs on TWO opens' worth        (R5b: the tally drains)
+ *  10. 3 ORDERs paying ONE ORDER's native-coin fee  (the native fee tally)
+ *  11. the same 3 ORDERs paying three ORDERs' worth (N commands' worth funds N)
+ *  12. 3 Mode B DISPENSERs on ONE oracle fee output   (the oracle fee tally in validateOracleFee)
+ *  13. 2 Mode B DISPENSERs on TWO opens' worth        (the oracle fee tally drains)
  *
- * Shapes 8 and 9 are ORDINARY, non-batch transactions: since a319226 the flag no
- * longer gates only BATCH behavior, so a comparison over batch shapes alone would
+ * Shapes 8 and 9 are ORDINARY, non-batch transactions: the flag does not
+ * gate only BATCH behavior, so a comparison over batch shapes alone would
  * leave the newly-gated ordinary dispense path entirely unmeasured and pass anyway.
  * Shapes 10/11 run on the NATIVE fee lane in the same corpus: an output paying
  * FEE_DESTINATION is what flips detectFeePaymentMode, so one BTC regtest chain
@@ -123,7 +123,7 @@
  * ------------------------------------------------------------------------------
  * WHAT IT DOES NOT COVER - read this before quoting a green run.
  *
- * ONE of R5's consumers is absent from the corpus, and it is not an oversight:
+ * ONE of the per-output fee tally's consumers is absent from the corpus, and it is not an oversight:
  *
  *   - COINPAY's settlement-value tally, which is STRUCTURALLY unreachable inside a
  *     BATCH today: the decoder gates payment-output capture on the raw data
@@ -292,7 +292,7 @@ function parseArgs() {
 const A1 = 'mq7tVfobimRUPxPNnyd5mKn11SVmTiLxtu';   // issuer / dispenser owner, funded with gas
 const A2 = 'n4nbVcRRR5sEHyp2VYuLUvCyDmQmBoonoK';   // counterparty, funded with gas
 const A3 = 'mvuKWKvgzrkxh8QgNZ91vMBZUKN5BFYmo3';   // dispenser payment collector (TWO dispensers)
-const A4 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi';   // deliberately holds NO gas (R4 pre-check)
+const A4 = 'mwGujTXFXMLN2YXqo4mQK4DcKy31DUcwoi';   // deliberately holds NO gas (aggregate gas pre-check)
 const A5 = 'mzBc4XEFSdzCDcTxAgf6EZXgsZWpztRhef';   // second collector (get_amount attribution)
 const ORACLE_A = 'mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp';  // PRICE v1 oracle the paid output goes to
 const ORACLE_B = 'mjifPngDYQ6HHPNQdGk1kQuFkJWEiQksQp';  // a SECOND oracle, deliberately never paid
@@ -390,7 +390,7 @@ function corpus() {
 
     // 107: SHAPE 6 - a dotted ISSUE whose parent does not exist. Invalid on every
     // side, but below the flag getTokenInfo still INTERNS the unseen names into
-    // index_tickers for free (R6/F11); above it the intern is suppressed. The
+    // index_tickers for free; above it the intern is suppressed. The
     // verdict is identical and the SIDE EFFECT is not, which is precisely the class
     // of leak a verdict-only comparison would miss.
     blocks.push({ block: 107, time: t(107), txs: [
@@ -441,7 +441,7 @@ function corpus() {
         { source: A2, destination: A5, data: `SEND|0|${BETA}|5|${A5}` },
     ] });
 
-    // 113: SHAPE 10 - the one-fee-for-N batch, R5's headline invariant, on the NATIVE
+    // 113: SHAPE 10 - the one-fee-for-N batch, the per-output fee tally's headline invariant, on the NATIVE
     // fee lane. The transaction's only output pays FEE_DESTINATION, which is what flips
     // detectFeePaymentMode to 'native', and it carries exactly ONE ORDER's worth of fee.
     // Below the flag nothing decrements TX_OUTPUTS between sub-commands, so all three
@@ -462,7 +462,7 @@ function corpus() {
         ] });
     }
 
-    // 115: SHAPE 12 - the oracle-fee half of R5b, the site every earlier run of this
+    // 115: SHAPE 12 - the oracle-fee half of the per-output fee tally, the site every earlier run of this
     // tool named as unreached. THREE Mode B DISPENSER opens in one BATCH: the first two
     // name ORACLE_A, the third names ORACLE_B. The transaction's single output pays
     // ORACLE_A exactly ONE open's worth of oracle fee and pays ORACLE_B nothing.

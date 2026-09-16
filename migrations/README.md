@@ -8,7 +8,7 @@ The runner-tracked migration home is **`src/sql/migrations/`**. That is the only
 directory `Database.runMigrations()` scans, records in the `schema_migrations`
 ledger, and enforces immutability/checksum on. New migrations go there, tagged
 `-- xchain:migration mode=auto|manual` (auto applies at boot; manual applies via
-`node src/migrate.js`).
+`node src/migration/migrate.js`).
 
 A `manual` migration that code ASSERTS at startup carries one more token on that
 same directive line, `deploy-precondition=required`, and is registered in

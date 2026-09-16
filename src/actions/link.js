@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -31,7 +32,9 @@
 
 class Link {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -43,30 +46,71 @@ class Link {
         this.formats[0] = 'VERSION|COIN1|COIN1_ACTION_INDEX|COIN2|COIN2_ACTION_INDEX|MEMO';
     }
 
+    // Handle parsing the ADDRESS transaction
     async parse(params, data, error){
+        /*****************************************************************
+         * DEBUGGING - Force params
+         ****************************************************************/
+        // Example payloads by FORMAT version:
+        // let str = "0|1234|BTC|4321|Linking FILE upload to TICK";
+        // let str = "0|1234|DOGE|6666|Linking TICK with FILE upload on DOGE";
+        // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
+
+        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
+        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
+        // Convert NUMBER fields from string value to number value so comparisons are mathematical
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        // COIN Validations
+        error = this.validateCoinsAndFormats(data, format, error);
 
-        // Validate COIN1 is valid
+        error = await this.validateFields(data, error);
+
+        // Determine final status
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        // Print status message
+        getLogger().info("\t LINK : " + data['COIN1'] + ':' + data['COIN1_ACTION_INDEX'] + '->' + data['COIN2'] + ':' + data['COIN2_ACTION_INDEX'] + ' : ' + data['STATUS']);
+
+        // Create record in links table
+        await this.indexerDb.createLink(data);
+
+        // Store the SOURCE in addresses list
+        this.util.addAddressTicker(data['SOURCE']);
+
+        // Create action mappings
+        await this.mapper.createMappings(data);
+
+    }
+
+    // COIN Validations
+    validateCoinsAndFormats(data, format, error){
+
+        // Validate COIN1 is valid: a LINK pairs two on-chain actions across two COIN networks,
+        // so COIN1 has to be a network this indexer is configured for, or the pairing can never
+        // be verified.
         if(!error && format==0 && !this.config['COINS'].includes(data['COIN1']))
             error = 'invalid: COIN1 (unsupported COIN network)';
 
-        // Validate COIN2 is valid
+        // Validate COIN2 is valid: the other side of the pair is checked separately, because a
+        // LINK between a supported network and an unsupported one is not half-valid, it is
+        // unverifiable.
         if(!error && format==0 && !this.config['COINS'].includes(data['COIN2']))
             error = 'invalid: COIN2 (unsupported COIN network)';
 
         // FORMAT Validations
 
-        // Verify COIN1_ACTION_INDEX format
+        // Verify COIN1_ACTION_INDEX format: both action indexes are numeric row references, not
+        // hashes, so a non-numeric value cannot be looked up and would silently link nothing.
         if(!error && (this.util.isNull(data['COIN1_ACTION_INDEX']) || !this.util.isNumeric(data['COIN1_ACTION_INDEX'])))
             error = 'invalid: COIN1_ACTION_INDEX (format)';
 
@@ -74,9 +118,14 @@ class Link {
         if(!error && (this.util.isNull(data['COIN2_ACTION_INDEX']) || !this.util.isNumeric(data['COIN2_ACTION_INDEX'])))
             error = 'invalid: COIN2_ACTION_INDEX (format)';
 
-        // General Validations
+        return error;
+    }
 
-        // Verify SOURCE is not sleeping
+    // General Validations
+    async validateFields(data, error){
+
+        // Verify SOURCE is not sleeping: a frozen address may not create or change links,
+        // matching every other action-creating handler.
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
@@ -99,6 +148,8 @@ class Link {
                 let tokenInfo = await this.indexerDb.getTokenInfo(tick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
                 if(tokenInfo && tokenInfo['OWNER'] !== data['SOURCE'])
                     error = 'invalid: SOURCE (not current TICK owner)';
+                // Verify TICK ownership is not escrowed: an owner mid-sale must not be able to
+                // re-point the token's links while the ownership transfer is still pending.
                 if(!error && await this.indexerDb.isOwnershipEscrowed(tick))
                     error = 'invalid: TICK (ownership escrowed)';
             }
@@ -116,17 +167,7 @@ class Link {
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
-        let status = (error) ? error : 'valid';
-        data['STATUS'] = status;
-
-        console.log("\t LINK : " + data['COIN1'] + ':' + data['COIN1_ACTION_INDEX'] + '->' + data['COIN2'] + ':' + data['COIN2_ACTION_INDEX'] + ' : ' + data['STATUS']);
-
-        await this.indexerDb.createLink(data);
-
-        this.util.addAddressTicker(data['SOURCE']);
-
-        await this.mapper.createMappings(data);
-
+        return error;
     }
 }
 

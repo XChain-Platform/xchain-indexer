@@ -57,6 +57,8 @@
 'use strict';
 
 const crypto = require('crypto');
+const fs     = require('fs');
+const path   = require('path');
 
 // The activation maps BOTH repos evaluate, as [module basename, [export names]].
 // Order is fixed and part of the digest preimage; append new gates at the END so
@@ -86,7 +88,36 @@ const SHARED_GATES = [
     ['attest_zero_conf_activation',             ['ATTEST_ZERO_CONF_ACTIVATION']],
     ['attest_responsible_widening_activation',  ['ATTEST_RESPONSIBLE_WIDENING_V2']],
     // Epoch-keyed: ROLLCALL v1 with the GATES field, and the rules-aware capability set.
-    ['rollcall_gates_activation',               ['ROLLCALL_GATES_ACTIVATION']]
+    ['rollcall_gates_activation',               ['ROLLCALL_GATES_ACTIVATION']],
+    // COIN-KEYED ('<COIN>:<network>' with the bare network key as fallback), the first
+    // shared gate of that shape: XBRIDGE arms one height per chain because TBTC, TLTC and
+    // TDOGE tips differ by orders of magnitude. activeGatesAt resolves both forms below.
+    ['xchain_bridge_activation',                ['XCHAIN_BRIDGE_ACTIVATION']],
+    // The time-keyed mirror barrier family. Registered here where the parent spec's own
+    // anchor-attest gate declined to be, and the reason is the hub's side of the rule: that
+    // gate was indexer-only, so the hub evaluated neither of its constants and a shared entry
+    // would have been dead weight. The hub evaluates all three of THIS family's rules (the
+    // follower admission bound, the producer era gate and the admission stamp it signs), so an
+    // upgraded hub MUST report a rules mismatch against un-upgraded peers during the deploy
+    // wave rather than silently signing rows their consumers bind at a different block.
+    // Appended at the END: an insertion mid-list reorders the preimage of everything after it.
+    ['mirror_admission_activation',             ['MIRROR_ADMISSION_ACTIVATION', 'MIRROR_ADMISSION_CONSUMER_ACTIVATION', 'ADMIT_MARGIN_BLOCKS', 'ADMIT_MIN_FUTURE_BLOCKS', 'ADMIT_MAX_FUTURE_BLOCKS']],
+    // The family's anchor-attest member: the maturity-horizon height and the arrival margin it
+    // reads. A second entry for anchor_reward_activation rather than an edit of its entry
+    // above, for the same preimage-ordering reason.
+    ['anchor_reward_activation',                ['ANCHOR_ATTEST_BARRIER_ACTIVATION', 'ANCHOR_ATTEST_ARRIVAL_MARGIN_S']],
+    // The admission canonical ENCODER and its era gate, which moved into that module when the
+    // price rail joined the family: the hub signs the admission field and every indexer
+    // rebuilds it, so two builds spelling one map differently is a fork rather than a stall.
+    // Registered because the BYTES a price round is signed over move at the activation, so an
+    // upgraded build must report a rules mismatch against un-upgraded peers during the deploy
+    // wave. What these rows can and cannot see: a function canonicalizes to `undefined` and a
+    // regex to '{}', so they alarm on PRESENCE and never on a changed function BODY; the body
+    // is held by the byte compare of the two copies of the module, which is a test rather than
+    // a digest row. A SECOND entry for the module at the END rather than names added to its
+    // entry above, because an insertion mid-list shifts the preimage of every gate after it.
+    ['mirror_admission_activation',             ['CHAIN_CODE_RE', 'CANONICAL_HEIGHT_RE', 'encodeAdmitBlocks',
+                                                 'decodeAdmitBlocks', 'isAdmissionEra', 'admissionCanonicalField']]
 ];
 
 // A per-network height at or above this value is a far-future placeholder, not an
@@ -112,19 +143,57 @@ function canonical(value){
 let cached = null;
 let cachedValues = null;
 
-// The RAW export of every shared gate, keyed '<module>.<EXPORT>', ABSENT where this
-// build lacks it. Read once: the digest and the active-set derivation below must see
-// the same values, and a gate module is never re-required after boot.
+// The activation registry, reachable at this one path in every repo that carries this
+// module. Every shared gate VALUE is a row of it, keyed exactly as SHARED_GATES spells it.
+const registry = require('./consensus/gate_registry');
+
+// One shared gate's value: the registry row under '<module>.<EXPORT>', which THROWS a
+// RegistryMissError naming the key rather than reading null. A row a build lacks is a
+// build defect and never a network state; a null returned here instead let a MOVED
+// carrier read as ABSENT while the signed GATES field stayed byte for byte what every
+// peer publishes, a rules fork no wire field named.
+//
+// The one legitimate miss is a name that is a FUNCTION on the carrier (the admission
+// encoder and era gate: a registry holds values, and a function's entry alarms on
+// presence alone, see SHARED_GATES). Those are read from the carrier at src/<mod>.js,
+// and anything but a function there rethrows the miss. A carrier that is not there is
+// a build defect too, never ABSENT, and a carrier that IS there and fails to load throws
+// for the reason it always did: swallowing that yields 87637dfa instead of 26ba9cce in
+// a checkout without node_modules, since stake_weighted_quorum.js requires mathjs, and
+// two revisions measured that way FALSELY MATCH.
+function loadGateValue(mod, name){
+    const key = mod + '.' + name;
+    try {
+        return registry.get(key);
+    } catch (miss) {
+        if (!miss || miss.name !== 'RegistryMissError') throw miss;
+        const file = path.join(__dirname, mod + '.js');
+        if (!fs.existsSync(file)) {
+            throw new Error('consensus-rules gate ' + key + ' has no registry row and no carrier at src/'
+                + mod + '.js, so no digest can be computed');
+        }
+        let carrier;
+        try {
+            carrier = require(file);
+        } catch (e) {
+            throw new Error('consensus-rules gate ' + mod + ' is present at src/' + mod
+                + '.js but failed to load, so no digest can be computed: '
+                + ((e && e.message) ? e.message : String(e)));
+        }
+        if (typeof carrier[name] === 'function') return carrier[name];
+        throw miss;
+    }
+}
+
+// The RAW value of every shared gate, keyed '<module>.<EXPORT>'. Read once: the digest
+// and the active-set derivation below must see the same values, and neither the
+// registry nor a gate module is re-read after boot. ABSENT is no longer produced here;
+// it remains the sentinel diffGates uses for a key a PEER's map lacks.
 function loadGateValues(){
     if (cachedValues) return cachedValues;
     const values = {};
     for (const [mod, names] of SHARED_GATES) {
-        let m = null;
-        try { m = require('./' + mod + '.js'); } catch (e) { m = null; }
-        for (const name of names) {
-            const key = mod + '.' + name;
-            values[key] = (m && Object.prototype.hasOwnProperty.call(m, name)) ? m[name] : ABSENT;
-        }
+        for (const name of names) values[mod + '.' + name] = loadGateValue(mod, name);
     }
     cachedValues = values;
     return cachedValues;
@@ -152,6 +221,41 @@ function knownGateKeys(){
     return Object.keys(loadGateValues()).sort();
 }
 
+// The activation height a gate MAP declares for `network`, or undefined when it declares
+// none. Two key forms are legal: the plain network key every gate but one uses, and the
+// coin-keyed '<COIN>:<network>' form XCHAIN_BRIDGE_ACTIVATION uses with the bare network
+// key as its fallback.
+//
+// With `coin` named the resolution matches the gate module's own resolver exactly: the
+// coin's key when the map declares one, otherwise the bare network key.
+//
+// With no coin named the EARLIEST armed key for the network decides. A GATES list states
+// what a BUILD applies and one build serves every chain on a network, so the first chain
+// to arm is the block from which a build lacking the gate is running different rules.
+// Reading the bare key alone would report such a gate inactive forever, because an arming
+// train sizes one height per chain and leaves the bare fallback on the far-future sentinel.
+function networkActivationHeight(map, network, coin){
+    if (coin != null) {
+        const keyed = map[String(coin) + ':' + network];
+        if (keyed !== undefined) return keyed;
+        return Object.prototype.hasOwnProperty.call(map, network) ? map[network] : undefined;
+    }
+    const suffix = ':' + network;
+    let earliest = undefined;
+    let declared = false;
+    for (const k of Object.keys(map)) {
+        if (k !== network && !(k.length > suffix.length && k.endsWith(suffix))) continue;
+        declared = true;
+        const at = map[k];
+        if (!Number.isFinite(at) || at >= FAR_FUTURE_HEIGHT_SENTINEL) continue;
+        if (earliest === undefined || at < earliest) earliest = at;
+    }
+    if (earliest !== undefined) return earliest;
+    // Nothing armed for this network: hand back the bare value so the caller's own
+    // sentinel and null checks report it inactive for the reason it is inactive.
+    return declared ? map[network] : undefined;
+}
+
 // The shared gates ACTIVE at `height` on `network`, '<module>.<EXPORT>', sorted: every
 // per-network activation MAP whose entry for the network is a finite height, below the
 // far-future sentinel, and <= height. Non-map exports (frozen ladder constants such as
@@ -159,7 +263,12 @@ function knownGateKeys(){
 // null entry is the unratified sentinel and reads as inactive. This is the comparand the
 // rules-aware capability set filters on: a validator whose last rolled call did not name
 // every key returned here is dropped for a request at this height.
-function activeGatesAt(height, network){
+//
+// `coin` is optional and only changes the answer for a coin-keyed gate: pass the chain
+// being judged to get that chain's own activation, omit it to get the network-wide answer
+// (active from the first chain that arms), which is what a caller holding only a height
+// and a network needs.
+function activeGatesAt(height, network, coin){
     let h = Number(height);
     if (!Number.isFinite(h)) return [];
     const values = loadGateValues();
@@ -167,8 +276,8 @@ function activeGatesAt(height, network){
     for (const key of Object.keys(values)) {
         const v = values[key];
         if (v === ABSENT || v === null || typeof v !== 'object' || Array.isArray(v)) continue;
-        if (!Object.prototype.hasOwnProperty.call(v, network)) continue;
-        const at = v[network];
+        const at = networkActivationHeight(v, network, coin);
+        if (at === undefined) continue;
         if (!Number.isFinite(at) || at >= FAR_FUTURE_HEIGHT_SENTINEL) continue;
         if (at <= h) out.push(key);
     }

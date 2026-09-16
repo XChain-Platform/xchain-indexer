@@ -1,0 +1,1283 @@
+#!/usr/bin/env node
+'use strict';
+
+/*********************************************************************
+ *
+ * Copyright © 2025–2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md. A commercial
+ * license (without AGPL source-disclosure terms) is available -
+ * contact legal@dankest.llc.
+ *
+ **********************************************************************
+ * Full-parse recovery CLI to rebuild the cross-chain match mirror from the
+ * on-chain ANCHOR archive, with NO surviving hub database.
+ *
+ * Reads the DOGE indexer's anchor_actions (populated purely by chain parse),
+ * reassembles each archive batch (v1 + v2 continuation chunks), and for every
+ * batch that passes verification rebuilds cross_chain_matches and
+ * capability_snapshots so a from-genesis reindex of BTC/LTC/DOGE re-derives
+ * cross-chain settlements identically.
+ *
+ * Verification per batch (all self-contained in the archive):
+ *   1. CRC32 of the decompressed JSON must equal the v1's signed BATCH_CRC32.
+ *   2. The v1 wrapper signatures must reach 2f+1 of the ARCHIVED
+ *      oracle_publish set at the anchor's snapshot_block.
+ *   3. Every match's validator_signatures must reach 2f+1 of the ARCHIVED
+ *      cross_chain set at the match's snapshot_block.
+ *   4. (stake cross-check, ON by default) every archived snapshot pubkey must
+ *      hold ANY active on-chain stake at its snapshot_block in the given BTC
+ *      indexer DB. A fabricated validator set cannot survive this, because
+ *      staking is on-chain. The chain stays the root of trust. Steps 2/3 alone
+ *      authenticate the wrapper/match signatures only against the validator set
+ *      carried INSIDE the same archive blob, so a self-consistent forged archive
+ *      passes them; this on-chain cross-check is what makes the chain, not the
+ *      archive, the root of trust, so it now runs unless explicitly skipped.
+ *
+ * Later batches supersede earlier ones per match_id (latest-status-wins), so
+ * a match archived as `finalized` and later re-archived as `retracted` ends
+ * recovered as retracted.
+ *
+ *   node bin/recovery.js [--dry-run] [--skip-stake-verification [--i-understand-unverified]]
+ *
+ * Reads INDEXER_DB_* from the service environment (.env). Point it at the
+ * DOGE indexer DB. The default stake cross-check requires BTC_INDEXER_DB_NAME
+ * (same host/credentials) holding the BTC indexer's stakes tables.
+ *
+ * Pre-BTC-reindex reward-restore workflow: the reward restore runs BEFORE the
+ * BTC reindex, when the stakes table is empty and the cross-check would wrongly
+ * fail every batch. That is the ONE legitimate writing skip; run it with
+ *   node bin/recovery.js --skip-stake-verification --i-understand-unverified
+ * then, AFTER the BTC reindex, run a verifying dry-run pass to confirm:
+ *   node bin/recovery.js --dry-run
+ * A bare --skip-stake-verification (no --i-understand-unverified) is forced to a
+ * dry run so an unverified run can never write settlement-bearing rows by accident.
+ *
+ ********************************************************************/
+
+// Run as a CLI, load .env before any local require: src/config.js captures the
+// environment once at module load, and a module required below may pull it in.
+// Required as a module (the tests), the caller's environment is left alone.
+if(require.main === module) require('dotenv').config();
+
+const zlib    = require('zlib');
+const crypto  = require('crypto');
+const ed25519 = require('../src/consensus/ed25519.js');
+const swq     = require('../src/stake_weighted_quorum.js');
+const eq      = require('../src/equivocation_header.js');
+const ccr     = require('../src/cross_chain_royalty_activation.js');
+const ar      = require('../src/anchor_reward_activation.js');
+const rca     = require('../src/rollcall_activation.js');
+const gateRegistry = require('../src/consensus/gate_registry');
+const srb     = require('../src/snapshot_reorg_buffer.js');
+const cmsh    = require('../src/consensus/capability_min_stake_history.js');
+const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
+        ARCHIVE_HEAD_GATE_SQL, dedupeArchiveChunks,
+        archiveChunkCoverage } = require('../src/actions/anchor/anchor_action_query.js');
+// Archive-head version set, spliced rather than hand-copied: recovery must replay the
+// SAME heads the live mirror path reads, so a new publisher-bearing version added to
+// ARCHIVE_HEAD_VERSIONS cannot reach one path and silently skip the other.
+const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../src/stateHash.js');
+
+// Capabilities whose archived snapshot is re-resolvable from the BTC capability stakes.
+// Both cross-checks gate on this one set (_verifyStakes for its delegated-key admission,
+// verifyCompleteness for the whole check), so a future snapshot kind cannot silently reach
+// one and skip the other.
+const QUORUM_CAPABILITIES = new Set(['cross_chain', 'oracle_publish', 'price', 'attestation']);
+
+class AnchorRecovery {
+
+    // db: doQuery handle on the DOGE indexer DB (anchor_actions + the mirror
+    // tables to rebuild). opts.btcDb: optional doQuery handle on the BTC
+    // indexer DB for the stake cross-check. opts.dryRun: verify + report only.
+    constructor(db, opts){
+        opts = opts || {};
+        this.db     = db;
+        this.btcDb  = opts.btcDb || null;
+        this.dryRun = !!opts.dryRun;
+        // Explicit flag, NOT btcDb presence: the reward restore runs BEFORE the
+        // BTC reindex (empty stakes table), where the stake cross-check would
+        // wrongly fail every batch. Run a --verify-stakes --dry-run pass AFTER
+        // the reindex for the cross-check.
+        this.verifyStakes = !!opts.verifyStakes;
+        // mathjs bignumber helpers (same instance the indexer uses) for the
+        // stake-weighted quorum predicate. Required when replaying archives whose
+        // snapshot_block is at/above STAKE_WEIGHTED_QUORUM.
+        this.util   = opts.util || null;
+        // Operator-supplied block-anchored governance MIN_STAKE history
+        // ({ <capability>: [{activation_block, value}] }), overriding the frozen
+        // per-network table in capability_min_stake_history.js. For a DR run replaying a
+        // federation whose ratified history is not in this build. OPERATOR input only -
+        // nothing archive-derived may ever reach it, or the archive picks its own bar again.
+        this.minStakeActivations = opts.minStakeActivations || null;
+        this.log    = opts.log || ((msg) => console.log(msg));
+    }
+
+    async run(){
+        let report = { batches: 0, verified: 0, failed: [], matches: 0, snapshots: 0, calls: 0, rewards: 0 };
+
+        // Restrict to the SAME statuses every other reader of anchor_actions accepts
+        // (getArchiveReplayWatermarks / getMaxAnchorCheckpointSeq: archive-head or
+        // checkpoint-bearing versions AND status IN ('valid','unverified')). anchor_actions stores
+        // a row for EVERY parsed ANCHOR, valid or not (anchor.js records the verdict in STATUS
+        // rather than dropping the row), so without
+        // this join recovery replayed batches the on-chain parse recorded as invalid - e.g.
+        // 'insufficient valid signatures' or a stale CHECKPOINT_SEQ / MATCH_BATCH_SEQ replay -
+        // into cross_chain_matches / cross_chain_calls that a normally-synced indexer never
+        // derived, diverging a recovery-fed node from a mirror-fed one. The INNER JOIN also drops
+        // any row with a NULL status_id, which every production row resolves (anchor.js defaults
+        // STATUS to 'valid'); do NOT loosen this to a LEFT JOIN accepting NULL, which reopens the hole.
+        // match_batch_seq is NOT unique: the parseCheckpoint replay guard admits an EQUAL
+        // MATCH_BATCH_SEQ (a permissionless re-broadcast or failover double-publish stores a
+        // second v1 head for the same batch, db/anchors/index.js 'match_batch_seq is NOT unique'). The
+        // rebuild below is order-dependent (latest-status-wins per match_id; finalized-wins full
+        // overwrite per (call_id,phase)), so equal-seq heads MUST replay in a deterministic total
+        // order or two nodes persist divergent finalized content. Break the tie on action_index
+        // ASC - unique + consensus-visible on this single-network table - mirroring the live head
+        // pick (db.getAnchorV1ByBatchSeq) and the chunk-assembly query below.
+        // The head's AUTHOR rides along (LEFT joined, so the row set is unchanged): under
+        // the publisher-scoped flag day a head reassembles its own publisher's
+        // chunks, and recovery has to reassemble the same set the live path did or a
+        // recovery-fed node diverges from a mirror-fed one. Resolved through
+        // actions.source_id, authoritative for auth, exactly like the live head pick.
+        let v1s = await this.db.doQuery(
+            `SELECT a.*, adr.address AS source FROM anchor_actions a
+             JOIN index_statuses s ON s.id = a.status_id
+             LEFT JOIN actions         act ON act.action_index = a.action_index
+             LEFT JOIN index_addresses adr ON adr.id           = act.source_id
+             WHERE a.version ${ARCHIVE_HEAD_VERSIONS_SQL} AND s.status IN ('valid', 'unverified')
+             ORDER BY a.match_batch_seq ASC, a.action_index ASC`);
+        if(!v1s || v1s.length === 0){
+            // Name the versions the query actually scanned, so the operator reading this
+            // during an incident is never sent hunting for a retired wire.
+            this.log('recovery: no archive anchors found (anchor_actions has no ' +
+                     ARCHIVE_HEAD_VERSIONS.map(v => 'v' + v).join('/') + ' rows)');
+            return report;
+        }
+
+        for(let v1 of v1s){
+            report.batches++;
+            let batchSeq = Number(v1.match_batch_seq);
+            try {
+                let archive = await this.verifyBatch(v1);
+                // The anchor txid is not in the archive blob, but it IS recoverable at
+                // rebuild time: it is the DOGE transaction hash of this v1 ANCHOR action.
+                // Populate it so a recovery-fed mirror matches a mirror-fed one, where the
+                // hub backfills anchor_txid on publish (hub_db_sync COALESCE upgrade path).
+                let anchorTxid = await this.anchorTxid(v1.action_index);
+                if(!this.dryRun) await this.rebuild(archive, report, v1.network, anchorTxid);
+                else {
+                    report.matches   += archive.matches.length;
+                    report.calls     += (archive.calls || []).length;
+                    report.snapshots += (archive.capability_snapshots || []).length;
+                    report.rewards   += (archive.rewards || []).length;
+                }
+                report.verified++;
+                this.log('recovery: batch ' + batchSeq + ' OK (' + archive.matches.length + ' matches, ' +
+                         ((archive.calls || []).length) + ' calls, ' + ((archive.rewards || []).length) + ' rewards)');
+            } catch(e){
+                report.failed.push({ batch_seq: batchSeq, reason: e.message });
+                this.log('recovery: batch ' + batchSeq + ' FAILED: ' + e.message);
+            }
+        }
+
+        this.log('recovery: ' + report.verified + '/' + report.batches + ' batches verified, ' +
+                 report.matches + ' match rows, ' + report.calls + ' call rows, ' +
+                 report.snapshots + ' snapshot rows, ' + report.rewards + ' reward rows' +
+                 (this.dryRun ? ' (dry run, nothing written)' : ''));
+        return report;
+    }
+
+    // ── Per-batch verification ──────────────────────────────────────────────────
+
+    // The author this head's chunk set is scoped to, or null while the
+    // publisher-scoped flag day is inert for the batch. `network` comes off the anchor
+    // row itself, never a process-level default: the parse path rejects an ANCHOR whose
+    // NETWORK is not this indexer's ('invalid: NETWORK (not this network)'), so every
+    // replayable row already carries the network the live gate resolved against.
+    async archiveAuthorScope(v1){
+        let gate = await this.db.doQuery(ARCHIVE_HEAD_GATE_SQL, [Number(v1.match_batch_seq)]);
+        let head = (gate && gate.length > 0) ? gate[0] : null;
+        if(!head) return null;
+        if(!gateRegistry.activeAt('archive_batch_author_activation.ARCHIVE_BATCH_AUTHOR_ACTIVATION', v1.network, null, Number(head.block_index_doge), null)) return null;
+        return String(v1.source || '');
+    }
+
+    async verifyBatch(v1){
+        // Reassemble v1 chunk 0 + v2 continuations.
+        let totalChunks = Number(v1.total_chunks) || 1;
+        let b64 = String(v1.archive_b64 || '');
+        if(totalChunks > 1){
+            // Import the live path's query rather than inline a copy: recovery holds
+            // only a doQuery handle, and a hand-copied shape drifts on the authorship
+            // term. Rejected 'invalid: ...' rows are excluded so one permissionless junk
+            // v2 tx cannot inflate the count and block the batch forever ('incomplete
+            // batch'); 'orphan' rows are KEPT (a chunk that landed before its
+            // parent head carries legitimate archive bytes) and are exactly why the
+            // authorship filter must be in the read path; and only chunks authored by
+            // the canonical archive head count at all. Lowest action_index wins per
+            // index, deterministically. Mirrors the v1 status join above and
+            // rollback.js's valid-chunk self-join; do NOT loosen to unfiltered.
+            // At/after the publisher-scoped flag day the batch key is
+            // (match_batch_seq, head author), so THIS head reassembles the chunks of its
+            // own publisher and a junk head squatting the seq can no longer filter them
+            // out. Gated on the batch's canonical head (earliest v1 row, the one row
+            // resolved identically on every node without consulting status), byte-for-byte
+            // the anchor the live parse path uses, so recovery and the live path never
+            // apply different rules to the same batch. Below the flag day the legacy
+            // canonical-head query runs unchanged.
+            let scope = await this.archiveAuthorScope(v1);
+            let rows = (scope !== null)
+                ? await this.db.doQuery(ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL, [Number(v1.match_batch_seq), scope])
+                : await this.db.doQuery(ARCHIVE_CHUNK_SET_SQL,
+                    [Number(v1.match_batch_seq), Number(v1.match_batch_seq)]);
+            // Completeness is exact index coverage of {1..totalChunks-1}, NOT a bare chunk
+            // count — byte-identical to the live head/chunk gates via archiveChunkCoverage,
+            // so recovery and the live path never disagree on whether a batch assembles or on
+            // the reassembled byte order. Out-of-range chunks are dropped rather than counted,
+            // so a stray orphan can neither inflate the count past totalChunks-1 ('incomplete
+            // batch' forever) nor pad a set missing a real index up to length.
+            let chunks  = dedupeArchiveChunks(rows);
+            let ordered = archiveChunkCoverage(chunks, totalChunks);
+            if(!ordered){
+                let inRange = chunks.filter(c => { let i = Number(c.chunk_index); return i >= 1 && i <= totalChunks - 1; }).length;
+                throw new Error('incomplete batch: ' + inRange + '/' + (totalChunks - 1) + ' continuation chunks');
+            }
+            for(let c of ordered) b64 += c.archive_b64;
+        }
+
+        // CRC binds the blob to the signed structure.
+        // Bound decompressed output (gzip-bomb DoS guard); zlib throws RangeError past
+        // the cap, which the catch rejects as an invalid archive.
+        let json;
+        try { json = zlib.gunzipSync(Buffer.from(b64, 'base64url'), { maxOutputLength: 16 * 1024 * 1024 }).toString('utf8'); }
+        catch(e){ throw new Error('archive is not valid gzip'); }
+        if(this.crc32Hex(json) !== String(v1.batch_crc32))
+            throw new Error('BATCH_CRC32 mismatch');
+
+        let archive = JSON.parse(json);
+        if(!archive || !Array.isArray(archive.matches))
+            throw new Error('malformed archive JSON');
+        if(archive.matches.length !== Number(v1.match_count))
+            throw new Error('MATCH_COUNT mismatch (' + archive.matches.length + ' != ' + v1.match_count + ')');
+
+        let snaps = Array.isArray(archive.capability_snapshots) ? archive.capability_snapshots : [];
+        // Source-keyed rows {pubkey, source, weight} so the weighted predicate can
+        // dedupe by staking source; the legacy count path uses only .pubkey.
+        let setFor = (capability, block) => snaps
+            .filter(s => s.capability === capability && Number(s.snapshot_block) === Number(block))
+            .map(s => ({ pubkey: String(s.signing_pubkey).toLowerCase(), source: String(s.source != null ? s.source : ''), weight: String(s.amount != null ? s.amount : '0') }));
+
+        // Optional but recommended: archived validator sets must be backed by
+        // real on-chain BTC stakes. Fabricated sets cannot survive this.
+        if(this.verifyStakes && this.btcDb) await this._verifyStakes(snaps, v1.network);
+
+        // Key-binding: existence alone accepts an archive whose signing key
+        // is real but attributed to SOMEONE ELSE'S staking source. Under weighted quorum
+        // the source carries the weight and stake_weighted_quorum derives pubkey->source
+        // from the archive itself, so swapping an attacker key onto an honest source's row
+        // (source and amount left byte-identical) is credited that source's full weight.
+        // Needs no resolver, so it runs on a bare doQuery handle too.
+        if(this.verifyStakes && this.btcDb) await this.verifyKeySourceBinding(snaps, v1.network);
+
+        // Completeness: existence alone (above) accepts a real-but-
+        // PROPER-SUBSET snapshot - a single small-but-real staker could omit the honest
+        // high-stake sources so the under-counted S lets its minority clear the 2/3 bar,
+        // forging a match/call the wrapper quorum then authenticates. Re-resolve the FULL
+        // qualifying set from the BTC stakes and require no qualifying source was dropped.
+        // Needs the resolver (a BTC-scoped Database), so it is gated on that being present
+        // in addition to --verify-stakes; the raw-doQuery test stub skips it harmlessly.
+        if(this.verifyStakes && this.btcDb && typeof this.btcDb.getStakeWeightsByCapability === 'function')
+            await this.verifyCompleteness(snaps, v1.network);
+
+        // 1. Wrapper signatures vs the ARCHIVED oracle_publish set.
+        let wrapperSet = setFor('oracle_publish', v1.snapshot_block);
+        let wrapperCanonical = this.wrapperCanonical(v1);
+        let wrapperSigs = this.parseSigs(v1.validator_signatures);
+        if(!this.quorumVerified(wrapperCanonical, wrapperSigs, wrapperSet, swq.isStakeWeightedQuorumActive(v1.snapshot_block, v1.network)))
+            throw new Error('wrapper signatures fail quorum against the archived oracle_publish set');
+
+        // 2. Every match's signatures vs the ARCHIVED cross_chain set.
+        for(let m of archive.matches){
+            let set  = setFor('cross_chain', m.snapshot_block);
+            let sigs = this.parseSigs(m.validator_signatures);
+            if(!this.quorumVerified(this.matchCanonical(m), sigs, set, swq.isStakeWeightedQuorumActive(m.snapshot_block, m.network)))
+                throw new Error('match ' + String(m.match_id).substring(0, 16) + '... fails quorum against the archived cross_chain set');
+        }
+
+        // 3. Every XCALL relay row's signatures vs the ARCHIVED cross_chain set.
+        // `calls` is absent from pre-XCALL archives; treated as empty.
+        for(let c of (archive.calls || [])){
+            let set  = setFor('cross_chain', c.snapshot_block);
+            let sigs = this.parseSigs(c.validator_signatures);
+            if(!this.quorumVerified(this.callCanonical(c), sigs, set, swq.isStakeWeightedQuorumActive(c.snapshot_block, c.network)))
+                throw new Error('call ' + String(c.call_id).substring(0, 16) + '... (' + c.phase + ') fails quorum against the archived cross_chain set');
+        }
+
+        // 4. Shape-check archived anchor-publish rewards (absent pre-rewards
+        // archives, treated as empty). Reward rows carry no per-row signatures; they are
+        // bound by the wrapper CRC+quorum, and the archiving followers re-derived
+        // each one from deterministic election state before co-signing. ONLY
+        // anchor publish rewards are restorable. oracle_round, attest_fee and attest_bcast are
+        // re-derived from the chain parse itself, so an archive that claims them
+        // is malformed (or malicious) and the batch is rejected.
+        for(let r of (archive.rewards || [])){
+            if(!/^[0-9a-fA-F]{64}$/.test(String(r.validator_pubkey || '')))
+                throw new Error('reward row has malformed validator_pubkey');
+            if(!r.source || typeof r.source !== 'string')
+                throw new Error('reward row is missing its earn-time source');
+            if(!/^anchor_[A-Za-z_]+$/.test(String(r.reward_type || '')))
+                throw new Error('reward row has non-anchor reward_type "' + r.reward_type + '"; only anchor publish rewards are archivable');
+            if(!Number.isFinite(Number(r.round_number)) || Number(r.round_number) < 0)
+                throw new Error('reward row has malformed round_number');
+            if(!/^[0-9]+(\.[0-9]+)?$/.test(String(r.amount || '')) || !(Number(r.amount) > 0))
+                throw new Error('reward row has malformed amount');
+            if(!Number.isFinite(Number(r.block_index)) || Number(r.block_index) < 0)
+                throw new Error('reward row has malformed block_index');
+        }
+
+        return archive;
+    }
+
+    // Group archived snapshot rows by (capability, snapshot_block) - the locus both
+    // cross-checks resolve at, since the on-chain effective signer set is defined per
+    // capability at a block.
+    groupSnaps(snaps){
+        let groups = new Map();
+        for(let s of snaps){
+            let key = String(s.capability) + '@' + Number(s.snapshot_block);
+            if(!groups.has(key)) groups.set(key, { capability: String(s.capability), block: Number(s.snapshot_block), rows: [] });
+            groups.get(key).rows.push(s);
+        }
+        return [...groups.values()];
+    }
+
+    // Existence check: every archived snapshot pubkey must be a real on-chain signer for its
+    // capability at its block. The probe runs in two stages and the ORDER is the fix:
+    //
+    //   1. the direct-stake query (hasDirectStake) answers first, byte-unchanged. It is the
+    //      fabrication guard, needs no resolver, and is subject to no result cap - so every
+    //      key the delegation-blind check already accepted is still accepted.
+    //   2. ONLY a key that query rejects is looked up in the delegation-aware effective
+    //      signer set. A DELEGATED signing key is authorized by a staked source and holds no
+    //      `stakes` row of its own (db/stakes.js effectiveCapabilitySetSql / _stakeWeightsSql UNION
+    //      active `delegations`), so a direct-only check rejected the WHOLE batch for any
+    //      honest archive carrying a delegated-only validator. That is the bug this closes.
+    //
+    // Stage 2 resolves through getValidatorsByCapability and NEVER through the stake-WEIGHT
+    // resolver, even at a block where stake-weighted quorum is active. Only the count
+    // resolver is key-complete: _cappedStakeWeightsSql bounds each source to
+    // STAKE_WEIGHT_MAX_KEYS_PER_SOURCE (64) effective keys and DELIBERATELY does not set
+    // `truncated` when it drops the excess (a source's spare keys cannot change its weight,
+    // which is all the weighted path is for). Used as a per-KEY oracle it would silently deny
+    // an honest source's 65th key - a fresh instance of the very false-reject this fixes.
+    //
+    // The threshold is deliberately LOOSE (minStake '0'), not the capability MIN_STAKE: this
+    // is the existence guard, and verifyCompleteness is the bar. slashCapabilityStake
+    // rewrites `stakes.amount` IN PLACE (db/stakes.js), so re-resolving a historical block AFTER a
+    // slash reports the post-slash amount; a MIN_STAKE-thresholded existence check would then
+    // false-reject an honest archive, while at '0' the source still resolves.
+    //
+    // Truncation at VALIDATOR_QUERY_LIMIT cannot prove a key ABSENT, so it fails closed
+    // (mirrors verifyCompleteness and the hub's truncation rule). That cap binds only on stage 2, whose
+    // input is keys stage 1 has already rejected: a truncated resolution therefore turns a
+    // certain rejection into one that names the cap, and can never reject a key stage 1 admitted.
+    //
+    // Deliberately NOT added here: rejecting a key that is revoked (stake_key_revocations) or
+    // slashed at/before the block. The resolver does exclude those, but enforcing it means
+    // resolving EVERY archived key through a capped query - re-imposing stage 2's cap on the
+    // keys stage 1 answers for. Qualification is verifyCompleteness's job; this stays an
+    // existence guard.
+    //
+    // BOTH stages re-derive at the DECLARED snapshot_block buried by
+    // CANONICAL_REORG_BUFFER, never at the declared height itself. The hub that wrote
+    // this archive resolved its set through CapabilitySnapshot, which subtracts the
+    // buffer from every height it is handed while the archived row keeps the raw label,
+    // so a validator whose stake DEACTIVATED inside (declared - 6, declared] is absent
+    // from a raw re-resolution and an honest archive is condemned as fabricated,
+    // unrecoverable. Flag-day gated (INERT on mainnet/testnet), so below the gate this
+    // is the declared height unchanged and pre-flag-day archives read exactly as before.
+    // Keeps its underscore: the constructor assigns the BOOLEAN option verifyStakes
+    // onto the instance, so a plain-named method here would be shadowed by that flag
+    // and every call would hit a boolean instead of a function.
+    async _verifyStakes(snaps, network){
+        // A handle exposing only doQuery (unit fixtures, an embedder holding a raw query
+        // handle) has no resolver, so stage 1 is the whole answer - exactly as
+        // verifyCompleteness degrades to skipping. The recovery bin always builds a
+        // BTC-scoped Database, so production runs both stages.
+        let canResolve = typeof this.btcDb.getValidatorsByCapability === 'function';
+        for(let g of this.groupSnaps(snaps)){
+            let resolveBlock = srb.buriedSnapshotBlock(g.block, network);
+            let undirected = [];
+            for(let s of g.rows)
+                if(!(await this.hasDirectStake(s, resolveBlock))) undirected.push(s);
+            if(undirected.length === 0) continue;
+            if(!canResolve || !QUORUM_CAPABILITIES.has(g.capability))
+                throw new Error('archived snapshot pubkey ' + String(undirected[0].signing_pubkey).substring(0, 16) +
+                                '... has no on-chain stake at block ' + undirected[0].snapshot_block + ' (fabricated set?)');
+            let resolved = (await this.btcDb.getValidatorsByCapability(g.capability, resolveBlock, '0')) || [];
+            let effective = new Set(resolved.map(v => String(v.pubkey).toLowerCase()));
+            for(let s of undirected){
+                if(effective.has(String(s.signing_pubkey).toLowerCase())) continue;
+                if(resolved.truncated === true)
+                    throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
+                                    ' cannot be existence-checked: the delegation resolution is truncated at' +
+                                    ' VALIDATOR_QUERY_LIMIT, so pubkey ' + String(s.signing_pubkey).substring(0, 16) +
+                                    '... cannot be proven absent');
+                throw new Error('archived snapshot pubkey ' + String(s.signing_pubkey).substring(0, 16) +
+                                '... has no on-chain stake or delegation for ' + g.capability +
+                                ' at block ' + g.block + ' (fabricated set?)');
+            }
+        }
+    }
+
+    // Stage-1 existence probe: does this pubkey hold ANY active stake at its snapshot block?
+    // Delegation-blind by design - a false answer is escalated to the effective-set lookup,
+    // never treated as a rejection on its own.
+    //
+    // `atBlock` is the height the probe actually runs at: the archived snapshot_block
+    // buried by the reorg buffer at/above that flag-day, the declared height
+    // below it. It is passed in rather than re-derived here so stage 1 and stage 2
+    // can never probe two different heights for the same group.
+    async hasDirectStake(s, atBlock){
+        let at   = (atBlock === undefined) ? s.snapshot_block : atBlock;
+        let rows = await this.btcDb.doQuery(
+            `SELECT 1 FROM stakes st
+             JOIN index_pubkeys ip ON ip.id = st.signing_pubkey_id
+             JOIN index_statuses ix ON ix.id = st.status_id
+             WHERE ip.pubkey = ? AND ix.status = 'valid'
+               AND st.activation_block <= ?
+               AND (st.deactivation_block IS NULL OR st.deactivation_block > ?)
+             LIMIT 1`,
+            [String(s.signing_pubkey).toLowerCase(), Number(at), Number(at)]);
+        return !!(rows && rows.length > 0);
+    }
+
+    // Key-binding check: bind every archived signing key to the staking SOURCE the archive claims
+    // for it. _verifyStakes answers "does this key hold stake somewhere" and
+    // verifyWeightedCompleteness reduces the archive to source -> amount before it looks,
+    // so signing-key identity leaves the weighted path entirely: an attacker holding any
+    // small active stake can write their own key onto an honest source's archived row,
+    // leave source and amount untouched, pass both checks, and be credited that source's
+    // full quorum weight by stake_weighted_quorum, which reads pubkey -> source out of the
+    // archive itself. The legacy count path already compares archived pubkeys, so only the
+    // weighted path needs this.
+    //
+    // Scoped to stake-WEIGHTED quorum capabilities, for the false-reject reason this file is
+    // built around: under count quorum the source carries no weight and older archives may
+    // not populate it at all, so enforcing binding there would condemn honest archives and
+    // halt disaster recovery. Below the flag day nothing changes, byte for byte.
+    //
+    // Existence semantics (LIMIT 1 on a matching row), never stake_source.js's
+    // `ORDER BY action_index DESC LIMIT 1` single-answer form: a key legitimately backed by
+    // two sources must pass under EACH of them, and picking only the latest would reject an
+    // honest archive.
+    //
+    // Deliberately NOT added here: the revocation and permanent-slash exclusions
+    // stake_source.js carries. Those are QUALIFICATION predicates and belong to
+    // verifyCompleteness; applying them here would make this probe stricter than the set the
+    // archive was built from. Known residual: a source's own revoked or slashed key still
+    // binds to that source and passes. Same reasoning as the existence guard above.
+    async verifyKeySourceBinding(snaps, network){
+        for(let g of this.groupSnaps(snaps)){
+            if(!QUORUM_CAPABILITIES.has(g.capability)) continue;
+            if(!swq.isStakeWeightedQuorumActive(g.block, network)) continue;
+            // Same buried height as _verifyStakes and verifyCompleteness, so the three
+            // checks can never probe a group at two different blocks.
+            let atBlock = srb.buriedSnapshotBlock(g.block, network);
+            for(let s of g.rows){
+                let src = String(s.source != null ? s.source : '').trim();
+                let pk  = String(s.signing_pubkey).toLowerCase();
+                if(src === '')
+                    throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
+                                    ' carries key ' + pk.substring(0, 16) + '... with no staking source,' +
+                                    ' which cannot be bound on the stake-weighted path');
+                if(!(await this.hasBoundStake(pk, src, atBlock)))
+                    throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
+                                    ': key ' + pk.substring(0, 16) + '... is not authorized by its claimed' +
+                                    ' source ' + src.substring(0, 24) + '... at block ' + atBlock +
+                                    ' (key-binding forge?)');
+            }
+        }
+    }
+
+    // Is this (pubkey, source) pair an active on-chain authorization at `atBlock`? Two legs,
+    // the second tried only when the first finds nothing: a DELEGATED signing key holds no
+    // `stakes` row of its own, so a stakes-only probe would reject every honest archive that
+    // carries a delegated-only validator. Join-shaped like hasDirectStake rather than
+    // id-lookup-shaped like stake_source.js, so it answers on a bare doQuery handle.
+    async hasBoundStake(pubkey, source, atBlock){
+        let at   = Number(atBlock);
+        let args = [pubkey, source, at, at];
+        let rows = await this.btcDb.doQuery(
+            `SELECT 1 FROM stakes st
+             JOIN index_pubkeys ip ON ip.id = st.signing_pubkey_id
+             JOIN index_addresses ia ON ia.id = st.source_id
+             JOIN index_statuses ix ON ix.id = st.status_id
+             WHERE ip.pubkey = ? AND ia.address = ? AND ix.status = 'valid'
+               AND st.activation_block <= ?
+               AND (st.deactivation_block IS NULL OR st.deactivation_block > ?)
+             LIMIT 1`, args);
+        if(rows && rows.length > 0) return true;
+        rows = await this.btcDb.doQuery(
+            `SELECT 1 FROM delegations dg
+             JOIN index_pubkeys ip ON ip.id = dg.signing_pubkey_id
+             JOIN index_addresses ia ON ia.id = dg.source_id
+             JOIN index_statuses ix ON ix.id = dg.status_id
+             WHERE ip.pubkey = ? AND ia.address = ? AND ix.status = 'valid'
+               AND dg.activation_block <= ?
+               AND (dg.deactivation_block IS NULL OR dg.deactivation_block > ?)
+             LIMIT 1`, args);
+        return !!(rows && rows.length > 0);
+    }
+
+    // Completeness check: every SOURCE that qualifies for a capability at the snapshot_block
+    // must appear in the archived snapshot for that (capability, block); a dropped
+    // qualifying source under-counts S and lets an evicted minority clear quorum.
+    //
+    // Deriving the threshold FROM THE ARCHIVE (the smallest per-source weight the
+    // archive admits) would let the archive choose its own bar: dropping every lower-weight
+    // qualifying source RAISES that minimum, the resolver then returns only the high-weight
+    // sources the archive kept, and resolved ⊆ archived passes while the dropped sources are
+    // missing from the stake denominator S. That vector stays closed: nothing archive-derived
+    // reaches the threshold. A truncated resolution cannot be trusted complete, so it fails
+    // closed (mirrors meetsStakeThreshold and the hub's truncation rule).
+    //
+    // This replaces an interim bar (this node's LOCAL coin-config MIN_STAKE, applied by
+    // db/stakes.js when no override is passed) with an AS-OF-BLOCK reconstruction of the two
+    // things the hub actually built the archive from:
+    //
+    //   1. THE THRESHOLD. capability_min_stake_history.minStakeAt() resolves the governance
+    //      MIN_STAKE effective at the resolve block from the frozen block-anchored table plus
+    //      the genesis coin-config floor, byte-mirroring xchain-hub
+    //      CapabilityRegistry.getMinStake(capability, blockIndex) - the value
+    //      CapabilitySnapshot hands the indexer, and which db/stakes.js honours VERBATIM precisely
+    //      because local config drifts between independently-operated indexers. The local
+    //      floor was NOT the bar the archive was built at: a governance MIN_STAKE ABOVE it
+    //      made this check STRICTER than the honest hub, so the re-resolution reported sources
+    //      the hub correctly excluded and completeness false-rejected an honest archive,
+    //      HALTING disaster recovery; below it the check under-caught. The reconstruction is
+    //      resolved at the BURIED block, because the hub buries first and resolves its
+    //      threshold at the buried height too (CapabilitySnapshot.getSnapshot).
+    //
+    //   2. THE WEIGHTS. The archived per-source `amount` is the quorum denominator S, and it
+    //      was taken entirely on trust, because the obvious check - compare it to a
+    //      re-resolution - false-rejects honest archives: slashCapabilityStake rewrites
+    //      `stakes.amount` IN PLACE, so re-resolving a historical block after a slash reports
+    //      the POST-slash weight, not the weight the hub saw. slashRestoresAfter() removes
+    //      that objection by unwinding every capability_slash_debits row recorded AFTER the
+    //      resolve block, so the archived weight is compared to the weight as of the snapshot.
+    //      A forged archive can no longer deflate other sources' weights to shrink S.
+    //
+    // Both reconstructions degrade to the earlier local-floor behaviour rather than failing
+    // closed when their inputs are absent (a handle with no coin config, a schema with no
+    // capability_slash_debits): a DR tool that refuses to run is the failure mode this
+    // exists to remove, and check 1 - resolved ⊆ archived - is unaffected either way.
+    async verifyCompleteness(snaps, network){
+        for(let g of this.groupSnaps(snaps)){
+            // Only the quorum-bearing capabilities are re-resolvable from BTC stakes; skip
+            // any other archived group (none today, but future-proof against a new snapshot kind).
+            if(!QUORUM_CAPABILITIES.has(g.capability))
+                continue;
+            // Re-resolve at the DECLARED block buried by CANONICAL_REORG_BUFFER,
+            // the height the hub's CapabilitySnapshot actually resolved this archived set
+            // at. At the raw height a source whose stake ACTIVATED inside
+            // (declared - 6, declared] appears in the re-resolution but not in the archive,
+            // and this check condemns an honest archive for a "dropped qualifying source".
+            // The stake-weighted flag-day keeps keying on the DECLARED block: moving a
+            // cutover boundary by the buffer is its own fork.
+            let resolveBlock = srb.buriedSnapshotBlock(g.block, network);
+            // The bar the ARCHIVE was built at, reconstructed as of that block.
+            // null = nothing resolvable (no coin config on this handle), in which case no
+            // override is passed and db/stakes.js applies its own local floor unchanged.
+            let minStake = this.minStakeAt(g.capability, resolveBlock, network);
+            let weighted = swq.isStakeWeightedQuorumActive(g.block, network);
+            let resolved = weighted
+                ? await this.btcDb.getStakeWeightsByCapability(g.capability, resolveBlock, minStake)
+                : await this.btcDb.getValidatorsByCapability(g.capability, resolveBlock, minStake);
+            resolved = resolved || [];
+            // A resolution that overflowed its cap cannot be trusted complete -> fail closed.
+            if(resolved.truncated === true)
+                throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
+                                ' cannot be completeness-checked: the on-chain resolution is truncated (raise VALIDATOR_QUERY_LIMIT / STAKE_WEIGHT_MAX_SOURCES)');
+            if(weighted)
+                await this.verifyWeightedCompleteness(g, resolved, resolveBlock, minStake);
+            else {
+                // Legacy count quorum: completeness is by signing pubkey.
+                let archivedPubkeys = new Set(g.rows.map(r => String(r.signing_pubkey).toLowerCase()));
+                for(let v of resolved){
+                    let pk = String(v.pubkey).toLowerCase();
+                    if(!archivedPubkeys.has(pk))
+                        throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
+                                        ' is incomplete: qualifying validator ' + pk.substring(0, 16) +
+                                        '... was dropped (subset-forge?)');
+                }
+            }
+        }
+    }
+
+    // Stake-weighted half of the completeness check, at as-of-block weights. Two checks, in
+    // this order because the second is only meaningful on sources the first admitted:
+    //
+    //   1. every source the re-resolution reports must be in the archive (the original
+    //      subset check, byte-unchanged apart from the threshold it resolved at);
+    //   2. the archived per-source `amount` must EQUAL that source's as-of-block weight. This
+    //      is the quorum denominator S, so a deflated `amount` on other sources lowers the
+    //      bar a forged signature set has to clear.
+    //
+    // Check 2 needs the slash-debit reconstruction; when it is unavailable the check is
+    // skipped and check 1 stands alone, which is exactly the earlier behaviour.
+    //
+    // KNOWN RESIDUAL, deliberately not closed here: a source whose weight the re-resolution
+    // cannot report AT ALL because a post-snapshot slash took it under the threshold is
+    // invisible to check 1, so dropping it from the archive is still undetected. Catching it
+    // needs a key-complete candidate set - every source with ANY stake AND an effective key at
+    // the block, i.e. a zero-threshold weight resolution - and that resolution is far likelier
+    // to hit STAKE_WEIGHT_MAX_SOURCES than the thresholded one, where a truncated result must
+    // fail closed. Trading a rare missed subset-forge for a new way to HALT disaster recovery
+    // on honest data is the wrong trade for this tool; judging candidates on weight alone
+    // instead is not an option, because it condemns any archive whose source held stake but no
+    // effective key (all keys revoked) at the block.
+    async verifyWeightedCompleteness(g, resolved, resolveBlock, minStake){
+        // Per-source archived weight. Every key of a source carries the SAME `amount` (the
+        // source's aggregate; capability_snapshots.sql), so a source spelling two amounts
+        // across its keys is malformed however it got that way - and is a way to hide an
+        // inflated weight behind an honest-looking row.
+        let archived = new Map();
+        for(let r of g.rows){
+            let src = String(r.source != null ? r.source : '');
+            let amt = String(r.amount != null ? r.amount : '0');
+            if(archived.has(src) && !cmsh.amountsEqual(archived.get(src), amt))
+                throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
+                                ' is malformed: source ' + src.substring(0, 24) + '... carries two different' +
+                                ' weights (' + archived.get(src) + ' and ' + amt + ') across its keys');
+            if(!archived.has(src)) archived.set(src, amt);
+        }
+        let restores = await this.slashRestoresAfter(resolveBlock);
+
+        // 1. Source-level completeness: no qualifying staking source may be absent.
+        let resolvedSources = new Map();
+        for(let v of resolved){
+            let src = String(v.source != null ? v.source : '');
+            if(!resolvedSources.has(src)) resolvedSources.set(src, String(v.weight != null ? v.weight : '0'));
+            if(!archived.has(src))
+                throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
+                                ' is incomplete: qualifying source ' + src.substring(0, 24) +
+                                '... (qualifying at the ' + g.capability + ' MIN_STAKE reconstructed as of block ' +
+                                resolveBlock + ': ' + (minStake === null ? 'this node\'s local floor' : minStake) +
+                                ') was dropped (subset-forge?)');
+        }
+
+        // 2. Archived weight must equal the as-of-block reconstruction. Only for sources the
+        // resolution reports: a source it does not report has no on-chain weight to compare
+        // against here (see the residual noted above).
+        for(let [src, weight] of resolvedSources){
+            if(!archived.has(src)) continue;                      // check 1 already threw
+            let asOf = cmsh.addAmount(weight, restores.get(src) || '0');
+            if(!cmsh.amountsEqual(asOf, archived.get(src)))
+                throw new Error('archived ' + g.capability + ' snapshot at block ' + g.block +
+                                ' carries a forged weight for source ' + src.substring(0, 24) + '...: archived ' +
+                                archived.get(src) + ', on-chain as of that block ' + asOf +
+                                ' (weight-forge? a deflated weight shrinks the quorum denominator S)');
+        }
+    }
+
+    // Per-source stake SLASHED AFTER `atBlock`, so a historical weight can be restored to
+    // what it was AT that block. slashCapabilityStake rewrites `stakes.amount` in place and
+    // records the exact per-row delta in capability_slash_debits, so a source's as-of-block
+    // aggregate is (the aggregate the resolver reports for that block today) + (every debit
+    // against its stake rows recorded after it).
+    //
+    // Scoped to `target_table = 'stakes'`: only active stake rows carry capability weight -
+    // an `unstakes` row is cooldown-locked tokens, outside the weight sum by construction
+    // (db/stakes.js _stakeWeightsSql), so unwinding its slash would inflate the reconstruction. The
+    // debit join applies the SAME valid-status + activation/deactivation window at `atBlock`
+    // the resolver applies, so both halves of the sum cover one identical row set.
+    //
+    // Returns Map(source -> restored amount) covering ONLY sources with a post-`atBlock`
+    // debit; every other source's resolved weight already IS its as-of-block weight.
+    // Degrades to an empty map (with a loud operator warning) when the query cannot run - an
+    // older schema without the table, or a bare doQuery handle - because the check it feeds is
+    // an ADDITION: skipping it leaves the earlier completeness check intact, where failing
+    // closed would refuse an honest recovery outright.
+    async slashRestoresAfter(atBlock){
+        let out = new Map();
+        if(!this.btcDb || typeof this.btcDb.doQuery !== 'function') return out;
+        let at = Number(atBlock);
+        if(!Number.isFinite(at)) return out;
+        let rows;
+        try {
+            rows = await this.btcDb.doQuery(
+                `SELECT sa.address AS source,
+                        SUM(CAST(d.amount AS DECIMAL(30,8))) AS restored
+                 FROM capability_slash_debits d
+                 JOIN stakes s            ON s.action_index = d.stake_action_index
+                 JOIN index_statuses ix   ON ix.id          = s.status_id
+                 JOIN index_addresses sa  ON sa.id          = s.source_id
+                 WHERE d.target_table = 'stakes'
+                   AND d.block_index > ?
+                   AND ix.status = 'valid'
+                   AND s.activation_block <= ?
+                   AND (s.deactivation_block IS NULL OR s.deactivation_block > ?)
+                 GROUP BY sa.address`,
+                [at, at, at]);
+        } catch(e){
+            this.log('recovery: WARNING as-of-block stake-weight reconstruction unavailable (' +
+                     ((e && e.message) || e) + '); archived per-source weights go UNCHECKED' +
+                     ' for this batch');
+            return out;
+        }
+        for(let r of (rows || [])){
+            let src = String(r.source != null ? r.source : '');
+            if(src === '') continue;
+            out.set(src, String(r.restored != null ? r.restored : '0'));
+        }
+        return out;
+    }
+
+    // The capability MIN_STAKE effective at `atBlock` - the bar the hub that wrote the
+    // archive resolved its qualifying set at. Genesis floor comes from the BTC
+    // handle's own coin config, the frozen constant XChainHub asserts its genesis governance
+    // value against at boot; null when this handle carries no config, which leaves
+    // db/stakes.js applying its local floor unchanged.
+    minStakeAt(capability, atBlock, network){
+        return cmsh.minStakeAt(capability, atBlock, network,
+                               this.genesisMinStake(capability), this.minStakeActivations);
+    }
+
+    // Genesis (block-0) MIN_STAKE for a capability, from the BTC-scoped handle's coin config
+    // (STAKING.CAPABILITIES.<cap>.MIN_STAKE). Defensive throughout: recovery is also driven
+    // by bare query handles that carry no config at all.
+    genesisMinStake(capability){
+        let cfg  = this.btcDb && this.btcDb.config;
+        let caps = (cfg && cfg['STAKING'] && cfg['STAKING']['CAPABILITIES']) ? cfg['STAKING']['CAPABILITIES'] : null;
+        let entry = caps ? caps[capability] : null;
+        if(!entry || entry['MIN_STAKE'] === undefined || entry['MIN_STAKE'] === null) return null;
+        return String(entry['MIN_STAKE']);
+    }
+
+    // ── Rebuild (latest-status-wins: batches process in batch_seq order) ───────
+
+    // Resolve the on-chain transaction hash of an ANCHOR action (actions ->
+    // transactions -> index_transactions). Returns null when unresolvable
+    // (e.g. synthetic fixtures), in which case anchor_txid stays NULL exactly
+    // as a pre-backfill streamed mirror would.
+    async anchorTxid(actionIndex){
+        try {
+            let rows = await this.db.doQuery(
+                `SELECT it.hash FROM actions a
+                 JOIN transactions t ON t.tx_index = a.tx_index
+                 JOIN index_transactions it ON it.id = t.tx_hash_id
+                 WHERE a.action_index = ? LIMIT 1`,
+                [Number(actionIndex)]);
+            return (rows && rows.length > 0 && rows[0].hash) ? String(rows[0].hash) : null;
+        } catch(e){ return null; }
+    }
+
+    // Begin a transaction on a DB handle when it supports one. Recovery is also driven
+    // by raw doQuery stubs (unit fixtures, and any embedder holding only a query handle),
+    // so a handle without the transaction API degrades to autocommit behavior instead
+    // of throwing. Returns whether a transaction is actually open.
+    async begin(handle){
+        if(!handle || typeof handle.beginTransaction !== 'function') return false;
+        await handle.beginTransaction();
+        return true;
+    }
+
+    // Roll back without masking the original failure: the caller is already unwinding a
+    // batch error, and a rollback that itself fails must not replace that reason.
+    async safeRollback(handle){
+        try {
+            if(handle && typeof handle.rollbackTransaction === 'function') await handle.rollbackTransaction();
+        } catch(e){
+            this.log('recovery: WARNING rollback failed: ' + ((e && e.message) || e));
+        }
+    }
+
+    // Rebuild ONE verified batch atomically. Every write of a batch lands or none
+    // does: before this, a batch that threw part-way (a malformed reward row, a DB error on
+    // the third of ten matches) left its earlier rows committed while run() reported the
+    // batch FAILED, so the operator's "N/M verified" line understated what the DB actually
+    // held, and a re-run re-staged the reward rows that HAD landed - double-crediting the
+    // COLLECT rail, which recovery_pending_rewards has no unique key to dedupe.
+    //
+    // Two handles are involved and MariaDB gives us no cross-database atomic commit, so the
+    // ORDER of the two commits is what makes the window between them harmless:
+    //   1. this.db (DOGE mirror: matches, calls, capability snapshots) commits FIRST. Every
+    //      write on this handle is idempotent under replay (INSERT IGNORE / keyed UPDATE),
+    //      so re-running the batch after a crash converges on the same rows.
+    //   2. this.btcDb (staged anchor rewards) commits SECOND, because its INSERT is the one
+    //      write that is NOT idempotent. A crash or error between the two commits leaves the
+    //      BTC transaction unresolved, so the server rolls it back and the batch reports
+    //      FAILED with NO reward rows staged; the re-run stages them exactly once.
+    // Committing in the other order would leave rewards staged under a batch reported FAILED,
+    // and the re-run would stage them a second time.
+    //
+    // The transaction also makes write errors LOUD: db.doQuery swallows a query error into []
+    // outside a transaction (so a failed INSERT here used to leave the batch reported OK with
+    // rows silently missing) and re-throws inside one, which is what this per-batch rollback
+    // then acts on. A DR tool must never report a batch verified when its rows did not land.
+    async rebuild(archive, report, network, anchorTxid = null){
+        let rewards = archive.rewards || [];
+        // Hoisted ahead of every write: a batch that cannot restore its rewards must fail
+        // before it half-writes its matches, which is the exact partial-batch shape the
+        // per-batch transaction is about (and the only shape a non-transactional handle
+        // can still hit).
+        if(rewards.length > 0 && !this.btcDb)
+            throw new Error('archive carries ' + rewards.length + ' reward rows but no BTC indexer DB handle was provided (set BTC_INDEXER_DB_NAME); restoring without them would corrupt COLLECT replay');
+
+        // Counters stay local until both commits land, so a rolled-back batch never
+        // inflates the run report with rows that are not in the DB.
+        let delta  = { matches: 0, snapshots: 0, calls: 0, rewards: 0 };
+        // Both begins sit INSIDE the try: if the second one fails, the first transaction is
+        // still open and holding Database's transaction mutex, and the next batch's
+        // beginTransaction would block on that lock forever (a silent hang mid-recovery).
+        let dogeTx = false, btcTx = false;
+        try {
+            dogeTx = await this.begin(this.db);
+            btcTx  = (rewards.length > 0) ? await this.begin(this.btcDb) : false;
+            await this.writeBatch(archive, delta, network, anchorTxid, rewards);
+            if(dogeTx) await this.db.commitTransaction();
+            if(btcTx)  await this.btcDb.commitTransaction();
+        } catch(e){
+            if(btcTx)  await this.safeRollback(this.btcDb);
+            if(dogeTx) await this.safeRollback(this.db);
+            throw e;
+        }
+        report.matches   += delta.matches;
+        report.snapshots += delta.snapshots;
+        report.calls     += delta.calls;
+        report.rewards   += delta.rewards;
+    }
+
+    async writeBatch(archive, report, network, anchorTxid, rewards){
+        // Parity carve-out (documented): unlike cross_chain_matches/calls below,
+        // capability_snapshots is rebuilt WITHOUT an id, deliberately. The archive
+        // cannot carry one (hub ids are hub-local; every hub persists these rows
+        // independently), so the table is a NATURAL-KEY mirror on uq_cap_snap and
+        // hub_db_sync strips wire ids + bootstraps it from since_id=0.
+        // Local AUTO_INCREMENT numbering here is therefore harmless by design.
+        for(let s of (archive.capability_snapshots || [])){
+            await this.db.doQuery(
+                'INSERT IGNORE INTO capability_snapshots (snapshot_block, capability, signing_pubkey, amount, source) VALUES (?, ?, ?, ?, ?)',
+                [Number(s.snapshot_block), String(s.capability), String(s.signing_pubkey).toLowerCase(), String(s.amount), String(s.source || '')]);
+            report.snapshots++;
+        }
+        for(let m of archive.matches){
+            let existing = await this.db.doQuery(
+                'SELECT match_id FROM cross_chain_matches WHERE match_id = ? LIMIT 1', [m.match_id]);
+            if(existing && existing.length > 0){
+                // anchor_txid upgrades NULL->value only, matching the hub mirror's
+                // first-stamp-wins COALESCE semantics (hub_db_sync.js).
+                // Parity carve-out (documented, non-consensus): a retraction here flips the
+                // row to status='retracted' (hub-faithful; the HUB DB UPDATEs the same status),
+                // whereas the live mirror path DELETEs the row outright (hub_db_sync.js). So a
+                // recovery-fed mirror holds a retracted row where a mirror-fed one holds none.
+                // Consensus reads filter status='finalized' and cross_chain_settlements snapshots
+                // both leg refs, so neither read observes the difference; the row-presence gap is
+                // benign and intentional, not a replay divergence.
+                if(m.status === 'finalized'){
+                    // REVIVE content upgrade, mirroring the hub's own revive UPDATE
+                    // (CrossChainDexEngine._insertMatchRow: status/validator_signatures/
+                    // finalizing_view/effective_time WHERE status='retracted'). A match is NOT
+                    // content-immutable per match_id: when a source-chain reorg retracts a
+                    // crossing and the SAME crossing re-forms at the same BTC snapshot_block,
+                    // deriveMatchId yields the identical match_id and the hub revives the row
+                    // with THIS round's effective_time, view and quorum signatures, then
+                    // re-archives it, so both versions land in successive batches. A status-only
+                    // update here kept the FIRST batch's effective_time (which GATES the
+                    // settlement block, db.getEffectiveUnsettledMatches) and its stale signature
+                    // set under status='finalized' - so a recovery-fed node settles the match at
+                    // a different block than a mirror-fed one and fails 2f+1 re-verification at
+                    // the archived view. Only the columns the hub itself can move on a revive are
+                    // upgraded; the signed terms (chains/refs/amounts/fills/payouts) are bound
+                    // into match_id and never change for a given key.
+                    await this.db.doQuery(
+                        `UPDATE cross_chain_matches SET status = ?, effective_time = ?, finalizing_view = ?,
+                             validator_signatures = ?, anchor_txid = COALESCE(anchor_txid, ?)
+                         WHERE match_id = ?`,
+                        [m.status, Number(m.effective_time), Number(m.finalizing_view) || 0,
+                         m.validator_signatures, anchorTxid, m.match_id]);
+                } else {
+                    // Non-finalized incoming (a later batch retracts): only the lifecycle
+                    // status moves. Content upgrades happen on the revive branch above,
+                    // matching the hub, which never rewrites content on a retraction.
+                    await this.db.doQuery(
+                        'UPDATE cross_chain_matches SET status = ?, anchor_txid = COALESCE(anchor_txid, ?) WHERE match_id = ?',
+                        [m.status, anchorTxid, m.match_id]);
+                }
+            } else {
+                // Rebuild under the ORIGINAL hub-assigned id as provenance only.
+                // Settlement order is (snapshot_block, match_id), so replay does
+                // not depend on this value; keeping it preserves archive
+                // byte-parity. Archives published before the field was added carry
+                // no id; those rows fall back to AUTO_INCREMENT.
+                let hasId = Number.isFinite(Number(m.id)) && Number(m.id) > 0;
+                let idCol  = hasId ? 'id, ' : '';
+                let idMark = hasId ? '?, ' : '';
+                let idVal  = hasId ? [Number(m.id)] : [];
+                // finalizing_view rides the archive (MATCH_KEYS) and feeds the EQUIV
+                // signing canonical (matchCanonical) exactly as for calls below.
+                // Dropping it lands view>0 matches at view 0 and forks re-verification.
+                // a_payout_legs/b_payout_legs ride the archive (MATCH_KEYS, omit-when-null)
+                // at/above the CROSS_CHAIN_ROYALTY flag-day; they feed the signing canonical
+                // (matchCanonical), so dropping them would fork re-verification exactly like
+                // dropping finalizing_view. Pre-royalty archives carry no key → null.
+                await this.db.doQuery(
+                    `INSERT INTO cross_chain_matches
+                        (${idCol}match_id, snapshot_block, network,
+                         a_chain, a_action_index, a_kind, a_tick, a_amount, a_filled_before, a_ownership, a_payout_addr, a_payout_legs,
+                         b_chain, b_action_index, b_kind, b_tick, b_amount, b_filled_before, b_ownership, b_payout_addr, b_payout_legs,
+                         effective_time, validator_signatures, status, finalizing_view, anchor_txid)
+                     VALUES (${idMark}?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [...idVal, m.match_id, Number(m.snapshot_block), m.network,
+                     m.a_chain, Number(m.a_action_index), m.a_kind, m.a_tick, m.a_amount, m.a_filled_before, Number(m.a_ownership), m.a_payout_addr, (m.a_payout_legs != null ? String(m.a_payout_legs) : null),
+                     m.b_chain, Number(m.b_action_index), m.b_kind, m.b_tick, m.b_amount, m.b_filled_before, Number(m.b_ownership), m.b_payout_addr, (m.b_payout_legs != null ? String(m.b_payout_legs) : null),
+                     Number(m.effective_time), m.validator_signatures, m.status, Number(m.finalizing_view) || 0, anchorTxid]);
+                // Parity carve-out (documented, not recoverable): a/b_push_generation and
+                // cross_chain_calls.push_generation are reorg fences the archive does not
+                // serialize (MATCH_KEYS/CALL_KEYS omit them); recovered rows keep the
+                // schema default 0. Non-consensus: they gate retraction deletes only.
+            }
+            report.matches++;
+        }
+        // Anchor-publish rewards restore into the BTC indexer DB. They must be
+        // present BEFORE the BTC reindex replays its first COLLECT, or
+        // historically valid claims re-validate as 'no unclaimed rewards' and
+        // the recovered ledger diverges. Runbook ordering: DOGE archive extract,
+        // then BTC reward restore (this), then BTC reindex.
+        if(rewards.length > 0){
+            // The missing-btcDb guard is hoisted into rebuild so it fires before any write.
+            // Id determinism: do NOT assign index ids at restore time. Calling
+            // createAddress/getOrCreatePubkeyId here, OUTSIDE a block tx, would seed
+            // low AUTO_INCREMENT ids that offset every subsequent in-block deterministic id
+            // (getNextAddressId is MAX(id)+1 over ALL rows). A recovered node would then build a
+            // different index_addresses map than a from-genesis node, forking ^id resolution
+            // and breaking validator_rewards parity across the recovery boundary.
+            //
+            // Instead stage each archived reward keyed by the RAW source-address string + the
+            // signing pubkey, assigning no id. The earn-time source is still pinned by the
+            // archive (no restore-time drift if the pubkey was later re-staked elsewhere).
+            // During the BTC reindex the staged row materializes into validator_rewards under
+            // the deterministic source_id the source address takes in-block, at the height the
+            // LIVE fleet derived the reward at (earn-block + the frozen mirror maturity;
+            // db.applyPendingRewardsDueAtBlock, driven per block beside deriveAnchorRewards).
+            // The source's STAKE precedes its COLLECT in chain order, and the derive height
+            // precedes any COLLECT that could have claimed the reward on the canonical chain,
+            // so the reward is on the books before the COLLECT that spends it replays, without
+            // ever perturbing the id counter and without crediting it in a window where no live
+            // node holds it. recovery_pending_rewards is recovery-local: not consensus-hashed,
+            // not replicated by xchain-sync.
+            for(let r of rewards){
+                // Pin the per-chain anchor-publish reward amount to the FROZEN consensus
+                // constant at/above the anchor-reward flag-day, EXACTLY as the live indexer
+                // credits it (anchor.js: createValidatorReward with ar.ANCHOR_REWARD_AMOUNT,
+                // "NEVER taken from the wire"). Otherwise a colluding oracle_publish quorum
+                // (or, without --verify-stakes, a fabricated on-chain archive) could archive an
+                // inflated anchor_<chain> amount that recovery would stage COLLECT-spendable
+                // while a live node credits only the frozen amount -> recovered/live divergence
+                // + over-credit on the COLLECT rail. anchor_archive gets the same pinning at/above
+                // its own ARCHIVE_REWARD flag-day (derived from the ANCHOR v1 archive-head
+                // attestation with the frozen ARCHIVE_REWARD_AMOUNT); below each flag-day the
+                // legacy operator-tunable amount is kept as archived (matches the live push path).
+                // anchor_bundle (the ANCHOR v0 bundle) rides the per-chain pin: it is the same
+                // ANCHOR_REWARD_AMOUNT under the same anchor-reward flag-day, one per
+                // per-network bundle instead of one per chain. Without it an archived
+                // bundle reward would be staged at whatever amount the archive claims.
+                let derivedChainReward   = (/^anchor_(BTC|LTC|DOGE)$/.test(String(r.reward_type)) ||
+                                            String(r.reward_type) === 'anchor_bundle') &&
+                                           ar.isAnchorRewardActive(Number(r.block_index), network);
+                let derivedArchiveReward = String(r.reward_type) === 'anchor_archive' &&
+                                           ar.isArchiveRewardActive(Number(r.block_index), network);
+                // rollcall_publish rides the same pin for the same reason: its amount is a
+                // frozen consensus constant paid to the ELECTED leader, never taken from the
+                // wire, so an archive claiming a larger figure must not be staged
+                // COLLECT-spendable. Its block_index is the EARN block (the epoch height),
+                // which is what isRollcallActive gates on.
+                let derivedRollcallReward = String(r.reward_type) === 'rollcall_publish' &&
+                                            rca.isRollcallActive(Number(r.block_index), network);
+                let frozen = derivedChainReward ? ar.ANCHOR_REWARD_AMOUNT
+                           : derivedArchiveReward ? ar.ARCHIVE_REWARD_AMOUNT
+                           : derivedRollcallReward ? rca.ROLLCALL_REWARD_AMOUNT : null;
+                let amount = (frozen !== null) ? frozen : String(r.amount);
+                if(frozen !== null && String(r.amount) !== frozen)
+                    this.log('recovery: WARNING archived ' + r.reward_type + ' #' + r.round_number +
+                             ' amount ' + r.amount + ' != frozen ' + frozen +
+                             '; pinning to the frozen constant (forged or misconfigured archive?)');
+                await this.btcDb.doQuery(
+                    `INSERT INTO recovery_pending_rewards
+                        (source_address, validator_pubkey, reward_type, round_reference, amount, block_index)
+                     VALUES (?, ?, ?, ?, ?, ?)`,
+                    [String(r.source).substring(0, 120), String(r.validator_pubkey).toLowerCase().substring(0, 64),
+                     String(r.reward_type), Number(r.round_number), amount, Number(r.block_index)]);
+                report.rewards++;
+            }
+        }
+
+        for(let c of (archive.calls || [])){
+            let existing = await this.db.doQuery(
+                'SELECT call_id FROM cross_chain_calls WHERE call_id = ? AND phase = ? LIMIT 1', [c.call_id, c.phase]);
+            if(existing && existing.length > 0){
+                if(c.status === 'finalized'){
+                    // Finalized-wins CONTENT upgrade, mirroring the live mirror path
+                    // hub_db_sync._applyRow's cross_chain_calls ODKU (hub_db_sync.js:861-869).
+                    // Unlike matches, a call's signed content is NOT immutable per key: the
+                    // hub can re-finalize a retracted (call_id, phase) with NEW signed terms
+                    // after a source-chain reorg (CrossChainCallEngine.writeFinalizedRow
+                    // upserts the fresh quorum's content), and the anchor publisher re-archives
+                    // on any status change, so both versions land in successive batches. A
+                    // status-only update here would keep the FIRST batch's effective_time /
+                    // validator_signatures / params under status='finalized', forking the
+                    // injection block (effective_time gates it) and failing 2f+1 re-verification
+                    // vs mirror-fed nodes. So overwrite the full non-key column set. This column
+                    // list is kept in LOCKSTEP with the INSERT branch below (and hub_db_sync's
+                    // updatable set: every non-key column except id/call_id/phase/status);
+                    // schema drift between the two corrupts rebuilt rows. push_generation is a
+                    // reorg fence the archive never serializes (CALL_KEYS omits it), so it is
+                    // left untouched at its recovered default 0, exactly as the INSERT branch.
+                    await this.db.doQuery(
+                        `UPDATE cross_chain_calls SET status = ?, snapshot_block = ?, network = ?,
+                             source_chain = ?, source_action_index = ?, source_contract_index = ?,
+                             target_chain = ?, target_contract_index = ?, method = ?, params_json = ?,
+                             gas_limit = ?, cross_hops = ?, effective_time = ?, result_status = ?,
+                             return_payload_b64 = ?, validator_signatures = ?, finalizing_view = ?
+                         WHERE call_id = ? AND phase = ?`,
+                        [c.status, Number(c.snapshot_block), c.network,
+                         c.source_chain, Number(c.source_action_index), Number(c.source_contract_index),
+                         c.target_chain, Number(c.target_contract_index), c.method, c.params_json,
+                         Number(c.gas_limit), Number(c.cross_hops), Number(c.effective_time), c.result_status,
+                         c.return_payload_b64, c.validator_signatures, Number(c.finalizing_view) || 0,
+                         c.call_id, c.phase]);
+                } else {
+                    // Non-finalized incoming (e.g. a later batch retracts): only the
+                    // lifecycle status moves; content upgrades happen on the finalized
+                    // branch above, matching hub_db_sync's finalized-wins semantics.
+                    await this.db.doQuery(
+                        'UPDATE cross_chain_calls SET status = ? WHERE call_id = ? AND phase = ?',
+                        [c.status, c.call_id, c.phase]);
+                }
+            } else {
+                // Rebuild under the ORIGINAL hub-assigned id as provenance only.
+                // Injection order is (snapshot_block, call_id), so replay does not
+                // depend on this value; keeping it preserves archive byte-parity.
+                // finalizing_view is signed into the EQUIV canonical (the equivocation header):
+                // the indexer rebuilds the XCALL signing canonical from this column
+                // to re-verify the hub's 2f+1 sigs. Omitting it lets the NOT NULL
+                // DEFAULT 0 land every recovered row at view 0, so any call finalized
+                // at view>0 (a leader failover) fails re-verification on the recovered
+                // node. This strands undelivered calls and forks re-derivation. It rides
+                // the archive (CALL_KEYS) and the verifier already trusts it.
+                await this.db.doQuery(
+                    `INSERT INTO cross_chain_calls
+                        (id, call_id, phase, snapshot_block, network,
+                         source_chain, source_action_index, source_contract_index,
+                         target_chain, target_contract_index, method, params_json,
+                         gas_limit, cross_hops, effective_time, status, result_status,
+                         return_payload_b64, validator_signatures, finalizing_view)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [Number(c.id), c.call_id, c.phase, Number(c.snapshot_block), c.network,
+                     c.source_chain, Number(c.source_action_index), Number(c.source_contract_index),
+                     c.target_chain, Number(c.target_contract_index), c.method, c.params_json,
+                     Number(c.gas_limit), Number(c.cross_hops), Number(c.effective_time), c.status,
+                     c.result_status, c.return_payload_b64, c.validator_signatures, Number(c.finalizing_view) || 0]);
+            }
+            report.calls++;
+        }
+    }
+
+    // ── Canonicals (byte-identical to their producers) ──────────────────────────
+
+    // Hub StateCheckpointEngine canonical + the v1 archive extension (anchor.js).
+    // v1 ROUND_ID appends batch_seq (distinct from the v0 per-block key, so each batch in a block signs its own round);
+    // gated on the BTC snapshot_block + network, VIEW=0. Must byte-match anchor.canonical.
+    wrapperCanonical(v1){
+        let raw = ['XCHECKPOINT', v1.chain, v1.network, String(v1.block_index), v1.block_hash,
+                v1.ledger_hash, v1.actions_hash, v1.contract_hash,
+                String(v1.checkpoint_seq), String(v1.snapshot_block),
+                String(v1.match_batch_seq), String(v1.match_count), v1.batch_crc32,
+                String(v1.total_chunks)].join('|');
+        if(eq.isEquivHeaderActive(v1.snapshot_block, v1.network))
+            return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT,
+                v1.chain + '|' + v1.network + '|' + v1.block_index + '|' + v1.checkpoint_seq + '|' + v1.match_batch_seq, 0, raw);
+        return raw;
+    }
+
+    // Hub CrossChainDexEngine.canonicalMatch / indexer cross_settle.canonical.
+    matchCanonical(m){
+        let raw = [
+            'XMATCH', m.match_id, String(m.snapshot_block),
+            m.a_chain, String(m.a_action_index), m.a_tick || '', String(m.a_amount), String(m.a_ownership), m.a_payout_addr,
+            m.b_chain, String(m.b_action_index), m.b_tick || '', String(m.b_amount), String(m.b_ownership), m.b_payout_addr,
+            String(m.effective_time), m.network || '',
+            m.a_kind || 'swap', String(m.a_filled_before != null ? m.a_filled_before : '0'),
+            m.b_kind || 'swap', String(m.b_filled_before != null ? m.b_filled_before : '0')
+        ].join('|');
+        // Cross-chain royalty legs ride the signed match at/above the CROSS_CHAIN_ROYALTY
+        // flag-day; below it the canonical is byte-identical to the legacy format.
+        if(ccr.isCrossChainRoyaltyActive(m.snapshot_block, m.network))
+            raw += '|' + String(m.a_payout_legs || '') + '|' + String(m.b_payout_legs || '');
+        // EQUIV header: VIEW = the archived row's finalizing_view (serialized into
+        // the archive by StateAnchorPublisher.MATCH_KEYS). TAG=XDEX, ROUND_ID=match_id.
+        if(eq.isEquivHeaderActive(m.snapshot_block, m.network))
+            return eq.buildEquivCanonical(eq.ENGINE_TAGS.DEX, m.match_id, (m.finalizing_view != null ? m.finalizing_view : 0), raw);
+        return raw;
+    }
+
+    // Hub CrossChainCallEngine.canonicalMatch / indexer verifiers (xexec.js
+    // dispatch, xcall.js result).
+    callCanonical(c){
+        let sha = (s) => crypto.createHash('sha256').update(String(s == null ? '' : s), 'utf8').digest('hex');
+        let phase = (c.phase === 'result') ? 'result' : 'dispatch';
+        let raw;
+        if(c.phase === 'result'){
+            raw = [
+                'XCALL', 'RESULT', c.call_id, String(c.snapshot_block), c.network || '',
+                c.target_chain, String(c.result_status || ''),
+                sha(c.return_payload_b64), String(c.effective_time)
+            ].join('|');
+        } else {
+            raw = [
+                'XCALL', 'DISPATCH', c.call_id, String(c.snapshot_block), c.network || '',
+                c.source_chain, String(c.source_action_index), String(c.source_contract_index),
+                c.target_chain, String(c.target_contract_index),
+                c.method, sha(c.params_json),
+                String(c.gas_limit), String(c.cross_hops), String(c.effective_time)
+            ].join('|');
+        }
+        // EQUIV header: TAG=XCALL, ROUND_ID = sha256('XCALLROUND|'+phase+'|'+call_id),
+        // VIEW = the archived row's finalizing_view. Byte-matches hub + xexec/xcall twins.
+        if(eq.isEquivHeaderActive(c.snapshot_block, c.network))
+            return eq.buildEquivCanonical(eq.ENGINE_TAGS.XCALL, sha('XCALLROUND|' + phase + '|' + c.call_id), (c.finalizing_view != null ? c.finalizing_view : 0), raw);
+        return raw;
+    }
+
+    parseSigs(raw){
+        try {
+            let sigs = (typeof raw === 'string') ? JSON.parse(raw || '[]') : raw;
+            return Array.isArray(sigs) ? sigs.filter(s => s && s.pubkey && s.sig) : [];
+        } catch(e){ return []; }
+    }
+
+    // validatorSet: [{pubkey, source, weight}] from the archived snapshot. When
+    // `weighted` (snapshot_block at/above STAKE_WEIGHTED_QUORUM), the bar is summed
+    // signer STAKE > 2/3 of S (source-deduped); else the legacy 2f+1 signer count.
+    quorumVerified(canonical, sigs, validatorSet, weighted){
+        let qualified = new Set((validatorSet || []).map(v => String(v.pubkey).toLowerCase()));
+        if(qualified.size === 0) return false;
+        let validSigners = [], seen = new Set();
+        for(let s of sigs){
+            let pk = String(s.pubkey).toLowerCase();
+            if(seen.has(pk) || !qualified.has(pk)) continue;
+            if(!ed25519.verify(canonical, String(s.sig), pk)) continue;
+            // Mark seen only AFTER the signature verifies, matching anchor.js and the
+            // hub/SDK verifiers: marking on first encounter lets a garbage-then-valid
+            // pair for one qualified validator suppress the real signature and fail
+            // recovery of an on-chain-valid batch (order-dependent quorum under-count).
+            seen.add(pk);
+            validSigners.push(pk);
+        }
+        if(weighted)
+            return swq.meetsStakeThreshold(validatorSet, validSigners);
+        let quorum = (qualified.size <= 1) ? 1 : Math.max(2 * Math.floor((qualified.size - 1) / 3) + 1, Math.ceil((qualified.size + 1) / 2));
+        return validSigners.length >= quorum;
+    }
+
+    crc32Hex(str){
+        let n = zlib.crc32 ? zlib.crc32(Buffer.from(str, 'utf8')) : this.crc32Fallback(Buffer.from(str, 'utf8'));
+        return (n >>> 0).toString(16).padStart(8, '0');
+    }
+    crc32Fallback(buf){
+        let c, crc = 0xFFFFFFFF;
+        for(let i = 0; i < buf.length; i++){
+            c = (crc ^ buf[i]) & 0xFF;
+            for(let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+            crc = (crc >>> 8) ^ c;
+        }
+        return (crc ^ 0xFFFFFFFF) >>> 0;
+    }
+}
+
+// Test-only export: exposes wrapperCanonical as a static so byte-parity tests
+// can call it without constructing a full AnchorRecovery(db, opts) instance.
+// Delegates to the real instance method; does not change its output.
+AnchorRecovery.wrapperCanonicalForTest = function(v1){
+    return AnchorRecovery.prototype.wrapperCanonical.call({}, v1);
+};
+
+module.exports = AnchorRecovery;
+
+// ── CLI ─────────────────────────────────────────────────────────────────────
+if(require.main === module){
+    const Database = require('../src/db');
+    const config   = require('../src/config.js');
+    const Utility  = require('../src/utility.js');
+
+    (async () => {
+        const host = process.env.INDEXER_DB_HOST;
+        const port = process.env.INDEXER_DB_PORT;
+        const name = process.env.INDEXER_DB_NAME;
+        const user = process.env.INDEXER_DB_USER;
+        const pass = process.env.INDEXER_DB_PASS;
+        if(!host || !name || !user){
+            console.error('recovery: INDEXER_DB_HOST / INDEXER_DB_NAME / INDEXER_DB_USER must be set (point at the DOGE indexer DB).');
+            process.exit(2);
+        }
+        // Stake cross-check is ON BY DEFAULT (fail-closed root of trust). Opt out only with the
+        // explicit --skip-stake-verification flag; --verify-stakes is still accepted as a redundant
+        // no-op for back-compat with existing scripts. Skipping without --i-understand-unverified is
+        // forced to a dry run so an unverified run can never write settlement-bearing rows by accident.
+        const skipStakeVerification = process.argv.includes('--skip-stake-verification');
+        const ackUnverified         = process.argv.includes('--i-understand-unverified');
+        const verifyStakes          = !skipStakeVerification;
+        let   dryRun                = process.argv.includes('--dry-run');
+        if(skipStakeVerification && !dryRun && !ackUnverified){
+            console.warn('recovery: --skip-stake-verification WITHOUT --i-understand-unverified: forcing --dry-run so no rows are written. Re-run with --i-understand-unverified to perform an unverified rebuild (only the documented pre-BTC-reindex reward restore should).');
+            dryRun = true;
+        }
+
+        // Share ONE config object between indexer-like and its Utility.
+        const cfg = config.getConfig();
+        const indexerLike = { config: cfg, util: new Utility(cfg) };
+        const db = new Database(host, port, name, user, pass, indexerLike);
+
+        // The BTC indexer DB handle serves two roles: the --verify-stakes
+        // cross-check AND the anchor-publish reward restore (rewards live in the
+        // BTC DB so COLLECT replay can find them). Archives that carry reward
+        // rows hard-require it.
+        let btcDb = null;
+        const btcName = process.env.BTC_INDEXER_DB_NAME;
+        if(btcName){
+            // BTC-scoped config so getStakeWeightsByCapability/getValidatorsByCapability
+            // resolve capability stakes from the BTC stakes tables (the stake-set
+            // completeness cross-check), instead of the non-BTC short-circuit that reads
+            // the mirrored capability_snapshots recovery itself is rebuilding. The raw
+            // reward-restore + _verifyStakes queries are column-based, so the coin scope
+            // does not affect them.
+            const btcCfg  = config.getConfig('BTC', cfg['NETWORK']);
+            const btcLike = { config: btcCfg, util: new Utility(btcCfg) };
+            btcDb = new Database(host, port, btcName, user, pass, btcLike);
+        } else if(verifyStakes){
+            console.error('recovery: the default stake cross-check needs BTC_INDEXER_DB_NAME (same host/credentials). Set it, or pass --skip-stake-verification to run without the on-chain root of trust.');
+            process.exit(2);
+        } else {
+            console.warn('recovery: BTC_INDEXER_DB_NAME not set. Archived validator sets will not be cross-checked, and any batch carrying anchor reward rows will FAIL (the restore needs the BTC indexer DB).');
+        }
+        if(!verifyStakes)
+            console.warn('recovery: running WITH --skip-stake-verification. Archived validator sets will NOT be cross-checked against on-chain BTC stakes; a self-consistent forged archive would pass verification.');
+
+        try {
+            const recovery = new AnchorRecovery(db, { btcDb, dryRun, verifyStakes, util: indexerLike.util });
+            const report = await recovery.run();
+            process.exitCode = (report.failed.length > 0) ? 1 : 0;
+        } catch(err){
+            console.error('recovery: FAILED: ' + ((err && err.stack) || err));
+            process.exitCode = 1;
+        } finally {
+            process.exit();
+        }
+    })();
+}

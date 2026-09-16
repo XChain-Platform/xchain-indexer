@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -35,7 +36,9 @@
 
 class Message {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -50,14 +53,29 @@ class Message {
         this.formats[3] = 'VERSION|COIN|DESTINATION|PLAINTEXT_MESSAGE';
     }
 
+    // Handle parsing the ADDRESS transaction
     async parse(params, data, error){
+        /*****************************************************************
+         * DEBUGGING - Force params
+         ****************************************************************/
+        // Example payloads by FORMAT version:
+        // let str = "0|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1|PUBLIC_KEY_GOES_HERE";
+        // let str = "1|1Donatet2LrNpuWByAnH8gc9Wh9zSzZuLC|1|PUBLIC_KEY_GOES_HERE";
+        // let str = "2|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|ENCRYPTED_MESSAGE_GOES_HERE;
+        // let str = "3|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|Hello";
+        // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
+
+        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
+        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
+        // Convert NUMBER fields from string value to number value so comparisons are mathematical
         if(!error)
             data = this.util.setNumberFormats(data);
 
@@ -81,7 +99,23 @@ class Message {
 
         // TODO : Make sure that ENCRYPTION_METHOD is a numeric value or null (stop storing 'u' in database when undefined)
 
-        // FORMAT Validations
+        error = this.validateMessageFormats(data, error);
+
+        error = await this.validateFields(data, error);
+
+        // Determine final status
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        // Print status message
+        getLogger().info("\t MESSAGE : " + data['DESTINATION'] + ' : ' + data['STATUS']);
+
+        await this.storeMessage(data);
+
+    }
+
+    // FORMAT Validations
+    validateMessageFormats(data, error){
 
         // Verify COIN is a valid coin
         if(!error && !this.util.isNull(data['COIN']) && !this.config['COINS'].includes(String(data['COIN']).toUpperCase()))
@@ -101,7 +135,11 @@ class Message {
         if(!error && !this.util.isNull(data['ENCRYPTION_METHOD']) && !this.util.isNumeric(data['ENCRYPTION_METHOD']))
             error = 'invalid: ENCRYPTION_METHOD (format)';
 
-        // General Validations
+        return error;
+    }
+
+    // General Validations
+    async validateFields(data, error){
 
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
@@ -123,15 +161,19 @@ class Message {
         if(!error && String(data['PLAINTEXT_MESSAGE']).length > this.config['MAX_MESSAGE_LENGTH'])
             error = 'invalid: PLAINTEXT_MESSAGE (length)';
 
-        let status = (error) ? error : 'valid';
-        data['STATUS'] = status;
+        return error;
+    }
 
-        console.log("\t MESSAGE : " + data['DESTINATION'] + ' : ' + data['STATUS']);
+    // Write the message row, register the sender, and map the action
+    async storeMessage(data){
 
+        // Create record in messages table
         await this.indexerDb.createMessage(data);
 
+        // Store the SOURCE in addresses list
         this.util.addAddressTicker(data['SOURCE']);
 
+        // Create action mappings
         await this.mapper.createMappings(data);
 
     }

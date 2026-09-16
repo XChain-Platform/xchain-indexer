@@ -12,7 +12,7 @@
  **********************************************************************
  *
  * End-to-end LOCKED-BALANCE proof against an ARMED chain's real committed data
- * (SPV sub-tree spec §3 Stage B). The sibling of
+ * (the locked-balance sub-tree, Stage B). The sibling of
  * `verify-armed-contract-state-proof.js`, which does the same job for Stage A.
  *
  * WHY IT EXISTS. Stage A's live-chain harness closes the last link its unit
@@ -20,7 +20,7 @@
  * committed rows, produces a proof the SDK's independent verifier accepts.
  * Stage B has the same two implementations, the same key domain problem and a
  * live armed chain carrying REAL locked leaves, and had no such harness. Its
- * B2 vectors test the explorer's output through the SDK verifier, but over a
+ * golden vectors test the explorer's output through the SDK verifier, but over a
  * fixture tree, so nothing had ever put the pair over bytes a chain committed.
  * That asymmetry is the gap this closes: Stage B is the half with real data on
  * the venue, so it is the half where a fixture proves least.
@@ -35,7 +35,7 @@
  *      (delete-on-zero: released and never-locked keys both have no leaf).
  *   5. The two key domains cannot answer for each other: feeding the locked
  *      proof to the SPENDABLE verifier must fail. Each verifier derives its own
- *      key, so this is the cross-domain guard §3 Stage B relies on, checked
+ *      key, so this is the cross-domain guard Stage B relies on, checked
  *      here against live data rather than a vector.
  *
  * WHAT IT DOES NOT PROVE, stated so the result is not oversold: the quorum
@@ -50,8 +50,10 @@
  *   node bin/verify-armed-locked-balance-proof.js --db XChain_BTC_Regtest_Indexer \
  *        --chain BTC --network regtest --height 11200
  *
- * It loads the explorer's proofServer.js and the SDK's light.js from the
- * sibling repos; `--modules <dir>` overrides that for a staged container.
+ * It loads the explorer's http/proof_server.js and the SDK's light.js from the
+ * sibling repos; `--modules <dir>` overrides that for a staged container, whose
+ * directory is laid out like each repo's src/ (http/proof_server.js beside the
+ * merkle.js it requires one level up).
  *
  *********************************************************************/
 
@@ -84,8 +86,8 @@ function parseArgs(argv){
     const dir = opts.modules;
     const req = (sib, file) => require(dir ? path.resolve(dir, file)
                                            : path.resolve(__dirname, '..', '..', sib, 'src', file));
-    const ProofServer = req('xchain-explorer', 'proofServer.js');
-    const light       = req('xchain-sdk',      'light.js');
+    const ProofServer = req('xchain-explorer', 'http/proof_server.js');
+    const light       = req('xchain-sdk',      'protocol/light_client.js');
     const SUB         = require('../src/state_subtree_activation.js');
     const mariadb     = require('mariadb');
 

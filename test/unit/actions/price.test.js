@@ -16,10 +16,10 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
-const Price   = require('../../../src/actions/price.js');
+const Price   = require('../../../src/actions/price/index.js');
 // Same cached modules Price references - stubbing verify() controls sig acceptance,
 // stubbing isStakeWeightedQuorumActive() selects the count vs stake-weighted path.
-const ed25519 = require('../../../src/ed25519.js');
+const ed25519 = require('../../../src/consensus/ed25519.js');
 const swq     = require('../../../src/stake_weighted_quorum.js');
 
 const PUBKEY_A = 'a'.repeat(64);
@@ -32,68 +32,70 @@ const SIG_C    = '3'.repeat(128);
 // Every pubkey this suite signs with (the byte-repeat forms cover the Sybil
 // fixtures below). The mock DB resolves the BATCHED capability set over this
 // universe, mirroring db.js where getValidatorsByCapability and hasCapability
-// answer from the same _effectiveCapabilitySetSql (#3871).
+// answer from the same effectiveCapabilitySetSql.
 const ALL_PUBKEYS = Array.from(new Set(
     [PUBKEY_A, PUBKEY_B, PUBKEY_C].concat(
         Array.from({ length: 16 }, (_, i) => i.toString(16).padStart(2, '0').repeat(32)))));
+let indexer, actionsCtx, handler;
+
+// Drive BOTH capability APIs from one predicate, the way db.js does:
+// a case that says who qualifies stays honest whichever path the handler takes.
+function setCapable(db, predicate) {
+    db.hasCapability.callsFake(async (pubkey, cap, blk) => !!(await predicate(pubkey, cap, blk)));
+    db.getValidatorsByCapability.callsFake(async (cap, blk) => {
+        const rows = [];
+        for (const pubkey of ALL_PUBKEYS)
+            if (await predicate(pubkey, cap, blk)) rows.push({ pubkey, amount: '0' });
+        rows.truncated = false;
+        return rows;
+    });
+}
+
+function addPriceDbStubs(db) {
+    db.createPrice                  = sinon.stub().resolves();
+    db.hasCapability                = sinon.stub();
+    db.getValidatorsByCapability    = sinon.stub();
+    db.getActiveCapabilityCount     = sinon.stub().resolves(1);
+    db.getStakeWeightsByCapability  = sinon.stub().resolves([]);
+    db.createValidatorReward        = sinon.stub().resolves(true);
+    setCapable(db, () => true);
+}
+
+function setupPrice() {
+    indexer = createMockIndexer();
+    addPriceDbStubs(indexer.indexerDb);
+    actionsCtx = {
+        config:    indexer.config,
+        util:      indexer.util,
+        mapper:    indexer.mapper,
+        decoderDb: indexer.decoderDb,
+        indexerDb: indexer.indexerDb,
+        hubClient: null,
+    };
+    handler = new Price(actionsCtx);
+    indexer.util.resetLists();
+}
+
+function restorePrice() { sinon.restore(); }
+
+// PRICE|1|COIN|TICK|FIAT|VALUE|FEE|MEMO
+function v1Params(overrides = {}) {
+    const p = { coin: 'BTC', tick: 'TEST', fiat: 'USD', value: '1.50', fee: '0', memo: 'm', ...overrides };
+    return ['1', p.coin, p.tick, p.fiat, p.value, p.fee, p.memo];
+}
+
+function v1Data(overrides = {}) {
+    return createBaseData({ ACTION: 'PRICE', FORMAT: 1, ...overrides });
+}
 
 describe('Price (PRICE) @regression @tier3', function () {
-    let indexer, actionsCtx, handler;
+    beforeEach(setupPrice);
+    afterEach(restorePrice);
 
-    function addPriceDbStubs(db) {
-        db.createPrice                  = sinon.stub().resolves();
-        db.hasCapability                = sinon.stub();
-        db.getValidatorsByCapability    = sinon.stub();
-        db.getActiveCapabilityCount     = sinon.stub().resolves(1);
-        db.getStakeWeightsByCapability  = sinon.stub().resolves([]);
-        db.createValidatorReward        = sinon.stub().resolves(true);
-        setCapable(db, () => true);
-    }
-
-    // Drive BOTH capability APIs from one predicate, the way db.js does (#3871):
-    // a case that says who qualifies stays honest whichever path the handler takes.
-    function setCapable(db, predicate) {
-        db.hasCapability.callsFake(async (pubkey, cap, blk) => !!(await predicate(pubkey, cap, blk)));
-        db.getValidatorsByCapability.callsFake(async (cap, blk) => {
-            const rows = [];
-            for (const pubkey of ALL_PUBKEYS)
-                if (await predicate(pubkey, cap, blk)) rows.push({ pubkey, amount: '0' });
-            rows.truncated = false;
-            return rows;
-        });
-    }
-
-    beforeEach(function () {
-        indexer = createMockIndexer();
-        addPriceDbStubs(indexer.indexerDb);
-
-        actionsCtx = {
-            config:    indexer.config,
-            util:      indexer.util,
-            mapper:    indexer.mapper,
-            decoderDb: indexer.decoderDb,
-            indexerDb: indexer.indexerDb,
-            hubClient: null,
-        };
-        handler = new Price(actionsCtx);
-        indexer.util.resetLists();
-    });
-
-    afterEach(function () {
-        sinon.restore();
-    });
-
+    // ───────────────────────────────────────────────────────────────────────
+    // v1 - user TOKEN/FIAT oracle price
+    // ───────────────────────────────────────────────────────────────────────
     describe('v1 - user oracle price', function () {
-
-        // PRICE|1|COIN|TICK|FIAT|VALUE|FEE|MEMO
-        function v1Params(overrides = {}) {
-            const p = { coin: 'BTC', tick: 'TEST', fiat: 'USD', value: '1.50', fee: '0', memo: 'm', ...overrides };
-            return ['1', p.coin, p.tick, p.fiat, p.value, p.fee, p.memo];
-        }
-        function v1Data(overrides = {}) {
-            return createBaseData({ ACTION: 'PRICE', FORMAT: 1, ...overrides });
-        }
-
         it('valid oracle price → valid and recorded', async function () {
             const data = v1Data();
             await handler.parse(v1Params(), data, null);
@@ -118,7 +120,13 @@ describe('Price (PRICE) @regression @tier3', function () {
             await handler.parse(v1Params({ value: '0' }), data, null);
             assert.ok(String(data['STATUS']).includes('VALUE'));
         });
+    });
+});
 
+describe('Price (PRICE) @regression @tier3', function () {
+    beforeEach(setupPrice);
+    afterEach(restorePrice);
+    describe('v1 - user oracle price', function () {
         it('uses the exact bcmath comparator for VALUE positivity, matching the FEE sibling (2396)', async function () {
             // Zero in any decimal form is rejected; the smallest representable positive
             // 8-decimal amount is accepted. The positivity gate now runs through
@@ -151,7 +159,11 @@ describe('Price (PRICE) @regression @tier3', function () {
             }
         });
     });
+});
 
+describe('Price (PRICE) @regression @tier3', function () {
+    beforeEach(setupPrice);
+    afterEach(restorePrice);
     it('rejects an unknown VERSION', async function () {
         const data = createBaseData({ ACTION: 'PRICE', FORMAT: 9 });
         await handler.parse(['9'], data, null);
@@ -159,12 +171,11 @@ describe('Price (PRICE) @regression @tier3', function () {
         assert.ok(indexer.indexerDb.createPrice.calledOnce);
     });
 
-    describe('hub push - v1', function () {
-        function v1Params(overrides = {}) {
-            const p = { coin: 'BTC', tick: 'TEST', fiat: 'USD', value: '1.50', fee: '0', memo: 'm', ...overrides };
-            return ['1', p.coin, p.tick, p.fiat, p.value, p.fee, p.memo];
-        }
+    // ───────────────────────────────────────────────────────────────────────
+    // Hub push paths (hubClient present)
+    // ───────────────────────────────────────────────────────────────────────
 
+    describe('hub push - v1', function () {
         // A v1 oracle_price is user-submitted and never re-emitted by a later block, so its lost-push
         // window was permanent. It now uses the same durable transactional outbox as v0: enqueueHubPushTx
         // inside the block transaction plus a staged post-commit delivery; parse never pushes directly.
@@ -195,7 +206,13 @@ describe('Price (PRICE) @regression @tier3', function () {
             assert.strictEqual(staged.id, 7);
             assert.strictEqual(staged.pushType, 'oracle_price');
         });
+    });
+});
 
+describe('Price (PRICE) @regression @tier3', function () {
+    beforeEach(setupPrice);
+    afterEach(restorePrice);
+    describe('hub push - v1', function () {
         it('invalid v1 with hubClient → nothing enqueued or staged', async function () {
             const mockHubClient = { enabled: true, pushOraclePrice: sinon.stub().resolves() };
             indexer.indexerDb.enqueueHubPushTx = sinon.stub().resolves(1);

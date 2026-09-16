@@ -16,7 +16,7 @@
  * Prove that the migrations pending against a DEPLOYED ref are additive and
  * old-code-compatible, before they are applied to anything that matters.
  *
- * The migration-compatibility gate (spec §7) requires: "every pre-window migration
+ * The migration-compatibility gate requires: "every pre-window migration
  * proven additive and old-code-compatible (old suite green against the migrated
  * schema)". Driven by bin/check-migration-old-code-compat.sh, which provisions
  * the throwaway database; this file is the assertions.
@@ -29,17 +29,17 @@
  * migration did. The gate's wording describes the intent; this is the operation
  * that actually has the property.
  *
- * WHAT IT SIMULATES: §8 step 2, exactly
+ * WHAT IT SIMULATES: the rollout's migrate step, exactly
  * -------------------------------------
  *   1. build the schema for the affected tables AT THE DEPLOYED REF and populate
  *      it, so pre-existing rows are in the picture,
  *   2. seed `schema_migrations` the way that host's ledger really looks, so the
  *      pending set is the host's pending set and not "all of them",
  *   3. run the REAL runMigrations({includeManual:true}) from the batch tree, the
- *      same code path src/migrate.js drives, and
+ *      same code path src/db/migration/migrate.js drives, and
  *   4. run OLD code's statements against the migrated schema.
  *
- * Step 4 is the point. Between §8 step 2 (migrate) and step 4 (halt), the
+ * Step 4 is the point. Between the rollout's migrate step and its halt step, the
  * migrated schema is being served by code that predates it, so old statements
  * are the deployed reality and the thing that must not break.
  *
@@ -73,7 +73,7 @@ if(!OLD_REF || !DB_NAME || !process.env.DB_HOST){
     process.exit(2);
 }
 
-const Database = require(path.join(REPO, 'src/db.js'));
+const Database = require(path.join(REPO, 'src/db'));
 const config   = require(path.join(REPO, 'src/config.js'));
 const Utility  = require(path.join(REPO, 'src/utility.js'));
 
@@ -147,8 +147,8 @@ function git(...args){
 // here got this wrong twice over: stripping only whole comment lines split a
 // CREATE TABLE in half on a semicolon inside a trailing column comment
 // ("state_root; NULL pre flag-day"), and even the fixed regex was not
-// quote-aware, so a `--` inside a quoted DDL string would be eaten. db.js's
-// version handles both, and its comment names the exact hazard ("so a ';'
+// quote-aware, so a `--` inside a quoted DDL string would be eaten. The version
+// in db/index.js handles both, and its comment names the exact hazard ("so a ';'
 // appearing inside comment prose is never mistaken for a statement terminator").
 const stripSqlLineComments = Database.prototype.stripSqlLineComments;
 
@@ -320,7 +320,7 @@ async function main(){
         const conn = await db.getConnection();
         // The product's own ledger DDL, not a copy: a hand-written copy omitted the
         // `mode` column and the migrator then failed on its own bookkeeping insert.
-        try { await db._ensureMigrationsLedger(conn); }
+        try { await db.ensureMigrationsLedger(conn); }
         finally { await conn.release(); }
     }
     for(const f of oldFiles){
@@ -389,8 +389,8 @@ async function main(){
         }
         if(affected.includes('state_checkpoints')){
             // One checkpoint per seq is what old code writes in normal operation. It
-            // must still be accepted, because §3.5 abort resumes old code against this
-            // schema after the fence has been applied in §8 step 4a.
+            // must still be accepted, because an aborted rollout resumes old code against this
+            // schema after the fence has been applied at the rollout's halt step.
             await raw(OLD_STATEMENTS.state_checkpoints.insert,
                       ['BTC', 'regtest', 501, 'h2', 'l2', 'a2', 'c2', 900001, 900001]);
             notes.push('state_checkpoints: one row per seq still accepted (abort path writes normally)');

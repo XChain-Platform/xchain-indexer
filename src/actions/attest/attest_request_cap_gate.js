@@ -1,0 +1,156 @@
+/*********************************************************************
+ *
+ * Copyright © 2025–2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md.
+ *
+ **********************************************************************
+ *
+ * ATTEST v0 per-block admission caps (framework spec §11.1).
+ *
+ * The spec promised three rate limits. Two shipped: a per-validator outbound
+ * fetch limit (hub-side) and a per-provider payload/deadline bound. The two
+ * that bound VOLUME - "per-contract max ATTEST v0s per block" and "per-block
+ * global ceiling" - never did, so nothing bounded how many attestation
+ * requests a single block could admit.
+ *
+ * Why that matters more than an ordinary DoS bound: an admitted request makes
+ * OTHER people spend. Each one puts `REDUNDANCY` validators on the hook for a
+ * provider call, and for the `llm` provider that call is a real invoice on the
+ * operator's own vendor account. The requester pays a fixed gas charge
+ * (VM_ATTEST_REQUEST) that is identical whether the provider is a free HTTP
+ * GET or a paid model, so the cost of asking and the cost of serving are
+ * decoupled by construction.
+ *
+ * On a fee-bearing network economics still bound the shape: a spam loop costs
+ * its author real native coin per transaction and real XCHAIN per action. On
+ * TESTNET neither is scarce - the coin is faucet-issued and XCHAIN is openly
+ * mintable - so the author's cost to make five validators buy vendor tokens is
+ * approximately zero, and the bound has to be a protocol rule instead of a
+ * price. That is the launch reason this gate exists; the mainnet case is the
+ * ordinary one (a funded attacker is merely slowed by fees, not stopped).
+ *
+ * SEMANTICS: REJECTION, NOT DEFERRAL. This is deliberately unlike the three
+ * sibling per-block caps (XCALL_MAX_CALLS_PER_BLOCK,
+ * ATTEST_MAX_EXPIRIES_PER_BLOCK, CROSS_SETTLE_MAX_PER_BLOCK), which cap a pass
+ * the INDEXER schedules and carry the overflow forward to the next block. Those
+ * can defer because they choose when to do work that is already owed. An
+ * admission cap cannot: the v0 action is already in THIS block, emitted by the
+ * VM during an EXECUTE that has already run, so there is no later block to move
+ * it to and no way to re-present it. An over-cap request is therefore REFUSED,
+ * and the author's remedy is to retry in a later block.
+ *
+ * WHAT THE REFUSAL COSTS THE AUTHOR, measured on a live chain rather than read
+ * off this handler. attest.js sets the over-cap request's STATUS, which makes
+ * REQUEST_STATUS 'rejected' - but a v0 exists ONLY as a VM emission, and
+ * execute.js processEmission throws on any emission whose handler returns a
+ * non-'valid' STATUS. That throw rolls back the emitting EXECUTE's savepoint,
+ * so what a chain actually records is a REVERTED EXECUTE, not a rejected
+ * request row:
+ *
+ *   - the over-cap request row is rolled back, so NO ATTEST v0 is ever stored
+ *     'rejected'; that request_status is unreachable for v0 by construction
+ *   - the UNDER-cap siblings the same EXECUTE emitted before it are rolled back
+ *     with it, so hitting the cap costs a contract the requests it was entitled
+ *     to, not just the one over the line
+ *   - every state write of that execution is rolled back too
+ *   - the EXECUTE lands 'failed' with this rule's message verbatim in
+ *     contract_executions.error_message ("emission failed: ATTEST: invalid:
+ *     ATTEST cap (...)"), which is the ONLY durable trace of the refusal
+ *
+ * Driven on BTC regtest 2026-09-02, the first time this gate was ever
+ * reached on a chain; the e2e that reaches it is
+ * xchain-e2e-test/test/actions/attestationRequestCap.test.js. Nothing above is
+ * specific to the caps: every ATTEST v0 admission rule (responsible-set size,
+ * fee funding, structural validation) refuses the same way. Making a refusal
+ * per-request instead of per-EXECUTE would be a consensus change, and the caps
+ * are armed at genesis on testnet, so it needs its own flag-day and ruling.
+ *
+ * DETERMINISM: the count is taken from the attests table at
+ * (block_index = this block, action_index < this action, request_status <>
+ * 'rejected'). Every node processes a block's actions in action_index order
+ * inside one transaction, so at any given action every node sees exactly the
+ * same set of earlier admissions from that block. The order is total
+ * (action_index is unique), so which requests fall inside the cap and which
+ * fall outside is identical fleet-wide, and a from-genesis replay reproduces
+ * it. Rejected rows are excluded so a refused request never consumes a slot it
+ * was never granted.
+ *
+ * ACTIVATION PLANE: LOCAL BLOCK HEIGHT, matching the ATTEST_ADMISSION gate this
+ * check sits beside (see the plane note on the attest_admission_activation row). The
+ * comparison is against the request's own BLOCK_INDEX on its own chain.
+ *
+ * ARMING, and why testnet is NOT genesis-active despite being the reason this
+ * exists. The cap is CONSENSUS-VISIBLE: it changes which ATTEST v0s are
+ * accepted, so it moves actions rows, the contract hash and the checkpoint
+ * preimage. Arming it at height 0 on a chain that ALREADY HAS HISTORY silently
+ * reinterprets that history, and it is replay-safe there only if no past block
+ * ever admitted more than the cap - a chain-state question no file in this repo
+ * can answer, which is exactly the reasoning the CROSS_SETTLE_MAX_PER_BLOCK
+ * ruling recorded. So:
+ *
+ *   regtest 0  - armed at genesis; the e2e venue is rebuilt from scratch, so
+ *                there is no history to reinterpret and the suites exercise it.
+ *   testnet 0  - armed at genesis, RATIFIED by the operator 2026-08-18 on the
+ *                evidence below, so the public testnet launches with the cap in
+ *                force rather than discovering it dormant afterwards.
+ *   mainnet 0  - armed at genesis, RULED by the operator 2026-09-09 on its own
+ *                measurement (below), so the cap is in force from the first
+ *                mainnet block that carries a request.
+ *
+ * WHY 0 IS SAFE ON TESTNET, measured rather than assumed. Arming at genesis on a
+ * chain that already has history is replay-safe only if no past block ever
+ * admitted more than the cap. That is a chain-state question, and the
+ * CROSS_SETTLE_MAX_PER_BLOCK ruling refused to assume its answer. Here it was
+ * ANSWERED, for ALL THREE chains the `testnet` key covers rather than just the
+ * one that matters most: the live explorer reports `total: 0` attestation rows
+ * ever recorded on BTC, LTC and DOGE testnet alike (`/{TBTC,TLTC,TDOGE}/api/
+ * attestations`, checked 2026-08-18). Zero requests in a chain's whole history
+ * means no block of it can have exceeded a cap of 10, so arming from block 0
+ * reinterprets nothing and replay stays byte-identical on every testnet chain.
+ * MAINNET WAS MEASURED SEPARATELY, not generalized from the testnet result: the
+ * explorer reports 0 attestation rows ever recorded on BTC, LTC and DOGE mainnet
+ * (measured 2026-09-09), so no mainnet block can have exceeded a cap of 10
+ * either, and the from-genesis OLD-vs-ON replay per chain is the witness.
+ *
+ * A null height means the rule is INERT on that network and the legacy uncapped
+ * admission path runs byte for byte; no network is inert today.
+ *
+ * LOCAL COPY of the canonical maps in xchain-documentation/protocol/
+ * constants.js; kept value-identical by a parity test. A one-sided edit forks
+ * ATTEST v0 accept/reject at the flag-day.
+ *
+ ********************************************************************/
+
+const { get, copy, activeAt } = require('../../consensus/gate_registry');
+
+const ATTEST_REQUEST_CAP_ACTIVATION = copy('attest_request_cap_activation.ATTEST_REQUEST_CAP_ACTIVATION');
+
+const ATTEST_REQUEST_CAPS = copy('attest_request_cap_activation.ATTEST_REQUEST_CAPS');
+
+// Whether the per-block admission caps are in effect for an ATTEST v0 request at
+// `blockIndex` on `network`. Below the threshold (or on an unratified/unknown
+// network) -> the legacy uncapped admission path, unchanged.
+//
+// `blockIndex` is the LOCAL height of the chain the request landed on, NOT a BTC
+// anchor; callers must pass the request's own BLOCK_INDEX.
+function isAttestRequestCapActive(blockIndex, network){
+    let b = parseInt(blockIndex);
+    if(!Number.isFinite(b)) return false;
+    let threshold = ATTEST_REQUEST_CAP_ACTIVATION[network];
+    // null is the UNRATIFIED sentinel and must read as "off". Without the explicit
+    // null test `b >= null` coerces to `b >= 0` and arms the gate on every block of
+    // an unratified network - the inverse of what the sentinel means.
+    if(threshold === null || threshold === undefined) return false;
+    return b >= threshold;
+}
+
+module.exports = {
+    ATTEST_REQUEST_CAP_ACTIVATION,
+    ATTEST_REQUEST_CAPS,
+    isAttestRequestCapActive
+};

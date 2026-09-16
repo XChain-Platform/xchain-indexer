@@ -76,7 +76,7 @@ class MetricsCollector {
 
         // Block timing stats
         const times = measured.map(b => b.totalMs);
-        const blockTiming = this._computeDistribution(times);
+        const blockTiming = this.computeDistribution(times);
 
         // Phase timing stats
         const phaseNames = ['decoderRead', 'actionProcessing', 'expirations',
@@ -85,7 +85,7 @@ class MetricsCollector {
         const phaseTiming = {};
         for (const name of phaseNames) {
             const vals = measured.map(b => (b.phases && b.phases[name]) || 0);
-            phaseTiming[name] = this._computeDistribution(vals);
+            phaseTiming[name] = this.computeDistribution(vals);
         }
 
         // Memory stats
@@ -135,7 +135,7 @@ class MetricsCollector {
             `EL p99: ${s.eventLoop.p99Ms || 0}ms | errors: ${s.errors.length}`;
     }
 
-    _computeDistribution(values) {
+    computeDistribution(values) {
         if (values.length === 0) {
             return { min: 0, max: 0, avg: 0, p50: 0, p95: 0, p99: 0 };
         }
@@ -145,13 +145,13 @@ class MetricsCollector {
             min: +sorted[0].toFixed(2),
             max: +sorted[sorted.length - 1].toFixed(2),
             avg: +(sum / sorted.length).toFixed(2),
-            p50: +this._percentile(sorted, 50).toFixed(2),
-            p95: +this._percentile(sorted, 95).toFixed(2),
-            p99: +this._percentile(sorted, 99).toFixed(2)
+            p50: +this.percentile(sorted, 50).toFixed(2),
+            p95: +this.percentile(sorted, 95).toFixed(2),
+            p99: +this.percentile(sorted, 99).toFixed(2)
         };
     }
 
-    _percentile(sorted, p) {
+    percentile(sorted, p) {
         const idx = Math.ceil((p / 100) * sorted.length) - 1;
         return sorted[Math.max(0, idx)];
     }

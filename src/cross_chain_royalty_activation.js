@@ -40,14 +40,9 @@
  *
  ********************************************************************/
 
-// Per-network activation height, interpreted as the BTC-anchored snapshot_block
-// carried by the XMATCH canonical (NOT the local processing height), so every
-// chain + the hub flip the match format on the same anchor.
-const CROSS_CHAIN_ROYALTY_ACTIVATION = {
-    mainnet: 961000,      // ARMED 2026-07-07: BTC anchor ~2026-08-04; deploy hub + ALL indexers before this height
-    testnet: 0,
-    regtest: 0,
-};
+const { get, copy, activeAt } = require('./consensus/gate_registry');
+
+const CROSS_CHAIN_ROYALTY_ACTIVATION = copy('cross_chain_royalty_activation.CROSS_CHAIN_ROYALTY_ACTIVATION');
 
 // Whether the XMATCH canonical carries the royalty payout legs for a match whose
 // BTC-anchored snapshot is at `snapshotBlock` on `network`. Below the threshold ->

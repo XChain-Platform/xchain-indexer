@@ -37,6 +37,7 @@
 const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
+const consensusPin = require('./consensus_pin.js');
 
 // Registry of canonical coin data files. Order defines ALLOWED_COINS order.
 const COIN_FILES = {
@@ -311,7 +312,7 @@ function consensusSubset(tick, network){
         wireFormat: coin.wireFormat,
         // firstBlock is a CONSENSUS input, for the same reason wireFormat
         // is: getCoinConfig() exposes it (below) and the decoder reads it as the chain's
-        // start height (xchain-decoder/src/CryptoNetworks.js), so it decides which block
+        // start height (xchain-decoder/src/chain/crypto_networks.js), so it decides which block
         // the action history begins at. A node bundling a higher value skips the actions
         // below it and replays a different history while its pin verifies clean.
         // Per-network, matching where the coin files declare it.
@@ -353,8 +354,7 @@ function consensusHashes(network){
 // config would fork the federation). Returns { ok, skipped } on success. Throws
 // on the first mismatch with both hashes so the operator sees the drift.
 function verifyConsensusPin(network){
-    const { CONSENSUS_CONFIG_PIN } = require('./consensus_pin.js');
-    const pin = CONSENSUS_CONFIG_PIN ? CONSENSUS_CONFIG_PIN[network] : undefined;
+    const pin = consensusPin.CONSENSUS_CONFIG_PIN ? consensusPin.CONSENSUS_CONFIG_PIN[network] : undefined;
     if(pin === null || pin === undefined) return { ok: true, skipped: true };
     for(const tick of ALLOWED_COINS){
         const expected = pin[tick];
@@ -379,8 +379,8 @@ function verifyConsensusPin(network){
 // outside operators (the validator runbook hands them HUB_NETWORK=testnet) with an
 // ARMED consensus pin, so the same fork risk applies and a clean pin must not read
 // as covering this depth. Every sibling seam gates on regtest alone for that reason:
-// resolveFeeDestination above, XChainHub._oracleMaxAgeSeconds,
-// XchainPriceSource.pinOffRegtest and CapabilitySnapshot._resolveReorgBuffer.
+// resolveFeeDestination above, XChainHub.oracleMaxAgeSeconds,
+// XchainPriceSource.pinOffRegtest and CapabilitySnapshot.resolveReorgBuffer.
 //
 // Raising stays legal on every network because raising is unilaterally
 // conservative: the validator simply waits longer. Only lowering forks co-signing.

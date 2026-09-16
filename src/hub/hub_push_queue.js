@@ -1,0 +1,393 @@
+const { getLogger } = require('../observability/index.js');
+const { CONFIG_ENV } = require('../config.js');
+/*********************************************************************
+ *
+ * Copyright © 2025–2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md. A commercial
+ * license (without AGPL source-disclosure terms) is available -
+ * contact legal@dankest.llc.
+ *
+ **********************************************************************
+ *
+ * XChain Indexer - Hub Push Queue
+ *
+ * Durable retry queue for best-effort pushes to xchain-hub.
+ *
+ * The PRICE handlers push validated rounds (PRICE v0), oracle prices
+ * (PRICE v1), and batches of rounds (PRICE v0) to the hub. Those pushes are
+ * network calls and can fail when the hub is restarting, overloaded, or
+ * partitioned. The raw on-chain action is always retained locally in the
+ * `prices` table, but the hub never reads that table, so a dropped push used
+ * to permanently remove the row from the hub's oracle_prices / price_snapshots
+ * and from every indexer that mirrors the hub.
+ *
+ * To make those pushes durable, EVERY push is persisted to the
+ * `pending_hub_pushes` table up front (write-ahead), inside the same block
+ * transaction that writes the `prices` row, and the row is dropped only once the
+ * hub has accepted it. Delivery is attempted live post-commit; a row that was not
+ * delivered live (push failure, hub outage, or a crash in that window) survives
+ * for this poller. It drains that table on a fixed interval,
+ * re-sending each row with exponential backoff until the hub accepts it (the
+ * hub's pushpriceround / pushoracleprice / pushpricebatch / pushattestbatch
+ * handlers dedupe, so a replay the hub already has returns cleanly). A
+ * `price_round` row that keeps failing past the attempt cap is marked `failed`,
+ * which stops the retries, and the same drain tick sweeps terminal rows once they
+ * pass the retention window so the table stays bounded. `oracle_price`,
+ * `price_batch`, `attest_batch` and the `*_retraction` rows carry NO cap: none is
+ * re-derivable from a later block (each batch type is the SOLE carrier of its whole
+ * window for a chain-only node), so they stay `pending` and retry at the max backoff
+ * until the hub takes them (see attempt).
+ *
+ ********************************************************************/
+
+class HubPushQueue {
+
+    constructor(indexer, opts){
+        opts = opts || {};
+        this.indexer   = indexer;
+        this.indexerDb = indexer.indexerDb;
+        this.hubClient = indexer.hubClient;
+
+        // How often the poller wakes to drain due rows.
+        this.intervalMs    = opts.intervalMs    || parseInt(CONFIG_ENV.HUB_PUSH_RETRY_INTERVAL_MS) || 30000;
+        // Backoff schedule: wait grows as base * 2^(attempts-1), capped at max.
+        this.baseBackoffMs = opts.baseBackoffMs || parseInt(CONFIG_ENV.HUB_PUSH_RETRY_BASE_MS)     || 30000;
+        this.maxBackoffMs  = opts.maxBackoffMs  || parseInt(CONFIG_ENV.HUB_PUSH_RETRY_MAX_MS)      || 600000;  // 10 min cap
+        // Stop retrying a row after this many attempts (~30 min with defaults).
+        this.maxAttempts   = opts.maxAttempts   || parseInt(CONFIG_ENV.HUB_PUSH_MAX_ATTEMPTS)      || 10;
+        // Rows pulled per drain tick.
+        this.batchSize     = opts.batchSize     || 50;
+        // How long a terminal `failed` row survives before the drain sweeps it, and
+        // how often that sweep runs. A retired row is out of the poller's reach but
+        // still in the table, so without the sweep a long hub outage grows an
+        // operational table with no ceiling. The window is wide enough
+        // that the failed count getStats publishes still describes recent reality.
+        // Set HUB_PUSH_FAILED_RETENTION_SECONDS=0 to keep terminal rows forever.
+        let retentionEnv = parseInt(CONFIG_ENV.HUB_PUSH_FAILED_RETENTION_SECONDS);
+        this.failedRetentionSec = (opts.failedRetentionSec != null) ? opts.failedRetentionSec
+            : (Number.isFinite(retentionEnv) ? retentionEnv : 7 * 24 * 3600);
+        this.pruneIntervalMs = opts.pruneIntervalMs || parseInt(CONFIG_ENV.HUB_PUSH_PRUNE_INTERVAL_MS) || 3600000;
+        this._lastPruneMs = 0;
+
+        this.timer    = null;
+        this.draining = false;
+        // Wall clock before which no drain runs, set when the hub answers 429.
+        // A throttled push is the ONE failure the hub never judged: it did not see the
+        // payload, so the row is neither delivered nor rejected and retrying it inside the
+        // same window can only re-trip the same guard. Deferring the whole queue (not the
+        // single row) is what makes it converge: the drain sends up to batchSize rows
+        // back to back, so without this the first 429 is followed by 49 more, every one
+        // of them charging an attempt against rows the hub never read. 0 = no hold.
+        this._throttledUntilMs = 0;
+        // Promise that resolves when the currently in-flight drain() finishes; null when idle. Lets
+        // pause() await an in-flight drain instead of returning while it is still mid-batch.
+        this._drainDone = null;
+        // Set by rollback.js around its post-commit retraction block so a deferred drain cannot
+        // re-issue a stale open-ended retraction against the just-rolled-back range.
+        // Independent of `draining` (which only prevents overlapping drains).
+        this.paused   = false;
+    }
+
+    // Pause the queue and WAIT for any in-flight drain to finish. Setting `paused`
+    // stops any NEW drain tick, but a drain already mid-batch holds a pre-fetched set of rows in
+    // memory and could deliver a stale forward push AFTER the caller's retraction runs, re-creating
+    // an orphaned hub row the fence can no longer delete. Awaiting `_drainDone` closes that race: by
+    // the time pause() resolves, no drain is running and none can start. Returns a promise so callers
+    // do `await queue.pause()`. Safe to call when idle (resolves immediately).
+    async pause(){
+        this.paused = true;
+        // A drain that already passed its paused-check and set draining=true has a live _drainDone;
+        // await it. A drain starting after this line sees paused=true and returns before draining.
+        if(this._drainDone) await this._drainDone;
+    }
+    resume(){ this.paused = false; }
+
+    // Begin draining on an interval. No-op when no hub is configured; in that
+    // case the PRICE handlers never enqueue, so there is nothing to drain.
+    start(){
+        if(this.timer) return;
+        if(!this.hubClient || !this.hubClient.enabled){
+            getLogger().info('HubPushQueue: no hub configured, retry queue idle');
+            return;
+        }
+        this.timer = setInterval(() => {
+            this.drain().catch(err => getLogger().warn('HubPushQueue: drain error:', err.message || err));
+        }, this.intervalMs);
+        // Never keep the process alive on the timer alone.
+        if(this.timer.unref) this.timer.unref();
+        getLogger().info('HubPushQueue: started (interval ' + this.intervalMs + 'ms, max ' + this.maxAttempts + ' attempts)');
+    }
+
+    stop(){
+        if(this.timer){ clearInterval(this.timer); this.timer = null; }
+    }
+
+    // A pending row is due when enough time has elapsed since its last attempt,
+    // per the exponential-backoff schedule. Rows never tried are immediately due.
+    isDue(row, now){
+        if(!row.last_attempted_at) return true;
+        let last    = new Date(row.last_attempted_at).getTime();
+        let attempts = Number(row.attempts) || 0;
+        let backoff = Math.min(this.baseBackoffMs * Math.pow(2, Math.max(0, attempts - 1)), this.maxBackoffMs);
+        return now >= last + backoff;
+    }
+
+    // Drain one batch of due rows. Guarded against overlapping runs so a slow
+    // hub can't pile up concurrent drains on top of each other.
+    async drain(){
+        if(this.draining) return;
+        if(this.paused) return;
+        // Hub-imposed hold from a previous 429. Checked before the prune/fetch so a
+        // throttled queue costs one clock read per tick, not a DB round trip.
+        if(this._throttledUntilMs && Date.now() < this._throttledUntilMs) return;
+        this.draining = true;
+        // Publish a completion promise so pause() can await this in-flight drain.
+        let resolveDone;
+        this._drainDone = new Promise(resolve => { resolveDone = resolve; });
+        try {
+            // Sweep aged terminal rows before fetching. It rides the existing drain
+            // timer rather than owning one, so it inherits start/stop/pause and adds
+            // no lifecycle: the throttle below is what keeps it off every 30s tick.
+            await this.pruneFailed();
+            // The due-time predicate is pushed into SQL (db.js getPendingHubPushes) so
+            // parked-in-backoff rows no longer occupy the LIMIT batch slots, which is what
+            // caused head-of-line blocking. Pass the SAME backoff params used below by
+            // isDue, which stays as a cheap belt-and-braces re-check.
+            let rows = await this.indexerDb.getPendingHubPushes(this.batchSize, {
+                baseBackoffMs: this.baseBackoffMs,
+                maxBackoffMs:  this.maxBackoffMs
+            });
+            if(!rows || rows.length === 0) return;
+            let now = Date.now();
+            for(let row of rows){
+                if(!this.isDue(row, now)) continue;
+                await this.attempt(row);
+                // A 429 stops the batch where it stands. The remaining rows are still
+                // pending and still due, so the next tick past the hold picks them up
+                // unchanged; pushing them now would only deepen the throttle.
+                if(this._throttledUntilMs && Date.now() < this._throttledUntilMs) break;
+            }
+        } finally {
+            this.draining = false;
+            this._drainDone = null;
+            resolveDone();
+        }
+    }
+
+    // Delete terminal `failed` rows past the retention window, at most once per
+    // pruneIntervalMs. Never throws into drain(): a sweep that cannot run is a
+    // housekeeping miss, not a delivery failure, and the next tick retries. The
+    // typeof guard keeps minimal test doubles (indexerDb stubs without the method)
+    // working. Returns the number of rows removed, 0 when it did not run.
+    async pruneFailed(){
+        if(!(this.failedRetentionSec > 0)) return 0;
+        let now = Date.now();
+        if(now - this._lastPruneMs < this.pruneIntervalMs) return 0;
+        this._lastPruneMs = now;
+        if(typeof this.indexerDb.pruneFailedHubPushes !== 'function') return 0;
+        try {
+            let removed = await this.indexerDb.pruneFailedHubPushes(this.failedRetentionSec);
+            if(removed > 0)
+                getLogger().info('HubPushQueue: pruned ' + removed + ' failed row(s) older than ' +
+                    this.failedRetentionSec + 's');
+            return removed;
+        } catch (err){
+            getLogger().warn('HubPushQueue: failed-row prune error:', err.message || err);
+            return 0;
+        }
+    }
+
+    // Return aggregate queue stats for the health endpoint. Runs a single
+    // pooled query so it is safe to call concurrently with drain(). Returns
+    // null when the hub is unconfigured (queue never populated).
+    // pendingOldestAgeSec rides the same grouped scan. Now that oracle_price
+    // and the retractions retry without a cap, a stalled rail no longer shows up as a
+    // climbing `failed` count; it shows up as a pending backlog that AGES, and without
+    // this field that is invisible. Computed server-side so no host/DB clock skew folds
+    // into the age. Null when nothing is pending.
+    async getStats(){
+        if(!this.hubClient || !this.hubClient.enabled) return null;
+        let rows = await this.indexerDb.getHubPushQueueStats();
+        let pending = 0, failed = 0, pendingOldestAgeSec = null;
+        for(let r of (rows || [])){
+            if(r.status === 'pending'){
+                pending = Number(r.cnt);
+                if(r.oldest_age_sec !== undefined && r.oldest_age_sec !== null)
+                    pendingOldestAgeSec = Number(r.oldest_age_sec);
+            }
+            else if(r.status === 'failed')  failed  = Number(r.cnt);
+        }
+        return { pending, failed, pendingOldestAgeSec };
+    }
+
+    // Parse a queued row's JSON payload, or terminally fail an unparseable row so it
+    // stops cycling through the queue. This is the
+    // row's own parse guard, evaluated before any hub delivery is attempted. Returns
+    // null (never a legitimately-parsed value, even a bare `null` payload lands inside
+    // the wrapper object) when the row was already recorded failed here.
+    async parseHubPushPayload(row){
+        try {
+            return { payload: (typeof row.payload === 'string') ? JSON.parse(row.payload) : row.payload };
+        } catch (e){
+            // A payload that can't be parsed can never be delivered; mark it
+            // failed immediately so it stops cycling through the queue.
+            getLogger().warn('HubPushQueue: row ' + row.id + ' has unparseable payload, marking failed');
+            await this.indexerDb.recordHubPushAttempt(row.id, 'unparseable payload', 1);
+            return null;
+        }
+    }
+
+    // Deliver one push over the wire for its push_type. This is the dispatch table
+    // alone, so the caller's success/failure
+    // bookkeeping stays in one place. Returns false when the row was already
+    // terminally recorded here (unknown push_type, never sent to the hub); errors
+    // from hubClient propagate to the caller's try/catch unchanged.
+    async deliverHubPush(row, payload){
+        if(row.push_type === 'price_round'){
+            await this.hubClient.pushPriceRound(payload);
+        } else if(row.push_type === 'oracle_price'){
+            await this.hubClient.pushOraclePrice(payload);
+        } else if(row.push_type === 'price_batch'){
+            // PRICE v0: a signed window of rounds, delivered to pushpricebatch.
+            await this.hubClient.pushPriceBatch(payload);
+        } else if(row.push_type === 'attest_batch'){
+            // ATTEST v5: a signed window of finalized attestation responses parsed off
+            // the DOGE rail, delivered to pushattestbatch.
+            await this.hubClient.pushAttestBatch(payload);
+        } else if(row.push_type === 'price_retraction'){
+            // Reorg retraction parked by rollback.js when the live RPC failed.
+            // pushpricereorg is idempotent over a replayed range. A deferred drain bounds the
+            // delete to the CLOSED range [action_index, last_action_index] so a row re-published
+            // at A' inside the original open-ended range is not wiped. Old queued rows (no
+            // last_action_index) fall back to open-ended via undefined. retraction_generation
+            // fences the delete to push_generation <= it; absent on old queued rows.
+            await this.hubClient.retractPriceRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
+        } else if(row.push_type === 'xcall_retraction'){
+            // Reorg XCALL relay retraction parked by rollback.js when the live RPC
+            // failed. retractXcallRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
+            await this.hubClient.retractXcallRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
+        } else if(row.push_type === 'attest_batch_retraction'){
+            // Reorg ATTEST batch-link retraction parked by rollback.js when the live RPC
+            // failed. Keyed on ONE batch rather than on an action range (the hub clears a
+            // link column, never a row), and idempotent: the hub answers a retraction that
+            // matches no link with an accepted no-op, so a replayed drain is free.
+            await this.hubClient.retractAttestBatch(payload.coin, payload);
+        } else if(row.push_type === 'match_retraction'){
+            // Reorg DEX cross-chain match retraction parked by rollback.js when the
+            // live RPC failed. retractMatchRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
+            await this.hubClient.retractMatchRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
+        } else if(row.push_type === 'bridge_retraction'){
+            // Reorg bridge transfer retraction parked by rollback.js when the live RPC
+            // failed. retractBridgeRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
+            await this.hubClient.retractBridgeRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
+        } else {
+            getLogger().warn('HubPushQueue: row ' + row.id + ' has unknown push_type "' + row.push_type + '", marking failed');
+            await this.indexerDb.recordHubPushAttempt(row.id, 'unknown push_type', 1);
+            return false;
+        }
+        return true;
+    }
+
+    // Reorg retractions must NOT share the best-effort forward-push attempt cap. A
+    // `price_round` push is re-derivable, so retiring it to 'failed' after maxAttempts is
+    // fine. A '*_retraction' row is the ONLY remaining record that the hub must prune an orphaned
+    // range: retiring it (a hub outage overlapping a reorg exhausts the ~10-attempt backoff
+    // in under an hour) permanently strands stale prices and 'finalized' XCALL/DEX/bridge rows on
+    // the hub and every mirror, eligible for re-injection/settlement/minting, with the evidence
+    // parked invisibly in a terminal row. Retractions are idempotent and generation-fenced,
+    // so retrying forever at the max backoff is safe; keep them 'pending' indefinitely.
+    //
+    // An `oracle_price` row carries the same property and joins them. It is a
+    // user-submitted PRICE v1 action keyed by (source_address, source_chain, action_index)
+    // that no later block re-emits, so actions/price.js states plainly that a lost one is
+    // "never re-derivable" and builds this outbox to guarantee it is not lost. The
+    // ~10-attempt cap defeated that guarantee: a hub outage past ~30 minutes retired the
+    // row to 'failed', out of the poller's reach, and pruneFailed deleted it a week later.
+    // The hub dedupes on that same action key (actions/price.js), so replaying forever is
+    // as safe as it is for a retraction. `price_round` keeps the cap: price.js says it IS
+    // re-derivable, so it stays disposable.
+    //
+    // `price_batch` (PRICE v0) is durable for the SAME reason, not the opposite one: unlike
+    // a single `price_round`, which price.js can re-derive from the on-chain action alone, a
+    // batch is the SOLE carrier of every round in its window for a chain-only node with no
+    // hub of its own. Retiring a `price_batch` row to 'failed' after the finite cap does not
+    // just lose one re-derivable round, it permanently destroys up to an hour of price
+    // history (ORACLE_BATCH_WINDOW_ROUNDS rounds) that no later block or replay can recover.
+    // Do NOT "simplify" this back to matching `price_round`'s disposable classification: the
+    // two push types look like siblings but carry opposite re-derivability, which is exactly
+    // why they take opposite cap treatment.
+    //
+    // `attest_batch` (ATTEST v5/v6) is durable on that same reasoning, and one degree more
+    // so. It is the SOLE chain carrier of every finalized attestation response in its
+    // window: above the response-mirror activation a response is not its own transaction
+    // any more, so a batch retired to 'failed' strands an hour of responses that no later
+    // block re-emits and no replay recovers. The window is also what a chain-only node
+    // proves its coverage from, so losing one leaves a permanent hole in that proof.
+    //
+    // `attest_batch_retraction` is caught by the `_retraction` suffix above and belongs
+    // there for the same reason as its siblings: it is the only remaining record that a
+    // batch link no longer has a chain behind it, and the hub's own structural refusals
+    // are phrased 'invalid ...', which HubClient classes as terminal, so a genuinely
+    // unacceptable payload still leaves the queue instead of retrying forever.
+    //
+    // Retrying forever is only bounded because HubClient resolves TERMINAL hub rejections
+    // rather than throwing them: a payload the hub can never accept leaves the
+    // queue on the delivered path, so nothing immortal accumulates here.
+    isHubPushDurable(pushType){
+        return typeof pushType === 'string' &&
+            (pushType.endsWith('_retraction') || pushType === 'oracle_price' ||
+             pushType === 'price_batch' || pushType === 'attest_batch');
+    }
+
+    // Classify and record one failed delivery attempt. A 429 holds the WHOLE queue (the hub never judged the payload, so
+    // nothing here is charged an attempt), otherwise the row is persisted against
+    // either a finite cap (re-derivable pushes) or no cap at all (see
+    // isHubPushDurable's comment for why each push_type takes its cap).
+    async recordHubPushFailure(row, err, attemptNo){
+        let msg = String((err && err.message) || err).slice(0, 480);
+        // A 429 is not a delivery attempt, it is the hub declining to look. Record
+        // NOTHING: charging an attempt would inflate this row's exponential backoff
+        // (and, for the capped `price_round` type, walk it toward 'failed') on the
+        // strength of a verdict the hub never rendered on the payload. Leaving
+        // attempts and last_attempted_at untouched keeps the row due the instant the
+        // hold clears, which is what turns a chain-only price replay against a REMOTE
+        // hub from a stall into a slow, converging drain. A hub on the
+        // node's own host or private network never gets here at all: it exempts those
+        // callers from the per-IP cap (HUB_RATE_LIMIT_EXEMPT_LOCAL).
+        if(err && err.rateLimited){
+            let waitMs = Number.isFinite(err.retryAfterMs) && err.retryAfterMs > 0 ? err.retryAfterMs : 60000;
+            this._throttledUntilMs = Date.now() + waitMs;
+            getLogger().warn('HubPushQueue: hub rate-limited ' + row.push_type + ' row ' + row.id +
+                '; holding the queue ' + Math.round(waitMs / 1000) + 's (' + msg + ')');
+            return;
+        }
+        let isDurable = this.isHubPushDurable(row.push_type);
+        let cap = isDurable ? Number.MAX_SAFE_INTEGER : this.maxAttempts;
+        await this.indexerDb.recordHubPushAttempt(row.id, msg, cap);
+        getLogger().warn('HubPushQueue: push failed for row ' + row.id +
+            ' (attempt ' + attemptNo + (isDurable ? '' : '/' + this.maxAttempts) + '): ' + msg);
+    }
+
+    async attempt(row){
+        let parsed = await this.parseHubPushPayload(row);
+        if(parsed === null) return;
+
+        let attemptNo = (Number(row.attempts) || 0) + 1;
+        try {
+            let delivered = await this.deliverHubPush(row, parsed.payload);
+            if(!delivered) return;
+            // Success (or a hub-side dedupe of a row it already has); drop it.
+            await this.indexerDb.markHubPushDelivered(row.id);
+            getLogger().info('HubPushQueue: delivered ' + row.push_type + ' row ' + row.id + ' (attempt ' + attemptNo + ')');
+        } catch (err){
+            await this.recordHubPushFailure(row, err, attemptNo);
+        }
+    }
+}
+
+module.exports = HubPushQueue;

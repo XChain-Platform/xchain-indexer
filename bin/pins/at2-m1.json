@@ -1,0 +1,77 @@
+{
+  "note": "AT2 for milestone M1 of the code-structure pass: the suite title map is identical to the AT1 map through the declared delta in m1-title-delta.json, and the four consensus-identity numbers are byte-identical to the AT1 pin. Decision D37 splits the run while the bridge drive holds the regtest rail: the code-derived values come from a bare checkout and the tip state_hash from a read-only query, and the redeployed-indexer form of the state_hash read is deferred to the milestone that redeploys.",
+  "milestone": "M1",
+  "date": "2026-09-13",
+  "verdict": "pass",
+  "indexer_rev": "37b86938d6feeb7c274a4d99f219e5802be5a774",
+  "at1_pin": "bin/pins/at1-consensus-identity.json",
+  "at1_pin_rev": "b3c0cd22263ee675ac3d46ec541d49132065eda4",
+  "numbers": [
+    {
+      "name": "coin_registry_consensus_hash",
+      "expected": "ae89ab099baa3acd02926daba4f3790377b6527dbb19bd4580bab558a61f16a2",
+      "measured": "ae89ab099baa3acd02926daba4f3790377b6527dbb19bd4580bab558a61f16a2",
+      "result": "pass",
+      "how": "node bin/consensus-identity.js in the M1 worktree, no database",
+      "per_coin": {
+        "BTC": "63ee757834f6f815045321090fd89b446e784f442e3e7abf84b8c0fb3b479324",
+        "DOGE": "34f8dafeff36f7c8ca3b327c3c915251e78e64448742860620522a92a69368a0",
+        "LTC": "ab30c1d1fd444ca3dca1a9ec855bd587422e87d5e5e5e6b6f9ddadd1d2fb587d"
+      }
+    },
+    {
+      "name": "armed_map_fingerprint",
+      "expected": "55891dfd56f600227242b7aca78a9e0861177ccdd15a908096ea678473708ca0",
+      "measured": "55891dfd56f600227242b7aca78a9e0861177ccdd15a908096ea678473708ca0",
+      "result": "pass",
+      "how": "node bin/consensus-identity.js in the M1 worktree, no database"
+    },
+    {
+      "name": "consensus_rules_digest",
+      "expected": "26ba9cce1936d6c38518489b35e3ceb558746ffb466cea90f65b39adf49b2036",
+      "measured": "26ba9cce1936d6c38518489b35e3ceb558746ffb466cea90f65b39adf49b2036",
+      "result": "pass",
+      "how": "node bin/consensus-identity.js with no activation overrides set",
+      "reading": "unarmed"
+    },
+    {
+      "name": "consensus_rules_digest",
+      "expected": "f026ee1dc2de3437d9139147e9f49446273413a203dd38a89d821625f536ab2a",
+      "measured": "f026ee1dc2de3437d9139147e9f49446273413a203dd38a89d821625f536ab2a",
+      "result": "pass",
+      "how": "XC_ROLLCALL_REGTEST_ACTIVATION=armed XC_ROLLCALL_GATES_REGTEST_ACTIVATION=armed node bin/consensus-identity.js",
+      "reading": "armed, which is the form the regtest rail reports"
+    },
+    {
+      "name": "tip_state_hash",
+      "height": 2331,
+      "expected": "7d5821505bea5ee7850aa8c98af0ad189f6929f124dfb8620405217f9f7a213d",
+      "measured": "7d5821505bea5ee7850aa8c98af0ad189f6929f124dfb8620405217f9f7a213d",
+      "result": "pass",
+      "how": "read-only query at the pinned height inside the running BTC regtest indexer container, built from the service's own environment; the rail was neither written to nor restarted",
+      "rail_tip_at_read": 2331,
+      "deferred": "the redeployed-indexer form of this read, per decision D37, because the bridge drive holds the rail"
+    }
+  ],
+  "suite_title_map": {
+    "result": "pass",
+    "how": "node bin/suite-title-map.js --compare bin/pins/at1-suite-titles.json against the M1 tip",
+    "differences": 4,
+    "all_accounted": true,
+    "delta_map": "bin/pins/m1-title-delta.json",
+    "pin_before_sha256": "de142db0133560d13f0fd7def8abce4dbbc5fd84c873485d1744ad525d8a26df",
+    "pin_after_sha256": "43126c11fd28e776d29287028bc1162ddacc1a69212e429e586018ad93c8b285",
+    "accounting": "one M1 title rename in test/unit/protocol-address-roles.test.js, reported once under each of the two script tiers that collect the file, as a dropped title plus an added title each. No file was added, dropped or moved in any tier."
+  },
+  "sibling_reference_map": {
+    "result": "pass",
+    "how": "node bin/sibling-reference-map.js --siblings <platform root> --json against the M1 tip",
+    "pin_before_sha256": "1faffa9c4f8d49ff8f08035a686542f82f67ac131c648dd1ba310b612c963436",
+    "pin_after_sha256": "7a27b592a67bd525013116ea839bdbf122b0bb616034bab6eb0c1d1eb9247f36",
+    "accounting": [
+      "src/configs/BTC.js exists true to false: row 3 deleted src/configs/. Its two remaining referrers are prose mentions in sibling files, not loads.",
+      "src/recovery.js exists true to false: the recovery driver moved to bin/recovery.js, and the one sibling that loaded it (xchain-hub) already follows the new path.",
+      "src/consolidation_leg_amount_activation.js added: a prose mention appeared in a sibling working tree, not an M1 change. The file exists here."
+    ]
+  }
+}

@@ -89,15 +89,9 @@
 
 'use strict';
 
-// Per-network pre-batch era floor, as a unix-second block time. 0 (or an
-// absent/unknown network) means the barrier applies at every block. A
-// '<COIN>:<network>' key wins over the bare network key, so one chain's rail
-// start can differ from its siblings' without splitting the map.
-const PRICE_BATCHING_FLOOR_ACTIVATION = {
-    mainnet: 0,
-    testnet: 0,
-    regtest: 0,
-};
+const { get, copy, activeAt } = require('./consensus/gate_registry');
+
+const PRICE_BATCHING_FLOOR_ACTIVATION = copy('price_batching_floor_activation.PRICE_BATCHING_FLOOR_ACTIVATION');
 
 // Resolve the raw map entry: '<COIN>:<network>' first, then the bare network.
 function _floorEntry(network, coin) {

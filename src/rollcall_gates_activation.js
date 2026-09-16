@@ -51,12 +51,11 @@
 
 'use strict';
 
-// The documented regtest arming height: genesis, a multiple of the 30-block
-// regtest interval, so epoch 0 is a real v1 epoch.
-const ROLLCALL_GATES_REGTEST_ARMED_HEIGHT = 0;
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
-// The one environment variable this module reads, and only ever for regtest.
-const ROLLCALL_GATES_REGTEST_ENV = 'XC_ROLLCALL_GATES_REGTEST_ACTIVATION';
+const ROLLCALL_GATES_REGTEST_ARMED_HEIGHT = copy('rollcall_gates_activation.ROLLCALL_GATES_REGTEST_ARMED_HEIGHT');
+
+const ROLLCALL_GATES_REGTEST_ENV = copy('rollcall_gates_activation.ROLLCALL_GATES_REGTEST_ENV');
 
 // Same grammar as rollcall_activation.resolveRegtestActivation, read ONCE at
 // require time: armed | genesis | on | true | yes arm at genesis, a non-negative
@@ -78,13 +77,7 @@ function resolveRegtestGatesActivation(env){
     return null;
 }
 
-// Per-network EPOCH height at/above which ROLLCALL is published as v1 with the
-// GATES field and the epoch close records each signer's list.
-const ROLLCALL_GATES_ACTIVATION = {
-    mainnet: null,        // INERT placeholder: the operator owns this height
-    testnet: 152208,      // SIZED 2026-09-08: the first epoch boundary (151200 + 1008) after the v0.16.0 roll, which lands between the 151200 and 152208 closes
-    regtest: resolveRegtestGatesActivation(process.env),   // ARMS AT 0 when the venue sets XC_ROLLCALL_GATES_REGTEST_ACTIVATION
-};
+const ROLLCALL_GATES_ACTIVATION = copy('rollcall_gates_activation.ROLLCALL_GATES_ACTIVATION');
 
 // True when the epoch at `epochHeight` publishes ROLLCALL v1 and records gates.
 // null reads as "off" through the isFinite guard, never through `>=`.

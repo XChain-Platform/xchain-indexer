@@ -11,7 +11,7 @@
  *
  **********************************************************************
  *
- * Generate a precomputed genesis state dump (genesisDump.js artifact).
+ * Generate a precomputed genesis state dump (genesis_dump.js artifact).
  *
  * Runs the canonical CSV genesis injection ONCE against a scratch DB, then writes
  * the post-injection rows (pre-createBlock) to a gzip NDJSON file and prints the
@@ -34,7 +34,7 @@ const { decoderQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require(path.join(SETUP, 'db-connection'));
 const DecoderSeeder = require(path.join(SETUP, 'decoder-seeder'));
 const { initIndexer, destroyIndexer } = require(path.join(SETUP, 'indexer-launcher'));
-const GenesisDump = require(path.join(__dirname, '..', 'src', 'genesisDump'));
+const GenesisDump = require(path.join(__dirname, '..', 'src', 'chain', 'genesis_dump'));
 
 const outFile = process.argv[2];
 if(!outFile){

@@ -55,15 +55,11 @@
  *
  ********************************************************************/
 
-// The documented regtest arming height: genesis. It is a multiple of the
-// 30-block regtest interval, so epoch 0 is a real epoch and the first close is
-// not skipped. This is the height a regtest venue arms AT, not a height it is
-// armed at by default -- see resolveRegtestActivation for why the default is
-// inert and how a venue opts in.
-const ROLLCALL_REGTEST_ARMED_HEIGHT = 0;
+const { get, copy, activeAt } = require('./consensus/gate_registry');
 
-// The one environment variable this module reads, and only ever for regtest.
-const ROLLCALL_REGTEST_ENV = 'XC_ROLLCALL_REGTEST_ACTIVATION';
+const ROLLCALL_REGTEST_ARMED_HEIGHT = copy('rollcall_activation.ROLLCALL_REGTEST_ARMED_HEIGHT');
+
+const ROLLCALL_REGTEST_ENV = copy('rollcall_activation.ROLLCALL_REGTEST_ENV');
 
 /**
  * Resolve the regtest arming height from `env`.
@@ -106,58 +102,21 @@ function resolveRegtestActivation(env){
     return null;
 }
 
-// Per-network BTC height at/above which ROLLCALL epochs exist at all.
-// MAINNET ARMS AT 0 by the 2026-09-09 ruling: eviction can only reinterpret a chain that
-// has validators to evict, and mainnet carries 0 validators, 0 stakes and 0 roll-calls
-// (measured 2026-09-09), so every epoch below the tip closes empty and the from-genesis
-// OLD-vs-ON replay per chain is the witness. null is still a legitimate value here (regtest
-// holds it until the venue opts in), so every read MUST go through the Number.isFinite
-// guard below: a bare `height >= ROLLCALL_ACTIVATION[network]` would arm a null network at
-// height 0, since `0 >= null` is true in JS.
-const ROLLCALL_ACTIVATION = {
-    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 validators, 0 stakes, 0 roll-calls, measured 2026-09-09)
-    testnet: 151200,      // 1008 x 150 = 144 x 1050; tip was 150400 on 2026-08-30, ~5.5 days out
-    regtest: resolveRegtestActivation(process.env),   // ARMS AT 0 when the venue sets XC_ROLLCALL_REGTEST_ACTIVATION
-};
+const ROLLCALL_ACTIVATION = copy('rollcall_activation.ROLLCALL_ACTIVATION');
 
-// Epoch cadence in BTC blocks. Weekly on the live networks per the 2026-08-30
-// ruling: with K=2 an outage shorter than one epoch minus the accept window
-// (~6 days) can never evict, and 2-3 weeks idle always does. Regtest uses 30 so
-// an acceptance run does not have to mine 2 x 1008 blocks.
-const ROLLCALL_INTERVAL_BLOCKS = { mainnet: 1008, testnet: 1008, regtest: 30 };
+const ROLLCALL_INTERVAL_BLOCKS = copy('rollcall_activation.ROLLCALL_INTERVAL_BLOCKS');
 
-// How long after the epoch block a signature may still land, in BTC blocks. The
-// BTC header stamp at E + this value is what cuts the DOGE chain (see
-// rollcallWindowEndHeight / the epoch close).
-const ROLLCALL_ACCEPT_WINDOW_BLOCKS = { mainnet: 144, testnet: 144, regtest: 12 };
+const ROLLCALL_ACCEPT_WINDOW_BLOCKS = copy('rollcall_activation.ROLLCALL_ACCEPT_WINDOW_BLOCKS');
 
-// BTC blocks after the window closes before the epoch closes, giving the DOGE
-// side time to bury. MUST be >= 1 on every network: a block's `block_time` is
-// written by createBlock AFTER that block's own processing, so the window
-// endpoint has to be a strictly earlier block than the close, or the close
-// reads a timestamp that does not exist yet.
-const ROLLCALL_PROOF_DELAY_BLOCKS = { mainnet: 36, testnet: 36, regtest: 2 };
+const ROLLCALL_PROOF_DELAY_BLOCKS = copy('rollcall_activation.ROLLCALL_PROOF_DELAY_BLOCKS');
 
-// DOGE blocks past the window cut before a DOGE indexer's answer is admissible;
-// the anchor rail's own burial depth. This is what bounds the one residual the
-// design accepts: a DOGE reorg deeper than this, removing a counted signature
-// after the BTC close has recorded its epoch, cannot be undone from BTC,
-// because nothing there observes it and no un-evict rail exists.
-const ROLLCALL_DOGE_MATURITY = { mainnet: 60, testnet: 60, regtest: 2 };
+const ROLLCALL_DOGE_MATURITY = copy('rollcall_activation.ROLLCALL_DOGE_MATURITY');
 
-// K: consecutive ROLLED epochs a source must be absent for before eviction.
-const ROLLCALL_EVICT_MISSES = 2;
+const ROLLCALL_EVICT_MISSES = copy('rollcall_activation.ROLLCALL_EVICT_MISSES');
 
-// 2K: how many rolled epochs back the K-streak may reach. Bounds how far an old
-// absence can travel, so a source that leaves for months and returns starts
-// clean rather than resuming a stale streak.
-const ROLLCALL_STREAK_LOOKBACK = 4;
+const ROLLCALL_STREAK_LOOKBACK = copy('rollcall_activation.ROLLCALL_STREAK_LOOKBACK');
 
-// The frozen rollcall-publish reward, minted BTC-side to the ELECTED LEADER
-// only -- never to whoever published first, which would be a fee-bidding race
-// no hub can bump, since there is no fee-bump or RBF path anywhere in the hub.
-// Parity with ANCHOR_REWARD_AMOUNT per the 2026-08-30 ruling. Never from the wire.
-const ROLLCALL_REWARD_AMOUNT = '10.00000000';
+const ROLLCALL_REWARD_AMOUNT = copy('rollcall_activation.ROLLCALL_REWARD_AMOUNT');
 
 /**
  * Whether ROLLCALL is active for an epoch at BTC height `epochHeight` on `network`.

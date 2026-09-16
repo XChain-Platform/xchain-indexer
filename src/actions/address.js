@@ -1,3 +1,4 @@
+const { getLogger } = require('../observability/index.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -41,7 +42,9 @@
 
 class Address {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -49,27 +52,45 @@ class Address {
         this.util      = action.util;
         this.mapper    = action.mapper;
 
+        // Define list of known FORMATS
         this.formats = {};
         this.formats[0] = 'VERSION|FEE_PREFERENCE|REQUIRE_MEMO|DISPENSER_PREFERENCE|MEMO';
         // Self-gate one action-class of this account by binding a guard contract (address_controllers,
         // self-signed). One binding change per action; UNBIND=1 drops the live bind, and COOLDOWN_BLOCKS
-        // is committed at bind time as the friction on a later drop.
+        // is committed at bind time as the friction on a later drop (see
+        // Controller_Bound_Tokens.md).
         this.formats[1] = 'VERSION|CONTROLLER|ACTION_CLASS|COOLDOWN_BLOCKS|UNBIND|MEMO';
 
+        // Define lists of various fields
         this.fieldList = {};
         this.fieldList['NUMBER'] = ['FEE_PREFERENCE', 'REQUIRE_MEMO', 'DISPENSER_PREFERENCE'];
 
+        // Define lists of valid field values
         this.validValues = {};
+        // Define list of valid FEE_PREFERENCE values
         this.validValues['FEE_PREFERENCE'] = [0,1,2];
+        // Define list of valid REQUIRE_MEMO values
         this.validValues['REQUIRE_MEMO'] = [0,1];
+        // Define list of valid DISPENSER_PREFERENCE values
         this.validValues['DISPENSER_PREFERENCE'] = [1,2];
     }
 
+    // Handle parsing the ADDRESS transaction
     async parse(params, data, error){
+        /*****************************************************************
+         * DEBUGGING - Force params
+         ****************************************************************/
+        // Example payloads by FORMAT version:
+        // let str = "0|1|1|my address update";
+        // params  = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
+
+        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
+        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
@@ -80,24 +101,74 @@ class Address {
                 data[name] = this.util.bcnum(value);
         }
 
+        error = this.validatePreferenceFormats(data, error);
+
+        error = await this.validateFields(data, error);
+
+        error = await this.validateControllerBinding(data, format, error);
+
+        // Determine final status
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        // Print status message
+        getLogger().info("\t ADDRESS : " + data['SOURCE'] + ' : ' + data['STATUS']);
+
+        // Every ADDRESS action writes its `addresses` row, valid or not: that row is the audit trail a
+        // client reads the verdict from, so a refused one reads back its `invalid: ...` reason instead of
+        // being indistinguishable from an unprocessed action (same contract as issue.js, which calls
+        // createIssue unconditionally). Format 1 carries no preferences, so its row leaves those columns
+        // NULL; getAddressPreferences excludes the format for that reason (a NULL would read back as
+        // fee_preference=0).
+        await this.indexerDb.createAddressOption(data);
+
+        await this.recordControllerEvent(data, format, status);
+
+        // Store the SOURCE in addresses list
+        this.util.addAddressTicker(data['SOURCE']);
+
+        // Create action mappings
+        await this.mapper.createMappings(data);
+    }
+
+    /*****************************************************************
+     * FORMAT Validations
+     ****************************************************************/
+    validatePreferenceFormats(data, error){
+
+        // Verify FEE_PREFERENCE is numeric
         if(!error && !this.util.isNull(data['FEE_PREFERENCE']) && !this.util.isNumeric(data['FEE_PREFERENCE']))
             error = "invalid: FEE_PREFERENCE (format)";
 
+        // Verify REQUIRE_MEMO is numeric
         if(!error && !this.util.isNull(data['REQUIRE_MEMO']) && !this.util.isNumeric(data['REQUIRE_MEMO']))
             error = "invalid: REQUIRE_MEMO (format)";
 
+        // Verify DISPENSER_PREFERENCE is numeric
         if(!error && !this.util.isNull(data['DISPENSER_PREFERENCE']) && !this.util.isNumeric(data['DISPENSER_PREFERENCE']))
             error = "invalid: DISPENSER_PREFERENCE (format)";
 
+        return error;
+    }
+
+    /*****************************************************************
+     * General Validations
+     ****************************************************************/
+    async validateFields(data, error){
+
+        // Verify FEE_PREFERENCE value is valid
         if(!error && !this.util.isNull(data['FEE_PREFERENCE']) && !this.validValues['FEE_PREFERENCE'].includes(Number(data['FEE_PREFERENCE'])))
             error = 'invalid: FEE_PREFERENCE (value)';
 
+        // Verify REQUIRE_MEMO value is valid
         if(!error && !this.util.isNull(data['REQUIRE_MEMO']) && !this.validValues['REQUIRE_MEMO'].includes(Number(data['REQUIRE_MEMO'])))
             error = 'invalid: REQUIRE_MEMO (value)';
 
+        // Verify DISPENSER_PREFERENCE value is valid
         if(!error && !this.util.isNull(data['DISPENSER_PREFERENCE']) && !this.validValues['DISPENSER_PREFERENCE'].includes(Number(data['DISPENSER_PREFERENCE'])))
             error = 'invalid: DISPENSER_PREFERENCE (value)';
 
+        // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (sleeping)';
 
@@ -109,8 +180,16 @@ class Address {
         if(!error && String(data['MEMO']).indexOf(';')!=-1)
             error = 'invalid: MEMO (semicolon)';
 
+        // Verify MEMO is shorter than MAX_MEMO_LENGTH
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
+
+        return error;
+    }
+
+    // Controller bind/unbind rules for format 1: the controller must exist and be active, and the
+    // bind or unbind must be legal against whatever controller already gates the class.
+    async validateControllerBinding(data, format, error){
 
         // Verify CONTROLLER references an existing, active contract on this chain (BIND only; on UNBIND
         // it is empty and ignored). A missing/throwing guard method is fail-closed at runtime, not here.
@@ -154,23 +233,14 @@ class Address {
             }
         }
 
-        let status = (error) ? error : 'valid';
-        data['STATUS'] = status;
+        return error;
+    }
 
-        console.log("\t ADDRESS : " + data['SOURCE'] + ' : ' + data['STATUS']);
-
-        // Every ADDRESS action writes its `addresses` row, valid or not: that row is the audit trail a
-        // client reads the verdict from, so a refused one reads back its `invalid: ...` reason instead of
-        // being indistinguishable from an unprocessed action (same contract as issue.js, which calls
-        // createIssue unconditionally). Format 1 carries no preferences, so its row leaves those columns
-        // NULL; getAddressPreferences excludes the format for that reason (a NULL would read back as
-        // fee_preference=0).
-        await this.indexerDb.createAddressOption(data);
-
-        // Format 1 additionally appends the bind/unbind event. Only a VALID one is appended:
-        // address_controllers is the enforcement log, so a refused bind must never gate its class.
-        // CONTROLLER/COOLDOWN_BLOCKS stay out of the NUMBER list, remaining raw strings for the
-        // BIGINT/INT columns.
+    // Format 1 additionally appends the bind/unbind event. Only a VALID one is appended:
+    // address_controllers is the enforcement log, so a refused bind must never gate its class.
+    // CONTROLLER/COOLDOWN_BLOCKS stay out of the NUMBER list, remaining raw strings for the
+    // BIGINT/INT columns.
+    async recordControllerEvent(data, format, status){
         if(format === 1 && status === 'valid'){
             let addressId   = await this.indexerDb.createAddress(data['SOURCE']);
             let actionClass = String(data['ACTION_CLASS']).toLowerCase();
@@ -194,10 +264,6 @@ class Address {
                 });
             }
         }
-
-        this.util.addAddressTicker(data['SOURCE']);
-
-        await this.mapper.createMappings(data);
     }
 }
 

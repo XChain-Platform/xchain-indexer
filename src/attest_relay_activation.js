@@ -55,14 +55,9 @@
  *
  ********************************************************************/
 
-// Per-network activation height, interpreted as the BTC-anchored SNAPSHOT_BLOCK
-// carried by the relay canonical (NOT the local processing height), so BTC, LTC,
-// DOGE and the hub all flip the relay legs on one anchor.
-const ATTEST_RELAY_ACTIVATION = {
-    mainnet: 963000,      // ARMED 2026-07-30, RE-PINNED 2026-08-12 off block 969500 with the rest of the coordinated mainnet activation cohort; deploy every indexer + hub before this height
-    testnet: 0,
-    regtest: 0,
-};
+const { get, copy, activeAt } = require('./consensus/gate_registry');
+
+const ATTEST_RELAY_ACTIVATION = copy('attest_relay_activation.ATTEST_RELAY_ACTIVATION');
 
 // Whether the ATTEST relay legs are accepted for a relay whose BTC-anchored
 // snapshot is at `snapshotBlock` on `network`. Below the threshold -> off (the

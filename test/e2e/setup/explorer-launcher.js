@@ -25,7 +25,7 @@
 const http    = require('http');
 const express = require('express');
 const cors    = require('cors');
-const { parseCorsOrigin } = require('../../../src/corsOrigin.js');
+const { parseCorsOrigin } = require('../../../src/api/cors_origin.js');
 const path    = require('path');
 
 // Set package info before requiring explorer (it reads process.env.npm_package_*)
@@ -90,7 +90,20 @@ function buildTestConfigInfo() {
     return {
         getConfig:            async () => config,
         onConfigChanged:      () => {},
-        triggerConfigChanged: () => {}
+        triggerConfigChanged: () => {},
+        // The explorer's database layer reads every environment variable as
+        // this.configInfo.env.<KEY>, the object src/config.js exports, rather
+        // than touching process.env itself. This launcher bypasses config.js, so
+        // it supplies the same shape, a live read-only view like the real one, so
+        // a variable set after the explorer is built reads the same here as in
+        // production. Without it every explorer query throws on an undefined env.
+        env: new Proxy(Object.freeze({}), {
+            get:            (_t, k) => (typeof k === 'string' ? process.env[k] : undefined),
+            has:            (_t, k) => typeof k === 'string' && k in process.env,
+            set:            () => false,
+            deleteProperty: () => false,
+            defineProperty: () => false
+        })
     };
 }
 

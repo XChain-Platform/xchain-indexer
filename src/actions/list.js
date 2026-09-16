@@ -36,9 +36,18 @@
  *
  ********************************************************************/
 
+// The flag day at which a LIST format 1 must come from the address that created
+// the list: the height-keyed registry row list_owner_activation.LIST_OWNER_ACTIVATION,
+// which the SDK and the wallet read as the same map when they decide whether to offer
+// an edit form.
+const gateRegistry = require('../consensus/gate_registry');
+
+const { getLogger } = require('../observability/index.js');
 class List {
 
+    // Handle constructing a class instance
     constructor(action){
+        // Setup short aliases
         this.actions   = action;
         this.config    = action.config;
         this.decoderDb = action.decoderDb;
@@ -67,23 +76,86 @@ class List {
         this.editTypes = [1,2];
     }
 
+    // Every bridge role address configured for THIS chain. Policy inheritance materializes
+    // an origin token's list onto a bridged copy as an ordinary local LIST owned by this
+    // chain's ADDRESS.BRIDGE_<ORIGIN>, one per origin chain, so the set is read off the coin
+    // bundle by role-name prefix rather than named coin by coin here. An unconfigured chain
+    // yields an empty set and the guard below is inert, which is the pre-bridge behaviour.
+    bridgeRoleAddresses(){
+        let addresses = this.config['ADDRESS'] || {};
+        let roles     = [];
+        for(let role in addresses)
+            if(String(role).indexOf('BRIDGE_') === 0 && addresses[role])
+                roles.push(addresses[role]);
+        return roles;
+    }
+
+    // Handle parsing the LIST transaction
     async parse(params, data, error){
+        /*****************************************************************
+         * DEBUGGING - Force params
+         ****************************************************************/
+        // Example payloads by FORMAT version:
+        // let str = "0|1|JDOG|BRRR|TEST";
+        // let str = "0|2|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1FWDonkMbC6hL64JiysuggHnUAw2CKWszs|1BTNSGASK5En7rFurDJ79LQ8CVYo2ecLC8";
+        // let str = "1|2|860dc04b2b59657005a0955f282043c04bc9d5520562d317119722956043ffee|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1FWDonkMbC6hL64JiysuggHnUAw2CKWszs";
+        // let str = "1|1|b21f92568cf4f892fdf9adf432bfe1900ec41f16a1514c851b54926bd2828950|1JDogZS6tQcSxwfxhv6XKKjcyicYA4Feev|1FWDonkMbC6hL64JiysuggHnUAw2CKWszs|1FwkKA9cqpNRFTpVaokdRjT9Xamvebrwcu|bc1q50kxp76j9l0k9jgwasvcz4mcz0v03fv2y5pdxx|1Lfm6jXgCQi8LvjpgFHa2F4hdr1uJVa5t4";
+        // params = String(str).split('|');
+        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
+
+        // Validate that format is known
         let format = data['FORMAT'];
         if(!error && (format===null || this.formats[format] === undefined ))
             error = 'invalid: VERSION (unknown)';
 
+        // Parse PARAMS using given VERSION format and update transaction data object
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
+        // Convert NUMBER fields from string value to number value so comparisons are mathematical
         if(!error)
             data = this.util.setNumberFormats(data);
 
-        let type    = null;
+        // Define some placeholders
         let edit    = {};
         let list    = [];
         let invalid = {};
 
-        // FORMAT Validations
+        // Load the list this action edits, which also decides TYPE and the stored index
+        let loaded = await this.validateAndLoadList(data, format, error);
+        error = loaded.error;
+        list  = loaded.list;
+
+        error = await this.validateEditAuthority(data, format, error);
+
+        error = await this.validateFields(data, error);
+
+        // Handle building out some data arrays using list items
+        if(!error){
+
+            await this.collectEditItems(data, format, params, edit);
+
+            this.applyEditItems(data, format, edit, list, invalid);
+
+        }
+
+        // Determine final status
+        let status = (error) ? error : 'valid';
+        data['STATUS'] = status;
+
+        // Print status message
+        getLogger().info("\t LIST : " + data['STATUS']);
+
+        await this.storeList(data, status, edit, list, invalid);
+
+    }
+
+    // FORMAT Validations
+    async validateAndLoadList(data, format, error){
+
+        // The list's current membership, empty until an edit loads it
+        let type = null;
+        let list = [];
 
         // Validate TYPE
         if(!error && format==0 && !this.listTypes.includes(Number(data['TYPE'])))
@@ -121,7 +193,61 @@ class List {
             list = await this.indexerDb.getList(data['LIST_ACTION_INDEX'], data['BLOCK_INDEX']);
         }
 
-        // General Validations
+        return { error, list };
+    }
+
+    // ── Who may EDIT this list (two rules, one read) ──────────────────────────────────
+    //
+    // Both rules judge the ROOT CREATE's source, never the last edit's: the authority
+    // over an edit chain belongs to the address that created the list, and reading the
+    // newest edit would let the first unauthorized edit launder authority for every edit
+    // after it. Resolved here rather than leaning on the normalization above, which is
+    // itself flag-gated.
+    //
+    // Injected edits are exempt through IS_GENESIS: policy inheritance rewrites the
+    // copy's membership from a signed snapshot through processTransaction(tx, true), and
+    // the bridge role address that owns the list holds no key to broadcast with.
+    async validateEditAuthority(data, format, error){
+        if(!error && format==1 && !data['IS_GENESIS']){
+
+            let bridgeRoles = this.bridgeRoleAddresses();
+            let ownerCheck  = gateRegistry.activeAt('list_owner_activation.LIST_OWNER_ACTIVATION', this.config['NETWORK'], null, data['BLOCK_INDEX'], null);
+
+            // Spend no read when neither rule can fire: a chain with no bridge role address
+            // configured holds no bridge-owned list, and below LIST_OWNER_ACTIVATION the
+            // editor is compared to nobody. This also keeps the resolution the edit-chain
+            // flag day governs untouched, since the root resolved here is a LOCAL value and
+            // the stored LIST_ACTION_INDEX is still whatever that flag day decided above.
+            if(bridgeRoles.length || ownerCheck){
+
+                let rootIndex  = await this.indexerDb.getListRootIndex(data['LIST_ACTION_INDEX']);
+                let listSource = await this.indexerDb.getListSource(rootIndex);
+
+                // BRIDGE-OWNED LISTS. A materialized policy list on a bridged copy is the
+                // issuer's policy carried from the origin chain and signed by the federation;
+                // the destination chain must never let a broadcast rewrite it, or any address
+                // could edit an issuer's allow or block list on every chain holding a copy.
+                // Unconditional, not activation-keyed: no bridge-owned list can exist before
+                // the first snapshot applies, so no historical edit changes status on replay.
+                if(listSource && bridgeRoles.indexOf(listSource) !== -1)
+                    error = 'invalid: LIST_ACTION_INDEX (bridge-owned)';
+
+                // THE GENERAL OWNER CHECK. LIST edits had no owner check anywhere on
+                // the platform: any address could edit any issuer's list, and those lists gate
+                // SEND, ORDER, DISPENSER, AIRDROP, DIVIDEND, BET and SWAP on every listed
+                // token. Flag gated because it re-verdicts historical third-party edits, which
+                // the unconditional rule above cannot: below LIST_OWNER_ACTIVATION every edit
+                // is judged exactly as it was, so a from-genesis replay is byte-identical.
+                if(!error && ownerCheck && listSource && listSource != data['SOURCE'])
+                    error = 'invalid: LIST_ACTION_INDEX (not owner)';
+            }
+        }
+
+        return error;
+    }
+
+    // General Validations
+    async validateFields(data, error){
 
         // Verify SOURCE is not sleeping
         if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], null, data['BLOCK_INDEX']) == false)
@@ -139,64 +265,82 @@ class List {
         if(!error && String(data['MEMO']).length > this.config['MAX_MEMO_LENGTH'])
             error = 'invalid: MEMO (length)';
 
-        if(!error){
+        return error;
+    }
 
-            // Build out array of edit items and status for each
-            let firstItemIndex = this.itemStartIndex[format];
-            for(let idx in params){
-                let status = 'valid';
-                let item   = params[idx];
-                // Get list items (everything from the end of the fixed prefix onward).
-                // `idx` is a string here (for..in over an array), so compare numerically
-                // rather than leaning on coercion.
-                if(Number(idx) >= firstItemIndex){
+    // Build out array of edit items and status for each
+    async collectEditItems(data, format, params, edit){
 
-                    // Verify TICK 
-                    if(data['TYPE']==1){
-                        let tokenInfo = await this.indexerDb.getTokenInfo(item);
-                        if(!tokenInfo)
-                            status = 'invalid: TICK (unknown)';
-                    }
+        let firstItemIndex = this.itemStartIndex[format];
+        for(let idx in params){
+            let status = 'valid';
+            let item   = params[idx];
+            // Get list items (everything from the end of the fixed prefix onward).
+            // `idx` is a string here (for..in over an array), so compare numerically
+            // rather than leaning on coercion.
+            if(Number(idx) >= firstItemIndex){
 
-                    // Verify ADDRESS
-                    if(data['TYPE']==2 && !this.util.isCryptoAddress(item))
-                        status = 'invalid: ADDRESS (format)';
-
-                    // Add item and status to edits array
-                    edit[item] = status;
+                // Verify TICK 
+                if(data['TYPE']==1){
+                    let tokenInfo = await this.indexerDb.getTokenInfo(item);
+                    if(!tokenInfo)
+                        status = 'invalid: TICK (unknown)';
                 }
+
+                // Verify ADDRESS.
+                //
+                // ANY-COIN ITEMS at/above TOKEN_POLICY_INHERITANCE_ACTIVATION: a bridged
+                // copy inherits ONE list from its origin row, so that list has to be able
+                // to name holders on every chain a copy lives on. isAnyCoinAddress loops
+                // the existing coin-and-network-aware validator over COINS rather than
+                // introducing a second address validator. Below the flag it is the
+                // one-argument call this line has always made.
+                //
+                // The widening is hash-visible, which is why it is gated at all: an
+                // admitted item writes a list_items row and that table is hashed DERIVED.
+                // The ACTION's own status never moved either way (a bad item is recorded
+                // in list_items_invalid and the LIST stays valid), so only the membership
+                // is at stake.
+                if(data['TYPE']==2 && !this.indexerDb.isAnyCoinAddress(item, data['BLOCK_INDEX']))
+                    status = 'invalid: ADDRESS (format)';
+
+                // Add item and status to edits array
+                edit[item] = status;
             }
-
-            // Build out final array of list items
-            for(let item in edit){
-                let status = edit[item];
-
-                // VALID items
-                if(status=='valid'){
-
-                    // ADD items
-                    if((format==0 || (format==1 && data['EDIT']==1)) && !list.includes(item))
-                        list.push(item);
-
-                    // REMOVE items
-                    if(format==1 && data['EDIT']==2 && list.includes(item))
-                        list.splice(list.indexOf(item),1);
-
-                } else {
-                    // INVALID items
-                    invalid[item] = status;
-                }
-            }
-
         }
+    }
 
-        let status = (error) ? error : 'valid';
-        data['STATUS'] = status;
+    // Build out final array of list items
+    applyEditItems(data, format, edit, list, invalid){
 
-        console.log("\t LIST : " + data['STATUS']);
+        for(let item in edit){
+            let status = edit[item];
 
+            // VALID items
+            if(status=='valid'){
+
+                // ADD items
+                if((format==0 || (format==1 && data['EDIT']==1)) && !list.includes(item))
+                    list.push(item);
+
+                // REMOVE items
+                if(format==1 && data['EDIT']==2 && list.includes(item))
+                    list.splice(list.indexOf(item),1);
+
+            } else {
+                // INVALID items
+                invalid[item] = status;
+            }
+        }
+    }
+
+    // Persist the LIST action row, its edits and the resulting membership
+    async storeList(data, status, edit, list, invalid){
+
+        // Create record in lists table
         await this.indexerDb.createList(data);
 
+        // Store the SOURCE in addresses list
         this.util.addAddressTicker(data['SOURCE']);
 
         // If this was a valid transaction, then create the list and edit records
@@ -215,6 +359,7 @@ class List {
                 await this.indexerDb.createListItemInvalid(data, item, invalid[item]);
         }
 
+        // Create action mappings
         await this.mapper.createMappings(data);
 
     }

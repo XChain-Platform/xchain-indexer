@@ -12,7 +12,7 @@
  **********************************************************************
  *
  * Verify a reserved sub-tree ARMING BOUNDARY against a chain's own committed
- * rows (SPV sub-tree spec §7).
+ * rows on either side of the armed height.
  *
  * WHY THIS EXISTS. Both armings so far were verified by hand: someone read
  * state_tree_roots either side of the height, reassembled the roots in a
@@ -52,7 +52,7 @@
  *
  * THE EMPTY-SLOT CASE IS EXPECTED, NOT A FAILURE. A chain with no rows in the
  * slot's source table commits EMPTY_SMT_ROOT there, which is byte-identical to
- * the padding an absent slot contributes (spec §2), so state_root does NOT move
+ * the padding an absent slot contributes, so state_root does NOT move
  * across the boundary. The tool detects it, says so in as many words, and still
  * enforces 1, 2, 3 and 5, because the version flip and the boundary are real
  * even when the root is unchanged. Reporting "state_root did not move" as a pass
@@ -80,8 +80,8 @@
 const path = require('path');
 
 const SRC = path.resolve(__dirname, '..', 'src');
-const M   = require(path.join(SRC, 'merkle.js'));
-const SC  = require(path.join(SRC, 'stateCommitment.js'));
+const M   = require(path.join(SRC, 'consensus', 'merkle.js'));
+const SC  = require(path.join(SRC, 'state_commitment', 'index.js'));
 const SUB = require(path.join(SRC, 'state_subtree_activation.js'));
 
 const SLOT = 'contract_state_root';
@@ -114,7 +114,7 @@ function assemble(row, withSlots){
         extra = {};
         // Every reserved slot the row actually carries a column for. A slot with
         // no column contributes nothing, which is exactly what an absent slot
-        // means to the assembler (spec §2).
+        // means to the state_root assembler.
         for(const name of SUB.RESERVED_SUBTREES)
             if(row[name] != null) extra[name] = String(row[name]);
     }
@@ -152,7 +152,7 @@ function check(ok, label, detail){
     }
     console.log('# ' + opts.chain + '/' + opts.network + '  ' + SLOT + ' armed at ' + H);
 
-    const Database = require(path.join(SRC, 'db.js'));
+    const Database = require(path.join(SRC, 'db'));
     const config   = require(path.join(SRC, 'config.js'));
     const Utility  = require(path.join(SRC, 'utility.js'));
     const cfg  = config.getConfig(opts.chain, opts.network);
@@ -161,8 +161,8 @@ function check(ok, label, detail){
                               process.env.INDEXER_DB_USER, process.env.INDEXER_DB_PASS,
                               { config: cfg, util: new Utility(cfg) });
 
-    // Only contract_state_root has a COLUMN today: §6 leaves the other two
-    // reserved slots without one until each gains a derivation, so selecting the
+    // Only contract_state_root has a COLUMN today: the other two
+    // reserved slots have none until each gains a derivation, so selecting the
     // whole RESERVED_SUBTREES list would fail with errno 1054. When a second slot
     // gains a column, add it here and the assembly below picks it up.
     const cols = 'block_index, balances_root, stakes_root, state_root, ' + SLOT;
@@ -201,7 +201,7 @@ function check(ok, label, detail){
         'stored state_root at ' + H + ' reassembles from its own sub-roots',
         rebuilt === String(armedRow.state_root) ? '' : rebuilt + ' != ' + armedRow.state_root);
 
-    // Is the armed slot EMPTY? Then §2 says state_root cannot have moved.
+    // Is the armed slot EMPTY? Then the padding rule says state_root cannot have moved.
     const emptyRoot = M.toHex(M.EMPTY_SMT_ROOT);
     const slotIsEmpty = String(armedRow[SLOT]).toLowerCase() === emptyRoot.toLowerCase();
 

@@ -14,65 +14,42 @@
  *
  * XChain Indexer - API
  * 
- * This file parses in environmental variables and starts up the parsing API
+ * This file parses in environmental variables and starts up the parsing API.
+ * As the process entry it keeps the boot-time env reads, the three auth tier sets
+ * and the one handler a sibling guard reads here by path; the middleware, the
+ * JSON-RPC route families and the status route live under src/api/ and receive
+ * all of that through the one object apiContext() builds.
  * 
  ********************************************************************/
-
 // Load required libraries
-// Note: express-rate-limit is mounted per-IP below (INDEXER_RATE_LIMIT_RPM,
-// default 600). The indexer API is intended to be internal-only (hub +
-// xchain-node managed deployments), but the stock xchain-node topology can
-// publish the port on all host interfaces, so a generous limiter keeps an
-// anonymous loop off GET /status and the ungated JSON-RPC reads (each of which
-// costs pooled DB round-trips) without affecting the handful of legitimate
-// hub/explorer callers (see sibling services: decoder, encoder, explorer, hub).
 const dotenv        = require('dotenv');
+// Parse in .env config data BEFORE any local require. src/config.js captures the
+// environment once at module load, and XChainIndexer below loads it, so a later
+// dotenv.config() would leave every .env-supplied setting at its default.
+dotenv.config();
 const express       = require('express');
-const bodyParser    = require('body-parser');
-const helmet        = require('helmet');
-const cors          = require('cors');
-const rateLimit     = require('express-rate-limit');
 const XChainIndexer = require('./XChainIndexer');
 const jsonRouter    = require('express-json-rpc-router');
-const { buildHealthResponse, committedView, inFlightBlockIndex } = require('./health');
-const { createShutdown, createIndexerDrain } = require('./shutdown');
-const { getStakeSourceByPubkey } = require('./stake-source');
-const anchorActionQuery = require('./anchor-action-query');
-const priceBatchQuery   = require('./price-batch-query');
-const reorgHistoryQuery = require('./reorg-history-query');
-const { stampGiveDecimals } = require('./crossChainOfferDecimals');
-const merkle        = require('./merkle');
-const stateSubtree  = require('./state_subtree_activation');
-const srb           = require('./snapshot_reorg_buffer.js');      // CANONICAL_REORG_BUFFER, to reconstruct the raw request height
-const gatesFilter   = require('./rollcall_gates_filter.js');      // rules-aware attestation capability filter
+const { installMiddleware } = require('./api/middleware');
+const { buildRpcController } = require('./api/rpc');
+const { mountStatusRoute } = require('./api/status_endpoint');
+const { createShutdown, createIndexerDrain } = require('./api/shutdown');
 const crypto        = require('crypto');
-const { installObservability } = require('./observability');   // default-off /metrics + structured log shim
-const { installIndexerMetrics } = require('./indexerMetrics');  // poll-freshness heartbeat gauge
-const { parseCorsOrigin } = require('./corsOrigin.js');
-const { installCrashHandlers } = require('./diagnosticEvents.js');
-
-// Constant-time API-key comparison. A plain `!==` short-circuits at the first
-// mismatching byte, leaking the key that guards reward-forging writes through
-// response-time differences; timingSafeEqual needs equal-length buffers, so
-// length is guarded first (a length mismatch is not itself the secret).
-function keyEquals(provided, expected){
-    const a = Buffer.from(String(provided == null ? '' : provided));
-    const b = Buffer.from(String(expected == null ? '' : expected));
-    if(a.length !== b.length) return false;
-    return crypto.timingSafeEqual(a, b);
-}
-
-dotenv.config();
+const { installCrashHandlers } = require('./actions/anchor/diagnostic_events.js');
 
 // Before anything else logs. The env-validation failures immediately below are
 // exactly the lines an operator needs levelled and timestamped, and
-// installObservability does not run until ~160 lines further down.
+// installObservability does not run until startApi installs the middleware.
 const { patchConsole } = require('./observability');
+const { getLogger } = require('./observability/index.js');
+const fs   = require('fs');
+const path = require('path');
+const { CONFIG_ENV } = require('./config.js');
 patchConsole({
     service: 'xchain-indexer',
     version: require('../package.json').version,
-    coin:    process.env.INDEXER_COIN || '',
-    network: process.env.INDEXER_NETWORK || ''
+    coin:    CONFIG_ENV.INDEXER_COIN || '',
+    network: CONFIG_ENV.INDEXER_NETWORK || ''
 });
 
 // Validate required environment variables
@@ -80,40 +57,44 @@ const REQUIRED_ENV = [
     'DECODER_DB_HOST','DECODER_DB_PORT','DECODER_DB_NAME','DECODER_DB_USER','DECODER_DB_PASS',
     'INDEXER_DB_HOST','INDEXER_DB_PORT','INDEXER_DB_NAME','INDEXER_DB_USER','INDEXER_DB_PASS'
 ];
+// Read through CONFIG_ENV, which dotenv.config() at the top of this file populated before
+// config.js loaded. Every REQUIRED_ENV key is a CONFIG_ENV key; a name missing from that
+// object would read undefined and fail this check loudly at boot, never pass silently.
 for(const key of REQUIRED_ENV){
-    if(!process.env[key]){
-        console.error('Missing required environment variable: ' + key);
+    if(!CONFIG_ENV[key]){
+        getLogger().error('Missing required environment variable: ' + key);
         process.exit(1);
     }
 }
 
-const INDEXER_API_PORT = process.env.INDEXER_API_PORT;
-const INDEXER_NETWORK  = process.env.INDEXER_NETWORK;
+// Parse in the environmental variables
+const INDEXER_API_PORT = CONFIG_ENV.INDEXER_API_PORT;
+const INDEXER_NETWORK  = CONFIG_ENV.INDEXER_NETWORK;
 
 // xchain-utxo-tracker config (optional, required by DISPENSER fresh-address check)
-const UTXO_TRACKER_URL      = process.env.UTXO_TRACKER_URL || '';
-const UTXO_TRACKER_API_PORT = process.env.UTXO_TRACKER_API_PORT || '';
+const UTXO_TRACKER_URL      = CONFIG_ENV.UTXO_TRACKER_URL || '';
+const UTXO_TRACKER_API_PORT = CONFIG_ENV.UTXO_TRACKER_API_PORT || '';
 
 // Decoder database config
-const DECODER_DB_HOST  = process.env.DECODER_DB_HOST;
-const DECODER_DB_PORT  = process.env.DECODER_DB_PORT;
-const DECODER_DB_NAME  = process.env.DECODER_DB_NAME;
-const DECODER_DB_USER  = process.env.DECODER_DB_USER;
-const DECODER_DB_PASS  = process.env.DECODER_DB_PASS;
+const DECODER_DB_HOST  = CONFIG_ENV.DECODER_DB_HOST;
+const DECODER_DB_PORT  = CONFIG_ENV.DECODER_DB_PORT;
+const DECODER_DB_NAME  = CONFIG_ENV.DECODER_DB_NAME;
+const DECODER_DB_USER  = CONFIG_ENV.DECODER_DB_USER;
+const DECODER_DB_PASS  = CONFIG_ENV.DECODER_DB_PASS;
 
 // Indexer database config
-const INDEXER_DB_HOST  = process.env.INDEXER_DB_HOST;
-const INDEXER_DB_PORT  = process.env.INDEXER_DB_PORT;
-const INDEXER_DB_NAME  = process.env.INDEXER_DB_NAME;
-const INDEXER_DB_USER  = process.env.INDEXER_DB_USER;
-const INDEXER_DB_PASS  = process.env.INDEXER_DB_PASS;
+const INDEXER_DB_HOST  = CONFIG_ENV.INDEXER_DB_HOST;
+const INDEXER_DB_PORT  = CONFIG_ENV.INDEXER_DB_PORT;
+const INDEXER_DB_NAME  = CONFIG_ENV.INDEXER_DB_NAME;
+const INDEXER_DB_USER  = CONFIG_ENV.INDEXER_DB_USER;
+const INDEXER_DB_PASS  = CONFIG_ENV.INDEXER_DB_PASS;
 
 // Hub database config (optional, local read-only copy of cross-chain data)
-const HUB_DB_HOST = process.env.HUB_DB_HOST || '';
-const HUB_DB_PORT = process.env.HUB_DB_PORT || '';
-const HUB_DB_NAME = process.env.HUB_DB_NAME || '';
-const HUB_DB_USER = process.env.HUB_DB_USER || '';
-const HUB_DB_PASS = process.env.HUB_DB_PASS || '';
+const HUB_DB_HOST = CONFIG_ENV.HUB_DB_HOST || '';
+const HUB_DB_PORT = CONFIG_ENV.HUB_DB_PORT || '';
+const HUB_DB_NAME = CONFIG_ENV.HUB_DB_NAME || '';
+const HUB_DB_USER = CONFIG_ENV.HUB_DB_USER || '';
+const HUB_DB_PASS = CONFIG_ENV.HUB_DB_PASS || '';
 
 // API key for write + federation read methods (e.g. hub→indexer reward pushes).
 // Optional, matching .env.example: unset disables the gate (single-host /
@@ -121,7 +102,7 @@ const HUB_DB_PASS = process.env.HUB_DB_PASS || '';
 // valid key. Hard-requiring it at boot crash-looped every xchain-node-managed
 // deployment (ConfigService injects no such var); the same over-tightening
 // that took down the encoder pre-launch (see xchain-encoder e2bf7c4).
-const INDEXER_API_KEY = process.env.INDEXER_API_KEY || '';
+const INDEXER_API_KEY = CONFIG_ENV.INDEXER_API_KEY || '';
 
 // Explicit escape hatch for keyless single-host / regtest nodes. When no API
 // key is configured the gated methods (validator-reward writes, federation
@@ -129,25 +110,25 @@ const INDEXER_API_KEY = process.env.INDEXER_API_KEY || '';
 // the old keyless pass-through. A blind hard-fail would 401 every keyless
 // xchain-node-managed indexer fleet-wide, so the escape hatch keeps that an
 // opt-in operator decision rather than a silent breakage.
-const ALLOW_UNAUTHED = (process.env.INDEXER_ALLOW_UNAUTHENTICATED === 'true');
+const ALLOW_UNAUTHED = (CONFIG_ENV.INDEXER_ALLOW_UNAUTHENTICATED === 'true');
 if(!INDEXER_API_KEY && ALLOW_UNAUTHED)
-    console.warn('WARNING: INDEXER_API_KEY is not set and INDEXER_ALLOW_UNAUTHENTICATED=true; write and federation-read methods are UNAUTHENTICATED. Never use this in production.');
+    getLogger().warn('WARNING: INDEXER_API_KEY is not set and INDEXER_ALLOW_UNAUTHENTICATED=true; write and federation-read methods are UNAUTHENTICATED. Never use this in production.');
 else if(!INDEXER_API_KEY)
-    console.warn('WARNING: INDEXER_API_KEY is not set; write and federation-read methods will be REJECTED (fail-closed). Set INDEXER_API_KEY for a shared deployment, or INDEXER_ALLOW_UNAUTHENTICATED=true to allow keyless single-host/regtest access.');
+    getLogger().warn('WARNING: INDEXER_API_KEY is not set; write and federation-read methods will be REJECTED (fail-closed). Set INDEXER_API_KEY for a shared deployment, or INDEXER_ALLOW_UNAUTHENTICATED=true to allow keyless single-host/regtest access.');
 
 // feequotedryrun runs the REAL action handler with NO action deny-list: DEPLOY
 // constructor / full EXECUTE including emit subtrees, up to the VM CPU cap, while
 // holding the shared transaction mutex, under caller-shaped feeOutputs and the full
-// block watchdog. The consensus question that originally gated it is resolved (block
+// block watchdog. It is not gated for a consensus reason, since that question is settled (block
 // hashes cover canonical strings, and in-transaction index ids are dense-explicit and
-// roll back; see the 06-18 trial + Actions._dryRunAction), so this gate is about
+// roll back; see the 06-18 trial + Actions.dryRunAction), so this gate is about
 // UNMETERED COMPUTE on a public port: the default `feequote` dry-runs safely behind a
 // deny-list + admission cap + short timeout, while this raw surface stays OPT-IN:
 // registered ONLY on a regtest node with INDEXER_ENABLE_DRYRUN explicitly set.
 // Anywhere else the method is removed entirely (calls get method-not-found), so it can
 // never ship silently public on a shared/mainnet node.
 const ENABLE_DRYRUN = INDEXER_NETWORK === 'regtest'
-    && (process.env.INDEXER_ENABLE_DRYRUN === 'true' || process.env.INDEXER_ENABLE_DRYRUN === '1');
+    && (CONFIG_ENV.INDEXER_ENABLE_DRYRUN === 'true' || CONFIG_ENV.INDEXER_ENABLE_DRYRUN === '1');
 
 // Set of write methods that require the API key when one is configured.
 //
@@ -155,13 +136,13 @@ const ENABLE_DRYRUN = INDEXER_NETWORK === 'regtest'
 // oversight. `pushvalidatorrewards` was the only member: a key-authenticated
 // rail that minted COLLECT-spendable validator_rewards rows. Every reward it
 // carried is now derived from on-chain bytes by every indexer, the hub holds no
-// caller for it any more (xchain-hub/src/RewardTracker.js has no push loop and
+// caller for it any more (xchain-hub/src/anchor/reward_tracker.js has no push loop and
 // no terminal-refusal predicate), and mainnet is past both reward flag-days with
 // no pre-flag reward history to reinterpret. With no caller left to answer, the
 // method is gone rather than kept as a refusing stub: an unknown method answers
 // -32601 method-not-found, which is what a caller that should not exist deserves.
 //
-// The set itself stays because the gate below is shaped around three sets and a
+// The set itself stays because the gate (src/api/auth_gate.js) is shaped around three sets and a
 // future write method must land in one of them rather than ship ungated by
 // default. Anything that writes goes HERE.
 const WRITE_METHODS = new Set([]);
@@ -199,12 +180,6 @@ const FEDERATION_READ_METHODS = new Set([
     'getcrosschaincallresult'
 ]);
 
-// Upper bound on the key lists getrollcallsigners will answer over. The BTC
-// close asks for |R(E)| + 1 keys, so this is a sanity ceiling on a malformed or
-// hostile caller, not a paging limit: the method never enumerates, so a caller
-// that needs more keys than this is not doing what the method is for.
-const ROLLCALL_READ_MAX_KEYS = 2048;
-
 // sha256 of THIS indexer's vendored action-manifest.json, cached after the first
 // read. The BTC-side epoch close compares it against its own vendored copy and
 // DEFERS on a mismatch.
@@ -220,8 +195,6 @@ let _rollcallManifestHash = null;
 function rollcallManifestHash(){
     if(_rollcallManifestHash !== null) return _rollcallManifestHash;
     try {
-        const fs   = require('fs');
-        const path = require('path');
         const p    = path.join(__dirname, '..', 'test', 'fixtures', 'action-manifest.json');
         _rollcallManifestHash = crypto.createHash('sha256')
             .update(fs.readFileSync(p)).digest('hex');
@@ -229,980 +202,20 @@ function rollcallManifestHash(){
         // Fail LOUD rather than silently agreeing with every peer: a null hash can
         // never equal the caller's, so the close defers instead of trusting an
         // indexer whose manifest we could not read.
-        console.error('rollcallManifestHash: cannot read vendored action-manifest.json:', e.message);
+        getLogger().error('rollcallManifestHash: cannot read vendored action-manifest.json:', e.message);
         _rollcallManifestHash = null;
         return null;
     }
     return _rollcallManifestHash;
 }
 
-// Start up the API
-async function startApi(){
-
-    // Initialize the indexer (created before API so the controller can reference it)
-    const indexer = new XChainIndexer(DECODER_DB_HOST, DECODER_DB_PORT, DECODER_DB_NAME, DECODER_DB_USER, DECODER_DB_PASS, INDEXER_DB_HOST, INDEXER_DB_PORT, INDEXER_DB_NAME, INDEXER_DB_USER, INDEXER_DB_PASS, HUB_DB_HOST, HUB_DB_PORT, HUB_DB_NAME, HUB_DB_USER, HUB_DB_PASS, UTXO_TRACKER_URL, UTXO_TRACKER_API_PORT);
-
-    // Track indexer liveness so the health endpoint can report it (the indexer
-    // process exits on a fatal error, but the flag still distinguishes a clean
-    // run from one tearing down).
-    let indexerRunning = true;
-    let indexerError   = null;
-
-    // Create the app
-    const app = express();
-
-    // Use Helmet to increase security
-    app.use(helmet());
-
-    // Allow JSON requests
-    app.use(bodyParser.json());
-
-    // Allow CORS (restricted to the configured allowlist, defaults to localhost).
-    // CORS_ORIGIN is comma-separated, not a single origin: handing `cors` the raw
-    // string makes it echo that string verbatim to every caller, a multi-value
-    // header no browser accepts, so every listed origin is blocked while the
-    // header reads as configured. See src/corsOrigin.js.
-    app.use(cors({
-        origin: parseCorsOrigin(process.env.CORS_ORIGIN || 'http://localhost'),
-        methods: ['POST']
-    }));
-
-    // Per-IP rate limit, generous by default (the real callers are a handful of
-    // hub/explorer processes). Bounds an anonymous flood against GET /status and
-    // the ungated JSON-RPC read methods, both of which cost pooled DB round-trips
-    // per hit, so the perimeter assumption is no longer the only guard.
-    app.use(rateLimit({
-        windowMs: 60 * 1000,
-        limit: parseInt(process.env.INDEXER_RATE_LIMIT_RPM) || 600,
-        standardHeaders: true,
-        legacyHeaders: false
-    }));
-
-    // Prometheus /metrics plus a structured log shim, both DEFAULT OFF.
-    // Nothing is registered and no timer starts unless METRICS_ENABLED (and, for
-    // log shipping, LOG_SHIP_ENABLED + LOG_SHIP_URL) are set. The coin/network
-    // labels let one Prometheus scrape distinguish the per-chain indexers.
-    // See src/observability/README.md.
-    let indexerVersion = '';
-    try { indexerVersion = require('../package.json').version; } catch { /* version label is cosmetic */ }
-    const observability = installObservability(app, {
-        service: 'xchain-indexer',
-        version: indexerVersion,
-        coin:    process.env.INDEXER_COIN || '',
-        network: INDEXER_NETWORK || ''
-    });
-
-    // Poll-freshness heartbeat (item 9bee49e8). Commit recency lives in the
-    // /status JSON only, so a wedged block poller leaves no trace on the scrape
-    // and is undetectable if /status polling itself regresses. No-ops when
-    // metrics are off (registry null unless METRICS_ENABLED).
-    installIndexerMetrics(observability, indexer);
-
-    // API key enforcement for write + federation read + gated exec methods.
-    // These methods enumerate the staked validator set, run the VM, or (once a
-    // write method exists again) mutate replicated state, so they must never be
-    // reachable by an unauthenticated peer. The gate fails closed by default:
-    // with INDEXER_API_KEY set, a valid
-    // x-api-key is required; with no key set and no explicit escape hatch, the
-    // call is rejected. Only INDEXER_ALLOW_UNAUTHENTICATED=true restores keyless
-    // pass-through for a single-host / regtest node.
-    app.use((req, res, next) => {
-        // A JSON-RPC batch arrives as an array of call objects; a single call as
-        // one object. express-json-rpc-router dispatches every element of an
-        // array body, so the gate must inspect ALL of them: require the key if
-        // ANY element invokes a gated method. Reading req.body.method off an
-        // array leaves it undefined, which would smuggle a gated method (e.g.
-        // feequotedryrun, which runs the VM on the caller's bytes, or
-        // getactivevalidators, which enumerates the staked set) past the check
-        // unauthenticated inside a one-element batch.
-        let calls = Array.isArray(req.body) ? req.body : [req.body];
-        let id = (Array.isArray(req.body) ? null : (req.body && req.body.id)) || null;
-        let gated = calls.some(call => {
-            let method = call && call.method;
-            let normalized = method ? method.toLowerCase() : '';
-            return method && (WRITE_METHODS.has(normalized) || FEDERATION_READ_METHODS.has(normalized) || GATED_EXEC_METHODS.has(normalized));
-        });
-        if(gated){
-            if(INDEXER_API_KEY){
-                let provided = req.headers['x-api-key'] || '';
-                if(!keyEquals(provided, INDEXER_API_KEY)){
-                    return res.status(401).json({
-                        jsonrpc: '2.0', id,
-                        error: { code: -32001, message: 'Unauthorized' }
-                    });
-                }
-            } else if(!ALLOW_UNAUTHED){
-                return res.status(401).json({
-                    jsonrpc: '2.0', id,
-                    error: { code: -32001, message: 'Unauthorized: this method requires INDEXER_API_KEY, or set INDEXER_ALLOW_UNAUTHENTICATED=true for keyless single-host/regtest access' }
-                });
-            }
-            // else: no key configured and ALLOW_UNAUTHED set, pass through.
-        }
-        next();
-    });
-
-    const jsonRpcController = {
-
-        // Handle returning a success response to ping requests
-        async ping(){
-            return { status: "success" };
-        },
-
-        // Health check that reports actual indexer state. ping only confirms the
-        // HTTP server is up; this surfaces sync progress plus the circuit-breaker
-        // state of BOTH database connections so an operator can tell a healthy,
-        // syncing indexer apart from one silently stalled at an open circuit after
-        // a database outage (the breaker trips after repeated connection failures).
-        async health(){
-            let lastIndexedBlock = null;
-            // Snapshot the in-flight block BEFORE the awaited read: it is a
-            // synchronous peek at block-loop state, so taking it first means a
-            // block committing mid-handler can only ever collapse the pair
-            // toward the truth, never invent an in-flight block.
-            let inFlightBlock = inFlightBlockIndex(indexer.indexerDb);
-            try {
-                if(indexer.indexerDb)
-                    // Committed-only read. A bare getLatestBlockIndex() here
-                    // routes through getConnection() -> the block's OPEN transaction,
-                    // so health advertised a height every federation query guard (which
-                    // all read via apiView) rejects, and that a reorg may never commit.
-                    lastIndexedBlock = await committedView(indexer.indexerDb).getLatestBlockIndex();
-            } catch (err) {
-                // Database unreachable; leave lastIndexedBlock null. The circuit
-                // state below tells the operator why.
-            }
-            // The block committed while we were reading, so it is no longer in flight.
-            if(inFlightBlock != null && lastIndexedBlock != null && inFlightBlock <= lastIndexedBlock)
-                inFlightBlock = null;
-            let reorgStats = null;
-            try {
-                if(indexer.indexerDb)
-                    // Same committed-only view: reorg counters written by an in-flight
-                    // block roll back with it, so a dirty read here over-counts.
-                    reorgStats = await committedView(indexer.indexerDb).getReorgHealthStats();
-            } catch (err) {
-                // DB unreachable; leave reorg counters null (getReorgHealthStats is
-                // already non-throwing, this is belt-and-braces).
-            }
-            return buildHealthResponse({
-                indexer, indexerRunning, indexerError, lastIndexedBlock, inFlightBlock,
-                now: Date.now(), reorgStats
-            });
-        },
-
-        // Look up the active stake amount + latest block index for a single pubkey.
-        // Used by xchain-hub's CapabilityRegistry to keep its own qualification
-        // state in sync with on-chain stake without needing direct DB access.
-        // Body: { pubkey }
-        async getownstake({pubkey}){
-            if(!pubkey || !/^[0-9a-fA-F]{64}$/.test(String(pubkey)))
-                return { error: 'pubkey must be a 64-char hex string' };
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            // Federation READ isolation: route every read
-            // through apiView() so it draws an independent pooled connection and
-            // sees only COMMITTED state. A federation read landing mid-block must
-            // never join the block's open ACID transaction: sharing that physical
-            // connection with the block loop is a per-block atomicity hazard, and
-            // reading the block's uncommitted rows can hand a hub a validator set
-            // the block may still roll back on a reorg/throw.
-            let db = indexer.indexerDb.apiView();
-            let pk = String(pubkey).toLowerCase();
-            try {
-                let blockIndex = await db.getLatestBlockIndex();
-                // Effective-set view (direct stake minus revocations, plus delegated-key
-                // resolution) so a delegation-only hub self-qualifies in step with the
-                // federation. This is the federation-read-only consumer; consensus handlers
-                // use getActiveStakeByPubkey (direct stake ownership) instead.
-                let stake = await db.getEffectiveStakeByPubkey(pk, blockIndex);
-                return {
-                    pubkey:      pk,
-                    block_index: blockIndex,
-                    amount:      stake ? stake.amount : '0',
-                    has_stake:   !!stake
-                };
-            } catch (err) {
-                console.error('getownstake error:', err);
-                return { error: 'failed to look up stake' };
-            }
-        },
-
-        // Latest parsed block index. Used by xchain-hub's Consensus to
-        // anchor its snapshot at a deterministic block boundary when the
-        // hub's own chain-tip table is empty (no HUB_API_URL on the
-        // indexer = no pushChainTip = no chain_tips rows).
-        // Also exposes the decoder's current tip and a sync-status flag so
-        // operators can see the indexer→decoder lag in a single call.
-        async getlatestblock(){
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            try {
-                // Committed-only, like health and every federation query
-                // guard. The hub anchors its consensus snapshot at whatever height
-                // this returns; an in-flight height would anchor a snapshot on rows
-                // no other reader can see and a reorg may still erase.
-                let inFlight    = inFlightBlockIndex(indexer.indexerDb);
-                let block_index = await committedView(indexer.indexerDb).getLatestBlockIndex();
-                if(inFlight != null && inFlight <= block_index) inFlight = null;
-                return {
-                    block_index,
-                    in_flight_block: inFlight,
-                    decoder_block: indexer.lastDecoderBlock,
-                    lag: indexer.lastDecoderBlock != null
-                        ? indexer.lastDecoderBlock - block_index
-                        : null,
-                };
-            } catch (err) {
-                console.error('getlatestblock error:', err);
-                return { error: 'failed to look up latest block' };
-            }
-        },
-
-        // The stored per-block state-hash triple (+ the chain block hash from the
-        // decoder DB) for a height; what the hub's StateCheckpointEngine reads,
-        // independently re-fetches on every peer, and quorum-signs into the
-        // XCHECKPOINT canonical (spec: protocol/actions/ANCHOR.md). Omitting
-        // block_index returns the latest indexed block. Public read: these hashes
-        // are the platform's verifiability primitive, not sensitive state.
-        //
-        // COMMITTED-ONLY read, the signing-path sibling of the health read above. A bare
-        // read routes through db.getConnection(), which hands back the block loop's
-        // open transactionConnection while a block is processing, so both the default
-        // target height and the hash row itself would come from INSIDE the uncommitted
-        // block. That is worse here than on health: the hub's StateCheckpointEngine
-        // quorum-SIGNS this response into the XCHECKPOINT canonical, so a mid-block
-        // read means the validator set signs a state hash for a block a reorg (or a
-        // guard throwing before commit) may still erase, and the signature outlives
-        // the rollback. committedView() draws the independent pooled connection every
-        // federation query guard uses, so the worst case is "block not indexed: N"
-        // (the caller retries) instead of a signed hash for a block that never was.
-        async getblockhashes({block_index}){
-            if(!indexer.indexerDb || !indexer.decoderDb)
-                return { error: 'indexer database not ready' };
-            try {
-                let db        = committedView(indexer.indexerDb);
-                // The decoder DB carries no indexer-owned transaction today, but the
-                // chain block hash is signed alongside the triple, so it reads through
-                // the same committed-only view rather than depending on that staying true.
-                let decoderDb = committedView(indexer.decoderDb);
-                let target = (block_index !== undefined && block_index !== null)
-                    ? Number(block_index)
-                    : await db.getLatestBlockIndex();
-                if(!Number.isFinite(target) || target < 0)
-                    return { error: 'invalid block_index' };
-                let stored = await db.getStoredBlockHashes(target);
-                if(!stored)
-                    return { error: 'block not indexed: ' + target };
-                let blockHash = null;
-                let rows = await decoderDb.doQuery(
-                    'SELECT t.hash AS block_hash FROM blocks b ' +
-                    'LEFT JOIN index_transactions t ON (t.id = b.block_hash_id) WHERE b.block_index = ? LIMIT 1',
-                    [target]);
-                if(rows.length > 0 && rows[0].block_hash) blockHash = String(rows[0].block_hash);
-                return {
-                    coin:          indexer.config['COIN'],
-                    network:       indexer.config['NETWORK'],
-                    block_index:   Number(stored.block_index),
-                    block_time:    (stored.block_time != null) ? Number(stored.block_time) : null,
-                    block_hash:    blockHash,
-                    ledger_hash:   stored.ledger_hash   || null,
-                    actions_hash:  stored.actions_hash  || null,
-                    contract_hash: stored.contract_hash || null,
-                    // Additive light-client roots (SPV spec §4/§5): null before the
-                    // STATE_COMMITMENT flag-day, present after. Phase 2's checkpoint
-                    // engine signs over state_root + block_merkle_root. The version
-                    // bytes travel WITH their root (the scheme version under which
-                    // the stored root was computed) so the hub signs root+version as
-                    // a unit; null whenever the root is null.
-                    //
-                    // state_root_version is DERIVED AT THE ROW'S OWN HEIGHT, not read
-                    // off the static merkle constant and NOT derived at the chain tip.
-                    // This response is the only place the version is minted: the hub's
-                    // checkpoint engine copies it verbatim into the signed canonical
-                    // and from there into the anchor row, so a wrong value here is
-                    // signed by the validator set rather than merely displayed. Tip
-                    // derivation is the specific trap: it passes any "no static
-                    // constant" check while relabelling every below-boundary
-                    // checkpoint as version 2 once a slot arms, which is a lie about
-                    // what those blocks committed.
-                    balances_root:        stored.balances_root     || null,
-                    stakes_root:          stored.stakes_root       || null,
-                    state_root:           stored.state_root        || null,
-                    state_root_version:   stored.state_root
-                        ? stateSubtree.stateRootVersion(Number(stored.block_index),
-                                                        indexer.config['NETWORK'], indexer.config['COIN'])
-                        : null,
-                    block_merkle_root:    stored.block_merkle_root || null,
-                    block_merkle_version: stored.block_merkle_root ? merkle.BLOCK_MERKLE_VERSION : null
-                };
-            } catch (err) {
-                console.error('getblockhashes error:', err);
-                return { error: 'failed to look up block hashes' };
-            }
-        },
-
-        // Read-only native-coin fee pre-flight. Phase 2: runs the REAL action handler in a
-        // forced-rollback dry-run (Actions.computeFeeQuote), so `valid`/`error` are the
-        // handler's own verdict for ANY quotable action (class-A fee/price failures AND
-        // class-B action failures: insufficient balance, taken ticker, ...), and the fee is
-        // the handler's staged number valued at current oracle prices, judged (optionally)
-        // against the on-chain tolerance. Nothing persists. VM/compound actions never reach the
-        // dry-run engine here: DEPLOY/EXECUTE answer with a schedule-priced fee carrying
-        // `valid:null` (payable, unverified), XEXEC/BATCH stay unquotable. Quotes are
-        // admission-capped and time-boxed so this public read can't starve the block loop
-        // (see computeFeeQuote).
-        // Public read (surfaced to wallets/SDK via the explorer proxy); not a write or
-        // federation method.
-        // Body: { action, params, source, feeOutputSats? }
-        async feequote({action, params, source, feeOutputSats}){
-            if(!action || typeof action !== 'string')
-                return { error: 'action is required' };
-            if(!indexer.indexerDb || !indexer.actions)
-                return { error: 'indexer not ready' };
-            try {
-                return await indexer.actions.computeFeeQuote({ action, params, source, feeOutputSats });
-            } catch (err) {
-                console.error('feequote error:', err);
-                return { error: 'failed to compute fee quote' };
-            }
-        },
-
-        // Oracle usage fee quote. A Mode B dispenser (ORACLE_ADDRESS set) must
-        // carry a native-coin output paying the oracle operator, sized from the escrow
-        // this action adds. A payer calls this to learn the amount, then adds the output.
-        //
-        // Backed by the SAME utility.quoteOracleFee() the consensus check calls, so a
-        // quote and an acceptance can never drift apart; a drift would either reject an
-        // honest create or underpay the oracle. Unlike feequote this needs no dry-run:
-        // the amount is a pure function of the two oracle prices and the escrow.
-        //
-        // Body: { oracleAddress, giveCoin, giveTick, fiatCode, getCoin, giveEscrow, blockTime? }
-        // blockTime defaults to the indexer's current tip time; a caller quoting for a
-        // specific block may pass one.
-        async oraclefeequote({oracleAddress, giveCoin, giveTick, fiatCode, getCoin, giveEscrow, blockTime}){
-            if(!oracleAddress || !giveTick || !fiatCode)
-                return { error: 'oracleAddress, giveTick and fiatCode are required' };
-            if(!indexer.indexerDb || !indexer.util)
-                return { error: 'indexer not ready' };
-            try {
-                let ts = Number(blockTime);
-                if(!Number.isFinite(ts) || ts <= 0){
-                    let tip = await indexer.indexerDb.getLatestBlockIndex();
-                    ts = Number(await indexer.indexerDb.getBlockTime(tip)) || 0;
-                }
-                if(!Number.isFinite(ts) || ts <= 0)
-                    return { error: 'no indexed block to quote against' };
-                let quote = await indexer.util.quoteOracleFee(ts, {
-                    ORACLE_ADDRESS: oracleAddress,
-                    GIVE_COIN:      giveCoin || indexer.config['COIN'],
-                    GIVE_TICK:      giveTick,
-                    FIAT_CODE:      fiatCode,
-                    GET_COIN:       getCoin  || indexer.config['COIN'],
-                    GIVE_ESCROW:    giveEscrow,
-                }, indexer.indexerDb);
-                if(!quote.valid)
-                    return { valid: false, error: quote.error };
-                let native = indexer.util.bcformat(quote.expectedFee, 8);
-                return {
-                    valid:             true,
-                    oracleAddress:     oracleAddress,
-                    blockTime:         ts,
-                    requiredFeeNative: native,
-                    requiredFeeSats:   Number(indexer.util.bcformat(
-                                          indexer.util.bcmul(quote.expectedFee, '100000000', 0), 0)),
-                    belowDust:         !!quote.belowDust,
-                    note:              quote.belowDust
-                        ? 'fee is below the dust threshold; no output required'
-                        : 'add a native-coin output of at least this amount to ' + oracleAddress
-                };
-            } catch (err) {
-                console.error('oraclefeequote error:', err);
-                return { error: 'failed to compute oracle fee quote' };
-            }
-        },
-
-        // Public validity-first pre-flight: "would the indexer accept this action?"
-        // decoupled from native-coin fee support. Same forced-rollback dry-run engine and the
-        // same admission cap / timeout / guardInert as feequote, but the response is the
-        // action's validity STATUS (not a fee band), and supported:true whenever the handler
-        // actually ran. VM actions stay denylisted; settlement/lifecycle actions stay
-        // feeExempt. Height-keyed memo collapses same-height re-runs. Public read (surfaced to
-        // wallets/SDK via the explorer /{COIN}/api/preflight proxy); NOT gated like
-        // feequotedryrun. Never persists.
-        // `feeMode` ('xchain' | 'native', optional) says how the caller's real transaction will
-        // settle the protocol fee, because the verdict differs: the XCHAIN mode debits
-        // the payer's balance and the native mode pays a coin output. Omitted, the indexer picks
-        // the mode the chain itself defaults to.
-        // Body: { action, params, source, feeMode? }
-        async preflight({action, params, source, feeMode}){
-            if(!action || typeof action !== 'string')
-                return { error: 'action is required' };
-            if(!indexer.indexerDb || !indexer.actions)
-                return { error: 'indexer not ready' };
-            try {
-                return await indexer.actions.computePreflight({ action, params, source, feeMode });
-            } catch (err) {
-                console.error('preflight error:', err);
-                return { error: 'failed to compute pre-flight' };
-            }
-        },
-
-        // OPT-IN raw dry-run: same engine as feequote but with no action deny-list, no
-        // admission cap, the caller's literal feeOutputs (no probe injection), and the full
-        // block watchdog as timeout. That unrestricted surface (VM actions on demand) is why
-        // it stays regtest-gated (see ENABLE_DRYRUN) even though the default feequote now
-        // dry-runs publicly. Never persists.
-        // Body: { action, params, source, feeOutputs? }
-        async feequotedryrun({action, params, source, feeOutputs}){
-            if(!action || typeof action !== 'string')
-                return { error: 'action is required' };
-            if(!indexer.indexerDb || !indexer.actions)
-                return { error: 'indexer not ready' };
-            try {
-                return await indexer.actions.computeFeeQuoteDryRun({ action, params, source, feeOutputs });
-            } catch (err) {
-                console.error('feequotedryrun error:', err);
-                return { error: 'dry-run failed: ' + ((err && err.message) ? err.message : String(err)) };
-            }
-        },
-
-        // Read-only native-coin fee schedule + current oracle prices. Lets a client display the
-        // gas schedule / tolerance band and rough-estimate a native fee before a per-action
-        // feequote. Public read (surfaced to wallets/SDK via the explorer proxy).
-        async feeschedule(){
-            if(!indexer.indexerDb || !indexer.actions)
-                return { error: 'indexer not ready' };
-            try {
-                return await indexer.actions.getFeeSchedule();
-            } catch (err) {
-                console.error('feeschedule error:', err);
-                return { error: 'failed to fetch fee schedule' };
-            }
-        },
-
-        // Whole-federation validator-set snapshot at a block boundary:
-        // every pubkey with ANY active stake at the block, regardless of
-        // capability. Used by xchain-hub's Consensus (config-change PBFT)
-        // where quorum is over all stakers, not a capability subset.
-        // Body: { block_index }
-        async getactivevalidators({block_index}){
-            if(block_index === undefined || block_index === null)
-                return { error: 'block_index is required' };
-            let blk = Number(block_index);
-            if(!Number.isInteger(blk) || blk < 0)
-                return { error: 'block_index must be a non-negative integer' };
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            // Federation READ isolation: committed-only, off the block tx.
-            let db = indexer.indexerDb.apiView();
-            try {
-                let latestBlock = await db.getLatestBlockIndex();
-                if(blk > latestBlock)
-                    return { error: 'block_index ' + blk + ' not yet indexed (latest: ' + latestBlock + ')' };
-                let validators = await db.getActiveValidators(blk);
-                return {
-                    block_index: blk,
-                    count:       validators.length,
-                    // Additive: true when the result hit VALIDATOR_QUERY_LIMIT, so a
-                    // hub can alarm rather than silently consume a truncated set.
-                    truncated:   validators.truncated === true,
-                    validators:  validators
-                };
-            } catch (err) {
-                console.error('getactivevalidators error:', err);
-                return { error: 'failed to look up active validators' };
-            }
-        },
-
-        // Source-keyed whole-federation weights at a block boundary; every staker
-        // (no capability filter, no MIN_STAKE floor) with each effective key's
-        // `source` + the source's aggregate `weight`. The STAKE_WEIGHTED_QUORUM
-        // counterpart of getactivevalidators; used by xchain-hub's Consensus
-        // (config-change PBFT) to weight governance quorum by stake.
-        // Body: { block_index }
-        async getactivestakeweights({block_index}){
-            if(block_index === undefined || block_index === null)
-                return { error: 'block_index is required' };
-            let blk = Number(block_index);
-            if(!Number.isInteger(blk) || blk < 0)
-                return { error: 'block_index must be a non-negative integer' };
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            // Federation READ isolation: committed-only, off the block tx.
-            let db = indexer.indexerDb.apiView();
-            try {
-                let latestBlock = await db.getLatestBlockIndex();
-                if(blk > latestBlock)
-                    return { error: 'block_index ' + blk + ' not yet indexed (latest: ' + latestBlock + ')' };
-                let validators = await db.getActiveStakeWeights(blk);
-                let sources = new Set(validators.map(v => v.source));
-                return {
-                    block_index:  blk,
-                    count:        validators.length,
-                    source_count: sources.size,
-                    // Additive: true when the result hit VALIDATOR_QUERY_LIMIT, so a
-                    // hub can alarm rather than silently consume a truncated set.
-                    truncated:    validators.truncated === true,
-                    validators:   validators
-                };
-            } catch (err) {
-                console.error('getactivestakeweights error:', err);
-                return { error: 'failed to look up active stake weights' };
-            }
-        },
-
-        // Return the validator-set snapshot for a capability at a block boundary.
-        // Used by xchain-hub's CapabilitySnapshot to lock PBFT quorum N for a
-        // consensus round. Deterministic: every hub at the same block sees
-        // the same set, so all hubs compute the same quorum.
-        // Body: { capability, block_index, min_stake? }
-        // min_stake (optional) lets a caller (the hub) supply its own authoritative
-        // threshold so the validator set doesn't depend on this indexer's local
-        // config. Omitted → indexer falls back to its local config (back-compat).
-        async getcapabilityvalidators({capability, block_index, min_stake}){
-            if(!capability || typeof capability !== 'string')
-                return { error: 'capability is required' };
-            if(block_index === undefined || block_index === null)
-                return { error: 'block_index is required' };
-            let blk = Number(block_index);
-            if(!Number.isInteger(blk) || blk < 0)
-                return { error: 'block_index must be a non-negative integer' };
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            // Federation READ isolation: committed-only, off the block tx.
-            let db = indexer.indexerDb.apiView();
-            // A capability absent from this indexer's STAKING.CAPABILITIES config would
-            // otherwise produce an empty validator set indistinguishable from "no
-            // qualified validators at this block". Surface it as an error so the hub's
-            // CapabilitySnapshot treats it as a null snapshot (degraded mode) and the
-            // operator gets a signal of config drift instead of a silent attestation drop.
-            if(!db.isCapabilityConfigured(capability))
-                return { error: 'capability not configured: ' + capability };
-            try {
-                let latestBlock = await db.getLatestBlockIndex();
-                if(blk > latestBlock)
-                    return { error: 'block_index ' + blk + ' not yet indexed (latest: ' + latestBlock + ')' };
-                let validators = await db.getValidatorsByCapability(capability, blk, min_stake);
-                // VALIDATOR_QUERY_LIMIT flag rides on the array itself, so read it
-                // BEFORE the rules filter below hands back a fresh array.
-                let truncated  = validators.truncated === true;
-                // RULES-AWARE FILTER, `attestation` only (spec §7.4, D16, D86). The
-                // indexer, not the hub, owns this: the hub's CapabilitySnapshot carries
-                // no twin, and adding a height parameter to this RPC would let a caller
-                // choose the height its own set is judged at, which is precisely the
-                // attack attest_response_verify.js:32-41 names.
-                //
-                // WHY block_index + CANONICAL_REORG_BUFFER. `block_index` here is
-                // ALREADY the buried block: CapabilitySnapshot.getSnapshot subtracts the
-                // buffer before it calls (CapabilitySnapshot.js:238). The filter buries
-                // its own argument, exactly as _computeResponsibleSet does, so it must
-                // be handed the raw request height whose burial is this block_index.
-                // Two edges follow. buriedSnapshotBlock clamps at 0, so for the first
-                // CANONICAL_REORG_BUFFER blocks of a chain several raw heights bury to
-                // the same block and this reconstruction is off by the clamp; those
-                // blocks predate any rolled epoch, so the filter reads no row and drops
-                // nobody there either way. And on a network where snapshot burial is not
-                // armed the filter's burial is the identity, so it would judge at
-                // block_index + buffer; that is inert too, because ROLLCALL_GATES is null
-                // on every network whose burial is un-armed.
-                if(capability === 'attestation'){
-                    let gatesStats = {};
-                    validators = await gatesFilter.filterByRolledGates({
-                        db, validators, requestBlock: blk + srb.CANONICAL_REORG_BUFFER,
-                        network: indexer.config['NETWORK'], stats: gatesStats
-                    });
-                    let line = gatesFilter.formatGatesFilterStats(gatesStats);
-                    if(line) console.log('getcapabilityvalidators: ' + line);
-                }
-                // Confirm which threshold this snapshot actually filtered by, so a
-                // hub↔indexer MIN_STAKE mismatch is visible in the indexer log
-                // rather than surfacing only as a silently-divergent quorum N.
-                let thresholdSource = (min_stake !== undefined && min_stake !== null)
-                    ? String(min_stake) + ' (caller-supplied)'
-                    : 'local-config';
-                console.log('getcapabilityvalidators: capability=' + capability +
-                    ' block=' + blk + ' min_stake=' + thresholdSource +
-                    ' validators=' + validators.length);
-                return {
-                    capability:  capability,
-                    block_index: blk,
-                    count:       validators.length,
-                    // Additive: true when the result hit VALIDATOR_QUERY_LIMIT, so a
-                    // hub can alarm rather than silently consume a truncated set.
-                    truncated:   truncated,
-                    validators:  validators
-                };
-            } catch (err) {
-                console.error('getcapabilityvalidators error:', err);
-                return { error: 'failed to look up capability validators' };
-            }
-        },
-
-        // Verified full-node set at a block (NODEPROOF / verified-validator tier):
-        // validators with a passed possession proof inside PROOF_WINDOW_BLOCKS of
-        // `block_index`. The hub unions this with FULLNODE.GENESIS_VERIFIERS to form
-        // the eligible-verifier set for a challenge round, matching the indexer's
-        // acceptance rule in actions/nodeproof.js. The live-stake intersection is applied
-        // HERE, by this RPC, not by the caller: the returned set is already the
-        // proof-window set intersected with the live full_node capability at
-        // `block_index`. A caller must NOT re-filter it through a capability snapshot of
-        // its own. That set is the 2/3+1 quorum denominator, and nodeproof.js sizes the
-        // chain's acceptance quorum over this same rule, so a second filter (which
-        // carries its own MIN_STAKE predicate) shrinks the hub's divisor below the one
-        // the chain will accept.
-        async getfullnodeverifiers({block_index}){
-            if(block_index === undefined || block_index === null)
-                return { error: 'block_index is required' };
-            let blk = Number(block_index);
-            if(!Number.isInteger(blk) || blk < 0)
-                return { error: 'block_index must be a non-negative integer' };
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            // Federation READ isolation: committed-only, off the block tx.
-            let db = indexer.indexerDb.apiView();
-            try {
-                // Intersect the proof-window set with the LIVE full_node capability
-                // at this block (byte-identical to the eligibility rule in
-                // actions/nodeproof.js (_eligibleVerifierSet) and the reward split in
-                // actions/price.js, so the hub sizes quorum over the same set the
-                // chain will accept.
-                // Resolve the capability side ONCE (hasCapability is ~5 sequential
-                // queries per pubkey); a truncated capability read re-probes per pubkey
-                // so the hub's quorum divisor cannot silently shrink.
-                let raw = await db.getVerifiedFullNodeSet(blk);
-                let capRows = await db.getValidatorsByCapability('full_node', blk);
-                let capSet  = (capRows && capRows.truncated === true)
-                            ? null
-                            : new Set((capRows || []).map(v => String(v.pubkey).toLowerCase()));
-                let validators = [];
-                for(let v of raw){
-                    let pk = String(v.pubkey).toLowerCase();
-                    if(capSet ? capSet.has(pk) : await db.hasCapability(v.pubkey, 'full_node', blk))
-                        validators.push(v);
-                }
-                return {
-                    block_index: blk,
-                    count:       validators.length,
-                    // Additive: true when the result hit VALIDATOR_QUERY_LIMIT, so a
-                    // hub can alarm rather than silently consume a truncated set.
-                    truncated:   raw.truncated === true,
-                    validators:  validators
-                };
-            } catch (err) {
-                console.error('getfullnodeverifiers error:', err);
-                return { error: 'failed to look up full-node verifiers' };
-            }
-        },
-
-        // Source-keyed validator weights for stake-weighted quorum (STAKE_WEIGHTED_QUORUM).
-        // Like getcapabilityvalidators but returns each effective signing key's `source`
-        // (staking address) + the source's aggregate `weight`. The hub mirrors these into
-        // capability_snapshots so every validator dedupes voting weight by source; one
-        // stake counts once no matter how many keys it has delegated (DELEGATE.md).
-        async getstakeweightsbycapability({capability, block_index, min_stake}){
-            if(!capability || typeof capability !== 'string')
-                return { error: 'capability is required' };
-            if(block_index === undefined || block_index === null)
-                return { error: 'block_index is required' };
-            let blk = Number(block_index);
-            if(!Number.isInteger(blk) || blk < 0)
-                return { error: 'block_index must be a non-negative integer' };
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            // Federation READ isolation: committed-only, off the block tx.
-            let db = indexer.indexerDb.apiView();
-            if(!db.isCapabilityConfigured(capability))
-                return { error: 'capability not configured: ' + capability };
-            try {
-                let latestBlock = await db.getLatestBlockIndex();
-                if(blk > latestBlock)
-                    return { error: 'block_index ' + blk + ' not yet indexed (latest: ' + latestBlock + ')' };
-                let validators = await db.getStakeWeightsByCapability(capability, blk, min_stake);
-                let sources = new Set(validators.map(v => v.source));
-                let thresholdSource = (min_stake !== undefined && min_stake !== null)
-                    ? String(min_stake) + ' (caller-supplied)'
-                    : 'local-config';
-                console.log('getstakeweightsbycapability: capability=' + capability +
-                    ' block=' + blk + ' min_stake=' + thresholdSource +
-                    ' keys=' + validators.length + ' sources=' + sources.size);
-                return {
-                    capability:  capability,
-                    block_index: blk,
-                    count:       validators.length,
-                    source_count: sources.size,
-                    // Additive: true when the result hit VALIDATOR_QUERY_LIMIT, so a
-                    // hub can alarm rather than silently consume a truncated set.
-                    truncated:   validators.truncated === true,
-                    validators:  validators
-                };
-            } catch (err) {
-                console.error('getstakeweightsbycapability error:', err);
-                return { error: 'failed to look up stake weights' };
-            }
-        },
-
-        // List ATTEST v0 (request) rows currently awaiting validator fulfillment.
-        // Used by xchain-hub's AttestationRound to discover work. Returns
-        // latest_block_index alongside so the hub can compute its
-        // confirmation-wait threshold (block_index + CONFIRMATIONS <= latest)
-        // in a single round-trip without a follow-up getlatestblock call.
-        // Body: { provider_id?: string, limit?: number,
-        //         after_block_index?: number, after_action_index?: number }
-        //   The after_* pair is a keyset cursor for paging past the oldest
-        //   `limit` rows (see getPendingAttestationRequests).
-        async getpendingattestation_requests({provider_id, limit, after_block_index, after_action_index}){
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            let max = Number(limit);
-            if(!Number.isFinite(max) || max <= 0) max = 100;
-            if(max > 500) max = 500;
-            // Optional keyset cursor: caller pages forward by passing the last
-            // (block_index, action_index) it consumed. Only honoured when both
-            // components are present and finite; otherwise a full sweep is returned.
-            let cursor = null;
-            if(Number.isFinite(Number(after_block_index)) && Number.isFinite(Number(after_action_index))){
-                cursor = { after_block_index, after_action_index };
-            }
-            // Federation READ isolation: committed-only, off the block tx.
-            let db = indexer.indexerDb.apiView();
-            try {
-                let latest  = await db.getLatestBlockIndex();
-                let rows    = await db.getPendingAttestationRequests(provider_id, max, cursor);
-                return {
-                    latest_block_index: latest,
-                    count:              rows.length,
-                    requests:           rows
-                };
-            } catch (err) {
-                console.error('getpendingattestation_requests error:', err);
-                return { error: 'failed to look up pending attestation requests' };
-            }
-        },
-
-        // Attestation relay: list the ATTEST v0 requests this chain holds only as a
-        // MATERIALIZED relay leg (an origin_chain that is not this coin), at any
-        // lifecycle status, each carrying its terminal response when one exists.
-        // xchain-hub's AttestationRelay uses it for both halves of the round trip: to
-        // know a request is already on this chain whatever its status (the pending
-        // queue alone answers that only while it is pending, so a fulfilled one read as
-        // never materialized and drew a duplicate v3), and to discover the responses it
-        // owes back as an ATTEST v4. A co-signing peer re-reads ONE row through it
-        // (request_id filter) to independently confirm a leader's proposed v4 rather
-        // than trusting the proposal. latest_block_index rides along so the caller can
-        // apply its confirmation depth without a follow-up getlatestblock.
-        // Body: { request_id?: string, limit?: number,
-        //         after_block_index?: number, after_action_index?: number }
-        async getrelayedattestation_requests({request_id, limit, after_block_index, after_action_index}){
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            let max = Number(limit);
-            if(!Number.isFinite(max) || max <= 0) max = 100;
-            if(max > 500) max = 500;
-            let cursor = null;
-            if(Number.isFinite(Number(after_block_index)) && Number.isFinite(Number(after_action_index))){
-                cursor = { after_block_index, after_action_index };
-            }
-            // Federation READ isolation: committed-only, off the block tx.
-            let db = indexer.indexerDb.apiView();
-            try {
-                let latest = await db.getLatestBlockIndex();
-                let rows   = await db.getRelayedAttestationRequests(
-                    indexer.config['COIN'], request_id, max, cursor);
-                return {
-                    latest_block_index: latest,
-                    count:              rows.length,
-                    requests:           rows
-                };
-            } catch (err) {
-                console.error('getrelayedattestation_requests error:', err);
-                return { error: 'failed to look up relayed attestation requests' };
-            }
-        },
-
-        // Return this chain's OPEN cross-chain DEX offers (give_coin != get_coin) so the
-        // xchain-hub federation can build the unified cross-chain order book. The "from"
-        // chain is implicit (this indexer's COIN). Paginates by keyset on action_index.
-        // Returns the latest block in the same round-trip so the federation can snapshot
-        // its matching view without a follow-up getlatestblock.
-        async getopencrosschainorders({to_coin, limit, after_action_index}){
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            let max = Number(limit);
-            if(!Number.isFinite(max) || max <= 0) max = 100;
-            if(max > 500) max = 500;
-            // Federation READ isolation: committed-only, off the block tx.
-            let db = indexer.indexerDb.apiView();
-            try {
-                let latest = await db.getLatestBlockIndex();
-                // Source-chain reorg fence: stamp each offer with this chain's current
-                // push generation. The hub copies it onto the matched leg's a_/b_push_generation so a
-                // deferred retraction fences by generation and a re-published order at a recycled
-                // action_index (higher generation) survives. Per-COIN, so one read covers the book.
-                //
-                // Read the generation BEFORE the rows (HUB-RETRACT-1): a concurrent rollback bumps the
-                // generation atomically with deleting the orphaned rows (rollback.js, in-transaction).
-                // Reading the generation first guarantees safety wherever that commit lands - gen G
-                // then rows are pre-commit orphans (stamped G, which the fence <= G covers) or already
-                // gone; gen G+1 means the commit happened, so the orphaned rows are already gone. The
-                // reverse order (rows then generation) could read orphaned rows pre-commit and stamp
-                // them with the post-commit G+1, letting them escape the fence permanently.
-                let pushGeneration = await db.getPushGeneration(indexer.config['COIN']);
-                // Effective expiration filter (XCC-2): drop offers already past their (edit-
-                // overlaid) expiration relative to the tip's block_time, so a stale 'open' offer
-                // awaiting its next block-loop expiry pass cannot occupy a bounded slot. A missing
-                // block_time (older-schema gap) yields a non-finite value → the filter is skipped
-                // (fail open, unchanged behavior) rather than dropping the whole book.
-                // getBlockTime returns the `false` sentinel on a missing block / older-schema gap;
-                // coerce that (and any non-finite) to null so the filter is skipped rather than
-                // running as a `>= 0` no-op or, worse, a `>= NaN` that drops the whole book.
-                let rawBlockTime = await db.getBlockTime(latest);
-                let blockTime = (rawBlockTime !== false && Number.isFinite(Number(rawBlockTime)))
-                    ? Number(rawBlockTime) : null;
-                // Unified cross-chain book (XCC-2): SWAP (Phase A, exact single-fill) + ORDER
-                // (Phase B, price-time partial fills) drawn in one UNION ALL so a single global
-                // LIMIT + keyset cursor bounds the whole book. Each offer is tagged `kind`; the
-                // returned array carries .truncated + .next_cursor out-of-band.
-                let merged = await db.getOpenCrossChainOffers(max, after_action_index, to_coin, blockTime);
-                let truncated = merged.truncated === true;
-                if(truncated)
-                    console.warn('getopencrosschainorders hit the cap of ' + max + ' at block ' + latest + ' - the open cross-chain book is truncated (newer offers dropped); the hub should page via next_cursor or raise its limit.');
-                for(let o of merged) o.push_generation = pushGeneration;
-                // Give-side decimal grid: the hub quantizes each cross-chain
-                // fill on the grid of the leg that gives it, and declines the match outright
-                // rather than guessing when it is absent. Resolution lives in
-                // crossChainOfferDecimals.js (it delegates to the same getTokenInfo
-                // order_match.js uses, so the two grids cannot drift).
-                await stampGiveDecimals(db, indexer.util, indexer.config['COIN_DECIMALS'], merged, latest);
-                return {
-                    latest_block_index: latest,
-                    network:            indexer.config['NETWORK'],
-                    count:              merged.length,
-                    truncated:          truncated,
-                    // Keyset cursor for the hub's page loop: feed back as after_action_index.
-                    next_cursor:        (merged.next_cursor != null) ? merged.next_cursor : null,
-                    orders:             merged
-                };
-            } catch (err) {
-                console.error('getopencrosschainorders error:', err);
-                return { error: 'failed to look up cross-chain orders' };
-            }
-        },
-
-        // BET parimutuel betting reads (betting spec section 8: raw reads for ops
-        // tooling and e2e; the PUBLIC surface is the explorer REST layer). Paged
-        // listing of betting feeds.
-        // Body: { status?, source?, tick?, limit?, after_action_index? }
-        async getbetfeeds({status, source, tick, limit, after_action_index}){
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            let max = Number(limit);
-            if(!Number.isFinite(max) || max <= 0) max = 100;
-            if(max > 500) max = 500;
-            // Committed-only read off an independent pooled connection
-            let db = indexer.indexerDb.apiView();
-            try {
-                let latest = await db.getLatestBlockIndex();
-                let rows   = await db.getBetFeedRows({ status, source, tick, limit: max, after_action_index });
-                return {
-                    latest_block_index: latest,
-                    network:            indexer.config['NETWORK'],
-                    count:              rows.length,
-                    next_cursor:        (rows.length === max) ? rows[rows.length - 1].action_index : null,
-                    feeds:              rows
-                };
-            } catch (err) {
-                console.error('getbetfeeds error:', err);
-                return { error: 'failed to look up bet feeds' };
-            }
-        },
-
-        // One betting feed + its per-outcome open pools.
-        // Body: { action_index }
-        async getbetfeed({action_index}){
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            if(!Number.isFinite(Number(action_index)))
-                return { error: 'action_index must be numeric' };
-            let db = indexer.indexerDb.apiView();
-            try {
-                let feed = await db.getBetFeedInfo(Number(action_index));
-                if(!feed)
-                    return { error: 'unknown feed' };
-                let pools = await db.getBetFeedPools(Number(action_index));
-                return {
-                    network: indexer.config['NETWORK'],
-                    feed:    feed,
-                    pools:   pools
-                };
-            } catch (err) {
-                console.error('getbetfeed error:', err);
-                return { error: 'failed to look up bet feed' };
-            }
-        },
-
-        // Paged listing of bets.
-        // Body: { feed?, source?, status?, limit?, after_action_index? }
-        async getbets({feed, source, status, limit, after_action_index}){
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            let max = Number(limit);
-            if(!Number.isFinite(max) || max <= 0) max = 100;
-            if(max > 500) max = 500;
-            let db = indexer.indexerDb.apiView();
-            try {
-                let latest = await db.getLatestBlockIndex();
-                let rows   = await db.getBetRows({ feed, source, status, limit: max, after_action_index });
-                return {
-                    latest_block_index: latest,
-                    network:            indexer.config['NETWORK'],
-                    count:              rows.length,
-                    next_cursor:        (rows.length === max) ? rows[rows.length - 1].action_index : null,
-                    bets:               rows
-                };
-            } catch (err) {
-                console.error('getbets error:', err);
-                return { error: 'failed to look up bets' };
-            }
-        },
-
-        // Pending XCALL v0 (cross-chain call request) rows awaiting federation
-        // dispatch. Used by xchain-hub's CrossChainCallEngine to discover work;
-        // the hub confirmation-gates on (block_index, latest_block_index) and
-        // dedupes against its own cross_chain_calls table.
-        // Body: { limit?: number }
-        async getpendingcrosschaincalls({limit}){
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            let max = Number(limit);
-            if(!Number.isFinite(max) || max <= 0) max = 100;
-            if(max > 500) max = 500;
-            // Federation READ isolation: committed-only, off the block tx.
-            let db = indexer.indexerDb.apiView();
-            try {
-                let latest = await db.getLatestBlockIndex();
-                // Source-chain reorg fence: stamp each call with this chain's current
-                // push generation. The hub copies it onto the dispatch row (and the result row
-                // inherits it), so a source-keyed deferred retraction fences by generation. Per-COIN.
-                // Read the generation BEFORE the rows (HUB-RETRACT-1): the rollback bumps the
-                // generation atomically with deleting the orphaned rows, so gen-first is safe wherever
-                // that commit lands, while rows-then-gen could stamp a pre-commit orphan with the
-                // post-commit generation and let it escape the fence. See getopencrosschainorders.
-                let pushGeneration = await db.getPushGeneration(indexer.config['COIN']);
-                let rows   = await db.getPendingCrossChainCallRequests(max);
-                for(let c of rows) c.push_generation = pushGeneration;
-                return {
-                    latest_block_index: latest,
-                    network:            indexer.config['NETWORK'],
-                    count:              rows.length,
-                    calls:              rows
-                };
-            } catch (err) {
-                console.error('getpendingcrosschaincalls error:', err);
-                return { error: 'failed to look up pending cross-chain calls' };
-            }
-        },
-
+// The one route family the entry keeps: xchain-hub's cross_chain_call_engine.test.js
+// reads THIS file by literal path, slices from the getcrosschaincall header to the
+// next eight-space async member and compiles the success literal into the fixture
+// its dispatch pin validates against, so the handler stays here at that indentation.
+// Its siblings are in src/api/rpc/cross_chain_calls.js.
+function crossChainCallRpc({ indexer }){
+    return {
         // Single XCALL request by call_id; the targeted re-verification a hub
         // follower runs before co-signing a leader's proposed dispatch row
         // (field-for-field, against its OWN view of this chain).
@@ -1218,15 +231,16 @@ async function startApi(){
                 let latest = await db.getLatestBlockIndex();
                 // Source-chain reorg fence: the hub follower pins this call's
                 // generation against the leader's proposed dispatch row
-                // (CrossChainCallEngine._validateDispatch). The field is stamped on the row but
+                // (CrossChainCallEngine.validateDispatch). The field is stamped on the row but
                 // never enters the signed canonical, so the pin is what stops a Byzantine leader
                 // inflating it to evade a later source-keyed retraction. Omitting it here made
                 // the follower re-derive 0 for every call, which matched only until the first
                 // rollback on this chain bumped the generation - after that no honest follower
                 // could ever co-sign a dispatch again.
                 //
-                // Read the generation BEFORE the row (HUB-RETRACT-1), same ordering and for the
-                // same reason as getopencrosschainorders / getpendingcrosschaincalls above.
+                // Read the generation BEFORE the row, same ordering and for the
+                // same reason as getopencrosschainorders (src/api/rpc/orders.js) and
+                // getpendingcrosschaincalls (src/api/rpc/cross_chain_calls.js).
                 let pushGeneration = await db.getPushGeneration(indexer.config['COIN']);
                 let row    = await db.getCrossChainCallRequestById(String(call_id));
                 if(!row){
@@ -1253,608 +267,68 @@ async function startApi(){
                     }
                 };
             } catch (err) {
-                console.error('getcrosschaincall error:', err);
+                getLogger().error('getcrosschaincall error:', err);
                 return { error: 'failed to look up cross-chain call' };
             }
         },
-
-        // Execution outcome of an injected cross-chain call on THIS (target) chain.
-        // Used by the hub to relay the result back to the source chain, and by hub
-        // followers to re-verify a proposed result row byte-for-byte.
-        // Body: { call_id }
-        async getcrosschaincallresult({call_id}){
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            if(!call_id || !/^[0-9a-fA-F]{64}$/.test(String(call_id)))
-                return { error: 'call_id must be a 64-hex id' };
-            // Federation READ isolation: committed-only, off the block tx.
-            let db = indexer.indexerDb.apiView();
-            try {
-                let latest = await db.getLatestBlockIndex();
-                let row    = await db.getCrossChainCallExecutionById(String(call_id));
-                if(!row){
-                    let res = { exists: false, network: indexer.config['NETWORK'], latest_block_index: latest };
-                    // Surface refusal diagnostics (XDISP-1): a quorum-starved dispatch has
-                    // no execution row, but the injection pass records WHY it keeps being
-                    // refused. Node-local advisory only (never quorum-verified relay data).
-                    let rejection = await db.getCrossChainCallRejectionById(String(call_id));
-                    if(rejection){
-                        res.rejection = {
-                            reason:      rejection.reason,
-                            detail:      rejection.detail || '',
-                            attempts:    Number(rejection.attempts),
-                            first_block: Number(rejection.first_block),
-                            last_block:  Number(rejection.last_block)
-                        };
-                    }
-                    return res;
-                }
-                return {
-                    exists:               true,
-                    network:              indexer.config['NETWORK'],
-                    latest_block_index:   latest,
-                    executed_block_index: Number(row.block_index),
-                    status:               row.result_status,
-                    return_payload_b64:   row.return_payload_b64 || '',
-                    gas_used:             Number(row.gas_used)
-                };
-            } catch (err) {
-                console.error('getcrosschaincallresult error:', err);
-                return { error: 'failed to look up cross-chain call result' };
-            }
-        },
-
-        // Which oracle rounds in [first_round, last_round] already ride a VALID PRICE
-        // batch on this chain. The hub's batch publisher asks before it re-proposes a
-        // buffered window: a validator's own tables cannot answer (its snapshots keep
-        // the per-round proof for rounds it finalized itself, and its published-round
-        // markers cover only what IT broadcast), so without this read a hub restarted
-        // onto a full buffer re-publishes windows the chain already carries, at a fee
-        // apiece. Invalid wires are deliberately excluded: they do not carry their
-        // rounds for a replaying node, so those windows are right to fill. Returns the
-        // latest indexed block in the same round-trip, and `truncated` when the page
-        // filled, so the caller pages past its last batch rather than reading the
-        // remainder as empty. Body: { first_round, last_round, limit? }
-        async getpricebatches({first_round, last_round, limit}){
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            let v = priceBatchQuery.validatePriceBatchParams({ first_round, last_round, limit });
-            if(!v.ok) return { error: v.error };
-            // Federation READ isolation: committed-only, off the block tx.
-            let db = indexer.indexerDb.apiView();
-            try {
-                let latest = await db.getLatestBlockIndex();
-                let rows   = await db.doQuery(priceBatchQuery.PRICE_BATCHES_SQL,
-                    ['valid', v.last_round, v.first_round, v.limit]);
-                return priceBatchQuery.buildPriceBatchesResponse(latest, rows, v);
-            } catch (err) {
-                console.error('getpricebatches error:', err);
-                return { error: 'failed to look up price batches' };
-            }
-        },
-
-        // Existence + confirmation depth for a single action. Lets the xchain-hub
-        // federation verify that a proposed cross-chain source action really exists
-        // on this chain (and how deep it is buried) before co-signing an
-        // attestation, instead of trusting the proposer's claim. Returns the latest
-        // indexed block in the same round-trip so depth and tip are one snapshot.
-        // Body: { action_index }
-        async getactionconfirmations({action_index}){
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            let idx = Number(action_index);
-            if(!Number.isInteger(idx) || idx <= 0)
-                return { error: 'action_index must be a positive integer' };
-            // Federation READ isolation: committed-only, off the block tx.
-            let db = indexer.indexerDb.apiView();
-            try {
-                let latest = await db.getLatestBlockIndex();
-                let row    = await db.getActionInfo(idx);
-                if(!row){
-                    return {
-                        coin:               indexer.config['COIN'],
-                        network:            indexer.config['NETWORK'],
-                        action_index:       idx,
-                        exists:             false,
-                        latest_block_index: latest,
-                        confirmations:      0
-                    };
-                }
-                let blockIndex = Number(row.block_index);
-                return {
-                    coin:               indexer.config['COIN'],
-                    network:            indexer.config['NETWORK'],
-                    action_index:       idx,
-                    exists:             true,
-                    action:             row.action,
-                    block_index:        blockIndex,
-                    latest_block_index: latest,
-                    confirmations:      (latest >= blockIndex) ? (latest - blockIndex + 1) : 0
-                };
-            } catch (err) {
-                console.error('getactionconfirmations error:', err);
-                return { error: 'failed to look up action confirmations' };
-            }
-        },
-
-        // Look up the on-chain ANCHOR checkpoint record (from anchor_actions, the
-        // permanent full-parse record) for a checkpoint identity, with its DOGE
-        // confirmation depth. Serves the hub's anchor-gossip verification: before a
-        // hub trusts an XANC_V0_DONE / XANC_FINALIZED (which stamps anchor_txid and
-        // mirrors a reward), it confirms via THIS method that a matching anchor
-        // actually landed on-chain (payload hashes match, status is not 'invalid',
-        // confirmations >= XCHAIN_CONFIRMATIONS_DOGE), independently of the announced
-        // txid, defeating a phantom txid and a Byzantine ELECTED publisher alike.
-        // `chain`/`network` are the CHECKPOINTED chain (e.g. BTC/regtest); this
-        // indexer serves the anchor chain (DOGE), so confirmations are DOGE-relative.
-        // Optional `txid` / `version` narrow the lookup to a SPECIFIC anchor
-        // transaction rather than "the newest anchor for this checkpoint". Without
-        // them the answer is only "this checkpoint is anchored at depth", which a
-        // Byzantine ELECTED publisher can satisfy while announcing a never-mined or
-        // real-but-different txid (XANC-ELECTED-FORGE-1). `checkpoint_anchored` is
-        // returned alongside `exists` so a filtering caller can distinguish a benign
-        // not-yet-anchored checkpoint from a positively-detected txid forge.
-        //
-        // The candidate rows are read with doQuery + the SQL owned by
-        // anchor-action-query.js rather than a db.js accessor, keeping this read
-        // surface isolated (db.js is under concurrent edit). db.js's single-row
-        // getAnchorActionByCheckpoint is superseded by this path and should be
-        // folded back here once db.js is free.
-        async getanchoraction({chain, network, block_index, checkpoint_seq, txid, version}){
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            let v = anchorActionQuery.validateAnchorActionParams({ chain, network, block_index, checkpoint_seq, txid, version });
-            if(!v.ok) return { error: v.error };
-            // Federation READ isolation: committed-only, off the block tx.
-            let db = indexer.indexerDb.apiView();
-            try {
-                let latest = await db.getLatestBlockIndex();
-                let rows   = await db.doQuery(anchorActionQuery.ANCHOR_ACTIONS_SQL,
-                    [chain, network, v.block_index, v.checkpoint_seq, ...anchorActionQuery.CHECKPOINT_VERSIONS]);
-                let row    = anchorActionQuery.selectAnchorRow(rows, { txid: v.txid, version: v.version });
-                return anchorActionQuery.buildAnchorActionResponse(indexer.config, latest, row,
-                    { checkpoint_anchored: Array.isArray(rows) && rows.length > 0 });
-            } catch (err) {
-                console.error('getanchoraction error:', err);
-                return { error: 'failed to look up anchor action' };
-            }
-        },
-
-        // DOGE anchor visibility for the BTC indexer: "what did this DOGE transaction
-        // anchor, and how deep is it?" Keyed on the txid alone, because that is the only
-        // DOGE-side identity a mirrored anchor_reward_attestations row carries
-        // (doge_anchor_txid). The BTC indexer calls this before it mints the
-        // COLLECT-spendable anchor/archive reward and does the binding itself: it matches
-        // the returned publisher / snapshot_block / seq against the reward tuple it is
-        // about to pay, so a txid that anchored something else is positively rejected
-        // rather than weakly accepted. See anchor_proof_client.js and
-        // anchor_reward_derive.js on the calling side.
-        // `after_action_index` is the optional exclusive page cursor a caller echoes back
-        // from a previous response's next_after_action_index. Omitting it reads the first
-        // page, which is what every pre-pagination caller does, so the method stays
-        // backward compatible on the wire.
-        // ROLLCALL federation read: "which of THESE keys have a presence signature
-        // on chain for THIS epoch, inside THIS window?" Served off the committed
-        // view, DOGE side.
-        //
-        // BOUNDED BY THE CALLER'S KEY LISTS, never by enumeration. The BTC close
-        // asks for exactly the keys of R(E) plus the elected leader, so the answer
-        // size is fixed by the asker and no attacker-inflated action set can
-        // exhaust a page walk into `unknown` or truncate it into a false absence.
-        // An enumerating variant of this read would be a denial-of-service surface
-        // that evicts live validators, which is why it does not exist.
-        //
-        // Everything here is STRUCTURE. This indexer cannot check LEDGER_HASH
-        // against anything (it has no BTC view), so it returns the raw signed
-        // material and the BTC side re-verifies against its OWN ledger_hash and
-        // discards any row whose carried hash differs.
-        //
-        // `hcut` is the window cut: the highest DOGE block at or before
-        // `max_block_time` (the BTC header stamp at E + ACCEPT_WINDOW). The caller
-        // must treat a null cut, or a tip that has not buried the cut by
-        // ROLLCALL_DOGE_MATURITY, as `unknown` and DEFER -- never as "nobody was
-        // present", which would evict the whole federation on a lagging peer.
-        //
-        // `manifest_hash` is what turns a silent failure loud: a DOGE indexer
-        // running a decoder that predates the ROLLCALL allowlist entry drops every
-        // roll call at decode and would answer a perfectly well-formed "nobody
-        // signed". The BTC side compares this against its own vendored manifest and
-        // defers on a mismatch, so a stale peer stalls a block instead of evicting
-        // a federation.
-        async getrollcallsigners({network, epoch_height, max_block_time, pubkeys, publishers}){
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            if(String(indexer.config['COIN']) !== 'DOGE')
-                return { error: 'getrollcallsigners is DOGE-only' };
-            if(network !== undefined && String(network) !== String(indexer.config['NETWORK']))
-                return { error: 'network mismatch' };
-
-            let epoch = parseInt(epoch_height);
-            let maxT  = parseInt(max_block_time);
-            if(!Number.isFinite(epoch) || epoch < 0) return { error: 'invalid epoch_height' };
-            if(!Number.isFinite(maxT))               return { error: 'invalid max_block_time' };
-
-            let keys = Array.isArray(pubkeys)    ? pubkeys    : [];
-            let pubs = Array.isArray(publishers) ? publishers : [];
-            // Hex-shaped and bounded. A caller asking about a key it cannot name is
-            // asking to enumerate, which this method does not do.
-            const HEX64 = /^[0-9a-fA-F]{64}$/;
-            keys = keys.filter((k) => HEX64.test(String(k))).map((k) => String(k).toLowerCase());
-            pubs = pubs.filter((k) => HEX64.test(String(k))).map((k) => String(k).toLowerCase());
-            if(keys.length > ROLLCALL_READ_MAX_KEYS || pubs.length > ROLLCALL_READ_MAX_KEYS)
-                return { error: 'too many keys requested' };
-
-            try {
-                // Federation READ isolation: committed-only, off the block tx.
-                let db = indexer.indexerDb.apiView();
-
-                let tipIndex = await db.getLatestBlockIndex();
-                let tipRow   = await db.doQuery(
-                    'SELECT block_time FROM blocks WHERE block_index = ?', [tipIndex]);
-                let tipTime  = (tipRow && tipRow[0]) ? parseInt(tipRow[0].block_time) : null;
-
-                let hcut = await db.getRollcallWindowCut(maxT);
-
-                let signers = {};
-                for(let k of keys) signers[k] = null;
-                let publishersOut = {};
-                for(let k of pubs) publishersOut[k] = null;
-
-                // A null cut means no DOGE block is inside the window yet. Answer the
-                // shape with an explicit null hcut so the caller defers rather than
-                // reading empty maps as a positive "none".
-                if(hcut !== null){
-                    for(let r of await db.getRollcallSignersForKeys(epoch, keys, hcut)){
-                        signers[String(r.pubkey).toLowerCase()] = {
-                            sig:          String(r.sig).toLowerCase(),
-                            ledger_hash:  String(r.ledger_hash).toLowerCase(),
-                            publisher:    String(r.publisher).toLowerCase(),
-                            action_index: Number(r.action_index),
-                            block_index:  Number(r.block_index),
-                            // ROLLCALL v1 GATES as carried, null on a v0 row: the BTC close
-                            // needs it to rebuild the v1 canonical it re-verifies against.
-                            gates:        (r.gates === undefined || r.gates === null) ? null : String(r.gates)
-                        };
-                    }
-                    for(let r of await db.getRollcallPublishers(epoch, pubs, hcut)){
-                        publishersOut[String(r.publisher).toLowerCase()] = {
-                            action_index: Number(r.action_index),
-                            block_index:  Number(r.block_index)
-                        };
-                    }
-                }
-
-                return {
-                    hcut,
-                    tip_block_index: (tipIndex === null || tipIndex === undefined) ? null : Number(tipIndex),
-                    tip_block_time:  Number.isFinite(tipTime) ? tipTime : null,
-                    manifest_hash:   rollcallManifestHash(),
-                    signers,
-                    publishers: publishersOut
-                };
-            } catch (err) {
-                console.error('getrollcallsigners error:', err);
-                return { error: 'failed to look up rollcall signers' };
-            }
-        },
-
-        async getanchorconfirmations({txid, after_action_index}){
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            let v = anchorActionQuery.validateAnchorConfirmationsParams({ txid, after_action_index });
-            if(!v.ok) return { error: v.error };
-            // Federation READ isolation: committed-only, off the block tx.
-            let db = indexer.indexerDb.apiView();
-            try {
-                let latest = await db.getLatestBlockIndex();
-                let rows   = (v.after === null)
-                           ? await db.doQuery(anchorActionQuery.ANCHOR_BY_TXID_SQL,       [v.txid])
-                           : await db.doQuery(anchorActionQuery.ANCHOR_BY_TXID_AFTER_SQL, [v.txid, v.after]);
-                return anchorActionQuery.buildAnchorConfirmationsResponse(indexer.config, latest, rows);
-            } catch (err) {
-                console.error('getanchorconfirmations error:', err);
-                return { error: 'failed to look up anchor confirmations' };
-            }
-        },
-
-        // Content-addressed archive-anchor existence: "is this exact archive batch
-        // already on-chain, published by this address?" - answered WITHOUT the
-        // match_batch_seq.
-        //
-        // Serves the crash-safety guard on the hub's archive publish path. That path
-        // broadcasts the v1 head and its v2 continuation chunks BEFORE it records the
-        // batch locally, so a crash in between re-elects the same match rows on the next
-        // flush under a FRESH batch seq and re-spends DOGE on a duplicate archive. Every
-        // other archive read is keyed on that seq and therefore cannot see the earlier
-        // publish; this one is keyed on the batch's content commitment (checkpoint
-        // identity + batch_crc32 + match_count), which the publisher signs into the v1
-        // canonical and can recompute after the restart.
-        //
-        // `chain`/`network` are the CHECKPOINTED chain (e.g. BTC/regtest); this indexer
-        // serves the anchor chain (DOGE), so confirmations are DOGE-relative. Any depth
-        // counts to the caller: a 1-conf archive already spent the fee.
-        //
-        // `author` scopes the answer to one publishing address (the hub passes its own
-        // DOGE address). Unscoped, a third party who copied our mined head onto the
-        // chain would answer "already published" for a batch whose chunks it never sent,
-        // and the publisher would skip its own head and strand the archive.
-        //
-        // `chunks_present` / `chunks_complete` + the head's own `match_batch_seq` let a
-        // resuming publisher re-send only the chunks that are actually missing, in the
-        // slots of the batch its previous process allocated.
-        async getarchiveanchor({chain, network, block_index, checkpoint_seq, batch_crc32, match_count, author}){
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            let v = anchorActionQuery.validateArchiveAnchorParams(
-                { chain, network, block_index, checkpoint_seq, batch_crc32, match_count, author });
-            if(!v.ok) return { error: v.error };
-            // Federation READ isolation: committed-only, off the block tx.
-            let db = indexer.indexerDb.apiView();
-            try {
-                let latest = await db.getLatestBlockIndex();
-                let found  = await db.getArchiveAnchorByContent(chain, network, v.block_index,
-                    v.checkpoint_seq, v.batch_crc32, v.match_count, v.author);
-                return anchorActionQuery.buildArchiveAnchorResponse(
-                    indexer.config, latest, found.head, found.chunks);
-            } catch (err) {
-                console.error('getarchiveanchor error:', err);
-                return { error: 'failed to look up archive anchor' };
-            }
-        },
-
-        // Reorg history WITH the orphaned block hashes, from the decoder's `events`
-        // table (code='REORG', data = [{block_index, block_hash}]).
-        //
-        // Serves xchain-hub's ReorgHandler (REORG-OLDHASH-UNVERIFIED-1): the handler
-        // can confirm the announced NEW hash is what its own node serves at the reorg
-        // height, but nothing today proves the announced OLD hash was ever canonical
-        // there, so one Byzantine validator can drive a fake-reorg rollback with a
-        // fabricated oldHash. db.js's getReorgsSince() keeps only the deepest
-        // block_index and drops the hashes, so this is a separate read.
-        //
-        // Pass block_index + block_hash to ask the precise question: "did you orphan
-        // THIS hash at THIS height?" -> `matched` is the answer. Both must occur on the
-        // SAME orphaned block. Reads the DECODER db (events is a decoder table).
-        async getreorghistory({since_id, block_index, block_hash, limit}){
-            if(!indexer.decoderDb)
-                return { error: 'decoder database not ready' };
-            let v = reorgHistoryQuery.validateReorgHistoryParams({ since_id, block_index, block_hash, limit });
-            if(!v.ok) return { error: v.error };
-            // Federation READ isolation: route through apiView for symmetry
-            // with the indexerDb federation reads. The decoder DB never opens a block
-            // transaction (its doQuery already pools), so this is defense-in-depth, but
-            // keeping every federation read on the pooled view removes the whole class.
-            let db = indexer.decoderDb.apiView();
-            try {
-                let rows = await db.doQuery(reorgHistoryQuery.REORG_EVENTS_SQL, [v.since_id, v.limit]);
-                // Live REORG_HALT probe so the hub can tell "no recent reorgs" apart from
-                // "decoder halted, history frozen". Best-effort: a probe fault falls back to the
-                // indexer's last-known flag rather than failing the whole read.
-                let decoderReorgHalted;
-                try {
-                    // Route through the same apiView db (pool-direct, never the block tx connection).
-                    let probe = await db.isReorgHalted();
-                    decoderReorgHalted = !!(probe && probe.halted);
-                } catch (probeErr) {
-                    decoderReorgHalted = !!indexer.decoderReorgHalted;
-                }
-                return reorgHistoryQuery.buildReorgHistoryResponse(rows,
-                    { block_index: v.block_index, block_hash: v.block_hash },
-                    { decoderReorgHalted });
-            } catch (err) {
-                console.error('getreorghistory error:', err);
-                return { error: 'failed to look up reorg history' };
-            }
-        },
-
-        // NOTE: `pushvalidatorrewards` is RETIRED and the method is gone from this
-        // controller entirely; see the WRITE_METHODS note above. An interim step kept
-        // it as a refusing stub so an un-upgraded hub read a terminal error instead of
-        // a method-not-found its push loop misread as acceptance. That reason has
-        // expired: no hub build carries a push loop or the terminal-refusal
-        // predicate any more, so there is no caller left for the stub to be kind to.
-        // A call now gets JSON-RPC -32601, which is the honest answer.
-
-        // Resolve the staking source address that owned/delegated a signing
-        // pubkey as of a block; stakes first, then DELEGATE v0 delegations
-        // (same order as createValidatorReward). Block-scoped so every caller
-        // gets the same answer at any time: the hub archive builder pins this
-        // earn-time source into the ANCHOR archive, and follower hubs
-        // re-resolve it before co-signing.
-        // Body: { pubkey, block_index }. Logic lives in ./stake-source so it can
-        // be unit-tested without standing up the Express/JSON-RPC stack.
-        async getstakesourcebypubkey({pubkey, block_index}){
-            return getStakeSourceByPubkey(indexer, { pubkey, block_index });
-        },
-
-        // Public roll-call verdict history, BTC side (validator liveness eviction
-        // spec). Feeds xchain-node's `validator status` (an operator's last rolled
-        // epoch + absence streak) and xchain-dashboard's consecutive-UNROLLED
-        // alarm, the only detector for a federation that has silently stopped
-        // rolling. Plain public read, not a federation read: absences are DERIVED
-        // chain data the explorer also needs, and this table is authoritative
-        // (anything the hub reports about roll calls is publisher state only).
-        // Never returns responsible_set_json: that field pins K-streak membership
-        // and is an internal detail this surface does not expose.
-        // Body: { limit?: number }
-        async getrollcalls({limit}){
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            let max = Number(limit);
-            if(!Number.isFinite(max) || max <= 0) max = 20;
-            if(max > 100) max = 100;
-            // Committed-only read off an independent pooled connection
-            let db = indexer.indexerDb.apiView();
-            try {
-                let rows = await db.getRollcalls(max);
-                return { rollcalls: rows };
-            } catch (err) {
-                console.error('getrollcalls error:', err);
-                return { error: 'failed to look up roll calls' };
-            }
-        },
-
-        // Roll-call absences for one staking source, BTC side. `source` is an
-        // address as a caller types it; an unknown or unresolvable source is not
-        // an error, it just has no absences on file.
-        // Body: { source, limit?: number }
-        async getrollcallabsences({source, limit}){
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            let max = Number(limit);
-            if(!Number.isFinite(max) || max <= 0) max = 20;
-            if(max > 100) max = 100;
-            // Committed-only read off an independent pooled connection
-            let db = indexer.indexerDb.apiView();
-            try {
-                let rows = await db.getRollcallAbsencesBySource(source, max);
-                return { absences: rows };
-            } catch (err) {
-                console.error('getrollcallabsences error:', err);
-                return { error: 'failed to look up roll call absences' };
-            }
-        }
-
     };
+}
 
-    // Unregister the opt-in dry-run unless explicitly enabled on a regtest node
-    // (see ENABLE_DRYRUN). Removing the method means a non-regtest / unflagged node
-    // returns method-not-found instead of exposing unauthenticated VM execution.
-    if(!ENABLE_DRYRUN)
-        delete jsonRpcController.feequotedryrun;
-    else
-        console.warn('WARNING: feequotedryrun is ENABLED (regtest + INDEXER_ENABLE_DRYRUN). It runs the real VM in a rolled-back txn; keep this node isolated.');
+// Everything the middleware, the route families and the status route need from
+// this file, built once per boot. The env-derived values are read at module load
+// above and handed over here rather than re-read by each part, so a boot under a
+// fresh environment grades every part against the same snapshot.
+function apiContext(indexer, liveness){
+    return {
+        indexer, liveness, XChainIndexer, CONFIG_ENV, INDEXER_NETWORK, ENABLE_DRYRUN,
+        INDEXER_API_KEY, ALLOW_UNAUTHED, WRITE_METHODS, FEDERATION_READ_METHODS, GATED_EXEC_METHODS,
+        rollcallManifestHash
+    };
+}
 
-    // Plain REST status endpoint for monitoring tools that poll over a simple
-    // GET: uptime checks, container liveness/readiness probes, and load-balancer
-    // health checks that cannot speak the JSON-RPC envelope the methods above
-    // require. Surfaces the indexer's current block height, the decoder's current
-    // tip, the computed indexer→decoder lag, and the sync flag, so quantitative
-    // lag is readable from the public API surface without direct database access.
-    // The indexer block is read fresh from the DB (same source and same
-    // committed-only view as the `health` method) so it neither reports a stale
-    // in-memory counter nor advertises an uncommitted one.
-    app.get('/status', async (req, res) => {
-        let indexerBlock = null;
-        let indexerDbUnreachable = false;
-        // Same committed-vs-in-flight split as health: indexerBlock is
-        // the height a committed-only reader (every federation query guard) can
-        // answer at; inFlightBlock is the block being parsed right now, which is
-        // not indexed yet and a reorg may mean it never is.
-        let inFlightBlock = inFlightBlockIndex(indexer.indexerDb);
-        try {
-            if(indexer.indexerDb)
-                indexerBlock = await committedView(indexer.indexerDb).getLatestBlockIndex();
-        } catch (err) {
-            // Database unreachable; leave indexerBlock null so lag stays null
-            // rather than reporting a misleading figure.
-            indexerDbUnreachable = true;
-        }
-        if(inFlightBlock != null && indexerBlock != null && inFlightBlock <= indexerBlock)
-            inFlightBlock = null;
-        let decoderBlock = null;
-        try {
-            if(indexer.decoderDb)
-                decoderBlock = await indexer.decoderDb.getBlockIndex('decoder', 'last');
-            if(decoderBlock != null) decoderBlock = Number(decoderBlock);
-        } catch (err) {
-            // Database unreachable; use in-memory snapshot as fallback
-            decoderBlock = (indexer.lastDecoderBlock != null) ? Number(indexer.lastDecoderBlock) : null;
-        }
-        // Age of the last successful hub-config fetch (null until the first success). A
-        // climbing age here while the indexer otherwise looks synced is the signal that
-        // the hub is unreachable and the live-polled governance params are stale.
-        let lastHubConfigFetchAt = indexer.lastHubConfigFetchAt || null;
-        // Age + explicit staleness via the one shared helper (same threshold as buildHealthResponse).
-        let hubConfig            = XChainIndexer.hubConfigStaleness(lastHubConfigFetchAt, Date.now());
-        let hubConfigAgeSeconds  = hubConfig.ageSeconds;
-        let hubConfigStale       = hubConfig.stale;
-        // Status-code contract for the xchain-node http_get healthcheck (wget
-        // exits 0 on any 2xx): 503 when the indexer DB is unreachable or the
-        // block counter is genuinely WEDGED, matching the encoder / utxo-tracker /
-        // sync siblings. A set stallReason ALONE no longer trips 503: a
-        // BTC-mainnet indexer perpetually defers the newest block behind a price
-        // mirror one block back, so it is almost always mid-barrier at probe time
-        // even though it advances every few seconds. Reserve 503 for a stall with
-        // no committed block inside the grace window; a stalled-but-advancing
-        // indexer stays 200 with degraded:true. isSynced=false alone likewise
-        // stays 200: a healthy initial catch-up must not trip restart loops.
-        let now       = Date.now();
-        let stalled   = !!indexer.stallReason;
-        let wedged    = XChainIndexer.stallWedged(indexer.stallReason, indexer.lastBlockCommittedAt,
-                                                  indexer.healthStallGraceMs, now,
-                                                  indexer.stallClearsAt);
-        // Discriminate the healthy future-stamped-block wait from real degradation. One
-        // clock read for all three so the fields can never disagree with each other.
-        let futureWait  = XChainIndexer.waitingOnFutureBlock(indexer.stallReason, indexer.stallClearsAt, now);
-        let stallClass  = XChainIndexer.stallClassOf(indexer.stallReason, indexer.lastBlockCommittedAt,
-                                                     indexer.healthStallGraceMs, now, indexer.stallClearsAt);
-        // Hub mirror connectivity (row 48, attest-response-mirror spec). Absent
-        // entirely on a single-host deployment (HUB_DB_SYNC_ENABLED unset), so an
-        // honest verdict starts from whether the instance exists at all; a snapshot
-        // failure must not fail the whole probe, so it degrades to the same shape.
-        let hubMirror;
-        try {
-            hubMirror = indexer.hubDbSync
-                ? indexer.hubDbSync.mirrorStatus()
-                : { configured: false, connected: false, bootstrapped: false, streamWatermark: null, tables: {} };
-        } catch (err) {
-            hubMirror = { configured: false, connected: false, bootstrapped: false, streamWatermark: null, tables: {} };
-        }
-        let unhealthy = indexerDbUnreachable || wedged;
-        res.status(unhealthy ? 503 : 200).json({
-            indexerBlock: indexerBlock,
-            inFlightBlock: inFlightBlock,
-            decoderBlock: decoderBlock,
-            lag:          (decoderBlock != null && indexerBlock != null)
-                            ? decoderBlock - indexerBlock
-                            : null,
-            isSynced:     indexer.isSynced(),
-            // true when every block consensus currently PERMITS this indexer to commit is
-            // committed: level with the decoder tip, or the only thing in the way is a
-            // future-stamped block it must legally wait out. Read this, not isSynced, before
-            // concluding a non-zero lag means the indexer is behind: a testnet4 miner stamping
-            // each block ~20 min ahead pins lag at ~6 blocks forever with isSynced stuck false,
-            // while the indexer commits every block the instant it becomes processable.
-            atProcessableTip: XChainIndexer.atProcessableTip(indexer.isSynced(), indexer.stallReason,
-                                                             indexer.stallClearsAt, now),
-            // Why the block counter is not advancing, or null when advancing normally:
-            // a hub-sync barrier timeout (price/oracle/match/call/snapshot) or a VM
-            // executor host fault. Lets a monitoring probe tell these stalls apart from
-            // a healthy catch-up, all of which otherwise present only as a growing lag.
-            stallReason:  indexer.stallReason || null,
-            // Epoch-ms at which the current time-keyed barrier can first be
-            // satisfied, or null. Non-null means this indexer is waiting on WALL CLOCK
-            // because the block it is on is stamped in the future, which is expected and
-            // self-clearing; it is not counted as a wedge, and it tells a probe when the
-            // chain should move again rather than leaving a valid stall looking like death.
-            stallClearsAt: indexer.stallClearsAt || null,
-            // true when a sync barrier is deferring blocks but the counter is still
-            // advancing (healthy-degraded, stays 200); distinct from a wedge, which is
-            // stalled AND making no progress inside the grace window (503).
-            // NOTE it stays true during the future-stamped-block wait too, deliberately:
-            // consumers keyed on `degraded === false` treat that as the wedge case, so
-            // flipping it would UPGRADE a healthy wait to a critical alert. Read
-            // waitingOnFutureBlock / stallClass to tell the two apart.
-            degraded:     stalled && !wedged,
-            // true when the stall is only a wait for wall clock to reach a future-stamped
-            // block (stallClearsAt still ahead). Healthy and self-clearing: the indexer has
-            // committed everything consensus lets it commit and will take the rest the
-            // moment their stamps arrive. A monitor should not alert on this.
-            waitingOnFutureBlock: futureWait,
-            // Single machine-readable verdict on the counter, so a probe does not have to
-            // join stallReason/degraded/stallClearsAt: 'none' | 'future_block_wait' |
-            // 'barrier_defer' | 'wedged'.
-            stallClass:   stallClass,
-            // epoch-ms of the most recent successful block commit (null until the first),
-            // so a probe can read advance-recency directly rather than infer it from lag.
-            lastBlockCommittedAt: indexer.lastBlockCommittedAt || null,
-            lastHubConfigFetchAt: lastHubConfigFetchAt,
-            hubConfigAgeSeconds:  hubConfigAgeSeconds,
-            hubConfigStale:       hubConfigStale,
-            hubMirror:            hubMirror
-        });
+// Graceful shutdown, bound to the server and the settled block loop.
+function installShutdown(indexer, server, indexerExited, liveness){
+    // Graceful shutdown. node is PID 1 in the image, so `docker stop` delivers
+    // SIGTERM to this process; before this handler existed the default action
+    // killed the block loop wherever it stood, which meant an aborted MariaDB
+    // write transaction and InnoDB crash recovery on every routine restart.
+    // The handler is bounded by its own hard-exit timer (see src/api/shutdown.js):
+    // installing it removes node's default terminate, so a drain that hangs must
+    // still end the process rather than linger until the supervisor's SIGKILL.
+    const shutdown = createShutdown({
+        drain: createIndexerDrain({
+            indexer:     indexer,
+            server:      server,
+            loopSettled: indexerExited,
+            // Flip BEFORE stop(): stop() only sets stopFlag and the loop may take a
+            // whole block to notice it, and /status must not report a draining
+            // indexer as running through that window.
+            onDraining:  () => { liveness.indexerRunning = false; }
+        })
     });
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT',  () => shutdown('SIGINT'));
+}
+
+// Start up the API
+async function startApi(){
+
+    // Initialize the indexer (created before API so the controller can reference it)
+    const indexer = new XChainIndexer(DECODER_DB_HOST, DECODER_DB_PORT, DECODER_DB_NAME, DECODER_DB_USER, DECODER_DB_PASS, INDEXER_DB_HOST, INDEXER_DB_PORT, INDEXER_DB_NAME, INDEXER_DB_USER, INDEXER_DB_PASS, HUB_DB_HOST, HUB_DB_PORT, HUB_DB_NAME, HUB_DB_USER, HUB_DB_PASS, UTXO_TRACKER_URL, UTXO_TRACKER_API_PORT);
+
+    // Track indexer liveness so the health endpoint can report it (the indexer
+    // process exits on a fatal error, but the flag still distinguishes a clean
+    // run from one tearing down). One object, so the health handler reads the
+    // flip at call time rather than the value it was built with.
+    const liveness = { indexerRunning: true, indexerError: null };
+
+    // Create the app, then the middleware stack, the JSON-RPC controller and the
+    // REST status route, all off the one context.
+    const app = express();
+    const ctx = apiContext(indexer, liveness);
+    installMiddleware(app, ctx);
+    const jsonRpcController = buildRpcController(ctx, [crossChainCallRpc]);
+    mountStatusRoute(app, ctx);
 
     // Express 5 / body-parser 2.x leaves req.body undefined when a request carries
     // no JSON body (a GET, or a POST without application/json), whereas body-parser
@@ -1870,39 +344,20 @@ async function startApi(){
     // Start the server. The handle is kept so the shutdown drain below can stop
     // accepting connections and let in-flight requests finish.
     const server = app.listen(INDEXER_API_PORT, () => {
-      console.log('API listening on port ' + INDEXER_API_PORT);
+      getLogger().info('API listening on port ' + INDEXER_API_PORT);
     });
 
     // Start the Indexer (trap any errors and log them before exiting the indexer).
     // start() awaits the block loop, so this promise SETTLES when the loop breaks:
     // on a fatal error here, or on the stopFlag the drain sets at a block boundary.
     const indexerExited = indexer.start().catch((error) => {
-        console.error('Fatal indexer error:', error);
-        indexerRunning = false;
-        indexerError   = error;
+        getLogger().error('Fatal indexer error:', error);
+        liveness.indexerRunning = false;
+        liveness.indexerError   = error;
         process.exit(1);
     });
 
-    // Graceful shutdown. node is PID 1 in the image, so `docker stop` delivers
-    // SIGTERM to this process; before this handler existed the default action
-    // killed the block loop wherever it stood, which meant an aborted MariaDB
-    // write transaction and InnoDB crash recovery on every routine restart.
-    // The handler is bounded by its own hard-exit timer (see src/shutdown.js):
-    // installing it removes node's default terminate, so a drain that hangs must
-    // still end the process rather than linger until the supervisor's SIGKILL.
-    const shutdown = createShutdown({
-        drain: createIndexerDrain({
-            indexer:     indexer,
-            server:      server,
-            loopSettled: indexerExited,
-            // Flip BEFORE stop(): stop() only sets stopFlag and the loop may take a
-            // whole block to notice it, and /status must not report a draining
-            // indexer as running through that window.
-            onDraining:  () => { indexerRunning = false; }
-        })
-    });
-    process.on('SIGTERM', () => shutdown('SIGTERM'));
-    process.on('SIGINT',  () => shutdown('SIGINT'));
+    installShutdown(indexer, server, indexerExited, liveness);
 
     // Crash visibility. Registered here rather than at module scope because
     // several suites require modules of this repo in-process under mocha, which

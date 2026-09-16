@@ -143,6 +143,18 @@ function createMockDb() {
         isListEditResolutionActive: sinon.stub().returns(true),
         getListRootIndex: sinon.stub().callsFake(async (action_index) => action_index),
         getListHeadIndex: sinon.stub().callsFake(async (action_index) => action_index),
+        // The source of a list's ROOT create, which list.js reads for the bridge-owned
+        // refusal and for the owner check. Null by default: no owner claim proven,
+        // which is the pre-bridge behaviour for every suite that does not set it.
+        getListSource: sinon.stub().resolves(null),
+        // Address-format admission for LIST type-2 items and the address-sleep read.
+        // Defaults to this chain's own validator, the behaviour below
+        // TOKEN_POLICY_INHERITANCE_ACTIVATION; suites driving the any-coin widening
+        // override it or bind the real Database.prototype implementation.
+        isAnyCoinAddress: sinon.stub().callsFake(function(address){
+            const Utility = require('../../src/utility.js');
+            return new Utility().isCryptoAddress(address);
+        }),
 
         // BET parimutuel betting (P4)
         getBetFeedInfo: sinon.stub().resolves(false),
