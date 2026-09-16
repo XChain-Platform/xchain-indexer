@@ -66,6 +66,24 @@ const REGTEST_ARMING = {
         { env: 'XC_MIRROR_ADMISSION_ACTIVATION', label: 'MIRROR ADMISSION', armedHeight: 0, keys: ['regtest'] },
 };
 
+// env name -> its reader. Each variable is read BY NAME, once, here: the
+// documentation coverage gate resolves `env.NAME` to a doc row and counts a
+// computed `env[name]` as a blind spot it ratchets, so the rule's `env` string
+// (kept for the warning text) selects a reader instead of indexing the object.
+// A rule naming a variable with no reader here is a defect, not an inert row.
+const ENV_READERS = {
+    XC_ROLLCALL_REGTEST_ACTIVATION:       (env) => env.XC_ROLLCALL_REGTEST_ACTIVATION,
+    XC_ROLLCALL_GATES_REGTEST_ACTIVATION: (env) => env.XC_ROLLCALL_GATES_REGTEST_ACTIVATION,
+    XC_MIRROR_ADMISSION_ACTIVATION:       (env) => env.XC_MIRROR_ADMISSION_ACTIVATION,
+};
+
+// The raw value of the rule's env variable, through its named reader.
+function readRuleEnv(rule, env) {
+    const read = ENV_READERS[rule.env];
+    if (!read) throw new Error('REGTEST_ARMING names ' + rule.env + ' but ENV_READERS has no reader for it');
+    return read(env);
+}
+
 // The table with its regtest entries armed from `raw`, one env variable's
 // value, or the table itself when the venue named nothing (an unset or refused
 // value leaves UNPINNED in place). Frozen like the committed row it stands for.
@@ -86,7 +104,7 @@ function regtestArming(env) {
     return function armAtRead(key, table) {
         const rule = REGTEST_ARMING[key];
         if (!rule) return table;
-        const raw = env[rule.env];
+        const raw = readRuleEnv(rule, env);
         const hit = cache.get(key);
         if (hit && hit.raw === raw) return hit.value;
         const value = armed(rule, table, raw);

@@ -102,7 +102,7 @@
     },
     "consensus_rules_digest": {
       "path": "src/consensus_rules_digest.js",
-      "hash": "b598ebd8b2ff03b1047ef84833993d6402ebbb7eb42555e3ea08443d1c0ec885",
+      "hash": "194eb2ac5f79b28b9a9df1f65c117fe8b03704f7ece8ef8e2e125b14e0356d1c",
       "twins": [
         "xchain-hub"
       ]
@@ -1385,6 +1385,13 @@
       "id": "xchain_bridge_activation",
       "from": "dd477c70e57afe302942baa4575b1304f5a96e9f4b8266c1406569ce3ff98e68",
       "to": "74b142da3d1de295e5eb2419d4d7dcc58a0a0ecb2e8b6da0770298b394240540",
+      "reason": "registry conversion (rows 12, 13, 14)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "consensus_rules_digest",
+      "from": "b598ebd8b2ff03b1047ef84833993d6402ebbb7eb42555e3ea08443d1c0ec885",
+      "to": "194eb2ac5f79b28b9a9df1f65c117fe8b03704f7ece8ef8e2e125b14e0356d1c",
       "reason": "registry conversion (rows 12, 13, 14)",
       "date": "2026-09-16"
     }

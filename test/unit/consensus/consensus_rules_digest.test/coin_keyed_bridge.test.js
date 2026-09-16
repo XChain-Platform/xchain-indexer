@@ -16,27 +16,22 @@
 
 'use strict';
 
-const { assert, crd } = require('./helpers/consensus_rules_digest.js');
+const { assert, crd, stubRegistryRow } = require('./helpers/consensus_rules_digest.js');
 
-const KEY  = 'xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION';
-const GATE = require.resolve('../../../../src/xchain_bridge_activation.js');
-const CRD  = require.resolve('../../../../src/consensus_rules_digest.js');
+const KEY = 'xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION';
+const CRD = require.resolve('../../../../src/consensus_rules_digest.js');
 
-// Re-require the digest over a stubbed activation map. The digest memoizes gate values,
-// so its module cache entry must be dropped for the stub to be seen.
+// Re-require the digest over a stubbed registry row for the bridge map. The digest
+// memoizes gate values, so its module cache entry must be dropped for the stub to be seen.
 function withMap(map, body) {
-    const real    = require.cache[GATE];
     const realCrd = require.cache[CRD];
+    const restore = stubRegistryRow(KEY, map);
     try {
-        const stub = Object.create(Object.getPrototypeOf(real));
-        Object.assign(stub, real);
-        stub.exports = Object.assign({}, real.exports, { XCHAIN_BRIDGE_ACTIVATION: map });
-        require.cache[GATE] = stub;
         delete require.cache[CRD];
         body(require('../../../../src/consensus_rules_digest.js'));
     } finally {
-        require.cache[GATE] = real;
-        require.cache[CRD]  = realCrd;
+        restore();
+        require.cache[CRD] = realCrd;
     }
 }
 

@@ -16,7 +16,7 @@
 
 'use strict';
 
-const { assert, crd } = require('./helpers/consensus_rules_digest.js');
+const { assert, crd, stubRegistryRow } = require('./helpers/consensus_rules_digest.js');
 
 // The zero-confirmation flip's three appended SHARED_GATES rows, plus the two
 // helpers a ROLLCALL v1 publisher and the rules-aware capability set filter both read.
@@ -118,21 +118,15 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
     });
 
     // The 2026-09-09 genesis-arm ruling left no SHIPPED gate on the far-future sentinel,
-    // so the exclusion branch is driven against a stubbed gate module instead of riding
+    // so the exclusion branch is driven against a stubbed registry row instead of riding
     // whichever map happened to be unarmed. PRICE_PAIR_WIDEN_ACTIVATION, the last live
-    // example before the arm, is the map stubbed here.
+    // example before the arm, is the row stubbed here.
     it('excludes a far-future sentinel height, however high the chain climbs', function () {
-        const GATE  = require.resolve('../../../../src/price_pair_activation.js');
-        const CRD   = require.resolve('../../../../src/consensus_rules_digest.js');
-        const real  = require.cache[GATE];
+        const CRD     = require.resolve('../../../../src/consensus_rules_digest.js');
         const realCrd = require.cache[CRD];
+        const restore = stubRegistryRow('price_pair_activation.PRICE_PAIR_WIDEN_ACTIVATION',
+            { mainnet: crd.FAR_FUTURE_HEIGHT_SENTINEL, testnet: 0, regtest: 0 });
         try {
-            const stub = Object.create(Object.getPrototypeOf(real));
-            Object.assign(stub, real);
-            stub.exports = Object.assign({}, real.exports, {
-                PRICE_PAIR_WIDEN_ACTIVATION: { mainnet: crd.FAR_FUTURE_HEIGHT_SENTINEL, testnet: 0, regtest: 0 },
-            });
-            require.cache[GATE] = stub;
             delete require.cache[CRD];                       // clears the module-level value cache
             const fresh = require('../../../../src/consensus_rules_digest.js');
             const at = fresh.activeGatesAt(fresh.FAR_FUTURE_HEIGHT_SENTINEL, 'mainnet');
@@ -141,7 +135,7 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
             assert.ok(fresh.activeGatesAt(0, 'testnet').includes('price_pair_activation.PRICE_PAIR_WIDEN_ACTIVATION'),
                 'the same stub is active on testnet, so the exclusion is the sentinel and not the stub');
         } finally {
-            require.cache[GATE] = real;
+            restore();
             require.cache[CRD]  = realCrd;
         }
     });

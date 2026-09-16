@@ -143,38 +143,57 @@ function canonical(value){
 let cached = null;
 let cachedValues = null;
 
-// A gate carrier's exports, or null when this build genuinely does not carry the file.
-// The FILE decides that and never the require, because a carrier this build lacks is a
-// real protocol state the digest must record as ABSENT, while a carrier that IS here and
-// fails to load is a broken measurement with no digest to report. Swallowing the second
-// yields 87637dfa instead of 26ba9cce in a checkout without node_modules, since
-// stake_weighted_quorum.js requires mathjs: two revisions measured that way both carry
-// the wrong number and FALSELY MATCH. A moved carrier still reads ABSENT, the state
-// xchain-hub/bin/check-frozen-set.js exists to refuse and must therefore keep seeing.
-function loadGateModule(mod){
-    const file = path.join(__dirname, mod + '.js');
-    if (!fs.existsSync(file)) return null;
+// The activation registry, reachable at this one path in every repo that carries this
+// module. Every shared gate VALUE is a row of it, keyed exactly as SHARED_GATES spells it.
+const registry = require('./consensus/gate_registry');
+
+// One shared gate's value: the registry row under '<module>.<EXPORT>', which THROWS a
+// RegistryMissError naming the key rather than reading null. A row a build lacks is a
+// build defect and never a network state; a null returned here instead let a MOVED
+// carrier read as ABSENT while the signed GATES field stayed byte for byte what every
+// peer publishes, a rules fork no wire field named.
+//
+// The one legitimate miss is a name that is a FUNCTION on the carrier (the admission
+// encoder and era gate: a registry holds values, and a function's entry alarms on
+// presence alone, see SHARED_GATES). Those are read from the carrier at src/<mod>.js,
+// and anything but a function there rethrows the miss. A carrier that is not there is
+// a build defect too, never ABSENT, and a carrier that IS there and fails to load throws
+// for the reason it always did: swallowing that yields 87637dfa instead of 26ba9cce in
+// a checkout without node_modules, since stake_weighted_quorum.js requires mathjs, and
+// two revisions measured that way FALSELY MATCH.
+function loadGateValue(mod, name){
+    const key = mod + '.' + name;
     try {
-        return require(file);
-    } catch (e) {
-        throw new Error('consensus-rules gate ' + mod + ' is present at src/' + mod
-            + '.js but failed to load, so no digest can be computed: '
-            + ((e && e.message) ? e.message : String(e)));
+        return registry.get(key);
+    } catch (miss) {
+        if (!miss || miss.name !== 'RegistryMissError') throw miss;
+        const file = path.join(__dirname, mod + '.js');
+        if (!fs.existsSync(file)) {
+            throw new Error('consensus-rules gate ' + key + ' has no registry row and no carrier at src/'
+                + mod + '.js, so no digest can be computed');
+        }
+        let carrier;
+        try {
+            carrier = require(file);
+        } catch (e) {
+            throw new Error('consensus-rules gate ' + mod + ' is present at src/' + mod
+                + '.js but failed to load, so no digest can be computed: '
+                + ((e && e.message) ? e.message : String(e)));
+        }
+        if (typeof carrier[name] === 'function') return carrier[name];
+        throw miss;
     }
 }
 
-// The RAW export of every shared gate, keyed '<module>.<EXPORT>', ABSENT where this
-// build lacks it. Read once: the digest and the active-set derivation below must see
-// the same values, and a gate module is never re-required after boot.
+// The RAW value of every shared gate, keyed '<module>.<EXPORT>'. Read once: the digest
+// and the active-set derivation below must see the same values, and neither the
+// registry nor a gate module is re-read after boot. ABSENT is no longer produced here;
+// it remains the sentinel diffGates uses for a key a PEER's map lacks.
 function loadGateValues(){
     if (cachedValues) return cachedValues;
     const values = {};
     for (const [mod, names] of SHARED_GATES) {
-        const m = loadGateModule(mod);
-        for (const name of names) {
-            const key = mod + '.' + name;
-            values[key] = (m && Object.prototype.hasOwnProperty.call(m, name)) ? m[name] : ABSENT;
-        }
+        for (const name of names) values[mod + '.' + name] = loadGateValue(mod, name);
     }
     cachedValues = values;
     return cachedValues;

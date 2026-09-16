@@ -223,28 +223,60 @@ describe('flag-day placeholder guard @regression @tier1', function () {
     });
 });
 
+// NOTE: xchain-documentation/protocol/constants.js is deliberately NOT in
+// this loop. Its `mainnet: 963000` substring is vacuously satisfied by
+// ARCHIVE_REWARD_ACTIVATION, so a substring check on the docs file could never fail
+// for the retraction gate. The docs arm is asserted by named export below instead.
+//
+// Each entry is the sibling's shim and the registry row it reads: the shim
+// carries no height of its own any more (it resolves `<stem>.<EXPORT>` through
+// the sibling's src/consensus/gate_registry), so the height is asserted on the
+// row text under src/consensus/gate_registry/shared_rows_*.js, the same source of
+// truth the shim reads, while the shim itself is still swept for the placeholder.
+const SIBLING_FILES = [
+    ['../../../../xchain-hub/src/anchor_reward_activation.js',
+        'anchor_reward_activation.ARCHIVE_REWARD_ACTIVATION'],
+    ['../../../../xchain-hub/src/retraction_signing_activation.js',
+        'retraction_signing_activation.RETRACTION_SIGNING_ACTIVATION'],
+    ['../../../../xchain-explorer/src/retraction_signing_activation.js',
+        'retraction_signing_activation.RETRACTION_SIGNING_ACTIVATION'],
+    // the PRICE v0 signature-tally gate rides the SAME ratified 963000
+    // anchor, so a future re-anchor has to move it along with the pair above.
+    ['../../../../xchain-hub/src/price_sig_tally_activation.js',
+        'price_sig_tally_activation.PRICE_SIG_TALLY_ACTIVATION'],
+    // the ATTEST relay gate rides it too and was listed
+    // nowhere here, so the and repins could not have failed on it.
+    ['../../../../xchain-hub/src/attest_relay_activation.js',
+        'attest_relay_activation.ATTEST_RELAY_ACTIVATION'],
+];
+
+// The text of one registry row in a sibling checkout: the `addGate('<key>', ...)`
+// call through its closing `});`, found in whichever shared_rows_N.js part holds
+// it. Text rather than require(): a sibling's registry entry loads that repo's
+// config module, which this guard has no business evaluating. Throws naming the
+// key when no part carries the row, because a sibling that dropped it is exactly
+// the regression this sweep exists to catch.
+function siblingRegistryRow(siblingDir, key) {
+    const dir = path.join(siblingDir, 'src', 'consensus', 'gate_registry');
+    const parts = fs.readdirSync(dir).filter(f => /^shared_rows_\d+\.js$/.test(f)).sort();
+    const open = "addGate('" + key + "',";
+    for (const part of parts) {
+        const text = fs.readFileSync(path.join(dir, part), 'utf8');
+        const at = text.indexOf('\n' + open);
+        if (at < 0) continue;
+        const close = text.indexOf('\n});', at);
+        assert.ok(close > at, part + ' opens the row ' + key + ' and never closes it');
+        return { part, text: text.slice(at + 1, close + 4) };
+    }
+    throw new Error('no shared_rows_N.js under ' + dir + ' carries the registry row ' + key);
+}
+
 describe('flag-day placeholder guard @regression @tier1', function () {
     // Cross-service sweep: resolved by monorepo-relative path, so this only runs in the
     // monorepo/aggregator checkout; standalone single-repo CI skips (unless a required-
     // sibling job sets XCHAIN_REQUIRE_SIBLINGS=1, where a missing sibling hard-fails).
     describe('sibling copies carry no placeholder regression', function () {
-        // NOTE: xchain-documentation/protocol/constants.js is deliberately NOT in
-        // this substring loop. Its `mainnet: 963000` substring is vacuously satisfied by
-        // ARCHIVE_REWARD_ACTIVATION, so a substring check on the docs file could never fail
-        // for the retraction gate. The docs arm is asserted by named export below instead.
-        const SIBLING_FILES = [
-            '../../../../xchain-hub/src/anchor_reward_activation.js',
-            '../../../../xchain-hub/src/retraction_signing_activation.js',
-            '../../../../xchain-explorer/src/retraction_signing_activation.js',
-            // the PRICE v0 signature-tally gate rides the SAME ratified 963000
-            // anchor, so a future re-anchor has to move it along with the pair above.
-            '../../../../xchain-hub/src/price_sig_tally_activation.js',
-            // the ATTEST relay gate rides it too and was listed
-            // nowhere here, so the and repins could not have failed on it.
-            '../../../../xchain-hub/src/attest_relay_activation.js',
-        ];
-
-        for (const rel of SIBLING_FILES) {
+        for (const [rel, key] of SIBLING_FILES) {
             it(rel.replace(/^(\.\.\/)+/, '') + ' has no 983000 placeholder and pins the derived height', function () {
                 const p = path.resolve(__dirname, rel);
                 // Absent or a lane symlink into a live main checkout: skip, or fail naming why.
@@ -253,8 +285,12 @@ describe('flag-day placeholder guard @regression @tier1', function () {
                 const s = fs.readFileSync(p, 'utf8');
                 assert.ok(!s.includes('983000'),
                     p + ' still carries the retired 983000 placeholder');
-                assert.ok(s.includes('mainnet: ' + RATIFIED_BTC_HEIGHT),
-                    p + ' must pin the derived mainnet height ' + RATIFIED_BTC_HEIGHT);
+                const row = siblingRegistryRow(path.resolve(p, '..', '..'), key);
+                assert.ok(!row.text.includes('983000'),
+                    row.part + ' row ' + key + ' still carries the retired 983000 placeholder');
+                assert.ok(row.text.includes('mainnet: ' + RATIFIED_BTC_HEIGHT + ','),
+                    row.part + ' row ' + key + ' must pin the derived mainnet height ' + RATIFIED_BTC_HEIGHT
+                    + ' (the shim ' + p + ' reads it from there)');
             });
         }
 
