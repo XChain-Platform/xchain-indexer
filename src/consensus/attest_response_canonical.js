@@ -81,7 +81,7 @@
 'use strict';
 
 // Zero-require module; the encoder and the era gate are the same twin the hub signs with.
-const { admissionCanonicalField } = require('../mirror_admission_activation.js');
+const { admissionCanonicalField } = require('./gates/mirror_admission_gate.js');
 
 // The label the hub's builder hands the era gate, so a refusal on either side reads the same.
 const ADMISSION_FIELD_LABEL = 'AttestationConsensus';

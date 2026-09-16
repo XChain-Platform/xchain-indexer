@@ -44,9 +44,9 @@
  ********************************************************************/
 
 const crypto  = require('crypto');
-const rca     = require('../rollcall_activation.js');
-const swq     = require('../stake_weighted_quorum.js');
-const srb     = require('../snapshot_reorg_buffer.js');
+const rca     = require('./gates/rollcall_gate.js');
+const swq     = require('./stake_weighted_quorum.js');
+const srb     = require('./snapshot_reorg_buffer.js');
 // The close's steps live beside it in rollcall_close/: the inputs (responsible set,
 // window cut, ledger hash, peer answer), the signer verification, and the absence streak.
 const { indexResponsible, readEpochHashes, askSigners } = require('./rollcall_close/epoch_inputs.js');

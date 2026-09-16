@@ -25,7 +25,7 @@ const { createMockIndexer, createBaseData } = require('../../../../../fixtures/m
 
 const Attest  = require('../../../../../../src/actions/attest/index.js');
 const avr     = require('../../../../../../src/actions/attest/attest_response_verify.js');
-const swq     = require('../../../../../../src/stake_weighted_quorum.js');
+const swq     = require('../../../../../../src/consensus/stake_weighted_quorum.js');
 const { stubActiveAt } = require('../../../../../helpers/gate_modules.js');
 const attestBcastFee  = require('../../../../../../src/actions/attest/attest_broadcast_fee_gate.js');
 // Same module instance the handler (and the extracted verifier) hold: wrapping
@@ -105,8 +105,7 @@ function setupVectors() {
     // verifier is reached at all, so every vector here would record the flag-day
     // verdict instead of the canonical/quorum verdict it exists to pin. These vectors
     // are the LEGACY era's; the gate has its own cases in attest.test.js.
-    sinon.stub(require('../../../../../../src/attest_response_mirror_activation.js'),
-               'isResponseMirrorActive').returns(false);
+    stubActiveAt(sinon, 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION', false);
 
     state.indexer = indexer;
     state.handler = handler;

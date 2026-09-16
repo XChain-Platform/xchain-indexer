@@ -53,10 +53,11 @@
  * half is ONE value across every member: the defect that item recorded was not
  * a wrong number, it was a repin that moved some members and not others.
  *
- * The named-export pins of the remaining cohort members, the hub-only
- * GOV_SNAPSHOT_ACTIVATION declaration and the retraction twin byte identity
- * live beside this file in flagday_placeholder_guard.test/, opening the same
- * describe so every full test title is unchanged.
+ * The named-export pins of the remaining cohort members and the hub-only
+ * GOV_SNAPSHOT_ACTIVATION declaration live beside this file in
+ * flagday_placeholder_guard.test/, opening the same describe so every full
+ * test title is unchanged. The retraction twin byte identity went with the
+ * shim in W5: the row is a registry row, twinned by the registry parts.
  ********************************************************************/
 
 'use strict';
@@ -68,6 +69,8 @@ const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.
 
 
 const SRC = path.join(__dirname, '..', '..', '..', 'src');
+// The cohort rows are registry rows (W5 retired their predicate-only shims).
+const registry = require(path.join(SRC, 'consensus', 'gate_registry'));
 
 const RATIFIED_ANCHOR_TS  = 1786060800;   // 2026-08-07 00:00:00 UTC
 const RATIFIED_BTC_HEIGHT = 963000;       // re-pin: the pre-freeze train boundary
@@ -129,17 +132,19 @@ describe('flag-day placeholder guard @regression @tier1', function () {
     });
 
     it('ARCHIVE_REWARD_ACTIVATION is armed at the derived BTC height (983000 placeholder gone)', function () {
-        const mod = require(path.join(SRC, 'anchor_reward_activation.js'));
+        const mod = require(path.join(SRC, 'consensus', 'gates', 'anchor_reward_gate.js'));
         assert.strictEqual(mod.ARCHIVE_REWARD_ACTIVATION.mainnet, RATIFIED_BTC_HEIGHT);
         assert.strictEqual(mod.isArchiveRewardActive(RATIFIED_BTC_HEIGHT - 1, 'mainnet'), false);
         assert.strictEqual(mod.isArchiveRewardActive(RATIFIED_BTC_HEIGHT, 'mainnet'), true);
     });
 
     it('RETRACTION_SIGNING_ACTIVATION is armed at the derived BTC height (983000 placeholder gone)', function () {
-        const mod = require(path.join(SRC, 'retraction_signing_activation.js'));
-        assert.strictEqual(mod.RETRACTION_SIGNING_ACTIVATION.mainnet, RATIFIED_BTC_HEIGHT);
-        assert.strictEqual(mod.isRetractionSigningActive(RATIFIED_BTC_HEIGHT - 1, 'mainnet'), false);
-        assert.strictEqual(mod.isRetractionSigningActive(RATIFIED_BTC_HEIGHT, 'mainnet'), true);
+        // A registry row since W5 (its predicate-only shim is gone): the callers read it
+        // through activeAt() by this key, so the guard reads it the same way.
+        const key = 'retraction_signing_activation.RETRACTION_SIGNING_ACTIVATION';
+        assert.strictEqual(registry.get(key).mainnet, RATIFIED_BTC_HEIGHT);
+        assert.strictEqual(registry.activeAt(key, 'mainnet', null, RATIFIED_BTC_HEIGHT - 1, null), false);
+        assert.strictEqual(registry.activeAt(key, 'mainnet', null, RATIFIED_BTC_HEIGHT, null), true);
     });
 });
 
@@ -153,17 +158,22 @@ describe('flag-day placeholder guard @regression @tier1', function () {
     // repins moved the TIME half and nothing failed when the HEIGHT half
     // stayed behind. Enumerating the cohort by name here makes a partial re-pin a
     // CI failure rather than an eight-week boundary skew nobody notices.
+    // Registry keys since W3: the four rows the cohort is made of. Three of the
+    // four shims went with W5 and their callers read the row by key, so the guard
+    // reads every member through the registry (get for the map, activeAt for the
+    // flip) rather than through a module that may or may not still exist.
     const XC104_HEIGHT_COHORT = [
-        ['anchor_reward_activation.js',        'ARCHIVE_REWARD_ACTIVATION',    'isArchiveRewardActive'],
-        ['retraction_signing_activation.js',   'RETRACTION_SIGNING_ACTIVATION', 'isRetractionSigningActive'],
-        ['price_sig_tally_activation.js',      'PRICE_SIG_TALLY_ACTIVATION',   'isPriceSigTallyVerifyFirstActive'],
-        ['attest_relay_activation.js',         'ATTEST_RELAY_ACTIVATION',      'isAttestRelayActive'],
+        'anchor_reward_activation.ARCHIVE_REWARD_ACTIVATION',
+        'retraction_signing_activation.RETRACTION_SIGNING_ACTIVATION',
+        'price_sig_tally_activation.PRICE_SIG_TALLY_ACTIVATION',
+        'attest_relay_activation.ATTEST_RELAY_ACTIVATION',
     ];
 
     it('every member of the BTC-height cohort carries the SAME mainnet height', function () {
-        for (const [file, mapName] of XC104_HEIGHT_COHORT) {
-            const map = require(path.join(SRC, file))[mapName];
-            assert.ok(map && typeof map === 'object', file + ' must export ' + mapName);
+        for (const key of XC104_HEIGHT_COHORT) {
+            const mapName = key.slice(key.indexOf('.') + 1);
+            const map = registry.get(key);
+            assert.ok(map && typeof map === 'object', key + ' must be a registry row');
             assert.strictEqual(map.mainnet, RATIFIED_BTC_HEIGHT,
                 mapName + ' is at ' + map.mainnet + ', not the cohort height ' + RATIFIED_BTC_HEIGHT +
                 '. A re-pin that moves some members and not others leaves the fleet running one ' +
@@ -176,11 +186,11 @@ describe('flag-day placeholder guard @regression @tier1', function () {
     });
 
     it('every cohort member flips exactly at the shared height, not one block either side', function () {
-        for (const [file, , fnName] of XC104_HEIGHT_COHORT) {
-            const fn = require(path.join(SRC, file))[fnName];
-            assert.strictEqual(fn(RATIFIED_BTC_HEIGHT - 1, 'mainnet'), false, fnName + ' fired below the cohort height');
-            assert.strictEqual(fn(RATIFIED_BTC_HEIGHT, 'mainnet'), true, fnName + ' did not fire at the cohort height');
-            assert.strictEqual(fn(RATIFIED_BTC_HEIGHT + 1, 'mainnet'), true, fnName + ' did not stay on above the cohort height');
+        for (const key of XC104_HEIGHT_COHORT) {
+            const fn = (height, network) => registry.activeAt(key, network, null, height, null);
+            assert.strictEqual(fn(RATIFIED_BTC_HEIGHT - 1, 'mainnet'), false, key + ' fired below the cohort height');
+            assert.strictEqual(fn(RATIFIED_BTC_HEIGHT, 'mainnet'), true, key + ' did not fire at the cohort height');
+            assert.strictEqual(fn(RATIFIED_BTC_HEIGHT + 1, 'mainnet'), true, key + ' did not stay on above the cohort height');
         }
     });
 
@@ -191,7 +201,7 @@ describe('flag-day placeholder guard @regression @tier1', function () {
         // from it, a long-running node never did, and they diverge at the first hash).
         // 961000 is the last boundary the chain has already crossed, so anything at or
         // below it is by definition retroactive.
-        const CROSSED = require(path.join(SRC, 'anchor_reward_activation.js')).ANCHOR_REWARD_ACTIVATION.mainnet;
+        const CROSSED = registry.get('anchor_reward_activation.ANCHOR_REWARD_ACTIVATION').mainnet;
         assert.ok(RATIFIED_BTC_HEIGHT > CROSSED,
             'the ratified height cohort (' + RATIFIED_BTC_HEIGHT + ') is at or below the already-crossed ' +
             CROSSED + ' boundary, which arms it retroactively');
@@ -203,7 +213,7 @@ describe('flag-day placeholder guard @regression @tier1', function () {
         // The gate is deliberately anchored to the EQUIV flag-day HEIGHT, but the literal
         // 961000 is duplicated in protocol_changes.js rather than derived from the shared map.
         // Bind the two so a re-arm of the EQUIV anchor cannot silently leave this gate behind.
-        const equivMainnet = require(path.join(SRC, 'equivocation_header.js')).EQUIV_HEADER_ACTIVATION.mainnet;
+        const equivMainnet = require(path.join(SRC, 'consensus', 'equivocation_header.js')).EQUIV_HEADER_ACTIVATION.mainnet;
         const row = pcTable.SLASH_BURNS_PENDING_STAKE;
         assert.ok(is020(row) && row.mainnet_block > 0, 'SLASH_BURNS_PENDING_STAKE must be registered with a mainnet_block gate');
         assert.strictEqual(row.mainnet_block, equivMainnet,
@@ -215,7 +225,7 @@ describe('flag-day placeholder guard @regression @tier1', function () {
         // gate is anchored to the EQUIV flag-day HEIGHT, so a re-arm of that anchor must not
         // leave this gate behind on the old height, which would reopen the window where an
         // honest price validator's two distinct rounds at one BTC tip burn its whole bond.
-        const equivMainnet = require(path.join(SRC, 'equivocation_header.js')).EQUIV_HEADER_ACTIVATION.mainnet;
+        const equivMainnet = require(path.join(SRC, 'consensus', 'equivocation_header.js')).EQUIV_HEADER_ACTIVATION.mainnet;
         const row = pcTable.SLASH_ORACLE_ROUND_DISCRIMINATED;
         assert.ok(is020(row) && row.mainnet_block > 0, 'SLASH_ORACLE_ROUND_DISCRIMINATED must be registered with a mainnet_block gate');
         assert.strictEqual(row.mainnet_block, equivMainnet,
@@ -228,26 +238,25 @@ describe('flag-day placeholder guard @regression @tier1', function () {
 // ARCHIVE_REWARD_ACTIVATION, so a substring check on the docs file could never fail
 // for the retraction gate. The docs arm is asserted by named export below instead.
 //
-// Each entry is the sibling's shim and the registry row it reads: the shim
-// carries no height of its own any more (it resolves `<stem>.<EXPORT>` through
-// the sibling's src/consensus/gate_registry), so the height is asserted on the
-// row text under src/consensus/gate_registry/shared_rows_*.js, the same source of
-// truth the shim reads, while the shim itself is still swept for the placeholder.
+// Each entry is a sibling repo, the registry row the cohort member is, and (for
+// the one member that still has a logic module, the anchor-reward gate) the
+// sibling's copy of that module: a module carries no height of its own any more
+// (it resolves `<stem>.<EXPORT>` through the sibling's src/consensus/gate_registry),
+// so the height is asserted on the row text under
+// src/consensus/gate_registry/shared_rows_*.js, the same source of truth the
+// callers read, while a surviving module is still swept for the placeholder. The
+// retraction, price-tally and relay shims went with W5 in every repo (their
+// callers read the row by key), so those entries name the row alone.
 const SIBLING_FILES = [
-    ['../../../../xchain-hub/src/anchor_reward_activation.js',
-        'anchor_reward_activation.ARCHIVE_REWARD_ACTIVATION'],
-    ['../../../../xchain-hub/src/retraction_signing_activation.js',
-        'retraction_signing_activation.RETRACTION_SIGNING_ACTIVATION'],
-    ['../../../../xchain-explorer/src/retraction_signing_activation.js',
-        'retraction_signing_activation.RETRACTION_SIGNING_ACTIVATION'],
+    ['../../../../xchain-hub', 'anchor_reward_activation.ARCHIVE_REWARD_ACTIVATION', 'src/consensus/gates/anchor_reward_gate.js'],
+    ['../../../../xchain-hub', 'retraction_signing_activation.RETRACTION_SIGNING_ACTIVATION', null],
+    ['../../../../xchain-explorer', 'retraction_signing_activation.RETRACTION_SIGNING_ACTIVATION', null],
     // the PRICE v0 signature-tally gate rides the SAME ratified 963000
     // anchor, so a future re-anchor has to move it along with the pair above.
-    ['../../../../xchain-hub/src/price_sig_tally_activation.js',
-        'price_sig_tally_activation.PRICE_SIG_TALLY_ACTIVATION'],
+    ['../../../../xchain-hub', 'price_sig_tally_activation.PRICE_SIG_TALLY_ACTIVATION', null],
     // the ATTEST relay gate rides it too and was listed
     // nowhere here, so the and repins could not have failed on it.
-    ['../../../../xchain-hub/src/attest_relay_activation.js',
-        'attest_relay_activation.ATTEST_RELAY_ACTIVATION'],
+    ['../../../../xchain-hub', 'attest_relay_activation.ATTEST_RELAY_ACTIVATION', null],
 ];
 
 // The text of one registry row in a sibling checkout: the `addGate('<key>', ...)`
@@ -276,21 +285,25 @@ describe('flag-day placeholder guard @regression @tier1', function () {
     // monorepo/aggregator checkout; standalone single-repo CI skips (unless a required-
     // sibling job sets XCHAIN_REQUIRE_SIBLINGS=1, where a missing sibling hard-fails).
     describe('sibling copies carry no placeholder regression', function () {
-        for (const [rel, key] of SIBLING_FILES) {
-            it(rel.replace(/^(\.\.\/)+/, '') + ' has no 983000 placeholder and pins the derived height', function () {
-                const p = path.resolve(__dirname, rel);
-                // Absent or a lane symlink into a live main checkout: skip, or fail naming why.
-                const sibling = siblingCheckout(__dirname, p);
-                if (!sibling.usable) return skipOrFail(this, sibling, 'the placeholder sweep of ' + rel);
-                const s = fs.readFileSync(p, 'utf8');
-                assert.ok(!s.includes('983000'),
-                    p + ' still carries the retired 983000 placeholder');
-                const row = siblingRegistryRow(path.resolve(p, '..', '..'), key);
+        for (const [repoRel, key, moduleRel] of SIBLING_FILES) {
+            const repoName = repoRel.replace(/^(\.\.\/)+/, '');
+            it(repoName + ' ' + key + ' has no 983000 placeholder and pins the derived height', function () {
+                const repo = path.resolve(__dirname, repoRel);
+                // The row's part file, or the module when one still exists: absent or a
+                // lane symlink into a live main checkout skips, or fails naming why.
+                const probe = moduleRel ? path.join(repo, moduleRel) : path.join(repo, 'src', 'consensus', 'gate_registry.js');
+                const sibling = siblingCheckout(__dirname, probe);
+                if (!sibling.usable) return skipOrFail(this, sibling, 'the placeholder sweep of ' + repoName + ' ' + key);
+                if (moduleRel) {
+                    const s = fs.readFileSync(probe, 'utf8');
+                    assert.ok(!s.includes('983000'), probe + ' still carries the retired 983000 placeholder');
+                }
+                const row = siblingRegistryRow(repo, key);
                 assert.ok(!row.text.includes('983000'),
                     row.part + ' row ' + key + ' still carries the retired 983000 placeholder');
                 assert.ok(row.text.includes('mainnet: ' + RATIFIED_BTC_HEIGHT + ','),
                     row.part + ' row ' + key + ' must pin the derived mainnet height ' + RATIFIED_BTC_HEIGHT
-                    + ' (the shim ' + p + ' reads it from there)');
+                    + ' (the callers in ' + repoName + ' read it from there)');
             });
         }
 
@@ -308,9 +321,9 @@ describe('flag-day placeholder guard @regression @tier1', function () {
                 'constants.js must export a RETRACTION_SIGNING_ACTIVATION map (the canonical authority for the three vendored copies)');
             assert.strictEqual(canon.RETRACTION_SIGNING_ACTIVATION.mainnet, RATIFIED_BTC_HEIGHT,
                 'canonical retraction mainnet height must be the ratified ' + RATIFIED_BTC_HEIGHT);
-            const local = require(path.join(SRC, 'retraction_signing_activation.js')).RETRACTION_SIGNING_ACTIVATION;
+            const local = registry.get('retraction_signing_activation.RETRACTION_SIGNING_ACTIVATION');
             assert.deepStrictEqual(local, canon.RETRACTION_SIGNING_ACTIVATION,
-                'the vendored retraction_signing_activation.js map drifted from the canonical constants.js map');
+                'the retraction_signing_activation registry row drifted from the canonical constants.js map');
         });
     });
 });

@@ -51,7 +51,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('../gate_registry');
 
 const ROLLCALL_GATES_REGTEST_ARMED_HEIGHT = copy('rollcall_gates_activation.ROLLCALL_GATES_REGTEST_ARMED_HEIGHT');
 

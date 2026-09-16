@@ -21,7 +21,7 @@
 
 const { BS, bindSettlementReads, NETWORK, SNAPSHOT, makeTransfer, makeCtx } = require('./helpers/settle_fixtures.js');
 const assert = require('assert');
-const eq     = require('../../../../src/equivocation_header.js');
+const eq     = require('../../../../src/consensus/equivocation_header.js');
 const Utility = require('../../../../src/utility.js');
 
 describe('bridge_settle: the XBRIDGE settle pass', function(){

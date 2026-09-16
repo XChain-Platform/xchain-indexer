@@ -39,8 +39,8 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../../../fixtures/config');
 const Utility           = require('../../../../src/utility');
 const Database          = require('../../../../src/db');
-const swc               = require('../../../../src/stake_weight_collation_activation');
-const swqCap            = require('../../../../src/swq_source_cap_activation');
+const swc               = require('../../../../src/consensus/gates/stake_weight_collation_gate');
+const swqCap            = require('../../../../src/consensus/gates/swq_source_cap_gate');
 
 function dbFor(network, coin) {
     const config   = getTestConfig();

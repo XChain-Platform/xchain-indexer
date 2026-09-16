@@ -53,7 +53,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('../gate_registry');
 
 const PRICE_PAIR_TICKER_MAX_LEGACY = copy('price_pair_activation.PRICE_PAIR_TICKER_MAX_LEGACY');
 const PRICE_PAIR_TICKER_MAX_WIDE = copy('price_pair_activation.PRICE_PAIR_TICKER_MAX_WIDE');

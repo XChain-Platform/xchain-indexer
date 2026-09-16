@@ -26,7 +26,7 @@
 // ARCHIVE_HEAD_VERSIONS is the archive-head version set, re-exported below for the
 // callers that reason about versions. Its SQL fragment form is consumed only by the
 // statements, so it is imported where they live.
-const { ARCHIVE_HEAD_VERSIONS } = require('../../stateHash.js');
+const { ARCHIVE_HEAD_VERSIONS } = require('../../consensus/state_hash.js');
 
 // The anchor_actions STATEMENTS live in src/db/anchor_sql.js, beside the tables they
 // name, and are re-exported below so every existing caller keeps importing them from

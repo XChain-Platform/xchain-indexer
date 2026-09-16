@@ -131,7 +131,7 @@ describe('stateCommitment: persistent SMT == in-memory reference @regression', f
 });
 
 describe('state-commitment flag-day activation @regression', function(){
-    const act = require('../../../src/state_commitment_activation.js');
+    const act = require('../../../src/consensus/gates/state_commitment_gate.js');
 
     it('gates on the local block_index per chain', function(){
         assert.strictEqual(act.isStateCommitmentActive(0, 'regtest'), true);

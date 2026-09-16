@@ -12,7 +12,7 @@
 // asked about, shared by test/unit/snapshot_reorg_buffer.test.js and the parts
 // beside it.
 
-const srb = require('../../../../../src/snapshot_reorg_buffer.js');
+const srb = require('../../../../../src/consensus/snapshot_reorg_buffer.js');
 
 // ── The stake history every party is asked about ─────────────────────────────
 // Declared snapshot height N; the buried height the hub actually resolves at is

@@ -26,8 +26,8 @@ const sinon  = require('sinon');
 const crypto = require('crypto');
 
 const derive = require('../../../../src/consensus/anchor_reward_derive.js');
-const swq    = require('../../../../src/stake_weighted_quorum.js');
-const ar     = require('../../../../src/anchor_reward_activation.js');
+const swq    = require('../../../../src/consensus/stake_weighted_quorum.js');
+const ar     = require('../../../../src/consensus/gates/anchor_reward_gate.js');
 
 
 function makeKey() {
@@ -83,8 +83,8 @@ function stubDb(validators, pending) {
 describe('anchor-reward derive set is INVARIANT under the barrier change @regression @tier1', () => {
     const cfg = { COIN: 'BTC', NETWORK: 'regtest' };
     const MODULES = [
-    '../../../../src/mirror_admission_activation.js',
-    '../../../../src/anchor_reward_activation.js',
+    '../../../../src/consensus/gates/mirror_admission_gate.js',
+    '../../../../src/consensus/gates/anchor_reward_gate.js',
     '../../../../src/consensus/anchor_reward_derive.js'
     ];
     beforeEach(function () { sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false); });
@@ -107,7 +107,7 @@ describe('anchor-reward derive set is INVARIANT under the barrier change @regres
     process.env.XC_MIRROR_ADMISSION_ACTIVATION = '0';
     try {
     return fn(require('../../../../src/consensus/anchor_reward_derive.js'),
-    require('../../../../src/anchor_reward_activation.js'));
+    require('../../../../src/consensus/gates/anchor_reward_gate.js'));
     } finally {
     for (const [p, mod] of saved) {
     if (mod === undefined) delete require.cache[p]; else require.cache[p] = mod;

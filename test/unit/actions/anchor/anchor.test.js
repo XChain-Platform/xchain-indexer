@@ -26,7 +26,7 @@ const sinon = require('sinon');
 const { createBaseData } = require('../../../fixtures/mocks');
 const { PUBKEY_A, PUBKEY_B, SIG, HASH, crc32Hex, gz64, v0Params, THREE_CHAINS, v1Params, ARCHIVE_JSON, PUBLISHER, armAnchor, disarmAnchor } = require('./anchor.test/helpers/anchor_fixtures.js');
 const Anchor = require('../../../../src/actions/anchor/index.js');
-const eq = require('../../../../src/equivocation_header.js');
+const eq = require('../../../../src/consensus/equivocation_header.js');
 
 let indexer, handler, verifyStub, swqStub, deriveGateStub;
 
@@ -166,7 +166,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
     // archive head, so rejecting a publisher-bearing head on that flag day would reject
     // every archive anchor on a network whose height has not been reached.
     it('v1 parses on its own shape, not on the ARCHIVE_REWARD flag-day', async function () {
-        let arStub = sinon.stub(require('../../../../src/anchor_reward_activation.js'),
+        let arStub = sinon.stub(require('../../../../src/consensus/gates/anchor_reward_gate.js'),
             'isArchiveRewardActive').returns(false);
         try {
             let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 1, COIN: 'DOGE' });

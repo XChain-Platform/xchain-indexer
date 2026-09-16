@@ -84,7 +84,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('../gate_registry');
 
 const RESERVED_SUBTREES = copy('state_subtree_activation.RESERVED_SUBTREES');
 

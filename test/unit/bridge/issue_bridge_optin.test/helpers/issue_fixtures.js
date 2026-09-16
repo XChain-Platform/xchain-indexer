@@ -37,8 +37,11 @@ const assert = require('assert');
 const sinon  = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../../../fixtures/mocks');
 const Issue                = require('../../../../../src/actions/issue/index.js');
-const tokenBridgeActivation = require('../../../../../src/token_bridge_activation.js');
-const tokenPolicyActivation = require('../../../../../src/token_policy_activation.js');
+// The bridge opt-in and policy-inheritance flag days are registry rows (W5), stubbed
+// through activeAt() by their keys.
+const { stubActiveAt } = require('../../../../helpers/gate_modules.js');
+const TOKEN_BRIDGE_KEY = 'token_bridge_activation.TOKEN_BRIDGE_ACTIVATION';
+const TOKEN_POLICY_INHERITANCE_KEY = 'token_policy_activation.TOKEN_POLICY_INHERITANCE_ACTIVATION';
 const OWNER   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const STRANGER = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
 const GAS_ADDR = { BTC: '1XChain3M4uRwcHqt4XuhVBUQ8cL4qQsA', DOGE: 'DGasfpttCnTijuuoAdiJ9sXJjG7vQ5pMkW' };
@@ -99,8 +102,8 @@ async function run({ params, data = {}, token = null, controllers = null, list =
     if(list)
         indexer.indexerDb.getList.resolves(list);
 
-    sinon.stub(tokenBridgeActivation, 'isTokenBridgeActive').returns(bridge);
-    sinon.stub(tokenPolicyActivation, 'isTokenPolicyInheritanceActive').returns(policy);
+    stubActiveAt(sinon, TOKEN_BRIDGE_KEY, bridge);
+    stubActiveAt(sinon, TOKEN_POLICY_INHERITANCE_KEY, policy);
 
     const handler = new Issue(makeActionsCtx(indexer));
     const d = createBaseData(Object.assign({ ACTION: 'ISSUE', FORMAT: Number(params[0]), BLOCK_INDEX: 500, SOURCE: OWNER }, data));
@@ -109,4 +112,4 @@ async function run({ params, data = {}, token = null, controllers = null, list =
 }
 const SUBASSET = 'invalid: TICK (subassets are not bridgeable yet)';
 
-module.exports = { assert, sinon, createMockIndexer, createBaseData, Issue, tokenBridgeActivation, tokenPolicyActivation, OWNER, STRANGER, GAS_ADDR, makeActionsCtx, format7, format5, tokenRow, run, SUBASSET };
+module.exports = { assert, sinon, createMockIndexer, createBaseData, Issue, TOKEN_BRIDGE_KEY, TOKEN_POLICY_INHERITANCE_KEY, OWNER, STRANGER, GAS_ADDR, makeActionsCtx, format7, format5, tokenRow, run, SUBASSET };

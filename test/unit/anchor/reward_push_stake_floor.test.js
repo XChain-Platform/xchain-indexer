@@ -44,7 +44,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert   = require('assert');
 const sinon    = require('sinon');
 const Database = require('../../../src/db');
-const ar       = require('../../../src/anchor_reward_activation');
+const ar       = require('../../../src/consensus/gates/anchor_reward_gate');
 
 const PUB = 'cd'.repeat(32); // 64 hex chars
 

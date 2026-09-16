@@ -25,7 +25,7 @@ const NodeProof = require('../../../../../src/actions/nodeproof/index.js');
 // Same cached module NodeProof references; stubbing verify() controls which
 // verifier signatures the handler accepts toward quorum.
 const ed25519   = require('../../../../../src/consensus/ed25519.js');
-const srb       = require('../../../../../src/snapshot_reorg_buffer.js');
+const srb       = require('../../../../../src/consensus/snapshot_reorg_buffer.js');
 
 // 64-hex pubkeys / 128-hex sigs (format-valid; verification is stubbed)
 const PUBKEY_V  = 'a'.repeat(64);   // genesis verifier (signs the verdict)

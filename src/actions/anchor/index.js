@@ -59,8 +59,8 @@
  ********************************************************************/
 
 const zlib    = require('zlib');
-const eq      = require('../../equivocation_header.js');
-const ar      = require('../../anchor_reward_activation.js');
+const eq      = require('../../consensus/equivocation_header.js');
+const ar      = require('../../consensus/gates/anchor_reward_gate.js');
 // The ANCHOR and archive-author gates are registry rows read by literal key
 // (W4): no predicate module stands between this file and the row it judges by.
 const gateRegistry = require('../../consensus/gate_registry');

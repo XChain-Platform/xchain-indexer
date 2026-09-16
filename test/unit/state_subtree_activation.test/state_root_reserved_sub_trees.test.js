@@ -25,7 +25,7 @@
 const assert = require('assert');
 const M   = require('../../../src/consensus/merkle.js');
 const SC  = require('../../../src/state_commitment/index.js');
-const SUB = require('../../../src/state_subtree_activation.js');
+const SUB = require('../../../src/consensus/gates/state_subtree_gate.js');
 
 // Snapshot of the REAL armed heights, taken before any test mutates the map, so
 // a scratch-arm can restore rather than delete (deleting disarms the chain for
@@ -105,7 +105,7 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
     it('no environment variable can arm a slot', function(){
         // An env-tunable consensus height is a fork switch on an operator's shell.
         // Nothing in the module may read process.env at all.
-        const src = require('fs').readFileSync(require('path').resolve(__dirname, '../../../src/state_subtree_activation.js'), 'utf8');
+        const src = require('fs').readFileSync(require('path').resolve(__dirname, '../../../src/consensus/gates/state_subtree_gate.js'), 'utf8');
         assert.ok(!/process\.env/.test(src), 'state_subtree_activation.js must not read process.env');
     });
 });

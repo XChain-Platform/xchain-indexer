@@ -16,7 +16,7 @@ const sinon = require('sinon');
 const { createMockIndexer } = require('../../../fixtures/mocks');
 
 const Rollback = require('../../../../src/rollback/index.js');
-const ar = require('../../../../src/anchor_reward_activation.js');
+const ar = require('../../../../src/consensus/gates/anchor_reward_gate.js');
 
 // Part of the Rollback suite whose entry is test/unit/rollback.test.js: the anchor
 // validator_rewards restores from anchor_reward_reconcile_log, the derive-block
@@ -222,7 +222,7 @@ describe('Rollback @regression @tier3', function () {
 
     // ─── the anchor invalid_archive reset selects the shared archive-head version set ─────
     it('selects the anchor invalid_archive reset parents via the shared archive-head set', async function () {
-        const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../../../../src/stateHash.js');
+        const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../../../../src/consensus/state_hash.js');
         assert.deepStrictEqual(ARCHIVE_HEAD_VERSIONS, [1], 'shared archive-head set must be [1]');
         indexer.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]); // firstActionIndex
         indexer.indexerDb.doQuery.resolves([]);

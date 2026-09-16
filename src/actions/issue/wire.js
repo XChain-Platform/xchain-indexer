@@ -25,11 +25,11 @@
 'use strict';
 
 // Token-bridge opt-in (ISSUE format 7), the policy-inheritance flag day and the tick
-// namespace flag day. Standalone height-keyed modules, not protocol_changes.js entries,
-// because the hub, SDK and explorer read the same maps; see the module headers.
-const tokenBridgeActivation = require('../../token_bridge_activation.js');
-const tokenPolicyActivation = require('../../token_policy_activation.js');
+// namespace flag day: registry rows read by literal key (W4, W5), the same rows the
+// hub, SDK and explorer read through their own registry copies.
 const gateRegistry = require('../../consensus/gate_registry');
+const TOKEN_BRIDGE_KEY = 'token_bridge_activation.TOKEN_BRIDGE_ACTIVATION';
+const TOKEN_POLICY_INHERITANCE_KEY = 'token_policy_activation.TOKEN_POLICY_INHERITANCE_ACTIVATION';
 
 // The flag days, the FORMAT gate and the positional PARAMS. Returns the context: the
 // FORMAT, the (possibly replaced) data object, the verdict so far and the three flags.
@@ -40,8 +40,8 @@ async function parseWire(params, data, error){
     // Token-bridge flag days, resolved once against THIS action's block so every check
     // below sees one activation state. Keyed on the block_index of the chain being
     // parsed, never on a transfer's snapshot_block.
-    let tokenBridgeActive = tokenBridgeActivation.isTokenBridgeActive(data['BLOCK_INDEX'], this.config['NETWORK']);
-    let policyInheritance = tokenPolicyActivation.isTokenPolicyInheritanceActive(data['BLOCK_INDEX'], this.config['NETWORK']);
+    let tokenBridgeActive = gateRegistry.activeAt(TOKEN_BRIDGE_KEY, this.config['NETWORK'], null, data['BLOCK_INDEX'], null);
+    let policyInheritance = gateRegistry.activeAt(TOKEN_POLICY_INHERITANCE_KEY, this.config['NETWORK'], null, data['BLOCK_INDEX'], null);
     // The tick-namespace flag day has its OWN constant, not the bridge's: the
     // bridge arms only after its own cross-check, and the namespace has to close
     // before anyone squats a future chain root, not after.

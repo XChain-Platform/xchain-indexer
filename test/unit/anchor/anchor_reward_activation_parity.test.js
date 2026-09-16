@@ -31,7 +31,7 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
-const indexer = require('../../../src/anchor_reward_activation.js');
+const indexer = require('../../../src/consensus/gates/anchor_reward_gate.js');
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
 // The self-reference line each copy carries naming its twin (the OTHER file). It is
@@ -100,14 +100,14 @@ describe('anchor_reward_activation twin parity @regression @tier1', function () 
     // sibling job sets XCHAIN_REQUIRE_SIBLINGS=1, where a missing sibling hard-fails).
     describe('hub twin cross-check', function () {
         function loadHub(){
-            const p = '../../../../xchain-hub/src/anchor_reward_activation.js';
+            const p = '../../../../xchain-hub/src/consensus/gates/anchor_reward_gate.js';
             return { mod: require(p), file: require.resolve(p) };
         }
 
         it('hub export map + amount + predicate match the indexer', function () {
             let hub;
             // Judged before the require: a lane symlink into a live main checkout is refused.
-            const sibling = siblingCheckout(__dirname, '../../../../xchain-hub/src/anchor_reward_activation.js');
+            const sibling = siblingCheckout(__dirname, '../../../../xchain-hub/src/consensus/gates/anchor_reward_gate.js');
             if (!sibling.usable) return skipOrFail(this, sibling, 'anchor-reward twin parity');
             try { hub = loadHub(); }
             catch (e) {
@@ -131,7 +131,7 @@ describe('anchor_reward_activation twin parity @regression @tier1', function () 
 
         it('hub and indexer source are byte-identical apart from the twin-reference line', function () {
             let hubFile;
-            const sibling = siblingCheckout(__dirname, '../../../../xchain-hub/src/anchor_reward_activation.js');
+            const sibling = siblingCheckout(__dirname, '../../../../xchain-hub/src/consensus/gates/anchor_reward_gate.js');
             if (!sibling.usable) return skipOrFail(this, sibling, 'anchor-reward twin byte parity');
             try { hubFile = loadHub().file; }
             catch (e) {
@@ -144,7 +144,7 @@ describe('anchor_reward_activation twin parity @regression @tier1', function () 
                 .map(l => TWIN_REF.test(l) ? '<TWIN-REF>' : l)
                 .join('\n');
             assert.strictEqual(
-                norm(path.join(__dirname, '../../../src/anchor_reward_activation.js')),
+                norm(path.join(__dirname, '../../../src/consensus/gates/anchor_reward_gate.js')),
                 norm(hubFile),
                 'anchor_reward_activation.js drifted between hub and indexer (only the "twin lives in ..." line may differ)'
             );

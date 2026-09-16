@@ -72,7 +72,9 @@ describe('Cross_Settle action handler @regression @tier1', function () {
     useCrossSettleHarness(bind);
 
     describe('cross-chain royalty at settlement (CROSS_CHAIN_ROYALTY)', function () {
-        const ccr = require('../../../../../src/cross_chain_royalty_activation.js');
+        // The royalty flag day is a registry row (W5), stubbed through activeAt() by its key.
+        const { stubGate } = require('../../../../helpers/gate_modules.js');
+        const CROSS_CHAIN_ROYALTY_KEY = 'cross_chain_royalty_activation.CROSS_CHAIN_ROYALTY_ACTIVATION';
 
         it('fail-closed: a leg that does not re-encode yields NO split (full proceeds credit)', async function () {
             // A segwit-looking leg claimed to be DOGE-encoded can never decode (DOGE has no
@@ -90,7 +92,7 @@ describe('Cross_Settle action handler @regression @tier1', function () {
         });
 
         it('below the flag-day the split is not applied (legacy full credit)', async function () {
-            const flagStub = sinon.stub(ccr, 'isCrossChainRoyaltyActive').returns(false);
+            const flagStub = stubGate(sinon, CROSS_CHAIN_ROYALTY_KEY, false);
             const { match } = signMatch(makeMatch({ b_payout_legs: LEGS }), 1);   // legacy canonical (no legs bytes)
             indexer.indexerDb.getValidatorsByCapability.resolves(snapFor(match, 1));
             const data = makeData({ MATCH: match });

@@ -20,7 +20,7 @@ const Price   = require('../../../src/actions/price/index.js');
 // Same cached modules Price references - stubbing verify() controls sig acceptance,
 // stubbing isStakeWeightedQuorumActive() selects the count vs stake-weighted path.
 const ed25519 = require('../../../src/consensus/ed25519.js');
-const swq     = require('../../../src/stake_weighted_quorum.js');
+const swq     = require('../../../src/consensus/stake_weighted_quorum.js');
 
 const PUBKEY_A = 'a'.repeat(64);
 const PUBKEY_B = 'b'.repeat(64);

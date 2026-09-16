@@ -24,7 +24,7 @@
 'use strict';
 
 const M      = require('../consensus/merkle.js');
-const SUB    = require('../state_subtree_activation.js');
+const SUB    = require('../consensus/gates/state_subtree_gate.js');
 const ESC    = require('../consensus/escrow_leaf_subtree.js');
 const LEDGER = require('../db/state_commitment/ledger_reads.js');
 const { leafOrNull } = require('./leaf_values.js');

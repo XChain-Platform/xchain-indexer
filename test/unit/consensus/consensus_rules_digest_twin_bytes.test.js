@@ -62,19 +62,26 @@ const REPO_ROOT    = path.join(__dirname, '..', '..', '..');
 const SIBLING_ROOT = process.env.XCHAIN_SIBLING_ROOT || path.join(REPO_ROOT, '..');
 const HUB_DIR      = process.env.XCHAIN_HUB_DIR || path.join(SIBLING_ROOT, 'xchain-hub');
 const HUB_COPY     = path.join(HUB_DIR, 'src', 'consensus_rules_digest.js');
+// The carrier the hub copy's loader opens for the function-valued admission names,
+// at the W5 tail: a hub tree that predates the move cannot compute its digest.
+const HUB_CARRIER  = path.join(HUB_DIR, 'src', 'consensus', 'gates', 'mirror_admission_gate.js');
 const MY_COPY      = path.join(REPO_ROOT, 'src', 'consensus_rules_digest.js');
 const STRICT       = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 
 function requireHub() {
     // Refuses an absent hub and a lane symlink into a live main checkout alike:
     // the latter reads a peer's uncommitted bytes, which prove nothing either way.
-    const hubCheckout = siblingCheckout(__dirname, HUB_COPY);
-    if (!hubCheckout.usable) {
-        if (STRICT) {
-            assert.fail('xchain-hub sibling checkout unusable: ' + hubCheckout.reason
-                + ' (set XCHAIN_HUB_DIR at a checkout to prove this guard ran)');
+    // A hub whose admission carrier is not at the W5 tail is refused the same way,
+    // since its loader throws before any byte or value could be compared.
+    for (const probe of [HUB_COPY, HUB_CARRIER]) {
+        const hubCheckout = siblingCheckout(__dirname, probe);
+        if (!hubCheckout.usable) {
+            if (STRICT) {
+                assert.fail('xchain-hub sibling checkout unusable: ' + hubCheckout.reason
+                    + ' (set XCHAIN_HUB_DIR at a checkout to prove this guard ran)');
+            }
+            this.skip();
         }
-        this.skip();
     }
 }
 

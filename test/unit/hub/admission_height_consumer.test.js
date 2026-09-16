@@ -33,8 +33,8 @@ const path   = require('path');
 
 // Every module that closes over the activation resolver at require time.
 const ARMED_MODULES = [
-    '../../../src/mirror_admission_activation.js',
-    '../../../src/anchor_reward_activation.js',
+    '../../../src/consensus/gates/mirror_admission_gate.js',
+    '../../../src/consensus/gates/anchor_reward_gate.js',
     '../../../src/hub/hub_db_sync/watermarks.js',   // the client part that closes over the resolver
     '../../../src/hub/hub_db_sync.js',
     '../../../src/XChainIndexer.js'
@@ -50,7 +50,7 @@ function armModules() {
     for (const p of paths) delete require.cache[p];
     process.env.XC_MIRROR_ADMISSION_ACTIVATION = String(ARMED_AT);
 
-    const act        = require('../../../src/mirror_admission_activation.js');
+    const act        = require('../../../src/consensus/gates/mirror_admission_gate.js');
     const HubDbSync  = require('../../../src/hub/hub_db_sync.js');
     const Indexer    = require('../../../src/XChainIndexer.js');
 
@@ -351,7 +351,7 @@ describe('mirror-admission height barriers: UNARMED (today\'s rule, byte for byt
     const HubDbSync = require('../../../src/hub/hub_db_sync.js');
 
     it('is INERT on every network in this train, so nothing below the cut changes', function () {
-        const act = require('../../../src/mirror_admission_activation.js');
+        const act = require('../../../src/consensus/gates/mirror_admission_gate.js');
         for (const net of ['mainnet', 'testnet', 'regtest']) {
             assert.strictEqual(act.isMirrorAdmissionConsumerActive('BTC', net, B), false, net);
         }

@@ -29,7 +29,7 @@
 const mariadb = require('mariadb');
 const fs      = require('fs');
 const path    = require('path');
-const stakeWeightCollation = require('../../stake_weight_collation_activation');
+const stakeWeightCollation = require('../../consensus/gates/stake_weight_collation_gate');
 const { getLogger } = require('../../observability/index.js');
 // The class itself, for the statics these methods read. db/index.js publishes it before it
 // requires any part, so this resolves to the finished class rather than a half-built export.

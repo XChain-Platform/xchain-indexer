@@ -44,8 +44,8 @@
  ********************************************************************/
 
 const crypto  = require('crypto');
-const eq      = require('../../equivocation_header.js');
-const ah      = require('../../mirror_admission_activation.js');
+const eq      = require('../../consensus/equivocation_header.js');
+const ah      = require('../../consensus/gates/mirror_admission_gate.js');
 // Read from the vendored protocol constants, not re-exported through
 // actions/xcall: an action that requires another action makes the two
 // load-order dependent, and the hop ceiling is protocol data rather than

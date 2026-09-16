@@ -60,7 +60,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 const crypto = require('crypto');
 
-const eq      = require('../../../../src/equivocation_header.js');
+const eq      = require('../../../../src/consensus/equivocation_header.js');
 
 const { K1, JUNK_SIG, RANK3, HASH_HELLO, CANON_EQUIV_LOWER, CANON_EQUIV_RAW, CANON_BARE_LOWER } = require('./attest_response_verify_vectors.test/helpers/vectors.js');
 const { state, makeRequestRow, setupVectors, seatUnweighted, driveOnce, driveSigned } = require('./attest_response_verify_vectors.test/helpers/vector_harness.js');

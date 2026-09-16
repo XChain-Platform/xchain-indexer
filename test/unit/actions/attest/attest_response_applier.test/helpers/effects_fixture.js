@@ -19,7 +19,7 @@ const sinon  = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../../../../fixtures/mocks');
 
 const Attest   = require('../../../../../../src/actions/attest/index.js');
-const swq     = require('../../../../../../src/stake_weighted_quorum.js');
+const swq     = require('../../../../../../src/consensus/stake_weighted_quorum.js');
 const { stubActiveAt } = require('../../../../../helpers/gate_modules.js');
 const attestBcastFee  = require('../../../../../../src/actions/attest/attest_broadcast_fee_gate.js');
 const ed25519 = require('../../../../../../src/consensus/ed25519.js');

@@ -26,12 +26,15 @@
 // Strict, as the class body these methods came from was.
 'use strict';
 
-const listEditResolution = require('../../list_edit_resolution_activation');
+// The list-edit resolution flag day (keyed '<COIN>:<network>', so the coin goes with
+// the height) and token-policy inheritance are registry rows read by literal key (W5).
 // Token-policy inheritance: the flag day at which a LIST type-2 item, and the address-sleep
 // read that shares its validator, are judged against EVERY supported coin instead of only
 // this chain's. One issuer list has to be able to hold BTC, LTC and DOGE addresses, because
 // the policy on the origin row is the policy every bridged copy inherits.
-const tokenPolicyActivation = require('../../token_policy_activation');
+const gateRegistry = require('../../consensus/gate_registry');
+const LIST_EDIT_RESOLUTION_KEY = 'list_edit_resolution_activation.LIST_EDIT_RESOLUTION_ACTIVATION';
+const TOKEN_POLICY_INHERITANCE_KEY = 'token_policy_activation.TOKEN_POLICY_INHERITANCE_ACTIVATION';
 
 module.exports = {
 
@@ -67,7 +70,7 @@ module.exports = {
     // predicate getList uses without re-deriving network/coin.
     // @param {block_index}  integer  block being processed
     isListEditResolutionActive(block_index){
-        return listEditResolution.isListEditResolutionActive(block_index, this.config['NETWORK'], this.config['COIN']);
+        return gateRegistry.activeAt(LIST_EDIT_RESOLUTION_KEY, this.config['NETWORK'], this.config['COIN'], block_index, null);
     },
 
     // Create / Update record in `credits` table
@@ -165,7 +168,7 @@ module.exports = {
     isAnyCoinAddress(address, block_index){
         if(this.util.isCryptoAddress(address))
             return true;
-        if(!tokenPolicyActivation.isTokenPolicyInheritanceActive(block_index, this.config['NETWORK']))
+        if(!gateRegistry.activeAt(TOKEN_POLICY_INHERITANCE_KEY, this.config['NETWORK'], null, block_index, null))
             return false;
         for(let coin of (this.config['COINS'] || []))
             if(this.util.isCryptoAddress(address, coin, this.config['NETWORK']))

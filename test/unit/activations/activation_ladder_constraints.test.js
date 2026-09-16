@@ -60,11 +60,12 @@
 
 const assert = require('assert');
 
-const { TRAIN_ACTIVATION } = require('../../../src/train_activation.js');
-const { XCHAIN_BRIDGE_ACTIVATION: BRIDGE } = require('../../../src/xchain_bridge_activation.js');
+const { TRAIN_ACTIVATION } = require('../../../src/consensus/gates/train_gate.js');
+// The bridge map is a registry row (W5), read by its key.
+const BRIDGE = require('../../../src/consensus/gate_registry').get('xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION');
 
-// The house 'never armed' literal xchain_bridge_activation.js writes on every mainnet and
-// testnet slot until a train sizes it (its own header/comments call it "the house sentinel").
+// The house 'never armed' literal the xchain_bridge_activation row writes on every mainnet and
+// testnet slot until a train sizes it (its registry note calls it "the house sentinel").
 // Not exported by the source module, so pinned here as a plain literal; a change to it would
 // already be caught by activation_constants_parity.test.js as a canon drift.
 const BRIDGE_SENTINEL = 9999999999;

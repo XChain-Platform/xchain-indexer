@@ -18,10 +18,11 @@ const crypto = require('crypto');
 const { createMockIndexer, createBaseData } = require('../fixtures/mocks');
 
 const Attest          = require('../../src/actions/attest/index.js');
-const swq             = require('../../src/stake_weighted_quorum.js');
+const swq             = require('../../src/consensus/stake_weighted_quorum.js');
 const { stubActiveAt } = require('./gate_modules.js');
 const attestBcastFee  = require('../../src/actions/attest/attest_broadcast_fee_gate.js');
-const arm             = require('../../src/attest_response_mirror_activation.js');
+// The response-mirror flag day is a registry row (W5); its key, for the stubs below.
+const RESPONSE_MIRROR_KEY = 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
 // Same module instance Attest holds a reference to (Node module cache); stubbing
 // `verify` here controls signature acceptance inside the handler.
 const ed25519         = require('../../src/consensus/ed25519.js');
@@ -134,7 +135,7 @@ function setUpAttestHandler() {
     // an on-chain v1 is rejected outright and the broadcast-fee carve-out is retired,
     // so leaving it armed would move every legacy v1 and fee fixture in this file at
     // once. Both eras have their own describes below.
-    sinon.stub(arm, 'isResponseMirrorActive').returns(false);
+    stubActiveAt(sinon, RESPONSE_MIRROR_KEY, false);
     return { indexer, actionsCtx, handler, executeStub };
 }
 

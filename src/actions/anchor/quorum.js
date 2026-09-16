@@ -21,7 +21,7 @@
  ********************************************************************/
 
 const ed25519 = require('../../consensus/ed25519.js');
-const swq     = require('../../stake_weighted_quorum.js');
+const swq     = require('../../consensus/stake_weighted_quorum.js');
 
 // Verify 2f+1 oracle_publish signatures over the canonical.
 // SNAPSHOT_BLOCK comes from the wire payload (a BTC height), NOT from

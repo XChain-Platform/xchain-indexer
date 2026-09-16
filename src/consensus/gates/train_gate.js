@@ -70,7 +70,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('../gate_registry');
 
 const TRAIN_ACTIVATION = copy('train_activation.TRAIN_ACTIVATION');
 

@@ -43,7 +43,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('./gate_registry');
 
 const EQUIV_HEADER_ACTIVATION = copy('equivocation_header.EQUIV_HEADER_ACTIVATION');
 

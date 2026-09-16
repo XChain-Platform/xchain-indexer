@@ -29,7 +29,7 @@ const {
     buildStateHashData, isBetStatusStateHashActive, BET_STATUS_STATE_HASH_ACTIVATION,
     POLL_FINALIZE_STATE_HASH_ACTIVATION, TOKEN_SUPPLY_STATE_HASH_ACTIVATION,
     INDEX_MAP_STATE_HASH_ACTIVATION,
-} = require('../../../src/stateHash');
+} = require('../../../src/consensus/state_hash');
 
 const util = new Utility();
 const PREFEATURE_KEYS = ['deactivations', 'slashes', 'request_status', 'cooldown', 'credits', 'anchor_invalid', 'block_index', 'state_hash_version'];

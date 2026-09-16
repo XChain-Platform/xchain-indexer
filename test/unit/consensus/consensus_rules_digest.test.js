@@ -42,9 +42,14 @@ describe('consensus_rules_digest (indexer copy)', function () {
     // the indexer share no source file, so armed_map_fingerprint can never match
     // between them, while this must.
     it('is identical to the hub copy gate for gate', function () {
-        // Refuses an absent hub and a lane symlink into a live main checkout alike.
+        // Refuses an absent hub and a lane symlink into a live main checkout alike. The hub
+        // copy cannot compute without its admission carrier at the W5 tail, so a hub tree
+        // that predates the move is probed on that file and skips (or refuses under
+        // XCHAIN_REQUIRE_SIBLINGS=1) rather than throwing out of the twin's loader.
         const hubCheckout = siblingCheckout(__dirname, HUB_COPY);
         if (!hubCheckout.usable) return skipOrFail(this, hubCheckout, 'the xchain-hub consensus_rules_digest twin');
+        const hubCarrier = siblingCheckout(__dirname, path.resolve(HUB_COPY, '..', 'consensus', 'gates', 'mirror_admission_gate.js'));
+        if (!hubCarrier.usable) return skipOrFail(this, hubCarrier, 'the xchain-hub admission carrier the digest twin reads');
         const hub = require(HUB_COPY);
         const mine = crd.computeConsensusRulesDigest();
         const theirs = hub.computeConsensusRulesDigest();
@@ -78,8 +83,8 @@ describe('consensus_rules_digest (indexer copy)', function () {
 // every shared gate is a registry row now, so a missing row is a build defect that throws
 // naming the key rather than reading ABSENT: the null the old loader returned let a moved
 // carrier read as ABSENT while the signed GATES field stayed byte for byte what every peer
-// publishes. The load refusal is not cosmetic either: src/mirror_admission_activation.js is
-// the one carrier still read (for its function-valued gates), and a checkout that cannot
+// publishes. The load refusal is not cosmetic either: src/consensus/gates/mirror_admission_gate.js
+// is the one carrier still read (for its function-valued gates), and a checkout that cannot
 // load a carrier must refuse rather than round down, since two revisions measured that
 // way agree with each other while agreeing with no real build.
 //
@@ -94,11 +99,15 @@ const REGISTRY_SRC = path.resolve(__dirname, '../../../src/consensus/gate_regist
 // A standalone tree: the module under test, a registry that answers from the real one
 // except for `missingKey` (a RegistryMissError, exactly what a dropped row raises), and a
 // stub for every carrier the module names (a function under every name that is a
-// function on the real carrier, since only those are read from the carrier).
+// function on the real carrier, since only those are read from the carrier). The
+// stubs sit where the loader looks since W5, consensus/gates/<stem>_gate.js; a
+// SHARED_GATES module with no logic module left (a W5-deleted predicate shim)
+// gets a values-only stub the loader never opens.
+function carrierPath(mod) { return path.join('consensus', 'gates', mod.replace(/_activation$/, '_gate') + '.js'); }
 function scratchTree(mutate, missingKey) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crd-carrier-'));
     fs.copyFileSync(MODULE_SRC, path.join(dir, 'consensus_rules_digest.js'));
-    fs.mkdirSync(path.join(dir, 'consensus'));
+    fs.mkdirSync(path.join(dir, 'consensus', 'gates'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'consensus', 'gate_registry.js'),
         'const real = require(' + JSON.stringify(REGISTRY_SRC) + ');\n'
         + 'const missing = ' + JSON.stringify(missingKey || null) + ';\n'
@@ -112,10 +121,11 @@ function scratchTree(mutate, missingKey) {
         byModule.get(mod).push(...names);
     }
     for (const [mod, names] of byModule) {
-        const real = require('../../../src/' + mod + '.js');
+        const realPath = path.resolve(__dirname, '../../../src', carrierPath(mod));
+        const real = fs.existsSync(realPath) ? require(realPath) : {};
         const body = names.map(n => 'exports.' + n + ' = '
             + (typeof real[n] === 'function' ? 'function () {};' : '{ regtest: 0 };')).join('\n');
-        fs.writeFileSync(path.join(dir, mod + '.js'), body + '\n');
+        fs.writeFileSync(path.join(dir, carrierPath(mod)), body + '\n');
     }
     mutate(dir);
     return require(path.join(dir, 'consensus_rules_digest.js'));
@@ -138,14 +148,14 @@ describe('consensus_rules_digest: a missing row or a broken carrier is never an 
     });
 
     it('THROWS naming the key when the carrier of a function-valued gate is gone', function () {
-        const mod = scratchTree(dir => fs.unlinkSync(path.join(dir, 'mirror_admission_activation.js')));
+        const mod = scratchTree(dir => fs.unlinkSync(path.join(dir, carrierPath('mirror_admission_activation'))));
         assert.throws(() => mod.computeConsensusRulesDigest(),
             (e) => e.message.includes('mirror_admission_activation.encodeAdmitBlocks'));
     });
 
     it('REFUSES when a carrier is present and fails to load, naming it and the cause', function () {
         const victim = 'mirror_admission_activation';
-        const mod = scratchTree(dir => fs.writeFileSync(path.join(dir, victim + '.js'),
+        const mod = scratchTree(dir => fs.writeFileSync(path.join(dir, carrierPath(victim)),
             "require('a-dependency-that-is-not-installed');\n"));
         assert.throws(() => mod.computeConsensusRulesDigest(), (e) => {
             assert.ok(e instanceof Error);

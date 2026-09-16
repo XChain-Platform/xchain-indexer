@@ -45,8 +45,8 @@ const { decoderQuery, indexerQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require('../../setup/db-connection');
 const DecoderSeeder = require('../../setup/decoder-seeder');
 const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../../setup/indexer-launcher');
-const eq = require('../../../../src/equivocation_header.js');
-const srb = require('../../../../src/snapshot_reorg_buffer.js');
+const eq = require('../../../../src/consensus/equivocation_header.js');
+const srb = require('../../../../src/consensus/snapshot_reorg_buffer.js');
 
 const FUNDER = 'mgash6jYSKAR3Q5HPpDgNX2BYr18q9N6GQ'; // configs/BTC.js ADDRESS.GAS (fee-exempt gas funder)
 const A1     = 'mq7tVfobimRUPxPNnyd5mKn11SVmTiLxtu'; // valid regtest P2PKH (the staker)

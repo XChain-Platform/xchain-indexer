@@ -58,9 +58,9 @@
 
 'use strict';
 
-const { ROLLCALL_GATES_ACTIVATION } = require('../../rollcall_gates_activation.js');
+const { ROLLCALL_GATES_ACTIVATION } = require('../../consensus/gates/rollcall_gates_gate.js');
 const { activeGatesAt } = require('../../consensus_rules_digest.js');
-const srb = require('../../snapshot_reorg_buffer.js');
+const srb = require('../../consensus/snapshot_reorg_buffer.js');
 
 // Drop the capability rows whose last rolled gate list does not cover the gates
 // active at the request block. Returns a NEW array in the input's order (order is

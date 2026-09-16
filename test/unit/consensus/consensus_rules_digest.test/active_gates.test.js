@@ -68,11 +68,15 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
     // and a pin that moved with a drill lever would be a test of the launcher. The pinned value
     // is the fleet's: every shipped process reads the unarmed maps.
     it('digests to the pinned value, which moved when the admission encoder was registered', function () {
-        // Every gate module, not just the admission one: the family's arming lever is shared,
-        // so the anchor-attest gate resolves from the same variable and a cached copy of it
-        // would keep a drill's heights in the digest after the variable was cleared.
+        // Every gate module still on disk, not just the admission one: the family's arming
+        // lever is shared, so the anchor-attest gate resolves from the same variable and a
+        // cached copy of it would keep a drill's heights in the digest after the variable
+        // was cleared. A SHARED_GATES stem whose shim W5 deleted has no module to purge
+        // (its row is read from the registry), so the helper answers null for it.
+        const { modulePathFor } = require('../../../helpers/gate_modules.js');
         const paths = [require.resolve('../../../../src/consensus_rules_digest.js')].concat(
-            [...new Set(crd.SHARED_GATES.map(g => g[0]))].map(m => require.resolve('../../../../src/' + m + '.js')));
+            [...new Set(crd.SHARED_GATES.map(g => g[0]))].map(m => modulePathFor(m)).filter(p => p !== null)
+                .map(p => require.resolve(p)));
         const saved = paths.map(p => [p, require.cache[p]]);
         const env   = process.env.XC_MIRROR_ADMISSION_ACTIVATION;
         try {

@@ -86,12 +86,13 @@ describe('bin/reachability.js', function () {
         });
 
         it('applies the declared dynamic edges the static walk cannot see', () => {
-            // No literal names this gate carrier: the digest builds
-            // './<module>.js' from its SHARED_GATES rows, so withdrawing the
-            // declared edge drops both assertions below at once.
-            const gate = report.files['src/checkpoint_commitment_activation.js'];
-            assert.deepStrictEqual(gate.requiredByInRepo, ['src/consensus_rules_digest.js'],
-                'the gate carrier is held by the computed require and by nothing else');
+            // No literal in the digest names this gate carrier: loadGateValue builds
+            // './consensus/gates/<stem>_gate.js' from its SHARED_GATES rows for the
+            // function-valued admission names (W5), so withdrawing the declared edge
+            // drops the digest from the carrier's holders.
+            const gate = report.files['src/consensus/gates/mirror_admission_gate.js'];
+            assert.ok(gate.requiredByInRepo.includes('src/consensus_rules_digest.js'),
+                'the admission carrier is held by the digest through the computed require; holders: ' + gate.requiredByInRepo.join(', '));
             assert.strictEqual(gate.reachableFromIndexerRuntime, true,
                 'a SHARED_GATES carrier is on the boot path through the digest');
         });
@@ -111,13 +112,14 @@ describe('bin/reachability.js', function () {
             assert.deepStrictEqual(history.requiredByInRepo, ['bin/recovery.js']);
         });
 
-        it('reaches every gate module W4 moved into a feature directory from the runtime', () => {
-            // The ten logic-bearing activation modules kept their bodies and moved
-            // beside their callers; a move that broke a require would read here as
-            // an unreached module, not as a failing action test somewhere else.
+        it('reaches every gate module W4 and W5 moved into a feature directory from the runtime', () => {
+            // The ten logic-bearing activation modules W4 moved beside their callers
+            // and the fourteen twins W5 moved to src/consensus/gates/ kept their
+            // bodies; a move that broke a require would read here as an unreached
+            // module, not as a failing action test somewhere else.
             const moved = Object.keys(report.files).filter((f) => /^src\/.+\/[a-z0-9_]+_gate\.js$/.test(f)
                 && f !== 'src/api/auth_gate.js' && f !== 'src/XChainIndexer/train_gate.js');
-            assert.strictEqual(moved.length, 10, 'the W4 census: ten moved gate modules, found ' + moved.join(', '));
+            assert.strictEqual(moved.length, 24, 'the W4 census of ten plus the W5 census of fourteen moved gate modules, found ' + moved.join(', '));
             for (const f of moved) assert.strictEqual(report.files[f].reachableFromIndexerRuntime, true, f + ' is not on the runtime path');
         });
     });

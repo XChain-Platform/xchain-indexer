@@ -30,7 +30,7 @@
 'use strict';
 
 const assert  = require('assert');
-const swq     = require('../../../src/stake_weighted_quorum.js');
+const swq     = require('../../../src/consensus/stake_weighted_quorum.js');
 // Decides whether each sibling path may be trusted before a cross-repo guard requires it.
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
@@ -211,8 +211,8 @@ function registerCrossEngineDeterminismTest() {
         let hubSwq;
         // Judged before the require, so a lane symlink into a live main checkout is
         // never loaded as the hub engine.
-        const hubCheckout = siblingCheckout(__dirname, '../../../../xchain-hub/src/stake_weighted_quorum.js');
-        try { hubSwq = hubCheckout.usable ? require('../../../../xchain-hub/src/stake_weighted_quorum.js') : null; } catch (e) { hubSwq = null; }
+        const hubCheckout = siblingCheckout(__dirname, '../../../../xchain-hub/src/consensus/stake_weighted_quorum.js');
+        try { hubSwq = hubCheckout.usable ? require('../../../../xchain-hub/src/consensus/stake_weighted_quorum.js') : null; } catch (e) { hubSwq = null; }
 
         // Deterministic PRNG (mulberry32): fixed seed, reproducible fixtures.
         function rng(seed) {
@@ -260,8 +260,8 @@ function registerDelegationTotalStakeTest() {
         // Sibling-relative; absent in standalone single-repo CI (dependent test skips).
         let hubSwq;
         // Judged before the require, as in the determinism block above.
-        const hubCheckout = siblingCheckout(__dirname, '../../../../xchain-hub/src/stake_weighted_quorum.js');
-        try { hubSwq = hubCheckout.usable ? require('../../../../xchain-hub/src/stake_weighted_quorum.js') : null; } catch (e) { hubSwq = null; }
+        const hubCheckout = siblingCheckout(__dirname, '../../../../xchain-hub/src/consensus/stake_weighted_quorum.js');
+        try { hubSwq = hubCheckout.usable ? require('../../../../xchain-hub/src/consensus/stake_weighted_quorum.js') : null; } catch (e) { hubSwq = null; }
 
         function rng(seed) {
             return function () {

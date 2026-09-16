@@ -39,8 +39,9 @@ const assert = require('assert');
 const crypto = require('crypto');
 
 const Utility = require('../../../src/utility.js');
-const arm     = require('../../../src/attest_response_mirror_activation.js');
-const zc      = require('../../../src/attest_zero_conf_activation.js');
+const gateRegistry = require('../../../src/consensus/gate_registry');
+const RESPONSE_MIRROR_KEY = 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
+const ZERO_CONF_KEY = 'attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION';
 
 const REQ_ID   = 'd'.repeat(64);
 const PUBKEY_A = 'a'.repeat(64);
@@ -218,9 +219,9 @@ describe('ATTEST applier fall-through above the zero-conf height @regression @ti
 
     describe('selector candidate list (utility.selectApplicableAttestationResponses)', function () {
         it('BELOW the height returns the old single-choice item with no candidates key', function () {
-            assert.strictEqual(arm.isResponseMirrorActive(T_REQ_BLOCK, 'testnet'), true,
+            assert.strictEqual(gateRegistry.activeAt(RESPONSE_MIRROR_KEY, 'testnet', null, T_REQ_BLOCK, null), true,
                 'fixture assumption: the mirror is armed on testnet at this block');
-            assert.strictEqual(zc.isZeroConfActive(T_REQ_BLOCK, 'testnet'), false,
+            assert.strictEqual(gateRegistry.activeAt(ZERO_CONF_KEY, 'testnet', null, T_REQ_BLOCK, null), false,
                 'fixture assumption: zero-conf is NOT armed on testnet, so this is the below-height path');
 
             const lo = mirrorRow({ effective_time: EFFECTIVE_T,     response_hash: 'b'.repeat(64) });

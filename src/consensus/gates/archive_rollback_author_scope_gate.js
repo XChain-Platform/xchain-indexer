@@ -64,7 +64,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('../gate_registry');
 
 const ARCHIVE_ROLLBACK_AUTHOR_SCOPE_ACTIVATION = copy('archive_rollback_author_scope_activation.ARCHIVE_ROLLBACK_AUTHOR_SCOPE_ACTIVATION');
 

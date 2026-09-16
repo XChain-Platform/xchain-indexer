@@ -20,7 +20,7 @@
 
 const crypto = require('crypto');
 
-const eq = require('../../../../../src/equivocation_header.js');
+const eq = require('../../../../../src/consensus/equivocation_header.js');
 const { NETWORK } = require('./arms.js');
 
 // ---------------------------------------------------------------------------

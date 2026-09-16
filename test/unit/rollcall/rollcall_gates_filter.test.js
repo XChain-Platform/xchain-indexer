@@ -28,14 +28,14 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 
 const FILTER_PATH = require.resolve('../../../src/actions/attest/rollcall_gates_filter.js');
-const ACTIV_PATH  = require.resolve('../../../src/rollcall_gates_activation.js');
+const ACTIV_PATH  = require.resolve('../../../src/consensus/gates/rollcall_gates_gate.js');
 const ENV_KEY     = 'XC_ROLLCALL_GATES_REGTEST_ACTIVATION';
 
 // The digest and burial seams are deliberately NOT busted: the armed filter must
 // share the very instances used here, or `needed` in a test would not be the
 // `needed` the filter compared against.
 const { activeGatesAt } = require('../../../src/consensus_rules_digest.js');
-const srb = require('../../../src/snapshot_reorg_buffer.js');
+const srb = require('../../../src/consensus/snapshot_reorg_buffer.js');
 
 function reload(envValue){
     if(envValue === undefined) delete process.env[ENV_KEY];

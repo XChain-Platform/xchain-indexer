@@ -72,7 +72,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('./gate_registry');
 
 const CANONICAL_REORG_BUFFER = copy('snapshot_reorg_buffer.CANONICAL_REORG_BUFFER');
 

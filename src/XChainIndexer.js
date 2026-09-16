@@ -29,8 +29,8 @@ const { CONFIG_ENV } = require('./config.js');
 // re-arm a gate by purging this module and the activation module from the require cache,
 // and a part loaded once would keep calling the unarmed functions.
 const { ANCHOR_ATTEST_ARRIVAL_MARGIN_S, ANCHOR_REWARD_MIRROR_MATURITY,
-        isAnchorAttestBarrierHorizonActive } = require('./anchor_reward_activation.js');
-const { isMirrorAdmissionConsumerActive } = require('./mirror_admission_activation.js');
+        isAnchorAttestBarrierHorizonActive } = require('./consensus/gates/anchor_reward_gate.js');
+const { isMirrorAdmissionConsumerActive } = require('./consensus/gates/mirror_admission_gate.js');
 const { getLogger } = require('./observability/index.js');
 
 // The method groups beside this entry (./XChainIndexer/). Each part holds one concern and

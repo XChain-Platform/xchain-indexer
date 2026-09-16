@@ -23,17 +23,16 @@
 
 'use strict';
 
-// The ATTEST response-mirror flag day, read from the LOCAL v0 request row. Same
-// module attest.js's isMirrorEraRequest seam reads, so the applier pass and the
-// handler can never disagree about which era a request is in.
-const attestResponseMirror = require('../attest_response_mirror_activation.js');
-// The zero-confirmation flag day, also read from the LOCAL v0 request row. Change C
-// of that height is this file's: above it the applier falls through an inert
-// candidate row to the next one instead of stranding the request until its deadline.
-const attestZeroConf = require('../attest_zero_conf_activation.js');
-// Both flag days are required here rather than taken from the entry: nothing purges them
-// together with utility.js, so the require cache hands this part the very objects the entry
-// would hold. The mirror-admission map is the one a suite purges, and it comes from the entry.
+// The ATTEST response-mirror flag day, read from the LOCAL v0 request row: the same
+// registry row attest.js's isMirrorEraRequest seam reads by literal key (W5), so the
+// applier pass and the handler can never disagree about which era a request is in.
+// The zero-confirmation flag day is read the same way, also from the LOCAL v0 request
+// row. Change C of that height is this file's: above it the applier falls through an
+// inert candidate row to the next one instead of stranding the request until its
+// deadline. The mirror-admission map is the one a suite purges, and it comes from the entry.
+const gateRegistry = require('../consensus/gate_registry');
+const RESPONSE_MIRROR_KEY = 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
+const ZERO_CONF_KEY = 'attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION';
 //
 // The per-block cap on mirror applies. actions/attest/index.js sets its static
 // ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK from this same constants module, so this is the number
@@ -138,13 +137,13 @@ function pendingMirrorRequests(requestRows, block, network){
         // The flag day is keyed on the REQUEST's own block, read from the
         // local row. attest.js's isMirrorEraRequest is the same module: the applier
         // re-checks it as its own gate, and the chain-side gate calls it too.
-        if(!attestResponseMirror.isResponseMirrorActive(req.block_index, network)) continue;
+        if(!gateRegistry.activeAt(RESPONSE_MIRROR_KEY, network, null, req.block_index, null)) continue;
         let reqId = String(req.request_id).toLowerCase();
         byId.set(reqId, req);
         // Evaluated HERE, beside the mirror-era check and off the same field:
         // both eras are properties of the request, never of the applying block, so a
         // node that catches up late reaches the same verdict for the same request.
-        if(attestZeroConf.isZeroConfActive(req.block_index, network)) fallThroughIds.add(reqId);
+        if(gateRegistry.activeAt(ZERO_CONF_KEY, network, null, req.block_index, null)) fallThroughIds.add(reqId);
     }
     return { byId, fallThroughIds };
 }

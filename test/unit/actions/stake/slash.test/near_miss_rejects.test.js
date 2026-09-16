@@ -19,7 +19,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon  = require('sinon');
-const eq    = require('../../../../../src/equivocation_header.js');
+const eq    = require('../../../../../src/consensus/equivocation_header.js');
 const {
     genKey, sign, b64, dexContent, params, data, dexProof, useSlashHarness,
 } = require('./helpers/slash_harness.js');

@@ -27,9 +27,13 @@ process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
+const sinon  = require('sinon');
 
 const XBridge  = require('../../../../src/actions/xbridge/index.js');
-const { XCHAIN_BRIDGE_ACTIVATION } = require('../../../../src/xchain_bridge_activation.js');
+// The bridge map is a registry row (W5): a case that needs a chain-specific slot
+// stubs activeAt() for the key instead of writing into the shipped map.
+const { stubGate } = require('../../../helpers/gate_modules.js');
+const XCHAIN_BRIDGE_KEY = 'xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION';
 const { DEST, makeHandler, makeData } = require('./xbridge.test/helpers/xbridge_context.js');
 
 describe('XBRIDGE action handler @regression @tier3', function(){
@@ -104,9 +108,12 @@ describe('XBRIDGE action handler @regression @tier3', function(){
         // regtest, the sentinel elsewhere), which is exactly the shape a coin-blind call
         // would also produce, so this case writes a chain-specific regtest slot for its own
         // duration and drives the real handler against it: DOGE must refuse at a height BTC
-        // is admitted at, on one network, through nothing but ctx.coin.
+        // is admitted at, on one network, through nothing but ctx.coin. The slot is a
+        // stub on the registry read: the fake answers by the COIN the handler passes,
+        // which is the only way a DOGE-specific height can reach it.
         it('keys the activation on the chain being parsed, not on the network alone', async function(){
-            XCHAIN_BRIDGE_ACTIVATION['DOGE:regtest'] = 500;
+            stubGate(sinon, XCHAIN_BRIDGE_KEY, false).callsFake((key, network, coin, height) =>
+                (coin === 'DOGE' ? Number(height) >= 500 : Number(height) >= 0));
             try {
                 let doge = makeHandler({ coin: 'DOGE', network: 'regtest' });
                 let dogeData = makeData(1, 'DOGE', { BLOCK_INDEX: 100 });
@@ -128,9 +135,9 @@ describe('XBRIDGE action handler @regression @tier3', function(){
                 assert.notStrictEqual(dogeAtData['STATUS'], 'invalid: XBRIDGE before activation',
                     'a DOGE block at the DOGE slot must be admitted past the activation gate');
             } finally {
-                delete XCHAIN_BRIDGE_ACTIVATION['DOGE:regtest'];
+                sinon.restore();
             }
-            assert.strictEqual(XCHAIN_BRIDGE_ACTIVATION['DOGE:regtest'], undefined,
+            assert.strictEqual(require('../../../../src/consensus/gate_registry').get(XCHAIN_BRIDGE_KEY)['DOGE:regtest'], undefined,
                 'the shipped map must be left exactly as it ships');
         });
     });

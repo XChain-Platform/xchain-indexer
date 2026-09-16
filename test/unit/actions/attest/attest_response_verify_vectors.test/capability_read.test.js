@@ -25,7 +25,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 const crypto = require('crypto');
 
-const swq     = require('../../../../../src/stake_weighted_quorum.js');
+const swq     = require('../../../../../src/consensus/stake_weighted_quorum.js');
 
 const { K1, BURIED_BLOCK } = require('./helpers/vectors.js');
 const { setupVectors, seatUnweighted, seatWeighted, driveOnce, driveSigned } = require('./helpers/vector_harness.js');

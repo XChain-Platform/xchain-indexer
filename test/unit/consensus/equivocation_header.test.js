@@ -26,7 +26,7 @@
 'use strict';
 
 const assert = require('assert');
-const eq     = require('../../../src/equivocation_header.js');
+const eq     = require('../../../src/consensus/equivocation_header.js');
 // Decides whether each sibling path may be trusted before the parity guards require it.
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
@@ -85,18 +85,18 @@ describe('equivocation_header (indexer)', function () {
             // hub + indexer (server consensus) + sdk + explorer (client checkpoint
             // verifiers). A drift in ANY copy flips the header on different blocks → fork.
             // Every copy must be a trusted checkout, as the require block below needs all three.
-            for (const rel of ['../../../../xchain-hub/src/equivocation_header.js',
-                               '../../../../xchain-sdk/src/equivocation_header.js',
-                               '../../../../xchain-explorer/src/equivocation_header.js']) {
+            for (const rel of ['../../../../xchain-hub/src/consensus/equivocation_header.js',
+                               '../../../../xchain-sdk/src/consensus/equivocation_header.js',
+                               '../../../../xchain-explorer/src/consensus/equivocation_header.js']) {
                 const copy = siblingCheckout(__dirname, rel);
                 if (!copy.usable) return skipOrFail(this, copy, 'the five-copy equivocation_header parity');
             }
             let copies;
             try {
                 copies = {
-                    hub:      require('../../../../xchain-hub/src/equivocation_header.js'),
-                    sdk:      require('../../../../xchain-sdk/src/equivocation_header.js'),
-                    explorer: require('../../../../xchain-explorer/src/equivocation_header.js'),
+                    hub:      require('../../../../xchain-hub/src/consensus/equivocation_header.js'),
+                    sdk:      require('../../../../xchain-sdk/src/consensus/equivocation_header.js'),
+                    explorer: require('../../../../xchain-explorer/src/consensus/equivocation_header.js'),
                 };
             } catch (e) { return this.skip(); }
             const ref = eq.buildEquivCanonical('XDEX', 'mid', 2, 'XMATCH|mid|x');

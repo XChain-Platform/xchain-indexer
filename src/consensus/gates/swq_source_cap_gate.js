@@ -44,7 +44,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('../gate_registry');
 
 const STAKE_WEIGHT_MAX_SOURCES = copy('swq_source_cap_activation.STAKE_WEIGHT_MAX_SOURCES');
 const STAKE_WEIGHT_MAX_KEYS_PER_SOURCE = copy('swq_source_cap_activation.STAKE_WEIGHT_MAX_KEYS_PER_SOURCE');

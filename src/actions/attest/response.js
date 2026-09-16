@@ -24,9 +24,11 @@
 // The ONE response verifier: this chain path and the hub-mirror applier call the
 // same module, so an artifact cannot be judged differently by delivery route.
 const avr     = require('./attest_response_verify.js');
-// The response-mirror flag day, keyed on the REQUEST's own block. utility.js reads
-// the same module for the applier pass's selection.
-const arm     = require('../../attest_response_mirror_activation.js');
+// The response-mirror flag day, keyed on the REQUEST's own block: a registry row
+// read by literal key (W5). utility.js reads the same row for the applier pass's
+// selection.
+const gateRegistry = require('../../consensus/gate_registry');
+const RESPONSE_MIRROR_KEY = 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
 const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
 const { getLogger } = require('../../observability/index.js');
 
@@ -315,6 +317,6 @@ module.exports = {
     // request.block_index is already the BTC block the flag day keys on.
     isMirrorEraRequest(request){
         if(!request) return false;
-        return arm.isResponseMirrorActive(request.block_index, this.config['NETWORK']);
+        return gateRegistry.activeAt(RESPONSE_MIRROR_KEY, this.config['NETWORK'], null, request.block_index, null);
     }
 };

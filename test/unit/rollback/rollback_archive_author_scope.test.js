@@ -46,7 +46,7 @@ const {
     ARCHIVE_AUTHOR_SCOPE_JOIN_SQL,
     isArchiveRollbackAuthorScopeActive,
     archiveAuthorScopeJoin,
-} = require('../../../src/archive_rollback_author_scope_activation.js');
+} = require('../../../src/consensus/gates/archive_rollback_author_scope_gate.js');
 const ARCHIVE_BATCH_AUTHOR_ACTIVATION = require('../../../src/consensus/gate_registry')
     .get('archive_batch_author_activation.ARCHIVE_BATCH_AUTHOR_ACTIVATION');
 

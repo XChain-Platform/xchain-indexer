@@ -58,7 +58,7 @@ const path   = require('path');
 
 const M   = require('../../src/consensus/merkle.js');
 const SC  = require('../../src/state_commitment/index.js');
-const SUB = require('../../src/state_subtree_activation.js');
+const SUB = require('../../src/consensus/gates/state_subtree_gate.js');
 const CST = require('../../src/consensus/contract_state_subtree.js');
 
 const CHAIN = 'BTC', NETWORK = 'regtest';

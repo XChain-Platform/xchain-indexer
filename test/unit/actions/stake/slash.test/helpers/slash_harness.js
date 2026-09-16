@@ -17,8 +17,8 @@
 const sinon  = require('sinon');
 const crypto = require('crypto');
 const { createMockIndexer, createBaseData } = require('../../../../../fixtures/mocks');
-const eq    = require('../../../../../../src/equivocation_header.js');
-const srb   = require('../../../../../../src/snapshot_reorg_buffer.js');
+const eq    = require('../../../../../../src/consensus/equivocation_header.js');
+const srb   = require('../../../../../../src/consensus/snapshot_reorg_buffer.js');
 const Slash = require('../../../../../../src/actions/slash/index.js');
 
 // The height the verifier must RESOLVE a proof's set at, given the RAW height the proof

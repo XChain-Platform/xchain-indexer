@@ -18,7 +18,7 @@
  ********************************************************************/
 const assert = require('assert');
 const rc  = require('../../../../src/consensus/rollcall_close.js');
-const rga = require('../../../../src/rollcall_gates_activation.js');
+const rga = require('../../../../src/consensus/gates/rollcall_gates_gate.js');
 
 const { NETWORK, EPOCH, CLOSE, LEDGER, CONFIG, UTIL, signFor, signV1For, stubProof, federation, answerWith, dbFor, armRollcall } = require('./helpers/rollcall_fixtures.js');
 

@@ -1,6 +1,6 @@
 'use strict';
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('../gate_registry');
 
 /*
  * mirror_admission_activation.js - admission by height for the mirror barrier family.

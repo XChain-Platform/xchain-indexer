@@ -44,7 +44,7 @@ const crypto = require('crypto');
 const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
-const swq   = require('../../../src/stake_weighted_quorum.js');
+const swq   = require('../../../src/consensus/stake_weighted_quorum.js');
 const fs    = require('fs');
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
@@ -62,13 +62,13 @@ const NETWORK   = 'regtest';
 // file under src/actions/price/ is re-required, not just the parts named when this list
 // was written.
 const PRICE_DIR = __dirname + '/../../../src/actions/price';
-const ARMED_MODULES = ['../../../src/mirror_admission_activation.js', '../../../src/consensus/ed25519.js']
+const ARMED_MODULES = ['../../../src/consensus/gates/mirror_admission_gate.js', '../../../src/consensus/ed25519.js']
     .concat(fs.readdirSync(PRICE_DIR, { recursive: true }).filter(f => f.endsWith('.js')).sort()
         .map(f => '../../../src/actions/price/' + f));
 // The hub's verifier twin, so the round trip is driven across the repo boundary the wire
 // actually crosses rather than inside one repo's own idea of the bytes.
 const HUB_MODULES = [
-    '../../../../xchain-hub/src/mirror_admission_activation.js',
+    '../../../../xchain-hub/src/consensus/gates/mirror_admission_gate.js',
     '../../../../xchain-hub/src/lib/admission_height.js',
     '../../../../xchain-hub/src/oracle/price_aggregator.js'
 ];
@@ -96,7 +96,7 @@ function armTwins() {
     for (const p of all) delete require.cache[p];
     process.env.XC_MIRROR_ADMISSION_ACTIVATION = String(ADMIT_AT);
 
-    const act     = require('../../../src/mirror_admission_activation.js');
+    const act     = require('../../../src/consensus/gates/mirror_admission_gate.js');
     const ed      = require('../../../src/consensus/ed25519.js');
     const Price   = require('../../../src/actions/price/index.js');
     const hubAgg  = hubPaths ? require('../../../../xchain-hub/src/oracle/price_aggregator.js') : null;

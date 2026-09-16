@@ -35,8 +35,8 @@ const { decoderQuery, indexerQuery, createDatabases, createDecoderSchema,
         resetDecoderDb, resetIndexerDb, closeAll } = require('../../setup/db-connection');
 const DecoderSeeder = require('../../setup/decoder-seeder');
 const { initIndexer, processBlocks, destroyIndexer, destroyFileIndexers } = require('../../setup/indexer-launcher');
-const eq = require('../../../../src/equivocation_header.js');
-const srb = require('../../../../src/snapshot_reorg_buffer.js');
+const eq = require('../../../../src/consensus/equivocation_header.js');
+const srb = require('../../../../src/consensus/snapshot_reorg_buffer.js');
 
 // The regtest gas funder (configs/BTC.js ADDRESS.GAS) holds the full bootstrap supply,
 // so it can fund a >MIN_STAKE bond (the per-address seedGas MINT caps at 1000).

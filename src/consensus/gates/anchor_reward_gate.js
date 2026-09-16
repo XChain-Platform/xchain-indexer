@@ -30,15 +30,15 @@
  * ANCHOR canonical, not a local processing height, so the hub and the
  * BTC/LTC/DOGE indexers all flip on the same anchor.
  *
- * A byte-identical twin of the map and amount lives in
- * xchain-hub/src/anchor_reward_activation.js and in
+ * A byte-identical twin of this module lives at the same path in the hub
+ * (src/consensus/gates/anchor_reward_gate.js) and the map in
  * xchain-documentation/protocol/constants.js; a cross-service regression suite
  * keeps all copies byte-equal, since a divergence forks the derived reward row
  * and breaks federation/ledger parity.
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('../gate_registry');
 
 const ANCHOR_REWARD_ACTIVATION = copy('anchor_reward_activation.ANCHOR_REWARD_ACTIVATION');
 
@@ -154,7 +154,7 @@ function restoredRewardRearmFloor(reorgBlock, network){
 // The arming seam is SHARED with the mirror-admission family deliberately: one venue lever
 // (XC_MIRROR_ADMISSION_ACTIVATION) arms both flag days, so a regtest drill cannot end up
 // with the admission axis armed and the horizon axis inert and still be called a drill.
-const { resolveMirrorAdmissionRegtest } = require('./mirror_admission_activation.js');
+const { resolveMirrorAdmissionRegtest } = require('./mirror_admission_gate.js');
 
 const ANCHOR_ATTEST_ARRIVAL_MARGIN_S = copy('anchor_reward_activation.ANCHOR_ATTEST_ARRIVAL_MARGIN_S');
 

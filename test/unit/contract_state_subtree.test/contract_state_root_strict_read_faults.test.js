@@ -27,7 +27,7 @@
 const assert = require('assert');
 
 const SC  = require('../../../src/state_commitment/index.js');
-const SUB = require('../../../src/state_subtree_activation.js');
+const SUB = require('../../../src/consensus/gates/state_subtree_gate.js');
 
 const { FakeDb, armedAt, CHAIN, NETWORK } = require('./helpers/fake_db');
 

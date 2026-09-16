@@ -42,7 +42,7 @@ const sinon  = require('sinon');
 const { getTestConfig }          = require('../../fixtures/config');
 const Utility                    = require('../../../src/utility');
 const Database                   = require('../../../src/db');
-const { ARCHIVE_HEAD_VERSIONS }  = require('../../../src/stateHash');
+const { ARCHIVE_HEAD_VERSIONS }  = require('../../../src/consensus/state_hash');
 
 function makeDb() {
     const config  = getTestConfig();

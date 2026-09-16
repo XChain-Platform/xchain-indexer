@@ -32,7 +32,7 @@ const CHK    = require('../../../../../src/consensus/bridge_checkpoint_check.js'
 // admission_binding.test.js drives the armed one. The purge/re-require idiom is the same
 // one the price and follower-bound suites carry by hand (frontier row 25).
 function requireDisarmed(mod){
-    const twin  = require.resolve('../../../../../src/mirror_admission_activation.js');
+    const twin  = require.resolve('../../../../../src/consensus/gates/mirror_admission_gate.js');
     const target = require.resolve(mod);
     const saved = [[twin, require.cache[twin]], [target, require.cache[target]]];
     const savedEnv = process.env.XC_MIRROR_ADMISSION_ACTIVATION;
@@ -49,7 +49,7 @@ function requireDisarmed(mod){
 }
 const BS     = requireDisarmed('../../../../../src/consensus/bridge_settle.js');
 const M      = require('../../../../../src/consensus/merkle.js');
-const SUB    = require('../../../../../src/state_subtree_activation.js');
+const SUB    = require('../../../../../src/consensus/gates/state_subtree_gate.js');
 const Utility = require('../../../../../src/utility.js');
 const bridgeSettlementsMixin = require('../../../../../src/db/bridge_settlements/index.js');
 

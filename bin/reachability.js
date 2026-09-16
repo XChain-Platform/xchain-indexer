@@ -127,15 +127,17 @@ function toolingSweepDirs(siblingsRoot) {
 const DYNAMIC_EDGES = [
     {
         from: 'src/consensus_rules_digest.js',
-        // loadGateValues requires './<module>.js' for every SHARED_GATES row, so
-        // the gate carriers are held by the digest and not by any literal. The
-        // list is read from the module rather than restated, because a restated
-        // copy is a second registry that drifts.
+        // loadGateValue falls back to './consensus/gates/<stem>_gate.js' for a
+        // SHARED_GATES name that is a function on its carrier (the registry holds
+        // values), building the path from the row's module name with the
+        // _activation stem spelled _gate (W5). The list is read from the module
+        // rather than restated, because a restated copy is a second registry that
+        // drifts; a stem with no logic module left resolves to nothing and drops out.
         toList: () => {
             const { SHARED_GATES } = require('../src/consensus_rules_digest.js');
-            return SHARED_GATES.map(([mod]) => `src/${mod}.js`);
+            return SHARED_GATES.map(([mod]) => `src/consensus/gates/${mod.replace(/_activation$/, '_gate')}.js`);
         },
-        why: 'the consensus-rules digest requires every SHARED_GATES module by computed path',
+        why: 'the consensus-rules digest requires a function-valued SHARED_GATES carrier by computed path under src/consensus/gates/',
     },
     {
         from: 'src/db/index.js',

@@ -47,7 +47,7 @@ const List                  = require('../../../src/actions/list.js');
 const Database              = require('../../../src/db');
 const { stubActiveAt }      = require('../../helpers/gate_modules.js');
 const LIST_OWNER_ROW        = 'list_owner_activation.LIST_OWNER_ACTIVATION';
-const tokenPolicyActivation = require('../../../src/token_policy_activation.js');
+const TOKEN_POLICY_INHERITANCE_KEY = 'token_policy_activation.TOKEN_POLICY_INHERITANCE_ACTIVATION';
 
 // A real address of each chain on mainnet, so "valid here" and "valid on another
 // supported coin" are genuinely different questions for the validator.
@@ -108,7 +108,7 @@ describe('LIST bridge policy rules @regression @consensus', function(){
     describe('any-coin items (TOKEN_POLICY_INHERITANCE_ACTIVATION)', function(){
 
         it('records a foreign-coin item invalid below the flag', async function(){
-            sinon.stub(tokenPolicyActivation, 'isTokenPolicyInheritanceActive').returns(false);
+            stubActiveAt(sinon, TOKEN_POLICY_INHERITANCE_KEY, false);
             const indexer = makeIndexer({ coin: 'BTC', network: 'mainnet' });
             await runCreate(indexer, [DOGE_MAINNET]);
             assert.ok(indexer.indexerDb.createListItemInvalid.calledOnce,
@@ -118,7 +118,7 @@ describe('LIST bridge policy rules @regression @consensus', function(){
         });
 
         it('admits a foreign-coin item at/above the flag', async function(){
-            sinon.stub(tokenPolicyActivation, 'isTokenPolicyInheritanceActive').returns(true);
+            stubActiveAt(sinon, TOKEN_POLICY_INHERITANCE_KEY, true);
             const indexer = makeIndexer({ coin: 'BTC', network: 'mainnet' });
             await runCreate(indexer, [DOGE_MAINNET]);
             assert.strictEqual(indexer.indexerDb.createListItemInvalid.callCount, 0);
@@ -127,14 +127,14 @@ describe('LIST bridge policy rules @regression @consensus', function(){
         });
 
         it('still admits a local item below the flag, so nothing historical moves', async function(){
-            sinon.stub(tokenPolicyActivation, 'isTokenPolicyInheritanceActive').returns(false);
+            stubActiveAt(sinon, TOKEN_POLICY_INHERITANCE_KEY, false);
             const indexer = makeIndexer({ coin: 'BTC', network: 'mainnet' });
             await runCreate(indexer, [BTC_MAINNET]);
             assert.strictEqual(indexer.indexerDb.createListItem.callCount, 1);
         });
 
         it('still refuses a string that is no coin address at any flag state', async function(){
-            sinon.stub(tokenPolicyActivation, 'isTokenPolicyInheritanceActive').returns(true);
+            stubActiveAt(sinon, TOKEN_POLICY_INHERITANCE_KEY, true);
             const indexer = makeIndexer({ coin: 'BTC', network: 'mainnet' });
             await runCreate(indexer, ['not-an-address']);
             assert.strictEqual(indexer.indexerDb.createListItemInvalid.callCount, 1);

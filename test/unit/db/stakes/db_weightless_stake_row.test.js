@@ -48,7 +48,7 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../../../fixtures/config');
 const Utility           = require('../../../../src/utility');
 const Database          = require('../../../../src/db');
-const swqCap            = require('../../../../src/swq_source_cap_activation');
+const swqCap            = require('../../../../src/consensus/gates/swq_source_cap_gate');
 
 // Block heights either side of the source-cap flag day, so both query shapes in
 // stakeWeightsWithCap are exercised (they map rows independently).

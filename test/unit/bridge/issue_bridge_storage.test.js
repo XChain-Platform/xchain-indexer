@@ -40,7 +40,9 @@ const sinon  = require('sinon');
 const Database              = require('../../../src/db');
 const Utility               = require('../../../src/utility.js');
 const { getTestConfig }     = require('../../fixtures/config');
-const tokenPolicyActivation = require('../../../src/token_policy_activation.js');
+// The policy-inheritance flag day is a registry row (W5), stubbed through activeAt().
+const { stubActiveAt }      = require('../../helpers/gate_modules.js');
+const TOKEN_POLICY_INHERITANCE_KEY = 'token_policy_activation.TOKEN_POLICY_INHERITANCE_ACTIVATION';
 
 const BTC_MAINNET  = '1XChain3M4uRwcHqt4XuhVBUQ8cL4qQsA';
 const DOGE_MAINNET = 'DGasfpttCnTijuuoAdiJ9sXJjG7vQ5pMkW';
@@ -226,7 +228,7 @@ describe('token-bridge opt-in storage @regression @consensus', function(){
     describe('isAddressSleeping widening', function(){
 
         it('skips a foreign-format address below the flag (no query at all)', async function(){
-            sinon.stub(tokenPolicyActivation, 'isTokenPolicyInheritanceActive').returns(false);
+            stubActiveAt(sinon, TOKEN_POLICY_INHERITANCE_KEY, false);
             const db = makeDb({ coin: 'BTC', network: 'mainnet' });
             const sleeping = await db.isAddressSleeping(DOGE_MAINNET, 500);
             assert.strictEqual(sleeping, false);
@@ -234,7 +236,7 @@ describe('token-bridge opt-in storage @regression @consensus', function(){
         });
 
         it('judges a foreign-format address at/above the flag', async function(){
-            sinon.stub(tokenPolicyActivation, 'isTokenPolicyInheritanceActive').returns(true);
+            stubActiveAt(sinon, TOKEN_POLICY_INHERITANCE_KEY, true);
             const db = makeDb({ coin: 'BTC', network: 'mainnet' });
             db.doQuery.resolves([{ resume_block: -1 }]);
             const sleeping = await db.isAddressSleeping(DOGE_MAINNET, 500);
@@ -243,14 +245,14 @@ describe('token-bridge opt-in storage @regression @consensus', function(){
         });
 
         it('still judges a local address below the flag, so nothing historical moves', async function(){
-            sinon.stub(tokenPolicyActivation, 'isTokenPolicyInheritanceActive').returns(false);
+            stubActiveAt(sinon, TOKEN_POLICY_INHERITANCE_KEY, false);
             const db = makeDb({ coin: 'BTC', network: 'mainnet' });
             db.doQuery.resolves([{ resume_block: -1 }]);
             assert.strictEqual(await db.isAddressSleeping(BTC_MAINNET, 500), true);
         });
 
         it('still rejects a string that is no coin address at all', async function(){
-            sinon.stub(tokenPolicyActivation, 'isTokenPolicyInheritanceActive').returns(true);
+            stubActiveAt(sinon, TOKEN_POLICY_INHERITANCE_KEY, true);
             const db = makeDb({ coin: 'BTC', network: 'mainnet' });
             assert.strictEqual(await db.isAddressSleeping('not-an-address', 500), false);
             assert.strictEqual(db.doQuery.callCount, 0);

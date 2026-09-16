@@ -43,9 +43,9 @@
  * which epochs exist.
  *
  * Canonical map of record is xchain-documentation/protocol/constants.js; the
- * twin lives in xchain-hub/src/rollcall_activation.js and is kept BYTE-IDENTICAL
- * apart from that one reference line, because the hub signs what the indexer
- * judges and a one-sided edit forks the fleet at the epoch boundary.
+ * twin lives at the same path (src/consensus/gates/rollcall_gate.js) in the hub
+ * and the indexer and is kept BYTE-IDENTICAL, because the hub signs what the
+ * indexer judges and a one-sided edit forks the fleet at the epoch boundary.
  *
  * KEYING. Every gate here keys on the carried BTC EPOCH_HEIGHT, on BOTH chains,
  * which is the `snapshot_block` convention of stake_weighted_quorum.js and NOT
@@ -55,7 +55,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('../gate_registry');
 
 const ROLLCALL_REGTEST_ARMED_HEIGHT = copy('rollcall_activation.ROLLCALL_REGTEST_ARMED_HEIGHT');
 

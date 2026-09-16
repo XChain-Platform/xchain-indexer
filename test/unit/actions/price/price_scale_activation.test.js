@@ -37,8 +37,8 @@ const { createMockIndexer, createBaseData } = require('../../../fixtures/mocks')
 
 const Price      = require('../../../../src/actions/price/index.js');
 const ed25519    = require('../../../../src/consensus/ed25519.js');
-const swq        = require('../../../../src/stake_weighted_quorum.js');
-const priceScale = require('../../../../src/price_scale_activation.js');
+const swq        = require('../../../../src/consensus/stake_weighted_quorum.js');
+const priceScale = require('../../../../src/consensus/gates/price_scale_gate.js');
 
 // The three values the loose rule admits and every other price lane refuses.
 const WIDE          = '1.' + '0'.repeat(39) + '1';   // 42 chars: over-runs price_snapshots.price

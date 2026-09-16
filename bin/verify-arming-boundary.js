@@ -82,7 +82,7 @@ const path = require('path');
 const SRC = path.resolve(__dirname, '..', 'src');
 const M   = require(path.join(SRC, 'consensus', 'merkle.js'));
 const SC  = require(path.join(SRC, 'state_commitment', 'index.js'));
-const SUB = require(path.join(SRC, 'state_subtree_activation.js'));
+const SUB = require(path.join(SRC, 'consensus', 'gates', 'state_subtree_gate.js'));
 
 const SLOT = 'contract_state_root';
 

@@ -13,14 +13,15 @@
 # (hub_db_sync/, every .js under it, subdirectories included: the entry installs
 # them onto its prototype and resolves nothing outside the set), the
 # schema-version lockstep constant (hub_schema_version.js), the two activation
-# gate modules the client requires by relative path (DEP_FILES below; a consumer
-# without them fails at require on boot), and the mirror-table SQL twins the
+# gate modules the client requires by relative path (DEP_FILES below, under
+# src/consensus/gates/ since W5; a consumer without them fails at require on
+# boot), and the mirror-table SQL twins the
 # client's ensureTables() creates for consumers without their own schema
 # machinery (the explorer's copies land under src/sql/hub-mirror/ so they are
 # obviously not the explorer's own tables).
 #
 # DEP_FILES are NOT dependency-free. Since the activation registry (W3) each one
-# reads its rows through ./consensus/gate_registry, which every consumer carries
+# reads its rows through ../gate_registry, which every consumer carries
 # as ITS OWN registry: the entry src/consensus/gate_registry.js is the consumer's,
 # and the row part files under src/consensus/gate_registry/ are byte twins of the
 # indexer's src/protocol_changes/ parts kept in step by the platform's twin
@@ -38,7 +39,9 @@
 # dependency-free modules with ../, so a consumer that flattened it into src/
 # would resolve those requires one directory above its own src/ and fail at
 # boot. HUB_FILES therefore land in <service>/src/hub/ and DEP_FILES, which the
-# client reaches with ../, land in <service>/src/.
+# client reaches with ../../consensus/gates/, land in <service>/src/consensus/gates/
+# (the same tail every repo carries the W5 twins at, so the vendored copy stays
+# a raw byte twin of the canonical file).
 #
 # Usage:
 #   sync-hub-mirror-client.sh           Copy canonical -> every consumer (overwrites vendored copies).
@@ -54,7 +57,7 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 
 HUB_FILES="hub_db_sync.js hub_schema_version.js"
 HUB_DIRS="hub_db_sync"
-DEP_FILES="price_batching_floor_activation.js mirror_admission_activation.js"
+DEP_FILES="consensus/gates/price_batching_floor_gate.js consensus/gates/mirror_admission_gate.js"
 # What DEP_FILES require, relative to the consumer's src/: present or the pair
 # cannot load (see the header).
 REGISTRY_ENTRY="consensus/gate_registry.js"
@@ -127,7 +130,7 @@ for svc in $SERVICES; do
                 drift=1
             fi
         else
-            mkdir -p "$dest"
+            mkdir -p "$dest/$(dirname "$f")"
             cp "$SRC/$f" "$dest/$f"
         fi
     done

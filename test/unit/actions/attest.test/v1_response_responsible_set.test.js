@@ -25,9 +25,9 @@ const assert = require('assert');
 const sinon = require('sinon');
 const crypto = require('crypto');
 
-const swq = require('../../../../src/stake_weighted_quorum.js');
-const srb = require('../../../../src/snapshot_reorg_buffer.js');
-const wid = require('../../../../src/attest_responsible_widening_activation.js');
+const swq = require('../../../../src/consensus/stake_weighted_quorum.js');
+const srb = require('../../../../src/consensus/snapshot_reorg_buffer.js');
+const wid = require('../../../../src/consensus/gates/attest_responsible_widening_gate.js');
 const { PUBKEY_A, PUBKEY_B, SIG_A, SIG_B, REQ_ID, makeRequestRow, setUpAttestHandler, v1Data, v1Params, verifyAllSignatures } = require('../../../helpers/attest_fixture.js');
 
 // The handler under test and its mocked indexer, rebuilt before every test.

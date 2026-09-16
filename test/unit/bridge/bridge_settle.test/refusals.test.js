@@ -22,7 +22,7 @@
 
 const { BS, makeKey, NETWORK, SNAPSHOT, buildProof, makeTransfer, snapshotSet, makeCtx } = require('./helpers/settle_fixtures.js');
 const assert = require('assert');
-const swq    = require('../../../../src/stake_weighted_quorum.js');
+const swq    = require('../../../../src/consensus/stake_weighted_quorum.js');
 const CHK    = require('../../../../src/consensus/bridge_checkpoint_check.js');
 
 describe('bridge_settle: the XBRIDGE settle pass', function(){

@@ -265,7 +265,7 @@ describe('Rollback attest_validator_stats recompute @regression @tier3', functio
     // agreement this recompute's header demands, broken in the one direction no
     // existing case looked at (they assert THAT the lookup ran, never at what height).
     it('resolves the fallback capability set at the buried height, not the raw request block', async function () {
-        const srb      = require('../../../src/snapshot_reorg_buffer.js');
+        const srb      = require('../../../src/consensus/snapshot_reorg_buffer.js');
         const reqBlock = Number(expiredReqs[0].block_index);
         const buried   = srb.buriedSnapshotBlock(reqBlock, 'regtest');
         assert.strictEqual(buried, reqBlock - srb.CANONICAL_REORG_BUFFER,

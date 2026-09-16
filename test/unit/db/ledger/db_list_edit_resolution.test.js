@@ -41,7 +41,6 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../../../fixtures/config');
 const Utility           = require('../../../../src/utility');
 const Database          = require('../../../../src/db');
-const activation        = require('../../../../src/list_edit_resolution_activation');
 
 const ADDR_A = 'mmqFL1hiu2RDuyS69KS9ko6uaMryhANwsz';
 const ADDR_B = 'mk7MdP3qzVkgyjaYNR2sUY8Ggn4DWxt2KS';
@@ -201,38 +200,6 @@ describe('db.getList() LIST edit resolution @regression @tier1', function () {
 
 });
 
-describe('list_edit_resolution_activation flag day @regression @tier1', function () {
-
-    it('regtest is armed from genesis', function () {
-        assert.strictEqual(activation.isListEditResolutionActive(0, 'regtest', 'BTC'), true);
-    });
-
-    it('mainnet stays inert below its per-chain height', function () {
-        const h = activation.LIST_EDIT_RESOLUTION_ACTIVATION['BTC:mainnet'];
-        assert.strictEqual(activation.isListEditResolutionActive(h - 1, 'mainnet', 'BTC'), false);
-        assert.strictEqual(activation.isListEditResolutionActive(h,     'mainnet', 'BTC'), true);
-    });
-
-    it('each chain flips on its OWN height', function () {
-        const map = activation.LIST_EDIT_RESOLUTION_ACTIVATION;
-        for (const coin of ['BTC', 'LTC', 'DOGE']) {
-            for (const network of ['mainnet', 'testnet']) {
-                const h = map[coin + ':' + network];
-                assert.strictEqual(typeof h, 'number', coin + ':' + network + ' must be pinned');
-                assert.strictEqual(activation.isListEditResolutionActive(h - 1, network, coin), false);
-                assert.strictEqual(activation.isListEditResolutionActive(h, network, coin), true);
-            }
-        }
-    });
-
-    it('an absent or unparseable block index, and an unknown network, fail INERT', function () {
-        assert.strictEqual(activation.isListEditResolutionActive(null, 'regtest', 'BTC'), false);
-        assert.strictEqual(activation.isListEditResolutionActive(undefined, 'regtest', 'BTC'), false);
-        assert.strictEqual(activation.isListEditResolutionActive('nope', 'regtest', 'BTC'), false);
-        assert.strictEqual(activation.isListEditResolutionActive(999999999, 'nosuchnet', 'BTC'), false);
-    });
-
-});
 
 describe('getList() call sites carry block context (ratchet) @regression @tier1', function () {
 

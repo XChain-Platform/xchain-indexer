@@ -26,7 +26,7 @@ const arKey = require('../../actions/anchor/anchor_reward_key.js');
 // The frozen anchor/archive reward heights: the derive flag-day and the fleet-agreed
 // mirror-completeness watermark. Recovery-restored rewards claim their ORIGINAL derive
 // height from here, so a restored row and a live-derived one carry the same stamp.
-const ar = require('../../anchor_reward_activation.js');
+const ar = require('../../consensus/gates/anchor_reward_gate.js');
 
 const { getLogger } = require('../../observability/index.js');
 module.exports = {

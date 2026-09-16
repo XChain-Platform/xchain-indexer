@@ -26,7 +26,10 @@ const sinon = require('sinon');
 
 const { createBaseData } = require('../../../fixtures/mocks');
 const attestBcastFee = require('../../../../src/actions/attest/attest_broadcast_fee_gate.js');
-const arm = require('../../../../src/attest_response_mirror_activation.js');
+// The response-mirror flag day is a registry row (W5), stubbed through activeAt()
+// by its key; the fixture's beforeEach holds it OFF and the cases below drive it.
+const { stubGate } = require('../../../helpers/gate_modules.js');
+const RESPONSE_MIRROR_KEY = 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
 // Same module instance Attest holds a reference to (Node module cache); stubbing
 // `verify` here controls signature acceptance inside the handler.
 const ed25519 = require('../../../../src/consensus/ed25519.js');
@@ -79,7 +82,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
 
         it('an on-chain v1 for a mirror-era request is invalid, with the pinned status', async function () {
-            arm.isResponseMirrorActive.returns(true);
+            stubGate(sinon, RESPONSE_MIRROR_KEY, true);
             indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({ redundancy: 1 }));
             const data = v1Data();
             await handler.parse(v1Params([{ pubkey: PUBKEY_A, sig: SIG_A }]), data, null);
@@ -104,10 +107,10 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.ok(executeStub.parse.calledOnce);
         });
 
-        it('the era is read from the REQUEST block, through the one shared predicate', function () {
-            arm.isResponseMirrorActive.returns(true);
+        it('the era is read from the REQUEST block, through the one shared registry row', function () {
+            const mirrorGate = stubGate(sinon, RESPONSE_MIRROR_KEY, true);
             assert.strictEqual(handler.isMirrorEraRequest(makeRequestRow({ block_index: 90 })), true);
-            assert.ok(arm.isResponseMirrorActive.calledWith(90, 'regtest'),
+            assert.ok(mirrorGate.calledWith('regtest', null, 90, null),
                 'the request row block, never the response action block and never a hub-stated one');
             assert.strictEqual(handler.isMirrorEraRequest(null), false);
         });
@@ -126,7 +129,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             // Each of these rejects on its own below the height. Above it the era answers
             // first, so one wire cannot record two different reasons depending on the
             // request's incidental state.
-            arm.isResponseMirrorActive.returns(true);
+            stubGate(sinon, RESPONSE_MIRROR_KEY, true);
             for (const row of [makeRequestRow({ request_status: 'fulfilled' }),
                                makeRequestRow({ provider_id: 'llm' }),
                                makeRequestRow({ deadline_block: 1 })]) {
@@ -177,7 +180,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             it('MIRROR era: no attest_bcast row, and the WHOLE escrow splits', async function () {
                 // The exact amounts are the point of the row: retiring the carve-out
                 // changes real reward amounts above the height, so 4 must become 6.
-                arm.isResponseMirrorActive.returns(true);
+                stubGate(sinon, RESPONSE_MIRROR_KEY, true);
                 const request = feeRequestRow();
                 const data = createBaseData({
                     ACTION: 'ATTEST', FORMAT: 1, BLOCK_INDEX: 100, ACTION_INDEX: 60,
@@ -222,7 +225,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             });
 
             it('MIRROR era at REDUNDANCY 3: every signer gets an equal share of the whole escrow', async function () {
-                arm.isResponseMirrorActive.returns(true);
+                stubGate(sinon, RESPONSE_MIRROR_KEY, true);
                 indexer.indexerDb.getValidatorsByCapability.resolves([
                     { pubkey: PUBKEY_A }, { pubkey: PUBKEY_B }, { pubkey: 'c'.repeat(64) },
                 ]);
@@ -240,7 +243,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             it('the retirement keys on the REQUEST block, not the settling action block', async function () {
                 // A request admitted below the height settles under the legacy rules
                 // however late its response lands, which is what keeps replay stable.
-                arm.isResponseMirrorActive.callsFake((block) => Number(block) >= 95);
+                stubGate(sinon, RESPONSE_MIRROR_KEY, false).callsFake((key, network, coin, block) => Number(block) >= 95);
                 const data = createBaseData({
                     ACTION: 'ATTEST', FORMAT: 1, BLOCK_INDEX: 100, ACTION_INDEX: 60, BLOCK_TIME: 1700000000,
                 });

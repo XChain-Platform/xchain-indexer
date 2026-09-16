@@ -22,7 +22,7 @@
 'use strict';
 
 const crypto  = require('crypto');
-const { columnsAdmitBlocks } = require('../../mirror_admission_activation.js');
+const { columnsAdmitBlocks } = require('../../consensus/gates/mirror_admission_gate.js');
 // The ONE response verifier: this chain path and the hub-mirror applier call the
 // same module, so an artifact cannot be judged differently by delivery route.
 const avr     = require('./attest_response_verify.js');

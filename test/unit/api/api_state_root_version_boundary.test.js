@@ -47,7 +47,7 @@
 const assert = require('assert');
 
 const merkle = require('../../../src/consensus/merkle.js');
-const SUB    = require('../../../src/state_subtree_activation.js');
+const SUB    = require('../../../src/consensus/gates/state_subtree_gate.js');
 
 const { readApiSource } = require('../../helpers/api_source');
 const API_SRC = readApiSource();

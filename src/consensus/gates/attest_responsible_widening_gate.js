@@ -68,10 +68,13 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('../gate_registry');
 
-// The stage-2 selector. Required at the top: this module never feeds that one.
-const zc = require('./attest_zero_conf_activation.js');
+// The stage-2 selector is the zero-conf row, read through the registry by its literal
+// key (W5): the predicate module that once carried it is gone, and the row's own
+// fail-closed reading (null and unknown networks inactive, an unparseable height
+// inactive) is what the predicate spelled out.
+const ATTEST_ZERO_CONF_KEY = 'attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION';
 
 const ATTEST_RESPONSIBLE_WIDENING_ACTIVATION = copy('attest_responsible_widening_activation.ATTEST_RESPONSIBLE_WIDENING_ACTIVATION');
 
@@ -105,7 +108,7 @@ function widenSlots(atBlock, requestBlock, deadlineBlock, network){
     let dl  = parseInt(deadlineBlock);
     if(!Number.isFinite(req) || !Number.isFinite(at) || !Number.isFinite(dl)) return 0;
     if(req < threshold) return 0;
-    if(zc.isZeroConfActive(req, network)) return widenSlotsV2(at, req, dl);
+    if(activeAt(ATTEST_ZERO_CONF_KEY, network, null, req, null)) return widenSlotsV2(at, req, dl);
     let start = req + ATTEST_RESPONSIBLE_WIDENING.confirmations;
     let span  = dl - start;
     // Degenerate span (a deadline at or inside the confirmation lag): no room to

@@ -95,7 +95,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
             // Below the archive flag-day the reward was genuinely operator-tunable and
             // hub-pushed, so the archived amount IS what live nodes credited; pinning
             // it would fork the other way.
-            let arMod = require('../../../../src/anchor_reward_activation.js');
+            let arMod = require('../../../../src/consensus/gates/anchor_reward_gate.js');
             let saved = arMod.ARCHIVE_REWARD_ACTIVATION.regtest;
             arMod.ARCHIVE_REWARD_ACTIVATION.regtest = 999999999;           // pin the flag-day dormant
             try {

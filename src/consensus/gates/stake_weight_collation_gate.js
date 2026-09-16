@@ -61,7 +61,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('../gate_registry');
 
 const STAKE_WEIGHT_COLLATION = copy('stake_weight_collation_activation.STAKE_WEIGHT_COLLATION');
 

@@ -38,7 +38,7 @@ const { createMockIndexer, createBaseData } = require('../../../fixtures/mocks')
 
 const Anchor  = require('../../../../src/actions/anchor/index.js');
 const ed25519 = require('../../../../src/consensus/ed25519.js');
-const swq     = require('../../../../src/stake_weighted_quorum.js');
+const swq     = require('../../../../src/consensus/stake_weighted_quorum.js');
 const gateRegistry = require('../../../../src/consensus/gate_registry');
 const { stubActiveAt } = require('../../../helpers/gate_modules.js');
 const AUTHOR_KEY = 'archive_batch_author_activation.ARCHIVE_BATCH_AUTHOR_ACTIVATION';

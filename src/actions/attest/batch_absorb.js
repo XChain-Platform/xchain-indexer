@@ -22,7 +22,7 @@
 'use strict';
 
 const ed25519 = require('../../consensus/ed25519.js');
-const swq     = require('../../stake_weighted_quorum.js');
+const swq     = require('../../consensus/stake_weighted_quorum.js');
 // The v5/v6 wire: layout, chunking, caps and reassembly. Pure, and byte-twinned
 // into xchain-hub so the publisher that BUILDS a batch and this parser cannot
 // disagree about its bytes.

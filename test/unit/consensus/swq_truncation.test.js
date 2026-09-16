@@ -26,7 +26,7 @@
 'use strict';
 
 const assert = require('assert');
-const swq    = require('../../../src/stake_weighted_quorum.js');
+const swq    = require('../../../src/consensus/stake_weighted_quorum.js');
 
 describe('stake_weighted_quorum fail-closed on truncation (SWQ-TRUNC-1) @regression @security', function () {
 

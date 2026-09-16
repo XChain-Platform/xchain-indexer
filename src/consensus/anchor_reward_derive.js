@@ -53,9 +53,9 @@
 'use strict';
 
 const ed25519 = require('./ed25519.js');
-const swq     = require('../stake_weighted_quorum.js');
-const eq      = require('../equivocation_header.js');
-const ar      = require('../anchor_reward_activation.js');
+const swq     = require('./stake_weighted_quorum.js');
+const eq      = require('./equivocation_header.js');
+const ar      = require('./gates/anchor_reward_gate.js');
 const arKey   = require('../actions/anchor/anchor_reward_key.js');
 // The proof-and-mint step and the logical-reward grouping live beside this file in
 // anchor_reward_derive/. Every activation read (ar) stays here.

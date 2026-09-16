@@ -26,7 +26,7 @@
 const assert = require('assert');
 const M   = require('../../../src/consensus/merkle.js');
 const SC  = require('../../../src/state_commitment/index.js');
-const SUB = require('../../../src/state_subtree_activation.js');
+const SUB = require('../../../src/consensus/gates/state_subtree_gate.js');
 
 // Snapshot of the REAL armed heights, taken before any test mutates the map, so
 // a scratch-arm can restore rather than delete (deleting disarms the chain for

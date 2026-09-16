@@ -34,7 +34,7 @@
 const assert = require('assert');
 const path   = require('path');
 
-const MODULE_PATH = path.resolve(__dirname, '../../../src/mirror_admission_activation.js');
+const MODULE_PATH = path.resolve(__dirname, '../../../src/consensus/gates/mirror_admission_gate.js');
 const mirror = require(MODULE_PATH);
 
 // Load a FRESH copy of the module against a stand-in environment. The activation maps are

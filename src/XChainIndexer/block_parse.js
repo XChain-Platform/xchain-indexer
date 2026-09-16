@@ -23,7 +23,7 @@
 
 const fs           = require('fs');
 const protocolTime = require('../consensus/protocol_time.js');
-const stateCommitAct = require('../state_commitment_activation.js');
+const stateCommitAct = require('../consensus/gates/state_commitment_gate.js');
 const { collapseOutputFanout } = require('../chain/output_fanout.js');
 const { getLogger } = require('../observability/index.js');
 

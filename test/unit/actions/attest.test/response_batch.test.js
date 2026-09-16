@@ -25,7 +25,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const crypto = require('crypto');
 
-const swq = require('../../../../src/stake_weighted_quorum.js');
+const swq = require('../../../../src/consensus/stake_weighted_quorum.js');
 const abw = require('../../../../src/actions/attest/attest_batch_wire.js');
 // Same module instance Attest holds a reference to (Node module cache); stubbing
 // `verify` here controls signature acceptance inside the handler.

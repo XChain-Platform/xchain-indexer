@@ -39,7 +39,7 @@ const path   = require('path');
 const { concatSrcTreeFiles } = require('../../helpers/src_tree_files');
 
 const lifecycle = require('../../../src/hub/table_lifecycle.js');
-const stateHash = require('../../../src/stateHash.js');
+const stateHash = require('../../../src/consensus/state_hash.js');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '../../..', rel), 'utf8');
 
@@ -166,7 +166,7 @@ describe('Hash coverage guard @regression', function () {
             ['index_addresses', 'index_tickers'],
             'index_map hash class must cover exactly the two wire-^id consensus lookups');
         // Structural binding: the armed class queries both tables by block_index.
-        const src = read('src/stateHash.js');
+        const src = read('src/consensus/state_hash.js');
         for (const t of ['index_addresses', 'index_tickers']) {
             assert.ok(new RegExp(`FROM ${t} WHERE block_index = \\?`).test(src),
                 `stateHash.js no longer gathers the ${t} id-map delta; the index_map class declaration is stale`);
@@ -201,7 +201,7 @@ describe('Hash coverage guard @regression', function () {
         const commit = read('src/state_commitment/index.js');
         assert.ok(commit.indexOf('applyEscrowLeaves') !== -1,
             'stateCommitment.js no longer applies the escrow leaves into balances_root');
-        const act = require('../../../src/state_subtree_activation.js');
+        const act = require('../../../src/consensus/gates/state_subtree_gate.js');
         assert.ok(Number.isFinite(Number(act.ESCROW_LOCKED_LEAF_ACTIVATION['BTC:regtest'])),
             'ESCROW_LOCKED_LEAF_ACTIVATION lost its armed BTC:regtest height; re-check the declared coverage');
     });
@@ -220,7 +220,7 @@ describe('Hash coverage guard @regression', function () {
         // SQL must select by resolved_block (the same key the updated_rows
         // forward channel and the rollback re-open use) behind the activation
         // gate, with per-chain armed heights on every real chain:network pair.
-        const src = read('src/stateHash.js');
+        const src = read('src/consensus/state_hash.js');
         assert.ok(/FROM polls WHERE resolved_block BETWEEN \? AND \? ORDER BY action_index ASC/.test(src),
             'stateHash.js no longer gathers the poll-finalize flip by resolved_block; the polls state_hash declaration is stale');
         const map = stateHash.POLL_FINALIZE_STATE_HASH_ACTIVATION;
@@ -238,7 +238,7 @@ describe('Hash coverage guard @regression', function () {
         // SQL must derive the tick set from ledger rows at the block (the same
         // selection shape the updated_rows tokens-supply forward class uses) and
         // hash resolved (tick, supply) pairs, never surrogate ids.
-        const src = read('src/stateHash.js');
+        const src = read('src/consensus/state_hash.js');
         assert.ok(/SELECT tk\.tick AS tick, t\.supply AS supply FROM tokens t/.test(src),
             'stateHash.js no longer gathers (tick, supply); the tokens state_hash declaration is stale');
         for (const ledger of ['credits c', 'debits d', 'escrows e'])
@@ -257,7 +257,7 @@ describe('Hash coverage guard @regression', function () {
         // updated_rows BET forward channel and both rollback resets use) behind
         // the activation gate, resolving status strings via index_statuses
         // (never hashing the surrogate status_id), with per-chain armed heights.
-        const src = read('src/stateHash.js');
+        const src = read('src/consensus/state_hash.js');
         assert.ok(/FROM bet_feeds f JOIN index_statuses s ON \(s\.id = f\.feed_status_id\)[\s\S]{0,120}?WHERE f\.closed_block = \? OR f\.terminal_block = \? ORDER BY f\.action_index ASC/.test(src),
             'stateHash.js no longer gathers the bet_feeds flips by closed_block/terminal_block; the bet_feeds state_hash declaration is stale');
         assert.ok(/FROM bets b JOIN index_statuses s ON \(s\.id = b\.bet_status_id\) [\s\S]{0,80}?WHERE b\.settled_block = \? ORDER BY b\.action_index ASC/.test(src),

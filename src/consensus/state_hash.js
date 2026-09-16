@@ -54,7 +54,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('./gate_registry');
 
 const STATE_HASH_VERSION = copy('stateHash.STATE_HASH_VERSION');
 

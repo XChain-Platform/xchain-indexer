@@ -37,7 +37,7 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
     describe('relay canonicals', function () {
 
         it('the request canonical is the pinned field order the hub must reproduce', function () {
-            sinon.stub(require('../../../../src/equivocation_header.js'), 'isEquivHeaderActive').returns(false);
+            sinon.stub(require('../../../../src/consensus/equivocation_header.js'), 'isEquivHeaderActive').returns(false);
             const canonical = handler.relayRequestCanonical({
                 requestId: REQ_ID, snapshotBlock: 963000, network: 'mainnet',
                 originChain: 'LTC', originActionIndex: 4242, providerId: 'http_get',
@@ -51,7 +51,7 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
         });
 
         it('the response canonical is the pinned field order the hub must reproduce', function () {
-            sinon.stub(require('../../../../src/equivocation_header.js'), 'isEquivHeaderActive').returns(false);
+            sinon.stub(require('../../../../src/consensus/equivocation_header.js'), 'isEquivHeaderActive').returns(false);
             const bodyHash = crypto.createHash('sha256').update('body', 'utf8').digest('hex');
             const canonical = handler.relayResponseCanonical({
                 requestId: REQ_ID, snapshotBlock: 963000, network: 'mainnet',
@@ -64,7 +64,7 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
         });
 
         it('the two legs of one request_id never share an EQUIV round id', function () {
-            const eq = require('../../../../src/equivocation_header.js');
+            const eq = require('../../../../src/consensus/equivocation_header.js');
             sinon.stub(eq, 'isEquivHeaderActive').returns(true);
             const req = handler.relayRequestCanonical({
                 requestId: REQ_ID, snapshotBlock: 963000, network: 'mainnet',

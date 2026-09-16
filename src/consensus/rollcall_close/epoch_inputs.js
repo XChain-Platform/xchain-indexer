@@ -18,7 +18,7 @@
  *
  ********************************************************************/
 
-const rca = require('../../rollcall_activation.js');
+const rca = require('../gates/rollcall_gate.js');
 const { RollcallProofUnavailableError } = require('../doge_peer_clients/rollcall_proof_client.js');
 
 // The responsible set R(E) by effective key: the keys the peer is asked about,

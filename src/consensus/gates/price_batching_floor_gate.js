@@ -89,7 +89,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('../gate_registry');
 
 const PRICE_BATCHING_FLOOR_ACTIVATION = copy('price_batching_floor_activation.PRICE_BATCHING_FLOOR_ACTIVATION');
 

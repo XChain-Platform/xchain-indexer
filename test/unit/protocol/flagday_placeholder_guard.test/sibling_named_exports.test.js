@@ -30,6 +30,8 @@ const { siblingCheckout, skipOrFail } = require('../../../helpers/sibling_checko
 const { readSiblingModuleSource } = require('../../../helpers/sibling_module_source.js');
 
 const SRC = path.join(__dirname, '..', '..', '..', '..', 'src');
+// The cohort rows are registry rows (W5 retired their predicate-only shims).
+const registry = require(path.join(SRC, 'consensus', 'gate_registry'));
 
 const RATIFIED_BTC_HEIGHT = 963000;
 
@@ -49,9 +51,9 @@ describe('flag-day placeholder guard @regression @tier1', function () {
                 'constants.js must export a PRICE_SIG_TALLY_ACTIVATION map (the canonical authority for the indexer + hub copies)');
             assert.strictEqual(canon.PRICE_SIG_TALLY_ACTIVATION.mainnet, RATIFIED_BTC_HEIGHT,
                 'canonical PRICE signature-tally mainnet height must be the ratified ' + RATIFIED_BTC_HEIGHT);
-            const local = require(path.join(SRC, 'price_sig_tally_activation.js')).PRICE_SIG_TALLY_ACTIVATION;
+            const local = registry.get('price_sig_tally_activation.PRICE_SIG_TALLY_ACTIVATION');
             assert.deepStrictEqual(local, canon.PRICE_SIG_TALLY_ACTIVATION,
-                'the local price_sig_tally_activation.js map drifted from the canonical constants.js map');
+                'the local price_sig_tally_activation registry row drifted from the canonical constants.js map');
         });
 
         // same reasoning again for the remaining two cohort members.
@@ -60,16 +62,16 @@ describe('flag-day placeholder guard @regression @tier1', function () {
             const sibling = siblingCheckout(__dirname, p);
             if (!sibling.usable) return skipOrFail(this, sibling, 'the ATTEST_RELAY and ARCHIVE_REWARD docs pins');
             const canon = require(p);
-            for (const [mapName, file] of [
-                ['ATTEST_RELAY_ACTIVATION',   'attest_relay_activation.js'],
-                ['ARCHIVE_REWARD_ACTIVATION', 'anchor_reward_activation.js'],
+            for (const [mapName, key] of [
+                ['ATTEST_RELAY_ACTIVATION',   'attest_relay_activation.ATTEST_RELAY_ACTIVATION'],
+                ['ARCHIVE_REWARD_ACTIVATION', 'anchor_reward_activation.ARCHIVE_REWARD_ACTIVATION'],
             ]) {
                 assert.ok(canon[mapName] && typeof canon[mapName] === 'object',
                     'constants.js must export a ' + mapName + ' map');
                 assert.strictEqual(canon[mapName].mainnet, RATIFIED_BTC_HEIGHT,
                     'canonical ' + mapName + ' mainnet height must be the cohort height ' + RATIFIED_BTC_HEIGHT);
-                assert.deepStrictEqual(require(path.join(SRC, file))[mapName], canon[mapName],
-                    'the local ' + file + ' ' + mapName + ' map drifted from the canonical constants.js map');
+                assert.deepStrictEqual(registry.get(key), canon[mapName],
+                    'the local ' + key + ' registry row drifted from the canonical constants.js map');
             }
         });
     });
@@ -102,36 +104,3 @@ describe('flag-day placeholder guard @regression @tier1', function () {
     });
 });
 
-describe('flag-day placeholder guard @regression @tier1', function () {
-    // retraction_signing_activation.js is a fork-relevant flag-day twin that
-    // exists in three byte-identical copies (hub, indexer, explorer). It decides
-    // whether a mirror REFUSES an unsigned quorum-class retraction, so a one-sided edit
-    // (a comparator flip >= -> >, a testnet/regtest value change, an added second map,
-    // or any body rewrite) would let the hub sign under one era rule while a mirror
-    // enforces another - with no CI signal. The entry's substring checks only prove the
-    // literal `mainnet: 963000` appears SOMEWHERE in each copy; they pass through all of
-    // those drifts. Assert full-file byte-identity of the hub and explorer copies against
-    // the local indexer copy (all three are byte-identical today, headers included, so a
-    // plain string compare is correct). Same skip machinery as the sibling sweep above.
-    describe('retraction_signing_activation.js is byte-identical across hub/indexer/explorer', function () {
-        const LOCAL = path.join(SRC, 'retraction_signing_activation.js');
-        const SIBLING_TWINS = [
-            '../../../../../xchain-hub/src/retraction_signing_activation.js',
-            '../../../../../xchain-explorer/src/retraction_signing_activation.js',
-        ];
-        for (const rel of SIBLING_TWINS) {
-            it(rel.replace(/^(\.\.\/)+/, '') + ' is byte-identical to the indexer copy', function () {
-                const p = path.resolve(__dirname, rel);
-                const verdict = siblingCheckout(__dirname, p);
-                if (!verdict.usable) return skipOrFail(this, verdict, 'the retraction twin byte identity of ' + rel);
-                const local   = fs.readFileSync(LOCAL, 'utf8');
-                const sibling = fs.readFileSync(p, 'utf8');
-                assert.strictEqual(sibling, local,
-                    p + ' has diverged from the indexer copy of retraction_signing_activation.js. ' +
-                    'All three copies (hub, indexer, explorer) must stay byte-identical; a one-sided ' +
-                    'edit to this flag-day twin forks retraction acceptance between the hub and its ' +
-                    'mirrors. Reconcile the three copies.');
-            });
-        }
-    });
-});

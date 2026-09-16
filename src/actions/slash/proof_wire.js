@@ -24,7 +24,7 @@
  *
  ********************************************************************/
 
-const eq = require('../../equivocation_header.js');
+const eq = require('../../consensus/equivocation_header.js');
 
 
 // ENGINE_TAG → the membership label the locked snapshot governs that engine's signer

@@ -33,7 +33,7 @@
 
 'use strict';
 
-const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../stateHash.js');
+const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../consensus/state_hash.js');
 
 // ANCHOR versions that carry a full checkpoint identity (chain/network/block_index/
 // checkpoint_seq + the state hashes). Version 2 is an archive continuation chunk with

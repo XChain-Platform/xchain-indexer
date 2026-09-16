@@ -28,7 +28,7 @@
 'use strict';
 
 const ed25519 = require('../../consensus/ed25519.js');
-const swq     = require('../../stake_weighted_quorum.js');
+const swq     = require('../../consensus/stake_weighted_quorum.js');
 
 const { getLogger } = require('../../observability/index.js');
 

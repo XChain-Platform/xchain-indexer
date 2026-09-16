@@ -19,8 +19,9 @@
 
 const crypto = require('crypto');
 const zlib   = require('zlib');
-const eq     = require('../../src/equivocation_header.js');
-const ccr    = require('../../src/cross_chain_royalty_activation.js');
+const eq     = require('../../src/consensus/equivocation_header.js');
+const gateRegistry = require('../../src/consensus/gate_registry');
+const CROSS_CHAIN_ROYALTY_KEY = 'cross_chain_royalty_activation.CROSS_CHAIN_ROYALTY_ACTIVATION';
 
 // ── Real Ed25519 helpers ────────────────────────────────────────────────────
 function makeKeypair() {
@@ -57,7 +58,7 @@ function matchCanonical(m) {
         m.a_kind || 'swap', String(m.a_filled_before != null ? m.a_filled_before : '0'),
         m.b_kind || 'swap', String(m.b_filled_before != null ? m.b_filled_before : '0')].join('|');
     // Royalty legs ride the signed match at/above CROSS_CHAIN_ROYALTY (regtest genesis).
-    if (ccr.isCrossChainRoyaltyActive(m.snapshot_block, m.network))
+    if (gateRegistry.activeAt(CROSS_CHAIN_ROYALTY_KEY, m.network, null, m.snapshot_block, null))
         raw += '|' + String(m.a_payout_legs || '') + '|' + String(m.b_payout_legs || '');
     // EQUIV active in regtest: TAG=XDEX, ROUND_ID=match_id, VIEW=finalizing_view (default 0).
     if (eq.isEquivHeaderActive(m.snapshot_block, m.network))

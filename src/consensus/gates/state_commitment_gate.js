@@ -31,7 +31,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('../gate_registry');
 
 const STATE_COMMITMENT_ACTIVATION = copy('state_commitment_activation.STATE_COMMITMENT_ACTIVATION');
 

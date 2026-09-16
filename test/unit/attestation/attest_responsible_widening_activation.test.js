@@ -25,8 +25,10 @@
 
 const assert = require('assert');
 const path   = require('path');
-const wid    = require('../../../src/attest_responsible_widening_activation.js');
-const zc     = require('../../../src/attest_zero_conf_activation.js');
+const wid    = require('../../../src/consensus/gates/attest_responsible_widening_gate.js');
+// The zero-conf flip is a registry row (W5), read by its key.
+const gateRegistry = require('../../../src/consensus/gate_registry');
+const ZERO_CONF_KEY = 'attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION';
 // Decides whether the hub twin path may be trusted before either guard reads it.
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
@@ -111,7 +113,7 @@ describe('attest_responsible_widening (indexer copy)', function () {
             // hardcoded network list: where zero-conf is armed on the request's own
             // block the ladder runs V2 and the ceiling is headroom + maxSlots; where it is
             // not, the ceiling is stage-1's bare maxSlots.
-            const zcActive = zc.isZeroConfActive(height, net);
+            const zcActive = gateRegistry.activeAt(ZERO_CONF_KEY, net, null, height, null);
             const expected = zcActive
                 ? wid.ATTEST_RESPONSIBLE_WIDENING_V2.headroom + wid.ATTEST_RESPONSIBLE_WIDENING_V2.maxSlots
                 : wid.ATTEST_RESPONSIBLE_WIDENING.maxSlots;
@@ -122,8 +124,8 @@ describe('attest_responsible_widening (indexer copy)', function () {
 
     it('stage 1 (testnet, widening armed, request below the zero-conf flip): grants nothing in the first segment and both slots before the deadline', function () {
         assert.strictEqual(wid.ATTEST_RESPONSIBLE_WIDENING_ACTIVATION.testnet, 150780);
-        assert.strictEqual(typeof zc.ATTEST_ZERO_CONF_ACTIVATION.testnet, 'number');
-        assert.ok(REQ_S1 < zc.ATTEST_ZERO_CONF_ACTIVATION.testnet, 'stage 1 is asserted on a request below the zero-conf flip (D106)');
+        assert.strictEqual(typeof gateRegistry.get(ZERO_CONF_KEY).testnet, 'number');
+        assert.ok(REQ_S1 < gateRegistry.get(ZERO_CONF_KEY).testnet, 'stage 1 is asserted on a request below the zero-conf flip (D106)');
         for (const at of [REQ_S1, REQ_S1 + 3, REQ_S1 + 4])
             assert.strictEqual(wid.widenSlots(at, REQ_S1, DEADLINE_S1, 'testnet'), 0, 'block ' + at);
         assert.strictEqual(wid.widenSlots(REQ_S1 + 6, REQ_S1, DEADLINE_S1, 'testnet'), 1);
@@ -159,7 +161,7 @@ describe('attest_responsible_widening: the V2 ladder (zero-conf armed, D27, D28)
         // regtest arms ATTEST_ZERO_CONF_ACTIVATION at 0, so REQ/DEADLINE (BTC
         // testnet4's measured incident block numbers, reused here as arbitrary regtest
         // heights) run the V2 branch of widenSlots.
-        assert.strictEqual(zc.isZeroConfActive(REQ, 'regtest'), true);
+        assert.strictEqual(gateRegistry.activeAt(ZERO_CONF_KEY, 'regtest', null, REQ, null), true);
     });
 
     it('grants headroom at the request block, where elapsed is 0 (D27)', function () {
@@ -205,7 +207,7 @@ describe('attest_responsible_widening: the V2 ladder (zero-conf armed, D27, D28)
 
 describe('attest_responsible_widening: hub/indexer twin', function () {
 
-    const HUB_COPY = path.resolve(__dirname, '../../../../xchain-hub/src/attest_responsible_widening_activation.js');
+    const HUB_COPY = path.resolve(__dirname, '../../../../xchain-hub/src/consensus/gates/attest_responsible_widening_gate.js');
 
     // Skips green when the sibling checkout is absent, matching the house convention in
     // activation_constants_parity.test.js; CI sets XCHAIN_REQUIRE_SIBLINGS=1 to make it hard.

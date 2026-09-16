@@ -24,8 +24,8 @@
 'use strict';
 
 const crypto    = require('crypto');
-const swq       = require('../stake_weighted_quorum.js');
-const srb       = require('../snapshot_reorg_buffer.js');
+const swq       = require('../consensus/stake_weighted_quorum.js');
+const srb       = require('../consensus/snapshot_reorg_buffer.js');
 const pmsh      = require('../attestation/providerMinStakeHistory.js');
 // The rules-aware capability filter the live attest.js path applies. The reorg
 // recompute must subtract the SAME keys or it charges missed_count to validators

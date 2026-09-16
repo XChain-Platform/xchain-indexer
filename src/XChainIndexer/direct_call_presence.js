@@ -26,7 +26,7 @@ const { HUB_SYNC_WATERMARK_GRACE_S } = require('../hub/hub_db_sync.js');
 // Only the margin table is read from the activation module. admitMarginBlocks is a pure
 // lookup over a frozen table, so holding it from require time carries no activation arm
 // (the admission suites purge and re-require the activation module to re-arm it).
-const { admitMarginBlocks } = require('../mirror_admission_activation.js');
+const { admitMarginBlocks } = require('../consensus/gates/mirror_admission_gate.js');
 const { getLogger } = require('../observability/index.js');
 
 // One probe of the height form (above the activation). Records the floor it read on
