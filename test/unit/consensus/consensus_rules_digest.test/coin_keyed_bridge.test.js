@@ -49,17 +49,25 @@ describe('consensus_rules_digest: the coin-keyed bridge gate', function () {
         assert.notStrictEqual(crd.computeConsensusRulesDigest().gates[KEY], crd.ABSENT);
     });
 
-    // As SHIPPED: regtest 0, every other slot on the far-future sentinel.
-    it('is active on regtest from block 0 on every coin, and dark on testnet and mainnet', function () {
+    // As SHIPPED since the v0.19.0 cut: regtest 0, every mainnet slot on the far-future
+    // sentinel, and one sized testnet height per chain (BTC 152929, LTC 4887898,
+    // DOGE 67902062, read from the map rather than repeated here so this case grades the
+    // resolver against whatever the train wrote) with the bare testnet fallback still dark.
+    it('is active on regtest from block 0 on every coin, dark on mainnet, and armed on testnet at each chain\'s own height', function () {
+        const map = JSON.parse(crd.computeConsensusRulesDigest().gates[KEY]); // the digest carries each gate's canonical JSON
         for (const coin of ['BTC', 'LTC', 'DOGE']) {
             assert.ok(crd.activeGatesAt(0, 'regtest', coin).includes(KEY), 'regtest ' + coin);
-            for (const net of ['testnet', 'mainnet']) {
-                assert.ok(!crd.activeGatesAt(crd.FAR_FUTURE_HEIGHT_SENTINEL, net, coin).includes(KEY),
-                    'an unsized slot must stay dark however high ' + net + ' climbs: ' + coin);
-            }
+            assert.ok(!crd.activeGatesAt(crd.FAR_FUTURE_HEIGHT_SENTINEL, 'mainnet', coin).includes(KEY),
+                'an unsized slot must stay dark however high mainnet climbs: ' + coin);
+            const h = map[coin + ':testnet'];
+            assert.ok(Number.isFinite(h) && h > 0 && h < crd.FAR_FUTURE_HEIGHT_SENTINEL, coin + ':testnet is not a sized height');
+            assert.ok(!crd.activeGatesAt(h - 1, 'testnet', coin).includes(KEY), coin + ' one block below its testnet height');
+            assert.ok(crd.activeGatesAt(h, 'testnet', coin).includes(KEY), coin + ' at its testnet height');
         }
         assert.ok(crd.activeGatesAt(0, 'regtest').includes(KEY), 'and with no coin named');
-        assert.ok(!crd.activeGatesAt(crd.FAR_FUTURE_HEIGHT_SENTINEL, 'testnet').includes(KEY));
+        // The bare fallback is still the sentinel, so an unlisted testnet chain stays dark.
+        assert.strictEqual(map.testnet, crd.FAR_FUTURE_HEIGHT_SENTINEL);
+        assert.ok(!crd.activeGatesAt(crd.FAR_FUTURE_HEIGHT_SENTINEL, 'testnet', 'BCH').includes(KEY));
     });
 
     // One chain armed, another not: the shape the arming train writes.
@@ -135,5 +143,30 @@ describe('consensus_rules_digest: the coin-keyed bridge gate', function () {
                 }
             }
         }
+    });
+});
+
+// The shipped row, pinned by value: a companion to the resolver cases above, in its own
+// block so each describe stays under the readability limit.
+describe('consensus_rules_digest: the coin-keyed bridge gate as shipped', function () {
+    // The testnet heights the v0.19.0 train wrote, pinned as literals so the shipped row
+    // cannot drift from the cut's record without this suite saying so (the case above reads
+    // them from the row, so it alone would follow a drift). Sized 2026-09-16 (re-cut 16:33Z
+    // after the chain overran the first sizing) from each chain's own tip (TBTC 152,716,
+    // TLTC 4,887,644, TDOGE 67,900,748) and its measured cadence: the destinations 10 h above
+    // their tips, the BTC origin 30 h above its own. A later train re-arms by a new row and a
+    // new literal here, never by editing the row alone.
+    it('carries the cut\'s testnet heights as shipped, mainnet and both bare fallbacks on the sentinel, regtest at genesis', function () {
+        const ARMED_TESTNET = { 'BTC:testnet': 152929, 'LTC:testnet': 4887898, 'DOGE:testnet': 67902062 };
+        const map = JSON.parse(crd.computeConsensusRulesDigest().gates[KEY]);
+        for (const net of ['mainnet', 'testnet'])
+            assert.strictEqual(map[net], crd.FAR_FUTURE_HEIGHT_SENTINEL, net + ' fallback is not the sentinel');
+        for (const coin of ['BTC', 'LTC', 'DOGE']) {
+            assert.strictEqual(map[coin + ':mainnet'], crd.FAR_FUTURE_HEIGHT_SENTINEL,
+                coin + ':mainnet carries a height; nothing arms on mainnet before the checkpoint cross-check lands');
+            assert.strictEqual(map[coin + ':testnet'], ARMED_TESTNET[coin + ':testnet'],
+                coin + ':testnet does not carry the height the v0.19.0 cut sized; a height written here is the train\'s act, not a build\'s');
+        }
+        assert.strictEqual(map.regtest, 0);
     });
 });

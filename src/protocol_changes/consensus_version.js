@@ -85,6 +85,11 @@
 // set is identical on both sides of the bump. The two rules this train carries,
 // CONTRACT_META_REQUIRED and REST_PATTERN_METER, both register at 0.2.0 and take
 // their own per-network instants, not this ordinal.
-const CONSENSUS_VERSION = '0.18.0';
+// 0.18.0 -> 0.19.0 registers nothing new, checked the same way: all 96 entries
+// still sit at 0.1.0 (24) and 0.2.0 (72), so the enabled set is identical on
+// both sides of the bump. The bridge train's consensus work (the XBRIDGE handler
+// and the settle pass) arms on the per-chain XCHAIN_BRIDGE_ACTIVATION heights and
+// the TRAIN_ACTIVATION 0.19.0 row sized at the cut, not on this ordinal.
+const CONSENSUS_VERSION = '0.19.0';
 
 module.exports = { CONSENSUS_VERSION };
