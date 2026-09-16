@@ -98,21 +98,9 @@
 
 'use strict';
 
-// Per-chain activation height, interpreted as the processing chain's OWN
-// block_index. At/after the height a SWEEP settle writes no debit/credit leg
-// for a held tick whose amount is not above zero; below it the legs are
-// written exactly as the deployed fleet writes them.
-const SWEEP_ZERO_LEG_ACTIVATION = {
-    'BTC:mainnet':  null,         // INERT: operator-owned, sized above the deploy tip on the arming train
-    'LTC:mainnet':  null,         // INERT: operator-owned, sized above the deploy tip on the arming train
-    'DOGE:mainnet': null,         // INERT: operator-owned, sized above the deploy tip on the arming train
-    mainnet:        null,         // INERT: a coin with no entry above inherits the unarmed posture
-    'BTC:testnet':  156000,       // SIZED 2026-09-11: chain_tip 151,994 + 3,024 (21d @144/day) = 155,018, rounded up; shared with STAKE_KEY_REUSE_ACTIVATION
-    'LTC:testnet':  4897000,      // SIZED 2026-09-11: chain_tip 4,883,984 + 12,096 (21d @576/day) = 4,896,080, rounded up; shared with STAKE_KEY_REUSE_ACTIVATION
-    'DOGE:testnet': 67920000,     // SIZED 2026-09-11: chain_tip 67,888,041 + 30,240 (21d @1440/day) = 67,918,281, rounded up; shared with STAKE_KEY_REUSE_ACTIVATION
-    testnet:        null,         // INERT: a testnet coin with no entry above keeps writing the legs
-    regtest:        0,            // genesis-active so the e2e venue exercises the armed rule
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const SWEEP_ZERO_LEG_ACTIVATION = copy('sweep_zero_leg_activation.SWEEP_ZERO_LEG_ACTIVATION');
 
 // Resolve the per-chain threshold: '<COIN>:<network>' key first, then the bare
 // network key. Unknown network -> undefined -> inert/off.

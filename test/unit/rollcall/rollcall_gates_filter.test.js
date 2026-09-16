@@ -29,6 +29,9 @@ const assert = require('assert');
 
 const FILTER_PATH = require.resolve('../../../src/actions/attest/rollcall_gates_filter.js');
 const ACTIV_PATH  = require.resolve('../../../src/rollcall_gates_activation.js');
+// The registry the shim reads its table from: purged with it, so the venue's
+// arming is re-read (activation-registry W3, shared_rows.js registerRows).
+const REGISTRY_PATH = require.resolve('../../../src/protocol_changes.js');
 const ENV_KEY     = 'XC_ROLLCALL_GATES_REGTEST_ACTIVATION';
 
 // The digest and burial seams are deliberately NOT busted: the armed filter must
@@ -42,6 +45,7 @@ function reload(envValue){
     else process.env[ENV_KEY] = envValue;
     delete require.cache[FILTER_PATH];
     delete require.cache[ACTIV_PATH];
+    delete require.cache[REGISTRY_PATH];
     return require(FILTER_PATH);
 }
 

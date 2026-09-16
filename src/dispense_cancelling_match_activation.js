@@ -45,15 +45,9 @@
  *
  ********************************************************************/
 
-// Per-network activation, interpreted against the block's consensus timestamp
-// (data['BLOCK_TIME']). Mainnet flips at the coordinated 2.0.0 contract-era
-// flag-day; testnet/regtest are active from genesis, mirroring the 2.0.0
-// protocol_changes cohort (testnet_time/regtest_time = 0).
-const DISPENSE_CANCELLING_MATCH_ACTIVATION = {
-    mainnet: 1786060800,    // 2026-08-07 00:00:00 UTC - coordinated 2.0.0 flag-day; deploy ALL indexers before this time
-    testnet: 0,
-    regtest: 0,
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const DISPENSE_CANCELLING_MATCH_ACTIVATION = copy('dispense_cancelling_match_activation.DISPENSE_CANCELLING_MATCH_ACTIVATION');
 
 // Whether the corrected cancelling-dispenser correlation is in effect for a
 // block whose consensus timestamp is `blockTime` on `network`. Below the

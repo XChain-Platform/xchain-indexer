@@ -68,6 +68,27 @@ describe('protocol_changes/core: addGate validation @regression @tier1', functio
     });
 });
 
+describe('protocol_changes/core: copy() @regression @tier1', function () {
+    it('hands back an equal, mutable, fresh deep copy that never reaches the stored row', function () {
+        const r = createRegistry();
+        r.addGate('a.H', 'height', { 'BTC:testnet': 145000, regtest: 0 });
+        r.addGate('a.C', 'constant', ['x', { k: /re/i }]);
+        r.addGate('a.N', 'constant', 42);
+        const h = r.copy('a.H');
+        assert.deepStrictEqual(h, r.get('a.H'));
+        assert.notStrictEqual(h, r.get('a.H'));
+        assert.ok(!Object.isFrozen(h));
+        h['BTC:testnet'] = 1;
+        assert.strictEqual(r.get('a.H')['BTC:testnet'], 145000, 'the stored row must not move');
+        assert.notStrictEqual(r.copy('a.H'), h, 'every call is a fresh copy');
+        const c = r.copy('a.C');
+        assert.ok(!Object.isFrozen(c) && !Object.isFrozen(c[1]));
+        assert.strictEqual(c[1].k, r.get('a.C')[1].k, 'a RegExp is handed back as it is');
+        assert.strictEqual(r.copy('a.N'), 42);
+        assert.throws(() => r.copy('a.X'), (e) => e instanceof RegistryMissError);
+    });
+});
+
 describe('protocol_changes/core: get, has, rows and the miss throw @regression @tier1', function () {
     it('get() throws RegistryMissError naming the key; has() answers false', function () {
         const r = createRegistry();

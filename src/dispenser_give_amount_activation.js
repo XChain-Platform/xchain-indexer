@@ -52,13 +52,9 @@
  *
  ********************************************************************/
 
-// Per-network activation, interpreted against the block's consensus timestamp
-// (data['BLOCK_TIME']).
-const DISPENSER_GIVE_AMOUNT_ACTIVATION = {
-    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 dispensers, 0 dispenses, measured 2026-09-09)
-    testnet: 0,
-    regtest: 0,
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const DISPENSER_GIVE_AMOUNT_ACTIVATION = copy('dispenser_give_amount_activation.DISPENSER_GIVE_AMOUNT_ACTIVATION');
 
 // Whether a balance dispenser must carry a positive GIVE_AMOUNT for a block
 // whose consensus timestamp is `blockTime` on `network`. Below the threshold ->

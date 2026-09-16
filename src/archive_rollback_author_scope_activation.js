@@ -64,22 +64,11 @@
 
 'use strict';
 
-// Per-network activation, interpreted against the block index a rollback targets,
-// on the DOGE scale (see the KEYED ON note above).
-const ARCHIVE_ROLLBACK_AUTHOR_SCOPE_ACTIVATION = {
-    mainnet: 0,            // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 archive chunks, measured 2026-09-09), and ARCHIVE_BATCH_AUTHOR is 0 there too, so the precondition holds
-    testnet: 67915000,     // testnet runs a public chain with live history, so 0 would be retroactive rather than a flag day; TDOGE tip 67881714 on 2026-09-09 + 33286 blocks @1440/day = ~23 days, to ride the v0.17.0 train
-    regtest: 9999999999,   // INERT sentinel: keeps the flag-day-off control path drivable on a throwaway stack
-};
+const { get, copy, activeAt } = require('./protocol_changes');
 
-// The joins that bind an orphaned chunk to its own head's author. Spliced into
-// the reset UPDATE by both the source indexer and the replica so the two cannot
-// drift; `c` is the orphaned chunk and `p` the surviving head, as named there.
-const ARCHIVE_AUTHOR_SCOPE_JOIN_SQL =
-    'JOIN actions         pact ON pact.action_index = p.action_index ' +
-    'JOIN index_addresses padr ON padr.id = pact.source_id ' +
-    'JOIN actions         cact ON cact.action_index = c.action_index ' +
-    'JOIN index_addresses cadr ON cadr.id = cact.source_id AND cadr.address = padr.address ';
+const ARCHIVE_ROLLBACK_AUTHOR_SCOPE_ACTIVATION = copy('archive_rollback_author_scope_activation.ARCHIVE_ROLLBACK_AUTHOR_SCOPE_ACTIVATION');
+
+const ARCHIVE_AUTHOR_SCOPE_JOIN_SQL = copy('archive_rollback_author_scope_activation.ARCHIVE_AUTHOR_SCOPE_JOIN_SQL');
 
 // Whether the reset is publisher-scoped for a rollback targeting `blockIndex` on
 // `network`. A non-numeric height, an unknown network or an omitted one -> false

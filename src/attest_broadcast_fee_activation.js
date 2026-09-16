@@ -84,54 +84,11 @@
 
 'use strict';
 
-// Per-network activation height (LOCAL COPY of the canonical map in
-// xchain-documentation/protocol/constants.js). Compared against the LOCAL block_index
-// of the SETTLING action (the ATTEST v1 response, or the v4 relay response), which is
-// the block whose oracle price the conversion reads and the block the reward rows are
-// stamped with.
-// TESTNET ARMED AT 0, operator-ratified 2026-08-18 under the standing ruling that every
-// platform feature must be ACTIVE on testnet, so nothing is found dormant after release.
-// Safe for the same MEASURED reason as ATTEST_REQUEST_CAP_ACTIVATION rather than by
-// assumption: this gate only changes how a fulfilled ATTEST settle splits its escrow, and
-// the live explorer reports `total: 0` attestation rows EVER recorded on BTC, LTC and DOGE
-// testnet alike (/{TBTC,TLTC,TDOGE}/api/attestations, checked 2026-08-18). No settle has
-// ever happened on testnet, so there is no reward split to reinterpret and replay stays
-// byte-identical. MAINNET was measured the same way on 2026-09-09 and armed at genesis by
-// that day's ruling: 0 attestation rows on BTC, LTC and DOGE mainnet, so no settle exists
-// there either and a from-genesis replay is the witness.
-const ATTEST_BROADCAST_FEE_ACTIVATION = {
-    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 attestations, measured 2026-09-09)
-    testnet: 0,           // ARMED at genesis (operator-ratified 2026-08-18; zero historical attestation settles, so nothing is reinterpreted)
-    regtest: 0,           // ARMED at genesis on regtest so the e2e venue exercises the carve-out
-};
+const { get, copy, activeAt } = require('./protocol_changes');
 
-// Per-provider broadcast-fee allowance, denominated in NATIVE coin (whole coins, not
-// satoshis), LOCAL COPY of the canonical map in xchain-documentation/protocol/constants.js.
-//
-// PROVIDERS holds the shipped per-provider default. DEFAULT covers a provider an
-// operator registered through an ATTESTATION.PROVIDERS overlay that this map does not
-// name. HARD_MAX is the ceiling every resolved value is clamped to, including one an
-// overlay supplied, which is what keeps the bound consensus-visible rather than
-// operator-controlled.
-//
-// SIZING. A BTC ATTEST v1 carrying a small response is a few hundred to a few thousand
-// satoshis of miner fee at ordinary congestion. 0.0001 BTC (10,000 sat) covers that with
-// room and still costs a fraction of a normal request fee, which is what "conservative"
-// means here: the allowance is paid FLAT (see the header, decision 1), so an over-sized
-// default would systematically overpay the leader out of the author's escrow. The llm
-// provider carries the same figure; its responses are capped SMALLER than http_get's
-// (16KB vs 32KB), so it has no case for a wider allowance.
-//
-// These values are consensus-visible the moment the gate arms, so a change to any of
-// them needs its own flag-day exactly as the height does.
-const ATTEST_BROADCAST_FEE_CAP = {
-    DEFAULT:  '0.00010000',
-    HARD_MAX: '0.00100000',
-    PROVIDERS: {
-        http_get: '0.00010000',
-        llm:      '0.00010000',
-    },
-};
+const ATTEST_BROADCAST_FEE_ACTIVATION = copy('attest_broadcast_fee_activation.ATTEST_BROADCAST_FEE_ACTIVATION');
+
+const ATTEST_BROADCAST_FEE_CAP = copy('attest_broadcast_fee_activation.ATTEST_BROADCAST_FEE_CAP');
 
 // Whether the leader broadcast-fee carve-out is in effect for a settle at `blockIndex`
 // on `network`. Below the threshold (or an inert null / unknown network) -> off, and the

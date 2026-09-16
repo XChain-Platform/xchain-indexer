@@ -110,17 +110,11 @@
  *
  ********************************************************************/
 
-// Per-network activation, interpreted against the block's consensus timestamp
-// (data['BLOCK_TIME']).
-const AMOUNT_REPRESENTABILITY_ACTIVATION = {
-    mainnet: 9999999999,    // UNARMED (house sentinel, year 2286): mainnet writes are held
-    testnet: 9999999999,    // UNARMED (house sentinel): live launched history, arm needs a measured replay witness
-    regtest: 0,
-};
+const { get, copy, activeAt } = require('./protocol_changes');
 
-// Integer capacity of DECIMAL(60,18), the widest scale the consensus
-// aggregations cast to. See the WHY 42 INTEGER DIGITS note above.
-const AMOUNT_MAX_INTEGER_DIGITS = 42;
+const AMOUNT_REPRESENTABILITY_ACTIVATION = copy('amount_representability_activation.AMOUNT_REPRESENTABILITY_ACTIVATION');
+
+const AMOUNT_MAX_INTEGER_DIGITS = copy('amount_representability_activation.AMOUNT_MAX_INTEGER_DIGITS');
 
 // A plain unsigned decimal numeral: digits, optionally one '.' and at least one
 // more digit. Anchored, so exponent notation, signs, radix prefixes, whitespace

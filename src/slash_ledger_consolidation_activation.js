@@ -69,22 +69,9 @@
  *
  ********************************************************************/
 
-// Per-chain activation heights, interpreted against the chain's own block_index.
-// `null` = NOT YET PINNED = inert (legacy per-emission overwrite, byte-identical
-// replay).
-const SLASH_LEDGER_CONSOLIDATION_ACTIVATION = {
-    // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet
-    // history (0 stakes, 0 slashes on every chain, measured 2026-09-09).
-    'BTC:mainnet':  0,
-    'LTC:mainnet':  0,
-    'DOGE:mainnet': 0,
-    // Unpinned: testnet carries stake history, so its heights are pinned at
-    // flag-day assembly with the replay evidence that step requires.
-    'BTC:testnet':  null,
-    'LTC:testnet':  null,
-    'DOGE:testnet': null,
-    regtest: 0,
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const SLASH_LEDGER_CONSOLIDATION_ACTIVATION = copy('slash_ledger_consolidation_activation.SLASH_LEDGER_CONSOLIDATION_ACTIVATION');
 
 // Per-chain threshold with a network-wide fallback, byte-for-byte the lookup
 // stake_weight_collation_activation.js uses. A coin-less caller (unit fixtures)

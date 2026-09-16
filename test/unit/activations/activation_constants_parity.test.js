@@ -49,6 +49,13 @@ const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.
 // The canonical checkout and the hook that loads it, shared with the height-ordering part.
 const { CONSTANTS_PATH, canonExists, resolveCanonSource, loadCanon } =
     require('./activation_constants_parity.test/helpers/canon_source.js');
+// The activation registry (W3): every GATES row below is a registry row under
+// its `<stem>.<EXPORT>` key, except the ones NOT_A_ROW names, and the module's
+// export is that row (the same object when the module exports the frozen row,
+// an equal copy when it exports a mutable one for its tests to patch).
+const registry = require('../../../src/protocol_changes.js');
+const NOT_A_ROW = new Set(['consensus/reserved_roots.js']);
+function registryKey(file, exportName) { return file.replace(/\.js$/, '') + '.' + exportName; }
 
 // module filename in src/ -> the named export it and constants.js share.
 const GATES = [
@@ -225,6 +232,25 @@ describe('activation-gate constant parity to canonical constants.js @regression'
                 'undefined to undefined and pass vacuously');
         }
     });
+
+    // The registry half of the same floor: each row resolves by its registry key too, and
+    // what the module exports IS that row. A shim that read a different table than the
+    // fingerprint hashes would be the straggler v2 exists to expose.
+    it('resolves every gated constant by registry key, equal to the module export', function () {
+        for (const [file, exportName] of GATES) {
+            if (NOT_A_ROW.has(file)) continue;
+            const key = registryKey(file, exportName);
+            const local = require('../../../src/' + file)[exportName];
+            const row = registry.get(key);
+            if (local !== null && typeof local === 'object' && !Object.isFrozen(local)) {
+                assert.deepStrictEqual(local, row, key + ': the module\'s copy has drifted from the registry row');
+            } else {
+                assert.strictEqual(local, row, key + ': the module export is not the registry row');
+            }
+        }
+        assert.throws(() => registry.get(registryKey('consensus/reserved_roots.js', 'RESERVED_FUTURE_ROOTS')), registry.RegistryMissError,
+            'RESERVED_FUTURE_ROOTS is not an activation row (it is a reserved-name set, guarded by its own parity case)');
+    });
 });
 
 describe('activation-gate constant parity to canonical constants.js @regression', function () {
@@ -332,6 +358,10 @@ describe('activation-gate constant parity to canonical constants.js @regression'
             // activation maps. The checks stay so a mistyped export name cannot compare
             // undefined to undefined and pass vacuously on both sides.
             assert.ok(local !== undefined, file + ' must export ' + exportName);
+            // And the registry row under the same key, so the canon is compared against
+            // what the fingerprint hashes as well as against what the module exports.
+            if (!NOT_A_ROW.has(file)) assert.deepStrictEqual(registry.get(registryKey(file, exportName)), canon[exportName],
+                registryKey(file, exportName) + ' has drifted from the canonical ' + exportName);
             assert.ok(canon[exportName] !== undefined,
                 'constants.js must export ' + exportName + ' (the canonical authority for this gate)');
             assert.deepStrictEqual(local, canon[exportName],

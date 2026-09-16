@@ -61,37 +61,11 @@
  *
  ********************************************************************/
 
-// Scale the ledger stores amounts at once the rule is live. 18 is
-// MAX_TOKEN_DECIMALS: the finest precision any tick can be issued with, and the
-// scale getAddressBalances / stateCommitment.getNetBalance already net in.
-const LEDGER_AMOUNT_PRECISION = 18;
+const { get, copy, activeAt } = require('./protocol_changes');
 
-// Per-chain activation heights, interpreted against the chain's own block_index.
-// `null` = NOT YET PINNED = inert (legacy per-row quantization, byte-identical
-// replay). Only regtest is armed, so fresh regtest stacks exercise the exact-fee
-// path end to end; mainnet/testnet heights are pinned at flag-day assembly with
-// the replay evidence this item requires.
-const LEDGER_AMOUNT_PRECISION_ACTIVATION = {
-    // Pinned on the standing 21-day rule, to the same boundary the oracle
-    // stale-round gate uses, so both consensus changes arm in one fleet deploy
-    // and one rehearsal rather than two. Each height sits above the tip
-    // recorded beside it, because a height a carrying fleet has not yet passed
-    // opens a retroactive window: a node that reindexes across it derives
-    // different state than one that did not.
-    'BTC:mainnet':  966500,     // tip 963,334 (2026-08-20) + 21d @144/day
-    'LTC:mainnet':  3175500,    // tip 3,163,414 + 21d @576/day
-    'DOGE:mainnet': 6370000,    // tip 6,340,174 + 21d @1440/day
-    // TESTNET ARMED AT GENESIS, operator-ratified 2026-08-18. The pre-launch ruling is
-    // that every platform feature must be ACTIVE on testnet, and block 0 is safe here
-    // because that chain's indexer state is rebuilt from the chain itself before launch: a
-    // rebuild recomputes every row under this rule, so no row written under the legacy one
-    // survives to disagree with it. Without the rebuild a genesis height is NOT safe here,
-    // which is why a network with history carries a measured height instead.
-    'BTC:testnet':  0,
-    'LTC:testnet':  0,
-    'DOGE:testnet': 0,
-    regtest: 0,
-};
+const LEDGER_AMOUNT_PRECISION = copy('ledger_amount_precision_activation.LEDGER_AMOUNT_PRECISION');
+
+const LEDGER_AMOUNT_PRECISION_ACTIVATION = copy('ledger_amount_precision_activation.LEDGER_AMOUNT_PRECISION_ACTIVATION');
 
 // Per-chain threshold with a network-wide fallback, byte-for-byte the lookup
 // stateHash.js / caret_ref_strict_activation.js use. A coin-less caller (unit

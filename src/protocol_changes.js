@@ -26,7 +26,20 @@
 const {
     UNARMED, UNPINNED, RegistryMissError, createRegistry, applyChanges,
 } = require('./protocol_changes/core.js');
-const { registerShared } = require('./protocol_changes/shared_rows.js');
+const { registerRows } = require('./protocol_changes/shared_rows.js');
+// The gate rows, in registration order: the SHARED block parts (twinned into
+// hub, sync, explorer and sdk), the indexer-only parts, and the registry's own
+// constants. Each part queues its addGate() calls into shared_rows.js as it
+// loads; registerRows() below replays them into the registry.
+require('./protocol_changes/shared_rows_1.js');
+require('./protocol_changes/shared_rows_2.js');
+require('./protocol_changes/shared_rows_3.js');
+require('./protocol_changes/shared_rows_4.js');
+require('./protocol_changes/shared_rows_5.js');
+require('./protocol_changes/gates_1.js');
+require('./protocol_changes/gates_2.js');
+require('./protocol_changes/gates_3.js');
+require('./protocol_changes/gates_flag_times.js');
 const {
     VM_BANNED_ASYNC_MAINNET_TIME,
     NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME,
@@ -55,72 +68,9 @@ const CHANGES_3 = require('./protocol_changes/changes_3.js');
 const CHANGES_4 = require('./protocol_changes/changes_4.js');
 const CHANGE_PARTS = [CHANGES_1, CHANGES_2, CHANGES_3, CHANGES_4];
 
-// Consensus protocol version, COMPILED IN.
-//
-// isEnabled() compares this against the version registered on every protocol
-// change, so it decides WHICH consensus rules this node applies. It used to be
-// `process.env.npm_package_version || require('../package.json').version`,
-// which made a consensus input out of npm packaging metadata: a routine
-// `npm version` bump moved it, a bare `node src/api.js` resolved it
-// differently from `npm run`, and a host whose node_modules/package.json
-// disagreed resolved it differently again. Two nodes resolving two values fork
-// on the first version-gated action, silently, with no flag-day involved.
-//
-// Pinning it here decouples packaging from consensus in both directions:
-// releasing a new npm version no longer touches consensus, and moving consensus
-// is now a deliberate one-line edit reviewed on its own merits. The pin is kept
-// equal to the package version by assertConsensusVersionPin() (called at
-// indexer boot) and by test/unit/protocol_changes.test.js, so the two cannot
-// drift apart unnoticed; that equality is what makes this change a no-op on
-// every host today (spec §7 pre-window gate).
-// RENUMBERED ONTO THE PLATFORM VERSION STREAM (2026-08-14, first train).
-//
-// This repo's package version moved from its own stream (2.7.17) to the shared
-// platform stream, whose first release is 0.9.0. The pin above must equal the
-// package version, so it moved too, and the registry below had to move WITH it:
-// every change was registered at 1.0.0 or 2.0.0, and 0.9.0 is BELOW both, so
-// leaving the registry alone would have disabled all 89 changes at once and
-// made this node compute entirely different state. The gate caught exactly that.
-//
-// The registry was shifted ORDINALLY, not flattened: 1.0.0 -> 0.1.0 and
-// 2.0.0 -> 0.2.0. Flattening both tiers to one number was tried first and the
-// suite rejected it, because tests such as "a pre-consensus (v1.x) node treats
-// it as not-yet-active" depend on the two tiers being distinguishable. The shift
-// preserves that ordering exactly; it only re-expresses it underneath the
-// platform stream.
-//
-// WHY THIS IS NOT A CONSENSUS CHANGE. The version gate disabled nothing before
-// (0 of 89 at 2.7.17) and disables nothing after (0 of 89 at 0.9.0), so the
-// enabled set is identical; activation is decided by the per-network time/block
-// arguments, which were not touched. The registry and this constant live in the
-// same file and ship in the same artifact, so a node can never run one without
-// the other.
-//
-// A future change gates normally against the platform stream: register it at the
-// platform version it ships in, and nodes below that version treat it as
-// not-yet-active exactly as before.
-
-// The registry stays put across the 0.9.0 -> 0.10.0 move: every change registers
-// at 0.1.0 or 0.2.0, and isEnabled() ranks components numerically rather than
-// lexically, so 0.10.0 outranks both and the enabled set holds at 90 of 90.
-// 0.12.0 -> 0.12.1 registers nothing new. The patch restores admission of anchor
-// bytes the judge already had to read, so the enabled set is identical and no
-// activation argument moved; the pin advances only because it must track the
-// package version, which is what keeps a node from applying a rule set it was
-// not built for.
-// 0.12.1 -> 0.15.0 registers nothing new either, and this was checked rather than
-// assumed: every one of the 95 addChange() entries below registers at 0.1.0 or
-// 0.2.0, so nothing sits in the gap that a higher pin would newly enable and the
-// enabled set is identical on both sides of the bump. The train's consensus work
-// (the ATTEST response mirror, ROLLCALL) gates on its OWN per-network activation
-// heights, which are unarmed off regtest, not on this ordinal. So the second line
-// of the deliberate two-line decision is: the rule set does not move here.
-// 0.16.1 -> 0.17.0 registers nothing new, checked the same way: all 96 entries
-// below (24 at 0.1.0, 72 at 0.2.0) still sit at those two rungs, so the enabled
-// set is identical on both sides of the bump. The two rules this train carries,
-// CONTRACT_META_REQUIRED and REST_PATTERN_METER, both register at 0.2.0 and take
-// their own per-network instants, not this ordinal.
-const CONSENSUS_VERSION = '0.18.0';
+// The compiled consensus-version pin lives in its own part file (with the
+// history of every move it has made) so the registry can register it as a row.
+const { CONSENSUS_VERSION } = require('./protocol_changes/consensus_version.js');
 
 // Predicate for the NATIVE_FEE_PRICE_TIME_GATE flag-day. Its ONE consumer is
 // utility.getFeeOraclePrices (query selection); nothing else in src/ consults it.
@@ -353,9 +303,11 @@ class ProtocolChanges {
 }
 
 // THE registry (activation-registry spec 6.1), built once per load from the
-// SHARED block and the same time-table parts parseChanges() feeds the class.
+// gate-row parts and the same time-table parts parseChanges() feeds the class.
+// The venue's regtest arming is read here, at load, so a process that reloads
+// this entry re-reads its environment and every shim that follows sees it.
 const registry = createRegistry();
-registerShared(registry);
+registerRows(registry, process.env);
 applyChanges(registry, CHANGE_PARTS);
 
 module.exports = ProtocolChanges;
@@ -411,12 +363,16 @@ module.exports.EMISSION_ISSUANCE_LIMITS_MAINNET_TIME = EMISSION_ISSUANCE_LIMITS_
 // the constants' comment.
 module.exports.UNIFIED_FEES_SWEEP_CALLBACK_MAINNET_TIME = UNIFIED_FEES_SWEEP_CALLBACK_MAINNET_TIME;
 module.exports.UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME = UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME;
-// The registry API. get() throws RegistryMissError on a miss, never null;
-// activeAt() is the one generic predicate; rows() is the fingerprint's input.
-// `registry`, UNARMED and UNPINNED are deliberately NON-ENUMERABLE: the armed-map
-// manifest reads every enumerable non-function export of this module as a
-// consensus row, and these are the API, not rows.
+// The registry API. get() throws RegistryMissError on a miss, never null, and
+// returns the frozen row; copy() returns the same row as a fresh mutable deep
+// copy, which is what a shim exports when its module owned a mutable table
+// before (tests patch those tables to drive a boundary, and a frozen export
+// would refuse them). activeAt() is the one generic predicate; rows() is the
+// fingerprint's input. `registry`, UNARMED and UNPINNED are deliberately
+// NON-ENUMERABLE: the armed-map manifest reads every enumerable non-function
+// export of this module as a consensus row, and these are the API, not rows.
 module.exports.get = (key) => registry.get(key);
+module.exports.copy = (key) => registry.copy(key);
 module.exports.activeAt = (key, network, coin, height, time) => registry.activeAt(key, network, coin, height, time);
 module.exports.rows = () => registry.rows();
 module.exports.RegistryMissError = RegistryMissError;

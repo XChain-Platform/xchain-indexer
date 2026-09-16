@@ -184,16 +184,11 @@ async function runSide() {
         registry[name] = { mainnet: Number(c.mainnet_time), testnet: Number(c.testnet_time),
                            regtest: Number(c.regtest_time) };
 
-    // The OLD side can be a tree from before the v1 module moved beside v2 under
-    // src/consensus/armed_map/, or from before it took its snake_case name, so all three
-    // spellings are read, newest first; the fingerprint it computes is the same at each.
-    const fpCandidates = [
-        path.join(root, 'src', 'consensus', 'armed_map', 'armed_map_fingerprint.js'),
-        path.join(root, 'src', 'armed_map_fingerprint.js'),
-        path.join(root, 'src', 'armedMapFingerprint.js'),
-    ];
-    const fpModule = fpCandidates.find(p => fs.existsSync(p)) || fpCandidates[0];
-    const fp = require(fpModule).computeArmedMapFingerprint();
+    // The armed map as THIS side resolved it: fingerprint v2, the hash over the
+    // registry's rows (key -> row hash), so the parent can name the rows the arm
+    // moved. Both sides are W3 or later trees; v1 (file bytes) is gone from them.
+    const v2 = require(path.join(root, 'src', 'consensus', 'armed_map', 'fingerprint_v2.js')).computeArmedMapFingerprintV2();
+    const fp = { fingerprint: v2.hex, rows: v2.rows || {}, reason: v2.reason };
 
     // Which vm this process actually loaded, and the bytes of its entry module.
     const vmMain = require.resolve('xchain-vm', { paths: [root] });
@@ -807,11 +802,15 @@ async function main() {
     const fpOn = reports.ON.fingerprint, fpOld = reports.OLD.fingerprint;
     check(fpOn.fingerprint !== fpOld.fingerprint, 'armed-map fingerprint differs between the sides',
           'OLD ' + fpOld.fingerprint.slice(0, 16) + '... ON ' + fpOn.fingerprint.slice(0, 16) + '...');
-    const gateFilesTouched = Object.keys(fpOn.files).filter(n => armFiles.has('src/' + n));
-    const gateFilesSame = gateFilesTouched.filter(n => fpOn.files[n] === fpOld.files[n]);
-    check(gateFilesTouched.length > 0 && gateFilesSame.length === 0,
-          'every arm-touched gate carrier hashes differently per side (' + gateFilesTouched.length + ' carriers)',
-          gateFilesSame.length ? 'unchanged: ' + gateFilesSame.join(', ') : '');
+    // The rows that moved must carry exactly the registry constants the N1 read
+    // saw move: two independent readings of the same arm, agreeing row by row.
+    const rowsMoved = Object.keys(fpOn.rows).filter(k => fpOn.rows[k] !== fpOld.rows[k]);
+    const changePrefix = 'protocol_changes.changes.';
+    const changesMoved = rowsMoved.filter(k => k.startsWith(changePrefix)).map(k => k.slice(changePrefix.length));
+    const disagree = changesMoved.filter(n => !movedRegistry.has(n)).concat(Array.from(movedRegistry.keys()).filter(n => !changesMoved.includes(n)));
+    check(rowsMoved.length > 0 && disagree.length === 0,
+          'the armed-map rows that moved carry exactly the registry constants the arm moved (' + rowsMoved.length + ' rows)',
+          disagree.length ? 'disagree: ' + disagree.join(', ') : rowsMoved.join(', '));
     if (vmRoot) {
         check(reports.ON.vm.sha256 !== reports.OLD.vm.sha256, 'each side loaded its own vm tree',
               'OLD ' + reports.OLD.vm.main + '\n          ON  ' + reports.ON.vm.main);

@@ -87,15 +87,9 @@
 
 'use strict';
 
-// Per-network activation, interpreted as the PROCESSING chain's own
-// block_index (the value getLatestPrice is already given). null means unarmed
-// at every height; an unknown network resolves to undefined and is inert for
-// the same reason.
-const PRICE_FEE_BATCH_LANDED_ACTIVATION = {
-    mainnet: null,
-    testnet: null,
-    regtest: null,
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const PRICE_FEE_BATCH_LANDED_ACTIVATION = copy('price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION');
 
 // Resolve the threshold: '<COIN>:<network>' key first (so one chain can be
 // armed ahead of its siblings), then the bare network key.

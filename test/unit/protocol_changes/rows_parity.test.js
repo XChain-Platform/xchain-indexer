@@ -31,7 +31,8 @@ describe('protocol_changes/rows_parity: rows() equals the transitional manifest 
     it('carries exactly the 97 time-table keys the manifest lists', function () {
         const keys = [...registryChangeRows().keys()].sort();
         assert.strictEqual(keys.length, 97);
-        assert.deepStrictEqual(keys, manifest.PROTOCOL_CHANGE_NAMES.map((n) => PREFIX + n).sort());
+        const table = Object.keys(new ProtocolChanges({ config: {}, util: {} }).changes);
+        assert.deepStrictEqual(keys, table.map((n) => PREFIX + n).sort());
     });
 
     it('every row canonicalises to the value the manifest resolves for that key', function () {

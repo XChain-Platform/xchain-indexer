@@ -58,18 +58,9 @@
  *
  ********************************************************************/
 
-// Per-chain activation height, interpreted as the processing chain's OWN
-// block_index. At/after the height the indexer-local freshness query governs;
-// below it the legacy utxo-tracker getFirstSeen HTTP path runs. ARMED 2026-07-22
-// at the ratified deploy-train heights; testnet + regtest genesis-active
-// (pre-launch).
-const DISPENSER_FRESHNESS_ACTIVATION = {
-    'BTC:mainnet':  961000,
-    'LTC:mainnet':  3154250,
-    'DOGE:mainnet': 6319000,
-    testnet: 0,
-    regtest: 0,
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const DISPENSER_FRESHNESS_ACTIVATION = copy('dispenser_freshness_activation.DISPENSER_FRESHNESS_ACTIVATION');
 
 // Resolve the per-chain threshold: '<COIN>:<network>' key first, then the bare
 // network key. Unknown / unarmed -> undefined -> inert/off.

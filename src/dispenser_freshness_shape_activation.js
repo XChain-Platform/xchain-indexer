@@ -73,17 +73,9 @@
 
 'use strict';
 
-// Per-chain activation height, interpreted as the processing chain's OWN
-// block_index. At/after the height a shape-violating non-null get_first_seen
-// result throws; below it the legacy fail-open null is returned.
-const DISPENSER_FRESHNESS_SHAPE_ACTIVATION = {
-    'BTC:mainnet':  null,   // UNARMED: operator-owned, sized below 961000 on the arming train
-    'LTC:mainnet':  null,   // UNARMED: operator-owned, sized below 3154250 on the arming train
-    'DOGE:mainnet': null,   // UNARMED: operator-owned, sized below 6319000 on the arming train
-    mainnet:        null,   // UNARMED: a coin with no entry above inherits the inert posture
-    testnet:        0,      // genesis-active: the tracker path is unreachable there, nothing replays differently
-    regtest:        0,      // genesis-active so the venue exercises the strict path
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const DISPENSER_FRESHNESS_SHAPE_ACTIVATION = copy('dispenser_freshness_shape_activation.DISPENSER_FRESHNESS_SHAPE_ACTIVATION');
 
 // Resolve the per-chain threshold: '<COIN>:<network>' key first, then the bare
 // network key. Unknown network -> undefined -> inert/off.

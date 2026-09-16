@@ -47,26 +47,9 @@
 
 'use strict';
 
-// TICK_NAMESPACE_ACTIVATION: the height (per network) on the chain being parsed at/above
-// which the four-character creation floor and the RESERVED_FUTURE_ROOTS refusal bind.
-// Keyed on the chain's OWN block_index: what it gates is the verdict of an ISSUE mined
-// here.
-//
-// Regtest is 0, so both rules bind on the only venue milestone 1 runs on; the integration
-// and e2e fixtures were scanned 2026-09-11 and no real ISSUE of a listed or short name
-// exists there (XCP appears only in unit-test mocks, and every scenario ticker is four
-// characters or longer).
-//
-// Testnet holds at the house sentinel until the train that arms it sizes a dated instant
-// above the fleet's deploy tip. Mainnet is a genesis-arm candidate under the genesis-arm
-// method and stays at the sentinel until the mainnet replicas measure zero mined
-// ISSUEs of a short or listed name, valid OR invalid: an armed height below a real one
-// would re-verdict it and move that chain's hashes.
-const TICK_NAMESPACE_ACTIVATION = {
-    mainnet: 9999999999,
-    testnet: 9999999999,
-    regtest: 0,
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const TICK_NAMESPACE_ACTIVATION = copy('tick_namespace_activation.TICK_NAMESPACE_ACTIVATION');
 
 // Are the namespace rules in effect at height `blockIndex` on `network`? A non-numeric
 // height or an unknown network fails closed (false), which here means the LEGACY rule:

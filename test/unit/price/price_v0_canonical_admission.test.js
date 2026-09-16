@@ -43,6 +43,9 @@ const TIME      = 1756199400;
 
 const LOCAL_MODULES = [
     '../../../src/mirror_admission_activation.js',
+    // The registry the shim reads its table from: purged with it, so the venue's
+    // arming is re-read (activation-registry W3, shared_rows.js registerRows).
+    '../../../src/protocol_changes.js',
     '../../../src/consensus/ed25519.js'
 ];
 const HUB_MODULES = [

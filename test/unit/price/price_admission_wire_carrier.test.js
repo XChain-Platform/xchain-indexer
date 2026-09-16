@@ -62,7 +62,8 @@ const NETWORK   = 'regtest';
 // file under src/actions/price/ is re-required, not just the parts named when this list
 // was written.
 const PRICE_DIR = __dirname + '/../../../src/actions/price';
-const ARMED_MODULES = ['../../../src/mirror_admission_activation.js', '../../../src/consensus/ed25519.js']
+// protocol_changes.js is the registry the activation shim reads; purged with it so the arming is re-read.
+const ARMED_MODULES = ['../../../src/mirror_admission_activation.js', '../../../src/protocol_changes.js', '../../../src/consensus/ed25519.js']
     .concat(fs.readdirSync(PRICE_DIR, { recursive: true }).filter(f => f.endsWith('.js')).sort()
         .map(f => '../../../src/actions/price/' + f));
 // The hub's verifier twin, so the round trip is driven across the repo boundary the wire

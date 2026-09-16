@@ -60,22 +60,11 @@
 
 'use strict';
 
+const { get, copy, activeAt } = require('./protocol_changes');
+
 const mathjs = require('mathjs');
 
-// Frozen block-anchored governance MIN_STAKE history, per network, per capability:
-// an ascending list of { activation_block, value } entries, each the threshold
-// EFFECTIVE FROM that block until the next entry. Mirrors the shape of
-// xchain-hub CapabilityRegistry.minStakeHistory.
-//
-// EMPTY on every network: no governance MIN_STAKE change has ever activated, so
-// the threshold at every block is the genesis floor the caller supplies (the
-// frozen coin-config constant the hub asserts its own value against at boot).
-// See the header before adding an entry - it is a consensus flag day, not config.
-const MIN_STAKE_ACTIVATIONS = {
-    mainnet: {},
-    testnet: {},
-    regtest: {},
-};
+const MIN_STAKE_ACTIVATIONS = copy('capability_min_stake_history.MIN_STAKE_ACTIVATIONS');
 
 // Decimal-string amount as a full-precision bignumber (never a JS double).
 // Non-numeric input is NOT coerced to 0 here - callers need to tell "0" from

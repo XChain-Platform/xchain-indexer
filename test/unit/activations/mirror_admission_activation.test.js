@@ -35,6 +35,9 @@ const assert = require('assert');
 const path   = require('path');
 
 const MODULE_PATH = path.resolve(__dirname, '../../../src/mirror_admission_activation.js');
+// The registry the shim reads its table from: purged with it, so the venue's
+// arming is re-read (activation-registry W3, shared_rows.js registerRows).
+const REGISTRY_PATH = path.resolve(__dirname, '../../../src/protocol_changes.js');
 const mirror = require(MODULE_PATH);
 
 // Load a FRESH copy of the module against a stand-in environment. The activation maps are
@@ -44,15 +47,18 @@ const mirror = require(MODULE_PATH);
 function loadWith(envValue) {
     const saved = process.env.XC_MIRROR_ADMISSION_ACTIVATION;
     const savedModule = require.cache[MODULE_PATH];
+    const savedRegistry = require.cache[REGISTRY_PATH];
     try {
         if (envValue === undefined) delete process.env.XC_MIRROR_ADMISSION_ACTIVATION;
         else process.env.XC_MIRROR_ADMISSION_ACTIVATION = envValue;
         delete require.cache[MODULE_PATH];
+        delete require.cache[REGISTRY_PATH];
         return require(MODULE_PATH);
     } finally {
         if (saved === undefined) delete process.env.XC_MIRROR_ADMISSION_ACTIVATION;
         else process.env.XC_MIRROR_ADMISSION_ACTIVATION = saved;
         require.cache[MODULE_PATH] = savedModule;
+        require.cache[REGISTRY_PATH] = savedRegistry;
     }
 }
 

@@ -141,21 +141,9 @@
 
 'use strict';
 
-// Per-chain activation height, interpreted as the processing chain's OWN
-// block_index. At/after the height a SIGNING_PUBKEY whose every stake row is
-// deactivated and past cooldown is admissible for STAKE v1; below it the
-// legacy "any valid stakes row ever" refusal runs unchanged.
-const STAKE_KEY_REUSE_ACTIVATION = {
-    'BTC:mainnet':  null,         // INERT: operator-owned, sized above the deploy tip on the arming train
-    'LTC:mainnet':  null,         // INERT: capability STAKE is BTC-only; carried for shape
-    'DOGE:mainnet': null,         // INERT: capability STAKE is BTC-only; carried for shape
-    mainnet:        null,         // INERT: a coin with no entry above inherits the unarmed posture
-    'BTC:testnet':  156000,       // SIZED 2026-09-11: chain_tip 151,991 + 3,024 (21d @144/day) = 155,015, rounded up
-    'LTC:testnet':  4897000,      // SIZED 2026-09-11: chain_tip 4,883,971 + 12,096 (21d @576/day) = 4,896,067, rounded up
-    'DOGE:testnet': 67920000,     // SIZED 2026-09-11: chain_tip 67,887,900 + 30,240 (21d @1440/day) = 67,918,140, rounded up
-    testnet:        null,         // INERT: a testnet coin with no entry above stays on the legacy refusal
-    regtest:        0,            // genesis-active so the e2e venue exercises the armed rule
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const STAKE_KEY_REUSE_ACTIVATION = copy('stake_key_reuse_activation.STAKE_KEY_REUSE_ACTIVATION');
 
 // Resolve the per-chain threshold: '<COIN>:<network>' key first, then the bare
 // network key. Unknown network -> undefined -> inert/off.

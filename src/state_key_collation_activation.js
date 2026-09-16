@@ -56,31 +56,9 @@
  *
  ********************************************************************/
 
-// Per-chain activation height, interpreted as the processing chain's OWN
-// block_index. At/after the height the binary-collation (utf8_bin) queries
-// run; below it the legacy folding (utf8_general_ci) queries run.
-//
-// *** ARMED 2026-07-10 *** Heights are each processing chain's OWN block_index,
-// sequenced after the other armed cohorts (state_commitment 958500/3143000/
-// 6291000, swq_source_cap 960000, Cohort-B anchor 961000 on BTC) with fleet
-// deploy-by margin; testnets flip late July so they prove the binary path
-// before mainnet. The xchain-sync twin mirrors this file byte-for-byte in the
-// same change. Regtest is armed from genesis so fresh regtest stacks and the
-// e2e conformance scenario exercise the binary path end to end.
-const STATE_KEY_COLLATION_ACTIVATION = {
-    'BTC:mainnet':  962500,     // ARMED 2026-07-10 at tip 957491 (~Aug 13; ~10 days past Cohort-B 961000)
-    'LTC:mainnet':  3160000,    // ARMED 2026-07-10 at tip 3140024 (~Aug 14)
-    'DOGE:mainnet': 6335000,    // ARMED 2026-07-10 at tip 6284614 (~Aug 15)
-    // Testnet is genesis-active as of the 2026-08-10 fresh testnet genesis. LTC was
-    // the one entry still ahead of the new firstBlock (4890000 > 4855000); BTC and
-    // DOGE were already behind it and are zeroed with it so the map reads as one
-    // rule rather than three coincidences. The documented ordering still holds:
-    // state_commitment is genesis-active too, so this never precedes it.
-    'BTC:testnet':  0,
-    'LTC:testnet':  0,
-    'DOGE:testnet': 0,
-    regtest: 0,                 // armed from genesis: fresh regtest stacks exercise the binary path end to end
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const STATE_KEY_COLLATION_ACTIVATION = copy('state_key_collation_activation.STATE_KEY_COLLATION_ACTIVATION');
 
 // Resolve the per-chain threshold: '<COIN>:<network>' key first, then the bare
 // network key (regtest keeps one key). Unknown -> undefined -> inert/off.

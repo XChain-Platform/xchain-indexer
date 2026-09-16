@@ -61,27 +61,9 @@
  *
  ********************************************************************/
 
-// Per-chain activation heights, interpreted against the chain's own block_index.
-// Pinned to the mainnet pre-freeze activation train, the SAME cohort and the same
-// values as LIST_EDIT_RESOLUTION_ACTIVATION in list_edit_resolution_activation.js
-// (which in turn rides BET_STATUS_STATE_HASH_ACTIVATION in stateHash.js): all three
-// are execution-path validity changes on the same deploy train, so operators reason
-// about one boundary rather than three. caret-ref-strict.test.js asserts this map is
-// value-equal to that one, so a re-pin of the train has to move both or fail CI.
-// CONFIRM again at train assembly: heights are only as good as the day measured.
-const CARET_REF_STRICT_ACTIVATION = {
-    'BTC:mainnet':  963000,     // tip 959,853 (2026-07-27) + 21d @144/day = 962,877
-    'LTC:mainnet':  3162000,    // tip 3,149,481 + 21d @576/day = 3,161,577
-    'DOGE:mainnet': 6338000,    // tip 6,307,307 + 21d @1440/day = 6,337,547
-    // Testnet is genesis-active as of the 2026-08-10 fresh testnet genesis: the
-    // chain restarts at firstBlock (BTC 147500 / LTC 4855000 / DOGE 67815000) with
-    // no pre-rule history to preserve, so a mid-chain boundary would gate nothing
-    // and only risk a fleet-split at a height nobody needs.
-    'BTC:testnet':  0,
-    'LTC:testnet':  0,
-    'DOGE:testnet': 0,
-    regtest: 0,                 // armed from genesis: fresh regtest stacks exercise the reject end to end
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const CARET_REF_STRICT_ACTIVATION = copy('caret_ref_strict_activation.CARET_REF_STRICT_ACTIVATION');
 
 // Per-chain threshold with a network-wide fallback, byte-for-byte the lookup
 // stateHash.js and list_edit_resolution_activation.js use. A coin-less caller

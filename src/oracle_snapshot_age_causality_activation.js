@@ -57,18 +57,9 @@
  *
  ********************************************************************/
 
-// Per-chain activation height, interpreted as the processing chain's OWN
-// block_index. At/after the height the causally-capped age query runs; below it
-// the legacy uncapped query runs. ARMED 2026-07-22 at the ratified deploy-train
-// heights; testnet + regtest genesis-active (pre-launch), matching
-// PKG3_SANDBOX_ACTIVATION.
-const ORACLE_SNAPSHOT_AGE_CAUSALITY_ACTIVATION = {
-    'BTC:mainnet':  961000,
-    'LTC:mainnet':  3154250,
-    'DOGE:mainnet': 6319000,
-    testnet: 0,
-    regtest: 0,
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const ORACLE_SNAPSHOT_AGE_CAUSALITY_ACTIVATION = copy('oracle_snapshot_age_causality_activation.ORACLE_SNAPSHOT_AGE_CAUSALITY_ACTIVATION');
 
 // Resolve the per-chain threshold: '<COIN>:<network>' key first, then the bare
 // network key. Unknown / unarmed -> undefined -> inert/off.

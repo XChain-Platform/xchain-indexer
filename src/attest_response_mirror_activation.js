@@ -61,13 +61,9 @@
 
 'use strict';
 
-// Per-network activation height (LOCAL COPY, parity-tested). Compared against
-// the ATTEST v0 request's own BTC block_index (the v3's, for a relayed request).
-const ATTEST_RESPONSE_MIRROR_ACTIVATION = {
-    mainnet: null,        // INERT: operator-owned height, unratified. The legacy on-chain response path runs byte for byte.
-    testnet: 151324,      // ARMED 2026-09-07 at the chain tip on the operator ruling: exercising the mirror on testnet is the point of this train, so it activates on deploy rather than waiting on a future height.
-    regtest: 0,           // ARMED at genesis so the e2e mirror venue exercises the mirror path
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const ATTEST_RESPONSE_MIRROR_ACTIVATION = copy('attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION');
 
 // Networks already reported by the guard in isResponseMirrorActive, so a per-request
 // per-block path says it once rather than once per row.

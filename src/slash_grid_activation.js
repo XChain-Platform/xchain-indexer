@@ -78,27 +78,11 @@
  *
  ********************************************************************/
 
-// Scale the per-row deduction runs at once the rule is live. 18 is
-// MAX_TOKEN_DECIMALS (src/config.js), the finest precision any tick can be
-// issued with, so a subtraction at this scale is exact for every stored amount
-// and the derived delta is the reduction written rather than a re-rounding of it.
-const SLASH_DEDUCTION_PRECISION = 18;
+const { get, copy, activeAt } = require('./protocol_changes');
 
-// Per-chain activation heights, interpreted against the chain's own block_index.
-// `null` = NOT YET PINNED = inert (legacy arithmetic, byte-identical replay).
-const SLASH_GRID_ACTIVATION = {
-    // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet
-    // history (0 stakes, 0 slashes on every chain, measured 2026-09-09).
-    'BTC:mainnet':  0,
-    'LTC:mainnet':  0,
-    'DOGE:mainnet': 0,
-    // Unpinned: testnet carries stake history, so its heights are pinned at
-    // flag-day assembly with the replay evidence that step requires.
-    'BTC:testnet':  null,
-    'LTC:testnet':  null,
-    'DOGE:testnet': null,
-    regtest: 0,
-};
+const SLASH_DEDUCTION_PRECISION = copy('slash_grid_activation.SLASH_DEDUCTION_PRECISION');
+
+const SLASH_GRID_ACTIVATION = copy('slash_grid_activation.SLASH_GRID_ACTIVATION');
 
 // Per-chain threshold with a network-wide fallback, byte-for-byte the lookup
 // stake_weight_collation_activation.js uses. A coin-less caller (unit fixtures)

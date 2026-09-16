@@ -72,18 +72,9 @@
  *
  ********************************************************************/
 
-// Per-chain activation height, interpreted as the processing chain's OWN block_index.
-// At/after the height the deploy-lint banned-async / banned-wasm / banned-math rules
-// also match sloppy-mode `this` and the globalThis self-reference chain; below it they
-// resolve as they historically did (byte-identical replay).
-// MUST equal xchain-vm/src/index.js LINT_GLOBAL_ALIAS_ACTIVATION.
-const VM_LINT_GLOBAL_ALIAS_ACTIVATION = {
-    'BTC:mainnet':  0,   // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 contracts, 0 DEPLOY, measured 2026-09-09)
-    'LTC:mainnet':  0,
-    'DOGE:mainnet': 0,
-    testnet: 0,
-    regtest: 0,
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const VM_LINT_GLOBAL_ALIAS_ACTIVATION = copy('vm_lint_global_alias_activation.VM_LINT_GLOBAL_ALIAS_ACTIVATION');
 
 // Resolve the per-chain threshold: '<COIN>:<network>' key first, then the bare
 // network key. Unknown chain -> undefined -> off; unarmed (null) -> off.

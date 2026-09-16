@@ -126,31 +126,11 @@
  *
  ********************************************************************/
 
-// Per-network activation height (LOCAL COPY of the canonical map in
-// xchain-documentation/protocol/constants.js). Compared against the request's own
-// LOCAL block_index on its own chain.
-const ATTEST_REQUEST_CAP_ACTIVATION = {
-    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 attestations, measured 2026-09-09)
-    testnet: 0,           // ARMED at genesis (operator-ratified 2026-08-18; zero historical attestations, so nothing is reinterpreted)
-    regtest: 0,           // ARMED at genesis so the e2e venue exercises the cap
-};
+const { get, copy, activeAt } = require('./protocol_changes');
 
-// The cap VALUES; the map above decides WHEN they apply (LOCAL COPY, parity-tested).
-//
-// perContract bounds one contract's share of a block, so a single busy (or hostile)
-// contract cannot take the whole ceiling and starve every other contract's requests.
-// perBlock bounds the network-wide total, which is the number that actually bounds
-// validator spend: with REDUNDANCY 3 and BTC's ~144 blocks/day, a full-but-legal
-// 10/block admits ~1440 requests/day, i.e. ~4320 provider calls/day spread across the
-// responsible sets - a bounded, forecastable bill instead of a mempool-limited one.
-//
-// Sized to be invisible to legitimate use: a contract firing more than 2 attestations
-// in a single block is a batch pattern that can space itself across blocks, and 10
-// admitted requests in one block is far above any observed rate on any network today.
-const ATTEST_REQUEST_CAPS = {
-    perContract: 2,
-    perBlock:    10,
-};
+const ATTEST_REQUEST_CAP_ACTIVATION = copy('attest_request_cap_activation.ATTEST_REQUEST_CAP_ACTIVATION');
+
+const ATTEST_REQUEST_CAPS = copy('attest_request_cap_activation.ATTEST_REQUEST_CAPS');
 
 // Whether the per-block admission caps are in effect for an ATTEST v0 request at
 // `blockIndex` on `network`. Below the threshold (or on an unratified/unknown

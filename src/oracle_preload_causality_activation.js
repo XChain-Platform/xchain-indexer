@@ -80,18 +80,11 @@
 
 'use strict';
 
-// The chain whose heights price_snapshots.reference_block records. Its height
-// cap is exact, so it never takes the time bound.
-const ORACLE_PRELOAD_CAUSALITY_REFERENCE_COIN = 'BTC';
+const { get, copy, activeAt } = require('./protocol_changes');
 
-// Per-chain activation, interpreted as the processing chain's OWN block_index
-// (the value db.getOracleDataForVM already caps on). Every network is
-// genesis-active; BTC is carved out below at any height.
-const ORACLE_PRELOAD_CAUSALITY_ACTIVATION = {
-    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 contracts, measured 2026-09-09)
-    testnet: 0,
-    regtest: 0,
-};
+const ORACLE_PRELOAD_CAUSALITY_REFERENCE_COIN = copy('oracle_preload_causality_activation.ORACLE_PRELOAD_CAUSALITY_REFERENCE_COIN');
+
+const ORACLE_PRELOAD_CAUSALITY_ACTIVATION = copy('oracle_preload_causality_activation.ORACLE_PRELOAD_CAUSALITY_ACTIVATION');
 
 // Resolve the per-chain threshold: '<COIN>:<network>' key first, then the bare
 // network key. Unknown -> undefined -> inert.

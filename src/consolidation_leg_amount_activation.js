@@ -58,13 +58,9 @@
  *
  ********************************************************************/
 
-// Per-network activation, interpreted against the block's consensus timestamp
-// (data['BLOCK_TIME']).
-const CONSOLIDATION_LEG_AMOUNT_ACTIVATION = {
-    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 SEND, 0 DESTROY, measured 2026-09-09)
-    testnet: 0,
-    regtest: 0,
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const CONSOLIDATION_LEG_AMOUNT_ACTIVATION = copy('consolidation_leg_amount_activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION');
 
 // Whether the per-leg amount-format rule binds for a block whose consensus
 // timestamp is `blockTime` on `network`. Below the threshold -> off (legacy

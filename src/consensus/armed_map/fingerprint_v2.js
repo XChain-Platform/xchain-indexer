@@ -14,11 +14,12 @@
  *
  * Armed-map fingerprint v2 for the running process.
  *
- * Published beside v1 (src/armedMapFingerprint.js), never instead of it,
- * during the W1 window: v1 hashes carrier file bytes and names, v2 hashes the
- * armed VALUES this process resolved, row by row, through the explicit
- * manifest. A fleet tool compares v2 wherever every process publishes it and
- * falls back to v1 for a build that predates it.
+ * Published beside v1 during the W1 window and INSTEAD of it from W3, when the
+ * carriers became registry shims and v1 (a hash over carrier file bytes and
+ * names) was deleted: v2 hashes the armed VALUES this process resolved, row by
+ * row, through the registry-backed manifest. A fleet tool compares v2
+ * wherever every process publishes it and falls back to v1 from a pin for a
+ * build that predates it.
  *
  * FAILURE IS NEVER A PLAUSIBLE HEX. If any row cannot be resolved (a carrier
  * failed to load, an export vanished, a value has a refused type) the result

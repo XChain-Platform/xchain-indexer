@@ -63,29 +63,53 @@ describe('armed_map/fingerprint_v2: the running process', function () {
         assert.strictEqual(out.count, undefined);
     });
 
-    it('is published on the health payload beside v1', async function () {
+});
+
+describe('armed_map/fingerprint_v2: the published surfaces (W3)', function () {
+
+    it('is published on the health payload as the legacy field, its alias, version 2 and the logic digest (W3)', async function () {
         const { buildHealthResponse } = require('../../../../src/api/health.js');
+        const logicPin = require('../../../../bin/lib/carrier_logic_pin.js');
         // The smallest indexer the builder accepts, in the shape test/unit/health.test.js uses.
         const indexer = { decoderDb: { circuitState: 'closed' }, indexerDb: { circuitState: 'closed' },
             lastDecoderBlock: 200, lastHubConfigFetchAt: null, stallReason: null, isSynced: () => false };
         const res = await buildHealthResponse({ indexer, indexerRunning: true, indexerError: null,
             lastIndexedBlock: 190, now: 1000000 });
-        assert.match(res.armed_map_fingerprint, HEX64);
-        assert.strictEqual(res.armed_map_fingerprint_v2, v2.computeArmedMapFingerprintV2().hex);
+        assert.strictEqual(res.armed_map_fingerprint, v2.computeArmedMapFingerprintV2().hex, 'the legacy field carries v2');
+        assert.strictEqual(res.armed_map_fingerprint_v2, res.armed_map_fingerprint, 'the alias is the same value');
+        assert.strictEqual(res.armed_map_fingerprint_version, 2);
         assert.strictEqual(res.armed_map_rows, undefined, 'the row count belongs to consensus-identity, not health');
+        // C7: the logic digest is its own field, equal to the pin module's reading of the committed pin.
+        assert.strictEqual(res.carrier_logic_digest, logicPin.digest(logicPin.readPin(REPO)));
+        assert.match(res.carrier_logic_digest, HEX64);
     });
 
-    it('is published by consensus-identity --json beside v1, with its row map and count', function () {
+    it('reads the health logic digest as UNREADABLE when the pin is absent, never a hex', function () {
+        const mod = require('../../../../src/api/health/carrier_logic.js');
+        const script = "const m = require(" + JSON.stringify(path.join(REPO, 'src', 'api', 'health', 'carrier_logic.js')) + ");" +
+            "process.stdout.write(m.carrierLogicDigest());";
+        const dir = makeTree();
+        fs.rmSync(path.join(dir, 'bin'), { recursive: true, force: true });
+        const relScript = script.replace(path.join(REPO, 'src'), path.join(dir, 'src'));
+        const res = spawnSync(process.execPath, ['-e', relScript], { cwd: dir, encoding: 'utf8', env: childEnv() });
+        assert.strictEqual(res.status, 0, res.stderr);
+        assert.strictEqual(res.stdout, mod.UNREADABLE);
+        removeTree(trees.pop());
+    });
+
+    it('is published by consensus-identity --json as the legacy field, version 2, the row map and count, and the logic digest', function () {
         const res = spawnSync(process.execPath, [path.join(REPO, 'bin', 'consensus-identity.js'), '--json'],
             { cwd: REPO, encoding: 'utf8' });
         assert.strictEqual(res.status, 0, res.stderr);
         const identity = JSON.parse(res.stdout);
-        assert.match(identity.armed_map_fingerprint, HEX64);
-        assert.strictEqual(identity.armed_map_fingerprint_v2, v2.computeArmedMapFingerprintV2().hex);
+        assert.strictEqual(identity.armed_map_fingerprint, v2.computeArmedMapFingerprintV2().hex);
+        assert.strictEqual(identity.armed_map_fingerprint_v2, identity.armed_map_fingerprint);
+        assert.strictEqual(identity.armed_map_fingerprint_version, 2);
         // row 6: armed_map_rows is the per-key hash map (so a mismatch names the row) and the count sits beside it
         assert.strictEqual(identity.armed_map_row_count, manifest.ENTRIES.length);
         assert.strictEqual(Object.keys(identity.armed_map_rows).length, manifest.ENTRIES.length);
-        assert.notStrictEqual(identity.armed_map_fingerprint_v2, identity.armed_map_fingerprint);
+        const logicPin = require('../../../../bin/lib/carrier_logic_pin.js');
+        assert.strictEqual(identity.carrier_logic_digest, logicPin.digest(logicPin.readPin(REPO)));
     });
 });
 
@@ -99,6 +123,7 @@ function makeTree({ withModules = true, extra = [] } = {}) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'armed-map-v2-'));
     trees.push(dir);
     fs.cpSync(path.join(REPO, 'src'), path.join(dir, 'src'), { recursive: true });
+    fs.cpSync(path.join(REPO, 'bin', 'pins'), path.join(dir, 'bin', 'pins'), { recursive: true });
     for (const rel of extra) {
         fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
         fs.copyFileSync(path.join(REPO, rel), path.join(dir, rel));
@@ -118,9 +143,8 @@ function removeTree(dir) {
 const READ_SCRIPT = [
     "const path = require('path');",
     "const out = require(path.resolve('src/consensus/armed_map/fingerprint_v2.js')).computeArmedMapFingerprintV2();",
-    "const v1 = require(path.resolve('src/consensus/armed_map/armed_map_fingerprint.js')).computeArmedMapFingerprint().fingerprint;",
     "if (process.argv[1] === 'load-main') require(path.resolve('src/XChainIndexer.js'));",
-    'process.stdout.write(JSON.stringify({ hex: out.hex, count: out.count, reason: out.reason, v1 }));',
+    'process.stdout.write(JSON.stringify({ hex: out.hex, count: out.count, reason: out.reason }));',
 ].join('\n');
 
 function childEnv() {
@@ -203,7 +227,7 @@ describe('armed_map/fingerprint_v2: temp-tree falsification of armed values (des
 
     it('a committed height change moves v2', function () {
         const dir = makeTree();
-        editFile(dir, 'src/state_commitment_activation.js', "'BTC:testnet':  145000,", "'BTC:testnet':  145001,");
+        editFile(dir, STATE_COMMITMENT_PART, "'BTC:testnet':  145000,", "'BTC:testnet':  145001,");
         const r = readTree(dir);
         assert.strictEqual(r.status, 0, r.stderr);
         assert.match(r.out.hex, HEX64, r.out.reason);
@@ -212,7 +236,8 @@ describe('armed_map/fingerprint_v2: temp-tree falsification of armed values (des
 
     it('null (not yet pinned) to 9999999999 (unarmed sentinel) moves v2', function () {
         const dir = makeTree();
-        editFile(dir, 'src/slash_ledger_consolidation_activation.js', "'BTC:testnet':  null,", "'BTC:testnet':  9999999999,");
+        editFile(dir, partDeclaring('slash_ledger_consolidation_activation.SLASH_LEDGER_CONSOLIDATION_ACTIVATION'),
+            "'BTC:testnet':  null,", "'BTC:testnet':  9999999999,");
         const r = readTree(dir);
         assert.strictEqual(r.status, 0, r.stderr);
         assert.match(r.out.hex, HEX64, r.out.reason);
@@ -221,7 +246,17 @@ describe('armed_map/fingerprint_v2: temp-tree falsification of armed values (des
 });
 
 const GUARD = 'test/unit/consensus/armed_map/manifest.test.js';
-const V1_TEST = 'test/unit/consensus/armed_map/armed_map_fingerprint.test.js';
+const PARTS = 'src/protocol_changes';
+
+// The part file that declares `key`, relative to the repo root: the falsification
+// cases edit rows where they live, and a row that moves parts re-aims itself.
+function partDeclaring(key) {
+    const f = fs.readdirSync(path.join(REPO, PARTS)).find((name) =>
+        fs.readFileSync(path.join(REPO, PARTS, name), 'utf8').includes("addGate('" + key + "'"));
+    assert.ok(f, 'no part file declares ' + key);
+    return PARTS + '/' + f;
+}
+const STATE_COMMITMENT_PART = partDeclaring('state_commitment_activation.STATE_COMMITMENT_ACTIVATION');
 
 // The completeness guard suite, run by mocha against the temp tree at dir.
 function runGuard(dir) {
@@ -230,18 +265,26 @@ function runGuard(dir) {
         { cwd: dir, encoding: 'utf8', env: childEnv() });
 }
 
-// Green on an unmodified copy, red once `from` becomes `to` in the copy's
-// manifest, and v2 moved: a guard that is red on both sides proves nothing.
-function deletedEntryCase(baselineHex, from, to) {
-    const dir = makeTree({ extra: [GUARD, V1_TEST] });
+// Green on an unmodified copy, red once the row for `key` leaves the copy's
+// part file, and the build that reads it throws at boot: a guard that is red
+// on both sides proves nothing, and a shim that read undefined would be worse.
+function deletedRowCase(key, shimRel) {
+    const dir = makeTree({ extra: [GUARD] });
     const green = runGuard(dir);
     assert.strictEqual(green.status, 0, 'guard must be green on the unmodified copy: ' + green.stdout + green.stderr);
-    editFile(dir, 'src/consensus/armed_map/manifest.js', from, to);
+    const part = path.join(dir, partDeclaring(key));
+    const text = fs.readFileSync(part, 'utf8');
+    const start = text.indexOf("addGate('" + key + "'");
+    const end = text.indexOf(');\n', start) + 3;
+    assert.ok(start > 0 && end > start, 'row not found in the copy');
+    fs.writeFileSync(part, text.slice(0, start) + text.slice(end));
     const red = runGuard(dir);
-    assert.notStrictEqual(red.status, 0, 'guard stayed green after a manifest entry was deleted');
-    const r = readTree(dir);
-    assert.strictEqual(r.status, 0, r.stderr);
-    assert.notStrictEqual(r.out.hex, baselineHex, 'v2 must move when a row leaves the manifest');
+    assert.notStrictEqual(red.status, 0, 'guard stayed green after a registry row was deleted');
+    assert.match(red.stdout + red.stderr, /RegistryMissError|has no row/, 'the shim must throw RegistryMissError at load');
+    const r = spawnSync(process.execPath, ['-e', "require(require('path').resolve(" + JSON.stringify(shimRel) + "))"],
+        { cwd: dir, encoding: 'utf8', env: childEnv() });
+    assert.notStrictEqual(r.status, 0, 'a consumer requiring the shim must fail at boot');
+    assert.match(r.stderr, /RegistryMissError/);
 }
 
 describe('armed_map/fingerprint_v2: temp-tree falsification of layout and the completeness guard (design section 7, P4)', function () {
@@ -258,32 +301,31 @@ describe('armed_map/fingerprint_v2: temp-tree falsification of layout and the co
         for (const dir of trees.splice(0)) removeTree(dir);
     });
 
-    it('a comment, a whitespace reformat and a rename-and-move with requirers repointed leave v2 unchanged', function () {
+    it('a comment, a whitespace reformat in a part file and a shim rename-and-move with requirers repointed leave v2 unchanged', function () {
         const dir = makeTree();
         const plain = readTree(dir);
         assert.strictEqual(plain.status, 0, plain.stderr);
         fs.appendFileSync(path.join(dir, 'src/snapshot_reorg_buffer.js'), '\n// a comment that changes no value\n');
-        editFile(dir, 'src/state_commitment_activation.js', "'BTC:testnet':  145000,", "'BTC:testnet'   :\n        145000 ,");
+        editFile(dir, STATE_COMMITMENT_PART, "'BTC:testnet':  145000,", "'BTC:testnet'   :\n        145000 ,");
         const requirers = moveModule(dir, 'src/train_activation.js', 'src/activations/rule_set_train.js');
-        assert.ok(requirers >= 2, 'expected the manifest and XChainIndexer.js to be repointed, got ' + requirers);
+        assert.ok(requirers >= 1, 'expected XChainIndexer.js to be repointed, got ' + requirers);
         const r = readTree(dir, 'load-main');
         assert.strictEqual(r.status, 0, 'the moved build must still load: ' + r.stderr);
         assert.strictEqual(r.out.hex, baseline.hex, r.out.reason);
-        // v1 hashes names and bytes, so it MUST have moved: proof the edits above were real.
-        assert.notStrictEqual(r.out.v1, plain.out.v1);
+        assert.strictEqual(r.out.hex, plain.out.hex);
     });
 
-    it('deleting a whole module entry from the manifest turns the completeness guard red and moves v2', function () {
-        deletedEntryCase(baseline.hex, "    ['train_activation', () => require('../../train_activation.js'), ['TRAIN_ACTIVATION']],\n", '');
+    it('deleting a gate row from a part file turns the completeness guard red and the shim throws at boot', function () {
+        deletedRowCase('train_activation.TRAIN_ACTIVATION', 'src/train_activation.js');
     });
 
-    it('deleting one export name from a module entry turns the completeness guard red and moves v2', function () {
-        deletedEntryCase(baseline.hex, "['EQUIV_HEADER_ACTIVATION', 'ENGINE_TAGS']", "['EQUIV_HEADER_ACTIVATION']");
+    it('deleting a constant row from a part file turns the completeness guard red and the shim throws at boot', function () {
+        deletedRowCase('equivocation_header.ENGINE_TAGS', 'src/equivocation_header.js');
     });
 
     it('without node_modules v2 reads UNREADABLE or the process fails, never a plausible hex', function () {
         const dir = makeTree({ withModules: false });
-        const res = spawnSync(process.execPath, ['-e', READ_SCRIPT.replace(/^const v1 = .*$/m, 'const v1 = null;')],
+        const res = spawnSync(process.execPath, ['-e', READ_SCRIPT],
             { cwd: dir, encoding: 'utf8', env: childEnv() });
         assert.ok(!HEX64.test(res.stdout) && !/"hex":"[0-9a-f]{64}"/.test(res.stdout),
             'a checkout without node_modules published a hex: ' + res.stdout);

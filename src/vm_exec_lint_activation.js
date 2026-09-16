@@ -67,18 +67,9 @@
  *
  ********************************************************************/
 
-// Per-chain activation height, interpreted as the processing chain's OWN block_index.
-// At/after the height the VM re-lints stored contract code on every EXECUTE and fails
-// the execution when a now-banned construct is present; below it there is no check and
-// no gas charge (byte-identical replay).
-// MUST equal xchain-vm/src/index.js EXEC_LINT_ACTIVATION.
-const VM_EXEC_LINT_ACTIVATION = {
-    'BTC:mainnet':  0,   // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 contracts, 0 DEPLOY, 0 EXECUTE, measured 2026-09-09)
-    'LTC:mainnet':  0,
-    'DOGE:mainnet': 0,
-    testnet: 0,
-    regtest: 0,
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const VM_EXEC_LINT_ACTIVATION = copy('vm_exec_lint_activation.VM_EXEC_LINT_ACTIVATION');
 
 // Resolve the per-chain threshold: '<COIN>:<network>' key first, then the bare
 // network key. Unknown chain -> undefined -> off; unarmed (null) -> off.

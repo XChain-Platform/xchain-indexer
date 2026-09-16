@@ -49,18 +49,9 @@
  *
  ********************************************************************/
 
-// Per-network activation height (LOCAL COPY of the canonical map in
-// xchain-documentation/protocol/constants.js). Compared against the request's own
-// LOCAL block_index on its own chain (see the ACTIVATION PLANE note above), which
-// is the block the responsible set is computed at.
-const ATTEST_ADMISSION_ACTIVATION = {
-    // The VALUE is a BTC height; the COMPARISON is per-chain local. Numerically equal
-    // to the STAKE_WEIGHTED_QUORUM anchor, but that gate resolves it on the
-    // BTC-anchored snapshot_block plane, so the two do not flip together off BTC.
-    mainnet: 961000,      // ARMED: BTC anchor ~2026-08-04; already satisfied on LTC/DOGE local heights; deploy ALL indexers before this height
-    testnet: 0,
-    regtest: 0,
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const ATTEST_ADMISSION_ACTIVATION = copy('attest_admission_activation.ATTEST_ADMISSION_ACTIVATION');
 
 // Whether the admission rejection is in effect for an ATTEST v0 request at
 // `blockIndex` on `network`. Below the threshold -> legacy accept-then-expire.

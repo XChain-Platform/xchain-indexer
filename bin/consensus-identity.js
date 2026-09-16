@@ -11,22 +11,27 @@
  *
  **********************************************************************
  *
- * The four numbers that say whether this build still applies the same rules and
+ * The five numbers that say whether this build still applies the same rules and
  * still produces the same state as the one before it.
  *
  *   coin_registry_consensus_hash   sha256 over the consensus-critical subset of
  *                                  every bundled coin definition, per network.
  *                                  A changed value means a node would fail its
  *                                  own boot pin and halt rather than fork.
- *   armed_map_fingerprint          sha256 over the BYTES of every gate carrier
- *                                  in src/. Comparable between two indexers,
- *                                  and it moves on a comment reformat, which is
- *                                  correct: it answers "same build?".
- *   armed_map_fingerprint_v2       sha256 over the armed VALUES those carriers
- *   and armed_map_rows             resolve to, one hash per key, plus the count.
- *                                  Unmoved by a comment, rename or move, so it
- *                                  answers "same armed map?"; UNREADABLE when a
- *                                  row fails to resolve, never a plausible hash.
+ *   armed_map_fingerprint          sha256 over the armed VALUES the registry
+ *   (= armed_map_fingerprint_v2)   rows resolve to, one hash per key in
+ *   and armed_map_rows             armed_map_rows, plus the count. Unmoved by a
+ *                                  comment, rename or move, so it answers "same
+ *                                  armed map?"; UNREADABLE when a row fails to
+ *                                  resolve, never a plausible hash. v1 (a hash
+ *                                  over carrier bytes) is gone since W3; the
+ *                                  legacy field carries v2 and
+ *                                  armed_map_fingerprint_version says so.
+ *   carrier_logic_digest           sha256 over the sorted id=hash lines of
+ *                                  bin/pins/carrier-logic.json, the token-stream
+ *                                  pin of every gate carrier's LOGIC. Read from
+ *                                  the pin, not the tree: the pin's own guard
+ *                                  measures the tree. Answers "same logic?".
  *   consensus_rules_digest        sha256 over the DECIDED HEIGHTS of the gates
  *                                  the hub also evaluates. Comparable across
  *                                  repos, and it answers "same rules?".
@@ -54,10 +59,10 @@
  * ONE OF THE THREE IS NOT PURE, AND IT MATTERS FOR ANY PIN. The rules digest
  * hashes gate VALUES, and a regtest venue arms some gates from its own
  * environment rather than from a committed height, so the same build reports one
- * digest in a bare checkout and another inside a configured container. The v1
- * fingerprint does not move with it: it hashes file bytes, and an
- * environment-resolved height changes no byte. armed_map_fingerprint_v2 does
- * move, because like the digest it hashes resolved values. Two readings
+ * digest in a bare checkout and another inside a configured container. The
+ * armed-map fingerprint moves with it too, because like the digest it hashes
+ * resolved values; the carrier logic digest does not, because it reads a
+ * committed pin. Two readings of the two that move
  * therefore have to be taken with the same environment to be comparable, and
  * `consensus_rules_gates` in the JSON output is what turns a mismatch into a
  * named gate instead of two opaque hashes.
@@ -113,12 +118,13 @@ function canonicalJson(value) {
  * The three values that come from the source tree alone.
  * @returns {{coin_registry_consensus_hash: string, coin_registry_consensus_hashes: object,
  *            armed_map_fingerprint: string, armed_map_fingerprint_v2: string,
+ *            armed_map_fingerprint_version: number,
  *            armed_map_rows: ?object, armed_map_row_count: ?number,
- *            consensus_rules_digest: string, gates_field: string, gates_field_hash: string}}
+ *            consensus_rules_digest: string, gates_field: string, gates_field_hash: string,
+ *            carrier_logic_digest: string}}
  */
 function codeIdentity(network) {
     const coins = require('../src/coins/index.js');
-    const { computeArmedMapFingerprint } = require('../src/consensus/armed_map/armed_map_fingerprint.js');
     const { computeArmedMapFingerprintV2 } = require('../src/consensus/armed_map/fingerprint_v2.js');
     const { computeConsensusRulesDigest, knownGateKeys, ABSENT } = require('../src/consensus_rules_digest.js');
     const logicPin = require('./lib/carrier_logic_pin.js');
@@ -138,9 +144,11 @@ function codeIdentity(network) {
         // be attributable to a chain before anyone can act on it.
         coin_registry_consensus_hash: crypto.createHash('sha256').update(canonicalJson(hashes)).digest('hex'),
         coin_registry_consensus_hashes: hashes,
-        armed_map_fingerprint: computeArmedMapFingerprint().fingerprint,
-        // The row map and count are null exactly when v2 reads UNREADABLE.
+        // The legacy field carries v2 since W3 (the _v2 alias is dropped at W5); the
+        // row map and count are null exactly when v2 reads UNREADABLE.
+        armed_map_fingerprint: armedMapV2.hex,
         armed_map_fingerprint_v2: armedMapV2.hex,
+        armed_map_fingerprint_version: 2,
         armed_map_rows: armedMapV2.rows || null,
         armed_map_row_count: armedMapV2.count === undefined ? null : armedMapV2.count,
         consensus_rules_digest: rules.digest,
@@ -309,9 +317,10 @@ async function main() {
     for (const tick of Object.keys(identity.coin_registry_consensus_hashes).sort()) {
         console.log(`  ${tick.padEnd(29)}${identity.coin_registry_consensus_hashes[tick]}`);
     }
-    console.log(`armed_map_fingerprint:         ${identity.armed_map_fingerprint}`);
+    console.log(`armed_map_fingerprint:         ${identity.armed_map_fingerprint} (version ${identity.armed_map_fingerprint_version})`);
     console.log(`armed_map_fingerprint_v2:      ${identity.armed_map_fingerprint_v2}`);
     console.log(`armed_map_row_count:           ${identity.armed_map_row_count}`);
+    console.log(`carrier_logic_digest:          ${identity.carrier_logic_digest}`);
     console.log(`consensus_rules_digest:        ${identity.consensus_rules_digest}`);
     console.log(`gates_field:                   ${identity.gates_field}`);
     console.log(`gates_field_hash:              ${identity.gates_field_hash}`);

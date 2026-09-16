@@ -71,13 +71,9 @@
  *
  ********************************************************************/
 
-// Per-network activation, interpreted against the block's consensus timestamp
-// (data['BLOCK_TIME']).
-const DISPENSER_AMOUNT_POSITIVITY_ACTIVATION = {
-    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 dispensers, 0 dispenses, measured 2026-09-09)
-    testnet: 0,
-    regtest: 0,
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const DISPENSER_AMOUNT_POSITIVITY_ACTIVATION = copy('dispenser_amount_positivity_activation.DISPENSER_AMOUNT_POSITIVITY_ACTIVATION');
 
 // Whether the dispenser amount-positivity rules bind for a block whose
 // consensus timestamp is `blockTime` on `network`. Below the threshold -> off

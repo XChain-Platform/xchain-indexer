@@ -81,13 +81,9 @@
  *
  ********************************************************************/
 
-// Per-network activation, interpreted against the block's consensus timestamp
-// (data['BLOCK_TIME']).
-const GATED_HANDOFF_REF_ACTIVATION = {
-    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 SEND, measured 2026-09-09)
-    testnet: 0,
-    regtest: 0,
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const GATED_HANDOFF_REF_ACTIVATION = copy('gated_handoff_ref_activation.GATED_HANDOFF_REF_ACTIVATION');
 
 // Whether the gated-SEND handoff gate resolves a caret-spelled sibling
 // DESTINATION before comparing, for a block whose consensus timestamp is

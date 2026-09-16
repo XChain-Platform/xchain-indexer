@@ -29,209 +29,48 @@
  *
  ********************************************************************/
 
-// Maximum *compiled* on-chain ACTION push, in bytes.
-//
-// This is measured against the reassembled script push as it appears on
-// chain (i.e. the OP_PUSHDATA-prefixed buffer, BEFORE bitcoin.script.decompile
-// strips the push prefix. The indexing decoder is the protocol arbiter: it
-// drops any transaction whose compiled ACTION push exceeds this value, so the
-// encoder must enforce the identical compiled-size ceiling. A transaction the
-// encoder produces above this size would be silently dropped by every node.
-const MAX_ACTION_DATA_LENGTH = 8192;
+const { get, copy, activeAt } = require('../protocol_changes');
 
-// Bytes added by the OP_PUSHDATA2 push prefix (1-byte opcode + 2-byte
-// little-endian length) when a 256..65535-byte payload is compiled into the
-// on-chain script. For a single such push the compiled length is therefore
-// (decoded payload bytes + OP_RETURN_PUSH_OVERHEAD); smaller payloads use a
-// 1- or 2-byte prefix, and multi-segment encodings add one prefix per segment.
-// This is why the authoritative cap is enforced on the *compiled* length, not
-// on the decoded character count.
-const OP_RETURN_PUSH_OVERHEAD = 3;
+const MAX_ACTION_DATA_LENGTH = copy('protocol/constants.MAX_ACTION_DATA_LENGTH');
 
-// Maximum smart-contract source code size, in bytes (64 KiB). Enforced by the
-// SDK (pre-flight validation), the indexer (DEPLOY processing) and the VM
-// (isolate limit). These were each declared independently and are kept in
-// lockstep by the same regression suite.
-const MAX_CODE_SIZE = 65536;
+const OP_RETURN_PUSH_OVERHEAD = copy('protocol/constants.OP_RETURN_PUSH_OVERHEAD');
 
-// Cross-contract calls (emit.execute). Maximum call depth: a user-submitted
-// EXECUTE runs at depth 0; each emit.execute hop adds 1. Enforced by the VM at
-// emit time and re-validated by the indexer when it processes the emission.
-const VM_MAX_CALL_DEPTH = 4;
+const MAX_CODE_SIZE = copy('protocol/constants.MAX_CODE_SIZE');
 
-// Minimum caller-funded gas reservation per emit.execute call. Bounds call-tree
-// fan-out: every call costs at least (VM_EMISSION + VM_MIN_CALL_GAS) out of the
-// caller's own gas budget. Enforced by the VM and the indexer in lockstep.
-const VM_MIN_CALL_GAS = 5000;
+const VM_MAX_CALL_DEPTH = copy('protocol/constants.VM_MAX_CALL_DEPTH');
+
+const VM_MIN_CALL_GAS = copy('protocol/constants.VM_MIN_CALL_GAS');
 
 // ── Cross-CHAIN contract calls (emit.crossExecute / XCALL) ──────────────────
 // Enforced by the VM at emit time and re-validated host-side by the indexer
 // (processEmission + actions/xcall.js); the target chain re-validates the
 // signed dispatch row before injecting. See protocol/Cross_Chain_Calls.md.
 
-// Target-side gas ceiling bounds. The injected execution is fee-less on the
-// target chain (the caller pre-paid on the source chain), so the per-call cap
-// is much tighter than the same-chain 1M execution ceiling. The minimum equals
-// VM_MIN_CALL_GAS.
-const XCALL_MIN_GAS = 5000;
-const XCALL_MAX_GAS = 200000;
+const XCALL_MIN_GAS = copy('protocol/constants.XCALL_MIN_GAS');
+const XCALL_MAX_GAS = copy('protocol/constants.XCALL_MAX_GAS');
 
-// Cross-chain hop budget: a user-originated call is hop 1; a call emitted from
-// a cross-chain-injected execution (or from a result callback) is hop 2; more
-// requires a fresh user transaction. Bounds X→Y→X ping-pong, which is
-// otherwise free after the first hop (injected executions have no fee payer).
-const XCALL_MAX_HOPS = 2;
+const XCALL_MAX_HOPS = copy('protocol/constants.XCALL_MAX_HOPS');
 
-// Source-chain deadline window (blocks). Must comfortably exceed both chains'
-// relay confirmation depths plus federation rounds; expiry past deadline_block
-// is synthesized deterministically by every source-chain indexer.
-const XCALL_MIN_DEADLINE_BLOCKS = 10;
-const XCALL_MAX_DEADLINE_BLOCKS = 4000;
+const XCALL_MIN_DEADLINE_BLOCKS = copy('protocol/constants.XCALL_MIN_DEADLINE_BLOCKS');
+const XCALL_MAX_DEADLINE_BLOCKS = copy('protocol/constants.XCALL_MAX_DEADLINE_BLOCKS');
 
-// Return payload cap, bytes (pre-base64). The payload is mirrored to every
-// indexer and ANCHOR-archived on DOGE; an oversize return becomes status
-// 'payload_too_large' with an EMPTY payload (deterministic. Never truncated).
-const XCALL_MAX_RETURN_BYTES = 1024;
+const XCALL_MAX_RETURN_BYTES = copy('protocol/constants.XCALL_MAX_RETURN_BYTES');
 
-// Deterministic per-block injection cap on each target chain. Overflow carries
-// forward to the next block in (snapshot_block, call_id) order. Never dropped.
-const XCALL_MAX_CALLS_PER_BLOCK = 25;
+const XCALL_MAX_CALLS_PER_BLOCK = copy('protocol/constants.XCALL_MAX_CALLS_PER_BLOCK');
 
-// Age-out window (seconds of consensus block time, measured from a mirrored
-// result row's quorum-signed effective_time) past which the SOURCE chain retires
-// a result row it can never deliver.
-//
-// A result row whose call_id matches no local XCALL v0 request is rejected on
-// every block and pruned by nothing (pruning is keyed on a recorded callback),
-// so a handful of such rows permanently occupy the head of the
-// XCALL_MAX_CALLS_PER_BLOCK delivery slice and starve every real result behind
-// them. The mirrored row carries no deadline_block of its own, so the age-out
-// clock is effective_time: the federation only signs a result after the request
-// is buried at its source chain's relay confirmation depth, and one hour covers
-// the deepest of those windows (BTC 6 blocks x 600s, LTC 12 x 150s, DOGE 60 x
-// 60s). A request still absent an hour past effectiveness is absent because its
-// branch is gone, not because this node is behind, and no honest reorg brings it
-// back. Where a local request DOES exist (routing mismatch, or a definitively
-// unquorate result), its own deadline_block is the exact age-out clock and this
-// window is not used.
-//
-// Retirement is CONSENSUS-VISIBLE: it mints an action row and frees a slot in a
-// capped per-block pass, which decides which block a real callback lands in. It
-// is therefore flag-day gated (XCALL_RESULT_ORPHAN_RETIREMENT in the indexer's
-// protocol_changes.js) and anchored to a rollback-able action_index, so a
-// source-chain reorg that restores the missing request also erases the
-// retirement and the result delivers normally.
-const XCALL_RESULT_ORPHAN_GRACE_SECONDS = 3600;
+const XCALL_RESULT_ORPHAN_GRACE_SECONDS = copy('protocol/constants.XCALL_RESULT_ORPHAN_GRACE_SECONDS');
 
-// ── ATTEST expiry sweep ─────────────────────────────────────────────────────
-// Deterministic per-block cap on the ATTEST v0 deadline-expiry sweep.
-// Each expired request synthesizes an ATTEST v2 action that flips the request to
-// 'expired' and fires its callback, so an unbounded sweep lets a single block
-// inherit an arbitrary backlog: one block's processing time (and its actions
-// rows) becomes a function of how many requests happened to expire at once,
-// which an attacker controls by batching requests with a common deadline.
-//
-// Overflow carries forward to the next block rather than being dropped: the
-// selection is ordered (deadline_block ASC, action_index ASC), a TOTAL order
-// because action_index is unique, so the same requests expire in the same order
-// on every node, just spread across more blocks. Mirrors the XCALL sibling cap
-// above in both value and carry-forward semantics.
-//
-// CONSENSUS-VISIBLE: the cap decides which block an expiry lands in, which moves
-// actions rows, the contract hash and the checkpoint preimage. It ships ungated
-// because a fleet-wide replay batch recomputes all of it.
-const ATTEST_MAX_EXPIRIES_PER_BLOCK = 25;
+const ATTEST_MAX_EXPIRIES_PER_BLOCK = copy('protocol/constants.ATTEST_MAX_EXPIRIES_PER_BLOCK');
 
-// ── Cross-chain settlement pass ─────────────────────────────────────────────
-// Deterministic per-block cap on the CROSS_SETTLE pass. It was the
-// one cross-chain pass without one: processCrossChainSettlements looped every
-// finalized, effective, unsettled match the hub mirror carried, so a hub backlog
-// (or a hub the indexer had been disconnected from for a while) injected an
-// unbounded number of escrow-releasing actions into a single block transaction,
-// which is the BLOCK_PROCESS_TIMEOUT shape the XCALL and ATTEST caps above exist
-// to prevent.
-//
-// Overflow carries forward rather than being dropped: getEffectiveUnsettledMatches
-// already orders by (snapshot_block ASC, match_id ASC), quorum-agreed row content
-// and a total order, so the capped prefix is the same set on every operator no
-// matter which hub DB it mirrors, and the remainder settles next block in order.
-//
-// CONSENSUS-VISIBLE, like both siblings: the cap decides which block a settlement
-// lands in, so it moves actions rows, the contract hash and the checkpoint
-// preimage. Unlike both siblings it is therefore NOT applied unconditionally.
-//
-// OPERATOR RULING, 2026-08-11: the cap lands behind an
-// operator-ratified FLAG-DAY gate in protocol_changes.js
-// (CROSS_SETTLE_PER_BLOCK_CAP), and NOT ungated under the fleet-wide
-// wipe-and-replay route. What the ruling settled: CROSS_CHAIN_DEX is
-// genesis-active on every network (protocol_changes.js, all-zero thresholds) and
-// the fresh-genesis restart of 816d1e1 moved the three TESTNET chains only, that
-// commit saying in as many words that mainnet and regtest are untouched, so
-// mainnet carries history this cap reinterprets; ungated would be replay-safe
-// there only if no mainnet block ever held more than the cap of effective
-// unsettled matches, a chain-state question no file in this repo can answer. The
-// ATTEST_MAX_EXPIRIES_PER_BLOCK precedent above does not carry it: that one
-// shipped ungated only because a fleet-wide replay recomputed the
-// history it reinterpreted, a vehicle this cap does not have.
-//
-// The number below is the cap's VALUE; the gate decides WHEN it applies.
-// testnet/regtest activate at genesis, and mainnet now does too
-// (CROSS_SETTLE_CAP_MAINNET_TIME in protocol_changes.js is 0): ARMED at genesis
-// by the 2026-09-09 ruling, identity on the indexed mainnet history (this cap
-// reinterprets 0 already-indexed cross-settle blocks, measured 2026-09-09).
-const CROSS_SETTLE_MAX_PER_BLOCK = 25;
+const CROSS_SETTLE_MAX_PER_BLOCK = copy('protocol/constants.CROSS_SETTLE_MAX_PER_BLOCK');
 
-// ── Cross-chain bridge (xchain-bridge spec section 8, D5) ───────────────────
-// How many finalized bridge_transfers rows the XBRIDGE settle pass may apply per
-// DESTINATION CHAIN per block. Overflow carries forward in (snapshot_block,
-// transfer_id) order and is never dropped, the XCALL and CROSS_SETTLE discipline.
-//
-// UNGATED, unlike CROSS_SETTLE_MAX_PER_BLOCK above, and the difference is not a
-// preference: that cap re-sliced history a chain had already indexed, so it needed
-// its own flag day. This one ships INSIDE XCHAIN_BRIDGE_ACTIVATION. No chain has
-// ever applied an XBRIDGE settle leg below that height, so there is no history for
-// the cap to reinterpret and a second activation read would only add a way for the
-// two heights to disagree.
-const XBRIDGE_MAX_PER_BLOCK = 25;
+const XBRIDGE_MAX_PER_BLOCK = copy('protocol/constants.XBRIDGE_MAX_PER_BLOCK');
 
-// ── Token-policy inheritance (xchain-token-bridge-policy spec, D22, R2) ─────
-// How many finalized policy_snapshots rows the pass may apply per block per chain,
-// at the head of the XBRIDGE pass and before any in-leg at that block. Lower than
-// the transfer cap because one snapshot is up to six injected actions (two list
-// creates or edits per list, an ISSUE 5 and a SLEEP), each rewriting a full
-// membership, where one transfer is a single credit. Overflow carries forward in
-// (snapshot_block, snapshot_id) order across ticks and policy_seq order within a
-// tick, never dropped.
-const XPOLICY_MAX_PER_BLOCK = 5;
+const XPOLICY_MAX_PER_BLOCK = copy('protocol/constants.XPOLICY_MAX_PER_BLOCK');
 
-// Ceiling on the membership of a list a bridged token may carry (R2, RULED a
-// 2026-09-11). No cap existed anywhere before this: LIST items are variadic and the
-// only bound was MAX_ACTION_DATA_LENGTH on ONE action, while every edit persists a
-// complete membership snapshot, so a list grows without limit across edits. Every
-// policy snapshot carries the FULL membership as transport and every destination
-// rewrites it into list_items on apply, so the origin's list length is write
-// amplification on every chain holding a copy.
-//
-// Enforced in two places, neither of them a hash input: ISSUE format 7 with a
-// non-empty BRIDGE_CHAINS is refused when either list is larger, and the hub
-// declines to sign a snapshot over a larger membership (the previous snapshot stays
-// in force and the watch raises WARN). Nothing depends on the number in a hash, so a
-// later flag day can raise it.
-const XPOLICY_MAX_MEMBERS = 10000;
+const XPOLICY_MAX_MEMBERS = copy('protocol/constants.XPOLICY_MAX_MEMBERS');
 
-// ── Token-gated content (PC-29) ─────────────────────────────────────────────
-// Fixed fractional scale for comparing FILE.GATE_MIN_AMOUNT thresholds against a
-// holder's balance. The wallet scales both sides to this many fractional digits
-// as BigInt (packages/core THRESHOLD_SCALE); the indexer compares with mathjs
-// bignumber. A threshold carrying MORE decimal places than this is
-// unrepresentable on the wallet side, so the two implementations would disagree
-// on the last digit for values neither considers malformed. The indexer therefore
-// bounds a threshold's decimal places at min(gate tick divisibility,
-// THRESHOLD_SCALE) rather than at divisibility alone.
-//
-// Cross-repo twin: xchain-wallet packages/core THRESHOLD_SCALE. These two must
-// move together or the disagreement returns.
-const THRESHOLD_SCALE = 18;
+const THRESHOLD_SCALE = copy('protocol/constants.THRESHOLD_SCALE');
 
 // ── Chunked DEPLOY (DEPLOY v4 carriers + DEPLOY v2/v3 assemble) ─────────────
 // A contract whose base64(code) exceeds the single-tx budget is split across
@@ -239,192 +78,31 @@ const THRESHOLD_SCALE = 18;
 // the CODE_HASH. Enforced by the indexer (deploy_chunk + deploy assembly) and
 // the SDK (chunkHelper splitter) in lockstep.
 
-// Maximum number of chunks one DEPLOY may assemble. base64(MAX_CODE_SIZE) is
-// ~87.4 KB; at the conservative per-chunk part budget below that is ~12 chunks,
-// so 16 leaves headroom while bounding assembler work + chunk-table DoS.
-const MAX_DEPLOY_CHUNKS = 16;
+const MAX_DEPLOY_CHUNKS = copy('protocol/constants.MAX_DEPLOY_CHUNKS');
 
-// Maximum bytes of base64 code carried by a single DEPLOY v4 carrier's CODE_PART.
-// Sized so the compiled v4 carrier action (action prefix + 64-char CODE_HASH +
-// indices + the part) stays comfortably under MAX_ACTION_DATA_LENGTH including
-// the OP_PUSHDATA2 prefix. The SDK splits at this size; the indexer rejects a
-// larger part (belt-and-suspenders; the decoder already drops oversize pushes).
-const MAX_DEPLOYCHUNK_PART_BYTES = 7800;
+const MAX_DEPLOYCHUNK_PART_BYTES = copy('protocol/constants.MAX_DEPLOYCHUNK_PART_BYTES');
 
-// ── Stake-weighted quorum (STAKE_WEIGHTED_QUORUM / WI-1) ────────────────────
-// Consensus-critical activation: at/above this BTC-anchored snapshot_block the
-// federation quorum becomes stake-WEIGHTED (signers' summed source stake must
-// exceed 2/3 of total active snapshot stake) instead of count-based (2f+1 of the
-// pubkey COUNT).
-//
-// Keyed on the BTC `snapshot_block` carried by every settlement/checkpoint
-// canonical (NOT each chain's local processing height) so the hub and the BTC,
-// LTC and DOGE indexers all flip on the SAME anchor. A per-chain local-height
-// gate would fork: one snapshot_block lands at different local heights per chain.
-// The `network` is also taken from the row, so the gate is env-independent.
-//
-// Enforced IDENTICALLY by the hub (every PBFT tally engine), the indexer
-// (every settlement-signature gate + recovery), and the sdk/explorer/sync
-// verifiers. All five keep a local copy of this map; the cross-service
-// regression suite asserts they equal these values, so the activation height
-// can never silently diverge (a divergence forks the chain).
-//
-// mainnet is ARMED (2026-07-07) to a concrete near-term height: 961000, the
-// BTC-anchored flag-day at which mainnet flips from the count-based quorum
-// rule to stake-weighted. BTC anchor ~2026-08-04; hub + ALL indexers (+
-// sdk/explorer/sync copies) MUST deploy before this height. testnet/regtest
-// activate at genesis so the e2e / regtest stack exercises stake-weighting
-// from block 0.
-const STAKE_WEIGHTED_QUORUM_ACTIVATION = {
-    mainnet: 961000,      // ARMED 2026-07-07: BTC anchor ~2026-08-04; deploy hub + ALL indexers (+ sdk/explorer/sync copies) before this height
-    testnet: 0,
-    regtest: 0,
-};
+const STAKE_WEIGHTED_QUORUM_ACTIVATION = copy('protocol/constants.STAKE_WEIGHTED_QUORUM_ACTIVATION');
 
-// EQUIV_HEADER_ACTIVATION (WI-2 bump 2): the BTC-anchored flag-day at/above which every
-// consensus canonical is prefixed with a uniform signed header
-// `EQUIV|<ENGINE_TAG>|<ROUND_ID>|<VIEW>||<CONTENT>`. This is consensus-breaking (it changes the
-// signed preimage of every settlement/checkpoint/price/attestation signature + the config-change
-// PBFT canonical), so it is gated, kept byte-identical to the local copies in
-// xchain-{hub,indexer,sdk,explorer,sync}/src/equivocation_header.js by the
-// cross-service regression suite, and must deploy hub + ALL indexers atomically. Its sole
-// consumer is the SLASH v0 equivocation-slashing action, which is only constructible from
-// post-flag-day (header-carrying) messages. Same ARMED height and deploy-by convention as
-// STAKE_WEIGHTED_QUORUM_ACTIVATION: mainnet is armed to 961000 (2026-07-07; BTC anchor
-// ~2026-08-04), not a disabled placeholder.
-const EQUIV_HEADER_ACTIVATION = {
-    mainnet: 961000,      // ARMED 2026-07-07: BTC anchor ~2026-08-04; deploy hub + ALL indexers (+ sdk/explorer/sync copies) before this height
-    testnet: 0,
-    regtest: 0,
-};
+const EQUIV_HEADER_ACTIVATION = copy('protocol/constants.EQUIV_HEADER_ACTIVATION');
 
-// STATE_COMMITMENT_ACTIVATION (light-client SPV, spec §6.4): the flag-day at/above which
-// each indexer computes + commits the additive per-block `state_root` (balances+stakes SMT)
-// and `block_merkle_root`. ADDITIVE (the three consensus block hashes + BLOCK_HASH_VERSION are
-// untouched), so it is not consensus-breaking by itself; it only adds new committed roots that
-// the xchain-sync follower recomputes and HALTS on if they diverge. UNLIKE the two maps above,
-// this gates on the chain's OWN local block_index (each chain starts committing its own per-block
-// root at its own height); the Phase 2 checkpoint/ANCHOR extension that SIGNS these roots gates on
-// snapshot_block. Kept byte-identical to the local copies in xchain-indexer/src/
-// state_commitment_activation.js + xchain-sync/src/state_commitment_activation.js (and xchain-hub
-// at Phase 2) by the cross-service regression suite. ARMED MID-CHAIN 2026-07-07 with per-chain
-// '<COIN>:<network>' keys (one shared height cannot fit BTC ~957k and DOGE ~6.28M at once; bare
-// network key remains for regtest; coin-less mainnet/testnet lookups stay inert). Same heights
-// as the two state-hash gate maps, so ONE deploy-by date governs all Cohort-C flips; each height
-// precedes the Cohort-B BTC anchor (961000) as the checkpoint-commitment ordering requires.
-const STATE_COMMITMENT_ACTIVATION = {
-    'BTC:mainnet':  958500,     // ARMED 2026-07-07 at tip 957062; ~10 days of margin
-    'LTC:mainnet':  3143000,    // ARMED 2026-07-07 at tip 3138154; ~8 days
-    'DOGE:mainnet': 6291000,    // ARMED 2026-07-07 at tip 6280094; ~7.5 days
-    'BTC:testnet':  145000,     // ARMED 2026-07-07 at tip 143299
-    'LTC:testnet':  4805000,    // ARMED 2026-07-07 at tip 4797675
-    'DOGE:testnet': 67000000,   // ARMED 2026-07-07 at tip 66498605 (fast chain, wide margin)
-    regtest: 0,                 // armed from genesis: fresh regtest stacks exercise the roots end to end
-};
+const STATE_COMMITMENT_ACTIVATION = copy('protocol/constants.STATE_COMMITMENT_ACTIVATION');
 
-// CHECKPOINT_COMMITMENT_ACTIVATION (light-client SPV, spec §6.1/§6.3, Phase 2): the flag-day at/above
-// which the quorum-signed checkpoint canonical (and the on-chain ANCHOR) COMMIT the additive
-// `state_root` + `block_merkle_root` (with their version bytes) that STATE_COMMITMENT_ACTIVATION made
-// the indexer compute in Phase 1. Post-flag-day the checkpoint canonical string gains
-// `|STATE_ROOT|STATE_ROOT_VERSION|BLOCK_MERKLE_ROOT|BLOCK_MERKLE_VERSION` and a new ANCHOR v3 carries
-// the roots on DOGE; pre-flag-day both keep their old shape and the roots are absent. Consensus-relevant
-// for signature verification (the signed preimage changes), so it must deploy hub + ALL indexers + the
-// SDK/explorer verifiers atomically.
-//
-// UNLIKE STATE_COMMITMENT_ACTIVATION (which gates on each chain's OWN local block_index, since each chain
-// computes its own per-block root), this gates on the BTC-anchored `snapshot_block` carried by every
-// checkpoint canonical, exactly like STAKE_WEIGHTED_QUORUM_ACTIVATION / EQUIV_HEADER_ACTIVATION, so the
-// hub and the BTC/LTC/DOGE indexers all flip the SIGNED shape on the same anchor. The operator MUST pick
-// a snapshot_block at/after which every checkpointed chain is already past its own STATE_COMMITMENT
-// flag-day (else the engine would have no roots to sign). Kept byte-identical to the local copies in
-// xchain-{hub,indexer,sdk,explorer,sync}/src/checkpoint_commitment_activation.js (sync consumes it at
-// checkpoint.js to decide whether to expect the roots) by the cross-service regression suite. Same
-// ARMED height and deploy-by convention as the maps above: mainnet is armed to 961000
-// (2026-07-07; BTC anchor ~2026-08-04), not a disabled placeholder.
-const CHECKPOINT_COMMITMENT_ACTIVATION = {
-    mainnet: 961000,      // ARMED 2026-07-07: BTC anchor ~2026-08-04; deploy hub + ALL indexers (+ sdk/explorer/sync copies) before this height
-    testnet: 146000,      // ARMED 2026-07-22: first BTC-testnet anchor past all three STATE_COMMITMENT testnet thresholds; was 0, which forced the SPV root suffix from testnet genesis before the indexer computes roots, so the hub refused to sign every testnet checkpoint
-    regtest: 0,
-};
+const CHECKPOINT_COMMITMENT_ACTIVATION = copy('protocol/constants.CHECKPOINT_COMMITMENT_ACTIVATION');
 
-// ANCHOR_REWARD_ACTIVATION (anchor-reward re-derivation): the flag-day at/above which the validator
-// anchor reward stops being TRUSTED from the hub's `pushvalidatorrewards` JSON-RPC and is instead
-// DERIVED by every indexer from the on-chain ANCHOR bytes. Post-flag-day the hub emits a publisher-
-// bearing ANCHOR (v4 rootless / v5 root-bearing) carrying the elected publisher pubkey plus a 2f+1
-// `oracle_publish` attestation (XANCPUB) over the reward tuple; the indexer verifies that quorum and
-// credits the publisher with ANCHOR_REWARD_AMOUNT (a frozen consensus constant, NEVER from the wire).
-// Below the flag-day the old push path stands and v4/v5 anchors are rejected. Consensus-relevant (the
-// credited reward becomes a COLLECT-spendable per-block ledger row), so it must deploy hub + ALL
-// indexers atomically. Like CHECKPOINT_COMMITMENT_ACTIVATION / STAKE_WEIGHTED_QUORUM_ACTIVATION it gates
-// on the BTC-anchored `snapshot_block` carried by every ANCHOR canonical. Kept byte-identical to the
-// local copies in xchain-{hub,indexer}/src/anchor_reward_activation.js by the cross-service regression
-// suite. Same ARMED height and deploy-by convention as the maps above: mainnet is armed to 961000
-// (2026-07-07; BTC anchor ~2026-08-04), not a disabled placeholder.
-const ANCHOR_REWARD_ACTIVATION = {
-    mainnet: 961000,      // ARMED 2026-07-07: BTC anchor ~2026-08-04; deploy hub + ALL indexers (+ sdk/explorer/sync copies) before this height
-    testnet: 0,
-    regtest: 0,
-};
+const ANCHOR_REWARD_ACTIVATION = copy('protocol/constants.ANCHOR_REWARD_ACTIVATION');
 
-// ANCHOR_REWARD_AMOUNT: the frozen validator anchor-publish reward, signed into the XANCPUB attestation
-// by the hub and re-derived by the indexer (never from the wire). Changing it is itself a flag-day.
-const ANCHOR_REWARD_AMOUNT = '10.00000000';
+const ANCHOR_REWARD_AMOUNT = copy('protocol/constants.ANCHOR_REWARD_AMOUNT');
 
-// ARCHIVE_REWARD_ACTIVATION (archive-reward re-derivation): the flag-day at/above which the
-// anchor_archive reward stops riding the key-authenticated `pushvalidatorrewards` rail and is instead
-// DERIVED by every indexer from the on-chain ANCHOR v6 bytes (the v1 archive anchor plus the same
-// PUBLISHER + 2f+1 XANCPUB attestation tail as v4/v5, attested over an 'anchor_archive' canonical
-// keyed on MATCH_BATCH_SEQ). This retires the last insider-with-key reward-forge surface the
-// per-chain ANCHOR_REWARD flag-day left open. Below the flag-day the legacy v1 + push path stands
-// and v6 anchors are rejected. Consensus-relevant, same deploy rules and snapshot_block gating as
-// ANCHOR_REWARD_ACTIVATION; kept byte-identical to the local copies in
-// xchain-{hub,indexer}/src/anchor_reward_activation.js by the cross-service regression suite.
-const ARCHIVE_REWARD_ACTIVATION = {
-    mainnet: 963000,      // ARMED 2026-07-16, RE-PINNED 2026-08-12 off 969500 onto the pre-freeze train boundary (tip 959,853 on 07-27 at ~144 blocks/day + 21d); deploy every consumer before this era
-    testnet: 0,
-    regtest: 0,
-};
+const ARCHIVE_REWARD_ACTIVATION = copy('protocol/constants.ARCHIVE_REWARD_ACTIVATION');
 
-// ARCHIVE_REWARD_AMOUNT: the frozen archive-publish reward, signed into the archive XANCPUB
-// attestation by the hub and re-derived by the indexer (never from the wire). Kept equal to the
-// hub's historical default (ANCHOR_REWARD_PER_PUBLISH). Changing it is itself a flag-day.
-const ARCHIVE_REWARD_AMOUNT = '10.00000000';
+const ARCHIVE_REWARD_AMOUNT = copy('protocol/constants.ARCHIVE_REWARD_AMOUNT');
 
-// CROSS_CHAIN_ROYALTY_ACTIVATION (cross-chain royalty match-canonical): the flag-day at/above which
-// the validator-signed XMATCH canonical carries the matched orders' royalty payout legs
-// (a_payout_legs / b_payout_legs), so a colluding hub cannot strip a royalty from a cross-chain
-// match; below it the canonical stays byte-identical to the legacy format, so pre-existing
-// signatures keep verifying. Consensus-relevant (the signed preimage changes), so it must deploy
-// hub + ALL indexers atomically. Like CHECKPOINT_COMMITMENT_ACTIVATION / ANCHOR_REWARD_ACTIVATION
-// it gates on the BTC-anchored `snapshot_block` carried by every XMATCH canonical. The CREATE-side
-// acceptance rule (deny a royalty-bearing cross-chain listing while enforcement is impossible) is
-// gated separately by the CROSS_CHAIN_ROYALTY entry in the indexer's protocol_changes.js; the
-// operator MUST flip this canonical gate first or together with it, NEVER create-side first
-// (create-side ON with canonical OFF would put the legs in unsigned mirror fields, the exact
-// tamper hole the legs-in-canonical design closes). Kept byte-identical to the local copies in
-// xchain-{hub,indexer}/src/cross_chain_royalty_activation.js by the cross-service regression
-// suite. Same ARMED height and deploy-by convention as the maps above: mainnet is armed to
-// 961000 (2026-07-07; BTC anchor ~2026-08-04), not a disabled placeholder.
-const CROSS_CHAIN_ROYALTY_ACTIVATION = {
-    mainnet: 961000,      // ARMED 2026-07-07: BTC anchor ~2026-08-04; deploy hub + ALL indexers before this height
-    testnet: 0,
-    regtest: 0,
-};
+const CROSS_CHAIN_ROYALTY_ACTIVATION = copy('protocol/constants.CROSS_CHAIN_ROYALTY_ACTIVATION');
 
-// VALID_FIAT_CODES: the accepted FIAT_CODE allow-list for PRICE actions. The indexer's
-// config['FIATS'] keys (xchain-indexer/src/config.js) are the on-chain arbiter; this list
-// mirrors them in the indexer's insertion order. The SDK validator (VALID_FIAT_CODES) must
-// be a byte-equal allow-list so it never refuses a FIAT the protocol accepts (it previously
-// drifted, missing EUR and KRW). The cross-service parity test asserts SDK === this list.
-const VALID_FIAT_CODES = ['USD', 'CAD', 'AUD', 'MXN', 'GBP', 'JPY', 'CNY', 'CHF', 'BRL', 'INR', 'EUR', 'KRW'];
+const VALID_FIAT_CODES = copy('protocol/constants.VALID_FIAT_CODES');
 
-// GAS_TICK: the protocol gas token's TICK. The indexer's config['GAS']
-// (xchain-indexer/src/config.js) is the on-chain arbiter: it names the token
-// debited for capability STAKE, VOTE deposits/escrows, contract gas billing,
-// and every other gas-denominated flow. The SDK co-signer policy engine keys
-// capability-STAKE spending caps to this tick (STAKE v1/v2 carry no TICK
-// field). The cross-service parity test asserts indexer === SDK === this value.
-const GAS_TICK = 'XCHAIN';
+const GAS_TICK = copy('protocol/constants.GAS_TICK');
 
 // ── Oracle federation (xchain-hub) ───────────────────────────────────────────
 // Canonical source: xchain-hub/src/constants.js. UNLIKE XCALL_MAX_HOPS above, these
@@ -435,55 +113,13 @@ const GAS_TICK = 'XCHAIN';
 // reddens hub CI rather than this repo's. Nothing in this repo reads either
 // one; they are re-exports for consumers.
 
-// Coarse global sanity ceiling on an ingested price_snapshots value (pre-scale,
-// covers pairs like BTC/KRW up to ~$7M BTC with headroom); rejects
-// parse-overflow / misplaced-decimal garbage. Per-pair outliers are caught by
-// the co-sign deviation gate and multi-submitter aggregation, not here.
-const PRICE_MAX = 10_000_000_000;
+const PRICE_MAX = copy('protocol/constants.PRICE_MAX');
 
-// Co-sign deviation band for the oracle PREPARE content-validation gate: a
-// follower refuses to co-sign a proposed price that deviates more than this
-// fraction from its own local aggregate for the pair. MUST be
-// federation-uniform: if hubs used different bands, identical aggregates
-// could yield different accept/withhold decisions (a liveness divergence on
-// the ±band boundary). 0.05 = 5%.
-const ORACLE_DEVIATION_THRESHOLD = 0.05;
+const ORACLE_DEVIATION_THRESHOLD = copy('protocol/constants.ORACLE_DEVIATION_THRESHOLD');
 
-// ── Oracle history the VM can see (db.getOracleDataForVM) ───────────────────
-// The VM's bridge is synchronous and runs in a forked worker, so oracle history
-// is PRE-LOADED and shipped across an IPC boundary before every execution. Both
-// numbers below bound that payload, and both are consensus inputs: they decide
-// which rounds a contract can read, and two nodes loading different rounds reach
-// different contract state.
-//
-// ORACLE_VM_ROUND_WINDOW is the window in ROUNDS, deliberately not in rows. A flat
-// row cap taken newest-first would make the visible history a function of how many
-// coin pairs the oracle happens to publish: at 36 pairs a 50,000-row cap is only
-// ~1,388 rounds, and every pair added narrows it further with no signal. A
-// round-denominated window is stable under pair growth, and it is the quantity a
-// contract reasons about.
-//
-// The window is also what makes the boundary VISIBLE. getOracleDataForVM returns
-// the oldest round the window guarantees, and the VM's accessor answers
-// "outside the loaded window" for anything below it instead of the same null it
-// returns for a round that never existed. Those two were indistinguishable, and
-// the price-bet family votes its void guard on exactly that null, so the loser of
-// a settled bet could reclaim their stake by waiting for the settle round to
-// scroll out of the preload.
-//
-// 1200 rounds is ~8.3 days at the oracle's 144-rounds-per-day cadence, and is
-// the largest whole-round window that fits under the row ceiling at today's 36
-// pairs (1200 x 36 = 43,200). db.oracle-round-window.test.js pins that
-// arithmetic, so adding pairs past the point where the ceiling starts truncating
-// reddens a suite rather than silently shrinking the window again.
-const ORACLE_VM_ROUND_WINDOW = 1200;
+const ORACLE_VM_ROUND_WINDOW = copy('protocol/constants.ORACLE_VM_ROUND_WINDOW');
 
-// Hard ceiling on preloaded rows, unchanged from the flat cap it replaces so the
-// per-execution IPC payload does not regress. It is a backstop, not the window:
-// when it truncates, the oldest loaded round may be missing pairs, so the floor
-// reported to the VM rises above that round rather than claiming coverage the
-// payload does not have.
-const ORACLE_VM_MAX_ROWS = 50000;
+const ORACLE_VM_MAX_ROWS = copy('protocol/constants.ORACLE_VM_MAX_ROWS');
 
 module.exports = {
     MAX_ACTION_DATA_LENGTH,

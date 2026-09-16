@@ -68,40 +68,11 @@
  *
  ********************************************************************/
 
-// Scale the two amount operands are compared at once the rule is live.
-//
-// FROZEN. This is the emitted SQL of a consensus predicate: once any chain
-// arms a height, changing this number changes how blocks above that height
-// evaluate on a replay, which is a fork. It is deliberately a local constant
-// rather than an import of LEDGER_AMOUNT_PRECISION, so that a future edit to
-// that gate's scale cannot silently rewrite this predicate. The two are equal
-// today (both 18) and both exist for the same reason: 18 is
-// config.MAX_TOKEN_DECIMALS, the finest precision any tick can be issued with,
-// so no token amount can be truncated by the cast. Raising MAX_TOKEN_DECIMALS
-// above this value would make the comparison lossy; the accompanying unit test
-// pins that relationship so the divergence fails CI instead of shipping.
-const DISPENSER_SEND_COMPARE_SCALE = 18;
+const { get, copy, activeAt } = require('./protocol_changes');
 
-// Per-chain activation heights, interpreted against the chain's own block_index.
-// `null` = NOT YET PINNED = inert (legacy lexicographic compare, byte-identical
-// replay). Mainnet and regtest are armed; testnet is still unpinned.
-const DISPENSER_SEND_AMOUNT_COMPARE_ACTIVATION = {
-    // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet
-    // history (0 dispensers, 0 dispenses on every chain, measured 2026-09-09), so
-    // height 0 opens no retroactive window.
-    'BTC:mainnet':  0,
-    'LTC:mainnet':  0,
-    'DOGE:mainnet': 0,
-    // Unpinned. Testnet arms at flag-day assembly, above the tip recorded at that
-    // time, in one coordinated fleet deploy. A height a carrying fleet has already
-    // passed opens a retroactive window: a node that reindexes across it derives
-    // different state than one that did not, and testnet does carry the history
-    // that makes that real.
-    'BTC:testnet':  null,
-    'LTC:testnet':  null,
-    'DOGE:testnet': null,
-    regtest: 0,
-};
+const DISPENSER_SEND_COMPARE_SCALE = copy('dispenser_send_amount_compare_activation.DISPENSER_SEND_COMPARE_SCALE');
+
+const DISPENSER_SEND_AMOUNT_COMPARE_ACTIVATION = copy('dispenser_send_amount_compare_activation.DISPENSER_SEND_AMOUNT_COMPARE_ACTIVATION');
 
 // Per-chain threshold with a network-wide fallback, byte-for-byte the lookup
 // stateHash.js / ledger_amount_precision_activation.js use. A coin-less caller

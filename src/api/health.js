@@ -26,12 +26,12 @@
 // fatal error, the freshly-read indexed-block height, and the current epoch
 // ms). Async only for the hub_push_queue stats fetch; all other fields are
 // derived synchronously from already-resolved values.
-const { computeArmedMapFingerprint } = require('../consensus/armed_map/armed_map_fingerprint');
 const { computeArmedMapFingerprintV2 } = require('../consensus/armed_map/fingerprint_v2');
 const { computeConsensusRulesDigest } = require('../consensus_rules_digest');
 const { barrierHoldMs, barrierCeilingExceeded } = require('../XChainIndexer');
 // Field groups assembled in the parts under ./health/; each is placed at the
 // position its fields always held, so the payload keeps its key order.
+const { carrierLogicDigest }          = require('./health/carrier_logic');
 const { syncFields }                  = require('./health/sync_fields');
 const { stallFields }                 = require('./health/stall_fields');
 const { advanceFields }               = require('./health/advance_fields');
@@ -104,13 +104,13 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
         // Hub config overlay age and the hub push retry queue counts.
         ...hub,
         action_counters:  actionCounters(indexer),
-        // Consensus-gate build fingerprint: one string per process so a
-        // fleet sweep can confirm every deployed indexer runs the same armed map
-        // before a flag-day height. Per-file hashes live behind computeArmedMapFingerprint.
-        armed_map_fingerprint: computeArmedMapFingerprint().fingerprint,
-        // v2 of the same answer, published beside v1 during the W1 window: the armed VALUES
-        // row by row, so it survives a comment, rename or move; UNREADABLE, never a guess.
+        // Consensus-gate build fingerprint, v2 since W3: the armed VALUES row by row, so
+        // a sweep compares armed maps across a rename or move; UNREADABLE, never a guess.
+        armed_map_fingerprint: computeArmedMapFingerprintV2().hex,
         armed_map_fingerprint_v2: computeArmedMapFingerprintV2().hex,
+        armed_map_fingerprint_version: 2,
+        // The logic half v2 stopped covering, its own field beside v2, never inside it.
+        carrier_logic_digest: carrierLogicDigest(),
         // The CROSS-REPO half of the same question. armed_map_fingerprint hashes this
         // repo's own file bytes and so is only comparable against another indexer;
         // this digest hashes the DECIDED HEIGHTS of the gates the hub evaluates too,

@@ -88,16 +88,9 @@
  *
  ********************************************************************/
 
-// Per-chain activation height, interpreted as the processing chain's OWN
-// block_index. At/after the height a stale tip round is emitted with its price
-// withheld; below it the row is dropped entirely (legacy behaviour).
-const ORACLE_STALE_ROUND_VISIBILITY_ACTIVATION = {
-    'BTC:mainnet':  966500,     // tip 963,240 (2026-08-20) + 21d @144/day = 966,264
-    'LTC:mainnet':  3175500,    // tip 3,163,004 + 21d @576/day = 3,175,100
-    'DOGE:mainnet': 6370000,    // tip 6,339,253 + 21d @1440/day = 6,369,493
-    testnet: 0,
-    regtest: 0,
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const ORACLE_STALE_ROUND_VISIBILITY_ACTIVATION = copy('oracle_stale_round_visibility_activation.ORACLE_STALE_ROUND_VISIBILITY_ACTIVATION');
 
 // Resolve the per-chain threshold: '<COIN>:<network>' key first, then the bare
 // network key. Unknown / unarmed -> undefined -> inert/off.

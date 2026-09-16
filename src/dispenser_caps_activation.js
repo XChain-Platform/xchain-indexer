@@ -44,15 +44,9 @@
  *
  ********************************************************************/
 
-// Per-network activation, interpreted against the block's consensus timestamp
-// (data['BLOCK_TIME']). Mainnet flips at the coordinated 2.0.0 contract-era
-// flag-day; testnet/regtest are active from genesis, mirroring the 2.0.0
-// protocol_changes cohort and the sibling dispenser-family activations.
-const DISPENSER_CAPS_ACTIVATION = {
-    mainnet: 1786060800,    // 2026-08-07 00:00:00 UTC - coordinated 2.0.0 flag-day; deploy ALL indexers before this time
-    testnet: 0,
-    regtest: 0,
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const DISPENSER_CAPS_ACTIVATION = copy('dispenser_caps_activation.DISPENSER_CAPS_ACTIVATION');
 
 // Whether the MAX_DISPENSES / MAX_REFILLS caps are in effect for a block whose
 // consensus timestamp is `blockTime` on `network`. Below the threshold -> off

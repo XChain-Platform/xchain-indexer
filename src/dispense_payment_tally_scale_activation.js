@@ -85,24 +85,13 @@
  *
  ********************************************************************/
 
-// Scale the tally is kept at once the rule is live. 18 is
-// config.MAX_TOKEN_DECIMALS, the finest precision any tick can be issued with,
-// and the scale ledger_amount_precision_activation and the balance projections
-// already net in. Deliberately a local constant rather than an import: an edit
-// to another gate's scale must not silently re-price blocks above this height.
-const DISPENSE_TALLY_EXACT_SCALE = 18;
+const { get, copy, activeAt } = require('./protocol_changes');
 
-// The scale the tally has always used, and the scale a native-coin payment
-// keeps. Also the render width of the dispenses row below.
-const DISPENSE_TALLY_LEGACY_SCALE = 8;
+const DISPENSE_TALLY_EXACT_SCALE = copy('dispense_payment_tally_scale_activation.DISPENSE_TALLY_EXACT_SCALE');
 
-// Per-network activation, interpreted against the block's consensus timestamp
-// (data['BLOCK_TIME']), matching the dispenser-family cohort.
-const DISPENSE_PAYMENT_TALLY_SCALE_ACTIVATION = {
-    mainnet: 0,             // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 dispensers, 0 dispenses, measured 2026-09-09)
-    testnet: 0,
-    regtest: 0,
-};
+const DISPENSE_TALLY_LEGACY_SCALE = copy('dispense_payment_tally_scale_activation.DISPENSE_TALLY_LEGACY_SCALE');
+
+const DISPENSE_PAYMENT_TALLY_SCALE_ACTIVATION = copy('dispense_payment_tally_scale_activation.DISPENSE_PAYMENT_TALLY_SCALE_ACTIVATION');
 
 // Whether the exact token-payment tally binds for a block whose consensus
 // timestamp is `blockTime` on `network`. Below the threshold -> off (8 dp

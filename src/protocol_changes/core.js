@@ -21,7 +21,7 @@
  * constant, or one parsed entry of the ProtocolChanges time table.
  *
  * Only the part files beside this one call addGate() and addChange(); every
- * other module reads: get(key), has(key), rows(), activeAt(). A miss THROWS,
+ * other module reads: get(key), copy(key), has(key), rows(), activeAt(). A miss THROWS,
  * because a row a build lacks is a build defect and not a network state, and
  * a null answer would let a moved carrier read as "not yet active".
  *
@@ -77,6 +77,15 @@ function frozenCopy(value) {
     const out = {};
     for (const k of Object.keys(value)) out[k] = frozenCopy(value[k]);
     return Object.freeze(out);
+}
+
+// The mutable mirror of frozenCopy(): the same walk, nothing frozen.
+function mutableCopy(value) {
+    if (Array.isArray(value)) return value.map(mutableCopy);
+    if (!isPlainObject(value)) return value;
+    const out = {};
+    for (const k of Object.keys(value)) out[k] = mutableCopy(value[k]);
+    return out;
 }
 
 function hasOwn(obj, key) {
@@ -178,6 +187,17 @@ class GateRegistry {
         const row = this.entries.get(key);
         if (!row) throw new RegistryMissError(key);
         return row.value;
+    }
+
+    /**
+     * The row's value as a fresh MUTABLE deep copy (primitives and RegExps as
+     * they are); throws RegistryMissError on a miss. For a module that owned a
+     * plain table before the registry and whose tests patch it: the copy is the
+     * module's to mutate, the stored row never moves.
+     * @returns {*}
+     */
+    copy(key) {
+        return mutableCopy(this.get(key));
     }
 
     /** @returns {string} the row's unit; throws RegistryMissError on a miss. */

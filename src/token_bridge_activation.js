@@ -32,23 +32,9 @@
 
 'use strict';
 
-// TOKEN_BRIDGE_ACTIVATION: the height (per network) on the chain being parsed at/above
-// which XBRIDGE v3/v4 and ISSUE format 7 are legal. Below it v3 and v4 return the base
-// spec's own string 'invalid: XBRIDGE before activation', v5 is never injected, and an
-// ISSUE|7 keeps the parse verdict 'invalid: VERSION (unknown)' so no historical ISSUE on
-// any chain changes status on replay.
-//
-// Keyed on the chain's OWN block_index, as XCHAIN_BRIDGE_ACTIVATION.
-//
-// Mainnet and testnet sit at the house sentinel 9999999999. Testnet is NOT armed with the
-// XCHAIN bridge: no third-party token can be offered on a hub-trusted mint, so this gate
-// waits on the base spec's D2 checkpoint cross-check being built and armed on that
-// network. Regtest is 0 so the e2e rail exercises the armed rule from genesis.
-const TOKEN_BRIDGE_ACTIVATION = {
-    mainnet: 9999999999,
-    testnet: 9999999999,
-    regtest: 0,
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const TOKEN_BRIDGE_ACTIVATION = copy('token_bridge_activation.TOKEN_BRIDGE_ACTIVATION');
 
 // Is a general-token bridge action at height `blockIndex` on `network` at/above the
 // activation? A non-numeric height or an unknown network fails closed (false).

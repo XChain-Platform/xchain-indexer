@@ -88,7 +88,8 @@ function loadHubTwins(ctx) {
         return null;
     }
 }
-const MODS = ['../../../../src/mirror_admission_activation.js', '../../../../src/consensus/ed25519.js',
+// protocol_changes.js is the registry the activation shim reads; purged with it so the arming is re-read.
+const MODS = ['../../../../src/mirror_admission_activation.js', '../../../../src/protocol_changes.js', '../../../../src/consensus/ed25519.js',
               '../../../../../xchain-hub/src/mirror_admission_activation.js',
               '../../../../../xchain-hub/src/lib/admission_height.js',
               '../../../../../xchain-hub/src/oracle/consensus.js',

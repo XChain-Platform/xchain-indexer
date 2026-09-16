@@ -56,17 +56,9 @@
  *
  ********************************************************************/
 
-// Per-chain activation height, interpreted as the processing chain's OWN block_index.
-// At/after the height the deploy-lint generator + wasm bans block; below it they are
-// dropped from the deploy-blocking set (historical accepted verdict preserved).
-// Mirrors xchain-vm/src/index.js PKG3_SANDBOX_ACTIVATION.
-const VM_DEPLOY_LINT_PKG3_ACTIVATION = {
-    'BTC:mainnet':  961000,
-    'LTC:mainnet':  3154250,
-    'DOGE:mainnet': 6319000,
-    testnet: 0,
-    regtest: 0,
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const VM_DEPLOY_LINT_PKG3_ACTIVATION = copy('vm_deploy_lint_pkg3_activation.VM_DEPLOY_LINT_PKG3_ACTIVATION');
 
 // Resolve the per-chain threshold: '<COIN>:<network>' key first, then the bare
 // network key. Unknown / unarmed -> undefined -> off.

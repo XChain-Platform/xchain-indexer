@@ -62,14 +62,9 @@
 
 'use strict';
 
-// Per-network activation, interpreted against the DOGE block_index of the batch's
-// canonical archive head. Every network is armed from genesis, so all three run the
-// publisher-scoped rule end to end.
-const ARCHIVE_BATCH_AUTHOR_ACTIVATION = {
-    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 archive chunks, measured 2026-09-09)
-    testnet: 0,           // ARMED at genesis 2026-08-14 per the 2026-08-11 operator ruling; the re-genesised testnet has no pre-flag history to keep byte-identical
-    regtest: 0,           // armed from genesis
-};
+const { get, copy, activeAt } = require('./protocol_changes');
+
+const ARCHIVE_BATCH_AUTHOR_ACTIVATION = copy('archive_batch_author_activation.ARCHIVE_BATCH_AUTHOR_ACTIVATION');
 
 // Whether archive batches are publisher-scoped for a batch whose canonical head
 // landed at DOGE height `blockIndex` on `network`. A non-numeric height or an
