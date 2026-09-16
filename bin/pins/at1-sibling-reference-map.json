@@ -1,10 +1,10 @@
 {
   "pinMetadata": {
     "tool": "bin/sibling-reference-map.js",
-    "capturedAt": "2026-09-16T10:32:16.100Z",
-    "indexerSha": "aec8b07e04b48f4b0d5875721af8b975e0e97656",
+    "capturedAt": "2026-09-16T14:05:16.469Z",
+    "indexerSha": "b01cc5d612fc1379c999993b50f288c915b49bd1",
     "siblingsRoot": "..",
-    "note": "W5 consolidation (row 21), final companion tips",
+    "note": "W5 consolidation (row 21), landing tips",
     "indexerSrcFilesAtBaseSha": [
       "src/XChainIndexer.js",
       "src/XChainIndexer/background_jobs.js",
@@ -4492,7 +4492,7 @@
         {
           "repo": "xchain-sync",
           "file": "xchain-sync/bin/pins/at1-suite-titles.json",
-          "line": 2593,
+          "line": 2702,
           "kind": "text",
           "form": "text",
           "raw": "src/consensus/gates/train_gate.js"
