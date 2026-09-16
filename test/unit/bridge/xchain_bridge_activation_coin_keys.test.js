@@ -49,10 +49,11 @@ const SENTINEL = 9999999999;
 const COINS    = ['BTC', 'LTC', 'DOGE'];
 
 // The testnet heights the v0.19.0 train wrote, pinned here as literals so the shipped map
-// cannot drift from the cut's record without this suite saying so. Sized 2026-09-16 from
-// each chain's own tip (TBTC 152,676, TLTC 4,887,525, TDOGE 67,900,097) and its measured
-// cadence: the destinations 6 h above their tips, the BTC origin 18 h above its own.
-const ARMED_TESTNET = { 'BTC:testnet': 152795, 'LTC:testnet': 4887694, 'DOGE:testnet': 67900889 };
+// cannot drift from the cut's record without this suite saying so. Sized 2026-09-16 (re-cut
+// 16:33Z after the chain overran the first sizing) from each chain's own tip (TBTC 152,716,
+// TLTC 4,887,644, TDOGE 67,900,748) and its measured cadence: the destinations 10 h above
+// their tips, the BTC origin 30 h above its own.
+const ARMED_TESTNET = { 'BTC:testnet': 152929, 'LTC:testnet': 4887898, 'DOGE:testnet': 67902062 };
 
 describe('XCHAIN_BRIDGE_ACTIVATION coin-keyed flag day @regression', function () {
     describe('the shipped map', function () {
@@ -148,7 +149,7 @@ describe('XCHAIN_BRIDGE_ACTIVATION coin-keyed flag day @regression', function ()
             // heights were sized from, and genesis, are all below every armed height.
             for (const coin of COINS) {
                 const h = ARMED_TESTNET[coin + ':testnet'];
-                for (const block of [0, 152676, 4887525, 67900097, h - 1].filter(b => b < h))
+                for (const block of [0, 152716, 4887644, 67900748, h - 1].filter(b => b < h))
                     assert.strictEqual(isXchainBridgeActive(block, 'testnet', coin), false,
                         'testnet ' + coin + ' at ' + block + ' is armed below its cut height ' + h);
                 assert.strictEqual(isXchainBridgeActive(h, 'testnet', coin), true, coin + ' at its own height');
@@ -157,7 +158,7 @@ describe('XCHAIN_BRIDGE_ACTIVATION coin-keyed flag day @regression', function ()
             // A coin the train did not size, and a caller naming no coin, still read the bare
             // testnet fallback and stay dark however high the chain climbs.
             for (const coin of [null, 'BCH'])
-                for (const block of [0, 152795, 67900889, SENTINEL - 1])
+                for (const block of [0, 152929, 67902062, SENTINEL - 1])
                     assert.strictEqual(isXchainBridgeActive(block, 'testnet', coin), false,
                         'testnet ' + coin + ' at ' + block + ' is armed; an unlisted chain must stay dark');
         });

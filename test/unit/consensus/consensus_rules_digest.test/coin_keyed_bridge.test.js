@@ -50,8 +50,8 @@ describe('consensus_rules_digest: the coin-keyed bridge gate', function () {
     });
 
     // As SHIPPED since the v0.19.0 cut: regtest 0, every mainnet slot on the far-future
-    // sentinel, and one sized testnet height per chain (BTC 152795, LTC 4887694,
-    // DOGE 67900889, read from the map rather than repeated here so this case grades the
+    // sentinel, and one sized testnet height per chain (BTC 152929, LTC 4887898,
+    // DOGE 67902062, read from the map rather than repeated here so this case grades the
     // resolver against whatever the train wrote) with the bare testnet fallback still dark.
     it('is active on regtest from block 0 on every coin, dark on mainnet, and armed on testnet at each chain\'s own height', function () {
         const map = JSON.parse(crd.computeConsensusRulesDigest().gates[KEY]); // the digest carries each gate's canonical JSON

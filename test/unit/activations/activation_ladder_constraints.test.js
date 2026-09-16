@@ -87,13 +87,15 @@ const ALL_COINS  = ['BTC', 'LTC', 'DOGE'];
 const DEST_COINS = ['LTC', 'DOGE'];
 
 // The sitting the v0.19.0 testnet heights were sized in: each chain's chain_tip and its
-// seconds per block over the 99 blocks before it, read together at 2026-09-16 11:53Z.
+// seconds per block over the 99 blocks before it, read together at 2026-09-16 16:33Z. That
+// is the RE-CUT sitting: the 11:53Z sizing put the train boundary at what is now the BTC tip
+// below, and TBTC reached it before the cut, so the whole ladder was re-sized with a longer lead.
 // A later train re-sizes by a new row and a new record here, never by editing these.
 const CUT_RECORD = {
     testnet: {
-        BTC:  { tip: 152676,   secondsPerBlock: 548.6 },
-        LTC:  { tip: 4887525,  secondsPerBlock: 128.3 },
-        DOGE: { tip: 67900097, secondsPerBlock: 27.3 },
+        BTC:  { tip: 152716,   secondsPerBlock: 508.8 },
+        LTC:  { tip: 4887644,  secondsPerBlock: 141.8 },
+        DOGE: { tip: 67900748, secondsPerBlock: 27.4 },
     },
 };
 

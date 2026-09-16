@@ -88,13 +88,15 @@ addGate('train_activation.TRAIN_ACTIVATION', 'ruleset', {
     // The XCHAIN bridge rule set, armed at the v0.19.0 cut. Mainnet holds the house
     // sentinel: the mainnet arm is the next milestone and nothing arms there before the
     // checkpoint cross-check lands, so no mainnet node ever reaches this boundary.
-    // Testnet: SIZED 2026-09-16 11:53Z from chain_tip TBTC 152,676 + 40 blocks, which is
-    // ceil(6 h / 548.6 s per block measured over the preceding 99 blocks), about 6.1 h.
-    // That is the rolling-upgrade window the fleet roll must finish inside (4x the 90
-    // minute roll budget), and every testnet bridge height below sits above it on the
-    // same BTC clock, so a node lacking this rule set halts before it can grade a
-    // bridge action.
-    '0.19.0': { mainnet: 9999999999, testnet: 152716, regtest: 0 },
+    // Testnet: SIZED 2026-09-16, re-cut 16:33Z, from chain_tip TBTC 152,716 + 71 blocks,
+    // which is ceil(10 h / 508.8 s per block measured over the preceding 99 blocks), about
+    // 10.0 h. The first sizing (11:53Z, 152,716 itself) was overrun by the chain while the
+    // cut waited on the e2e matrix, so the boundary was re-cut from the new tip with a lead
+    // long enough to cover that wait plus the roll. That is the rolling-upgrade window the
+    // fleet roll must finish inside (over 6x the 90 minute roll budget), and every testnet
+    // bridge height below sits above it on the same BTC clock, so a node lacking this rule
+    // set halts before it can grade a bridge action.
+    '0.19.0': { mainnet: 9999999999, testnet: 152787, regtest: 0 },
 });
 
 // xchain_bridge_activation
@@ -119,10 +121,11 @@ addGate('train_activation.TRAIN_ACTIVATION', 'ruleset', {
 // Mainnet is the house sentinel 9999999999 on every key: milestone 1 is a hub-trusted mint
 // (spec section 12), and nothing arms on mainnet before the D2 checkpoint cross-check lands.
 // Testnet is SIZED AT THE v0.19.0 CUT, one dated instant PER CHAIN, from the three chain
-// tips and their last-99-block cadences read in one sitting (2026-09-16 11:53Z: TBTC 152,676
-// at 548.6 s per block, TLTC 4,887,525 at 128.3 s, TDOGE 67,900,097 at 27.3 s). The two
-// destinations arm ceil(6 h / cadence) blocks above their tips and BTC, the ORIGIN of the v0
-// lock, arms ceil(18 h / cadence) above its tip and so LAST in wall clock, because the lock
+// tips and their last-99-block cadences read in one sitting (2026-09-16 16:33Z, the re-cut
+// after the 11:53Z sizing was overrun: TBTC 152,716 at 508.8 s per block, TLTC 4,887,644 at
+// 141.8 s, TDOGE 67,900,748 at 27.4 s). The two destinations arm ceil(10 h / cadence) blocks
+// above their tips and BTC, the ORIGIN of the v0 lock, arms ceil(30 h / cadence) above its
+// tip and so LAST in wall clock, because the lock
 // handler never checks the destination's own activation: a destination arming later would
 // admit a lock nothing can mint, and the 3x gap is the band a destination cadence can slow by
 // before that ordering breaks. All three sit above the TRAIN_ACTIVATION 0.19.0 testnet
@@ -134,9 +137,9 @@ addGate('xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION', 'height', {
     'LTC:mainnet':  9999999999,
     'DOGE:mainnet': 9999999999,
     mainnet:        9999999999,   // fallback for a coin with no entry above
-    'BTC:testnet':  152795,       // SIZED 2026-09-16: chain_tip 152,676 + 119 (18 h at 548.6 s/blk), about 18.1 h, the origin, last
-    'LTC:testnet':  4887694,      // SIZED 2026-09-16: chain_tip 4,887,525 + 169 (6 h at 128.3 s/blk), about 6.0 h
-    'DOGE:testnet': 67900889,     // SIZED 2026-09-16: chain_tip 67,900,097 + 792 (6 h at 27.3 s/blk), about 6.0 h
+    'BTC:testnet':  152929,       // SIZED 2026-09-16, re-cut 16:33Z: chain_tip 152,716 + 213 (30 h at 508.8 s/blk), about 30.1 h, the origin, last
+    'LTC:testnet':  4887898,      // SIZED 2026-09-16, re-cut 16:33Z: chain_tip 4,887,644 + 254 (10 h at 141.8 s/blk), about 10.0 h
+    'DOGE:testnet': 67902062,     // SIZED 2026-09-16, re-cut 16:33Z: chain_tip 67,900,748 + 1314 (10 h at 27.4 s/blk), about 10.0 h
     testnet:        9999999999,   // fallback: a testnet coin with no entry above stays dark
     regtest:        0,            // genesis-active so the e2e rail exercises the armed rule
 });
