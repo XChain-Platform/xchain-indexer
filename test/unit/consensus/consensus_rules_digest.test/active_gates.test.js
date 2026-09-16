@@ -67,7 +67,7 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
     // the environment: a venue process launched armed has a different, equally correct digest,
     // and a pin that moved with a drill lever would be a test of the launcher. The pinned value
     // is the fleet's: every shipped process reads the unarmed maps.
-    it('digests to the pinned value, which moved when the admission encoder was registered', function () {
+    it('digests to the pinned value, which moved when the v0.19.0 cut armed the bridge on testnet', function () {
         // Every gate module, not just the admission one: the family's arming lever is shared,
         // so the anchor-attest gate resolves from the same variable and a cached copy of it
         // would keep a drill's heights in the digest after the variable was cleared.
@@ -80,8 +80,8 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
             for (const [p] of saved) delete require.cache[p];
             const fresh = require('../../../../src/consensus_rules_digest.js');
             assert.strictEqual(fresh.computeConsensusRulesDigest().digest,
-                '26ba9cce1936d6c38518489b35e3ceb558746ffb466cea90f65b39adf49b2036',
-                'the consensus rules digest moved; a gate was added, removed or reordered');
+                'd04b9bf0e6a2f25ff94f5d4ef770cfb756783c8c858a68cd33e1761e9c2e0891',
+                'the consensus rules digest moved; a gate was added, removed, reordered or re-armed');
         } finally {
             for (const [p, mod] of saved) { if (mod === undefined) delete require.cache[p]; else require.cache[p] = mod; }
             if (env === undefined) delete process.env.XC_MIRROR_ADMISSION_ACTIVATION;

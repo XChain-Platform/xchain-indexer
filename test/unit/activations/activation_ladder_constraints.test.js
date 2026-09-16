@@ -54,6 +54,14 @@
  * on an explicit-hours fixture below. A real per-cut C4 gate needs either the
  * wall-clock offsets recorded alongside each height or a per-coin cadence constant;
  * neither train_activation.js nor xchain_bridge_activation.js carries one today.
+ *
+ * SINCE THE CUT (2026-09-16). The v0.19.0 train wrote the '0.19.0' row and the three
+ * testnet bridge heights, so the C3 shipped-map case grades for real, and the C4
+ * shipped-map case now carries what the paragraph above asked for: the tip and the
+ * measured cadence of each chain at the sitting the heights were sized in (CUT_RECORD
+ * below), so each height's wall-clock offset is (height - tip) * cadence and the
+ * destination-before-origin inequality is proven in hours against the shipped map
+ * itself. Mainnet stays on the sentinel and is still graded as sentinel equality.
  */
 
 'use strict';
@@ -77,6 +85,17 @@ const BRIDGE_TRAIN_VERSION = '0.19.0';
 const NETS       = ['mainnet', 'testnet'];
 const ALL_COINS  = ['BTC', 'LTC', 'DOGE'];
 const DEST_COINS = ['LTC', 'DOGE'];
+
+// The sitting the v0.19.0 testnet heights were sized in: each chain's chain_tip and its
+// seconds per block over the 99 blocks before it, read together at 2026-09-16 11:53Z.
+// A later train re-sizes by a new row and a new record here, never by editing these.
+const CUT_RECORD = {
+    testnet: {
+        BTC:  { tip: 152676,   secondsPerBlock: 548.6 },
+        LTC:  { tip: 4887525,  secondsPerBlock: 128.3 },
+        DOGE: { tip: 67900097, secondsPerBlock: 27.3 },
+    },
+};
 
 // Resolve the height a chain identified by COIN:NETWORK actually reads out of a
 // XCHAIN_BRIDGE_ACTIVATION-shaped map: the coin-specific key when present, else the bare
@@ -201,27 +220,35 @@ describe('activation ladder fork-avoiding constraints (the bridge train cut)', f
 
 describe('activation ladder fork-avoiding constraints (the bridge train cut)', function () {
     describe('C4: destination bridge height at or before the BTC origin\'s, same network (against the shipped maps)', function () {
-        it('today: every mainnet/testnet slot is the sentinel, so C4 degenerates to sentinel === sentinel', function () {
-            const violations = c4Violations(BRIDGE);
-            assert.deepStrictEqual(violations, [], violations.join('\n'));
-            let sentinelPairs = 0;
-            for (const net of NETS) {
-                const originHeight = resolveBridgeHeight(BRIDGE, 'BTC', net);
-                for (const coin of DEST_COINS) {
-                    const destHeight = resolveBridgeHeight(BRIDGE, coin, net);
-                    if (originHeight === BRIDGE_SENTINEL && destHeight === BRIDGE_SENTINEL) { sentinelPairs++; continue; }
-                    // Either side has moved off the sentinel: a raw height comparison cannot prove
-                    // wall-clock ordering across different chains (see the file header), so this
-                    // stops here and fails loudly instead of silently mis-grading a real cut.
-                    assert.fail(coin + ':' + net + ' (' + destHeight + ') or BTC:' + net + ' (' + originHeight +
-                        ') has moved off the sentinel ' + BRIDGE_SENTINEL + '. This file cannot verify C4 by raw ' +
-                        'height once real per-chain heights are substituted (different chains run unrelated ' +
-                        'height scales); confirm the substitution against the cut\'s wall-clock table by hand, ' +
-                        'since neither activation map carries a per-coin cadence this check could use.');
-                }
+        it('mainnet: every slot is still the sentinel, so C4 degenerates to sentinel === sentinel there', function () {
+            const originHeight = resolveBridgeHeight(BRIDGE, 'BTC', 'mainnet');
+            assert.strictEqual(originHeight, BRIDGE_SENTINEL, 'BTC:mainnet has moved off the sentinel; a mainnet arm needs its own CUT_RECORD');
+            for (const coin of DEST_COINS)
+                assert.strictEqual(resolveBridgeHeight(BRIDGE, coin, 'mainnet'), BRIDGE_SENTINEL,
+                    coin + ':mainnet has moved off the sentinel; a mainnet arm needs its own CUT_RECORD');
+        });
+
+        it('testnet: each destination arms no later in wall clock than the BTC origin, from the shipped heights and the cut record', function () {
+            // A raw height comparison cannot do this across chains (see the file header); the
+            // wall-clock offset of a height is (height - tip at the cut) * measured cadence.
+            const record = CUT_RECORD.testnet;
+            const hours = (coin) => {
+                const h = resolveBridgeHeight(BRIDGE, coin, 'testnet');
+                assert.ok(Number.isFinite(h) && h !== BRIDGE_SENTINEL, coin + ':testnet is not a sized height');
+                assert.ok(h > record[coin].tip, coin + ':testnet (' + h + ') is not above the tip it was sized from (' + record[coin].tip + ')');
+                return (h - record[coin].tip) * record[coin].secondsPerBlock / 3600;
+            };
+            const originHours = hours('BTC');
+            for (const coin of DEST_COINS) {
+                const destHours = hours(coin);
+                assert.ok(destHours <= originHours,
+                    'C4 violated: ' + coin + ':testnet arms ' + destHours.toFixed(2) + ' h after the cut, after the BTC origin\'s ' +
+                    originHours.toFixed(2) + ' h; a lock mined on BTC before ' + coin + ' is armed would admit a transfer it cannot apply');
             }
-            assert.strictEqual(sentinelPairs, NETS.length * DEST_COINS.length,
-                'not vacuous: all ' + (NETS.length * DEST_COINS.length) + ' mainnet/testnet destination pairs must be classified');
+            // The train boundary sits inside the destination lead as well, so the roll window the
+            // boundary allows ends before any chain arms (C2 and C5 read together).
+            const trainHours = (TRAIN_ACTIVATION[BRIDGE_TRAIN_VERSION].testnet - record.BTC.tip) * record.BTC.secondsPerBlock / 3600;
+            assert.ok(trainHours > 0 && trainHours <= originHours, 'the train boundary (' + trainHours.toFixed(2) + ' h) must precede the origin arm');
         });
 
         it('regtest: every coin resolves to the same genesis height (0) via the bare fallback', function () {

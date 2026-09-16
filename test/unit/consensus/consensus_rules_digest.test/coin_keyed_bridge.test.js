@@ -49,17 +49,25 @@ describe('consensus_rules_digest: the coin-keyed bridge gate', function () {
         assert.notStrictEqual(crd.computeConsensusRulesDigest().gates[KEY], crd.ABSENT);
     });
 
-    // As SHIPPED: regtest 0, every other slot on the far-future sentinel.
-    it('is active on regtest from block 0 on every coin, and dark on testnet and mainnet', function () {
+    // As SHIPPED since the v0.19.0 cut: regtest 0, every mainnet slot on the far-future
+    // sentinel, and one sized testnet height per chain (BTC 152795, LTC 4887694,
+    // DOGE 67900889, read from the map rather than repeated here so this case grades the
+    // resolver against whatever the train wrote) with the bare testnet fallback still dark.
+    it('is active on regtest from block 0 on every coin, dark on mainnet, and armed on testnet at each chain\'s own height', function () {
+        const map = JSON.parse(crd.computeConsensusRulesDigest().gates[KEY]); // the digest carries each gate's canonical JSON
         for (const coin of ['BTC', 'LTC', 'DOGE']) {
             assert.ok(crd.activeGatesAt(0, 'regtest', coin).includes(KEY), 'regtest ' + coin);
-            for (const net of ['testnet', 'mainnet']) {
-                assert.ok(!crd.activeGatesAt(crd.FAR_FUTURE_HEIGHT_SENTINEL, net, coin).includes(KEY),
-                    'an unsized slot must stay dark however high ' + net + ' climbs: ' + coin);
-            }
+            assert.ok(!crd.activeGatesAt(crd.FAR_FUTURE_HEIGHT_SENTINEL, 'mainnet', coin).includes(KEY),
+                'an unsized slot must stay dark however high mainnet climbs: ' + coin);
+            const h = map[coin + ':testnet'];
+            assert.ok(Number.isFinite(h) && h > 0 && h < crd.FAR_FUTURE_HEIGHT_SENTINEL, coin + ':testnet is not a sized height');
+            assert.ok(!crd.activeGatesAt(h - 1, 'testnet', coin).includes(KEY), coin + ' one block below its testnet height');
+            assert.ok(crd.activeGatesAt(h, 'testnet', coin).includes(KEY), coin + ' at its testnet height');
         }
         assert.ok(crd.activeGatesAt(0, 'regtest').includes(KEY), 'and with no coin named');
-        assert.ok(!crd.activeGatesAt(crd.FAR_FUTURE_HEIGHT_SENTINEL, 'testnet').includes(KEY));
+        // The bare fallback is still the sentinel, so an unlisted testnet chain stays dark.
+        assert.strictEqual(map.testnet, crd.FAR_FUTURE_HEIGHT_SENTINEL);
+        assert.ok(!crd.activeGatesAt(crd.FAR_FUTURE_HEIGHT_SENTINEL, 'testnet', 'BCH').includes(KEY));
     });
 
     // One chain armed, another not: the shape the arming train writes.

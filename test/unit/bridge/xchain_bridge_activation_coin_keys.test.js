@@ -48,6 +48,12 @@ const { XCHAIN_BRIDGE_ACTIVATION, isXchainBridgeActive } = require(MODULE_PATH);
 const SENTINEL = 9999999999;
 const COINS    = ['BTC', 'LTC', 'DOGE'];
 
+// The testnet heights the v0.19.0 train wrote, pinned here as literals so the shipped map
+// cannot drift from the cut's record without this suite saying so. Sized 2026-09-16 from
+// each chain's own tip (TBTC 152,676, TLTC 4,887,525, TDOGE 67,900,097) and its measured
+// cadence: the destinations 6 h above their tips, the BTC origin 18 h above its own.
+const ARMED_TESTNET = { 'BTC:testnet': 152795, 'LTC:testnet': 4887694, 'DOGE:testnet': 67900889 };
+
 describe('XCHAIN_BRIDGE_ACTIVATION coin-keyed flag day @regression', function () {
     describe('the shipped map', function () {
 
@@ -63,15 +69,19 @@ describe('XCHAIN_BRIDGE_ACTIVATION coin-keyed flag day @regression', function ()
             }
         });
 
-        it('parks every mainnet and testnet slot on the sentinel and keeps regtest genesis-active', function () {
+        it('parks every mainnet slot and both bare fallbacks on the sentinel, carries the cut\'s testnet heights and keeps regtest genesis-active', function () {
             // Nothing in this test sizes a height. Mainnet waits on the checkpoint
-            // cross-check, testnet on the arming train, and regtest stays 0 so the e2e rail
-            // exercises the armed rule from genesis and no regtest replay hash moves.
-            for (const net of ['mainnet', 'testnet']) {
+            // cross-check, testnet carries exactly what the v0.19.0 train wrote (a later
+            // train re-arms by a new row, never by editing these), the bare testnet fallback
+            // stays dark so an unlisted chain inherits nothing, and regtest stays 0 so the
+            // e2e rail exercises the armed rule from genesis and no regtest replay hash moves.
+            for (const net of ['mainnet', 'testnet'])
                 assert.strictEqual(XCHAIN_BRIDGE_ACTIVATION[net], SENTINEL, net + ' fallback is not the sentinel');
-                for (const coin of COINS)
-                    assert.strictEqual(XCHAIN_BRIDGE_ACTIVATION[coin + ':' + net], SENTINEL,
-                        coin + ':' + net + ' carries a height; sizing one is the arming train\'s act, not a build\'s');
+            for (const coin of COINS) {
+                assert.strictEqual(XCHAIN_BRIDGE_ACTIVATION[coin + ':mainnet'], SENTINEL,
+                    coin + ':mainnet carries a height; nothing arms on mainnet before the checkpoint cross-check lands');
+                assert.strictEqual(XCHAIN_BRIDGE_ACTIVATION[coin + ':testnet'], ARMED_TESTNET[coin + ':testnet'],
+                    coin + ':testnet does not carry the height the v0.19.0 cut sized; a height written here is the train\'s act, not a build\'s');
             }
             assert.strictEqual(XCHAIN_BRIDGE_ACTIVATION.regtest, 0);
             for (const coin of COINS)
@@ -116,7 +126,7 @@ describe('XCHAIN_BRIDGE_ACTIVATION coin-keyed flag day @regression', function ()
                 for (const k of Object.keys(saved)) XCHAIN_BRIDGE_ACTIVATION[k] = saved[k];
             }
             for (const k of Object.keys(local))
-                assert.strictEqual(XCHAIN_BRIDGE_ACTIVATION[k], SENTINEL, 'the shipped map was not restored');
+                assert.strictEqual(XCHAIN_BRIDGE_ACTIVATION[k], saved[k], 'the shipped map was not restored');
         });
 
         it('is armed at every regtest height for every coin, through the bare key', function () {
@@ -126,12 +136,30 @@ describe('XCHAIN_BRIDGE_ACTIVATION coin-keyed flag day @regression', function ()
             }
         });
 
-        it('is dark on mainnet and testnet for every coin at any plausible height', function () {
-            for (const net of ['mainnet', 'testnet'])
-                for (const coin of COINS.concat([null, 'BCH']))
-                    for (const block of [0, 152110, 4884193, 67889993, SENTINEL - 1])
-                        assert.strictEqual(isXchainBridgeActive(block, net, coin), false,
-                            net + ' ' + coin + ' at ' + block + ' is armed; no pre-activation verdict may move');
+        it('is dark on mainnet for every coin at any plausible height', function () {
+            for (const coin of COINS.concat([null, 'BCH']))
+                for (const block of [0, 152110, 4884193, 67889993, SENTINEL - 1])
+                    assert.strictEqual(isXchainBridgeActive(block, 'mainnet', coin), false,
+                        'mainnet ' + coin + ' at ' + block + ' is armed; no pre-activation verdict may move');
+        });
+
+        it('arms each testnet chain at its own cut height and one block later, never one block earlier', function () {
+            // Every pre-activation verdict on the three chains stays what it was: the tips the
+            // heights were sized from, and genesis, are all below every armed height.
+            for (const coin of COINS) {
+                const h = ARMED_TESTNET[coin + ':testnet'];
+                for (const block of [0, 152676, 4887525, 67900097, h - 1].filter(b => b < h))
+                    assert.strictEqual(isXchainBridgeActive(block, 'testnet', coin), false,
+                        'testnet ' + coin + ' at ' + block + ' is armed below its cut height ' + h);
+                assert.strictEqual(isXchainBridgeActive(h, 'testnet', coin), true, coin + ' at its own height');
+                assert.strictEqual(isXchainBridgeActive(h + 1, 'testnet', coin), true, coin + ' one block above');
+            }
+            // A coin the train did not size, and a caller naming no coin, still read the bare
+            // testnet fallback and stay dark however high the chain climbs.
+            for (const coin of [null, 'BCH'])
+                for (const block of [0, 152795, 67900889, SENTINEL - 1])
+                    assert.strictEqual(isXchainBridgeActive(block, 'testnet', coin), false,
+                        'testnet ' + coin + ' at ' + block + ' is armed; an unlisted chain must stay dark');
         });
     });
 });
@@ -162,7 +190,7 @@ describe('XCHAIN_BRIDGE_ACTIVATION coin-keyed flag day @regression', function ()
             } finally {
                 XCHAIN_BRIDGE_ACTIVATION['BTC:testnet'] = saved;
             }
-            assert.strictEqual(XCHAIN_BRIDGE_ACTIVATION['BTC:testnet'], SENTINEL);
+            assert.strictEqual(XCHAIN_BRIDGE_ACTIVATION['BTC:testnet'], ARMED_TESTNET['BTC:testnet']);
         });
     });
 });
