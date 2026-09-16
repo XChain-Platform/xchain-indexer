@@ -35,6 +35,14 @@ CREATE TABLE bridge_transfers (
     decimals             TINYINT UNSIGNED NOT NULL,                -- the token's DECIMALS (8 for XCHAIN); the precision `amount` is formatted at
     amount               VARCHAR(250) NOT NULL,                    -- decimal string at `decimals` fractional digits; VARCHAR because amounts are bignumber math
     effective_time       BIGINT UNSIGNED NOT NULL,                 -- protocol-time instant every indexer applies at; compared against the block loop's block_time (median-time-past off mainnet)
+    -- ADMISSION HEIGHTS over the row's read set (dest_chain alone), mirrored from the hub
+    -- (xchain-hub/src/sql/bridge_transfers.sql). Only that chain's column is ever set; the
+    -- others exist so one uniform predicate serves every mirror table. NULL is the legacy
+    -- row: see the note in cross_chain_matches.sql. Added by
+    -- migrations/2026-09-16-admission-height.sql at this position.
+    admit_block_btc      BIGINT UNSIGNED DEFAULT NULL,
+    admit_block_ltc      BIGINT UNSIGNED DEFAULT NULL,
+    admit_block_doge     BIGINT UNSIGNED DEFAULT NULL,
     finalizing_view      INT          NOT NULL DEFAULT 0,          -- PBFT view the canonical was signed under; rebuilds the exact EQUIV header VIEW
     validator_signatures TEXT         NOT NULL,                    -- JSON [{pubkey,sig}] over the EQUIV-wrapped canonical
     status               VARCHAR(20)  NOT NULL DEFAULT 'finalized',-- finalized / retracted

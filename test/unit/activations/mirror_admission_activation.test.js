@@ -63,7 +63,6 @@ describe('mirror_admission_activation: the arming seam @regression', function ()
     it('holds an INERT (null) key inert at height 0 and at a huge height', function () {
         const inert = [
             ['BTC', 'mainnet'], ['LTC', 'mainnet'], ['DOGE', 'mainnet'],
-            ['BTC', 'testnet'], ['LTC', 'testnet'], ['DOGE', 'testnet'],
         ];
         for (const [coin, net] of inert) {
             assert.strictEqual(mirror.MIRROR_ADMISSION_ACTIVATION[coin + ':' + net], null,

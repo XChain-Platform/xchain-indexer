@@ -29,6 +29,16 @@ CREATE TABLE cross_chain_calls (
     cross_hops            INT          NOT NULL DEFAULT 0,         -- X→Y→X ping-pong bound (signed into the canonical)
     effective_time        BIGINT UNSIGNED NOT NULL,                -- apply at first block_time >= this (dispatch: target chain; result: source chain)
     finalizing_view       INT          NOT NULL DEFAULT 0,         -- PBFT view the round finalized at; signed into the EQUIV canonical (WI-2 bump 2) so the indexer rebuilds the exact view
+    -- ADMISSION HEIGHTS over the row's read set (target_chain OR source_chain), mirrored from
+    -- the hub (xchain-hub/src/sql/cross_chain_calls.sql). See the note in
+    -- cross_chain_matches.sql: NULL is the legacy row and binds by effective_time at every
+    -- height, so the consuming select is IS NULL OR, never a bare <=. Added by
+    -- migrations/2026-09-16-admission-height.sql, AFTER finalizing_view (one column later
+    -- than the hub) for the reason cross_chain_matches.sql gives: the 2026-07-19 migration
+    -- anchored finalizing_view on effective_time.
+    admit_block_btc       BIGINT UNSIGNED DEFAULT NULL,
+    admit_block_ltc       BIGINT UNSIGNED DEFAULT NULL,
+    admit_block_doge      BIGINT UNSIGNED DEFAULT NULL,
     status                VARCHAR(20)  NOT NULL DEFAULT 'finalized',-- row lifecycle: finalized / retracted
     result_status         VARCHAR(20),                             -- result phase only: ok|reverted|out_of_gas|no_contract|not_callable|payload_too_large|error
     return_payload_b64    TEXT,                                    -- result phase only (sha256'd into the canonical)

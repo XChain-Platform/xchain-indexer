@@ -67,10 +67,14 @@ const REPO    = process.env.REPO || path.join(__dirname, '..');
 const OLD_REF = process.env.OLD_REF;
 const DB_NAME = process.env.DB_NAME;
 
-if(!OLD_REF || !DB_NAME || !process.env.DB_HOST){
-    console.error('check-migration-old-code-compat: OLD_REF, DB_NAME and DB_HOST are required ' +
-                  '(run it through bin/check-migration-old-code-compat.sh).');
-    process.exit(2);
+// Refused inside main() rather than at load, so the unit test that drives the
+// admission-table statements below can require this file without a database.
+function requireVenueEnv(){
+    if(!OLD_REF || !DB_NAME || !process.env.DB_HOST){
+        console.error('check-migration-old-code-compat: OLD_REF, DB_NAME and DB_HOST are required ' +
+                      '(run it through bin/check-migration-old-code-compat.sh).');
+        process.exit(2);
+    }
 }
 
 const Database = require(path.join(REPO, 'src/db'));
@@ -137,7 +141,224 @@ const OLD_STATEMENTS = {
                     state_root=VALUES(state_root), block_merkle_root=VALUES(block_merkle_root)`,
         priorRoot: 'SELECT balances_root FROM state_tree_roots WHERE chain=? AND network=? AND block_index=? LIMIT 1',
     },
+    // ── The seven mirror-admission tables (2026-09-16-admission-height.sql) ─────────
+    // What an OLD mirror really sends, copied from origin/develop aca3678f (the ref the
+    // barrier-family seam was cut at; re-copy from the deployed ref when it differs):
+    //   insert - src/hub/hub_db_sync/row_upserts.js mirrorUpsertSql, which composes the
+    //            INSERT by NAME over the columns the LOCAL table carries, so an old mirror
+    //            names no admission column and the migrated column must take NULL;
+    //   read   - the consuming select in src/db/* with its clock bound written out, the
+    //            `effective_time <= ?` form every read takes below the consumer activation
+    //            (the same bytes the new code emits there, so old and new reads agree).
+    // Each is driven by seedAdmissionMirrorRows / exerciseAdmissionMirrorRows below over
+    // ADMISSION_MIRROR_ROWS, so a table listed here is a table exercised there.
+    // The natural-key insert with the one upsertable link column (batch_action_index).
+    attestation_responses: {
+        insert: [
+            'INSERT INTO attestation_responses (`network`, `request_id`, `provider_id`, `status`, `response_hash`, `effective_time`, `signer_pubkeys`, `signatures`, `batch_action_index`)',
+            ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            ' ON DUPLICATE KEY UPDATE',
+            '    batch_action_index = COALESCE(batch_action_index, VALUES(batch_action_index))',
+        ].join('\n'),
+        read: `SELECT request_id, provider_id, status, response_payload, response_hash, meta,
+                      effective_time, signer_pubkeys, signatures, widen, batch_action_index
+                 FROM attestation_responses
+                 WHERE network = ? AND effective_time <= ? AND request_id IN (?, ?)`,
+    },
+    // The revive-aware ODKU keyed on (effective_time, status rank) with monotonic fences.
+    cross_chain_matches: {
+        insert: [
+            'INSERT INTO cross_chain_matches (`match_id`, `snapshot_block`, `network`, `a_chain`, `a_action_index`, `a_amount`, `a_payout_addr`, `b_chain`, `b_action_index`, `b_amount`, `b_payout_addr`, `effective_time`, `validator_signatures`, `status`, `anchor_txid`, `a_push_generation`, `b_push_generation`)',
+            ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            ' ON DUPLICATE KEY UPDATE',
+            '    `snapshot_block` = IF((VALUES(`effective_time`) > `effective_time` OR (VALUES(`effective_time`) = `effective_time` AND IF(VALUES(`status`) = \'finalized\', 0, 1) >= IF(`status` = \'finalized\', 0, 1))), VALUES(`snapshot_block`), `snapshot_block`),',
+            '    `network` = IF((VALUES(`effective_time`) > `effective_time` OR (VALUES(`effective_time`) = `effective_time` AND IF(VALUES(`status`) = \'finalized\', 0, 1) >= IF(`status` = \'finalized\', 0, 1))), VALUES(`network`), `network`),',
+            '    `a_chain` = IF((VALUES(`effective_time`) > `effective_time` OR (VALUES(`effective_time`) = `effective_time` AND IF(VALUES(`status`) = \'finalized\', 0, 1) >= IF(`status` = \'finalized\', 0, 1))), VALUES(`a_chain`), `a_chain`),',
+            '    `a_action_index` = IF((VALUES(`effective_time`) > `effective_time` OR (VALUES(`effective_time`) = `effective_time` AND IF(VALUES(`status`) = \'finalized\', 0, 1) >= IF(`status` = \'finalized\', 0, 1))), VALUES(`a_action_index`), `a_action_index`),',
+            '    `a_amount` = IF((VALUES(`effective_time`) > `effective_time` OR (VALUES(`effective_time`) = `effective_time` AND IF(VALUES(`status`) = \'finalized\', 0, 1) >= IF(`status` = \'finalized\', 0, 1))), VALUES(`a_amount`), `a_amount`),',
+            '    `a_payout_addr` = IF((VALUES(`effective_time`) > `effective_time` OR (VALUES(`effective_time`) = `effective_time` AND IF(VALUES(`status`) = \'finalized\', 0, 1) >= IF(`status` = \'finalized\', 0, 1))), VALUES(`a_payout_addr`), `a_payout_addr`),',
+            '    `b_chain` = IF((VALUES(`effective_time`) > `effective_time` OR (VALUES(`effective_time`) = `effective_time` AND IF(VALUES(`status`) = \'finalized\', 0, 1) >= IF(`status` = \'finalized\', 0, 1))), VALUES(`b_chain`), `b_chain`),',
+            '    `b_action_index` = IF((VALUES(`effective_time`) > `effective_time` OR (VALUES(`effective_time`) = `effective_time` AND IF(VALUES(`status`) = \'finalized\', 0, 1) >= IF(`status` = \'finalized\', 0, 1))), VALUES(`b_action_index`), `b_action_index`),',
+            '    `b_amount` = IF((VALUES(`effective_time`) > `effective_time` OR (VALUES(`effective_time`) = `effective_time` AND IF(VALUES(`status`) = \'finalized\', 0, 1) >= IF(`status` = \'finalized\', 0, 1))), VALUES(`b_amount`), `b_amount`),',
+            '    `b_payout_addr` = IF((VALUES(`effective_time`) > `effective_time` OR (VALUES(`effective_time`) = `effective_time` AND IF(VALUES(`status`) = \'finalized\', 0, 1) >= IF(`status` = \'finalized\', 0, 1))), VALUES(`b_payout_addr`), `b_payout_addr`),',
+            '    `validator_signatures` = IF((VALUES(`effective_time`) > `effective_time` OR (VALUES(`effective_time`) = `effective_time` AND IF(VALUES(`status`) = \'finalized\', 0, 1) >= IF(`status` = \'finalized\', 0, 1))), VALUES(`validator_signatures`), `validator_signatures`),',
+            '    `status` = IF((VALUES(`effective_time`) > `effective_time` OR (VALUES(`effective_time`) = `effective_time` AND IF(VALUES(`status`) = \'finalized\', 0, 1) >= IF(`status` = \'finalized\', 0, 1))), VALUES(`status`), `status`),',
+            '    `effective_time` = IF((VALUES(`effective_time`) > `effective_time` OR (VALUES(`effective_time`) = `effective_time` AND IF(VALUES(`status`) = \'finalized\', 0, 1) >= IF(`status` = \'finalized\', 0, 1))), VALUES(`effective_time`), `effective_time`),',
+            '    `a_push_generation` = GREATEST(COALESCE(`a_push_generation`, 0), COALESCE(VALUES(`a_push_generation`), 0)),',
+            '    `b_push_generation` = GREATEST(COALESCE(`b_push_generation`, 0), COALESCE(VALUES(`b_push_generation`), 0)),',
+            '    anchor_txid = COALESCE(anchor_txid, VALUES(anchor_txid))',
+        ].join('\n'),
+        read: `SELECT * FROM cross_chain_matches
+                 WHERE status = 'finalized' AND network = ? AND effective_time <= ? AND (a_chain = ? OR b_chain = ?)
+                 ORDER BY snapshot_block ASC, match_id ASC`,
+    },
+    // The status-gated ODKU with the push_generation fence assigned LAST.
+    cross_chain_calls: {
+        insert: [
+            'INSERT INTO cross_chain_calls (`call_id`, `phase`, `snapshot_block`, `network`, `source_chain`, `source_action_index`, `source_contract_index`, `target_chain`, `target_contract_index`, `method`, `params_json`, `gas_limit`, `effective_time`, `validator_signatures`, `status`, `push_generation`)',
+            ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            ' ON DUPLICATE KEY UPDATE',
+            '    `snapshot_block` = IF(VALUES(status) = \'finalized\' AND COALESCE(VALUES(`push_generation`), 0) >= COALESCE(`push_generation`, 0), VALUES(`snapshot_block`), `snapshot_block`),',
+            '    `network` = IF(VALUES(status) = \'finalized\' AND COALESCE(VALUES(`push_generation`), 0) >= COALESCE(`push_generation`, 0), VALUES(`network`), `network`),',
+            '    `source_chain` = IF(VALUES(status) = \'finalized\' AND COALESCE(VALUES(`push_generation`), 0) >= COALESCE(`push_generation`, 0), VALUES(`source_chain`), `source_chain`),',
+            '    `source_action_index` = IF(VALUES(status) = \'finalized\' AND COALESCE(VALUES(`push_generation`), 0) >= COALESCE(`push_generation`, 0), VALUES(`source_action_index`), `source_action_index`),',
+            '    `source_contract_index` = IF(VALUES(status) = \'finalized\' AND COALESCE(VALUES(`push_generation`), 0) >= COALESCE(`push_generation`, 0), VALUES(`source_contract_index`), `source_contract_index`),',
+            '    `target_chain` = IF(VALUES(status) = \'finalized\' AND COALESCE(VALUES(`push_generation`), 0) >= COALESCE(`push_generation`, 0), VALUES(`target_chain`), `target_chain`),',
+            '    `target_contract_index` = IF(VALUES(status) = \'finalized\' AND COALESCE(VALUES(`push_generation`), 0) >= COALESCE(`push_generation`, 0), VALUES(`target_contract_index`), `target_contract_index`),',
+            '    `method` = IF(VALUES(status) = \'finalized\' AND COALESCE(VALUES(`push_generation`), 0) >= COALESCE(`push_generation`, 0), VALUES(`method`), `method`),',
+            '    `params_json` = IF(VALUES(status) = \'finalized\' AND COALESCE(VALUES(`push_generation`), 0) >= COALESCE(`push_generation`, 0), VALUES(`params_json`), `params_json`),',
+            '    `gas_limit` = IF(VALUES(status) = \'finalized\' AND COALESCE(VALUES(`push_generation`), 0) >= COALESCE(`push_generation`, 0), VALUES(`gas_limit`), `gas_limit`),',
+            '    `effective_time` = IF(VALUES(status) = \'finalized\' AND COALESCE(VALUES(`push_generation`), 0) >= COALESCE(`push_generation`, 0), VALUES(`effective_time`), `effective_time`),',
+            '    `validator_signatures` = IF(VALUES(status) = \'finalized\' AND COALESCE(VALUES(`push_generation`), 0) >= COALESCE(`push_generation`, 0), VALUES(`validator_signatures`), `validator_signatures`),',
+            '    status = IF(VALUES(status) = \'finalized\' AND COALESCE(VALUES(`push_generation`), 0) >= COALESCE(`push_generation`, 0), \'finalized\', status),',
+            '    `push_generation` = GREATEST(COALESCE(`push_generation`, 0), COALESCE(VALUES(`push_generation`), 0))',
+        ].join('\n'),
+        read: `SELECT * FROM cross_chain_calls
+                 WHERE phase = 'dispatch' AND status = 'finalized' AND network = ?
+                   AND target_chain = ? AND effective_time <= ?
+                 ORDER BY snapshot_block ASC, call_id ASC`,
+    },
+    // Plain INSERT IGNORE: the bridge tables have no in-place upgrade path.
+    bridge_transfers: {
+        insert: [
+            'INSERT IGNORE INTO bridge_transfers (transfer_id, snapshot_block, network, src_chain, src_action_index, src_address, dest_chain, dest_address, tick, decimals, amount, effective_time, validator_signatures, status, push_generation)',
+            ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        ].join('\n'),
+        read: `SELECT * FROM bridge_transfers
+                 WHERE status = 'finalized' AND network = ? AND effective_time <= ? AND dest_chain = ?
+                 ORDER BY snapshot_block ASC, transfer_id ASC`,
+    },
+    // Plain INSERT IGNORE, as bridge_transfers.
+    policy_snapshots: {
+        insert: [
+            'INSERT IGNORE INTO policy_snapshots (snapshot_id, snapshot_block, origin_chain, tick, policy_seq, origin_block, policy_hash, effective_time, network, validator_signatures, status, push_generation)',
+            ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        ].join('\n'),
+        read: `SELECT * FROM policy_snapshots
+                 WHERE status = 'finalized' AND network = ? AND effective_time <= ?`,
+    },
+    // The skipped-to-finalized upgrade path, keyed on VALUES(status).
+    price_snapshots: {
+        insert: [
+            'INSERT INTO price_snapshots (`round_number`, `coin_pair`, `price`, `reference_block`, `block_timestamp`, `validator_count`, `consensus_proof`, `status`, `push_generation`)',
+            ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            ' ON DUPLICATE KEY UPDATE',
+            '    `price` = IF(VALUES(status) = \'finalized\', VALUES(`price`), `price`),',
+            '    `reference_block` = IF(VALUES(status) = \'finalized\', VALUES(`reference_block`), `reference_block`),',
+            '    `block_timestamp` = IF(VALUES(status) = \'finalized\', VALUES(`block_timestamp`), `block_timestamp`),',
+            '    `validator_count` = IF(VALUES(status) = \'finalized\', VALUES(`validator_count`), `validator_count`),',
+            '    `consensus_proof` = IF(VALUES(status) = \'finalized\', VALUES(`consensus_proof`), `consensus_proof`),',
+            '    `push_generation` = IF(VALUES(status) = \'finalized\', VALUES(`push_generation`), `push_generation`),',
+            '    status = IF(VALUES(status) = \'finalized\', \'finalized\', status)',
+        ].join('\n'),
+        read: `SELECT price, round_number, block_timestamp
+                 FROM price_snapshots
+                 WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL
+                   AND block_timestamp BETWEEN ? AND ?
+                 ORDER BY block_timestamp DESC, round_number DESC`,
+    },
+    // The generation-fenced in-place upgrade; push_generation is gate and target, so LAST.
+    oracle_prices: {
+        insert: [
+            'INSERT INTO oracle_prices (`source_address`, `source_chain`, `coin`, `tick`, `fiat`, `value`, `block_time`, `effective_at`, `action_index`, `push_generation`)',
+            ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            ' ON DUPLICATE KEY UPDATE',
+            '    `source_address` = IF(VALUES(`push_generation`) >= `push_generation`, VALUES(`source_address`), `source_address`),',
+            '    `coin` = IF(VALUES(`push_generation`) >= `push_generation`, VALUES(`coin`), `coin`),',
+            '    `tick` = IF(VALUES(`push_generation`) >= `push_generation`, VALUES(`tick`), `tick`),',
+            '    `fiat` = IF(VALUES(`push_generation`) >= `push_generation`, VALUES(`fiat`), `fiat`),',
+            '    `value` = IF(VALUES(`push_generation`) >= `push_generation`, VALUES(`value`), `value`),',
+            '    `block_time` = IF(VALUES(`push_generation`) >= `push_generation`, VALUES(`block_time`), `block_time`),',
+            '    `effective_at` = IF(VALUES(`push_generation`) >= `push_generation`, VALUES(`effective_at`), `effective_at`),',
+            '    push_generation = IF(VALUES(`push_generation`) >= `push_generation`, VALUES(`push_generation`), `push_generation`)',
+        ].join('\n'),
+        read: `SELECT id, source_address, source_chain, coin, tick, fiat, value, fee, memo,
+                      block_time, effective_at, action_index
+                 FROM oracle_prices
+                 WHERE source_address = ? AND coin = ? AND tick = ? AND fiat = ? AND effective_at <= ?
+                 ORDER BY effective_at DESC, action_index DESC LIMIT 1`,
+    },
 };
+
+// The rows the admission-table statements above are driven with: `legacy` is inserted
+// BEFORE the migration (the row every deployed mirror already holds, which must read
+// NULL in every added column afterwards), `later` is what old code inserts AFTER it
+// (naming no admission column, delivered twice so the ODKU / INSERT IGNORE re-delivery
+// path is exercised too), and `read` binds the old clock-bound select, which must return
+// `expect` rows. Keyed by table so the two drivers below enumerate exactly this set: an
+// entry here without an OLD_STATEMENTS twin, or the reverse, fails the unit test that
+// pins the two maps to the migration's manifest.
+const HASH64 = 'c'.repeat(64);
+const ADMISSION_MIRROR_ROWS = {
+    attestation_responses: {
+        legacy: ['regtest', '1'.repeat(64), 'prov', 'ok', HASH64, 1000, '[]', '[]', null],
+        later:  ['regtest', '2'.repeat(64), 'prov', 'ok', HASH64, 1001, '[]', '[]', null],
+        read:   ['regtest', 2000, '1'.repeat(64), '2'.repeat(64)], expect: 2,
+    },
+    cross_chain_matches: {
+        legacy: ['m1', 500, 'regtest', 'BTC', 1, '1', 'addrA', 'DOGE', 2, '2', 'addrB', 1000, '[]', 'finalized', null, 0, 0],
+        later:  ['m2', 501, 'regtest', 'BTC', 3, '1', 'addrA', 'DOGE', 4, '2', 'addrB', 1001, '[]', 'finalized', null, 0, 0],
+        read:   ['regtest', 2000, 'BTC', 'BTC'], expect: 2,
+    },
+    cross_chain_calls: {
+        legacy: ['c1', 'dispatch', 500, 'regtest', 'DOGE', 1, 10, 'BTC', 20, 'ping', '[]', 5000, 1000, '[]', 'finalized', 0],
+        later:  ['c2', 'dispatch', 501, 'regtest', 'DOGE', 2, 10, 'BTC', 20, 'ping', '[]', 5000, 1001, '[]', 'finalized', 0],
+        read:   ['regtest', 'BTC', 2000], expect: 2,
+    },
+    bridge_transfers: {
+        legacy: ['3'.repeat(64), 500, 'regtest', 'DOGE', 1, 'srcaddr', 'BTC', 'dstaddr', 'XCHAIN', 8, '1.00000000', 1000, '[]', 'finalized', 0],
+        later:  ['4'.repeat(64), 501, 'regtest', 'DOGE', 2, 'srcaddr', 'BTC', 'dstaddr', 'XCHAIN', 8, '1.00000000', 1001, '[]', 'finalized', 0],
+        read:   ['regtest', 2000, 'BTC'], expect: 2,
+    },
+    policy_snapshots: {
+        legacy: ['5'.repeat(64), 500, 'DOGE', 'PEPE', 1, 400, HASH64, 1000, 'regtest', '[]', 'finalized', 0],
+        later:  ['6'.repeat(64), 501, 'DOGE', 'PEPE', 2, 401, HASH64, 1001, 'regtest', '[]', 'finalized', 0],
+        read:   ['regtest', 2000], expect: 2,
+    },
+    price_snapshots: {
+        legacy: [1, 'BTC-USD', '100.00000000', 500, 1000, 3, '{}', 'finalized', 0],
+        later:  [2, 'BTC-USD', '101.00000000', 501, 1001, 3, '{}', 'finalized', 0],
+        read:   ['BTC-USD', 0, 2000], expect: 2,
+    },
+    oracle_prices: {
+        legacy: ['oracle1', 'DOGE', 'DOGE', 'PEPE', 'USD', '0.5', 1000, 1000, 1, 0],
+        later:  ['oracle1', 'DOGE', 'DOGE', 'PEPE', 'USD', '0.6', 1001, 1001, 2, 0],
+        read:   ['oracle1', 'DOGE', 'PEPE', 'USD', 2000], expect: 1,   // the old read is LIMIT 1
+    },
+};
+
+// Seed one legacy row per admission table BEFORE the migration runs, so the
+// NULL-on-legacy-rows check afterwards examines a row rather than an empty table.
+// Only tables old code can touch: a table the pending set CREATEs has no old shape.
+async function seedAdmissionMirrorRows(raw, exercisable){
+    const seeded = [];
+    for(const t of Object.keys(ADMISSION_MIRROR_ROWS)){
+        if(!exercisable.includes(t)) continue;
+        await raw(OLD_STATEMENTS[t].insert, ADMISSION_MIRROR_ROWS[t].legacy);
+        seeded.push(t);
+    }
+    return seeded;
+}
+
+// AFTER the migration: old code's INSERT, which names no admission column, still lands a
+// row; its re-delivery (the same statement again, the ON DUPLICATE KEY / INSERT IGNORE
+// path every mirror apply relies on) is still accepted; and its clock-bound read still
+// returns both the legacy and the later row. Every table in ADMISSION_MIRROR_ROWS that
+// old code can touch is driven here, so a listed statement is an executed statement.
+async function exerciseAdmissionMirrorRows(raw, exercisable){
+    const notes = [];
+    for(const t of Object.keys(ADMISSION_MIRROR_ROWS)){
+        if(!exercisable.includes(t)) continue;
+        const S = OLD_STATEMENTS[t], R = ADMISSION_MIRROR_ROWS[t];
+        await raw(S.insert, R.later);
+        await raw(S.insert, R.later);
+        const rows = await raw(S.read, R.read);
+        if(rows.length !== R.expect)
+            throw new Error(t + ': the old clock-bound read returned ' + rows.length + ' row(s), expected ' + R.expect);
+        notes.push(t + ': old insert, re-delivery and clock-bound read all OK');
+    }
+    return notes;
+}
 
 function git(...args){
     return execFileSync('git', ['-C', REPO, ...args], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
@@ -186,6 +407,24 @@ function tablesTouched(sql){
     return { written: [...written], referenced: [...referenced] };
 }
 
+// Every ADD COLUMN IF NOT EXISTS clause of every ALTER in a migration body, as
+// { table, col, tail }. Clauses are split on the `, ADD COLUMN` boundary rather than
+// on commas, because a column type can carry one (ENUM('pass','always')). The earlier
+// single regex took only the FIRST clause of a multi-clause ALTER and ran its tail to
+// the semicolon, so the second and third columns of a three-column ALTER were never
+// measured on legacy rows.
+function addedColumns(body){
+    const out = [];
+    for(const m of stripSqlLineComments(body).matchAll(/ALTER\s+TABLE\s+`?([a-z_][a-z0-9_]*)`?([^;]*)/gi)){
+        const table = m[1].toLowerCase();
+        for(const clause of m[2].split(/,\s*(?=ADD\s+COLUMN)/i)){
+            const c = /ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+`?([a-z_][a-z0-9_]*)`?([\s\S]*)/i.exec(clause);
+            if(c) out.push({ table, col: c[1].toLowerCase(), tail: c[2] });
+        }
+    }
+    return out;
+}
+
 const results = [];
 async function check(name, fn){
     try { results.push({ ok: true, name, detail: (await fn()) || '' }); }
@@ -193,6 +432,7 @@ async function check(name, fn){
 }
 
 async function main(){
+    requireVenueEnv();
     const cfg = config.getConfig();
     const db  = new Database(process.env.DB_HOST, process.env.DB_PORT, DB_NAME,
                              process.env.DB_USER, process.env.DB_PASS,
@@ -314,6 +554,10 @@ async function main(){
     if(OLD_STATEMENTS.state_tree_roots && affected.includes('state_tree_roots'))
         await raw(OLD_STATEMENTS.state_tree_roots.insert,
                   ['BTC', 'regtest', 500, ROOT, ROOT, ROOT, ROOT]);
+    // The mirror-admission tables: one legacy row each, so the migrated columns are
+    // measured NULL on a row that exists rather than vacuously on an empty table.
+    const seededAdmission = await seedAdmissionMirrorRows(raw, mustExercise);
+    if(seededAdmission.length) console.log('seeded a legacy row in: ' + seededAdmission.join(', '));
 
     // ── Seed the ledger as the deployed host's really looks ──────────────────────
     {
@@ -346,8 +590,7 @@ async function main(){
         const notes = [];
         for(const f of pending){
             const body = fs.readFileSync(path.join(REPO, 'src/sql/migrations', f), 'utf8');
-            for(const m of body.matchAll(/ALTER\s+TABLE\s+`?([a-z_][a-z0-9_]*)`?[\s\S]*?ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+`?([a-z_][a-z0-9_]*)`?([^;]*)/gi)){
-                const [table, col, tail] = [m[1].toLowerCase(), m[2].toLowerCase(), m[3]];
+            for(const { table, col, tail } of addedColumns(body)){
                 const rows = await raw('SELECT `' + col + '` AS v FROM `' + table + '`');
                 if(!rows.length) continue;
                 const wantNull = /\bNULL\b/i.test(tail) && !/NOT\s+NULL/i.test(tail);
@@ -428,6 +671,8 @@ async function main(){
             if(!prior.length) throw new Error('state_tree_roots prior-root lookup returned nothing');
             notes.push('state_tree_roots: insert, ON DUPLICATE KEY UPDATE and prior-root lookup all OK');
         }
+        // The seven mirror-admission tables, driven from one table so none is skipped.
+        notes.push(...await exerciseAdmissionMirrorRows(raw, mustExercise));
         return notes.join('; ');
     });
 
@@ -468,4 +713,9 @@ async function main(){
     process.exit(failed === 0 ? 0 : 1);
 }
 
-main().catch(e => { console.error('HARNESS ERROR: ' + ((e && e.stack) || e)); process.exit(2); });
+if(require.main === module)
+    main().catch(e => { console.error('HARNESS ERROR: ' + ((e && e.stack) || e)); process.exit(2); });
+
+// For the unit test that pins the admission-table statements to the migration's
+// manifest and drives the two loops above with a recording connection.
+module.exports = { OLD_STATEMENTS, ADMISSION_MIRROR_ROWS, addedColumns, seedAdmissionMirrorRows, exerciseAdmissionMirrorRows };

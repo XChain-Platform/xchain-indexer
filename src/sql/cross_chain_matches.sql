@@ -37,6 +37,21 @@ CREATE TABLE cross_chain_matches (
     b_payout_legs        TEXT,                                     -- B-order royalty split (JSON [{to,bps}], b_chain encoding; NULL = none); signed into the canonical at/above CROSS_CHAIN_ROYALTY
     effective_time       BIGINT UNSIGNED NOT NULL,                -- wall-clock instant the indexer applies at (shared clock)
     finalizing_view      INT          NOT NULL DEFAULT 0,         -- PBFT view the round finalized at; signed into the EQUIV canonical (WI-2 bump 2) so the indexer rebuilds the exact view
+    -- ADMISSION HEIGHTS, one per chain in the row's read set (a_chain OR b_chain), mirrored
+    -- from the hub (xchain-hub/src/sql/cross_chain_matches.sql) and INSIDE the signed
+    -- canonical. Readable at block B on chain C iff admit_block_<c> <= B above the consumer
+    -- activation. NULL is the LEGACY row and binds by effective_time <= t(B) at EVERY
+    -- height, so every consuming select is
+    -- (admit_block_<c> IS NULL AND effective_time <= ?) OR (admit_block_<c> IS NOT NULL AND admit_block_<c> <= ?)
+    -- and NEVER a bare `admit_block_<c> <= ?`, which evaluates to NULL for legacy rows,
+    -- silently drops them and is a silent consensus change (mirrorBindClause). Added by
+    -- migrations/2026-09-16-admission-height.sql. Placed AFTER finalizing_view, one column
+    -- later than the hub, because the 2026-07-17 migration anchored finalizing_view on
+    -- effective_time and a column inserted between them would leave that anchor stale
+    -- (the column-parity guard compares every migration's anchor against this file).
+    admit_block_btc      BIGINT UNSIGNED DEFAULT NULL,
+    admit_block_ltc      BIGINT UNSIGNED DEFAULT NULL,
+    admit_block_doge     BIGINT UNSIGNED DEFAULT NULL,
     validator_signatures TEXT         NOT NULL,                   -- JSON [{pubkey,sig}]; 2f+1 over the canonical match
     status               VARCHAR(20)  NOT NULL DEFAULT 'finalized',
     batch_root           VARCHAR(64),
