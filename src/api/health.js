@@ -26,7 +26,7 @@
 // fatal error, the freshly-read indexed-block height, and the current epoch
 // ms). Async only for the hub_push_queue stats fetch; all other fields are
 // derived synchronously from already-resolved values.
-const { computeArmedMapFingerprintV2 } = require('../consensus/armed_map/fingerprint_v2');
+const { computeArmedMapFingerprintV2 } = require('../consensus/armed_map/fingerprint');
 const { computeConsensusRulesDigest } = require('../consensus_rules_digest');
 const { barrierHoldMs, barrierCeilingExceeded } = require('../XChainIndexer');
 // Field groups assembled in the parts under ./health/; each is placed at the
@@ -106,8 +106,9 @@ async function buildHealthResponse({ indexer, indexerRunning, indexerError, last
         action_counters:  actionCounters(indexer),
         // Consensus-gate build fingerprint, v2 since W3: the armed VALUES row by row, so
         // a sweep compares armed maps across a rename or move; UNREADABLE, never a guess.
+        // The _v2 alias of the W1 to W4 window is gone since W5: the version field is
+        // what tells a fleet tool which algorithm the legacy field carries.
         armed_map_fingerprint: computeArmedMapFingerprintV2().hex,
-        armed_map_fingerprint_v2: computeArmedMapFingerprintV2().hex,
         armed_map_fingerprint_version: 2,
         // The logic half v2 stopped covering, its own field beside v2, never inside it.
         carrier_logic_digest: carrierLogicDigest(),

@@ -20,7 +20,7 @@
  * pin module under bin/lib, neither of which a process needs to serve blocks,
  * and the guard that holds the tree to the pin runs in CI. The digest formula
  * is the pin module's (sha256 over the sorted `id=hash` lines) restated here
- * for the same reason, and test/unit/consensus/armed_map/fingerprint_v2.test.js
+ * for the same reason, and test/unit/consensus/armed_map/fingerprint.test.js
  * holds the two equal.
  *
  * UNREADABLE, NEVER A GUESS. A checkout or image without the pin publishes

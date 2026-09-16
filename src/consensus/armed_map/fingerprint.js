@@ -17,9 +17,12 @@
  * Published beside v1 during the W1 window and INSTEAD of it from W3, when the
  * carriers became registry shims and v1 (a hash over carrier file bytes and
  * names) was deleted: v2 hashes the armed VALUES this process resolved, row by
- * row, through the registry-backed manifest. A fleet tool compares v2
- * wherever every process publishes it and falls back to v1 from a pin for a
- * build that predates it.
+ * row, through the registry-backed manifest. Since W5 it is the only armed-map
+ * fingerprint a process publishes: the armed_map_fingerprint field carries it,
+ * armed_map_fingerprint_version says 2, and the armed_map_fingerprint_v2 alias
+ * of the W1 to W4 window is gone (the file lost its _v2 suffix at the same
+ * time). A fleet tool compares v2 wherever every process publishes it and
+ * falls back to v1 from a pin for a build that predates it.
  *
  * FAILURE IS NEVER A PLAUSIBLE HEX. If any row cannot be resolved (a carrier
  * failed to load, an export vanished, a value has a refused type) the result

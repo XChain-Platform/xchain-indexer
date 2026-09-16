@@ -24,15 +24,15 @@ const path   = require('path');
 const { spawnSync } = require('child_process');
 
 const REPO = path.resolve(__dirname, '..', '..', '..', '..');
-const V2_PATH = path.join(REPO, 'src', 'consensus', 'armed_map', 'fingerprint_v2.js');
+const V2_PATH = path.join(REPO, 'src', 'consensus', 'armed_map', 'fingerprint.js');
 
-const v2 = require('../../../../src/consensus/armed_map/fingerprint_v2.js');
+const v2 = require('../../../../src/consensus/armed_map/fingerprint.js');
 const manifest = require('../../../../src/consensus/armed_map/manifest.js');
 const { fingerprint } = require('../../../../src/consensus/armed_map/canonical.js');
 
 const HEX64 = /^[0-9a-f]{64}$/;
 
-describe('armed_map/fingerprint_v2: the running process', function () {
+describe('armed_map/fingerprint: the running process', function () {
 
     it('is the canonical fingerprint of the manifest rows', function () {
         const out = v2.computeArmedMapFingerprintV2();
@@ -65,9 +65,9 @@ describe('armed_map/fingerprint_v2: the running process', function () {
 
 });
 
-describe('armed_map/fingerprint_v2: the published surfaces (W3)', function () {
+describe('armed_map/fingerprint: the published surfaces (W3, alias dropped at W5)', function () {
 
-    it('is published on the health payload as the legacy field, its alias, version 2 and the logic digest (W3)', async function () {
+    it('is published on the health payload as the legacy field and version 2 with the logic digest, and no _v2 alias (W5)', async function () {
         const { buildHealthResponse } = require('../../../../src/api/health.js');
         const logicPin = require('../../../../bin/lib/carrier_logic_pin.js');
         // The smallest indexer the builder accepts, in the shape test/unit/health.test.js uses.
@@ -76,8 +76,9 @@ describe('armed_map/fingerprint_v2: the published surfaces (W3)', function () {
         const res = await buildHealthResponse({ indexer, indexerRunning: true, indexerError: null,
             lastIndexedBlock: 190, now: 1000000 });
         assert.strictEqual(res.armed_map_fingerprint, v2.computeArmedMapFingerprintV2().hex, 'the legacy field carries v2');
-        assert.strictEqual(res.armed_map_fingerprint_v2, res.armed_map_fingerprint, 'the alias is the same value');
         assert.strictEqual(res.armed_map_fingerprint_version, 2);
+        // C4: the W1 to W4 alias is gone at W5; the version field is what names the algorithm.
+        assert.ok(!Object.prototype.hasOwnProperty.call(res, 'armed_map_fingerprint_v2'), 'the _v2 alias must not be published');
         assert.strictEqual(res.armed_map_rows, undefined, 'the row count belongs to consensus-identity, not health');
         // C7: the logic digest is its own field, equal to the pin module's reading of the committed pin.
         assert.strictEqual(res.carrier_logic_digest, logicPin.digest(logicPin.readPin(REPO)));
@@ -103,8 +104,8 @@ describe('armed_map/fingerprint_v2: the published surfaces (W3)', function () {
         assert.strictEqual(res.status, 0, res.stderr);
         const identity = JSON.parse(res.stdout);
         assert.strictEqual(identity.armed_map_fingerprint, v2.computeArmedMapFingerprintV2().hex);
-        assert.strictEqual(identity.armed_map_fingerprint_v2, identity.armed_map_fingerprint);
         assert.strictEqual(identity.armed_map_fingerprint_version, 2);
+        assert.ok(!Object.prototype.hasOwnProperty.call(identity, 'armed_map_fingerprint_v2'), 'the _v2 alias must not be printed');
         // row 6: armed_map_rows is the per-key hash map (so a mismatch names the row) and the count sits beside it
         assert.strictEqual(identity.armed_map_row_count, manifest.ENTRIES.length);
         assert.strictEqual(Object.keys(identity.armed_map_rows).length, manifest.ENTRIES.length);
@@ -142,7 +143,7 @@ function removeTree(dir) {
 
 const READ_SCRIPT = [
     "const path = require('path');",
-    "const out = require(path.resolve('src/consensus/armed_map/fingerprint_v2.js')).computeArmedMapFingerprintV2();",
+    "const out = require(path.resolve('src/consensus/armed_map/fingerprint.js')).computeArmedMapFingerprintV2();",
     "if (process.argv[1] === 'load-main') require(path.resolve('src/XChainIndexer.js'));",
     'process.stdout.write(JSON.stringify({ hex: out.hex, count: out.count, reason: out.reason }));',
 ].join('\n');
@@ -204,7 +205,7 @@ function moveModule(dir, fromRel, toRel) {
     return rewritten;
 }
 
-describe('armed_map/fingerprint_v2: temp-tree falsification of armed values (design section 7, P4)', function () {
+describe('armed_map/fingerprint: temp-tree falsification of armed values (design section 7, P4)', function () {
     this.timeout(180000);
 
     let baseline;
@@ -290,7 +291,7 @@ function deletedRowCase(key, shimRel) {
     assert.match(r.stderr, /RegistryMissError/);
 }
 
-describe('armed_map/fingerprint_v2: temp-tree falsification of layout and the completeness guard (design section 7, P4)', function () {
+describe('armed_map/fingerprint: temp-tree falsification of layout and the completeness guard (design section 7, P4)', function () {
     this.timeout(180000);
 
     let baseline;
@@ -308,10 +309,10 @@ describe('armed_map/fingerprint_v2: temp-tree falsification of layout and the co
         const dir = makeTree();
         const plain = readTree(dir);
         assert.strictEqual(plain.status, 0, plain.stderr);
-        fs.appendFileSync(path.join(dir, 'src/snapshot_reorg_buffer.js'), '\n// a comment that changes no value\n');
+        fs.appendFileSync(path.join(dir, 'src/consensus/snapshot_reorg_buffer.js'), '\n// a comment that changes no value\n');
         editFile(dir, STATE_COMMITMENT_PART, "'BTC:testnet':  145000,", "'BTC:testnet'   :\n        145000 ,");
-        const requirers = moveModule(dir, 'src/train_activation.js', 'src/activations/rule_set_train.js');
-        assert.ok(requirers >= 1, 'expected XChainIndexer.js to be repointed, got ' + requirers);
+        const requirers = moveModule(dir, 'src/consensus/gates/train_gate.js', 'src/activations/rule_set_train.js');
+        assert.ok(requirers >= 1, 'expected the train gate requirer under src/XChainIndexer/ to be repointed, got ' + requirers);
         const r = readTree(dir, 'load-main');
         assert.strictEqual(r.status, 0, 'the moved build must still load: ' + r.stderr);
         assert.strictEqual(r.out.hex, baseline.hex, r.out.reason);
@@ -319,11 +320,11 @@ describe('armed_map/fingerprint_v2: temp-tree falsification of layout and the co
     });
 
     it('deleting a gate row from a part file turns the completeness guard red and the shim throws at boot', function () {
-        deletedRowCase('train_activation.TRAIN_ACTIVATION', 'src/train_activation.js');
+        deletedRowCase('train_activation.TRAIN_ACTIVATION', 'src/consensus/gates/train_gate.js');
     });
 
     it('deleting a constant row from a part file turns the completeness guard red and the shim throws at boot', function () {
-        deletedRowCase('equivocation_header.ENGINE_TAGS', 'src/equivocation_header.js');
+        deletedRowCase('equivocation_header.ENGINE_TAGS', 'src/consensus/equivocation_header.js');
     });
 
     it('without node_modules v2 reads UNREADABLE or the process fails, never a plausible hex', function () {
