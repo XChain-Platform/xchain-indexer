@@ -146,11 +146,17 @@ module.exports = function carrierLogicPinOps(core) {
      * activation file at the top level and under src/lib, every SHARED_GATES
      * carrier at src/<name>.js, and the digest module that computes the requires.
      */
-    function hubMembers(dir) {
+    function hubMembers(dir, pin) {
         const source = fs.readFileSync(path.join(dir, 'src/consensus_rules_digest.js'), 'utf8');
-        const shared = constInit(source, 'SHARED_GATES').elements
-            .map((row) => `src/${row.elements[0].value}.js`);
-        return activationFiles(dir).concat(activationFiles(dir, 'lib'), shared, ['src/consensus_rules_digest.js'])
+        // A SHARED_GATES stem lives at its pinned path once W5 has moved it
+        // (src/consensus/gates/<stem>_gate.js, src/consensus/<carrier>.js or a
+        // hub-owned home such as src/attestation/); the pin already records
+        // that path per id, so read it there rather than restating the loader's
+        // move table. A stem with no pin entry yet (before --init) falls back
+        // to the pre-W5 flat path.
+        const ids = Array.from(new Set(constInit(source, 'SHARED_GATES').elements.map((row) => row.elements[0].value)));
+        const shared = ids.map((id) => (pin && pin.entries && pin.entries[id] ? pin.entries[id].path : `src/${id}.js`));
+        return activationFiles(dir).concat(activationFiles(dir, 'lib'), gateFiles(dir), shared, ['src/consensus_rules_digest.js'])
             .filter((rel) => fs.existsSync(path.join(dir, rel)));
     }
 
@@ -171,9 +177,9 @@ module.exports = function carrierLogicPinOps(core) {
                 .concat(gateFiles(dir), fixedCarrierPaths(dir, pin, FIXED_CARRIER_IDS[name]), ['src/consensus_rules_digest.js'])
                 .filter((rel) => fs.existsSync(path.join(dir, rel)));
         } else if (name === 'xchain-sync') {
-            list = activationFiles(dir).concat(fixedCarrierPaths(dir, pin, FIXED_CARRIER_IDS[name]));
+            list = activationFiles(dir).concat(gateFiles(dir), fixedCarrierPaths(dir, pin, FIXED_CARRIER_IDS[name]));
         } else if (name === 'xchain-hub') {
-            list = hubMembers(dir);
+            list = hubMembers(dir, pin);
         } else {
             throw new Error(`no membership rule for ${name}`);
         }
