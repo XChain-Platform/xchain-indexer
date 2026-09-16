@@ -23,12 +23,12 @@
 // body and settle.js the per-dispense one. parse() runs them in the same order and the
 // same loops it always did.
 //
-// The caps activation is required HERE and reached through isDispenseCapsActive below,
-// rather than required in settle.js: bin/check-flagday-deploy.sh greps the deployed
+// The caps gate is read HERE by its literal registry key through isDispenseCapsActive
+// below, rather than in settle.js: bin/check-flagday-deploy.sh greps the deployed
 // src/actions/dispense/index.js for the literal dispenser_caps_activation, and an absent
-// marker there reads UNKNOWN rather than failing, so moving the require would retire
+// marker there reads UNKNOWN rather than failing, so moving the key would retire
 // that flag-day row silently.
-const dispenserCaps = require('../../dispenser_caps_activation.js');
+const gateRegistry = require('../../consensus/gate_registry');
 
 const contextPart = require('./context.js');
 const pricingPart = require('./pricing.js');
@@ -69,11 +69,11 @@ class Dispense {
             await this.settleDispense(ctx, idx);
     }
 
-    // The dispenser-caps flag-day, read through the handler so the activation require,
+    // The dispenser-caps flag-day, read through the handler so the registry key,
     // and therefore the literal bin/check-flagday-deploy.sh greps this file for, stays
     // in this file while the auto-close that consumes it lives in dispense/settle.js.
     isDispenseCapsActive(block_time){
-        return dispenserCaps.isDispenserCapsActive(block_time, this.config['NETWORK']);
+        return gateRegistry.activeAt('dispenser_caps_activation.DISPENSER_CAPS_ACTIVATION', this.config['NETWORK'], null, null, block_time);
     }
 }
 

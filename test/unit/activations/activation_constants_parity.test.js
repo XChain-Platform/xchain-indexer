@@ -54,24 +54,37 @@ const { CONSTANTS_PATH, canonExists, resolveCanonSource, loadCanon } =
 // export is that row (the same object when the module exports the frozen row,
 // an equal copy when it exports a mutable one for its tests to patch).
 const registry = require('../../../src/protocol_changes.js');
+const { modulePathFor } = require('../../helpers/gate_modules.js');
 const NOT_A_ROW = new Set(['consensus/reserved_roots.js']);
 function registryKey(file, exportName) { return file.replace(/\.js$/, '') + '.' + exportName; }
+// The local value of one GATES entry. W4 (activation registry, row 18) moved
+// the logic-bearing modules to their feature directories and retired the
+// predicate-only shims outright, so the file column is the registry stem the
+// module is known by: a moved module is read at its W4 path, a retired one has
+// no module and its local value IS the registry row the callers read by key.
+function localExport(file, exportName) {
+    if (NOT_A_ROW.has(file)) return require('../../../src/' + file)[exportName];
+    const modulePath = modulePathFor(file.replace(/\.js$/, ''));
+    if (modulePath === null) return registry.get(registryKey(file, exportName));
+    return require(modulePath)[exportName];
+}
 
-// module filename in src/ -> the named export it and constants.js share.
+// registry stem (the module filename in src/ for a twin; the bare stem for a
+// module W4 moved or retired) -> the named export it and constants.js share.
 const GATES = [
     ['checkpoint_commitment_activation.js', 'CHECKPOINT_COMMITMENT_ACTIVATION'],
     ['cross_chain_royalty_activation.js',   'CROSS_CHAIN_ROYALTY_ACTIVATION'],
-    ['attest_admission_activation.js',      'ATTEST_ADMISSION_ACTIVATION'],
-    ['attest_request_cap_activation.js',    'ATTEST_REQUEST_CAP_ACTIVATION'],
+    ['attest_admission_activation',         'ATTEST_ADMISSION_ACTIVATION'],
+    ['attest_request_cap_activation',       'ATTEST_REQUEST_CAP_ACTIVATION'],
     // Not an activation MAP but the consensus constants that gate reads: the caps decide
     // which requests are admitted at the flag-day exactly as the heights decide when.
-    ['attest_request_cap_activation.js',    'ATTEST_REQUEST_CAPS'],
+    ['attest_request_cap_activation',       'ATTEST_REQUEST_CAPS'],
     ['attest_relay_activation.js',          'ATTEST_RELAY_ACTIVATION'],
-    ['attest_broadcast_fee_activation.js',  'ATTEST_BROADCAST_FEE_ACTIVATION'],
+    ['attest_broadcast_fee_activation',     'ATTEST_BROADCAST_FEE_ACTIVATION'],
     // Not an activation MAP but a consensus constant the same gate reads: the cap clamps the
     // escrow carve-out, so a one-sided edit changes the amount paid at the flag-day exactly as a
     // one-sided height edit changes when it is paid.
-    ['attest_broadcast_fee_activation.js',  'ATTEST_BROADCAST_FEE_CAP'],
+    ['attest_broadcast_fee_activation',     'ATTEST_BROADCAST_FEE_CAP'],
     ['attest_responsible_widening_activation.js',      'ATTEST_RESPONSIBLE_WIDENING_ACTIVATION'],
     // Not an activation MAP but the consensus constants the same gate reads: the ladder's
     // confirmations and maxSlots decide WHICH validators may sign at the flag-day exactly as
@@ -91,7 +104,7 @@ const GATES = [
     // admission the same way a one-sided height edit would.
     ['attest_responsible_widening_activation.js',       'ATTEST_RESPONSIBLE_WIDENING_V2'],
     ['anchor_reward_activation.js',         'ANCHOR_REWARD_DERIVE_ACTIVATION'],
-    ['anchor_activation.js',                'ANCHOR_ACTIVATION'],
+    ['anchor_activation',                   'ANCHOR_ACTIVATION'],
     // constants.js claims the whole anchor/archive reward block is "kept byte-identical to
     // the local copies ... by the cross-service regression suite"; these are the exports of
     // that block nothing else compared to canon (ARCHIVE_REWARD_ACTIVATION is locked by
@@ -109,7 +122,7 @@ const GATES = [
     // The height at which fee pricing stops selecting rounds the chain has not yet shown
     // the node. A one-sided edit forks fee validity between a hub-connected node and a
     // chain-only node at the boundary, which is the divergence the gate exists to close.
-    ['price_fee_batch_landed_activation.js', 'PRICE_FEE_BATCH_LANDED_ACTIVATION'],
+    ['price_fee_batch_landed_activation',    'PRICE_FEE_BATCH_LANDED_ACTIVATION'],
     // The PLATFORM TRAIN gate, keyed by platform version
     // rather than by feature. A one-sided edit here is worse than a one-sided feature-gate
     // edit: this map is what decides whether a node HALTS at a train boundary or applies
@@ -121,11 +134,11 @@ const GATES = [
     // whose every row is deactivated and past cooldown is admitted. A one-sided edit forks
     // STAKE v1 admission, and with it the bond debit, the escrow row and capability-set
     // membership, all of which land in hashed history.
-    ['stake_key_reuse_activation.js',      'STAKE_KEY_REUSE_ACTIVATION'],
+    ['stake_key_reuse_activation',         'STAKE_KEY_REUSE_ACTIVATION'],
     // The height at which a SWEEP stops writing a zero-amount debit and credit leg for a
     // held tick with nothing to move. Those rows are in the per-block ledger hash, so a
     // one-sided edit forks the ledger hash at the first zero-balance sweep past the boundary.
-    ['sweep_zero_leg_activation.js',       'SWEEP_ZERO_LEG_ACTIVATION'],
+    ['sweep_zero_leg_activation',          'SWEEP_ZERO_LEG_ACTIVATION'],
     // The XCHAIN bridge flag day. A one-sided edit forks the bridge at the boundary in the
     // worst direction available: the destination chain mints from a transfer record the
     // source chain's copy says was never legal to sign, or refuses one it did sign.
@@ -141,7 +154,7 @@ const GATES = [
     // The LIST owner check. It re-verdicts every historical third-party LIST edit,
     // and list_items is a hashed DERIVED table, so a one-sided edit forks the chain at the
     // boundary in the most ordinary traffic there is.
-    ['list_owner_activation.js',           'LIST_OWNER_ACTIVATION'],
+    ['list_owner_activation',              'LIST_OWNER_ACTIVATION'],
     // Not activation MAPS but the consensus constants the bridge and policy passes read: the
     // per-block caps decide WHICH rows land in WHICH block (an action-index change, so a hash
     // change), and XPOLICY_MAX_MEMBERS decides which opt-in is refused. A one-sided edit to any
@@ -153,7 +166,7 @@ const GATES = [
     // the boundary it decides whether an ISSUE of a short or listed name is 'invalid: TICK
     // (length)' / 'invalid: TICK (reserved)' or a live token row, so a one-sided height edit
     // has one node holding a root the next node just sold.
-    ['tick_namespace_activation.js',       'TICK_NAMESPACE_ACTIVATION'],
+    ['tick_namespace_activation',          'TICK_NAMESPACE_ACTIVATION'],
     // Not an activation MAP but the reserved SET that gate reads, and the list equality is the
     // point: membership decides a verdict, so a name present on one side and absent on the
     // other forks the chain the first time anyone issues it. deepStrictEqual over the array
@@ -226,7 +239,7 @@ describe('activation-gate constant parity to canonical constants.js @regression'
     it('resolves every gated constant from its local module, whatever the checkout state', function () {
         assert.ok(GATES.length >= 47, 'the gate list has shrunk; a dropped entry is an unpinned flag day');
         for (const [file, exportName] of GATES) {
-            const local = require('../../../src/' + file)[exportName];
+            const local = localExport(file, exportName);
             assert.ok(local !== undefined,
                 file + ' no longer exports ' + exportName + '; the parity case for it would compare ' +
                 'undefined to undefined and pass vacuously');
@@ -240,7 +253,7 @@ describe('activation-gate constant parity to canonical constants.js @regression'
         for (const [file, exportName] of GATES) {
             if (NOT_A_ROW.has(file)) continue;
             const key = registryKey(file, exportName);
-            const local = require('../../../src/' + file)[exportName];
+            const local = localExport(file, exportName);
             const row = registry.get(key);
             if (local !== null && typeof local === 'object' && !Object.isFrozen(local)) {
                 assert.deepStrictEqual(local, row, key + ': the module\'s copy has drifted from the registry row');
@@ -353,7 +366,7 @@ describe('activation-gate constant parity to canonical constants.js @regression'
             : 'SKIPPED: documentation checkout absent at ' + CONSTANTS_PATH + '; ' + file + ' ' +
               exportName + ' parity not verified this run';
         (canonExists ? it : it.skip)(title, function () {
-            const local = require('../../../src/' + file)[exportName];
+            const local = localExport(file, exportName);
             // Presence, not shape: the list carries scalar consensus constants as well as
             // activation maps. The checks stay so a mistyped export name cannot compare
             // undefined to undefined and pass vacuously on both sides.

@@ -37,9 +37,10 @@
  ********************************************************************/
 
 // The flag day at which a LIST format 1 must come from the address that created
-// the list. Standalone height-keyed module rather than a protocol_changes entry, because the
-// SDK and the wallet read the same map when they decide whether to offer an edit form.
-const listOwnerActivation = require('../list_owner_activation.js');
+// the list: the height-keyed registry row list_owner_activation.LIST_OWNER_ACTIVATION,
+// which the SDK and the wallet read as the same map when they decide whether to offer
+// an edit form.
+const gateRegistry = require('../consensus/gate_registry');
 
 const { getLogger } = require('../observability/index.js');
 class List {
@@ -210,7 +211,7 @@ class List {
         if(!error && format==1 && !data['IS_GENESIS']){
 
             let bridgeRoles = this.bridgeRoleAddresses();
-            let ownerCheck  = listOwnerActivation.isListOwnerCheckActive(data['BLOCK_INDEX'], this.config['NETWORK']);
+            let ownerCheck  = gateRegistry.activeAt('list_owner_activation.LIST_OWNER_ACTIVATION', this.config['NETWORK'], null, data['BLOCK_INDEX'], null);
 
             // Spend no read when neither rule can fire: a chain with no bridge role address
             // configured holds no bridge-owned list, and below LIST_OWNER_ACTIVATION the

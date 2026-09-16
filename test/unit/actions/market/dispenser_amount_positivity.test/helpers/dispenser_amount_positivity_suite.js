@@ -17,10 +17,9 @@ const sinon = require('sinon');
 const { createMockIndexer, createTokenInfo } = require('../../../../../fixtures/mocks');
 const Dispenser = require('../../../../../../src/actions/dispenser/index.js');
 const Dispense  = require('../../../../../../src/actions/dispense/index.js');
-const activation = require('../../../../../../src/dispenser_amount_positivity_activation.js');
-
-// Any network name the activation map does not carry reads as OFF, which is how these
-// tests reach the legacy behavior without editing the module's thresholds.
+// Any network name the registry row (dispenser_amount_positivity_activation, read by
+// the create and dispense paths through activeAt) does not carry reads as OFF, which is
+// how these tests reach the legacy behavior without editing a threshold.
 const GATE_OFF_NETWORK = 'no-such-network';
 const OWNER_ADDR = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const BUYER_ADDR = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
@@ -86,6 +85,6 @@ function freshDispenseSuite() {
 }
 
 module.exports = {
-    activation, GATE_OFF_NETWORK, OWNER_ADDR, BUYER_ADDR, BLOCK_TIME, EXPIRATION,
+    GATE_OFF_NETWORK, OWNER_ADDR, BUYER_ADDR, BLOCK_TIME, EXPIRATION,
     makeActionsCtx, makeDispenser, makeDispenserInfo, freshDispenserCreateSuite, freshDispenseSuite,
 };

@@ -23,7 +23,7 @@
 'use strict';
 
 const assert = require('assert');
-const arc    = require('../../../src/attest_request_cap_activation.js');
+const arc    = require('../../../src/actions/attest/attest_request_cap_gate.js');
 
 describe('ATTEST per-block admission caps (spec §11.1) @regression', function () {
     describe('isAttestRequestCapActive', function () {

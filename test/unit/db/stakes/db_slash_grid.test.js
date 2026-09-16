@@ -22,7 +22,7 @@
  * unit of escrow and credits a full unit against a stake that was never debited. The
  * stake stays slashable again and withdrawable.
  *
- * slash_grid_activation.js floors the request onto the tick's grid once and derives the
+ * src/db/contracts/slash_grid_gate.js floors the request onto the tick's grid once and derives the
  * take from the reduction actually written. The invariant these cases assert is the one
  * that was broken: total === sum(releases) === sum(prev_amount - written amount).
  *
@@ -42,7 +42,7 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../../../fixtures/config');
 const Utility           = require('../../../../src/utility');
 const Database          = require('../../../../src/db');
-const slashGrid         = require('../../../../src/slash_grid_activation');
+const slashGrid         = require('../../../../src/db/contracts/slash_grid_gate.js');
 
 // `network` picks the gate state: 'regtest' and 'mainnet' are armed at genesis (mainnet
 // by the 2026-09-09 ruling), 'testnet' is unpinned and therefore inert, which is what

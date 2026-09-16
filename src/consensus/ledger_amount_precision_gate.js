@@ -61,14 +61,14 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('./gate_registry');
 
 const LEDGER_AMOUNT_PRECISION = copy('ledger_amount_precision_activation.LEDGER_AMOUNT_PRECISION');
 
 const LEDGER_AMOUNT_PRECISION_ACTIVATION = copy('ledger_amount_precision_activation.LEDGER_AMOUNT_PRECISION_ACTIVATION');
 
 // Per-chain threshold with a network-wide fallback, byte-for-byte the lookup
-// stateHash.js / caret_ref_strict_activation.js use. A coin-less caller (unit
+// stateHash.js / db/database/caret_ref_strict_gate.js use. A coin-less caller (unit
 // fixtures) falls through to the bare network key and stays inert on
 // mainnet/testnet, which is the safe side.
 function _activationThreshold(map, network, coin){

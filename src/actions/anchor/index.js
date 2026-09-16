@@ -41,7 +41,7 @@
  *   v2 - VERSION|MATCH_BATCH_SEQ|CHUNK_INDEX|TOTAL_CHUNKS|ARCHIVE_B64_CHUNK
  *
  * ACTIVATION. The version set RESTARTS at 0 at ANCHOR_ACTIVATION (see
- * ../anchor_activation.js), so the first check in parse() is the anchor's own
+ * the anchor_activation row in src/protocol_changes/), so the first check in parse() is the anchor's own
  * DOGE mined height: below the threshold EVERY ANCHOR of EVERY version is
  * 'invalid: ANCHOR before activation', because the same byte meant something
  * else on the pre-restart wire and no parser can tell the two apart from the
@@ -61,8 +61,9 @@
 const zlib    = require('zlib');
 const eq      = require('../../equivocation_header.js');
 const ar      = require('../../anchor_reward_activation.js');
-const abas    = require('../../archive_batch_author_activation.js');
-const aact    = require('../../anchor_activation.js');
+// The ANCHOR and archive-author gates are registry rows read by literal key
+// (W4): no predicate module stands between this file and the row it judges by.
+const gateRegistry = require('../../consensus/gate_registry');
 
 // The three wire families and their shared steps, one part file each.
 const validate     = require('./validate.js');
@@ -206,9 +207,9 @@ class Anchor {
         // bytes means anything and every ANCHOR down there is invalid whatever it decodes
         // to. Keyed on the anchor's OWN DOGE mined height (data['BLOCK_INDEX'], the same
         // key the unverified-head gate in reassembly.js reads), never on SNAPSHOT_BLOCK or the
-        // checkpointed height, which belong to other chains. isAnchorActive fails closed on
+        // checkpointed height, which belong to other chains. activeAt fails closed on
         // a non-numeric height or an unknown network.
-        if(!error && !aact.isAnchorActive(Number(data['BLOCK_INDEX']), this.config['NETWORK']))
+        if(!error && !gateRegistry.activeAt('anchor_activation.ANCHOR_ACTIVATION', this.config['NETWORK'], null, Number(data['BLOCK_INDEX']), null))
             error = 'invalid: ANCHOR before activation';
 
         // Verify VERSION is one this parser knows (the table in the constructor is the whole wire set)
@@ -258,7 +259,7 @@ class Anchor {
     async archiveAuthorScope(batchSeq, source){
         let canonical = await this.indexerDb.getAnchorV1ByBatchSeq(Number(batchSeq));
         if(!canonical) return null;
-        if(!abas.isArchiveBatchAuthorActive(Number(canonical.block_index_doge), this.config['NETWORK'])) return null;
+        if(!gateRegistry.activeAt('archive_batch_author_activation.ARCHIVE_BATCH_AUTHOR_ACTIVATION', this.config['NETWORK'], null, Number(canonical.block_index_doge), null)) return null;
         return String(source || '');
     }
 

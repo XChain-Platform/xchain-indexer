@@ -28,7 +28,7 @@
 
 const crypto  = require('crypto');
 const protocolTime = require('../../consensus/protocol_time');
-const caretRefStrict = require('../../caret_ref_strict_activation');
+const caretRefStrict = require('./caret_ref_strict_gate');
 // The frozen anchor/archive reward heights: the derive flag-day and the fleet-agreed
 // mirror-completeness watermark. Recovery-restored rewards claim their ORIGINAL derive
 // height from here, so a restored row and a live-derived one carry the same stamp.
@@ -229,7 +229,7 @@ module.exports = {
     // on it. THE call action handlers should use: resolveAddressRef alone reports a
     // malformed/dangling reference only by leaving the value untouched, which is safe
     // solely while every caller remembers to format-check the field afterwards (see
-    // caret_ref_strict_activation.js for the three call sites where that does not
+    // db/database/caret_ref_strict_gate.js for the three call sites where that does not
     // hold, and for what the same omission cost on SEND).
     //
     // Returns { value, rejected }:

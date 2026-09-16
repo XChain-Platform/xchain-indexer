@@ -91,12 +91,12 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('../../consensus/gate_registry');
 
 // The consensus ceiling, read from this repo's copy of the protocol constants so
 // the chain bound and the value the cross-repo equality gate watches cannot
 // drift apart. Exclusive: a price AT the ceiling is refused.
-const { PRICE_MAX } = require('./protocol/constants.js');
+const { PRICE_MAX } = require('../../protocol/constants.js');
 
 const PRICE_ZERO_VALIDITY_ACTIVATION = copy('price_zero_validity_activation.PRICE_ZERO_VALIDITY_ACTIVATION');
 

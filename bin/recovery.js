@@ -72,9 +72,9 @@ const eq      = require('../src/equivocation_header.js');
 const ccr     = require('../src/cross_chain_royalty_activation.js');
 const ar      = require('../src/anchor_reward_activation.js');
 const rca     = require('../src/rollcall_activation.js');
-const abas    = require('../src/archive_batch_author_activation.js');
+const gateRegistry = require('../src/consensus/gate_registry');
 const srb     = require('../src/snapshot_reorg_buffer.js');
-const cmsh    = require('../src/capability_min_stake_history.js');
+const cmsh    = require('../src/consensus/capability_min_stake_history.js');
 const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         ARCHIVE_HEAD_GATE_SQL, dedupeArchiveChunks,
         archiveChunkCoverage } = require('../src/actions/anchor/anchor_action_query.js');
@@ -203,7 +203,7 @@ class AnchorRecovery {
         let gate = await this.db.doQuery(ARCHIVE_HEAD_GATE_SQL, [Number(v1.match_batch_seq)]);
         let head = (gate && gate.length > 0) ? gate[0] : null;
         if(!head) return null;
-        if(!abas.isArchiveBatchAuthorActive(Number(head.block_index_doge), v1.network)) return null;
+        if(!gateRegistry.activeAt('archive_batch_author_activation.ARCHIVE_BATCH_AUTHOR_ACTIVATION', v1.network, null, Number(head.block_index_doge), null)) return null;
         return String(v1.source || '');
     }
 

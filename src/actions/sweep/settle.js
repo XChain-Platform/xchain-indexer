@@ -19,7 +19,7 @@
  *
  ********************************************************************/
 
-const sweepZeroLeg = require('../../sweep_zero_leg_activation.js');
+const gateRegistry = require('../../consensus/gate_registry');
 
 // Installed onto Sweep.prototype by sweep.js; each method runs with `this` bound to
 // the handler, exactly as the parse() code it came from.
@@ -179,9 +179,9 @@ module.exports = {
         // A held balance can be exactly 0 (a prior sweep already moved it, or the fee
         // debit above reduced it to nothing). Nothing moves for that tick, but the
         // zero-amount debit and credit rows land in the hashed ledger, so skipping
-        // them is a flag day (sweep_zero_leg_activation.js): below the height the
+        // them is a flag day (the sweep_zero_leg_activation row): below the height the
         // legs are written as before, at/above it the tick writes no leg.
-        let skipZeroLegs = sweepZeroLeg.isSweepZeroLegActive(data['BLOCK_INDEX'], this.config['NETWORK'], data['COIN']);
+        let skipZeroLegs = gateRegistry.activeAt('sweep_zero_leg_activation.SWEEP_ZERO_LEG_ACTIVATION', this.config['NETWORK'], data['COIN'], data['BLOCK_INDEX'], null);
         for(let { tick_id, tick } of settleTicks){
             let amount = balances[tick_id];
 

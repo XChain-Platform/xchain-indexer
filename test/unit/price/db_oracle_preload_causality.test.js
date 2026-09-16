@@ -12,7 +12,7 @@
  * test/unit/price/db_oracle_preload_causality.test.js
  *
  * VM oracle preload causality flag-day (see
- * src/oracle_preload_causality_activation.js). Every read in
+ * src/db/prices/oracle_preload_causality_gate.js). Every read in
  * db.getOracleDataForVM bounds itself on `reference_block <= blockCap` with
  * blockCap taken from the PROCESSING chain's height, while reference_block is a
  * BTC anchor on every row. On LTC and DOGE the local height sits far above any
@@ -39,7 +39,7 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../../fixtures/config');
 const Utility           = require('../../../src/utility');
 const Database          = require('../../../src/db');
-const pca               = require('../../../src/oracle_preload_causality_activation');
+const pca               = require('../../../src/db/prices/oracle_preload_causality_gate.js');
 
 // Two finalized rounds for one pair. Round 2 is anchored 10 BTC blocks later and
 // carries a consensus timestamp AFTER the block under test: it is the future

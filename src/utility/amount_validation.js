@@ -26,7 +26,7 @@
 // consensus timestamp so historical replay below the threshold is byte-identical.
 // Required here rather than taken from the entry: nothing purges it together with
 // utility.js, so the require cache hands this part the same object the entry would.
-const amountRepresentability = require('../amount_representability_activation.js');
+const amountRepresentability = require('./amount_representability_gate.js');
 
 // Installed onto Utility.prototype by ../utility.js, non-enumerable; each method runs with
 // `this` bound to the Utility instance, exactly as the class method it was.
@@ -70,7 +70,7 @@ module.exports = {
         // the one that was validated - while '1e-1' passes on an indivisible tick and
         // credits 0, and a 43-digit integer passes but overflows the DECIMAL(60,18)
         // aggregation the supply sums cast to. Gated per chain on the block's consensus
-        // timestamp (amount_representability_activation.js): below the threshold this is
+        // timestamp (utility/amount_representability_gate.js): below the threshold this is
         // inert and historical replay is byte-identical. Placed FIRST and as an early
         // return false so the gate can only ever reject more than the legacy body, never
         // accept more. NOT yet mirrored in xchain-sdk/src/utils/utility.js, on purpose: a client

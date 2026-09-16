@@ -37,8 +37,8 @@ const PK_C = 'c'.repeat(64);
 const { createMockIndexer, createBaseData } = require('../../../fixtures/mocks');
 const Attest          = require('../../../../src/actions/attest/index.js');
 const swq             = require('../../../../src/stake_weighted_quorum.js');
-const attestAdmission = require('../../../../src/attest_admission_activation.js');
-const attestBcastFee  = require('../../../../src/attest_broadcast_fee_activation.js');
+const { stubActiveAt } = require('../../../helpers/gate_modules.js');
+const attestBcastFee  = require('../../../../src/actions/attest/attest_broadcast_fee_gate.js');
 const arm             = require('../../../../src/attest_response_mirror_activation.js');
 // The SAME module object actions/attest.js closed over at require time, which is
 // what makes a sinon stub here reach inside the handler.
@@ -89,7 +89,7 @@ describe('ATTEST v0 admission: the rules-aware REDUNDANCY literal @regression @t
         sinon.stub(attestBcastFee, 'isAttestBroadcastFeeActive').returns(false);
         sinon.stub(arm, 'isResponseMirrorActive').returns(false);
         // The gate this row's literal lives behind.
-        sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(true);
+        stubActiveAt(sinon, 'attest_admission_activation.ATTEST_ADMISSION_ACTIVATION', true);
     });
 
     afterEach(function () { sinon.restore(); });
@@ -147,7 +147,7 @@ describe('ATTEST v0 admission: the rules-aware REDUNDANCY literal @regression @t
         sinon.stub(attestBcastFee, 'isAttestBroadcastFeeActive').returns(false);
         sinon.stub(arm, 'isResponseMirrorActive').returns(false);
         // The gate this row's literal lives behind.
-        sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(true);
+        stubActiveAt(sinon, 'attest_admission_activation.ATTEST_ADMISSION_ACTIVATION', true);
     });
 
     afterEach(function () { sinon.restore(); });
@@ -196,7 +196,7 @@ describe('ATTEST v0 admission: the rules-aware REDUNDANCY literal @regression @t
         sinon.stub(attestBcastFee, 'isAttestBroadcastFeeActive').returns(false);
         sinon.stub(arm, 'isResponseMirrorActive').returns(false);
         // The gate this row's literal lives behind.
-        sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(true);
+        stubActiveAt(sinon, 'attest_admission_activation.ATTEST_ADMISSION_ACTIVATION', true);
     });
 
     afterEach(function () { sinon.restore(); });

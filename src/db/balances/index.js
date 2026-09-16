@@ -22,7 +22,7 @@
 // Load required libraries
 const mariadb = require('mariadb');
 const path    = require('path');
-const ledgerPrecision = require('../../ledger_amount_precision_activation');
+const ledgerPrecision = require('../../consensus/ledger_amount_precision_gate');
 
 const { getLogger } = require('../../observability/index.js');
 module.exports = {
@@ -35,7 +35,7 @@ module.exports = {
         // Sum at the EXACT ledger scale (18 dp) and round ONCE at the tick's own scale,
         // the shape sanityCheck's balances projection uses. A per-row cast to the tick's
         // decimals is round(A)+round(B), which is not round(A+B) once the ledger carries
-        // amounts finer than the tick (ledger_amount_precision_activation.js).
+        // amounts finer than the tick (consensus/ledger_amount_precision_gate.js).
         let query = `SELECT ` + ledgerPrecision.exactSumSql('amount') + ` as supply FROM balances WHERE tick_id=? LIMIT 1`;
         let results = await this.doQuery(query, [tick_id]);
         // bcstr keeps the STRING contract this helper always had: a bare bignumber

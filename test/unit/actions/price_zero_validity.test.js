@@ -41,7 +41,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 
-const priceRange = require('../../../src/price_zero_validity_activation.js');
+const priceRange = require('../../../src/actions/price/price_zero_validity_gate.js');
 
 const {
     TESTNET_GATE, usePriceRangeHarness,

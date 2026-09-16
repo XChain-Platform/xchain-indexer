@@ -21,7 +21,7 @@
  *
  ********************************************************************/
 
-const priceRange = require('../../price_zero_validity_activation.js');
+const priceRange = require('./price_zero_validity_gate.js');
 
 // Every v1 field rule, in order. Returns the error chain.
 function validatePriceV1(config, util, params, data, error){

@@ -248,8 +248,7 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
         // this one only had a self-referential read. Assert equality so a one-sided re-timing of
         // the cohort reddens CI instead of forking the fleet in the gap window.
         const pc  = require('../../../../src/protocol_changes.js');
-        const dcm = require('../../../../src/dispense_cancelling_match_activation.js');
-        assert.strictEqual(dcm.DISPENSE_CANCELLING_MATCH_ACTIVATION.mainnet, pc.VM_BANNED_ASYNC_MAINNET_TIME,
+        assert.strictEqual(pc.get('dispense_cancelling_match_activation.DISPENSE_CANCELLING_MATCH_ACTIVATION').mainnet, pc.VM_BANNED_ASYNC_MAINNET_TIME,
             'DISPENSE_CANCELLING_MATCH_ACTIVATION.mainnet drifted from the coordinated 2.0.0 flag-day timestamp');
     });
 });

@@ -25,7 +25,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const { createBaseData } = require('../../../fixtures/mocks');
-const attestBcastFee = require('../../../../src/attest_broadcast_fee_activation.js');
+const attestBcastFee = require('../../../../src/actions/attest/attest_broadcast_fee_gate.js');
 const arm = require('../../../../src/attest_response_mirror_activation.js');
 // Same module instance Attest holds a reference to (Node module cache); stubbing
 // `verify` here controls signature acceptance inside the handler.

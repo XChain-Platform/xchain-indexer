@@ -28,7 +28,7 @@ const pricePair     = require('../../price_pair_activation.js');
 const priceScale    = require('../../price_scale_activation.js');
 const priceSigTally = require('../../price_sig_tally_activation.js');
 const priceV2       = require('./price_batch_compression.js');
-const priceRange    = require('../../price_zero_validity_activation.js');
+const priceRange    = require('./price_zero_validity_gate.js');
 const adm           = require('../../mirror_admission_activation.js');
 
 // 1. DECOMPRESSION, before anything else.

@@ -26,8 +26,8 @@ const { createMockIndexer, createBaseData } = require('../../../../../fixtures/m
 const Attest  = require('../../../../../../src/actions/attest/index.js');
 const avr     = require('../../../../../../src/actions/attest/attest_response_verify.js');
 const swq     = require('../../../../../../src/stake_weighted_quorum.js');
-const attestAdmission = require('../../../../../../src/attest_admission_activation.js');
-const attestBcastFee  = require('../../../../../../src/attest_broadcast_fee_activation.js');
+const { stubActiveAt } = require('../../../../../helpers/gate_modules.js');
+const attestBcastFee  = require('../../../../../../src/actions/attest/attest_broadcast_fee_gate.js');
 // Same module instance the handler (and the extracted verifier) hold: wrapping
 // `verify` here observes the exact canonical Buffer both are handed.
 const ed25519 = require('../../../../../../src/consensus/ed25519.js');
@@ -98,7 +98,7 @@ function setupVectors() {
     // regtest arms every flag-day at genesis; pin the two that would otherwise move
     // a vector's branch out from under it. Each vector re-arms what it needs.
     sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
-    sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(false);
+    stubActiveAt(sinon, 'attest_admission_activation.ATTEST_ADMISSION_ACTIVATION', false);
     sinon.stub(attestBcastFee, 'isAttestBroadcastFeeActive').returns(false);
     // Same treatment for the response-mirror flag day, which regtest also arms at
     // genesis: at and above it the chain handler refuses an on-chain v1 before the

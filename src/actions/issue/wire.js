@@ -29,7 +29,7 @@
 // because the hub, SDK and explorer read the same maps; see the module headers.
 const tokenBridgeActivation = require('../../token_bridge_activation.js');
 const tokenPolicyActivation = require('../../token_policy_activation.js');
-const tickNamespaceActivation = require('../../tick_namespace_activation.js');
+const gateRegistry = require('../../consensus/gate_registry');
 
 // The flag days, the FORMAT gate and the positional PARAMS. Returns the context: the
 // FORMAT, the (possibly replaced) data object, the verdict so far and the three flags.
@@ -45,7 +45,7 @@ async function parseWire(params, data, error){
     // The tick-namespace flag day has its OWN constant, not the bridge's: the
     // bridge arms only after its own cross-check, and the namespace has to close
     // before anyone squats a future chain root, not after.
-    let namespaceActive   = tickNamespaceActivation.isTickNamespaceActive(data['BLOCK_INDEX'], this.config['NETWORK']);
+    let namespaceActive   = gateRegistry.activeAt('tick_namespace_activation.TICK_NAMESPACE_ACTIVATION', this.config['NETWORK'], null, data['BLOCK_INDEX'], null);
 
     // Format 7 does not exist below TOKEN_BRIDGE_ACTIVATION: it falls through to the
     // same 'invalid: VERSION (unknown)' an unknown version has always produced, so a

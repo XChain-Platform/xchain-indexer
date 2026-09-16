@@ -2,13 +2,8 @@
   "version": 1,
   "entries": {
     "amount_representability_activation": {
-      "path": "src/amount_representability_activation.js",
+      "path": "src/utility/amount_representability_gate.js",
       "hash": "0d4f17a80235e5e8ce6d5069cf87ff438d291f021f2e10ef8f4e17b7bbb8121a",
-      "twins": []
-    },
-    "anchor_activation": {
-      "path": "src/anchor_activation.js",
-      "hash": "300c843933b74fcd28768ef7a79fd355e01368723e13d266885d5f943a5edffe",
       "twins": []
     },
     "anchor_reward_activation": {
@@ -18,16 +13,6 @@
         "xchain-hub"
       ]
     },
-    "archive_batch_author_activation": {
-      "path": "src/archive_batch_author_activation.js",
-      "hash": "2e4e759932763e9c8349f323633a4368662a48361479e4c64c1ae450391654bd",
-      "twins": []
-    },
-    "archive_head_unverified_gate_activation": {
-      "path": "src/archive_head_unverified_gate_activation.js",
-      "hash": "cba1b2a65db10f339a8422e4d1b7c53dc745406c8e20273483ee3d5362b571f0",
-      "twins": []
-    },
     "archive_rollback_author_scope_activation": {
       "path": "src/archive_rollback_author_scope_activation.js",
       "hash": "9f65819d7885209579a3deee1aaf7bc6363895779d0d599c76191d51e5762d46",
@@ -35,13 +20,8 @@
         "xchain-sync"
       ]
     },
-    "attest_admission_activation": {
-      "path": "src/attest_admission_activation.js",
-      "hash": "f4e8d29aa4b553deb95c1e5a3b61f42cc5de18ad93cbd66271b48a027cda77ac",
-      "twins": []
-    },
     "attest_broadcast_fee_activation": {
-      "path": "src/attest_broadcast_fee_activation.js",
+      "path": "src/actions/attest/attest_broadcast_fee_gate.js",
       "hash": "e904e6dafb4783b370a46837e75338dfc389d9825c82d14a7f8b7bc308b07d60",
       "twins": []
     },
@@ -58,7 +38,7 @@
       "twins": []
     },
     "attest_request_cap_activation": {
-      "path": "src/attest_request_cap_activation.js",
+      "path": "src/actions/attest/attest_request_cap_gate.js",
       "hash": "ed391a6acf41e9e647ecadd126409e75c3176827ef148290547097f46e51edbe",
       "twins": []
     },
@@ -83,12 +63,12 @@
       "twins": []
     },
     "capability_min_stake_history": {
-      "path": "src/capability_min_stake_history.js",
+      "path": "src/consensus/capability_min_stake_history.js",
       "hash": "9773230b616e2aa3bc0f8414730de791ff5143a299a8934e9a90dbcf5bd19a85",
       "twins": []
     },
     "caret_ref_strict_activation": {
-      "path": "src/caret_ref_strict_activation.js",
+      "path": "src/db/database/caret_ref_strict_gate.js",
       "hash": "e42336cc0b14b9f8477fb0bd61111f6bde8de31a3239b3c1915f2aefeabcbb0d",
       "twins": []
     },
@@ -107,63 +87,18 @@
         "xchain-hub"
       ]
     },
-    "consolidation_leg_amount_activation": {
-      "path": "src/consolidation_leg_amount_activation.js",
-      "hash": "4d3e3b51ed21604a34936a8ff8700bf155cb49036c47919ea56705ba42ac1f31",
-      "twins": []
-    },
     "cross_chain_royalty_activation": {
       "path": "src/cross_chain_royalty_activation.js",
       "hash": "0cccc60ed315f24b2ef29db98c956db8dc7ebe927207fb46ea0fe837e07a0536",
       "twins": []
     },
-    "dispense_cancelling_match_activation": {
-      "path": "src/dispense_cancelling_match_activation.js",
-      "hash": "6c3f625ea9f2585484f4739a6f411450903ddb15b82c4b80287c573738c28da6",
-      "twins": []
-    },
     "dispense_payment_tally_scale_activation": {
-      "path": "src/dispense_payment_tally_scale_activation.js",
+      "path": "src/actions/dispense/dispense_payment_tally_scale_gate.js",
       "hash": "b40920ad55b0d54006349fd4e7beaa66b258e16530c4826057d829d45b86537f",
       "twins": []
     },
-    "dispenser_amount_positivity_activation": {
-      "path": "src/dispenser_amount_positivity_activation.js",
-      "hash": "fa30970ce72f8d2eb4aa05e99e3fbcdd4128237f5d6bb40b15db30e66fa775da",
-      "twins": []
-    },
-    "dispenser_caps_activation": {
-      "path": "src/dispenser_caps_activation.js",
-      "hash": "ff78410346f82dcc80f35c499c28a4c6a7278e322f7dc357dfe8ffd3d1210c0c",
-      "twins": []
-    },
-    "dispenser_freshness_activation": {
-      "path": "src/dispenser_freshness_activation.js",
-      "hash": "ebd23efbd9f93f50087281bcaa1f1c894e951a9931bf2277dd0a2f8a885d4574",
-      "twins": []
-    },
-    "dispenser_freshness_shape_activation": {
-      "path": "src/dispenser_freshness_shape_activation.js",
-      "hash": "f4d984d7f21657474047fe326900a353d1ff79059630b46160c09159e33f0c6d",
-      "twins": []
-    },
-    "dispenser_give_amount_activation": {
-      "path": "src/dispenser_give_amount_activation.js",
-      "hash": "13c910a3e77de6694930335de8e081d30d0f8a41c736a46b684bd102cdcd7e97",
-      "twins": []
-    },
-    "dispenser_oracle_price_activation": {
-      "path": "src/dispenser_oracle_price_activation.js",
-      "hash": "9ed6593f5f383332324a871b1c57269f5f6c0ded42adb8094cae12923968cf22",
-      "twins": []
-    },
-    "dispenser_ownership_cancel_activation": {
-      "path": "src/dispenser_ownership_cancel_activation.js",
-      "hash": "6f68bb072496130093e2da11c7fc97460667af8c0b68b7b61258a445ebd9372b",
-      "twins": []
-    },
     "dispenser_send_amount_compare_activation": {
-      "path": "src/dispenser_send_amount_compare_activation.js",
+      "path": "src/db/dispensers/dispenser_send_amount_compare_gate.js",
       "hash": "995b18a253e76cf3670f069e8da2b66ae493688cf601d199812cdf9f48ea9b8a",
       "twins": []
     },
@@ -174,13 +109,8 @@
         "xchain-sync"
       ]
     },
-    "gated_handoff_ref_activation": {
-      "path": "src/gated_handoff_ref_activation.js",
-      "hash": "d29054c67f7040064e3cb079469f97e977dffdbd197d0ced5591f119a7f6f1ec",
-      "twins": []
-    },
     "ledger_amount_precision_activation": {
-      "path": "src/ledger_amount_precision_activation.js",
+      "path": "src/consensus/ledger_amount_precision_gate.js",
       "hash": "a645487f51d7895e8a1b8c5d6546b68584d2037afe5c942f7148bfe9d036c51a",
       "twins": []
     },
@@ -189,39 +119,19 @@
       "hash": "404150ac7b5d65dd93cbab0c59ba6b9e1751e17ff356a038bfe943a00cb1db74",
       "twins": []
     },
-    "list_owner_activation": {
-      "path": "src/list_owner_activation.js",
-      "hash": "15ab8fb20aeb9def4a98d15ddd43aedfe4c284701fff8cd90e7e1656eaf88347",
-      "twins": []
-    },
     "mirror_admission_activation": {
       "path": "src/mirror_admission_activation.js",
       "hash": "ff9dacf3d0abc1037361c4265f5a324d1bc0965b078e528df55da4320f981a85",
       "twins": []
     },
     "oracle_preload_causality_activation": {
-      "path": "src/oracle_preload_causality_activation.js",
+      "path": "src/db/prices/oracle_preload_causality_gate.js",
       "hash": "7ec32753dd425897a23dd2bc471324c75576a1b14738353db0024aca36b690e5",
-      "twins": []
-    },
-    "oracle_snapshot_age_causality_activation": {
-      "path": "src/oracle_snapshot_age_causality_activation.js",
-      "hash": "e04c1035a6409d13f16fd48e8060d61b38ed77ddfb7e050eced2788e25599206",
-      "twins": []
-    },
-    "oracle_stale_round_visibility_activation": {
-      "path": "src/oracle_stale_round_visibility_activation.js",
-      "hash": "3c744566ffbe96e5fcdeb006c1317ba9c1f47716b18b08fca756ad115d4dae3e",
       "twins": []
     },
     "price_batching_floor_activation": {
       "path": "src/price_batching_floor_activation.js",
       "hash": "b58de6c4d13f4f23a238cf24c6d038dc063ab2f0e21f319684bc22193b7cc8ad",
-      "twins": []
-    },
-    "price_fee_batch_landed_activation": {
-      "path": "src/price_fee_batch_landed_activation.js",
-      "hash": "fdbae1425a61847c57a370a74156fb6552cdf45ead0a328bb2a95603b229525f",
       "twins": []
     },
     "price_pair_activation": {
@@ -244,7 +154,7 @@
       ]
     },
     "price_zero_validity_activation": {
-      "path": "src/price_zero_validity_activation.js",
+      "path": "src/actions/price/price_zero_validity_gate.js",
       "hash": "e7fd7246ba29412363bdcb46936e3855664b96f6a932265f62912b5faa738998",
       "twins": []
     },
@@ -276,13 +186,8 @@
       "twins": []
     },
     "slash_grid_activation": {
-      "path": "src/slash_grid_activation.js",
+      "path": "src/db/contracts/slash_grid_gate.js",
       "hash": "546cdc63d9916b8f304fac09dcb593f8ad1c92129362082b75fec41a922fdcab",
-      "twins": []
-    },
-    "slash_ledger_consolidation_activation": {
-      "path": "src/slash_ledger_consolidation_activation.js",
-      "hash": "a99a1990d12e8829a69f81e8609d4f02c60709ab1dacb859160aae4be85d9324",
       "twins": []
     },
     "snapshot_reorg_buffer": {
@@ -291,11 +196,6 @@
       "twins": [
         "xchain-hub"
       ]
-    },
-    "stake_key_reuse_activation": {
-      "path": "src/stake_key_reuse_activation.js",
-      "hash": "813191061c19052917f3ba5935126428875805958ece4e9197053f1bcdcdfee9",
-      "twins": []
     },
     "stake_weight_collation_activation": {
       "path": "src/stake_weight_collation_activation.js",
@@ -339,22 +239,12 @@
         "xchain-sync"
       ]
     },
-    "sweep_zero_leg_activation": {
-      "path": "src/sweep_zero_leg_activation.js",
-      "hash": "ecf926127c424f666f74d6ddbbc3ae1f3d147348b9caf9e9a1c2d64167388b3e",
-      "twins": []
-    },
     "swq_source_cap_activation": {
       "path": "src/swq_source_cap_activation.js",
       "hash": "07148486fb1f8869168eadcc08701cab41a275c90eff873df28b2feac2cfa0ef",
       "twins": [
         "xchain-sync"
       ]
-    },
-    "tick_namespace_activation": {
-      "path": "src/tick_namespace_activation.js",
-      "hash": "140b4b2b6a9332ca717487dd2560b927e5b35b324537b8e47148f681746efc5d",
-      "twins": []
     },
     "token_bridge_activation": {
       "path": "src/token_bridge_activation.js",
@@ -376,21 +266,6 @@
       "twins": [
         "xchain-sync"
       ]
-    },
-    "vm_deploy_lint_pkg3_activation": {
-      "path": "src/vm_deploy_lint_pkg3_activation.js",
-      "hash": "561cf979c214e7f1c9494bdeb87b58110fb4497e647aeabd3546fe9428f1e653",
-      "twins": []
-    },
-    "vm_exec_lint_activation": {
-      "path": "src/vm_exec_lint_activation.js",
-      "hash": "e0a5fa76ce744f590fbc07514f353788d6f6a84690870926c22f1e2c918c1531",
-      "twins": []
-    },
-    "vm_lint_global_alias_activation": {
-      "path": "src/vm_lint_global_alias_activation.js",
-      "hash": "771c0c87cea8d64b69ee378efc5d6b629e65b1f77bdad39e8c145a2e454ac393",
-      "twins": []
     },
     "xchain_bridge_activation": {
       "path": "src/xchain_bridge_activation.js",
@@ -1394,6 +1269,302 @@
       "to": "194eb2ac5f79b28b9a9df1f65c117fe8b03704f7ece8ef8e2e125b14e0356d1c",
       "reason": "registry conversion (rows 12, 13, 14)",
       "date": "2026-09-16"
+    },
+    {
+      "id": "anchor_activation",
+      "from": "300c843933b74fcd28768ef7a79fd355e01368723e13d266885d5f943a5edffe",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "archive_batch_author_activation",
+      "from": "2e4e759932763e9c8349f323633a4368662a48361479e4c64c1ae450391654bd",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "archive_head_unverified_gate_activation",
+      "from": "cba1b2a65db10f339a8422e4d1b7c53dc745406c8e20273483ee3d5362b571f0",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "attest_admission_activation",
+      "from": "f4e8d29aa4b553deb95c1e5a3b61f42cc5de18ad93cbd66271b48a027cda77ac",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "consolidation_leg_amount_activation",
+      "from": "4d3e3b51ed21604a34936a8ff8700bf155cb49036c47919ea56705ba42ac1f31",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "dispense_cancelling_match_activation",
+      "from": "6c3f625ea9f2585484f4739a6f411450903ddb15b82c4b80287c573738c28da6",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "dispenser_amount_positivity_activation",
+      "from": "fa30970ce72f8d2eb4aa05e99e3fbcdd4128237f5d6bb40b15db30e66fa775da",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "dispenser_caps_activation",
+      "from": "ff78410346f82dcc80f35c499c28a4c6a7278e322f7dc357dfe8ffd3d1210c0c",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "dispenser_freshness_activation",
+      "from": "ebd23efbd9f93f50087281bcaa1f1c894e951a9931bf2277dd0a2f8a885d4574",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "dispenser_freshness_shape_activation",
+      "from": "f4d984d7f21657474047fe326900a353d1ff79059630b46160c09159e33f0c6d",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "dispenser_give_amount_activation",
+      "from": "13c910a3e77de6694930335de8e081d30d0f8a41c736a46b684bd102cdcd7e97",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "dispenser_oracle_price_activation",
+      "from": "9ed6593f5f383332324a871b1c57269f5f6c0ded42adb8094cae12923968cf22",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "dispenser_ownership_cancel_activation",
+      "from": "6f68bb072496130093e2da11c7fc97460667af8c0b68b7b61258a445ebd9372b",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "gated_handoff_ref_activation",
+      "from": "d29054c67f7040064e3cb079469f97e977dffdbd197d0ced5591f119a7f6f1ec",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "list_owner_activation",
+      "from": "15ab8fb20aeb9def4a98d15ddd43aedfe4c284701fff8cd90e7e1656eaf88347",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "oracle_snapshot_age_causality_activation",
+      "from": "e04c1035a6409d13f16fd48e8060d61b38ed77ddfb7e050eced2788e25599206",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "oracle_stale_round_visibility_activation",
+      "from": "3c744566ffbe96e5fcdeb006c1317ba9c1f47716b18b08fca756ad115d4dae3e",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "price_fee_batch_landed_activation",
+      "from": "fdbae1425a61847c57a370a74156fb6552cdf45ead0a328bb2a95603b229525f",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "slash_ledger_consolidation_activation",
+      "from": "a99a1990d12e8829a69f81e8609d4f02c60709ab1dacb859160aae4be85d9324",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "stake_key_reuse_activation",
+      "from": "813191061c19052917f3ba5935126428875805958ece4e9197053f1bcdcdfee9",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "sweep_zero_leg_activation",
+      "from": "ecf926127c424f666f74d6ddbbc3ae1f3d147348b9caf9e9a1c2d64167388b3e",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "tick_namespace_activation",
+      "from": "140b4b2b6a9332ca717487dd2560b927e5b35b324537b8e47148f681746efc5d",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "vm_deploy_lint_pkg3_activation",
+      "from": "561cf979c214e7f1c9494bdeb87b58110fb4497e647aeabd3546fe9428f1e653",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "vm_exec_lint_activation",
+      "from": "e0a5fa76ce744f590fbc07514f353788d6f6a84690870926c22f1e2c918c1531",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "vm_lint_global_alias_activation",
+      "from": "771c0c87cea8d64b69ee378efc5d6b629e65b1f77bdad39e8c145a2e454ac393",
+      "to": null,
+      "reason": "W4 consolidation (row 18)",
+      "date": "2026-09-16"
+    },
+    {
+      "id": "amount_representability_activation",
+      "from": "0d4f17a80235e5e8ce6d5069cf87ff438d291f021f2e10ef8f4e17b7bbb8121a",
+      "to": "0d4f17a80235e5e8ce6d5069cf87ff438d291f021f2e10ef8f4e17b7bbb8121a",
+      "path": {
+        "from": "src/amount_representability_activation.js",
+        "to": "src/utility/amount_representability_gate.js"
+      },
+      "date": "2026-09-16",
+      "reason": "W4 consolidation (row 18)"
+    },
+    {
+      "id": "attest_broadcast_fee_activation",
+      "from": "e904e6dafb4783b370a46837e75338dfc389d9825c82d14a7f8b7bc308b07d60",
+      "to": "e904e6dafb4783b370a46837e75338dfc389d9825c82d14a7f8b7bc308b07d60",
+      "path": {
+        "from": "src/attest_broadcast_fee_activation.js",
+        "to": "src/actions/attest/attest_broadcast_fee_gate.js"
+      },
+      "date": "2026-09-16",
+      "reason": "W4 consolidation (row 18)"
+    },
+    {
+      "id": "attest_request_cap_activation",
+      "from": "ed391a6acf41e9e647ecadd126409e75c3176827ef148290547097f46e51edbe",
+      "to": "ed391a6acf41e9e647ecadd126409e75c3176827ef148290547097f46e51edbe",
+      "path": {
+        "from": "src/attest_request_cap_activation.js",
+        "to": "src/actions/attest/attest_request_cap_gate.js"
+      },
+      "date": "2026-09-16",
+      "reason": "W4 consolidation (row 18)"
+    },
+    {
+      "id": "caret_ref_strict_activation",
+      "from": "e42336cc0b14b9f8477fb0bd61111f6bde8de31a3239b3c1915f2aefeabcbb0d",
+      "to": "e42336cc0b14b9f8477fb0bd61111f6bde8de31a3239b3c1915f2aefeabcbb0d",
+      "path": {
+        "from": "src/caret_ref_strict_activation.js",
+        "to": "src/db/database/caret_ref_strict_gate.js"
+      },
+      "date": "2026-09-16",
+      "reason": "W4 consolidation (row 18)"
+    },
+    {
+      "id": "dispense_payment_tally_scale_activation",
+      "from": "b40920ad55b0d54006349fd4e7beaa66b258e16530c4826057d829d45b86537f",
+      "to": "b40920ad55b0d54006349fd4e7beaa66b258e16530c4826057d829d45b86537f",
+      "path": {
+        "from": "src/dispense_payment_tally_scale_activation.js",
+        "to": "src/actions/dispense/dispense_payment_tally_scale_gate.js"
+      },
+      "date": "2026-09-16",
+      "reason": "W4 consolidation (row 18)"
+    },
+    {
+      "id": "dispenser_send_amount_compare_activation",
+      "from": "995b18a253e76cf3670f069e8da2b66ae493688cf601d199812cdf9f48ea9b8a",
+      "to": "995b18a253e76cf3670f069e8da2b66ae493688cf601d199812cdf9f48ea9b8a",
+      "path": {
+        "from": "src/dispenser_send_amount_compare_activation.js",
+        "to": "src/db/dispensers/dispenser_send_amount_compare_gate.js"
+      },
+      "date": "2026-09-16",
+      "reason": "W4 consolidation (row 18)"
+    },
+    {
+      "id": "ledger_amount_precision_activation",
+      "from": "a645487f51d7895e8a1b8c5d6546b68584d2037afe5c942f7148bfe9d036c51a",
+      "to": "a645487f51d7895e8a1b8c5d6546b68584d2037afe5c942f7148bfe9d036c51a",
+      "path": {
+        "from": "src/ledger_amount_precision_activation.js",
+        "to": "src/consensus/ledger_amount_precision_gate.js"
+      },
+      "date": "2026-09-16",
+      "reason": "W4 consolidation (row 18)"
+    },
+    {
+      "id": "oracle_preload_causality_activation",
+      "from": "7ec32753dd425897a23dd2bc471324c75576a1b14738353db0024aca36b690e5",
+      "to": "7ec32753dd425897a23dd2bc471324c75576a1b14738353db0024aca36b690e5",
+      "path": {
+        "from": "src/oracle_preload_causality_activation.js",
+        "to": "src/db/prices/oracle_preload_causality_gate.js"
+      },
+      "date": "2026-09-16",
+      "reason": "W4 consolidation (row 18)"
+    },
+    {
+      "id": "price_zero_validity_activation",
+      "from": "e7fd7246ba29412363bdcb46936e3855664b96f6a932265f62912b5faa738998",
+      "to": "e7fd7246ba29412363bdcb46936e3855664b96f6a932265f62912b5faa738998",
+      "path": {
+        "from": "src/price_zero_validity_activation.js",
+        "to": "src/actions/price/price_zero_validity_gate.js"
+      },
+      "date": "2026-09-16",
+      "reason": "W4 consolidation (row 18)"
+    },
+    {
+      "id": "slash_grid_activation",
+      "from": "546cdc63d9916b8f304fac09dcb593f8ad1c92129362082b75fec41a922fdcab",
+      "to": "546cdc63d9916b8f304fac09dcb593f8ad1c92129362082b75fec41a922fdcab",
+      "path": {
+        "from": "src/slash_grid_activation.js",
+        "to": "src/db/contracts/slash_grid_gate.js"
+      },
+      "date": "2026-09-16",
+      "reason": "W4 consolidation (row 18)"
+    },
+    {
+      "id": "capability_min_stake_history",
+      "from": "9773230b616e2aa3bc0f8414730de791ff5143a299a8934e9a90dbcf5bd19a85",
+      "to": "9773230b616e2aa3bc0f8414730de791ff5143a299a8934e9a90dbcf5bd19a85",
+      "path": {
+        "from": "src/capability_min_stake_history.js",
+        "to": "src/consensus/capability_min_stake_history.js"
+      },
+      "date": "2026-09-16",
+      "reason": "W4 consolidation (row 18)"
     }
   ]
 }

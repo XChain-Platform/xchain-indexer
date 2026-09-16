@@ -246,6 +246,9 @@ describe('armed_map/fingerprint_v2: temp-tree falsification of armed values (des
 });
 
 const GUARD = 'test/unit/consensus/armed_map/manifest.test.js';
+// The guard resolves the W4-moved gate modules through this helper, so a copy
+// that runs the guard needs the helper beside it at the same relative depth.
+const GATE_HELPER = 'test/helpers/gate_modules.js';
 const PARTS = 'src/protocol_changes';
 
 // The part file that declares `key`, relative to the repo root: the falsification
@@ -269,7 +272,7 @@ function runGuard(dir) {
 // part file, and the build that reads it throws at boot: a guard that is red
 // on both sides proves nothing, and a shim that read undefined would be worse.
 function deletedRowCase(key, shimRel) {
-    const dir = makeTree({ extra: [GUARD] });
+    const dir = makeTree({ extra: [GUARD, GATE_HELPER] });
     const green = runGuard(dir);
     assert.strictEqual(green.status, 0, 'guard must be green on the unmodified copy: ' + green.stdout + green.stderr);
     const part = path.join(dir, partDeclaring(key));

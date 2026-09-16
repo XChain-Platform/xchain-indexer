@@ -19,7 +19,7 @@
  *
  ********************************************************************/
 
-const ledgerPrecision = require('../../ledger_amount_precision_activation');
+const ledgerPrecision = require('../../consensus/ledger_amount_precision_gate');
 
 // The escrow-holding kinds getAddressEscrows lists, in the order it lists them: the
 // type tag each row is reported under, and the query for the address's items of that

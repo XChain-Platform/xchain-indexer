@@ -61,12 +61,13 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('../../consensus/gate_registry');
 
 const CARET_REF_STRICT_ACTIVATION = copy('caret_ref_strict_activation.CARET_REF_STRICT_ACTIVATION');
 
 // Per-chain threshold with a network-wide fallback, byte-for-byte the lookup
-// stateHash.js and list_edit_resolution_activation.js use. A coin-less caller
+// stateHash.js and list_edit_resolution_activation.js use (the same lookup
+// activeAt() applies). A coin-less caller
 // (unit fixtures) falls through to the bare network key and stays inert on
 // mainnet/testnet, which is the safe side.
 function _activationThreshold(map, network, coin){

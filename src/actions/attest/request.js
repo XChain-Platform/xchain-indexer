@@ -21,8 +21,9 @@
 
 'use strict';
 
-const attestAdmission = require('../../attest_admission_activation.js');
-const attestRequestCap = require('../../attest_request_cap_activation.js');
+// The admission gate is a registry row read by literal key (W4).
+const gateRegistry = require('../../consensus/gate_registry');
+const attestRequestCap = require('./attest_request_cap_gate.js');
 // The rules-aware capability filter: drops a validator whose last rolled ROLLCALL
 // gate list does not cover the gates active at the request block. Inert on every
 // network whose ROLLCALL_GATES_ACTIVATION is null, where it never queries.
@@ -196,9 +197,9 @@ module.exports = {
         // LOCAL-HEIGHT plane: BLOCK_INDEX is this request's height on
         // its own chain, which is what this gate is defined against. It is deliberately
         // NOT the BTC-anchored plane the stake_weighted_quorum / price_sig_tally gates
-        // use; see attest_admission_activation.js for why the two differ and why the
-        // difference must not be "corrected" without its own flag-day.
-        if(!error && !relayOrigin && attestAdmission.isAttestAdmissionActive(data['BLOCK_INDEX'], this.config['NETWORK'])){
+        // use; the attest_admission_activation row's note in src/protocol_changes/ says why
+        // the two differ and why the difference must not be "corrected" without its own flag-day.
+        if(!error && !relayOrigin && gateRegistry.activeAt('attest_admission_activation.ATTEST_ADMISSION_ACTIVATION', this.config['NETWORK'], null, data['BLOCK_INDEX'], null)){
             // The rules-aware filter reports how many keys it removed
             // through this out-parameter; nothing else about the call moves.
             let gatesStats = {};
@@ -234,7 +235,7 @@ module.exports = {
     // that on a fee-bearing network; on testnet nothing is scarce, so the bound has
     // to be this rule. Refusal rather than deferral, because the action is already
     // in this block and there is no later block to carry it to - see the semantics
-    // note in attest_request_cap_activation.js, which also records what the refusal
+    // note in attest_request_cap_gate.js, which also records what the refusal
     // costs the author on a live chain: the emitting EXECUTE REVERTS (processEmission
     // throws on a non-'valid' emission), taking the under-cap siblings and the
     // execution's state writes with it, and no 'rejected' v0 row survives.

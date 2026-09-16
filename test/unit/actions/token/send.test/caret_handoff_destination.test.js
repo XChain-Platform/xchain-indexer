@@ -23,7 +23,8 @@ const sinon  = require('sinon');
 const { createMockIndexer } = require('../../../../fixtures/mocks');
 
 const Send = require('../../../../../src/actions/send/index.js');
-const gatedHandoffRef = require('../../../../../src/gated_handoff_ref_activation.js');
+const { stubActiveAt } = require('../../../../helpers/gate_modules.js');
+const HANDOFF_ROW = 'gated_handoff_ref_activation.GATED_HANDOFF_REF_ACTIVATION';
 const {
     SOURCE, DESTINATION, DEST2, makeActionsCtx, makeData, makeToken, makeBalances,
 } = require('./helpers/send_harness.js');
@@ -48,17 +49,15 @@ function handlerOn(network) {
     }));
 }
 
-// The pre-flag-day era is reached by pinning THIS key inert on a mainnet venue for
-// the duration of the call. Pinning only this key is deliberate: the venue keeps
-// every other mainnet gate send.js reads (consolidation_leg_amount) at the value the
-// fleet runs, so the legacy arm being compared against is the real one.
-const HOUSE_SENTINEL = 9999999999;
+// The pre-flag-day era is reached by answering THIS key inert on a mainnet venue for
+// the duration of the call (the registry row is frozen, so the read is stubbed).
+// Answering only this key is deliberate: the venue keeps every other mainnet gate
+// send.js reads (consolidation_leg_amount) at the value the fleet runs, so the legacy
+// arm being compared against is the real one.
 async function belowFlag(fn) {
-    const map   = gatedHandoffRef.GATED_HANDOFF_REF_ACTIVATION;
-    const saved = map.mainnet;
-    map.mainnet = HOUSE_SENTINEL;
+    const stub = stubActiveAt(sinon, HANDOFF_ROW, false);
     try { return await fn(); }
-    finally { map.mainnet = saved; }
+    finally { stub.restore(); }
 }
 
 // How the indexer's resolver answers a `^<id>`: to `addr`, or refused.

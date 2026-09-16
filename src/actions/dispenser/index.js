@@ -54,8 +54,7 @@
 // comparison that forces the DISPENSER family to resolve through the dispenser row.
 // Both are content pins on this FILE, not on the handler, so moving either block out
 // would retire a guard silently rather than fail.
-const dispenserFreshness = require('../../dispenser_freshness_activation.js');
-const dispenserFreshnessShape = require('../../dispenser_freshness_shape_activation.js');
+const gateRegistry = require('../../consensus/gate_registry');
 
 const contextPart = require('./context.js');
 const validatePart = require('./validate.js');
@@ -177,24 +176,25 @@ class Dispenser {
             let getPrefs = await this.indexerDb.getAddressPreferences(data['GET_ADDRESS'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
             if(Number(getPrefs['DISPENSER_PREFERENCE']) !== 2){
                 let isFresh = false;
-                // Freshness causality flag-day (see dispenser_freshness_activation.js).
+                // Freshness causality flag-day (see the dispenser_freshness_activation row in src/protocol_changes/).
                 // At/after the gate the verdict derives from
                 // deterministic indexer-local chain state (no XChain activity strictly
                 // before BLOCK_INDEX); the external utxo-tracker is NEVER consulted. Below
                 // the gate the legacy tracker HTTP path runs byte-identically so historical
                 // replay is preserved.
-                if(dispenserFreshness.isDispenserFreshnessLocalActive(data['BLOCK_INDEX'], this.config['NETWORK'], this.config['COIN'])){
+                if(gateRegistry.activeAt('dispenser_freshness_activation.DISPENSER_FRESHNESS_ACTIVATION', this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null)){
                     isFresh = !(await this.indexerDb.hasXChainActivityBefore(data['GET_ADDRESS'], data['BLOCK_INDEX']));
                 } else if(this.utxoTracker && this.utxoTracker.enabled){
                     try {
-                        // Oracle-shape flag-day (see dispenser_freshness_shape_activation.js).
+                        // Oracle-shape flag-day (the dispenser_freshness_shape_activation row).
                         // At/after it a non-null get_first_seen answer with no numeric height
                         // throws and the catch below reads as not fresh; below it that answer
                         // is the legacy null, which grants the exception. Passed in because
                         // the gate is keyed on this chain's block_index and the client has no
                         // block context.
-                        let strictShape = dispenserFreshnessShape.isDispenserFreshnessShapeStrict(
-                            data['BLOCK_INDEX'], this.config['NETWORK'], this.config['COIN']);
+                        let strictShape = gateRegistry.activeAt(
+                            'dispenser_freshness_shape_activation.DISPENSER_FRESHNESS_SHAPE_ACTIVATION',
+                            this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
                         let firstSeen = await this.utxoTracker.getFirstSeen(data['GET_ADDRESS'], { strictShape: strictShape });
                         isFresh = !firstSeen || firstSeen.height >= data['BLOCK_INDEX'];
                         // get_first_seen answers null both for "never appeared on chain"

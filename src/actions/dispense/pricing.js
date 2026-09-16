@@ -23,8 +23,8 @@
 
 'use strict';
 
-const dispenserAmountPositivity = require('../../dispenser_amount_positivity_activation.js');
-const tallyScaleActivation = require('../../dispense_payment_tally_scale_activation.js');
+const gateRegistry = require('../../consensus/gate_registry');
+const tallyScaleActivation = require('./dispense_payment_tally_scale_gate.js');
 
 // Installed onto Dispense.prototype by index.js; each method runs with `this`
 // bound to the handler, exactly as the inline code it was.
@@ -198,9 +198,10 @@ module.exports = {
             // Verify at least one unit can be dispensed (multiplier > 0). The legacy
             // reading tests equality, so a NEGATIVE count settles valid having skipped every
             // downstream guard, and the GIVE_REMAINING recompute then subtracts a negative
-            // (dispenser_amount_positivity_activation.js carries the chain and the gating
-            // argument). Guard the fill COUNT, not a price field: three producers feed it.
-            let rejectNonPositiveFill = dispenserAmountPositivity.isDispenserAmountPositivityActive(block_time, this.config['NETWORK']);
+            // (the dispenser_amount_positivity_activation row's note in src/protocol_changes/
+            // carries the chain and the gating argument). Guard the fill COUNT, not a price
+            // field: three producers feed it.
+            let rejectNonPositiveFill = gateRegistry.activeAt('dispenser_amount_positivity_activation.DISPENSER_AMOUNT_POSITIVITY_ACTIVATION', this.config['NETWORK'], null, null, block_time);
             if(!error && (rejectNonPositiveFill ? !this.util.bcgt(multiplier, '0') : multiplier == 0))
                 error = 'invalid: insufficient funds ';
 

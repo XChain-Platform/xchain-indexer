@@ -45,7 +45,8 @@ const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 const Issue                   = require('../../../src/actions/issue/index.js');
-const tickNamespaceActivation = require('../../../src/tick_namespace_activation.js');
+const { stubActiveAt }        = require('../../helpers/gate_modules.js');
+const TICK_NAMESPACE_ROW      = 'tick_namespace_activation.TICK_NAMESPACE_ACTIVATION';
 const { RESERVED_FUTURE_ROOTS, isReservedFutureRoot } = require('../../../src/consensus/reserved_roots.js');
 
 const OWNER = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
@@ -97,11 +98,9 @@ async function run({ params, existing = null, active = true, data = {}, coin = '
     indexer.indexerDb.getTickerId.resolves(FEE_TICK_ID);
     indexer.indexerDb.getAddressBalances.resolves({ [FEE_TICK_ID]: '100000000' });
 
-    // One `it` drives several ISSUEs, so the predicate is re-stubbed per call; sinon
-    // refuses to wrap an already-wrapped method, hence the explicit restore.
-    if(tickNamespaceActivation.isTickNamespaceActive.restore)
-        tickNamespaceActivation.isTickNamespaceActive.restore();
-    sinon.stub(tickNamespaceActivation, 'isTickNamespaceActive').returns(active);
+    // One `it` drives several ISSUEs, so the gate is re-answered per call; the helper
+    // re-uses the one activeAt stub rather than wrapping the method twice.
+    stubActiveAt(sinon, TICK_NAMESPACE_ROW, active);
 
     const handler = new Issue(makeActionsCtx(indexer));
     const d = createBaseData(Object.assign({ ACTION: 'ISSUE', FORMAT: Number(params[0]), BLOCK_INDEX: 500, SOURCE: OWNER }, data));

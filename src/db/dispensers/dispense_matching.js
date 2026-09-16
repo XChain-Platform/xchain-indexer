@@ -21,8 +21,8 @@
  *
  ********************************************************************/
 
-const dispenseCancellingMatch = require('../../dispense_cancelling_match_activation');
-const dispenserSendCompare = require('../../dispenser_send_amount_compare_activation');
+const gateRegistry = require('../../consensus/gate_registry');
+const dispenserSendCompare = require('./dispenser_send_amount_compare_gate');
 
 // The findMatchingDispensers query: valid dispensers for a coin at an address whose
 // latest status is open or cancelling. `latestStatusCorrelate` is the column the
@@ -59,7 +59,7 @@ module.exports = {
     // Handle finding any sends to an address with active dispenser(s)
     //
     // Affordability predicate (flag-day gated, see
-    // dispenser_send_amount_compare_activation.js). `sends.amount` and
+    // db/dispensers/dispenser_send_amount_compare_gate.js). `sends.amount` and
     // `dispensers.get_amount` are both VARCHAR(250), so the legacy
     // `s1.amount >= d1.get_amount` compares them as TEXT under the column
     // collation: get_amount '9' against a send of '10' is false as a string and
@@ -131,7 +131,7 @@ module.exports = {
         if(!this.util.isNull(tick_id)){
             where = ' AND d1.get_tick_id=?';
             args.push(tick_id);
-        } else if(dispenseCancellingMatch.isDispenseCancellingMatchActive(data['BLOCK_TIME'], this.config['NETWORK'])){
+        } else if(gateRegistry.activeAt('dispense_cancelling_match_activation.DISPENSE_CANCELLING_MATCH_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME'])){
             // Native-coin trigger: a bare native payment carries no COIN_TICK (only the
             // token-SEND channel sets it, utility.js), so tick_id is null. Without a
             // predicate the native branch left `where` empty and matched EVERY open
@@ -148,7 +148,7 @@ module.exports = {
             where = ' AND d1.get_tick_id IS NULL';
         }
         // Latest-status correlation column (flag-day gated, see
-        // dispense_cancelling_match_activation.js). The MAX(action_index) subquery must
+        // the dispense_cancelling_match_activation row in src/protocol_changes/). The MAX(action_index) subquery must
         // correlate on the DISPENSER's action index (d1.action_index), the idiom every
         // sibling query uses (getDispenserInfo / findDispenserSends / getSweepDestination /
         // findCancelledDispensers). The legacy predicate correlated on s1.action_index -
@@ -157,8 +157,8 @@ module.exports = {
         // writes a 'cancelling' row the dispenser matches nothing and the buyer's coin-paid
         // DISPENSE trigger is silently dropped. Correcting it changes how already-valid
         // blocks evaluate, so the legacy column is kept below the activation time.
-        let latestStatusCorrelate = dispenseCancellingMatch.isDispenseCancellingMatchActive(
-            data['BLOCK_TIME'], this.config['NETWORK']) ? 'd1.action_index' : 's1.action_index';
+        let latestStatusCorrelate = gateRegistry.activeAt('dispense_cancelling_match_activation.DISPENSE_CANCELLING_MATCH_ACTIVATION',
+            this.config['NETWORK'], null, null, data['BLOCK_TIME']) ? 'd1.action_index' : 's1.action_index';
         let query  = matchingDispensersSql(latestStatusCorrelate, where);
         let results = await this.doQuery(query, args);
         if(results.length > 0){

@@ -20,7 +20,7 @@
 
 'use strict';
 
-const dispenserCaps = require('../../dispenser_caps_activation.js');
+const gateRegistry = require('../../consensus/gate_registry');
 
 // Installed onto Dispenser.prototype by index.js; each method runs with `this`
 // bound to the handler, exactly as the inline code it was.
@@ -132,10 +132,10 @@ module.exports = {
         // like MAX_REFILLS below, so replay below the flag-day stays byte-identical.
         if(!error && format==2 && Number(dispenserInfo['GIVE_OWNERSHIP']||0)==1 &&
            !this.util.isNull(data['GIVE_ESCROW']) &&
-           dispenserCaps.isDispenserCapsActive(data['BLOCK_TIME'], this.config['NETWORK']))
+           gateRegistry.activeAt('dispenser_caps_activation.DISPENSER_CAPS_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']))
             error = "invalid: GIVE_ESCROW (must be empty when GIVE_OWNERSHIP=1)";
 
-        // MAX_REFILLS cap (see dispenser_caps_activation.js). A refill is a
+        // MAX_REFILLS cap (the dispenser_caps_activation row). A refill is a
         // format-2 DISPENSER_EDIT that tops up GIVE_ESCROW; each refill resets the
         // dispense count (derived since the last refill in dispense.js), and the 6th
         // refill is rejected (Counterparty parity). Rate/give-quantity are inherently
@@ -144,7 +144,7 @@ module.exports = {
         // dispenser-family cohort so historical replay stays byte-identical below it.
         if(!error && format==2 && !this.util.isNull(data['GIVE_ESCROW']) &&
            this.util.bcgt(data['GIVE_ESCROW'], 0) &&
-           dispenserCaps.isDispenserCapsActive(data['BLOCK_TIME'], this.config['NETWORK'])){
+           gateRegistry.activeAt('dispenser_caps_activation.DISPENSER_CAPS_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME'])){
             let refills = await this.indexerDb.getDispenserRefillCount(data['DISPENSER_ACTION_INDEX']);
             if(refills >= this.config['MAX_REFILLS'])
                 error = 'invalid: MAX_REFILLS (dispenser refill limit reached)';

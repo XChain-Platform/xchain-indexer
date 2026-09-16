@@ -106,7 +106,7 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
         });
 
         it('is the admission cap\'s own per-block figure, so it never throttles a legal rate', function () {
-            const caps = require('../../../../../src/attest_request_cap_activation.js');
+            const caps = require('../../../../../src/actions/attest/attest_request_cap_gate.js');
             const declared = require('../../../../../src/actions/attest/index.js').ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK;
             assert.strictEqual(declared, CAP, 'the cap the cases above spell out is the one the code carries');
             assert.strictEqual(declared, caps.ATTEST_REQUEST_CAPS.perBlock,

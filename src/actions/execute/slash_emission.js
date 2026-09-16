@@ -33,7 +33,7 @@
 
 'use strict';
 
-const slashLedgerConsolidation = require('../../slash_ledger_consolidation_activation.js');
+const gateRegistry = require('../../consensus/gate_registry');
 
 const { getLogger } = require('../../observability/index.js');
 
@@ -47,8 +47,8 @@ const { resolveSlashTarget } = require('./slash_target.js');
 // as repeated slash calls (protocol/contract-staking.md), so that collision is the
 // normal path, not a corner case. Gated: it changes stored ledger amounts.
 function slashConsolidationActive(data, slashLedger){
-    return slashLedgerConsolidation.isSlashLedgerConsolidationActive(
-        data['BLOCK_INDEX'], this.config['NETWORK'], this.config['COIN']) && slashLedger;
+    return gateRegistry.activeAt('slash_ledger_consolidation_activation.SLASH_LEDGER_CONSOLIDATION_ACTIVATION',
+        this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null) && slashLedger;
 }
 
 // Keyed on tickId, never on the wire spelling. createLedgerChangeRecord
@@ -94,7 +94,7 @@ async function applySlashReleases(data, target, deduction, consolidate, slashLed
 //   3. Write a slash_events row keyed by execution_index for audit + wallet UX.
 //   4. Accumulate this execution's slash ledger totals in `slashLedger` so a second
 //      same-token slash adds to the first instead of overwriting it (see the
-//      running-total note above and slash_ledger_consolidation_activation.js).
+//      running-total note above and the slash_ledger_consolidation_activation row in src/protocol_changes/).
 async function processSlashEmission(emission, data, slashPosition, slashLedger){
     let target = await resolveSlashTarget.call(this, emission, data);
     if(target === null) return;

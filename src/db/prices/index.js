@@ -24,7 +24,7 @@
 const path    = require('path');
 const priceLog = require('./price_log.js');
 const oracleVmSnapshot = require('./oracle_vm_snapshot.js');
-const batchLandedFee = require('../../price_fee_batch_landed_activation');
+const gateRegistry = require('../../consensus/gate_registry');
 const { getLogger } = require('../../observability/index.js');
 // Per-block cap on the ATTEST deadline-expiry sweep. Vendored
 // byte-identical from xchain-documentation/protocol/constants.js, same convention
@@ -84,7 +84,7 @@ module.exports = Object.assign({
     // both chain-derived unix seconds, so the check is deterministic across nodes and does
     // not false-trigger during historical backfill.
     //
-    // Landed-batch bound (price_fee_batch_landed_activation.js). At/after the height
+    // Landed-batch bound (the price_fee_batch_landed_activation row in src/protocol_changes/). At/after the height
     // the selection additionally requires the round's batch to have LANDED on chain at
     // or before this block's time, so a hub-connected node (whose mirror holds a round
     // a whole batch window before the batch carrying it is mined) and a chain-only node
@@ -97,8 +97,8 @@ module.exports = Object.assign({
         // block time. Armed with no such time available the read FAILS CLOSED (no price)
         // rather than answering from the unbounded selection, which is the fork this gate
         // closes; every consensus caller passes opts.blockTime.
-        let landedActive = batchLandedFee.isPriceFeeBatchLandedActive(
-            blockHeight, this.config['NETWORK'], this.config['COIN']);
+        let landedActive = gateRegistry.activeAt('price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION',
+            this.config['NETWORK'], this.config['COIN'], blockHeight, null);
         let landedTime   = opts ? Number(opts.blockTime) : NaN;
         if(landedActive && !Number.isFinite(landedTime)){
             if(!this._batchLandedNoTimeWarned){

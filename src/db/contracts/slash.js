@@ -21,7 +21,7 @@
  *
  ********************************************************************/
 
-const slashGrid = require('../../slash_grid_activation');
+const slashGrid = require('./slash_grid_gate');
 
 module.exports = {
 
@@ -54,7 +54,7 @@ module.exports = {
         // precision so an >8-dp token isn't truncated mid-deduction (which would leave dust unslashed
         // or corrupt the residual stake). XCHAIN(8) math is unchanged (item 5303).
         let dec = await this.getTokenDecimalPrecision(tickId);
-        // Conserve value across the deduction (flag-day, slash_grid_activation.js). Rounding
+        // Conserve value across the deduction (flag-day, db/contracts/slash_grid_gate.js). Rounding
         // the row write and the credit SEPARATELY at `dec` lets them disagree: HALF-UP at
         // decimals=0 turns a '0.5' slash of a '1' row into an unchanged row and a full-unit
         // credit. Floor the request onto the tick's grid ONCE (a punishment may not grow on

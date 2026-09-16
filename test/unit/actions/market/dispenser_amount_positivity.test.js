@@ -8,7 +8,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// Dispenser amount-positivity flag-day (dispenser_amount_positivity_activation.js).
+// Dispenser amount-positivity flag-day (the dispenser_amount_positivity_activation row).
 //
 // Every gated case carries its own FAILURE-REPRODUCING CONTROL: the same input with
 // the gate forced off, asserted to still produce the ORIGINAL defective outcome. A
@@ -23,7 +23,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 const { createBaseData } = require('../../../fixtures/mocks');
 const {
-    activation, GATE_OFF_NETWORK, OWNER_ADDR, BLOCK_TIME, EXPIRATION,
+    GATE_OFF_NETWORK, OWNER_ADDR, BLOCK_TIME, EXPIRATION,
     makeDispenser, freshDispenserCreateSuite,
 } = require('./dispenser_amount_positivity.test/helpers/dispenser_amount_positivity_suite.js');
 
@@ -46,41 +46,6 @@ async function createWithGetAmount(getAmount, opts = {}) {
     const data = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
     await dispenser.parse(params, data, false);
     return data['STATUS'];
-}
-
-function activationModuleCases() {
-    it('mainnet is ARMED AT GENESIS by the 2026-09-09 ruling', function () {
-        // 0 dispensers and 0 dispenses on mainnet (measured 2026-09-09), so both
-        // enforcement points are identity over the indexed history.
-        assert.strictEqual(activation.DISPENSER_AMOUNT_POSITIVITY_ACTIVATION.mainnet, 0);
-        // Either sentinel reads back as "still unarmed" at the GoLiveGate.
-        assert.notStrictEqual(activation.DISPENSER_AMOUNT_POSITIVITY_ACTIVATION.mainnet, 9999999999);
-        assert.notStrictEqual(activation.DISPENSER_AMOUNT_POSITIVITY_ACTIVATION.mainnet, 999999999);
-        assert.strictEqual(activation.isDispenserAmountPositivityActive(0, 'mainnet'), true);
-        assert.strictEqual(activation.isDispenserAmountPositivityActive(BLOCK_TIME, 'mainnet'), true);
-    });
-
-    it('testnet and regtest run from genesis', function () {
-        assert.strictEqual(activation.isDispenserAmountPositivityActive(0, 'testnet'), true);
-        assert.strictEqual(activation.isDispenserAmountPositivityActive(0, 'regtest'), true);
-    });
-
-    it('an unknown network and a non-finite blockTime both read as off', function () {
-        assert.strictEqual(activation.isDispenserAmountPositivityActive(BLOCK_TIME, GATE_OFF_NETWORK), false);
-        assert.strictEqual(activation.isDispenserAmountPositivityActive('nonsense', 'regtest'), false);
-    });
-
-    it('the threshold binds at its own instant, not after it', function () {
-        const map = activation.DISPENSER_AMOUNT_POSITIVITY_ACTIVATION;
-        const saved = map.testnet;
-        map.testnet = 1700000000;
-        try {
-            assert.strictEqual(activation.isDispenserAmountPositivityActive(1699999999, 'testnet'), false);
-            assert.strictEqual(activation.isDispenserAmountPositivityActive(1700000000, 'testnet'), true);
-        } finally {
-            map.testnet = saved;
-        }
-    });
 }
 
 function nativeCoinPriceCases() {
@@ -140,7 +105,6 @@ function nativeCoinPriceBoundaryCases() {
 }
 
 describe('Dispenser amount positivity @regression @tier2', function () {
-    describe('activation module', activationModuleCases);
     describe('DISPENSER create: native-coin GET_AMOUNT', nativeCoinPriceCases);
     describe('DISPENSER create: native-coin GET_AMOUNT', nativeCoinPriceBoundaryCases);
 });

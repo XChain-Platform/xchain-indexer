@@ -19,7 +19,7 @@
  *
  ********************************************************************/
 
-const consolidationLegAmount = require('../../consolidation_leg_amount_activation.js');
+const gateRegistry = require('../../consensus/gate_registry');
 
 // Installed onto Send.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
@@ -102,14 +102,14 @@ module.exports = {
     // so it reaches the per-leg format check below instead of being summed into a total that
     // passes. bcadd formats to the tick's DECIMALS, so two 0.5 legs of a 0-decimals token
     // merged to '1' and settled while either leg alone was rejected. Gated per chain
-    // (consolidation_leg_amount_activation.js): below the threshold the legacy key and merge
+    // (the consolidation_leg_amount_activation row in src/protocol_changes/): below the threshold the legacy key and merge
     // run unchanged and historical replay stays byte-identical.
     //
     // Above the threshold BOTH key shapes are prefixed ('k' merge key, 'i' held-out leg), so a
     // DESTINATION chosen to spell a held-out leg's key cannot collide with one. Prefixing every
     // key uniformly leaves insertion order (and so the emitted record order) unchanged.
     consolidateSendLegs(sends, ticks, data){
-        let legAmountRule = consolidationLegAmount.isConsolidationLegAmountActive(data['BLOCK_TIME'], this.config['NETWORK']);
+        let legAmountRule = gateRegistry.activeAt('consolidation_leg_amount_activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);
         let keys = {};
         for(let idx in sends){
             let [tick, amount, destination, memo] = sends[idx];

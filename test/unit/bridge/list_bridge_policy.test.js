@@ -45,7 +45,8 @@ const sinon  = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 const List                  = require('../../../src/actions/list.js');
 const Database              = require('../../../src/db');
-const listOwnerActivation   = require('../../../src/list_owner_activation.js');
+const { stubActiveAt }      = require('../../helpers/gate_modules.js');
+const LIST_OWNER_ROW        = 'list_owner_activation.LIST_OWNER_ACTIVATION';
 const tokenPolicyActivation = require('../../../src/token_policy_activation.js');
 
 // A real address of each chain on mainnet, so "valid here" and "valid on another
@@ -188,35 +189,35 @@ describe('LIST bridge policy rules @regression @consensus', function(){
     describe('owner check (LIST_OWNER_ACTIVATION)', function(){
 
         it('refuses a non-owner edit at/above the flag', async function(){
-            sinon.stub(listOwnerActivation, 'isListOwnerCheckActive').returns(true);
+            stubActiveAt(sinon, LIST_OWNER_ROW, true);
             const indexer = makeIndexer({ coin: 'BTC', network: 'mainnet' });
             indexer.indexerDb.getListSource.resolves(OWNER);
             assert.strictEqual(await runEdit(indexer, { source: STRANGER }), 'invalid: LIST_ACTION_INDEX (not owner)');
         });
 
         it('admits the creator\'s own edit at/above the flag', async function(){
-            sinon.stub(listOwnerActivation, 'isListOwnerCheckActive').returns(true);
+            stubActiveAt(sinon, LIST_OWNER_ROW, true);
             const indexer = makeIndexer({ coin: 'BTC', network: 'mainnet' });
             indexer.indexerDb.getListSource.resolves(OWNER);
             assert.strictEqual(await runEdit(indexer, { source: OWNER }), 'valid');
         });
 
         it('leaves a non-owner edit valid BELOW the flag, so replay is identical', async function(){
-            sinon.stub(listOwnerActivation, 'isListOwnerCheckActive').returns(false);
+            stubActiveAt(sinon, LIST_OWNER_ROW, false);
             const indexer = makeIndexer({ coin: 'BTC', network: 'mainnet' });
             indexer.indexerDb.getListSource.resolves(OWNER);
             assert.strictEqual(await runEdit(indexer, { source: STRANGER }), 'valid');
         });
 
         it('exempts an injected edit even above the flag', async function(){
-            sinon.stub(listOwnerActivation, 'isListOwnerCheckActive').returns(true);
+            stubActiveAt(sinon, LIST_OWNER_ROW, true);
             const indexer = makeIndexer({ coin: 'BTC', network: 'mainnet' });
             indexer.indexerDb.getListSource.resolves(OWNER);
             assert.strictEqual(await runEdit(indexer, { source: STRANGER, isGenesis: true }), 'valid');
         });
 
         it('does not touch a CREATE, which has no prior owner to compare against', async function(){
-            sinon.stub(listOwnerActivation, 'isListOwnerCheckActive').returns(true);
+            stubActiveAt(sinon, LIST_OWNER_ROW, true);
             const indexer = makeIndexer({ coin: 'BTC', network: 'mainnet' });
             const { status } = await runCreate(indexer, [BTC_MAINNET]);
             assert.strictEqual(status, 'valid');

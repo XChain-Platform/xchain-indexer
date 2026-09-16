@@ -28,7 +28,9 @@ const sinon = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../../fixtures/mocks');
 const Attest = require('../../../../src/actions/attest/index.js');
 const swq = require('../../../../src/stake_weighted_quorum.js');
-const attestAdmission = require('../../../../src/attest_admission_activation.js');
+const gateRegistry = require('../../../../src/consensus/gate_registry');
+const { stubActiveAt } = require('../../../helpers/gate_modules.js');
+const ADMISSION_KEY = 'attest_admission_activation.ATTEST_ADMISSION_ACTIVATION';
 const srb = require('../../../../src/snapshot_reorg_buffer.js');
 const { PUBKEY_A, deriveReqId, setUpAttestHandler } = require('../../../helpers/attest_fixture.js');
 const { readRollbackSource } = require('../../../helpers/rollback_source.js');
@@ -116,7 +118,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
     afterEach(() => sinon.restore());
     describe('ATTEST_ADMISSION flag-day: unservable-redundancy rejection', function () {
         beforeEach(function () {
-            attestAdmission.isAttestAdmissionActive.returns(true);   // stubbed off in outer beforeEach
+            stubActiveAt(sinon, ADMISSION_KEY, true);   // stubbed off in the fixture's beforeEach
         });
 
         it('rejects a request whose responsible set is smaller than REDUNDANCY', async function () {
@@ -164,28 +166,28 @@ describe('Attest (ATTEST) @regression @tier3', function () {
     afterEach(() => sinon.restore());
     describe('ATTEST_ADMISSION flag-day: unservable-redundancy rejection', function () {
         beforeEach(function () {
-            attestAdmission.isAttestAdmissionActive.returns(true);   // stubbed off in outer beforeEach
+            stubActiveAt(sinon, ADMISSION_KEY, true);   // stubbed off in the fixture's beforeEach
         });
 
         it('below the gate the legacy accept-then-expire path is preserved (replay bit-identical)', async function () {
-            attestAdmission.isAttestAdmissionActive.returns(false);
+            stubActiveAt(sinon, ADMISSION_KEY, false);
             const data = v0Data();
             await handler.parse(v0Params(validReqId(data), 3), data, null);
             assert.strictEqual(data['STATUS'], 'valid', 'pre-gate replay must still accept: ' + data['STATUS']);
             assert.strictEqual(data['REQUEST_STATUS'], 'pending');
         });
 
-        it('gate queries the request block and network (real module map sanity)', function () {
-            // Un-stubbed module semantics: regtest/testnet armed at genesis,
+        it('gate queries the request block and network (real registry row sanity)', function () {
+            // Un-stubbed registry semantics, read from the GateRegistry instance
+            // beneath the stubbed module export: regtest/testnet armed at genesis,
             // mainnet at the STAKE_WEIGHTED_QUORUM anchor, unknown network off.
-            const real = require('../../../../src/attest_admission_activation.js');
-            const fn   = attestAdmission.isAttestAdmissionActive.wrappedMethod || real.isAttestAdmissionActive;
-            assert.strictEqual(real.ATTEST_ADMISSION_ACTIVATION.mainnet, 961000);
-            assert.strictEqual(fn.call(real, 0, 'regtest'), true);
-            assert.strictEqual(fn.call(real, 960999, 'mainnet'), false);
-            assert.strictEqual(fn.call(real, 961000, 'mainnet'), true);
-            assert.strictEqual(fn.call(real, 100, 'nonet'), false);
-            assert.strictEqual(fn.call(real, 'x', 'regtest'), false);
+            const real = gateRegistry.registry;
+            assert.strictEqual(gateRegistry.get(ADMISSION_KEY).mainnet, 961000);
+            assert.strictEqual(real.activeAt(ADMISSION_KEY, 'regtest', null, 0, null), true);
+            assert.strictEqual(real.activeAt(ADMISSION_KEY, 'mainnet', null, 960999, null), false);
+            assert.strictEqual(real.activeAt(ADMISSION_KEY, 'mainnet', null, 961000, null), true);
+            assert.strictEqual(real.activeAt(ADMISSION_KEY, 'nonet', null, 100, null), false);
+            assert.strictEqual(real.activeAt(ADMISSION_KEY, 'regtest', null, 'x', null), false);
         });
     });
 });

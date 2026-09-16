@@ -16,8 +16,9 @@ const sinon = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../../fixtures/mocks');
 
 const Dispenser_Close = require('../../../../src/actions/dispenser_close/index.js');
-const ocg      = require('../../../../src/dispenser_ownership_cancel_activation.js');
-const FLAG_DAY = ocg.DISPENSER_OWNERSHIP_CANCEL_ACTIVATION.mainnet; // 1786060800
+const gateRegistry = require('../../../../src/consensus/gate_registry');
+const CANCEL_ROW   = 'dispenser_ownership_cancel_activation.DISPENSER_OWNERSHIP_CANCEL_ACTIVATION';
+const FLAG_DAY = gateRegistry.get(CANCEL_ROW).mainnet; // 1786060800
 const SOURCE   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const GET_ADDR = 'mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp'; // != SOURCE, and the canceller
 const SWEEP    = 'mzMsvKm5N4vmAWKFDbwjc7hqCkGwANhCwn';
@@ -227,7 +228,7 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
 // Cancelling an OWNERSHIP dispenser must NOT hand the canceller (which may be
 // GET_ADDRESS) the token's issuer rights. Per DISPENSER.md:122 only a SWEEP
 // delivers ownership to a non-SOURCE destination; cancel/expire leave it with
-// SOURCE. Gated (dispenser_ownership_cancel_activation.js) so historical replay
+// SOURCE. Gated (the dispenser_ownership_cancel_activation registry row) so historical replay
 // stays byte-identical below the flag-day.
 describe('Dispenser_Close action handler @regression @tier2', function () {
     beforeEach(setupDispenserClose);
@@ -282,13 +283,14 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
     });
 
     describe('1678 ownership cancel/expire routing gate @regression @tier1', function () {
-        it('activation predicate: flips at the mainnet flag-day, genesis on testnet/regtest, off for unknown/bad input', function () {
-            assert.strictEqual(ocg.isDispenserOwnershipCancelActive(FLAG_DAY - 1, 'mainnet'), false);
-            assert.strictEqual(ocg.isDispenserOwnershipCancelActive(FLAG_DAY, 'mainnet'), true);
-            assert.strictEqual(ocg.isDispenserOwnershipCancelActive(0, 'testnet'), true);
-            assert.strictEqual(ocg.isDispenserOwnershipCancelActive(0, 'regtest'), true);
-            assert.strictEqual(ocg.isDispenserOwnershipCancelActive(FLAG_DAY, 'stagenet'), false);
-            assert.strictEqual(ocg.isDispenserOwnershipCancelActive('nonsense', 'mainnet'), false);
+        it('the gate read close.js makes: flips at the mainnet flag-day, genesis on testnet/regtest, off for unknown/bad input', function () {
+            const at = (blockTime, network) => gateRegistry.activeAt(CANCEL_ROW, network, null, null, blockTime);
+            assert.strictEqual(at(FLAG_DAY - 1, 'mainnet'), false);
+            assert.strictEqual(at(FLAG_DAY, 'mainnet'), true);
+            assert.strictEqual(at(0, 'testnet'), true);
+            assert.strictEqual(at(0, 'regtest'), true);
+            assert.strictEqual(at(FLAG_DAY, 'stagenet'), false);
+            assert.strictEqual(at('nonsense', 'mainnet'), false);
         });
     });
 });

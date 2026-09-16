@@ -26,6 +26,7 @@ const crypto = require('crypto');
 const { createBaseData } = require('../../../fixtures/mocks');
 
 const { setupRelay } = require('./helpers/relay_fixture.js');
+const { stubActiveAt } = require('../../../helpers/gate_modules.js');
 
 // Consecutive sibling blocks under the one suite title, each running the shared
 // setup, so every full test title is the one the suite has always reported.
@@ -74,8 +75,7 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
 
         it('leaves the admission rejection intact when the gate is off', async function () {
             protocolGates.ATTEST_RELAY_ORIGIN = false;
-            const attestAdmission = require('../../../../src/attest_admission_activation.js');
-            sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(true);
+            stubActiveAt(sinon, 'attest_admission_activation.ATTEST_ADMISSION_ACTIVATION', true);
             const { data, params } = v0Emission('LTC');
 
             await handler.parse(params, data, null);

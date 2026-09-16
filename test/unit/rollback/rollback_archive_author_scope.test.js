@@ -14,7 +14,7 @@
  * anchor_actions rows in a real SQL engine.
  *
  * MATCH_BATCH_SEQ is not a batch key. Once archive batches are publisher-scoped
- * (archive_batch_author_activation.js) two publishers hold two live batches under
+ * (the archive_batch_author_activation registry row) two publishers hold two live batches under
  * one seq, each with its own head and its own chunks stored 'valid'. The reset
  * self-joins head to chunk on the seq alone, so one publisher's orphaned chunk
  * resets the OTHER publisher's head, whose batch survives the reorg intact and
@@ -47,7 +47,8 @@ const {
     isArchiveRollbackAuthorScopeActive,
     archiveAuthorScopeJoin,
 } = require('../../../src/archive_rollback_author_scope_activation.js');
-const { ARCHIVE_BATCH_AUTHOR_ACTIVATION } = require('../../../src/archive_batch_author_activation.js');
+const ARCHIVE_BATCH_AUTHOR_ACTIVATION = require('../../../src/consensus/gate_registry')
+    .get('archive_batch_author_activation.ARCHIVE_BATCH_AUTHOR_ACTIVATION');
 
 const SQL_DIR = path.join(__dirname, '..', '..', '..', 'src', 'sql');
 const BATCH_SEQ = 7;

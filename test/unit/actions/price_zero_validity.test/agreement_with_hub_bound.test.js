@@ -21,7 +21,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const path   = require('path');
 
-const priceRange = require('../../../../src/price_zero_validity_activation.js');
+const priceRange = require('../../../../src/actions/price/price_zero_validity_gate.js');
 // Decides whether the hub aggregator source may be trusted before the drift alarm reads it.
 const { siblingCheckout, skipOrFail } = require('../../../helpers/sibling_checkout.js');
 const { readSiblingModuleSource } = require('../../../helpers/sibling_module_source.js');

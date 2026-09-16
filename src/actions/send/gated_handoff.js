@@ -19,7 +19,7 @@
  *
  ********************************************************************/
 
-const gatedHandoffRef = require('../../gated_handoff_ref_activation.js');
+const gateRegistry = require('../../consensus/gate_registry');
 
 // Installed onto Send.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
@@ -84,9 +84,9 @@ module.exports = {
         // resolves no address references), while the SDK compacts a MESSAGE
         // DESTINATION to `^<id>` for any already-indexed recipient, so a byte
         // compare misses the ordinary wallet-composed handoff. Above the flag
-        // day a caret spelling is resolved first; plane and arming state in
-        // gated_handoff_ref_activation.js.
-        let refRule = gatedHandoffRef.isGatedHandoffRefActive(data['BLOCK_TIME'], this.config['NETWORK']);
+        // day a caret spelling is resolved first; plane and arming state beside the
+        // gated_handoff_ref_activation row in src/protocol_changes/.
+        let refRule = gateRegistry.activeAt('gated_handoff_ref_activation.GATED_HANDOFF_REF_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);
 
         for(let s of siblings){
             if(s.action !== 'MESSAGE') continue;

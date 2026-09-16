@@ -19,7 +19,8 @@ const assert = require('assert');
 const { createBaseData } = require('../../../../fixtures/mocks');
 const { v0Params, THREE_CHAINS, v1Params, ARCHIVE_JSON, armAnchor, disarmAnchor } = require('./helpers/anchor_fixtures.js');
 const Anchor = require('../../../../../src/actions/anchor/index.js');
-const aact = require('../../../../../src/anchor_activation.js');
+const gateRegistry = require('../../../../../src/consensus/gate_registry');
+const ANCHOR_HEIGHTS = gateRegistry.get('anchor_activation.ANCHOR_ACTIVATION');
 
 let indexer, handler, verifyStub, swqStub, deriveGateStub;
 
@@ -57,7 +58,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
     // restart height. Keyed on the anchor's OWN DOGE height, never on SNAPSHOT_BLOCK.
     it('a v0 mined BELOW ANCHOR_ACTIVATION is invalid whatever it decodes to', async function () {
         let h = handlerOn('testnet');
-        let below = aact.ANCHOR_ACTIVATION.testnet - 1;
+        let below = ANCHOR_HEIGHTS.testnet - 1;
         let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE', BLOCK_INDEX: below });
         await h.parse(v0Params({ network: 'testnet', sections: THREE_CHAINS }), data, null);
         assert.strictEqual(data['STATUS'], 'invalid: ANCHOR before activation');
@@ -65,7 +66,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
             'a pre-activation anchor pays nothing: the gate runs ahead of every body parser');
         // One block higher the same bytes are the live wire.
         let data2 = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE',
-                                     BLOCK_INDEX: aact.ANCHOR_ACTIVATION.testnet });
+                                     BLOCK_INDEX: ANCHOR_HEIGHTS.testnet });
         await h.parse(v0Params({ network: 'testnet', sections: THREE_CHAINS }), data2, null);
         assert.strictEqual(data2['STATUS'], 'valid', 'the threshold block itself is active');
     });
@@ -81,7 +82,7 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
 
     it('the activation gate covers EVERY version and fails closed on a junk height', async function () {
         let h = handlerOn('testnet');
-        let below = aact.ANCHOR_ACTIVATION.testnet - 1;
+        let below = ANCHOR_HEIGHTS.testnet - 1;
         // A v1 and a v2 below the height are 'before activation', not 'VERSION (unknown)':
         // the same bytes meant something else on the pre-restart wire, so no shape check
         // on them means anything down there.

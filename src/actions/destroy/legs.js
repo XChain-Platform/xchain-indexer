@@ -22,7 +22,7 @@
 
 'use strict';
 
-const consolidationLegAmount = require('../../consolidation_leg_amount_activation.js');
+const gateRegistry = require('../../consensus/gate_registry');
 
 // The legs one DESTROY names, in wire order. A VERSION error still yields one leg, so a
 // refused action leaves its row in the destroys table.
@@ -83,9 +83,10 @@ async function loadTicks(destroys, data){
 // Same rule and same gate as the SEND leg merge: a leg whose RAW amount fails its tick's
 // format is held out of the merge on its own key, so it reaches the per-leg format check
 // below rather than being summed into a passing total. Below the threshold the legacy key
-// and merge run unchanged (consolidation_leg_amount_activation.js carries the rationale).
+// and merge run unchanged (the consolidation_leg_amount_activation row's note in
+// src/protocol_changes/ carries the rationale).
 function consolidateLegs(destroys, ticks, data){
-    let legAmountRule = consolidationLegAmount.isConsolidationLegAmountActive(data['BLOCK_TIME'], this.config['NETWORK']);
+    let legAmountRule = gateRegistry.activeAt('consolidation_leg_amount_activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);
     let keys = {};
     for(let idx in destroys){
         let [tick, amount, memo] = destroys[idx];

@@ -35,7 +35,9 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../../fixtures/config');
 const Utility           = require('../../../src/utility');
 const Database          = require('../../../src/db');
-const landedGate        = require('../../../src/price_fee_batch_landed_activation');
+const gateRegistry      = require('../../../src/consensus/gate_registry');
+const { stubActiveAt }  = require('../../helpers/gate_modules.js');
+const LANDED_ROW        = 'price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION';
 
 // One block: its height on the processing chain and its own clock.
 const BLOCK_HEIGHT = 6280000;
@@ -136,7 +138,7 @@ describe('getLatestPrice() landed-batch fee bound @regression @tier1', function 
     });
 
     it('armed: both node kinds price against the round whose batch had landed', async function () {
-        sinon.stub(landedGate, 'isPriceFeeBatchLandedActive').returns(true);
+        stubActiveAt(sinon, LANDED_ROW, true);
         const got = await priceOnBothNodeKinds();
         assert.strictEqual(got.hub.roundNumber, 41);
         assert.strictEqual(got.chain.roundNumber, 41);
@@ -145,7 +147,7 @@ describe('getLatestPrice() landed-batch fee bound @regression @tier1', function 
     });
 
     it('armed: a round whose batch lands in a LATER block than this one is not selectable', async function () {
-        sinon.stub(landedGate, 'isPriceFeeBatchLandedActive').returns(true);
+        stubActiveAt(sinon, LANDED_ROW, true);
         // Same row set, but round 41's batch landed one second after this block's clock.
         const rows = [Object.assign({}, ROUND_41_LANDED, { batch_block_time: BLOCK_TIME + 1 }),
                       ROUND_42_UNLANDED];
@@ -156,7 +158,7 @@ describe('getLatestPrice() landed-batch fee bound @regression @tier1', function 
     });
 
     it('armed: the height-selected (reference chain) path carries the bound too', async function () {
-        sinon.stub(landedGate, 'isPriceFeeBatchLandedActive').returns(true);
+        stubActiveAt(sinon, LANDED_ROW, true);
         const db  = makeDb(HUB_CONNECTED);
         const got = await db.getLatestPrice('DOGE/USD', BLOCK_HEIGHT,
             { blockTime: BLOCK_TIME, maxAgeSeconds: 3600 });
@@ -165,7 +167,7 @@ describe('getLatestPrice() landed-batch fee bound @regression @tier1', function 
     });
 
     it('armed: no chain-derived block time means NO price, never an unbounded one', async function () {
-        sinon.stub(landedGate, 'isPriceFeeBatchLandedActive').returns(true);
+        stubActiveAt(sinon, LANDED_ROW, true);
         sinon.stub(console, 'warn');
         const db  = makeDb(HUB_CONNECTED);
         const got = await db.getLatestPrice('DOGE/USD', BLOCK_HEIGHT);
@@ -186,34 +188,20 @@ describe('getLatestPrice() landed-batch fee bound @regression @tier1', function 
 
 describe('PRICE_FEE_BATCH_LANDED_ACTIVATION sizing @regression @tier1', function () {
 
+    // The read src/db/prices/index.js makes, under the key it spells there.
+    const at = (height, network, coin) => gateRegistry.activeAt(LANDED_ROW, network, coin, height, null);
+
     it('mainnet is unarmed at every height', function () {
-        assert.strictEqual(landedGate.PRICE_FEE_BATCH_LANDED_ACTIVATION.mainnet, null);
-        assert.strictEqual(landedGate.isPriceFeeBatchLandedActive(0, 'mainnet', 'BTC'), false);
-        assert.strictEqual(landedGate.isPriceFeeBatchLandedActive(Number.MAX_SAFE_INTEGER, 'mainnet', 'DOGE'), false);
+        assert.strictEqual(gateRegistry.get(LANDED_ROW).mainnet, null);
+        assert.strictEqual(at(0, 'mainnet', 'BTC'), false);
+        assert.strictEqual(at(Number.MAX_SAFE_INTEGER, 'mainnet', 'DOGE'), false);
     });
 
-    it('every network the map declares is unarmed, and an undeclared one is inert', function () {
-        for (const net of Object.keys(landedGate.PRICE_FEE_BATCH_LANDED_ACTIVATION)) {
-            assert.strictEqual(landedGate.isPriceFeeBatchLandedActive(9e9, net, 'DOGE'), false, net);
+    it('every network the row declares is unarmed, and an undeclared one is inert', function () {
+        for (const net of Object.keys(gateRegistry.get(LANDED_ROW))) {
+            assert.strictEqual(at(9e9, net, 'DOGE'), false, net);
         }
-        assert.strictEqual(landedGate.isPriceFeeBatchLandedActive(9e9, 'someothernet', 'DOGE'), false);
-        assert.strictEqual(landedGate.isPriceFeeBatchLandedActive(9e9, undefined, undefined), false);
-    });
-
-    it('an armed threshold is inclusive at the height and off one block below it', function () {
-        // Arming is a coordinated event, so the map ships unarmed; the comparison itself
-        // still has to be pinned, or the first network armed would be the test of it.
-        const map = landedGate.PRICE_FEE_BATCH_LANDED_ACTIVATION;
-        map['DOGE:regtest'] = 500;
-        try {
-            assert.strictEqual(landedGate.isPriceFeeBatchLandedActive(499, 'regtest', 'DOGE'), false);
-            assert.strictEqual(landedGate.isPriceFeeBatchLandedActive(500, 'regtest', 'DOGE'), true);
-            assert.strictEqual(landedGate.isPriceFeeBatchLandedActive(501, 'regtest', 'DOGE'), true);
-            // The per-chain key must not leak onto a sibling chain of the same network.
-            assert.strictEqual(landedGate.isPriceFeeBatchLandedActive(9e9, 'regtest', 'LTC'), false);
-            assert.strictEqual(landedGate.isPriceFeeBatchLandedActive('not a height', 'regtest', 'DOGE'), false);
-        } finally {
-            delete map['DOGE:regtest'];
-        }
+        assert.strictEqual(at(9e9, 'someothernet', 'DOGE'), false);
+        assert.strictEqual(at(9e9, undefined, undefined), false);
     });
 });

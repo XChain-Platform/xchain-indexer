@@ -23,7 +23,7 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../..
 const Batch  = require('../../../../../src/actions/batch/index.js');
 const Attest = require('../../../../../src/actions/attest/index.js');
 const swq    = require('../../../../../src/stake_weighted_quorum.js');
-const attestAdmission = require('../../../../../src/attest_admission_activation.js');
+const { stubActiveAt } = require('../../../../helpers/gate_modules.js');
 
 const SOURCE   = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const TX_HASH  = 'a'.repeat(64);
@@ -125,7 +125,7 @@ function freshAttestSuite(indexer) {
     // Same defaults the ATTEST suite uses: legacy count path, admission gate off,
     // so a redundancy-3 request against a one-validator snapshot stays 'valid'.
     sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
-    sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(false);
+    stubActiveAt(sinon, 'attest_admission_activation.ATTEST_ADMISSION_ACTIVATION', false);
     return { attest, attestCtx };
 }
 

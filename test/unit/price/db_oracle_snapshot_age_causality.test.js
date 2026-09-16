@@ -12,7 +12,7 @@
  * test/unit/price/db_oracle_snapshot_age_causality.test.js
  *
  * VM oracle getSnapshotAge() causality flag-day (see
- * src/oracle_snapshot_age_causality_activation.js). db.getOracleDataForVM's age
+ * the oracle_snapshot_age_causality_activation row in src/protocol_changes/). db.getOracleDataForVM's age
  * query (MAX(reference_block) of finalized snapshots) must be causally capped at
  * the block being processed, like every sibling query in the same function;
  * uncapped, a replay observes a FUTURE snapshot and computes a different
@@ -38,7 +38,6 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../../fixtures/config');
 const Utility           = require('../../../src/utility');
 const Database          = require('../../../src/db');
-const sac               = require('../../../src/oracle_snapshot_age_causality_activation');
 
 function dbFor(network, coin) {
     const config   = getTestConfig();
@@ -103,38 +102,6 @@ describe('VM oracle snapshot-age causality gate (getOracleDataForVM age query) @
             assert.match(c.query.replace(/\s+/g, ' '), /WHERE status = 'finalized' AND reference_block <= \?/,
                 'pre-launch testnet caps from genesis (matches PKG3_SANDBOX_ACTIVATION)');
             assert.deepStrictEqual(c.args, [500]);
-        });
-    });
-});
-
-describe('VM oracle snapshot-age causality gate (getOracleDataForVM age query) @regression @tier1', function () {
-    describe('activation-module predicate', function () {
-
-        it('regtest is active from genesis at any block height', function () {
-            assert.strictEqual(sac.isOracleSnapshotAgeCausalityActive(0, 'regtest', 'BTC'), true);
-            assert.strictEqual(sac.isOracleSnapshotAgeCausalityActive(999999, 'regtest', 'BTC'), true);
-        });
-
-        it('mainnet is armed per coin: inert below the height, active at/after it', function () {
-            // BTC 961000, LTC 3154250, DOGE 6319000
-            assert.strictEqual(sac.isOracleSnapshotAgeCausalityActive(960999, 'mainnet', 'BTC'), false);
-            assert.strictEqual(sac.isOracleSnapshotAgeCausalityActive(961000, 'mainnet', 'BTC'), true);
-            assert.strictEqual(sac.isOracleSnapshotAgeCausalityActive(3154249, 'mainnet', 'LTC'), false);
-            assert.strictEqual(sac.isOracleSnapshotAgeCausalityActive(3154250, 'mainnet', 'LTC'), true);
-            assert.strictEqual(sac.isOracleSnapshotAgeCausalityActive(6318999, 'mainnet', 'DOGE'), false);
-            assert.strictEqual(sac.isOracleSnapshotAgeCausalityActive(6319000, 'mainnet', 'DOGE'), true);
-        });
-
-        it('testnet is genesis-active for every coin (pre-launch cohort)', function () {
-            assert.strictEqual(sac.isOracleSnapshotAgeCausalityActive(0, 'testnet', 'BTC'), true);
-            assert.strictEqual(sac.isOracleSnapshotAgeCausalityActive(0, 'testnet', 'DOGE'), true);
-            assert.strictEqual(sac.isOracleSnapshotAgeCausalityActive(999999999, 'testnet', 'LTC'), true);
-        });
-
-        it('unknown network or unparseable height is off (safe: keeps deployed behavior)', function () {
-            assert.strictEqual(sac.isOracleSnapshotAgeCausalityActive(0, 'stagenet', 'BTC'), false);
-            assert.strictEqual(sac.isOracleSnapshotAgeCausalityActive('nonsense', 'regtest', 'BTC'), false);
-            assert.strictEqual(sac.isOracleSnapshotAgeCausalityActive(undefined, 'regtest', 'BTC'), false);
         });
     });
 });

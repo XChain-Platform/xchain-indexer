@@ -27,7 +27,7 @@ const sinon  = require('sinon');
 const { createBaseData } = require('../../../../fixtures/mocks');
 
 const arm     = require('../../../../../src/attest_response_mirror_activation.js');
-const attestBcastFee  = require('../../../../../src/attest_broadcast_fee_activation.js');
+const attestBcastFee  = require('../../../../../src/actions/attest/attest_broadcast_fee_gate.js');
 
 const { PUBKEY_A, SIG_A, REQ_ID, BODY, BLOCK_TIME, requestRow } = require('./helpers/rows.js');
 const { applyData, setupEffects } = require('./helpers/effects_fixture.js');

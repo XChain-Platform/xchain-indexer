@@ -20,7 +20,7 @@
  ********************************************************************/
 
 const path    = require('path');
-const ledgerPrecision = require('../../ledger_amount_precision_activation');
+const ledgerPrecision = require('../../consensus/ledger_amount_precision_gate');
 // The bridge reads (getBridgeBalances, getBridgeEscrowProof) are the part of this family
 // kept in credits/bridge_reads.js; they are merged into the export below, so db/index.js
 // installs one credits mixin and every method keeps its name on Database.prototype.

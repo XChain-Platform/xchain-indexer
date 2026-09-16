@@ -21,7 +21,7 @@ const assert = require('assert');
 const path   = require('path');
 const fs     = require('fs');
 
-const cmsh = require('../../../src/capability_min_stake_history.js');
+const cmsh = require('../../../src/consensus/capability_min_stake_history.js');
 // Decides whether the hub source path may be trusted before the rule pin reads it.
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 

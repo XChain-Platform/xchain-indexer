@@ -18,7 +18,9 @@
  *
  ********************************************************************/
 
-const ownershipCancelGate = require('../../dispenser_ownership_cancel_activation.js');
+// The ownership-cancel gate is a registry row read by literal key (W4); the key
+// spelling below is the marker bin/check-flagday-deploy.sh greps this file for.
+const gateRegistry = require('../../consensus/gate_registry');
 
 // Installed onto Dispenser_Close.prototype by dispenser_close.js; each method runs with
 // `this` bound to the handler, exactly as the class method it was.
@@ -57,13 +59,13 @@ module.exports = {
         // `destination` (sweep > canceller > SOURCE), and cancel authority
         // includes GET_ADDRESS, so a GET_ADDRESS/SOURCE canceller acquired the
         // token's ownership for free. Gated
-        // (dispenser_ownership_cancel_activation.js): below the flag-day the
+        // (the dispenser_ownership_cancel_activation row in src/protocol_changes/): below the flag-day the
         // legacy canceller-takes-ownership routing runs so historical replay is
         // byte-identical; at/after it only the SWEEP path transfers ownership and
         // cancel/expire leave it with SOURCE (matching dispenser_expire.js, which
         // was already correct). The GIVE token-balance refund routing is separate
         // (handled per DISPENSER cancel semantics) and unaffected here.
-        let ownershipCancelActive = ownershipCancelGate.isDispenserOwnershipCancelActive(data['BLOCK_TIME'], this.config['NETWORK']);
+        let ownershipCancelActive = gateRegistry.activeAt('dispenser_ownership_cancel_activation.DISPENSER_OWNERSHIP_CANCEL_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);
         let ownershipDest = ownershipCancelActive
                           ? ((!this.util.isNull(sweepDest)) ? sweepDest : dispenser['SOURCE'])
                           : destination;

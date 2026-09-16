@@ -14,7 +14,7 @@
  * test/unit/actions/market/dispense_payment_tally_scale.test.js
  *
  * Token-payment dispense tally scale flag-day
- * (dispense_payment_tally_scale_activation.js).
+ * (src/actions/dispense/dispense_payment_tally_scale_gate.js).
  *
  * A SEND-triggered dispense is priced in the SENT tick, which may carry up to
  * MAX_TOKEN_DECIMALS, while the non-batch payment tally in actions/dispense.js
@@ -45,7 +45,7 @@ const assert = require('assert');
 
 const Utility   = require('../../../../src/utility.js');
 const Dispense  = require('../../../../src/actions/dispense/index.js');
-const activation = require('../../../../src/dispense_payment_tally_scale_activation.js');
+const activation = require('../../../../src/actions/dispense/dispense_payment_tally_scale_gate.js');
 
 const DISPENSER_ADDRESS = 'dispenserAddress11111111111';
 const BUYER             = 'buyerAddress';

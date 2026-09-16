@@ -20,8 +20,9 @@
  *
  ********************************************************************/
 
-const vmDeployLintPkg3 = require('../../vm_deploy_lint_pkg3_activation.js');
-const vmLintGlobalAlias = require('../../vm_lint_global_alias_activation.js');
+// Both deploy-lint gates are registry rows read by literal key (W4); the key
+// spellings below are the markers bin/check-flagday-deploy.sh greps this file for.
+const gateRegistry = require('../../consensus/gate_registry');
 
 /**
  * Throw the EXECUTOR_UNAVAILABLE host fault when a deploy would need the VM and it is absent.
@@ -81,7 +82,7 @@ async function resolveLintFlags(deploy, data){
     // shape as dispenser_freshness. Below each coin's height both flags are false,
     // so validateSyntax drops both rules and the historical accepted verdict
     // replays byte-identically. Both threaded exactly like the two flags above.
-    let enforcePkg3DeployLint = vmDeployLintPkg3.isVmDeployLintPkg3Active(data['BLOCK_INDEX'], deploy.config['NETWORK'], deploy.config['COIN']);
+    let enforcePkg3DeployLint = gateRegistry.activeAt('vm_deploy_lint_pkg3_activation.VM_DEPLOY_LINT_PKG3_ACTIVATION', deploy.config['NETWORK'], deploy.config['COIN'], data['BLOCK_INDEX'], null);
     let enforceBannedGenerator = enforcePkg3DeployLint;
     let enforceBannedWasm = enforcePkg3DeployLint;
     // The global-alias refinement of banned-async + banned-wasm + banned-math
@@ -96,7 +97,7 @@ async function resolveLintFlags(deploy, data){
     // by the 2026-09-09 ruling (identity on the indexed mainnet history: 0
     // contracts, 0 DEPLOY, measured 2026-09-09), so this resolves true there
     // from block 0 and no already-accepted deploy is reinterpreted.
-    let enforceLintGlobalAlias = vmLintGlobalAlias.isVmLintGlobalAliasActive(data['BLOCK_INDEX'], deploy.config['NETWORK'], deploy.config['COIN']);
+    let enforceLintGlobalAlias = gateRegistry.activeAt('vm_lint_global_alias_activation.VM_LINT_GLOBAL_ALIAS_ACTIVATION', deploy.config['NETWORK'], deploy.config['COIN'], data['BLOCK_INDEX'], null);
     // banned-rest (unmeterable rest positions) is the deploy half of
     // REST_PATTERN_METER. Its VM twin wraps a top-level rest's source in the
     // size-charged helper; the positions with no addressable source cannot be

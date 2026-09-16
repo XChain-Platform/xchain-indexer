@@ -25,7 +25,7 @@ const { createMockIndexer, createBaseData } = require('../../../../fixtures/mock
 const Price      = require('../../../../../src/actions/price/index.js');
 const ed25519    = require('../../../../../src/consensus/ed25519.js');
 const swq        = require('../../../../../src/stake_weighted_quorum.js');
-const priceRange = require('../../../../../src/price_zero_validity_activation.js');
+const priceRange = require('../../../../../src/actions/price/price_zero_validity_gate.js');
 
 // The hub's admission predicate, transcribed from PriceAggregator's ingest sites
 // (`!(parseFloat(String(p.price)) > 0) || !(parseFloat(String(p.price)) < PRICE_MAX)`

@@ -29,7 +29,7 @@
 
 'use strict';
 
-const stakeKeyReuse = require('../../stake_key_reuse_activation.js');
+const gateRegistry = require('../../consensus/gate_registry');
 
 const { getLogger } = require('../../observability/index.js');
 
@@ -157,9 +157,9 @@ async function validateFreeKey(data){
     // branch cannot simply pass the real block to the same mode: the legacy
     // predicate's activation filter would hide a freshly-staked, not-yet-activated
     // row, so the armed branch selects its own query mode instead
-    // (stake_key_reuse_activation.js records the whole argument).
+    // (the stake_key_reuse_activation row's note records the whole argument).
     let anyStake;
-    if(stakeKeyReuse.isStakeKeyReuseActive(data['BLOCK_INDEX'], this.config['NETWORK'], data['COIN']))
+    if(gateRegistry.activeAt('stake_key_reuse_activation.STAKE_KEY_REUSE_ACTIVATION', this.config['NETWORK'], data['COIN'], data['BLOCK_INDEX'], null))
         anyStake = await this.indexerDb.getActiveStakeByPubkey(data['SIGNING_PUBKEY'], data['BLOCK_INDEX'], {reuseBlockingOnly: true});
     else
         anyStake = await this.indexerDb.getActiveStakeByPubkey(data['SIGNING_PUBKEY'], null);

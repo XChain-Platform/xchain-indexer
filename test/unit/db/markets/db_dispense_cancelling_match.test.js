@@ -12,7 +12,7 @@
  * test/unit/db/markets/db_dispense_cancelling_match.test.js
  *
  * DISPENSE cancelling-dispenser match flag-day (see
- * src/dispense_cancelling_match_activation.js). findMatchingDispensers'
+ * the dispense_cancelling_match_activation row in src/protocol_changes/). findMatchingDispensers'
  * latest-status MAX(action_index) subquery must correlate on the DISPENSER's
  * action index (d1.action_index) like every sibling query; the legacy predicate
  * correlated on the STATUS row's own action index (s1.action_index), so a
@@ -36,9 +36,9 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../../../fixtures/config');
 const Utility           = require('../../../../src/utility');
 const Database          = require('../../../../src/db');
-const dcm               = require('../../../../src/dispense_cancelling_match_activation');
+const gateRegistry      = require('../../../../src/consensus/gate_registry');
 
-const FLAG_DAY = dcm.DISPENSE_CANCELLING_MATCH_ACTIVATION.mainnet; // 1786060800
+const FLAG_DAY = gateRegistry.get('dispense_cancelling_match_activation.DISPENSE_CANCELLING_MATCH_ACTIVATION').mainnet; // 1786060800
 
 // Build a Database with an injected config + a captured doQuery.
 function dbFor(network) {
@@ -110,22 +110,4 @@ describe('DISPENSE cancelling-match gate (findMatchingDispensers latest-status c
         });
     });
 
-    describe('activation-module predicate', function () {
-
-        it('flips exactly at the mainnet flag-day', function () {
-            assert.strictEqual(dcm.isDispenseCancellingMatchActive(FLAG_DAY - 1, 'mainnet'), false);
-            assert.strictEqual(dcm.isDispenseCancellingMatchActive(FLAG_DAY, 'mainnet'), true);
-        });
-
-        it('testnet/regtest are active from genesis', function () {
-            assert.strictEqual(dcm.isDispenseCancellingMatchActive(0, 'testnet'), true);
-            assert.strictEqual(dcm.isDispenseCancellingMatchActive(0, 'regtest'), true);
-        });
-
-        it('unknown network or unparseable time is off (safe: keeps deployed behavior)', function () {
-            assert.strictEqual(dcm.isDispenseCancellingMatchActive(FLAG_DAY, 'stagenet'), false);
-            assert.strictEqual(dcm.isDispenseCancellingMatchActive(undefined, 'mainnet'), false);
-            assert.strictEqual(dcm.isDispenseCancellingMatchActive('nonsense', 'mainnet'), false);
-        });
-    });
 });

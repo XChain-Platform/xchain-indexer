@@ -12,12 +12,21 @@
 # Vendored set: the client entry (hub_db_sync.js) and its parts directory
 # (hub_db_sync/, every .js under it, subdirectories included: the entry installs
 # them onto its prototype and resolves nothing outside the set), the
-# schema-version lockstep constant (hub_schema_version.js), the dependency-free
-# modules the client requires by relative path (price_batching_floor_activation.js;
-# a consumer without them fails at require on boot), and the mirror-table SQL
-# twins the client's ensureTables() creates for consumers without their own
-# schema machinery (the explorer's copies land under src/sql/hub-mirror/ so they
-# are obviously not the explorer's own tables).
+# schema-version lockstep constant (hub_schema_version.js), the two activation
+# gate modules the client requires by relative path (DEP_FILES below; a consumer
+# without them fails at require on boot), and the mirror-table SQL twins the
+# client's ensureTables() creates for consumers without their own schema
+# machinery (the explorer's copies land under src/sql/hub-mirror/ so they are
+# obviously not the explorer's own tables).
+#
+# DEP_FILES are NOT dependency-free. Since the activation registry (W3) each one
+# reads its rows through ./consensus/gate_registry, which every consumer carries
+# as ITS OWN registry: the entry src/consensus/gate_registry.js is the consumer's,
+# and the row part files under src/consensus/gate_registry/ are byte twins of the
+# indexer's src/protocol_changes/ parts kept in step by the platform's twin
+# reconcile script, not by this one. This script therefore
+# vendors the two gate modules only and REFUSES a consumer with no registry
+# entry, in both modes, rather than boarding a module that cannot load there.
 #
 # The parts directory is synced as a SET, not file by file: --check compares
 # every part on both sides AND refuses a part present on only one side, so a
@@ -46,6 +55,9 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 HUB_FILES="hub_db_sync.js hub_schema_version.js"
 HUB_DIRS="hub_db_sync"
 DEP_FILES="price_batching_floor_activation.js mirror_admission_activation.js"
+# What DEP_FILES require, relative to the consumer's src/: present or the pair
+# cannot load (see the header).
+REGISTRY_ENTRY="consensus/gate_registry.js"
 SQL_FILES="price_snapshots.sql oracle_prices.sql cross_chain_matches.sql cross_chain_calls.sql capability_snapshots.sql state_checkpoints.sql anchor_reward_attestations.sql attestation_responses.sql bridge_transfers.sql policy_snapshots.sql"
 SERVICES="xchain-explorer"
 
@@ -100,6 +112,14 @@ for svc in $SERVICES; do
             done)
         fi
     done
+    # The pair's registry: the consumer's own file, never copied from here. A
+    # consumer without it would take the two modules and fail at require on boot,
+    # so both modes stop on it and name the script that supplies the parts.
+    if [ ! -f "$dest/$REGISTRY_ENTRY" ]; then
+        echo "DRIFT: $svc/src/$REGISTRY_ENTRY is missing; DEP_FILES require it (the consumer's own registry entry, with its parts kept in step by the platform twin reconcile script), so the pair cannot be vendored there"
+        drift=1
+        continue
+    fi
     for f in $DEP_FILES; do
         if [ "$CHECK" -eq 1 ]; then
             if ! cmp -s "$SRC/$f" "$dest/$f"; then
@@ -152,5 +172,6 @@ fi
 if [ "$CHECK" -eq 1 ]; then
     [ "$drift" -eq 0 ] && echo "OK: all vendored hub-mirror client copies are byte-identical to canonical." || exit 1
 else
+    [ "$drift" -eq 0 ] || exit 1
     echo "Synced canonical hub-mirror client into: $SERVICES"
 fi

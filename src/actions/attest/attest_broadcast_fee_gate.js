@@ -84,7 +84,7 @@
 
 'use strict';
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('../../consensus/gate_registry');
 
 const ATTEST_BROADCAST_FEE_ACTIVATION = copy('attest_broadcast_fee_activation.ATTEST_BROADCAST_FEE_ACTIVATION');
 

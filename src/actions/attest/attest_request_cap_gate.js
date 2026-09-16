@@ -81,7 +81,7 @@
  * was never granted.
  *
  * ACTIVATION PLANE: LOCAL BLOCK HEIGHT, matching the ATTEST_ADMISSION gate this
- * check sits beside (see the plane note in attest_admission_activation.js). The
+ * check sits beside (see the plane note on the attest_admission_activation row). The
  * comparison is against the request's own BLOCK_INDEX on its own chain.
  *
  * ARMING, and why testnet is NOT genesis-active despite being the reason this
@@ -126,7 +126,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('../../consensus/gate_registry');
 
 const ATTEST_REQUEST_CAP_ACTIVATION = copy('attest_request_cap_activation.ATTEST_REQUEST_CAP_ACTIVATION');
 

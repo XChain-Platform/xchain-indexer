@@ -195,8 +195,8 @@ const { execSync, spawnSync } = require('child_process');
 
 const REPO      = path.resolve(__dirname, '..');
 const GATE      = 'LEDGER_AMOUNT_PRECISION';
-const FLAG_REL  = path.join('src', 'ledger_amount_precision_activation.js');
-const FLAG_NAME = 'ledger_amount_precision_activation';
+const FLAG_REL  = path.join('src', 'consensus', 'ledger_amount_precision_gate.js');
+const FLAG_NAME = 'ledger_amount_precision_gate';
 const UNARMED   = 9999999999;       // the house UNARMED sentinel
 const SIDE_MARK = '###LAP-SIDE###'; // child -> parent report line
 
@@ -239,7 +239,7 @@ const SITES = [
         file,
         label: 'the require of the activation module in ' + path.basename(file),
         restores: false,
-        head: "const ledgerPrecision = require('../../ledger_amount_precision_activation');\n",
+        head: "const ledgerPrecision = require('../../consensus/ledger_amount_precision_gate');\n",
         legacy: '',
     })),
     {

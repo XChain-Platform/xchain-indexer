@@ -21,7 +21,8 @@ const sinon = require('sinon');
 const { createBaseData } = require('../../../../fixtures/mocks');
 const { SOURCE, DESTINATION, makeSweepContext } = require('./helpers/sweep_context.js');
 
-const { SWEEP_ZERO_LEG_ACTIVATION } = require('../../../../../src/sweep_zero_leg_activation.js');
+const SWEEP_ZERO_LEG_ACTIVATION = require('../../../../../src/consensus/gate_registry')
+    .get('sweep_zero_leg_activation.SWEEP_ZERO_LEG_ACTIVATION');
 
 let indexer, handler;
 
@@ -69,7 +70,7 @@ describe('Sweep @regression @tier3', function () {
         // A SWEEP with nothing to move for a held tick wrote a zero-amount credit/debit
         // leg for it (seen on SWEEP 1237, amount "0"), a fake row on the action page and
         // the address Credits tab. Those rows are in the hashed ledger, so the skip is
-        // gated on the SWEEP's own chain height (sweep_zero_leg_activation.js): the legs
+        // gated on the SWEEP's own chain height (the sweep_zero_leg_activation row): the legs
         // are written below the height and skipped at/above it.
         describe('zero-amount leg flag day', function () {
             const BTC_TESTNET_HEIGHT = SWEEP_ZERO_LEG_ACTIVATION['BTC:testnet'];

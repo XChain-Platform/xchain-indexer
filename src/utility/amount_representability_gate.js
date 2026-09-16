@@ -99,8 +99,8 @@
  * legacy path here too, so the parity suite stays green by construction.
  *
  * Registered as a standalone twin-style module rather than a
- * protocol_changes.addChange entry, matching dispense_cancelling_match_
- * activation.js and dispenser_amount_positivity_activation.js: isEnabled() is
+ * protocol_changes.addChange entry, matching the dispense_cancelling_match and
+ * dispenser_amount_positivity registry rows: isEnabled() is
  * async and DB-backed, and isValidAmountFormat is a synchronous predicate on
  * 25 call sites across 16 files, so an addChange entry would force that whole
  * validation surface async for no consensus benefit.
@@ -110,7 +110,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('../consensus/gate_registry');
 
 const AMOUNT_REPRESENTABILITY_ACTIVATION = copy('amount_representability_activation.AMOUNT_REPRESENTABILITY_ACTIVATION');
 

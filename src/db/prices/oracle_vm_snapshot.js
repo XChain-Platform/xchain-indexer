@@ -23,9 +23,10 @@
  *
  ********************************************************************/
 
-const snapshotAgeCausality = require('../../oracle_snapshot_age_causality_activation');
-const staleRoundVisibility = require('../../oracle_stale_round_visibility_activation');
-const preloadCausality = require('../../oracle_preload_causality_activation');
+// The age-causality and stale-visibility gates are registry rows read by literal
+// key (W4); the age key is the marker bin/check-flagday-deploy.sh greps this file for.
+const gateRegistry = require('../../consensus/gate_registry');
+const preloadCausality = require('./oracle_preload_causality_gate');
 const { getLogger } = require('../../observability/index.js');
 const { ORACLE_VM_ROUND_WINDOW,
         ORACLE_VM_MAX_ROWS } = require('../../protocol/constants.js');
@@ -41,7 +42,7 @@ function preloadWindow(db, blockIndex, refTime){
     // matching the sibling queries' idiom.
     let blockCap = blockIndex || 999999999;
 
-    // Preload causality gate (oracle_preload_causality_activation.js). The cap
+    // Preload causality gate (db/prices/oracle_preload_causality_gate.js). The cap
     // above compares the PROCESSING chain's height against a BTC-anchored
     // reference_block, so on LTC and DOGE it matches every row and admits
     // rounds the hub finalized after this block; which of them a node holds
@@ -66,7 +67,7 @@ function preloadWindow(db, blockIndex, refTime){
 async function readSnapshotAge(db, blockIndex, win){
     const { blockCap, refTime, timeCausal, timeBound } = win;
     // Pre-load the latest finalized snapshot age (blocks since last snapshot).
-    // Snapshot-age causality gate (oracle_snapshot_age_causality_activation.js):
+    // Snapshot-age causality gate (the oracle_snapshot_age_causality_activation row in src/protocol_changes/):
     // the legacy age query has NO block cap, unlike every sibling below, so a
     // node replaying block N whose DB already holds a future finalized snapshot
     // at N+k reads it and computes snapshotAge 0, while the node that first
@@ -75,8 +76,8 @@ async function readSnapshotAge(db, blockIndex, win){
     // the age query is causally capped at blockCap; below it the uncapped legacy
     // query runs so historical blocks replay byte-identically. Execution-path
     // gate (VM read), indexer-only: xchain-sync never re-runs the VM.
-    let ageCausal = snapshotAgeCausality.isOracleSnapshotAgeCausalityActive(
-        blockIndex, db.config['NETWORK'], db.config['COIN']);
+    let ageCausal = gateRegistry.activeAt('oracle_snapshot_age_causality_activation.ORACLE_SNAPSHOT_AGE_CAUSALITY_ACTIVATION',
+        db.config['NETWORK'], db.config['COIN'], blockIndex, null);
     let ageQuery = "SELECT MAX(reference_block) AS latest_block FROM price_snapshots WHERE status = 'finalized'"
                  + (ageCausal ? " AND reference_block <= ?" : "")
                  + timeBound;
@@ -120,7 +121,7 @@ async function loadLatestPrices(db, blockIndex, win, isStale){
     // resolves to that same row through the (round_number, coin_pair) unique
     // key, so bounding it twice would filter nothing further.
     let latestRows = await db.doQueryStrict(latestQuery, timeCausal ? [blockCap, refTime] : [blockCap]);
-    // Stale-round visibility gate (oracle_stale_round_visibility_activation.js).
+    // Stale-round visibility gate (the oracle_stale_round_visibility_activation row in src/protocol_changes/).
     // Below the height a stale tip is dropped from `prices` entirely, so
     // getPrice() returns null while getPriceAtRound() still carries the very
     // same round - the two views disagree about whether the round EXISTS, and
@@ -129,8 +130,8 @@ async function loadLatestPrices(db, blockIndex, win, isStale){
     // consensus history already decided. At/after the height the row is kept
     // with its PRICE WITHHELD instead: identity and consensus timestamp stay
     // readable, the stale value does not. VM-observable, hence height-gated.
-    let staleVisible = staleRoundVisibility.isOracleStaleRoundVisibilityActive(
-        blockIndex, db.config['NETWORK'], db.config['COIN']);
+    let staleVisible = gateRegistry.activeAt('oracle_stale_round_visibility_activation.ORACLE_STALE_ROUND_VISIBILITY_ACTIVATION',
+        db.config['NETWORK'], db.config['COIN'], blockIndex, null);
     for(let r of latestRows){
         let stale = isStale(Number(r.block_timestamp));
         // Legacy path: stale prices surface as no-price (null); contracts can

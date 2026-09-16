@@ -53,7 +53,7 @@
  * BINARY_ALLOC gate (xchain-vm/src/index.js, 1786060800 = 2026-08-07): that
  * flag-day is already in the past, and arming against it would retroactively
  * change blocks the fleet has processed, the exact hazard
- * ledger_amount_precision_activation.js documents.
+ * consensus/ledger_amount_precision_gate.js documents.
  *
  * `null` means NOT YET PINNED and therefore inert: the legacy arithmetic runs
  * verbatim and historical replay stays byte-identical.
@@ -78,7 +78,7 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('../../consensus/gate_registry');
 
 const SLASH_DEDUCTION_PRECISION = copy('slash_grid_activation.SLASH_DEDUCTION_PRECISION');
 

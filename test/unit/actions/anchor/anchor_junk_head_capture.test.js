@@ -39,8 +39,10 @@ const { createMockIndexer, createBaseData } = require('../../../fixtures/mocks')
 const Anchor  = require('../../../../src/actions/anchor/index.js');
 const ed25519 = require('../../../../src/consensus/ed25519.js');
 const swq     = require('../../../../src/stake_weighted_quorum.js');
-const abs     = require('../../../../src/archive_batch_author_activation.js');
-const aact    = require('../../../../src/anchor_activation.js');
+const gateRegistry = require('../../../../src/consensus/gate_registry');
+const { stubActiveAt } = require('../../../helpers/gate_modules.js');
+const AUTHOR_KEY = 'archive_batch_author_activation.ARCHIVE_BATCH_AUTHOR_ACTIVATION';
+const ANCHOR_KEY = 'anchor_activation.ANCHOR_ACTIVATION';
 
 const PUBLISHER = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const ATTACKER  = 'mzBc4XEFSdzCDcTxAgf6EZXgsZWpztRhef';
@@ -53,14 +55,12 @@ const ATTACKER  = 'mzBc4XEFSdzCDcTxAgf6EZXgsZWpztRhef';
 // activation gate the fixture heights depend on exactly as the fleet runs it.
 const ARMED_BLOCK = 500;
 
-// The height sentinel this key used to carry, reused only as a scratch inert value.
-const HEIGHT_SENTINEL = 999999999;
+// The registry row is frozen, so the key is answered inert by stubbing the read
+// for the duration of the call rather than by editing a table.
 async function belowFlag(fn) {
-    let map   = abs.ARCHIVE_BATCH_AUTHOR_ACTIVATION;
-    let saved = map.mainnet;
-    map.mainnet = HEIGHT_SENTINEL;
+    const stub = stubActiveAt(sinon, AUTHOR_KEY, false);
     try { return await fn(); }
-    finally { map.mainnet = saved; }
+    finally { stub.restore(); }
 }
 
 const PUBKEY_A = 'a'.repeat(64);
@@ -268,7 +268,7 @@ describe('ANCHOR archive batch capture by a junk head @regression @tier1', funct
         // would never reach the rule it is pinning. ARCHIVE_BATCH_AUTHOR is pinned inert
         // for this call only, since mainnet is armed at genesis in the shipped map.
         let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 2, COIN: 'DOGE', ACTION_INDEX: 40, SOURCE: PUBLISHER,
-                                    BLOCK_INDEX: aact.ANCHOR_ACTIVATION.mainnet });
+                                    BLOCK_INDEX: gateRegistry.get(ANCHOR_KEY).mainnet });
         await belowFlag(() => handler.parse(['2', '9', '1', '3', 'BBBB'], data, null));
         assert.strictEqual(data['STATUS'], 'invalid: TOTAL_CHUNKS (does not match parent v1)',
             'below the flag day the pre-existing (capturable) verdict must be reproduced byte for byte');
@@ -306,26 +306,27 @@ describe('ANCHOR archive batch capture by a junk head @regression @tier1', funct
     });
 
     it('activation is network-keyed and armed at genesis on regtest, testnet and mainnet', function () {
-        assert.strictEqual(abs.isArchiveBatchAuthorActive(0, 'regtest'), true);
+        const at = (height, network) => gateRegistry.activeAt(AUTHOR_KEY, network, null, height, null);
+        assert.strictEqual(at(0, 'regtest'), true);
         // Testnet armed at genesis by the 2026-08-11 operator ruling: the publisher-scoped
         // rule is live from block 0 there, so the rule was exercised on a real network
         // before mainnet took a height.
-        assert.strictEqual(abs.ARCHIVE_BATCH_AUTHOR_ACTIVATION.testnet, 0);
-        assert.strictEqual(abs.isArchiveBatchAuthorActive(0, 'testnet'), true);
-        assert.strictEqual(abs.isArchiveBatchAuthorActive(999999998, 'testnet'), true);
+        assert.strictEqual(gateRegistry.get(AUTHOR_KEY).testnet, 0);
+        assert.strictEqual(at(0, 'testnet'), true);
+        assert.strictEqual(at(999999998, 'testnet'), true);
         // Mainnet armed at genesis by the 2026-09-09 ruling: 0 archive chunks on mainnet
         // (measured 2026-09-09), so the rule is identity over the indexed history.
-        assert.strictEqual(abs.ARCHIVE_BATCH_AUTHOR_ACTIVATION.mainnet, 0);
+        assert.strictEqual(gateRegistry.get(AUTHOR_KEY).mainnet, 0);
         // Either sentinel reads back as "still unarmed" at the GoLiveGate.
-        assert.notStrictEqual(abs.ARCHIVE_BATCH_AUTHOR_ACTIVATION.mainnet, 999999999);
-        assert.notStrictEqual(abs.ARCHIVE_BATCH_AUTHOR_ACTIVATION.mainnet, 9999999999);
-        assert.strictEqual(abs.isArchiveBatchAuthorActive(0, 'mainnet'), true);
-        assert.strictEqual(abs.isArchiveBatchAuthorActive(999999998, 'mainnet'), true);
-        assert.strictEqual(abs.isArchiveBatchAuthorActive(NaN, 'regtest'), false);
+        assert.notStrictEqual(gateRegistry.get(AUTHOR_KEY).mainnet, 999999999);
+        assert.notStrictEqual(gateRegistry.get(AUTHOR_KEY).mainnet, 9999999999);
+        assert.strictEqual(at(0, 'mainnet'), true);
+        assert.strictEqual(at(999999998, 'mainnet'), true);
+        assert.strictEqual(at(NaN, 'regtest'), false);
         // Fails closed on mainnet too, now that its threshold is 0: NaN is not ">= 0".
-        assert.strictEqual(abs.isArchiveBatchAuthorActive(NaN, 'mainnet'), false);
+        assert.strictEqual(at(NaN, 'mainnet'), false);
         // Fails closed on an armed network too: NaN must never read as ">= 0".
-        assert.strictEqual(abs.isArchiveBatchAuthorActive(NaN, 'testnet'), false);
-        assert.strictEqual(abs.isArchiveBatchAuthorActive(0, 'nosuchnet'), false);
+        assert.strictEqual(at(NaN, 'testnet'), false);
+        assert.strictEqual(at(0, 'nosuchnet'), false);
     });
 });

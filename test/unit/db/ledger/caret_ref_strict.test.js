@@ -50,7 +50,7 @@ const { getTestConfig } = require('../../../fixtures/config');
 const Utility           = require('../../../../src/utility');
 const Database          = require('../../../../src/db');
 
-const gate = require('../../../../src/caret_ref_strict_activation');
+const gate = require('../../../../src/db/database/caret_ref_strict_gate.js');
 const { CARET_REF_STRICT_ACTIVATION, isCaretRefStrictActive, isUnresolvedCaretRef } = gate;
 
 // A real regtest-format address, used as the resolution target.

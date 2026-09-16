@@ -14,10 +14,9 @@
 'use strict';
 
 const sinon = require('sinon');
-const activation = require('../../../../../../src/consolidation_leg_amount_activation.js');
-
-// Any network the activation map does not carry reads as OFF, which is how these tests
-// reach the legacy behavior without editing the module's thresholds.
+// Any network the registry row (consolidation_leg_amount_activation, read by the
+// SEND and DESTROY leg mergers through activeAt) does not carry reads as OFF, which
+// is how these tests reach the legacy behavior without editing a threshold.
 const GATE_OFF_NETWORK = 'no-such-network';
 
 const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
@@ -39,4 +38,4 @@ function makeActionsCtx(indexer) {
     };
 }
 
-module.exports = { activation, GATE_OFF_NETWORK, SOURCE, DEST, DEST2, makeActionsCtx };
+module.exports = { GATE_OFF_NETWORK, SOURCE, DEST, DEST2, makeActionsCtx };

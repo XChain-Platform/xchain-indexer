@@ -52,7 +52,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 
 const Utility         = require('../../src/utility');
-const ledgerPrecision = require('../../src/ledger_amount_precision_activation');
+const ledgerPrecision = require('../../src/consensus/ledger_amount_precision_gate.js');
 
 describe('[regression:p0] exact-ledger flag module @money @regression @tier1', function () {
     describe('the exact scale is a pinned constant, not a tunable', function () {

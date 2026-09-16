@@ -10,7 +10,7 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// STAKE v1 signing-key REUSE flag day (src/stake_key_reuse_activation.js).
+// STAKE v1 signing-key REUSE flag day (the stake_key_reuse_activation row in src/protocol_changes/).
 //
 // WHAT IS PROVEN HERE, AND WHAT IS PROVEN ELSEWHERE. The verdicts below are the
 // ones an operator sees, so they are asserted at the ACTION layer over row sets:
@@ -39,14 +39,14 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../..
 
 const Stake          = require('../../../../src/actions/stake/index.js');
 const configModule   = require('../../../../src/config.js');
-const stakeKeyReuse  = require('../../../../src/stake_key_reuse_activation.js');
+const gateRegistry   = require('../../../../src/consensus/gate_registry');
 
 const SOURCE = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 const PUBKEY = 'b'.repeat(64);
 
 // Read the boundary off the module rather than hardcoding it, so a re-pinned
 // height moves these cases with it instead of reddening them.
-const GATE       = stakeKeyReuse.STAKE_KEY_REUSE_ACTIVATION['BTC:testnet'];
+const GATE       = gateRegistry.get('stake_key_reuse_activation.STAKE_KEY_REUSE_ACTIVATION')['BTC:testnet'];
 const AT_GATE    = GATE;
 const BELOW_GATE = GATE - 1;
 
@@ -262,56 +262,5 @@ describe('STAKE v1 signing-key reuse flag day @regression @tier2', function () {
             assert.strictEqual(status, 'invalid: SIGNING_PUBKEY (already in use)');
             assert.strictEqual(call.args[1], null);
         });
-    });
-});
-
-describe('stake_key_reuse_activation gate resolution @regression @tier1', function () {
-    const { isStakeKeyReuseActive, STAKE_KEY_REUSE_ACTIVATION } = stakeKeyReuse;
-
-    it('regtest is genesis-active', function () {
-        assert.strictEqual(STAKE_KEY_REUSE_ACTIVATION.regtest, 0);
-        assert.strictEqual(isStakeKeyReuseActive(0, 'regtest', 'BTC'), true);
-    });
-
-    it('mainnet is the inert null and reads as off at every height', function () {
-        assert.strictEqual(STAKE_KEY_REUSE_ACTIVATION['BTC:mainnet'], null);
-        assert.strictEqual(isStakeKeyReuseActive(0, 'mainnet', 'BTC'), false);
-        // The coercion this guards: `b >= null` is `b >= 0`, which would arm the
-        // widening on every block of an unratified chain.
-        assert.strictEqual(isStakeKeyReuseActive(9000000, 'mainnet', 'BTC'), false);
-    });
-
-    it('is armed per coin on testnet and flips exactly at the height', function () {
-        for (const coin of ['BTC', 'LTC', 'DOGE']) {
-            const h = STAKE_KEY_REUSE_ACTIVATION[coin + ':testnet'];
-            assert.ok(Number.isFinite(h) && h > 0, coin + ':testnet must be armed');
-            assert.strictEqual(isStakeKeyReuseActive(h - 1, 'testnet', coin), false);
-            assert.strictEqual(isStakeKeyReuseActive(h,     'testnet', coin), true);
-        }
-    });
-
-    it('prefers the coin key over the bare network key', function () {
-        // testnet's bare key is the inert null, so a hit on it instead of the coin key
-        // would read as off at a height the coin key arms.
-        assert.strictEqual(STAKE_KEY_REUSE_ACTIVATION.testnet, null);
-        assert.strictEqual(isStakeKeyReuseActive(STAKE_KEY_REUSE_ACTIVATION['BTC:testnet'], 'testnet', 'BTC'), true);
-    });
-
-    it('falls back to the bare network key for a coin with no entry', function () {
-        assert.strictEqual(isStakeKeyReuseActive(0, 'regtest', 'ZZZ'), true);
-        assert.strictEqual(isStakeKeyReuseActive(9000000, 'testnet', 'ZZZ'), false);
-    });
-
-    it('fails CLOSED on an unknown network', function () {
-        assert.strictEqual(isStakeKeyReuseActive(9000000, 'devnet', 'BTC'), false);
-    });
-
-    it('fails CLOSED on an unusable height, genesis-armed network included', function () {
-        // Number(null), Number('') and Number(false) are all a finite 0, which on
-        // regtest would read as ACTIVE and widen the predicate for an action carrying
-        // no block index at all.
-        for (const bad of [null, undefined, '', false, true, NaN, 'abc', {}])
-            assert.strictEqual(isStakeKeyReuseActive(bad, 'regtest', 'BTC'), false,
-                'unusable height ' + String(bad) + ' must not arm the gate');
     });
 });

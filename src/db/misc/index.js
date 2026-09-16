@@ -20,7 +20,7 @@
  *
  ********************************************************************/
 
-const ledgerPrecision = require('../../ledger_amount_precision_activation');
+const ledgerPrecision = require('../../consensus/ledger_amount_precision_gate');
 
 // The misc mixin is cut into parts by behaviour under misc/; this entry merges them
 // back into the one method set db/index.js installs, at the position those methods held here.
@@ -46,7 +46,7 @@ module.exports = {
         // fee against a decimals=0 XCHAIN was recorded as 0.5 in `fees` and debited
         // as 1, and a 51-sub-command batch spent 51 rather than 25.5.
         //
-        // EXACT rule (flag-day, ledger_amount_precision_activation.js): store the
+        // EXACT rule (flag-day, consensus/ledger_amount_precision_gate.js): store the
         // amount at 18 dp, i.e. exactly, and let the projections round ONCE. The
         // aggregation sites below (getTokenSupply / getHolders / sanityCheck /
         // getAddressCreditDebit) sum at 18 dp and round once at the tick's scale,

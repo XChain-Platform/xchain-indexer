@@ -12,7 +12,7 @@
  * test/unit/db/markets/db_dispenser_send_amount_compare.test.js
  *
  * Token-SEND dispense trigger numeric-compare flag-day (see
- * src/dispenser_send_amount_compare_activation.js). findDispenserSends decided
+ * src/db/dispensers/dispenser_send_amount_compare_gate.js). findDispenserSends decided
  * affordability with `s1.amount >= d1.get_amount` over two VARCHAR(250)
  * columns, i.e. a lexicographic compare: get_amount '9' against a send of '10'
  * was FALSE, so a legal overpayment produced no DISPENSE at all and the
@@ -45,7 +45,7 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../../../fixtures/config');
 const Utility           = require('../../../../src/utility');
 const Database          = require('../../../../src/db');
-const dsc               = require('../../../../src/dispenser_send_amount_compare_activation');
+const dsc               = require('../../../../src/db/dispensers/dispenser_send_amount_compare_gate.js');
 
 // The exact predicate text that shipped before this gate existed, indentation
 // included. Emitting anything else on an unpinned chain re-evaluates already
@@ -235,8 +235,7 @@ describe('token-SEND dispense affordability compare gate @regression @tier1', fu
         it('does not ride an already-passed flag-day', function () {
             // The dispense-cancelling gate armed 2026-08-07, in the past. Hanging this
             // correction on it would arm it retroactively over committed blocks.
-            const dcm = require('../../../../src/dispense_cancelling_match_activation');
-            const passed = dcm.DISPENSE_CANCELLING_MATCH_ACTIVATION.mainnet;
+            const passed = require('../../../../src/consensus/gate_registry').get('dispense_cancelling_match_activation.DISPENSE_CANCELLING_MATCH_ACTIVATION').mainnet;
             assert.ok(passed, 'expected the sibling gate to carry a mainnet threshold');
             assert.notStrictEqual(dsc.DISPENSER_SEND_AMOUNT_COMPARE_ACTIVATION['BTC:mainnet'], passed);
         });

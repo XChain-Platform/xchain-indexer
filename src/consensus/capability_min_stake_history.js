@@ -12,55 +12,66 @@
  *
  * XChain Platform: as-of-block capability MIN_STAKE reconstruction.
  *
- * A capability's qualifying validator set is defined by a threshold that is
- * BLOCK-ANCHORED: xchain-hub resolves it through
- * CapabilityRegistry.getMinStake(capability, blockIndex), walking a
- * block-anchored history (genesis value, then one entry per finalized
- * governance change) to the value effective AT that block. Making the
- * threshold a deterministic function of block height is what makes a
- * snapshot federation-deterministic: every hub resolving the same block
- * folds in the same min_stake and agrees on quorum N. db.js honours a
- * caller-supplied minStake verbatim for the same reason: it never clamps to
- * this node's own coin-config floor, since local config drifts between
- * independently-operated indexers.
+ * WHAT THIS IS FOR. A capability's qualifying validator set is defined by a
+ * threshold, and that threshold is BLOCK-ANCHORED: xchain-hub resolves it through
+ * CapabilityRegistry.getMinStake(capability, blockIndex), which walks a
+ * block-anchored history (genesis value from the operator config, then one entry
+ * per finalized governance change carrying the proposer-declared activation_block)
+ * and returns the value effective AT that block. Making the threshold a
+ * deterministic function of block height is what makes a snapshot
+ * federation-deterministic: every hub resolving the same block folds the same
+ * min_stake into its request, so all of them lock the identical qualifying set and
+ * agree on quorum N.
+ *
+ * xchain-indexer's database layer honours a caller-supplied minStake VERBATIM for
+ * exactly that reason: it never clamps it to this node's own coin-config floor,
+ * because the local config drifts between independently-operated indexers and a
+ * clamp would make two indexers resolve two different sets for one block.
  *
  * THE HOLE THIS CLOSES. AnchorRecovery._verifyCompleteness re-derives the
- * qualifying set for an archived snapshot and checks that the archive
- * dropped no qualifying source, but it passed no threshold, so db.js applied
- * this node's local coin-config MIN_STAKE, not the bar the archive was built
- * at. A governance MIN_STAKE above the local floor makes the check stricter
- * than the honest hub that wrote the archive: the re-resolution reports
- * sources the hub correctly excluded, and disaster recovery halts on honest
- * data. Below the local floor the check merely under-catches.
+ * qualifying set for an ARCHIVED snapshot and checks that the archive dropped no
+ * qualifying source. It passed NO threshold, so the database applied this node's
+ * local coin-config MIN_STAKE. That is not the bar the archive was built at:
  *
- * Recovery runs with no surviving hub database and the indexer mirrors no
- * hub governance table, so the only source that survives a total hub loss is
- * a frozen, block-anchored table shipped in the software itself. This module
- * is that table plus the resolution rule, so recovery reconstructs the
- * threshold the archive was built at from the snapshot block alone.
+ *   - a governance MIN_STAKE ABOVE the local floor makes the check STRICTER than
+ *     the honest hub that wrote the archive. The re-resolution reports sources the
+ *     hub correctly excluded, completeness calls the archive incomplete, and
+ *     DISASTER RECOVERY HALTS on honest data;
+ *   - below the local floor the check merely under-catches.
  *
- * ARMING IS A COORDINATED FLEET ACT, NOT AN EDIT HERE. MIN_STAKE_ACTIVATIONS
- * is empty on every network today: the hub pins governance MIN_STAKE changes
- * off and asserts its genesis value against the canonical coins registry at
- * boot, so the effective threshold everywhere is the genesis floor and this
- * module reproduces that exactly. Adding an entry changes acceptance (which
- * archives verify, and on the live path which validators qualify), so it
- * must land in the SAME coordinated release as the matching hub-side history
- * or the two resolve different sets for the same block and fork. Never add
- * an entry to "match" a hub that has already moved: fix the hub.
+ * Recovery runs with NO surviving hub database, so it cannot ask a hub, and the
+ * indexer mirrors no hub governance table. The only source that survives a total
+ * hub loss is a FROZEN, block-anchored table shipped in the software itself: the
+ * block-height flag-day that xchain-hub's CapabilityRegistry names in its
+ * MIN_STAKE_GOVERNANCE_DISABLED note. This module is that table plus the
+ * resolution rule, so recovery reconstructs the threshold the archive was built at
+ * from the snapshot block alone.
  *
- * PLANE. Callers resolve at the height they actually re-derive the validator
- * set at, which for a capability snapshot is the declared snapshot_block
- * already buried by snapshot_reorg_buffer.js (the hub buries first and
- * resolves its own threshold at the buried height). Resolving the threshold
- * at the raw height while resolving the set at the buried one would
+ * ARMING IS A COORDINATED FLEET ACT, NOT AN EDIT HERE. MIN_STAKE_ACTIVATIONS is
+ * EMPTY on every network today, which is the deployed truth: the hub pins
+ * governance MIN_STAKE changes off (MIN_STAKE_GOVERNANCE_DISABLED = true) and
+ * asserts its own genesis value against the canonical coins registry at boot, so
+ * the effective threshold at every block IS the genesis floor and this module
+ * reproduces today's behaviour exactly. Adding an entry here changes ACCEPTANCE
+ * (which archives verify, and on the live path which validators qualify), so an
+ * entry must land in the SAME coordinated release as the matching hub-side history
+ * or the two resolve different sets for the same block and fork. Never add one to
+ * "match" a hub that has already moved: fix the hub. Since W3 the table itself is
+ * the registry row capability_min_stake_history.MIN_STAKE_ACTIVATIONS in
+ * src/protocol_changes/; this module reads it and applies the resolution rule.
+ *
+ * PLANE. Callers resolve at the height they actually re-derive the validator set
+ * at: for a capability snapshot that is the DECLARED snapshot_block already
+ * BURIED by snapshot_reorg_buffer.js, because the hub buries first and resolves
+ * its threshold at the buried height (CapabilitySnapshot.getSnapshot). Resolving
+ * the threshold at the raw height while resolving the set at the buried one would
  * reintroduce, in the threshold, precisely the split this module removes.
  *
  ********************************************************************/
 
 'use strict';
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('./gate_registry');
 
 const mathjs = require('mathjs');
 

@@ -68,14 +68,14 @@
  *
  ********************************************************************/
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('../../consensus/gate_registry');
 
 const DISPENSER_SEND_COMPARE_SCALE = copy('dispenser_send_amount_compare_activation.DISPENSER_SEND_COMPARE_SCALE');
 
 const DISPENSER_SEND_AMOUNT_COMPARE_ACTIVATION = copy('dispenser_send_amount_compare_activation.DISPENSER_SEND_AMOUNT_COMPARE_ACTIVATION');
 
 // Per-chain threshold with a network-wide fallback, byte-for-byte the lookup
-// stateHash.js / ledger_amount_precision_activation.js use. A coin-less caller
+// stateHash.js / consensus/ledger_amount_precision_gate.js use. A coin-less caller
 // (unit fixtures) falls through to the bare network key and stays inert on
 // mainnet/testnet, which is the safe side.
 function _activationThreshold(map, network, coin){

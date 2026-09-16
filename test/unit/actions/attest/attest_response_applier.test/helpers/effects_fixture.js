@@ -20,8 +20,8 @@ const { createMockIndexer, createBaseData } = require('../../../../../fixtures/m
 
 const Attest   = require('../../../../../../src/actions/attest/index.js');
 const swq     = require('../../../../../../src/stake_weighted_quorum.js');
-const attestAdmission = require('../../../../../../src/attest_admission_activation.js');
-const attestBcastFee  = require('../../../../../../src/attest_broadcast_fee_activation.js');
+const { stubActiveAt } = require('../../../../../helpers/gate_modules.js');
+const attestBcastFee  = require('../../../../../../src/actions/attest/attest_broadcast_fee_gate.js');
 const ed25519 = require('../../../../../../src/consensus/ed25519.js');
 
 const { PUBKEY_A, REQ_ID, BLOCK_TIME, mirrorRow, requestRow } = require('./rows.js');
@@ -80,7 +80,7 @@ function setupEffects() {
     const handler = new Attest(actionsCtx);
     indexer.util.resetLists();
     sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
-    sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(false);
+    stubActiveAt(sinon, 'attest_admission_activation.ATTEST_ADMISSION_ACTIVATION', false);
     sinon.stub(attestBcastFee, 'isAttestBroadcastFeeActive').returns(false);
     sinon.stub(ed25519, 'verify').returns(true);
     return { indexer, actionsCtx, handler, executeStub };

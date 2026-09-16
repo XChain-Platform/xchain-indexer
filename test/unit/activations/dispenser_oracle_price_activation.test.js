@@ -13,13 +13,14 @@
  **********************************************************************
  * test/unit/activations/dispenser_oracle_price_activation.test.js
  *
- * Mode B create-time effective-oracle-price flag-day. The predicate is pinned
- * both sides of the gate, and mainnet is pinned ARMED AT GENESIS by the
- * 2026-09-09 operator ruling: mainnet carries 0 dispensers and 0 dispenses
- * (measured 2026-09-09), so a create-acceptance tightening at height 0 has no
- * create to re-judge and forks no from-genesis replay. Moving this value is an
- * operator act, so a change is expected to fail here and be re-pinned
- * deliberately.
+ * Mode B create-time effective-oracle-price flag-day. Mainnet is ARMED AT
+ * GENESIS by the 2026-09-09 operator ruling: mainnet carries 0 dispensers and 0
+ * dispenses (measured 2026-09-09), so a create-acceptance tightening at height
+ * 0 has no create to re-judge and forks no from-genesis replay. The row itself
+ * (dispenser_oracle_price_activation.DISPENSER_ORACLE_PRICE_ACTIVATION) is
+ * pinned by the v2 fingerprint and compared row by row by the registry suites;
+ * since W4 the create path reads it through activeAt() by that key, so the
+ * "below the gate" case stubs the registry read rather than a shim predicate.
  *
  * The behavior the gate arms is pinned below: the precondition is a validity
  * rule that must run on a create carrying an ORACLE_ADDRESS whatever it escrows,
@@ -34,56 +35,9 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon  = require('sinon');
-const { isDispenserOraclePriceActive, DISPENSER_ORACLE_PRICE_ACTIVATION } =
-    require('../../../src/dispenser_oracle_price_activation.js');
+const gateRegistry = require('../../../src/consensus/gate_registry');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../fixtures/mocks');
 const Dispenser = require('../../../src/actions/dispenser/index.js');
-
-describe('dispenser Mode B oracle-price activation predicate @regression @tier1', function () {
-
-    it('mainnet is ARMED AT GENESIS by the 2026-09-09 ruling, never a sentinel', function () {
-        assert.strictEqual(DISPENSER_ORACLE_PRICE_ACTIVATION.mainnet, 0);
-        // The GoLiveGate readback reads either sentinel as "still unarmed", so a
-        // regression back to one is a launch blocker, not a cosmetic diff.
-        assert.notStrictEqual(DISPENSER_ORACLE_PRICE_ACTIVATION.mainnet, 9999999999);
-        assert.notStrictEqual(DISPENSER_ORACLE_PRICE_ACTIVATION.mainnet, 999999999);
-        assert.strictEqual(isDispenserOraclePriceActive(0, 'mainnet'), true);
-        assert.strictEqual(isDispenserOraclePriceActive(1, 'mainnet'), true);
-        assert.strictEqual(isDispenserOraclePriceActive(1786060800, 'mainnet'), true);
-        assert.strictEqual(isDispenserOraclePriceActive(9999999999, 'mainnet'), true);
-    });
-
-    it('testnet and regtest are genesis-active (pre-launch cohort)', function () {
-        assert.strictEqual(DISPENSER_ORACLE_PRICE_ACTIVATION.testnet, 0);
-        assert.strictEqual(DISPENSER_ORACLE_PRICE_ACTIVATION.regtest, 0);
-        assert.strictEqual(isDispenserOraclePriceActive(0, 'testnet'), true);
-        assert.strictEqual(isDispenserOraclePriceActive(1, 'regtest'), true);
-    });
-
-    it('unknown network or unparseable time is off (safe: keeps legacy acceptance)', function () {
-        assert.strictEqual(isDispenserOraclePriceActive(9999999999, 'stagenet'), false);
-        assert.strictEqual(isDispenserOraclePriceActive('nonsense', 'regtest'), false);
-        assert.strictEqual(isDispenserOraclePriceActive(undefined, 'mainnet'), false);
-    });
-
-    it('the gate is indexer-only: no xchain-sync twin to keep in step', function () {
-        // Same shape as dispenser_caps_activation. This is an execution-path gate on
-        // create acceptance, not a hashing-path change, so a missing sync-side copy is
-        // correct rather than an oversight. Pin it so a future reader does not "fix" it.
-        const fs   = require('fs');
-        const path = require('path');
-        const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
-        // An absence claim is only as good as the checkout it looks in: a refused sync
-        // root (absent, or a lane symlink into a live main checkout) proves nothing.
-        const syncRoot = siblingCheckout(__dirname, '../../../../xchain-sync');
-        if (!syncRoot.usable)
-            return skipOrFail(this, syncRoot, 'the indexer-only sync twin absence pin');
-        const twin = path.resolve(
-            __dirname, '../../../../xchain-sync/src/dispenser_oracle_price_activation.js');
-        assert.strictEqual(fs.existsSync(twin), false,
-            'this gate is indexer-only; a sync twin would imply a hashing-path change');
-    });
-});
 
 let indexer, actionsCtx, dispenser;
 
@@ -199,8 +153,8 @@ describe('Mode B create requires an effective oracle price @regression @tier2', 
     it('still accepts that same create BELOW the gate (replay stays byte-identical)', async function () {
         // Historical blocks must re-evaluate exactly as they did, so below the flag-day
         // the legacy acceptance runs even though the oracle has published nothing.
-        const gate = require('../../../src/dispenser_oracle_price_activation.js');
-        sinon.stub(gate, 'isDispenserOraclePriceActive').returns(false);
+        sinon.stub(gateRegistry, 'activeAt').callThrough()
+            .withArgs('dispenser_oracle_price_activation.DISPENSER_ORACLE_PRICE_ACTIVATION').returns(false);
         indexer.indexerDb.getOraclePrice = sinon.stub().resolves(null);
 
         const data = modeBData();

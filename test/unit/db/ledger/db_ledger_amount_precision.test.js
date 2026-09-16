@@ -45,7 +45,7 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../../../fixtures/config');
 const Utility           = require('../../../../src/utility');
 const Database          = require('../../../../src/db');
-const ledgerPrecision   = require('../../../../src/ledger_amount_precision_activation');
+const ledgerPrecision   = require('../../../../src/consensus/ledger_amount_precision_gate.js');
 
 function makeDb(network, coin) {
     const config = getTestConfig();

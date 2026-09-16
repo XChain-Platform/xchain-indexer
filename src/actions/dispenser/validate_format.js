@@ -21,9 +21,8 @@
 
 'use strict';
 
-const dispenserGiveAmount = require('../../dispenser_give_amount_activation.js');
-const dispenserOraclePrice = require('../../dispenser_oracle_price_activation.js');
-const dispenserAmountPositivity = require('../../dispenser_amount_positivity_activation.js');
+// The three create-format gates are registry rows read by literal key (W4).
+const gateRegistry = require('../../consensus/gate_registry');
 
 // Installed onto Dispenser.prototype by index.js; each method runs with `this`
 // bound to the handler, exactly as the inline code it was.
@@ -76,11 +75,11 @@ module.exports = {
         // payments. GIVE_ESCROW is deliberately NOT constrained here: an empty
         // escrow is a legitimate open-now-refill-later dispenser, and with a
         // positive GIVE_AMOUNT the clamp drives the multiplier to 0 so the dispense
-        // settles invalid and consumes nothing. Gated (see
-        // dispenser_give_amount_activation.js): this rejects creates the ungated
+        // settles invalid and consumes nothing. Gated (the
+        // dispenser_give_amount_activation row): this rejects creates the ungated
         // engine accepts, so replay below the flag-day stays byte-identical.
         if(!error && format==0 && !isOwnershipGive &&
-           dispenserGiveAmount.isDispenserGiveAmountActive(data['BLOCK_TIME'], this.config['NETWORK']) &&
+           gateRegistry.activeAt('dispenser_give_amount_activation.DISPENSER_GIVE_AMOUNT_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']) &&
            (this.util.isNull(data['GIVE_AMOUNT']) || !this.util.bcgt(data['GIVE_AMOUNT'], '0')))
             error = "invalid: GIVE_AMOUNT (required and greater than 0 when GIVE_OWNERSHIP=0)";
 
@@ -99,9 +98,9 @@ module.exports = {
         // Verify a NATIVE-COIN-priced GET_AMOUNT against COIN_DECIMALS, as order.js resolves
         // its native side. The rule above is a conjunct on getTokenInfo, which an empty
         // GET_TICK never loads, so that shape reached storage with no sign or precision
-        // check. Gated (dispenser_amount_positivity_activation.js): it rejects creates the
-        // ungated engine accepts, so replay below the threshold stays byte-identical.
-        let getAmountPositivity = dispenserAmountPositivity.isDispenserAmountPositivityActive(data['BLOCK_TIME'], this.config['NETWORK']);
+        // check. Gated (the dispenser_amount_positivity_activation row): it rejects creates
+        // the ungated engine accepts, so replay below the threshold stays byte-identical.
+        let getAmountPositivity = gateRegistry.activeAt('dispenser_amount_positivity_activation.DISPENSER_AMOUNT_POSITIVITY_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);
         if(!error && format==0 && getAmountPositivity && this.util.isNull(data['GET_TICK']) &&
            !this.util.isNull(data['GET_AMOUNT']) && !this.util.isValidAmountFormat(this.config['COIN_DECIMALS'], data['GET_AMOUNT'], data['BLOCK_TIME']))
             error = "invalid: GET_AMOUNT (format)";
@@ -168,10 +167,10 @@ module.exports = {
         // through the fee path, and checking every edit unconditionally would newly reject
         // expiration-only or list-only edits on a dispenser whose oracle is perfectly fine.
         //
-        // Gated (see dispenser_oracle_price_activation.js): this rejects creates the ungated
+        // Gated (see the dispenser_oracle_price_activation row in src/protocol_changes/): this rejects creates the ungated
         // engine accepts, so replay below the flag-day stays byte-identical.
         if(!error && format==0 && !this.util.isNull(data['ORACLE_ADDRESS']) &&
-           dispenserOraclePrice.isDispenserOraclePriceActive(data['BLOCK_TIME'], this.config['NETWORK']) &&
+           gateRegistry.activeAt('dispenser_oracle_price_activation.DISPENSER_ORACLE_PRICE_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']) &&
            await this.actions.protocolChanges.isEnabled('FIAT_DISPENSER_PRICING', data['BLOCK_INDEX'])){
             let priceCheck = await this.util.requireEffectiveOraclePrice(data['BLOCK_TIME'], {
                 ORACLE_ADDRESS: data['ORACLE_ADDRESS'],

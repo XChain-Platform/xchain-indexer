@@ -37,7 +37,8 @@ const { getTestConfig } = require('../../../fixtures/config');
 const Utility  = require('../../../../src/utility');
 const Database = require('../../../../src/db');
 const Anchor   = require('../../../../src/actions/anchor/index.js');
-const aact     = require('../../../../src/anchor_activation.js');
+const gateRegistry = require('../../../../src/consensus/gate_registry');
+const ANCHOR_HEIGHTS = gateRegistry.get('anchor_activation.ANCHOR_ACTIVATION');
 
 const HASH   = (c) => c.repeat(64);
 const PUBKEY = 'a'.repeat(64);
@@ -124,7 +125,7 @@ describe('ANCHOR retired wires on a from-genesis replay @regression', function (
     afterEach(() => sinon.restore());
 
     it('a v5 anchor below ANCHOR_ACTIVATION is recorded invalid with SQL-safe bound values', async function () {
-        const below = aact.ANCHOR_ACTIVATION.testnet - 1;
+        const below = ANCHOR_HEIGHTS.testnet - 1;
         assert.ok(below > 0, 'testnet activation is pinned above genesis');
         const data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 5, COIN: 'DOGE', BLOCK_INDEX: below, ACTION_INDEX: 12 });
         await handler.parse(v5Params(), data, null);
@@ -141,7 +142,7 @@ describe('ANCHOR retired wires on a from-genesis replay @regression', function (
     });
 
     it('a v7 bundle below ANCHOR_ACTIVATION (three sections walked as one head) is recorded SQL-safe too', async function () {
-        const below = aact.ANCHOR_ACTIVATION.testnet - 1;
+        const below = ANCHOR_HEIGHTS.testnet - 1;
         // The old bundle: VERSION|NETWORK|SNAPSHOT_BLOCK|SECTION_COUNT|<sections...>|PUBLISHER|...
         const section = (chain) => [chain, '150208', HASH('0'), HASH('1'), HASH('2'), HASH('3'), '150208', '150208',
                                     HASH('d'), '2', HASH('e'), '1', '1', PUBKEY, SIG];
@@ -174,7 +175,7 @@ describe('ANCHOR retired wires on a from-genesis replay @regression', function (
     afterEach(() => sinon.restore());
 
     it('a hostile v1 at/above activation with junk in bounded fields is recorded SQL-safe, so one bad ANCHOR cannot park the indexer', async function () {
-        const at = aact.ANCHOR_ACTIVATION.testnet;
+        const at = ANCHOR_HEIGHTS.testnet;
         // v1 layout with a 64-char "crc", a hash where MATCH_COUNT goes, a 130-char publisher.
         const params = ['1', 'BTC', 'testnet', '500', HASH('0'), HASH('1'), HASH('2'), HASH('3'),
                         '0', '100', '0', HASH('9'), HASH('c'), '1', 'AAAA', '1', PUBKEY, SIG,

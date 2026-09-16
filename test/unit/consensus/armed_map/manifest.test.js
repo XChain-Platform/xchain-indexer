@@ -37,6 +37,7 @@ const PARTS = path.join(SRC, 'protocol_changes');
 const manifest = require('../../../../src/consensus/armed_map/manifest.js');
 const { canonicalValue } = require('../../../../src/consensus/armed_map/canonical.js');
 const ProtocolChanges = require('../../../../src/protocol_changes.js');
+const { GATE_MODULE_PATHS, REPLACED_STEMS } = require('../../../helpers/gate_modules.js');
 
 // The two declaration shapes that made a file a carrier. ACTIVATION_MAP is the
 // activation-map rule the platform's code-structure gate grades with, and
@@ -70,13 +71,18 @@ function scanDeclarations(root) {
     return found;
 }
 
-// The modules the registry replaced: every *_activation.js at the top of src/
-// and the seven fixed carriers, read as the running process resolves them.
+// The modules the registry replaced: every *_activation.js still at the top of
+// src/ (the W5 twins), the logic-bearing modules W4 moved to their feature
+// directories (keyed by the registry stem they kept), and the seven fixed
+// carriers, read as the running process resolves them.
 const FIXED = ['protocol/constants.js', 'stateHash.js', 'attestation/providerMinStakeHistory.js',
-    'stake_weighted_quorum.js', 'equivocation_header.js', 'snapshot_reorg_buffer.js', 'capability_min_stake_history.js'];
+    'stake_weighted_quorum.js', 'equivocation_header.js', 'snapshot_reorg_buffer.js'];
 function shimModules() {
-    return fs.readdirSync(SRC).filter((f) => f.endsWith('_activation.js')).sort().concat(FIXED)
-        .map((rel) => [rel.replace(/\.js$/, ''), require(path.join(SRC, rel))]);
+    const top = fs.readdirSync(SRC).filter((f) => f.endsWith('_activation.js')).sort()
+        .map((rel) => [rel.replace(/\.js$/, ''), rel]);
+    const moved = Object.entries(GATE_MODULE_PATHS);
+    return top.concat(moved, FIXED.map((rel) => [rel.replace(/\.js$/, ''), rel]))
+        .map(([stem, rel]) => [stem, require(path.join(SRC, rel))]);
 }
 
 describe('armed_map/manifest: completeness guard', function () {
@@ -103,7 +109,7 @@ describe('armed_map/manifest: completeness guard', function () {
         }
     });
 
-    it('every non-function export of every shim module is a row, and every row but the time table and the VM mirror is exported by one', function () {
+    it('every non-function export of every shim module is a row, and every row but the time table, the VM mirror and the W4-replaced predicates is exported by one', function () {
         const keys = rowKeys();
         const missing = [];
         const exported = new Set();
@@ -115,8 +121,14 @@ describe('armed_map/manifest: completeness guard', function () {
             }
         }
         assert.deepStrictEqual(missing, [], 'exported data outside the v2 rows: ' + missing.join(', '));
+        // A row nobody exports is read only through activeAt() by its literal
+        // key: that is exactly the W4 census, one row per replaced shim, and a
+        // new row that no module and no census names still reds here.
         const unexported = [...keys].filter((k) => !k.startsWith('protocol_changes.') && !k.startsWith('xchain-vm.') && !exported.has(k));
-        assert.deepStrictEqual(unexported, [], 'rows no shim exports: ' + unexported.join(', '));
+        const replaced = [...keys].filter((k) => REPLACED_STEMS.includes(k.slice(0, k.lastIndexOf('.'))));
+        assert.strictEqual(replaced.length, REPLACED_STEMS.length, 'one registry row per replaced shim');
+        assert.deepStrictEqual(unexported, replaced, 'rows no shim exports, beyond the W4-replaced set: ' +
+            unexported.filter((k) => !replaced.includes(k)).join(', '));
     });
 
 });

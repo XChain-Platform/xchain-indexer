@@ -21,7 +21,7 @@
 
 'use strict';
 
-const attestBcastFee  = require('../../attest_broadcast_fee_activation.js');
+const attestBcastFee  = require('./attest_broadcast_fee_gate.js');
 const wid     = require('../../attest_responsible_widening_activation.js');
 // The zero-conf flip, keyed on the REQUEST's own block. Read here for the fulfilled
 // fee split, which pays the verified signers rather than the widened set above it.
@@ -140,7 +140,7 @@ module.exports = {
         // escrow BEFORE the split, because it reimburses a cost the broadcaster
         // already paid a miner rather than rewarding the work the split pays for.
         // Below the gate it is '0' and the split sees the whole fee, byte-identically
-        // to the pre-flag-day ledger. See attest_broadcast_fee_activation.js.
+        // to the pre-flag-day ledger. See attest_broadcast_fee_gate.js.
         broadcastFee = await this.broadcastFeeReimbursement(request, data, responsible, feeAmount, feeCap);
         // Below the gate (and on any request that reimburses nothing) the escrow is
         // handed to the split UNTOUCHED rather than round-tripped through bcsub: a
@@ -232,7 +232,7 @@ module.exports = {
     //
     // The three pinned decisions this implements (denomination, broadcaster identity,
     // amount bound) and why each is shaped the way it is live in
-    // attest_broadcast_fee_activation.js; only the mechanics are here.
+    // attest_broadcast_fee_gate.js; only the mechanics are here.
     //
     //   `data`        the SETTLING action (v1 response or v4 relay response). Its
     //                 BLOCK_INDEX/BLOCK_TIME anchor both the flag-day test and the
@@ -294,7 +294,7 @@ module.exports = {
     // Same block-gated, staleness-guarded oracle read the native-coin fee check runs
     // (utility.validateNativeCoinFee), anchored on the settle block's own height and
     // time. A missing or stale feed reimburses ZERO rather than wedging the settle:
-    // see the ORACLE LIVENESS note in attest_broadcast_fee_activation.js.
+    // see the ORACLE LIVENESS note in attest_broadcast_fee_gate.js.
     //
     // Returns the prices, or null when there is nothing usable to convert with, which
     // the caller reimburses zero on.

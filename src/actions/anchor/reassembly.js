@@ -20,7 +20,7 @@
  *
  ********************************************************************/
 
-const ahug = require('../../archive_head_unverified_gate_activation.js');
+const gateRegistry = require('../../consensus/gate_registry');
 const aaq  = require('./anchor_action_query.js');
 const diag = require('./diagnostic_events.js');
 
@@ -48,11 +48,13 @@ const { getLogger } = require('../../observability/index.js');
 // lands, while a snapshot-less node's same head is 'unverified' with error null and
 // DOES stamp. invalid_archive is projected by stateHash.js class 6, so ungated the
 // two classes silently fork wherever ARCHIVE_INVALID_STATE_HASH_ACTIVATION is armed.
-// Rationale and the pinning train live in archive_head_unverified_gate_activation.js;
-// do not re-argue it here.
+// Rationale and the pinning train live beside the registry row
+// archive_head_unverified_gate_activation.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION
+// in src/protocol_changes/; do not re-argue it here.
 async function reassembleAtHead(handler, data, error, format){
-    let admitUnverifiedHead = ahug.isArchiveHeadUnverifiedGateActive(
-        Number(data['BLOCK_INDEX']), handler.config['NETWORK']);
+    let admitUnverifiedHead = gateRegistry.activeAt(
+        'archive_head_unverified_gate_activation.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION',
+        handler.config['NETWORK'], null, Number(data['BLOCK_INDEX']), null);
     if(!error &&
        (data['STATUS'] === 'valid' || (admitUnverifiedHead && data['STATUS'] === 'unverified')) &&
        Number(data['TOTAL_CHUNKS']) > 1){
@@ -88,7 +90,7 @@ async function reassembleAtHead(handler, data, error, format){
 // chunk is never stored 'unverified', since only parseCheckpoint's snapshot-less
 // branch assigns that status, so the '|| unverified' term is unreachable on this
 // path and carries no flag day of its own; the head-side twin's 'unverified' term
-// IS gated, see archive_head_unverified_gate_activation.js, because there it is
+// IS gated, see the archive_head_unverified_gate_activation row in src/protocol_changes/, because there it is
 // reachable and preimage-moving). Completeness is decided by index coverage, never
 // by a bare chunk count, so a stray out-of-range orphan can neither pad an
 // incomplete set to length nor block a complete one.

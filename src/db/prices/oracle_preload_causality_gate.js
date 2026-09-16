@@ -73,14 +73,14 @@
  * EXECUTION-PATH gate (a VM read) rather than a change to how a row is hashed,
  * so it is indexer-only with no xchain-sync twin: xchain-sync's BlockHasher
  * reads already-materialized contract rows and never re-runs the VM. Sibling
- * gates over the same preload: oracle_snapshot_age_causality_activation.js and
- * oracle_stale_round_visibility_activation.js, both of which stay in force.
+ * gates over the same preload: the oracle_snapshot_age_causality_activation and
+ * oracle_stale_round_visibility_activation registry rows, both of which stay in force.
  *
  ********************************************************************/
 
 'use strict';
 
-const { get, copy, activeAt } = require('./consensus/gate_registry');
+const { get, copy, activeAt } = require('../../consensus/gate_registry');
 
 const ORACLE_PRELOAD_CAUSALITY_REFERENCE_COIN = copy('oracle_preload_causality_activation.ORACLE_PRELOAD_CAUSALITY_REFERENCE_COIN');
 

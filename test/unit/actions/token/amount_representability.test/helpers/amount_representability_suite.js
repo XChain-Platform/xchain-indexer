@@ -14,7 +14,7 @@
 'use strict';
 
 const sinon = require('sinon');
-const activation = require('../../../../../../src/amount_representability_activation.js');
+const activation = require('../../../../../../src/utility/amount_representability_gate.js');
 
 // Any network the activation map does not carry reads as OFF, which is how these tests
 // reach the legacy behavior without editing the module's thresholds.

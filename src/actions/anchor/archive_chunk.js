@@ -18,7 +18,7 @@
  *
  ********************************************************************/
 
-const abas       = require('../../archive_batch_author_activation.js');
+const gateRegistry = require('../../consensus/gate_registry');
 const diag       = require('./diagnostic_events.js');
 const validate   = require('./validate.js');
 const reassembly = require('./reassembly.js');
@@ -37,7 +37,7 @@ async function resolveChunkParent(handler, data, error){
         // both the legacy parent AND the flag-day anchor, so a head and its chunks
         // can never be judged under two different rules.
         let canonical = await handler.indexerDb.getAnchorV1ByBatchSeq(Number(data['MATCH_BATCH_SEQ']));
-        if(canonical && abas.isArchiveBatchAuthorActive(Number(canonical.block_index_doge), handler.config['NETWORK'])){
+        if(canonical && gateRegistry.activeAt('archive_batch_author_activation.ARCHIVE_BATCH_AUTHOR_ACTIVATION', handler.config['NETWORK'], null, Number(canonical.block_index_doge), null)){
             // Publisher-scoped batch: the parent is the earliest head for this seq
             // authored by THIS chunk's publisher. A junk head squatting the seq is
             // then the head of its own batch only, and governs neither the geometry

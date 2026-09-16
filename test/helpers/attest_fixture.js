@@ -19,8 +19,8 @@ const { createMockIndexer, createBaseData } = require('../fixtures/mocks');
 
 const Attest          = require('../../src/actions/attest/index.js');
 const swq             = require('../../src/stake_weighted_quorum.js');
-const attestAdmission = require('../../src/attest_admission_activation.js');
-const attestBcastFee  = require('../../src/attest_broadcast_fee_activation.js');
+const { stubActiveAt } = require('./gate_modules.js');
+const attestBcastFee  = require('../../src/actions/attest/attest_broadcast_fee_gate.js');
 const arm             = require('../../src/attest_response_mirror_activation.js');
 // Same module instance Attest holds a reference to (Node module cache); stubbing
 // `verify` here controls signature acceptance inside the handler.
@@ -125,7 +125,7 @@ function setUpAttestHandler() {
     // fixtures' redundancy-3 requests against a 1-validator snapshot stay
     // 'valid'; the gate's own describe below re-enables it. (regtest arms the
     // gate at genesis, so this must be stubbed off here, mirroring swq above.)
-    sinon.stub(attestAdmission, 'isAttestAdmissionActive').returns(false);
+    stubActiveAt(sinon, 'attest_admission_activation.ATTEST_ADMISSION_ACTIVATION', false);
     // Same treatment for the leader broadcast-fee carve-out: regtest arms it at genesis, so
     // the fixtures above would otherwise settle through the carve-out path and every
     // legacy split assertion would move. Its own describe below re-enables it.

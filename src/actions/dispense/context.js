@@ -22,7 +22,7 @@
 'use strict';
 
 const divergenceMetrics = require('../../chain/dispenser_divergence_metrics.js');
-const tallyScaleActivation = require('../../dispense_payment_tally_scale_activation.js');
+const tallyScaleActivation = require('./dispense_payment_tally_scale_gate.js');
 
 // Installed onto Dispense.prototype by index.js; each method runs with `this`
 // bound to the handler, exactly as the inline code it was.
@@ -166,7 +166,7 @@ module.exports = {
         // 8 dp holds a native-coin payment exactly and ROUNDS a token one: a SEND
         // trigger carries the sent tick's own amount, and a tick may be issued with up
         // to MAX_TOKEN_DECIMALS. Gated, because it changes the fill count a payment buys
-        // (dispense_payment_tally_scale_activation.js carries the two rounding failures
+        // (dispense_payment_tally_scale_gate.js carries the two rounding failures
         // and the unarmed-mainnet argument). The batch pool is excluded there: it counts
         // the transaction's coin settlement value and coinpay.js formats it at 8 dp.
         let tallyScale = tallyScaleActivation.dispenseTallyScale(

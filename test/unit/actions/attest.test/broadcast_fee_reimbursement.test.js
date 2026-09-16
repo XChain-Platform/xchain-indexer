@@ -24,7 +24,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const crypto = require('crypto');
 
-const attestBcastFee = require('../../../../src/attest_broadcast_fee_activation.js');
+const attestBcastFee = require('../../../../src/actions/attest/attest_broadcast_fee_gate.js');
 // Same module instance Attest holds a reference to (Node module cache); stubbing
 // `verify` here controls signature acceptance inside the handler.
 const ed25519 = require('../../../../src/consensus/ed25519.js');

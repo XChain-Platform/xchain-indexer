@@ -39,9 +39,9 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../../../fixtures/config');
 const Utility           = require('../../../../src/utility');
 const Database          = require('../../../../src/db');
-const dcm               = require('../../../../src/dispense_cancelling_match_activation');
+const gateRegistry      = require('../../../../src/consensus/gate_registry');
 
-const FLAG_DAY = dcm.DISPENSE_CANCELLING_MATCH_ACTIVATION.mainnet; // 1786060800
+const FLAG_DAY = gateRegistry.get('dispense_cancelling_match_activation.DISPENSE_CANCELLING_MATCH_ACTIVATION').mainnet; // 1786060800
 
 // Build a Database with an injected config + a captured doQuery.
 function dbFor(network) {

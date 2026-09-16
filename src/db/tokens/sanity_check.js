@@ -21,7 +21,7 @@
  *
  ********************************************************************/
 
-const ledgerPrecision = require('../../ledger_amount_precision_activation');
+const ledgerPrecision = require('../../consensus/ledger_amount_precision_gate');
 
 const { getLogger } = require('../../observability/index.js');
 

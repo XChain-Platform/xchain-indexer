@@ -12,7 +12,7 @@
  * test/unit/price/db_oracle_stale_round_visibility.test.js
  *
  * VM oracle stale-round visibility flag-day (see
- * src/oracle_stale_round_visibility_activation.js). db.getOracleDataForVM()
+ * the oracle_stale_round_visibility_activation row in src/protocol_changes/). db.getOracleDataForVM()
  * applied its freshness guard to the `prices` view only: a stale tip round was
  * dropped there while `rounds` still carried the same round, so getPrice()
  * reported "no oracle data" about a round getPriceAtRound() could read. A
@@ -43,7 +43,8 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../../fixtures/config');
 const Utility           = require('../../../src/utility');
 const Database          = require('../../../src/db');
-const srv               = require('../../../src/oracle_stale_round_visibility_activation');
+const gateRegistry      = require('../../../src/consensus/gate_registry');
+const STALE_ROW         = 'oracle_stale_round_visibility_activation.ORACLE_STALE_ROUND_VISIBILITY_ACTIVATION';
 
 const PAIR      = 'BTC/USD';
 const BLOCK_TS  = 1700000000;
@@ -185,46 +186,20 @@ describe('VM oracle stale-round visibility gate (getOracleDataForVM) @regression
 });
 
 describe('VM oracle stale-round visibility gate (getOracleDataForVM) @regression @tier1', function () {
-    describe('activation-module predicate', function () {
-
-        it('regtest is active from genesis at any block height', function () {
-            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(0, 'regtest', 'BTC'), true);
-            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(999999, 'regtest', 'BTC'), true);
-        });
-
-        it('mainnet is armed per coin: inert below the height, active at/after it', function () {
-            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(966499, 'mainnet', 'BTC'), false);
-            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(966500, 'mainnet', 'BTC'), true);
-            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(3175499, 'mainnet', 'LTC'), false);
-            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(3175500, 'mainnet', 'LTC'), true);
-            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(6369999, 'mainnet', 'DOGE'), false);
-            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(6370000, 'mainnet', 'DOGE'), true);
-        });
+    describe('the registry row oracle_vm_snapshot.js reads', function () {
 
         it('is pinned ahead of the tip the first carrying fleet deploys at', function () {
             // The heights are the gate's whole safety property: a flag day at or
             // below the tip that first carries this code has a retroactive window,
             // in which a node that reindexes derives different contract state from
             // one that does not. Pin them exactly, so a re-pin has to come here.
-            assert.deepStrictEqual(srv.ORACLE_STALE_ROUND_VISIBILITY_ACTIVATION, {
+            assert.deepStrictEqual(gateRegistry.get(STALE_ROW), {
                 'BTC:mainnet':  966500,
                 'LTC:mainnet':  3175500,
                 'DOGE:mainnet': 6370000,
                 testnet: 0,
                 regtest: 0
             });
-        });
-
-        it('testnet is genesis-active for every coin (pre-launch cohort)', function () {
-            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(0, 'testnet', 'BTC'), true);
-            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(0, 'testnet', 'DOGE'), true);
-            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(999999999, 'testnet', 'LTC'), true);
-        });
-
-        it('unknown network or unparseable height is off (safe: keeps deployed behavior)', function () {
-            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(0, 'stagenet', 'BTC'), false);
-            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive('nonsense', 'regtest', 'BTC'), false);
-            assert.strictEqual(srv.isOracleStaleRoundVisibilityActive(undefined, 'regtest', 'BTC'), false);
         });
     });
 });

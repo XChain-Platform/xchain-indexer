@@ -26,24 +26,24 @@ const { createMockIndexer, createBaseData } = require('../../../fixtures/mocks')
 const Anchor  = require('../../../../src/actions/anchor/index.js');
 const ed25519 = require('../../../../src/consensus/ed25519.js');
 const swq     = require('../../../../src/stake_weighted_quorum.js');
-const ahug    = require('../../../../src/archive_head_unverified_gate_activation.js');
-const aact    = require('../../../../src/anchor_activation.js');
+const gateRegistry = require('../../../../src/consensus/gate_registry');
+const { stubActiveAt } = require('../../../helpers/gate_modules.js');
+const HEAD_GATE_KEY = 'archive_head_unverified_gate_activation.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION';
+const ANCHOR_KEY    = 'anchor_activation.ANCHOR_ACTIVATION';
 
 // A mainnet fixture must be mined AT OR ABOVE the ANCHOR activation height or the
 // activation gate rejects it before any flag day is consulted, and these cases are
 // about the flag day, not the restart.
-const MAINNET_ACTIVE = aact.ANCHOR_ACTIVATION.mainnet;
+const MAINNET_ACTIVE = gateRegistry.get(ANCHOR_KEY).mainnet;
 
 // Mainnet is armed at genesis since the 2026-09-09 ruling, so the network name alone
-// no longer reaches the below-flag arm. Pin THIS key inert for the duration of a call
-// and leave the ANCHOR activation gate the fixture heights depend on untouched.
-const HEIGHT_SENTINEL = 999999999;
+// no longer reaches the below-flag arm. Answer THIS key inert for the duration of a
+// call (the registry row is frozen, so the read is stubbed rather than the table
+// edited) and leave the ANCHOR activation gate the fixture heights depend on untouched.
 async function belowFlag(fn) {
-    let map   = ahug.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION;
-    let saved = map.mainnet;
-    map.mainnet = HEIGHT_SENTINEL;
+    const stub = stubActiveAt(sinon, HEAD_GATE_KEY, false);
     try { return await fn(); }
-    finally { map.mainnet = saved; }
+    finally { stub.restore(); }
 }
 
 const PUBKEY_A = 'a'.repeat(64);
@@ -52,7 +52,7 @@ const HASH     = (c) => c.repeat(64);
 // The lowest DOGE height at which a testnet ANCHOR parses at all: below the v0
 // activation every version is 'invalid: ANCHOR before activation', which would make
 // these reassembly cases pass for the wrong reason.
-const TESTNET_ACTIVE = aact.ANCHOR_ACTIVATION.testnet;
+const TESTNET_ACTIVE = gateRegistry.get(ANCHOR_KEY).testnet;
 
 function crc32Hex(str) {
     let buf = Buffer.from(str, 'utf8');
@@ -242,28 +242,29 @@ describe('Anchor head-side reassembly gate: unverified flag-day @regression', fu
     afterEach(function () { verifyStub.restore(); swqStub.restore(); });
 
     it('every network is armed at 0, mainnet included since the 2026-09-09 ruling', function () {
-        assert.strictEqual(ahug.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION.mainnet, 0,
+        assert.strictEqual(gateRegistry.get(HEAD_GATE_KEY).mainnet, 0,
             'mainnet armed at genesis: 0 archive chunks there (measured 2026-09-09), so the ' +
             'widened head-side gate has no invalid_archive stamp to move');
         // Either sentinel reads back as "still unarmed" at the GoLiveGate.
-        assert.notStrictEqual(ahug.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION.mainnet, 999999999);
-        assert.notStrictEqual(ahug.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION.mainnet, 9999999999);
+        assert.notStrictEqual(gateRegistry.get(HEAD_GATE_KEY).mainnet, 999999999);
+        assert.notStrictEqual(gateRegistry.get(HEAD_GATE_KEY).mainnet, 9999999999);
         // Testnet is armed from genesis: its indexer state is rebuilt from the chain, so the
         // widened gate contradicts nothing already indexed under the narrower rule.
-        assert.strictEqual(ahug.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION.testnet, 0, 'testnet armed at genesis');
-        assert.strictEqual(ahug.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION.regtest, 0, 'regtest armed at genesis');
+        assert.strictEqual(gateRegistry.get(HEAD_GATE_KEY).testnet, 0, 'testnet armed at genesis');
+        assert.strictEqual(gateRegistry.get(HEAD_GATE_KEY).regtest, 0, 'regtest armed at genesis');
     });
 
-    it('the predicate is fail-closed on a junk height or an unknown network', function () {
-        assert.strictEqual(ahug.isArchiveHeadUnverifiedGateActive('nope', 'regtest'), false);
-        assert.strictEqual(ahug.isArchiveHeadUnverifiedGateActive(null, 'regtest'), false);
-        assert.strictEqual(ahug.isArchiveHeadUnverifiedGateActive(0, 'nosuchnet'), false);
-        assert.strictEqual(ahug.isArchiveHeadUnverifiedGateActive(0, 'regtest'), true);
-        assert.strictEqual(ahug.isArchiveHeadUnverifiedGateActive(0, 'testnet'), true);
-        assert.strictEqual(ahug.isArchiveHeadUnverifiedGateActive(0, 'mainnet'), true);
-        assert.strictEqual(ahug.isArchiveHeadUnverifiedGateActive(999999998, 'mainnet'), true);
+    it('the gate read is fail-closed on a junk height or an unknown network', function () {
+        const at = (height, network) => gateRegistry.activeAt(HEAD_GATE_KEY, network, null, height, null);
+        assert.strictEqual(at('nope', 'regtest'), false);
+        assert.strictEqual(at(null, 'regtest'), false);
+        assert.strictEqual(at(0, 'nosuchnet'), false);
+        assert.strictEqual(at(0, 'regtest'), true);
+        assert.strictEqual(at(0, 'testnet'), true);
+        assert.strictEqual(at(0, 'mainnet'), true);
+        assert.strictEqual(at(999999998, 'mainnet'), true);
         // Fail-closed still binds on mainnet now that its threshold is 0: NaN is not ">= 0".
-        assert.strictEqual(ahug.isArchiveHeadUnverifiedGateActive('nope', 'mainnet'), false);
+        assert.strictEqual(at('nope', 'mainnet'), false);
     });
 
     it('gate INERT (mainnet, key pinned inert), unverified head, corrupt blob: deployed valid-only rule stands, no stamp', async function () {
@@ -315,12 +316,12 @@ describe('Anchor head-side reassembly gate: unverified flag-day @regression', fu
     });
 
     it('the gate is keyed on the HEAD\'s own DOGE height: one block below the threshold is inert', async function () {
-        const map  = ahug.ARCHIVE_HEAD_UNVERIFIED_GATE_ACTIVATION;
-        const prev = map.regtest;
-        map.regtest = 500;
+        // A regtest threshold of 500 for this key only; the registry row is frozen.
+        const stub = stubActiveAt(sinon, HEAD_GATE_KEY, false);
+        stub.withArgs(HEAD_GATE_KEY).callsFake((key, network, coin, height) => Number(height) >= 500);
         try {
             assert.strictEqual((await stampedAt('regtest', 499, true)).stamped, false, 'one block below the height must be inert');
             assert.strictEqual((await stampedAt('regtest', 500, true)).stamped, true, 'the threshold block itself is active');
-        } finally { map.regtest = prev; }
+        } finally { stub.restore(); }
     });
 });

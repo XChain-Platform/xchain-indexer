@@ -97,16 +97,28 @@ describe('bin/reachability.js', function () {
         });
 
         it('does not count a module reached only from its own suite', () => {
-            const lint = report.files['src/vm_exec_lint_activation.js'];
-            assert.strictEqual(lint.reachableFromIndexerRuntime, false);
-            assert.strictEqual(lint.reachableFromTooling, false);
-            assert.strictEqual(lint.testOnly, true);
+            // The utf8mb4 column helper is a module only a suite holds: nothing
+            // on the runtime or tooling path requires it.
+            const columns = report.files['src/chain/utf8mb4_columns.js'];
+            assert.strictEqual(columns.reachableFromIndexerRuntime, false);
+            assert.strictEqual(columns.reachableFromTooling, false);
+            assert.strictEqual(columns.testOnly, true);
         });
 
         it('keeps a module whose only caller is a kept non-runtime file', () => {
-            const history = report.files['src/capability_min_stake_history.js'];
+            const history = report.files['src/consensus/capability_min_stake_history.js'];
             assert.strictEqual(history.reachableFromIndexerRuntime, false);
             assert.deepStrictEqual(history.requiredByInRepo, ['bin/recovery.js']);
+        });
+
+        it('reaches every gate module W4 moved into a feature directory from the runtime', () => {
+            // The ten logic-bearing activation modules kept their bodies and moved
+            // beside their callers; a move that broke a require would read here as
+            // an unreached module, not as a failing action test somewhere else.
+            const moved = Object.keys(report.files).filter((f) => /^src\/.+\/[a-z0-9_]+_gate\.js$/.test(f)
+                && f !== 'src/api/auth_gate.js' && f !== 'src/XChainIndexer/train_gate.js');
+            assert.strictEqual(moved.length, 10, 'the W4 census: ten moved gate modules, found ' + moved.join(', '));
+            for (const f of moved) assert.strictEqual(report.files[f].reachableFromIndexerRuntime, true, f + ' is not on the runtime path');
         });
     });
 
@@ -140,8 +152,7 @@ describe('bin/reachability.js', function () {
                 'src/chain/utf8mb4_columns.js',
                 'src/consensus/xchain_price.js',
                 'src/consensus/xchain_price_query.js',
-                'src/vm_exec_lint_activation.js',
-            ], 'the four test-only modules are candidates that only the sibling sweep clears');
+            ], 'the three test-only modules are candidates that only the sibling sweep clears');
         });
     });
 });
