@@ -66,7 +66,8 @@ function makeQueue(pushBatchStub, rows){
         pushPriceBatch:  pushBatchStub,
         retractPriceRange: sinon.stub().resolves(),
         retractXcallRange: sinon.stub().resolves(),
-        retractMatchRange: sinon.stub().resolves()
+        retractMatchRange: sinon.stub().resolves(),
+        retractBridgeRange: sinon.stub().resolves()
     };
     let indexerDb = {
         getPendingHubPushes:  sinon.stub().resolves(rows),

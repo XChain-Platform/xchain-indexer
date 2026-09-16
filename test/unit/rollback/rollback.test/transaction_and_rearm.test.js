@@ -164,7 +164,7 @@ describe('Rollback @regression @tier3', function () {
     // throws into the transaction catch: every delete is rolled back, commit never happens, and no
     // retraction is delivered. The driver retries the reorg idempotently.
     it('rolls back the transaction and issues no retraction when bumpPushGeneration fails', async function () {
-        const hubClient = { enabled: true, retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
+        const hubClient = { enabled: true, retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves(), retractBridgeRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
         const rb = new Rollback(idx);
@@ -214,8 +214,8 @@ describe('Rollback @regression @tier3', function () {
     });
 
     // ─── Retractions are write-ahead-staged in-tx, then delivered + dropped on success ─────
-    it('write-aheads all three retractions inside the tx and marks each delivered on live success', async function () {
-        const hubClient = { enabled: true, retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves() };
+    it('write-aheads all four range retractions inside the tx and marks each delivered on live success', async function () {
+        const hubClient = { enabled: true, retractPriceRange: sinon.stub().resolves(), retractXcallRange: sinon.stub().resolves(), retractMatchRange: sinon.stub().resolves(), retractBridgeRange: sinon.stub().resolves() };
         const idx = createMockIndexer({ hubClient });
         idx.protocolChanges = { isDefined: sinon.stub().returns(true), isEnabled: sinon.stub().resolves(true) };
         let n = 0; idx.indexerDb.enqueueHubPushTx = sinon.stub().callsFake(async () => ++n);
@@ -225,16 +225,16 @@ describe('Rollback @regression @tier3', function () {
         idx.indexerDb.doQuery.onFirstCall().resolves([{ action_index: 50 }]);
         idx.indexerDb.doQuery.resolves([]);
         await rb.rollback(100);
-        // All three retraction types were write-ahead-staged...
+        // All four range retraction types were write-ahead-staged...
         const stagedTypes = idx.indexerDb.enqueueHubPushTx.getCalls().map(c => c.args[0]);
-        for (const t of ['price_retraction', 'xcall_retraction', 'match_retraction'])
+        for (const t of ['price_retraction', 'xcall_retraction', 'match_retraction', 'bridge_retraction'])
             assert.ok(stagedTypes.includes(t), `expected a write-ahead ${t} row`);
         // ...before the commit (durable regardless of any post-commit crash)...
         assert.ok(idx.indexerDb.enqueueHubPushTx.getCall(0).calledBefore(idx.indexerDb.commitTransaction.getCall(0)),
             'write-ahead rows must be staged inside the transaction (before commit)');
-        // ...and each was delivered live then dropped (ids 1,2,3).
+        // ...and each was delivered live then dropped (ids 1,2,3,4).
         const delivered = idx.indexerDb.markHubPushDelivered.getCalls().map(c => c.args[0]).sort();
-        assert.deepStrictEqual(delivered, [1, 2, 3], 'every successfully delivered write-ahead row must be dropped');
+        assert.deepStrictEqual(delivered, [1, 2, 3, 4], 'every successfully delivered write-ahead row must be dropped');
     });
 
     // ─── Anchor invalid_archive reset interns 'unverified' before the UPDATE ─────

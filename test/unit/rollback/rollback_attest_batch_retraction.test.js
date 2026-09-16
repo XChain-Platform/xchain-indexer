@@ -57,6 +57,7 @@ function makeRollback(opts){
         retractPriceRange:  sinon.stub().resolves(),
         retractXcallRange:  sinon.stub().resolves(),
         retractMatchRange:  sinon.stub().resolves(),
+        retractBridgeRange: sinon.stub().resolves(),
         retractAttestBatch: sinon.stub().resolves()
     }, opts.hubClient || {});
 
@@ -193,8 +194,9 @@ describe('Rollback: ATTEST batch-link retraction (spec §6.3, row 55)', function
         assert.strictEqual(stagedAttestCalls(none.idx).length, 0);
         assert.strictEqual(none.hubClient.retractAttestBatch.callCount, 0,
             'no batch un-landed means no retraction, not an empty one');
-        // The three range retractions are unaffected either way.
+        // The four range retractions are unaffected either way.
         assert.strictEqual(none.hubClient.retractPriceRange.callCount, 1);
+        assert.strictEqual(none.hubClient.retractBridgeRange.callCount, 1);
     });
 
     it('never purges its own durable retraction row on a deeper nested reorg', async function(){

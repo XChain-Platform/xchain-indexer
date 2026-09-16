@@ -100,12 +100,15 @@ module.exports = {
         let bumpedGeneration = await this.indexerDb.bumpPushGeneration(this.config['COIN']);
         retractionGeneration = bumpedGeneration - 1;
 
-        // Write-ahead the three retraction intents as durable pending_hub_pushes rows, committed
+        // Write-ahead the four range retraction intents as durable pending_hub_pushes rows, committed
         // atomically with the rollback. Enqueuing the retractions only in the post-commit failure
         // path drops them permanently when a crash (or DB-pool blip) lands between commit and the
         // live RPC: the retried reorg skips rollback() (lastIndexerBlock already below
         // minReorgBlock), so they are never re-issued, leaving orphaned 'finalized' hub rows
-        // serving fleet-wide. The rows are inserted AFTER the dataTables purge, so this
+        // serving fleet-wide. The bridge retraction rides the same range because a lock or burn
+        // orphaned before its effective_time would otherwise stay 'finalized' on every hub and
+        // mirror and the destination chain would mint from a lock that is no longer on this chain.
+        // The rows are inserted AFTER the dataTables purge, so this
         // rollback's own orphan delete cannot remove them; and a deeper later reorg's purge
         // deliberately EXCLUDES these retraction push_types (HUB-RETRACT-2 nested-reorg guard,
         // see the pending_hub_pushes delete above), so they are never superseded by a later
@@ -113,7 +116,7 @@ module.exports = {
         // durable rows are CLOSED-range (bounded by lastActionIndex): a queued drain runs after
         // replay may have re-published rows above lastActionIndex, which must be preserved.
         if(firstActionIndex !== null && this.hubClient && this.hubClient.enabled){
-            for(let pushType of ['price_retraction', 'xcall_retraction', 'match_retraction']){
+            for(let pushType of ['price_retraction', 'xcall_retraction', 'match_retraction', 'bridge_retraction']){
                 let id = await this.indexerDb.enqueueHubPushTx(pushType, {
                     coin: this.config['COIN'], action_index: firstActionIndex,
                     last_action_index: lastActionIndex, retraction_generation: retractionGeneration });
@@ -214,7 +217,7 @@ module.exports = {
     // durably staged in pending_hub_pushes inside the rollback transaction, so even a crash right
     // here loses nothing: HubPushQueue drains the surviving rows on restart. Here we just try an
     // IMMEDIATE live delivery to prune the hub's orphaned oracle_prices / cross_chain_calls /
-    // cross_chain_matches rows without waiting for the queue's backoff, and drop the durable row
+    // cross_chain_matches / bridge_transfers rows without waiting for the queue's backoff, and drop the durable row
     // on success. Any failure simply leaves the row for the queue (retractions are idempotent and
     // generation-fenced, so re-delivery is safe).
     //
@@ -236,6 +239,7 @@ module.exports = {
                     price_retraction: (last) => this.hubClient.retractPriceRange(coin, firstActionIndex, last, retractionGeneration),
                     xcall_retraction: (last) => this.hubClient.retractXcallRange(coin, firstActionIndex, last, retractionGeneration),
                     match_retraction: (last) => this.hubClient.retractMatchRange(coin, firstActionIndex, last, retractionGeneration),
+                    bridge_retraction: (last) => this.hubClient.retractBridgeRange(coin, firstActionIndex, last, retractionGeneration),
                     // Takes the staged PAYLOAD rather than a range ceiling: this retraction names
                     // one batch, and the live and deferred deliveries are byte-identical because
                     // there is no open-ended form to narrow. It is the same payload the durable
@@ -250,7 +254,8 @@ module.exports = {
                         // Live delivery failed; the durable (closed-range) write-ahead row stays for
                         // HubPushQueue to retry with backoff. A dropped retraction would otherwise
                         // leave orphaned 'finalized' hub rows serving fleet-wide (stale prices, XCALL
-                        // relay rows eligible for re-injection, matches eligible for settlement).
+                        // relay rows eligible for re-injection, matches eligible for settlement,
+                        // bridge transfers eligible to mint on the destination chain).
                         getLogger().warn('Rollback: live ' + r.pushType + ' failed; durable row ' + r.id +
                             ' will be retried by HubPushQueue:', err && err.message);
                     }

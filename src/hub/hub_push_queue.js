@@ -281,6 +281,10 @@ class HubPushQueue {
             // Reorg DEX cross-chain match retraction parked by rollback.js when the
             // live RPC failed. retractMatchRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
             await this.hubClient.retractMatchRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
+        } else if(row.push_type === 'bridge_retraction'){
+            // Reorg bridge transfer retraction parked by rollback.js when the live RPC
+            // failed. retractBridgeRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
+            await this.hubClient.retractBridgeRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
         } else {
             getLogger().warn('HubPushQueue: row ' + row.id + ' has unknown push_type "' + row.push_type + '", marking failed');
             await this.indexerDb.recordHubPushAttempt(row.id, 'unknown push_type', 1);
@@ -293,8 +297,8 @@ class HubPushQueue {
     // `price_round` push is re-derivable, so retiring it to 'failed' after maxAttempts is
     // fine. A '*_retraction' row is the ONLY remaining record that the hub must prune an orphaned
     // range: retiring it (a hub outage overlapping a reorg exhausts the ~10-attempt backoff
-    // in under an hour) permanently strands stale prices and 'finalized' XCALL/DEX rows on
-    // the hub and every mirror, eligible for re-injection/settlement, with the evidence
+    // in under an hour) permanently strands stale prices and 'finalized' XCALL/DEX/bridge rows on
+    // the hub and every mirror, eligible for re-injection/settlement/minting, with the evidence
     // parked invisibly in a terminal row. Retractions are idempotent and generation-fenced,
     // so retrying forever at the max backoff is safe; keep them 'pending' indefinitely.
     //

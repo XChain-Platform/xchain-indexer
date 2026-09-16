@@ -284,14 +284,15 @@ function registerHubPushQueueGroup11() { describe('_attempt()', function(){
         // ─── Retractions are exempt from the attempt cap ─────
         // A reorg retraction is the ONLY remaining record that the hub must prune an orphaned
         // range; retiring it to 'failed' after maxAttempts (a hub outage overlapping a reorg)
-        // permanently strands stale prices / 'finalized' XCALL+DEX rows on the hub. Retractions
+        // permanently strands stale prices / 'finalized' XCALL+DEX+bridge rows on the hub. Retractions
         // are idempotent + generation-fenced, so they must retry indefinitely, never retire.
-        for(const rt of ['price_retraction', 'xcall_retraction', 'match_retraction', 'attest_batch_retraction']){
+        for(const rt of ['price_retraction', 'xcall_retraction', 'match_retraction', 'bridge_retraction', 'attest_batch_retraction']){
             it('does NOT retire a ' + rt + ' after maxAttempts failures (retries forever)', async function(){
                 let indexer = makeIndexer();
                 indexer.hubClient.retractPriceRange = sinon.stub().rejects(new Error('hub down'));
                 indexer.hubClient.retractXcallRange = sinon.stub().rejects(new Error('hub down'));
                 indexer.hubClient.retractMatchRange = sinon.stub().rejects(new Error('hub down'));
+                indexer.hubClient.retractBridgeRange = sinon.stub().rejects(new Error('hub down'));
                 indexer.hubClient.retractAttestBatch = sinon.stub().rejects(new Error('hub down'));
                 let q = new HubPushQueue(indexer, { maxAttempts: 3 });
                 // A row that has already burned through maxAttempts: a forward push would be retired.

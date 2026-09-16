@@ -30,6 +30,7 @@ function makeIndexer(hubClientOpts){
         retractPriceRange: sinon.stub().resolves(),
         retractXcallRange: sinon.stub().resolves(),
         retractMatchRange: sinon.stub().resolves(),
+        retractBridgeRange: sinon.stub().resolves(),
         retractAttestBatch: sinon.stub().resolves()
     }, hubClientOpts || {});
 

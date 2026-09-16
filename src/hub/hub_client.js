@@ -261,11 +261,29 @@ class HubClient {
         return this.push('pushdexreorg', params, this.reorgApiKey);
     }
 
+    // Notify the hub that a reorg rolled back XBRIDGE lock/burn actions on this chain so it can
+    // retract any bridge_transfers rows whose SOURCE leg sits in the orphaned range. The hub marks
+    // them 'retracted', releases the source-leg guard, forgets the finalized ring entry and
+    // broadcasts deletions, so every indexer mirroring bridge_transfers drops the row (otherwise a
+    // 'finalized' transfer from an orphaned lock stays eligible to mint on the destination chain).
+    // sourceChain:     the chain this indexer serves (BTC/LTC/DOGE)
+    // fromActionIndex: lowest rolled-back action_index; the hub retracts transfers for this
+    //                  source_chain whose src_action_index is >= this value.
+    // toActionIndex (optional): closed-range upper bound for a deferred retraction.
+    // retractionGeneration (optional): see retractPriceRange (fenced on push_generation by the hub).
+    async retractBridgeRange(sourceChain, fromActionIndex, toActionIndex, retractionGeneration){
+        if(!this.enabled) return;
+        let params = { source_chain: sourceChain, from_action_index: fromActionIndex };
+        if(toActionIndex !== undefined && toActionIndex !== null) params.to_action_index = toActionIndex;
+        if(retractionGeneration !== undefined && retractionGeneration !== null) params.retraction_generation = retractionGeneration;
+        return this.push('pushbridgereorg', params, this.reorgApiKey);
+    }
+
     // Notify the hub that a reorg un-landed an ATTEST v5/v6 batch this chain carried, so
     // it can clear the batch link that landing stamped on every response the batch
     // carried.
     //
-    // NOT A RANGE, and not a delete. The other three retractions above name a rolled-back
+    // NOT A RANGE, and not a delete. The four range retractions above name a rolled-back
     // action range and the hub removes what that range seeded; this one names ONE batch,
     // because the hub-side effect is to NULL a single link column and never to remove a
     // row: a mirror row is legitimate whichever batch carried it (its federation

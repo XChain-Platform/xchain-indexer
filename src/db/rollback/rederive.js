@@ -42,7 +42,7 @@ module.exports = {
             // drain later is safe: their fence cannot delete rows re-published after
             // this reorg's generation bump.
             if(table === 'pending_hub_pushes'){
-                query = `DELETE FROM pending_hub_pushes WHERE action_index >= ? AND push_type NOT IN ('price_retraction', 'xcall_retraction', 'match_retraction', 'attest_batch_retraction')`;
+                query = `DELETE FROM pending_hub_pushes WHERE action_index >= ? AND push_type NOT IN ('price_retraction', 'xcall_retraction', 'match_retraction', 'bridge_retraction', 'attest_batch_retraction')`;
             }
             await db.doQuery(query, args);
         }

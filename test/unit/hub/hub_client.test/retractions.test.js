@@ -8,8 +8,8 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// HubClient retraction methods: retractPriceRange, retractXcallRange and
-// retractMatchRange against a stubbed call(): the disabled guard, the reorg
+// HubClient retraction methods: retractPriceRange, retractXcallRange,
+// retractMatchRange and retractBridgeRange against a stubbed call(): the disabled guard, the reorg
 // method and payload each sends, and rejection propagation.
 // Part of the HubClient suite; see ../hub_client.test.js.
 
@@ -141,6 +141,64 @@ describe('HubClient', function(){
             let c = new HubClient('http://hub.example.com', '');
             sinon.stub(c, 'call').rejects(new Error('dex reorg error'));
             await assert.rejects(() => c.retractMatchRange('BTC', 1), /dex reorg error/);
+        });
+    });
+});
+
+// -----------------------------------------------------------------------
+// retractBridgeRange
+// -----------------------------------------------------------------------
+describe('HubClient', function(){
+    afterEach(restoreStubsAndHubEnv);
+
+    describe('retractBridgeRange()', function(){
+        it('returns immediately without calling _call when not enabled', async function(){
+            let c = new HubClient('', '');
+            let callStub = sinon.stub(c, 'call').resolves({});
+            let result = await c.retractBridgeRange('BTC', 42);
+            assert.strictEqual(callStub.callCount, 0);
+            assert.strictEqual(result, undefined);
+        });
+
+        it('calls _call with pushbridgereorg and correct payload', async function(){
+            let c = new HubClient('http://hub.example.com', '');
+            let callStub = sinon.stub(c, 'call').resolves({});
+            await c.retractBridgeRange('LTC', 999);
+            assert.strictEqual(callStub.calledOnce, true);
+            assert.strictEqual(callStub.firstCall.args[0], 'pushbridgereorg');
+            let payload = callStub.firstCall.args[1];
+            assert.strictEqual(payload.source_chain, 'LTC');
+            assert.strictEqual(payload.from_action_index, 999);
+            // No bound or generation passed => neither key present (open-ended, no fence).
+            assert.ok(!('to_action_index' in payload));
+            assert.ok(!('retraction_generation' in payload));
+        });
+
+        it('threads to_action_index + retraction_generation into the payload when given', async function(){
+            let c = new HubClient('http://hub.example.com', '');
+            let callStub = sinon.stub(c, 'call').resolves({});
+            await c.retractBridgeRange('BTC', 50, 75, 5);
+            let payload = callStub.firstCall.args[1];
+            assert.strictEqual(payload.from_action_index, 50);
+            assert.strictEqual(payload.to_action_index, 75);
+            assert.strictEqual(payload.retraction_generation, 5);
+        });
+
+        it('carries the reorg api key, exactly as retractMatchRange does', async function(){
+            let c = new HubClient('http://hub.example.com', 'bulk-key');
+            c.reorgApiKey = 'reorg-key';
+            let callStub = sinon.stub(c, 'call').resolves({});
+            await c.retractMatchRange('BTC', 1);
+            await c.retractBridgeRange('BTC', 1);
+            assert.strictEqual(callStub.callCount, 2);
+            assert.strictEqual(callStub.secondCall.args[2], 'reorg-key');
+            assert.strictEqual(callStub.secondCall.args[2], callStub.firstCall.args[2]);
+        });
+
+        it('propagates rejection from _call', async function(){
+            let c = new HubClient('http://hub.example.com', '');
+            sinon.stub(c, 'call').rejects(new Error('bridge reorg error'));
+            await assert.rejects(() => c.retractBridgeRange('BTC', 1), /bridge reorg error/);
         });
     });
 });
