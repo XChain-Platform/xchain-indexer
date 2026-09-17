@@ -81,6 +81,29 @@ describe('HubDbSync watchdog measures transport not processing (ITEM 2477) @regr
     });
 });
 
+describe('HubDbSync anchor-stamp stream delivery @regression @tier2', function () {
+    afterEach(function () { sinon.restore(); });
+
+    it('updates only an already-admitted match and has no insert fallback', async function () {
+        const write = sinon.stub().resolves({ affectedRows: 1 });
+        const s = new HubDbSync({ doQuery: write, doQueryStrict: write },
+            { hubUrl: 'http://hub.test' });
+
+        s.enqueueStreamFrame({
+            type: 'row:anchor-stamped', table: 'cross_chain_matches',
+            match_id: 'm-after-window', anchor_txid: 'dogetx_after_window'
+        });
+        await s._msgChain;
+
+        assert.strictEqual(write.callCount, 1, 'one metadata update reaches the mirror');
+        assert.strictEqual(write.firstCall.args[0],
+            'UPDATE cross_chain_matches SET anchor_txid = COALESCE(anchor_txid, ?) WHERE match_id = ?');
+        assert.deepStrictEqual(write.firstCall.args[1], ['dogetx_after_window', 'm-after-window']);
+        assert.ok(!/INSERT/i.test(write.firstCall.args[0]),
+            'an absent match must stay absent until REST bootstrap admits it');
+    });
+});
+
 describe('HubDbSync watchdog measures transport not processing (ITEM 2477) @regression @tier2', function () {
     this.timeout(15000);
 
