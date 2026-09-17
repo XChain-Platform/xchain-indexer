@@ -299,11 +299,11 @@ module.exports = {
             // open foreign transaction when invoked on the view - defeating the reorg-path isolation
             // that routes createReorg / the rollback read-phase through this view (REORG-1).
             this._apiView.doQueryStrict = (query, args) => this.poolQuery(query, args);
-            // Own block_time memo so a federation read's getBlockTime (XCC-2 expiration filter)
-            // can never torn-write or evict the block loop's shared _blockTimeCache, which feeds
-            // the consensus-path ProtocolChanges.isEnabled. Without this the view inherits the
-            // instance's single-entry memo by reference (Object.create) and the two paths race.
+            // Own both time memos so an API read cannot refill or evict the block loop's
+            // caches while a reorg clears them. Without these properties the view inherits
+            // the instance's single-entry memos by reference through Object.create.
             this._apiView._blockTimeCache = { block_index: null, block_time: null };
+            this._apiView._protocolTimeCache = { block_index: null, block_time: null };
         }
         return this._apiView;
     },

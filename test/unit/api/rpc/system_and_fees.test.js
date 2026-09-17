@@ -150,12 +150,10 @@ describe('JSON-RPC system family: getblockhashes @regression @tier1', function (
     });
 });
 
-// A fee-family indexer double. oraclefeequote is a public read off the raw
-// handle, so the tip reads sit on indexerDb itself rather than on its apiView().
+// A fee-family indexer double. oraclefeequote reads the tip and oracle rows from
+// the API view, keeping its connection and time memos outside the block loop.
 function indexerWithActions(actions, util, tip = { getLatestBlockIndex: async () => 9, getBlockTime: async () => 1700000000 }) {
-    const indexer = fakeIndexer({ actions, util });
-    Object.assign(indexer.indexerDb, tip);
-    return indexer;
+    return fakeIndexer({ actions, util, view: tip });
 }
 
 describe('JSON-RPC fee family @regression @tier1', function () {

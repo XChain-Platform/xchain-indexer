@@ -101,10 +101,11 @@ function oracleFeeQuoteRpc({ indexer }){
             if(!indexer.indexerDb || !indexer.util)
                 return { error: 'indexer not ready' };
             try {
+                let db = indexer.indexerDb.apiView();
                 let ts = Number(blockTime);
                 if(!Number.isFinite(ts) || ts <= 0){
-                    let tip = await indexer.indexerDb.getLatestBlockIndex();
-                    ts = Number(await indexer.indexerDb.getBlockTime(tip)) || 0;
+                    let tip = await db.getLatestBlockIndex();
+                    ts = Number(await db.getBlockTime(tip)) || 0;
                 }
                 if(!Number.isFinite(ts) || ts <= 0)
                     return { error: 'no indexed block to quote against' };
@@ -115,7 +116,7 @@ function oracleFeeQuoteRpc({ indexer }){
                     FIAT_CODE:      fiatCode,
                     GET_COIN:       getCoin  || indexer.config['COIN'],
                     GIVE_ESCROW:    giveEscrow,
-                }, indexer.indexerDb);
+                }, db);
                 if(!quote.valid)
                     return { valid: false, error: quote.error };
                 let native = indexer.util.bcformat(quote.expectedFee, 8);
