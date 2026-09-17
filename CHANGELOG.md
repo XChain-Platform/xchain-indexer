@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - The mirror-admission replay witness queries through the indexer's database wrapper instead of calling a raw connection method that is not available there.  
-- The integration launcher now applies each block through production's own pass sequence, and the mirror-admission witness refuses a replay that skipped the pass reading a table holding admission-era rows.
+- The integration launcher now applies each block through production's own pass sequence, and the mirror-admission witness refuses a replay that skipped the pass reading a table holding admission-era rows.  
+- The integration equivalence oracle compares state tree roots by height without their timestamp, accepts only orphaned tree nodes no surviving root reaches, and compares chain-keyed roots across coins by presence.
 
 ## [0.19.0] - 2026-09-16
 

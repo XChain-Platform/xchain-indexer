@@ -39,6 +39,10 @@
  *                    integrity state hash) is compared resolved
  *                    (readHashChain), and tx hashes come verbatim from the
  *                    shared decoder corpus.
+ *                 4. state_tree_nodes residue: the node store is copy-on-write
+ *                    and rollback-exempt, so the survivor keeps nodes of
+ *                    orphaned trees. Its extra rows pass only while no
+ *                    surviving state_tree_roots row reaches them.
  *
  * In BOTH modes the consensus commitment is the resolved hash chain.
  * assertHashChainsEqual. Because getBlockHashes folds raw address_id /
@@ -51,11 +55,35 @@
 'use strict';
 
 const assert = require('assert');
+const M = require('../../../src/consensus/merkle.js');
 
 // Wall-clock columns the indexer writes with NOW()/CURRENT_TIMESTAMP:
 // local artifacts, never consensus data.
 const GLOBAL_COLUMN_EXCLUSIONS = ['created_at', 'created', 'updated', 'logged_at'];
-const TABLE_COLUMN_EXCLUSIONS = { events: ['time'] };
+const TABLE_COLUMN_EXCLUSIONS = {
+    events: ['time'],
+    // computed_at defaults to CURRENT_TIMESTAMP. The sync snapshot refuses to ship it
+    // as per-node wall clock, and the follower's commitment check compares only the
+    // roots at a height (balances_root, block_merkle_root, state_root).
+    state_tree_roots: ['computed_at'],
+};
+
+// The sub-roots whose trees live in state_tree_nodes: the set the retention
+// pruner marks from. state_root is a fixed five-leaf merkle over sub-roots, and
+// the shadow columns anchor no retained tree.
+const STATE_TREE_ROOT_COLUMNS = ['balances_root', 'stakes_root', 'contract_state_root'];
+
+// Roots whose value differs per coin by construction: balanceKey, escrowKey and
+// contractStateKey fold the chain literal into every leaf key, and state_root
+// folds balances_root in. Across coins only their presence is comparable.
+// stakes_root is left out: stakeKey carries no chain literal.
+const CHAIN_KEYED_ROOT_COLUMNS = [
+    'balances_root', 'balances_root_escrow_shadow', 'contract_state_root',
+    'contract_state_root_shadow', 'state_root',
+];
+
+// EMPTY[h] as hex: the root of an all-empty subtree of height h, never stored.
+const EMPTY_HEX = M.EMPTY.map(b => M.toHex(b));
 
 // The indexer's append-only dedup tables (rollback.js touches none of them).
 const INDEX_TABLES = new Set([
@@ -119,6 +147,115 @@ async function tableCanon(queryFn, table, excluded) {
 async function listTables(queryFn) {
     const rows = await queryFn('SHOW TABLES');
     return rows.map(r => String(Object.values(r)[0])).sort();
+}
+
+/** Walk every tree the root rows name through the node rows. An internal node at
+ *  depth d (0..255) has a row unless its hash is EMPTY[256 - d]; a depth-256 child
+ *  is a value leaf and never has one. Returns the reachable node hashes and every
+ *  referenced hash the store does not hold. */
+function walkStateTrees(rootRows, nodeRows) {
+    const nodes = new Map(nodeRows.map(n => [n.node_hash, n]));
+    const reachable = new Set();
+    const missing = new Set();
+    const stack = [];
+    for (const row of rootRows) {
+        for (const col of STATE_TREE_ROOT_COLUMNS) if (row[col]) stack.push([row[col], 0]);
+    }
+    while (stack.length) {
+        const [hash, depth] = stack.pop();
+        if (depth === M.SMT_DEPTH || hash === EMPTY_HEX[M.SMT_DEPTH - depth] ||
+            reachable.has(hash)) continue;
+        const node = nodes.get(hash);
+        if (!node) { missing.add(hash); continue; }
+        reachable.add(hash);
+        stack.push([node.left_hash, depth + 1], [node.right_hash, depth + 1]);
+    }
+    return { reachable, missing: [...missing].sort() };
+}
+
+// One table's entry in a failure report.
+function tableDiff(table, labelA, labelB, onlyInA, onlyInB, counts, maxDiffRows, extra = {}) {
+    return Object.assign({
+        table,
+        [labelA + ' rows']: counts[0],
+        [labelB + ' rows']: counts[1],
+        ['only in ' + labelA]: onlyInA.slice(0, maxDiffRows),
+        ['only in ' + labelB]: onlyInB.slice(0, maxDiffRows),
+    }, extra);
+}
+
+// Unresolved references per side, keyed for the report; empty when both walks closed.
+function unresolvedReport(labelA, labelB, walkA, walkB, maxDiffRows) {
+    const out = {};
+    if (walkA.missing.length) out['unresolved in ' + labelA] = walkA.missing.slice(0, maxDiffRows);
+    if (walkB.missing.length) out['unresolved in ' + labelB] = walkB.missing.slice(0, maxDiffRows);
+    return out;
+}
+
+/** Content mode, state_tree_nodes. Rollback drops the orphaned heights' roots and
+ *  keeps their nodes, which the opt-in pruner later reclaims as nodes no retained
+ *  root reaches. So a survivor row the fresh side lacks passes only when unreachable
+ *  from the survivor's roots; a fresh row the survivor lacks, or a reference either
+ *  store cannot resolve, is a difference. Returns a report entry or null. */
+function stateTreeNodesContentDiff(canonA, canonB, rootsA, rootsB, labels, maxDiffRows) {
+    const rowsA = canonA.map(s => JSON.parse(s));
+    const walkA = walkStateTrees(rootsA, rowsA);
+    const walkB = walkStateTrees(rootsB, canonB.map(s => JSON.parse(s)));
+    const setA = new Set(canonA);
+    const setB = new Set(canonB);
+    const onlyInB = canonB.filter(r => !setA.has(r));
+    const reachableOnlyInA = canonA.filter((r, i) =>
+        !setB.has(r) && walkA.reachable.has(rowsA[i].node_hash));
+    const unresolved = unresolvedReport(labels[0], labels[1], walkA, walkB, maxDiffRows);
+    if (!onlyInB.length && !reachableOnlyInA.length && !Object.keys(unresolved).length) return null;
+    return tableDiff('state_tree_nodes', labels[0], labels[1], reachableOnlyInA, onlyInB,
+        [canonA.length, canonB.length], maxDiffRows, unresolved);
+}
+
+// The one chain literal a captured state's roots carry, or null.
+function capturedChain(state) {
+    const chains = new Set((state.state_tree_roots || []).map(s => JSON.parse(s).chain));
+    return chains.size === 1 ? [...chains][0] : null;
+}
+
+// A root row with its local id and chain literal dropped and each chain-keyed root
+// reduced to its presence, so two coins compare at (network, block_index).
+function crossChainRootCanon(canonRow) {
+    const row = JSON.parse(canonRow);
+    delete row.id;
+    delete row.chain;
+    for (const col of CHAIN_KEYED_ROOT_COLUMNS) {
+        if (row[col] != null) row[col] = '<CHAIN_KEYED>';
+    }
+    return JSON.stringify(row);
+}
+
+/** State tree tables across two coins. Roots compare by natural key on every
+ *  chain-agnostic column plus chain-keyed presence. The node stores hold chain-keyed
+ *  trees whose rows cannot match across coins, so each side is held to resolving
+ *  every node its own roots reach. Returns report entries. */
+function crossChainStateTreeDiffs(stateA, stateB, labelA, labelB, maxDiffRows) {
+    const diffs = [];
+    const rootsA = stateA.state_tree_roots.map(crossChainRootCanon).sort();
+    const rootsB = stateB.state_tree_roots.map(crossChainRootCanon).sort();
+    const setA = new Set(rootsA);
+    const setB = new Set(rootsB);
+    const onlyInA = rootsA.filter(r => !setB.has(r));
+    const onlyInB = rootsB.filter(r => !setA.has(r));
+    if (onlyInA.length || onlyInB.length || rootsA.length !== rootsB.length) {
+        diffs.push(tableDiff('state_tree_roots', labelA, labelB, onlyInA, onlyInB,
+            [rootsA.length, rootsB.length], maxDiffRows));
+    }
+    const parse = rows => (rows || []).map(s => JSON.parse(s));
+    const walkA = walkStateTrees(parse(stateA.state_tree_roots), parse(stateA.state_tree_nodes));
+    const walkB = walkStateTrees(parse(stateB.state_tree_roots), parse(stateB.state_tree_nodes));
+    const unresolved = unresolvedReport(labelA, labelB, walkA, walkB, maxDiffRows);
+    if (Object.keys(unresolved).length) {
+        diffs.push(tableDiff('state_tree_nodes', labelA, labelB, [], [],
+            [(stateA.state_tree_nodes || []).length, (stateB.state_tree_nodes || []).length],
+            maxDiffRows, unresolved));
+    }
+    return diffs;
 }
 
 /** Read a node's chained consensus-hash triple (plus the replication-integrity
@@ -208,6 +345,14 @@ async function assertIndexerDbsEquivalent(queryA, queryB, opts = {}) {
         const excluded = excludedColumns(table, mode);
         const canonA = await tableCanon(queryA, table, excluded);
         const canonB = await tableCanon(queryB, table, excluded);
+        if (mode === 'content' && table === 'state_tree_nodes') {
+            const roots = async q => (tablesA.includes('state_tree_roots')
+                ? (await tableCanon(q, 'state_tree_roots', [])).map(s => JSON.parse(s)) : []);
+            const diff = stateTreeNodesContentDiff(canonA, canonB,
+                await roots(queryA), await roots(queryB), [labelA, labelB], maxDiffRows);
+            if (diff) diffs.push(diff);
+            continue;
+        }
         const setA = new Set(canonA);
         const onlyInB = canonB.filter(r => !setA.has(r));
         if (mode === 'content' && INDEX_TABLES.has(table)) {
@@ -251,7 +396,12 @@ async function captureDbState(queryFn, opts = {}) {
 /**
  * Assert two captured states are identical. `ignoreTables` lists tables
  * whose content differs BY CONSTRUCTION of the comparison (each entry must
- * carry its justification at the call site).
+ * carry its justification at the call site). `crossChain: true` declares the
+ * two states come from different coins (the multi-chain sweep): the state tree
+ * tables are then graded by crossChainStateTreeDiffs. The option is explicit so
+ * a wrong chain literal on one side of a same-coin comparison fails instead of
+ * relaxing the root value check, and it is refused when both sides carry the
+ * same chain literal.
  */
 function assertCapturedStatesEqual(stateA, stateB, opts = {}) {
     const labelA = opts.labelA || 'A';
@@ -265,8 +415,24 @@ function assertCapturedStatesEqual(stateA, stateB, opts = {}) {
         `${labelA} and ${labelB} have different table sets`);
 
     const diffs = [];
+    const chainA = capturedChain(stateA);
+    const chainB = capturedChain(stateB);
+    const crossChain = opts.crossChain === true;
+    if (crossChain && (chainA === null || chainB === null || chainA === chainB)) {
+        assert.fail(`crossChain comparison needs two distinct chain literals: ` +
+            `${labelA}=${chainA} ${labelB}=${chainB}`);
+    }
+    if (!crossChain && chainA !== null && chainB !== null && chainA !== chainB) {
+        assert.fail(`${labelA} and ${labelB} captures carry different chains ` +
+            `(${labelA}=${chainA} ${labelB}=${chainB}); pass crossChain: true only when comparing two coins`);
+    }
+    if (crossChain) {
+        diffs.push(...crossChainStateTreeDiffs(stateA, stateB, labelA, labelB, maxDiffRows)
+            .filter(d => !ignore.has(d.table)));
+    }
     for (const table of tablesA) {
         if (ignore.has(table)) continue;
+        if (crossChain && (table === 'state_tree_roots' || table === 'state_tree_nodes')) continue;
         const canonA = stateA[table];
         const canonB = stateB[table];
         if (canonA.length === canonB.length &&

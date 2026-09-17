@@ -229,11 +229,11 @@ defineParitySuite(function () {
     });
 
     it('LTC full state is byte-identical to BTC (modulo the 5 normalized artifacts)', function () {
-        assertCapturedStatesEqual(states.BTC, states.LTC, { labelA: 'BTC', labelB: 'LTC' });
+        assertCapturedStatesEqual(states.BTC, states.LTC, { labelA: 'BTC', labelB: 'LTC', crossChain: true });
     });
 
     it('DOGE full state is byte-identical to BTC (modulo the 5 normalized artifacts)', function () {
-        assertCapturedStatesEqual(states.BTC, states.DOGE, { labelA: 'BTC', labelB: 'DOGE' });
+        assertCapturedStatesEqual(states.BTC, states.DOGE, { labelA: 'BTC', labelB: 'DOGE', crossChain: true });
     });
 
     it('the consensus hash chains are identical across all three chains', function () {
