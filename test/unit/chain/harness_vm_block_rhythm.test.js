@@ -20,72 +20,13 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 const assert = require('assert');
 
 const launcher      = require('../../integration/setup/indexer-launcher.js');
-const XChainIndexer = require('../../../src/XChainIndexer.js');
-
-// A collaborator whose every method call is appended to `trace` as `<label>.<method>`.
-// `answers` maps a method to its return value ('self' returns the collaborator), and
-// `sync` names the methods production calls without awaiting.
-function recorder(label, trace, answers = {}, sync = []) {
-    const proxy = new Proxy({}, {
-        get(target, prop) {
-            if (typeof prop !== 'string' || prop === 'then') return undefined;
-            if (Object.prototype.hasOwnProperty.call(target, prop)) return target[prop];
-            return (...args) => {
-                trace.push(label + '.' + prop);
-                const answer = Object.prototype.hasOwnProperty.call(answers, prop) ? answers[prop] : [];
-                const out = answer === 'self' ? proxy : (typeof answer === 'function' ? answer(...args) : answer);
-                return sync.includes(prop) ? out : Promise.resolve(out);
-            };
-        },
-        set(target, prop, value) { target[prop] = value; return true; },
-    });
-    return proxy;
-}
-
-// An XChainIndexer on the real prototype with every collaborator recorded and each pass
-// group bracketed by markers. testnet at a low height keeps the state roots and the
-// proof-bearing reward passes below their activations.
-function recordingIndexer(firstBlock, lastBlock) {
-    const trace = [];
-    const ix = Object.create(XChainIndexer.prototype);
-    ix.trace = trace;
-    ix.config = { COIN: 'BTC', NETWORK: 'testnet', GENESIS_BLOCK: -1 };
-    ix.util = recorder('util', trace, {}, ['logError', 'resetLists', 'addAddressTicker', 'getAddressesList', 'getTickersList']);
-    ix.indexerDb = recorder('db', trace, {
-        mirrorDb: 'self', getLastProcessedReorgId: 0, getBlockIndex: null, createActionIndex: 1,
-    }, ['mirrorDb']);
-    ix.decoderDb = {
-        async getReorgsSince() { return []; },
-        async getBlockIndex(which, pos) { return pos === 'last' ? lastBlock : firstBlock; },
-        async getDecoderBlockData(block) { return [{ tx_hash: 'tx' + block, data: 'SEND|X' }]; },
-        async getBlockTime() { return 1700000000; },
-        async getRawBlockTime() { return 1700000007; },
-    };
-    ix.protocolChanges = { async isEnabled() { return true; } };
-    ix.actions = {
-        vm: { beginBlock() { trace.push('vm.beginBlock'); }, endBlock() { trace.push('vm.endBlock'); } },
-        async processTransaction() { trace.push('actions.processTransaction'); },
-    };
-    ix.genesis = recorder('genesis', trace, { gasTokenParams: {} }, ['gasTokenParams']);
-    ix.mapper = recorder('mapper', trace);
-    ix.anchorProof = recorder('anchorProof', trace);
-    ix.rollcallProof = recorder('rollcallProof', trace);
-    for (const name of launcher.PASS_GROUPS) {
-        const pass = XChainIndexer.prototype[name];
-        ix[name] = async function (blk) {
-            trace.push('<' + name);
-            await pass.call(this, blk);
-            trace.push(name + '>');
-        };
-    }
-    return ix;
-}
+const { recordingIndexer } = require('../setup/recording_indexer.js');
 
 const isMarker = (entry) => entry.startsWith('<') || entry.endsWith('>');
 
 describe('integration harness VM block rhythm through production\'s passes', function () {
     it('opens the cache first inside the block and closes it after every pass group, just before createBlock', async function () {
-        const ix = recordingIndexer(101, 101);
+        const ix = recordingIndexer({ firstBlock: 101, lastBlock: 101, passGroups: launcher.PASS_GROUPS });
         assert.strictEqual(await launcher.processBlocks(ix), 1);
         const t = ix.trace.slice(ix.trace.indexOf('db.beginTransaction'));
         const groups = launcher.PASS_GROUPS;
@@ -114,7 +55,7 @@ describe('integration harness VM block rhythm through production\'s passes', fun
     });
 
     it('leaves the cache open when a pass throws inside the window, and the next attempt opens a fresh one', async function () {
-        const ix = recordingIndexer(101, 101);
+        const ix = recordingIndexer({ firstBlock: 101, lastBlock: 101, passGroups: launcher.PASS_GROUPS });
         let failures = 1;
         ix.util.processCrossChainCalls = async function () {
             ix.trace.push('util.processCrossChainCalls');

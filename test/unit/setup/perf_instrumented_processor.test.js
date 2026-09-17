@@ -22,62 +22,7 @@ const assert = require('assert');
 const launcher      = require('../../integration/setup/indexer-launcher.js');
 const MetricsCollector = require('../../perf/setup/metrics-collector.js');
 const { processBlocksInstrumented } = require('../../perf/setup/instrumented-processor.js');
-const XChainIndexer = require('../../../src/XChainIndexer.js');
-
-// A collaborator whose every method call is appended to `trace` as `<label>.<method>`.
-// `answers` maps a method to its return value ('self' returns the collaborator), and
-// `sync` names the methods production calls without awaiting.
-function recorder(label, trace, answers = {}, sync = []) {
-    const proxy = new Proxy({}, {
-        get(target, prop) {
-            if (typeof prop !== 'string' || prop === 'then') return undefined;
-            if (Object.prototype.hasOwnProperty.call(target, prop)) return target[prop];
-            return (...args) => {
-                trace.push(label + '.' + prop);
-                const answer = Object.prototype.hasOwnProperty.call(answers, prop) ? answers[prop] : [];
-                const out = answer === 'self' ? proxy : (typeof answer === 'function' ? answer(...args) : answer);
-                return sync.includes(prop) ? out : Promise.resolve(out);
-            };
-        },
-        set(target, prop, value) { target[prop] = value; return true; },
-    });
-    return proxy;
-}
-
-// An XChainIndexer on the real prototype with every collaborator recorded, applying
-// blocks 101 through `lastBlock`. testnet at a low height keeps the state roots and the
-// proof-bearing reward passes below their activations.
-function recordingIndexer(lastBlock, opts = {}) {
-    const trace = [];
-    const ix = Object.create(XChainIndexer.prototype);
-    ix.trace = trace;
-    ix.config = { COIN: 'BTC', NETWORK: 'testnet', GENESIS_BLOCK: -1 };
-    ix.util = recorder('util', trace, {}, ['logError', 'resetLists', 'addAddressTicker', 'getAddressesList', 'getTickersList']);
-    ix.indexerDb = recorder('db', trace, {
-        mirrorDb: 'self', getLastProcessedReorgId: 0, getBlockIndex: null, createActionIndex: 1,
-        createBlock: (block) => {
-            if (opts.throwAtBlock === block) throw new Error('boom at ' + block);
-            return [];
-        },
-    }, ['mirrorDb']);
-    ix.decoderDb = {
-        async getReorgsSince() { trace.push('decoder.getReorgsSince'); return []; },
-        async getBlockIndex(which, pos) { trace.push('decoder.getBlockIndex'); return pos === 'last' ? lastBlock : 101; },
-        async getDecoderBlockData(block) { trace.push('decoder.getDecoderBlockData'); return [{ tx_hash: 'tx' + block, data: 'SEND|X' }]; },
-        async getBlockTime() { trace.push('decoder.getBlockTime'); return 1700000000; },
-        async getRawBlockTime() { trace.push('decoder.getRawBlockTime'); return 1700000007; },
-    };
-    ix.protocolChanges = { async isEnabled() { return true; } };
-    ix.actions = {
-        vm: { beginBlock() { trace.push('vm.beginBlock'); }, endBlock() { trace.push('vm.endBlock'); } },
-        async processTransaction() { trace.push('actions.processTransaction'); },
-    };
-    ix.genesis = recorder('genesis', trace, { gasTokenParams: {} }, ['gasTokenParams']);
-    ix.mapper = recorder('mapper', trace);
-    ix.anchorProof = recorder('anchorProof', trace);
-    ix.rollcallProof = recorder('rollcallProof', trace);
-    return ix;
-}
+const { recordingIndexer } = require('./recording_indexer.js');
 
 // The own methods of the indexer and the collaborators the harness instruments. Data
 // fields are left out: production's openBlockTransaction stamps them on indexerDb.
@@ -96,10 +41,10 @@ function collectorPhaseNames() {
 
 describe('perf harness: instrumented blocks run through the integration launcher', function () {
     it('makes exactly the calls the launcher makes, block for block', async function () {
-        const plain = recordingIndexer(102);
+        const plain = recordingIndexer({ firstBlock: 101, lastBlock: 102, traceDecoderCalls: true });
         const plainBlocks = await launcher.processBlocks(plain);
 
-        const timed = recordingIndexer(102);
+        const timed = recordingIndexer({ firstBlock: 101, lastBlock: 102, traceDecoderCalls: true });
         const collector = new MetricsCollector({ name: 'trace' });
         collector.start();
         const { blocksProcessed } = await processBlocksInstrumented(timed, collector);
@@ -113,7 +58,7 @@ describe('perf harness: instrumented blocks run through the integration launcher
     });
 
     it('times every collector phase, every pass group and finalizeBlock for each block', async function () {
-        const ix = recordingIndexer(102);
+        const ix = recordingIndexer({ firstBlock: 101, lastBlock: 102, traceDecoderCalls: true });
         const collector = new MetricsCollector({ name: 'phases' });
         collector.start();
         await processBlocksInstrumented(ix, collector);
@@ -130,7 +75,7 @@ describe('perf harness: instrumented blocks run through the integration launcher
     });
 
     it('leaves the indexer and its collaborators without any instrumentation afterwards', async function () {
-        const ix = recordingIndexer(101);
+        const ix = recordingIndexer({ firstBlock: 101, lastBlock: 101, traceDecoderCalls: true });
         const before = ownShape(ix);
         const collector = new MetricsCollector({ name: 'restore' });
         collector.start();
@@ -140,7 +85,8 @@ describe('perf harness: instrumented blocks run through the integration launcher
     });
 
     it('records the failing block, rethrows, and still removes its wrappers', async function () {
-        const ix = recordingIndexer(102, { throwAtBlock: 102 });
+        const ix = recordingIndexer({ firstBlock: 101, lastBlock: 102, traceDecoderCalls: true,
+            throwAtBlock: 102 });
         const before = ownShape(ix);
         const collector = new MetricsCollector({ name: 'error' });
         collector.start();
