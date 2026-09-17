@@ -97,6 +97,20 @@ addGate('train_activation.TRAIN_ACTIVATION', 'ruleset', {
     // bridge height below sits above it on the same BTC clock, so a node lacking this rule
     // set halts before it can grade a bridge action.
     '0.19.0': { mainnet: 9999999999, testnet: 152787, regtest: 0 },
+    // The mirror-admission rule set, armed at the v0.20.0 cut: the producer and consumer
+    // admission maps and the anchor-attest barrier replace the effective_time binding, so a
+    // node without them grades an admission-stamped row under the rule it replaced. Mainnet
+    // holds the house sentinel because the whole family is null on mainnet under the
+    // 2026-08-29 write hold. Testnet: SIZED 2026-09-17 22:45Z, chain_tip TBTC 152,891 + 225
+    // blocks, which is ceil(36 h / 576.7 s per block), about 36.0 h. The cadence is measured
+    // over a trailing window as long as the lead being sized (53 h here), never the last 99
+    // blocks: a 99-block window on a testnet difficulty burst is noise, and it is what pulled
+    // the LTC leg of this family two days off its BTC counterpart a day after the first cut.
+    // That lead is the rolling-upgrade window the fleet roll must finish inside (24x the 90
+    // minute roll budget), and every testnet mirror-admission height sits above it on the same
+    // BTC clock (the BTC producer at 153,222 is 106 blocks and about 17.0 h further up), so a
+    // node lacking this rule set halts before it can grade an admission-stamped row.
+    '0.20.0': { mainnet: 9999999999, testnet: 153116, regtest: 0 },
 });
 
 // xchain_bridge_activation
