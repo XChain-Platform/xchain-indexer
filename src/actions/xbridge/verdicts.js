@@ -58,7 +58,7 @@ const FEE_INSUFFICIENT   = 'invalid: insufficient funds (FEE)';
  */
 const VERDICTS = {
     // Shared gates, common to every version.
-    BEFORE_ACTIVATION:   'invalid: XBRIDGE before activation',        // below XCHAIN_BRIDGE_ACTIVATION (v0-v2) or TOKEN_BRIDGE_ACTIVATION (v3-v5) for this CHAIN: both maps are coin-keyed, with the bare network as fallback
+    BEFORE_ACTIVATION:   'invalid: XBRIDGE before activation',        // below XCHAIN_BRIDGE_ACTIVATION for this CHAIN (coin-keyed) / TOKEN_BRIDGE_ACTIVATION for this network
     UNKNOWN_VERSION:     'invalid: VERSION (unknown)',                // a version byte outside 0-5; a KNOWN version below its gate is BEFORE_ACTIVATION instead
     BTC_ONLY:            'invalid: XBRIDGE (BTC only)',               // v0 broadcast on any chain other than BTC; the literal the five BTC-only handlers share
     V1_NOT_ON_BTC:       'invalid: XBRIDGE v1 is not valid on BTC',   // v1 broadcast on BTC (the inverse-chain shape anchor.js uses)
