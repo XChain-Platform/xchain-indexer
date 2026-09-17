@@ -80,7 +80,7 @@ const SIBLINGS = [
       marker: path.join('src', 'sql'),
       altEnvs: ['XCHAIN_DECODER_SQL_PATH'],
       guards: 'the decoder schema the integration scenarios build their fixtures from' },
-    { repo: 'xchain-explorer', envs: [],
+    { repo: 'xchain-explorer', envs: ['XCHAIN_EXPLORER_DIR'],
       marker: 'src',
       guards: 'the merkle twin, the state-checkpoint fence parity, and the explorer launcher' },
 ];
