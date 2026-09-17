@@ -6,9 +6,8 @@
 -- ---
 -- Every hub-mirrored row binds to a block by `effective_time <= t(B)`, a wall-clock
 -- rule that holds the block loop up to two hours behind a future-stamped row and, on
--- the anchor-attest member, a whole day. The time-keyed mirror barrier family
--- (claude/specs/time-keyed-mirror-barrier-family.md, D-H) replaces that with
--- admission by height: the hub stamps each row with the block on every reading chain
+-- the anchor-attest member, a whole day. The time-keyed mirror admission barrier
+-- family replaces that with admission by height: the hub stamps each row with the block on every reading chain
 -- at or above which the row is readable, the indexer's per-table per-chain height
 -- watermark certifies the mirror is complete to that height, and the consuming select
 -- admits the row the moment B reaches it. The columns here are the indexer's copy of
