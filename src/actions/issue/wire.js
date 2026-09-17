@@ -40,12 +40,12 @@ async function parseWire(params, data, error){
     // Token-bridge flag days, resolved once against THIS action's block so every check
     // below sees one activation state. Keyed on the block_index of the chain being
     // parsed, never on a transfer's snapshot_block.
-    let tokenBridgeActive = gateRegistry.activeAt(TOKEN_BRIDGE_KEY, this.config['NETWORK'], null, data['BLOCK_INDEX'], null);
-    let policyInheritance = gateRegistry.activeAt(TOKEN_POLICY_INHERITANCE_KEY, this.config['NETWORK'], null, data['BLOCK_INDEX'], null);
+    let tokenBridgeActive = gateRegistry.activeAt(TOKEN_BRIDGE_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
+    let policyInheritance = gateRegistry.activeAt(TOKEN_POLICY_INHERITANCE_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
     // The tick-namespace flag day has its OWN constant, not the bridge's: the
     // bridge arms only after its own cross-check, and the namespace has to close
     // before anyone squats a future chain root, not after.
-    let namespaceActive   = gateRegistry.activeAt('tick_namespace_activation.TICK_NAMESPACE_ACTIVATION', this.config['NETWORK'], null, data['BLOCK_INDEX'], null);
+    let namespaceActive   = gateRegistry.activeAt('tick_namespace_activation.TICK_NAMESPACE_ACTIVATION', this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
 
     // Format 7 does not exist below TOKEN_BRIDGE_ACTIVATION: it falls through to the
     // same 'invalid: VERSION (unknown)' an unknown version has always produced, so a

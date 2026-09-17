@@ -168,7 +168,7 @@ module.exports = {
     isAnyCoinAddress(address, block_index){
         if(this.util.isCryptoAddress(address))
             return true;
-        if(!gateRegistry.activeAt(TOKEN_POLICY_INHERITANCE_KEY, this.config['NETWORK'], null, block_index, null))
+        if(!gateRegistry.activeAt(TOKEN_POLICY_INHERITANCE_KEY, this.config['NETWORK'], this.config['COIN'], block_index, null))
             return false;
         for(let coin of (this.config['COINS'] || []))
             if(this.util.isCryptoAddress(address, coin, this.config['NETWORK']))
