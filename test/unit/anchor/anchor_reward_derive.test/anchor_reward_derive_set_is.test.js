@@ -118,10 +118,11 @@ describe('anchor-reward derive set is INVARIANT under the barrier change @regres
     }
 
     it('the inert maps really are inert, so today\'s fleet sees no change at all', function () {
+    // testnet is SIZED at 153266 (this train's own arming), so only mainnet is
+    // still inert here; the hub's twin (anchor_reward_activation_parity.test.js)
+    // narrowed the same way.
     assert.strictEqual(ar.ANCHOR_ATTEST_BARRIER_ACTIVATION.mainnet, null);
-    assert.strictEqual(ar.ANCHOR_ATTEST_BARRIER_ACTIVATION.testnet, null);
     assert.strictEqual(ar.isAnchorAttestBarrierHorizonActive('mainnet', 10 ** 9), false);
-    assert.strictEqual(ar.isAnchorAttestBarrierHorizonActive('testnet', 10 ** 9), false);
     assert.strictEqual(ar.isAnchorAttestBarrierHorizonActive('regtest', 10 ** 9), false,
     'inert by default: the regtest slot arms only through its env seam');
     });

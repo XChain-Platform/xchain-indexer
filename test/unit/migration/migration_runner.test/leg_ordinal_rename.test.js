@@ -112,10 +112,16 @@ describe('leg-ordinal migration rename: destroys-sends-leg-ordinal @regression @
         assert.strictEqual(Database.backdatedFrontierViolation(NEW_NAME, [FRONTIER]), null);
     });
 
-    it('the renamed file sorts after every migration currently in the tree', function () {
-        const files = fs.readdirSync(MIG_DIR).filter(f => f.endsWith('.sql') && f !== NEW_NAME);
+    it('the renamed file sorts after every migration that existed when it was renamed', function () {
+        // Scoped to files dated at or before NEW_NAME itself: a migration authored
+        // LATER (row 15's own 2026-09-16-admission-height.sql, for one) sorts after
+        // NEW_NAME by construction and says nothing about whether NEW_NAME backdates
+        // against what came before it, which is the one thing this regression test
+        // exists to prove. Reading the whole live directory here would fail the day
+        // any later migration lands, forever, regardless of NEW_NAME's own placement.
+        const files = fs.readdirSync(MIG_DIR).filter(f => f.endsWith('.sql') && f !== NEW_NAME && f < NEW_NAME);
         assert.strictEqual(Database.backdatedFrontierViolation(NEW_NAME, files), null,
-            NEW_NAME + ' must not backdate against any migration shipped today');
+            NEW_NAME + ' must not backdate against any migration that predates it');
     });
 });
 

@@ -26,6 +26,7 @@ const Price      = require('../../../../../src/actions/price/index.js');
 const ed25519    = require('../../../../../src/consensus/ed25519.js');
 const swq        = require('../../../../../src/consensus/stake_weighted_quorum.js');
 const priceRange = require('../../../../../src/actions/price/price_zero_validity_gate.js');
+const adm        = require('../../../../../src/consensus/gates/mirror_admission_gate.js');
 
 // The hub's admission predicate, transcribed from PriceAggregator's ingest sites
 // (`!(parseFloat(String(p.price)) > 0) || !(parseFloat(String(p.price)) < PRICE_MAX)`
@@ -87,6 +88,17 @@ const HONEST = '50000.00000000';
 // than against a number typed twice.
 const TESTNET_GATE = priceRange.PRICE_ZERO_VALIDITY_ACTIVATION.testnet;
 
+// The per-round BTC anchor must sit BELOW the mirror admission era for BTC:testnet,
+// or the real v0 parser (price/v0.js parseRoundList) demands an ADMIT_BLOCKS field
+// this harness's wire builder (batchBody, above) never emits: this suite tests
+// price-range validation, not admission wiring, so every round here must land in
+// the legacy (pre-admission) era on every network the tests drive it against.
+// Derived from the registry rather than a typed height so a future resize of
+// MIRROR_ADMISSION_ACTIVATION moves this fixture with it, instead of drifting
+// stale again the way the previous hardcoded 799000 did once the registry's
+// testnet height was resized down past it.
+const PRE_ADMISSION_BTC_HEIGHT = adm.MIRROR_ADMISSION_ACTIVATION['BTC:testnet'] - 1000;
+
 // The price under test rides round index 3, so a case that would pass by
 // grading only the first round of a window is still visible.
 function sixRounds(price){
@@ -95,7 +107,7 @@ function sixRounds(price){
         rounds.push({
             round:          100 + i,
             timestamp:      1700000000 + (i * 600),
-            btcBlockHeight: 799000 + i,
+            btcBlockHeight: PRE_ADMISSION_BTC_HEIGHT + i,
             pairs: [{ pair: 'BTC/USD', price: i === 3 ? price : HONEST }],
         });
     }
