@@ -123,6 +123,12 @@ const SIDES = {
 
 let failures = 0;
 
+// Adapt the indexer Database wrapper to the raw-query callback expected by the
+// equivalence reader; query exists only on the wrapper's pooled connections.
+function queryIndexerDb(indexerDb) {
+    return (sql, args) => indexerDb.doQuery(sql, args);
+}
+
 // Guarded, because the pure helpers below are exported for their own unit drive:
 // an unguarded body would start a replay the moment anything required this file.
 if (require.main === module) {
@@ -158,7 +164,7 @@ async function runSide() {
     const ms = Date.now() - t0;
 
     const eq = require(path.join(REPO, 'test', 'integration', 'setup', 'equivalence.js'));
-    const q = (sql, args) => indexer.indexerDb.query(sql, args);
+    const q = queryIndexerDb(indexer.indexerDb);
     const chain = await eq.readHashChain(q);
     await launcher.destroyIndexer(indexer);
 
@@ -388,5 +394,5 @@ async function main() {
     process.exit(failures === 0 ? EXIT.PASS : EXIT.FAIL);
 }
 
-module.exports = { parseArgs, explicitDbParams, eraExpectation, armValueFor, belowBoundary,
+module.exports = { queryIndexerDb, parseArgs, explicitDbParams, eraExpectation, armValueFor, belowBoundary,
                    firstDivergence, sideEnv, SIDES, EXIT, HASH_FIELDS };
