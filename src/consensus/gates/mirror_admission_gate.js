@@ -3,7 +3,7 @@
 const { get, copy, activeAt } = require('../gate_registry');
 
 /*
- * mirror_admission_activation.js - admission by height for the mirror barrier family.
+ * mirror_admission_gate.js - admission by height for the mirror barrier family.
  *
  * BYTE-IDENTICAL TWIN. This file exists at xchain-indexer/src/, xchain-hub/src/ and, once
  * vendored, xchain-explorer/src/. The three copies are held identical by
