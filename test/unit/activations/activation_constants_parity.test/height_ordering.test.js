@@ -172,33 +172,20 @@ describe('activation-gate constant parity to canonical constants.js @regression'
     // bridge would leave a window in which foreign assets are being rooted on this chain and
     // the roots they need are still purchasable, which is the one ordering that defeats the
     // reservation. Read off the canon so a canon that itself violated the rule is caught.
-    // PER CHAIN KEY since the v0.20.0 arming train re-keyed TOKEN_BRIDGE_ACTIVATION to
-    // '<COIN>:<network>', and TICK_NAMESPACE_ACTIVATION followed it, but either map may carry
-    // a chain key the other resolves only by fallback, so each side is resolved through the SAME
-    // fallback the predicates use. A bare-key walk would fail on the shape ('BTC:mainnet is
-    // armed but the namespace is not') and never reach the question the case exists to ask,
-    // which is whether the chain a coin actually reads closes its namespace first.
     it('holds TICK_NAMESPACE_ACTIVATION <= TOKEN_BRIDGE_ACTIVATION over the canonical constants.js', function () {
         if (!canonExists) { this.skip(); return; }
         const ns    = canon.TICK_NAMESPACE_ACTIVATION;
         const token = canon.TOKEN_BRIDGE_ACTIVATION;
         assert.ok(ns && token, 'constants.js must export both the namespace and the token-bridge maps');
-        const keys = [...new Set([...Object.keys(token), ...Object.keys(ns)])];
-        const compared = [];
-        for (const key of keys) {
-            const here  = resolveChainKey(token, key);
-            const there = resolveChainKey(ns, key);
-            if (here === null || here === undefined) continue;
-            assert.ok(there !== null && there !== undefined,
-                'TOKEN_BRIDGE_ACTIVATION resolves ' + key + ' but TICK_NAMESPACE_ACTIVATION does not');
-            compared.push(key);
-            assert.ok(there <= here,
-                'TICK_NAMESPACE_ACTIVATION for ' + key + ' (' + there + ') is above TOKEN_BRIDGE_ACTIVATION for ' +
-                key + ' (' + here + '); the bridge would be rooting foreign assets while the roots ' +
+        const nets = Object.keys(token).filter(net => token[net] !== null && token[net] !== undefined);
+        assert.ok(nets.includes('regtest'), 'not vacuous: regtest must be armed at this milestone');
+        for (const net of nets) {
+            assert.ok(ns[net] !== null && ns[net] !== undefined,
+                'TOKEN_BRIDGE_ACTIVATION.' + net + ' is armed but TICK_NAMESPACE_ACTIVATION.' + net + ' is not');
+            assert.ok(ns[net] <= token[net],
+                'TICK_NAMESPACE_ACTIVATION.' + net + ' (' + ns[net] + ') is above TOKEN_BRIDGE_ACTIVATION.' +
+                net + ' (' + token[net] + '); the bridge would be rooting foreign assets while the roots ' +
                 'they need are still on sale');
         }
-        assert.ok(compared.includes('regtest'), 'not vacuous: regtest must be armed at this milestone');
-        assert.ok(compared.some(k => k.indexOf(':') >= 0),
-            'not vacuous: the coin-keyed slots must be compared, not just the bare network keys');
     });
 });

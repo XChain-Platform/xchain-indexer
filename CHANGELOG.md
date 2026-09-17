@@ -8,7 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- Testnet arms the token bridge, policy inheritance and tick namespace per chain at BTC 153160, LTC 4888478 and DOGE 67906525, with all three activation maps keyed by coin and network.
 - Mirrored rows carry per-chain admission heights so a future-dated block no longer stalls indexer processing while the mirror proves completeness by height.
 - `carrier_logic_pin_ops --move` can re-pin changed carrier logic while recording the path and hash transitions atomically.
 

@@ -52,45 +52,23 @@ const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
 // Below it every milestone-1 verdict stands unchanged, so the replay corpus is
 // hash-identical on every chain with this code present.
 //
-// KEYED '<COIN>:<network>' since the v0.20.0 arming train, with the bare network key as
-// the fallback, tracking TOKEN_BRIDGE_ACTIVATION's own re-keying on that train. The
-// reason is the first invariant below: inheritance has to sit at or above the token
-// bridge, the token bridge is now three testnet heights on three chains whose tips differ
-// by orders of magnitude, and a single testnet number here could satisfy at most one of
-// them. A coin with no entry of its own inherits the bare network key, so an unlisted
-// chain is inert rather than undecided.
+// Mainnet and testnet are the house sentinel 9999999999: this rides the same MAJOR
+// train as the two bridges and the operator sizes the dated instant at the cut. A
+// height in the map ahead of the fleet's deploy tip is the operator's act, not a
+// build's. Regtest is 0 so the e2e rail exercises the armed rule from genesis.
 //
-// Mainnet is the house sentinel 9999999999 on every key: this rides the same MAJOR train
-// as the two bridges and nothing arms on mainnet before the base spec's D2 checkpoint
-// cross-check lands there.
-//
-// Testnet is armed AT THE SAME HEIGHT as the token bridge on each chain, not above it.
-// Both flag days ship on the v0.20.0 train and the milestone-2 code is already in the
-// binary, so a gap between them would buy nothing and cost something real: between the
-// two heights bridged copies could exist with no policy to inherit and no in-leg barrier
-// holding a v5 credit until the tick has one, which is exactly the unpoliced window the
-// barrier exists to close. Equality satisfies the first invariant, which is `>=`.
-//
-// TWO ORDERING INVARIANTS, asserted by the activation-constant parity suite over the
-// canonical constants.js rather than over this copy:
-//   - >= TOKEN_BRIDGE_ACTIVATION per chain key. Inheritance has nothing to inherit onto
+// TWO ORDERING INVARIANTS, asserted by test/unit/activationConstantsParity.test.js
+// over the canonical constants.js rather than over this copy:
+//   - >= TOKEN_BRIDGE_ACTIVATION per network. Inheritance has nothing to inherit onto
 //     before bridged copies can exist.
 //   - >= LIST_EDIT_RESOLUTION_ACTIVATION per chain and network. The snapshot read
 //     resolves a list AS OF origin_block through getListAtBlock, which walks the edit
 //     chain; below that gate the legacy create-index read runs and the membership the
-//     federation signs would not be the membership the chain actually held. That map is
-//     0 on all three testnet chains since the 2026-08-10 fresh genesis, so every testnet
-//     height here clears it.
+//     federation signs would not be the membership the chain actually held.
 addGate('token_policy_activation.TOKEN_POLICY_INHERITANCE_ACTIVATION', 'height', {
-    'BTC:mainnet':  9999999999,
-    'LTC:mainnet':  9999999999,
-    'DOGE:mainnet': 9999999999,
-    mainnet:        9999999999,   // fallback for a coin with no entry above
-    'BTC:testnet':  153160,       // == TOKEN_BRIDGE_ACTIVATION BTC:testnet, sized 2026-09-17 02:42Z
-    'LTC:testnet':  4888478,      // == TOKEN_BRIDGE_ACTIVATION LTC:testnet
-    'DOGE:testnet': 67906525,     // == TOKEN_BRIDGE_ACTIVATION DOGE:testnet
-    testnet:        9999999999,   // fallback: a testnet coin with no entry above stays dark
-    regtest:        0,            // genesis-active so the e2e rail exercises the armed rule
+    mainnet: 9999999999,
+    testnet: 9999999999,
+    regtest: 0,
 });
 
 // train_activation

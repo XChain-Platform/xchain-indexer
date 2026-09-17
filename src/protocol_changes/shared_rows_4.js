@@ -373,28 +373,21 @@ addGate('swq_source_cap_activation.SWQ_SOURCE_CAP_ACTIVATION', 'height', {
 });
 
 // token_bridge_activation
-// TOKEN_BRIDGE_ACTIVATION: the height on the chain being parsed at/above which XBRIDGE
-// v3/v4 and ISSUE format 7 are legal. Below it v3 and v4 return the base spec's own
-// 'invalid: XBRIDGE before activation', v5 is never injected and an ISSUE|7 keeps the
-// verdict 'invalid: VERSION (unknown)', so no historical ISSUE changes status on replay.
+// TOKEN_BRIDGE_ACTIVATION: the height (per network) on the chain being parsed at/above
+// which XBRIDGE v3/v4 and ISSUE format 7 are legal. Below it v3 and v4 return the base
+// spec's own string 'invalid: XBRIDGE before activation', v5 is never injected, and an
+// ISSUE|7 keeps the parse verdict 'invalid: VERSION (unknown)' so no historical ISSUE on
+// any chain changes status on replay.
 //
-// KEYED '<COIN>:<network>' since the v0.20.0 arming train, bare network as the fallback:
-// the shape XCHAIN_BRIDGE_ACTIVATION uses, and for its reason. This map sits at or above
-// that one on EVERY chain key and the three testnet tips differ by orders of magnitude,
-// so one testnet number is either unreachable on two chains or already passed on two.
-// Mainnet holds the sentinel on every key until the base spec's D2 checkpoint cross-check
-// arms there. Testnet was sized per chain at the v0.20.0 cut, the two destinations first
-// and BTC (the v3 lock's origin) last, because the lock handler never reads the
-// destination's own activation; the arithmetic is in the canonical constants.js.
+// Keyed on the chain's OWN block_index, as XCHAIN_BRIDGE_ACTIVATION.
+//
+// Mainnet and testnet sit at the house sentinel 9999999999. Testnet is NOT armed with the
+// XCHAIN bridge: no third-party token can be offered on a hub-trusted mint, so this gate
+// waits on the base spec's D2 checkpoint cross-check being built and armed on that
+// network. Regtest is 0 so the e2e rail exercises the armed rule from genesis.
 addGate('token_bridge_activation.TOKEN_BRIDGE_ACTIVATION', 'height', {
-    'BTC:mainnet':  9999999999,
-    'LTC:mainnet':  9999999999,
-    'DOGE:mainnet': 9999999999,
-    mainnet:        9999999999,   // fallback for a coin with no entry above
-    'BTC:testnet':  153160,       // SIZED 2026-09-17 02:42Z: chain_tip 152,780 + 380 (51.3 h at 487.2 s/blk), the origin, last
-    'LTC:testnet':  4888478,      // SIZED 2026-09-17 02:42Z: chain_tip 4,887,866 + 612 (31.3 h at 184.2 s/blk)
-    'DOGE:testnet': 67906525,     // SIZED 2026-09-17 02:42Z: chain_tip 67,902,163 + 4362 (31.3 h at 25.8 s/blk)
-    testnet:        9999999999,   // fallback: a testnet coin with no entry above stays dark
-    regtest:        0,            // genesis-active so the e2e rail exercises the armed rule
+    mainnet: 9999999999,
+    testnet: 9999999999,
+    regtest: 0,
 });
 // SHARED-GATES END

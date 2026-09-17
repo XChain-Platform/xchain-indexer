@@ -34,7 +34,6 @@ const XBridge  = require('../../../../src/actions/xbridge/index.js');
 // stubs activeAt() for the key instead of writing into the shipped map.
 const { stubGate } = require('../../../helpers/gate_modules.js');
 const XCHAIN_BRIDGE_KEY = 'xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION';
-const TOKEN_BRIDGE_KEY  = 'token_bridge_activation.TOKEN_BRIDGE_ACTIVATION';
 const { DEST, makeHandler, makeData } = require('./xbridge.test/helpers/xbridge_context.js');
 
 describe('XBRIDGE action handler @regression @tier3', function(){
@@ -139,50 +138,6 @@ describe('XBRIDGE action handler @regression @tier3', function(){
                 sinon.restore();
             }
             assert.strictEqual(require('../../../../src/consensus/gate_registry').get(XCHAIN_BRIDGE_KEY)['DOGE:regtest'], undefined,
-                'the shipped map must be left exactly as it ships');
-        });
-    });
-});
-
-describe('XBRIDGE action handler @regression @tier3', function(){
-    describe('shared gates', function(){
-        // The v0.20.0 arming train re-keyed TOKEN_BRIDGE_ACTIVATION to '<COIN>:<network>' and
-        // sized three testnet heights, one per chain, because the tips differ by orders of
-        // magnitude. Those heights only mean anything if the handler hands the map the coin
-        // it is parsing: a coin-blind read resolves the bare network key, which holds the
-        // sentinel on testnet, so every testnet chain would stay dark past its sized height
-        // with no test red and an announcement promising otherwise. The shipped map answers
-        // the same for every coin on regtest, so this case stubs a DOGE-specific slot on the
-        // registry read, the same way the XCHAIN case above does, and drives the real handler
-        // with a v3: DOGE must refuse at a height BTC is admitted at, through ctx.coin alone.
-        it('keys the token-bridge activation on the chain being parsed, not on the network alone', async function(){
-            stubGate(sinon, TOKEN_BRIDGE_KEY, false).callsFake((key, network, coin, height) =>
-                (coin === 'DOGE' ? Number(height) >= 500 : Number(height) >= 0));
-            try {
-                let doge = makeHandler({ coin: 'DOGE', network: 'regtest' });
-                let dogeData = makeData(3, 'DOGE', { BLOCK_INDEX: 100 });
-                await doge.handler.parse(['3', 'FUFU', 'BTC', DEST, '1', ''], dogeData, null);
-                assert.strictEqual(dogeData['STATUS'], 'invalid: XBRIDGE before activation',
-                    'a DOGE v3 below the DOGE token slot must refuse; if it did not, the handler read ' +
-                    'TOKEN_BRIDGE_ACTIVATION without the coin and the per-chain testnet heights are dead');
-
-                // Same network, same height, a chain the DOGE slot says nothing about.
-                let btc = makeHandler({ coin: 'BTC', network: 'regtest' });
-                let btcData = makeData(3, 'BTC', { BLOCK_INDEX: 100 });
-                await btc.handler.parse(['3', 'FUFU', 'DOGE', DEST, '1', ''], btcData, null);
-                assert.notStrictEqual(btcData['STATUS'], 'invalid: XBRIDGE before activation',
-                    'BTC inherits the bare regtest key (0) and must still be past the token gate at the same height');
-
-                // And the DOGE chain crosses at its own number, not at BTC's.
-                let dogeAt = makeHandler({ coin: 'DOGE', network: 'regtest' });
-                let dogeAtData = makeData(3, 'DOGE', { BLOCK_INDEX: 500 });
-                await dogeAt.handler.parse(['3', 'FUFU', 'BTC', DEST, '1', ''], dogeAtData, null);
-                assert.notStrictEqual(dogeAtData['STATUS'], 'invalid: XBRIDGE before activation',
-                    'a DOGE v3 at the DOGE token slot must be admitted past the activation gate');
-            } finally {
-                sinon.restore();
-            }
-            assert.strictEqual(require('../../../../src/consensus/gate_registry').get(TOKEN_BRIDGE_KEY)['DOGE:regtest'], undefined,
                 'the shipped map must be left exactly as it ships');
         });
     });

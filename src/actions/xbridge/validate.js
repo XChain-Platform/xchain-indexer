@@ -43,7 +43,7 @@ const INJECTED_VERSIONS = [2, 5];
 
 // v0/v1/v2 are the XCHAIN bridge and gate on XCHAIN_BRIDGE_ACTIVATION (keyed
 // '<COIN>:<network>'); v3/v4/v5 are the general token bridge and gate on
-// TOKEN_BRIDGE_ACTIVATION (also '<COIN>:<network>'). The parity test pins TOKEN >= XCHAIN for every
+// TOKEN_BRIDGE_ACTIVATION (network-keyed). The parity test pins TOKEN >= XCHAIN for every
 // chain key, so a chain can never admit v3 without an engine behind it.
 const TOKEN_VERSIONS    = [3, 4, 5];
 
@@ -90,11 +90,11 @@ function validateFormat(data, ctx){
     // that a pre-activation chain gives ONE answer for the whole action rather than a
     // per-version taxonomy of a feature that is not live yet.
     //
-    // Both bridge maps are keyed '<COIN>:<network>', so the coin goes with the height: BTC,
+    // The XCHAIN map is keyed '<COIN>:<network>', so the coin goes with the height: BTC,
     // LTC and DOGE reach the bridge at three different heights on one network, and
     // passing the network alone would judge a DOGE block against a BTC number.
     let active = (TOKEN_VERSIONS.indexOf(format) !== -1)
-        ? gateRegistry.activeAt(TOKEN_BRIDGE_KEY, ctx.network, ctx.coin, ctx.blockIndex, null)
+        ? gateRegistry.activeAt(TOKEN_BRIDGE_KEY, ctx.network, null, ctx.blockIndex, null)
         : gateRegistry.activeAt(XCHAIN_BRIDGE_KEY, ctx.network, ctx.coin, ctx.blockIndex, null);
     if(!active)
         return { valid: false, verdict: VERDICTS.BEFORE_ACTIVATION };

@@ -303,7 +303,7 @@ addGate('sweep_zero_leg_activation.SWEEP_ZERO_LEG_ACTIVATION', 'height', {
 });
 
 // tick_namespace_activation
-// TICK_NAMESPACE_ACTIVATION: the height (per chain) on the chain being parsed at/above
+// TICK_NAMESPACE_ACTIVATION: the height (per network) on the chain being parsed at/above
 // which the four-character creation floor and the RESERVED_FUTURE_ROOTS refusal bind.
 // Keyed on the chain's OWN block_index: what it gates is the verdict of an ISSUE mined
 // here.
@@ -313,25 +313,15 @@ addGate('sweep_zero_leg_activation.SWEEP_ZERO_LEG_ACTIVATION', 'height', {
 // exists there (XCP appears only in unit-test mocks, and every scenario ticker is four
 // characters or longer).
 //
-// KEYED '<COIN>:<network>' since the v0.20.0 arming train, bare network as the fallback.
-// The namespace has to close at or before TOKEN_BRIDGE_ACTIVATION on every chain key, and
-// that map is three testnet heights whose tips differ by orders of magnitude: one bare
-// testnet number at or below BTC's 153160 would sit millions of blocks under the TLTC and
-// TDOGE tips and re-verdict every short or reserved ISSUE ever mined there.
-//
-// Testnet arms AT the token bridge height on each chain. Every slot is above that chain's
-// tip, so no mined ISSUE is re-verdicted, and each carries the same post-roll lead the
-// bridge was sized with, which an earlier height would have to give up. Mainnet is a
-// genesis-arm candidate under the genesis-arm method and stays at the sentinel until the
-// mainnet replicas measure zero mined ISSUEs of a short or listed name, valid OR invalid:
-// an armed height below a real one would re-verdict it and move that chain's hashes.
+// Testnet holds at the house sentinel until the train that arms it sizes a dated instant
+// above the fleet's deploy tip. Mainnet is a genesis-arm candidate under the genesis-arm
+// method and stays at the sentinel until the mainnet replicas measure zero mined
+// ISSUEs of a short or listed name, valid OR invalid: an armed height below a real one
+// would re-verdict it and move that chain's hashes.
 addGate('tick_namespace_activation.TICK_NAMESPACE_ACTIVATION', 'height', {
-    mainnet:        9999999999,
-    'BTC:testnet':  153160,       // == TOKEN_BRIDGE_ACTIVATION BTC:testnet, sized 2026-09-17 02:42Z
-    'LTC:testnet':  4888478,      // == TOKEN_BRIDGE_ACTIVATION LTC:testnet
-    'DOGE:testnet': 67906525,     // == TOKEN_BRIDGE_ACTIVATION DOGE:testnet
-    testnet:        9999999999,   // fallback: a testnet coin with no entry above stays dark
-    regtest:        0,
+    mainnet: 9999999999,
+    testnet: 9999999999,
+    regtest: 0,
 });
 
 // vm_deploy_lint_pkg3_activation
