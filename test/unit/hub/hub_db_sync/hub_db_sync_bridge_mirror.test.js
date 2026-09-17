@@ -40,10 +40,20 @@ function makeSync(options = {}, rows = []) {
     const calls   = [];
     const doQuery = sinon.stub().callsFake(async (sql, args) => {
         calls.push({ sql: sql, args: args });
+        // Each barrier asks the schema whether its mirror table is there before naming it.
+        // Answer that probe the way a schema holding the table answers it; the pre-migration
+        // schema, where it answers empty, is driven in its own suite at the end of this file.
+        if (/information_schema\.TABLES/i.test(sql)) return [{ TABLE_NAME: args[0] }];
         return (typeof rows === 'function') ? rows(sql, args) : rows;
     });
     const sync = new HubDbSync({ doQuery }, Object.assign({ hubUrl: 'http://hub.test' }, options));
     return { sync, doQuery, calls };
+}
+
+// The watermark statements, which is what a case asserting the barrier's scope means by
+// "the query it ran": the schema probe is one statement per table per client, not per read.
+function watermarkCalls(calls) {
+    return calls.filter(c => /MAX\(effective_time\)/.test(c.sql));
 }
 
 describe('bridge mirror registration @regression @tier1', function () {
@@ -131,17 +141,19 @@ describe('bridge sync barrier @regression @tier1', function () {
 
         await sync.refreshBridgeSyncTimestamp();
 
-        assert.match(calls[0].sql, /FROM bridge_transfers/);
-        assert.match(calls[0].sql, /src_chain\s*=\s*\?\s+OR\s+dest_chain\s*=\s*\?/i);
-        assert.deepStrictEqual(calls[0].args, ['DOGE', 'DOGE']);
+        const read = watermarkCalls(calls)[0];
+        assert.match(read.sql, /FROM bridge_transfers/);
+        assert.match(read.sql, /src_chain\s*=\s*\?\s+OR\s+dest_chain\s*=\s*\?/i);
+        assert.deepStrictEqual(read.args, ['DOGE', 'DOGE']);
         assert.strictEqual(sync.bridgeSyncTimestamp, 456);
     });
 
     it('falls back to an unscoped watermark when no coin is configured', async function () {
         const { sync, calls } = makeSync({}, [{ ts: 9 }]);
         await sync.refreshBridgeSyncTimestamp();
-        assert.ok(!/src_chain/.test(calls[0].sql), 'no coin means no chain filter');
-        assert.deepStrictEqual(calls[0].args, []);
+        const read = watermarkCalls(calls)[0];
+        assert.ok(!/src_chain/.test(read.sql), 'no coin means no chain filter');
+        assert.deepStrictEqual(read.args, []);
     });
 
     it('leaves the cached watermark untouched when the table is not there yet', async function () {
@@ -232,10 +244,11 @@ describe('policy sync barrier @regression @tier1', function () {
 
         await sync.refreshPolicySyncTimestamp();
 
-        assert.match(calls[0].sql, /FROM policy_snapshots/);
-        assert.match(calls[0].sql, /origin_chain\s*<>\s*\?/i);
-        assert.ok(!/dest_chain/.test(calls[0].sql), 'a policy row has no destination to scope by');
-        assert.deepStrictEqual(calls[0].args, ['BTC']);
+        const read = watermarkCalls(calls)[0];
+        assert.match(read.sql, /FROM policy_snapshots/);
+        assert.match(read.sql, /origin_chain\s*<>\s*\?/i);
+        assert.ok(!/dest_chain/.test(read.sql), 'a policy row has no destination to scope by');
+        assert.deepStrictEqual(read.args, ['BTC']);
         assert.strictEqual(sync.policySyncTimestamp, 321);
     });
 

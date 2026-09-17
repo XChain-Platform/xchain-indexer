@@ -17,6 +17,10 @@
  * The content-watermark barriers over bridge_transfers and policy_snapshots,
  * shaped like the match and call barriers with their own scope rules.
  *
+ * Both tables are read only after the connected schema has been asked whether it
+ * carries them: a consumer whose hub DB predates them would otherwise fail one
+ * statement per refresh forever, silently, with its barrier shut either way.
+ *
  * Part of the hub-mirror client (src/hub/hub_db_sync.js), which installs the
  * methods here onto HubDbSync.prototype. Vendored byte-identical into
  * xchain-explorer by bin/sync-hub-mirror-client.sh: edit the xchain-indexer copy.
@@ -25,12 +29,86 @@
 
 const { getLogger } = require('../../../observability/index.js');
 
+// The two mirror tables this file reads a watermark from. Named as data because the
+// probe below asks information_schema for exactly these names: a consumer schema
+// carries them only once the bridge tables have been created in it.
+const BRIDGE_TABLE = 'bridge_transfers';
+const POLICY_TABLE = 'policy_snapshots';
+
+// How long a NEGATIVE table probe is trusted. A positive answer is kept for the life
+// of the process (a mirror table cannot vanish from under a running client), a
+// negative one expires so that creating the table heals the barrier by itself rather
+// than needing the consumer restarted.
+const MIRROR_TABLE_PROBE_TTL_MS = 60000;
+
+// MariaDB error 1146 (ER_NO_SUCH_TABLE), matched on the numeric errno as well as the
+// name because the two spellings come from different layers of the driver and only
+// the number is stable.
+function isMissingTableError(err) {
+    const cause = (err && err.cause) ? err.cause : err;
+    return Number(cause && cause.errno) === 1146 || (cause && cause.code) === 'ER_NO_SUCH_TABLE';
+}
+
+// Report a mirror table the consumer's schema does not carry, and remember it, so the
+// next refresh skips a statement that cannot work. Reported, not swallowed: a barrier
+// held shut by a table nobody created is indistinguishable from a mirror that is merely
+// behind, and only this line separates them.
+function noteMirrorTableAbsent(sync, table) {
+    if (!sync._mirrorTableMemo) sync._mirrorTableMemo = {};
+    sync._mirrorTableMemo[table] = { present: false, at: Date.now() };
+    getLogger().warn('HubDbSync: this schema has no ' + table + ' table, so its sync barrier stays ' +
+                     'closed and every block needing it will defer; create the bridge mirror tables ' +
+                     'in the hub DB this consumer reads');
+}
+
+// Whether the connected schema carries `table`, memoized on the instance rather than
+// asked per refresh: the refreshes run on every mirrored row, and the answer only
+// changes when somebody creates the table. DATABASE() rather than a configured name,
+// so the answer is about the schema the read itself lands in.
+//
+// A probe that ITSELF fails answers true, which is the behaviour before this guard
+// existed: the caller's catch below is the net, so a broken probe costs one failed
+// statement and never a barrier that opens on a watermark it did not read.
+async function mirrorTablePresent(sync, table) {
+    if (!sync._mirrorTableMemo) sync._mirrorTableMemo = {};
+    let memo = sync._mirrorTableMemo[table];
+    if (memo && (memo.present || (Date.now() - memo.at) < MIRROR_TABLE_PROBE_TTL_MS)) return memo.present;
+    let rows;
+    try {
+        rows = await sync.hubDb.doQuery(
+            "SELECT TABLE_NAME FROM information_schema.TABLES " +
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?", [table]);
+    } catch (e) {
+        return true;
+    }
+    if (rows.length > 0) {
+        sync._mirrorTableMemo[table] = { present: true, at: Date.now() };
+        return true;
+    }
+    noteMirrorTableAbsent(sync, table);
+    return false;
+}
+
+// Why a watermark read failed, said out loud. A missing table is the pre-migration
+// schema, and the memo makes the next refresh skip the statement; anything else is a
+// real fault, and a barrier held shut by a broken connection or a lost grant is worth
+// exactly one log line per refresh rather than silence.
+function noteWatermarkReadFailure(sync, table, err) {
+    if (isMissingTableError(err)) { noteMirrorTableAbsent(sync, table); return; }
+    getLogger().warn('HubDbSync: could not read the ' + table + ' watermark, so its sync barrier ' +
+                     'stays closed: ' + (err && err.message));
+}
+
 module.exports = {
 
     // ── XBRIDGE transfer sync barrier (mirrors the match/call barriers exactly) ──
 
     async refreshBridgeSyncTimestamp(armBootstrap = this._bootstrapDrained) {
         let ts = null;
+        // Ask the schema for the table before naming it: on a consumer whose hub DB was
+        // never given the bridge mirror tables, the statement below is error 1146 every
+        // time this runs, swallowed, and the operator is told nothing at all.
+        if (!await mirrorTablePresent(this, BRIDGE_TABLE)) return;
         try {
             // Scope the watermark to transfers that touch THIS coin on either leg, the same
             // rule the match and call barriers apply and for the same reason: the hub
@@ -50,7 +128,8 @@ module.exports = {
                 "SELECT MAX(effective_time) AS ts FROM bridge_transfers " + where, args);
             if (rows.length > 0 && rows[0].ts !== null) ts = Number(rows[0].ts);
         } catch (e) {
-            return;                                             // table not ready yet
+            noteWatermarkReadFailure(this, BRIDGE_TABLE, e);     // barrier stays closed
+            return;
         }
         this.bridgeSyncTimestamp = ts;
         // Arm only under a full bootstrap drain; reconnect / live-row refreshes default
@@ -129,6 +208,9 @@ module.exports = {
 
     async refreshPolicySyncTimestamp(armBootstrap = this._bootstrapDrained) {
         let ts = null;
+        // Same schema probe as the bridge barrier above, and for the same reason: the
+        // policy table ships in the same migration, so a schema missing one is missing both.
+        if (!await mirrorTablePresent(this, POLICY_TABLE)) return;
         try {
             // Scoped on origin_chain ALONE, and that is the one place this barrier departs
             // from the bridge barrier above. A policy snapshot names no destination: it is
@@ -144,7 +226,8 @@ module.exports = {
                 "SELECT MAX(effective_time) AS ts FROM policy_snapshots " + where, args);
             if (rows.length > 0 && rows[0].ts !== null) ts = Number(rows[0].ts);
         } catch (e) {
-            return;                                             // table not ready yet
+            noteWatermarkReadFailure(this, POLICY_TABLE, e);     // barrier stays closed
+            return;
         }
         this.policySyncTimestamp = ts;
         if (armBootstrap) this.policyBootstrapped = true;
