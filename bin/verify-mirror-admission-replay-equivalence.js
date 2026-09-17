@@ -91,6 +91,9 @@
  *   - the mirror holds no row carrying this chain's admission height in a table a
  *     consumer binds by it, because only such a row binds differently armed;
  *   - the sides did not copy the same mirror;
+ *   - a side's replay did not run the production pass that reads a table holding
+ *     admission-era rows (ADMISSION_TABLE_PASSES), because that side never read
+ *     the rows and agrees with every other side about them by not looking;
  *   - the corpus carries no block at or above --activation-height, because then
  *     BOUNDARY never arms inside it and is a second OFF.
  *
@@ -196,9 +199,12 @@ async function runSide() {
 
     const eq = require(path.join(REPO, 'test', 'integration', 'setup', 'equivalence.js'));
     const chain = await eq.readHashChain(q);
+    // What the replay actually ran, reported rather than assumed, so the parent can refuse a
+    // side that never reached the pass reading an admission-bearing table (skippedPassRefusal).
+    const passes = typeof launcher.passesRun === 'function' ? launcher.passesRun(indexer) : null;
     await launcher.destroyIndexer(indexer);
 
-    console.log(SIDE_MARK + JSON.stringify({ key, blocks, ms, era, mirror, chain }));
+    console.log(SIDE_MARK + JSON.stringify({ key, blocks, ms, era, mirror, passes, chain }));
     process.exit(0);
 }
 
@@ -225,6 +231,45 @@ function admissionColumnsFor(coin) {
     };
     if (c === 'btc') out.attestation_responses = 'admit_block_btc';
     return out;
+}
+
+/**
+ * For each table admissionColumnsFor names, the production block pass group whose consumer
+ * binds its rows (src/XChainIndexer/block_passes.js). A replay that did not run the group never
+ * read the table, however many admission-era rows the mirror put there.
+ */
+const ADMISSION_TABLE_PASSES = Object.freeze({
+    cross_chain_matches:   Object.freeze({ pass: 'runSettlementPasses', consumer: 'processCrossChainSettlements' }),
+    bridge_transfers:      Object.freeze({ pass: 'runSettlementPasses', consumer: 'processBridgeSettlePass' }),
+    policy_snapshots:      Object.freeze({ pass: 'runSettlementPasses', consumer: 'processBridgeSettlePass' }),
+    cross_chain_calls:     Object.freeze({ pass: 'runCrossChainPasses', consumer: 'processCrossChainCalls' }),
+    attestation_responses: Object.freeze({ pass: 'runCrossChainPasses', consumer: 'processAttestationResponses' }),
+});
+
+/**
+ * The first side whose replay skipped the pass reading a table that holds admission-era rows,
+ * as a named reason, or null. A side that reports no pass list at all is refused too: a replay
+ * that cannot say what it ran cannot prove it read the rows.
+ *
+ * @returns {string|null}
+ */
+function skippedPassRefusal(results) {
+    for (const s of Object.keys(results || {})) {
+        const rows = (results[s].mirror && results[s].mirror.admissionRows) || {};
+        const ran = Array.isArray(results[s].passes) ? results[s].passes : null;
+        for (const [table, n] of Object.entries(rows)) {
+            if (!(Number(n) > 0)) continue;
+            const need = ADMISSION_TABLE_PASSES[table];
+            if (!need)
+                return 'table ' + table + ' holds ' + n + ' admission-era rows and no block pass is named as its reader, ' +
+                       'so no replay can be shown to have read them';
+            if (ran === null || !ran.includes(need.pass))
+                return 'side ' + s + ' replayed without the ' + need.pass + ' pass (' + need.consumer + '), which reads ' +
+                       table + ', while the mirror holds ' + n + ' admission-era rows there: the side never read them, so ' +
+                       'agreement over them is vacuous (passes run: ' + JSON.stringify(ran) + ')';
+        }
+    }
+    return null;
 }
 
 /**
@@ -396,6 +441,8 @@ function corpusRefusal(o, results) {
                'set in any table a consumer binds by it (' + JSON.stringify(m.admissionRows) + '; copied ' +
                JSON.stringify(m.copied) + '), so every side binds every mirrored row by effective_time and A1 and A2 ' +
                'are vacuous. Supply the mirror of an ARMED venue indexer that finalized admission-era rows';
+    const skipped = skippedPassRefusal(results);
+    if (skipped !== null) return skipped;
     const chain = (results.off && results.off.chain) || [];
     const top = chain.length ? chain[chain.length - 1].block_index : null;
     if (top === null || top < o.activationHeight)
@@ -574,4 +621,4 @@ async function main() {
 
 module.exports = { queryIndexerDb, parseArgs, explicitDbParams, eraExpectation, armValueFor, belowBoundary,
                    firstDivergence, sideEnv, sideArgs, sideMirrorDb, resolvedEra, admissionColumnsFor, loadMirror,
-                   corpusRefusal, SIDES, EXIT, HASH_FIELDS, ARM_ENV };
+                   corpusRefusal, skippedPassRefusal, ADMISSION_TABLE_PASSES, SIDES, EXIT, HASH_FIELDS, ARM_ENV };

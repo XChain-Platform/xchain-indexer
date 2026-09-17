@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `carrier_logic_pin_ops --move` can re-pin changed carrier logic while recording the path and hash transitions atomically.
 
 ### Fixed
-- The mirror-admission replay witness queries through the indexer's database wrapper instead of calling a raw connection method that is not available there.
+- The mirror-admission replay witness queries through the indexer's database wrapper instead of calling a raw connection method that is not available there.  
+- The integration launcher now applies each block through production's own pass sequence, and the mirror-admission witness refuses a replay that skipped the pass reading a table holding admission-era rows.
 
 ## [0.19.0] - 2026-09-16
 

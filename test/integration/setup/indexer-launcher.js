@@ -13,11 +13,9 @@
  **********************************************************************
  * Indexer launcher for integration tests.
  *
- * Provides two modes:
- *   1. processBlocks(): processes all pending blocks synchronously, then returns
- *   2. startAndWaitForSync(): starts the full loop, waits for sync, then stops
- *
- * Both modes use the real XChainIndexer code against real MariaDB databases.
+ * processBlocks() applies every pending decoder block synchronously, then returns.
+ * It uses the real XChainIndexer code against real MariaDB databases, and each
+ * block runs production's own pass sequence (runBlockPasses), not a copy of it.
  */
 
 const { getConnectionParams, activeFileKey, fileKey } = require('./db-connection');
@@ -47,6 +45,26 @@ const XChainIndexer = require('../../../src/XChainIndexer.js');
 // Same module the production block loop uses, so the harness cannot drift from
 // the collapse rule it is meant to model (see processBlocks below).
 const { collapseOutputFanout } = require('../../../src/chain/output_fanout.js');
+const blockPassMethods = require('../../../src/XChainIndexer/block_passes.js');
+const AnchorProofClient = require('../../../src/consensus/doge_peer_clients/anchor_proof_client.js');
+const { RollcallProofClient } = require('../../../src/consensus/doge_peer_clients/rollcall_proof_client.js');
+
+// The pass groups production's runBlockPasses calls, read from the module it is
+// installed from, so a group added there is recorded here without an edit.
+const PASS_GROUPS = Object.freeze(Object.keys(blockPassMethods)
+    .filter((name) => /^run[A-Z]\w*Passes$/.test(name) && name !== 'runBlockPasses'));
+
+// The group the gas fixture follows. applySystemGas stands in for bridge-shaped
+// gas credits, which production applies in the XBRIDGE settle pass at the end of
+// the settlement group, so the fixture runs immediately after that group.
+const GAS_FIXTURE_AFTER = 'runSettlementPasses';
+// A renamed group would otherwise drop every gas seed without a word.
+if (!PASS_GROUPS.includes(GAS_FIXTURE_AFTER))
+    throw new Error('indexer-launcher: production has no ' + GAS_FIXTURE_AFTER + ' pass group to seed gas after; ' +
+                    'groups are ' + PASS_GROUPS.join(', '));
+
+// Per indexer, the pass groups processBlocks actually ran (see passesRun).
+const passesRunBy = new WeakMap();
 
 /**
  * Create a configured XChainIndexer instance pointing at the test databases.
@@ -99,6 +117,11 @@ async function initIndexer(opts = {}) {
     indexer.actions = new Actions(indexer);
     indexer.rollback = new Rollback(indexer);
     indexer.genesis = new Genesis(indexer.actions, indexer.indexerDb, indexer.config, indexer.util);
+    // The DOGE proof clients the reward passes read, built as createHubClients builds
+    // them. Unconfigured they are inert until a matured reward or an armed roll-call
+    // epoch needs a proof, and then the block throws exactly as production defers it.
+    indexer.anchorProof   = new AnchorProofClient(indexer.config);
+    indexer.rollcallProof = new RollcallProofClient(indexer.config);
 
     // Create and verify databases and tables
     liveIndexers.set(indexer, activeFileKey());
@@ -176,55 +199,17 @@ async function processBlocks(indexer) {
         const fanoutFixActive = await indexer.protocolChanges.isEnabled('FIX_OUTPUT_FANOUT', lastIndexerBlock);
         blockTransactions = collapseOutputFanout(blockTransactions, fanoutFixActive, (m) => indexer.util.logError(m));
         const blockTime = await indexer.decoderDb.getBlockTime(lastIndexerBlock);
+        // finalizeBlock persists the chain's own stamp on the blocks row, as production does.
+        const rawBlockTime = await indexer.decoderDb.getRawBlockTime(lastIndexerBlock);
+        const blk = { blockToParse: lastIndexerBlock, blockTime, rawBlockTime, blockTransactions };
 
-        await indexer.indexerDb.beginTransaction();
-        // Mirror production (XChainIndexer sets indexerDb.blockIndex before parsing a
-        // block): createAddress/createTicker default block_index to this.blockIndex,
-        // so without this the harness stamps block_index=NULL and the reorg rollback
-        // (DELETE WHERE block_index >= ?) matches nothing, blinding the 05-reorg suite
-        // to the out-of-band index-id bug class.
-        indexer.indexerDb.blockIndex = lastIndexerBlock;
+        // Production's openBlockTransaction: the transaction, the indexerDb.blockIndex stamp
+        // (without it createAddress/createTicker write block_index=NULL and the reorg
+        // rollback's DELETE WHERE block_index >= ? matches nothing), and the per-block state
+        // commitment and hub push buffers. It returns whether the state roots are due.
+        const stateCommitActive = await indexer.openBlockTransaction(lastIndexerBlock);
         try {
-            // Mirror production (XChainIndexer.js, first statement inside the block's
-            // transaction): install a fresh per-block VM compilation cache. Without it
-            // vm._blockCache stays null for the whole harness run, so every VM-touching
-            // scenario executes contracts on a cache rhythm the fleet never runs: cold
-            // compile per execute instead of compile-once-per-block. That hides both the
-            // cache's own bugs (a stale entry surviving into the next block) and any
-            // consensus-visible difference between a cached and an uncached execute.
-            if (indexer.actions.vm)
-                indexer.actions.vm.beginBlock();
-
-            // Mirror production: genesis ledger bootstrap runs before the block's real
-            // transactions at the configured genesis block (no-op otherwise). See genesis.js.
-            if (indexer.genesis && Number(lastIndexerBlock) === Number(indexer.config['GENESIS_BLOCK']))
-                await indexer.genesis.inject(lastIndexerBlock, blockTime);
-            for (const tx of blockTransactions) {
-                await indexer.actions.processTransaction(tx);
-            }
-
-            await indexer.util.processExpirations(indexer.actions, indexer.indexerDb, lastIndexerBlock, blockTime);
-            // Mirror production (XChainIndexer.start): settle this chain's leg of any
-            // effective validator-signed cross-chain match. No-op for scenarios without
-            // cross_chain_matches rows; scenario 26 injects signed matches directly.
-            await indexer.util.processCrossChainSettlements(indexer.actions, indexer.indexerDb, lastIndexerBlock, blockTime);
-            // The fixture's stand-in for the XBRIDGE settle pass, at the pass's pinned
-            // position (XChainIndexer.start: after the cross-chain DEX settlement). Off
-            // BTC the gas preamble arrives here as bridge-shaped credits, because a
-            // broadcast ISSUE of XCHAIN is refused there; see gas-seeder.js.
-            await applySystemGas(indexer, lastIndexerBlock, blockTime);
-            await indexer.util.processCancellations(indexer.actions, indexer.indexerDb, lastIndexerBlock, blockTime);
-            // Mirror production: clear the per-block VM compilation cache after the last
-            // pass that can execute contract code and BEFORE createBlock, so nothing
-            // compiled this block can be reused by the next one. A block that throws
-            // skips this exactly as production does; the next block's beginBlock installs
-            // a fresh cache either way.
-            if (indexer.actions.vm)
-                indexer.actions.vm.endBlock();
-            await indexer.indexerDb.createBlock(lastIndexerBlock, blockTime);
-            await indexer.util.processMarketUpdates(indexer.indexerDb, lastIndexerBlock, blockTime);
-            await indexer.indexerDb.sanityCheck(lastIndexerBlock);
-
+            await runProductionPasses(indexer, blk, stateCommitActive);
             await indexer.indexerDb.commitTransaction();
             blocksProcessed++;
         } catch (error) {
@@ -235,6 +220,46 @@ async function processBlocks(indexer) {
 
     indexer.synced = true;
     return blocksProcessed;
+}
+
+/**
+ * Apply one block through production's runBlockPasses rather than a list of our own:
+ * a replay that skips a pass never reads that pass's tables, so a witness over rows
+ * only it binds hashes every side equal and proves nothing. Groups run through a view
+ * of the indexer that records each one and seeds gas after GAS_FIXTURE_AFTER.
+ */
+async function runProductionPasses(indexer, blk, stateCommitActive) {
+    let ran = passesRunBy.get(indexer);
+    if (!ran) {
+        ran = new Set();
+        passesRunBy.set(indexer, ran);
+    }
+    const view = Object.create(indexer);
+    for (const name of PASS_GROUPS) {
+        const pass = indexer[name];
+        view[name] = async function (b) {
+            await pass.call(this, b);
+            ran.add(name);
+            // Off BTC the gas preamble arrives as bridge-shaped credits, because a broadcast
+            // ISSUE of XCHAIN is refused there; see gas-seeder.js.
+            if (name === GAS_FIXTURE_AFTER)
+                await applySystemGas(indexer, b.blockToParse, b.blockTime);
+        };
+    }
+    return indexer.runBlockPasses.call(view, blk, stateCommitActive);
+}
+
+/**
+ * The production pass groups processBlocks has completed at least once on this
+ * indexer, in production order. A replay tool reads this to prove its replay ran the
+ * pass that consumes a table before it trusts a comparison over that table.
+ *
+ * @param {XChainIndexer} indexer
+ * @returns {string[]}
+ */
+function passesRun(indexer) {
+    const ran = passesRunBy.get(indexer);
+    return ran ? PASS_GROUPS.filter((name) => ran.has(name)) : [];
 }
 
 /**
@@ -274,4 +299,4 @@ async function destroyFileIndexers(testFile) {
         if (key === owner) await destroyIndexer(indexer);
 }
 
-module.exports = { createIndexer, initIndexer, processBlocks, destroyIndexer, destroyFileIndexers };
+module.exports = { createIndexer, initIndexer, processBlocks, passesRun, destroyIndexer, destroyFileIndexers, PASS_GROUPS };

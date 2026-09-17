@@ -4,6 +4,8 @@ const assert = require('assert');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const witness = require('../../../bin/verify-mirror-admission-replay-equivalence.js');
+const launcher = require('../../integration/setup/indexer-launcher.js');
+const blockPasses = require('../../../src/XChainIndexer/block_passes.js');
 
 const TOOL = path.resolve(__dirname, '../../../bin/verify-mirror-admission-replay-equivalence.js');
 const GATE = path.resolve(__dirname, '../../../src/consensus/gates/mirror_admission_gate.js');
@@ -152,7 +154,9 @@ describe('mirror-admission replay witness: a vacuous corpus is a named refusal, 
     const O = { coin: 'BTC', activationHeight: 60 };
     const chain = (n) => Array.from({ length: n }, (_, i) => ({ block_index: i + 1 }));
     const mirror = (admitted) => ({ source: 'm', copied: { cross_chain_calls: 3 }, admissionRows: { cross_chain_calls: admitted } });
-    const sides = (m, n) => ({ off: { mirror: m, chain: chain(n) }, boundary: { mirror: m, chain: chain(n) }, on: { mirror: m, chain: chain(n) } });
+    const passes = launcher.PASS_GROUPS.slice();
+    const sides = (m, n) => ({ off: { mirror: m, passes, chain: chain(n) }, boundary: { mirror: m, passes, chain: chain(n) },
+                               on: { mirror: m, passes, chain: chain(n) } });
 
     it('accepts a mirror with admission-era rows and a boundary inside the corpus', function () {
         assert.strictEqual(witness.corpusRefusal(O, sides(mirror(2), 102)), null);
@@ -198,5 +202,48 @@ describe('mirror-admission replay witness: a vacuous corpus is a named refusal, 
         const unset = withEnv({ MA_WITNESS_UNIT_PASS: undefined, TEST_DB_PASS: 'wrong-source' },
                               () => witness.explicitDbParams(o));
         assert.deepStrictEqual(unset, { missingPassEnv: 'MA_WITNESS_UNIT_PASS' });
+    });
+});
+
+describe('mirror-admission replay witness: a replay that skipped the pass reading a bearing table is refused', function () {
+    const O = { coin: 'BTC', activationHeight: 300 };
+    const chain = Array.from({ length: 323 }, (_, i) => ({ block_index: i }));
+    // A signed-corpus shape: one federation-signed attest response with admit_block_btc set,
+    // which only the cross-chain group's ATTEST response pass reads.
+    const mirror = { source: 'signed_attest_mirror', copied: { attestation_responses: 1 },
+                     admissionRows: { cross_chain_matches: 0, cross_chain_calls: 0, bridge_transfers: 0,
+                                      policy_snapshots: 0, attestation_responses: 1 } };
+    const all = launcher.PASS_GROUPS.slice();
+    const without = (name) => all.filter((p) => p !== name);
+    const sides = (offPasses) => ({
+        off:      { mirror, passes: offPasses, chain },
+        boundary: { mirror, passes: all, chain },
+        on:       { mirror, passes: all, chain },
+    });
+
+    it('refuses by name the replay that never ran the ATTEST response pass over a signed response', function () {
+        const reason = witness.corpusRefusal(O, sides(without('runCrossChainPasses')));
+        assert.ok(reason !== null, 'a replay that could not read attestation_responses was accepted');
+        assert.match(reason, /^side off replayed without the runCrossChainPasses pass \(processAttestationResponses\), which reads attestation_responses, while the mirror holds 1 admission-era rows there/);
+    });
+
+    it('refuses a side that reports no pass list, since it cannot show it read the rows', function () {
+        assert.match(witness.corpusRefusal(O, sides(undefined)), /^side off replayed without the runCrossChainPasses pass/);
+    });
+
+    it('accepts replays that ran every group, and does not demand a pass for a table with no bearing rows', function () {
+        assert.strictEqual(witness.corpusRefusal(O, sides(all)), null);
+        assert.strictEqual(witness.skippedPassRefusal(sides(without('runSettlementPasses'))), null,
+            'the settlement tables hold no admission-era rows in this corpus');
+    });
+
+    it('names a reader for every admission-bearing table, and that reader is a production pass calling the consumer', function () {
+        const tables = Object.keys(witness.admissionColumnsFor('BTC')).sort();
+        assert.deepStrictEqual(Object.keys(witness.ADMISSION_TABLE_PASSES).sort(), tables);
+        for (const [table, need] of Object.entries(witness.ADMISSION_TABLE_PASSES)) {
+            assert.ok(launcher.PASS_GROUPS.includes(need.pass), table + ': ' + need.pass + ' is not a group the launcher runs');
+            assert.ok(blockPasses[need.pass].toString().includes(need.consumer),
+                table + ': production ' + need.pass + ' no longer calls ' + need.consumer);
+        }
     });
 });
