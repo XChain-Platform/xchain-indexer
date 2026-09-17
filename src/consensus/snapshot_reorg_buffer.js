@@ -74,8 +74,23 @@
 
 const { get, copy, activeAt } = require('./gate_registry');
 
+// The reorg-depth buffer every party in a federation must resolve capability
+// snapshots at. 6 = the BTC confirmation depth the platform already treats as
+// buried (XCHAIN_CONFIRMATIONS_BTC). CONSENSUS-CRITICAL: the hub subtracts this
+// before every snapshot lookup and refuses to boot on mainnet/testnet when a local
+// override diverges (CapabilitySnapshot._resolveReorgBuffer), so a verifier that
+// buries by a different depth resolves a different set than the signer.
 const CANONICAL_REORG_BUFFER = copy('snapshot_reorg_buffer.CANONICAL_REORG_BUFFER');
 
+// Per-network activation height (LOCAL COPY of the canonical map maintained
+// upstream, kept equal by the cross-service regression suite). Keyed on the
+// BTC-anchored declared snapshot_block.
+//
+// ARMED at genesis on mainnet, testnet and regtest per the gate table: every
+// network resolves through the buried height from block 0. Arming changes
+// acceptance itself, so a one-sided or partially-rolled-out arm would fork the
+// fleet rather than fix it; the gate table records the per-network ruling and
+// the evidence for arming each network at genesis instead of a later height.
 const SNAPSHOT_BURIAL_ACTIVATION = copy('snapshot_reorg_buffer.SNAPSHOT_BURIAL_ACTIVATION');
 
 // Whether a verifier must bury the declared snapshot_block before re-deriving the
