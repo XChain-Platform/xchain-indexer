@@ -75,6 +75,28 @@
  * unmet, and it always prints the block count it compared against the corpus it
  * was pointed at.
  *
+ * WHAT "ADMISSION-BEARING" NEEDS, measured on the rail 2026-09-17 (A2 failed with
+ * ON and OFF identical at all 102 blocks). Every consumer-gated read is a select
+ * over a HUB-MIRROR table (cross_chain_matches and cross_chain_calls in
+ * db/cross_chain, bridge_transfers and policy_snapshots in bridge_settle,
+ * attestation_responses in db/attests) or a barrier that needs a hub connection.
+ * A side process has no hub connection, and its fresh schema's mirror tables are
+ * EMPTY, so over a decoder corpus alone arming changes no read at any block and
+ * the comparison cannot be anything but vacuous. The corpus is therefore TWO
+ * schemas: the decoder schema, and --mirror-db, a hub mirror whose rows every side
+ * copies into its own schema before it replays (the state a from-genesis resync
+ * starts from). The run refuses, before any verdict, when:
+ *
+ *   - no --mirror-db is named;
+ *   - the mirror holds no row carrying this chain's admission height in a table a
+ *     consumer binds by it, because only such a row binds differently armed;
+ *   - the sides did not copy the same mirror;
+ *   - the corpus carries no block at or above --activation-height, because then
+ *     BOUNDARY never arms inside it and is a second OFF.
+ *
+ * A mirror that passes and still leaves ON equal to OFF is a FAIL of A2: the rows
+ * exist and arming moved none of them, which is a finding, not a corpus gap.
+ *
  *   exit 0  every assertion holds AND the control shows the gate does something
  *   exit 1  an assertion failed: the first divergent block and field are printed
  *   exit 2  REFUSED: a precondition is unmet; the reason is the last line
@@ -89,8 +111,11 @@
  * USAGE
  *   node bin/verify-mirror-admission-replay-equivalence.js \
  *        --coin BTC --network regtest \
- *        --decoder-db ma_witness_dec --activation-height 120 \
+ *        --decoder-db ma_witness_dec --mirror-db ma_witness_mirror --activation-height 120 \
  *        --db-host 127.0.0.1 --db-port 3306 --db-user replay --db-pass-env MA_DB_PASS
+ *
+ * --mirror-db names the hub mirror schema every side copies before it replays (see
+ * WHAT "ADMISSION-BEARING" NEEDS above); it is required, on the same server.
  *
  * Options: --schema-prefix <name> (default ma_witness_replay_<coin>), --sides
  * <off,boundary,on>, --dry-run (prove the sides and their eras, replay nothing,
@@ -114,12 +139,16 @@ const ARM_ENV   = 'XC_MIRROR_ADMISSION_ACTIVATION';
 const HASH_FIELDS = ['ledger', 'actions', 'contracts', 'state'];
 
 // The three sides, and the arming each one gives its own child process. `null`
-// means the lever is UNSET, which is what leaves every regtest key inert.
+// means the lever is UNSET, which is what leaves every regtest key inert: sideEnv()
+// deletes the key for it rather than passing null, which spawn would stringify.
 const SIDES = {
     off:      { arm: null,  label: 'OFF (inert, the code below every height)' },
     boundary: { arm: 'H',   label: 'BOUNDARY (armed at --activation-height)' },
     on:       { arm: '0',   label: 'ON (armed at genesis, the negative control)' },
 };
+
+// A schema name this tool will splice into SQL: letters, digits and underscore only.
+const SCHEMA_NAME = /^[A-Za-z0-9_]+$/;
 
 let failures = 0;
 
@@ -154,17 +183,83 @@ async function runSide() {
 
     const launcher = require(path.join(REPO, 'test', 'integration', 'setup', 'indexer-launcher.js'));
     const indexer  = await launcher.initIndexer();
+    const q = queryIndexerDb(indexer.indexerDb);
+
+    // The mirror goes in BEFORE the first block: every side must replay against the same
+    // mirrored rows, or the sides differ by their inputs and not by their arming.
+    const mirrorDb = sideMirrorDb(process.argv);
+    const mirror = mirrorDb === null ? null : await loadMirror(q, mirrorDb, process.env.INDEXER_COIN);
+
     const t0 = Date.now();
     const blocks = await launcher.processBlocks(indexer);
     const ms = Date.now() - t0;
 
     const eq = require(path.join(REPO, 'test', 'integration', 'setup', 'equivalence.js'));
-    const q = queryIndexerDb(indexer.indexerDb);
     const chain = await eq.readHashChain(q);
     await launcher.destroyIndexer(indexer);
 
-    console.log(SIDE_MARK + JSON.stringify({ key, blocks, ms, era, chain }));
+    console.log(SIDE_MARK + JSON.stringify({ key, blocks, ms, era, mirror, chain }));
     process.exit(0);
+}
+
+/** The --mirror-db a side process was spawned with, or null. Passed on argv, so no new env read. */
+function sideMirrorDb(argv) {
+    const i = argv.indexOf('--mirror-db');
+    return (i >= 0 && i + 1 < argv.length && SCHEMA_NAME.test(String(argv[i + 1]))) ? String(argv[i + 1]) : null;
+}
+
+/**
+ * The admission column a consumer binds each hub-mirror table by for `coin`, from the read
+ * sites (db/cross_chain mirrorBindClause for matches and calls, bridge_settle for transfers and
+ * policies, db/attests mirror_responses for the BTC-only attest rail). A table absent here binds
+ * nothing by height for this chain, so none of its rows can bind differently armed.
+ */
+function admissionColumnsFor(coin) {
+    const c = String(coin || '').trim().toLowerCase();
+    if (!/^[a-z]+$/.test(c)) return {};
+    const out = {
+        cross_chain_matches: 'admit_block_' + c,
+        cross_chain_calls:   'admit_block_' + c,
+        bridge_transfers:    'admit_block_' + c,
+        policy_snapshots:    'admit_block_' + c,
+    };
+    if (c === 'btc') out.attestation_responses = 'admit_block_btc';
+    return out;
+}
+
+/**
+ * Copy every hub-mirror table (the table lifecycle registry's `replication: 'hub-mirror'`
+ * rows) from `mirrorDb` into this side's own schema, over the columns both carry, then count
+ * the rows that carry this chain's admission height. Same server, one INSERT ... SELECT per
+ * table, so the rows never pass through this process.
+ *
+ * @returns {Promise<{source: string, copied: object, admissionRows: object}>} copied is a row
+ *          count per table, or null where the mirror has no such table
+ */
+async function loadMirror(q, mirrorDb, coin) {
+    const lifecycle = require(path.join(REPO, 'src', 'hub', 'table_lifecycle.js'));
+    const tables = lifecycle.TABLES.filter((e) => e.replication === 'hub-mirror').map((e) => e.table).sort();
+    const copied = {};
+    for (const t of tables) {
+        const cols = await q('SELECT a.COLUMN_NAME AS c FROM information_schema.COLUMNS a ' +
+            'JOIN information_schema.COLUMNS b ON b.TABLE_SCHEMA = DATABASE() AND b.TABLE_NAME = a.TABLE_NAME AND b.COLUMN_NAME = a.COLUMN_NAME ' +
+            'WHERE a.TABLE_SCHEMA = ? AND a.TABLE_NAME = ? ORDER BY a.ORDINAL_POSITION', [mirrorDb, t]);
+        if (cols.length === 0) { copied[t] = null; continue; }
+        const list = cols.map((r) => '`' + String(r.c).replace(/`/g, '``') + '`').join(', ');
+        await q('INSERT INTO `' + t + '` (' + list + ') SELECT ' + list + ' FROM `' + mirrorDb + '`.`' + t + '`', []);
+        const n = await q('SELECT COUNT(*) AS n FROM `' + t + '`', []);
+        copied[t] = Number(n[0].n);
+    }
+    const admissionRows = {};
+    for (const [t, col] of Object.entries(admissionColumnsFor(coin))) {
+        admissionRows[t] = 0;
+        if (!copied[t]) continue;
+        const has = await q('SELECT COUNT(*) AS n FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?', [t, col]);
+        if (Number(has[0].n) === 0) continue;
+        const r = await q('SELECT COUNT(*) AS n FROM `' + t + '` WHERE `' + col + '` IS NOT NULL', []);
+        admissionRows[t] = Number(r[0].n);
+    }
+    return { source: mirrorDb, copied, admissionRows };
 }
 
 /**
@@ -208,7 +303,7 @@ function refuse(reason) {
 }
 
 function parseArgs(argv) {
-    const o = { coin: 'BTC', network: 'regtest', decoderDb: null, activationHeight: null,
+    const o = { coin: 'BTC', network: 'regtest', decoderDb: null, mirrorDb: null, activationHeight: null,
                 schemaPrefix: null, sides: ['off', 'boundary', 'on'], dryRun: false, keep: false,
                 workdir: null, db: { host: null, port: null, user: null, passEnv: null } };
     for (let i = 0; i < argv.length; i += 1) {
@@ -216,6 +311,7 @@ function parseArgs(argv) {
         if (a === '--coin')                   o.coin = String(argv[++i]).toUpperCase();
         else if (a === '--network')           o.network = String(argv[++i]);
         else if (a === '--decoder-db')        o.decoderDb = argv[++i];
+        else if (a === '--mirror-db')         o.mirrorDb = argv[++i];
         else if (a === '--activation-height') o.activationHeight = Number(argv[++i]);
         else if (a === '--schema-prefix')     o.schemaPrefix = argv[++i];
         else if (a === '--sides')             o.sides = String(argv[++i]).split(',').map((s) => s.trim()).filter(Boolean);
@@ -269,6 +365,45 @@ function armValueFor(side, height) {
     return arm === 'H' ? String(height) : arm;
 }
 
+/**
+ * Why this run's corpus cannot make A1 or A2 mean anything, or null when it can. Pure over the
+ * parsed side results, so each refusal is driven in the unit suite without a database:
+ *
+ *   - a side replayed without the mirror (no `mirror` record);
+ *   - the sides copied different mirrors, so they differ by input and not by arming;
+ *   - the mirror holds no row with this chain's admission height, so arming changes no binding;
+ *   - no block of the corpus is at or above H, so BOUNDARY never armed inside it.
+ *
+ * @returns {string|null} the named reason
+ */
+function corpusRefusal(o, results) {
+    const sides = Object.keys(results || {});
+    for (const s of sides) {
+        if (!results[s].mirror)
+            return 'side ' + s + ' replayed without a hub mirror (--mirror-db): its mirror tables were empty, so arming ' +
+                   'could change no read and the comparison is vacuous';
+    }
+    const first = JSON.stringify(results[sides[0]].mirror);
+    for (const s of sides.slice(1)) {
+        if (JSON.stringify(results[s].mirror) !== first)
+            return 'the sides copied different mirrors (' + sides[0] + ' ' + first + ', ' + s + ' ' +
+                   JSON.stringify(results[s].mirror) + '), so they differ by their inputs and not by their arming';
+    }
+    const m = results[sides[0]].mirror;
+    const bearing = Object.values(m.admissionRows || {}).reduce((a, n) => a + Number(n || 0), 0);
+    if (bearing === 0)
+        return 'no row arming would change: mirror ' + m.source + ' holds no row with ' + o.coin + '\'s admission height ' +
+               'set in any table a consumer binds by it (' + JSON.stringify(m.admissionRows) + '; copied ' +
+               JSON.stringify(m.copied) + '), so every side binds every mirrored row by effective_time and A1 and A2 ' +
+               'are vacuous. Supply the mirror of an ARMED venue indexer that finalized admission-era rows';
+    const chain = (results.off && results.off.chain) || [];
+    const top = chain.length ? chain[chain.length - 1].block_index : null;
+    if (top === null || top < o.activationHeight)
+        return 'the boundary height ' + o.activationHeight + ' is above the corpus tip ' + top + ', so BOUNDARY never ' +
+               'armed inside the corpus and A1 compares two inert replays. Pick a height inside the corpus';
+    return null;
+}
+
 /** The blocks strictly below the boundary, which is the region BF4 is about. */
 function belowBoundary(chain, height) {
     return chain.filter((b) => b.block_index < height);
@@ -293,10 +428,14 @@ function firstDivergence(chainA, chainB) {
     return null;
 }
 
-function runSideProcess(side, env, logPath) {
+function sideArgs(o) {
+    return [__filename, '--side'].concat(o.mirrorDb ? ['--mirror-db', o.mirrorDb] : []);
+}
+
+function runSideProcess(side, env, logPath, args) {
     return new Promise((resolve) => {
         const log = fs.createWriteStream(logPath);
-        const child = spawn(process.execPath, [__filename, '--side'], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+        const child = spawn(process.execPath, args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
         let stdout = '';
         child.stdout.on('data', (d) => { stdout += d; log.write(d); });
         child.stderr.on('data', (d) => log.write(d));
@@ -311,14 +450,20 @@ function parseSideOutput(side, res) {
 }
 
 function sideEnv(o, p, side, schema) {
-    return Object.assign({}, process.env, {
+    const env = Object.assign({}, process.env, {
         MA_SIDE_KEY: side,
         INDEXER_COIN: o.coin, INDEXER_NETWORK: o.network,
         TEST_DB_HOST: p.host, TEST_DB_PORT: p.port, TEST_DB_USER: p.user, TEST_DB_PASS: p.pass,
         TEST_DECODER_DB: o.decoderDb, TEST_INDEXER_DB: schema,
-        // Each side's arming, and ONLY that, is what differs between the children.
-        [ARM_ENV]: armValueFor(side, o.activationHeight),
     });
+    // Each side's arming, and ONLY that, is what differs between the children. An unarmed side
+    // gets NO key: spawn turns a null value into the string "null", which the regtest resolver
+    // rejects as unrecognised (inert, with a warning) instead of reading an unset lever, and a
+    // lever inherited from the operator's shell would otherwise arm OFF.
+    const arm = armValueFor(side, o.activationHeight);
+    if (arm === null) delete env[ARM_ENV];
+    else env[ARM_ENV] = arm;
+    return env;
 }
 
 function provePreconditions(o, p) {
@@ -330,6 +475,11 @@ function provePreconditions(o, p) {
         refuse('the database password must come from an environment variable named by ' + p.missingPassEnv +
                ', so it never reaches a process list or this tool\'s output');
     if (!o.decoderDb) refuse('--decoder-db <schema> is required: the corpus is what makes this measurement mean anything');
+    if (!o.mirrorDb)
+        refuse('--mirror-db <schema> is required: every admission-gated read is a hub-mirror select, a side has no hub, ' +
+               'and without a mirror its tables are empty, so arming could change nothing and A1 and A2 would be vacuous');
+    if (!SCHEMA_NAME.test(String(o.mirrorDb)))
+        refuse('--mirror-db must be a plain schema name (letters, digits, underscore), got ' + JSON.stringify(o.mirrorDb));
     if (!Number.isSafeInteger(o.activationHeight) || o.activationHeight <= 0)
         refuse('--activation-height <H> is required and must be a positive integer: it is the boundary the ' +
                'comparison is about, and a height outside the corpus measures nothing');
@@ -349,7 +499,8 @@ async function main() {
 
     console.log('# below-the-flag replay witness for the mirror-admission family (BF4, AB4)');
     console.log('# chain ' + o.coin + '/' + o.network + '   boundary height ' + o.activationHeight);
-    console.log('# corpus ' + (o.decoderDb || '(none)') + '   schemas ' + prefix + '_{' + o.sides.join(',') + '}');
+    console.log('# corpus ' + (o.decoderDb || '(none)') + ' + mirror ' + (o.mirrorDb || '(none)') +
+                '   schemas ' + prefix + '_{' + o.sides.join(',') + '}');
 
     section('preconditions');
     provePreconditions(o, p);
@@ -367,7 +518,7 @@ async function main() {
     const results = {};
     for (const side of o.sides) {
         const logPath = path.join(workdir, side + '.log');
-        const res = await runSideProcess(side, sideEnv(o, p, side, prefix + '_' + side), logPath);
+        const res = await runSideProcess(side, sideEnv(o, p, side, prefix + '_' + side), logPath, sideArgs(o));
         const parsed = parseSideOutput(side, res);
         if (res.status !== 0 || parsed === null)
             refuse('side ' + side + ' exited ' + res.status + ' without a result; its log is ' + logPath);
@@ -383,6 +534,14 @@ async function main() {
             side + ' resolved the consumer activation ' + want.how,
             'expected ' + JSON.stringify(want.value) + ', got ' + JSON.stringify(results[side].era.consumer));
     }
+
+    // Before any verdict line: a vacuous corpus must end in a named refusal, never in a PASS for
+    // A1 followed by a FAIL for A2 that reads like a defect in the gate.
+    section('corpus: the mirror carries rows arming would bind differently, and H is inside the corpus');
+    for (const side of o.sides)
+        info(side + ' mirror: ' + JSON.stringify(results[side].mirror));
+    const vacuous = corpusRefusal(o, results);
+    if (vacuous !== null) refuse(vacuous);
 
     section('A1: OFF and BOUNDARY are byte-identical BELOW the boundary');
     const offBelow = belowBoundary(results.off.chain, o.activationHeight);
@@ -414,4 +573,5 @@ async function main() {
 }
 
 module.exports = { queryIndexerDb, parseArgs, explicitDbParams, eraExpectation, armValueFor, belowBoundary,
-                   firstDivergence, sideEnv, resolvedEra, SIDES, EXIT, HASH_FIELDS, ARM_ENV };
+                   firstDivergence, sideEnv, sideArgs, sideMirrorDb, resolvedEra, admissionColumnsFor, loadMirror,
+                   corpusRefusal, SIDES, EXIT, HASH_FIELDS, ARM_ENV };
