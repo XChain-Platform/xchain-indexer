@@ -150,12 +150,7 @@ async function runSide() {
     // from the variable we set: an unrecognised value leaves the resolver INERT
     // and would otherwise make an "armed" side silently a second OFF.
     const gate = require(path.join(REPO, 'src', 'consensus', 'gates', 'mirror_admission_gate.js'));
-    const coin = process.env.INDEXER_COIN, network = process.env.INDEXER_NETWORK;
-    const era = {
-        armEnv:   process.env[ARM_ENV] === undefined ? null : String(process.env[ARM_ENV]),
-        producer: gate.MIRROR_ADMISSION_ACTIVATION[coin + ':' + network],
-        consumer: gate.MIRROR_ADMISSION_CONSUMER_ACTIVATION[coin + ':' + network],
-    };
+    const era = resolvedEra(gate);
 
     const launcher = require(path.join(REPO, 'test', 'integration', 'setup', 'indexer-launcher.js'));
     const indexer  = await launcher.initIndexer();
@@ -170,6 +165,27 @@ async function runSide() {
 
     console.log(SIDE_MARK + JSON.stringify({ key, blocks, ms, era, chain }));
     process.exit(0);
+}
+
+/**
+ * The era a side process resolved: the lever as this process sees it, and the
+ * producer and consumer heights the real gate answers for the coin and network
+ * the parent handed down.
+ *
+ * Every variable here is read by its LITERAL name, never through ARM_ENV, because
+ * a computed `process.env[...]` read is invisible to the documentation coverage
+ * gate (xchain-documentation lib/env-var-doc-coverage.js). The parent still writes
+ * the lever through ARM_ENV in sideEnv(), so the unit suite round-trips sideEnv()
+ * into this reader to keep the two names from drifting apart.
+ */
+function resolvedEra(gate) {
+    const armed = process.env.XC_MIRROR_ADMISSION_ACTIVATION;
+    const key = process.env.INDEXER_COIN + ':' + process.env.INDEXER_NETWORK;
+    return {
+        armEnv:   armed === undefined ? null : String(armed),
+        producer: gate.MIRROR_ADMISSION_ACTIVATION[key],
+        consumer: gate.MIRROR_ADMISSION_CONSUMER_ACTIVATION[key],
+    };
 }
 
 // ---------------------------------------------------------------------------
@@ -226,9 +242,12 @@ function explicitDbParams(o) {
     if (host === null || port === null || user === null) return null;
     let pass = null;
     if (o.db.passEnv) {
-        if (process.env[o.db.passEnv] === undefined)
-            return { missingPassEnv: o.db.passEnv };
-        pass = process.env[o.db.passEnv];
+        // The one computed env read this tool keeps, by design: --db-pass-env names the
+        // variable at run time so the password never reaches argv, so its name cannot be a
+        // literal. Read once, so the coverage gate's computed-read count holds at one site.
+        const named = process.env[o.db.passEnv];
+        if (named === undefined) return { missingPassEnv: o.db.passEnv };
+        pass = named;
     } else if (process.env.TEST_DB_PASS !== undefined) {
         pass = process.env.TEST_DB_PASS;
     } else {
@@ -395,4 +414,4 @@ async function main() {
 }
 
 module.exports = { queryIndexerDb, parseArgs, explicitDbParams, eraExpectation, armValueFor, belowBoundary,
-                   firstDivergence, sideEnv, SIDES, EXIT, HASH_FIELDS };
+                   firstDivergence, sideEnv, resolvedEra, SIDES, EXIT, HASH_FIELDS, ARM_ENV };

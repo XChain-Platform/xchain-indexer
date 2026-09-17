@@ -13,8 +13,9 @@
  * The height-ordering invariants between activation maps, read straight off the canonical
  * xchain-documentation/protocol/constants.js so a canon that itself violated one is caught:
  * zero-conf above mirror and widening, token bridge above XCHAIN bridge, policy inheritance
- * above the token bridge and the list-edit resolution, and the tick namespace below the
- * token bridge. Part of the suite whose entry is test/unit/activation_constants_parity.test.js;
+ * above the token bridge and the list-edit resolution, the tick namespace below the token
+ * bridge, and BTC as the last of the three chains to arm the token bridge and policy
+ * inheritance in wall clock. Part of the suite whose entry is test/unit/activation_constants_parity.test.js;
  * every case is pending when the documentation checkout is absent or refused.
  *
  ********************************************************************/
@@ -22,9 +23,10 @@
 'use strict';
 
 const assert = require('assert');
+const fs     = require('fs');
 
 // The canonical checkout verdict and the before-all hook shared with the suite entry.
-const { canonExists, loadCanon } = require('./helpers/canon_source.js');
+const { CONSTANTS_PATH, canonExists, loadCanon } = require('./helpers/canon_source.js');
 
 // The threshold a chain identified by `key` actually reads out of `map`: the exact key when
 // the map declares one, otherwise the bare network half of a '<COIN>:<network>' key. This is
@@ -200,5 +202,101 @@ describe('activation-gate constant parity to canonical constants.js @regression'
         assert.ok(compared.includes('regtest'), 'not vacuous: regtest must be armed at this milestone');
         assert.ok(compared.some(k => k.indexOf(':') >= 0),
             'not vacuous: the coin-keyed slots must be compared, not just the bare network keys');
+    });
+});
+
+// The house sentinel: a slot at this height never arms.
+const NEVER = 9999999999;
+
+// The sizing record a testnet slot carries on its own line in the canonical constants.js,
+// for example "SIZED 2026-09-17 02:42Z: chain_tip 152,780 + 380 (51.3 h at 487.2 s/blk)":
+// the read instant, the tip read then, the lead in blocks and the measured cadence.
+const SIZED_RECORD = /SIZED (.+?): chain_tip ([\d,]+) \+ (\d+) \(([\d.]+) h at ([\d.]+) s\/blk\)/;
+// A slot sized by reference to another map's slot on the same chain key.
+const SAME_AS = /== ([A-Z_]+) ([A-Z]+:[a-z]+)/;
+
+// Every coin-keyed slot line of one map in the canonical source, as key -> trailing comment.
+function slotComments(source, mapName) {
+    const start = source.indexOf('const ' + mapName + ' = {');
+    assert.ok(start >= 0, 'constants.js must declare ' + mapName);
+    const body = source.slice(start, source.indexOf('};', start));
+    const out = {};
+    for (const m of body.matchAll(/^\s*'([A-Z]+:[a-z]+)':\s*\d+,\s*\/\/\s*(.*)$/gm)) out[m[1]] = m[2];
+    return out;
+}
+
+// The sizing record behind one armed slot, followed through at most one "== MAP KEY"
+// reference whose value matches. Throws, naming the slot, when the height has no record:
+// an unsized height cannot be placed on a wall clock, so the ordering cannot be judged.
+function sizingOf(source, canon, mapName, key) {
+    const comment = slotComments(source, mapName)[key] || '';
+    let m = SIZED_RECORD.exec(comment);
+    if (!m) {
+        const ref = SAME_AS.exec(comment);
+        assert.ok(ref && canon[ref[1]] && canon[ref[1]][ref[2]] === canon[mapName][key],
+            mapName + ' ' + key + ' is armed at ' + canon[mapName][key] + ' with no sizing record and no ' +
+            'matching "== MAP KEY" reference, so its arm time cannot be compared');
+        m = SIZED_RECORD.exec(slotComments(source, ref[1])[ref[2]] || '');
+        assert.ok(m, ref[1] + ' ' + ref[2] + ' carries no sizing record');
+    }
+    const tip = Number(m[2].replace(/,/g, '')), lead = Number(m[3]);
+    assert.strictEqual(tip + lead, canon[mapName][key],
+        mapName + ' ' + key + ': the sizing record says tip ' + tip + ' + ' + lead + ' but the slot is ' + canon[mapName][key]);
+    return { instant: m[1], seconds: lead * Number(m[5]) };
+}
+
+describe('activation-gate constant parity to canonical constants.js @regression', function () {
+    before(function () { canon = loadCanon(); });
+
+    // WHAT THE HUB RELIES ON. xchain-hub's bridge engine gates the token-bridge and policy
+    // families at ONE chain: gateActive('token' | 'policy', snapshot_block, 'BTC') in
+    // src/cross_chain/bridge/transfer_poll.js and validate.js, where snapshot_block is the
+    // hub's view of the BTC tip. It never reads LTC's or DOGE's token or policy height. From
+    // the moment it passes it signs general-token legs toward LTC and DOGE and the XPOLICY
+    // snapshots those chains apply, so it is only sound if both are armed by then.
+    //
+    // WHAT IS TESTABLE. Heights on three chains are not comparable, so the statement asserted
+    // is the one the sizing makes: from ONE sitting in which the three tips and cadences were
+    // read, BTC's lead (blocks to its height times its cadence) is at least LTC's and DOGE's.
+    // The hub's snapshot_block is at or below the BTC tip, so the hub arms no earlier than that
+    // projection, which keeps the comparison on the safe side. Each armed coin-keyed slot must
+    // carry a sizing record whose arithmetic reproduces its height, and the three records must
+    // share one read instant. A network whose BTC slot never arms (the mainnet sentinel today)
+    // never lets the hub sign, so it is not compared; it enters this case once it is sized.
+    it('holds BTC as the last chain to arm the token bridge and policy inheritance, in wall clock', function () {
+        if (!canonExists) { this.skip(); return; }
+        const source = fs.readFileSync(CONSTANTS_PATH, 'utf8');
+        const compared = [];
+        for (const mapName of ['TOKEN_BRIDGE_ACTIVATION', 'TOKEN_POLICY_INHERITANCE_ACTIVATION']) {
+            const map = canon[mapName];
+            assert.ok(map, 'constants.js must export ' + mapName);
+            const nets = [...new Set(Object.keys(map).map(k => k.slice(k.indexOf(':') + 1)))];
+            for (const net of nets) {
+                const btc = resolveChainKey(map, 'BTC:' + net);
+                if (btc === null || btc === undefined || btc === NEVER) continue;
+                compared.push(mapName + ' ' + net);
+                const btcSized = btc > 0 && map['BTC:' + net] !== undefined ? sizingOf(source, canon, mapName, 'BTC:' + net) : null;
+                for (const coin of ['LTC', 'DOGE']) {
+                    const here = resolveChainKey(map, coin + ':' + net);
+                    assert.ok(here !== null && here !== undefined && here !== NEVER,
+                        mapName + ': BTC ' + net + ' arms at ' + btc + ' but ' + coin + ' ' + net + ' never does');
+                    if (btcSized === null) {
+                        assert.strictEqual(btc, 0, mapName + ' BTC ' + net + ' is armed with no coin-keyed slot to size it');
+                        assert.strictEqual(here, 0, mapName + ': BTC ' + net + ' arms at genesis but ' + coin + ' arms later, at ' + here);
+                        continue;
+                    }
+                    if (here === 0) continue;
+                    const dest = sizingOf(source, canon, mapName, coin + ':' + net);
+                    assert.strictEqual(dest.instant, btcSized.instant,
+                        mapName + ': ' + coin + ' ' + net + ' was sized at ' + dest.instant + ' and BTC at ' + btcSized.instant +
+                        '; leads read in different sittings cannot be compared');
+                    assert.ok(btcSized.seconds >= dest.seconds,
+                        mapName + ': BTC ' + net + ' arms ' + (btcSized.seconds / 3600).toFixed(1) + ' h after the sizing read but ' +
+                        coin + ' arms ' + (dest.seconds / 3600).toFixed(1) + ' h after it; the hub would sign toward a chain not yet armed');
+                }
+            }
+        }
+        for (const mapName of ['TOKEN_BRIDGE_ACTIVATION', 'TOKEN_POLICY_INHERITANCE_ACTIVATION'])
+            assert.ok(compared.includes(mapName + ' testnet'), 'not vacuous: ' + mapName + ' testnet must be compared, compared ' + compared.join(', '));
     });
 });
