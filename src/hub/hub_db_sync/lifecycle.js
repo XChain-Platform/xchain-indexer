@@ -90,10 +90,16 @@ module.exports = {
     async bootstrapAll() {
         if (this._bootstrapping) return;                     // reconnect + retry timer may overlap
         this._bootstrapping = true;
+        const drainEpoch = this._wsEpoch;
         try {
             this._pendingBootstrapHeights = null;
             let drained = await this.drainEveryTable();
-            if (drained.allDrained && drained.marks.length > 0) this.certifyFullDrain(drained.marks);
+            // A disconnect leaves a delivery gap that only the replacement
+            // connection's own drain can close. Results started on the prior
+            // connection cannot certify its replacement.
+            const sameConnection = this._wsEpoch === drainEpoch;
+            if (drained.allDrained && drained.marks.length > 0 && sameConnection)
+                this.certifyFullDrain(drained.marks);
             else if (this.running) this.scheduleBootstrapRetry();
         } finally {
             this._bootstrapping = false;

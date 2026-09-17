@@ -142,6 +142,38 @@ describe('HubDbSync live price rows buffer until the price bootstrap drains (#24
 });
 
 describe('HubDbSync live price rows buffer until the price bootstrap drains (#2422) @regression @tier1', function () {
+    it('a reconnect while a table page is pending cannot certify the stale full drain', async function () {
+        const { sync } = makeBufferSync();
+        sync.running = true;
+        const pageStarted = {};
+        pageStarted.promise = new Promise(resolve => { pageStarted.resolve = resolve; });
+        const releasePage = {};
+        releasePage.promise = new Promise(resolve => { releasePage.resolve = resolve; });
+        const bootstrapTable = sinon.stub(sync, 'bootstrapTable');
+        bootstrapTable.onFirstCall().callsFake(async () => {
+            pageStarted.resolve();
+            await releasePage.promise;
+            return 55;
+        });
+        bootstrapTable.resolves(55);
+        const certifyFullDrain = sinon.spy(sync, 'certifyFullDrain');
+        const scheduleBootstrapRetry = sinon.stub(sync, 'scheduleBootstrapRetry');
+
+        const draining = sync.bootstrapAll();
+        await pageStarted.promise;
+        sync.ws = { generation: 'closing' };
+        sync.resetOnSocketClose();
+        sync.ws = { generation: 'replacement' };
+        sync.adoptReadyFrame(sync.ws, { type: 'ready', watermark: 56 });
+        releasePage.resolve();
+        await draining;
+
+        assert.ok(certifyFullDrain.notCalled, 'the prior connection drain must not certify');
+        assert.strictEqual(sync._bootstrapDrained, false, 'the replacement connection gate stays closed');
+        assert.strictEqual(sync.streamWatermark, 0, 'the stale drain cannot advance the watermark');
+        assert.ok(scheduleBootstrapRetry.calledOnce, 'the replacement connection gets a fresh drain');
+    });
+
     it('a disconnect racing the drain cannot stale-arm the live path (epoch guard)', async function () {
         const doQuery = sinon.stub().resolves([{ max_id: null }]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
