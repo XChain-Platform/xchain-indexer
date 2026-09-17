@@ -118,11 +118,11 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     // -----------------------------------------------------------------------
     it('re-ISSUE by owner with format 1 updates description', async function () {
         // Initial ISSUE
-        await seeder.seedBlock(110, BASE_TIME, [
+        await seeder.seedBlock(100, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|EDITME|1000|100|0|Original description' }
         ]);
         // Update description via format 1: VERSION|TICK|DESCRIPTION|MEMO
-        await seeder.seedBlock(111, BASE_TIME + 10, [
+        await seeder.seedBlock(101, BASE_TIME + 10, [
             { source: ADDR1, data: 'ISSUE|1|EDITME|Updated description' }
         ]);
 
@@ -157,11 +157,11 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     // 4. Re-ISSUE by non-owner fails
     // -----------------------------------------------------------------------
     it('re-ISSUE by non-owner address is marked invalid', async function () {
-        await seeder.seedBlock(120, BASE_TIME, [
+        await seeder.seedBlock(100, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|OWNED|2000|100|0|Token owned by ADDR1' }
         ]);
         // ADDR2 (non-owner) tries to update
-        await seeder.seedBlock(121, BASE_TIME + 10, [
+        await seeder.seedBlock(101, BASE_TIME + 10, [
             { source: ADDR2, data: 'ISSUE|1|OWNED|Takeover attempt' }
         ]);
 
@@ -186,7 +186,7 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     // 5. ISSUE reserved tick name (BTC): status invalid
     // -----------------------------------------------------------------------
     it('ISSUE of reserved tick BTC is rejected on every network, regtest included', async function () {
-        await seeder.seedBlock(130, BASE_TIME, [
+        await seeder.seedBlock(100, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|BTC|1000|100|0|Trying to issue reserved tick' }
         ]);
 
@@ -227,11 +227,11 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
         // Need 25 fields after ACTION: VERSION(0) through MEMO(24), LOCK_MINT is index 22
         const issueData = 'ISSUE|0|LOCKTOKEN|1000|100|0|Locked token|||||||||||||||||1';
 
-        await seeder.seedBlock(900, BASE_TIME, [
+        await seeder.seedBlock(100, BASE_TIME, [
             { source: ADDR1, data: issueData }
         ]);
         // MINT should fail due to LOCK_MINT
-        await seeder.seedBlock(901, BASE_TIME + 10, [
+        await seeder.seedBlock(101, BASE_TIME + 10, [
             { source: ADDR1, data: 'MINT|0|LOCKTOKEN|50' }
         ]);
 
@@ -249,7 +249,7 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     // 19. ISSUE owner is set from SOURCE address
     // -----------------------------------------------------------------------
     it('ISSUE sets token owner to the source address', async function () {
-        await seeder.seedBlock(1000, BASE_TIME, [
+        await seeder.seedBlock(100, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|OWNEDBY1|1000|100|0|Owned by addr1' }
         ]);
 

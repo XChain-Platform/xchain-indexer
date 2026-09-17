@@ -55,14 +55,14 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     // 13. DESTROY reduces supply: only debits created, supply decremented
     // -----------------------------------------------------------------------
     it('DESTROY creates a debit record and decrements token supply', async function () {
-        await seeder.seedBlock(500, BASE_TIME, [
+        await seeder.seedBlock(100, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|BURNABLE|5000|1000|0|Burnable token' }
         ]);
-        await seeder.seedBlock(501, BASE_TIME + 10, [
+        await seeder.seedBlock(101, BASE_TIME + 10, [
             { source: ADDR1, data: 'MINT|0|BURNABLE|500' }
         ]);
         // DESTROY format 0: VERSION|TICK|AMOUNT|MEMO
-        await seeder.seedBlock(502, BASE_TIME + 20, [
+        await seeder.seedBlock(102, BASE_TIME + 20, [
             { source: ADDR1, data: 'DESTROY|0|BURNABLE|200' }
         ]);
 
@@ -96,14 +96,14 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     // 14. DESTROY insufficient balance: invalid
     // -----------------------------------------------------------------------
     it('DESTROY with insufficient balance is marked invalid', async function () {
-        await seeder.seedBlock(510, BASE_TIME, [
+        await seeder.seedBlock(100, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|UNBURNABLE|1000|200|0|Token' }
         ]);
-        await seeder.seedBlock(511, BASE_TIME + 10, [
+        await seeder.seedBlock(101, BASE_TIME + 10, [
             { source: ADDR1, data: 'MINT|0|UNBURNABLE|100' }
         ]);
         // Try to destroy 500: only has 100
-        await seeder.seedBlock(512, BASE_TIME + 20, [
+        await seeder.seedBlock(102, BASE_TIME + 20, [
             { source: ADDR1, data: 'DESTROY|0|UNBURNABLE|500' }
         ]);
 
@@ -121,13 +121,13 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     // 15. Sanity check passes after ISSUE + MINT + SEND sequence
     // -----------------------------------------------------------------------
     it('sanity check passes: supply == credits - debits == balances after ISSUE+MINT+SEND', async function () {
-        await seeder.seedBlock(600, BASE_TIME, [
+        await seeder.seedBlock(100, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|SANITY|10000|1000|0|Sanity token' }
         ]);
-        await seeder.seedBlock(601, BASE_TIME + 10, [
+        await seeder.seedBlock(101, BASE_TIME + 10, [
             { source: ADDR1, data: 'MINT|0|SANITY|800' }
         ]);
-        await seeder.seedBlock(602, BASE_TIME + 20, [
+        await seeder.seedBlock(102, BASE_TIME + 20, [
             { source: ADDR1, destination: ADDR2, data: 'SEND|0|SANITY|300|' + ADDR2 }
         ]);
 
