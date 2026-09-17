@@ -7,14 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-09-17
+
+### Added
+- Schema v7 records admission heights on seven mirror tables.
+- Testnet heights arm the mirror producer, mirror consumer, and anchor-attestation barriers.
+
 ### Changed
-- Mirrored rows carry per-chain admission heights so a future-dated block no longer stalls indexer processing while the mirror proves completeness by height.
-- `carrier_logic_pin_ops --move` can re-pin changed carrier logic while recording the path and hash transitions atomically.
+- Live and replay processing enforce mirror admission by per-chain height.
+- `carrier_logic_pin_ops --move` can re-pin changed carrier logic and record path and hash transitions atomically.
+- Activation modules, fingerprints, sibling maps, and identity pins follow the consolidated consensus layout.
 
 ### Fixed
-- The mirror-admission replay witness queries through the indexer's database wrapper instead of calling a raw connection method that is not available there.  
-- The integration launcher now applies each block through production's own pass sequence, and the mirror-admission witness refuses a replay that skipped the pass reading a table holding admission-era rows.  
-- The integration equivalence oracle compares state tree roots by height without their timestamp, accepts only orphaned tree nodes no surviving root reaches, and compares chain-keyed roots across coins by presence.
+- Mirror watermark reads verify table availability before querying a table.
+- The migration CLI refuses unrecognized arguments instead of applying every pending migration.
+- The replay witness queries through the indexer's database wrapper.
+- The replay witness rejects empty corpora and replays through the production block passes.
+- Integration equivalence compares state-tree roots by natural key and reachable roots.
 
 ## [0.19.0] - 2026-09-16
 
