@@ -1,8 +1,11 @@
 'use strict';
 
 const assert = require('assert');
+const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { EventEmitter } = require('events');
 const witness = require('../../../bin/verify-mirror-admission-replay-equivalence.js');
 const launcher = require('../../integration/setup/indexer-launcher.js');
 const blockPasses = require('../../../src/XChainIndexer/block_passes.js');
@@ -76,6 +79,79 @@ describe('mirror-admission replay witness', function () {
             if (witness.armValueFor(side, 120) !== null)
                 assert.strictEqual(era.armEnv, witness.armValueFor(side, 120), side + ' reported lever');
         }
+    });
+});
+
+describe('mirror-admission replay witness: owned artifact cleanup', function () {
+    it('removes owned schemas and workdir by default, but --keep preserves and prints both', async function () {
+        const removedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-witness-unit-remove-'));
+        const removed = witness.createRunArtifacts();
+        removed.db = { test: true };
+        removed.workdir = removedDir;
+        removed.ownsWorkdir = true;
+        removed.schemaNames.push('ma_witness_unit_off', 'ma_witness_unit_on');
+        const dropped = [];
+        await witness.cleanupRunArtifacts(removed, {
+            dropSchemas: async (db, names) => dropped.push({ db, names }),
+        });
+        const removedDirExists = fs.existsSync(removedDir);
+        if (removedDirExists) fs.rmdirSync(removedDir);
+        assert.deepStrictEqual(dropped, [{ db: { test: true }, names: ['ma_witness_unit_off', 'ma_witness_unit_on'] }]);
+        assert.strictEqual(removedDirExists, false, 'default cleanup left its owned workdir behind');
+
+        const keptDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-witness-unit-keep-'));
+        const kept = witness.createRunArtifacts();
+        kept.keep = true;
+        kept.workdir = keptDir;
+        kept.ownsWorkdir = true;
+        kept.schemaNames.push('ma_witness_unit_boundary');
+        const lines = [];
+        await witness.cleanupRunArtifacts(kept, {
+            dropSchemas: async () => { throw new Error('keep attempted a schema drop'); },
+            log: (line) => lines.push(line),
+        });
+        assert.strictEqual(fs.existsSync(keptDir), true, '--keep removed its owned workdir');
+        assert.ok(lines.some((line) => line.includes('ma_witness_unit_boundary')), 'kept schema name was not printed');
+        assert.ok(lines.some((line) => line.includes(keptDir)), 'kept workdir path was not printed');
+        fs.rmdirSync(keptDir);
+    });
+
+    it('applies cleanup on a refused CLI exit in both default and --keep modes', function () {
+        const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-witness-unit-cli-'));
+        const removedDir = path.join(parent, 'removed');
+        const keptDir = path.join(parent, 'kept');
+        const run = (args) => spawnSync(process.execPath, [TOOL, '--workdir'].concat(args), { encoding: 'utf8' });
+        try {
+            const removed = run([removedDir]);
+            assert.strictEqual(removed.status, witness.EXIT.REFUSED, removed.stdout + removed.stderr);
+            assert.strictEqual(fs.existsSync(removedDir), false, 'refused default run left its workdir behind');
+
+            const kept = run([keptDir, '--keep']);
+            assert.strictEqual(kept.status, witness.EXIT.REFUSED, kept.stdout + kept.stderr);
+            assert.strictEqual(fs.existsSync(keptDir), true, 'refused --keep run removed its workdir');
+            assert.ok(kept.stdout.includes('kept workdir: ' + keptDir), kept.stdout);
+            fs.rmdirSync(keptDir);
+            fs.rmdirSync(parent);
+        } finally {
+            if (fs.existsSync(removedDir)) fs.rmdirSync(removedDir);
+            if (fs.existsSync(keptDir)) fs.rmdirSync(keptDir);
+            if (fs.existsSync(parent)) fs.rmdirSync(parent);
+        }
+    });
+});
+
+describe('mirror-admission replay witness: signal cleanup', function () {
+    it('records the first catchable signal and stops the active replay side', function () {
+        const emitter = new EventEmitter();
+        const artifacts = witness.createRunArtifacts();
+        const killed = [];
+        artifacts.activeChild = { kill: (signal) => killed.push(signal) };
+        const remove = witness.installSignalHandlers(artifacts, emitter);
+        emitter.emit('SIGTERM');
+        emitter.emit('SIGINT');
+        remove();
+        assert.strictEqual(artifacts.interruptedSignal, 'SIGTERM');
+        assert.deepStrictEqual(killed, ['SIGTERM']);
     });
 });
 
