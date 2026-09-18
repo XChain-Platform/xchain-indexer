@@ -9,9 +9,9 @@
 # test/unit/repo_guards/sibling_coverage.test.js, which reports the surface this file leaves
 # uncovered and now fails if a guard's sibling is ever added without a line here.
 #
-# ci-dispatch.sh ships each of these at its origin/master (falling back to local
-# HEAD) and REFUSES the push if one is not a checkout beside this repo, so a
-# declared sibling can never be silently absent.
+# ci-dispatch.sh ships each of these at the pushed branch (falling back to its
+# origin/master, then local HEAD) and REFUSES the push if one is not a checkout
+# beside this repo, so a declared sibling can never be silently absent.
 
 # Vendored coins-registry byte-identity, attest-relay and snapshot-reorg
 # activation parity, and the mirror bigint twin.
