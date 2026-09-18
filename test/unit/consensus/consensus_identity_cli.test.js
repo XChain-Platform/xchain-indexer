@@ -116,3 +116,37 @@ describe('bin/consensus-identity.js --assert-no-absent', function () {
         assert.ok(res.stderr.includes(KEY), res.stderr);
     });
 });
+
+describe('bin/consensus-identity.js argument validation', function () {
+    this.timeout(20000);
+
+    it('refuses an unknown flag before measuring the checkout', function () {
+        const res = run(['--out', 'ignored.json']);
+        assert.strictEqual(res.status, 2);
+        assert.strictEqual(res.stdout, '');
+        assert.match(res.stderr, /REFUSING: unknown flag --out/);
+        assert.match(res.stderr, /Usage: node bin\/consensus-identity\.js \[--json\] \[--compare <pin>\]/);
+    });
+
+    it('refuses a bare positional argument the same way', function () {
+        const res = run(['pin.json']);
+        assert.strictEqual(res.status, 2);
+        assert.match(res.stderr, /REFUSING: unknown flag pin\.json/);
+    });
+
+    it('keeps JSON output working', function () {
+        const res = run(['--json']);
+        assert.strictEqual(res.status, 0, res.stderr);
+        assert.doesNotThrow(() => JSON.parse(res.stdout));
+    });
+
+    it('documents both compare blocks without advertising an output-file flag', function () {
+        const res = run(['--help']);
+        assert.strictEqual(res.status, 0, res.stderr);
+        assert.match(res.stdout, /node bin\/consensus-identity\.js --compare <pin>/);
+        assert.match(res.stdout, /bare_checkout block/);
+        assert.match(res.stdout, /armed_regtest_venue block/);
+        assert.match(res.stdout, /XC_ROLLCALL_REGTEST_ACTIVATION=armed XC_ROLLCALL_GATES_REGTEST_ACTIVATION=armed/);
+        assert.ok(!res.stdout.includes('--out'));
+    });
+});

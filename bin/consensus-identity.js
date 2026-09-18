@@ -90,10 +90,11 @@
  *   node bin/consensus-identity.js --compare <pin>    compare the selected pin
  *                                                     block field by field
  *
+ * A single bare --compare grades only the bare_checkout block. Grade the
+ * armed_regtest_venue block with a second run:
+ *
  *   XC_ROLLCALL_REGTEST_ACTIVATION=armed XC_ROLLCALL_GATES_REGTEST_ACTIVATION=armed \
- *     node bin/consensus-identity.js
- *                                      reproduces the digest an ARMED regtest
- *                                      venue reports, from a bare checkout
+ *     node bin/consensus-identity.js --compare <pin>
  *
  ********************************************************************/
 
@@ -102,6 +103,15 @@
 const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
+
+const USAGE = 'Usage: node bin/consensus-identity.js [--json] [--compare <pin>]';
+
+class CliUsageError extends Error {
+    constructor(arg) {
+        super(`REFUSING: unknown flag ${arg}\n${USAGE}`);
+        this.name = 'CliUsageError';
+    }
+}
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 
@@ -161,6 +171,9 @@ function codeIdentity(network) {
 }
 
 function selectedPinBlock(pin) {
+    // One compare grades exactly one block. Without both arming variables the
+    // result covers bare_checkout only, so armed_regtest_venue needs a second
+    // invocation under the environment printed in the usage text.
     const armed = pin.armed_regtest_venue;
     const env = armed && armed.env ? armed.env : {};
     const armedNow = Object.keys(env).length > 0
@@ -275,6 +288,7 @@ function parseArgs(argv) {
         else if (argv[i] === '--assert-no-absent') opts.assertNoAbsent = true;
         else if (argv[i] === '--compare') { opts.compare = path.resolve(argv[i + 1]); i += 1; }
         else if (argv[i] === '--help' || argv[i] === '-h') opts.help = true;
+        else throw new CliUsageError(argv[i]);
     }
     return opts;
 }
@@ -340,7 +354,7 @@ async function main() {
 
 if (require.main === module) {
     main().then(() => process.exit(process.exitCode || 0), (e) => {
-        console.error(`consensus-identity: ${e.message}`);
+        console.error(e instanceof CliUsageError ? e.message : `consensus-identity: ${e.message}`);
         process.exit(2);
     });
 }
