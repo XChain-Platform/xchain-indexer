@@ -35,7 +35,7 @@ function dbSource(){
 const { CHECKPOINT_VERSIONS, CHECKPOINT_SECTION_VERSIONS, ANCHOR_ACTIONS_SQL,
         validateAnchorActionParams, selectAnchorRow,
         buildAnchorActionResponse } = require('../../../src/actions/anchor/anchor_action_query');
-const { ARCHIVE_HEAD_VERSIONS } = require('../../../src/stateHash.js');
+const { ARCHIVE_HEAD_VERSIONS } = require('../../../src/consensus/state_hash.js');
 
 const CONFIG = { COIN: 'DOGE', NETWORK: 'regtest' };
 

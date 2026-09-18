@@ -191,7 +191,7 @@ describe('price capability resolution off BTC @regression', function () {
         });
 
         it('the mirrored set clears the stake-weighted quorum the measured rounds failed', async function () {
-            const swq = require('../../../src/stake_weighted_quorum');
+            const swq = require('../../../src/consensus/stake_weighted_quorum');
             const { db } = dbFor('DOGE', 'regtest');
             const validators = await db.getStakeWeightsByCapability('price', SNAP_BLOCK);
             assert.strictEqual(swq.meetsStakeThreshold(validators, ['aa11', 'bb22', 'cc33', 'dd44']), true);

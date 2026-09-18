@@ -204,19 +204,21 @@ addGate('mirror_admission_activation.ADMIT_MAX_FUTURE_BLOCKS', 'constant', {
  * height on a BTC indexer, so the two legs of one cross-chain match would cross the flag day at
  * unrelated instants. The 'COIN:network' key shape is established precedent.
  *
- * Mainnet is null under the 2026-08-29 write hold. Testnet is sized at the release cut from the
- * measured tip plus the roll window plus slack, per key. The v7 HUB_SCHEMA_VERSION roll
- * completes BEFORE any network's activation height: the heights map rides frames carrying no
- * schema_version, so a v7 indexer above the activation against a v6 hub would see no heights at
- * all and defer forever under the fail-closed rule.
+ * Mainnet is null under the 2026-08-29 write hold. TESTNET SIZED 2026-09-16 20:41Z, LTC and DOGE
+ * RE-CUT 2026-09-17 22:45Z onto the BTC instant after their cadences drifted off it; the measured
+ * tips, the formula, the cadence-window rule, the epoch-close rule and the per-chain re-size rule
+ * are written once in the canon (xchain-documentation/protocol/constants.js), which this row is
+ * held value-identical to. The v7 HUB_SCHEMA_VERSION roll completes BEFORE any of these heights:
+ * the heights map rides frames carrying no schema_version, so a v7 indexer above the activation
+ * against a v6 hub would see no heights at all and defer forever under the fail-closed rule.
  */
 addGate('mirror_admission_activation.MIRROR_ADMISSION_ACTIVATION', 'height', {
     'BTC:mainnet':  null,
     'LTC:mainnet':  null,
     'DOGE:mainnet': null,
-    'BTC:testnet':  null,   // SIZED AT THE CUT, strictly below the consumer height for this key
-    'LTC:testnet':  null,
-    'DOGE:testnet': null,
+    'BTC:testnet':  153222,      // SIZED 2026-09-16 20:41Z: epoch close 153,216 + 6 buried; tip 152,756 + 466 at 498.7 s/blk, about 64.5 h
+    'LTC:testnet':  4891504,     // RE-CUT 2026-09-17 22:45Z onto that instant: tip 4,889,190 + 2314 at 82.5 s/blk
+    'DOGE:testnet': 67911796,    // RE-CUT 2026-09-17 22:45Z onto that instant: tip 67,904,912 + 6884 at 27.7 s/blk
     'BTC:regtest':  UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
     'LTC:regtest':  UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
     'DOGE:regtest': UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
@@ -226,9 +228,9 @@ addGate('mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION', 'hei
     'BTC:mainnet':  null,
     'LTC:mainnet':  null,
     'DOGE:mainnet': null,
-    'BTC:testnet':  null,   // SIZED AT THE CUT, strictly above the producer height for this key
-    'LTC:testnet':  null,
-    'DOGE:testnet': null,
+    'BTC:testnet':  153266,      // its producer + 44 blocks, about 6 h: strictly above, never equal
+    'LTC:testnet':  4891766,     // its producer + 262 blocks, about 6 h at 82.5 s/blk
+    'DOGE:testnet': 67912575,    // its producer + 779 blocks, about 6 h at 27.7 s/blk
     'BTC:regtest':  UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
     'LTC:regtest':  UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
     'DOGE:regtest': UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration

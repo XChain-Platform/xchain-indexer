@@ -22,7 +22,7 @@
 
 const crypto  = require('crypto');
 const ed25519 = require('../../../../../../src/consensus/ed25519.js');
-const eq      = require('../../../../../../src/equivocation_header.js');
+const eq      = require('../../../../../../src/consensus/equivocation_header.js');
 
 const NETWORK = 'regtest';
 const DEPTH     = 2;                  // FULLNODE_CONFIRM_DEPTH

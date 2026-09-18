@@ -15,18 +15,18 @@ const assert = require('assert');
 const crypto = require('crypto');
 const sinon  = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../../fixtures/mocks');
-const swq   = require('../../../../src/stake_weighted_quorum.js');
+const swq   = require('../../../../src/consensus/stake_weighted_quorum.js');
 const fs    = require('fs');
 const { siblingCheckout, skipOrFail } = require('../../../helpers/sibling_checkout.js');
 const ADMIT_AT  = 799000;
 const LEGACY_AT = ADMIT_AT - 1;
 const NETWORK   = 'regtest';
 const PRICE_DIR = __dirname + '/../../../../src/actions/price';
-const ARMED_MODULES = ['../../../../src/mirror_admission_activation.js', '../../../../src/consensus/ed25519.js']
+const ARMED_MODULES = ['../../../../src/consensus/gates/mirror_admission_gate.js', '../../../../src/consensus/ed25519.js']
     .concat(fs.readdirSync(PRICE_DIR, { recursive: true }).filter(f => f.endsWith('.js')).sort()
         .map(f => '../../../../src/actions/price/' + f));
 const HUB_MODULES = [
-    '../../../../../xchain-hub/src/mirror_admission_activation.js',
+    '../../../../../xchain-hub/src/consensus/gates/mirror_admission_gate.js',
     '../../../../../xchain-hub/src/lib/admission_height.js',
     '../../../../../xchain-hub/src/oracle/price_aggregator.js'
 ];
@@ -48,7 +48,7 @@ function armTwins() {
     const savedEnv = process.env.XC_MIRROR_ADMISSION_ACTIVATION;
     for (const p of all) delete require.cache[p];
     process.env.XC_MIRROR_ADMISSION_ACTIVATION = String(ADMIT_AT);
-    const act     = require('../../../../src/mirror_admission_activation.js');
+    const act     = require('../../../../src/consensus/gates/mirror_admission_gate.js');
     const ed      = require('../../../../src/consensus/ed25519.js');
     const Price   = require('../../../../src/actions/price/index.js');
     const hubAgg  = hubPaths ? require('../../../../../xchain-hub/src/oracle/price_aggregator.js') : null;

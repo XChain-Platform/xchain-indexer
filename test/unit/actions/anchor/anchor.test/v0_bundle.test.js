@@ -19,7 +19,7 @@ const assert = require('assert');
 const { createBaseData } = require('../../../../fixtures/mocks');
 const { PUBKEY_A, PUBKEY_B, PUBKEY_C, PUBKEY_D, SIG, HASH, v0Params, THREE_CHAINS, PUBLISHER, armAnchor, disarmAnchor } = require('./helpers/anchor_fixtures.js');
 const Anchor = require('../../../../../src/actions/anchor/index.js');
-const eq = require('../../../../../src/equivocation_header.js');
+const eq = require('../../../../../src/consensus/equivocation_header.js');
 
 let indexer, handler, verifyStub, swqStub, deriveGateStub;
 

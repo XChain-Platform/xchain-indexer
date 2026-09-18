@@ -274,34 +274,34 @@ describe('activation-gate constant parity to canonical constants.js @regression'
     // into two services: the indexer stops applying blocks and the sync follower stops
     // following, and the header text is what tells an operator which. Value parity to the
     // canon is covered by the GATES case below; this is the twin half of it.
-    it('holds xchain-sync/src/train_activation.js byte-identical to this repo\'s copy', function () {
-        const here = path.resolve(__dirname, '../../../src/train_activation.js');
-        const twin = path.resolve(__dirname, '../../../../xchain-sync/src/train_activation.js');
+    it('holds xchain-sync/src/consensus/gates/train_gate.js byte-identical to this repo\'s copy', function () {
+        const here = path.resolve(__dirname, '../../../src/consensus/gates/train_gate.js');
+        const twin = path.resolve(__dirname, '../../../../xchain-sync/src/consensus/gates/train_gate.js');
         assert.ok(fs.existsSync(here), 'the indexer train-activation gate is missing at ' + here);
         const twinVerdict = siblingCheckout(__dirname, twin);
         if (!twinVerdict.usable)
             return skipOrFail(this, twinVerdict, 'the sync train-activation twin byte compare');
         assert.strictEqual(fs.readFileSync(twin, 'utf8'), fs.readFileSync(here, 'utf8'),
-            'xchain-sync/src/train_activation.js has drifted from the indexer copy; the two are ' +
+            'xchain-sync/src/consensus/gates/train_gate.js has drifted from the indexer copy; the two are ' +
             'vendored twins and a one-sided edit forks the fleet at the train boundary.');
     });
 
-    // mirror_admission_activation.js is the second module whose copies must be BYTE-identical
+    // mirror_admission_gate.js is the second module whose copies must be BYTE-identical
     // rather than value-identical, and the reason is sharper than the train gate's: since the
     // price rail joined the family the module carries the admission canonical ENCODER as well
     // as the heights. The hub SIGNS those bytes and this repo REBUILDS them to verify, and no
     // value-parity suite anywhere can compare two copies of a FUNCTION: they would both resolve,
     // both be callable, and disagree only on the bytes a quorum already signed. A byte compare is
     // the only check that sees an encoder edit landed on one side of the boundary.
-    it('holds xchain-hub/src/mirror_admission_activation.js byte-identical to this repo\'s copy', function () {
-        const here = path.resolve(__dirname, '../../../src/mirror_admission_activation.js');
-        const twin = path.resolve(__dirname, '../../../../xchain-hub/src/mirror_admission_activation.js');
+    it('holds xchain-hub/src/consensus/gates/mirror_admission_gate.js byte-identical to this repo\'s copy', function () {
+        const here = path.resolve(__dirname, '../../../src/consensus/gates/mirror_admission_gate.js');
+        const twin = path.resolve(__dirname, '../../../../xchain-hub/src/consensus/gates/mirror_admission_gate.js');
         assert.ok(fs.existsSync(here), 'the indexer admission activation module is missing at ' + here);
         const twinVerdict = siblingCheckout(__dirname, twin);
         if (!twinVerdict.usable)
             return skipOrFail(this, twinVerdict, 'the hub mirror-admission twin byte compare');
         assert.strictEqual(fs.readFileSync(twin, 'utf8'), fs.readFileSync(here, 'utf8'),
-            'xchain-hub/src/mirror_admission_activation.js has drifted from the indexer copy; the two ' +
+            'xchain-hub/src/consensus/gates/mirror_admission_gate.js has drifted from the indexer copy; the two ' +
             'are byte-identical twins carrying the admission heights AND the canonical encoder, so a ' +
             'one-sided edit makes every signed admission field unverifiable on the other side.');
     });
@@ -311,7 +311,7 @@ describe('activation-gate constant parity to canonical constants.js @regression'
     // they match still carries the encoder the verifier calls. A rename would otherwise leave
     // every canonical rebuild throwing at runtime with both parity cases green.
     it('exports the admission canonical encoder and its era gate, callable and injective', function () {
-        const m = require('../../../src/mirror_admission_activation.js');
+        const m = require('../../../src/consensus/gates/mirror_admission_gate.js');
         for (const name of ['encodeAdmitBlocks', 'decodeAdmitBlocks', 'isAdmissionEra', 'admissionCanonicalField'])
             assert.strictEqual(typeof m[name], 'function', 'mirror_admission_activation must export ' + name);
         assert.strictEqual(m.encodeAdmitBlocks({ DOGE: 23, BTC: 1 }), 'BTC:1,DOGE:23');

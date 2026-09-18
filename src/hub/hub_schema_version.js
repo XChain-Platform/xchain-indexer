@@ -76,6 +76,27 @@
 // halt window, only which side waits, so the hub rolls FIRST and this indexer
 // follows it back to back with the explorer (regtest measured about 2.5 minutes
 // per indexer image for that window).
-const HUB_SCHEMA_VERSION = 6;
+//
+// v7: seven mirror tables gained the admission-height columns the time-keyed
+// barrier family binds on: attestation_responses.admit_block_btc, the
+// admit_block_btc/ltc/doge triple on cross_chain_matches, cross_chain_calls,
+// bridge_transfers, policy_snapshots and price_snapshots, and the unsigned
+// oracle_prices.admit_block. Above the consumer activation this indexer admits
+// a mirrored row by height (heights[table][chain] >= B - margin) instead of by
+// clock and rebuilds the signed admission map from those columns before it
+// applies the row, so a v6 hub streaming rows without them does not merely
+// miss a field: an activated indexer could verify no era row at all. A v6
+// indexer must reject the v7 stream until it has applied the
+// 2026-09-16-admission-height migration.
+//
+// v7 ROLL (2026-09-16): the strict-equality halt window is unavoidable again,
+// so the v6 order stands: the hub rolls FIRST and stamps 7, then this indexer
+// and the explorer follow back to back. One bound is new: the whole v7 roll
+// completes BELOW every network's mirror-admission activation height (C17).
+// The heights watermark rides frames that carry no schema_version, so a v7
+// indexer above the activation against a v6 hub would see no heights and defer
+// forever under the fail-closed rule, while below the activation the same
+// mismatched pair only parks the mirror for the roll window.
+const HUB_SCHEMA_VERSION = 7;
 
 module.exports = { HUB_SCHEMA_VERSION };

@@ -41,10 +41,12 @@ const { spawnSync } = require('child_process');
 const BIN     = path.resolve(__dirname, '../../../bin/consensus-identity.js');
 const REPO    = path.resolve(__dirname, '../../..');
 // A real shared-gate carrier, temporarily renamed out from under the tool: the
-// value it once carried is a registry row, so the digest must not notice.
-const VICTIM  = path.resolve(REPO, 'src/cross_chain_royalty_activation.js');
+// value it once carried is a registry row, so the digest must not notice. The
+// price-pair gate is the victim since W5 (the royalty shim the case used before
+// is gone: its row is read by key and there is no file left to hide).
+const VICTIM  = path.resolve(REPO, 'src/consensus/gates/price_pair_gate.js');
 const HIDDEN  = VICTIM + '.hidden-for-test';
-const KEY     = 'cross_chain_royalty_activation.CROSS_CHAIN_ROYALTY_ACTIVATION';
+const KEY     = 'price_pair_activation.PRICE_PAIR_WIDEN_ACTIVATION';
 const REGISTRY = path.resolve(REPO, 'src/consensus/gate_registry.js');
 
 function run(args, preload) {

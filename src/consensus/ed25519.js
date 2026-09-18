@@ -21,8 +21,8 @@
  ********************************************************************/
 
 const crypto = require('crypto');
-const eq     = require('../equivocation_header.js');
-const adm    = require('../mirror_admission_activation.js');
+const eq     = require('./equivocation_header.js');
+const adm    = require('./gates/mirror_admission_gate.js');
 
 // ASN.1 DER prefix for Ed25519 SPKI (SubjectPublicKeyInfo), 12 bytes
 const SPKI_ED25519_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');

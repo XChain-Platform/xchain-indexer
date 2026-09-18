@@ -24,7 +24,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 
 const observability = require('../../../../src/observability/index.js');
-const srb = require('../../../../src/snapshot_reorg_buffer.js');
+const srb = require('../../../../src/consensus/snapshot_reorg_buffer.js');
 const gatesFilter = require('../../../../src/actions/attest/rollcall_gates_filter.js');
 const { buildStakesRpc } = require('../../../../src/api/rpc/stakes.js');
 const { buildCapabilitiesRpc } = require('../../../../src/api/rpc/capabilities.js');

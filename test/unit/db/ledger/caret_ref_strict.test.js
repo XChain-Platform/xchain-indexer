@@ -109,7 +109,7 @@ describe('caret-ref strict activation predicate @regression @tier1', function ()
         // Both are execution-path validity changes on the pre-freeze train, so
         // a re-pin has to move both or this fails rather than silently splitting the
         // boundary operators were told to reason about.
-        const listEdit = require('../../../../src/list_edit_resolution_activation').LIST_EDIT_RESOLUTION_ACTIVATION;
+        const listEdit = require('../../../../src/consensus/gate_registry').get('list_edit_resolution_activation.LIST_EDIT_RESOLUTION_ACTIVATION');
         assert.deepStrictEqual(CARET_REF_STRICT_ACTIVATION, listEdit);
     });
 });

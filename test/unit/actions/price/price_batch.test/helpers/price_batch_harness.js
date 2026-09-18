@@ -23,7 +23,7 @@ const { createMockIndexer, createBaseData } = require('../../../../../fixtures/m
 
 const Price   = require('../../../../../../src/actions/price/index.js');
 const ed25519 = require('../../../../../../src/consensus/ed25519.js');
-const swq     = require('../../../../../../src/stake_weighted_quorum.js');
+const swq     = require('../../../../../../src/consensus/stake_weighted_quorum.js');
 const comp    = require('../../../../../../src/actions/price/price_batch_compression.js');
 
 // ---------------------------------------------------------------------------

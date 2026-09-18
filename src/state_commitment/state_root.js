@@ -26,7 +26,7 @@
 'use strict';
 
 const M   = require('../consensus/merkle.js');
-const SUB = require('../state_subtree_activation.js');
+const SUB = require('../consensus/gates/state_subtree_gate.js');
 
 // Assemble the top-level state_root from the two v1 sub-roots plus any RESERVED
 // slot that its flag-day has armed (SPV spec §4.1, state-subtree extension design).

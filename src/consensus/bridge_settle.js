@@ -74,9 +74,9 @@
 // than requiring them for themselves: a part file is not purged with the entry, and one that had
 // captured the activation itself would keep answering from the pre-arming map. The parts that
 // read no activation are plain requires.
-const swq     = require('../stake_weighted_quorum.js');
-const eq      = require('../equivocation_header.js');
-const ah      = require('../mirror_admission_activation.js');
+const swq     = require('./stake_weighted_quorum.js');
+const eq      = require('./equivocation_header.js');
+const ah      = require('./gates/mirror_admission_gate.js');
 const cpCheck = require('./bridge_checkpoint_check.js');
 
 const { SETTLE_REASON, POLICY_LEG_ORDINAL,

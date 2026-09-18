@@ -56,13 +56,13 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     // 9. SEND transfers balance: credits, debits, balances for both addresses
     // -----------------------------------------------------------------------
     it('SEND debits source and credits destination with correct amounts', async function () {
-        await seeder.seedBlock(300, BASE_TIME, [
+        await seeder.seedBlock(100, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|SENDABLE|5000|1000|0|Sendable token' }
         ]);
-        await seeder.seedBlock(301, BASE_TIME + 10, [
+        await seeder.seedBlock(101, BASE_TIME + 10, [
             { source: ADDR1, data: 'MINT|0|SENDABLE|500' }
         ]);
-        await seeder.seedBlock(302, BASE_TIME + 20, [
+        await seeder.seedBlock(102, BASE_TIME + 20, [
             { source: ADDR1, destination: ADDR2, data: 'SEND|0|SENDABLE|200|' + ADDR2 }
         ]);
 
@@ -89,14 +89,14 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     // 10. SEND insufficient balance: status invalid, no ledger changes
     // -----------------------------------------------------------------------
     it('SEND with insufficient balance is marked invalid and creates no ledger entries', async function () {
-        await seeder.seedBlock(310, BASE_TIME, [
+        await seeder.seedBlock(100, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|SCARCE|100|50|0|Scarce token' }
         ]);
-        await seeder.seedBlock(311, BASE_TIME + 10, [
+        await seeder.seedBlock(101, BASE_TIME + 10, [
             { source: ADDR1, data: 'MINT|0|SCARCE|50' }
         ]);
         // Try to send 100: ADDR1 only has 50
-        await seeder.seedBlock(312, BASE_TIME + 20, [
+        await seeder.seedBlock(102, BASE_TIME + 20, [
             { source: ADDR1, destination: ADDR2, data: 'SEND|0|SCARCE|100|' + ADDR2 }
         ]);
 
@@ -132,14 +132,14 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     // 11. SEND to invalid address: status invalid
     // -----------------------------------------------------------------------
     it('SEND to an invalid destination address is marked invalid', async function () {
-        await seeder.seedBlock(320, BASE_TIME, [
+        await seeder.seedBlock(100, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|ADDRCHECK|1000|500|0|Address check token' }
         ]);
-        await seeder.seedBlock(321, BASE_TIME + 10, [
+        await seeder.seedBlock(101, BASE_TIME + 10, [
             { source: ADDR1, data: 'MINT|0|ADDRCHECK|200' }
         ]);
         // Destination is not a valid address (fails isCryptoAddress)
-        await seeder.seedBlock(322, BASE_TIME + 20, [
+        await seeder.seedBlock(102, BASE_TIME + 20, [
             { source: ADDR1, destination: 'badaddr', data: 'SEND|0|ADDRCHECK|100|badaddr' }
         ]);
 
@@ -165,16 +165,16 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     // 12. Multi-block lifecycle: ISSUE → MINT → SEND → SEND → verify balances
     // -----------------------------------------------------------------------
     it('full lifecycle ISSUE→MINT→SEND→SEND produces correct final balances', async function () {
-        await seeder.seedBlock(400, BASE_TIME, [
+        await seeder.seedBlock(100, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|LIFECYCLE|10000|2000|0|Lifecycle token' }
         ]);
-        await seeder.seedBlock(401, BASE_TIME + 10, [
+        await seeder.seedBlock(101, BASE_TIME + 10, [
             { source: ADDR1, data: 'MINT|0|LIFECYCLE|1000' }
         ]);
-        await seeder.seedBlock(402, BASE_TIME + 20, [
+        await seeder.seedBlock(102, BASE_TIME + 20, [
             { source: ADDR1, destination: ADDR2, data: 'SEND|0|LIFECYCLE|400|' + ADDR2 }
         ]);
-        await seeder.seedBlock(403, BASE_TIME + 30, [
+        await seeder.seedBlock(103, BASE_TIME + 30, [
             { source: ADDR2, destination: ADDR3, data: 'SEND|0|LIFECYCLE|150|' + ADDR3 }
         ]);
 
@@ -204,11 +204,11 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     // 20. Multiple tokens coexist independently: balances do not cross
     // -----------------------------------------------------------------------
     it('two independently issued tokens maintain separate balances', async function () {
-        await seeder.seedBlock(1100, BASE_TIME, [
+        await seeder.seedBlock(100, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|APPLE|1000|500|0|Apple token' },
             { source: ADDR2, data: 'ISSUE|0|ORANGE|2000|1000|0|Orange token' }
         ]);
-        await seeder.seedBlock(1101, BASE_TIME + 10, [
+        await seeder.seedBlock(101, BASE_TIME + 10, [
             { source: ADDR1, data: 'MINT|0|APPLE|300' },
             { source: ADDR2, data: 'MINT|0|ORANGE|700' }
         ]);

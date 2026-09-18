@@ -35,10 +35,10 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
-const act = require('../../../src/rollcall_activation.js');
+const act = require('../../../src/consensus/gates/rollcall_gate.js');
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
-const ACT_PATH = require.resolve('../../../src/rollcall_activation.js');
+const ACT_PATH = require.resolve('../../../src/consensus/gates/rollcall_gate.js');
 
 // Re-require the module with ROLLCALL_ACTIVATION resolved against `env`. The
 // map is built at require time on purpose (an activation height that can change
@@ -72,7 +72,7 @@ function loadCanonical(){
     return require('../../../../xchain-documentation/protocol/constants.js');
 }
 function loadHub(){
-    const p = path.join(__dirname, '../../../../xchain-hub/src/rollcall_activation.js');
+    const p = path.join(__dirname, '../../../../xchain-hub/src/consensus/gates/rollcall_gate.js');
     // Absent, or a lane symlink into a live main checkout that no commit pins: either way
     // the twin is not read, and the callers skip or rethrow this reason under strict.
     const sibling = siblingCheckout(__dirname, p);
@@ -122,7 +122,7 @@ describe('rollcall_activation', function () {
                 .map(l => TWIN_REF.test(l) ? '<TWIN-REF>' : l)
                 .join('\n');
             assert.strictEqual(
-                norm(path.join(__dirname, '../../../src/rollcall_activation.js')),
+                norm(path.join(__dirname, '../../../src/consensus/gates/rollcall_gate.js')),
                 norm(hub.file),
                 'rollcall_activation.js drifted between hub and indexer (only the twin-reference line may differ)'
             );

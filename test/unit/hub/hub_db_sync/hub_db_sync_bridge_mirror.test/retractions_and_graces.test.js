@@ -75,7 +75,13 @@ describe('bridge-family watermark graces @regression @tier1', function () {
 // fence and the DELETE shape alone (the same harness the cross_chain_calls cases use).
 function makeApply(options = {}) {
     const calls   = [];
-    const doQuery = sinon.stub().callsFake(async (sql, args) => { calls.push({ sql: sql, args: args }); return []; });
+    const doQuery = sinon.stub().callsFake(async (sql, args) => {
+        calls.push({ sql: sql, args: args });
+        // The barrier refresh a retraction triggers asks the schema for its table first, and
+        // a mirror that just had a row deleted from that table plainly has it.
+        if (/information_schema\.TABLES/i.test(sql)) return [{ TABLE_NAME: args[0] }];
+        return [];
+    });
     const sync    = new HubDbSync({ doQuery }, Object.assign({ hubUrl: 'http://hub.test' }, options));
     return { sync, calls };
 }

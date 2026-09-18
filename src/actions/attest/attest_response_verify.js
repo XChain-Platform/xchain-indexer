@@ -51,10 +51,10 @@
 
 const crypto  = require('crypto');
 const ed25519 = require('../../consensus/ed25519.js');
-const swq     = require('../../stake_weighted_quorum.js');
-const wid     = require('../../attest_responsible_widening_activation.js');
-const eq      = require('../../equivocation_header.js');
-const srb     = require('../../snapshot_reorg_buffer.js');
+const swq     = require('../../consensus/stake_weighted_quorum.js');
+const wid     = require('../../consensus/gates/attest_responsible_widening_gate.js');
+const eq      = require('../../consensus/equivocation_header.js');
+const srb     = require('../../consensus/snapshot_reorg_buffer.js');
 const { buildResponseCanonicalRaw } = require('../../consensus/attest_response_canonical.js');
 
 // Verify a response artifact's federation signatures against the capability

@@ -71,12 +71,13 @@ function scanDeclarations(root) {
     return found;
 }
 
-// The modules the registry replaced: every *_activation.js still at the top of
-// src/ (the W5 twins), the logic-bearing modules W4 moved to their feature
-// directories (keyed by the registry stem they kept), and the seven fixed
-// carriers, read as the running process resolves them.
-const FIXED = ['protocol/constants.js', 'stateHash.js', 'attestation/providerMinStakeHistory.js',
-    'stake_weighted_quorum.js', 'equivocation_header.js', 'snapshot_reorg_buffer.js'];
+// The modules the registry replaced: any *_activation.js still at the top of
+// src/ (none since W5; the scan stays so a shim that reappears is counted), the
+// logic-bearing modules W4 and W5 moved under their feature directories and
+// src/consensus/ (keyed by the registry stem they kept, the four carriers
+// included, per test/helpers/gate_modules.js), and the two fixed modules that
+// never moved, read as the running process resolves them.
+const FIXED = ['protocol/constants.js', 'attestation/providerMinStakeHistory.js'];
 function shimModules() {
     const top = fs.readdirSync(SRC).filter((f) => f.endsWith('_activation.js')).sort()
         .map((rel) => [rel.replace(/\.js$/, ''), rel]);
@@ -152,7 +153,7 @@ describe('armed_map/manifest: the row list', function () {
 
     it('never lists a key twice and never enumerates the file system', function () {
         assert.strictEqual(rowKeys().size, manifest.ENTRIES.length);
-        for (const file of ['manifest.js', 'fingerprint_v2.js', 'canonical.js']) {
+        for (const file of ['manifest.js', 'fingerprint.js', 'canonical.js']) {
             const text = fs.readFileSync(path.join(SRC, 'consensus', 'armed_map', file), 'utf8');
             // A call or an fs require, not the word: the manifest header names readdirSync
             // in prose to say it is never called.

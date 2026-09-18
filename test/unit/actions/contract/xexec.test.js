@@ -19,7 +19,7 @@ const { createMockIndexer } = require('../../../fixtures/mocks');
 
 const Xexec   = require('../../../../src/actions/xexec/index.js');
 const ed25519 = require('../../../../src/consensus/ed25519.js');
-const eq      = require('../../../../src/equivocation_header.js');
+const eq      = require('../../../../src/consensus/equivocation_header.js');
 
 const PUBKEY_A = 'a'.repeat(64);
 const SIG_A    = '1'.repeat(128);

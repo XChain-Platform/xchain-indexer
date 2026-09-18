@@ -26,7 +26,8 @@ const sinon  = require('sinon');
 
 const { createBaseData } = require('../../../../fixtures/mocks');
 
-const arm     = require('../../../../../src/attest_response_mirror_activation.js');
+const { stubActiveAt } = require('../../../../helpers/gate_modules.js');
+const RESPONSE_MIRROR_KEY = 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
 const attestBcastFee  = require('../../../../../src/actions/attest/attest_broadcast_fee_gate.js');
 
 const { PUBKEY_A, SIG_A, REQ_ID, BODY, BLOCK_TIME, requestRow } = require('./helpers/rows.js');
@@ -50,7 +51,7 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
             await handler.parse([1, REQ_ID], terminal, null);
             assert.strictEqual(indexer.indexerDb.createAttestationResponse.called, false);
 
-            sinon.stub(arm, 'isResponseMirrorActive').returns(false);
+            stubActiveAt(sinon, RESPONSE_MIRROR_KEY, false);
             const legacy = applyData();
             await handler.parse([1, REQ_ID], legacy, null);
             assert.strictEqual(indexer.indexerDb.createAttestationResponse.called, false,

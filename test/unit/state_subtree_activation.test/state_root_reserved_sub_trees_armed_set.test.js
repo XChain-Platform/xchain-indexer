@@ -27,7 +27,7 @@
 'use strict';
 
 const assert = require('assert');
-const SUB = require('../../../src/state_subtree_activation.js');
+const SUB = require('../../../src/consensus/gates/state_subtree_gate.js');
 
 describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @regression', function(){
 

@@ -18,7 +18,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const { createBaseData } = require('../../../../fixtures/mocks');
 const { HASH, crc32Hex, gz64, v1Params, ARCHIVE_JSON, PUBLISHER, OUTSIDER, armAnchor, disarmAnchor } = require('./helpers/anchor_fixtures.js');
-const eq = require('../../../../../src/equivocation_header.js');
+const eq = require('../../../../../src/consensus/equivocation_header.js');
 
 let indexer, handler, verifyStub, swqStub, deriveGateStub;
 

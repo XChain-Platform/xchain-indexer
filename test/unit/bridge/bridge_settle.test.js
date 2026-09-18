@@ -42,7 +42,7 @@
 
 const { BS, makeKey, sign, NETWORK, SNAPSHOT, DEST_ADDR, ESCROW_DOGE_ON_BTC, ESCROW_BTC_ON_DOGE, buildProof, makeTransfer, snapshotSet, makeCtx } = require('./bridge_settle.test/helpers/settle_fixtures.js');
 const assert = require('assert');
-const eq     = require('../../../src/equivocation_header.js');
+const eq     = require('../../../src/consensus/equivocation_header.js');
 
 describe('bridge_settle: the XBRIDGE settle pass', function(){
     describe('the signed canonical', function(){

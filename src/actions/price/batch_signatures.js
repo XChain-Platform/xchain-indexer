@@ -19,8 +19,11 @@
  ********************************************************************/
 
 const ed25519       = require('../../consensus/ed25519.js');
-const swq           = require('../../stake_weighted_quorum.js');
-const priceSigTally = require('../../price_sig_tally_activation.js');
+const swq           = require('../../consensus/stake_weighted_quorum.js');
+// The verify-first tally rule is a registry row read by literal key (W5), on the
+// batch's BTC anchor height.
+const gateRegistry  = require('../../consensus/gate_registry');
+const PRICE_SIG_TALLY_KEY = 'price_sig_tally_activation.PRICE_SIG_TALLY_ACTIVATION';
 
 // The `price` capability set at the batch anchor, or null when the read
 // truncated and every signer must be probed one at a time.
@@ -110,8 +113,8 @@ async function verifyBatchSignatures(indexerDb, config, batch){
     // the window). At/above the gate a pubkey enters the dedupe set only after a
     // successful verify, so a garbage signature carrying a qualified oracle's pubkey
     // cannot be ordered ahead of that oracle's real one to consume its slot.
-    let verifyFirst = priceSigTally.isPriceSigTallyVerifyFirstActive(
-        batch.btcBlockHeight, config['NETWORK']);
+    let verifyFirst = gateRegistry.activeAt(PRICE_SIG_TALLY_KEY, config['NETWORK'], null,
+        batch.btcBlockHeight, null);
     let capableSet = await resolveCapableSet(indexerDb, batch.btcBlockHeight);
     let tally = await tallyQualifiedSigners(indexerDb, payload, batch.sigs,
         batch.btcBlockHeight, verifyFirst, capableSet);

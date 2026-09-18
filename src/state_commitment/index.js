@@ -37,7 +37,7 @@
 'use strict';
 
 const M = require('../consensus/merkle.js');
-const SUB = require('../state_subtree_activation.js');
+const SUB = require('../consensus/gates/state_subtree_gate.js');
 const CST = require('../consensus/contract_state_subtree.js');
 const ESC = require('../consensus/escrow_leaf_subtree.js');
 const EJW = require('../consensus/escrow_journal_writer.js');   // SOURCE ONLY: the follower replicates these rows

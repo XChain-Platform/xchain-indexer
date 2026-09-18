@@ -16,7 +16,7 @@
 
 const assert  = require('assert');
 const crypto  = require('crypto');
-const eq      = require('../../../../../src/equivocation_header.js');
+const eq      = require('../../../../../src/consensus/equivocation_header.js');
 const BS      = require('../../../../../src/consensus/bridge_settle.js');
 const Utility = require('../../../../../src/utility.js');
 const { XPOLICY_MAX_PER_BLOCK } = require('../../../../../src/protocol/constants.js');

@@ -25,6 +25,11 @@
  *   node src/db/migration/migrate.js                   # or: npm run migrate
  *   node src/db/migration/migrate.js --file <name.sql> # scope the run to named file(s)
  *
+ * Any argument this CLI does not recognize is REFUSED with the usage text and
+ * exit 2. It is never ignored: a no-argument run means APPLY EVERYTHING, so an
+ * ignored token (a typo, `--dry-run`, `--help`) would silently apply every
+ * pending manual migration the operator was only asking about.
+ *
  * Reads INDEXER_DB_* from the service environment (.env). Run with the indexer
  * process stopped if a pending migration's header says so.
  *
@@ -38,9 +43,36 @@ const config   = require('../../config.js');
 const Utility  = require('../../utility.js');
 
 const { CONFIG_ENV } = require('../../config.js');
+// Spelled out for an operator reading it mid-incident: the difference between a
+// blanket run and a scoped one is the whole risk of this command, so each mode
+// says what it applies rather than naming a flag.
+const USAGE = [
+    'Usage: node src/db/migration/migrate.js [--file <name.sql> ...]',
+    '',
+    '  (no arguments)         APPLY EVERYTHING. Runs every pending migration, auto',
+    '                         AND manual, against the database in INDEXER_DB_NAME.',
+    '                         Manual migrations are the destructive / backfill ones.',
+    '  --file, -f <name.sql>  APPLY ONE. Runs only the named migration file(s).',
+    '                         Repeat the flag or comma-separate to name several.',
+    '  --help, -h             Print this usage and exit 0. Touches no database.',
+    '',
+    'Reads INDEXER_DB_HOST / INDEXER_DB_PORT / INDEXER_DB_NAME / INDEXER_DB_USER /',
+    'INDEXER_DB_PASS from the service environment (.env). Any other argument is',
+    'refused with exit 2, because ignoring one would mean APPLY EVERYTHING.',
+].join('\n');
+
+// Print the usage and exit. Returns null so main() bails even where process.exit
+// is stubbed (tests), instead of falling through to an apply-everything run.
+function refuse(message){
+    console.error('migrate: ' + message);
+    console.error(USAGE);
+    process.exit(2);
+    return null;
+}
+
 // Parse `--file <name>` / `--file=<name>` / `-f <name>` occurrences into a list of
-// migration filenames to scope the run to. Values may be comma-separated. Returns []
-// when no targeting flag is present (the default apply-everything behavior).
+// migration filenames. Values may be comma-separated. [] means no targeting flag
+// (the apply-everything default); null means refused or served, so main() must stop.
 function parseFileTargets(argv){
     const targets = [];
     const push = (v) => {
@@ -51,23 +83,44 @@ function parseFileTargets(argv){
     };
     for(let i = 0; i < argv.length; i++){
         const a = argv[i];
+        // Usage requests are served before anything else reads the environment, so
+        // asking what this command does never needs a loaded .env and never runs.
+        if(a === '--help' || a === '-h'){
+            console.log(USAGE);
+            process.exit(0);
+            return null;  // (unreachable when exit is real; keeps a stubbed exit from applying)
+        }
+        const named = targets.length;
         if(a === '--file' || a === '-f'){
             const v = argv[i + 1];
             if(v === undefined || v.startsWith('-')){
-                console.error('migrate: ' + a + ' requires a migration filename argument.');
-                process.exit(2);
-                return targets;  // (unreachable when exit is real; guards stubbed-exit tests)
+                return refuse(a + ' requires a migration filename argument.');
             }
             push(v);
             i++;
         } else if(a.startsWith('--file=')){
             push(a.slice('--file='.length));
+        } else {
+            // Refuse anything else, including a bare filename: only --file scopes a
+            // run, and guessing here is what turns a typo into APPLY EVERYTHING.
+            return refuse('unrecognized argument "' + a + '".');
+        }
+        // A targeting flag that named nothing (`--file=`, `--file ,`) would leave the
+        // scope empty, and an empty scope means APPLY EVERYTHING: the opposite of
+        // what the operator asked for. Refuse instead of widening the run.
+        if(targets.length === named){
+            return refuse(a + ' names no migration file.');
         }
     }
     return targets;
 }
 
 async function main(){
+    // Argv is settled first so `--help` answers without a loaded .env, and so a
+    // refused argument never reaches the database checks below.
+    const only = parseFileTargets(process.argv.slice(2));
+    if(only === null) return;
+
     const host = CONFIG_ENV.INDEXER_DB_HOST;
     const port = CONFIG_ENV.INDEXER_DB_PORT;
     const name = CONFIG_ENV.INDEXER_DB_NAME;
@@ -77,8 +130,6 @@ async function main(){
         console.error('migrate: INDEXER_DB_HOST / INDEXER_DB_NAME / INDEXER_DB_USER must be set (load the service .env).');
         process.exit(2);
     }
-
-    const only = parseFileTargets(process.argv.slice(2));
 
     // The Database constructor only needs { config, util } off its parent.
     // Share ONE config object between the two (see Utility constructor).

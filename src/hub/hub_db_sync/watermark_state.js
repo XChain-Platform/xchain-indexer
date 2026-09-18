@@ -31,7 +31,7 @@ const { HUB_SYNC_WATERMARK_GRACE_S, resolveWatermarkGrace, resolveBarrierHoldCei
         resolveWatermarkStallMs } = require('./watermark_config.js');
 const { PRICE_BATCH_APPLY_ROWS, BOOTSTRAP_PROGRESS_INTERVAL_MS,
         PRICE_MIRROR_LOOKBACK_S } = require('./mirror_bounds.js');
-const { priceEraFloorS } = require('../../price_batching_floor_activation.js');
+const { priceEraFloorS } = require('../../consensus/gates/price_batching_floor_gate.js');
 
 function initWatermarkState(sync) {
     // Stream-position watermark: the hub's "you have received everything I

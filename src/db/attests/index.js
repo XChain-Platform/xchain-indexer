@@ -27,7 +27,7 @@ const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
 // The frozen anchor/archive reward heights: the derive flag-day and the fleet-agreed
 // mirror-completeness watermark. Recovery-restored rewards claim their ORIGINAL derive
 // height from here, so a restored row and a live-derived one carry the same stamp.
-const ar = require('../../anchor_reward_activation.js');
+const ar = require('../../consensus/gates/anchor_reward_gate.js');
 // The attests mixin is cut into parts by behaviour under attests/; this entry merges them
 // back into the one method set db/index.js installs, at the position those methods held here.
 const rowWriters       = require('./row_writers.js');

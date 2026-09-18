@@ -14,9 +14,9 @@ const sinon  = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../../../../fixtures/mocks');
 
 const Rollcall = require('../../../../../../src/actions/rollcall/index.js');
-const eq       = require('../../../../../../src/equivocation_header.js');
-const rca      = require('../../../../../../src/rollcall_activation.js');
-const rga      = require('../../../../../../src/rollcall_gates_activation.js');
+const eq       = require('../../../../../../src/consensus/equivocation_header.js');
+const rca      = require('../../../../../../src/consensus/gates/rollcall_gate.js');
+const rga      = require('../../../../../../src/consensus/gates/rollcall_gates_gate.js');
 const { buildRollcallCanonical } = require('../../../../../../src/actions/rollcall/rollcall_canonical.js');
 const { knownGateKeys }          = require('../../../../../../src/consensus_rules_digest.js');
 

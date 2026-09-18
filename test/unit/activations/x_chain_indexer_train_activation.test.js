@@ -38,7 +38,7 @@
 const assert = require('assert');
 const path   = require('path');
 
-const ta            = require('../../../src/train_activation.js');
+const ta            = require('../../../src/consensus/gates/train_gate.js');
 const XChainIndexer = require('../../../src/XChainIndexer.js');
 
 const FLOOR   = { '1.0.0': { mainnet: 0, testnet: 0, regtest: 0 } };

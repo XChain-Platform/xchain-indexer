@@ -41,7 +41,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const eq     = require('../../equivocation_header.js');
+const eq     = require('../../consensus/equivocation_header.js');
 
 // sha256 of the GATES field exactly as carried, lowercase hex.
 function gatesHash(gates){

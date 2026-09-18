@@ -30,7 +30,7 @@ const M = require('../merkle.js');
 // The state_root layout version is a DERIVED quantity, per height, chain and network. This
 // is the same module the block path and getblockhashes derive it from, so this check and the
 // value the fleet stamps into the signed checkpoint cannot come apart.
-const stateSubtree = require('../../state_subtree_activation.js');
+const stateSubtree = require('../gates/state_subtree_gate.js');
 const { ESCROW_CHAIN, ESCROW_PROOF_REASON, fail, pass } = require('./reasons.js');
 const { str, height, version, scaled } = require('./fields.js');
 const { resolveEscrowAddress } = require('./escrow_address.js');

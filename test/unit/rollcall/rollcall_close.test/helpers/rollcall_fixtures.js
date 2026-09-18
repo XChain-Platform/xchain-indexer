@@ -19,8 +19,8 @@
  ********************************************************************/
 const crypto = require('crypto');
 
-const rca = require('../../../../../src/rollcall_activation.js');
-const eq  = require('../../../../../src/equivocation_header.js');
+const rca = require('../../../../../src/consensus/gates/rollcall_gate.js');
+const eq  = require('../../../../../src/consensus/equivocation_header.js');
 
 const NETWORK = 'regtest';
 const EPOCH   = 30;                                    // ROLLCALL_INTERVAL_BLOCKS.regtest

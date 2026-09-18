@@ -26,8 +26,10 @@
 
 'use strict';
 
-const xchainBridgeActivation = require('../../xchain_bridge_activation.js');
-const tokenBridgeActivation  = require('../../token_bridge_activation.js');
+// The two bridge flag days are registry rows read by literal key (W5).
+const gateRegistry = require('../../consensus/gate_registry');
+const XCHAIN_BRIDGE_KEY = 'xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION';
+const TOKEN_BRIDGE_KEY  = 'token_bridge_activation.TOKEN_BRIDGE_ACTIVATION';
 
 const v = require('./verdicts.js');
 const VERDICTS = v.VERDICTS;
@@ -92,8 +94,8 @@ function validateFormat(data, ctx){
     // LTC and DOGE reach the bridge at three different heights on one network, and
     // passing the network alone would judge a DOGE block against a BTC number.
     let active = (TOKEN_VERSIONS.indexOf(format) !== -1)
-        ? tokenBridgeActivation.isTokenBridgeActive(ctx.blockIndex, ctx.network)
-        : xchainBridgeActivation.isXchainBridgeActive(ctx.blockIndex, ctx.network, ctx.coin);
+        ? gateRegistry.activeAt(TOKEN_BRIDGE_KEY, ctx.network, null, ctx.blockIndex, null)
+        : gateRegistry.activeAt(XCHAIN_BRIDGE_KEY, ctx.network, ctx.coin, ctx.blockIndex, null);
     if(!active)
         return { valid: false, verdict: VERDICTS.BEFORE_ACTIVATION };
 

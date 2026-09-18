@@ -16,7 +16,7 @@
  *
  ********************************************************************/
 
-const rca = require('../../rollcall_activation.js');
+const rca = require('../gates/rollcall_gate.js');
 
 // Parse a pinned responsible set back into a Set of source addresses. A row whose
 // JSON is missing or unparseable yields null, and the caller must then treat that

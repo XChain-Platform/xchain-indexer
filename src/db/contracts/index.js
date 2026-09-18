@@ -22,7 +22,10 @@
 // Load required libraries
 const mariadb = require('mariadb');
 const path    = require('path');
-const stateKeyCollation = require('../../state_key_collation_activation');
+// The state-key binary collation flag day is a registry row read by literal key (W5),
+// keyed '<COIN>:<network>' so the coin goes with the height.
+const gateRegistry = require('../../consensus/gate_registry');
+const STATE_KEY_COLLATION_KEY = 'state_key_collation_activation.STATE_KEY_COLLATION_ACTIVATION';
 // The contracts mixin is cut into parts by behaviour under contracts/; this entry merges them
 // back into the one method set db/index.js installs, at the position those methods held here.
 const stakes             = require('./stakes.js');
@@ -266,8 +269,8 @@ module.exports = {
     async getContractState(contractIndex, blockIndex){
         // Get the latest row per key using MAX(id)
         // The idx_latest index (contract_index, state_key, id DESC) makes this efficient
-        let stateKeyBin = (blockIndex !== undefined) && stateKeyCollation.isStateKeyBinCollationActive(
-            blockIndex, this.config['NETWORK'], this.config['COIN']);
+        let stateKeyBin = (blockIndex !== undefined) && gateRegistry.activeAt(STATE_KEY_COLLATION_KEY,
+            this.config['NETWORK'], this.config['COIN'], blockIndex, null);
         let query = `SELECT cs.state_key, cs.state_value
                      FROM contract_state cs
                      INNER JOIN (

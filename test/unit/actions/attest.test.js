@@ -23,7 +23,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon = require('sinon');
 
-const srb = require('../../../src/snapshot_reorg_buffer.js');
+const srb = require('../../../src/consensus/snapshot_reorg_buffer.js');
 const { PUBKEY_A, REQ_ID, deriveReqId, GOLDEN_REQUEST_ID, setUpAttestHandler, v0Data, v0Params } = require('../../helpers/attest_fixture.js');
 
 // The handler under test and its mocked indexer, rebuilt before every test.

@@ -31,7 +31,7 @@ const bridgeStateCommitment = require('../../state_commitment/index.js');
 // comparison refuses every checkpoint cut once a sub-tree slot arms. getBridgeEscrowProof
 // re-derives it here as a guard against handing out an envelope built from a stale or
 // mis-migrated state_checkpoints row.
-const bridgeStateSubtree = require('../../state_subtree_activation.js');
+const bridgeStateSubtree = require('../../consensus/gates/state_subtree_gate.js');
 
 // The state_checkpoints row getBridgeEscrowProof binds its envelope to, or null when this
 // height has none or its stamped version cannot be trusted.

@@ -18,7 +18,7 @@
 
 const ed25519 = require('../ed25519.js');
 const rcc     = require('../../actions/rollcall/rollcall_canonical.js');
-const rga     = require('../../rollcall_gates_activation.js');
+const rga     = require('../gates/rollcall_gates_gate.js');
 
 // (4) Verify. A row counts only if it carries THIS indexer's ledger_hash and
 // its signature verifies over the canonical rebuilt here.

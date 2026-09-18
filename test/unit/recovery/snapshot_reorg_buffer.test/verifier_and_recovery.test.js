@@ -19,7 +19,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 
-const swq = require('../../../../src/stake_weighted_quorum.js');
+const swq = require('../../../../src/consensus/stake_weighted_quorum.js');
 
 const { createMockIndexer, createBaseData } = require('../../../fixtures/mocks');
 const Attest         = require('../../../../src/actions/attest/index.js');
@@ -81,8 +81,7 @@ function setUpVerifier(){
     // And the response-mirror flag day, armed on regtest at genesis: above it the
     // chain handler refuses an on-chain v1 before any height is resolved, so these
     // burial vectors are the legacy era's (matches attest.test.js default).
-    sinon.stub(require('../../../../src/attest_response_mirror_activation.js'),
-               'isResponseMirrorActive').returns(false);
+    require('../../../helpers/gate_modules.js').stubActiveAt(sinon, 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION', false);
     sinon.stub(ed25519, 'verify').returns(true);
 }
 

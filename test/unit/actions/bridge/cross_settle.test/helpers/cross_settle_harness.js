@@ -20,7 +20,7 @@ const sinon = require('sinon');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../../../fixtures/mocks');
 
 const Cross_Settle = require('../../../../../../src/actions/cross_settle/index.js');
-const swq          = require('../../../../../../src/stake_weighted_quorum.js');
+const swq          = require('../../../../../../src/consensus/stake_weighted_quorum.js');
 
 // ── Real Ed25519 keypair helpers ───────────────────────────────────────────
 // cross_settle verifies signatures with the production ed25519.js (no stub), so

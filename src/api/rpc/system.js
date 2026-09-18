@@ -23,7 +23,7 @@
 const { buildHealthResponse, committedView, inFlightBlockIndex } = require('../health');
 const { chainBlockHash } = require('../chain_block_hash');           // decoder-side hash for the block-hash triple
 const merkle        = require('../../consensus/merkle');
-const stateSubtree  = require('../../state_subtree_activation');
+const stateSubtree  = require('../../consensus/gates/state_subtree_gate');
 const { getLogger } = require('../../observability/index.js');
 
 function buildSystemRpc(ctx){

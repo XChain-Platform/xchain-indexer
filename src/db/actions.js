@@ -19,9 +19,12 @@
  *
  ********************************************************************/
 
-const { buildStateHashData, ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../stateHash');
+const { buildStateHashData, ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../consensus/state_hash');
 const { canonicalizeHashAddress } = require('../consensus/protocol_address_roles');
-const stateKeyCollation = require('../state_key_collation_activation');
+// The state-key binary collation flag day is a registry row read by literal key (W5),
+// keyed '<COIN>:<network>' so the coin goes with the height.
+const gateRegistry = require('../consensus/gate_registry');
+const STATE_KEY_COLLATION_KEY = 'state_key_collation_activation.STATE_KEY_COLLATION_ACTIVATION';
 // Per-block cap on the ATTEST deadline-expiry sweep. Vendored
 // byte-identical from xchain-documentation/protocol/constants.js, same convention
 // as the XCALL_MAX_CALLS_PER_BLOCK sibling it mirrors.
@@ -235,8 +238,8 @@ module.exports = {
     // is kept so historical block hashes replay byte-identically.
     // xchain-sync/src/client/block_hasher.js mirrors this gate byte-for-byte.
     async getBlockHashContractStateRows(block_index){
-        let stateKeyBin = stateKeyCollation.isStateKeyBinCollationActive(
-            block_index, this.config['NETWORK'], this.config['COIN']);
+        let stateKeyBin = gateRegistry.activeAt(STATE_KEY_COLLATION_KEY,
+            this.config['NETWORK'], this.config['COIN'], block_index, null);
         let stateKeyCollate = stateKeyBin ? ' COLLATE utf8_bin' : '';
         let query = `SELECT cs.contract_index, cs.state_key, cs.state_value
                  FROM contract_state cs

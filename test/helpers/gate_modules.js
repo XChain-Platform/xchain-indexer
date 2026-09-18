@@ -12,16 +12,18 @@
  *
  **********************************************************************
  *
- * Where the activation registry's gate modules live after W4, for the
+ * Where the activation registry's gate modules live after W4 and W5, for the
  * suites that resolve a module from a registry key.
  *
  * W3 gave every gate a shim at src/<stem>.js; W4 (activation registry spec,
- * row 18) took the shims apart: the 25 predicate-only shims are gone and
- * their callers read the row through activeAt() by its literal key, the 10
- * logic-bearing modules moved to their feature directories as <stem>_gate.js
- * with the registry key stem unchanged, and the 27 twins stay at src/<stem>.js
- * for W5. A suite that walks the registry needs all three facts, so they are
- * written here once.
+ * row 18) took the non-twin shims apart: the 25 predicate-only shims are gone
+ * and their callers read the row through activeAt() by its literal key, the
+ * 10 logic-bearing modules moved to their feature directories as
+ * <stem>_gate.js with the registry key stem unchanged. W5 (row 21) did the
+ * same to the 27 twins: 13 predicate-only shims deleted, 14 logic-bearing
+ * twins at src/consensus/gates/<stem>_gate.js, and the four carriers under
+ * src/consensus/ (the same tail in every consumer repo, D101). A suite that
+ * walks the registry needs all of these facts, so they are written here once.
  *
  ********************************************************************/
 
@@ -45,10 +47,31 @@ const GATE_MODULE_PATHS = Object.freeze({
     price_zero_validity_activation: 'actions/price/price_zero_validity_gate.js',
     slash_grid_activation: 'db/contracts/slash_grid_gate.js',
     capability_min_stake_history: 'consensus/capability_min_stake_history.js',
+    // The W5 twins (row 21): one tail in every repo that carries them.
+    anchor_reward_activation: 'consensus/gates/anchor_reward_gate.js',
+    archive_rollback_author_scope_activation: 'consensus/gates/archive_rollback_author_scope_gate.js',
+    attest_responsible_widening_activation: 'consensus/gates/attest_responsible_widening_gate.js',
+    mirror_admission_activation: 'consensus/gates/mirror_admission_gate.js',
+    price_batching_floor_activation: 'consensus/gates/price_batching_floor_gate.js',
+    price_pair_activation: 'consensus/gates/price_pair_gate.js',
+    price_scale_activation: 'consensus/gates/price_scale_gate.js',
+    rollcall_activation: 'consensus/gates/rollcall_gate.js',
+    rollcall_gates_activation: 'consensus/gates/rollcall_gates_gate.js',
+    stake_weight_collation_activation: 'consensus/gates/stake_weight_collation_gate.js',
+    state_commitment_activation: 'consensus/gates/state_commitment_gate.js',
+    state_subtree_activation: 'consensus/gates/state_subtree_gate.js',
+    swq_source_cap_activation: 'consensus/gates/swq_source_cap_gate.js',
+    train_activation: 'consensus/gates/train_gate.js',
+    // The four moved carriers (row 21), keyed by the registry stem they kept.
+    stateHash: 'consensus/state_hash.js',
+    equivocation_header: 'consensus/equivocation_header.js',
+    stake_weighted_quorum: 'consensus/stake_weighted_quorum.js',
+    snapshot_reorg_buffer: 'consensus/snapshot_reorg_buffer.js',
 });
 
-// The key stems whose predicate W4 replaced with activeAt(): no module exports
-// these rows any more, the callers spell the key at the call site.
+// The key stems whose predicate W4 (25) and W5 (13, the predicate-only twins)
+// replaced with activeAt(): no module exports these rows any more, the callers
+// spell the key at the call site.
 const REPLACED_STEMS = Object.freeze([
     'anchor_activation',
     'archive_batch_author_activation',
@@ -75,13 +98,26 @@ const REPLACED_STEMS = Object.freeze([
     'vm_deploy_lint_pkg3_activation',
     'vm_exec_lint_activation',
     'vm_lint_global_alias_activation',
+    'attest_relay_activation',
+    'attest_relay_reject_slot_activation',
+    'attest_response_mirror_activation',
+    'attest_zero_conf_activation',
+    'checkpoint_commitment_activation',
+    'cross_chain_royalty_activation',
+    'list_edit_resolution_activation',
+    'price_sig_tally_activation',
+    'retraction_signing_activation',
+    'state_key_collation_activation',
+    'token_bridge_activation',
+    'token_policy_activation',
+    'xchain_bridge_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS);
 
 /**
  * The absolute path of the module that exports a registry key's rows, or
- * null when W4 replaced that module's predicate with activeAt().
+ * null when W4 or W5 replaced that module's predicate with activeAt().
  * @param {string} stem  the registry key stem (`<stem>.<EXPORT>`)
  * @returns {?string}
  */
@@ -111,4 +147,30 @@ function stubActiveAt(sinon, key, value) {
     return stub;
 }
 
-module.exports = { SRC, GATE_MODULE_PATHS, REPLACED_STEMS, modulePathFor, stubActiveAt };
+/**
+ * A per-key handle over the one activeAt() stub, shaped like the predicate stub
+ * a suite held before the module went (`returns`, `callsFake`, `restore`,
+ * `calledWith`), so a fixture can hand its cases one gate to drive without
+ * touching the other keys it stubbed. `restore()` puts the real row back for
+ * THIS key only (the stub stays for the others); `sinon.restore()` removes it all.
+ * @param {object} sinon  the suite's sinon (the default sandbox)
+ * @param {string} key    the registry key, `<stem>.<EXPORT>`
+ * @param {boolean} value what activeAt() answers for that key until changed
+ * @returns {{stub: object, returns: Function, callsFake: Function, restore: Function, calledWith: Function}}
+ */
+function stubGate(sinon, key, value) {
+    const stub = stubActiveAt(sinon, key, value);
+    const handle = {
+        stub,
+        returns(v) { stub.withArgs(key).returns(v); return handle; },
+        // fn receives activeAt's own arguments: (key, network, coin, height, time).
+        callsFake(fn) { stub.withArgs(key).callsFake(fn); return handle; },
+        restore() { stub.withArgs(key).callThrough(); return handle; },
+        // The predicate's (clock, network) order is gone: pass activeAt's
+        // (network, coin, height, time) after the key.
+        calledWith(...args) { return stub.calledWith(key, ...args); },
+    };
+    return handle;
+}
+
+module.exports = { SRC, GATE_MODULE_PATHS, REPLACED_STEMS, modulePathFor, stubActiveAt, stubGate };

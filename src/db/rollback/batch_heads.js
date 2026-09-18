@@ -22,8 +22,8 @@
 
 'use strict';
 
-const { ARCHIVE_HEAD_VERSIONS_SQL } = require('../../stateHash.js');
-const { archiveAuthorScopeJoin } = require('../../archive_rollback_author_scope_activation.js');
+const { ARCHIVE_HEAD_VERSIONS_SQL } = require('../../consensus/state_hash.js');
+const { archiveAuthorScopeJoin } = require('../../consensus/gates/archive_rollback_author_scope_gate.js');
 // Wire versions only, for the ATTEST batch-link retraction below: the head and the
 // continuation are what make an `attests` row part of a batch, and naming them from the
 // wire module keeps the reorg query and the parser reading the same two numbers.

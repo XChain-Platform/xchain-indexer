@@ -21,10 +21,13 @@
 
 'use strict';
 
-const attestRelay     = require('../../attest_relay_activation.js');
-// Whether a refused v3 withholds its row so the id it named stays free for the
-// honest relay. Landing-block plane, unarmed on mainnet.
-const relayRejectSlot = require('../../attest_relay_reject_slot_activation.js');
+// The relay flag day (BTC-anchored SNAPSHOT_BLOCK plane) and the refused-slot rule
+// (whether a refused v3 withholds its row so the id it named stays free for the
+// honest relay; block-TIME plane, unarmed on mainnet) are registry rows read by
+// literal key (W5).
+const gateRegistry = require('../../consensus/gate_registry');
+const ATTEST_RELAY_KEY = 'attest_relay_activation.ATTEST_RELAY_ACTIVATION';
+const RELAY_REJECT_SLOT_KEY = 'attest_relay_reject_slot_activation.ATTEST_RELAY_REJECT_SLOT_ACTIVATION';
 const { getLogger } = require('../../observability/index.js');
 const { HOME_CHAIN, ALLOWED_ORIGIN_CHAINS } = require('./constants.js');
 
@@ -100,9 +103,9 @@ module.exports = {
     // verdict below, so this gate changes acceptance for exactly the divergent
     // case and is a strict no-op on any network whose threshold is 0.
     relayRequestArmed(data, snapshotBlock){
-        if(!attestRelay.isAttestRelayActive(data['BLOCK_INDEX'], this.config['NETWORK']))
+        if(!gateRegistry.activeAt(ATTEST_RELAY_KEY, this.config['NETWORK'], null, data['BLOCK_INDEX'], null))
             return false;
-        if(snapshotBlock >= 0 && !attestRelay.isAttestRelayActive(snapshotBlock, this.config['NETWORK']))
+        if(snapshotBlock >= 0 && !gateRegistry.activeAt(ATTEST_RELAY_KEY, this.config['NETWORK'], null, snapshotBlock, null))
             return false;
         return true;
     },
@@ -258,7 +261,7 @@ module.exports = {
         // persisted, nothing hashed, the verdict still on the action row. Flag-day
         // gated, plane and arming state in attest_relay_reject_slot_activation.js.
         let withholdRefusal = (data['REQUEST_STATUS'] === 'rejected') &&
-            relayRejectSlot.isAttestRelayRejectSlotActive(data['BLOCK_TIME'], this.config['NETWORK']);
+            gateRegistry.activeAt(RELAY_REJECT_SLOT_KEY, this.config['NETWORK'], null, null, data['BLOCK_TIME']);
         if(!withholdRefusal)
             await this.indexerDb.createAttestationRequest(data);
     }

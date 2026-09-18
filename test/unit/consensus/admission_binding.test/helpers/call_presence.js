@@ -67,7 +67,7 @@ const floorRow = (v) => [{ param_value: v }];
 // What an armed block at height B measures a floor against, the same in every arm and every block.
 function floorTargets(B) {
     // The margin is a frozen constant of the twin, the same in every arm.
-    const target = B - require('../../../../../src/mirror_admission_activation.js').admitMarginBlocks('cross_chain_calls');
+    const target = B - require('../../../../../src/consensus/gates/mirror_admission_gate.js').admitMarginBlocks('cross_chain_calls');
 
     // A persisted floor is canonical digits, so it is never negative: at B=0 the
     // target is below genesis, every real floor covers it, and the only NOT-covered

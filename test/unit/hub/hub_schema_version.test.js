@@ -68,3 +68,16 @@ describe('hub-schema-version', function () {
         });
     });
 });
+
+// The value itself is part of the contract: the seven mirror twins under
+// src/sql carry the admission-height columns (2026-09-16-admission-height),
+// and only a v7 stream can be trusted to carry them. A hub still stamping 6
+// is refused by the gate above, and a v6 stamp shipped from THIS side with
+// the columns present would let a stale reader apply admission-era rows it
+// cannot verify, so the constant is pinned to the shape, not just its type.
+describe('hub-schema-version: the v7 admission-height shape', function () {
+    it('is v7, so a v6 hub stream is refused and a v6 reader refuses this one', function () {
+        assert.strictEqual(mod.HUB_SCHEMA_VERSION, 7);
+        assert.notStrictEqual(6, mod.HUB_SCHEMA_VERSION);
+    });
+});

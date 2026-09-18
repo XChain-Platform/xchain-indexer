@@ -72,7 +72,7 @@
  *     preimage queries and the stake-weight collation guard, so it is its own ruling and
  *     its own change, the way state_key already is.
  *   * contract_state.state_key / state_key_bin / state_value - the state_key collation is
- *     a height-gated consensus flag-day (src/state_key_collation_activation.js).
+ *     a height-gated consensus flag-day (the state_key_collation_activation registry row).
  *   * polls.callback_params - its ADD COLUMN migration (2026-07-05) is checksum-immutable
  *     and declares plain MEDIUMTEXT, so a charset on the definition would break the
  *     ADD-COLUMN parity gate with no legal way to converge the two paths.

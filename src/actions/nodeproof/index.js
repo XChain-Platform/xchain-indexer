@@ -31,8 +31,8 @@
  ********************************************************************/
 
 const ed25519  = require('../../consensus/ed25519.js');
-const eq       = require('../../equivocation_header.js');
-const srb      = require('../../snapshot_reorg_buffer.js');
+const eq       = require('../../consensus/equivocation_header.js');
+const srb      = require('../../consensus/snapshot_reorg_buffer.js');
 const validate = require('./validate.js');
 const settle   = require('./settle.js');
 

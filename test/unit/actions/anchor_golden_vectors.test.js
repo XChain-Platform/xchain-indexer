@@ -33,8 +33,8 @@ const sinon  = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 const Anchor   = require('../../../src/actions/anchor/index.js');
 const ed25519  = require('../../../src/consensus/ed25519.js');
-const swq      = require('../../../src/stake_weighted_quorum.js');
-const arMod    = require('../../../src/anchor_reward_activation.js');
+const swq      = require('../../../src/consensus/stake_weighted_quorum.js');
+const arMod    = require('../../../src/consensus/gates/anchor_reward_gate.js');
 
 const fs     = require('fs');
 const path   = require('path');
@@ -265,18 +265,18 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
         assert.strictEqual(publisher, BUNDLE.publisher);
         assert.strictEqual(type, 'anchor_bundle');
         assert.strictEqual(round, BUNDLE.snapshot_block, 'round_reference IS the snapshot block');
-        assert.strictEqual(amount, require('../../../src/anchor_reward_activation.js').ANCHOR_REWARD_AMOUNT);
+        assert.strictEqual(amount, require('../../../src/consensus/gates/anchor_reward_gate.js').ANCHOR_REWARD_AMOUNT);
         assert.strictEqual(earnBlock, BUNDLE.snapshot_block);
         assert.strictEqual(qualifier, 0, 'a bundle round_reference only advances, so qualifier is 0');
 
         // The bytes the attestation quorum signed, six positional fields with
         // round_reference repeated as the snapshot block field.
-        const eq = require('../../../src/equivocation_header.js');
+        const eq = require('../../../src/consensus/equivocation_header.js');
         const canonical = handler.rewardCanonical(data);
         const expected  = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT,
             'XANCPUB|bundle|' + BUNDLE.network + '|' + BUNDLE.snapshot_block, 0,
             ['XANCPUB', 'anchor_bundle', String(BUNDLE.snapshot_block), String(BUNDLE.snapshot_block),
-             BUNDLE.publisher, require('../../../src/anchor_reward_activation.js').ANCHOR_REWARD_AMOUNT].join('|'));
+             BUNDLE.publisher, require('../../../src/consensus/gates/anchor_reward_gate.js').ANCHOR_REWARD_AMOUNT].join('|'));
         assert.strictEqual(canonical, expected,
             'the bundle XANCPUB canonical drifted from the frozen six-field layout');
     });
@@ -289,7 +289,7 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
 
     it('v0: each section canonical is rebuilt with the HEADER network, at the section\'s own block', async function () {
         await parseV0();
-        const eq = require('../../../src/equivocation_header.js');
+        const eq = require('../../../src/consensus/equivocation_header.js');
         for (const row of writtenRows()) {
             const canonical = handler.canonical(row);
             const base = ['XCHECKPOINT', row['CHAIN'], BUNDLE.network, String(row['BLOCK_INDEX_CHECKPOINTED']),

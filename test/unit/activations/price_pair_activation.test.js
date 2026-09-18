@@ -27,7 +27,7 @@ const {
     PRICE_PAIR_TICKER_MAX_LEGACY, PRICE_PAIR_TICKER_MAX_WIDE, PRICE_PAIR_WIDEN_ACTIVATION,
     PRICE_PAIR_RE_LEGACY, PRICE_PAIR_RE_WIDE,
     isPricePairWideningActive, pricePairPattern, isValidPricePair,
-} = require('../../../src/price_pair_activation.js');
+} = require('../../../src/consensus/gates/price_pair_gate.js');
 
 const ARMED = 1800000000;   // an arbitrary armed threshold, for the boundary cases
 

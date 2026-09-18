@@ -21,8 +21,12 @@ const sinon  = require('sinon');
 const { createMockIndexer } = require('../../../../fixtures/mocks');
 
 const Attest       = require('../../../../../src/actions/attest/index.js');
-const swq          = require('../../../../../src/stake_weighted_quorum.js');
-const attestRelay  = require('../../../../../src/attest_relay_activation.js');
+const swq          = require('../../../../../src/consensus/stake_weighted_quorum.js');
+// The relay and response-mirror flag days are registry rows (W5), stubbed through
+// activeAt() by their keys.
+const { stubActiveAt, stubGate } = require('../../../../helpers/gate_modules.js');
+const RELAY_KEY = 'attest_relay_activation.ATTEST_RELAY_ACTIVATION';
+const RESPONSE_MIRROR_KEY = 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
 const ed25519      = require('../../../../../src/consensus/ed25519.js');
 
 const PUBKEY_A = 'a'.repeat(64);
@@ -140,13 +144,12 @@ function setupRelay() {
     // on-chain ATTEST v1 is refused outright, and two cases here fulfil a relayed
     // request with exactly that wire. The relay legs themselves are untouched by that
     // era, so these fixtures run below it (attest.test.js owns the gate's own cases).
-    sinon.stub(require('../../../../../src/attest_response_mirror_activation.js'),
-               'isResponseMirrorActive').returns(false);
+    stubActiveAt(sinon, RESPONSE_MIRROR_KEY, false);
     // Signature verification is stubbed: these tests are about the relay's
     // structure and gating, not about ed25519 itself.
     sinon.stub(ed25519, 'verify').returns(true);
     // Gate ON by default; the inertness describe drives it OFF explicitly.
-    const gateStub = sinon.stub(attestRelay, 'isAttestRelayActive').returns(true);
+    const gateStub = stubGate(sinon, RELAY_KEY, true);
 
     return { indexer, actionsCtx, handler, executeStub, gateStub, protocolGates };
 }

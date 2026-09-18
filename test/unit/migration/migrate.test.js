@@ -26,9 +26,9 @@ const { requireWithFreshConfig } = require('../../helpers/fresh_config.js');
 
 // Run migrate.js with the DB environment deliberately absent. cwd is a temp
 // dir so dotenv.config() finds no .env, and env carries only PATH.
-function runWithoutDbEnv() {
+function runWithoutDbEnv(...args) {
     try {
-        const stdout = execFileSync(process.execPath, [MIGRATE_PATH], {
+        const stdout = execFileSync(process.execPath, [MIGRATE_PATH, ...args], {
             cwd: os.tmpdir(),
             env: { PATH: process.env.PATH },
             stdio: 'pipe',
@@ -65,8 +65,12 @@ describe('migrate CLI safety guard', function () {
 // which is where this flag shipped first. The cases run in two sibling describe
 // blocks of the same title, each installing the shared hooks below.
 
+// INDEXER_COIN / INDEXER_NETWORK join the DB vars because config.getConfig() loads
+// src/coins/<COIN>.js and throws without them; that throw rejects main() and the
+// cases below time out rather than fail. Pinned here so this file runs on its own.
 const ENV_KEYS = ['INDEXER_DB_HOST', 'INDEXER_DB_PORT', 'INDEXER_DB_NAME',
-                  'INDEXER_DB_USER', 'INDEXER_DB_PASS'];
+                  'INDEXER_DB_USER', 'INDEXER_DB_PASS',
+                  'INDEXER_COIN', 'INDEXER_NETWORK'];
 
 // Per-case state: what the hooks saved, and the stubs the cases assert on.
 const cli = {};
@@ -82,6 +86,8 @@ function setUpTargetingCase() {
     process.env.INDEXER_DB_HOST = 'db.test';
     process.env.INDEXER_DB_NAME = 'indexer_test';
     process.env.INDEXER_DB_USER = 'tester';
+    process.env.INDEXER_COIN = 'BTC';
+    process.env.INDEXER_NETWORK = 'regtest';
     cli.exitStub       = sinon.stub(process, 'exit');
     cli.consoleErrStub = sinon.stub(console, 'error');
     cli.consoleLogStub = sinon.stub(console, 'log');
@@ -168,14 +174,16 @@ describe('migrate CLI --file targeting @regression', function () {
     beforeEach(setUpTargetingCase);
     afterEach(tearDownTargetingCase);
 
-    it('--file with no value exits 2 before building a DB handle', async function () {
+    it('--file with no value exits 2 before building a DB handle', function () {
         process.argv = ['node', 'migrate.js', '--file'];
         const fake = makeFakeDb();
-        // process.exit is stubbed, so main() continues past the guard; assert the
-        // exit(2) signal and the actionable error fired before any migration ran.
+        // process.exit is stubbed, so the exit(2) does not end the process; main()
+        // must still bail rather than fall through to a blanket run. The refusal
+        // precedes main()'s first await, so it has run by the time require returns.
         loadMigrateWith(fake.FakeDatabase);
-        await fake.done;
         assert.strictEqual(cli.exitStub.calledWith(2), true, 'expected process.exit(2) on a valueless --file');
+        assert.strictEqual(fake.runArgs, null, 'a refused argv must apply no migrations');
+        assert.strictEqual(fake.poolEnded, false, 'a refused argv must not open a DB handle');
         assert.match(cli.consoleErrStub.getCalls().map(c => c.args[0]).join('\n'),
             /--file requires a migration filename argument/);
     });
@@ -186,5 +194,93 @@ describe('migrate CLI --file targeting @regression', function () {
         await fake.done;
         assert.deepStrictEqual(fake.runArgs, { includeManual: true },
             'a blanket run must NOT set opts.only');
+    });
+});
+
+// Unrecognized argv. An ignored token falls through to the no-argument meaning,
+// which is apply-everything, so `migrate.js --help` would apply every pending
+// manual migration. Each case pins the refusal by what it APPLIES, not what it says.
+
+describe('migrate CLI argv refusal @regression', function () {
+
+    beforeEach(setUpTargetingCase);
+    afterEach(tearDownTargetingCase);
+
+    // The refusal is synchronous (it precedes main()'s first await), so a case that
+    // must prove nothing ran asserts right after the require rather than awaiting a
+    // pool.end() that a correct CLI never reaches.
+    function loadWithArgv(args) {
+        process.argv = ['node', 'migrate.js', ...args];
+        const fake = makeFakeDb();
+        loadMigrateWith(fake.FakeDatabase);
+        return fake;
+    }
+
+    it('an unknown flag applies nothing and exits 2', function () {
+        const fake = loadWithArgv(['--dry-run']);
+        assert.strictEqual(fake.runArgs, null, 'an unknown flag must not run migrations');
+        assert.strictEqual(fake.poolEnded, false, 'an unknown flag must not open a DB handle');
+        assert.strictEqual(cli.exitStub.calledWith(2), true, 'expected process.exit(2)');
+    });
+
+    it('a bare positional applies nothing and exits 2 (it is not a --file value)', function () {
+        const fake = loadWithArgv(['2026-07-24-pubkeys-widen-uncompressed.sql']);
+        assert.strictEqual(fake.runArgs, null, 'a bare filename must not become a blanket run');
+        assert.strictEqual(cli.exitStub.calledWith(2), true, 'expected process.exit(2)');
+    });
+
+    it('an empty --file= value applies nothing rather than widening to everything', function () {
+        const fake = loadWithArgv(['--file=']);
+        assert.strictEqual(fake.runArgs, null, 'an empty scope must not mean apply-everything');
+        assert.strictEqual(cli.exitStub.calledWith(2), true, 'expected process.exit(2)');
+    });
+
+    it('--help and -h apply nothing and exit 0', function () {
+        for (const flag of ['--help', '-h']) {
+            const fake = loadWithArgv([flag]);
+            assert.strictEqual(fake.runArgs, null, flag + ' must not run migrations');
+            assert.strictEqual(fake.poolEnded, false, flag + ' must not open a DB handle');
+            assert.strictEqual(cli.exitStub.calledWith(0), true, flag + ' must exit 0');
+            assert.strictEqual(cli.exitStub.calledWith(2), false, flag + ' is not an error');
+            cli.exitStub.resetHistory();
+        }
+    });
+
+    it('the refusal prints both modes so an operator can tell them apart', function () {
+        loadWithArgv(['--dry-run']);
+        const printed = cli.consoleErrStub.getCalls().map(c => c.args[0]).join('\n');
+        assert.match(printed, /APPLY EVERYTHING/, 'the usage must name the blanket mode');
+        assert.match(printed, /APPLY ONE/, 'the usage must name the scoped mode');
+        assert.match(printed, /--file/, 'the usage must show the flag that scopes a run');
+    });
+});
+
+// The real binary as a child process, with no INDEXER_DB_* in the environment, so
+// the guard is proven end to end and not only against a fake Database. `--help`
+// exiting 0 unconfigured is also what proves it never reached the DB checks.
+
+describe('migrate CLI --help as a child process @regression', function () {
+    it('--help exits 0 with no DB environment loaded', function () {
+        const res = runWithoutDbEnv('--help');
+        assert.strictEqual(res.status, 0, '--help must succeed without a configured database');
+    });
+
+    it('--help prints both modes and no apply banner', function () {
+        const res = runWithoutDbEnv('--help');
+        assert.match(res.stdout, /APPLY EVERYTHING/);
+        assert.match(res.stdout, /APPLY ONE/);
+        assert.ok(!/applying pending migrations/.test(res.stdout), '--help must not start a run');
+    });
+
+    it('an unknown token exits 2 without reaching the DB environment check', function () {
+        const res = runWithoutDbEnv('--dry-run');
+        assert.strictEqual(res.status, 2);
+        const all = res.stdout + res.stderr;
+        // The environment guard's own sentence. An unconfigured no-argument run
+        // prints it (the safety-guard cases above); its absence here is what shows
+        // argv was settled before anything looked at the environment.
+        assert.ok(!/must be set \(load the service \.env\)/.test(all),
+            'argv must be refused before the environment guard runs');
+        assert.ok(!/applying pending migrations/.test(all), 'an unknown token must not start a run');
     });
 });

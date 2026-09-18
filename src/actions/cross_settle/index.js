@@ -36,9 +36,12 @@
  *
  ********************************************************************/
 
-const eq      = require('../../equivocation_header.js');
-const ccr     = require('../../cross_chain_royalty_activation.js');
-const ah      = require('../../mirror_admission_activation.js');
+const eq      = require('../../consensus/equivocation_header.js');
+// The royalty flag day is a registry row read by literal key (W5), on the match's
+// BTC-anchored snapshot block.
+const gateRegistry = require('../../consensus/gate_registry');
+const CROSS_CHAIN_ROYALTY_KEY = 'cross_chain_royalty_activation.CROSS_CHAIN_ROYALTY_ACTIVATION';
+const ah      = require('../../consensus/gates/mirror_admission_gate.js');
 
 const localLeg   = require('./local_leg.js');
 const quorum     = require('./quorum.js');
@@ -77,7 +80,7 @@ class Cross_Settle {
         ].join('|');
         // Cross-chain royalty legs ride the signed match at/above the CROSS_CHAIN_ROYALTY
         // flag-day; below it the canonical is byte-identical to the legacy format.
-        if(ccr.isCrossChainRoyaltyActive(m.snapshot_block, m.network))
+        if(gateRegistry.activeAt(CROSS_CHAIN_ROYALTY_KEY, m.network, null, m.snapshot_block, null))
             raw += '|' + String(m.a_payout_legs || '') + '|' + String(m.b_payout_legs || '');
         // The admission map the hub signed, rebuilt from the mirrored row's own admit_block_*
         // columns and era-keyed on the ROW's snapshot_block, exactly as the hub keys it. Below

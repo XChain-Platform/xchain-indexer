@@ -28,7 +28,7 @@
 
 // The mirror-admission flag day, CONSUMER side (the time-keyed mirror barrier family): above
 // it the mirrored selects bind rows by their signed admission height instead of by the clock.
-const { isMirrorAdmissionConsumerActive } = require('../../mirror_admission_activation.js');
+const { isMirrorAdmissionConsumerActive } = require('../../consensus/gates/mirror_admission_gate.js');
 const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL, ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow, dedupeArchiveChunks } = require('../../actions/anchor/anchor_action_query');
 
 module.exports = {

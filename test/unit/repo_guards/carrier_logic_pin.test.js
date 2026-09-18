@@ -174,12 +174,58 @@ describe('bin/lib/carrier_logic_pin.js: --retire and --move', () => {
         assert.strictEqual(pinModule.digest(repo.pin), pinModule.digest(pinModule.readPin(repo.dir)), 'a move leaves the digest alone');
     });
 
-    it('(j) --move is refused when the new path carries different logic, and the pin is untouched', () => {
-        fs.writeFileSync(path.join(repo.dir, 'src', 'deep', 'thing_gate.js'), repo.source.replace("activeAt('k', h)", "!activeAt('k', h)"));
-        assert.throws(() => pinModule.moveEntry(repo.dir, repo.pin, 'thing_activation', 'src/deep/thing_gate.js', 'row 18'),
-            (e) => e.exitCode === 1 && /not the pinned logic/.test(e.message));
+    it('(j) --move refuses a missing destination and leaves the pin untouched', () => {
         assert.throws(() => pinModule.moveEntry(repo.dir, repo.pin, 'thing_activation', 'src/deep/missing_gate.js', 'row 18'), /does not exist/);
         assert.deepStrictEqual(repo.pin, pinModule.readPin(repo.dir), 'a refused move writes nothing');
+    });
+});
+
+describe('bin/lib/carrier_logic_pin.js: a move that changes logic', () => {
+    let repo;
+    beforeEach(() => { repo = scratchRepo(); });
+    afterEach(() => { fs.rmSync(repo.dir, { recursive: true, force: true }); });
+
+    it('(o) --move refuses changed logic without a reason and changes no pin bytes', () => {
+        const before = JSON.stringify(repo.pin);
+        const history = JSON.stringify(repo.pin.repins);
+        const moved = repo.source.replace("activeAt('k', h)", "!activeAt('k', h)");
+        fs.writeFileSync(path.join(repo.dir, 'src', 'deep', 'thing_gate.js'), moved);
+        assert.throws(() => pinModule.moveEntry(repo.dir, repo.pin, 'thing_activation', 'src/deep/thing_gate.js'),
+            (e) => e.exitCode === 1 && /requires --reason/.test(e.message));
+        assert.strictEqual(JSON.stringify(repo.pin), before);
+        assert.strictEqual(JSON.stringify(repo.pin.repins), history);
+    });
+
+    it('(p) --move records a changed hash and path together when given a reason', () => {
+        const entry = repo.pin.entries.thing_activation;
+        Object.assign(entry, { twins: ['xchain-sync'], note: 'keep this note' });
+        const committed = JSON.parse(JSON.stringify(repo.pin));
+        const moved = repo.source.replace("activeAt('k', h)", "!activeAt('k', h)");
+        const movedHash = pinModule.tokenHash(moved);
+        fs.writeFileSync(path.join(repo.dir, 'src', 'deep', 'thing_gate.js'), moved);
+        pinModule.moveEntry(repo.dir, repo.pin, 'thing_activation', 'src/deep/thing_gate.js', 'combined move');
+        assert.deepStrictEqual(repo.pin.entries.thing_activation, {
+            path: 'src/deep/thing_gate.js', hash: movedHash, twins: ['xchain-sync'], note: 'keep this note',
+        });
+        assert.strictEqual(repo.pin.repins.length, 1);
+        const record = repo.pin.repins[0];
+        assert.deepStrictEqual(record, {
+            id: 'thing_activation', from: repo.hash, to: movedHash,
+            path: { from: 'src/thing_activation.js', to: 'src/deep/thing_gate.js' },
+            date: record.date, reason: 'combined move',
+        });
+        assert.match(record.date, /^\d{4}-\d{2}-\d{2}$/);
+        assert.deepStrictEqual(pinModule.unrecordedChanges(committed, repo.pin), []);
+        delete record.path;
+        assert.deepStrictEqual(pinModule.unrecordedChanges(committed, repo.pin), [
+            'thing_activation: hash and path changed with no combined --move record',
+        ]);
+        repo.pin.repins.push({
+            id: 'thing_activation', from: repo.hash, to: repo.hash,
+            path: { from: 'src/thing_activation.js', to: 'src/deep/thing_gate.js' },
+        });
+        assert.strictEqual(pinModule.unrecordedChanges(committed, repo.pin).length, 1,
+            'separate hash-only and path-only records do not prove the combined change');
     });
 });
 

@@ -25,8 +25,8 @@
 'use strict';
 
 const ed25519 = require('../ed25519.js');
-const swq     = require('../../stake_weighted_quorum.js');
-const eq      = require('../../equivocation_header.js');
+const swq     = require('../stake_weighted_quorum.js');
+const eq      = require('../equivocation_header.js');
 
 // The ANCHOR wire version that carries a checkpoint SECTION in its own right. Version 1 is the
 // archive head, which carries its WRAPPER checkpoint's identity rather than being one, and

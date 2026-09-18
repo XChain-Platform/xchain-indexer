@@ -22,10 +22,12 @@
 'use strict';
 
 const attestBcastFee  = require('./attest_broadcast_fee_gate.js');
-const wid     = require('../../attest_responsible_widening_activation.js');
-// The zero-conf flip, keyed on the REQUEST's own block. Read here for the fulfilled
-// fee split, which pays the verified signers rather than the widened set above it.
-const zc      = require('../../attest_zero_conf_activation.js');
+const wid     = require('../../consensus/gates/attest_responsible_widening_gate.js');
+// The zero-conf flip, keyed on the REQUEST's own block: a registry row read by literal
+// key (W5). Read here for the fulfilled fee split, which pays the verified signers
+// rather than the widened set above it.
+const gateRegistry = require('../../consensus/gate_registry');
+const ZERO_CONF_KEY = 'attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION';
 const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
 const { getLogger } = require('../../observability/index.js');
 
@@ -111,7 +113,7 @@ module.exports = {
         // charge faults, so neither the assignment plane nor missed_count
         // moves with this.
         let paid = responsible;
-        if(zc.isZeroConfActive(Number(request.block_index), this.config['NETWORK']))
+        if(gateRegistry.activeAt(ZERO_CONF_KEY, this.config['NETWORK'], null, Number(request.block_index), null))
             paid = this.signerPaySet(request, data, responsible);
 
         let broadcastFee = '0';

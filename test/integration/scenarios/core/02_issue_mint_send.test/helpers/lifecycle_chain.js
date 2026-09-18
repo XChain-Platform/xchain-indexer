@@ -53,7 +53,8 @@ function fileSchemaHooks(testFile) {
     };
 }
 
-// A reset chain and a fresh indexer for one test.
+// A reset chain and a fresh indexer for one test. Gas lands at 99, so tests seed from 100:
+// processBlocks runs every pass at every height between, and a gap outgrows the timeout.
 async function freshLifecycleChain() {
     await resetDecoderDb();
     await resetIndexerDb();

@@ -53,7 +53,7 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const assert = require('assert');
 
-const { buildStateHashData, INDEX_MAP_STATE_HASH_ACTIVATION } = require('../../src/stateHash');
+const { buildStateHashData, INDEX_MAP_STATE_HASH_ACTIVATION } = require('../../src/consensus/state_hash');
 const {
     util, CHAIN, STAKE_SOURCE, EARN_BLOCK, COLLECT_BLOCK,
     indexMapChecksum, rewardRows, useRecoveredNodes, teardownRecoveredNodes,

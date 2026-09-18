@@ -77,7 +77,7 @@ function initHaltState(indexer){
     indexer.decoderReorgHalted   = false;
     indexer._reorgHaltLogTick    = 0;
     // The platform-train consensus activation verdict for the block the loop is about
-    // to apply (src/train_activation.js), or null before
+    // to apply (src/consensus/gates/train_gate.js), or null before
     // the first evaluation. `pending` means the signed release manifest names a rule set
     // this build does not implement and the boundary is still ahead, which health reports
     // and the monitor alerts on so the halt is ANNOUNCED before it fires; `halt` means

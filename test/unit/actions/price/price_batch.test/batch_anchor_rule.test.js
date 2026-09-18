@@ -25,7 +25,7 @@ const {
     signBatch, v2Data, newPriceHandler, usePriceBatchHarness,
 } = require('./helpers/price_batch_harness.js');
 
-const swq           = require('../../../../../src/stake_weighted_quorum.js');
+const swq           = require('../../../../../src/consensus/stake_weighted_quorum.js');
 
 // Each test gets a fresh harness from usePriceBatchHarness; bind() hands it to
 // the names the test bodies use and builds the handler they drive.

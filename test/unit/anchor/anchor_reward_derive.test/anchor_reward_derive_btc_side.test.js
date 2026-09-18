@@ -26,8 +26,8 @@ const sinon  = require('sinon');
 const crypto = require('crypto');
 
 const derive = require('../../../../src/consensus/anchor_reward_derive.js');
-const swq    = require('../../../../src/stake_weighted_quorum.js');
-const ar     = require('../../../../src/anchor_reward_activation.js');
+const swq    = require('../../../../src/consensus/stake_weighted_quorum.js');
+const ar     = require('../../../../src/consensus/gates/anchor_reward_gate.js');
 
 
 function makeKey() {

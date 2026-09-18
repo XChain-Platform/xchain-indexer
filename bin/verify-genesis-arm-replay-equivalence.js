@@ -187,7 +187,7 @@ async function runSide() {
     // The armed map as THIS side resolved it: fingerprint v2, the hash over the
     // registry's rows (key -> row hash), so the parent can name the rows the arm
     // moved. Both sides are W3 or later trees; v1 (file bytes) is gone from them.
-    const v2 = require(path.join(root, 'src', 'consensus', 'armed_map', 'fingerprint_v2.js')).computeArmedMapFingerprintV2();
+    const v2 = require(path.join(root, 'src', 'consensus', 'armed_map', 'fingerprint.js')).computeArmedMapFingerprintV2();
     const fp = { fingerprint: v2.hex, rows: v2.rows || {}, reason: v2.reason };
 
     // Which vm this process actually loaded, and the bytes of its entry module.

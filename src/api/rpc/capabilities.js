@@ -21,7 +21,7 @@
  ********************************************************************/
 
 const capabilityValidators = require('../capability_validators');
-const srb          = require('../../snapshot_reorg_buffer.js');      // CANONICAL_REORG_BUFFER, to reconstruct the raw request height
+const srb          = require('../../consensus/snapshot_reorg_buffer.js');      // CANONICAL_REORG_BUFFER, to reconstruct the raw request height
 const gatesFilter  = require('../../actions/attest/rollcall_gates_filter.js');      // rules-aware attestation capability filter
 const { getLogger } = require('../../observability/index.js');
 

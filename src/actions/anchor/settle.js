@@ -19,7 +19,7 @@
  *
  ********************************************************************/
 
-const ar    = require('../../anchor_reward_activation.js');
+const ar    = require('../../consensus/gates/anchor_reward_gate.js');
 const arKey = require('./anchor_reward_key.js');
 
 const { getLogger } = require('../../observability/index.js');

@@ -26,8 +26,10 @@ const {
 } = require('./helpers/price_batch_harness.js');
 
 const ed25519       = require('../../../../../src/consensus/ed25519.js');
-const swq           = require('../../../../../src/stake_weighted_quorum.js');
-const priceSigTally = require('../../../../../src/price_sig_tally_activation.js');
+const swq           = require('../../../../../src/consensus/stake_weighted_quorum.js');
+// The verify-first tally rule is a registry row (W5), observed through activeAt().
+const gateRegistry  = require('../../../../../src/consensus/gate_registry');
+const PRICE_SIG_TALLY_KEY = 'price_sig_tally_activation.PRICE_SIG_TALLY_ACTIVATION';
 
 // Each test gets a fresh harness from usePriceBatchHarness; bind() hands it to
 // the names the test bodies use and builds the handler they drive.
@@ -133,7 +135,7 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
         it('keys the sig-tally, the quorum gate AND the validator set on the BATCH anchor', async function () {
             swq.isStakeWeightedQuorumActive.restore();
             const gateSpy = sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
-            const tallySpy = sinon.spy(priceSigTally, 'isPriceSigTallyVerifyFirstActive');
+            const tallySpy = sinon.spy(gateRegistry, 'activeAt');
 
             const batch = validBatch();
             // A DOGE-like landing height, deliberately unlike the BTC anchor.
@@ -142,7 +144,9 @@ describe('Price v2 (PRICE batch) @regression @tier3', function () {
             // The gate keyed on the batch anchor (the LAST call is the quorum gate; the two
             // before it are the straddle rule's own probes).
             assert.strictEqual(gateSpy.lastCall.args[0], batch.btcBlockHeight);
-            assert.strictEqual(tallySpy.lastCall.args[0], batch.btcBlockHeight);
+            const tallyCalls = tallySpy.getCalls().filter((c) => c.args[0] === PRICE_SIG_TALLY_KEY);
+            assert.ok(tallyCalls.length > 0, 'the tally rule was read');
+            assert.strictEqual(tallyCalls[tallyCalls.length - 1].args[3], batch.btcBlockHeight);
             // The SET from the BTC anchor too, NOT the landing chain's own height:
             // capability_snapshots.snapshot_block is a BTC height, so a DOGE/LTC height
             // matches nothing off BTC and can match the wrong snapshot on regtest.

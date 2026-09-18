@@ -41,7 +41,8 @@ const sinon  = require('sinon');
 
 const { createBaseData } = require('../../fixtures/mocks');
 
-const attestRelay  = require('../../../src/attest_relay_activation.js');
+const gateRegistry = require('../../../src/consensus/gate_registry');
+const RELAY_KEY = 'attest_relay_activation.ATTEST_RELAY_ACTIVATION';
 const { v3Params, v4Params, originRequestRow, setupRelay } = require('./attest_relay.test/helpers/relay_fixture.js');
 
 // Consecutive sibling blocks under the one suite title, each running the shared
@@ -83,10 +84,10 @@ describe('Attest cross-chain relay (ATTEST v3/v4) @regression @tier3', function 
 
         it('the real gate (unstubbed) is inert on mainnet below 963000 and live at it', function () {
             gateStub.restore();
-            assert.strictEqual(attestRelay.isAttestRelayActive(962999, 'mainnet'), false);
-            assert.strictEqual(attestRelay.isAttestRelayActive(963000, 'mainnet'), true);
+            assert.strictEqual(gateRegistry.activeAt(RELAY_KEY, 'mainnet', null, 962999, null), false);
+            assert.strictEqual(gateRegistry.activeAt(RELAY_KEY, 'mainnet', null, 963000, null), true);
             // An unknown network must fail closed, never open.
-            assert.strictEqual(attestRelay.isAttestRelayActive(99999999, 'devnet'), false);
+            assert.strictEqual(gateRegistry.activeAt(RELAY_KEY, 'devnet', null, 99999999, null), false);
         });
     });
 });

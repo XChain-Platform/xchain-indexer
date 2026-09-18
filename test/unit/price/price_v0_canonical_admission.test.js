@@ -42,11 +42,11 @@ const ROUND     = 5;
 const TIME      = 1756199400;
 
 const LOCAL_MODULES = [
-    '../../../src/mirror_admission_activation.js',
+    '../../../src/consensus/gates/mirror_admission_gate.js',
     '../../../src/consensus/ed25519.js'
 ];
 const HUB_MODULES = [
-    '../../../../xchain-hub/src/mirror_admission_activation.js',
+    '../../../../xchain-hub/src/consensus/gates/mirror_admission_gate.js',
     '../../../../xchain-hub/src/lib/admission_height.js',
     '../../../../xchain-hub/src/oracle/consensus.js',
     '../../../../xchain-hub/src/oracle/price_aggregator.js'
@@ -87,7 +87,7 @@ function armTwins() {
     process.env.XC_MIRROR_ADMISSION_ACTIVATION = String(ADMIT_AT);
 
     const ed  = require('../../../src/consensus/ed25519.js');
-    const act = require('../../../src/mirror_admission_activation.js');
+    const act = require('../../../src/consensus/gates/mirror_admission_gate.js');
     let hub = null;
     if (hubPaths) {
         const OracleConsensus = require('../../../../xchain-hub/src/oracle/consensus.js');
@@ -218,7 +218,7 @@ describe('PRICE v0 canonical: the admission field on the indexer verifier', func
         it('the two copies of the encoder agree over a generated corpus', function () {
             const hub = hubOrSkip(this);
             if (!hub) return;
-            const theirs = require('../../../../xchain-hub/src/mirror_admission_activation.js');
+            const theirs = require('../../../../xchain-hub/src/consensus/gates/mirror_admission_gate.js');
             const chains = ['BTC', 'LTC', 'DOGE'];
             let compared = 0;
             for (let mask = 1; mask < 8; mask++) {

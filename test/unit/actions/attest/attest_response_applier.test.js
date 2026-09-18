@@ -40,7 +40,8 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 
 const Utility  = require('../../../../src/utility.js');
-const arm     = require('../../../../src/attest_response_mirror_activation.js');
+const gateRegistry = require('../../../../src/consensus/gate_registry');
+const RESPONSE_MIRROR_KEY = 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
 
 const { REQ_ID, REQ_BLOCK, DEADLINE, EFFECTIVE_T, mirrorRow, requestRow } = require('./attest_response_applier.test/helpers/rows.js');
 
@@ -98,7 +99,7 @@ describe('ATTEST hub-mirror response applier @regression @tier3', function () {
                 'an already-terminal request is never re-bound');
             // The flag day is keyed on the REQUEST's block. regtest is armed at genesis,
             // so drive the OFF side through the network the constant leaves unarmed.
-            assert.strictEqual(arm.isResponseMirrorActive(REQ_BLOCK, 'testnet'), false,
+            assert.strictEqual(gateRegistry.activeAt(RESPONSE_MIRROR_KEY, 'testnet', null, REQ_BLOCK, null), false,
                 'fixture assumption: testnet is the unarmed network in the activation map');
             assert.strictEqual(
                 util.selectApplicableAttestationResponses([mirrorRow()], [requestRow()], 100, EFFECTIVE_T, 'testnet').length, 0,

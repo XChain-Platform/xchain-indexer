@@ -35,7 +35,7 @@ const crypto = require('crypto');
 // from the environment at require time, and test/unit/admission_binding.test.js arms it by
 // purging this file together with the activation module and re-requiring both. A part required
 // on its own would stay cached with the old arm; this capture is re-taken on every re-require.
-const { isMirrorAdmissionConsumerActive, isRowReadableAt } = require('./mirror_admission_activation.js');
+const { isMirrorAdmissionConsumerActive, isRowReadableAt } = require('./consensus/gates/mirror_admission_gate.js');
 
 // The behaviour parts, installed onto Utility.prototype at the foot of this file.
 const generalPart          = require('./utility/general.js');

@@ -24,8 +24,9 @@ const sinon  = require('sinon');
 const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
 
 const Attest = require('../../../src/actions/attest/index.js');
-const swq    = require('../../../src/stake_weighted_quorum.js');
-const zc     = require('../../../src/attest_zero_conf_activation.js');
+const swq    = require('../../../src/consensus/stake_weighted_quorum.js');
+const gateRegistry = require('../../../src/consensus/gate_registry');
+const ZERO_CONF_KEY = 'attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION';
 
 // 64-hex pubkeys, deliberately ordered so ascending sort (A < B < C < D) differs
 // from the order the signature list is written in below.
@@ -179,7 +180,7 @@ describe('ATTEST fee settle: pay the verified signers above the zero-conf height
     });
 
     it('below the height (testnet, request above the mirror height): all four responsible members are paid', async function () {
-        assert.strictEqual(zc.isZeroConfActive(TESTNET_BELOW_ZC, 'testnet'), false,
+        assert.strictEqual(gateRegistry.activeAt(ZERO_CONF_KEY, 'testnet', null, TESTNET_BELOW_ZC, null), false,
             'fixture guard: this height must be BELOW the zero-conf flip on testnet');
         buildHandler({ NETWORK: 'testnet' });
 

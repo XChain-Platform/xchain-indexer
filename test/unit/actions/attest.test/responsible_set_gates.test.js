@@ -27,11 +27,11 @@ const sinon = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../../../fixtures/mocks');
 const Attest = require('../../../../src/actions/attest/index.js');
-const swq = require('../../../../src/stake_weighted_quorum.js');
+const swq = require('../../../../src/consensus/stake_weighted_quorum.js');
 const gateRegistry = require('../../../../src/consensus/gate_registry');
 const { stubActiveAt } = require('../../../helpers/gate_modules.js');
 const ADMISSION_KEY = 'attest_admission_activation.ATTEST_ADMISSION_ACTIVATION';
-const srb = require('../../../../src/snapshot_reorg_buffer.js');
+const srb = require('../../../../src/consensus/snapshot_reorg_buffer.js');
 const { PUBKEY_A, deriveReqId, setUpAttestHandler } = require('../../../helpers/attest_fixture.js');
 const { readRollbackSource } = require('../../../helpers/rollback_source.js');
 

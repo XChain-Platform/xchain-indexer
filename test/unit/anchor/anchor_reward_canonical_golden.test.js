@@ -39,8 +39,8 @@
 
 const assert = require('assert');
 const derive = require('../../../src/consensus/anchor_reward_derive.js');
-const ar     = require('../../../src/anchor_reward_activation.js');
-const eq     = require('../../../src/equivocation_header.js');
+const ar     = require('../../../src/consensus/gates/anchor_reward_gate.js');
+const eq     = require('../../../src/consensus/equivocation_header.js');
 
 const PUBLISHER = '07'.repeat(32);
 

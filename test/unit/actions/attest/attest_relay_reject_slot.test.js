@@ -43,10 +43,14 @@ const { createMockIndexer, createBaseData } = require('../../../fixtures/mocks')
 
 const Attest          = require('../../../../src/actions/attest/index.js');
 const Database        = require('../../../../src/db');
-const swq             = require('../../../../src/stake_weighted_quorum.js');
+const swq             = require('../../../../src/consensus/stake_weighted_quorum.js');
 const ed25519         = require('../../../../src/consensus/ed25519.js');
-const attestRelay     = require('../../../../src/attest_relay_activation.js');
-const relayRejectSlot = require('../../../../src/attest_relay_reject_slot_activation.js');
+// The relay flag day and the refused-slot rule are registry rows (W5), stubbed
+// through activeAt() by their keys and read back through the registry.
+const gateRegistry    = require('../../../../src/consensus/gate_registry');
+const { stubActiveAt } = require('../../../helpers/gate_modules.js');
+const RELAY_KEY = 'attest_relay_activation.ATTEST_RELAY_ACTIVATION';
+const REJECT_SLOT_KEY = 'attest_relay_reject_slot_activation.ATTEST_RELAY_REJECT_SLOT_ACTIVATION';
 
 const PUBKEY_A = 'a'.repeat(64);
 const SIG_A    = '1'.repeat(128);
@@ -162,7 +166,7 @@ function setupRelayFixture() {
 
     sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false);
     sinon.stub(ed25519, 'verify').returns(true);
-    sinon.stub(attestRelay, 'isAttestRelayActive').returns(true);
+    stubActiveAt(sinon, RELAY_KEY, true);
     // Keep the dropped-row warning out of the suite's output; it is also the
     // product's own signal that the defect fired, so the legacy case asserts on it.
     warn = sinon.stub(console, 'warn');
@@ -188,7 +192,7 @@ describe('a refused ATTEST v3 and the request_id slot @regression @tier1', funct
     afterEach(function () { sinon.restore(); });
 
     it('below the flag day the refusal is stored and the honest relay never persists', async function () {
-        sinon.stub(relayRejectSlot, 'isAttestRelayRejectSlotActive').returns(false);
+        stubActiveAt(sinon, REJECT_SLOT_KEY, false);
 
         const { griefData, relayData } = await runGriefThenRelay();
 
@@ -245,8 +249,9 @@ describe('a refused ATTEST v3 and the request_id slot @regression @tier1', funct
 
     it('the real gate is genesis-active on mainnet, testnet and regtest', function () {
         sinon.restore();
-        const { ATTEST_RELAY_REJECT_SLOT_ACTIVATION: map,
-                isAttestRelayRejectSlotActive: active } = relayRejectSlot;
+        const map = gateRegistry.get(REJECT_SLOT_KEY);
+        // A block-TIME row: the clock goes in activeAt's time slot.
+        const active = (t, network) => gateRegistry.activeAt(REJECT_SLOT_KEY, network, null, null, t);
 
         // ARMED at genesis by the 2026-09-09 ruling: mainnet holds 0 attestations
         // (measured 2026-09-09), so no v3 refusal has ever claimed a slot there and

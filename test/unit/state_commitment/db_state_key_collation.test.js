@@ -37,7 +37,6 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../../fixtures/config');
 const Utility           = require('../../../src/utility');
 const Database          = require('../../../src/db');
-const skc               = require('../../../src/state_key_collation_activation');
 
 // Build a Database with an injected config + a captured doQuery.
 function dbFor(network, coin) {
@@ -121,45 +120,3 @@ describe('state_key binary-collation gate (contract_hash preimage + VM reload) @
     });
 });
 
-describe('state_key binary-collation gate (contract_hash preimage + VM reload) @regression @tier1', function () {
-    describe('activation-module predicate', function () {
-
-        it('regtest is armed from genesis; unknown network/coin is off', function () {
-            assert.strictEqual(skc.isStateKeyBinCollationActive(0, 'regtest', 'BTC'), true);
-            assert.strictEqual(skc.isStateKeyBinCollationActive(0, 'regtest', undefined), true, 'bare network key covers every regtest coin');
-            assert.strictEqual(skc.isStateKeyBinCollationActive(100, 'stagenet', 'BTC'), false);
-            assert.strictEqual(skc.isStateKeyBinCollationActive('x', 'regtest', 'BTC'), false);
-        });
-
-        it('every mainnet chain is armed at its coordinated 2026-07-10 height', function () {
-            const ARMED = {
-                'BTC:mainnet': 962500, 'LTC:mainnet': 3160000, 'DOGE:mainnet': 6335000,
-            };
-            for (const [key, height] of Object.entries(ARMED)) {
-                assert.strictEqual(skc.STATE_KEY_COLLATION_ACTIVATION[key], height,
-                    key + ' must carry the coordinated armed height (twin-mirrored to xchain-sync)');
-                const [coin, network] = key.split(':');
-                assert.strictEqual(skc.isStateKeyBinCollationActive(height - 1, network, coin), false,
-                    key + ' must stay legacy below the armed height');
-                assert.strictEqual(skc.isStateKeyBinCollationActive(height, network, coin), true,
-                    key + ' must flip binary at the armed height');
-            }
-        });
-
-        it('every testnet chain is armed from genesis (2026-08-10 fresh testnet genesis)', function () {
-            // Testnet restarts at firstBlock with no pre-rule history, so the class
-            // is on from the first parsed block and there is no boundary to cross.
-            for (const coin of ['BTC', 'LTC', 'DOGE']) {
-                assert.strictEqual(skc.STATE_KEY_COLLATION_ACTIVATION[coin + ':testnet'], 0,
-                    coin + ':testnet must be genesis-active (twin-mirrored to xchain-sync)');
-                assert.strictEqual(skc.isStateKeyBinCollationActive(0, 'testnet', coin), true,
-                    coin + ':testnet must be binary at block 0');
-            }
-        });
-
-        it('bare mainnet/testnet lookups (no coin) are inert', function () {
-            assert.strictEqual(skc.isStateKeyBinCollationActive(1e9, 'mainnet', undefined), false);
-            assert.strictEqual(skc.isStateKeyBinCollationActive(1e9, 'testnet', undefined), false);
-        });
-    });
-});

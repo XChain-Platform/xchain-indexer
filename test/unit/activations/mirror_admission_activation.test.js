@@ -34,7 +34,7 @@
 const assert = require('assert');
 const path   = require('path');
 
-const MODULE_PATH = path.resolve(__dirname, '../../../src/mirror_admission_activation.js');
+const MODULE_PATH = path.resolve(__dirname, '../../../src/consensus/gates/mirror_admission_gate.js');
 const mirror = require(MODULE_PATH);
 
 // Load a FRESH copy of the module against a stand-in environment. The activation maps are
@@ -63,7 +63,6 @@ describe('mirror_admission_activation: the arming seam @regression', function ()
     it('holds an INERT (null) key inert at height 0 and at a huge height', function () {
         const inert = [
             ['BTC', 'mainnet'], ['LTC', 'mainnet'], ['DOGE', 'mainnet'],
-            ['BTC', 'testnet'], ['LTC', 'testnet'], ['DOGE', 'testnet'],
         ];
         for (const [coin, net] of inert) {
             assert.strictEqual(mirror.MIRROR_ADMISSION_ACTIVATION[coin + ':' + net], null,
@@ -112,6 +111,44 @@ describe('mirror_admission_activation: the arming seam @regression', function ()
             assert.strictEqual(armed.isMirrorAdmissionConsumerActive('BTC', 'regtest', h), false,
                 'an unreadable height ' + JSON.stringify(String(h)) + ' armed the consumer');
         }
+    });
+});
+
+describe('mirror_admission_activation: the arming seam @regression', function () {
+    // The three testnet keys left the inert list above at the 2026-09-16 cut, and what
+    // replaces the coverage they carried is the cut's OWN property rather than nothing.
+    // The producer and the consumer arm at DIFFERENT heights, which is the entire reason
+    // the family carries two maps instead of one: between them, producers stamp rows that
+    // consumers still bind by effective_time. A build that collapses the two maps, or that
+    // reads the consumer height off the producer map, passes every inert case above and
+    // fails only here.
+    it('arms BTC:testnet producer-first at the sized cut, the consumer trailing by its own lead', function () {
+        assert.strictEqual(mirror.MIRROR_ADMISSION_ACTIVATION['BTC:testnet'], 153222,
+            'not vacuous: the sized PRODUCER height this case is about must still be in the map');
+        assert.strictEqual(mirror.MIRROR_ADMISSION_CONSUMER_ACTIVATION['BTC:testnet'], 153266,
+            'not vacuous: the sized CONSUMER height this case is about must still be in the map');
+
+        // One block below the producer height the key is still wholly inert. This is the
+        // boundary an off-by-one in the comparison moves, and the direction that matters:
+        // arming early stamps rows under a rule the fleet has not adopted yet.
+        assert.strictEqual(mirror.isMirrorAdmissionProducerActive('BTC', 'testnet', 153221), false,
+            'the producer armed a block BELOW its sized height');
+        assert.strictEqual(mirror.isMirrorAdmissionConsumerActive('BTC', 'testnet', 153221), false,
+            'the consumer armed a block BELOW the producer height');
+
+        // Inside the producer-only lead the producer stamps and the consumer must NOT yet
+        // bind by height, or it refuses rows that no producer was required to stamp.
+        for (const h of [153222, 153265]) {
+            assert.strictEqual(mirror.isMirrorAdmissionProducerActive('BTC', 'testnet', h), true,
+                'the producer is not armed at height ' + h + ', at or above its sized height');
+            assert.strictEqual(mirror.isMirrorAdmissionConsumerActive('BTC', 'testnet', h), false,
+                'the consumer armed at height ' + h + ', inside the producer-only lead');
+        }
+
+        // The consumer arms at its own height, and the <= direction is what is asserted:
+        // exactly at 153266, not one block later.
+        assert.strictEqual(mirror.isMirrorAdmissionConsumerActive('BTC', 'testnet', 153266), true,
+            'the consumer is not armed at its own sized height');
     });
 });
 

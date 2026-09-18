@@ -23,7 +23,7 @@
 
 const fs              = require('fs');
 const path            = require('path');
-const trainActivation = require('../train_activation.js');
+const trainActivation = require('../consensus/gates/train_gate.js');
 const { getLogger }   = require('../observability/index.js');
 
 module.exports = {
@@ -75,7 +75,7 @@ module.exports = {
     //
     // The clock is the BTC height. A BTC indexer's own block_index IS that height; off BTC
     // there is none in this path, so null is passed and the gate treats an unimplemented
-    // requirement as fail-closed (see the header of src/train_activation.js). Never throws
+    // requirement as fail-closed (see the header of src/consensus/gates/train_gate.js). Never throws
     // into the block loop: an unexpected fault in the gate itself is reported and halts,
     // because a gate that cannot decide must not wave the block through.
     async checkTrainActivation(blockToParse){

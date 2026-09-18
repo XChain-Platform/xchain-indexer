@@ -30,8 +30,9 @@ const ProtocolChanges = require('../../../src/protocol_changes.js');
 const { TABLE, compareAll } = require('./helpers/predicate_parity.js');
 const { SRC, REPLACED_STEMS, modulePathFor } = require('../../helpers/gate_modules.js');
 
-// The rows whose predicate W4 replaced with activeAt() itself (row 18): the
-// callers spell the key at the call site, so there is no predicate to compare.
+// The rows whose predicate W4 (row 18) and W5 (row 21) replaced with activeAt()
+// itself: the callers spell the key at the call site, so there is no predicate
+// to compare.
 const REPLACED = new Set(REPLACED_STEMS.map((stem) => ProtocolChanges.rows()
     .map(([k]) => k).find((k) => k.startsWith(stem + '.'))));
 
@@ -76,7 +77,7 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
     });
 
     it('every replaced row is still a registry row and has no module left in src/ to read it through', function () {
-        assert.strictEqual(REPLACED.size, 25, 'the W4 census: 25 predicate-only shims');
+        assert.strictEqual(REPLACED.size, 38, 'the W4 census of 25 predicate-only shims plus the 13 predicate-only twins of W5');
         for (const key of REPLACED) {
             assert.ok(['height', 'time'].includes(ProtocolChanges.registry.unitOf(key)), key + ' is a height or time row');
             const stem = key.slice(0, key.lastIndexOf('.'));
@@ -93,7 +94,7 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
         for (const r of results) assert.ok(r.inputs >= 5, r.key + ' compared only ' + r.inputs + ' inputs');
         assert.strictEqual(results.filter((r) => r.verdict === 'EQUAL').length, TABLE.length - Object.keys(FINDINGS).length,
             'every tabled predicate but the findings compared EQUAL');
-        assert.ok(TABLE.length >= 45, 'too few predicates compared');
+        assert.ok(TABLE.length >= 36, 'too few predicates compared');
     });
 
     it('the two findings differ for the recorded reason, not for a moved threshold', function () {

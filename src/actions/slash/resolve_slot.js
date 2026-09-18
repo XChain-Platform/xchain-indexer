@@ -25,7 +25,7 @@
  *
  ********************************************************************/
 
-const eq = require('../../equivocation_header.js');
+const eq = require('../../consensus/equivocation_header.js');
 const { parseOracleContent, parseBatchContent } = require('./content_parsers.js');
 
 

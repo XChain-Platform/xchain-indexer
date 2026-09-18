@@ -26,8 +26,8 @@
 // Strict, as the class body these methods came from was.
 'use strict';
 
-const swqCap = require('../../swq_source_cap_activation');
-const stakeWeightCollation = require('../../stake_weight_collation_activation');
+const swqCap = require('../../consensus/gates/swq_source_cap_gate');
+const stakeWeightCollation = require('../../consensus/gates/stake_weight_collation_gate');
 const { getLogger } = require('../../observability/index.js');
 // Module-level state and pure helpers that the split keeps in one place, so the class
 // and every mixin read the same instance of each.

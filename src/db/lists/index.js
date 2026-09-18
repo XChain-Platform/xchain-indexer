@@ -20,7 +20,10 @@
  ********************************************************************/
 
 const path    = require('path');
-const listEditResolution = require('../../list_edit_resolution_activation');
+// The list-edit resolution flag day is a registry row read by literal key (W5), keyed
+// '<COIN>:<network>' so the coin goes with the height.
+const gateRegistry = require('../../consensus/gate_registry');
+const LIST_EDIT_RESOLUTION_KEY = 'list_edit_resolution_activation.LIST_EDIT_RESOLUTION_ACTIVATION';
 
 module.exports = {
 
@@ -101,7 +104,7 @@ module.exports = {
             // historical replay; below the height (or with no block context) the
             // legacy create-index read runs unchanged.
             let resolved = action_index;
-            if(listEditResolution.isListEditResolutionActive(block_index, this.config['NETWORK'], this.config['COIN']))
+            if(gateRegistry.activeAt(LIST_EDIT_RESOLUTION_KEY, this.config['NETWORK'], this.config['COIN'], block_index, null))
                 resolved = await this.getListHeadIndex(action_index);
             let query = '';
             let args  = [resolved];

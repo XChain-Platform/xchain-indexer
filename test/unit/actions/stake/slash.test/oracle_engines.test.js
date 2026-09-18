@@ -18,7 +18,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon  = require('sinon');
-const eq    = require('../../../../../src/equivocation_header.js');
+const eq    = require('../../../../../src/consensus/equivocation_header.js');
 const { buried, params, data, useSlashHarness } = require('./helpers/slash_harness.js');
 
 // Each test gets a fresh harness from useSlashHarness; bind() hands it to the

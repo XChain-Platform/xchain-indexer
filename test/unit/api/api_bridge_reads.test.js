@@ -210,7 +210,7 @@ async function buildEnvelope(opts){
     const stakesRoot   = M.toHex(M.EMPTY_SMT_ROOT);
     const subRoots     = { balances_root: balancesRoot, stakes_root: stakesRoot };
     const stateRoot    = M.toHex(M.stateRoot(subRoots));
-    const SUB = require('../../../src/state_subtree_activation.js');
+    const SUB = require('../../../src/consensus/gates/state_subtree_gate.js');
     const version = SUB.stateRootVersion(HEIGHT, NETWORK, CHAIN);
     const checkpointRow = { checkpoint_seq: 7, snapshot_block: HEIGHT, state_root: stateRoot, state_root_version: version };
 
@@ -301,7 +301,7 @@ describe('db.getBridgeEscrowProof, driven through CHK.verifyEscrowAgainstCheckpo
 
 describe('db.getBridgeEscrowProof, driven through CHK.verifyEscrowAgainstCheckpoint @regression @tier1', function(){
     it('state_root_version is DERIVED via state_subtree_activation.stateRootVersion, never the static merkle constant', async function(){
-        const SUB = require('../../../src/state_subtree_activation.js');
+        const SUB = require('../../../src/consensus/gates/state_subtree_gate.js');
         const M2  = require('../../../src/consensus/merkle.js');
         const realVersion = SUB.stateRootVersion(HEIGHT, NETWORK, CHAIN);
         // The static constant and the derived value happen to agree at this fixture's

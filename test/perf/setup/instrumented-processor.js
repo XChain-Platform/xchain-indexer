@@ -15,128 +15,116 @@
  **********************************************************************
  * Instrumented block processor for performance tests.
  *
- * THIS FUNCTION IS A VERBATIM COPY of processBlocks() in
- * test/integration/setup/indexer-launcher.js with per-phase
- * timing instrumentation added. If processBlocks() changes,
- * this file must be updated to match.
+ * Blocks are applied by the integration launcher's processBlocks, so a perf run
+ * executes production's own pass sequence and cannot measure a block the fleet
+ * would not run. Timing comes from wrappers installed on the indexer instance for
+ * the duration of the run and removed afterwards.
  */
 
-const { applySystemGas } = require('../../integration/setup/gas-seeder');
+const launcher = require('../../integration/setup/indexer-launcher');
+
+// Phases MetricsCollector summarises, each timed across every call of the named
+// method. decoderRead and commit bracket the block; actionProcessing is the whole
+// opening group, which holds the block's transactions.
+const METHOD_PHASES = [
+    ['decoderDb', 'getDecoderBlockData', 'decoderRead'],
+    ['decoderDb', 'getBlockTime',        'decoderRead'],
+    ['decoderDb', 'getRawBlockTime',     'decoderRead'],
+    ['util',      'processExpirations',  'expirations'],
+    ['util',      'processCancellations', 'cancellations'],
+    ['indexerDb', 'createBlock',         'blockCreation'],
+    ['util',      'processMarketUpdates', 'marketUpdates'],
+    ['indexerDb', 'sanityCheck',         'sanityCheck'],
+    ['indexerDb', 'commitTransaction',   'commit'],
+];
+const OPENING_GROUP_PHASE = 'actionProcessing';
+
+// Shadow target[method] with an own property and return the function that puts the
+// original back, so a run leaves the instance exactly as it found it.
+function shadow(target, method, wrap) {
+    const hadOwn = Object.prototype.hasOwnProperty.call(target, method);
+    const previous = target[method];
+    if (typeof previous !== 'function')
+        throw new Error('instrumented-processor: ' + method + ' is not a method of the indexer collaborator');
+    target[method] = wrap(previous);
+    return () => {
+        if (hadOwn) target[method] = previous;
+        else delete target[method];
+    };
+}
 
 /**
  * Process all pending blocks with per-phase timing instrumentation.
  *
+ * Each block's phases carry the MetricsCollector names plus one entry per production
+ * pass group (launcher.PASS_GROUPS) and finalizeBlock, all in milliseconds.
+ *
  * @param {object} indexer    - Initialized indexer from initIndexer()
  * @param {MetricsCollector} collector - A started MetricsCollector instance
- * @returns {{ blocksProcessed: number, stats: object }}
+ * @returns {{ blocksProcessed: number }}
  */
 async function processBlocksInstrumented(indexer, collector) {
-    let blocksProcessed = 0;
+    // The block being timed. It opens on the block's first decoder read, which is the
+    // launcher's first per-block call, and closes when that block's commit returns;
+    // the reorg rollback's own commit happens before any block opens and is not timed.
+    let block = null;
+    let phases = null;
+    const depth = new Map();
 
-    // --- Reorg handling (identical to processBlocks) ---
-    // Process EVERY decoder reorg the indexer has not yet recorded (not just the
-    // newest), matched by event IDENTITY (events.id) not block-height magnitude, so
-    // consecutive higher-block reorgs are not missed. Mirrors XChainIndexer.start().
-    const lastProcessedReorgId = await indexer.indexerDb.getLastProcessedReorgId();
-    const unprocessedReorgs    = await indexer.decoderDb.getReorgsSince(lastProcessedReorgId);
-
-    let lastDecoderBlock = await indexer.decoderDb.getBlockIndex('decoder', 'last');
-    let lastIndexerBlock = await indexer.indexerDb.getBlockIndex('indexer', 'last');
-
-    if (unprocessedReorgs.length > 0) {
-        let minReorgBlock = null;
-        for (const reorg of unprocessedReorgs) {
-            if (minReorgBlock === null || reorg.block_index < minReorgBlock)
-                minReorgBlock = reorg.block_index;
-        }
-        if (lastIndexerBlock !== null && lastIndexerBlock >= minReorgBlock) {
-            await indexer.rollback.rollback(minReorgBlock);
-            lastIndexerBlock = await indexer.indexerDb.getBlockIndex('indexer', 'last');
-        }
-        for (const reorg of unprocessedReorgs)
-            await indexer.indexerDb.createReorg(reorg.block_index, reorg.id);
-    }
-
-    // Initialize start position if indexer is empty
-    if (lastIndexerBlock === null) {
-        const firstDecoderBlock = await indexer.decoderDb.getBlockIndex('decoder', 'first');
-        if (firstDecoderBlock !== null) {
-            lastIndexerBlock = firstDecoderBlock - 1;
-        }
-    }
-
-    // Process all pending blocks with instrumentation
-    while (lastIndexerBlock !== null && lastDecoderBlock !== null &&
-           lastIndexerBlock < lastDecoderBlock) {
-
-        lastIndexerBlock++;
-        collector.beginBlock(lastIndexerBlock);
-
-        const phases = {};
-        let t;
-
-        // Phase: decoderRead
-        t = process.hrtime.bigint();
-        const blockTransactions = await indexer.decoderDb.getDecoderBlockData(lastIndexerBlock);
-        const blockTime = await indexer.decoderDb.getBlockTime(lastIndexerBlock);
-        phases.decoderRead = Number(process.hrtime.bigint() - t) / 1e6;
-
-        await indexer.indexerDb.beginTransaction();
+    // Add the call's elapsed time to `phase` on the open block. A nested call of a
+    // phase already being timed is not counted twice.
+    const timed = (phase, run) => async function (...args) {
+        if (block === null || depth.get(phase)) return run.apply(this, args);
+        depth.set(phase, 1);
+        const t = process.hrtime.bigint();
         try {
-            // Phase: actionProcessing
-            t = process.hrtime.bigint();
-            for (const tx of blockTransactions) {
-                await indexer.actions.processTransaction(tx);
-            }
-            phases.actionProcessing = Number(process.hrtime.bigint() - t) / 1e6;
-
-            // Phase: expirations
-            t = process.hrtime.bigint();
-            await indexer.util.processExpirations(indexer.actions, indexer.indexerDb, lastIndexerBlock, blockTime);
-            phases.expirations = Number(process.hrtime.bigint() - t) / 1e6;
-
-            // The fixture's stand-in for the XBRIDGE settle pass (see processBlocks and
-            // gas-seeder.js): off BTC the bootstrap gas arrives here as bridge-shaped
-            // credits. Bootstrap blocks only, so it is not timed as a phase.
-            await applySystemGas(indexer, lastIndexerBlock, blockTime);
-
-            // Phase: cancellations
-            t = process.hrtime.bigint();
-            await indexer.util.processCancellations(indexer.actions, indexer.indexerDb, lastIndexerBlock, blockTime);
-            phases.cancellations = Number(process.hrtime.bigint() - t) / 1e6;
-
-            // Phase: blockCreation
-            t = process.hrtime.bigint();
-            await indexer.indexerDb.createBlock(lastIndexerBlock, blockTime);
-            phases.blockCreation = Number(process.hrtime.bigint() - t) / 1e6;
-
-            // Phase: marketUpdates
-            t = process.hrtime.bigint();
-            await indexer.util.processMarketUpdates(indexer.indexerDb, lastIndexerBlock, blockTime);
-            phases.marketUpdates = Number(process.hrtime.bigint() - t) / 1e6;
-
-            // Phase: sanityCheck
-            t = process.hrtime.bigint();
-            await indexer.indexerDb.sanityCheck(lastIndexerBlock);
-            phases.sanityCheck = Number(process.hrtime.bigint() - t) / 1e6;
-
-            // Phase: commit
-            t = process.hrtime.bigint();
-            await indexer.indexerDb.commitTransaction();
-            phases.commit = Number(process.hrtime.bigint() - t) / 1e6;
-
-            collector.endBlock(lastIndexerBlock, phases);
-            blocksProcessed++;
-
-        } catch (error) {
-            await indexer.indexerDb.rollbackTransaction();
-            collector.recordError(lastIndexerBlock, error);
-            throw error;
+            return await run.apply(this, args);
+        } finally {
+            depth.delete(phase);
+            if (phases) phases[phase] = (phases[phase] || 0) + Number(process.hrtime.bigint() - t) / 1e6;
         }
-    }
+    };
 
-    indexer.synced = true;
-    return { blocksProcessed };
+    const restores = [];
+    try {
+        // Timing wrappers go on first so the block opener and closer sit outside them: the
+        // block's first decoder read is then timed, and endBlock follows the timed commit.
+        for (const [owner, method, phase] of METHOD_PHASES)
+            restores.push(shadow(indexer[owner], method, (run) => timed(phase, run)));
+        restores.push(shadow(indexer.decoderDb, 'getDecoderBlockData', (read) => async function (blockIndex, ...rest) {
+            if (block === null) {
+                block = blockIndex;
+                phases = {};
+                collector.beginBlock(blockIndex);
+            }
+            return read.call(this, blockIndex, ...rest);
+        }));
+        restores.push(shadow(indexer.indexerDb, 'commitTransaction', (commit) => async function (...args) {
+            const result = await commit.apply(this, args);
+            if (block !== null) {
+                collector.endBlock(block, phases);
+                block = null;
+                phases = null;
+            }
+            return result;
+        }));
+        // The pass groups are timed by wrapping the methods runBlockPasses calls, named by
+        // the launcher from production's module, so no pass is listed here.
+        for (const name of launcher.PASS_GROUPS) {
+            restores.push(shadow(indexer, name, (run) => timed(name, run)));
+            if (name === launcher.PASS_GROUPS[0])
+                restores.push(shadow(indexer, name, (run) => timed(OPENING_GROUP_PHASE, run)));
+        }
+        restores.push(shadow(indexer, 'finalizeBlock', (run) => timed('finalizeBlock', run)));
+
+        const blocksProcessed = await launcher.processBlocks(indexer);
+        return { blocksProcessed };
+    } catch (error) {
+        if (block !== null) collector.recordError(block, error);
+        throw error;
+    } finally {
+        for (const restore of restores.reverse()) restore();
+    }
 }
 
 module.exports = { processBlocksInstrumented };

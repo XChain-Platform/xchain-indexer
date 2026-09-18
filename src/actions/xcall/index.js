@@ -45,9 +45,9 @@
 
 const crypto  = require('crypto');
 const ed25519 = require('../../consensus/ed25519.js');
-const swq     = require('../../stake_weighted_quorum.js');
-const eq      = require('../../equivocation_header.js');
-const ah      = require('../../mirror_admission_activation.js');
+const swq     = require('../../consensus/stake_weighted_quorum.js');
+const eq      = require('../../consensus/equivocation_header.js');
+const ah      = require('../../consensus/gates/mirror_admission_gate.js');
 
 // Vendored from ../protocol/constants.js (byte-identical to xchain-documentation/
 // protocol/constants.js; same convention as the VM_MAX_CALL_DEPTH /

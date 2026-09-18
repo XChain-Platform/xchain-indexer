@@ -146,11 +146,17 @@ module.exports = function carrierLogicPinOps(core) {
      * activation file at the top level and under src/lib, every SHARED_GATES
      * carrier at src/<name>.js, and the digest module that computes the requires.
      */
-    function hubMembers(dir) {
+    function hubMembers(dir, pin) {
         const source = fs.readFileSync(path.join(dir, 'src/consensus_rules_digest.js'), 'utf8');
-        const shared = constInit(source, 'SHARED_GATES').elements
-            .map((row) => `src/${row.elements[0].value}.js`);
-        return activationFiles(dir).concat(activationFiles(dir, 'lib'), shared, ['src/consensus_rules_digest.js'])
+        // A SHARED_GATES stem lives at its pinned path once W5 has moved it
+        // (src/consensus/gates/<stem>_gate.js, src/consensus/<carrier>.js or a
+        // hub-owned home such as src/attestation/); the pin already records
+        // that path per id, so read it there rather than restating the loader's
+        // move table. A stem with no pin entry yet (before --init) falls back
+        // to the pre-W5 flat path.
+        const ids = Array.from(new Set(constInit(source, 'SHARED_GATES').elements.map((row) => row.elements[0].value)));
+        const shared = ids.map((id) => (pin && pin.entries && pin.entries[id] ? pin.entries[id].path : `src/${id}.js`));
+        return activationFiles(dir).concat(activationFiles(dir, 'lib'), gateFiles(dir), shared, ['src/consensus_rules_digest.js'])
             .filter((rel) => fs.existsSync(path.join(dir, rel)));
     }
 
@@ -171,9 +177,9 @@ module.exports = function carrierLogicPinOps(core) {
                 .concat(gateFiles(dir), fixedCarrierPaths(dir, pin, FIXED_CARRIER_IDS[name]), ['src/consensus_rules_digest.js'])
                 .filter((rel) => fs.existsSync(path.join(dir, rel)));
         } else if (name === 'xchain-sync') {
-            list = activationFiles(dir).concat(fixedCarrierPaths(dir, pin, FIXED_CARRIER_IDS[name]));
+            list = activationFiles(dir).concat(gateFiles(dir), fixedCarrierPaths(dir, pin, FIXED_CARRIER_IDS[name]));
         } else if (name === 'xchain-hub') {
-            list = hubMembers(dir);
+            list = hubMembers(dir, pin);
         } else {
             throw new Error(`no membership rule for ${name}`);
         }
@@ -245,9 +251,8 @@ module.exports = function carrierLogicPinOps(core) {
     }
 
     /**
-     * Repoint one entry at `rel`, keeping its id and hash. Refused, as a logic
-     * finding (exit 1), when the file at the new path hashes differently: a move
-     * carries the module, never a change to it, which goes through --write.
+     * Repoint one entry at `rel`, keeping its id. A changed hash is accepted
+     * only with a reason, and the one move record then proves both changes.
      */
     function moveEntry(dir, pin, id, rel, reason) {
         const before = pin.entries[id];
@@ -255,12 +260,12 @@ module.exports = function carrierLogicPinOps(core) {
         if (before.path === rel) throw new Error(`${id} is already at ${rel}; nothing to move`);
         const hash = hashFile(dir, rel);
         if (hash === null) throw new Error(`${rel} does not exist under ${dir}`);
-        if (hash !== before.hash) {
-            const err = new Error(`${id}: the logic at ${rel} (${hash.slice(0, 8)}) is not the pinned logic (${before.hash.slice(0, 8)}); a move carries a module unchanged, re-pin a changed one with --write`);
+        if (hash !== before.hash && (typeof reason !== 'string' || reason.trim() === '')) {
+            const err = new Error(`${id}: moving to changed logic requires --reason`);
             err.exitCode = 1;
             throw err;
         }
-        pin.entries[id] = Object.assign({}, before, { path: rel });
+        pin.entries[id] = Object.assign({}, before, { path: rel, hash });
         const record = { id, from: before.hash, to: hash, path: { from: before.path, to: rel }, date: today() };
         if (reason !== undefined) record.reason = reason;
         pin.repins.push(record);
@@ -270,7 +275,8 @@ module.exports = function carrierLogicPinOps(core) {
      * Every difference between the pin as committed and `pin` that carries no
      * `repins` record of the right shape: a changed or added hash needs a record
      * whose `to` is the new hash, a retired id one whose `to` is null, and a
-     * moved path one whose `path.to` is the new path under the unchanged hash.
+     * moved path one whose `path.to` is the new path. A hash-and-path move needs
+     * one record whose hash and path fields prove both the old and new states.
      * @returns {string[]} `<id>: <what happened>` lines, empty when every change is recorded
      */
     function unrecordedChanges(committed, pin) {
@@ -283,6 +289,12 @@ module.exports = function carrierLogicPinOps(core) {
                 if (before.path !== rel && !repins.some((r) => r.id === id && r.to === hash && r.path && r.path.to === rel)) {
                     out.push(`${id}: moved from ${before.path} to ${rel} with no --move record`);
                 }
+                continue;
+            }
+            if (before && before.path !== rel) {
+                const combined = repins.some((r) => r.id === id && r.from === before.hash && r.to === hash &&
+                    r.path && r.path.from === before.path && r.path.to === rel);
+                if (!combined) out.push(`${id}: hash and path changed with no combined --move record`);
                 continue;
             }
             if (!repins.some((r) => r.id === id && r.to === hash)) {
@@ -343,8 +355,10 @@ module.exports = function carrierLogicPinOps(core) {
         }
         writePin(dir, pin);
         const rec = pin.repins[pin.repins.length - 1];
-        if (verb === 'moved') console.log(`moved ${opts.id}: ${rec.path.from} -> ${rec.path.to} (${rec.to.slice(0, 8)} unchanged)`);
-        else if (verb === 'retired') console.log(`retired ${opts.id}: ${rec.from} -> (gone)`);
+        if (verb === 'moved') {
+            const hashMove = rec.from === rec.to ? `${rec.to.slice(0, 8)} unchanged` : `${rec.from.slice(0, 8)} -> ${rec.to.slice(0, 8)}`;
+            console.log(`moved ${opts.id}: ${rec.path.from} -> ${rec.path.to} (${hashMove})`);
+        } else if (verb === 'retired') console.log(`retired ${opts.id}: ${rec.from} -> (gone)`);
         else console.log(`${verb} ${opts.id}: ${rec.from || '(new)'} -> ${rec.to}`);
         return 0;
     }

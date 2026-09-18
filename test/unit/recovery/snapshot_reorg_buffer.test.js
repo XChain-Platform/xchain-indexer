@@ -33,7 +33,7 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 
-const srb = require('../../../src/snapshot_reorg_buffer.js');
+const srb = require('../../../src/consensus/snapshot_reorg_buffer.js');
 
 const { siblingCheckout } = require('../../helpers/sibling_checkout.js');
 
@@ -138,12 +138,14 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
         });
 
         it('shares ONE literal buffer with the verifiers (no vendored copy to drift)', function () {
-            const hubSrb = requireSibling(HUB_DIR, 'src/snapshot_reorg_buffer.js');
-            assert.ok(hubSrb, 'the hub must vendor the shared module');
+            // The W5 tail (src/consensus/), the same in every repo that carries it; an
+            // absent copy skips here and throws under XCHAIN_REQUIRE_SIBLINGS=1.
+            const hubSrb = requireSibling(HUB_DIR, 'src/consensus/snapshot_reorg_buffer.js');
+            if(!hubSrb) this.skip();
             assert.strictEqual(hubSrb.CANONICAL_REORG_BUFFER, srb.CANONICAL_REORG_BUFFER);
             assert.strictEqual(
-                fs.readFileSync(path.join(HUB_DIR, 'src/snapshot_reorg_buffer.js'), 'utf8'),
-                fs.readFileSync(path.join(__dirname, '../../../src/snapshot_reorg_buffer.js'), 'utf8'),
+                fs.readFileSync(path.join(HUB_DIR, 'src/consensus/snapshot_reorg_buffer.js'), 'utf8'),
+                fs.readFileSync(path.join(__dirname, '../../../src/consensus/snapshot_reorg_buffer.js'), 'utf8'),
                 'the hub and indexer copies of snapshot_reorg_buffer.js have drifted');
         });
     });
@@ -166,9 +168,11 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
         });
 
         it('vendors the identical shared module', function () {
+            const sdkCopy = path.join(SDK_DIR, 'src/consensus/snapshot_reorg_buffer.js');
+            if(!requireSibling(SDK_DIR, 'src/consensus/snapshot_reorg_buffer.js')) this.skip();
             assert.strictEqual(
-                fs.readFileSync(path.join(SDK_DIR, 'src/snapshot_reorg_buffer.js'), 'utf8'),
-                fs.readFileSync(path.join(__dirname, '../../../src/snapshot_reorg_buffer.js'), 'utf8'),
+                fs.readFileSync(sdkCopy, 'utf8'),
+                fs.readFileSync(path.join(__dirname, '../../../src/consensus/snapshot_reorg_buffer.js'), 'utf8'),
                 'the sdk and indexer copies of snapshot_reorg_buffer.js have drifted');
         });
 

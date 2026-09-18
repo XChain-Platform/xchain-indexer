@@ -77,7 +77,7 @@ function parseArgs(argv){
                                            : path.resolve(__dirname, '..', '..', sib, 'src', file));
     const ProofServer = req('xchain-explorer', 'http/proof_server.js');
     const light       = req('xchain-sdk',      'protocol/light_client.js');
-    const SUB         = require('../src/state_subtree_activation.js');
+    const SUB         = require('../src/consensus/gates/state_subtree_gate.js');
     const mariadb     = require('mariadb');
 
     const conn = await mariadb.createConnection({

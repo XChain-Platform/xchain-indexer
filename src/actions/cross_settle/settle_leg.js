@@ -26,7 +26,10 @@
 
 'use strict';
 
-const ccr = require('../../cross_chain_royalty_activation.js');
+// The royalty flag day is a registry row read by literal key (W5), on the match's
+// BTC-anchored snapshot block.
+const gateRegistry = require('../../consensus/gate_registry');
+const CROSS_CHAIN_ROYALTY_KEY = 'cross_chain_royalty_activation.CROSS_CHAIN_ROYALTY_ACTIVATION';
 
 const { getLogger } = require('../../observability/index.js');
 
@@ -269,7 +272,7 @@ async function releaseEscrow(data, m, coin, leg, giveAmount, offerSource){
  */
 async function proceedsCredits(data, m, coin, giveTick, giveAmount, payoutAddr, counterpartyCoin){
     let full = [[giveTick, giveAmount, payoutAddr]];
-    if(!ccr.isCrossChainRoyaltyActive(m.snapshot_block, m.network))
+    if(!gateRegistry.activeAt(CROSS_CHAIN_ROYALTY_KEY, m.network, null, m.snapshot_block, null))
         return full;
     // The legs belong to the offer whose proceeds THIS release pays out: on a's chain
     // the escrow releases to b's payout (b's legs), and vice versa.

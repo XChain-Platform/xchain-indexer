@@ -24,7 +24,7 @@
  ********************************************************************/
 
 const { getLogger } = require('../../../observability/index.js');
-const { isPreBatchEraFloor } = require('../../../price_batching_floor_activation.js');
+const { isPreBatchEraFloor } = require('../../../consensus/gates/price_batching_floor_gate.js');
 
 module.exports = {
 

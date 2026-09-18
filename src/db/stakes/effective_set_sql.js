@@ -21,7 +21,7 @@
  *
  ********************************************************************/
 
-const stakeWeightCollation = require('../../stake_weight_collation_activation');
+const stakeWeightCollation = require('../../consensus/gates/stake_weight_collation_gate');
 
 module.exports = {
 

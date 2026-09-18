@@ -29,7 +29,7 @@ const { getLogger } = require('../../observability/index.js');
 // CLIENT_FILES entry alongside price_batching_floor_activation.js and, like it,
 // dependency-free: the alternative threads an activation verdict through eleven predicate
 // signatures, their waiters and every one of their call sites.
-const { admitMarginBlocks, isMirrorAdmissionConsumerActive } = require('../../mirror_admission_activation.js');
+const { admitMarginBlocks, isMirrorAdmissionConsumerActive } = require('../../consensus/gates/mirror_admission_gate.js');
 const { WATERMARK_STALL_CHECK_MS, watermarkStallVerdict, sanitizeHeights,
         heightsAdvanced } = require('./watermark_config.js');
 

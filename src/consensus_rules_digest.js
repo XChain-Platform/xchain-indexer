@@ -155,29 +155,32 @@ const registry = require('./consensus/gate_registry');
 //
 // The one legitimate miss is a name that is a FUNCTION on the carrier (the admission
 // encoder and era gate: a registry holds values, and a function's entry alarms on
-// presence alone, see SHARED_GATES). Those are read from the carrier at src/<mod>.js,
-// and anything but a function there rethrows the miss. A carrier that is not there is
-// a build defect too, never ABSENT, and a carrier that IS there and fails to load throws
-// for the reason it always did: swallowing that yields 87637dfa instead of 26ba9cce in
-// a checkout without node_modules, since stake_weighted_quorum.js requires mathjs, and
-// two revisions measured that way FALSELY MATCH.
+// presence alone, see SHARED_GATES). Those are read from the carrier's logic module,
+// which since W5 lives at src/consensus/gates/<stem>_gate.js in every repo that
+// carries this file (the registry key stem keeps its _activation spelling, the file
+// does not), and anything but a function there rethrows the miss. A carrier that is
+// not there is a build defect too, never ABSENT, and a carrier that IS there and fails
+// to load throws for the reason it always did: swallowing that yields 87637dfa instead
+// of 26ba9cce in a checkout without node_modules, since stake_weighted_quorum.js
+// requires mathjs, and two revisions measured that way FALSELY MATCH.
 function loadGateValue(mod, name){
     const key = mod + '.' + name;
     try {
         return registry.get(key);
     } catch (miss) {
         if (!miss || miss.name !== 'RegistryMissError') throw miss;
-        const file = path.join(__dirname, mod + '.js');
+        const rel = path.join('consensus', 'gates', mod.replace(/_activation$/, '_gate') + '.js');
+        const file = path.join(__dirname, rel);
         if (!fs.existsSync(file)) {
             throw new Error('consensus-rules gate ' + key + ' has no registry row and no carrier at src/'
-                + mod + '.js, so no digest can be computed');
+                + rel + ', so no digest can be computed');
         }
         let carrier;
         try {
             carrier = require(file);
         } catch (e) {
-            throw new Error('consensus-rules gate ' + mod + ' is present at src/' + mod
-                + '.js but failed to load, so no digest can be computed: '
+            throw new Error('consensus-rules gate ' + mod + ' is present at src/' + rel
+                + ' but failed to load, so no digest can be computed: '
                 + ((e && e.message) ? e.message : String(e)));
         }
         if (typeof carrier[name] === 'function') return carrier[name];

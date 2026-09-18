@@ -26,8 +26,11 @@
 
 const crypto = require('crypto');
 const { getLogger } = require('../../observability/index.js');
-const swq    = require('../../stake_weighted_quorum.js');
-const { isRetractionSigningActive } = require('../../retraction_signing_activation.js');
+const swq    = require('../../consensus/stake_weighted_quorum.js');
+// The signed-retraction flag day is a registry row read by literal key (W5) through
+// the consumer's own registry entry, on the retraction's BTC-anchored snapshot block.
+const gateRegistry = require('../../consensus/gate_registry');
+const RETRACTION_SIGNING_KEY = 'retraction_signing_activation.RETRACTION_SIGNING_ACTIVATION';
 const { RETRACTION_COLUMNS, RETRACTION_CHAIN_COLUMNS } = require('./mirror_tables.js');
 const { applyMirrorWrite } = require('./mirror_write.js');
 
@@ -173,7 +176,7 @@ module.exports = {
                 "SELECT MAX(snapshot_block) AS sb FROM capability_snapshots WHERE capability = 'cross_chain'");
             if (rows.length > 0 && rows[0].sb !== null) gateBlock = Number(rows[0].sb);
         } catch (e) { gateBlock = null; }                  // mirror table not ready yet
-        if (gateBlock !== null && isRetractionSigningActive(gateBlock, this.network)) {
+        if (gateBlock !== null && gateRegistry.activeAt(RETRACTION_SIGNING_KEY, this.network, null, gateBlock, null)) {
             let ok = await this.verifyRetractionSignatures(event);
             if (!ok) {
                 getLogger().error('HubDbSync: refusing UNVERIFIED retraction of ' + event.table +
@@ -250,7 +253,7 @@ module.exports = {
     async verifyRetractionSignatures(event) {
         let sb = Number(event.snapshot_block);
         if (!Number.isFinite(sb) || sb < 0) return false;
-        if (!isRetractionSigningActive(sb, this.network)) return false;
+        if (!gateRegistry.activeAt(RETRACTION_SIGNING_KEY, this.network, null, sb, null)) return false;
         let sigs = event.retraction_signatures;
         if (!Array.isArray(sigs) || sigs.length === 0) return false;
 

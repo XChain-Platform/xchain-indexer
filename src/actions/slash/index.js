@@ -80,7 +80,7 @@
  ********************************************************************/
 
 const ed25519 = require('../../consensus/ed25519.js');
-const srb     = require('../../snapshot_reorg_buffer.js');
+const srb     = require('../../consensus/snapshot_reorg_buffer.js');
 
 const { getLogger } = require('../../observability/index.js');
 // The proof's own parts. The handler keeps the chain-facing rules (signatures,

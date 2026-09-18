@@ -19,14 +19,16 @@
  *                                  A changed value means a node would fail its
  *                                  own boot pin and halt rather than fork.
  *   armed_map_fingerprint          sha256 over the armed VALUES the registry
- *   (= armed_map_fingerprint_v2)   rows resolve to, one hash per key in
- *   and armed_map_rows             armed_map_rows, plus the count. Unmoved by a
+ *   and armed_map_rows             rows resolve to, one hash per key in
+ *                                  armed_map_rows, plus the count. Unmoved by a
  *                                  comment, rename or move, so it answers "same
  *                                  armed map?"; UNREADABLE when a row fails to
  *                                  resolve, never a plausible hash. v1 (a hash
  *                                  over carrier bytes) is gone since W3; the
  *                                  legacy field carries v2 and
- *                                  armed_map_fingerprint_version says so.
+ *                                  armed_map_fingerprint_version says so. The
+ *                                  armed_map_fingerprint_v2 alias of the W1 to
+ *                                  W4 window is gone since W5.
  *   carrier_logic_digest           sha256 over the sorted id=hash lines of
  *                                  bin/pins/carrier-logic.json, the token-stream
  *                                  pin of every gate carrier's LOGIC. Read from
@@ -111,15 +113,14 @@ function canonicalJson(value) {
 /**
  * The three values that come from the source tree alone.
  * @returns {{coin_registry_consensus_hash: string, coin_registry_consensus_hashes: object,
- *            armed_map_fingerprint: string, armed_map_fingerprint_v2: string,
- *            armed_map_fingerprint_version: number,
+ *            armed_map_fingerprint: string, armed_map_fingerprint_version: number,
  *            armed_map_rows: ?object, armed_map_row_count: ?number,
  *            consensus_rules_digest: string, gates_field: string, gates_field_hash: string,
  *            carrier_logic_digest: string}}
  */
 function codeIdentity(network) {
     const coins = require('../src/coins/index.js');
-    const { computeArmedMapFingerprintV2 } = require('../src/consensus/armed_map/fingerprint_v2.js');
+    const { computeArmedMapFingerprintV2 } = require('../src/consensus/armed_map/fingerprint.js');
     const { computeConsensusRulesDigest, knownGateKeys, ABSENT } = require('../src/consensus_rules_digest.js');
     const logicPin = require('./lib/carrier_logic_pin.js');
 
@@ -138,10 +139,10 @@ function codeIdentity(network) {
         // be attributable to a chain before anyone can act on it.
         coin_registry_consensus_hash: crypto.createHash('sha256').update(canonicalJson(hashes)).digest('hex'),
         coin_registry_consensus_hashes: hashes,
-        // The legacy field carries v2 since W3 (the _v2 alias is dropped at W5); the
-        // row map and count are null exactly when v2 reads UNREADABLE.
+        // The legacy field carries v2 since W3 and the version field says so; the
+        // _v2 alias of the W1 to W4 window is gone since W5. The row map and count
+        // are null exactly when v2 reads UNREADABLE.
         armed_map_fingerprint: armedMapV2.hex,
-        armed_map_fingerprint_v2: armedMapV2.hex,
         armed_map_fingerprint_version: 2,
         armed_map_rows: armedMapV2.rows || null,
         armed_map_row_count: armedMapV2.count === undefined ? null : armedMapV2.count,
@@ -312,7 +313,6 @@ async function main() {
         console.log(`  ${tick.padEnd(29)}${identity.coin_registry_consensus_hashes[tick]}`);
     }
     console.log(`armed_map_fingerprint:         ${identity.armed_map_fingerprint} (version ${identity.armed_map_fingerprint_version})`);
-    console.log(`armed_map_fingerprint_v2:      ${identity.armed_map_fingerprint_v2}`);
     console.log(`armed_map_row_count:           ${identity.armed_map_row_count}`);
     console.log(`carrier_logic_digest:          ${identity.carrier_logic_digest}`);
     console.log(`consensus_rules_digest:        ${identity.consensus_rules_digest}`);

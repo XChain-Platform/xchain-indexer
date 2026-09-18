@@ -143,7 +143,7 @@ describe('activation-gate constant parity to canonical constants.js @regression'
     it('holds TOKEN_POLICY_INHERITANCE_ACTIVATION >= LIST_EDIT_RESOLUTION_ACTIVATION for every chain key', function () {
         if (!canonExists) { this.skip(); return; }
         const policy = canon.TOKEN_POLICY_INHERITANCE_ACTIVATION;
-        const lists  = require('../../../../src/list_edit_resolution_activation.js').LIST_EDIT_RESOLUTION_ACTIVATION;
+        const lists  = require('../../../../src/consensus/gate_registry').get('list_edit_resolution_activation.LIST_EDIT_RESOLUTION_ACTIVATION');
         assert.ok(policy && lists, 'both maps must resolve');
         let compared = 0;
         for (const key of Object.keys(lists)) {

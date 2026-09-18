@@ -67,13 +67,14 @@ if(require.main === module) require('dotenv').config();
 const zlib    = require('zlib');
 const crypto  = require('crypto');
 const ed25519 = require('../src/consensus/ed25519.js');
-const swq     = require('../src/stake_weighted_quorum.js');
-const eq      = require('../src/equivocation_header.js');
-const ccr     = require('../src/cross_chain_royalty_activation.js');
-const ar      = require('../src/anchor_reward_activation.js');
-const rca     = require('../src/rollcall_activation.js');
+const swq     = require('../src/consensus/stake_weighted_quorum.js');
+const eq      = require('../src/consensus/equivocation_header.js');
+const ar      = require('../src/consensus/gates/anchor_reward_gate.js');
+const rca     = require('../src/consensus/gates/rollcall_gate.js');
 const gateRegistry = require('../src/consensus/gate_registry');
-const srb     = require('../src/snapshot_reorg_buffer.js');
+// The royalty flag day is a registry row read by literal key (W5).
+const CROSS_CHAIN_ROYALTY_KEY = 'cross_chain_royalty_activation.CROSS_CHAIN_ROYALTY_ACTIVATION';
+const srb     = require('../src/consensus/snapshot_reorg_buffer.js');
 const cmsh    = require('../src/consensus/capability_min_stake_history.js');
 const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         ARCHIVE_HEAD_GATE_SQL, dedupeArchiveChunks,
@@ -81,7 +82,7 @@ const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
 // Archive-head version set, spliced rather than hand-copied: recovery must replay the
 // SAME heads the live mirror path reads, so a new publisher-bearing version added to
 // ARCHIVE_HEAD_VERSIONS cannot reach one path and silently skip the other.
-const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../src/stateHash.js');
+const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../src/consensus/state_hash.js');
 
 // Capabilities whose archived snapshot is re-resolvable from the BTC capability stakes.
 // Both cross-checks gate on this one set (_verifyStakes for its delegated-key admission,
@@ -1118,7 +1119,7 @@ class AnchorRecovery {
         ].join('|');
         // Cross-chain royalty legs ride the signed match at/above the CROSS_CHAIN_ROYALTY
         // flag-day; below it the canonical is byte-identical to the legacy format.
-        if(ccr.isCrossChainRoyaltyActive(m.snapshot_block, m.network))
+        if(gateRegistry.activeAt(CROSS_CHAIN_ROYALTY_KEY, m.network, null, m.snapshot_block, null))
             raw += '|' + String(m.a_payout_legs || '') + '|' + String(m.b_payout_legs || '');
         // EQUIV header: VIEW = the archived row's finalizing_view (serialized into
         // the archive by StateAnchorPublisher.MATCH_KEYS). TAG=XDEX, ROUND_ID=match_id.

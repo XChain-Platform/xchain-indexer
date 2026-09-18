@@ -294,10 +294,11 @@ describe('Rollback coverage guard @regression', function () {
         // read a file that does not exist on the sync side and turn the guard into a
         // throw (under XCHAIN_REQUIRE_SIBLINGS) or a silent skip. reconcile-twins.sh
         // records the same asymmetry per twin.
+        // The W5 gate twins carry the same tail on both sides (src/consensus/gates/,
+        // D101); the state_key_collation shim went with W5 (its row is read by key).
         for(const [twin, syncTwin] of [['consensus/merkle.js', 'merkle.js'],
-                                       ['state_commitment_activation.js', 'state_commitment_activation.js'],
-                                       ['swq_source_cap_activation.js', 'swq_source_cap_activation.js'],
-                                       ['state_key_collation_activation.js', 'state_key_collation_activation.js'],
+                                       ['consensus/gates/state_commitment_gate.js', 'consensus/gates/state_commitment_gate.js'],
+                                       ['consensus/gates/swq_source_cap_gate.js', 'consensus/gates/swq_source_cap_gate.js'],
                                        ['hub/table_lifecycle.js', 'table_lifecycle.js'],
                                        ['hub/table_lifecycle/action_tables.js', 'table_lifecycle/action_tables.js'],
                                        ['hub/table_lifecycle/block_and_special_tables.js', 'table_lifecycle/block_and_special_tables.js']]){

@@ -25,8 +25,10 @@ const {
     newPriceHandler, usePriceBatchHarness,
 } = require('./helpers/price_batch_harness.js');
 
-const swq           = require('../../../../../src/stake_weighted_quorum.js');
-const priceSigTally = require('../../../../../src/price_sig_tally_activation.js');
+const swq           = require('../../../../../src/consensus/stake_weighted_quorum.js');
+// The verify-first tally rule is a registry row (W5), stubbed through activeAt() by its key.
+const { stubGate } = require('../../../../helpers/gate_modules.js');
+const PRICE_SIG_TALLY_KEY = 'price_sig_tally_activation.PRICE_SIG_TALLY_ACTIVATION';
 
 // Each test gets a fresh harness from usePriceBatchHarness; bind() hands it to
 // the names the test bodies use and builds the handler they drive.
@@ -42,10 +44,8 @@ const newHandler = () => newPriceHandler(indexer, hubClient);
 const GATE = 963000;
 
 function armGateAt(height){
-    priceSigTally.isPriceSigTallyVerifyFirstActive.restore &&
-        priceSigTally.isPriceSigTallyVerifyFirstActive.restore();
-    sinon.stub(priceSigTally, 'isPriceSigTallyVerifyFirstActive')
-        .callsFake(h => parseInt(h) >= height);
+    stubGate(sinon, PRICE_SIG_TALLY_KEY, false)
+        .callsFake((key, network, coin, h) => parseInt(h) >= height);
 }
 
 function batchAcross(firstAnchor){

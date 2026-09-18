@@ -8,166 +8,131 @@
 // This file is part of XChain Platform. Licensed under the GNU Affero
 // General Public License v3.0 or later; see LICENSE.md.
 //
-// The integration harness (test/integration/setup/indexer-launcher.js) exists to
-// run the REAL block loop against real databases, so a scenario that passes there
-// is evidence about the fleet. That evidence is only as good as the harness's
-// fidelity to XChainIndexer.start(): every pass the production loop runs and the
-// harness skips is a difference the scenarios cannot see.
-//
-// The per-block VM compilation cache is one such pass. Production installs it
-// (vm.beginBlock) as the first statement inside the block's transaction and clears
-// it (vm.endBlock) immediately before createBlock. The harness omitted both, so
-// vm._blockCache stayed null for an entire run and every VM-touching scenario
-// executed contracts cold, on a rhythm the fleet never runs. This test pins the
-// rhythm into the harness itself, driving processBlocks over a stub indexer that
-// records the call order.
+// The per-block VM compilation cache as the integration launcher runs it through
+// production's block passes. A contract compiled outside the cache window, or a cache
+// that survives into the next block, executes on a rhythm the fleet never runs. These
+// tests pin where the window opens and closes relative to the pass groups, and what a
+// block that throws inside the window leaves behind.
 
 process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const assert = require('assert');
-const fs     = require('fs');
-const path   = require('path');
 
-const { processBlocks } = require('../../integration/setup/indexer-launcher.js');
+const launcher      = require('../../integration/setup/indexer-launcher.js');
+const XChainIndexer = require('../../../src/XChainIndexer.js');
 
-const LAUNCHER = path.join(__dirname, '../../integration/setup/indexer-launcher.js');
-const { readIndexerClassSource } = require('../../helpers/indexer_class_source.js');
-
-// A stub indexer exposing exactly the surface processBlocks touches. Every call
-// that matters to block rhythm appends to `calls`, so the assertions read as the
-// sequence the fleet runs rather than as counts.
-function makeStubIndexer(opts = {}){
-    const calls = [];
-    const firstBlock = opts.firstBlock || 100;
-    const lastBlock  = opts.lastBlock  || 102;
-    const vm = opts.noVm ? null : {
-        beginBlock(){ calls.push('vm.beginBlock'); },
-        endBlock(){   calls.push('vm.endBlock');   }
-    };
-    const indexer = {
-        calls,
-        vmRef: vm,
-        config: { GENESIS_BLOCK: -1 },
-        synced: false,
-        actions: {
-            vm,
-            async processTransaction(){ calls.push('processTransaction'); }
+// A collaborator whose every method call is appended to `trace` as `<label>.<method>`.
+// `answers` maps a method to its return value ('self' returns the collaborator), and
+// `sync` names the methods production calls without awaiting.
+function recorder(label, trace, answers = {}, sync = []) {
+    const proxy = new Proxy({}, {
+        get(target, prop) {
+            if (typeof prop !== 'string' || prop === 'then') return undefined;
+            if (Object.prototype.hasOwnProperty.call(target, prop)) return target[prop];
+            return (...args) => {
+                trace.push(label + '.' + prop);
+                const answer = Object.prototype.hasOwnProperty.call(answers, prop) ? answers[prop] : [];
+                const out = answer === 'self' ? proxy : (typeof answer === 'function' ? answer(...args) : answer);
+                return sync.includes(prop) ? out : Promise.resolve(out);
+            };
         },
-        genesis: { async inject(){ calls.push('genesis.inject'); } },
-        rollback: { async rollback(){ calls.push('rollback'); } },
-        protocolChanges: { async isEnabled(){ return true; } },
-        util: {
-            logError(){},
-            async processExpirations(){          calls.push('processExpirations'); },
-            async processCrossChainSettlements(){ calls.push('processCrossChainSettlements'); },
-            async processCancellations(){        calls.push('processCancellations'); },
-            async processMarketUpdates(){        calls.push('processMarketUpdates'); }
-        },
-        decoderDb: {
-            async getReorgsSince(){ return []; },
-            async getBlockIndex(which, pos){
-                return pos === 'last' ? lastBlock : firstBlock;
-            },
-            async getDecoderBlockData(block){
-                return [{ tx_hash: 'tx' + block, data: 'SEND|X' }];
-            },
-            async getBlockTime(){ return 1700000000; }
-        },
-        indexerDb: {
-            blockIndex: null,
-            async getLastProcessedReorgId(){ return 0; },
-            async getBlockIndex(){ return opts.lastIndexerBlock === undefined ? null : opts.lastIndexerBlock; },
-            async beginTransaction(){  calls.push('beginTransaction'); },
-            async commitTransaction(){ calls.push('commitTransaction'); },
-            async rollbackTransaction(){ calls.push('rollbackTransaction'); },
-            async createBlock(){ calls.push('createBlock'); if(opts.throwInCreateBlock) throw new Error('boom'); },
-            async sanityCheck(){ calls.push('sanityCheck'); }
-        }
-    };
-    return indexer;
+        set(target, prop, value) { target[prop] = value; return true; },
+    });
+    return proxy;
 }
 
-describe('integration harness VM block rhythm', function(){
-    it('installs and clears the per-block compilation cache once per block', async function(){
-        // The indexer DB is empty, so processing starts at the first decoder block:
-        // blocks 100 and 101 both run.
-        const indexer = makeStubIndexer({ firstBlock: 100, lastBlock: 101 });
-        const processed = await processBlocks(indexer);
-        assert.strictEqual(processed, 2, 'two blocks should be processed');
+// An XChainIndexer on the real prototype with every collaborator recorded and each pass
+// group bracketed by markers. testnet at a low height keeps the state roots and the
+// proof-bearing reward passes below their activations.
+function recordingIndexer(firstBlock, lastBlock) {
+    const trace = [];
+    const ix = Object.create(XChainIndexer.prototype);
+    ix.trace = trace;
+    ix.config = { COIN: 'BTC', NETWORK: 'testnet', GENESIS_BLOCK: -1 };
+    ix.util = recorder('util', trace, {}, ['logError', 'resetLists', 'addAddressTicker', 'getAddressesList', 'getTickersList']);
+    ix.indexerDb = recorder('db', trace, {
+        mirrorDb: 'self', getLastProcessedReorgId: 0, getBlockIndex: null, createActionIndex: 1,
+    }, ['mirrorDb']);
+    ix.decoderDb = {
+        async getReorgsSince() { return []; },
+        async getBlockIndex(which, pos) { return pos === 'last' ? lastBlock : firstBlock; },
+        async getDecoderBlockData(block) { return [{ tx_hash: 'tx' + block, data: 'SEND|X' }]; },
+        async getBlockTime() { return 1700000000; },
+        async getRawBlockTime() { return 1700000007; },
+    };
+    ix.protocolChanges = { async isEnabled() { return true; } };
+    ix.actions = {
+        vm: { beginBlock() { trace.push('vm.beginBlock'); }, endBlock() { trace.push('vm.endBlock'); } },
+        async processTransaction() { trace.push('actions.processTransaction'); },
+    };
+    ix.genesis = recorder('genesis', trace, { gasTokenParams: {} }, ['gasTokenParams']);
+    ix.mapper = recorder('mapper', trace);
+    ix.anchorProof = recorder('anchorProof', trace);
+    ix.rollcallProof = recorder('rollcallProof', trace);
+    for (const name of launcher.PASS_GROUPS) {
+        const pass = XChainIndexer.prototype[name];
+        ix[name] = async function (blk) {
+            trace.push('<' + name);
+            await pass.call(this, blk);
+            trace.push(name + '>');
+        };
+    }
+    return ix;
+}
 
-        const begins = indexer.calls.filter(c => c === 'vm.beginBlock').length;
-        const ends   = indexer.calls.filter(c => c === 'vm.endBlock').length;
-        assert.strictEqual(begins, 2, 'vm.beginBlock must run once per block');
-        assert.strictEqual(ends,   2, 'vm.endBlock must run once per block');
+const isMarker = (entry) => entry.startsWith('<') || entry.endsWith('>');
+
+describe('integration harness VM block rhythm through production\'s passes', function () {
+    it('opens the cache first inside the block and closes it after every pass group, just before createBlock', async function () {
+        const ix = recordingIndexer(101, 101);
+        assert.strictEqual(await launcher.processBlocks(ix), 1);
+        const t = ix.trace.slice(ix.trace.indexOf('db.beginTransaction'));
+        const groups = launcher.PASS_GROUPS;
+
+        // The cache is the first thing the block does after its transaction opens,
+        // ahead of the genesis injection and every transaction in the first group.
+        assert.deepStrictEqual(t.slice(0, 3), ['db.beginTransaction', '<' + groups[0], 'vm.beginBlock']);
+
+        // Every pass group runs entirely inside the window, so every contract the block
+        // executes compiles against this block's cache.
+        const open = t.indexOf('vm.beginBlock');
+        const close = t.indexOf('vm.endBlock');
+        assert.ok(t.indexOf('actions.processTransaction') > open);
+        for (const name of groups.slice(1))
+            assert.ok(t.indexOf('<' + name) > open, name + ' started before the cache opened');
+        for (const name of groups)
+            assert.ok(t.indexOf(name + '>') < close, name + ' finished after the cache closed');
+
+        // Nothing between the window closing and the commit can execute contract code,
+        // and the blocks row is the next write.
+        const after = t.slice(close + 1).filter((entry) => !isMarker(entry));
+        assert.strictEqual(after[0], 'db.createBlock');
+        assert.ok(!after.some((entry) => entry.startsWith('actions.') || entry.startsWith('vm.')),
+            'a VM-reachable call ran after the cache closed: ' + JSON.stringify(after));
+        assert.strictEqual(after[after.length - 1], 'db.commitTransaction');
     });
 
-    it('orders the cache exactly as production does within each block', async function(){
-        const indexer = makeStubIndexer({ firstBlock: 101, lastBlock: 101 });
-        await processBlocks(indexer);
+    it('leaves the cache open when a pass throws inside the window, and the next attempt opens a fresh one', async function () {
+        const ix = recordingIndexer(101, 101);
+        let failures = 1;
+        ix.util.processCrossChainCalls = async function () {
+            ix.trace.push('util.processCrossChainCalls');
+            if (failures-- > 0) throw new Error('mid-pass');
+        };
 
-        // One block only, so the recorded sequence IS the per-block order.
-        assert.deepStrictEqual(indexer.calls, [
-            'beginTransaction',
-            'vm.beginBlock',
-            'processTransaction',
-            'processExpirations',
-            'processCrossChainSettlements',
-            'processCancellations',
-            'vm.endBlock',
-            'createBlock',
-            'processMarketUpdates',
-            'sanityCheck',
-            'commitTransaction'
-        ]);
+        // Production's abandonBlock rolls back without closing the cache; the launcher
+        // rethrows the same way and writes no blocks row.
+        await assert.rejects(() => launcher.processBlocks(ix), /mid-pass/);
+        const rhythm = (trace) => trace.filter((c) => c.startsWith('vm.') || c === 'db.createBlock' ||
+                                                     c === 'db.rollbackTransaction' || c === 'db.commitTransaction');
+        assert.deepStrictEqual(rhythm(ix.trace), ['vm.beginBlock', 'db.rollbackTransaction']);
+
+        // The retry of the same block installs a new cache before any of its work and
+        // closes it before the blocks row, as every block does.
+        const mark = ix.trace.length;
+        assert.strictEqual(await launcher.processBlocks(ix), 1);
+        assert.deepStrictEqual(rhythm(ix.trace.slice(mark)),
+            ['vm.beginBlock', 'vm.endBlock', 'db.createBlock', 'db.commitTransaction']);
     });
-
-    it('leaves no cache installed across a block boundary', async function(){
-        const indexer = makeStubIndexer({ firstBlock: 100, lastBlock: 101 });
-        await processBlocks(indexer);
-
-        // Between the two blocks the sequence must read ...endBlock ... beginBlock,
-        // never two beginBlocks in a row (a cache surviving into the next block is
-        // exactly the drift this rhythm exists to prevent).
-        const rhythm = indexer.calls.filter(c => c === 'vm.beginBlock' || c === 'vm.endBlock');
-        assert.deepStrictEqual(rhythm, ['vm.beginBlock', 'vm.endBlock', 'vm.beginBlock', 'vm.endBlock']);
-    });
-
-    it('does not clear the cache when the block throws, matching production', async function(){
-        // Production's endBlock sits inside the try, after the last VM-touching pass;
-        // a block that throws before it rolls back and the NEXT block's beginBlock
-        // installs a fresh cache. The harness must fail the same way.
-        const indexer = makeStubIndexer({ firstBlock: 101, lastBlock: 101, throwInCreateBlock: true });
-        await assert.rejects(() => processBlocks(indexer), /boom/);
-        assert.ok(indexer.calls.includes('rollbackTransaction'), 'the block must roll back');
-        assert.strictEqual(indexer.calls.filter(c => c === 'vm.beginBlock').length, 1);
-        assert.strictEqual(indexer.calls.filter(c => c === 'vm.endBlock').length, 1,
-            'endBlock precedes createBlock, so it still ran before the throw');
-    });
-});
-
-describe('integration harness VM block rhythm', function(){
-    it('is a no-op when the VM runtime is unavailable', async function(){
-        // xchain-vm is optional (it fails to load on macOS/off-pin Node), and
-        // actions.vm is null then. The harness must not throw on that path.
-        const indexer = makeStubIndexer({ firstBlock: 101, lastBlock: 101, noVm: true });
-        const processed = await processBlocks(indexer);
-        assert.strictEqual(processed, 1);
-        assert.ok(!indexer.calls.some(c => c.startsWith('vm.')), 'no VM calls without a VM');
-    });
-
-    it('production still calls both hooks, so the harness mirrors a live rhythm', function(){
-        // If XChainIndexer ever drops or renames these calls, the harness's mirror
-        // becomes fiction. Guard the production side of the pair too.
-        const prod = readIndexerClassSource();
-        assert.ok(/this\.actions\.vm\.beginBlock\(\)/.test(prod),
-            'XChainIndexer.js must call this.actions.vm.beginBlock()');
-        assert.ok(/this\.actions\.vm\.endBlock\(\)/.test(prod),
-            'XChainIndexer.js must call this.actions.vm.endBlock()');
-
-        const harness = fs.readFileSync(LAUNCHER, 'utf8');
-        assert.ok(/indexer\.actions\.vm\.beginBlock\(\)/.test(harness));
-        assert.ok(/indexer\.actions\.vm\.endBlock\(\)/.test(harness));
-    });
-
 });

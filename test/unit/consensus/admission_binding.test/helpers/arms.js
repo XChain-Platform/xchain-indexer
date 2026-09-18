@@ -27,8 +27,10 @@ const LEGACY_AT = ADMIT_AT - 1;
 
 const HUB_SRC  = path.resolve(__dirname, '../../../../../../xchain-hub/src');
 // Present is not enough to trust: in a lane worktree the hub entry can be a symlink into a
-// peer's live main checkout, which no commit pins, so the shared helper decides.
-const HUB_VERDICT = siblingCheckout(__dirname, path.join(HUB_SRC, 'cross_chain', 'dex_engine.js'));
+// peer's live main checkout, which no commit pins, so the shared helper decides. Probed on
+// the admission gate at its W5 tail, so a hub checkout that predates the move reads as
+// absent (skip, or a refusal under XCHAIN_REQUIRE_SIBLINGS=1) rather than as a resolve error.
+const HUB_VERDICT = siblingCheckout(__dirname, path.join(HUB_SRC, 'consensus', 'gates', 'mirror_admission_gate.js'));
 const HAVE_HUB = HUB_VERDICT.usable;
 if (!HAVE_HUB && siblingsRequired())
     throw new Error('admission binding parity cannot run: xchain-hub sibling at ' + HUB_SRC + ' refused: ' + HUB_VERDICT.reason);
@@ -36,7 +38,7 @@ if (!HAVE_HUB && siblingsRequired())
 // Every module that captures a function off the activation twin at require time, so an
 // arming has to purge and re-require all of them or the consumer keeps the old arm.
 const LOCAL_MODULES = [
-    '../../../../../src/mirror_admission_activation.js',
+    '../../../../../src/consensus/gates/mirror_admission_gate.js',
     '../../../../../src/consensus/attest_response_canonical.js',
     '../../../../../src/actions/xcall/index.js',
     '../../../../../src/actions/xexec/index.js',
@@ -47,7 +49,7 @@ const LOCAL_MODULES = [
     '../../../../../src/XChainIndexer.js'
 ];
 const HUB_MODULES = [
-    '../../../../../../xchain-hub/src/mirror_admission_activation.js',
+    '../../../../../../xchain-hub/src/consensus/gates/mirror_admission_gate.js',
     '../../../../../../xchain-hub/src/lib/admission_height.js',
     '../../../../../../xchain-hub/src/cross_chain/dex_engine.js',
     '../../../../../../xchain-hub/src/cross_chain/call_engine.js',
@@ -90,7 +92,7 @@ function load(activation) {
 
     const h = {
         activation,
-        act:      require('../../../../../src/mirror_admission_activation.js'),
+        act:      require('../../../../../src/consensus/gates/mirror_admission_gate.js'),
         can:      require('../../../../../src/consensus/attest_response_canonical.js'),
         Xcall:    require('../../../../../src/actions/xcall/index.js'),
         Xexec:    require('../../../../../src/actions/xexec/index.js'),
@@ -103,7 +105,7 @@ function load(activation) {
     };
     if (HAVE_HUB) {
         h.hub = {
-            act:    require('../../../../../../xchain-hub/src/mirror_admission_activation.js'),
+            act:    require('../../../../../../xchain-hub/src/consensus/gates/mirror_admission_gate.js'),
             ah:     require('../../../../../../xchain-hub/src/lib/admission_height.js'),
             Dex:    require('../../../../../../xchain-hub/src/cross_chain/dex_engine.js'),
             Call:   require('../../../../../../xchain-hub/src/cross_chain/call_engine.js'),

@@ -33,8 +33,8 @@
 
 const assert  = require('assert');
 const ed25519 = require('../../../src/consensus/ed25519.js');
-const eq      = require('../../../src/equivocation_header.js');
-const adm     = require('../../../src/mirror_admission_activation.js');
+const eq      = require('../../../src/consensus/equivocation_header.js');
+const adm     = require('../../../src/consensus/gates/mirror_admission_gate.js');
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
 const NETWORK = 'regtest';
@@ -111,8 +111,8 @@ function loadHubTwins(ctx) {
         return null;
     }
 }
-const MODS = ['../../../src/mirror_admission_activation.js', '../../../src/consensus/ed25519.js',
-              '../../../../xchain-hub/src/mirror_admission_activation.js',
+const MODS = ['../../../src/consensus/gates/mirror_admission_gate.js', '../../../src/consensus/ed25519.js',
+              '../../../../xchain-hub/src/consensus/gates/mirror_admission_gate.js',
               '../../../../xchain-hub/src/lib/admission_height.js',
               '../../../../xchain-hub/src/oracle/consensus.js',
               '../../../../xchain-hub/src/oracle/price_aggregator.js'];
@@ -137,7 +137,7 @@ function admissionHooks() {
         const savedEnv = process.env.XC_MIRROR_ADMISSION_ACTIVATION;
         for (const p of paths) delete require.cache[p];
         process.env.XC_MIRROR_ADMISSION_ACTIVATION = '0';
-        const act = require('../../../src/mirror_admission_activation.js');
+        const act = require('../../../src/consensus/gates/mirror_admission_gate.js');
         const ed  = require('../../../src/consensus/ed25519.js');
         const OC  = require('../../../../xchain-hub/src/oracle/consensus.js');
         const PA  = require('../../../../xchain-hub/src/oracle/price_aggregator.js');

@@ -41,7 +41,7 @@
 const assert = require('assert');
 const M   = require('../../src/consensus/merkle.js');
 const SC  = require('../../src/state_commitment/index.js');
-const SUB = require('../../src/state_subtree_activation.js');
+const SUB = require('../../src/consensus/gates/state_subtree_gate.js');
 
 // Snapshot of the REAL armed heights, taken before any test mutates the map, so
 // a scratch-arm can restore rather than delete (deleting disarms the chain for
@@ -218,9 +218,9 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
         // collation-FOLDED key set and forks against a binary-collation reader. All
         // three testnets are genesis-active there, so 0 is the lowest legal height
         // and this is the assertion that fails if either map moves off genesis alone.
-        const COLLATION = require('../../src/state_key_collation_activation.js');
+        const gateRegistry = require('../../src/consensus/gate_registry');
         for(const coin of ['BTC', 'LTC', 'DOGE'])
-            assert.ok(COLLATION.isStateKeyBinCollationActive(0, 'testnet', coin),
+            assert.ok(gateRegistry.activeAt('state_key_collation_activation.STATE_KEY_COLLATION_ACTIVATION', 'testnet', coin, 0, null),
                 coin + ':testnet Stage A arms at 0, so its collation must be genesis-active too');
         // Genesis on testnet must not have leaked onto the other two networks: the
         // maps are read by an exact '<COIN>:<network>' key, and a genesis height is

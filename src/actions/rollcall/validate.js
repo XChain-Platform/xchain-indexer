@@ -17,8 +17,8 @@
  *
  ********************************************************************/
 
-const rca = require('../../rollcall_activation.js');
-const rga = require('../../rollcall_gates_activation.js');
+const rca = require('../../consensus/gates/rollcall_gate.js');
+const rga = require('../../consensus/gates/rollcall_gates_gate.js');
 
 // One GATES token: '<module>.<EXPORT>', the identity form the digest emits.
 const GATE_TOKEN = /^[A-Za-z0-9_]+\.[A-Za-z0-9_]+$/;

@@ -18,7 +18,7 @@
  ********************************************************************/
 const assert = require('assert');
 const rc  = require('../../../../src/consensus/rollcall_close.js');
-const rca = require('../../../../src/rollcall_activation.js');
+const rca = require('../../../../src/consensus/gates/rollcall_gate.js');
 
 const { EPOCH, CLOSE, CONFIG, UTIL, stubProof, federation, answerWith, dbFor, armRollcall } = require('./helpers/rollcall_fixtures.js');
 

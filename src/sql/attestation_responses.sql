@@ -98,6 +98,16 @@ CREATE TABLE attestation_responses (
     response_hash        CHAR(64)     NOT NULL,                    -- sha256 of the body bytes; the field the canonical already signs
     meta                 TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci, -- as in the on-chain v1 (attests.meta): opaque provider bytes, so utf8mb4 for the same reason
     effective_time       BIGINT UNSIGNED NOT NULL,                 -- unix seconds, leader-chosen, INSIDE the signed canonical: the applying block is a pure function of it
+    -- ADMISSION HEIGHT on BTC, and BTC alone: this table is read on BTC only by the
+    -- call-site guard, so the row's map has exactly one entry. Mirrored from the hub
+    -- (xchain-hub/src/sql/attestation_responses.sql) and INSIDE the signed canonical, so
+    -- the verifier rebuilds the signed map from this column. Readable at block B iff
+    -- this <= B above the consumer activation. NULL is the LEGACY row and binds by
+    -- effective_time <= t(B) at EVERY height, so the consuming select is IS NULL OR and
+    -- never a bare <= on this nullable column (mirrorBindClause). Added by
+    -- migrations/2026-09-16-admission-height.sql, anchored here so a migrated DB and a
+    -- fresh install agree on SHOW CREATE TABLE.
+    admit_block_btc      BIGINT UNSIGNED DEFAULT NULL,
     signer_pubkeys       TEXT         NOT NULL,                    -- JSON array, ordered responsible-set pubkeys that signed
     signatures           TEXT         NOT NULL,                    -- JSON [{pubkey,sig}], Ed25519 over the mirror-era canonical
     widen                TINYINT UNSIGNED DEFAULT 0,               -- the widening step the leader used; INFORMATIONAL, the verifier recomputes it

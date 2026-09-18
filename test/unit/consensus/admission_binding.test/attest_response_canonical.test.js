@@ -25,7 +25,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 
-const eq = require('../../../../src/equivocation_header.js');
+const eq = require('../../../../src/consensus/equivocation_header.js');
 const { NETWORK, load, ARMS } = require('./helpers/arms.js');
 const { sha } = require('./helpers/rail_fixtures.js');
 

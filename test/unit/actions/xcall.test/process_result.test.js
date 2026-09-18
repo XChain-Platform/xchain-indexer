@@ -22,7 +22,7 @@ const crypto = require('crypto');
 // Same module instance Xcall holds a reference to; stubbing `verify` here
 // controls signature acceptance inside processResult.
 const ed25519 = require('../../../../src/consensus/ed25519.js');
-const eq      = require('../../../../src/equivocation_header.js');
+const eq      = require('../../../../src/consensus/equivocation_header.js');
 
 const {
     PUBKEY_A, SIG_A, freshXcall, makeRequestRow, makeResultRow, ctx,

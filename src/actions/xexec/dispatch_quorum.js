@@ -23,7 +23,7 @@
 'use strict';
 
 const ed25519 = require('../../consensus/ed25519.js');
-const swq     = require('../../stake_weighted_quorum.js');
+const swq     = require('../../consensus/stake_weighted_quorum.js');
 
 // Verify the cross_chain quorum over the dispatch canonical.
 // Stake-weighted (source-deduped 3·Σ>2·S) at/above STAKE_WEIGHTED_QUORUM

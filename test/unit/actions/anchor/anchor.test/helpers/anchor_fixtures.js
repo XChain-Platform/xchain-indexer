@@ -19,8 +19,8 @@ const Anchor = require('../../../../../../src/actions/anchor/index.js');
 // Same module instance Anchor holds a reference to (Node module cache); stubbing
 // `verify` here controls signature acceptance inside the handler.
 const ed25519 = require('../../../../../../src/consensus/ed25519.js');
-const swq = require('../../../../../../src/stake_weighted_quorum.js');
-const arMod = require('../../../../../../src/anchor_reward_activation.js');
+const swq = require('../../../../../../src/consensus/stake_weighted_quorum.js');
+const arMod = require('../../../../../../src/consensus/gates/anchor_reward_gate.js');
 
 const PUBKEY_A = 'a'.repeat(64);
 const PUBKEY_B = 'b'.repeat(64);

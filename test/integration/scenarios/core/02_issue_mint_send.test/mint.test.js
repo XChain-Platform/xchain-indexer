@@ -56,10 +56,10 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     // 6. MINT creates supply: verify credits, balances, tokens.supply
     // -----------------------------------------------------------------------
     it('MINT creates credit, updates balance, and increments token supply', async function () {
-        await seeder.seedBlock(200, BASE_TIME, [
+        await seeder.seedBlock(100, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|MINTME|10000|1000|0|Mintable token' }
         ]);
-        await seeder.seedBlock(201, BASE_TIME + 10, [
+        await seeder.seedBlock(101, BASE_TIME + 10, [
             { source: ADDR1, data: 'MINT|0|MINTME|500' }
         ]);
 
@@ -80,11 +80,11 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     // -----------------------------------------------------------------------
     it('MINT exceeding MAX_MINT is marked invalid', async function () {
         // MAX_MINT is 100
-        await seeder.seedBlock(210, BASE_TIME, [
+        await seeder.seedBlock(100, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|CAPTOKEN|5000|100|0|Capped minting' }
         ]);
         // Attempt to mint 101: exceeds MAX_MINT
-        await seeder.seedBlock(211, BASE_TIME + 10, [
+        await seeder.seedBlock(101, BASE_TIME + 10, [
             { source: ADDR1, data: 'MINT|0|CAPTOKEN|101' }
         ]);
 
@@ -111,15 +111,15 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     // -----------------------------------------------------------------------
     it('MINT that would exceed MAX_SUPPLY is marked invalid', async function () {
         // MAX_SUPPLY=100, MAX_MINT=100
-        await seeder.seedBlock(220, BASE_TIME, [
+        await seeder.seedBlock(100, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|FULLSUP|100|100|0|Full supply token' }
         ]);
         // Mint the full supply
-        await seeder.seedBlock(221, BASE_TIME + 10, [
+        await seeder.seedBlock(101, BASE_TIME + 10, [
             { source: ADDR1, data: 'MINT|0|FULLSUP|100' }
         ]);
         // Try to mint 1 more: should fail
-        await seeder.seedBlock(222, BASE_TIME + 20, [
+        await seeder.seedBlock(102, BASE_TIME + 20, [
             { source: ADDR1, data: 'MINT|0|FULLSUP|1' }
         ]);
 
@@ -158,10 +158,10 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     // -----------------------------------------------------------------------
     it('token with 8 decimals stores and retrieves fractional amounts correctly', async function () {
         // MAX_SUPPLY and MAX_MINT with decimal values
-        await seeder.seedBlock(700, BASE_TIME, [
+        await seeder.seedBlock(100, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|PRECISE|100.00000000|10.00000000|8|8-decimal token' }
         ]);
-        await seeder.seedBlock(701, BASE_TIME + 10, [
+        await seeder.seedBlock(101, BASE_TIME + 10, [
             { source: ADDR1, data: 'MINT|0|PRECISE|5.00000000' }
         ]);
 
@@ -179,11 +179,11 @@ describe('ISSUE / MINT / SEND / DESTROY Token Lifecycle @regression @tier1', fun
     // 17. MINT with DESTINATION: credit goes to destination, not source
     // -----------------------------------------------------------------------
     it('MINT with DESTINATION credits the destination address, not source', async function () {
-        await seeder.seedBlock(800, BASE_TIME, [
+        await seeder.seedBlock(100, BASE_TIME, [
             { source: ADDR1, data: 'ISSUE|0|DESTMINT|5000|1000|0|Destination mint' }
         ]);
         // MINT to ADDR2 as destination
-        await seeder.seedBlock(801, BASE_TIME + 10, [
+        await seeder.seedBlock(101, BASE_TIME + 10, [
             { source: ADDR1, data: 'MINT|0|DESTMINT|300|' + ADDR2 }
         ]);
 

@@ -28,6 +28,18 @@ CREATE TABLE price_snapshots (
     source_action_index BIGINT,                                -- action_index of the PRICE tx on source_chain (NULL for hub-finalized); the reorg-retraction key (RETRACTION_COLUMNS.price_snapshots in hub_db_sync.js).
     push_generation     BIGINT NOT NULL DEFAULT 0,     -- source-chain reorg fence (item 5308); mirrored from the hub. See xchain-hub/src/sql/price_snapshots.sql.
     batch_block_time    BIGINT NOT NULL DEFAULT 0,     -- clock of the block the PRICE batch carrying this round LANDED in; 0 = no landed batch known yet (a round finalized over P2P and mirrored ahead of its batch). Stamped by the hub's batch ingest and mirrored from it, so a hub-connected node and a chain-only node can agree on which rounds the chain could have shown them. Read by getLatestPrice under price_fee_batch_landed_activation.js.
+    -- ADMISSION HEIGHTS over the round's read set, which is every chain (members 2 and 3),
+    -- mirrored from the hub (xchain-hub/src/sql/price_snapshots.sql). A price round is SIGNED
+    -- (consensus_proof), so this map is inside the signed bytes and the batch verifier rebuilds
+    -- it from these columns. Distinct from reference_block, which is the round's own BTC anchor
+    -- for v0-proofed rows and the LANDING chain's height for a batch-sourced round, and is
+    -- therefore not an admission height on any chain. NULL is the legacy row: see the note in
+    -- cross_chain_matches.sql. Added by migrations/2026-09-16-admission-height.sql, AFTER
+    -- batch_block_time (the hub has it before), because the 2026-09-11 migration anchored
+    -- batch_block_time on push_generation and the column-parity guard holds that anchor.
+    admit_block_btc     BIGINT UNSIGNED DEFAULT NULL,
+    admit_block_ltc     BIGINT UNSIGNED DEFAULT NULL,
+    admit_block_doge    BIGINT UNSIGNED DEFAULT NULL,
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY idx_round_pair (round_number, coin_pair),
     KEY idx_pair_block (coin_pair, reference_block),

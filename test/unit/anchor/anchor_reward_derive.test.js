@@ -25,8 +25,8 @@ const sinon  = require('sinon');
 const crypto = require('crypto');
 
 const derive = require('../../../src/consensus/anchor_reward_derive.js');
-const swq    = require('../../../src/stake_weighted_quorum.js');
-const ar     = require('../../../src/anchor_reward_activation.js');
+const swq    = require('../../../src/consensus/stake_weighted_quorum.js');
+const ar     = require('../../../src/consensus/gates/anchor_reward_gate.js');
 
 // Ed25519 keypair whose raw 32-byte pubkey / 64-byte sig hex match src/consensus/ed25519.js verify().
 function makeKey() {
@@ -297,8 +297,8 @@ describe('anchor_reward_derive (BTC-side derivation) @regression @tier2', () => 
 describe('anchor-reward derive set is INVARIANT under the barrier change @regression @tier1', () => {
     const cfg = { COIN: 'BTC', NETWORK: 'regtest' };
     const MODULES = [
-    '../../../src/mirror_admission_activation.js',
-    '../../../src/anchor_reward_activation.js',
+    '../../../src/consensus/gates/mirror_admission_gate.js',
+    '../../../src/consensus/gates/anchor_reward_gate.js',
     '../../../src/consensus/anchor_reward_derive.js'
     ];
     beforeEach(function () { sinon.stub(swq, 'isStakeWeightedQuorumActive').returns(false); });
@@ -321,7 +321,7 @@ describe('anchor-reward derive set is INVARIANT under the barrier change @regres
     process.env.XC_MIRROR_ADMISSION_ACTIVATION = '0';
     try {
     return fn(require('../../../src/consensus/anchor_reward_derive.js'),
-    require('../../../src/anchor_reward_activation.js'));
+    require('../../../src/consensus/gates/anchor_reward_gate.js'));
     } finally {
     for (const [p, mod] of saved) {
     if (mod === undefined) delete require.cache[p]; else require.cache[p] = mod;
@@ -339,7 +339,7 @@ describe('anchor-reward derive set is INVARIANT under the barrier change @regres
     const armed = await withArmedActivation(async (armedDerive, armedAct) => {
     // The arming is real, or the comparison below proves nothing.
     assert.strictEqual(armedAct.isAnchorAttestBarrierHorizonActive('regtest', 1000), true);
-    assert.strictEqual(require('../../../src/anchor_reward_activation.js')
+    assert.strictEqual(require('../../../src/consensus/gates/anchor_reward_gate.js')
     .ANCHOR_ATTEST_BARRIER_ACTIVATION.regtest, 0);
     return runFixture(armedDerive, keys, row);
     });

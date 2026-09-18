@@ -17,7 +17,7 @@
 
 const crypto = require('crypto');
 
-const srb     = require('../../../../../../src/snapshot_reorg_buffer.js');
+const srb     = require('../../../../../../src/consensus/snapshot_reorg_buffer.js');
 
 // ---------------------------------------------------------------------------
 // Deterministic Ed25519 identities from fixed 32-byte seeds.

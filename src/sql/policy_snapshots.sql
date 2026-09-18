@@ -34,6 +34,16 @@ CREATE TABLE policy_snapshots (
     sleeping             TINYINT(1)   NOT NULL DEFAULT 0,          -- tick sleep on the origin row; committed through policy_hash only
     effective_time       BIGINT UNSIGNED NOT NULL,                 -- protocol-time instant the apply is due at; NOT monotonic across policy_seq, so apply order is by seq
     network              VARCHAR(20)  NOT NULL,                    -- mainnet/testnet/regtest; signed
+    -- ADMISSION HEIGHTS, mirrored from the hub (xchain-hub/src/sql/policy_snapshots.sql), and
+    -- this is the SHARP case: the consuming select carries no chain clause at all, so every
+    -- chain the federation serves reads every row and the map must name all of them. A chain
+    -- added to the federation AFTER a row was signed is simply absent from that row's map and
+    -- binds there by effective_time, which is safe by construction rather than silently
+    -- unbound. See the note in cross_chain_matches.sql. Added by
+    -- migrations/2026-09-16-admission-height.sql at this position.
+    admit_block_btc      BIGINT UNSIGNED DEFAULT NULL,
+    admit_block_ltc      BIGINT UNSIGNED DEFAULT NULL,
+    admit_block_doge     BIGINT UNSIGNED DEFAULT NULL,
     finalizing_view      INT          NOT NULL DEFAULT 0,          -- PBFT view the canonical was signed under
     validator_signatures TEXT         NOT NULL,                    -- JSON [{pubkey,sig}] over the EQUIV-wrapped XPOLICY canonical
     status               VARCHAR(20)  NOT NULL DEFAULT 'finalized',-- finalized / retracted

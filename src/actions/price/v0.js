@@ -23,13 +23,16 @@
  *
  ********************************************************************/
 
-const swq           = require('../../stake_weighted_quorum.js');
-const pricePair     = require('../../price_pair_activation.js');
-const priceScale    = require('../../price_scale_activation.js');
-const priceSigTally = require('../../price_sig_tally_activation.js');
+const swq           = require('../../consensus/stake_weighted_quorum.js');
+const pricePair     = require('../../consensus/gates/price_pair_gate.js');
+const priceScale    = require('../../consensus/gates/price_scale_gate.js');
+// The verify-first tally rule is a registry row read by literal key (W5), on the
+// batch's BTC anchor height.
+const gateRegistry  = require('../../consensus/gate_registry');
+const PRICE_SIG_TALLY_KEY = 'price_sig_tally_activation.PRICE_SIG_TALLY_ACTIVATION';
 const priceV2       = require('./price_batch_compression.js');
 const priceRange    = require('./price_zero_validity_gate.js');
-const adm           = require('../../mirror_admission_activation.js');
+const adm           = require('../../consensus/gates/mirror_admission_gate.js');
 
 // 1. DECOMPRESSION, before anything else.
 function inflateBatchFields(params, error){
@@ -285,8 +288,8 @@ function checkBatchStraddle(config, rounds){
     // The mirror admission activation is a third such gate: each round carries its
     // own map era-keyed on its own anchor, and every round in one batch sits in one
     // era, so a straddling window is invalid here exactly as at the other two.
-    if(priceSigTally.isPriceSigTallyVerifyFirstActive(firstAnchor, network) !==
-       priceSigTally.isPriceSigTallyVerifyFirstActive(lastAnchor, network) ||
+    if(gateRegistry.activeAt(PRICE_SIG_TALLY_KEY, network, null, firstAnchor, null) !==
+       gateRegistry.activeAt(PRICE_SIG_TALLY_KEY, network, null, lastAnchor, null) ||
        swq.isStakeWeightedQuorumActive(firstAnchor, network) !==
        swq.isStakeWeightedQuorumActive(lastAnchor, network) ||
        adm.isAdmissionEra(network, firstAnchor) !== adm.isAdmissionEra(network, lastAnchor))

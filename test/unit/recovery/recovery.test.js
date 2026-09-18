@@ -67,7 +67,7 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
     // An operator reads this line during an incident, so it must name the versions the
     // query actually scanned rather than a hardcoded set that drifts when they change.
     it('the empty-archive log names exactly ARCHIVE_HEAD_VERSIONS, never a retired wire', async function () {
-        const { ARCHIVE_HEAD_VERSIONS } = require('../../../src/stateHash.js');
+        const { ARCHIVE_HEAD_VERSIONS } = require('../../../src/consensus/state_hash.js');
         let lines = [];
         let report = await new AnchorRecovery(memDb([], []), { log: m => lines.push(String(m)), util }).run();
 

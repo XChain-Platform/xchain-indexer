@@ -73,7 +73,7 @@ const COLLECT_BLOCK = 4;
 // ANCHOR_REWARD_AMOUNT and recovery pins the archived amount to it. Node A must
 // credit the frozen amount like a real live node; the ARCHIVE keeps a deliberately
 // wrong 5.00000000 so this suite also proves recovery pins a forged amount.
-const ar            = require('../../../../src/anchor_reward_activation');
+const ar            = require('../../../../src/consensus/gates/anchor_reward_gate');
 const REWARD_AMOUNT = ar.ANCHOR_REWARD_AMOUNT;
 const FORGED_ARCHIVE_AMOUNT = '5.00000000';
 const REWARD_ROUND  = 1;

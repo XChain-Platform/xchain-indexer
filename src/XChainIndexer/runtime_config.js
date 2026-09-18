@@ -27,7 +27,7 @@ const util   = require('../utility.js');
 // The frozen call-barrier grace and its resolver, shared with the direct-hub-DB
 // (no-mirror) call-presence barrier so both paths open on the SAME constant.
 const { HUB_SYNC_WATERMARK_GRACE_S, resolveWatermarkGrace } = require('../hub/hub_db_sync.js');
-const { ANCHOR_ATTEST_ARRIVAL_MARGIN_S } = require('../anchor_reward_activation.js');
+const { ANCHOR_ATTEST_ARRIVAL_MARGIN_S } = require('../consensus/gates/anchor_reward_gate.js');
 const { getLogger } = require('../observability/index.js');
 
 module.exports = {
