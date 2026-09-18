@@ -21,6 +21,7 @@ const crypto = require('crypto');
 const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../../../../fixtures/mocks');
+const { getTestConfig } = require('../../../../fixtures/config');
 
 const Price      = require('../../../../../src/actions/price/index.js');
 const ed25519    = require('../../../../../src/consensus/ed25519.js');
@@ -88,16 +89,44 @@ const HONEST = '50000.00000000';
 // than against a number typed twice.
 const TESTNET_GATE = priceRange.PRICE_ZERO_VALIDITY_ACTIVATION.testnet;
 
-// The per-round BTC anchor must sit BELOW the mirror admission era for BTC:testnet,
-// or the real v0 parser (price/v0.js parseRoundList) demands an ADMIT_BLOCKS field
-// this harness's wire builder (batchBody, above) never emits: this suite tests
-// price-range validation, not admission wiring, so every round here must land in
-// the legacy (pre-admission) era on every network the tests drive it against.
-// Derived from the registry rather than a typed height so a future resize of
-// MIRROR_ADMISSION_ACTIVATION moves this fixture with it, instead of drifting
-// stale again the way the previous hardcoded 799000 did once the registry's
-// testnet height was resized down past it.
+// The network every batch here is SIGNED for, and the one the mock indexer's own
+// config carries, so the canonical the harness builds and the canonical
+// batch_signatures.js rebuilds from config['NETWORK'] are keyed alike by
+// construction. Read from the config fixture rather than typed, so the two cannot
+// drift apart.
+const HARNESS_NETWORK = getTestConfig().NETWORK;
+
+// The networks the suite hands newRangeHandler. Named here because the anchor
+// invariant below has to hold for every one of them, not only for the signing one.
+const GRADED_NETWORKS = ['mainnet', 'testnet', 'regtest'];
+
+// The per-round BTC anchor sits DELIBERATELY BELOW the mirror admission era, on
+// every network the suite grades, with a 1000-block margin under the earliest
+// armed height. That is a fixture requirement, not a rule: the real v0 parser
+// (price/v0.js parseRoundList) demands an ADMIT_BLOCKS field in the admission era
+// that this harness's wire builder (batchBody, above) never emits, so an
+// admission-era anchor reds this suite on ADMISSION WIRING while claiming to test
+// PRICE-RANGE validation. The flag day this suite actually straddles is the
+// TIME-keyed price-range gate, and it straddles it explicitly through BLOCK_TIME
+// (TESTNET_GATE - 1 and TESTNET_GATE in the test bodies), never through an anchor
+// height.
+//
+// Derived from the registry rather than typed so a resize of
+// MIRROR_ADMISSION_ACTIVATION moves this fixture with it: the previous hardcoded
+// 799000 was a mainnet-scale height graded as testnet, and it drifted into the
+// admission era the moment the registry's testnet height was re-cut down past it,
+// which read as a rule bug in price/v0.js for hours. The assertion below is what
+// makes the next such drift fail as a fixture error instead.
 const PRE_ADMISSION_BTC_HEIGHT = adm.MIRROR_ADMISSION_ACTIVATION['BTC:testnet'] - 1000;
+
+// Fail at load, naming the fixture, if the widest round in any window this harness
+// builds has reached the admission era on any graded network.
+for(const network of GRADED_NETWORKS){
+    if(adm.isAdmissionEra(network, PRE_ADMISSION_BTC_HEIGHT + 5))
+        throw new Error('price_range_harness fixture drift: anchor ' + (PRE_ADMISSION_BTC_HEIGHT + 5) +
+                        ' is in the mirror admission era on ' + network +
+                        '; re-base PRE_ADMISSION_BTC_HEIGHT below MIRROR_ADMISSION_ACTIVATION');
+}
 
 // The price under test rides round index 3, so a case that would pass by
 // grading only the first round of a window is still visible.
@@ -114,11 +143,18 @@ function sixRounds(price){
     return rounds;
 }
 
-function signBatch(rounds, identities){
+// `network` is HALF the admission activation key, so it is passed explicitly:
+// buildPriceBatchPayload reads an absent fifth argument as the inert network and
+// silently rebuilds the LEGACY canonical, which verifies below the activation and
+// strands every admission-era batch with signatures no verifier reproduces. The
+// anchors here are pre-admission by construction (see PRE_ADMISSION_BTC_HEIGHT),
+// so the bytes are the same either way today; naming the network is what keeps
+// that a property of the fixture rather than of the omission.
+function signBatch(rounds, identities, network = HARNESS_NETWORK){
     const firstRound     = rounds[0].round;
     const lastRound      = rounds[rounds.length - 1].round;
     const btcBlockHeight = rounds[rounds.length - 1].btcBlockHeight;
-    const payload = ed25519.buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds);
+    const payload = ed25519.buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds, network);
     const sigs    = identities.map(id => ({ pubkey: id.pubkey, sig: signWith(id, payload) }));
     return { firstRound, lastRound, btcBlockHeight, rounds, sigs };
 }
@@ -148,10 +184,10 @@ function newRangeHandler(indexer, hubClient, network){
 }
 
 // A signed, quorate six-round batch carrying `price` on round index 3.
-function batchWithFor(capable, price){
+function batchWithFor(capable, price, network = HARNESS_NETWORK){
     const id = newIdentity();
     capable.add(id.pubkey);
-    return signBatch(sixRounds(price), [id]);
+    return signBatch(sixRounds(price), [id], network);
 }
 
 // The suite's hooks, installed in the calling describe: a fresh mock indexer and
@@ -191,6 +227,7 @@ const v0Data = (overrides = {}) =>
 
 module.exports = {
     HUB_PRICE_MAX, hubAdmits, RANGE_CASES, newIdentity, signWith, batchBody, uncompressedParams,
-    HONEST, TESTNET_GATE, sixRounds, signBatch, newRangeHandler, batchWithFor, v0Data,
+    HONEST, TESTNET_GATE, HARNESS_NETWORK, PRE_ADMISSION_BTC_HEIGHT,
+    sixRounds, signBatch, newRangeHandler, batchWithFor, v0Data,
     usePriceRangeHarness,
 };
