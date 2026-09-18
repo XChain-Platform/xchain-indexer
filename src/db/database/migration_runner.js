@@ -31,6 +31,9 @@ const path    = require('path');
 const crypto  = require('crypto');
 const { getLogger } = require('../../observability/index.js');
 const { CONFIG_ENV } = require('../../config.js');
+// Object-level half of the backdating guard: plain functions over statement lists, so
+// they are required directly rather than installed on the prototype.
+const { reorderVerdict, describeReorder } = require('./migration_reorder.js');
 // The class itself, for the statics these methods read. db/index.js publishes it before it
 // requires any part, so this resolves to the finished class rather than a half-built export.
 const Database = require('../index.js');
@@ -115,7 +118,7 @@ async function migrateFile(self, conn, file, appliedByName, ctx){
     // THIS run never advance it and a long-offline node catching up is fine.
     // Auto files only - see Database.backdatedFrontierViolation for why a
     // deferred mode=manual file cannot be told apart from a backdated one.
-    if(mode === 'auto') guardBackdatedFrontier(file, appliedByName, includeManual);
+    if(mode === 'auto') guardBackdatedFrontier(self, ctx, file, raw, appliedByName);
 
     await applyMigrationFile(self, conn, file, raw, checksum, mode, result);
 }
@@ -206,19 +209,55 @@ async function gateUnappliedMigration(self, conn, file, checksum, mode, result, 
     return false;
 }
 
-// The backdating guard for an auto file (see the note where migrateFile calls it).
-function guardBackdatedFrontier(file, appliedByName, includeManual){
-    const frontier = Database.backdatedFrontierViolation(file, appliedByName.keys());
-    if(frontier){
-        const msg = 'runMigrations: ' + file + ' is dated BEFORE already-applied migration ' + frontier +
-            ', so it would run in a different position here than on a fresh database and diverge the schema. ' +
-            'Rename it with a date after ' + frontier + '.';
-        // Same dual-mode contract as the checksum guard above: the operator
-        // path and opt-in strict mode fail closed, passive startup logs and
-        // proceeds so a backdated commit cannot black-start the fleet.
-        if(includeManual || CONFIG_ENV.MIGRATION_STRICT_CHECKSUM === '1') throw new Error(msg);
-        getLogger().error(msg + ' Applying it anyway at this position - review manually.');
+// The already-applied migrations a pending file sorts before. Missing files stay
+// unattributable so the verdict fails closed.
+function jumpedMigrations(self, dir, file, appliedByName){
+    const out = [];
+    for(const name of appliedByName.keys()){
+        const n = String(name);
+        if(!/^\d{4}-\d{2}-\d{2}-/.test(n) || n <= String(file)) continue;
+        let statements = null;
+        try { statements = self.splitSqlStatements(fs.readFileSync(path.join(dir, n), 'utf8')); }
+        catch(_){ statements = null; }
+        out.push({ file: n, statements });
     }
+    return out.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
+}
+
+// The backdating guard for an auto file (see the note where migrateFile calls it).
+// The lexical check opens the question; object attribution determines whether applying
+// in the new position can actually leave a different schema.
+function guardBackdatedFrontier(self, ctx, file, raw, appliedByName){
+    const { dir, includeManual, result } = ctx;
+    const frontier = Database.backdatedFrontierViolation(file, appliedByName.keys());
+    if(!frontier) return;
+
+    const jumped  = jumpedMigrations(self, dir, file, appliedByName);
+    const verdict = reorderVerdict({ file, statements: self.splitSqlStatements(raw) }, jumped);
+    result.reordered.push({
+        file, frontier,
+        divergent: verdict.divergent,
+        tables:    verdict.tables,
+        shared:    verdict.shared.map(s => s.file),
+        opaque:    verdict.opaque.map(o => o.file),
+    });
+
+    if(!verdict.divergent){
+        getLogger().info('runMigrations: out-of-order but PROVABLY HARMLESS: ' + file +
+            ' sorts before already-applied ' + frontier + ', yet ' + describeReorder(verdict, jumped.length) +
+            ' Applying at this position. Rename it past ' + frontier +
+            ' (with a Database.MIGRATION_LEDGER_RENAMES entry, since the fleet has it under this name) to clear the out-of-order state.');
+        return;
+    }
+
+    const msg = 'runMigrations: ' + file + ' is dated BEFORE already-applied migration ' + frontier +
+        ', so it would run in a different position here than on a fresh database and diverge the schema: ' +
+        describeReorder(verdict, jumped.length) + ' Rename it with a date after ' + frontier + '.';
+    // Same dual-mode contract as the checksum guard above: the operator
+    // path and opt-in strict mode fail closed, passive startup logs and
+    // proceeds so a backdated commit cannot black-start the fleet.
+    if(includeManual || CONFIG_ENV.MIGRATION_STRICT_CHECKSUM === '1') throw new Error(msg);
+    getLogger().error(msg + ' Applying it anyway at this position - review manually.');
 }
 
 // Split, guard and apply one pending file, then record it in the ledger.
@@ -264,7 +303,7 @@ module.exports = {
         const only          = (opts.only == null) ? null
             : new Set([].concat(opts.only).map(s => String(s).trim()).filter(Boolean));
         const dir           = path.join(__dirname, '..', '..', 'sql', 'migrations');
-        const result        = { applied: [], pending: [], baselined: [], lockSkipped: false };
+        const result        = { applied: [], pending: [], baselined: [], reordered: [], lockSkipped: false };
 
         let files = [];
         try { files = fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort(); }
