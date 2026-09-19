@@ -121,10 +121,11 @@ describe('admission binding: the verify-side canonical twins byte-match the hub 
                         }
                     });
 
-                    it(rail + ': an admission-era row with NO columns REFUSES rather than verifying as legacy', function () {
-                        assert.throws(() => twins[rail](rowOf(arm.modernBlock)), /refusing to build a legacy canonical/);
-                        assert.throws(() => twins[rail](rowOf(arm.modernBlock, NO_COLS)), /refusing to build a legacy canonical/);
-                        if (hub) assert.throws(() => hub[rail](rowOf(arm.modernBlock, NO_COLS)), /refusing to build a legacy canonical/);
+                    it(rail + ': an admission-era row with NO columns uses legacy bytes', function () {
+                        const expected = legacyBytes(rowOf(arm.modernBlock));
+                        assert.strictEqual(twins[rail](rowOf(arm.modernBlock)), expected);
+                        assert.strictEqual(twins[rail](rowOf(arm.modernBlock, NO_COLS)), expected);
+                        if (hub) assert.strictEqual(hub[rail](rowOf(arm.modernBlock, NO_COLS)), expected);
                     });
 
                     it(rail + ': a different map is different bytes, and an unusable column is a refusal', function () {
@@ -136,10 +137,11 @@ describe('admission binding: the verify-side canonical twins byte-match the hub 
                     });
                 }
 
-                it(rail + ': a legacy-era row handed columns REFUSES in the other direction', function () {
+                it(rail + ': a legacy-era row handed columns uses legacy bytes', function () {
                     const row = (arm.legacyBlock !== null) ? rowOf(arm.legacyBlock, COLS) : rowOf(5, Object.assign({ network: 'mainnet' }, COLS));
-                    assert.throws(() => twins[rail](row), /refusing to build an admission-era canonical/);
-                    if (hub) assert.throws(() => hub[rail](row), /refusing to build an admission-era canonical/);
+                    const expected = legacyBytes(row);
+                    assert.strictEqual(twins[rail](row), expected);
+                    if (hub) assert.strictEqual(hub[rail](row), expected);
                 });
             }
         });

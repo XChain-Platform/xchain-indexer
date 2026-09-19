@@ -364,20 +364,19 @@ function isAdmissionEra(network, eraBlock){
 }
 
 /**
- * The canonical tail for a row's admission map: '' below the activation, and '|' plus the
- * encoded map at or above it.
+ * The canonical tail for a row's admission map: '' unless both the row is at or above the
+ * activation and the map is present, and '|' plus the encoded map when both are true.
  *
- * REFUSES IN BOTH DIRECTIONS, exactly as AttestationConsensus._buildCanonical does for
- * the mirror era. Building a legacy canonical for a modern row strands the row (its
- * signatures reproduce over bytes no verifier rebuilds); building a modern canonical for
- * a legacy row forks a from-genesis replay. Neither can be recovered from downstream, so
- * both throw where the caller that got it wrong is still on the stack.
+ * A version seam can expose either an admission map to an inert node or a legacy row to an
+ * armed node. Both cases take the legacy byte path so mixed versions can bind the row and
+ * let quorum verification decide whether its signatures match. Only an armed node with a
+ * present map emits admission bytes.
  *
  * No per-rail canonical VERSION field is minted for this, and none exists anywhere in the
  * tree: this height-gated era check IS the versioning, and a version integer would
  * duplicate the gate while giving a Byzantine leader a second field to disagree about.
  *
- * @param {string} label the builder's canonical tag, for the refusal message
+ * @param {string} label the builder's canonical tag, retained for the stable caller API
  * @param {string} network the row's network, half the activation key
  * @param {number} eraBlock the ROW's own BTC block
  * @param {object|null} map the row's admission map, or null for a legacy row
@@ -390,22 +389,16 @@ function admissionCanonicalField(label, network, eraBlock, map){
 
 /**
  * The admission map as a canonical VALUE rather than a pipe-appended tail: null below the
- * activation, the encoded map at or above it, with the same two refusals as the field
- * form. This is the spelling a JSON-shaped canonical (the PRICE batch) carries under its
- * own key, where a '|' tail would be a byte inside a string rather than a delimiter. One
- * era gate for both spellings, so the two carriers can never disagree about which era a
- * row is in.
+ * activation or when the map is absent, and the encoded map when the era is armed and the
+ * map is present. This is the spelling a JSON-shaped canonical (the PRICE batch) carries
+ * under its own key, where a '|' tail would be a byte inside a string rather than a
+ * delimiter. One era gate for both spellings keeps their boundary semantics identical.
  */
 function admissionCanonicalValue(label, network, eraBlock, map){
     let era = isAdmissionEra(network, eraBlock);
     let has = (map !== null && map !== undefined);
-    if(era && !has)
-        throw new Error(label + ': admission-era row at block ' + String(eraBlock) + ' on ' + String(network) +
-            ' has no admit_blocks; refusing to build a legacy canonical');
-    if(!era && has)
-        throw new Error(label + ': legacy-era row at block ' + String(eraBlock) + ' on ' + String(network) +
-            ' was handed admit_blocks ' + JSON.stringify(map) + '; refusing to build an admission-era canonical');
     if(!era) return null;
+    if(!has) return null;
     return encodeAdmitBlocks(map);
 }
 

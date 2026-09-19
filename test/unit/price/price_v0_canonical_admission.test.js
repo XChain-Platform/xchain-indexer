@@ -161,12 +161,11 @@ describe('PRICE v0 canonical: the admission field on the indexer verifier', func
             build(ADMIT_AT, admitMap()));
     });
 
-    it('refuses in BOTH directions rather than rebuilding the wrong era', function () {
-        assert.throws(() => build(ADMIT_AT, null), /refusing to build a legacy canonical/);
-        assert.throws(() => build(ADMIT_AT, undefined), /refusing to build a legacy canonical/);
-        assert.throws(() => build(LEGACY_AT, admitMap()), /refusing to build an admission-era canonical/);
-        assert.throws(() => build(ADMIT_AT + 1000000, admitMap(), 'mainnet'),
-            /refusing to build an admission-era canonical/);
+    it('uses legacy bytes in BOTH directions of the version seam', function () {
+        assert.strictEqual(build(ADMIT_AT, null), build(ADMIT_AT, undefined));
+        assert.strictEqual(build(LEGACY_AT, admitMap()), build(LEGACY_AT, undefined));
+        assert.strictEqual(build(ADMIT_AT + 1000000, admitMap(), 'mainnet'),
+            build(ADMIT_AT + 1000000, undefined, 'mainnet'));
     });
 
     it('refuses a map the encoding cannot spell injectively', function () {
@@ -202,14 +201,14 @@ describe('PRICE v0 canonical: the admission field on the indexer verifier', func
 describe('PRICE v0 canonical: the admission field on the indexer verifier', function () {
     useArmedTwins();
     describe('against the hub producer and its ingest verifier', function () {
-        it('all three refuse the same two wrong-era builds', function () {
+        it('all three use legacy bytes for both version seams', function () {
             const hub = hubOrSkip(this);
             if (!hub) return;
             for (const twin of [hub.producer, hub.ingest]) {
-                assert.throws(() => twin.buildPriceV0Payload(ROUND, TIME, pairs(), ADMIT_AT, null),
-                    /refusing to build a legacy canonical/);
-                assert.throws(() => twin.buildPriceV0Payload(ROUND, TIME, pairs(), LEGACY_AT, admitMap()),
-                    /refusing to build an admission-era canonical/);
+                assert.strictEqual(twin.buildPriceV0Payload(ROUND, TIME, pairs(), ADMIT_AT, null),
+                    build(ADMIT_AT, undefined));
+                assert.strictEqual(twin.buildPriceV0Payload(ROUND, TIME, pairs(), LEGACY_AT, admitMap()),
+                    build(LEGACY_AT, undefined));
             }
         });
 

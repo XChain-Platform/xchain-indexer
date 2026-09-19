@@ -114,6 +114,28 @@ describe('mirror_admission_activation: the arming seam @regression', function ()
     });
 });
 
+describe('mirror_admission_activation: canonical version seam @regression', function () {
+    it('uses legacy canonical bytes for an inert row with no map', function () {
+        const inert = loadWith(undefined);
+        assert.strictEqual(inert.admissionCanonicalValue('INERT-ABSENT', 'regtest', 280, null), null);
+    });
+
+    it('uses legacy canonical bytes for an inert row with a present map', function () {
+        const inert = loadWith(undefined);
+        assert.strictEqual(inert.admissionCanonicalValue('INERT-PRESENT', 'regtest', 280, { BTC: 280 }), null);
+    });
+
+    it('encodes a present map for an armed row', function () {
+        const armed = loadWith('armed');
+        assert.strictEqual(armed.admissionCanonicalValue('ARMED-PRESENT', 'regtest', 280, { BTC: 280 }), 'BTC:280');
+    });
+
+    it('uses legacy canonical bytes for an armed row with no map', function () {
+        const armed = loadWith('armed');
+        assert.strictEqual(armed.admissionCanonicalValue('ARMED-ABSENT', 'regtest', 280, null), null);
+    });
+});
+
 describe('mirror_admission_activation: the arming seam @regression', function () {
     // The three testnet keys left the inert list above at the 2026-09-16 cut, and what
     // replaces the coverage they carried is the cut's OWN property rather than nothing.
