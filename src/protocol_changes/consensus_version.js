@@ -90,6 +90,11 @@
 // both sides of the bump. The bridge train's consensus work (the XBRIDGE handler
 // and the settle pass) arms on the per-chain XCHAIN_BRIDGE_ACTIVATION heights and
 // the TRAIN_ACTIVATION 0.19.0 row sized at the cut, not on this ordinal.
-const CONSENSUS_VERSION = '0.19.0';
+// 0.19.0 -> 0.20.0 registers nothing new, checked the same way: all 97 entries
+// still sit at 0.1.0 (24) and 0.2.0 (73), so no row falls in the span the pin
+// crosses and the enabled set is identical on both sides of the bump. The mirror
+// admission barrier family this train carries arms on its own per-chain
+// activation heights and the TRAIN_ACTIVATION 0.20.0 row, not on this ordinal.
+const CONSENSUS_VERSION = '0.20.0';
 
 module.exports = { CONSENSUS_VERSION };
