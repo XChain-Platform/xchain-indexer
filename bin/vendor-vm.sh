@@ -76,7 +76,16 @@ MODE="${1:-fix}"
 # is a guard people learn to route around.
 if [ "$MODE" != "check" ] && [ "$(uname -s)" != "Linux" ]; then
     echo "vendor-vm: refusing to $MODE on $(uname -s): npm install would build a non-Linux isolated-vm into the vendored tree." >&2
-    echo "vendor-vm: run this script on a Linux host instead, e.g.: ssh <host> 'cd $(pwd) && bin/vendor-vm.sh'" >&2
+    # The Linux host this points at reaches the SAME tree at a DIFFERENT absolute
+    # path: it NFS-mounts the Mac's home under its own, so only the path relative
+    # to $HOME is shared and a hint built from the local absolute path names a
+    # directory that does not exist there. Print it ~-relative and let the remote
+    # shell expand its own tilde (ssh hands the string to that shell, so the
+    # single quotes stop the LOCAL expansion without stopping the remote one).
+    # $(pwd) was wrong twice over: it also named the caller's cwd, not the repo.
+    HINT_PATH="$INDEXER_ROOT"
+    case "$INDEXER_ROOT" in "$HOME"/*) HINT_PATH="~/${INDEXER_ROOT#"$HOME"/}" ;; esac
+    echo "vendor-vm: run this script on a Linux host instead, e.g.: ssh <host> 'cd $HINT_PATH && bin/vendor-vm.sh'" >&2
     exit 1
 fi
 
