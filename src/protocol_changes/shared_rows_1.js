@@ -295,11 +295,11 @@ addGate('anchor_reward_activation.ANCHOR_ATTEST_ARRIVAL_MARGIN_S', 'constant', 6
 // that window.
 addGate('anchor_reward_activation.ANCHOR_ATTEST_BARRIER_ACTIVATION', 'height', {
     mainnet: null,        // INERT under the 2026-08-29 mainnet write hold
-    // SIZED 2026-09-16 20:41Z, on the BTC clock because this member is BTC-only: the same
-    // instant as the family's BTC CONSUMER height, so the one member that keeps BOTH
-    // certificates gains them together rather than carrying a lone extra rule for 6 h.
-    // Above the same roll and the same epoch close; the canon carries the measurement.
-    testnet: 153266,
+    // SIZED 2026-09-16 20:41Z, RE-SLID 2026-09-19, on the BTC clock because this member is
+    // BTC-only: the same instant as the family's BTC CONSUMER height, so the one member that
+    // keeps BOTH certificates gains them together rather than carrying a lone extra rule for
+    // 6 h. The canon carries the measurement.
+    testnet: 153328,
     regtest: UNPINNED,   // shares the family's arming seam so one venue lever arms both
 });
 

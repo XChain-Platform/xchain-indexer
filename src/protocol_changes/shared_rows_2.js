@@ -216,9 +216,9 @@ addGate('mirror_admission_activation.MIRROR_ADMISSION_ACTIVATION', 'height', {
     'BTC:mainnet':  null,
     'LTC:mainnet':  null,
     'DOGE:mainnet': null,
-    'BTC:testnet':  153222,      // SIZED 2026-09-16 20:41Z: epoch close 153,216 + 6 buried; tip 152,756 + 466 at 498.7 s/blk, about 64.5 h
+    'BTC:testnet':  153300,      // RE-SLID 2026-09-19: train 153,221 + 79 blocks (17 h at 781.078553 s/blk), the v0.20.1 patch reslide
     'LTC:testnet':  null,        // dq4 (a), 2026-09-18: LTC:testnet mirror admission ships null on this train; arms on a later train
-    'DOGE:testnet': 67911796,    // RE-CUT 2026-09-17 22:45Z onto that instant: tip 67,904,912 + 6884 at 27.7 s/blk
+    'DOGE:testnet': 67916857,    // RE-SLID 2026-09-19: tip 67,911,061 + 5796 blocks (41 h at 25.469118 s/blk, the same instant as the BTC producer), the v0.20.1 patch reslide
     'BTC:regtest':  UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
     'LTC:regtest':  UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
     'DOGE:regtest': UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
@@ -228,9 +228,9 @@ addGate('mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION', 'hei
     'BTC:mainnet':  null,
     'LTC:mainnet':  null,
     'DOGE:mainnet': null,
-    'BTC:testnet':  153266,      // its producer + 44 blocks, about 6 h: strictly above, never equal
+    'BTC:testnet':  153328,      // RE-SLID 2026-09-19: its producer + 28 blocks (6 h at 781.078553 s/blk), strictly above, never equal
     'LTC:testnet':  null,        // dq4 (a), 2026-09-18: LTC:testnet mirror admission ships null on this train; arms on a later train
-    'DOGE:testnet': 67912575,    // its producer + 779 blocks, about 6 h at 27.7 s/blk
+    'DOGE:testnet': 67917706,    // RE-SLID 2026-09-19: its producer + 849 blocks (6 h at 25.469118 s/blk)
     'BTC:regtest':  UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
     'LTC:regtest':  UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
     'DOGE:regtest': UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
