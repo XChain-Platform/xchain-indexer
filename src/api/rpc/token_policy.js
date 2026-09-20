@@ -105,10 +105,11 @@ function appliedPolicyRpc({ indexer }){
                 let info = await db.getTokenInfo(t, null);
                 if(!info)
                     return { error: 'tick has no local row on this chain' };
+                let copy    = indexer.util.parseBridgedTick(t);
                 let latest  = await db.getLatestBlockIndex();
                 let [sleeping, applied] = await Promise.all([
                     db.isTickSleeping(t, latest),
-                    db.getAppliedPolicySnapshot(t)
+                    copy ? db.getAppliedPolicySnapshot(copy.origin, copy.name) : Promise.resolve(null)
                 ]);
                 return {
                     tick:         t,
