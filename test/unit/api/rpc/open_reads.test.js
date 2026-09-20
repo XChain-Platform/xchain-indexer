@@ -123,7 +123,7 @@ describe('JSON-RPC betting family @regression @tier1', function () {
 describe('JSON-RPC bridge family @regression @tier1', function () {
     afterEach(function () { sinon.restore(); });
 
-    it('getpendingbridgetransfers derives the kind from the version, unroots a v4 tick and stamps the generation read first', async function () {
+    it('getpendingbridgetransfers derives the kind from the version, retains a rooted v4 tick and stamps the generation read first', async function () {
         const rows = [
             { action_index: 1, version: 0, block_index: 90, amount: '1.5', decimals: 8, min_depth: null, dest_chain: 'DOGE', tick: 'XCHAIN', dest_address: 'D', src_address: 'B', tx_hash: 'a'.repeat(64) },
             { action_index: 2, version: 4, block_index: 95, amount: '7', decimals: null, min_depth: 3, dest_chain: 'DOGE', tick: 'BTC.FUFU', dest_address: 'D', src_address: 'B', tx_hash: 'b'.repeat(64) }
@@ -138,7 +138,7 @@ describe('JSON-RPC bridge family @regression @tier1', function () {
         assert.deepStrictEqual(res.transfers[0], { transfer_kind: 'lock', src_chain: 'BTC', src_action_index: 1, src_address: 'B', dest_chain: 'DOGE',
             dest_address: 'D', tick: 'XCHAIN', decimals: 8, amount: '1.5', min_depth: 0, block_index: 90, confirmations: 11, tx_hash: 'a'.repeat(64), push_generation: 9 });
         assert.strictEqual(res.transfers[1].transfer_kind, 'burn');
-        assert.strictEqual(res.transfers[1].tick, 'FUFU');
+        assert.strictEqual(res.transfers[1].tick, 'BTC.FUFU');
         assert.strictEqual(res.transfers[1].decimals, 0);
         assert.strictEqual(res.transfers[1].min_depth, 3);
     });
