@@ -34,6 +34,7 @@ function batchRow(i, filler) {
         response_hash:        crypto.createHash('sha256').update('body-' + i).digest('hex'),
         meta:                 'm',
         effective_time:       1700000000 + i,
+        admit_block_btc:      899000 + i,
         signer_pubkeys:       JSON.stringify([PUBKEY_A]),
         signatures:           JSON.stringify([{ pubkey: PUBKEY_A, sig: SIG_A }]),
         widen:                0,

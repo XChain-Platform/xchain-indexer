@@ -44,8 +44,16 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
             assert.strictEqual(out.batch.rows.length, 5);
             assert.deepStrictEqual(Object.keys(out.batch.rows[0]), abw.ATTEST_BATCH_ROW_FIELDS,
                 'the carried field set and its ORDER are the wire contract');
+            const effectiveTimeIndex = abw.ATTEST_BATCH_ROW_FIELDS.indexOf('effective_time');
+            assert.strictEqual(abw.ATTEST_BATCH_ROW_FIELDS[effectiveTimeIndex + 1], 'admit_block_btc',
+                'the admission height follows effective_time in canonical order');
+            const body = JSON.parse(abw.buildAttestBatchBody(win));
+            assert.strictEqual(body.rows[2].admit_block_btc, win.rows[2].admit_block_btc,
+                'body encoding preserves the admission height');
             assert.deepStrictEqual(out.batch.rows[2], win.rows[2],
                 'a row survives compression and reassembly byte for byte');
+            assert.strictEqual(out.batch.rows[2].admit_block_btc, win.rows[2].admit_block_btc,
+                'reassembly preserves the admission height');
             assert.deepStrictEqual(out.batch.sigs, [{ pubkey: PUBKEY_A, sig: SIG_A }]);
         });
 
@@ -103,6 +111,14 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
             assert.notStrictEqual(
                 abw.buildAttestBatchCanonical({ ...win, btc_block_height: 900001 }), canonical,
                 'the anchor the quorum is resolved at is inside the preimage');
+            const changedAdmission = {
+                ...win,
+                rows: win.rows.map((row, i) => i === 1
+                    ? { ...row, admit_block_btc: row.admit_block_btc + 1 }
+                    : row)
+            };
+            assert.notStrictEqual(abw.buildAttestBatchCanonical(changedAdmission), canonical,
+                'the per-row admission height is inside the signed preimage');
         });
     });
 });
