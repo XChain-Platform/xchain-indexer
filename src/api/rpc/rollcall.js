@@ -22,6 +22,8 @@
 
 const { rollcallSignersRequest, rollcallPresence } = require('../rollcall_signers');
 const { getLogger } = require('../../observability/index.js');
+const { ROLLCALL_ACTIVATION } = require('../../consensus/gates/rollcall_gate.js');
+const { ROLLCALL_GATES_ACTIVATION } = require('../../consensus/gates/rollcall_gates_gate.js');
 
 function buildRollcallRpc(ctx){
     return Object.assign({}, rollcallSignersRpc(ctx), rollcallReadsRpc(ctx));
@@ -86,6 +88,8 @@ function rollcallSignersRpc({ indexer, rollcallManifestHash }){
                     tip_block_index: (tipIndex === null || tipIndex === undefined) ? null : Number(tipIndex),
                     tip_block_time:  Number.isFinite(tipTime) ? tipTime : null,
                     manifest_hash:   rollcallManifestHash(),
+                    rollcall_activation: ROLLCALL_ACTIVATION[indexer.config.NETWORK],
+                    rollcall_gates_activation: ROLLCALL_GATES_ACTIVATION[indexer.config.NETWORK],
                     signers,
                     publishers: publishersOut
                 };
