@@ -41,8 +41,8 @@ const { getLogger } = require('../../observability/index.js');
  * @property {string} src_address       - the locking or burning source address
  * @property {string} dest_chain        - coin the credit is to land on
  * @property {string} dest_address      - address to credit on dest_chain
- * @property {string} tick              - the asset's NATIVE tick, never the rooted
- *   <ORIGIN>.<NAME> form; XCHAIN for every v0/v1 leg
+ * @property {string} tick              - the action's tick; v4 burns retain the rooted
+ *   <ORIGIN>.<NAME> form so the destination can identify the native asset unambiguously
  * @property {number} decimals          - the token's DECIMALS as read at the leg's
  *   OWN block; the precision `amount` is formatted at, and signed into the record
  * @property {string} amount            - decimal string at `decimals` fractional
@@ -89,10 +89,6 @@ function pendingBridgeTransfersRpc({ indexer }){
                 let rows   = await db.getPendingBridgeTransfers(max);
                 let transfers = rows.map(r => {
                     let version = Number(r.version);
-                    // v4 stores the ROOTED <ORIGIN>.<NAME> tick (xbridges.sql); every other
-                    // version already carries the native name.
-                    let bridged = (version === 4) ? indexer.util.parseBridgedTick(r.tick) : null;
-                    let tick    = bridged ? bridged.name : r.tick;
                     return {
                         transfer_kind:    (version === 0 || version === 3) ? 'lock' : 'burn',
                         src_chain:        indexer.config['COIN'],
@@ -100,7 +96,7 @@ function pendingBridgeTransfersRpc({ indexer }){
                         src_address:      r.src_address,
                         dest_chain:       r.dest_chain,
                         dest_address:     r.dest_address,
-                        tick:             tick,
+                        tick:             r.tick,
                         decimals:         (r.decimals    != null) ? Number(r.decimals)   : 0,
                         amount:           String(r.amount),
                         min_depth:        (r.min_depth   != null) ? Number(r.min_depth)  : 0,
