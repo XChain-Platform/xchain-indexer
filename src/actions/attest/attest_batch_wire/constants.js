@@ -115,6 +115,7 @@ const ATTEST_BATCH_ROW_FIELDS = [
     'response_hash',
     'meta',
     'effective_time',
+    'admit_block_btc',
     'signer_pubkeys',
     'signatures',
     'widen'
