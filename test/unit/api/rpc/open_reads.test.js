@@ -200,16 +200,21 @@ describe('JSON-RPC token policy family @regression @tier1', function () {
 
     it('getappliedpolicy reports the local row with the applied snapshot identity when one landed', async function () {
         const view = recordingView({
-            getTokenInfo: (t) => (t === 'FUFU' ? { ALLOW_LIST: '7', BLOCK_LIST: null, BRIDGED: 1 } : null),
+            getTokenInfo: (t) => (t === 'DOGE.FUFU' ? { ALLOW_LIST: '7', BLOCK_LIST: null, BRIDGED: 1 } : null),
             getLatestBlockIndex: 66, isTickSleeping: 1,
-            getAppliedPolicySnapshot: (t) => ({ policy_seq: '2', origin_block: '40', policy_hash: 'h' })
+            getAppliedPolicySnapshot: (origin, name) => {
+                assert.deepStrictEqual([origin, name], ['DOGE', 'FUFU']);
+                return { policy_seq: '2', origin_block: '40', policy_hash: 'h' };
+            }
         });
-        const rpc = buildTokenPolicyRpc({ indexer: fakeIndexer({ view }) });
-        assert.deepStrictEqual(await rpc.getappliedpolicy({ tick: 'FUFU' }),
-            { tick: 'FUFU', bridged: true, allow_list: 7, block_list: null, sleeping: true, policy_seq: 2, origin_block: 40, policy_hash: 'h' });
-        assert.deepStrictEqual(view.calls[2], ['isTickSleeping', 'FUFU', 66]);
+        const util = { parseBridgedTick: (tick) => tick === 'DOGE.FUFU' ? { origin: 'DOGE', name: 'FUFU' } : null };
+        const rpc = buildTokenPolicyRpc({ indexer: fakeIndexer({ view, util }) });
+        assert.deepStrictEqual(await rpc.getappliedpolicy({ tick: 'DOGE.FUFU' }),
+            { tick: 'DOGE.FUFU', bridged: true, allow_list: 7, block_list: null, sleeping: true, policy_seq: 2, origin_block: 40, policy_hash: 'h' });
+        assert.deepStrictEqual(view.calls[2], ['isTickSleeping', 'DOGE.FUFU', 66]);
+        assert.deepStrictEqual(view.calls[3], ['getAppliedPolicySnapshot', 'DOGE', 'FUFU']);
         view.getAppliedPolicySnapshot = async () => null;
-        assert.strictEqual((await rpc.getappliedpolicy({ tick: 'FUFU' })).policy_seq, null);
+        assert.strictEqual((await rpc.getappliedpolicy({ tick: 'DOGE.FUFU' })).policy_seq, null);
         assert.deepStrictEqual(await rpc.getappliedpolicy({ tick: 'NOPE' }), { error: 'tick has no local row on this chain' });
         assert.deepStrictEqual(await rpc.getappliedpolicy({}), { error: 'tick required' });
     });

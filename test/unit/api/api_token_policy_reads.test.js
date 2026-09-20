@@ -230,24 +230,65 @@ describe('db.isTickSleepingAtBlock (policy spec D3) @regression @tier1', functio
 // ── db.getAppliedPolicySnapshot ───────────────────────────────────────────────
 
 describe('db.getAppliedPolicySnapshot (policy spec D25) @regression @tier1', function(){
-    it('joins the local idempotency record to the mirrored snapshot row, highest seq first', async function(){
+    it('resolves the highest applied snapshot on a separate mirror handle', async function(){
         const db = newDb();
+        const ids = ['a'.repeat(64), 'b'.repeat(64)];
         sinon.stub(db, 'doQuery').callsFake(async (query, args) => {
-            assert.match(query, /bridge_settlements bs/i);
-            assert.match(query, /policy_snapshots ps/i);
+            assert.match(query, /FROM\s+bridge_settlements/i);
             assert.match(query, /bs\.kind='policy'/i);
-            assert.match(query, /ORDER BY\s+ps\.policy_seq DESC/i);
-            assert.deepStrictEqual(args, ['FUFU', 'regtest']);
-            return [{ policy_seq: 3, origin_block: 900, policy_hash: 'h'.repeat(64) }];
+            assert.doesNotMatch(query, /policy_snapshots/i,
+                'the local ledger query cannot join a table held by the mirror connection');
+            assert.deepStrictEqual(args, ['FUFU']);
+            return ids.map(transfer_id => ({ transfer_id }));
         });
-        const applied = await db.getAppliedPolicySnapshot('FUFU');
+        const mirror = {
+            doQuery: sinon.stub().callsFake(async (query, args) => {
+                assert.match(query, /FROM\s+policy_snapshots/i);
+                assert.doesNotMatch(query, /bridge_settlements/i,
+                    'the mirror query cannot join a table held by the local ledger connection');
+                assert.match(query, /network\s*=\s*\?/i);
+                assert.match(query, /origin_chain\s*=\s*\?/i);
+                assert.match(query, /tick\s*=\s*\?/i);
+                assert.match(query, /snapshot_id\s+IN\s*\(\?,\?\)/i);
+                assert.match(query, /ORDER BY\s+policy_seq DESC,\s*id DESC/i);
+                assert.deepStrictEqual(args, ['regtest', 'DOGE', 'FUFU'].concat(ids));
+                return [{ policy_seq: 3, origin_block: 900, policy_hash: 'h'.repeat(64) }];
+            })
+        };
+        db.indexer.hubDb = mirror;
+
+        const applied = await db.getAppliedPolicySnapshot('DOGE', 'FUFU');
         assert.strictEqual(applied.policy_seq, 3);
+        assert.strictEqual(db.doQuery.callCount, 1);
+        assert.strictEqual(mirror.doQuery.callCount, 1);
     });
 
-    it('returns null when nothing has applied here yet (not an error)', async function(){
+    it('uses network, origin and native tick to reject another copy with a higher sequence', async function(){
+        const db = newDb();
+        const localId = 'c'.repeat(64);
+        sinon.stub(db, 'doQuery').resolves([{ transfer_id: localId }]);
+        const mirror = {
+            doQuery: sinon.stub().callsFake(async (query, args) => {
+                assert.match(query, /network\s*=\s*\?\s+AND\s+origin_chain\s*=\s*\?\s+AND\s+tick\s*=\s*\?/i);
+                assert.deepStrictEqual(args, ['regtest', 'DOGE', 'FUFU', localId]);
+                // The database applies the query predicates before ordering. This row is
+                // the highest matching copy, not a higher sequence for another origin.
+                return [{ policy_seq: 4, origin_block: 901, policy_hash: 'i'.repeat(64) }];
+            })
+        };
+        db.indexer.hubDb = mirror;
+
+        const applied = await db.getAppliedPolicySnapshot('DOGE', 'FUFU');
+        assert.strictEqual(applied.policy_seq, 4);
+    });
+
+    it('returns null without consulting the mirror when nothing has applied here yet', async function(){
         const db = newDb();
         sinon.stub(db, 'doQuery').resolves([]);
-        const applied = await db.getAppliedPolicySnapshot('FUFU');
+        const mirror = { doQuery: sinon.stub().rejects(new Error('mirror must not be read')) };
+        db.indexer.hubDb = mirror;
+        const applied = await db.getAppliedPolicySnapshot('DOGE', 'FUFU');
         assert.strictEqual(applied, null);
+        assert.strictEqual(mirror.doQuery.callCount, 0);
     });
 });
