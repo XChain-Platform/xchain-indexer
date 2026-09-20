@@ -29,6 +29,8 @@ const { buildPriceBatchesRpc } = require('../../../../src/api/rpc/price_batches.
 const { buildAnchorRpc } = require('../../../../src/api/rpc/anchor.js');
 const { buildRollcallRpc } = require('../../../../src/api/rpc/rollcall.js');
 const { buildReorgHistoryRpc } = require('../../../../src/api/rpc/reorg_history.js');
+const { ROLLCALL_ACTIVATION } = require('../../../../src/consensus/gates/rollcall_gate.js');
+const { ROLLCALL_GATES_ACTIVATION } = require('../../../../src/consensus/gates/rollcall_gates_gate.js');
 const { recordingView, fakeIndexer } = require('./helpers/fake_indexer.js');
 
 const PK = 'ab'.repeat(32);
@@ -119,7 +121,7 @@ describe('JSON-RPC roll-call family @regression @tier1', function () {
 
     const request = { network: 'regtest', epoch_height: 960, max_block_time: 1700000000, pubkeys: [PK], publishers: [] };
 
-    it('getrollcallsigners answers the cut, the tip and the manifest hash the entry computes', async function () {
+    it('getrollcallsigners answers the cut, tip, manifest hash and activation heights', async function () {
         const view = recordingView({ getLatestBlockIndex: 1000, getBlockTimeAtHeightOrNull: 1700000500,
                                      getRollcallWindowCut: 990, getRollcallSignersForKeys: [], getRollcallPublishers: [] });
         const rpc = buildRollcallRpc({ indexer: fakeIndexer({ view, config: { COIN: 'DOGE' } }), rollcallManifestHash: () => 'ff'.repeat(32) });
@@ -128,8 +130,21 @@ describe('JSON-RPC roll-call family @regression @tier1', function () {
         assert.strictEqual(res.tip_block_index, 1000);
         assert.strictEqual(res.tip_block_time, 1700000500);
         assert.strictEqual(res.manifest_hash, 'ff'.repeat(32));
+        assert.strictEqual(res.rollcall_activation, ROLLCALL_ACTIVATION.regtest);
+        assert.strictEqual(res.rollcall_gates_activation, ROLLCALL_GATES_ACTIVATION.regtest);
         assert.deepStrictEqual(res.signers, { [PK]: null });
         assert.deepStrictEqual(view.calls[2], ['getRollcallWindowCut', 1700000000]);
+    });
+
+    it('getrollcallsigners reports null for an inert activation rail', async function () {
+        const view = recordingView({ getLatestBlockIndex: 1000, getBlockTimeAtHeightOrNull: 1700000500,
+                                     getRollcallWindowCut: 990, getRollcallSignersForKeys: [], getRollcallPublishers: [] });
+        const rpc = buildRollcallRpc({ indexer: fakeIndexer({ view, config: { COIN: 'DOGE', NETWORK: 'mainnet' } }),
+                                       rollcallManifestHash: () => 'ff'.repeat(32) });
+        const res = await rpc.getrollcallsigners(Object.assign({}, request, { network: 'mainnet' }));
+        assert.strictEqual(res.rollcall_activation, ROLLCALL_ACTIVATION.mainnet);
+        assert.strictEqual(ROLLCALL_GATES_ACTIVATION.mainnet, null);
+        assert.strictEqual(res.rollcall_gates_activation, null);
     });
 
     it('getrollcallsigners refuses off DOGE, without a database, and reports a throw', async function () {
