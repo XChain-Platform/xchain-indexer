@@ -51,7 +51,8 @@
 const path = require('path');
 
 function parseArgs(argv){
-    const out = { db: null, chain: 'BTC', network: 'regtest', height: null, modules: null };
+    const out = { db: null, chain: 'BTC', network: 'regtest', height: null, modules: null,
+                  selfTestBindings: false };
     for(let i = 2; i < argv.length; i++){
         switch(argv[i]){
             case '--db':      out.db      = argv[++i]; break;
@@ -59,15 +60,106 @@ function parseArgs(argv){
             case '--network': out.network = argv[++i]; break;
             case '--height':  out.height  = parseInt(argv[++i], 10); break;
             case '--modules': out.modules = argv[++i]; break;
+            case '--self-test-bindings': out.selfTestBindings = true; break;
             default: console.error('unknown arg: ' + argv[i]); process.exit(64);
         }
     }
-    if(!out.db || out.height == null){ console.error('--db and --height are required'); process.exit(64); }
+    if(!out.selfTestBindings && (!out.db || out.height == null)){
+        console.error('--db and --height are required');
+        process.exit(64);
+    }
     return out;
+}
+
+async function runBindingChecks(light, server, proof, trustedRoot, chain, network, asked, height){
+    const verified = light.verifyContractStateProof(proof, trustedRoot, chain, network, asked);
+    const misdirectedAsked = {
+        contract_index: asked.contract_index,
+        state_key: asked.state_key + '-not-asked'
+    };
+    const misdirected = light.verifyContractStateProof(
+        proof, trustedRoot, chain, network, misdirectedAsked);
+
+    const tamperedProof = Object.assign({}, proof, { state_value: '"tampered"' });
+    const tampered = light.verifyContractStateProof(
+        tamperedProof, trustedRoot, chain, network, asked);
+
+    const absentAsked = {
+        contract_index: asked.contract_index,
+        state_key: 'definitely-not-a-real-key'
+    };
+    const absentResponse = await server.contractStateProof(
+        { coin: chain }, chain, network, absentAsked.contract_index, absentAsked.state_key, height);
+    const absent = absentResponse.error ? null : light.verifyContractStateProof(
+        absentResponse.proof, trustedRoot, chain, network, absentAsked);
+
+    return { verified, misdirected, tampered, absent, absentResponse };
+}
+
+async function selfTestBindings(){
+    const assert = require('assert/strict');
+    const asked = { contract_index: 17, state_key: 'requested-key' };
+    const proof = {
+        contract_index: asked.contract_index,
+        state_key: asked.state_key,
+        state_value: '"stored"',
+        smt_proof: {},
+        sub_root_path: {}
+    };
+    const verifierCalls = [];
+    const serverCalls = [];
+    const light = {
+        verifyContractStateProof(candidate, trustedRoot, chain, network, expected){
+            verifierCalls.push({ candidate, trustedRoot, chain, network, expected });
+            if(expected && (String(expected.contract_index) !== String(candidate.contract_index) ||
+                            String(expected.state_key) !== String(candidate.state_key)))
+                return { verified: false, state_value: null, reason: 'REQUESTED_IDENTITY_MISMATCH' };
+            if(candidate.state_value === '"tampered"')
+                return { verified: false, state_value: null, reason: 'LEAF_VALUE_MISMATCH' };
+            return { verified: true, state_value: candidate.state_value, reason: null };
+        }
+    };
+    const server = {
+        async contractStateProof(context, chain, network, contractIndex, stateKey, height){
+            serverCalls.push({ context, chain, network, contractIndex, stateKey, height });
+            return { proof: {
+                contract_index: contractIndex,
+                state_key: stateKey,
+                state_value: null,
+                smt_proof: {},
+                sub_root_path: {}
+            } };
+        }
+    };
+
+    const checks = await runBindingChecks(
+        light, server, proof, 'trusted-root', 'BTC', 'regtest', asked, 123);
+
+    assert.equal(checks.verified.verified, true);
+    assert.equal(checks.misdirected.verified, false);
+    assert.equal(checks.misdirected.reason, 'REQUESTED_IDENTITY_MISMATCH');
+    assert.equal(checks.tampered.verified, false);
+    assert.equal(checks.tampered.reason, 'LEAF_VALUE_MISMATCH');
+    assert.notEqual(checks.tampered.reason, 'REQUESTED_IDENTITY_MISMATCH');
+    assert.equal(checks.absent.verified, true);
+    assert.equal(checks.absent.state_value, null);
+    assert.equal(checks.absent.reason, null);
+    assert.equal(verifierCalls.length, 4);
+    assert.deepEqual(verifierCalls[0].expected, asked);
+    assert.deepEqual(verifierCalls[1].expected,
+                     { contract_index: asked.contract_index, state_key: asked.state_key + '-not-asked' });
+    assert.deepEqual(verifierCalls[2].expected, asked);
+    assert.deepEqual(verifierCalls[3].expected,
+                     { contract_index: asked.contract_index, state_key: 'definitely-not-a-real-key' });
+    assert.equal(serverCalls.length, 1);
+    assert.equal(serverCalls[0].contractIndex, asked.contract_index);
+    assert.equal(serverCalls[0].stateKey, 'definitely-not-a-real-key');
+    console.log('# SELF-TEST BINDINGS: PASS (17 assertions)');
 }
 
 (async () => {
     const opts = parseArgs(process.argv);
+    if(opts.selfTestBindings) return selfTestBindings();
     // Resolve the explorer's proof server and the SDK's verifier from the
     // sibling repos (the normal monorepo layout). `--modules <dir>` overrides
     // it for a staged container, where the siblings are not on disk and the
@@ -151,32 +243,36 @@ function parseArgs(argv){
     // is a real bug class the explorer's double-decode hit before, so this
     // harness would have passed while the server answered the wrong question.
     const asked = { contract_index: row.contract_index, state_key: row.state_key };
-    const v = light.verifyContractStateProof(p, tr.state_root, opts.chain, opts.network, asked);
+    const checks = await runBindingChecks(
+        light, server, p, tr.state_root, opts.chain, opts.network, asked, opts.height);
+    const v = checks.verified;
     console.log('# SDK verifyContractStateProof -> verified=' + v.verified + ' reason=' + v.reason);
     console.log('# returned state_value matches the stored row: ' + (v.state_value === p.state_value));
 
     // NEGATIVE: the same proof, checked against a key we did NOT ask for, must be
     // refused. This is the binding proving itself on every run rather than on trust.
-    const misdirected = light.verifyContractStateProof(p, tr.state_root, opts.chain, opts.network,
-                            { contract_index: row.contract_index, state_key: row.state_key + '-not-asked' });
+    const misdirected = checks.misdirected;
     console.log('# proof checked against an unrequested key -> verified=' + misdirected.verified +
                 ' reason=' + misdirected.reason);
 
     // And a NEGATIVE: tamper the value, the same verifier must reject it.
-    const bad = Object.assign({}, p, { state_value: '"tampered"' });
-    const bv = light.verifyContractStateProof(bad, tr.state_root, opts.chain, opts.network);
+    const bv = checks.tampered;
     console.log('# tampered value -> verified=' + bv.verified + ' reason=' + bv.reason);
 
     // And an absent key at the same armed height must be a verifiable NON-inclusion.
-    const absent = await server.contractStateProof({ coin: opts.chain }, opts.chain, opts.network,
-                                                   row.contract_index, 'definitely-not-a-real-key', opts.height);
+    const absent = checks.absentResponse;
     if(!absent.error){
-        const av = light.verifyContractStateProof(absent.proof, tr.state_root, opts.chain, opts.network);
+        const av = checks.absent;
         console.log('# absent key -> verified=' + av.verified + ' value=' + JSON.stringify(av.state_value));
     }
 
     await conn.end();
-    const ok = v.verified === true && bv.verified === false && misdirected.verified === false;
+    const ok = v.verified === true && v.state_value === p.state_value &&
+               bv.verified === false && bv.reason === 'LEAF_VALUE_MISMATCH' &&
+               misdirected.verified === false &&
+               misdirected.reason === 'REQUESTED_IDENTITY_MISMATCH' &&
+               checks.absent !== null && checks.absent.verified === true &&
+               checks.absent.state_value === null && checks.absent.reason === null;
     console.log(ok ? '# RESULT: PASS' : '# RESULT: FAIL');
     process.exit(ok ? 0 : 1);
 })().catch(e => { console.error(e); process.exit(1); });

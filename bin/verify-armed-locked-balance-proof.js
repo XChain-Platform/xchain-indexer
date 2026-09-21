@@ -62,7 +62,8 @@
 const path = require('path');
 
 function parseArgs(argv){
-    const out = { db: null, chain: 'BTC', network: 'regtest', height: null, modules: null };
+    const out = { db: null, chain: 'BTC', network: 'regtest', height: null, modules: null,
+                  selfTestBindings: false };
     for(let i = 2; i < argv.length; i++){
         switch(argv[i]){
             case '--db':      out.db      = argv[++i]; break;
@@ -70,6 +71,7 @@ function parseArgs(argv){
             case '--network': out.network = argv[++i]; break;
             case '--height':  out.height  = parseInt(argv[++i], 10); break;
             case '--modules': out.modules = argv[++i]; break;
+            case '--self-test-bindings': out.selfTestBindings = true; break;
             case '--help': case '-h':
                 console.log(require('fs').readFileSync(__filename, 'utf8').split('*/')[0]);
                 process.exit(0);
@@ -77,12 +79,117 @@ function parseArgs(argv){
             default: console.error('unknown arg: ' + argv[i]); process.exit(64);
         }
     }
-    if(!out.db || out.height == null){ console.error('--db and --height are required'); process.exit(64); }
+    if(!out.selfTestBindings && (!out.db || out.height == null)){
+        console.error('--db and --height are required');
+        process.exit(64);
+    }
     return out;
+}
+
+async function runBindingChecks(light, server, proof, trustedRoot, chain, network,
+                                asked, height, trustedHeight){
+    const verified = light.verifyLockedBalanceProof(
+        proof, trustedRoot, chain, network, asked, trustedHeight);
+    const misdirectedAsked = { address: asked.address, tick: asked.tick + '-NOT-ASKED' };
+    const misdirected = light.verifyLockedBalanceProof(
+        proof, trustedRoot, chain, network, misdirectedAsked, trustedHeight);
+
+    const tamperedProof = Object.assign({}, proof, { amount: '999999.00000000' });
+    const tampered = light.verifyLockedBalanceProof(
+        tamperedProof, trustedRoot, chain, network, asked, trustedHeight);
+
+    const absentAsked = { address: asked.address, tick: 'NOSUCHTICKXCTEST' };
+    const absentResponse = await server.lockedBalanceProof(
+        { coin: chain }, chain, network, absentAsked.address, absentAsked.tick, height);
+    const absent = absentResponse.error ? null : light.verifyLockedBalanceProof(
+        absentResponse.proof, trustedRoot, chain, network, absentAsked, trustedHeight);
+
+    const cross = (typeof light.verifyBalanceProof === 'function')
+        ? light.verifyBalanceProof(proof, trustedRoot, chain, network, asked)
+        : null;
+    return { verified, misdirected, tampered, absent, absentResponse, cross };
+}
+
+async function selfTestBindings(){
+    const assert = require('assert/strict');
+    const asked = { address: 'xc1-requested', tick: 'XCHAIN' };
+    const proof = {
+        address: asked.address,
+        tick: asked.tick,
+        amount: '7.00000000',
+        height: '456',
+        smt_proof: {},
+        sub_root_path: {}
+    };
+    const lockedCalls = [];
+    const balanceCalls = [];
+    const serverCalls = [];
+    const identityMismatch = (candidate, expected) => expected &&
+        (String(expected.address) !== String(candidate.address) ||
+         String(expected.tick) !== String(candidate.tick));
+    const light = {
+        verifyLockedBalanceProof(candidate, trustedRoot, chain, network, expected, trustedHeight){
+            lockedCalls.push({ candidate, trustedRoot, chain, network, expected, trustedHeight });
+            if(identityMismatch(candidate, expected))
+                return { verified: false, amount: null, reason: 'REQUESTED_IDENTITY_MISMATCH' };
+            if(candidate.amount === '999999.00000000')
+                return { verified: false, amount: null, reason: 'LEAF_AMOUNT_MISMATCH' };
+            return { verified: true, amount: candidate.amount, reason: null };
+        },
+        verifyBalanceProof(candidate, trustedRoot, chain, network, expected){
+            balanceCalls.push({ candidate, trustedRoot, chain, network, expected });
+            if(identityMismatch(candidate, expected))
+                return { verified: false, amount: null, reason: 'REQUESTED_IDENTITY_MISMATCH' };
+            return { verified: false, amount: null, reason: 'KEY_MISMATCH' };
+        }
+    };
+    const server = {
+        async lockedBalanceProof(context, chain, network, address, tick, height){
+            serverCalls.push({ context, chain, network, address, tick, height });
+            return { proof: {
+                address,
+                tick,
+                amount: '0',
+                height: String(height),
+                smt_proof: {},
+                sub_root_path: {}
+            } };
+        }
+    };
+
+    const checks = await runBindingChecks(
+        light, server, proof, 'trusted-root', 'BTC', 'regtest', asked, 456, 456);
+
+    assert.equal(checks.verified.verified, true);
+    assert.equal(checks.misdirected.verified, false);
+    assert.equal(checks.misdirected.reason, 'REQUESTED_IDENTITY_MISMATCH');
+    assert.equal(checks.tampered.verified, false);
+    assert.equal(checks.tampered.reason, 'LEAF_AMOUNT_MISMATCH');
+    assert.notEqual(checks.tampered.reason, 'REQUESTED_IDENTITY_MISMATCH');
+    assert.equal(checks.absent.verified, true);
+    assert.equal(checks.absent.amount, '0');
+    assert.equal(checks.absent.reason, null);
+    assert.equal(checks.cross.verified, false);
+    assert.equal(checks.cross.reason, 'KEY_MISMATCH');
+    assert.notEqual(checks.cross.reason, 'REQUESTED_IDENTITY_MISMATCH');
+    assert.equal(lockedCalls.length, 4);
+    assert.deepEqual(lockedCalls[0].expected, asked);
+    assert.deepEqual(lockedCalls[1].expected,
+                     { address: asked.address, tick: asked.tick + '-NOT-ASKED' });
+    assert.deepEqual(lockedCalls[2].expected, asked);
+    assert.deepEqual(lockedCalls[3].expected,
+                     { address: asked.address, tick: 'NOSUCHTICKXCTEST' });
+    assert.equal(balanceCalls.length, 1);
+    assert.deepEqual(balanceCalls[0].expected, asked);
+    assert.equal(serverCalls.length, 1);
+    assert.equal(serverCalls[0].address, asked.address);
+    assert.equal(serverCalls[0].tick, 'NOSUCHTICKXCTEST');
+    console.log('# SELF-TEST BINDINGS: PASS (22 assertions)');
 }
 
 (async () => {
     const opts = parseArgs(process.argv);
+    if(opts.selfTestBindings) return selfTestBindings();
     const dir = opts.modules;
     const req = (sib, file) => require(dir ? path.resolve(dir, file)
                                            : path.resolve(__dirname, '..', '..', sib, 'src', file));
@@ -187,42 +294,49 @@ function parseArgs(argv){
     const trustedHeight = tr.block_index;
 
     // 2. THE CHECK: an independent implementation, in another repo, accepts it.
-    const v = light.verifyLockedBalanceProof(p, tr.state_root, opts.chain, opts.network,
-                                             null, trustedHeight);
+    const asked = { address: row.address, tick: row.tick };
+    const checks = await runBindingChecks(
+        light, server, p, tr.state_root, opts.chain, opts.network, asked,
+        opts.height, trustedHeight);
+    const v = checks.verified;
     console.log('# SDK verifyLockedBalanceProof -> verified=' + v.verified + ' reason=' + v.reason +
                 ' amount=' + v.amount);
 
+    const misdirected = checks.misdirected;
+    console.log('# proof checked against an unrequested key -> verified=' + misdirected.verified +
+                ' reason=' + misdirected.reason);
+
     // 3. NEGATIVE: tamper the amount, the same verifier must reject it.
-    const bad = Object.assign({}, p, { amount: '999999.00000000' });
-    const bv = light.verifyLockedBalanceProof(bad, tr.state_root, opts.chain, opts.network,
-                                              null, trustedHeight);
+    const bv = checks.tampered;
     console.log('# tampered amount -> verified=' + bv.verified + ' reason=' + bv.reason);
 
     // 4. A never-locked key must verify as ZERO LOCKED (delete-on-zero).
     let zeroOk = null;
-    const absent = await server.lockedBalanceProof({ coin: opts.chain }, opts.chain, opts.network,
-                                                   row.address, 'NOSUCHTICKXCTEST', opts.height);
+    const absent = checks.absentResponse;
     if(absent.error){
         console.log('# never-locked key -> proof server refused: ' + absent.error);
     } else {
-        const av = light.verifyLockedBalanceProof(absent.proof, tr.state_root, opts.chain, opts.network,
-                                                  null, trustedHeight);
-        zeroOk = (av.verified === true && String(av.amount).replace(/0+$/, '').replace(/\.$/, '') === '0');
+        const av = checks.absent;
+        zeroOk = (av.verified === true && av.reason === null &&
+                  String(av.amount).replace(/0+$/, '').replace(/\.$/, '') === '0');
         console.log('# never-locked key -> verified=' + av.verified + ' amount=' + av.amount);
     }
 
     // 5. The two key domains must not answer for each other.
     let domainOk = null;
-    if(typeof light.verifyBalanceProof === 'function'){
-        const cross = light.verifyBalanceProof(p, tr.state_root, opts.chain, opts.network);
-        domainOk = (cross.verified === false);
+    if(checks.cross !== null){
+        const cross = checks.cross;
+        domainOk = (cross.verified === false && cross.reason === 'KEY_MISMATCH');
         console.log('# locked proof fed to the SPENDABLE verifier -> verified=' + cross.verified +
                     ' reason=' + cross.reason);
     }
 
     await conn.end();
-    const ok = v.verified === true && bv.verified === false &&
-               (zeroOk === null || zeroOk === true) && (domainOk === null || domainOk === true);
+    const ok = v.verified === true &&
+               misdirected.verified === false &&
+               misdirected.reason === 'REQUESTED_IDENTITY_MISMATCH' &&
+               bv.verified === false && bv.reason === 'LEAF_AMOUNT_MISMATCH' &&
+               zeroOk === true && domainOk === true;
     console.log(ok ? '# RESULT: PASS' : '# RESULT: FAIL');
     process.exit(ok ? 0 : 1);
 })().catch(e => { console.error(e); process.exit(1); });
