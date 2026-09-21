@@ -100,6 +100,18 @@ module.exports = {
         process.exit(1);
     },
 
+    // Start a poll pass with no stall named. stallReason is written only by the defer sites
+    // and cleared only by a commit, so a reason left over from an earlier pass (a block that
+    // since moved on to a different hold, or a pass that never reached a block at all)
+    // would keep /status naming a hold that is no longer current. Clearing it here means
+    // whatever is named after the pass was set by this pass. barrierHold is deliberately
+    // left alone: it is keyed on the block and folded once the pass ends (noteBarrierHold),
+    // so a block deferred on consecutive passes keeps its accumulated hold.
+    beginPollPass(){
+        this.stallReason   = null;
+        this.stallClearsAt = null;
+    },
+
     // Fold one poll-loop pass into the mirror-barrier hold, and act when it crosses the
     // named ceiling. Called once per pass, right after the catch-up loop exits,
     // where `this.stallReason` and `this.stallClearsAt` already carry whatever the defer
