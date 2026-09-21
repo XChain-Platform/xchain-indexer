@@ -27,6 +27,15 @@
  * in the monorepo/aggregator checkout; a standalone single-repo checkout skips it (unless
  * XCHAIN_REQUIRE_SIBLINGS=1, where a missing sibling hard-fails) and still runs the local
  * shape assertions below.
+ *
+ * TWO CANONICALS, TWO ERA RULES, mirrored here from the hub's copy of this suite so neither is
+ * checked in one repo only. The BATCH canonical is the subject of the describes above; the
+ * SINGLE-ROUND one (buildPriceV0Payload) is a separate write carrying the round's admission
+ * map, so the describe at the bottom arms the activation itself and drives both eras. Its own
+ * subject is the coinPair / pair SPELLING SPLIT, which nothing else in this repo drives:
+ * priceV0CanonicalAdmission.test.js holds the indexer's era, refusal and encoder cases for that
+ * builder but spells every fixture `pair`, so a fork of the coinPair branch alone left the
+ * whole indexer suite green and went red only in the hub's tree.
  */
 
 'use strict';
@@ -288,5 +297,104 @@ describe('PRICE v0 canonical: three-way twin parity', function () {
             // Caller ordering still normalizes identically with the map in play.
             assert.strictEqual(armed.ed.buildPriceBatchPayload(FIRST, LAST, ANCHOR, withMaps(shuffledBatch()), NETWORK), fromIndexer);
         });
+    });
+});
+
+// The SINGLE-ROUND canonical, mirrored from the hub's copy of this suite. buildPriceV0Payload
+// is a separate write from the batch builder with its own three twins, and unlike the batch it
+// carries the round's ADMISSION MAP, so it is era-keyed on the round's own BTC anchor and the
+// describe drives both eras. It ARMS ITSELF for the reason admissionHooks() gives, and the
+// LOCAL twin is armed in every checkout: a forked indexer builder goes red here even where the
+// hub entry is refused, and only the three-way comparison waits on the siblings.
+const V0 = { ADMIT: 799000, LEGACY: 798999, ROUND: 5, TIME: 1756199400,
+             TAIL: '|BTC:799004,DOGE:5000004,LTC:2400004',
+             MAP:  () => ({ DOGE: 5000004, BTC: 799004, LTC: 2400004 }) };   // insertion order is not ASCII order
+// The producer keys a round's pairs `coinPair` in memory and the wire-parsed round keys them
+// `pair`; both spellings must reach identical bytes on all three twins.
+const coinKeyed = () => [{ coinPair: 'XCP/USD', price: 0.4237 }, { pair: 'BTC/USD', price: '61234.5' },
+                         { coinPair: 'AAA/USD', price: 1 }];
+const pairKeyed = () => coinKeyed().map(p => ({ pair: p.coinPair || p.pair, price: p.price }));
+const V0_ERAS = [
+    { name: 'below the activation, where the round is legacy',             height: V0.LEGACY, map: () => undefined, tail: null },
+    { name: 'at the activation, where the round carries an admission map', height: V0.ADMIT,  map: V0.MAP,          tail: V0.TAIL }];
+
+let v0 = null;
+function armV0Twins() {
+    const localPaths = MODS.filter(m => !m.includes('xchain-hub')).map(m => require.resolve(m));
+    const hubMods    = MODS.filter(m => m.includes('xchain-hub'));
+    // Judged before anything is required, for the same reason loadHubTwins judges first.
+    const refused = hubMods.map(m => siblingCheckout(__dirname, m)).find(v => !v.usable) || null;
+    let hubPaths = null;
+    if (!refused) {
+        try { hubPaths = hubMods.map(m => require.resolve(m)); }
+        catch (e) {
+            if (process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                throw new Error('PRICE v0 single-round parity cannot run: xchain-hub sibling missing (' + e.message + ')');
+        }
+    }
+    const paths    = localPaths.concat(hubPaths || []);
+    const saved    = paths.map(p => [p, require.cache[p]]);
+    const savedEnv = process.env.XC_MIRROR_ADMISSION_ACTIVATION;
+    for (const p of paths) delete require.cache[p];
+    process.env.XC_MIRROR_ADMISSION_ACTIVATION = String(V0.ADMIT);
+    const act = require('../../../src/consensus/gates/mirror_admission_gate.js');
+    const ed  = require('../../../src/consensus/ed25519.js');
+    let hub = null;
+    if (hubPaths) {
+        const OC = require('../../../../xchain-hub/src/oracle/consensus.js');
+        const PA = require('../../../../xchain-hub/src/oracle/price_aggregator.js');
+        const stubHub = { db: null, network: NETWORK, getPeerManager: () => ({}) };
+        hub = { producer: new OC(stubHub, {}), ingest: new PA(stubHub) };
+    }
+    // Restored byte-exact: the arming is scoped to this describe and never to the process.
+    return { act, ed, hub, refused, restore() {
+        for (const [p, mod] of saved) { if (mod === undefined) delete require.cache[p]; else require.cache[p] = mod; }
+        if (savedEnv === undefined) delete process.env.XC_MIRROR_ADMISSION_ACTIVATION;
+        else process.env.XC_MIRROR_ADMISSION_ACTIVATION = savedEnv;
+    } };
+}
+function v0Hooks() {
+    before(function () { v0 = armV0Twins(); });
+    after(function () { if (v0) v0.restore(); v0 = null; });
+}
+// The indexer verifier takes `network` before the height; the hub twins read theirs off the
+// instance, so each side gets one helper and a call-site typo cannot read as a divergence.
+const v0Local = (pairs, era) => v0.ed.buildPriceV0Payload(V0.ROUND, V0.TIME, pairs, NETWORK, era.height, era.map());
+const v0Hub   = (twin, pairs, era) => twin.buildPriceV0Payload(V0.ROUND, V0.TIME, pairs, era.height, era.map());
+
+// The era is DRIVEN, not merely named: without this case both blocks could be running the
+// legacy path and the two-era structure would prove nothing.
+const v0EraCase = era => function () {
+    let canonical = v0Local(coinKeyed(), era);
+    if (era.tail === null) {
+        assert.ok(canonical.endsWith('}'), 'a legacy round ends at its JSON body: ' + canonical.slice(-40));
+        assert.ok(!/BTC:799004/.test(canonical), 'a legacy round carries no admission field: ' + canonical.slice(-60));
+    } else assert.ok(canonical.endsWith(era.tail), 'the admission field is missing from the rebuilt bytes: ' + canonical.slice(-60));
+};
+const v0SpellingCase = era => function () {
+    assert.strictEqual(v0Local(coinKeyed(), era), v0Local(pairKeyed(), era),
+        'the indexer verifier spells coinPair and pair to different bytes, so it cannot rebuild what the producer signed');
+};
+const v0ThreeWayCase = era => function () {
+    if (!v0.hub) { if (v0.refused) skipOrFail(this, v0.refused, 'the PRICE v0 single-round twin parity'); else this.skip(); return; }
+    let expected = v0Local(pairKeyed(), era);
+    assert.strictEqual(v0Local(coinKeyed(), era), expected, 'indexer verifier: coinPair input must match pair input');
+    for (const [name, twin] of [['OracleConsensus (PRODUCER)', v0.hub.producer], ['PriceAggregator (hub ingest)', v0.hub.ingest]])
+        for (const pairs of [coinKeyed(), pairKeyed()])
+            assert.strictEqual(v0Hub(twin, pairs, era), expected, name + ' diverged from the indexer verifier');
+};
+
+describe('PRICE v0 single-round canonical: three-way twin parity', function () {
+    v0Hooks();
+    it('is ARMED, so neither era block below is the other one in disguise', function () {
+        assert.strictEqual(v0.act.isMirrorAdmissionProducerActive('BTC', NETWORK, V0.ADMIT), true,
+            'the admission-era cases would be vacuous: the activation did not arm');
+        assert.strictEqual(v0.act.isMirrorAdmissionProducerActive('BTC', NETWORK, V0.LEGACY), false,
+            'the legacy cases would be vacuous: ' + V0.LEGACY + ' is not below the armed height');
+    });
+    for (const era of V0_ERAS) describe(era.name, function () {
+        it('puts the admission field on the indexer verifier\'s bytes exactly in its own era', v0EraCase(era));
+        it('spells coinPair and pair to the same bytes on the indexer verifier', v0SpellingCase(era));
+        it('all three twins emit identical bytes for both spellings of the round', v0ThreeWayCase(era));
     });
 });
