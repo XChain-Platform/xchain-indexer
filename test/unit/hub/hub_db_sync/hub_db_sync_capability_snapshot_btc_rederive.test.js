@@ -78,7 +78,7 @@ function dbFor(coin, opts) {
     const o        = opts || {};
     const config   = getTestConfig();
     config.COIN    = coin;
-    config.NETWORK = 'regtest';
+    config.NETWORK = o.network || 'regtest';
     // Faithful to coins/DOGE.js and coins/LTC.js: no capabilities at all off BTC.
     if (coin !== 'BTC') config.STAKING = Object.assign({}, config.STAKING, { CAPABILITIES: {} });
 
