@@ -25,8 +25,8 @@
  *     bridge transfer, policy snapshot) and the attest-response canonical are compared
  *     BYTE FOR BYTE against the hub's own builders, required out of the sibling checkout
  *     and driven with a stub `this`, legacy rows and admission-era rows alike.
- *   - An admission-era row with no admission columns REFUSES on both sides rather than
- *     verifying as legacy.
+ *   - Both version seams keep the legacy bytes: an admission-era row with no admission
+ *     columns and a legacy-era row handed admission columns.
  *   - The mirrored selects (match, two call reads in both mirror topologies, the attest
  *     response read, the bridge transfer and policy selects) issue their pre-train SQL
  *     text byte for byte below the activation and the guarded height form above it, asserted as
@@ -121,10 +121,12 @@ describe('admission binding: the verify-side canonical twins byte-match the hub 
                         }
                     });
 
-                    it(rail + ': an admission-era row with NO columns REFUSES rather than verifying as legacy', function () {
-                        assert.throws(() => twins[rail](rowOf(arm.modernBlock)), /refusing to build a legacy canonical/);
-                        assert.throws(() => twins[rail](rowOf(arm.modernBlock, NO_COLS)), /refusing to build a legacy canonical/);
-                        if (hub) assert.throws(() => hub[rail](rowOf(arm.modernBlock, NO_COLS)), /refusing to build a legacy canonical/);
+                    it(rail + ': an admission-era row with NO columns keeps the legacy bytes at the version seam', function () {
+                        const absent = rowOf(arm.modernBlock);
+                        const nulls = rowOf(arm.modernBlock, NO_COLS);
+                        assert.strictEqual(twins[rail](absent), legacyBytes(absent));
+                        assert.strictEqual(twins[rail](nulls), legacyBytes(nulls));
+                        if (hub) assert.strictEqual(hub[rail](nulls), legacyBytes(nulls));
                     });
 
                     it(rail + ': a different map is different bytes, and an unusable column is a refusal', function () {
@@ -136,10 +138,10 @@ describe('admission binding: the verify-side canonical twins byte-match the hub 
                     });
                 }
 
-                it(rail + ': a legacy-era row handed columns REFUSES in the other direction', function () {
+                it(rail + ': a legacy-era row handed columns keeps the legacy bytes in the other direction', function () {
                     const row = (arm.legacyBlock !== null) ? rowOf(arm.legacyBlock, COLS) : rowOf(5, Object.assign({ network: 'mainnet' }, COLS));
-                    assert.throws(() => twins[rail](row), /refusing to build an admission-era canonical/);
-                    if (hub) assert.throws(() => hub[rail](row), /refusing to build an admission-era canonical/);
+                    assert.strictEqual(twins[rail](row), legacyBytes(row));
+                    if (hub) assert.strictEqual(hub[rail](row), legacyBytes(row));
                 });
             }
         });

@@ -81,7 +81,7 @@
     },
     "mirror_admission_activation": {
       "path": "src/consensus/gates/mirror_admission_gate.js",
-      "hash": "ff9dacf3d0abc1037361c4265f5a324d1bc0965b078e528df55da4320f981a85",
+      "hash": "d59a0c44b7d0dc1dbc5f1530d67e012a7dac33f1824960565a9788b75cff6a25",
       "twins": []
     },
     "oracle_preload_causality_activation": {
@@ -1782,6 +1782,13 @@
       "to": "26894199bd6651dbedcc962825eb63aea91b0a5e7d1d8d3e28eaddf73ce69415",
       "reason": "W5 consolidation (row 21)",
       "date": "2026-09-16"
+    },
+    {
+      "id": "mirror_admission_activation",
+      "from": "ff9dacf3d0abc1037361c4265f5a324d1bc0965b078e528df55da4320f981a85",
+      "to": "d59a0c44b7d0dc1dbc5f1530d67e012a7dac33f1824960565a9788b75cff6a25",
+      "reason": "canonical admission boundary fix, operator ruling (a) 2026-09-19",
+      "date": "2026-09-19"
     }
   ]
 }

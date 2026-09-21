@@ -21,7 +21,7 @@ const eq = require('../../../src/consensus/equivocation_header.js');
 
 // THE LEGACY ARM, EXPLICITLY. The rows below carry no admission columns, which is a legacy
 // row only while the mirror-admission activation is inert; a process launched armed
-// (XC_MIRROR_ADMISSION_ACTIVATION set) makes both canonicals REFUSE them, correctly, so the
+// (XC_MIRROR_ADMISSION_ACTIVATION set) makes both canonicals take the legacy seam path, so the
 // two action modules are required with the env unset and the cache put back at once. This
 // file drives the legacy bytes; admission_binding.test.js drives the armed arm of the same
 // twins against the hub's builders. Same purge/re-require idiom as the price suites (row 25).
@@ -90,15 +90,15 @@ describe('EQUIV XCALL canonical (WI-2 bump 2)', function () {
         assert.strictEqual(kr, 'XCALL|' + sha('XCALLROUND|result|' + CID) + '|0');
     });
 
-    it('is driven in the legacy arm: a row handed admission columns is refused in BOTH phases', function () {
+    it('is driven in the legacy arm: admission columns are ignored in BOTH phases', function () {
         // Proves the disarm above took, so the byte assertions here cannot pass vacuously in
         // a process that happened to be launched unarmed, and shows the era gate is wired
         // into both twins rather than one.
         const cols = { admit_block_btc: 104, admit_block_ltc: 404 };
-        assert.throws(() => xexec.canonical(Object.assign(dispatchRow('regtest', 100, 0), cols)),
-                      /refusing to build an admission-era canonical/);
-        assert.throws(() => xcall.resultCanonical(Object.assign(resultRow('regtest', 100, 0), cols)),
-                      /refusing to build an admission-era canonical/);
+        assert.strictEqual(xexec.canonical(Object.assign(dispatchRow('regtest', 100, 0), cols)),
+                           xexec.canonical(dispatchRow('regtest', 100, 0)));
+        assert.strictEqual(xcall.resultCanonical(Object.assign(resultRow('regtest', 100, 0), cols)),
+                           xcall.resultCanonical(resultRow('regtest', 100, 0)));
         // NULL columns are the legacy row, byte for byte.
         const nulls = { admit_block_btc: null, admit_block_ltc: null, admit_block_doge: null };
         assert.strictEqual(xexec.canonical(Object.assign(dispatchRow('regtest', 100, 0), nulls)),

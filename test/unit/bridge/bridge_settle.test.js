@@ -67,11 +67,11 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
             assert.notStrictEqual(a, c);
         });
 
-        it('is driven in the legacy arm, and a legacy row handed admission columns is refused there', function(){
+        it('is driven in the legacy arm, and ignores admission columns there', function(){
             // The disarm above is what this file rests on; a suite that silently inherited a
             // process-level arming would fail every quorum case for the wrong reason.
-            assert.throws(() => BS.transferCanonical(makeTransfer([], { admit_block_doge: SNAPSHOT + 4 })),
-                          /refusing to build an admission-era canonical/);
+            assert.strictEqual(BS.transferCanonical(makeTransfer([], { admit_block_doge: SNAPSHOT + 4 })),
+                               BS.transferCanonical(makeTransfer([], {})));
             assert.strictEqual(BS.transferCanonical(makeTransfer([], { admit_block_doge: null, admit_block_btc: null })),
                                BS.transferCanonical(makeTransfer([], {})), 'NULL columns are the legacy row');
         });
