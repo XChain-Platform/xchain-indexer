@@ -24,12 +24,15 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const srb = require('../../../src/consensus/snapshot_reorg_buffer.js');
-const { PUBKEY_A, REQ_ID, deriveReqId, GOLDEN_REQUEST_ID, setUpAttestHandler, v0Data, v0Params } = require('../../helpers/attest_fixture.js');
+const gateRegistry = require('../../../src/consensus/gate_registry');
+const { PUBKEY_A, REQ_ID, deriveReqId, GOLDEN_REQUEST_ID, makeRequestRow, setUpAttestHandler, v0Data, v0Params } = require('../../helpers/attest_fixture.js');
+
+const ZERO_CONF_KEY = 'attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION';
 
 // The handler under test and its mocked indexer, rebuilt before every test.
-let indexer, handler;
+let indexer, handler, executeStub;
 function setUpHandler() {
-    ({ indexer, handler } = setUpAttestHandler());
+    ({ indexer, handler, executeStub } = setUpAttestHandler());
 }
 
 // ───────────────────────────────────────────────────────────────────────
@@ -91,6 +94,48 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.strictEqual(
                 indexer.indexerDb.createAttestationRequest.firstCall.args[0]['RESPONSIBLE_SET_JSON'],
                 data['RESPONSIBLE_SET_JSON']);
+        });
+    });
+});
+
+describe('Attest (ATTEST) @regression @tier3', function () {
+    beforeEach(setUpHandler);
+    afterEach(() => sinon.restore());
+
+    describe('v2: expire', function () {
+        it('persists a sparse system expiry row without consulting the zero-conf activation', async function () {
+            indexer.indexerDb.getAttestationRequestById.resolves(makeRequestRow({
+                block_index: 151700,
+                deadline_block: 151724,
+                request_status: 'pending',
+            }));
+            const data = {
+                ACTION: 'ATTEST',
+                FORMAT: 2,
+                BLOCK_INDEX: 151725,
+                BLOCK_TIME: 1789843200,
+                REQUEST_ID: REQ_ID,
+                IS_SYNTHETIC: true,
+            };
+
+            await handler.parse(['2', REQ_ID], data, null);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.deepStrictEqual(indexer.indexerDb.createActionIndex.firstCall.args, [{
+                ACTION: 'ATTEST',
+                BLOCK_INDEX: 151725,
+                FORMAT: 2,
+            }, true], 'v2 persists no transaction, source, request, signature or response fields');
+            assert.ok(indexer.indexerDb.createAttestationResponse.notCalled,
+                'expiry is not an attestation response and has no bound response row');
+            assert.strictEqual(data['VALIDATOR_SIGNATURES'], undefined,
+                'a synthesized expiry has no validator signatures');
+            assert.strictEqual(gateRegistry.activeAt.calledWith(ZERO_CONF_KEY), false,
+                'the response zero-conf flag day must not gate or reshape expiry rows');
+            assert.ok(indexer.indexerDb.updateAttestationRequestStatus.calledWith(
+                REQ_ID.toLowerCase(), 'expired', 151725));
+            assert.ok(executeStub.parse.calledOnce,
+                'the contract callback is emitted as a separate EXECUTE action');
         });
     });
 });
