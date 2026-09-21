@@ -116,3 +116,40 @@ describe('bin/consensus-identity.js --assert-no-absent', function () {
         assert.ok(res.stderr.includes(KEY), res.stderr);
     });
 });
+
+describe('bin/consensus-identity.js argument validation', function () {
+
+    it('refuses an unknown flag before producing output', function () {
+        const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'identity-phantom-'));
+        const output = path.join(dir, 'ignored.json');
+        const res = run(['--phantom-write', output]);
+        assert.strictEqual(res.status, 2);
+        assert.strictEqual(res.stdout, '');
+        assert.strictEqual(res.stderr, 'unknown flag: --phantom-write\n');
+        assert.strictEqual(fs.existsSync(output), false);
+    });
+
+    it('refuses a positional argument as an unknown flag', function () {
+        const res = run(['ignored.json']);
+        assert.strictEqual(res.status, 2);
+        assert.strictEqual(res.stdout, '');
+        assert.strictEqual(res.stderr, 'unknown flag: ignored.json\n');
+    });
+
+    it('refuses a value option whose value is missing', function () {
+        const res = run(['--out']);
+        assert.strictEqual(res.status, 2);
+        assert.strictEqual(res.stdout, '');
+        assert.strictEqual(res.stderr, '--out requires a value\n');
+    });
+
+    it('implements the hub-compatible --out JSON write', function () {
+        const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'identity-out-'));
+        const output = path.join(dir, 'nested', 'identity.json');
+        const res = run(['--out', output, '--json']);
+
+        assert.strictEqual(res.status, 0, res.stderr);
+        assert.strictEqual(res.stderr, '');
+        assert.deepStrictEqual(JSON.parse(fs.readFileSync(output, 'utf8')), JSON.parse(res.stdout));
+    });
+});

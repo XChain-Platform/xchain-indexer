@@ -89,6 +89,7 @@
  *                                                     restructure has to survive)
  *   node bin/consensus-identity.js --compare <pin>    compare the selected pin
  *                                                     block field by field
+ *   node bin/consensus-identity.js --out <file>       write the identity as JSON
  *
  *   XC_ROLLCALL_REGTEST_ACTIVATION=armed XC_ROLLCALL_GATES_REGTEST_ACTIVATION=armed \
  *     node bin/consensus-identity.js
@@ -104,6 +105,13 @@ const path   = require('path');
 const crypto = require('crypto');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
+
+class CliUsageError extends Error {
+    constructor(message) {
+        super(message);
+        this.name = 'CliUsageError';
+    }
+}
 
 /** Key-sorted JSON, so the hash of a map does not depend on insertion order. */
 function canonicalJson(value) {
@@ -266,15 +274,27 @@ async function readStateHash(opts) {
 function parseArgs(argv) {
     const opts = { json: false, stateHash: false, network: 'regtest', chain: 'BTC', assertNoAbsent: false };
     for (let i = 0; i < argv.length; i += 1) {
-        if (argv[i] === '--json') opts.json = true;
-        else if (argv[i] === '--state-hash') opts.stateHash = true;
-        else if (argv[i] === '--network') { opts.network = argv[i + 1]; i += 1; }
-        else if (argv[i] === '--chain') { opts.chain = argv[i + 1]; i += 1; }
-        else if (argv[i] === '--db') { opts.db = argv[i + 1]; i += 1; }
-        else if (argv[i] === '--at-block') { opts.atBlock = Number(argv[i + 1]); opts.stateHash = true; i += 1; }
-        else if (argv[i] === '--assert-no-absent') opts.assertNoAbsent = true;
-        else if (argv[i] === '--compare') { opts.compare = path.resolve(argv[i + 1]); i += 1; }
-        else if (argv[i] === '--help' || argv[i] === '-h') opts.help = true;
+        const arg = argv[i];
+        const takeValue = () => {
+            const value = argv[i + 1];
+            if (value === undefined || value.startsWith('-')) {
+                throw new CliUsageError(`${arg} requires a value`);
+            }
+            i += 1;
+            return value;
+        };
+
+        if (arg === '--json') opts.json = true;
+        else if (arg === '--state-hash') opts.stateHash = true;
+        else if (arg === '--network') opts.network = takeValue();
+        else if (arg === '--chain') opts.chain = takeValue();
+        else if (arg === '--db') opts.db = takeValue();
+        else if (arg === '--at-block') { opts.atBlock = Number(takeValue()); opts.stateHash = true; }
+        else if (arg === '--assert-no-absent') opts.assertNoAbsent = true;
+        else if (arg === '--compare') opts.compare = path.resolve(takeValue());
+        else if (arg === '--out') opts.out = path.resolve(takeValue());
+        else if (arg === '--help' || arg === '-h') opts.help = true;
+        else throw new CliUsageError(`unknown flag: ${arg}`);
     }
     return opts;
 }
@@ -301,6 +321,11 @@ async function main() {
             + 'this build has lost:');
         for (const key of identity.consensus_rules_gates_absent_keys) console.error(`  ${key}`);
         process.exitCode = 1;
+    }
+
+    if (opts.out) {
+        fs.mkdirSync(path.dirname(opts.out), { recursive: true });
+        fs.writeFileSync(opts.out, `${JSON.stringify(identity, null, 2)}\n`);
     }
 
     if (opts.json) {
@@ -340,13 +365,14 @@ async function main() {
 
 if (require.main === module) {
     main().then(() => process.exit(process.exitCode || 0), (e) => {
-        console.error(`consensus-identity: ${e.message}`);
+        console.error(e instanceof CliUsageError ? e.message : `consensus-identity: ${e.message}`);
         process.exit(2);
     });
 }
 
 module.exports = {
     codeIdentity,
+    parseArgs,
     readStateHash,
     canonicalJson,
     compareIdentity,
