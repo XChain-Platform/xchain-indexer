@@ -23,6 +23,7 @@
  ********************************************************************/
 
 const { assert, fs, path, Database, modeOf } = require('./migration_runner.test/helpers/migration_fixtures.js');
+const crypto = require('crypto');
 
 
 describe('Database._migrationMode() @regression @tier1', function () {
@@ -154,6 +155,71 @@ describe('legacy migration rename: ledger remap + ordering @regression @tier1', 
         Object.entries(RENAMES).forEach(function ([oldName, newName]) {
             assert.strictEqual(byFrom.get(oldName), newName);
         });
+    });
+});
+
+describe('verifyTables() fresh-schema migration baseline @regression @tier1', function () {
+    const SQL_DIR = path.join(__dirname, '..', '..', '..', 'src', 'sql');
+    const MIG_DIR = path.join(SQL_DIR, 'migrations');
+    const schemaFiles = fs.readdirSync(SQL_DIR).filter(f => f.endsWith('.sql'));
+    const migrationFiles = fs.readdirSync(MIG_DIR).filter(f => f.endsWith('.sql')).sort();
+
+    function makeDb(tableExists) {
+        const inserted = [];
+        const created = [];
+        const conn = {
+            async query(sql, params) {
+                if (/information_schema\.tables/i.test(sql))
+                    return tableExists(params[1]) ? [{ table_name: params[1] }] : [];
+                if (/^CREATE TABLE IF NOT EXISTS schema_migrations/i.test(sql)) return [];
+                if (/^INSERT INTO schema_migrations/i.test(sql)) {
+                    inserted.push(params);
+                    return { affectedRows: 1 };
+                }
+                throw new Error('unexpected query: ' + sql);
+            },
+            async release() {},
+        };
+        const db = Object.create(Database.prototype);
+        db.dbName = 'fresh_indexer';
+        db.getConnection = async () => conn;
+        db.createTable = async (file) => { created.push(file); };
+        db.alterTableForDrift = async () => {};
+        db.reconcileTableIndexes = async () => {};
+        db.util = { throwError(message) { throw new Error(message); } };
+        return { db, inserted, created };
+    }
+
+    async function quietly(fn) {
+        const realLog = console.log, realWarn = console.warn;
+        console.log = console.warn = () => {};
+        try { return await fn(); }
+        finally { console.log = realLog; console.warn = realWarn; }
+    }
+
+    it('records every committed migration when boot schema creates every managed table', async function () {
+        const { db, inserted, created } = makeDb(() => false);
+
+        assert.strictEqual(await quietly(() => db.verifyTables()), true);
+        assert.deepStrictEqual(created.slice().sort(), schemaFiles.slice().sort());
+        assert.deepStrictEqual(inserted.map(row => row[0]), migrationFiles);
+
+        const bridgeFile = '2026-09-12-bridge-tables.sql';
+        const bridgeRaw = fs.readFileSync(path.join(MIG_DIR, bridgeFile), 'utf8');
+        const bridgeRow = inserted.find(row => row[0] === bridgeFile);
+        assert.deepStrictEqual(bridgeRow, [
+            bridgeFile,
+            crypto.createHash('sha256').update(bridgeRaw).digest('hex'),
+            'manual'
+        ]);
+    });
+
+    it('does not baseline migrations when even one managed table already existed', async function () {
+        const { db, inserted, created } = makeDb(table => table !== 'bridge_transfers');
+
+        assert.strictEqual(await quietly(() => db.verifyTables()), true);
+        assert.deepStrictEqual(created, ['bridge_transfers.sql']);
+        assert.deepStrictEqual(inserted, []);
     });
 });
 
