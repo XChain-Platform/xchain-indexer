@@ -133,9 +133,14 @@ module.exports = {
     // Handle returning the next explicit id for the `index_tickers` table.
     // Same deterministic dense-counter role as getNextAddressId (see its note): a wire
     // ^<id> ticker reference resolves through this id, so it must be rollback-reproducible.
+    //
+    // Called only by createTicker's active-transaction branch. The maximum is read with a
+    // locking current read, so a second transaction blocks on the first until it commits or
+    // rolls back and then observes the committed predecessor id. A process-local queue
+    // cannot give that guarantee when several processes share the table.
     async getNextTickerId(){
         let id      = 0;
-        let results = await this.doQuery("SELECT id FROM index_tickers ORDER BY id DESC LIMIT 1");
+        let results = await this.doQuery("SELECT id FROM index_tickers ORDER BY id DESC LIMIT 1 FOR UPDATE");
         if(results.length > 0)
             id = Number(results[0].id);
         id++;
