@@ -71,12 +71,9 @@ module.exports = {
     // The addresses, tickers and DEX market pairs the orphaned range touched, read into
     // the util lists (and the returned pair array) before any delete removes the rows
     // that name them, so the post-delete balance/supply/market recompute can find them.
-    // The addresses/tickers lists are captured here, in this method's own tail, rather
-    // than left for the caller to read after awaiting this call: this.util's lists are
-    // shared with the fee-quote dry-run path (processAction -> resetLists), so a caller-side
-    // read separated from the last row-absorb by even one await could observe a list the
-    // dry-run reset or refilled in between. Capturing before return keeps zero yield points
-    // between the last absorb and the read, matching this method's pre-split shape.
+    // The addresses/tickers lists belong to the rollback-local utility view installed by
+    // the constructor, so fee-quote dispatch cannot reset or refill them between table reads.
+    // Return those private lists with the market list collected by this method.
     async collectAffectedEntities(firstActionIndex){
         let query, args;
         // Placeholder for market pairs
@@ -113,8 +110,7 @@ module.exports = {
             }
         }
 
-        // Capture in the same synchronous tail as the loop above, with no await between the
-        // last absorb and this read (see the method comment above).
+        // Return the rollback-local lists alongside the locally collected markets.
         let addresses = this.util.getAddressesList();
         let tickers   = this.util.getTickersList();
         return { markets, addresses, tickers };
