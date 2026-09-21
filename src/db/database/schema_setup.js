@@ -29,32 +29,11 @@
 const mariadb = require('mariadb');
 const fs      = require('fs');
 const path    = require('path');
-const crypto  = require('crypto');
 const stakeWeightCollation = require('../../consensus/gates/stake_weight_collation_gate');
 const { getLogger } = require('../../observability/index.js');
 // The class itself, for the statics these methods read. db/index.js publishes it before it
 // requires any part, so this resolves to the finished class rather than a half-built export.
 const Database = require('../index.js');
-
-// A completely fresh database is built from the current declarative schema, so every
-// committed migration's end state is already present. Record that baseline without
-// executing historical ALTERs or data repairs against the empty, current schema.
-async function recordFreshSchemaMigrations(self, db){
-    const dir = path.join(__dirname, '..', '..', 'sql', 'migrations');
-    const files = fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort();
-    await self.ensureMigrationsLedger(db);
-    for(const file of files){
-        const raw      = fs.readFileSync(path.join(dir, file), 'utf8');
-        const checksum = crypto.createHash('sha256').update(raw).digest('hex');
-        const mode     = self.migrationMode(raw);
-        await db.query(
-            'INSERT INTO schema_migrations (name, checksum, mode, applied_at) VALUES (?, ?, ?, NOW()) ' +
-            'ON DUPLICATE KEY UPDATE checksum = VALUES(checksum), mode = VALUES(mode), applied_at = NOW()',
-            [file, checksum, mode]
-        );
-    }
-    getLogger().info('Fresh schema: recorded ' + files.length + ' migration(s) already represented by the boot schema.');
-}
 
 module.exports = {
 
@@ -170,12 +149,6 @@ module.exports = {
                 }
             }
         }
-        // Only baseline when this pass built the entire managed schema. An aged or
-        // partially missing database may have legacy rows that a pending migration still
-        // needs to transform, so creating even one table there must not mark migrations
-        // wholesale as applied.
-        if(checked > 0 && created === checked)
-            await recordFreshSchemaMigrations(this, db);
         await db.release();
         getLogger().info('Database and tables verified (' + checked + ' tables, ' + created + ' created).');
         getLogger().info(this.schemaShapeSummary());
