@@ -12,7 +12,7 @@
  *
  * The attest-response canonical twin under the mirror-admission flag day: the two-era
  * bytes with no request block, the pre-train bytes below the activation, the appended
- * request-block-keyed map above it, and a refusal in both directions, every one compared
+ * request-block-keyed map above it, and legacy binding at both version seams, all compared
  * byte for byte against the hub builder when the sibling is trusted.
  * Part of the suite whose entry is test/unit/admission_binding.test.js.
  *
@@ -82,10 +82,12 @@ describe('admission binding: the attest-response canonical twin', function () {
                 if (h.hub) assert.strictEqual(got, hubCanonical(h, legacyBlock, legacyEt, null, legacyNet));
             });
 
-            it('a request below the activation handed a map REFUSES in the other direction', function () {
-                assert.throws(() => h.can.buildResponseCanonicalRaw(Object.assign({}, BASE, { effectiveTime: legacyEt, network: legacyNet, requestBlock: legacyBlock, admitBlocks: { BTC: legacyBlock + 1 } })),
-                    /refusing to build an admission-era canonical/);
-                if (h.hub) assert.throws(() => hubCanonical(h, legacyBlock, legacyEt, { BTC: legacyBlock + 1 }, legacyNet), /refusing to build an admission-era canonical/);
+            it('a request below the activation handed a map uses legacy bytes', function () {
+                const expected = h.can.buildResponseCanonicalRaw(Object.assign({}, BASE, { effectiveTime: legacyEt, network: legacyNet, requestBlock: legacyBlock, admitBlocks: null }));
+                const got = h.can.buildResponseCanonicalRaw(Object.assign({}, BASE, { effectiveTime: legacyEt, network: legacyNet, requestBlock: legacyBlock, admitBlocks: { BTC: legacyBlock + 1 } }));
+                assert.strictEqual(got, expected);
+                if (h.hub) assert.strictEqual(hubCanonical(h, legacyBlock, legacyEt, { BTC: legacyBlock + 1 }, legacyNet),
+                    hubCanonical(h, legacyBlock, legacyEt, null, legacyNet));
             });
 
             it('the spelling guard on effective_time still throws before any admission field is considered', function () {
@@ -116,13 +118,12 @@ describe('admission binding: the attest-response canonical twin', function () {
                     assert.strictEqual(indexerCanonical(h, Object.assign({}, fields, { admitBlocks: fromRow }), arm.modernBlock), got);
                 });
 
-                it('an admission-era request with no map REFUSES on both sides', function () {
-                    assert.throws(() => h.can.buildResponseCanonicalRaw(Object.assign({}, BASE, { effectiveTime: 1234, network: NETWORK, requestBlock: arm.modernBlock })),
-                        /AttestationConsensus: admission-era request|refusing to build a legacy canonical/);
-                    assert.throws(() => h.can.buildResponseCanonicalRaw(Object.assign({}, BASE, { effectiveTime: 1234, network: NETWORK, requestBlock: arm.modernBlock, admitBlocks: null })),
-                        /refusing to build a legacy canonical/);
-                    if (h.hub) assert.throws(() => hubCanonical(h, arm.modernBlock, 1234, null), /refusing to build a legacy canonical/);
-                    // A legacy row read back off the columns is null, which is the same refusal.
+                it('an admission-era request with no map uses legacy bytes on both sides', function () {
+                    const expected = RID + BASE.providerId + BASE.responseHash + BASE.status + BASE.meta + '|1234';
+                    assert.strictEqual(h.can.buildResponseCanonicalRaw(Object.assign({}, BASE, { effectiveTime: 1234, network: NETWORK, requestBlock: arm.modernBlock })), expected);
+                    assert.strictEqual(h.can.buildResponseCanonicalRaw(Object.assign({}, BASE, { effectiveTime: 1234, network: NETWORK, requestBlock: arm.modernBlock, admitBlocks: null })), expected);
+                    if (h.hub) assert.ok(hubCanonical(h, arm.modernBlock, 1234, null).endsWith(expected));
+                    // A legacy row read back off the columns is null, selecting the same bytes.
                     assert.strictEqual(h.act.columnsAdmitBlocks({ admit_block_btc: null }), null);
                 });
             }
