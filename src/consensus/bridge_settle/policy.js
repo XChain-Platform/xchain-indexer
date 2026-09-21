@@ -46,7 +46,7 @@ const createPolicyLegs = require('./policy_legs.js');
  *
  * @returns {{reason: string, terminal: boolean}|{fields: Object}}
  */
-function screenRow(row, ctx){
+function screenRow(deps, row, ctx){
     if(!row || typeof row !== 'object' || !ctx || typeof ctx !== 'object')
         return { reason: SETTLE_REASON.ROW_FIELDS, terminal: true };
 
@@ -58,12 +58,18 @@ function screenRow(row, ctx){
     if(!id || !origin || !name || snapshot === null || seq === null)
         return { reason: SETTLE_REASON.ROW_FIELDS, terminal: true };
 
-    if(String(row.network || '') !== String(ctx.network || ''))
+    if(String(row.network || '') !== String(ctx.network || '')){
+        deps.refusalLog.warnOnce('XPOLICY', id, SETTLE_REASON.NETWORK,
+                                 SETTLE_REASON.NETWORK + ' : terminal');
         return { reason: SETTLE_REASON.NETWORK, terminal: true };
+    }
     const localChainId = ctx.config ? ctx.config['BTC_CHAIN_ID'] : null;
     if(!isNull(row.btc_chain_id) && !isNull(localChainId) &&
-       String(row.btc_chain_id) !== String(localChainId))
+       String(row.btc_chain_id) !== String(localChainId)){
+        deps.refusalLog.warnOnce('XPOLICY', id, SETTLE_REASON.CHAIN_ID,
+                                 SETTLE_REASON.CHAIN_ID + ' : terminal');
         return { reason: SETTLE_REASON.CHAIN_ID, terminal: true };
+    }
     if(String(row.status || '') !== 'finalized')
         return { reason: SETTLE_REASON.NOT_FINALIZED, terminal: false };
 
@@ -251,7 +257,7 @@ async function applyPolicySnapshot(deps, row, ctx){
     const out = (applied, reason, terminal, actionIndexes) =>
         ({ applied: applied, reason: reason, terminal: !!terminal, actionIndexes: actionIndexes || [] });
 
-    const screened = screenRow(row, ctx);
+    const screened = screenRow(deps, row, ctx);
     if(screened.reason) return out(false, screened.reason, screened.terminal);
     const f = screened.fields;
 
