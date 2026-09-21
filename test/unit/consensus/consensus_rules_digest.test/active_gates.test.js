@@ -174,6 +174,35 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
         assert.ok(crd.activeGatesAt(0, 'regtest').includes('attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION'));
     });
 
+    it('resolves both admission maps by coin while a sibling slot stays on the sentinel', function () {
+        const CRD     = require.resolve('../../../../src/consensus_rules_digest.js');
+        const realCrd = require.cache[CRD];
+        const keys = [
+            'mirror_admission_activation.MIRROR_ADMISSION_ACTIVATION',
+            'mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION',
+        ];
+        for (const key of keys) {
+            const restore = stubRegistryRow(key, {
+                'BTC:testnet': 100,
+                'LTC:testnet': crd.FAR_FUTURE_HEIGHT_SENTINEL,
+                testnet:       crd.FAR_FUTURE_HEIGHT_SENTINEL,
+            });
+            try {
+                delete require.cache[CRD];
+                const fresh = require('../../../../src/consensus_rules_digest.js');
+                assert.ok(fresh.activeGatesAt(100, 'testnet', 'BTC').includes(key),
+                    key + ' must be active at its own coin\'s armed height');
+                assert.ok(!fresh.activeGatesAt(100, 'testnet', 'LTC').includes(key),
+                    key + ' must not inherit an armed sibling coin\'s height');
+                assert.ok(!fresh.activeGatesAt(crd.FAR_FUTURE_HEIGHT_SENTINEL, 'testnet', 'LTC').includes(key),
+                    key + ' sentinel slot must stay inactive however high the chain climbs');
+            } finally {
+                restore();
+                require.cache[CRD] = realCrd;
+            }
+        }
+    });
+
     it('returns [] for a non-finite height', function () {
         assert.deepStrictEqual(crd.activeGatesAt(NaN, 'regtest'), []);
         assert.deepStrictEqual(crd.activeGatesAt(undefined, 'regtest'), []);
