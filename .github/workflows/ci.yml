@@ -98,7 +98,7 @@ jobs:
       # public post-flip.
       - name: Stage the vendored xchain-vm from its canonical sibling
         env:
-          SIBLINGS_REF: ${{ github.ref == 'refs/heads/master' && 'master' || 'develop' }}
+          SIBLINGS_REF: ${{ github.base_ref || (github.ref == 'refs/heads/master' && 'master' || 'develop') }}
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE/.."
@@ -176,7 +176,7 @@ jobs:
       # a perf regression and is really a missing checkout.
       - name: Stage the vendored xchain-vm from its canonical sibling
         env:
-          SIBLINGS_REF: ${{ (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/')) && github.head_ref || (github.ref == 'refs/heads/master' && 'master' || 'develop') }}
+          SIBLINGS_REF: ${{ github.base_ref || (github.ref == 'refs/heads/master' && 'master' || 'develop') }}
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE/.."
