@@ -71,8 +71,13 @@ class Rollback {
         // indexerReorgView guard in XChainIndexer.js.
         this.indexerView = (this.indexerDb && typeof this.indexerDb.apiView === 'function') ? this.indexerDb.apiView() : this.indexerDb;
 
-        // Setup alias to the utility class
-        this.util      = indexer.util;
+        // Inherit the indexer's utility methods and configuration, but own the mutable
+        // address/ticker lists. Fee-quote dry runs dispatch through indexer.util and call
+        // resetLists before every action. That reset can land between any two awaits in the
+        // rollback entity loop, so sharing these lists could discard entities collected from
+        // earlier tables or leak the quoted action's entities into the rollback recompute.
+        this.util      = Object.create(indexer.util);
+        this.util.resetLists();
 
         // Setup alias to the hub client (used to retract price rows + cross_chain_calls
         // relay rows seeded from rolled-back PRICE / XCALL actions on the cross-chain hub)
@@ -154,11 +159,9 @@ class Rollback {
         let firstActionIndex      = scope.firstActionIndex;
         let lastActionIndex       = scope.lastActionIndex;
 
-        // collectAffectedEntities captures the addresses/tickers lists itself, in the same
-        // synchronous tail as its own last row-absorb (no await between fill and capture): a
-        // concurrent fee-quote dry-run resets/refills these same shared indexer.util lists
-        // (processAction -> resetLists), so a read taken after an extra await here could see a
-        // foreign or incomplete set. See the AWAIT-POINT rule (finding 3f12c42f/92357c37).
+        // collectAffectedEntities returns this rollback's private address/ticker lists. A
+        // concurrent fee-quote dry run uses indexer.util, so it cannot reset or refill them at
+        // any await in the entity loop.
         let { markets, addresses, tickers } = await this.collectAffectedEntities(firstActionIndex);
 
         // The push-generation fence and the durable retraction rows the transaction stages
