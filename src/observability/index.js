@@ -78,6 +78,17 @@ let _shipperAttached = false;
 // (`<ts> warn [svc] <ts> warn [svc] msg`).
 let _sink = null;
 
+// routeLabel's unmatched-path fallback (below) hands out one label per
+// distinct first path segment, and that segment is chosen by whoever sends
+// the request. Without a cap, a flood of distinct unmatched segments buys one
+// series per request against the SHARED per-metric budget every route draws
+// from (Registry maxSeries, metrics.js), and once that budget is spent the
+// service's own routes can no longer register a series either. Past
+// UNMATCHED_ROUTE_LABEL_CAP distinct segments, every further one collapses
+// onto a single overflow label instead of buying its own series.
+const UNMATCHED_ROUTE_LABEL_CAP = 20;
+const _unmatchedRouteLabels = new Set();
+
 const CONSOLE_METHODS = { log: 'info', info: 'info', warn: 'warn', error: 'error', debug: 'debug' };
 
 function toBool(v, fallback = false) {
@@ -110,7 +121,10 @@ function timingSafeEqual(a, b) {
 // Path label for HTTP metrics. Express route patterns ("/hub-db/snapshot/:t")
 // are already low-cardinality; a raw URL is not, so anything without a matched
 // route falls back to its first path segment. This is the difference between a
-// dozen series and one per block height.
+// dozen series and one per block height. The first segment is still whatever
+// the requester sent, so past UNMATCHED_ROUTE_LABEL_CAP distinct segments seen
+// (above), later ones share a fixed overflow label instead of each buying a
+// new series.
 function routeLabel(req) {
     if (req.route && req.route.path) {
         const base = req.baseUrl || '';
@@ -119,7 +133,14 @@ function routeLabel(req) {
     }
     const raw = (req.originalUrl || req.url || '/').split('?')[0];
     const seg = raw.split('/').filter(Boolean)[0];
-    return seg ? `/${seg}` : '/';
+    if (!seg) return '/';
+    const label = `/${seg}`;
+    if (_unmatchedRouteLabels.has(label)) return label;
+    if (_unmatchedRouteLabels.size < UNMATCHED_ROUTE_LABEL_CAP) {
+        _unmatchedRouteLabels.add(label);
+        return label;
+    }
+    return '/_unmatched';
 }
 
 // Express dispatches its router stack in registration order, so a timing
@@ -394,6 +415,7 @@ function _resetObservability() {
     _logger = null;
     _registry = null;
     _shipperAttached = false;
+    _unmatchedRouteLabels.clear();
 }
 
 module.exports = {
