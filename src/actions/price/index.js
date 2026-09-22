@@ -111,6 +111,25 @@ class Price {
         let batch    = v0.parseBatchBody(this.config, data, inflated.fields, inflated.error);
         error        = batch.error;
 
+        // STRICT PARAMETER LENGTH. Nothing downstream checks whether the field list was
+        // consumed to its end, so a wire with junk appended after the last signature would
+        // otherwise parse identically to the same batch without it and land the same row
+        // under the same EQUIV key: two byte-distinct spellings of one batch under one
+        // equiv key is exactly the shape equivocation reasoning depends on being
+        // impossible. Computed from the counts parseBatchBody already resolved (rounds,
+        // pairs per round, admit-block presence, sig count), so this stays byte-exact with
+        // what was actually consumed and needs no second parse of the wire.
+        if(!error){
+            let expectedFields = 5;
+            for(let round of batch.rounds){
+                expectedFields += 4 + (2 * round.pairs.length);
+                if(round.admitBlocks !== undefined) expectedFields += 1;
+            }
+            expectedFields += 1 + (2 * batch.sigCount);
+            if(inflated.fields.length !== expectedFields)
+                error = 'invalid: trailing data after batch signatures';
+        }
+
         if(!error){
             let straddle = v0.checkBatchStraddle(this.config, batch.rounds);
             if(straddle) error = straddle;
