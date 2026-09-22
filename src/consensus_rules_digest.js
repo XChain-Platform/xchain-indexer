@@ -77,9 +77,10 @@ const SHARED_GATES = [
     ['snapshot_reorg_buffer',                   ['SNAPSHOT_BURIAL_ACTIVATION']],
     ['stake_weighted_quorum',                   ['STAKE_WEIGHTED_QUORUM_ACTIVATION']],
     ['attest_responsible_widening_activation',  ['ATTEST_RESPONSIBLE_WIDENING_ACTIVATION', 'ATTEST_RESPONSIBLE_WIDENING']],
-    // Unratified on mainnet and testnet (both null): this row moves the digest for a
-    // gate that decides nothing yet, so an upgraded hub reports a rules mismatch
-    // against un-upgraded peers during the deploy wave, not a divergent ledger.
+    // Armed on testnet (height 151324, 2026-09-07) and at genesis on regtest; still
+    // null (unratified) on mainnet. This row moves the digest for a gate that is live
+    // on testnet, so an upgraded hub reports a rules mismatch against un-upgraded
+    // testnet peers during the deploy wave, not a divergent ledger.
     ['attest_response_mirror_activation',       ['ATTEST_RESPONSE_MIRROR_ACTIVATION']],
     // The zero-confirmation flip (one height for serve-at-tip, the stage-2 ladder and the
     // applier fall-through) and the stage-2 ladder constants it selects. The V2 constants
