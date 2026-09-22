@@ -36,7 +36,7 @@ const { ADDR1, ADDR2, ADDR3, TICK_X, T0, freshIndexer, seedGasToken } = require(
 // Suite-level setup / teardown
 // ---------------------------------------------------------------------------
 before(async function () {
-    this.timeout(30000);
+    this.timeout(120000); // the tier's --timeout; a slow runner's schema build outlasts 30s
     await createDatabases(__filename);
     await createDecoderSchema();
 });
