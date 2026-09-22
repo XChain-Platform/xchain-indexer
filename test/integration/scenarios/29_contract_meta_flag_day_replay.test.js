@@ -112,8 +112,8 @@ const T_PRE = 1789000000;
 // median is a T_FILL value, so B_POST is the first block whose PROTOCOL time is
 // above the flag day. This is the same arithmetic the release re-pin obeys (spec
 // 2.4: strictly above the tip AND the tip's median-time-past).
-const T_FILL = [10000000001, 10000000002, 10000000003];
-const T_POST = 10000000004;
+const T_FILL = [1789257601, 1789257602, 1789257603];
+const T_POST = 1789257604;
 
 const b64 = s => Buffer.from(s, 'utf8').toString('base64');
 
