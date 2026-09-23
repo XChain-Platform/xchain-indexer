@@ -17,6 +17,11 @@ const crypto = require('crypto');
 
 const abw = require('../../src/actions/attest/attest_batch_wire.js');
 
+// The wire takes the caller's era predicate to pick the row field set. These rows
+// carry admit_block_btc, so the wire suite runs in the admission era; which era the
+// live registry picks for a given anchor is attest_batch_wire_era.test.js's subject.
+const ADMISSION_ERA = () => true;
+
 const PUBKEY_A = 'a'.repeat(64);
 const SIG_A    = '1'.repeat(128);
 
@@ -81,11 +86,11 @@ function chunkRows(wires) {
 }
 
 function roundTrip(win) {
-    const enc = abw.encodeAttestBatch(win);
+    const enc = abw.encodeAttestBatch(win, ADMISSION_ERA);
     assert.strictEqual(enc.ok, true, 'fixture window must encode');
     const head = abw.parseAttestBatchHead(toParams(enc.wires[0]));
     assert.strictEqual(head.ok, true, 'fixture head must parse');
     return { enc, head, chunks: chunkRows(enc.wires) };
 }
 
-module.exports = { PUBKEY_A, SIG_A, batchRow, window_, noisy, toParams, chunkRows, roundTrip };
+module.exports = { ADMISSION_ERA, PUBKEY_A, SIG_A, batchRow, window_, noisy, toParams, chunkRows, roundTrip };

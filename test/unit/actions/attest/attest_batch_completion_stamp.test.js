@@ -36,6 +36,7 @@ const crypto = require('crypto');
 const { createMockIndexer, createBaseData } = require('../../../fixtures/mocks');
 const Attest  = require('../../../../src/actions/attest/index.js');
 const abw     = require('../../../../src/actions/attest/attest_batch_wire.js');
+const { isAdmissionEra } = require('../../../../src/consensus/gates/mirror_admission_gate.js');
 const ed25519 = require('../../../../src/consensus/ed25519.js');
 
 const { ATTEST_BATCH_COMPLETION_STAMP } = Attest;
@@ -73,7 +74,7 @@ function chunkedBatch(want){
             row_count: n, btc_block_height: ANCHOR, rows,
             sigs: [{ pubkey: PUBKEY_A, sig: SIG_A }],
         };
-        const enc = abw.encodeAttestBatch(win);
+        const enc = abw.encodeAttestBatch(win, isAdmissionEra);
         if(enc.totalChunks === want) return { win, enc };
     }
     throw new Error('no window of this fixture shape encodes to ' + want + ' chunks');
@@ -161,7 +162,7 @@ async function writeTimeRefusals(){
             network: 'testnet', window_start: 1700000000, window_end: 1700003600,
             row_count: 2, btc_block_height: ANCHOR, rows,
             sigs: [{ pubkey: PUBKEY_A, sig: SIG_A }],
-        });
+        }, isAdmissionEra);
         const data = batchData();
         await h.parse(wireParams(enc.wires[0]), data, null);
         cases.push(data['STATUS']);
@@ -263,7 +264,7 @@ describe('ATTEST v5 head: the batch-completion marker @regression', function(){
                 network: 'regtest', window_start: 1700000000, window_end: 1700003600,
                 row_count: 1, btc_block_height: ANCHOR, rows,
                 sigs: [{ pubkey: PUBKEY_A, sig: SIG_A }],
-            });
+            }, isAdmissionEra);
             assert.strictEqual(enc.totalChunks, 1, 'fixture assumption: one wire');
             ed25519.verify.returns(false);
             const data = batchData();

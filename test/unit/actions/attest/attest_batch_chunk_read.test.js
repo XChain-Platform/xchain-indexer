@@ -28,6 +28,7 @@ const crypto = require('crypto');
 
 const Database = require('../../../../src/db');
 const abw      = require('../../../../src/actions/attest/attest_batch_wire.js');
+const { isAdmissionEra } = require('../../../../src/consensus/gates/mirror_admission_gate.js');
 
 const AUTHOR  = 'nWbnkorpwGHrGQjaLo2rmyRQPPzn8CFrKQ';
 const FOREIGN = 'nUxUJZAhGwNyZDvqSHUFZ2NhVKAqZbnyDp';
@@ -70,7 +71,7 @@ function encodeBatch(rowCount, payloadBytes) {
         network: 'regtest', window_start: 1700000000, window_end: 1700003600,
         row_count: rows.length, btc_block_height: 900000, rows, sigs: [],
     };
-    const encoded = abw.encodeAttestBatch(window);
+    const encoded = abw.encodeAttestBatch(window, isAdmissionEra);
     assert.strictEqual(encoded.ok, true, 'fixture assumption: the window encodes');
     return encoded;
 }
@@ -177,7 +178,7 @@ describe('ATTEST batch chunk read: the publisher partition and its row limit (ro
         assert.strictEqual(read.length, encoded.totalChunks,
             'the whole chunk set survives the bound; a limit that clipped it would deny the window');
 
-        const assembled = abw.reassembleAttestBatch(head, read.filter(r => Number(r.chunk_index) !== 0));
+        const assembled = abw.reassembleAttestBatch(head, read.filter(r => Number(r.chunk_index) !== 0), isAdmissionEra);
         assert.strictEqual(assembled.ok, true,
             'a truncated read fails here on coverage, which is what the bound must never cause');
         assert.strictEqual(assembled.batch.rows.length, 20);
@@ -195,6 +196,6 @@ describe('ATTEST batch chunk read: the publisher partition and its row limit (ro
         // unscoped still carry only this author's, so the bound changes no verdict.
         const unscoped = await db.getAttestBatchChunks(encoded.batchKey);
         assert.strictEqual(abw.reassembleAttestBatch(head,
-            unscoped.filter(r => String(r.source) === AUTHOR && Number(r.chunk_index) !== 0)).ok, true);
+            unscoped.filter(r => String(r.source) === AUTHOR && Number(r.chunk_index) !== 0), isAdmissionEra).ok, true);
     });
 });

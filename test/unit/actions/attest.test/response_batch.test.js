@@ -27,6 +27,7 @@ const crypto = require('crypto');
 
 const swq = require('../../../../src/consensus/stake_weighted_quorum.js');
 const abw = require('../../../../src/actions/attest/attest_batch_wire.js');
+const { isAdmissionEra } = require('../../../../src/consensus/gates/mirror_admission_gate.js');
 // Same module instance Attest holds a reference to (Node module cache); stubbing
 // `verify` here controls signature acceptance inside the handler.
 const ed25519 = require('../../../../src/consensus/ed25519.js');
@@ -58,7 +59,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         it('a good batch is valid and stages an attest_batch hub push', async function () {
             const { handler: h, db } = batchHandler('DOGE');
             const win = batchWindow(2);
-            const enc = abw.encodeAttestBatch(win);
+            const enc = abw.encodeAttestBatch(win, isAdmissionEra);
             const data = batchData();
             await h.parse(wireParams(enc.wires[0]), data, null);
 
@@ -85,7 +86,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.strictEqual(payload.action_index, 71);
             assert.strictEqual(payload.block_index, 6300000);
             assert.strictEqual(payload.block_time, 1700004000);
-            assert.deepStrictEqual(payload.rows, JSON.parse(abw.buildAttestBatchBody(win)).rows,
+            assert.deepStrictEqual(payload.rows, JSON.parse(abw.buildAttestBatchBody(win, isAdmissionEra)).rows,
                 'the reassembled body verbatim, so the hub re-verifies the bytes this node verified');
             assert.deepStrictEqual(payload.sigs, [{ pubkey: PUBKEY_A, sig: SIG_A }]);
 
@@ -107,7 +108,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
 
         it('an empty window (row_count 0) is a valid batch and still pushes', async function () {
             const { handler: h, db } = batchHandler('DOGE');
-            const enc = abw.encodeAttestBatch(batchWindow(0));
+            const enc = abw.encodeAttestBatch(batchWindow(0), isAdmissionEra);
             const data = batchData();
             await h.parse(wireParams(enc.wires[0]), data, null);
             assert.strictEqual(data['STATUS'], 'valid');
@@ -118,7 +119,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         it('a bad batch quorum is invalid, with no push and no partial absorb', async function () {
             ed25519.verify.returns(false);
             const { handler: h, db } = batchHandler('DOGE');
-            const enc = abw.encodeAttestBatch(batchWindow(2));
+            const enc = abw.encodeAttestBatch(batchWindow(2), isAdmissionEra);
             const data = batchData();
             await h.parse(wireParams(enc.wires[0]), data, null);
 
@@ -130,7 +131,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         it('a signer outside the attestation capability snapshot does not count', async function () {
             const { handler: h, db } = batchHandler('DOGE');
             db.getValidatorsByCapability.resolves([{ pubkey: PUBKEY_B }]);
-            const enc = abw.encodeAttestBatch(batchWindow(1));
+            const enc = abw.encodeAttestBatch(batchWindow(1), isAdmissionEra);
             const data = batchData();
             await h.parse(wireParams(enc.wires[0]), data, null);
             assert.match(data['STATUS'], /^invalid: insufficient PBFT quorum/);
@@ -142,7 +143,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         it('takes the stake-weighted quorum at and above the SWQ anchor', async function () {
             swq.isStakeWeightedQuorumActive.returns(true);
             const { handler: h, db } = batchHandler('DOGE');
-            const enc = abw.encodeAttestBatch(batchWindow(1));
+            const enc = abw.encodeAttestBatch(batchWindow(1), isAdmissionEra);
             const data = batchData();
             await h.parse(wireParams(enc.wires[0]), data, null);
             assert.strictEqual(data['STATUS'], 'valid');
@@ -167,7 +168,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             // verification happens on the BTC indexer after the hub re-serves the row.
             const { handler: h } = batchHandler('DOGE');
             const spy = sinon.spy(h, 'computeResponsibleSet');
-            const enc = abw.encodeAttestBatch(batchWindow(3));
+            const enc = abw.encodeAttestBatch(batchWindow(3), isAdmissionEra);
             await h.parse(wireParams(enc.wires[0]), batchData(), null);
             assert.strictEqual(spy.called, false);
         });
@@ -175,7 +176,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         for (const coin of ['BTC', 'LTC']) {
             it(`is invalid on ${coin}: batches ride the DOGE rail`, async function () {
                 const { handler: h, db } = batchHandler(coin);
-                const enc = abw.encodeAttestBatch(batchWindow(1));
+                const enc = abw.encodeAttestBatch(batchWindow(1), isAdmissionEra);
                 const head = batchData({ COIN: coin });
                 await h.parse(wireParams(enc.wires[0]), head, null);
                 assert.strictEqual(head['STATUS'], 'invalid: ATTEST v5 (batches ride the DOGE rail)');
@@ -191,7 +192,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
 
         it('refuses a batch declaring another network', async function () {
             const { handler: h, db } = batchHandler('DOGE');
-            const enc = abw.encodeAttestBatch(batchWindow(1, { network: 'testnet' }));
+            const enc = abw.encodeAttestBatch(batchWindow(1, { network: 'testnet' }), isAdmissionEra);
             const data = batchData();
             await h.parse(wireParams(enc.wires[0]), data, null);
             assert.strictEqual(data['STATUS'], 'invalid: NETWORK (batch declares testnet)');
@@ -233,7 +234,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             const enc = abw.encodeAttestBatch({
                 network: 'regtest', window_start: 1, window_end: 2, row_count: 40,
                 btc_block_height: ANCHOR, rows, sigs: [{ pubkey: PUBKEY_A, sig: SIG_A }],
-            });
+            }, isAdmissionEra);
             assert.ok(enc.totalChunks > 1, 'the fixture must actually chunk');
 
             const data = batchData({ FORMAT: 6, ACTION_INDEX: 80 });
@@ -248,7 +249,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         it('pushes nothing when the node has no hub client', async function () {
             const { handler: h, db } = batchHandler('DOGE');
             h.hubClient = null;
-            const enc = abw.encodeAttestBatch(batchWindow(1));
+            const enc = abw.encodeAttestBatch(batchWindow(1), isAdmissionEra);
             const data = batchData();
             await h.parse(wireParams(enc.wires[0]), data, null);
             assert.strictEqual(data['STATUS'], 'valid', 'a hub-less node judges the batch identically');
@@ -280,7 +281,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.strictEqual(db.enqueueHubPushTx.firstCall.args[0], 'attest_batch');
 
             const payload = db.enqueueHubPushTx.firstCall.args[1];
-            assert.deepStrictEqual(payload.rows, JSON.parse(abw.buildAttestBatchBody(win)).rows,
+            assert.deepStrictEqual(payload.rows, JSON.parse(abw.buildAttestBatchBody(win, isAdmissionEra)).rows,
                 'the reassembled body verbatim, so the hub verifies the bytes the chain carried');
             assert.strictEqual(payload.row_count, win.row_count);
             assert.strictEqual(payload.action_index, 71,
@@ -325,7 +326,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.strictEqual(head['STATUS'], 'valid');
             assert.strictEqual(db.enqueueHubPushTx.callCount, 1, 'the head completes the coverage and absorbs');
             assert.deepStrictEqual(db.enqueueHubPushTx.firstCall.args[1].rows,
-                JSON.parse(abw.buildAttestBatchBody(win)).rows);
+                JSON.parse(abw.buildAttestBatchBody(win, isAdmissionEra)).rows);
             assert.strictEqual(db.enqueueHubPushTx.firstCall.args[1].action_index, 73,
                 'the head names the batch, and here the head IS the completing action');
             const rollbackKey = db.enqueueHubPushTx.firstCall.args[2];

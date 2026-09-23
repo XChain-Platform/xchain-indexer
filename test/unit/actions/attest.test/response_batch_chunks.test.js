@@ -27,6 +27,7 @@ const fs = require('fs');
 const path = require('path');
 
 const abw = require('../../../../src/actions/attest/attest_batch_wire.js');
+const { isAdmissionEra } = require('../../../../src/consensus/gates/mirror_admission_gate.js');
 // Same module instance Attest holds a reference to (Node module cache); stubbing
 // `verify` here controls signature acceptance inside the handler.
 const ed25519 = require('../../../../src/consensus/ed25519.js');
@@ -189,7 +190,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             assert.strictEqual(honest['STATUS'], 'valid', 'the publisher\'s own slot was never taken');
             assert.strictEqual(db.enqueueHubPushTx.callCount, 1, 'and the batch completes');
             assert.deepStrictEqual(db.enqueueHubPushTx.firstCall.args[1].rows,
-                JSON.parse(abw.buildAttestBatchBody(win)).rows);
+                JSON.parse(abw.buildAttestBatchBody(win, isAdmissionEra)).rows);
             assert.strictEqual(db.setAttestBatchStatus.called, false,
                 'no foreign bytes ever joined the reassembly, so the head keeps its verdict');
             assert.strictEqual(stored.find(r => r.action_index === 72).status, 'valid',
@@ -224,7 +225,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         it('a second head for the window from the same publisher neither absorbs nor pushes', async function () {
             const { handler: h, db } = batchHandler('DOGE');
             const stored = chunkStore(db);
-            const enc = abw.encodeAttestBatch(batchWindow(2));
+            const enc = abw.encodeAttestBatch(batchWindow(2), isAdmissionEra);
 
             const first = await land(h, enc, 0, 71, PUB_A);
             assert.strictEqual(first['STATUS'], 'valid');
@@ -244,7 +245,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             for (const [firstIdx, secondIdx] of [[71, 72], [72, 71]]) {
                 const { handler: h, db } = batchHandler('DOGE');
                 const stored = chunkStore(db);
-                const enc = abw.encodeAttestBatch(batchWindow(2));
+                const enc = abw.encodeAttestBatch(batchWindow(2), isAdmissionEra);
                 await land(h, enc, 0, firstIdx, PUB_A);
                 await land(h, enc, 0, secondIdx, PUB_A);
                 const valid = stored.filter(r => r.status === 'valid').map(r => r.action_index);
@@ -260,7 +261,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
             // honest publisher; the pick is therefore per publisher.
             const { handler: h, db } = batchHandler('DOGE');
             chunkStore(db);
-            const enc = abw.encodeAttestBatch(batchWindow(2));
+            const enc = abw.encodeAttestBatch(batchWindow(2), isAdmissionEra);
 
             await land(h, enc, 0, 71, PUB_B);
             const honest = await land(h, enc, 0, 72, PUB_A);
@@ -302,7 +303,7 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         it('a single-wire head pushes its own index, which is the head\'s', async function () {
             const { handler: h, db } = batchHandler('DOGE');
             chunkStore(db);
-            const enc = abw.encodeAttestBatch(batchWindow(2));
+            const enc = abw.encodeAttestBatch(batchWindow(2), isAdmissionEra);
             await land(h, enc, 0, 71);
             assert.strictEqual(db.enqueueHubPushTx.firstCall.args[1].action_index, 71);
         });
