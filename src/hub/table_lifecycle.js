@@ -21,7 +21,7 @@
  *
  *   1. REPLICATION  - how (and whether) xchain-sync delivers the table to
  *                     followers. Generates the per-block stream topology
- *                     (xchain-sync/src/replicatedTables.js TOPOLOGY.indexer).
+ *                     (xchain-sync/src/schema/replicated_tables.js TOPOLOGY.indexer).
  *   2. ROLLBACK     - how a chain reorg unwinds the table, on the source
  *                     indexer (src/rollback.js) and on every replica
  *                     (xchain-sync/src/ClientRollback.js). Generates both
@@ -42,7 +42,7 @@
  * understanding the table, not by silencing the tests.
  *
  * BYTE-ALIGNED TWIN: copied verbatim, with its table_lifecycle/ parts, into
- * xchain-sync/src/tableLifecycle.js (sync has no dependency on this package
+ * xchain-sync/src/table_lifecycle.js (sync has no dependency on this package
  * by design; same convention as stateHash.js / merkle.js). Edit here, then
  * `cp` to the twin; the sync rollback-coverage suite asserts byte-identity.
  *
@@ -152,7 +152,7 @@ const ORPHAN_SWEEPS = [
 // per-table content checksum over a bounded block window: xchain-sync computes
 // it in BlockHasher.computeTableContentChecksums, the source publishes it on
 // /status (api.js) and a follower at the same height recomputes and compares in
-// ClientSync._verifyAgainstSource. Because both sides run the SAME method over
+// ClientSync.verifyTableContentParity. Because both sides run the SAME method over
 // the SAME published bound, equal count + different checksum means content
 // divergence, which is exactly the class the row counts cannot see.
 //
@@ -169,7 +169,7 @@ const ORPHAN_SWEEPS = [
 //      purge deferred out of band. Neither has a block bound a source and a
 //      follower can agree on, so a checksum over them would false-alarm rather
 //      than detect. Both keep the convergence channel they already have (the
-//      snapshot upsert; ClientSync._reconcileDispensers' periodic replace).
+//      snapshot upsert; ClientSync.reconcileDispensers' periodic replace).
 //
 //   2. IN-PLACE MUTATED tables: exactly the tables declaring the 'state_hash'
 //      class above. A row of theirs written in block N is edited again in a
@@ -261,10 +261,10 @@ function replicaRollbackTables(){
     };
 }
 
-// Per-block stream topology for the indexer DB (xchain-sync/src/
-// replicatedTables.js TOPOLOGY.indexer). The decoder DB topology is NOT
+// Per-block stream topology for the indexer DB (xchain-sync/src/schema/
+// replicated_tables.js TOPOLOGY.indexer). The decoder DB topology is NOT
 // generated from this registry: that schema is owned by xchain-decoder and
-// stays declared literally in replicatedTables.js.
+// stays declared literally in replicated_tables.js.
 function streamTopology(){
     let scoped = (scope) => tablesWhere(t => t.replication === 'stream:' + scope);
     return {

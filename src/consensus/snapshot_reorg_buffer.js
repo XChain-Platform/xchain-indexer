@@ -62,11 +62,14 @@
  * difference must not be "corrected" without its own flag-day.
  *
  * The canonical source of record is
- * xchain-documentation/protocol/reference-impl/snapshot_reorg_buffer.js; it is
- * vendored BYTE-IDENTICALLY into xchain-hub, xchain-indexer and xchain-sdk. The
- * cross-service conformance suite (ConsensusPrimitiveConformance.test.js) runs in
- * every one of those repos and asserts byte-identity of the local copy to this
- * source, so an unmirrored edit fails CI everywhere.
+ * xchain-indexer/src/consensus/snapshot_reorg_buffer.js; it is vendored
+ * BYTE-IDENTICALLY into xchain-hub, xchain-sdk and
+ * xchain-documentation/protocol/reference-impl/consensus/snapshot_reorg_buffer.js.
+ * Edit the indexer copy only and re-run reconcile-twins.sh to re-vendor every
+ * other copy; never edit a vendored copy. The cross-service conformance suite
+ * (ConsensusPrimitiveConformance.test.js) runs in every one of those repos and
+ * asserts byte-identity of the local copy to the xchain-documentation copy, so
+ * an unmirrored edit fails CI everywhere.
  *
  ********************************************************************/
 

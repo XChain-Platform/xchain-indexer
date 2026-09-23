@@ -18,11 +18,15 @@
  *     EQUIV|<ENGINE_TAG>|<ROUND_ID>|<VIEW>||<CONTENT>
  *
  * The canonical source of record is
- * xchain-documentation/protocol/reference-impl/equivocation_header.js; it is
- * vendored BYTE-IDENTICALLY into xchain-hub, xchain-indexer, xchain-explorer,
- * xchain-sdk and xchain-sync. Every PBFT/consensus engine prefixes its canonical
- * through here, the settlement gates (cross_settle, xexec, xcall, anchor, price,
- * attest) and the recovery verifier re-derive it to re-verify quorum signatures,
+ * xchain-indexer/src/consensus/equivocation_header.js; it is vendored
+ * BYTE-IDENTICALLY into xchain-hub, xchain-explorer, xchain-sdk, xchain-sync and
+ * xchain-documentation/protocol/reference-impl/consensus/equivocation_header.js.
+ * Edit the indexer copy only and re-run reconcile-twins.sh to re-vendor every
+ * other copy; never edit a vendored copy.
+ *
+ * Every PBFT/consensus engine prefixes its canonical through here, the settlement
+ * gates (cross_settle, xexec, xcall, anchor, price, attest) and the recovery
+ * verifier re-derive it to re-verify quorum signatures,
  * and the SLASH v0 action verifies equivocation proofs against it. Adding `<VIEW>`
  * makes equivocation provable WITHOUT false-positiving honest view changes (which
  * re-sign different content for the same round under a different view). Equivocation
@@ -38,8 +42,9 @@
  * the same anchor. The cross-service conformance suite
  * (ConsensusPrimitiveConformance.test.js, driven by
  * xchain-documentation/protocol/test-vectors) runs in every repo and asserts BOTH the
- * behavior (canonical vectors) AND byte-identity of the local copy to this canonical
- * source, so any unmirrored edit fails CI everywhere (a divergence forks the chain).
+ * behavior (canonical vectors) AND byte-identity of the local copy to the
+ * xchain-documentation copy, so any unmirrored edit fails CI everywhere (a
+ * divergence forks the chain).
  *
  ********************************************************************/
 

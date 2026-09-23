@@ -18,11 +18,13 @@
 // predicate and the equivocation-header builder are CONSENSUS-CRITICAL and
 // vendored byte-identically into five services (xchain-hub, xchain-indexer,
 // xchain-explorer, xchain-sdk, xchain-sync); a divergence in their logic forks
-// the chain. The canonical source of record lives in xchain-documentation
-// (protocol/reference-impl + protocol/test-vectors). This guard runs in every
+// the chain. Their canonical source of record is xchain-indexer/src/consensus,
+// which reconcile-twins.sh vendors into every other copy, including
+// xchain-documentation/protocol/reference-impl/consensus; the canonical vectors
+// live in xchain-documentation/protocol/test-vectors. This guard runs in every
 // repo and asserts BOTH:
 //   1. BEHAVIOR  - the local copy matches the canonical vectors.
-//   2. IDENTITY  - the local copy is byte-identical to the canonical source.
+//   2. IDENTITY  - the local copy is byte-identical to the xchain-documentation copy.
 // (1) catches a logic change that happens to pass the local unit suite; (2)
 // catches ANY edit to one copy that was not propagated to the others. When the
 // sibling xchain-documentation repo is not checked out (standalone deploy), skip
@@ -130,7 +132,7 @@ describe('consensus-primitive conformance: byte-identity to canonical source @re
             const canon = fs.readFileSync(canonPath, 'utf8');
             assert.strictEqual(local, canon,
                 'this repo\'s consensus/' + f + ' has drifted from the canonical source; ' +
-                'edit xchain-documentation/protocol/reference-impl/consensus/' + f + ' and re-vendor all five copies.');
+                'edit xchain-indexer/src/consensus/' + f + ' and re-run reconcile-twins.sh to re-vendor every copy.');
         });
     });
 });

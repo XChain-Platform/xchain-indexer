@@ -24,9 +24,9 @@ const { assert, crd, stubRegistryRow } = require('./helpers/consensus_rules_dige
 // the indexer's own instance of the same guard, so a one-sided edit here cannot pass by
 // running only on the other repo.
 describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', function () {
-    it('is sorted, has 33 entries, and contains the gates the last three trains append', function () {
+    it('is sorted, has 34 entries, and contains the gates the last three trains append', function () {
         const keys = crd.knownGateKeys();
-        assert.strictEqual(keys.length, 33, 'SHARED_GATES total entry count moved; re-derive this floor before changing it');
+        assert.strictEqual(keys.length, 34, 'SHARED_GATES total entry count moved; re-derive this floor before changing it');
         assert.deepStrictEqual(keys, [...keys].sort());
         for (const k of [
             'attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION',
@@ -49,7 +49,9 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
             'mirror_admission_activation.encodeAdmitBlocks',
             'mirror_admission_activation.decodeAdmitBlocks',
             'mirror_admission_activation.isAdmissionEra',
-            'mirror_admission_activation.admissionCanonicalField'
+            'mirror_admission_activation.admissionCanonicalField',
+            // The token leg gate both repos evaluate per bridge leg.
+            'token_bridge_activation.TOKEN_BRIDGE_ACTIVATION'
         ]) assert.ok(keys.includes(k), 'missing ' + k);
     });
 });
@@ -84,7 +86,7 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
             for (const [p] of saved) delete require.cache[p];
             const fresh = require('../../../../src/consensus_rules_digest.js');
             assert.strictEqual(fresh.computeConsensusRulesDigest().digest,
-                'b57eb9a867a8d3c914dc100b445fccb217c54efc8a7dd671a0ad176c83cebd4c',
+                '0b39313c90c49cdbf033e719448d389d2742795be78e17129bdd2925a84292df',
                 'the consensus rules digest moved; a gate was added, removed, reordered or re-armed');
         } finally {
             for (const [p, mod] of saved) { if (mod === undefined) delete require.cache[p]; else require.cache[p] = mod; }
@@ -117,8 +119,9 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
         assert.deepStrictEqual(mods.slice(0, PRE_EXISTING.length), PRE_EXISTING,
             'a SHARED_GATES entry was inserted mid-list; that reorders the preimage of every gate after it');
         assert.deepStrictEqual(mods.slice(PRE_EXISTING.length),
-            ['mirror_admission_activation', 'anchor_reward_activation', 'mirror_admission_activation'],
-            'the family must be the LAST three entries, the encoder registration last of all');
+            ['mirror_admission_activation', 'anchor_reward_activation', 'mirror_admission_activation',
+                'token_bridge_activation'],
+            'the family must follow the bridge gate, the encoder registration last, then the token leg gate');
     });
 
     // The 2026-09-09 genesis-arm ruling left no SHIPPED gate on the far-future sentinel,

@@ -118,7 +118,11 @@ const SHARED_GATES = [
     // a digest row. A SECOND entry for the module at the END rather than names added to its
     // entry above, because an insertion mid-list shifts the preimage of every gate after it.
     ['mirror_admission_activation',             ['CHAIN_CODE_RE', 'CANONICAL_HEIGHT_RE', 'encodeAdmitBlocks',
-                                                 'decodeAdmitBlocks', 'isAdmissionEra', 'admissionCanonicalField']]
+                                                 'decodeAdmitBlocks', 'isAdmissionEra', 'admissionCanonicalField']],
+    // The token leg of the bridge: the hub gates every token leg on it and the indexer gates
+    // XBRIDGE v3/v4 and ISSUE format 7 on it, so a train that sizes it on one side only must
+    // report a rules mismatch. Appended at the END for the preimage-ordering reason above.
+    ['token_bridge_activation',                 ['TOKEN_BRIDGE_ACTIVATION']]
 ];
 
 // A per-network height at or above this value is a far-future placeholder, not an

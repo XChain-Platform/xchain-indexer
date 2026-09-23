@@ -14,17 +14,20 @@
  *
  * THE single, CONSENSUS-CRITICAL implementation of the stake-weighted quorum
  * predicate. The canonical source of record is
- * xchain-documentation/protocol/reference-impl/stake_weighted_quorum.js; it is
- * vendored BYTE-IDENTICALLY into xchain-hub, xchain-indexer, xchain-explorer,
- * xchain-sdk and xchain-sync. Every PBFT tally engine, every settlement gate
- * (cross_settle, xexec, xcall, anchor, price, attest), the recovery verifier and
- * the client/explorer checkpoint verifiers resolve through this predicate so they
- * can never drift; a divergence forks the chain.
+ * xchain-indexer/src/consensus/stake_weighted_quorum.js; it is vendored
+ * BYTE-IDENTICALLY into xchain-hub, xchain-explorer, xchain-sdk, xchain-sync and
+ * xchain-documentation/protocol/reference-impl/consensus/stake_weighted_quorum.js.
+ * Edit the indexer copy only and re-run reconcile-twins.sh to re-vendor every
+ * other copy; never edit a vendored copy. Every PBFT tally engine, every
+ * settlement gate (cross_settle, xexec, xcall, anchor, price, attest), the
+ * recovery verifier and the client/explorer checkpoint verifiers resolve through
+ * this predicate so they can never drift; a divergence forks the chain.
  *
  * The cross-service conformance suite (ConsensusPrimitiveConformance.test.js,
  * driven by xchain-documentation/protocol/test-vectors) runs in every repo and
  * asserts BOTH the behavior (canonical vectors) AND byte-identity of the local
- * copy to this canonical source, so any unmirrored edit fails CI everywhere.
+ * copy to the xchain-documentation copy, so any unmirrored edit fails CI
+ * everywhere.
  *
  * Self-contained on mathjs bignumber (exact, never a JS double): the predicate is
  * a pure function with no injected utility instance, so it is identical in every

@@ -23,7 +23,7 @@
  *
  * Every shared gate VALUE is an activation-registry row now, so the state the
  * flag was written for (a carrier moved out from under the build reading as
- * ABSENT) cannot be reached by hiding a carrier: the tool still reads 33 and
+ * ABSENT) cannot be reached by hiding a carrier: the tool still reads 34 and
  * exits 0, which is the point. A build that LACKS a row is a defect the digest
  * refuses to measure at all, flag or no flag: the registry throws naming the
  * key and the tool exits 2 with that one line. The refusal is driven through a
@@ -77,7 +77,7 @@ describe('bin/consensus-identity.js --assert-no-absent', function () {
         assert.strictEqual(res.stderr, '');
         const identity = JSON.parse(res.stdout);
         assert.strictEqual(identity.consensus_rules_gates_absent, 0);
-        assert.strictEqual(identity.consensus_rules_gates_resolved, 33);
+        assert.strictEqual(identity.consensus_rules_gates_resolved, 34);
     });
 
     it('reads every gate with a carrier hidden: the value is the registry row, never the file', function () {
@@ -97,7 +97,7 @@ describe('bin/consensus-identity.js --assert-no-absent', function () {
         assert.strictEqual(res.status, 0, res.stdout + res.stderr);
         const identity = JSON.parse(res.stdout);
         assert.strictEqual(identity.consensus_rules_gates_absent, 0);
-        assert.strictEqual(identity.consensus_rules_gates_resolved, 33);
+        assert.strictEqual(identity.consensus_rules_gates_resolved, 34);
         assert.ok(identity.consensus_rules_gates[KEY], 'the hidden carrier\'s gate still resolves');
     });
 
@@ -151,5 +151,31 @@ describe('bin/consensus-identity.js argument validation', function () {
         assert.strictEqual(res.status, 0, res.stderr);
         assert.strictEqual(res.stderr, '');
         assert.deepStrictEqual(JSON.parse(fs.readFileSync(output, 'utf8')), JSON.parse(res.stdout));
+    });
+});
+
+// A function canonicalizes to undefined, which JSON drops and a comparer reads as equal.
+describe('bin/consensus-identity.js function-valued gate rows', function () {
+    const FUNCTION_KEYS = ['encodeAdmitBlocks', 'decodeAdmitBlocks', 'isAdmissionEra', 'admissionCanonicalField']
+        .map(name => 'mirror_admission_activation.' + name);
+
+    it('emits one row per resolved gate, naming a function gate by presence', function () {
+        const res = run(['--json']);
+        assert.strictEqual(res.status, 0, res.stderr);
+        const identity = JSON.parse(res.stdout);
+        assert.strictEqual(Object.keys(identity.consensus_rules_gates).length, identity.consensus_rules_gates_resolved,
+            'the printed map must hold every gate the count names');
+        for (const key of FUNCTION_KEYS) assert.strictEqual(identity.consensus_rules_gates[key], '<function>', key);
+    });
+
+    it('reports a pin that lacks a function gate row as a mismatch', function () {
+        const { codeIdentity, compareIdentity } = require(BIN);
+        const fresh = codeIdentity('regtest');
+        const pinGates = Object.assign({}, fresh.consensus_rules_gates);
+        delete pinGates[FUNCTION_KEYS[0]];
+        const row = compareIdentity({ consensus_rules_gates: pinGates }, fresh)
+            .find(r => r.field === 'consensus_rules_gates.' + FUNCTION_KEYS[0]);
+        assert.ok(row, 'the dropped row must be compared by name');
+        assert.strictEqual(row.same, false, 'a row the pin lacks must not read as ok');
     });
 });

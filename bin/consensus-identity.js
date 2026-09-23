@@ -115,6 +115,16 @@ class CliUsageError extends Error {
     }
 }
 
+// The row a function-valued shared gate prints: present, body not digested (see SHARED_GATES).
+const FUNCTION_GATE = '<function>';
+
+// Name every gate row, since a function canonicalizes to undefined and JSON would drop it.
+function projectGates(gates) {
+    const out = {};
+    for (const key of Object.keys(gates)) out[key] = gates[key] === undefined ? FUNCTION_GATE : gates[key];
+    return out;
+}
+
 /**
  * The four numbers that come from the source tree alone, with the shape fields
  * that make a mismatch diagnosable beside them.
@@ -134,12 +144,13 @@ function codeIdentity(network) {
 
     const hashes = coins.consensusHashes(network);
     const rules = computeConsensusRulesDigest();
+    const gates = projectGates(rules.gates);
     const armedMapV2 = computeArmedMapFingerprintV2();
     const gatesField = knownGateKeys().join(',');
     // The shape of the measurement, beside the number it produced. A digest taken over a
     // list in which some gate read ABSENT is a different question answered, and nothing
     // about the hash itself says so: 87637dfa and 26ba9cce are equally plausible on sight.
-    const absent = Object.keys(rules.gates).filter(k => rules.gates[k] === ABSENT).sort();
+    const absent = Object.keys(gates).filter(k => gates[k] === ABSENT).sort();
     return {
         network,
         // One number for the registry, over the per-coin hashes the hub serves.
@@ -158,13 +169,13 @@ function codeIdentity(network) {
         armed_map_rows: armedMapV2.rows || null,
         armed_map_row_count: armedMapV2.count === undefined ? null : armedMapV2.count,
         consensus_rules_digest: rules.digest,
-        consensus_rules_gates_resolved: Object.keys(rules.gates).length - absent.length,
+        consensus_rules_gates_resolved: Object.keys(gates).length - absent.length,
         consensus_rules_gates_absent: absent.length,
         consensus_rules_gates_absent_keys: absent,
         // The gate-by-gate preimage, kept beside the digest because two
         // mismatched hashes say nothing about what to fix. It is also what makes
         // an environment-shifted digest diagnosable in one read: see the header.
-        consensus_rules_gates: rules.gates,
+        consensus_rules_gates: gates,
         gates_field: gatesField,
         gates_field_hash: crypto.createHash('sha256').update(gatesField, 'utf8').digest('hex'),
         carrier_logic_digest: logicPin.digest(logicPin.readPin(REPO_ROOT)),

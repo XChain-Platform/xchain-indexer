@@ -29,6 +29,13 @@ const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
 const { buildInjectedExecContext, SYNTH_EXEC_TX_HASH, SYNTH_TAGS } = require('../../consensus/exec_context.js');
 const { getLogger } = require('../../observability/index.js');
 
+// Declare the fixed finalization slots that open every callback's params, in wire order.
+const POLL_CALLBACK_FIXED_SLOTS = Object.freeze([
+    'pollIndex', 'status', 'winningOption', 'totalWeight', 'totalVoters', 'quorumMet', 'minVotersMet'
+]);
+// Name the slot spliced after the fixed slots while VOTE_POLL_TICK_VISIBLE is active.
+const POLL_CALLBACK_TICK_SLOT = 'tick';
+
 // Binding poll / callback-on-finalize (optional): a poll may name
 // a contract method that v2 finalization invokes with the result. Blank
 // CALLBACK_CONTRACT = a signaling poll. When set, the method + firing rule are
@@ -206,6 +213,7 @@ async function buildCallbackParams(poll, data, result){
 
     // Callback signature: [pollIndex, status, winning_option, total_weight,
     // total_voters, quorum_met, min_voters_met, (tick,)? ...originalCallbackParams].
+    // Keep it in step with POLL_CALLBACK_FIXED_SLOTS: contract templates pin their arity to it.
     let callbackArgs = [
         String(poll.action_index),
         String(result.poll_status),
@@ -278,5 +286,6 @@ async function runCallbackExecute(poll, actionParams, emissionData, emissionActi
 
 module.exports = {
     validateCreateCallback, validateCallbackTarget, validateCallbackPolicy, validateCallbackEscrow,
-    fireBindingCallback, buildCallbackParams, buildCallbackContext, runCallbackExecute
+    fireBindingCallback, buildCallbackParams, buildCallbackContext, runCallbackExecute,
+    POLL_CALLBACK_FIXED_SLOTS, POLL_CALLBACK_TICK_SLOT
 };

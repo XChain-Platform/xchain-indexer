@@ -54,7 +54,7 @@
     },
     "consensus_rules_digest": {
       "path": "src/consensus_rules_digest.js",
-      "hash": "26894199bd6651dbedcc962825eb63aea91b0a5e7d1d8d3e28eaddf73ce69415",
+      "hash": "90d7040d61391bb2a42ed6ebcf8ad250914a4e81f1bab11ec98420877bae66a9",
       "twins": [
         "xchain-hub"
       ]
@@ -1801,6 +1801,13 @@
       "to": "d59a0c44b7d0dc1dbc5f1530d67e012a7dac33f1824960565a9788b75cff6a25",
       "reason": "canonical admission boundary fix, operator ruling (a) 2026-09-19",
       "date": "2026-09-19"
+    },
+    {
+      "id": "consensus_rules_digest",
+      "from": "26894199bd6651dbedcc962825eb63aea91b0a5e7d1d8d3e28eaddf73ce69415",
+      "to": "90d7040d61391bb2a42ed6ebcf8ad250914a4e81f1bab11ec98420877bae66a9",
+      "reason": "SHARED_GATES appends token_bridge_activation.TOKEN_BRIDGE_ACTIVATION",
+      "date": "2026-09-23"
     }
   ]
 }
