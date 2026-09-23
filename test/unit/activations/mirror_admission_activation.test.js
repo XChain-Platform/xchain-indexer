@@ -145,22 +145,22 @@ describe('mirror_admission_activation: the arming seam @regression', function ()
     // reads the consumer height off the producer map, passes every inert case above and
     // fails only here.
     it('arms BTC:testnet producer-first at the sized cut, the consumer trailing by its own lead', function () {
-        assert.strictEqual(mirror.MIRROR_ADMISSION_ACTIVATION['BTC:testnet'], 153300,
+        assert.strictEqual(mirror.MIRROR_ADMISSION_ACTIVATION['BTC:testnet'], 154234,
             'not vacuous: the sized PRODUCER height this case is about must still be in the map');
-        assert.strictEqual(mirror.MIRROR_ADMISSION_CONSUMER_ACTIVATION['BTC:testnet'], 153328,
+        assert.strictEqual(mirror.MIRROR_ADMISSION_CONSUMER_ACTIVATION['BTC:testnet'], 154291,
             'not vacuous: the sized CONSUMER height this case is about must still be in the map');
 
         // One block below the producer height the key is still wholly inert. This is the
         // boundary an off-by-one in the comparison moves, and the direction that matters:
         // arming early stamps rows under a rule the fleet has not adopted yet.
-        assert.strictEqual(mirror.isMirrorAdmissionProducerActive('BTC', 'testnet', 153299), false,
+        assert.strictEqual(mirror.isMirrorAdmissionProducerActive('BTC', 'testnet', 154233), false,
             'the producer armed a block BELOW its sized height');
-        assert.strictEqual(mirror.isMirrorAdmissionConsumerActive('BTC', 'testnet', 153299), false,
+        assert.strictEqual(mirror.isMirrorAdmissionConsumerActive('BTC', 'testnet', 154233), false,
             'the consumer armed a block BELOW the producer height');
 
         // Inside the producer-only lead the producer stamps and the consumer must NOT yet
         // bind by height, or it refuses rows that no producer was required to stamp.
-        for (const h of [153300, 153327]) {
+        for (const h of [154234, 154290]) {
             assert.strictEqual(mirror.isMirrorAdmissionProducerActive('BTC', 'testnet', h), true,
                 'the producer is not armed at height ' + h + ', at or above its sized height');
             assert.strictEqual(mirror.isMirrorAdmissionConsumerActive('BTC', 'testnet', h), false,
@@ -168,8 +168,8 @@ describe('mirror_admission_activation: the arming seam @regression', function ()
         }
 
         // The consumer arms at its own height, and the <= direction is what is asserted:
-        // exactly at 153328, not one block later.
-        assert.strictEqual(mirror.isMirrorAdmissionConsumerActive('BTC', 'testnet', 153328), true,
+        // exactly at 154291, not one block later.
+        assert.strictEqual(mirror.isMirrorAdmissionConsumerActive('BTC', 'testnet', 154291), true,
             'the consumer is not armed at its own sized height');
     });
 });

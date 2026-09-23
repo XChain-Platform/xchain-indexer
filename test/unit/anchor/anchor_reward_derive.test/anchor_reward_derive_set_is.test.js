@@ -118,7 +118,7 @@ describe('anchor-reward derive set is INVARIANT under the barrier change @regres
     }
 
     it('the inert maps really are inert, so today\'s fleet sees no change at all', function () {
-    // testnet is SIZED at 153328 (this train's own arming), so only mainnet is
+    // testnet is SIZED at 154291 (this train's own arming), so only mainnet is
     // still inert here; the hub's twin (anchor_reward_activation_parity.test.js)
     // narrowed the same way.
     assert.strictEqual(ar.ANCHOR_ATTEST_BARRIER_ACTIVATION.mainnet, null);
