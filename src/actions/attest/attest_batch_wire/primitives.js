@@ -30,7 +30,9 @@
 const crypto = require('crypto');
 const zlib   = require('zlib');
 
-const { ATTEST_BATCH_ROW_FIELDS, CANONICAL_BASE64 } = require('./constants.js');
+const {
+    ATTEST_BATCH_LEGACY_ROW_FIELDS, ATTEST_BATCH_ADMISSION_ROW_FIELDS, CANONICAL_BASE64
+} = require('./constants.js');
 
 /**
  * A structured refusal. Callers record the action invalid on it and must never
@@ -108,16 +110,57 @@ function computeBatchKey(window){
     return crypto.createHash('sha256').update(preimage, 'utf8').digest('hex');
 }
 
-// Rows reduced to the carried field set, in ATTEST_BATCH_ROW_FIELDS order. A row
-// object built ad hoc in two places drifts, and a drifted row changes the signed
+/**
+ * The row field set a batch is signed over and checked against, chosen by the
+ * batch's OWN signed anchor: the admission set when `admissionEra(network,
+ * btcBlockHeight)` is true, the legacy set otherwise.
+ *
+ * The era predicate is a parameter because this directory may require nothing
+ * outside itself (the twins sit at different depths), so each repo passes its own
+ * mirror_admission_gate.js isAdmissionEra, the BTC producer activation keyed by
+ * network. It is keyed on the batch anchor and never on the reading node's height,
+ * so a batch's field set is fixed the moment it is signed: a node replaying from
+ * genesis, a node mid-roll and the publisher all pick the same set for the same
+ * bytes. The height handed over is Number() of the value the header signs, which
+ * is the value a verifier holds after checkBodyAgainstHead, so the two sides
+ * evaluate the gate on one number.
+ *
+ * A missing predicate throws rather than defaulting: either default is a fork,
+ * one against history and one against the flag day.
+ * @param {string} network the batch's network
+ * @param {number|string} btcBlockHeight the batch's signed BTC anchor
+ * @param {function(string, number): boolean} admissionEra the repo's isAdmissionEra
+ * @returns {string[]} ATTEST_BATCH_ADMISSION_ROW_FIELDS or ATTEST_BATCH_LEGACY_ROW_FIELDS
+ */
+function attestBatchRowFields(network, btcBlockHeight, admissionEra){
+    requireAdmissionEra(admissionEra);
+    return admissionEra(String(network), Number(btcBlockHeight)) === true
+        ? ATTEST_BATCH_ADMISSION_ROW_FIELDS
+        : ATTEST_BATCH_LEGACY_ROW_FIELDS;
+}
+
+// Refuse a call that brought no era predicate, before any byte is judged, so the
+// omission fails the same way whatever the input is.
+function requireAdmissionEra(admissionEra){
+    if(typeof admissionEra !== 'function')
+        throw new TypeError('attest_batch_wire: an admission-era predicate (mirror_admission_gate ' +
+                            'isAdmissionEra) is required to choose the batch row field set');
+}
+
+// Rows reduced to the era's carried field set, in that set's order. A row object
+// built ad hoc in two places drifts, and a drifted row changes the signed
 // canonical, so every serializer below goes through here.
-function normalizeBatchRows(window){
+function normalizeBatchRows(window, fields){
     return (window.rows || []).map((r) => {
         const out = {};
-        for(const f of ATTEST_BATCH_ROW_FIELDS)
+        for(const f of fields)
             out[f] = (r[f] === undefined) ? null : r[f];
         return out;
     });
+}
+
+function windowRowFields(window, admissionEra){
+    return attestBatchRowFields(window.network, window.btc_block_height, admissionEra);
 }
 
 function batchHeaderObject(window){
@@ -137,12 +180,17 @@ function batchHeaderObject(window){
  * two sides agree without the compressed or chunked bytes ever entering the
  * preimage. Insertion order IS the field order in JSON.stringify, so the object
  * literal above is the canonical's definition; never reorder it.
+ *
+ * The row fields are the era's (attestBatchRowFields): below the admission
+ * activation `admit_block_btc` is neither signed nor carried, so every batch
+ * already on chain keeps the bytes its quorum signed.
  * @param {Object} window
+ * @param {function(string, number): boolean} admissionEra the repo's isAdmissionEra
  * @returns {string}
  */
-function buildAttestBatchCanonical(window){
+function buildAttestBatchCanonical(window, admissionEra){
     const header = batchHeaderObject(window);
-    header.rows  = normalizeBatchRows(window);
+    header.rows  = normalizeBatchRows(window, windowRowFields(window, admissionEra));
     return JSON.stringify(header);
 }
 
@@ -151,11 +199,12 @@ function buildAttestBatchCanonical(window){
  * signature set that covers it. This is the exact string both sides deflate and
  * inflate.
  * @param {Object} window the window to serialize
+ * @param {function(string, number): boolean} admissionEra the repo's isAdmissionEra
  * @returns {string}
  */
-function buildAttestBatchBody(window){
+function buildAttestBatchBody(window, admissionEra){
     const body = batchHeaderObject(window);
-    body.rows  = normalizeBatchRows(window);
+    body.rows  = normalizeBatchRows(window, windowRowFields(window, admissionEra));
     body.sigs  = (window.sigs || []).map((s) => ({
         pubkey: String(s.pubkey || '').toLowerCase(),
         sig:    String(s.sig || '').toLowerCase()
@@ -165,6 +214,8 @@ function buildAttestBatchBody(window){
 
 module.exports = {
     fail,
+    attestBatchRowFields,
+    requireAdmissionEra,
     decodeCanonicalBase64,
     crc32Hex,
     computeBatchKey,

@@ -17,18 +17,18 @@ const crypto = require('crypto');
 const zlib = require('zlib');
 
 const abw = require('../../../../../src/actions/attest/attest_batch_wire.js');
-const { window_, noisy, toParams, roundTrip } = require('../../../../helpers/attest_batch_wire_fixture.js');
+const { ADMISSION_ERA, window_, noisy, toParams, roundTrip } = require('../../../../helpers/attest_batch_wire_fixture.js');
 
 describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
     describe('integrity: CRC and canonical base64', function () {
         it('reds a reassembled body whose CRC does not match the head', function () {
             const { enc, head, chunks } = roundTrip(window_(5));
             const tampered = { ...head, batchCrc32: 'deadbeef' };
-            const out = abw.reassembleAttestBatch(tampered, chunks);
+            const out = abw.reassembleAttestBatch(tampered, chunks, ADMISSION_ERA);
             assert.strictEqual(out.ok, false);
             assert.strictEqual(out.reason, abw.ATTEST_BATCH_FAIL_REASONS.CRC_MISMATCH);
             assert.strictEqual(out.status, 'invalid: ATTEST_BATCH (crc32-mismatch)');
-            assert.strictEqual(abw.reassembleAttestBatch(head, chunks).ok, true,
+            assert.strictEqual(abw.reassembleAttestBatch(head, chunks, ADMISSION_ERA).ok, true,
                 'and the untampered head still reassembles, so the fixture discriminates');
             assert.match(enc.batchCrc32, /^[0-9a-f]{8}$/);
         });
@@ -50,14 +50,14 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
             for (let i = 0; i < chunks.length; i++) {
                 const flip = chunks.map((c, j) => (j === i ? { ...c, chunk_b64: bump(c.chunk_b64, 10) } : c));
                 assert.notStrictEqual(flip[i].chunk_b64, chunks[i].chunk_b64, 'the fixture must actually change a byte');
-                const out = abw.reassembleAttestBatch(head, flip);
+                const out = abw.reassembleAttestBatch(head, flip, ADMISSION_ERA);
                 assert.strictEqual(out.ok, false, 'chunk ' + (i + 1) + ' corrupted must not reassemble clean');
                 assert.ok(refusals.includes(out.reason), 'refused at the integrity layer, reason ' + out.reason);
             }
-            const headFlip = abw.reassembleAttestBatch({ ...head, chunkB64: bump(head.chunkB64, 10) }, chunks);
+            const headFlip = abw.reassembleAttestBatch({ ...head, chunkB64: bump(head.chunkB64, 10) }, chunks, ADMISSION_ERA);
             assert.strictEqual(headFlip.ok, false, 'the head slice is body too');
             assert.ok(refusals.includes(headFlip.reason), 'reason ' + headFlip.reason);
-            assert.strictEqual(abw.reassembleAttestBatch(head, chunks).ok, true,
+            assert.strictEqual(abw.reassembleAttestBatch(head, chunks, ADMISSION_ERA).ok, true,
                 'and the untouched batch still reassembles, which is what proves the fixture discriminates');
         });
     });
@@ -71,7 +71,7 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
             // payload two wire spellings and fork the node whose runtime is less forgiving.
             const urlSafe = { ...head, chunkB64: head.chunkB64.replace(/\+/g, '-').replace(/\//g, '_') };
             if (urlSafe.chunkB64 !== head.chunkB64) {
-                const out = abw.reassembleAttestBatch(urlSafe, chunks);
+                const out = abw.reassembleAttestBatch(urlSafe, chunks, ADMISSION_ERA);
                 assert.strictEqual(out.ok, false);
                 assert.strictEqual(out.reason, abw.ATTEST_BATCH_FAIL_REASONS.BASE64);
             }
@@ -112,7 +112,7 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
             // count is a halt on any node running the MariaDB default sql_mode rather than
             // a refused wire.
             const win = window_(1);
-            const p   = toParams(abw.encodeAttestBatch(win).wires[0]);
+            const p   = toParams(abw.encodeAttestBatch(win, ADMISSION_ERA).wires[0]);
             p[8] = '4294967296';
             assert.strictEqual(abw.parseAttestBatchHead(p).reason,
                 abw.ATTEST_BATCH_FAIL_REASONS.TOTAL_CHUNKS);
@@ -127,7 +127,7 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
         it('bounds TOTAL_CHUNKS at the ceiling on both wires, and accepts the ceiling itself', function () {
             const win = window_(1);
             const key = abw.computeBatchKey(win);
-            const p   = toParams(abw.encodeAttestBatch(win).wires[0]);
+            const p   = toParams(abw.encodeAttestBatch(win, ADMISSION_ERA).wires[0]);
 
             p[8] = String(abw.ATTEST_BATCH_MAX_CHUNKS + 1);
             assert.strictEqual(abw.parseAttestBatchHead(p).reason,
@@ -166,15 +166,15 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
         });
 
         it('refuses to encode more than 256 rows', function () {
-            const out = abw.encodeAttestBatch(window_(257));
+            const out = abw.encodeAttestBatch(window_(257), ADMISSION_ERA);
             assert.strictEqual(out.ok, false);
             assert.strictEqual(out.reason, abw.ATTEST_BATCH_FAIL_REASONS.ROW_COUNT);
-            assert.strictEqual(abw.encodeAttestBatch(window_(256)).ok, true, '256 exactly is legal');
+            assert.strictEqual(abw.encodeAttestBatch(window_(256), ADMISSION_ERA).ok, true, '256 exactly is legal');
         });
 
         it('refuses a head declaring more than 256 rows, BEFORE anything consumes the count', function () {
             const win = window_(1);
-            const p = toParams(abw.encodeAttestBatch(win).wires[0]);
+            const p = toParams(abw.encodeAttestBatch(win, ADMISSION_ERA).wires[0]);
             p[5] = '100000';
             const out = abw.parseAttestBatchHead(p);
             assert.strictEqual(out.ok, false);
@@ -191,7 +191,7 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
                 windowStart: 1, windowEnd: 2, rowCount: 0, btcBlockHeight: 1,
                 batchCrc32: 'deadbeef', totalChunks: 1, chunkB64: bomb,
             };
-            const out = abw.reassembleAttestBatch(head, []);
+            const out = abw.reassembleAttestBatch(head, [], ADMISSION_ERA);
             assert.strictEqual(out.ok, false);
             assert.ok([abw.ATTEST_BATCH_FAIL_REASONS.SIZE_CAP,
                        abw.ATTEST_BATCH_FAIL_REASONS.RATIO_CAP].includes(out.reason),
@@ -206,7 +206,7 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
             // The header keys the gates and the body carries the rows; letting them
             // differ would let a publisher choose which one a node reads.
             const win = window_(3);
-            const body = JSON.parse(abw.buildAttestBatchBody(win));
+            const body = JSON.parse(abw.buildAttestBatchBody(win, ADMISSION_ERA));
             body.rows.pop();
             const raw  = Buffer.from(JSON.stringify(body), 'utf8');
             const head = {
@@ -216,14 +216,14 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
                 batchCrc32: abw.crc32Hex(raw), totalChunks: 1,
                 chunkB64: zlib.deflateRawSync(raw).toString('base64'),
             };
-            const out = abw.reassembleAttestBatch(head, []);
+            const out = abw.reassembleAttestBatch(head, [], ADMISSION_ERA);
             assert.strictEqual(out.ok, false);
             assert.strictEqual(out.reason, abw.ATTEST_BATCH_FAIL_REASONS.ROW_COUNT);
         });
 
         it('reds a row missing a carried field', function () {
             const win  = window_(2);
-            const body = JSON.parse(abw.buildAttestBatchBody(win));
+            const body = JSON.parse(abw.buildAttestBatchBody(win, ADMISSION_ERA));
             delete body.rows[1].response_hash;
             const raw  = Buffer.from(JSON.stringify(body), 'utf8');
             const head = {
@@ -233,7 +233,7 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
                 batchCrc32: abw.crc32Hex(raw), totalChunks: 1,
                 chunkB64: zlib.deflateRawSync(raw).toString('base64'),
             };
-            const out = abw.reassembleAttestBatch(head, []);
+            const out = abw.reassembleAttestBatch(head, [], ADMISSION_ERA);
             assert.strictEqual(out.ok, false);
             assert.strictEqual(out.reason, abw.ATTEST_BATCH_FAIL_REASONS.ROW_FIELD);
         });
@@ -244,7 +244,7 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
     describe('head structure', function () {
 
         it('refuses a head whose batch key does not derive from the window it declares', function () {
-            const p = toParams(abw.encodeAttestBatch(window_(1)).wires[0]);
+            const p = toParams(abw.encodeAttestBatch(window_(1), ADMISSION_ERA).wires[0]);
             p[4] = String(Number(p[4]) + 1);
             const out = abw.parseAttestBatchHead(p);
             assert.strictEqual(out.ok, false);
@@ -255,21 +255,21 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
         it('refuses non-canonical integer spellings and an inverted window', function () {
             const win = window_(1);
             for (const [idx, bad] of [[3, '01700000000'], [4, '-1'], [5, '1.5'], [6, '0x10']]) {
-                const p = toParams(abw.encodeAttestBatch(win).wires[0]);
+                const p = toParams(abw.encodeAttestBatch(win, ADMISSION_ERA).wires[0]);
                 p[idx] = bad;
                 assert.strictEqual(abw.parseAttestBatchHead(p).ok, false, 'field ' + idx + ' = ' + bad);
             }
-            const inverted = toParams(abw.encodeAttestBatch(win).wires[0]);
+            const inverted = toParams(abw.encodeAttestBatch(win, ADMISSION_ERA).wires[0]);
             inverted[3] = String(Number(inverted[4]) + 1);
             assert.strictEqual(abw.parseAttestBatchHead(inverted).ok, false);
         });
 
         it('refuses a head with a zero TOTAL_CHUNKS or an empty body field', function () {
             const win = window_(1);
-            const zero = toParams(abw.encodeAttestBatch(win).wires[0]);
+            const zero = toParams(abw.encodeAttestBatch(win, ADMISSION_ERA).wires[0]);
             zero[8] = '0';
             assert.strictEqual(abw.parseAttestBatchHead(zero).reason, abw.ATTEST_BATCH_FAIL_REASONS.TOTAL_CHUNKS);
-            const empty = toParams(abw.encodeAttestBatch(win).wires[0]);
+            const empty = toParams(abw.encodeAttestBatch(win, ADMISSION_ERA).wires[0]);
             empty[9] = '';
             assert.strictEqual(abw.parseAttestBatchHead(empty).reason, abw.ATTEST_BATCH_FAIL_REASONS.BASE64);
         });

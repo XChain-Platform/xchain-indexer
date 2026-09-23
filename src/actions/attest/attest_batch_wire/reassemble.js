@@ -33,9 +33,11 @@ const zlib = require('zlib');
 
 const {
     ATTEST_BATCH_MAX_INFLATED_BYTES, ATTEST_BATCH_MAX_ROWS, ATTEST_BATCH_MAX_INFLATE_RATIO,
-    ATTEST_BATCH_ROW_FIELDS, FAIL, HEX64
+    FAIL, HEX64
 } = require('./constants.js');
-const { fail, decodeCanonicalBase64, crc32Hex } = require('./primitives.js');
+const {
+    fail, decodeCanonicalBase64, crc32Hex, attestBatchRowFields, requireAdmissionEra
+} = require('./primitives.js');
 
 /**
  * Order a chunk set into slots 1..totalChunks-1, or null when coverage is
@@ -130,7 +132,12 @@ function decodeBatchBody(head, inflated){
 
 // Step 4: the body must describe the batch the wire header declared, and every
 // row and signature entry must carry its full field set. Returns null when it does.
-function checkBodyAgainstHead(head, parsed){
+//
+// "Full" is the ERA's set, from the same attestBatchRowFields call the signed
+// canonical makes, keyed on the head's anchor, which the body has just been held
+// equal to. A batch below the admission activation is complete without
+// admit_block_btc, and one at or above it is not.
+function checkBodyAgainstHead(head, parsed, admissionEra){
     // The header the wire declares and the body the quorum signed must describe
     // one batch. A disagreement is refused rather than resolved in either
     // direction: the header keys the gates, the body carries the rows, and
@@ -143,9 +150,10 @@ function checkBodyAgainstHead(head, parsed){
         return fail(FAIL.STRUCTURE, 'body header does not match the wire header');
     if(Number(parsed.row_count) !== parsed.rows.length) return fail(FAIL.ROW_COUNT, 'row_count does not match rows.length');
 
+    const fields = attestBatchRowFields(head.network, head.btcBlockHeight, admissionEra);
     for(const r of parsed.rows){
         if(!r || typeof r !== 'object' || Array.isArray(r)) return fail(FAIL.ROW_FIELD, 'row is not an object');
-        for(const f of ATTEST_BATCH_ROW_FIELDS)
+        for(const f of fields)
             if(!(f in r)) return fail(FAIL.ROW_FIELD, f);
     }
     for(const s of parsed.sigs){
@@ -166,10 +174,13 @@ function checkBodyAgainstHead(head, parsed){
  *
  * @param {Object} head the parseAttestBatchHead result for this batch
  * @param {{chunk_index:number, chunk_b64:string, action_index:(number|undefined)}[]} chunks
+ * @param {function(string, number): boolean} admissionEra the repo's isAdmissionEra, which
+ *        picks the row field set the body must carry (see attestBatchRowFields)
  * @returns {{ok:true, batch:Object, inflatedBytes:number, compressedBytes:number}
  *          |{ok:false, reason:string, status:string, detail:*}}
  */
-function reassembleAttestBatch(head, chunks){
+function reassembleAttestBatch(head, chunks, admissionEra){
+    requireAdmissionEra(admissionEra);
     if(!head || head.ok !== true) return fail(FAIL.STRUCTURE, 'head is not a parsed batch head');
 
     const joined = concatenateBatchChunks(head, chunks);
@@ -181,7 +192,7 @@ function reassembleAttestBatch(head, chunks){
     const decoded = decodeBatchBody(head, body.inflated);
     if(decoded.ok !== true) return decoded;
 
-    const mismatch = checkBodyAgainstHead(head, decoded.parsed);
+    const mismatch = checkBodyAgainstHead(head, decoded.parsed, admissionEra);
     if(mismatch !== null) return mismatch;
 
     return {
