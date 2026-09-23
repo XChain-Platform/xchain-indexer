@@ -115,7 +115,8 @@ addGate('train_activation.TRAIN_ACTIVATION', 'ruleset', {
     // at each coin's fastest defensible cadence. Chain_tip TBTC 153,698 at 2026-09-23T15:55Z
     // + 376 blocks, ceil(40 h / 383.04 s per block, the least-squares bound). The
     // mirror-admission family below re-slides onto the same instant plus its own 17 h and 6 h
-    // offsets. LTC stays null under dq4 (a) and is untouched by this reslide.
+    // offsets. LTC:testnet mirror admission ships disabled on this train and is
+    // untouched by this reslide; it arms on a later train.
     '0.20.0': { mainnet: 9999999999, testnet: 154074, regtest: 0 },
 });
 

@@ -191,7 +191,7 @@ function validateNativeTickShape(tick, parsed, ctx, pass){
     // Lifting this needs a prefix walk that would touch three surfaces: this refusal,
     // the OPT-IN format-7 refusal in actions/issue/bridge_opt_in.js, and the two-part
     // split in utility/ledger.js parseBridgedTick. That walk is dormant, on purpose,
-    // for a later train: the build-through plan's lanes were sized without it, and this
+    // for a later train: it was scoped out of this one deliberately, and this
     // refusal already keeps a dotted native tick from stranding anyone, so nothing here
     // is broken while it waits. This note replaces an older one ("Lifting this needs a
     // prefix walk the bridge does not implement") that read as a gap rather than a
