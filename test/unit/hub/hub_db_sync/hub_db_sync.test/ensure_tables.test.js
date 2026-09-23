@@ -145,3 +145,78 @@ describe('HubDbSync.ensureTables @regression @tier3', function () {
         );
     });
 });
+
+// ---------------------------------------------------------------------------
+// Index convergence on an EXISTING mirror table. ensureTables gates on table
+// existence, so a KEY a twin file gained after the mirror was first built never
+// reached a deployed consumer (price_snapshots.idx_status_timestamp_round, 2026-09-06:
+// the barrier read behind it full-scanned a million-row mirror on every poll).
+// ---------------------------------------------------------------------------
+describe('HubDbSync.ensureTables index reconciliation @regression @tier3', function () {
+    const { parseDeclaredIndexes } = require('../../../../../src/hub/hub_db_sync/ensure_tables.js');
+    const TWIN = 'CREATE TABLE t (\n  id BIGINT PRIMARY KEY,\n  status VARCHAR(10),\n  ts BIGINT,\n  addr VARCHAR(80),\n'
+        + '  UNIQUE KEY uq_status_ts (status, ts),\n  KEY idx_ts (ts),  -- a comment; with a semicolon\n  KEY idx_addr (addr(62))\n);\n'
+        + 'CREATE INDEX idx_status ON t (status);';
+
+    it('parses inline KEY, UNIQUE KEY (prefix widths stripped) and standalone CREATE INDEX', function () {
+        const got = parseDeclaredIndexes(TWIN, 't').map((i) => [i.name, i.unique, i.columns.join(',')]);
+        assert.deepStrictEqual(got, [
+            ['uq_status_ts', true, 'status,ts'],
+            ['idx_ts', false, 'ts'],
+            ['idx_addr', false, 'addr'],
+            ['idx_status', false, 'status']
+        ]);
+    });
+
+    function liveRows(indexes) {
+        const rows = [];
+        for (const [name, unique, cols] of indexes)
+            cols.forEach((c, i) => rows.push({ INDEX_NAME: name, NON_UNIQUE: unique ? 0 : 1, COLUMN_NAME: c, SEQ_IN_INDEX: i + 1 }));
+        return rows;
+    }
+
+    async function run(live) {
+        const dir = makeSqlDir({ 't.sql': TWIN });
+        const alters = [];
+        const doQuery = async (sql) => {
+            if (/^SHOW TABLES/.test(sql)) return [{ t: 't' }];
+            if (/information_schema\.statistics/.test(sql)) return live;
+            if (/^ALTER TABLE/.test(sql)) { alters.push(sql); return []; }
+            throw new Error('unexpected statement: ' + sql);
+        };
+        await ensureTables({ doQuery }, dir);
+        return alters;
+    }
+
+    it('adds every declared index the live table lacks, and nothing that is already there', async function () {
+        // uq_status_ts present by name; idx_ts satisfied by column set under another name;
+        // idx_addr and idx_status missing.
+        const alters = await run(liveRows([['PRIMARY', true, ['id']], ['uq_status_ts', true, ['status', 'ts']], ['ts_by_other_name', false, ['ts']]]));
+        assert.deepStrictEqual(alters, [
+            'ALTER TABLE `t` ADD INDEX `idx_addr` (addr(62))',
+            'ALTER TABLE `t` ADD INDEX `idx_status` (status)'
+        ]);
+    });
+
+    it('a UNIQUE declaration is not satisfied by a non-unique live index on the same columns', async function () {
+        const alters = await run(liveRows([['PRIMARY', true, ['id']], ['loose', false, ['status', 'ts']], ['idx_ts', false, ['ts']], ['idx_addr', false, ['addr']], ['idx_status', false, ['status']]]));
+        assert.deepStrictEqual(alters, ['ALTER TABLE `t` ADD UNIQUE INDEX `uq_status_ts` (status, ts)']);
+    });
+
+    it('does not query the live index set for a twin that declares no index', async function () {
+        const dir = makeSqlDir({ 'plain.sql': 'CREATE TABLE plain (id INT);' });
+        const calls = [];
+        await ensureTables({ doQuery: async (sql) => { calls.push(sql); return [{ t: 'plain' }]; } }, dir);
+        assert.deepStrictEqual(calls.filter((s) => !/^SHOW TABLES/.test(s)), []);
+    });
+
+    it('an ADD INDEX failure is logged and skipped, never thrown', async function () {
+        const dir = makeSqlDir({ 't.sql': TWIN });
+        const doQuery = async (sql) => {
+            if (/^SHOW TABLES/.test(sql)) return [{ t: 't' }];
+            if (/information_schema\.statistics/.test(sql)) return [];
+            throw new Error('Duplicate entry');
+        };
+        await ensureTables({ doQuery }, dir);                      // resolves
+    });
+});
