@@ -17,3 +17,6 @@
 coverage/
 .nyc_output/
 .claude/
+
+# Mutation run output, regenerated on every run
+test/mutation/mutation-report.json
