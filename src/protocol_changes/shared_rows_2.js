@@ -216,9 +216,9 @@ addGate('mirror_admission_activation.MIRROR_ADMISSION_ACTIVATION', 'height', {
     'BTC:mainnet':  null,
     'LTC:mainnet':  null,
     'DOGE:mainnet': null,
-    'BTC:testnet':  154234,      // RE-SLID 2026-09-23: train 154,074 + 160 blocks (17 h at 383.04 s/blk), the v0.20.1 patch reslide
+    'BTC:testnet':  154234,      // RE-SLID 2026-09-23: train 154,074 + 160 blocks (17 h at the 383.04 s/blk bound, 25.6 h at the 575.89 s/blk 84 h trailing mean), the v0.20.1 patch reslide
     'LTC:testnet':  null,        // disabled for v0.20.1, 2026-09-18: LTC:testnet mirror admission ships null on this train; arms on a later train
-    'DOGE:testnet': 67942777,    // RE-SLID 2026-09-23: tip 67,924,122 at 15:55Z + 18655 blocks (57 h at 11 s/blk median, the same instant as the BTC producer), the v0.20.1 patch reslide
+    'DOGE:testnet': 67936053,    // RE-SLID 2026-09-23: tip 67,924,397 at 17:48Z + 11656 blocks (83.8 h at 25.89 s/blk, the 84 h trailing mean, the same instant as the BTC producer), the v0.20.1 patch reslide
     'BTC:regtest':  UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
     'LTC:regtest':  UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
     'DOGE:regtest': UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
@@ -228,9 +228,9 @@ addGate('mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION', 'hei
     'BTC:mainnet':  null,
     'LTC:mainnet':  null,
     'DOGE:mainnet': null,
-    'BTC:testnet':  154291,      // RE-SLID 2026-09-23: its producer + 57 blocks (6 h at 383.04 s/blk), strictly above, never equal
+    'BTC:testnet':  154291,      // RE-SLID 2026-09-23: its producer + 57 blocks (6 h at the 383.04 s/blk bound, 9.1 h at the 575.89 s/blk 84 h trailing mean), strictly above, never equal
     'LTC:testnet':  null,        // disabled for v0.20.1, 2026-09-18: LTC:testnet mirror admission ships null on this train; arms on a later train
-    'DOGE:testnet': 67944741,    // RE-SLID 2026-09-23: its producer + 1964 blocks (6 h at 11 s/blk median)
+    'DOGE:testnet': 67936888,    // RE-SLID 2026-09-23: its producer + 835 blocks (6 h at 25.89 s/blk, the 84 h trailing mean), strictly above, never equal
     'BTC:regtest':  UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
     'LTC:regtest':  UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
     'DOGE:regtest': UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
