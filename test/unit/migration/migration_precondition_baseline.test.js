@@ -306,3 +306,52 @@ describe('MIGRATION_CHECKSUM_REBASELINES[validator-rewards round_qualifier] @reg
             'the tag must live in the header comment, never in an executable statement');
     });
 });
+
+const BRIDGE_FILE = '2026-09-12-bridge-tables.sql';
+
+describe('Database.MIGRATION_PRECONDITIONS[bridge tables] @regression @tier1', function () {
+
+    const bridgePre = Database.MIGRATION_PRECONDITIONS[BRIDGE_FILE];
+    const named = (names) => names.map((name) => ({ name }));
+
+    it('is registered, bound once on the database name, and reads information_schema.tables', function () {
+        assert.ok(bridgePre, BRIDGE_FILE + ' must have a MIGRATION_PRECONDITIONS entry');
+        assert.strictEqual(typeof bridgePre.skipWhen, 'function');
+        assert.strictEqual((bridgePre.sql.match(/\?/g) || []).length, 1,
+            'the precondition query must carry exactly one bind parameter');
+        assert.match(bridgePre.sql, /information_schema\.tables/i);
+        for (const t of BRIDGE_TABLE_ROWS) assert.match(bridgePre.sql, new RegExp("'" + t + "'"));
+    });
+
+    it('baselines only a file that creates exactly those four tables, IF NOT EXISTS', function () {
+        // The baseline is safe because running this file on a schema holding all four
+        // tables executes nothing; that premise must hold for the file as committed.
+        const raw = require('fs').readFileSync(require('path').join(
+            __dirname, '..', '..', '..', 'src', 'sql', 'migrations', BRIDGE_FILE), 'utf8');
+        const statements = Database.prototype.splitSqlStatements.call({
+            stripSqlLineComments: Database.prototype.stripSqlLineComments
+        }, raw);
+        const created = statements.map((s) => (/^\s*CREATE TABLE IF NOT EXISTS\s+(\w+)/i.exec(s) || [])[1]);
+        assert.deepStrictEqual(created.slice().sort(), BRIDGE_TABLE_ROWS.slice().sort(),
+            'every statement must be CREATE TABLE IF NOT EXISTS for one of the four tables; got: ' +
+            JSON.stringify(statements.map((s) => s.slice(0, 60))));
+    });
+
+    it('baselines when all four tables are present, whatever the name case', function () {
+        assert.ok(bridgePre.skipWhen(named(BRIDGE_TABLE_ROWS)));
+        assert.ok(bridgePre.skipWhen(named(BRIDGE_TABLE_ROWS.map((t) => t.toUpperCase()))));
+    });
+
+    it('does NOT baseline when any one of the four tables is missing', function () {
+        for (const missing of BRIDGE_TABLE_ROWS) {
+            assert.strictEqual(bridgePre.skipWhen(named(BRIDGE_TABLE_ROWS.filter((t) => t !== missing))), null,
+                'baselined with ' + missing + ' absent');
+        }
+    });
+
+    it('does NOT baseline on an empty or unreadable answer', function () {
+        assert.strictEqual(bridgePre.skipWhen([]), null);
+        assert.strictEqual(bridgePre.skipWhen(null), null);
+        assert.strictEqual(bridgePre.skipWhen([{}, { name: null }]), null);
+    });
+});

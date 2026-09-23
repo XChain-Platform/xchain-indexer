@@ -128,10 +128,11 @@ class Anchor {
                     d['BATCH_CRC32'] + '|' + String(d['TOTAL_CHUNKS']);
             roundId += '|' + d['MATCH_BATCH_SEQ'];
         } else if(Number(d['FORMAT']) === 0){
-            // Append the root suffix UNCONDITIONALLY, alone among the four canonical
-            // builders: hub (checkpointRootSuffix), SDK and explorer all gate it on
-            // isCheckpointCommitmentActive. The divergence is deliberate and
-            // belongs to the per-network anchor bundle.
+            // Append the root suffix UNCONDITIONALLY. Of the six checkpoint-family
+            // builders, this one and bridge_proof_client/checkpoint_source.js do; the hub
+            // (checkpointRootSuffix), SDK, sync and explorer gate it on
+            // CHECKPOINT_COMMITMENT. The divergence is deliberate: the roots this parse
+            // stores are then always inside the signed bytes.
             //
             // Parity therefore rests on a PRODUCER-side invariant, not on a shared gate:
             // no bundle may carry a section whose OWN snapshot block is below

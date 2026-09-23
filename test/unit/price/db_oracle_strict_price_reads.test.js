@@ -179,11 +179,14 @@ describe('price-barrier-guarded reads fail loudly on a DB fault @regression @tie
         // Converting it would be scope the fault class does not reach, so this pins
         // that it was deliberately left alone.
         // The Database class is a directory of per-family mixins, so the scan reads all of it.
-        const src = dbSource();
-        const fn  = src.slice(src.indexOf('async getCrossChainDataForVM('));
+        // The reads live in buildCrossChainDataForVM, which getCrossChainDataForVM memoizes.
+        const src   = dbSource();
+        const start = src.indexOf('async buildCrossChainDataForVM(');
+        assert.notStrictEqual(start, -1, 'buildCrossChainDataForVM not found in src/db');
+        const fn  = src.slice(start);
         const end = fn.indexOf('\n    async ', 1);
         assert.ok(/this\.doQuery\(/.test(end === -1 ? fn : fn.slice(0, end)),
-            'getCrossChainDataForVM stays on doQuery: it is a local, in-transaction read');
+            'the cross-chain preload stays on doQuery: it is a local, in-transaction read');
     });
 
 });

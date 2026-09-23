@@ -20,6 +20,8 @@
  *
  ********************************************************************/
 
+const { memoizedVmSnapshot } = require('../vm_snapshot_memo.js');
+
 // The finalized set's option rows grouped by poll, in the order the read returned them.
 function groupOptionsByPoll(optionRows){
     // String keys on both sides: the pool runs bigIntAsNumber, so both BIGINT
@@ -60,8 +62,14 @@ module.exports = {
     // index_tickers). Gating the KEY's presence, not just its value, keeps a
     // from-genesis replay of a pre-flag block identical on every node.
     async getPollResultsForVM(block_index, includeTick=false){
-        let polls = {};
         let bound = Number(block_index) || 0;
+        let key   = 'polls:' + bound + ':' + (includeTick ? 'tick' : 'plain');
+        return memoizedVmSnapshot(this, key, bound, () => this.buildPollResultsForVM(bound, includeTick));
+    },
+
+    // Build the poll snapshot above uncached; getPollResultsForVM memoizes it per block pass.
+    async buildPollResultsForVM(bound, includeTick){
+        let polls = {};
         let rows = await this.doQuery(
             `SELECT p.action_index, p.poll_status, p.winning_option, p.total_weight,
                     p.total_voters, p.decided_early, t.tick

@@ -21,6 +21,7 @@
 
 const path    = require('path');
 const { rethrowIfInfraFault } = require('../../consensus/fault_guard');
+const { memoizedVmSnapshot } = require('../vm_snapshot_memo.js');
 
 module.exports = {
 
@@ -266,8 +267,15 @@ module.exports = {
         return Number.isFinite(hcut) ? hcut : null;
     },
 
-    // Cross-chain data stub - returns no-data accessors until Phase 4
+    // Cross-chain snapshot for the VM, built once per block pass (see vm_snapshot_memo.js).
     async getCrossChainDataForVM(block_index){
+        let bound = Number(block_index) || 0;
+        return memoizedVmSnapshot(this, 'crossChain:' + bound, bound,
+            () => this.buildCrossChainDataForVM(bound));
+    },
+
+    // Build the cross-chain snapshot uncached; getCrossChainDataForVM memoizes it per block pass.
+    async buildCrossChainDataForVM(bound){
         // Serializable snapshot (plain data) - the VM worker rebuilds the
         // getAttestation/isSettled accessors (keys are "CHAIN:action_index").
         //
@@ -287,7 +295,7 @@ module.exports = {
             `SELECT a_chain, a_action_index, b_chain, b_action_index
              FROM cross_chain_settlements
              WHERE block_index < ? AND a_chain IS NOT NULL`,
-            [Number(block_index) || 0]);
+            [bound]);
         for(let r of rows){
             settled[String(r.a_chain) + ':' + String(r.a_action_index)] = true;
             settled[String(r.b_chain) + ':' + String(r.b_action_index)] = true;
@@ -301,7 +309,7 @@ module.exports = {
             `SELECT call_id, result_status, result_payload FROM xcalls
              WHERE version = 0 AND request_status IN ('completed', 'expired')
                AND resolved_block IS NOT NULL AND resolved_block < ?`,
-            [Number(block_index) || 0]);
+            [bound]);
         for(let r of callRows){
             calls[String(r.call_id)] = {
                 status:  String(r.result_status || ''),

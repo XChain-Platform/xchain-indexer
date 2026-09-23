@@ -131,6 +131,8 @@ module.exports = {
         // an immediate post-commit live delivery. Replaced each block, so a rolled-back
         // block's staged (and rolled-back) rows are simply discarded, never delivered.
         this.indexerDb._stagedHubPushes = [];
+        // Install a fresh VM snapshot memo; processBlock drops it when the pass ends.
+        this.indexerDb._vmSnapshotMemo = new Map();
         return stateCommitActive;
     },
 
@@ -185,6 +187,10 @@ module.exports = {
             // re-fetches it from the DB and retries this same block after the sleep interval,
             // instead of falling through and silently skipping the failed block.
             return { committed: committed, stop: true, lastDecoderBlock: lastDecoderBlock };
+        } finally {
+            // Drop the memo so no read outside a block pass (a dry run, a post-reorg
+            // quote) can be served a snapshot the pass built.
+            this.indexerDb._vmSnapshotMemo = null;
         }
     },
 

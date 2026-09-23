@@ -42,10 +42,10 @@
  * arms the ROLLCALL rail opts in here separately, so a rail-armed venue can
  * still drive the below-height (v0) behaviour as its control.
  *
- * LOCAL COPY of the canonical map in xchain-documentation/protocol/constants.js
- * and the value twin of xchain-hub/src/rollcall_gates_activation.js. The
- * mainnet and testnet heights are parity-tested; regtest is env-derived and is
- * not.
+ * LOCAL COPY of the canonical map in xchain-documentation/protocol/constants.js;
+ * the twin lives at the same path (src/consensus/gates/rollcall_gates_gate.js)
+ * in the hub and the indexer and is kept BYTE-IDENTICAL. The mainnet and
+ * testnet heights are parity-tested; regtest is env-derived and is not.
  *
  ********************************************************************/
 

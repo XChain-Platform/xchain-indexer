@@ -5,15 +5,19 @@ const { get, copy, activeAt } = require('../gate_registry');
 /*
  * mirror_admission_gate.js - admission by height for the mirror barrier family.
  *
- * BYTE-IDENTICAL TWIN. This file exists at xchain-indexer/src/, xchain-hub/src/ and, once
- * vendored, xchain-explorer/src/. The three copies are held identical by
- * bin/sync-hub-mirror-client.sh --check (a cmp -s byte compare, not a digest) and the
- * exported constants are held value-identical to xchain-documentation/protocol/constants.js
- * by the activation-constants parity suite. A one-sided edit forks consensus at the boundary.
+ * BYTE-IDENTICAL TWIN. The canonical copy is xchain-indexer/src/; xchain-hub/src/ and
+ * xchain-explorer/src/ carry it byte for byte, so edit the indexer copy and copy it outward.
+ * reconcile-twins.sh --check grades both pairs. The explorer pair is also held by
+ * xchain-indexer/bin/sync-hub-mirror-client.sh --check (a cmp -s byte compare, not a digest),
+ * which never reads the hub copy; the hub pair is also held by the byte compare in the
+ * activation-constants parity suite, which skips without a sibling checkout unless
+ * XCHAIN_REQUIRE_SIBLINGS=1. That suite also holds the exported constants value-identical to
+ * xchain-documentation/protocol/constants.js. A one-sided edit forks consensus at the boundary.
  *
- * ZERO REQUIRES, DELIBERATELY. This module is a CLIENT_FILES entry: it is vendored into the
- * explorer beside hub_db_sync.js, which can carry no dependency the explorer does not have.
- * price_batching_floor_activation.js is the precedent. The alternative considered and
+ * ONE REQUIRE, DELIBERATELY. This module is a DEP_FILES entry of sync-hub-mirror-client.sh: it
+ * is vendored into the explorer beside hub_db_sync.js, which can carry no dependency the
+ * explorer does not have, so it requires only ../gate_registry, which every consumer carries
+ * as its own. price_batching_floor_gate.js is the precedent. The alternative considered and
  * rejected was threading an admission bound through eleven predicate signatures, their
  * waiters and every call site.
  *

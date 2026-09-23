@@ -345,6 +345,24 @@ const MIGRATION_PRECONDITIONS = {
                    'qualified reward identity and this migration has nothing left to rebuild.';
         }
     },
+    // Creates bridge_transfers, bridge_settlements, policy_snapshots and xbridges. It is
+    // mode=manual and every statement is CREATE TABLE IF NOT EXISTS copied from src/sql, so
+    // once the boot-time verifyTables() has built all four, running the file changes nothing.
+    // Baseline exactly when assertBridgeTablesPresent passes (same query, same four names);
+    // a missing table or an unreadable answer returns null and the file stays pending.
+    '2026-09-12-bridge-tables.sql': {
+        sql: "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = ? " +
+             "AND table_name IN ('bridge_transfers', 'bridge_settlements', 'policy_snapshots', 'xbridges')",
+        skipWhen: (rows) => {
+            if(!Array.isArray(rows)) return null;
+            const live = new Set(rows.map(r => String((r && r.name) || '').toLowerCase()));
+            const required = ['bridge_transfers', 'bridge_settlements', 'policy_snapshots', 'xbridges'];
+            if(!required.every(t => live.has(t))) return null;
+            return 'bridge_transfers, bridge_settlements, policy_snapshots and xbridges are all ' +
+                   'present, built from their src/sql definitions at boot, so this migration has ' +
+                   'no table left to create.';
+        }
+    },
 };
 
 module.exports = {
