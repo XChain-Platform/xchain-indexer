@@ -23,7 +23,8 @@
  *                                  armed_map_rows, plus the count. Unmoved by a
  *                                  comment, rename or move, so it answers "same
  *                                  armed map?"; UNREADABLE when a row fails to
- *                                  resolve, never a plausible hash. v1 (a hash
+ *                                  resolve, never a plausible hash, and the run
+ *                                  then exits 1 with the reason. v1 (a hash
  *                                  over carrier bytes) is gone since W3; the
  *                                  legacy field carries v2 and
  *                                  armed_map_fingerprint_version says so. The
@@ -38,7 +39,7 @@
  *                                  the hub also evaluates. Comparable across
  *                                  repos, and it answers "same rules?".
  *   state_hash                     the stored hash at the regtest tip, or at a
- *                                  named height. The only one of the four that
+ *                                  named height. The only one of the five that
  *                                  needs a database, and the only one that
  *                                  speaks for the LEDGER rather than the code.
  *
@@ -46,13 +47,13 @@
  * and the digest, but only from a RUNNING server against a reachable database,
  * and there is no RPC at all for the coin hash or the state hash. A restructure
  * has to take the same reading from a checkout, before and after, with nothing
- * deployed. So the three code-derived values are computed here exactly as the
+ * deployed. So the four code-derived values are computed here exactly as the
  * server computes them, from the same modules, with no process to start.
  *
- * THE FOURTH NUMBER IS OPT-IN for that reason: without --state-hash this script
+ * THE FIFTH NUMBER IS OPT-IN for that reason: without --state-hash this script
  * opens no socket and reads no configuration beyond the source tree.
  *
- * ONE OF THE THREE IS NOT PURE, AND IT MATTERS FOR ANY PIN. The rules digest
+ * TWO OF THE FOUR ARE NOT PURE, AND IT MATTERS FOR ANY PIN. The rules digest
  * hashes gate VALUES, and a regtest venue arms some gates from its own
  * environment rather than from a committed height, so the same build reports one
  * digest in a bare checkout and another inside a configured container. The
@@ -77,16 +78,17 @@
  *
  * USAGE
  *   node bin/consensus-identity.js                    human summary, no database
- *   node bin/consensus-identity.js --json             the three code values
+ *   node bin/consensus-identity.js --json             the four code values
  *   node bin/consensus-identity.js --state-hash       adds the tip read
  *   node bin/consensus-identity.js --at-block 4210    the same read at a height,
  *                                                     which is how a reindex is
  *                                                     compared against its pin
  *   node bin/consensus-identity.js --network testnet  default regtest
  *   node bin/consensus-identity.js --assert-no-absent exit 1 if any shared gate
- *                                                     resolves to the absent
- *                                                     sentinel (the check a
- *                                                     restructure has to survive)
+ *                                                     reads the absent sentinel;
+ *                                                     a missing registry row is
+ *                                                     an exit-2 refusal naming
+ *                                                     the key, flag or no flag
  *   node bin/consensus-identity.js --compare <pin>    compare the selected pin
  *                                                     block field by field
  *   node bin/consensus-identity.js --out <file>       write the identity as JSON
@@ -113,22 +115,20 @@ class CliUsageError extends Error {
     }
 }
 
-/** Key-sorted JSON, so the hash of a map does not depend on insertion order. */
-function canonicalJson(value) {
-    return JSON.stringify(value, Object.keys(value).sort());
-}
-
 /**
- * The three values that come from the source tree alone.
- * @returns {{coin_registry_consensus_hash: string, coin_registry_consensus_hashes: object,
- *            armed_map_fingerprint: string, armed_map_fingerprint_version: number,
- *            armed_map_rows: ?object, armed_map_row_count: ?number,
- *            consensus_rules_digest: string, gates_field: string, gates_field_hash: string,
+ * The four numbers that come from the source tree alone, with the shape fields
+ * that make a mismatch diagnosable beside them.
+ * @returns {{network: string, coin_registry_consensus_hash: string, coin_registry_consensus_hashes: object,
+ *            armed_map_fingerprint: string, armed_map_fingerprint_unreadable_reason: ?string,
+ *            armed_map_fingerprint_version: number, armed_map_rows: ?object, armed_map_row_count: ?number,
+ *            consensus_rules_digest: string, consensus_rules_gates_resolved: number,
+ *            consensus_rules_gates_absent: number, consensus_rules_gates_absent_keys: string[],
+ *            consensus_rules_gates: object, gates_field: string, gates_field_hash: string,
  *            carrier_logic_digest: string}}
  */
 function codeIdentity(network) {
     const coins = require('../src/coins/index.js');
-    const { computeArmedMapFingerprintV2 } = require('../src/consensus/armed_map/fingerprint.js');
+    const { computeArmedMapFingerprintV2, UNREADABLE } = require('../src/consensus/armed_map/fingerprint.js');
     const { computeConsensusRulesDigest, knownGateKeys, ABSENT } = require('../src/consensus_rules_digest.js');
     const logicPin = require('./lib/carrier_logic_pin.js');
 
@@ -145,12 +145,15 @@ function codeIdentity(network) {
         // One number for the registry, over the per-coin hashes the hub serves.
         // The per-coin map is kept beside it because a single moved hash has to
         // be attributable to a chain before anyone can act on it.
-        coin_registry_consensus_hash: crypto.createHash('sha256').update(canonicalJson(hashes)).digest('hex'),
+        // Canonicalised by the registry's own exporter, the one consensusHash uses.
+        coin_registry_consensus_hash: crypto.createHash('sha256').update(coins.canonicalJson(hashes)).digest('hex'),
         coin_registry_consensus_hashes: hashes,
         // The legacy field carries v2 since W3 and the version field says so; the
         // _v2 alias of the W1 to W4 window is gone since W5. The row map and count
         // are null exactly when v2 reads UNREADABLE.
         armed_map_fingerprint: armedMapV2.hex,
+        // The module's reason beside its sentinel, so an UNREADABLE reading names its cause.
+        armed_map_fingerprint_unreadable_reason: armedMapV2.hex === UNREADABLE ? String(armedMapV2.reason) : null,
         armed_map_fingerprint_version: 2,
         armed_map_rows: armedMapV2.rows || null,
         armed_map_row_count: armedMapV2.count === undefined ? null : armedMapV2.count,
@@ -322,6 +325,11 @@ async function main() {
         for (const key of identity.consensus_rules_gates_absent_keys) console.error(`  ${key}`);
         process.exitCode = 1;
     }
+    // Fail an unresolvable armed map like an unread tip, so a sentinel pin never reads as a pass.
+    if (identity.armed_map_fingerprint_unreadable_reason !== null) {
+        console.error(`armed_map_fingerprint UNREADABLE: ${identity.armed_map_fingerprint_unreadable_reason}`);
+        process.exitCode = 1;
+    }
 
     if (opts.out) {
         fs.mkdirSync(path.dirname(opts.out), { recursive: true });
@@ -338,6 +346,9 @@ async function main() {
         console.log(`  ${tick.padEnd(29)}${identity.coin_registry_consensus_hashes[tick]}`);
     }
     console.log(`armed_map_fingerprint:         ${identity.armed_map_fingerprint} (version ${identity.armed_map_fingerprint_version})`);
+    if (identity.armed_map_fingerprint_unreadable_reason !== null) {
+        console.log(`  unreadable because:          ${identity.armed_map_fingerprint_unreadable_reason}`);
+    }
     console.log(`armed_map_row_count:           ${identity.armed_map_row_count}`);
     console.log(`carrier_logic_digest:          ${identity.carrier_logic_digest}`);
     console.log(`consensus_rules_digest:        ${identity.consensus_rules_digest}`);
@@ -374,7 +385,6 @@ module.exports = {
     codeIdentity,
     parseArgs,
     readStateHash,
-    canonicalJson,
     compareIdentity,
     selectedPinBlock,
     REPO_ROOT,

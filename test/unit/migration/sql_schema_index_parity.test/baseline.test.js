@@ -24,12 +24,20 @@ const fs     = require('fs');
 const path   = require('path');
 
 const { loadPinnedOriginFixture } = require('../../../helpers/pinnedOriginFixture');
-const { INDEX_BASELINE, collectDeclaredIndexes, collectMigrationIndexes } = require('./helpers/index_ledger.js');
+const { INDEX_BASELINE, PRIMARY_INDEX, collectDeclaredIndexes, collectMigrationIndexes } = require('./helpers/index_ledger.js');
 
 // The immutable anchor the re-freeze guard measures against, plus the sha256 that
 // makes editing it a deliberate act. See the re-freeze case at the bottom of this file.
 const ORIGIN_INDEX_BASELINE        = path.join(__dirname, '..', '..', '..', 'fixtures', 'schema-index-baseline-origin.json');
 const ORIGIN_INDEX_BASELINE_SHA256 = 'c5da83b9fb1d9aab4d2e370b2e975022f1bbabecc3e732fe2714e4ca48d720bf';
+
+// Original shape of each pre-ledger table-level PRIMARY KEY. The pinned anchor above was
+// seeded before the parser read primary keys, so these stand in for its missing entries;
+// adding a table here is the reviewed act, exactly as re-seeding the anchor would be.
+const ORIGIN_PRIMARY_KEYS = {
+    pending_hub_pushes: { columns: ['id'],   unique: true },
+    push_generations:   { columns: ['coin'], unique: true },
+};
 
 describe('SQL schema index parity (definition path vs ledger path) @regression', function(){
     it('sanity: the index baseline is neither empty nor stale (guard is not vacuous)', function(){
@@ -132,7 +140,9 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
                 .map(e => [String(e.name).toLowerCase(), e]));
             for(const entry of baseline[table]){
                 const index = String(entry.name).toLowerCase();
-                const o     = anchored.get(index);
+                const o     = anchored.get(index) ||
+                              (index === PRIMARY_INDEX && Object.hasOwn(ORIGIN_PRIMARY_KEYS, table)
+                                  ? ORIGIN_PRIMARY_KEYS[table] : undefined);
                 if(!o){ minted.push(`  ${table}.${index}  (frozen as: ${shape(entry.columns, entry.unique)})`); continue; }
                 if(shape(o.columns, o.unique) === shape(entry.columns, entry.unique)) continue;
                 const m = lastCreated.get(table + '.' + index);
@@ -140,7 +150,8 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
                 unjustified.push(`  ${table}.${index}\n    origin:    ${shape(o.columns, o.unique)}\n    ` +
                     `re-frozen: ${shape(entry.columns, entry.unique)}\n    ` +
                     (m ? `last migration recreate (${m.file}): ${shape(m.columns, m.unique)}`
-                       : 'no dated migration recreates this index'));
+                       : 'no dated migration recreates this index') +
+                    (index === PRIMARY_INDEX ? '\n    (a primary key moves by ALTER TABLE ... DROP PRIMARY KEY, ADD PRIMARY KEY (...))' : ''));
             }
         }
 

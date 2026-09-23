@@ -111,6 +111,28 @@ describe('armed_map/fingerprint: the published surfaces (W3, alias dropped at W5
         assert.strictEqual(Object.keys(identity.armed_map_rows).length, manifest.ENTRIES.length);
         const logicPin = require('../../../../bin/lib/carrier_logic_pin.js');
         assert.strictEqual(identity.carrier_logic_digest, logicPin.digest(logicPin.readPin(REPO)));
+        assert.strictEqual(identity.armed_map_fingerprint_unreadable_reason, null);
+    });
+
+    it('carries the UNREADABLE reason through consensus-identity and fails the run', function () {
+        // A preload that adds one throwing row in the child, the same row the in-process case uses.
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'armed-map-unreadable-'));
+        const preload = path.join(dir, 'throwing_row.js');
+        fs.writeFileSync(preload, 'require(' + JSON.stringify(path.join(REPO, 'src', 'consensus', 'armed_map', 'manifest.js'))
+            + ").ENTRIES.push(['zz_test.THROWS', () => { throw new Error('carrier failed to load'); }]);\n");
+        let res;
+        try {
+            res = spawnSync(process.execPath, ['-r', preload, path.join(REPO, 'bin', 'consensus-identity.js'), '--json'],
+                { cwd: REPO, encoding: 'utf8' });
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+        assert.strictEqual(res.status, 1, res.stdout + res.stderr);
+        const identity = JSON.parse(res.stdout);
+        assert.strictEqual(identity.armed_map_fingerprint, v2.UNREADABLE);
+        assert.ok(identity.armed_map_fingerprint_unreadable_reason.includes('zz_test.THROWS'),
+            String(identity.armed_map_fingerprint_unreadable_reason));
+        assert.match(res.stderr, /^armed_map_fingerprint UNREADABLE: .*zz_test\.THROWS/m);
     });
 });
 

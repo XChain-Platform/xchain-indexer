@@ -33,7 +33,9 @@
     "attest_responsible_widening_activation": {
       "path": "src/consensus/gates/attest_responsible_widening_gate.js",
       "hash": "5e389fa47f0c26faed5e3c6e817c30602c9e8ad2f51aece8dfadf0b2c09c19ad",
-      "twins": []
+      "twins": [
+        "xchain-hub"
+      ]
     },
     "attestation/providerMinStakeHistory": {
       "path": "src/attestation/providerMinStakeHistory.js",
@@ -71,6 +73,7 @@
       "path": "src/consensus/equivocation_header.js",
       "hash": "74a151e91bb72581fce3efe097452afa10603417d20eb008e58d1833f4a889f0",
       "twins": [
+        "xchain-hub",
         "xchain-sync"
       ]
     },
@@ -82,7 +85,9 @@
     "mirror_admission_activation": {
       "path": "src/consensus/gates/mirror_admission_gate.js",
       "hash": "d59a0c44b7d0dc1dbc5f1530d67e012a7dac33f1824960565a9788b75cff6a25",
-      "twins": []
+      "twins": [
+        "xchain-hub"
+      ]
     },
     "oracle_preload_causality_activation": {
       "path": "src/db/prices/oracle_preload_causality_gate.js",
@@ -104,7 +109,9 @@
     "price_scale_activation": {
       "path": "src/consensus/gates/price_scale_gate.js",
       "hash": "4789fa01a078a0287fe711e0ebaea253e7ebf9a39190e60de451db4fed0c0436",
-      "twins": []
+      "twins": [
+        "xchain-hub"
+      ]
     },
     "price_zero_validity_activation": {
       "path": "src/actions/price/price_zero_validity_gate.js",
@@ -124,12 +131,16 @@
     "rollcall_activation": {
       "path": "src/consensus/gates/rollcall_gate.js",
       "hash": "edd542e9a143c33539433d9f6f5d0b11989402908cb464a25cc4c5fe017edc4b",
-      "twins": []
+      "twins": [
+        "xchain-hub"
+      ]
     },
     "rollcall_gates_activation": {
       "path": "src/consensus/gates/rollcall_gates_gate.js",
       "hash": "fdefddad0db37e81f8c7301a7763ecd5b4fade21c2c6ef1b6cc28211c2bc6e81",
-      "twins": []
+      "twins": [
+        "xchain-hub"
+      ]
     },
     "slash_grid_activation": {
       "path": "src/db/contracts/slash_grid_gate.js",
@@ -154,6 +165,7 @@
       "path": "src/consensus/stake_weighted_quorum.js",
       "hash": "afaee5777e8d909eace7a7106b294797014f74929fc4302c50a2ec31ac77a847",
       "twins": [
+        "xchain-hub",
         "xchain-sync"
       ]
     },

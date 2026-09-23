@@ -23,8 +23,7 @@
 const { getLogger } = require('../../observability/index.js');
 
 /**
- * SEAM (no handler here; served by getpendingbridgetransfers and
- * getbridgetransfer). This typedef is the row shape the hub's
+ * The row shape getpendingbridgetransfers below returns. This typedef is what the hub's
  * CrossChainBridgeEngine polls for and signs, frozen up front so the read handlers,
  * the hub engine and the wallet cannot each invent a different field name.
  *

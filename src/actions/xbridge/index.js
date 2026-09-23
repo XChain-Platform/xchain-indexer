@@ -16,7 +16,7 @@
  *
  * The module shape, the method names, the parameter sets and the exact verdict strings
  * are the SEAM every bridge component builds against. The wire side (v0, v1, v3, v4) is built
- * here; the mirror-injected settle legs (v2, v5) live in ../bridge_settle.js.
+ * here; the mirror-injected settle legs (v2, v5) live in ../../consensus/bridge_settle.js.
  *
  * TWO WRITERS THIS HANDLER CALLS, which live in the database layer rather than in
  * this handler (src/db/xbridges/index.js and src/db/tokens/index.js), because neither spec nor the
@@ -48,12 +48,14 @@
  *
  * WHERE THE WORK SPLITS. This file owns the WIRE side: parse, guards, verdicts, and the
  * ledger effect of a lock and a burn. The mirror-injected settle legs (v2 and v5) are
- * applied from ../bridge_settle.js, which is a separate file for the same reason
+ * applied from ../../consensus/bridge_settle.js, which is a separate file for the same reason
  * cross_settle.js is separate from the handlers whose escrow it releases: a settle leg is
  * driven by an end-of-block pass over mirrored rows, not by a transaction on this chain.
  *
- * ACTIVATION. v0/v1/v2 gate on ../xchain_bridge_activation.js, v3/v4/v5 on
- * ../token_bridge_activation.js, both keyed on the block_index of the chain being parsed.
+ * ACTIVATION. v0/v1/v2 gate on the registry row xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION
+ * (src/protocol_changes/shared_rows_5.js), v3/v4/v5 on token_bridge_activation.TOKEN_BRIDGE_ACTIVATION
+ * (src/protocol_changes/shared_rows_4.js), both read in ./validate.js and keyed on the
+ * block_index of the chain being parsed.
  * Below the gate a broadcast is 'invalid: XBRIDGE before activation' (the per-feature
  * shape anchor.js uses) and no settle leg is ever injected, so pre-activation block hashes
  * are unchanged on every chain.
@@ -153,7 +155,7 @@ class XBridge {
         }
 
         // A system-injected settle leg that passed the gates is NOT this handler's to
-        // apply: ../bridge_settle.js drives v2 and v5 from the mirrored bridge_transfers
+        // apply: ../../consensus/bridge_settle.js drives v2 and v5 from the mirrored bridge_transfers
         // row at the pinned end-of-block pass position. Returning without
         // writing a verdict leaves that row entirely to the settle pass, which is the
         // only writer of it.

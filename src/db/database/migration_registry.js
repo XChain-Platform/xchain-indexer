@@ -152,7 +152,7 @@ const STARTUP_ASSERTED_MIGRATIONS = [
     {
         file:      '2026-09-12-bridge-tables.sql',
         assertion: 'assertBridgeTablesPresent',
-        symptom:   'Fatal indexer error: the bridge tables bridge_transfers, bridge_settlements, policy_snapshots are absent'
+        symptom:   'Fatal indexer error: the bridge tables bridge_transfers, bridge_settlements, policy_snapshots, xbridges are absent'
     }
 ];
 

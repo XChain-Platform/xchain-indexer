@@ -24,7 +24,7 @@ const Database = require('../../../../src/db');
 const FILE = '2026-07-24-pubkeys-widen-uncompressed.sql';
 const QUALIFIER_FILE = '2026-08-24-validator-rewards-round-qualifier.sql';
 const BRIDGE_TABLES_PROBE = /information_schema\.tables[\s\S]*bridge_transfers/i;
-const BRIDGE_TABLE_ROWS   = Object.freeze(['bridge_transfers', 'bridge_settlements', 'policy_snapshots']);
+const BRIDGE_TABLE_ROWS   = Object.freeze(['bridge_transfers', 'bridge_settlements', 'policy_snapshots', 'xbridges']);
 const bridgeTablesPresent = () => BRIDGE_TABLE_ROWS.map((name) => ({ name }));
 
 const MIG_DIR = path.join(__dirname, '..', '..', '..', '..', 'src', 'sql', 'migrations');

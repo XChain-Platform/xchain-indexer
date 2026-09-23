@@ -195,7 +195,7 @@ async function guardQuorumAndEscrow(deps, row, ctx, f){
 
 /**
  * Mint the internal settle action. Directly through createActionIndex and NEVER through
- * actions.processTransaction / processAction: actions/xbridge.js returns a system-injected
+ * actions.processTransaction / processAction: actions/xbridge/index.js returns a system-injected
  * v2/v5 without writing a verdict, a row or a ledger effect, precisely so this pass is the
  * sole writer of the leg (the CROSS_SETTLE and XEXEC shape). FORMAT is 2 for the gas tick
  * and 5 for a general token, which is what the wire versions mean.
@@ -301,7 +301,7 @@ async function applyBridgeTransfer(deps, row, ctx){
     const amount = String(row.amount);
 
     // Reset the per-action address/ticker lists the way processAction does for every other
-    // handler: this pass mints its action directly (actions/xbridge.js returns a system-injected
+    // handler: this pass mints its action directly (actions/xbridge/index.js returns a system-injected
     // v2/v5 untouched), so nothing else resets them, and a stale list would make updateBalances
     // recompute an unrelated address.
     ctx.util.resetLists();

@@ -86,14 +86,19 @@ describe('runMigrations() pubkey-width assertion @regression @tier1', function (
 
 // `present` is the list of bridge tables information_schema reports. null answers the
 // probe with a non-array (the unreadable case), which must pass through rather than halt.
+// Only names the probe's IN-list asks for are returned, as the server would.
 function makeDb(present) {
     const conn = {
         async query(sql) {
             if (/GET_LOCK/i.test(sql))                                     return [{ l: '1' }];
             if (/RELEASE_LOCK/i.test(sql))                                 return [];
             if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) return [];
-            if (BRIDGE_TABLES_PROBE.test(sql))
-                return (present === null) ? null : present.map((name) => ({ name }));
+            if (BRIDGE_TABLES_PROBE.test(sql)) {
+                if (present === null) return null;
+                const asked = sql.toLowerCase();
+                return present.filter((name) => asked.includes("'" + name.toLowerCase() + "'"))
+                    .map((name) => ({ name }));
+            }
             return [];
         },
         async release() {},
@@ -115,17 +120,25 @@ async function quietly(fn) {
     finally { console.log = realLog; console.warn = realWarn; }
 }
 
-// Post-run schema contract for the three bridge tables (2026-09-12-bridge-tables.sql,
+// Post-run schema contract for the bridge tables (2026-09-12-bridge-tables.sql,
 // mode=manual deploy-precondition=required). This is the case the harnesses above seed
 // their way past, so it is the one that has to hold: without it a node boots, looks
 // healthy, and silently never applies a mirrored transfer whose source leg has already
 // debited on the other chain, because the mirror ingest for a table this database cannot
 // write fails by OMISSION rather than by error.
+const BRIDGE_MIGRATION = path.join(__dirname, '..', '..', '..', '..', 'src', 'sql', 'migrations', '2026-09-12-bridge-tables.sql');
+
+// Every table the registered migration creates, read from the file itself.
+function migrationTables() {
+    const sql = require('fs').readFileSync(BRIDGE_MIGRATION, 'utf8');
+    return [...sql.matchAll(/^\s*CREATE TABLE IF NOT EXISTS\s+`?(\w+)`?/gim)].map((m) => m[1].toLowerCase());
+}
+
 describe('runMigrations() bridge-tables assertion @regression @tier1', function () {
     it('halts naming the migration file when every bridge table is absent', async function () {
         await assert.rejects(
             () => quietly(() => makeDb([]).runMigrations({})),
-            /bridge_transfers, bridge_settlements, policy_snapshots are absent[\s\S]*node src\/db\/migration\/migrate\.js --file 2026-09-12-bridge-tables\.sql/);
+            /bridge_transfers, bridge_settlements, policy_snapshots, xbridges are absent[\s\S]*node src\/db\/migration\/migrate\.js --file 2026-09-12-bridge-tables\.sql/);
     });
 
     // A partially migrated database is the shape a scoped --file rollout actually leaves,
@@ -133,11 +146,20 @@ describe('runMigrations() bridge-tables assertion @regression @tier1', function 
     // missing, so the remedy is not "re-run everything and hope".
     it('halts naming ONLY the missing table when the schema is half migrated', async function () {
         await assert.rejects(
-            () => quietly(() => makeDb(['bridge_transfers', 'policy_snapshots']).runMigrations({})),
+            () => quietly(() => makeDb(['bridge_transfers', 'policy_snapshots', 'xbridges']).runMigrations({})),
             /the bridge tables bridge_settlements are absent/);
         await assert.rejects(
-            () => quietly(() => makeDb(['bridge_transfers']).runMigrations({})),
+            () => quietly(() => makeDb(['bridge_transfers', 'xbridges']).runMigrations({})),
             /the bridge tables bridge_settlements, policy_snapshots are absent/);
+        // Every table the migration creates halts on its own absence, so a table added to
+        // the migration without widening the guard fails here.
+        const tables = migrationTables();
+        assert.deepStrictEqual([...tables].sort(), [...BRIDGE_TABLE_ROWS].sort());
+        for (const missing of tables) {
+            await assert.rejects(
+                () => quietly(() => makeDb(tables.filter((t) => t !== missing)).runMigrations({})),
+                new RegExp('the bridge tables ' + missing + ' are absent'));
+        }
     });
 
     it('passes on a fully migrated schema', async function () {
@@ -148,7 +170,7 @@ describe('runMigrations() bridge-tables assertion @regression @tier1', function 
     // (lower_case_table_names differs by platform), and a case-folded comparison is what
     // keeps a correctly migrated node off the halt path.
     it('accepts the names case-folded', async function () {
-        await quietly(() => makeDb(['BRIDGE_TRANSFERS', 'Bridge_Settlements', 'POLICY_snapshots']).runMigrations({}));
+        await quietly(() => makeDb(['BRIDGE_TRANSFERS', 'Bridge_Settlements', 'POLICY_snapshots', 'XBridges']).runMigrations({}));
     });
 });
 

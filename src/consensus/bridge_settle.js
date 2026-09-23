@@ -26,7 +26,7 @@
  * the application in bridge_settlements for idempotency and rollback. There is NO on-chain
  * transaction for a settle leg; it is an internal action, like CROSS_SETTLE and SWAP_MATCH.
  *
- * WHY IT IS A SEPARATE FILE FROM actions/xbridge.js. The same split cross_settle.js has
+ * WHY IT IS A SEPARATE FILE FROM actions/xbridge/index.js. The same split cross_settle.js has
  * from the handlers whose escrow it releases: the wire handler is driven by a transaction
  * mined on this chain, the settle pass by an end-of-block sweep over mirrored rows. Keeping
  * them apart is also what lets the wire lane and the settle lane build in parallel.

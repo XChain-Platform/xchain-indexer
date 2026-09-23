@@ -42,7 +42,7 @@ const FILE = '2026-07-24-pubkeys-widen-uncompressed.sql';
 // absent column is a fresh install rather than drift - which is why a bare fake conn that
 // returns [] has always satisfied them. assertBridgeTablesPresent reads
 // information_schema.TABLES, where an empty answer is NOT ambiguous: zero rows means the
-// three tables really are gone, and halting is the whole point of the guard.
+// bridge tables really are gone, and halting is the whole point of the guard.
 //
 // So the harnesses below seed that one probe, exactly as the sibling runner suite does
 // (test/unit/migration_runner.test.js): these cases drive the runner's PRECONDITION branch
@@ -51,7 +51,7 @@ const FILE = '2026-07-24-pubkeys-widen-uncompressed.sql';
 // left exactly as written; its halt is pinned by its own describe block in
 // test/unit/migration_runner.test.js.
 const BRIDGE_TABLES_PROBE = /information_schema\.tables[\s\S]*bridge_transfers/i;
-const BRIDGE_TABLE_ROWS   = Object.freeze(['bridge_transfers', 'bridge_settlements', 'policy_snapshots']);
+const BRIDGE_TABLE_ROWS   = Object.freeze(['bridge_transfers', 'bridge_settlements', 'policy_snapshots', 'xbridges']);
 const bridgeTablesPresent = () => BRIDGE_TABLE_ROWS.map((name) => ({ name }));
 
 describe('Database.MIGRATION_PRECONDITIONS[pubkeys widen] @regression @tier1', function () {
