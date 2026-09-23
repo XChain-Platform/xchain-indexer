@@ -148,7 +148,7 @@ function initConsumerHooks(sync, options) {
     // as they did before, which is the fail-open the verdict shape already encodes.
     sync.authoritativeDb = options.authoritativeDb || null;
 
-    // Receive-side retraction guards (XCALL-RETRACT-1). row:deleted events
+    // Receive-side retraction guards. row:deleted events
     // arrive unsigned over the hub stream, and the hub's push*reorg RPCs forward the
     // caller's claim verbatim, so a compromised HUB_API_KEY could fabricate reorg
     // retractions and have every mirror durably delete valid quorum-signed rows.
