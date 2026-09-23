@@ -30,7 +30,8 @@ CREATE TABLE token_controllers (
 -- (tick, action_class) at block X is the latest event <= X — a `bind` gates; an `unbind` gates
 -- only while X < cooldown_end_block (the drop-cooldown's teeth). Cooldown expiry is computed at
 -- read time, NOT swept, so rows never mutate and the table rolls back cleanly as a dataTable
--- (DELETE WHERE action_index >= orphan, then forward replay). See Controller_Bound_Tokens.md.
+-- (DELETE WHERE action_index >= orphan, then forward replay). See
+-- xchain-documentation/protocol/controller-bound-tokens.md.
 
 CREATE UNIQUE INDEX action_index   ON token_controllers (action_index);
 CREATE        INDEX tick_id        ON token_controllers (tick_id);

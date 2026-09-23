@@ -42,9 +42,13 @@ function siblingWith(repo, rel) {
     return fs.existsSync(path.join(dir, rel)) ? dir : null;
 }
 
-/** Skip or fail on a missing sibling, by the environment's rule. */
-function missingSibling(test, repo) {
-    if (REQUIRE_SIBLINGS) assert.fail(`${repo} is not checked out beside this repo and XCHAIN_REQUIRE_SIBLINGS=1`);
+/** Skip or fail once for every missing sibling, by the environment's rule; call it after the assertions (skip throws). */
+function missingSiblings(test, repos) {
+    const names = [...new Set(repos)].sort();
+    if (!names.length) return;
+    if (REQUIRE_SIBLINGS) {
+        assert.fail(`${names.join(', ')} ${names.length > 1 ? 'are' : 'is'} not checked out beside this repo and XCHAIN_REQUIRE_SIBLINGS=1`);
+    }
     test.skip();
 }
 
@@ -70,15 +74,17 @@ describe('bin/pins/carrier-logic.json: the carrier logic pin', function () {
 
     it('(c) every twin id hashes the same in the sibling pin', function () {
         const mismatches = [];
+        const missing = [];
         for (const id of Object.keys(pin.entries)) {
             for (const repo of pin.entries[id].twins || []) {
                 const dir = siblingWith(repo, pinModule.PIN_REL);
-                if (!dir) { missingSibling(this, repo); continue; }
+                if (!dir) { missing.push(repo); continue; }
                 const theirs = (pinModule.readPin(dir).entries[id] || {}).hash;
                 if (theirs !== pin.entries[id].hash) mismatches.push(`${id}: ${repo} pins ${theirs}, this repo pins ${pin.entries[id].hash}`);
             }
         }
         assert.deepStrictEqual(mismatches, [], 'a logic change to a twin re-pins every copy in one change set');
+        missingSiblings(this, missing);
     });
 });
 
@@ -105,10 +111,11 @@ describe('bin/pins/carrier-logic.json: the carrier logic pin', function () {
 
     it('(e) every twin file\'s bytes equal every sibling copy', function () {
         assert.ok(pinModule.MODULE_TWIN_FILES.length >= 2, 'the module and its ops half are both twins');
+        const missing = [];
         for (const repo of pinModule.MODULE_TWINS) {
             if (repo === pinModule.repoName(REPO_ROOT)) continue;
             const dir = siblingWith(repo, pinModule.MODULE_REL);
-            if (!dir) { missingSibling(this, repo); continue; }
+            if (!dir) { missing.push(repo); continue; }
             for (const rel of pinModule.MODULE_TWIN_FILES) {
                 const theirs = path.join(dir, rel);
                 assert.ok(fs.existsSync(theirs), `${rel} is missing from the ${repo} copy: cp it there`);
@@ -116,6 +123,7 @@ describe('bin/pins/carrier-logic.json: the carrier logic pin', function () {
                     `${rel} differs from the ${repo} copy: edit one and cp it to the others`);
             }
         }
+        missingSiblings(this, missing);
     });
 
     it('(g) the membership rule and the pin name the same files, both ways', () => {

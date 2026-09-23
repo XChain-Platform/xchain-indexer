@@ -180,7 +180,8 @@ module.exports = {
      * "At most one live controller per (subject, class)" is enforced by the handlers: a BIND is
      * rejected when an effective controller already gates that class (replace = unbind-then-bind,
      * which preserves the cooldown's teeth). action_class ∈ {transfer, trade, burn, mint, stake,
-     * ownership}, validated by the handler. See Controller_Bound_Tokens.md.
+     * ownership}, validated by the handler. See
+     * xchain-documentation/protocol/controller-bound-tokens.md.
      */
 
     // Append a token controller bind/unbind event. `evt` carries action_index, tick_id, action_class,

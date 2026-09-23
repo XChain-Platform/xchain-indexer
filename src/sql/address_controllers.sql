@@ -27,7 +27,8 @@ CREATE TABLE address_controllers (
 
 -- Append-only event log (self-signed account gates). Same model as token_controllers: effective
 -- controller = latest event <= X; a `bind` gates, an `unbind` gates only while X < cooldown_end_block.
--- Read-time cooldown, no sweep, rolls back cleanly as a dataTable. See Controller_Bound_Tokens.md.
+-- Read-time cooldown, no sweep, rolls back cleanly as a dataTable. See
+-- xchain-documentation/protocol/controller-bound-tokens.md.
 
 CREATE UNIQUE INDEX action_index   ON address_controllers (action_index);
 CREATE        INDEX address_id     ON address_controllers (address_id);

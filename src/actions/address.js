@@ -58,7 +58,7 @@ class Address {
         // Self-gate one action-class of this account by binding a guard contract (address_controllers,
         // self-signed). One binding change per action; UNBIND=1 drops the live bind, and COOLDOWN_BLOCKS
         // is committed at bind time as the friction on a later drop (see
-        // Controller_Bound_Tokens.md).
+        // xchain-documentation/protocol/controller-bound-tokens.md).
         this.formats[1] = 'VERSION|CONTROLLER|ACTION_CLASS|COOLDOWN_BLOCKS|UNBIND|MEMO';
 
         // Define lists of various fields

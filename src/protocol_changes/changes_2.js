@@ -234,13 +234,13 @@ module.exports = [
     // snapshot_block via the twin-module pattern (see the STAKE_WEIGHTED_QUORUM note
     // below), NOT this entry. The mainnet timestamp is CONFIRMED (2026-07-07,
     // re-anchored the same day when the contract-era cohort moved to 2026-08-07) at
-    // one quarter AFTER the CONTROLLER_GUARD flag-day (2027-01-01 00:00:00 UTC): the
-    // deny window between the two dates is the safe interim while the fleet upgrades
-    // to legs-in-canonical. The canonical partner is ARMED at BTC anchor 961000
-    // (~2026-08-04), months before this date, satisfying the canonical-first
-    // ordering; if the CONTROLLER_GUARD cohort moves again, re-anchor this one
-    // quarter after it (never before the canonical partner); a wrong value is a
-    // fork. testnet/regtest activate at genesis so the
+    // 2027-01-01 00:00:00 UTC, on its own date months AFTER the CONTROLLER_GUARD
+    // flag-day: the deny window between the two dates is the safe interim while the
+    // fleet upgrades to legs-in-canonical. The canonical partner is ARMED at BTC anchor
+    // 961000 (~2026-08-04), months before this date, satisfying the canonical-first
+    // ordering; if the CONTROLLER_GUARD cohort moves again, re-decide this date
+    // deliberately, keeping a deny window after the cohort and never placing it before
+    // the canonical partner; a wrong value is a fork. testnet/regtest activate at genesis so the
     // propagate+apply path is exercisable from block 0; regtest accepts an env
     // override (a future activation time) so the OFF/deny path stays drillable on a
     // single-node regtest stack. The override is regtest-only ON PURPOSE: two

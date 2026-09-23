@@ -209,7 +209,8 @@ function applyDispenserAndMessageLimits(config){
 function applyControllerPolicy(config){
     // Programmable policy layer: the action-classes a token/account may route to a guard
     // contract. Derived by a STATIC map from the action name (never from data['ACTION']) so a
-    // future action can't accidentally fall into a controlled class. See Controller_Bound_Tokens.md.
+    // future action can't accidentally fall into a controlled class. See
+    // xchain-documentation/protocol/controller-bound-tokens.md.
     // ROUTABLE set: an incoming action is mapped to exactly one of these (utility.controllerActionClass).
     // `ownership` gates the deed-over of a token's ownership record (SWEEP OWNERSHIPS=1 routes here
     // via the synthetic SWEEP_OWNERSHIP action, so an issuer can make ownership non-sweepable to a
@@ -229,7 +230,7 @@ function applyControllerPolicy(config){
     // binding only when no class-specific controller gates that class (most-specific-wins, single
     // guard, no stacking). 'all' means all classes present AND future, so it already gates mint
     // and stake (both wired) and will gate any class a later release routes. See
-    // Controller_Bound_Tokens.md.
+    // xchain-documentation/protocol/controller-bound-tokens.md.
     config['CONTROLLER_BINDABLE_CLASSES'] = [
         'transfer',
         'trade',

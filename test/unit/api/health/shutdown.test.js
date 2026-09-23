@@ -169,8 +169,10 @@ function registerTimeoutTests(){
         });
 
         it('stays under Docker\'s 10s default stop grace', function(){
+            // xchain-node stamps a 30 s budget; docker's ten seconds is the bound
+            // left on a container created before that budget existed.
             assert.ok(DEFAULT_SHUTDOWN_TIMEOUT_MS < 10000,
-                'a budget at or above the grace period ends in the daemon\'s SIGKILL, which is what this replaces');
+                'a budget at or above the grace period ends in the daemon\'s SIGKILL on an unstamped container');
         });
     });
 }
