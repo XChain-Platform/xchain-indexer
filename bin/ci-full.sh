@@ -28,6 +28,12 @@
 # layout and the venue gate's work/ layout (.ci-siblings ships them there). A
 # sibling a GitHub job checks out is REQUIRED here: missing means fail loud,
 # never skip, because GitHub will run the step this gate would be skipping.
+# ci-reusable.yml arms XCHAIN_REQUIRE_SIBLINGS=1 for the ci job's test-gate
+# step whenever it checked siblings out (.ci-siblings lists seven here), which
+# turns every cross-repo guard's usual "sibling absent, skip" into a hard
+# failure; the ci tier below arms the same env so a sibling that is absent or
+# moved fails here the same way it fails on GitHub, instead of quietly
+# skipping the guards that would have caught it.
 #
 # Database: TEST_DB_* env if already set; else the venue's CI_DB_* (exported by
 # ci-gate.sh from venue.env); else localhost root with the GitHub service-
@@ -107,7 +113,7 @@ export XCHAIN_SDK_PATH="${XCHAIN_SDK_PATH:-$SIB/xchain-sdk}"
 need_sib xchain-vm xchain-decoder xchain-sdk xchain-hub
 
 # --- job: ci (XChain-Platform/.github ci-reusable.yml -> npm run ci) -------
-run_tier "ci" npm run ci
+run_tier "ci (siblings STRICT)" env XCHAIN_REQUIRE_SIBLINGS=1 npm run ci
 
 # --- job: integration ------------------------------------------------------
 # The workflow stages the gitignored vendored VM from the canonical sibling
