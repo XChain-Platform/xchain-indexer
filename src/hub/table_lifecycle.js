@@ -23,12 +23,12 @@
  *                     followers. Generates the per-block stream topology
  *                     (xchain-sync/src/schema/replicated_tables.js TOPOLOGY.indexer).
  *   2. ROLLBACK     - how a chain reorg unwinds the table, on the source
- *                     indexer (src/rollback.js) and on every replica
- *                     (xchain-sync/src/ClientRollback.js). Generates both
+ *                     indexer (src/rollback/index.js) and on every replica
+ *                     (xchain-sync/src/client/rollback.js). Generates both
  *                     sets of generic delete lists.
  *   3. HASH COVERAGE- which integrity hash (if any) would catch a divergence
  *                     in the table. Declarative: guards in
- *                     test/unit/hash-coverage.test.js bind the declarations
+ *                     test/unit/hub/hash_coverage.test.js bind the declarations
  *                     to the actual hashing code.
  *
  * A fourth artifact, the advisory TABLE_CONTENT_PARITY_CHECK coverage set,
@@ -37,13 +37,13 @@
  *
  * Adding a table: create src/sql/<table>.sql, then add ONE entry to the
  * registry parts under table_lifecycle/ declaring all three dimensions.
- * test/unit/rollback-coverage.test.js fails until the entry exists, and the
+ * test/unit/rollback/rollback_coverage.test.js fails until the entry exists, and the
  * per-dimension guards fail until the entry matches reality. Classify by
  * understanding the table, not by silencing the tests.
  *
  * BYTE-ALIGNED TWIN: copied verbatim, with its table_lifecycle/ parts, into
  * xchain-sync/src/table_lifecycle.js (sync has no dependency on this package
- * by design; same convention as stateHash.js / merkle.js). Edit here, then
+ * by design; same convention as state_hash.js / merkle.js). Edit here, then
  * `cp` to the twin; the sync rollback-coverage suite asserts byte-identity.
  *
  * Entry fields:
@@ -67,10 +67,10 @@
  *               a reader assuming the default raises errno 1054, which every
  *               forward channel swallows as an older source schema: silent
  *               non-delivery, never an error.
- *               xchain-sync test/unit/streamScopeColumns.test.js binds this
+ *               xchain-sync test/unit/stream_scope_columns.test.js binds this
  *               field to the owning DDL, so a scope column the schema does not
  *               have fails the build instead of shipping un-replicated.
- *   rollback    source-indexer reorg handling (src/rollback.js):
+ *   rollback    source-indexer reorg handling (src/rollback/index.js):
  *                 'action'      generic DELETE by action_index (dataTables)
  *                 'block'       generic DELETE by block_index (blockTables)
  *                 'index'       block-scoped lookup delete (indexTables)
@@ -80,7 +80,7 @@
  *                 'lookup'      append-only id-keyed dedup lookup; orphaned
  *                               rows are inert (only ever referenced by id)
  *               null for owner 'sync' (not a source-indexer table)
- *   replicaRollback  replica-side reorg handling (ClientRollback.js):
+ *   replicaRollback  replica-side reorg handling (xchain-sync/src/client/rollback.js):
  *                 'mirror'      same generic list as the source
  *                 'recomputed' | 'special' | 'exempt' | 'lookup'  as above
  *                 'local'       indexer-local; table never exists on replicas
@@ -88,13 +88,13 @@
  *               refreshed by the recompute pass (coverage is a union)
  *   hashed      { classes: [...], note }. classes from:
  *                 'ledger' | 'actions' | 'contracts'  the three consensus
- *                     block hashes (db.js getBlockHashes)
+ *                     block hashes (src/db/actions.js getBlockHashes)
  *                 'state_hash'   replication-integrity 4th hash over in-place
- *                     mutations + backdated credits (stateHash.js)
+ *                     mutations + backdated credits (src/consensus/state_hash.js)
  *                 'state_commitment'  light-client SMT roots
- *                     (stateCommitment.js: balances + BTC stakes)
+ *                     (src/state_commitment/: balances + BTC stakes)
  *                 'index_map'    id->string delta class of state_hash
- *                     (armed per-chain; stateHash.js)
+ *                     (armed per-chain; src/consensus/state_hash.js)
  *                 'quorum'       not block-hashed, but every row carries (or
  *                     is derived under) federation quorum signatures
  *               classes may be empty; the note must then say why no hash is
@@ -157,8 +157,8 @@ const ORPHAN_SWEEPS = [
 // divergence, which is exactly the class the row counts cannot see.
 //
 // This block is the coverage contract. The guards bind it to the code:
-// xchain-sync test/unit/tableContentParity.test.js (every replicated table is
-// committed by something) and this repo's test/unit/hash-coverage.test.js (the
+// xchain-sync test/unit/table_content_parity.test.js (every replicated table is
+// committed by something) and this repo's test/unit/hub/hash_coverage.test.js (the
 // carve-outs stay pinned to the operator ruling).
 //
 // There are exactly TWO exclusion classes, and a table outside both is covered:
@@ -209,8 +209,8 @@ const CONTENT_PARITY_CARVE_OUTS = Object.freeze([
 // preimage, so the check still covers everything the two sides must agree on.
 // `validator_rewards.id` reaches the same place by a different route: the row
 // normally streams with every column, carrying the source id, but the RB-ANCHOR
-// reorg restore (xchain-indexer/src/rollback.js and its mirror in
-// xchain-sync/src/ClientRollback.js) re-INSERTs a deleted loser naming only
+// reorg restore (xchain-indexer/src/rollback/index.js and its mirror in
+// xchain-sync/src/client/rollback.js) re-INSERTs a deleted loser naming only
 // source_id/signing_pubkey_id/reward_type/round_reference/amount/block_index/
 // derive_block_index, so each side mints its own AUTO_INCREMENT value off a
 // counter the other never sees (the source burns values on every ignored
@@ -242,7 +242,7 @@ function tablesWhere(fn){
     return TABLES.filter(fn).map(t => t.table);
 }
 
-// Source-indexer generic rollback lists (xchain-indexer/src/rollback.js).
+// Source-indexer generic rollback lists (xchain-indexer/src/rollback/index.js).
 function rollbackTables(){
     return {
         dataTables:  tablesWhere(t => t.rollback === 'action'),
@@ -251,7 +251,7 @@ function rollbackTables(){
     };
 }
 
-// Replica generic rollback lists (xchain-sync/src/ClientRollback.js): the
+// Replica generic rollback lists (xchain-sync/src/client/rollback.js): the
 // source lists minus indexer-local tables that never exist on a replica.
 function replicaRollbackTables(){
     return {
