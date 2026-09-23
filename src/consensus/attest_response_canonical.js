@@ -73,8 +73,10 @@
  * admit_block_btc column. A caller that passes no `requestBlock` is not
  * admission-aware and gets the bytes above unchanged, which is what keeps this
  * function output-identical to the hub copy over every input the twin suite
- * drives. In the admission era a row handed no map REFUSES (the field throws),
- * exactly as the hub refuses, so the two eras can never share a signature.
+ * drives. The field is appended only when this node reads the request's era as
+ * armed and the row carries a map; both mixed cells (an admission-era row with
+ * no map, a legacy-era row handed one) keep the legacy bytes without throwing,
+ * as the hub does, and a signature over other bytes simply fails to verify.
  *
  ********************************************************************/
 
@@ -83,7 +85,7 @@
 // Zero-require module; the encoder and the era gate are the same twin the hub signs with.
 const { admissionCanonicalField } = require('./gates/mirror_admission_gate.js');
 
-// The label the hub's builder hands the era gate, so a refusal on either side reads the same.
+// The label the hub's builder hands the era gate, kept identical so the two call shapes match.
 const ADMISSION_FIELD_LABEL = 'AttestationConsensus';
 
 // Separates the appended mirror-era field from the free-form `meta` that precedes
@@ -125,11 +127,11 @@ function isCanonicalIntSpelling(v){
 // of the activation key) and `admitBlocks` (the row's admission map, or null for a
 // legacy row). `requestBlock` undefined means the caller is not admission-aware and
 // the bytes are exactly the two-era form above; with it present the admission field
-// is appended after the effective time, the hub's own position, and its era gate
-// refuses in both directions (an admission-era row with no map, a legacy-era row
-// handed one). That refusal is a throw, for the same reason the spelling check is:
-// a verifier must treat the row as unverifiable rather than rebuild bytes no honest
-// quorum signed.
+// is appended after the effective time, the hub's own position, when the era gate
+// reads the request's block as armed and a map is present. The two mixed cells (an
+// admission-era row with no map, a legacy-era row handed one) keep those legacy
+// bytes without throwing, so a version seam surfaces as an ordinary signature
+// mismatch. Only a map that cannot be spelled canonically still throws.
 function buildResponseCanonicalRaw(fields){
     let raw = String(fields.requestId)
             + String(fields.providerId)

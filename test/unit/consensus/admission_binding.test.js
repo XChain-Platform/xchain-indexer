@@ -147,3 +147,100 @@ describe('admission binding: the verify-side canonical twins byte-match the hub 
         });
     }
 });
+
+// The four-cell compatibility table, driven on the gate itself in every repo that carries it,
+// so a copy that forked its era gate fails here by name. The reader's state is the arm the copy
+// was loaded under; the map is a valid {BTC:280} on a row whose own BTC block is 275.
+const crypto = require('crypto');
+const fs     = require('fs');
+const path   = require('path');
+const { siblingCheckout, siblingsRequired } = require('../../helpers/sibling_checkout.js');
+
+const GATE_COPIES = [
+    ['xchain-indexer', path.resolve(__dirname, '../../../src/consensus/gates/mirror_admission_gate.js')],
+    ['xchain-hub',      path.resolve(__dirname, '../../../../xchain-hub/src/consensus/gates/mirror_admission_gate.js')],
+    ['xchain-explorer', path.resolve(__dirname, '../../../../xchain-explorer/src/consensus/gates/mirror_admission_gate.js')]
+];
+const MEASURED_MAP  = { BTC: 280 };
+const MEASURED_ERA  = 275;
+const TABLE_ARMS    = [['INERT', null], ['ARMED', 0]];
+
+// Load one copy under one arm and hand back the copy plus its restore. Only the gate module is
+// purged: every copy reads its registry rows at require time, and the registry applies the
+// venue's regtest arming at the moment a row is read.
+function loadGateCopy(file, activation) {
+    const saved    = require.cache[file];
+    const savedEnv = process.env.XC_MIRROR_ADMISSION_ACTIVATION;
+    delete require.cache[file];
+    if (activation === null) delete process.env.XC_MIRROR_ADMISSION_ACTIVATION;
+    else process.env.XC_MIRROR_ADMISSION_ACTIVATION = String(activation);
+    const gate = require(file);
+    return {
+        gate,
+        restore() {
+            delete require.cache[file];
+            if (saved !== undefined) require.cache[file] = saved;
+            if (savedEnv === undefined) delete process.env.XC_MIRROR_ADMISSION_ACTIVATION;
+            else process.env.XC_MIRROR_ADMISSION_ACTIVATION = savedEnv;
+        }
+    };
+}
+
+describe('admission binding: the four-cell compatibility table holds on every byte-identical gate copy', function () {
+
+    const verdicts = GATE_COPIES.map(([repo, file]) => [repo, file, siblingCheckout(__dirname, file)]);
+    const missing  = verdicts.filter(([, , v]) => !v.usable);
+    if (missing.length && siblingsRequired())
+        throw new Error('the gate copies cannot be compared: ' + missing.map(([r, , v]) => r + ': ' + v.reason).join('; '));
+
+    it('the copies present are byte-identical (PENDING here means a sibling is absent, never a silent pass)', function () {
+        const usable = verdicts.filter(([, , v]) => v.usable);
+        if (usable.length < GATE_COPIES.length) { this.skip(); return; }
+        const digests = usable.map(([repo, file]) =>
+            [repo, crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')]);
+        for (const [repo, digest] of digests)
+            assert.strictEqual(digest, digests[0][1], repo + ' copy differs from the indexer canonical copy');
+    });
+
+    for (const [repo, file, verdict] of verdicts) {
+        for (const [state, activation] of TABLE_ARMS) {
+            describe(repo + ' copy, reader ' + state, function () {
+                let loaded;
+                before(function () {
+                    if (!verdict.usable) { this.skip(); return; }
+                    loaded = loadGateCopy(file, activation);
+                });
+                after(function () { if (loaded) loaded.restore(); loaded = null; });
+
+                it('is loaded in the arm it names, so no cell below is vacuous', function () {
+                    assert.strictEqual(loaded.gate.isAdmissionEra(NETWORK, MEASURED_ERA), activation !== null);
+                });
+
+                it('map absent: no admission value, the legacy bytes', function () {
+                    assert.strictEqual(loaded.gate.admissionCanonicalValue('table', NETWORK, MEASURED_ERA, null), null);
+                    assert.strictEqual(loaded.gate.admissionCanonicalValue('table', NETWORK, MEASURED_ERA, undefined), null);
+                    assert.strictEqual(loaded.gate.admissionCanonicalField('table', NETWORK, MEASURED_ERA, null), '');
+                });
+
+                if (activation === null) {
+                    it('map present: presence alone does not select the era, so the legacy bytes, with no throw', function () {
+                        assert.strictEqual(loaded.gate.admissionCanonicalValue('table', NETWORK, MEASURED_ERA, MEASURED_MAP), null);
+                        assert.strictEqual(loaded.gate.admissionCanonicalField('table', NETWORK, MEASURED_ERA, MEASURED_MAP), '');
+                    });
+                } else {
+                    it('map present: the encoded map in the declared slot', function () {
+                        assert.strictEqual(loaded.gate.admissionCanonicalValue('table', NETWORK, MEASURED_ERA, MEASURED_MAP), 'BTC:280');
+                        assert.strictEqual(loaded.gate.admissionCanonicalField('table', NETWORK, MEASURED_ERA, MEASURED_MAP), '|BTC:280');
+                    });
+
+                    it('a malformed map is still refused: the compatibility rule covers a valid map only', function () {
+                        assert.throws(() => loaded.gate.admissionCanonicalValue('table', NETWORK, MEASURED_ERA, { BTC: '0280' }),
+                            /not a canonically spelled/);
+                        assert.throws(() => loaded.gate.admissionCanonicalValue('table', NETWORK, MEASURED_ERA, {}),
+                            /EMPTY admission map/);
+                    });
+                }
+            });
+        }
+    }
+});

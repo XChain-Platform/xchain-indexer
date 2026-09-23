@@ -83,12 +83,13 @@ class Cross_Settle {
         if(gateRegistry.activeAt(CROSS_CHAIN_ROYALTY_KEY, m.network, null, m.snapshot_block, null))
             raw += '|' + String(m.a_payout_legs || '') + '|' + String(m.b_payout_legs || '');
         // The admission map the hub signed, rebuilt from the mirrored row's own admit_block_*
-        // columns and era-keyed on the ROW's snapshot_block, exactly as the hub keys it. Below
-        // the producer activation the field is empty and these bytes are the legacy bytes; in
-        // the admission era a row with no columns set REFUSES (the field throws) rather than
-        // verifying as legacy, because the two eras never share a signature. Appended LAST so
-        // its '|' separator holds whatever the royalty gate did before it. Must byte-match the
-        // hub, which appends the same field in the same position.
+        // columns and era-keyed on the ROW's snapshot_block, exactly as the hub keys it. The
+        // field is set only when this node reads the row's era as armed AND the row carries a
+        // map; every other cell of the compatibility table builds the legacy bytes without
+        // throwing, and a signature over bytes this node did not rebuild fails the quorum
+        // check, which skips the match and lets the block commit. Appended LAST so its '|'
+        // separator holds whatever the royalty gate did before it. Must byte-match the hub,
+        // which appends the same field in the same position.
         raw += ah.admissionCanonicalField('CrossChainDex', m.network, m.snapshot_block, ah.columnsAdmitBlocks(m));
         // EQUIV header: VIEW = the row's persisted finalizing_view (the view the
         // hub round finalized at; == pending.view when the quorum sigs were taken). TAG=XDEX,

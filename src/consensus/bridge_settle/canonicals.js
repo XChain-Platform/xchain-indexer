@@ -82,8 +82,9 @@ function transferCanonical(deps, row){
     ].join('|');
     // The admission map the hub signed, rebuilt from the row's admit_block_* columns and
     // era-keyed on the ROW's snapshot_block. A transfer is read by dest_chain alone, so the
-    // map names one chain. Empty below the producer activation (legacy bytes unchanged); a
-    // modern row with no columns REFUSES here rather than verifying as legacy.
+    // map names one chain. Empty unless this node reads the row's era as armed and the row
+    // carries a map, so every other cell builds the legacy bytes without throwing and a
+    // mismatched signature is the ordinary quorum refusal.
     const admitted = raw + ah.admissionCanonicalField('CrossChainBridge', row.network, row.snapshot_block,
                                                       ah.columnsAdmitBlocks(row));
     if(eq.isEquivHeaderActive(row.snapshot_block, row.network))
