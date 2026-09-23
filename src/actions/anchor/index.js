@@ -134,13 +134,13 @@ class Anchor {
             // CHECKPOINT_COMMITMENT. The divergence is deliberate: the roots this parse
             // stores are then always inside the signed bytes.
             //
-            // Parity therefore rests on a PRODUCER-side invariant, not on a shared gate:
-            // no bundle may carry a section whose OWN snapshot block is below
-            // CHECKPOINT_COMMITMENT_ACTIVATION. Nothing enforces that here or in the hub's
-            // rootless-row skip, which drops a row on root ABSENCE only, and roots appear at the
-            // EARLIER per-chain STATE_COMMITMENT gate. So the invariant is a deployment
-            // fact (every checkpoint the live federations cut is far past the height),
-            // not a code property.
+            // Parity is enforced on the producer path: the hub bundle selector admits a
+            // section only when CHECKPOINT_COMMITMENT is active at that section's OWN
+            // snapshot block, and also rejects missing roots. The publisher-attestation
+            // follower rebuilds announced rows without rerunning that selector floor, but
+            // it signs only the separate reward canonical. It cannot make a below-floor
+            // section valid: this unconditional suffix makes the rootless checkpoint
+            // signatures fail, and the all-or-nothing verdict suppresses the reward.
             //
             // Fail-closed if it ever breaks: the hub signed such a row rootless, so every
             // section signature fails and the all-or-nothing verdict takes the whole bundle down. It never
