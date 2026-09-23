@@ -183,6 +183,7 @@ class Rollback {
     async runRollbackTransaction(block_index, scope, markets, addresses, tickers){
         let { firstActionIndex, lastActionIndex, unlandedAttestBatches } = scope;
         let staged = null;
+        this.sweepStats = [];
         // Begin a transaction; all deletes and recalculations are atomic
         await this.indexerDb.beginTransaction();
         try {

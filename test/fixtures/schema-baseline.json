@@ -2540,7 +2540,7 @@
       },
       {
         "name": "tick",
-        "spec": "VARCHAR(50) NOT NULL"
+        "spec": "VARCHAR(250) NOT NULL"
       },
       {
         "name": "fiat",

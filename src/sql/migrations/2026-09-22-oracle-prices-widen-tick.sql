@@ -1,0 +1,64 @@
+--********************************************************************
+--
+-- Copyright © 2025-2026 Dankest, LLC
+-- Based on XChain Platform by Dankest, LLC - https://dankest.llc
+--
+-- SPDX-License-Identifier: AGPL-3.0-or-later
+--
+-- This file is part of XChain Platform. Licensed under the GNU Affero
+-- General Public License v3.0 or later; see LICENSE.md. A commercial
+-- license (without AGPL source-disclosure terms) is available -
+-- contact legal@dankest.llc.
+--
+--********************************************************************
+
+-- xchain:migration mode=manual
+--
+-- Migration: oracle_prices.tick  VARCHAR(50) -> VARCHAR(250)
+--
+-- WHY
+-- ---
+-- PRICE v1 admits a tick up to MAX_TICK_LENGTH (250), on this indexer and in the hub's
+-- ingest gate, but oracle_prices declared tick VARCHAR(50). A chain-valid 51-250 character
+-- tick therefore errors the INSERT under STRICT_TRANS_TABLES or truncates to 50 characters
+-- on a permissive server, where two ticks sharing a 50-character prefix collapse onto one
+-- feed. Every other tick column (policy_snapshots, bridge_transfers) is already 250.
+--
+-- ORDER: MIRRORS FIRST, THEN THE HUB. This table is a hub mirror. Once the hub stores a
+-- longer tick, a mirror still at VARCHAR(50) under STRICT_TRANS_TABLES refuses that row and
+-- wedges its oracle barrier on every re-page. The hub therefore keeps its own column narrow
+-- (its boot-time widen logs and skips) until the operator sets
+-- XCHAIN_HUB_ORACLE_TICK_MIRRORS_WIDENED=1, which is the statement that this file has been
+-- applied on every indexer and every explorer mirror has been widened (the explorer's
+-- hub-mirror reconciler does it at startup, or bin/migrate-hub-mirror.js for an externally
+-- maintained schema). HUB_SCHEMA_VERSION does not move: no column is added and the wire row
+-- shape is unchanged.
+--
+-- (manual: the statement is a safe WIDEN that preserves every stored value, but a MODIFY
+--  that restates NOT NULL is indistinguishable from a narrowing to the auto-apply
+--  destructive-DDL classifier, and omitting NOT NULL would silently relax the column.)
+--
+-- ROW FORMAT. tick sits in idx_oracle_tick and idx_effective. At this table's utf8 (3 bytes
+-- per character) idx_oracle_tick grows to (100 + 10 + 250 + 10) * 3 = 1110 bytes, inside the
+-- 3072-byte InnoDB limit under ROW_FORMAT=DYNAMIC (the MariaDB 10.2+ default) but over the
+-- 767-byte limit of a legacy COMPACT or REDUNDANT table, where this ALTER fails with errno
+-- 1071 rather than applying. Check first and convert if needed:
+--
+--   SELECT row_format FROM information_schema.tables
+--    WHERE table_schema = DATABASE() AND table_name = 'oracle_prices';
+--   -- if not Dynamic:
+--   ALTER TABLE oracle_prices ROW_FORMAT=DYNAMIC;
+--
+-- NOT consensus-visible for any stored row: a widen rewrites no value, and every tick of
+-- 50 characters or fewer compares exactly as before. A row an earlier permissive server
+-- already truncated stays truncated; the widen does not recover it.
+--
+-- IDEMPOTENT: re-running MODIFY to the same type is a no-op, and the schema_migrations
+-- ledger records this file once per DB. A database created from the current
+-- src/sql/oracle_prices.sql is already VARCHAR(250); Database.MIGRATION_PRECONDITIONS
+-- baselines this file there instead of leaving it pending.
+--
+-- HOW TO RUN
+--   mariadb -u <indexer_user> -p <indexer_db> < src/sql/migrations/2026-09-22-oracle-prices-widen-tick.sql
+
+ALTER TABLE oracle_prices MODIFY tick VARCHAR(250) NOT NULL;

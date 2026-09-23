@@ -23,7 +23,7 @@ CREATE TABLE oracle_prices (
     source_address  VARCHAR(100) NOT NULL,        -- oracle operator's address (the SOURCE of the PRICE v1 tx)
     source_chain    VARCHAR(10)  NOT NULL,        -- chain on which the PRICE v1 tx was published
     coin            VARCHAR(10)  NOT NULL,        -- which chain's token this oracle is for (BTC/LTC/DOGE)
-    tick            VARCHAR(50)  NOT NULL,        -- token name (e.g. PEPECASH)
+    tick            VARCHAR(250) NOT NULL,        -- token name (e.g. PEPECASH); PRICE v1 admits up to MAX_TICK_LENGTH
     fiat            VARCHAR(10)  NOT NULL,        -- fiat currency code (e.g. USD, JPY)
     value           VARCHAR(250) NOT NULL,        -- price value as decimal string
     fee             VARCHAR(250),                 -- oracle usage fee as decimal (e.g. 0.01 = 1%)

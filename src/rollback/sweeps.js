@@ -48,7 +48,12 @@ module.exports = {
     // the NOT IN subqueries never short-circuit on a NULL.) Mirrors the icons orphan
     // sweep above.
     async sweepDanglingIndexReferences(){
-        await sweepSql.sweepDanglingIndexReferences(this.indexerDb, Database.MARKET_NATIVE_TICK_ID);
+        this.recordSweepStats(await sweepSql.sweepDanglingIndexReferences(this.indexerDb, Database.MARKET_NATIVE_TICK_ID));
+    },
+
+    // Keep each sweep's { table, ms, rows } for logRollbackSummary; runRollbackTransaction resets the list.
+    recordSweepStats(stats){
+        this.sweepStats = (this.sweepStats || []).concat(stats || []);
     },
 
     // IDX-2: the dangling-tick sweep above misses a market whose pair was FIRST traded only in

@@ -363,6 +363,19 @@ const MIGRATION_PRECONDITIONS = {
                    'no table left to create.';
         }
     },
+    // Widens oracle_prices.tick to 250. mode=manual, so a database created from the current
+    // src/sql/oracle_prices.sql (already 250) would sit PENDING forever; baseline only while the
+    // live column is already 250 or wider. An absent or unreadable length never baselines.
+    '2026-09-22-oracle-prices-widen-tick.sql': {
+        sql: "SELECT CHARACTER_MAXIMUM_LENGTH AS len FROM information_schema.columns " +
+             "WHERE table_schema = ? AND table_name = 'oracle_prices' AND column_name = 'tick'",
+        skipWhen: (rows) => {
+            if(!rows.length || rows[0].len == null) return null;
+            const len = Number(rows[0].len);
+            if(Number.isNaN(len) || len < 250) return null;
+            return 'oracle_prices.tick is already ' + len + ' characters wide, so there is no narrow column to widen.';
+        }
+    },
 };
 
 module.exports = {

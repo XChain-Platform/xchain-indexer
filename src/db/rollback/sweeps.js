@@ -16,21 +16,33 @@
  *
  * The dangling-reference sweeps, the pair-scoped market probes and delete, and the
  * local deletes of hub-mirrored rows, each one the body of the src/rollback/sweeps.js
- * method of the same name. The marked cross-chain block is compared statement for
- * statement with the replica by the cross-repo drift guards.
+ * method of the same name, plus timedSweep, which the orphan sweeps here and the icon
+ * sweep in ./rederive.js run through. The marked cross-chain block is compared statement
+ * for statement with the replica by the cross-repo drift guards.
  *
  ********************************************************************/
 
 'use strict';
 
+// Run one sweep DELETE and report { table, ms, rows } for the rollback summary.
+async function timedSweep(db, table, query, args){
+    let startedAt = Date.now();
+    let res = await db.doQuery(query, args);
+    let rows = (res && res.affectedRows != null) ? Number(res.affectedRows) : null;
+    return { table: table, ms: Date.now() - startedAt, rows: rows };
+}
+
 module.exports = {
 
-    // balances, markets and pubkeys rows whose index id no longer resolves.
+    timedSweep,
+
+    // balances, markets and pubkeys rows whose index id no longer resolves, timed per table.
     async sweepDanglingIndexReferences(db, nativeTickId){
-        await db.doQuery(
+        let stats = [];
+        stats.push(await timedSweep(db, 'balances',
             `DELETE FROM balances
              WHERE address_id NOT IN (SELECT id FROM index_addresses)
-                OR tick_id    NOT IN (SELECT id FROM index_tickers)`, []);
+                OR tick_id    NOT IN (SELECT id FROM index_tickers)`, []));
 
         // Same orphan-sweep for the other two derived tables that reference a rolled-back
         // index id but are NOT removed by the action_index / block_index delete loops
@@ -52,14 +64,15 @@ module.exports = {
         // The 0 sentinel is exempt on both sides: it is not a dangling ticker id, it is
         // a side that has no ticker at all (the native coin, named by coin1_id/coin2_id),
         // and matching it here deleted every token/native market on the first reorg.
-        await db.doQuery(
+        stats.push(await timedSweep(db, 'markets',
             `DELETE FROM markets
              WHERE (tick1_id <> ? AND tick1_id NOT IN (SELECT id FROM index_tickers))
                 OR (tick2_id <> ? AND tick2_id NOT IN (SELECT id FROM index_tickers))`,
-            [nativeTickId, nativeTickId]);
-        await db.doQuery(
+            [nativeTickId, nativeTickId]));
+        stats.push(await timedSweep(db, 'pubkeys',
             `DELETE FROM pubkeys
-             WHERE address_id NOT IN (SELECT id FROM index_addresses)`, []);
+             WHERE address_id NOT IN (SELECT id FROM index_addresses)`, []));
+        return stats;
     },
 
     // Each collected pair with no surviving order or match in either orientation.
