@@ -115,14 +115,16 @@ export XCHAIN_SDK_PATH="${XCHAIN_SDK_PATH:-$SIB/xchain-sdk}"
 
 need_sib xchain-vm xchain-decoder xchain-sdk xchain-hub
 
+# Stage the gitignored vendored VM from the canonical sibling before ANY tier
+# runs: the ci tier's own unit suite requires xchain-vm too (actions_class),
+# so staging it only ahead of integration left a from-scratch checkout's ci
+# tier dying on `Cannot find module 'xchain-vm'` before vendor:vm ever ran.
+run_tier "vendor:vm (stage from ../xchain-vm)" npm run vendor:vm
+
 # --- job: ci (XChain-Platform/.github ci-reusable.yml -> npm run ci) -------
 run_tier "ci (siblings STRICT)" env XCHAIN_REQUIRE_SIBLINGS=1 npm run ci
 
 # --- job: integration ------------------------------------------------------
-# The workflow stages the gitignored vendored VM from the canonical sibling
-# BEFORE the tier (a missing vendored copy fails at require time as `deploy VM
-# executor unavailable`, not at install time).
-run_tier "vendor:vm (stage from ../xchain-vm)" npm run vendor:vm
 run_tier "integration (test:integration:ci)" npm run test:integration:ci
 
 # --- job: perf-regression --------------------------------------------------
