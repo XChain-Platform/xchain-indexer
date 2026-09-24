@@ -72,17 +72,16 @@ describe('Anchor canonical vectors byte-identity to xchain-documentation @regres
             'xchain-documentation/protocol/test-vectors/anchor_canonical.json; reconcile both copies.');
     });
 
-    it('the pre-restart vectors are gone (v3..v7 deleted, not deprecated)', function () {
-        // The version set RESTARTED at 0 at ANCHOR_ACTIVATION, so every pre-restart byte
-        // (the per-chain anchors v3/v4/v5, the old archive head v6 and the old bundle v7)
-        // names a wire no parser reads any more. Keeping a case for one would pin bytes
-        // nothing produces, and the byte itself is now re-used by the live set.
-        for (const v of ['v3', 'v4', 'v5', 'v6', 'v7'])
+    it('the pre-restart vectors are gone (v4..v7 deleted; v3 is re-used by the archive fold)', function () {
+        // The version set restarted at 0 at ANCHOR_ACTIVATION, so the pre-restart bytes
+        // (per-chain v4/v5, old archive head v6, old bundle v7) name wires nothing reads.
+        // Byte 3 is re-used by the archive fold, whose vectors are pinned below.
+        for (const v of ['v4', 'v5', 'v6', 'v7'])
             assert.strictEqual(GOLDEN.vectors[v], undefined,
                 'vector ' + v + ' is retired; its parser is deleted, so keeping the case would ' +
                 'pin a wire nothing produces or reads');
-        assert.deepStrictEqual(Object.keys(GOLDEN.vectors), ['v0'],
-            'the frozen vector set is exactly the v0 bundle');
+        assert.deepStrictEqual(Object.keys(GOLDEN.vectors), ['v0', 'v3', 'v3_no_archive'],
+            'the frozen vector set is the v0 bundle plus the two v3 archive-fold bundles');
     });
 });
 
@@ -303,5 +302,50 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
                 eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, roundId, 0, base),
                 'a v0 section canonical must byte-match the per-chain XCHECKPOINT the hub signed');
         }
+    });
+});
+
+// ANCHOR v3, the archive fold: the v0 bundle plus ARCHIVE_COUNT and, when it is 1, one
+// archive section (WRAPPER_SECTION_INDEX|MATCH_BATCH_SEQ|MATCH_COUNT|BATCH_CRC32|
+// TOTAL_CHUNKS|ARCHIVE_B64) between the sections and the PUBLISHER tail. The vectors ship
+// ahead of the v3 parse, which lands behind ANCHOR_FOLD_ACTIVATION, so here they pin the
+// layout that parse must read and the fact that nothing reads them yet.
+const V3_ARCHIVE_FIELDS = 6;
+
+describe('Anchor frozen canonical wire vectors (v3 archive fold) @regression', function () {
+    beforeEach(setupAnchorFixture);
+    afterEach(restoreAnchorFixture);
+
+    it('v3: each vector is the v0 header, sections and tail around an ARCHIVE_COUNT slot', function () {
+        const v0 = wireToParams(GOLDEN.vectors.v0);
+        const v0End = sectionStart(v0, WIRE_SECTIONS.length);
+        for (const [name, archiveCount] of [['v3', 1], ['v3_no_archive', 0]]) {
+            const params = wireToParams(GOLDEN.vectors[name]);
+            const end = sectionStart(params, WIRE_SECTIONS.length);
+            assert.strictEqual(params[0], '3', name + ' carries version byte 3');
+            assert.deepStrictEqual(params.slice(1, end), v0.slice(1, v0End),
+                name + ': the header and section block are v0\'s, byte for byte');
+            assert.strictEqual(params[end], String(archiveCount), name + ' ARCHIVE_COUNT');
+            const tail = end + 1 + archiveCount * V3_ARCHIVE_FIELDS;
+            assert.deepStrictEqual(params.slice(tail), v0.slice(v0End),
+                name + ': one PUBLISHER/ATTEST tail, the same one a v0 carries');
+        }
+        const archive = wireToParams(GOLDEN.vectors.v3);
+        const wrapper = Number(archive[sectionStart(archive, WIRE_SECTIONS.length) + 1]);
+        assert.ok(Number.isInteger(wrapper) && wrapper >= 0 && wrapper < WIRE_SECTIONS.length,
+            'WRAPPER_SECTION_INDEX names one of the bundle\'s own sections');
+    });
+
+    it('v3: until the fold arms, both vectors are invalid and mint no reward', async function () {
+        for (const name of ['v3', 'v3_no_archive']) {
+            indexer.indexerDb.createAnchorAction.resetHistory();
+            const data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 3, COIN: 'DOGE' });
+            await handler.parse(wireToParams(GOLDEN.vectors[name]), data, null);
+            assert.match(String(data['STATUS']), /^invalid: /, name + ' must not parse valid yet');
+            assert.ok(writtenRows().every(r => r['STATUS'] !== 'valid'),
+                name + ' leaves no valid anchor_actions row');
+        }
+        assert.ok(indexer.indexerDb.createValidatorReward.notCalled,
+            'an unarmed v3 pays no anchor_bundle or anchor_archive reward');
     });
 });

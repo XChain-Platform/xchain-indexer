@@ -2289,7 +2289,7 @@
     ],
     "3afd86ba2217156b": [
       "Anchor canonical vectors byte-identity to xchain-documentation @regression fixture is byte-identical to xchain-documentation/protocol/test-vectors/anchor_canonical.json",
-      "Anchor canonical vectors byte-identity to xchain-documentation @regression the pre-restart vectors are gone (v3..v7 deleted, not deprecated)",
+      "Anchor canonical vectors byte-identity to xchain-documentation @regression the pre-restart vectors are gone (v4..v7 deleted; v3 is re-used by the archive fold)",
       "Anchor frozen canonical wire vectors (parser side) @regression sanity: the section walk locates the frozen vector's three CHAIN slots",
       "Anchor frozen canonical wire vectors (parser side) @regression v0: a bundle naming the same CHAIN twice is invalid as a WHOLE, with zero rewards (D39)",
       "Anchor frozen canonical wire vectors (parser side) @regression v0: each section canonical is rebuilt with the HEADER network, at the section's own block",
@@ -2298,7 +2298,9 @@
       "Anchor frozen canonical wire vectors (parser side) @regression v0: publisher and publisher_attestations are written on every section row",
       "Anchor frozen canonical wire vectors (parser side) @regression v0: the duplicate guard is scoped to ONE bundle, so a chain repeats across actions",
       "Anchor frozen canonical wire vectors (parser side) @regression v0: the frozen bytes parse to one valid row per section, in wire order",
-      "Anchor frozen canonical wire vectors (parser side) @regression v0: the header NETWORK and block_index are denormalized onto EVERY section row"
+      "Anchor frozen canonical wire vectors (parser side) @regression v0: the header NETWORK and block_index are denormalized onto EVERY section row",
+      "Anchor frozen canonical wire vectors (v3 archive fold) @regression v3: each vector is the v0 header, sections and tail around an ARCHIVE_COUNT slot",
+      "Anchor frozen canonical wire vectors (v3 archive fold) @regression v3: until the fold arms, both vectors are invalid and mint no reward"
     ],
     "3b85097b6d06ee8b": [
       "Rollback contract slash-restore order @regression @tier3 issues a restore for both stake-ledger tables",
