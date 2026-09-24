@@ -1,0 +1,60 @@
+{
+  "read_at": "yesterday",
+  "base": "https://explorer.xchain.io",
+  "chains": {
+    "BTC": {
+      "v1_rows": 0,
+      "valid_v1_rows": 0,
+      "longest_valid_value": 0,
+      "longest_valid_fee": 0,
+      "longest_canonical_value": 0,
+      "longest_canonical_fee": 0,
+      "leading_zero_rows": 0
+    },
+    "LTC": {
+      "v1_rows": 0,
+      "valid_v1_rows": 0,
+      "longest_valid_value": 0,
+      "longest_valid_fee": 0,
+      "longest_canonical_value": 0,
+      "longest_canonical_fee": 0,
+      "leading_zero_rows": 0
+    },
+    "DOGE": {
+      "v1_rows": 0,
+      "valid_v1_rows": 0,
+      "longest_valid_value": 0,
+      "longest_valid_fee": 0,
+      "longest_canonical_value": 0,
+      "longest_canonical_fee": 0,
+      "leading_zero_rows": 0
+    },
+    "TBTC": {
+      "v1_rows": 0,
+      "valid_v1_rows": 0,
+      "longest_valid_value": 0,
+      "longest_valid_fee": 0,
+      "longest_canonical_value": 0,
+      "longest_canonical_fee": 0,
+      "leading_zero_rows": 0
+    },
+    "TLTC": {
+      "v1_rows": 0,
+      "valid_v1_rows": 0,
+      "longest_valid_value": 0,
+      "longest_valid_fee": 0,
+      "longest_canonical_value": 0,
+      "longest_canonical_fee": 0,
+      "leading_zero_rows": 0
+    },
+    "TDOGE": {
+      "v1_rows": 1,
+      "valid_v1_rows": 1,
+      "longest_valid_value": 4,
+      "longest_valid_fee": 1,
+      "longest_canonical_value": 4,
+      "longest_canonical_fee": 1,
+      "leading_zero_rows": 0
+    }
+  }
+}
