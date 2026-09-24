@@ -22,7 +22,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon = require('sinon');
-const { createChaosDb, FakeConnection } = require('../setup/harness');
+const { createChaosDb } = require('../setup/harness');
 
 let db;
 
@@ -67,11 +67,11 @@ describe('Chaos: Circuit Breaker', function () {
         db = createChaosDb({ circuitThreshold: 5 });
         db.pool.setAlwaysFail(true);
         sinon.stub(db.util, 'sleep').resolves();
-        try {
-            await db.getConnection();
-        } catch (e) {
+        await assert.rejects(db.getConnection(), e => {
+            assert.ok(e instanceof Error);
             assert.ok(e.message.includes('Circuit breaker opened'));
-        }
+            return true;
+        });
         assert.strictEqual(db.circuitState, 'open');
         assert.strictEqual(db.circuitFailures, 5);
     });
@@ -90,12 +90,11 @@ describe('Chaos: Circuit Breaker', function () {
         db.circuitState = 'open';
         db.circuitOpenUntil = Date.now() + 60000;
         const poolCallsBefore = db.pool.callCount;
-        try {
-            await db.getConnection();
-            assert.fail('Should have thrown');
-        } catch (e) {
+        await assert.rejects(db.getConnection(), e => {
+            assert.ok(e instanceof Error);
             assert.ok(e.message.includes('Circuit breaker open'));
-        }
+            return true;
+        });
         // Pool should NOT have been called
         assert.strictEqual(db.pool.callCount, poolCallsBefore);
     });
@@ -127,12 +126,11 @@ describe('Chaos: Circuit Breaker', function () {
         db.circuitFailures = 0;
         db.pool.setAlwaysFail(true);
         sinon.stub(db.util, 'sleep').resolves();
-        try {
-            await db.getConnection();
-            assert.fail('Should have thrown');
-        } catch (e) {
+        await assert.rejects(db.getConnection(), e => {
+            assert.ok(e instanceof Error);
             assert.ok(e.message.includes('Circuit breaker opened'));
-        }
+            return true;
+        });
         assert.strictEqual(db.circuitState, 'open');
     });
 });
@@ -174,13 +172,12 @@ describe('Chaos: Circuit Breaker', function () {
         db = createChaosDb({ circuitThreshold: 5 });
         db.circuitState = 'open';
         db.circuitOpenUntil = Date.now() + 60000;
-        try {
-            await db.getConnection();
-            assert.fail('Should have thrown');
-        } catch (e) {
+        await assert.rejects(db.getConnection(), e => {
+            assert.ok(e instanceof Error);
             assert.ok(e.message.includes('Circuit breaker open'));
             assert.ok(e.message.includes('cooldown'));
-        }
+            return true;
+        });
     });
 
     it('CB-12: half-open logs transition message', async function () {
