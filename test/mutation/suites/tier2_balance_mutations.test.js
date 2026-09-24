@@ -37,7 +37,7 @@ const Database = require('../../../src/db');
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
+describe('Guard dependency: Tier 2: Balance & Ledger @tier2', function () {
     afterEach(function () { sinon.restore(); });
 
     // ── AOR: Arithmetic in getTokenSupply ────────────────────────────────
@@ -89,7 +89,7 @@ describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
     });
 });
 
-describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
+describe('Guard dependency: Tier 2: Balance & Ledger @tier2', function () {
     afterEach(function () { sinon.restore(); });
 
     describe('AOR: getTokenSupply Formula', function () {
@@ -133,7 +133,7 @@ describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
     });
 });
 
-describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
+describe('Guard dependency: Tier 2: Balance & Ledger @tier2', function () {
     afterEach(function () { sinon.restore(); });
 
     // ── PRM: Parameter Reorder in supply formula ─────────────────────────
@@ -163,7 +163,7 @@ describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
     });
 });
 
-describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
+describe('Guard dependency: Tier 2: Balance & Ledger @tier2', function () {
     afterEach(function () { sinon.restore(); });
 
     // ── SBR: String Replacement in createCredit/Debit/Escrow ─────────────
@@ -223,7 +223,7 @@ describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
     });
 });
 
-describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
+describe('Guard dependency: Tier 2: Balance & Ledger @tier2', function () {
     afterEach(function () { sinon.restore(); });
 
     // ── EHR: Error Handling in createLedgerChangeRecord ──────────────────
