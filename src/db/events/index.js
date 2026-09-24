@@ -114,7 +114,7 @@ module.exports = {
     // (operator context: why the decoder halted), null when not halted or absent.
     //
     // The NEWEST of REORG_HALT / REORG_HALT_CLEARED decides, mirroring the writer-side
-    // contract in xchain-decoder/src/db.js readReorgHaltState. `xchain-node clear-reorg-halt`
+    // contract in xchain-decoder/src/db/reorg_halt.js readReorgHaltState. `xchain-node clear-reorg-halt`
     // clears a reviewed halt by writing a REORG_HALT_CLEARED row and never deletes the halt
     // row, so the audit trail survives; selecting only REORG_HALT reads a cleared halt as
     // live forever. A later halt writes a newer REORG_HALT row that is live again.

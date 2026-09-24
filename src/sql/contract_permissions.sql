@@ -28,7 +28,7 @@ CREATE TABLE contract_permissions (
 -- execute.js processEmission (all emission paths) and the per-contract maxTakeBps in
 -- runControllerGuard. Keyed by the DEPLOY action_index so it rolls back cleanly as a dataTable
 -- (DELETE WHERE action_index >= orphan) and is cleared by deleteContract on a failed deploy.
--- See xchain-documentation/protocol/Controller_Bound_Tokens.md.
+-- See xchain-documentation/protocol/controller-bound-tokens.md.
 
 CREATE UNIQUE INDEX action_index   ON contract_permissions (action_index);
 CREATE        INDEX contract_index ON contract_permissions (contract_index);

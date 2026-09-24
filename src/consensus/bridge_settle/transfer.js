@@ -31,10 +31,8 @@
 
 'use strict';
 
-// Required here rather than taken from the entry because it reads no activation and nothing
-// purges it: the require cache hands this part the very object the entry and the tests hold,
-// so a sinon stub on the check still reaches this pass.
-const cpCheck = require('../bridge_checkpoint_check.js');
+// One pure resolver owns both the asset namespace and the leg direction.
+const { resolveTransferOrigin } = require('../bridge_checkpoint_check/origin.js');
 const { SETTLE_REASON, isNull, int } = require('./reasons.js');
 const { buildInLegEffects, buildOutLegEffects } = require('./leg_effects.js');
 const { isSettled, isSourceLegSettled, recordSettlement } = require('./settlements.js');
@@ -197,7 +195,7 @@ async function guardQuorumAndEscrow(deps, row, ctx, f){
 
 /**
  * Mint the internal settle action. Directly through createActionIndex and NEVER through
- * actions.processTransaction / processAction: actions/xbridge.js returns a system-injected
+ * actions.processTransaction / processAction: actions/xbridge/index.js returns a system-injected
  * v2/v5 without writing a verdict, a row or a ledger effect, precisely so this pass is the
  * sole writer of the leg (the CROSS_SETTLE and XEXEC shape). FORMAT is 2 for the gas tick
  * and 5 for a general token, which is what the wire versions mean.
@@ -288,28 +286,22 @@ async function applyBridgeTransfer(deps, row, ctx){
     const screened = screenRow(row, ctx);
     if(screened.reason) return out(false, screened.reason);
     const f = screened.fields;
+    const origin = resolveTransferOrigin(row);
+    if(!origin) return out(false, SETTLE_REASON.ROW_FIELDS);
 
     const refusal = await guardApply(deps, row, ctx, f);
     if(refusal) return out(false, refusal);
 
-    // DIRECTION IS DERIVED FROM THE ROW and is never a column. The transfer rules state the
-    // derivation outright: `src_chain === 'BTC'` is a LOCK, and a lock on the escrow chain is
-    // what an in leg mints against. Everything else is a burn on the other side, whose escrow
-    // this chain releases.
-    //
-    // Read through bridge_checkpoint_check's own escrow-chain constant rather than a literal,
-    // and in the SAME direction the check reads it: the check exempts an out leg on
-    // `thisChain === ESCROW_CHAIN` and refuses an in leg whose `src_chain` is not the escrow
-    // chain, so a pass that derived direction any other way could hand the check a leg it
-    // classifies the opposite way, and a mint would run with no cross-check at all. One
-    // constant, one direction, one place to generalize when a non-BTC-origin token bridges.
-    const isInLeg = (f.srcChain === cpCheck.ESCROW_CHAIN);
+    // DIRECTION IS DERIVED FROM THE ROW and is never a column. Bare native ticks are locks
+    // from src_chain, while a dest-rooted tick is a burn back to that native origin. XCHAIN
+    // retains its BTC origin. The checkpoint check uses this same resolver.
+    const isInLeg = (origin.kind === 'lock');
     const gasTick = ctx.config ? String(ctx.config['GAS']) : 'XCHAIN';
     const addresses = (ctx.config && ctx.config['ADDRESS']) || {};
     const amount = String(row.amount);
 
     // Reset the per-action address/ticker lists the way processAction does for every other
-    // handler: this pass mints its action directly (actions/xbridge.js returns a system-injected
+    // handler: this pass mints its action directly (actions/xbridge/index.js returns a system-injected
     // v2/v5 untouched), so nothing else resets them, and a stale list would make updateBalances
     // recompute an unrelated address.
     ctx.util.resetLists();

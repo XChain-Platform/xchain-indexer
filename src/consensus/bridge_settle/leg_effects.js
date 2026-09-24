@@ -28,6 +28,7 @@
 
 const Genesis = require('../../chain/genesis.js');
 const { SETTLE_REASON, BRIDGE_TX_PREFIX, isNull } = require('./reasons.js');
+const { resolveTransferOrigin } = require('../bridge_checkpoint_check/origin.js');
 
 /**
  * IN leg: this chain MINTS. The token row is created lazily by the first in-leg, which
@@ -40,8 +41,11 @@ async function buildInLegEffects(deps, row, ctx, f, amount, gasTick, addresses){
     const db = ctx.indexerDb;
     const genesis = new Genesis(ctx.actions, db, ctx.config, ctx.util);
     const injectCtx = { blockIndex: ctx.blockIndex, blockTime: ctx.blockTime, txHashPrefix: BRIDGE_TX_PREFIX };
-    let localTick = f.tick;
-    if(f.tick === gasTick){
+    const origin = resolveTransferOrigin(row);
+    if(!origin || origin.kind !== 'lock')
+        return { reason: SETTLE_REASON.ROW_FIELDS };
+    let localTick = origin.nativeTick;
+    if(origin.nativeTick.toUpperCase() === gasTick.toUpperCase()){
         // The byte-identical injectGasToken parameter set, taken from the ONE place that
         // owns it. Retyping the values here is the drift the helper exists to prevent
         // because a drifted parameter is a different token row, which is a different
@@ -49,11 +53,11 @@ async function buildInLegEffects(deps, row, ctx, f, amount, gasTick, addresses){
         await genesis.injectProtocolToken(genesis.gasTokenParams(), injectCtx);
         localTick = gasTick;
     } else {
-        const owner = addresses['BRIDGE_' + f.srcChain];
+        const owner = addresses['BRIDGE_' + origin.originChain];
         if(isNull(owner))
             return { reason: SETTLE_REASON.ESCROW_MISSING };
         const made = await genesis.injectBridgedToken(
-            { origin: f.srcChain, name: f.tick, decimals: f.decimals, owner: owner }, injectCtx);
+            { origin: origin.originChain, name: origin.nativeTick, decimals: f.decimals, owner: owner }, injectCtx);
         if(!made.ok){
             warnOnce('XBRIDGE', f.id, SETTLE_REASON.TOKEN_ROW,
                       SETTLE_REASON.TOKEN_ROW + ': ' + made.reason + ' : skipping');
@@ -78,7 +82,10 @@ async function buildInLegEffects(deps, row, ctx, f, amount, gasTick, addresses){
 async function buildOutLegEffects(deps, row, ctx, f, amount, addresses){
     const { warnOnce } = deps.refusalLog;
     const db = ctx.indexerDb;
-    const localTick = f.tick;
+    const origin = resolveTransferOrigin(row);
+    if(!origin || origin.kind !== 'burn')
+        return { reason: SETTLE_REASON.ROW_FIELDS };
+    const localTick = origin.nativeTick;
     const escrow = addresses['BRIDGE_' + f.srcChain];
     if(isNull(escrow))
         return { reason: SETTLE_REASON.ESCROW_MISSING };

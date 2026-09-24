@@ -32,17 +32,27 @@ const path    = require('path');
 process.env.npm_package_version = process.env.npm_package_version || '1.0.0-test';
 process.env.npm_package_name    = process.env.npm_package_name    || 'xchain-explorer';
 
-// Keep the whole module, never a destructure: DECODER_DB/INDEXER_DB are getters
-// that move when a test file claims its own schemas, and pulling them out here
+// Load the whole module at build time: DECODER_DB/INDEXER_DB are getters that
+// move when a test file claims its own schemas, and pulling them out earlier
 // would freeze the pre-claim base names into the explorer's config forever.
-const dbConnection = require('../../integration/setup/db-connection');
+let dbConnection = null;
+function loadDbConnection() {
+    if (!dbConnection) dbConnection = require('../../integration/setup/db-connection');
+    return dbConnection;
+}
 
 // The explorer class is required lazily so this module can be loaded (and its
 // name resolution exercised) without the sibling xchain-explorer checkout.
 let XChainExplorer = null;
+function resolveExplorerModule(relativePath) {
+    const explorerRoot = process.env.XCHAIN_EXPLORER_DIR
+        || path.resolve(__dirname, '../../../../xchain-explorer');
+    return path.resolve(explorerRoot, relativePath);
+}
+
 function loadExplorerClass() {
     if (!XChainExplorer) {
-        XChainExplorer = require(path.resolve(__dirname, '../../../../xchain-explorer/src/XChainExplorer.js'));
+        XChainExplorer = require(resolveExplorerModule('src/XChainExplorer.js'));
     }
     return XChainExplorer;
 }
@@ -54,8 +64,8 @@ function loadExplorerClass() {
  * Every database field is read off dbConnection at CALL time, so the explorer
  * connects to whichever schemas the calling test file has claimed.
  */
-function buildTestConfigInfo() {
-    const { DB_HOST, DB_PORT, DB_USER, DB_PASS, DECODER_DB, INDEXER_DB } = dbConnection;
+function buildTestConfigInfo(connection = loadDbConnection()) {
+    const { DB_HOST, DB_PORT, DB_USER, DB_PASS, DECODER_DB, INDEXER_DB } = connection;
     const config = {
         COIN_NETWORKS:  { BTC: 'Bitcoin' },
         COIN_PREFIXES:  { mainnet: '', testnet: 'T', regtest: 'R' },
@@ -74,7 +84,8 @@ function buildTestConfigInfo() {
             regtest: {
                 database: {
                     indexer: { db_host: DB_HOST, db_port: DB_PORT, user: DB_USER, pass: DB_PASS, name: INDEXER_DB },
-                    decoder: { db_host: DB_HOST, db_port: DB_PORT, user: DB_USER, pass: DB_PASS, name: DECODER_DB }
+                    decoder: { db_host: DB_HOST, db_port: DB_PORT, user: DB_USER, pass: DB_PASS, name: DECODER_DB },
+                    checkpoint: { db_host: DB_HOST, db_port: DB_PORT, user: DB_USER, pass: DB_PASS, name: INDEXER_DB }
                 },
                 address: {
                     burn:      'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
@@ -164,4 +175,11 @@ async function stopExplorer(server, explorer) {
     await new Promise((resolve) => server.close(resolve));
 }
 
-module.exports = { startExplorer, stopExplorer, closeExplorerPools, resetExplorerPools, buildTestConfigInfo };
+module.exports = {
+    startExplorer,
+    stopExplorer,
+    closeExplorerPools,
+    resetExplorerPools,
+    buildTestConfigInfo,
+    resolveExplorerModule
+};

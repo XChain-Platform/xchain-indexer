@@ -60,8 +60,8 @@ async function recordAndSettle(data, xbridge, ctx, fees, format, error){
     getLogger().info("\t XBRIDGE v" + format + " : " + ctx.tick + ' : ' + this.util.logAmount(data['AMOUNT']) +
                 ' : ' + (data['DEST_CHAIN'] || ctx.origin || '') + ' : ' + status);
 
-    // MISSING WRITER 1 (see the file header): the xbridges table and this method do
-    // not exist yet. The call is unconditional on purpose, because a handler that
+    // Record the xbridges row (Database.createXbridge, src/db/xbridges/index.js). The
+    // call is unconditional on purpose, because a handler that
     // silently skips its own record is worse than one that fails loudly, and because
     // the hub's poll and the pending read are both built on this row.
     await this.indexerDb.createXbridge(xbridge);
@@ -109,8 +109,8 @@ async function applyValidEffect(data, ctx, fees, format){
     await this.indexerDb.updateBalances(addresses);
     await this.indexerDb.updateTokens(tickers);
 
-    // MISSING WRITER 2 (see the file header): the first applied v3 sets the origin row's
-    // `bridged` bit, which is never cleared, so emptying
+    // Set the origin row's `bridged` bit on the first applied v3 (Database.setTokenBridged,
+    // src/db/tokens/index.js). The bit is never cleared, so emptying
     // BRIDGE_CHAINS after bridging cannot reopen the policy door while copies are
     // outstanding on another chain.
     if(format === 3)

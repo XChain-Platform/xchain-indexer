@@ -44,7 +44,7 @@
  * drifting off the ratified values) fails CI instead of silently leaving a
  * consensus protection dark on mainnet until 2027. TWO lines are permitted
  * to carry 1798761600: the CROSS_CHAIN_ROYALTY create-side entry, whose
- * one-quarter-after-CONTROLLER_GUARD deny window is CONFIRMED by design
+ * deny window after the CONTROLLER_GUARD flag-day is CONFIRMED by design
  * (flag-day inventory, Decision 5), and REST_PATTERN_METER, admitted by
  * ruling 2026-09-09 as a deliberate second occupant of that same confirmed
  * instant so the fleet gets one coordination event rather than two. The

@@ -20,6 +20,7 @@ const crypto = require('crypto');
 const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../../../../../fixtures/mocks');
+const { getTestConfig } = require('../../../../../fixtures/config');
 
 const Price   = require('../../../../../../src/actions/price/index.js');
 const ed25519 = require('../../../../../../src/consensus/ed25519.js');
@@ -38,6 +39,10 @@ function newIdentity(){
 function signWith(identity, payload){
     return crypto.sign(null, Buffer.from(payload, 'utf8'), identity.privateKey).toString('hex');
 }
+
+// The network every batch here is signed for: the mock indexer's own, read from the
+// config fixture so the signing key and the verifying key cannot be typed apart.
+const HARNESS_NETWORK = getTestConfig().NETWORK;
 
 // ---------------------------------------------------------------------------
 // Wire construction. `body` is the field list AFTER "PRICE|0|", which is
@@ -79,11 +84,20 @@ function sixRounds(overrides = {}){
 }
 
 // Build and SIGN a batch with the real canonical builder.
+//
+// `opts.network` is HALF the admission activation key and defaults to the network
+// the mock indexer's own config carries, so these bytes and the ones
+// batch_signatures.js rebuilds from config['NETWORK'] are keyed alike. It is named
+// rather than omitted because buildPriceBatchPayload reads an absent fifth argument
+// as the inert network and rebuilds the LEGACY canonical without complaint: an
+// admission-era batch signed that way carries signatures no verifier reproduces,
+// and the red surfaces as a bogus signature failure far from this line.
 function signBatch(rounds, identities, opts = {}){
     const firstRound     = opts.firstRound     !== undefined ? opts.firstRound     : rounds[0].round;
     const lastRound      = opts.lastRound      !== undefined ? opts.lastRound      : rounds[rounds.length - 1].round;
     const btcBlockHeight = opts.btcBlockHeight !== undefined ? opts.btcBlockHeight : rounds[rounds.length - 1].btcBlockHeight;
-    const payload = ed25519.buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds);
+    const network        = opts.network        !== undefined ? opts.network        : HARNESS_NETWORK;
+    const payload = ed25519.buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds, network);
     const sigs    = identities.map(id => ({ pubkey: id.pubkey, sig: signWith(id, payload) }));
     return { firstRound, lastRound, btcBlockHeight, rounds, sigs, payload };
 }
@@ -158,5 +172,5 @@ function validBatchFor(capable){
 
 module.exports = {
     newIdentity, signWith, batchBody, uncompressedParams, compressedParams, sixRounds,
-    signBatch, v2Data, newPriceHandler, validBatchFor, usePriceBatchHarness,
+    signBatch, v2Data, newPriceHandler, validBatchFor, usePriceBatchHarness, HARNESS_NETWORK,
 };

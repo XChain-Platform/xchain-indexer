@@ -40,7 +40,7 @@ const { commitGuardEffects } = require('./guard_effects.js');
 // Reserved method name a controller-bound token's contract must export. The
 // indexer invokes it before a guarded native action (SEND/ORDER/SWAP/DISPENSER)
 // on the token settles; the contract returns normally to ALLOW or reverts to
-// DENY. Canonical: protocol/Controller_Bound_Tokens.md.
+// DENY. Canonical: xchain-documentation/protocol/controller-bound-tokens.md.
 const GUARD_METHOD = 'guard';
 
 // Returns a DENY verdict when the controller cannot run, null when it can.

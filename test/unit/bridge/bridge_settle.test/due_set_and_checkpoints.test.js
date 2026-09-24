@@ -25,6 +25,8 @@ const assert = require('assert');
 const CHK    = require('../../../../src/consensus/bridge_checkpoint_check.js');
 const PC     = require('../../../../src/consensus/bridge_proof_client.js');
 const { XBRIDGE_MAX_PER_BLOCK } = require('../../../../src/protocol/constants.js');
+const gates  = require('../../../../src/consensus/gate_registry.js');
+const CKPT_KEY = 'checkpoint_commitment_activation.CHECKPOINT_COMMITMENT_ACTIVATION';
 
 describe('bridge_settle: the XBRIDGE settle pass', function(){
     describe('the due set: order and the per-block cap', function(){
@@ -185,6 +187,35 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
                 if(saved === undefined) delete process.env.BTC_INDEXER_API_URL;
                 else process.env.BTC_INDEXER_API_URL = saved;
             }
+        });
+    });
+});
+
+describe('bridge_settle: the XBRIDGE settle pass', function(){
+    describe('mirrored checkpoints below CHECKPOINT_COMMITMENT', function(){
+        it('refuses a root-bearing row whose quorum signed only the rootless bytes', async function(){
+            // Below the flag day the hub signs the rootless canonical, yet the row can carry
+            // roots from the earlier state-commitment gate. Those roots are unsigned, so the
+            // row must fail re-verification rather than reach the escrow check.
+            assert.strictEqual(gates.activeAt(CKPT_KEY, 'mainnet', null, 1000, null), false,
+                'premise: mainnet@1000 must sit below CHECKPOINT_COMMITMENT');
+            const keys = [makeKey(), makeKey(), makeKey()];
+            const cp = { chain: 'BTC', network: 'mainnet', block_index: 1210, checkpoint_seq: 1000,
+                         snapshot_block: 1000, block_hash: 'c0'.repeat(32), ledger_hash: 'a1'.repeat(32),
+                         actions_hash: 'b2'.repeat(32), contract_hash: 'c3'.repeat(32),
+                         state_root: 'd4'.repeat(32), state_root_version: 1,
+                         block_merkle_root: 'e5'.repeat(32), block_merkle_version: 1 };
+            const rootless = ['XCHECKPOINT', cp.chain, cp.network, cp.block_index, cp.block_hash, cp.ledger_hash,
+                              cp.actions_hash, cp.contract_hash, cp.checkpoint_seq, cp.snapshot_block].join('|');
+            assert.ok(PC.checkpointCanonical(cp).startsWith(rootless), 'premise: no EQUIV wrap at mainnet@1000');
+            const db = { getValidatorsByCapability: async () => snapshotSet(keys),
+                         getStakeWeightsByCapability: async () => snapshotSet(keys) };
+            const signedOver = (msg) => Object.assign({}, cp, { validator_signatures: JSON.stringify(
+                keys.map(k => ({ pubkey: k.pubkey, sig: sign(k.privateKey, msg) }))) });
+            assert.strictEqual(await PC.verifyCheckpointQuorum(signedOver(PC.checkpointCanonical(cp)), db), true,
+                'control: the same quorum over the root-bearing bytes verifies');
+            assert.strictEqual(await PC.verifyCheckpointQuorum(signedOver(rootless), db), false,
+                'a rootless-signed row carrying roots must not verify');
         });
     });
 });

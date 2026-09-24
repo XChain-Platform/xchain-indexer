@@ -40,6 +40,14 @@
  * refusal shape, codecs and signed canonical in primitives.js, the two wire
  * parsers in parse.js, and chunk coverage plus reassembly in reassemble.js.
  *
+ * TWO ROW FIELD SETS, ONE CHOICE. admit_block_btc joined the rows at the BTC
+ * mirror-admission producer activation, so a batch whose signed anchor is below it
+ * carries the legacy set and one at or above it carries the admission set. Every
+ * entry point that signs, encodes or checks a body takes the caller's era predicate
+ * (mirror_admission_gate.js isAdmissionEra) and resolves the set through the one
+ * attestBatchRowFields call, so the canonical a quorum signs and the presence check
+ * a replaying node applies can never disagree about a batch.
+ *
  * THE CAPS ARE CONSENSUS. The compressed bytes are the action body, so a size
  * or row-count breach must be invalid on every node or the fleet forks on the
  * first hostile batch. The inflate is bounded through zlib's maxOutputLength so
@@ -65,11 +73,12 @@ const zlib = require('zlib');
 const {
     ATTEST_BATCH_HEAD_VERSION, ATTEST_BATCH_CONTINUATION_VERSION, ATTEST_BATCH_WIRE_MAX_BYTES,
     ATTEST_BATCH_MAX_INFLATED_BYTES, ATTEST_BATCH_MAX_ROWS, ATTEST_BATCH_MAX_CHUNKS,
-    ATTEST_BATCH_MAX_INFLATE_RATIO, ATTEST_BATCH_ROW_FIELDS, FAIL
+    ATTEST_BATCH_MAX_INFLATE_RATIO, ATTEST_BATCH_LEGACY_ROW_FIELDS, ATTEST_BATCH_ADMISSION_ROW_FIELDS,
+    ATTEST_BATCH_ROW_FIELDS, FAIL
 } = require('./attest_batch_wire/constants.js');
 const {
-    fail, decodeCanonicalBase64, crc32Hex, computeBatchKey,
-    buildAttestBatchCanonical, buildAttestBatchBody
+    fail, decodeCanonicalBase64, crc32Hex, computeBatchKey, attestBatchRowFields,
+    requireAdmissionEra, buildAttestBatchCanonical, buildAttestBatchBody
 } = require('./attest_batch_wire/primitives.js');
 const { parseAttestBatchHead, parseAttestBatchContinuation } = require('./attest_batch_wire/parse.js');
 const { attestChunkCoverage, reassembleAttestBatch } = require('./attest_batch_wire/reassemble.js');
@@ -105,18 +114,21 @@ function continuationPrefix(batchKey, chunkIndex, totalChunks, crc){
  *
  * @param {{network:string, window_start:number, window_end:number, row_count:number,
  *          btc_block_height:number, rows:Object[], sigs:{pubkey:string,sig:string}[]}} window
+ * @param {function(string, number): boolean} admissionEra the repo's isAdmissionEra, which
+ *        picks the row field set the body carries (see attestBatchRowFields)
  * @returns {{ok:true, batchKey:string, batchCrc32:string, totalChunks:number,
  *            wires:string[], body:string, inflatedBytes:number, compressedBytes:number}
  *          |{ok:false, reason:string, status:string, detail:*}}
  */
-function encodeAttestBatch(window){
+function encodeAttestBatch(window, admissionEra){
+    requireAdmissionEra(admissionEra);
     if(!window || typeof window !== 'object') return fail(FAIL.STRUCTURE, 'window is not an object');
     const rows = Array.isArray(window.rows) ? window.rows : null;
     if(rows === null) return fail(FAIL.STRUCTURE, 'rows is not an array');
     if(rows.length > ATTEST_BATCH_MAX_ROWS) return fail(FAIL.ROW_COUNT, rows.length);
     if(Number(window.row_count) !== rows.length) return fail(FAIL.ROW_COUNT, 'row_count does not match rows.length');
 
-    const body = buildAttestBatchBody(window);
+    const body = buildAttestBatchBody(window, admissionEra);
     const bodyBytes = Buffer.from(body, 'utf8');
     if(bodyBytes.length > ATTEST_BATCH_MAX_INFLATED_BYTES) return fail(FAIL.OVERSIZE, bodyBytes.length);
 
@@ -164,11 +176,14 @@ module.exports = {
     ATTEST_BATCH_MAX_ROWS,
     ATTEST_BATCH_MAX_CHUNKS,
     ATTEST_BATCH_MAX_INFLATE_RATIO,
+    ATTEST_BATCH_LEGACY_ROW_FIELDS,
+    ATTEST_BATCH_ADMISSION_ROW_FIELDS,
     ATTEST_BATCH_ROW_FIELDS,
     ATTEST_BATCH_FAIL_REASONS: FAIL,
     ATTEST_BATCH_HEAD_FORMAT: HEAD_FORMAT,
     ATTEST_BATCH_CONTINUATION_FORMAT: CONTINUATION_FORMAT,
     computeBatchKey,
+    attestBatchRowFields,
     buildAttestBatchCanonical,
     buildAttestBatchBody,
     encodeAttestBatch,

@@ -22,71 +22,8 @@ const assert = require('assert');
 
 const launcher      = require('../../integration/setup/indexer-launcher.js');
 const gasSeeder     = require('../../integration/setup/gas-seeder.js');
-const XChainIndexer = require('../../../src/XChainIndexer.js');
 const blockPasses   = require('../../../src/XChainIndexer/block_passes.js');
-
-const BLOCK_TIME     = 1700000000;
-const RAW_BLOCK_TIME = 1700000007;
-
-// An object whose every method call is appended to `trace` as `<label>.<method>` and
-// resolves to `answer(method, args)` (default []). `sync` names methods that return
-// their answer directly rather than a promise.
-function recorder(label, trace, answer, sync) {
-    const proxy = new Proxy({}, {
-        get(target, prop) {
-            if (typeof prop !== 'string' || prop === 'then') return undefined;
-            if (Object.prototype.hasOwnProperty.call(target, prop)) return target[prop];
-            return (...args) => {
-                trace.push(label + '.' + prop);
-                const value = answer ? answer(prop, args) : undefined;
-                const out = value === undefined ? [] : value;
-                return sync && sync.includes(prop) ? (out === 'self' ? proxy : out) : Promise.resolve(out === 'self' ? proxy : out);
-            };
-        },
-        set(target, prop, value) { target[prop] = value; return true; },
-    });
-    return proxy;
-}
-
-// An XChainIndexer with every collaborator replaced by a recorder. Production's pass
-// methods come from the real prototype, so whatever runBlockPasses calls is what runs.
-// testnet at a low height keeps the state roots below their activation, so no root
-// computation needs a real tree behind the recorder.
-function recordingIndexer(opts = {}) {
-    const trace = [];
-    const ix = Object.create(XChainIndexer.prototype);
-    ix.trace = trace;
-    ix.config = { COIN: 'BTC', NETWORK: 'testnet', GENESIS_BLOCK: -1 };
-    ix.util = recorder('util', trace, null, ['logError', 'resetLists', 'addAddressTicker', 'getAddressesList', 'getTickersList']);
-    ix.indexerDb = recorder('db', trace, (method, args) => {
-        if (method === 'mirrorDb') return 'self';
-        if (method === 'getLastProcessedReorgId') return 0;
-        if (method === 'getBlockIndex') return null;
-        if (method === 'createActionIndex') return 1;
-        if (method === 'createBlock') {
-            trace.push('createBlock@' + args[0] + '/' + args[1]);
-            if (opts.throwInCreateBlock) throw new Error('boom');
-        }
-        return undefined;
-    }, ['mirrorDb']);
-    ix.decoderDb = {
-        async getReorgsSince() { return []; },
-        async getBlockIndex() { return opts.block; },
-        async getDecoderBlockData(block) { return [{ tx_hash: 'tx' + block, data: 'SEND|X' }]; },
-        async getBlockTime() { return BLOCK_TIME; },
-        async getRawBlockTime() { return RAW_BLOCK_TIME; },
-    };
-    ix.protocolChanges = { async isEnabled() { return true; } };
-    ix.actions = {
-        vm: opts.noVm ? null : { beginBlock() { trace.push('vm.beginBlock'); }, endBlock() { trace.push('vm.endBlock'); } },
-        async processTransaction() { trace.push('actions.processTransaction'); },
-    };
-    ix.genesis = recorder('genesis', trace, (method) => (method === 'gasTokenParams' ? {} : undefined), ['gasTokenParams']);
-    ix.mapper = recorder('mapper', trace);
-    ix.anchorProof = recorder('anchorProof', trace);
-    ix.rollcallProof = recorder('rollcallProof', trace);
-    return ix;
-}
+const { BLOCK_TIME, RAW_BLOCK_TIME, recordingIndexer } = require('./recording_indexer.js');
 
 // The block as production applies it once processBlock has read its inputs: open the
 // transaction, run the passes, commit.
@@ -108,10 +45,10 @@ describe('integration launcher: each block runs production\'s pass sequence', fu
     afterEach(function () { gasSeeder.clearSystemGas(); });
 
     it('applies a block call for call as production\'s runBlockPasses does', async function () {
-        const harness = recordingIndexer({ block: 101 });
+        const harness = recordingIndexer({ firstBlock: 101, recordCreateBlockArgs: true });
         assert.strictEqual(await launcher.processBlocks(harness), 1);
 
-        const prod = recordingIndexer({ block: 101 });
+        const prod = recordingIndexer({ firstBlock: 101, recordCreateBlockArgs: true });
         await productionBlock(prod, 101);
 
         const got = fromBlockOpen(harness.trace);
@@ -121,7 +58,7 @@ describe('integration launcher: each block runs production\'s pass sequence', fu
     });
 
     it('reaches the cross-chain calls and ATTEST response passes, in production\'s position', async function () {
-        const harness = recordingIndexer({ block: 101 });
+        const harness = recordingIndexer({ firstBlock: 101, recordCreateBlockArgs: true });
         await launcher.processBlocks(harness);
         const t = harness.trace;
         const at = (name) => {
@@ -140,7 +77,7 @@ describe('integration launcher: each block runs production\'s pass sequence', fu
     });
 
     it('reports the pass groups it ran, in production\'s call order', async function () {
-        const harness = recordingIndexer({ block: 101 });
+        const harness = recordingIndexer({ firstBlock: 101, recordCreateBlockArgs: true });
         assert.deepStrictEqual(launcher.passesRun(harness), [], 'nothing has run before processBlocks');
         await launcher.processBlocks(harness);
         assert.deepStrictEqual(launcher.passesRun(harness), launcher.PASS_GROUPS);
@@ -155,7 +92,7 @@ describe('integration launcher: each block runs production\'s pass sequence', fu
 
     it('seeds gas after the settlement group and before the cross-chain group', async function () {
         gasSeeder.registerSystemGas(101, { addresses: ['mgash6jYSKAR3Q5HPpDgNX2BYr18q9N6GQ'], amount: '100' });
-        const harness = recordingIndexer({ block: 101 });
+        const harness = recordingIndexer({ firstBlock: 101, recordCreateBlockArgs: true });
         await launcher.processBlocks(harness);
         const t = harness.trace;
         const seed = t.indexOf('genesis.injectProtocolToken');
@@ -165,7 +102,7 @@ describe('integration launcher: each block runs production\'s pass sequence', fu
     });
 
     it('installs and clears the VM compilation cache once per block, never across a boundary', async function () {
-        const harness = recordingIndexer({ block: 102 });
+        const harness = recordingIndexer({ firstBlock: 102, recordCreateBlockArgs: true });
         harness.decoderDb.getBlockIndex = async (which, pos) => (pos === 'last' ? 102 : 101);
         assert.strictEqual(await launcher.processBlocks(harness), 2);
         const rhythm = harness.trace.filter((c) => c === 'vm.beginBlock' || c === 'vm.endBlock' || c.startsWith('createBlock@'));
@@ -174,7 +111,8 @@ describe('integration launcher: each block runs production\'s pass sequence', fu
     });
 
     it('rolls the block back and rethrows when a pass throws, with the cache already closed', async function () {
-        const harness = recordingIndexer({ block: 101, throwInCreateBlock: true });
+        const harness = recordingIndexer({ firstBlock: 101, recordCreateBlockArgs: true,
+            throwInCreateBlock: true, createBlockError: () => 'boom' });
         await assert.rejects(() => launcher.processBlocks(harness), /boom/);
         assert.ok(harness.trace.includes('db.rollbackTransaction'));
         assert.ok(!harness.trace.includes('db.commitTransaction'));
@@ -183,7 +121,7 @@ describe('integration launcher: each block runs production\'s pass sequence', fu
     });
 
     it('runs without a VM runtime, as production does', async function () {
-        const harness = recordingIndexer({ block: 101, noVm: true });
+        const harness = recordingIndexer({ firstBlock: 101, recordCreateBlockArgs: true, noVm: true });
         assert.strictEqual(await launcher.processBlocks(harness), 1);
         assert.ok(!harness.trace.some((c) => c.startsWith('vm.')));
     });

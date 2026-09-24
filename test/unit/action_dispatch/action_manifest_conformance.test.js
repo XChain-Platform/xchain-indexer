@@ -97,11 +97,11 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
             'indexer dispatch drifted from action-manifest.json indexerHandled set. ' +
             'MISSING (in manifest, not dispatched -> coerced to UNKNOWN / ledger-fork risk): ' + JSON.stringify(missing) +
             '. EXTRA (dispatched, not in manifest): ' + JSON.stringify(extra) +
-            '. Edit xchain-documentation/protocol/action-manifest.json + re-vendor, or wire src/actions.js.');
+            '. Edit xchain-documentation/protocol/action-manifest.json + re-vendor, or wire src/actions/actions_class/dispatch.js.');
     });
 
     // The manifest's `aliases` map is expanded to canonical names before any gate
-    // (indexer ACTION_ALIASES module constant in src/actions/index.js, ~line 62; the constructor
+    // (indexer ACTION_ALIASES module constant in src/actions/index.js; the constructor
     // copies it into this.actionAliases via Object.assign). It was copied into
     // the indexer with no conformance guard: a sixth alias added on only one side decodes on
     // one and coerces to UNKNOWN on the other (the same silent-drop / ledger-fork class the
@@ -119,7 +119,7 @@ describe('ACTION manifest conformance: indexer indexerHandled set @regression', 
         assert.deepStrictEqual(local, expected,
             'indexer actionAliases (src/actions/index.js) drifted from action-manifest.json aliases. ' +
             'indexer=' + JSON.stringify(local) + ' manifest=' + JSON.stringify(expected) +
-            '. Edit xchain-documentation/protocol/action-manifest.json + re-vendor, or wire src/actions.js.');
+            '. Edit xchain-documentation/protocol/action-manifest.json + re-vendor, or edit ACTION_ALIASES in src/actions/index.js.');
     });
 
     describe('byte-identity to canonical manifest', function () {

@@ -14,6 +14,15 @@
  *
  * ATTEST v2: the system-synthesized expiry leg.
  *
+ * A v2 is an internal lifecycle marker, not a response and not a broadcast.
+ * Its generic action row intentionally contains only ACTION, BLOCK_INDEX and
+ * FORMAT. The database therefore stores null transaction/source fields and no
+ * request, signature or response binding on that row. REQUEST_ID exists only
+ * in the sweep's in-memory context so this handler can resolve the original v0
+ * request; the contract callback is a separate synthesized EXECUTE action.
+ * ATTEST_ZERO_CONF_ACTIVATION applies to fulfilled response fee splitting and
+ * has no bearing on whether, when or how this expiry row is synthesized.
+ *
  * Installed onto Attest.prototype by actions/attest/index.js, so call sites stay
  * this.<method>().
  *

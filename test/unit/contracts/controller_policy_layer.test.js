@@ -23,7 +23,7 @@
  * cooldown-sweep behavior is consensus-critical and exercised on Node 22 / regtest
  * (this Mac is Node 24, where isolated-vm / mariadb cannot load).
  *
- * Spec: xchain-documentation/protocol/Controller_Bound_Tokens.md
+ * Spec: xchain-documentation/protocol/controller-bound-tokens.md
  ********************************************************************/
 
 const assert = require('assert');

@@ -29,7 +29,7 @@ const assert = require('assert');
 const crypto = require('crypto');
 
 const abw = require('../../../../src/actions/attest/attest_batch_wire.js');
-const { PUBKEY_A, SIG_A, window_, noisy, roundTrip } = require('../../../helpers/attest_batch_wire_fixture.js');
+const { ADMISSION_ERA, PUBKEY_A, SIG_A, window_, noisy, roundTrip } = require('../../../helpers/attest_batch_wire_fixture.js');
 
 describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
     describe('round trip', function () {
@@ -38,14 +38,22 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
             const { enc, head, chunks } = roundTrip(win);
             assert.strictEqual(enc.totalChunks, 1, 'a small window rides one wire');
 
-            const out = abw.reassembleAttestBatch(head, chunks);
+            const out = abw.reassembleAttestBatch(head, chunks, ADMISSION_ERA);
             assert.strictEqual(out.ok, true, out.reason);
             assert.strictEqual(out.batch.row_count, 5);
             assert.strictEqual(out.batch.rows.length, 5);
             assert.deepStrictEqual(Object.keys(out.batch.rows[0]), abw.ATTEST_BATCH_ROW_FIELDS,
                 'the carried field set and its ORDER are the wire contract');
+            const effectiveTimeIndex = abw.ATTEST_BATCH_ROW_FIELDS.indexOf('effective_time');
+            assert.strictEqual(abw.ATTEST_BATCH_ROW_FIELDS[effectiveTimeIndex + 1], 'admit_block_btc',
+                'the admission height follows effective_time in canonical order');
+            const body = JSON.parse(abw.buildAttestBatchBody(win, ADMISSION_ERA));
+            assert.strictEqual(body.rows[2].admit_block_btc, win.rows[2].admit_block_btc,
+                'body encoding preserves the admission height');
             assert.deepStrictEqual(out.batch.rows[2], win.rows[2],
                 'a row survives compression and reassembly byte for byte');
+            assert.strictEqual(out.batch.rows[2].admit_block_btc, win.rows[2].admit_block_btc,
+                'reassembly preserves the admission height');
             assert.deepStrictEqual(out.batch.sigs, [{ pubkey: PUBKEY_A, sig: SIG_A }]);
         });
 
@@ -67,7 +75,7 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
             const { enc, head, chunks } = roundTrip(window_(0));
             assert.strictEqual(enc.totalChunks, 1);
             assert.strictEqual(head.rowCount, 0);
-            const out = abw.reassembleAttestBatch(head, chunks);
+            const out = abw.reassembleAttestBatch(head, chunks, ADMISSION_ERA);
             assert.strictEqual(out.ok, true, out.reason);
             assert.deepStrictEqual(out.batch.rows, []);
         });
@@ -92,17 +100,25 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
             // signatures, which DO ride inside the rows and therefore inside the preimage).
             const QUORUM_SIG = '7'.repeat(128);
             const win = window_(3, undefined, { sigs: [{ pubkey: PUBKEY_A, sig: QUORUM_SIG }] });
-            const canonical = abw.buildAttestBatchCanonical(win);
+            const canonical = abw.buildAttestBatchCanonical(win, ADMISSION_ERA);
             assert.strictEqual(canonical.includes(QUORUM_SIG), false,
                 'signatures cannot sign themselves, so they are outside the preimage');
             assert.ok(canonical.includes(SIG_A),
                 'the per-row responsible-set signatures ARE signed: they are row content');
             assert.strictEqual(
-                abw.buildAttestBatchCanonical({ ...win, sigs: [] }), canonical,
+                abw.buildAttestBatchCanonical({ ...win, sigs: [] }, ADMISSION_ERA), canonical,
                 'a different signature set over one window is the SAME signed bytes');
             assert.notStrictEqual(
-                abw.buildAttestBatchCanonical({ ...win, btc_block_height: 900001 }), canonical,
+                abw.buildAttestBatchCanonical({ ...win, btc_block_height: 900001 }, ADMISSION_ERA), canonical,
                 'the anchor the quorum is resolved at is inside the preimage');
+            const changedAdmission = {
+                ...win,
+                rows: win.rows.map((row, i) => i === 1
+                    ? { ...row, admit_block_btc: row.admit_block_btc + 1 }
+                    : row)
+            };
+            assert.notStrictEqual(abw.buildAttestBatchCanonical(changedAdmission, ADMISSION_ERA), canonical,
+                'the per-row admission height is inside the signed preimage');
         });
     });
 });
@@ -127,9 +143,9 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
         it('reassembles a chunked window identically to a single-wire one', function () {
             const win = window_(40, noisy);
             const { head, chunks } = roundTrip(win);
-            const out = abw.reassembleAttestBatch(head, chunks);
+            const out = abw.reassembleAttestBatch(head, chunks, ADMISSION_ERA);
             assert.strictEqual(out.ok, true, out.reason);
-            assert.deepStrictEqual(out.batch.rows, JSON.parse(abw.buildAttestBatchBody(win)).rows);
+            assert.deepStrictEqual(out.batch.rows, JSON.parse(abw.buildAttestBatchBody(win, ADMISSION_ERA)).rows);
         });
 
         it('numbers continuations 1..TOTAL_CHUNKS-1, leaving slot 0 to the head', function () {
@@ -161,7 +177,7 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
             const { head, chunks } = roundTrip(window_(40, noisy));
             for (let drop = 0; drop < chunks.length; drop++) {
                 const short = chunks.filter((_, i) => i !== drop);
-                const out = abw.reassembleAttestBatch(head, short);
+                const out = abw.reassembleAttestBatch(head, short, ADMISSION_ERA);
                 assert.strictEqual(out.ok, false, 'slot ' + (drop + 1) + ' missing must refuse');
                 assert.strictEqual(out.reason, abw.ATTEST_BATCH_FAIL_REASONS.COVERAGE);
             }
@@ -170,12 +186,12 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
         it('resolves a duplicated slot by the LOWEST action_index, whatever the read order', function () {
             const { head, chunks } = roundTrip(window_(40, noisy));
             const impostor = { chunk_index: 1, chunk_b64: 'QUJD', action_index: 999999 };
-            const good = abw.reassembleAttestBatch(head, chunks);
+            const good = abw.reassembleAttestBatch(head, chunks, ADMISSION_ERA);
             // A junk chunk broadcast LATER must not squat a slot the real one holds, in
             // either read order: two nodes reading the same rows differently ordered have
             // to reassemble the same bytes or they fork.
-            const a = abw.reassembleAttestBatch(head, [impostor].concat(chunks));
-            const b = abw.reassembleAttestBatch(head, chunks.concat([impostor]));
+            const a = abw.reassembleAttestBatch(head, [impostor].concat(chunks), ADMISSION_ERA);
+            const b = abw.reassembleAttestBatch(head, chunks.concat([impostor]), ADMISSION_ERA);
             assert.strictEqual(a.ok, true, a.reason);
             assert.deepStrictEqual(a.batch, good.batch);
             assert.deepStrictEqual(b.batch, good.batch);
@@ -184,7 +200,7 @@ describe('ATTEST v5/v6 batch wire @regression @tier2', function () {
         it('ignores chunks outside the declared range rather than counting them', function () {
             const { head, chunks } = roundTrip(window_(40, noisy));
             const stray = { chunk_index: head.totalChunks + 5, chunk_b64: 'QUJD', action_index: 1 };
-            const out = abw.reassembleAttestBatch(head, chunks.concat([stray]));
+            const out = abw.reassembleAttestBatch(head, chunks.concat([stray]), ADMISSION_ERA);
             assert.strictEqual(out.ok, true, out.reason);
         });
 

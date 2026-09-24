@@ -77,9 +77,10 @@ const SHARED_GATES = [
     ['snapshot_reorg_buffer',                   ['SNAPSHOT_BURIAL_ACTIVATION']],
     ['stake_weighted_quorum',                   ['STAKE_WEIGHTED_QUORUM_ACTIVATION']],
     ['attest_responsible_widening_activation',  ['ATTEST_RESPONSIBLE_WIDENING_ACTIVATION', 'ATTEST_RESPONSIBLE_WIDENING']],
-    // Unratified on mainnet and testnet (both null): this row moves the digest for a
-    // gate that decides nothing yet, so an upgraded hub reports a rules mismatch
-    // against un-upgraded peers during the deploy wave, not a divergent ledger.
+    // Armed on testnet (height 151324, 2026-09-07) and at genesis on regtest; still
+    // null (unratified) on mainnet. This row moves the digest for a gate that is live
+    // on testnet, so an upgraded hub reports a rules mismatch against un-upgraded
+    // testnet peers during the deploy wave, not a divergent ledger.
     ['attest_response_mirror_activation',       ['ATTEST_RESPONSE_MIRROR_ACTIVATION']],
     // The zero-confirmation flip (one height for serve-at-tip, the stage-2 ladder and the
     // applier fall-through) and the stage-2 ladder constants it selects. The V2 constants
@@ -117,7 +118,11 @@ const SHARED_GATES = [
     // a digest row. A SECOND entry for the module at the END rather than names added to its
     // entry above, because an insertion mid-list shifts the preimage of every gate after it.
     ['mirror_admission_activation',             ['CHAIN_CODE_RE', 'CANONICAL_HEIGHT_RE', 'encodeAdmitBlocks',
-                                                 'decodeAdmitBlocks', 'isAdmissionEra', 'admissionCanonicalField']]
+                                                 'decodeAdmitBlocks', 'isAdmissionEra', 'admissionCanonicalField']],
+    // The token leg of the bridge: the hub gates every token leg on it and the indexer gates
+    // XBRIDGE v3/v4 and ISSUE format 7 on it, so a train that sizes it on one side only must
+    // report a rules mismatch. Appended at the END for the preimage-ordering reason above.
+    ['token_bridge_activation',                 ['TOKEN_BRIDGE_ACTIVATION']]
 ];
 
 // A per-network height at or above this value is a far-future placeholder, not an

@@ -122,7 +122,8 @@
  *
  * Options: --schema-prefix <name> (default ma_witness_replay_<coin>), --sides
  * <off,boundary,on>, --dry-run (prove the sides and their eras, replay nothing,
- * exit 2), --keep (leave the schemas), --workdir <dir>.
+ * exit 2), --keep (leave the replay schemas and workdir, and print their names),
+ * --workdir <new directory below the system temporary root>.
  *
  * The password is read from the environment variable NAMED by --db-pass-env, so
  * it never appears in a process list or in this tool's output.
@@ -133,6 +134,7 @@
 
 const path = require('path');
 const fs   = require('fs');
+const os   = require('os');
 const { spawn } = require('child_process');
 
 const REPO      = path.resolve(__dirname, '..');
@@ -155,6 +157,15 @@ const SCHEMA_NAME = /^[A-Za-z0-9_]+$/;
 
 let failures = 0;
 
+class WitnessExit extends Error {
+    constructor(code) {
+        super('witness exit ' + code);
+        this.code = code;
+    }
+}
+
+class InterruptedExit extends Error {}
+
 // Adapt the indexer Database wrapper to the raw-query callback expected by the
 // equivalence reader; query exists only on the wrapper's pooled connections.
 function queryIndexerDb(indexerDb) {
@@ -167,7 +178,7 @@ if (require.main === module) {
     if (process.argv.includes('--side')) {
         runSide().catch((e) => { console.error('SIDE ERROR: ' + ((e && e.stack) || e)); process.exit(1); });
     } else {
-        main().catch((e) => { console.error('ERR ' + ((e && e.stack) || e)); process.exit(EXIT.REFUSED); });
+        runParent();
     }
 }
 
@@ -344,7 +355,7 @@ function section(title) { console.log('\n== ' + title + ' ' + '='.repeat(Math.ma
 // says it was not a verdict.
 function refuse(reason) {
     console.log('\nREFUSED: ' + reason);
-    process.exit(EXIT.REFUSED);
+    throw new WitnessExit(EXIT.REFUSED);
 }
 
 function parseArgs(argv) {
@@ -369,6 +380,144 @@ function parseArgs(argv) {
         else if (a === '--workdir')           o.workdir = argv[++i];
     }
     return o;
+}
+
+function createRunArtifacts() {
+    return {
+        keep: false, workdir: null, ownsWorkdir: false, schemaNames: [], db: null,
+        activeChild: null, activeChildDone: null, cleanupPromise: null, keptReported: false,
+        interruptedSignal: null,
+    };
+}
+
+/** A recursive delete is allowed only for a directory this run created below os.tmpdir(). */
+function assertSafeOwnedWorkdir(workdir) {
+    if (typeof workdir !== 'string' || workdir.length === 0)
+        throw new Error('refusing to delete an empty workdir path');
+    const tmpRoot = fs.realpathSync(os.tmpdir());
+    const candidate = fs.realpathSync(workdir);
+    if (candidate === path.parse(candidate).root || candidate === tmpRoot ||
+        !candidate.startsWith(tmpRoot + path.sep))
+        throw new Error('refusing to delete workdir outside the temporary root ' + tmpRoot + ': ' + candidate);
+    if (!fs.lstatSync(workdir).isDirectory())
+        throw new Error('refusing to delete a workdir that is not a directory: ' + workdir);
+}
+
+function realPathForPotentialPath(candidate) {
+    const tail = [];
+    let probe = path.resolve(candidate);
+    while (!fs.existsSync(probe)) {
+        const parent = path.dirname(probe);
+        if (parent === probe) return probe;
+        tail.unshift(path.basename(probe));
+        probe = parent;
+    }
+    return path.join(fs.realpathSync(probe), ...tail);
+}
+
+/** Create, and therefore take ownership of, the one workdir cleanup may remove. */
+function createWorkdir(requested, artifacts) {
+    let workdir;
+    if (requested !== null && requested !== undefined) {
+        if (String(requested).length === 0) refuse('--workdir must not be empty');
+        workdir = path.resolve(String(requested));
+        const tmpRoot = fs.realpathSync(os.tmpdir());
+        const realTarget = realPathForPotentialPath(workdir);
+        if (realTarget === path.parse(realTarget).root || realTarget === tmpRoot ||
+            !realTarget.startsWith(tmpRoot + path.sep))
+            refuse('--workdir must name a new directory below the temporary root ' + tmpRoot + ', got ' + workdir);
+        if (fs.existsSync(workdir))
+            refuse('--workdir already exists, so this run cannot own and safely remove it: ' + workdir);
+        fs.mkdirSync(workdir, { recursive: true });
+    } else {
+        workdir = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-witness-'));
+    }
+    assertSafeOwnedWorkdir(workdir);
+    artifacts.workdir = workdir;
+    artifacts.ownsWorkdir = true;
+    return workdir;
+}
+
+function replaySchemaNames(prefix, sides) {
+    if (!SCHEMA_NAME.test(String(prefix)))
+        refuse('--schema-prefix must contain only letters, digits and underscore, got ' + JSON.stringify(prefix));
+    const names = sides.map((side) => prefix + '_' + side);
+    for (const name of names) {
+        if (name.length > 64)
+            refuse('replay schema name exceeds MariaDB\'s 64-character limit: ' + name);
+    }
+    return names;
+}
+
+async function connectAdmin(p) {
+    const mariadb = require('mariadb');
+    return mariadb.createConnection({
+        host: p.host, port: Number(p.port), user: p.user, password: p.pass,
+        insertIdAsNumber: true, connectTimeout: 10000,
+    });
+}
+
+/** Refuse pre-existing names, then create exactly the schemas this run may later drop. */
+async function createReplaySchemas(p, names, artifacts) {
+    const admin = await connectAdmin(p);
+    try {
+        for (const name of names) {
+            const rows = await admin.query('SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?', [name]);
+            if (rows.length)
+                refuse('replay schema already exists, so this run refuses to overwrite or later delete it: ' + name);
+        }
+        for (const name of names) {
+            await admin.query('CREATE DATABASE `' + name + '`');
+            artifacts.schemaNames.push(name);
+        }
+    } finally {
+        await admin.end();
+    }
+}
+
+async function dropReplaySchemas(p, names) {
+    const admin = await connectAdmin(p);
+    try {
+        for (const name of names) {
+            if (!SCHEMA_NAME.test(name)) throw new Error('refusing to drop unsafe schema name ' + JSON.stringify(name));
+            await admin.query('DROP DATABASE IF EXISTS `' + name + '`');
+        }
+    } finally {
+        await admin.end();
+    }
+}
+
+/** Keep or remove only the artifacts whose ownership this run recorded. */
+function cleanupRunArtifacts(artifacts, deps = {}) {
+    if (artifacts.cleanupPromise) return artifacts.cleanupPromise;
+    artifacts.cleanupPromise = (async () => {
+        const log = deps.log || info;
+        if (artifacts.keep) {
+            if (!artifacts.keptReported) {
+                log('kept schemas: ' + (artifacts.schemaNames.length ? artifacts.schemaNames.join(', ') : '(none created)'));
+                if (artifacts.workdir) log('kept workdir: ' + artifacts.workdir);
+                artifacts.keptReported = true;
+            }
+            return;
+        }
+        const errors = [];
+        if (artifacts.schemaNames.length) {
+            try {
+                const drop = deps.dropSchemas || dropReplaySchemas;
+                await drop(artifacts.db, artifacts.schemaNames.slice());
+                artifacts.schemaNames.length = 0;
+            } catch (e) { errors.push(e); }
+        }
+        if (artifacts.ownsWorkdir && artifacts.workdir && fs.existsSync(artifacts.workdir)) {
+            try {
+                assertSafeOwnedWorkdir(artifacts.workdir);
+                fs.rmSync(artifacts.workdir, { recursive: true, force: true });
+                artifacts.workdir = null;
+            } catch (e) { errors.push(e); }
+        }
+        if (errors.length) throw new Error(errors.map((e) => e.message || String(e)).join('; '));
+    })();
+    return artifacts.cleanupPromise;
 }
 
 /**
@@ -479,15 +628,22 @@ function sideArgs(o) {
     return [__filename, '--side'].concat(o.mirrorDb ? ['--mirror-db', o.mirrorDb] : []);
 }
 
-function runSideProcess(side, env, logPath, args) {
-    return new Promise((resolve) => {
+function runSideProcess(side, env, logPath, args, artifacts) {
+    const done = new Promise((resolve) => {
         const log = fs.createWriteStream(logPath);
         const child = spawn(process.execPath, args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
+        artifacts.activeChild = child;
         let stdout = '';
         child.stdout.on('data', (d) => { stdout += d; log.write(d); });
         child.stderr.on('data', (d) => log.write(d));
-        child.on('close', (status) => { log.end(); resolve({ side, status, stdout }); });
+        child.on('close', (status) => {
+            log.end();
+            if (artifacts.activeChild === child) artifacts.activeChild = null;
+            resolve({ side, status, stdout });
+        });
     });
+    artifacts.activeChildDone = done;
+    return done;
 }
 
 function parseSideOutput(side, res) {
@@ -511,6 +667,65 @@ function sideEnv(o, p, side, schema) {
     if (arm === null) delete env[ARM_ENV];
     else env[ARM_ENV] = arm;
     return env;
+}
+
+async function stopActiveChild(artifacts) {
+    if (!artifacts.activeChild || !artifacts.activeChildDone) return;
+    artifacts.activeChild.kill('SIGTERM');
+    let timer;
+    await Promise.race([
+        artifacts.activeChildDone,
+        new Promise((resolve) => { timer = setTimeout(resolve, 5000); }),
+    ]);
+    if (timer) clearTimeout(timer);
+    if (artifacts.activeChild) {
+        artifacts.activeChild.kill('SIGKILL');
+        await artifacts.activeChildDone;
+    }
+}
+
+function throwIfInterrupted(artifacts) {
+    if (artifacts.interruptedSignal !== null) throw new InterruptedExit();
+}
+
+function installSignalHandlers(artifacts, emitter = process) {
+    const handlers = {};
+    for (const name of ['SIGINT', 'SIGTERM']) {
+        handlers[name] = () => {
+            if (artifacts.interruptedSignal !== null) return;
+            artifacts.interruptedSignal = name;
+            if (artifacts.activeChild) artifacts.activeChild.kill('SIGTERM');
+        };
+        emitter.once(name, handlers[name]);
+    }
+    return () => {
+        for (const name of Object.keys(handlers)) emitter.removeListener(name, handlers[name]);
+    };
+}
+
+async function runParent() {
+    const artifacts = createRunArtifacts();
+    const removeSignalHandlers = installSignalHandlers(artifacts);
+    let code = EXIT.REFUSED;
+    try {
+        code = await main(artifacts);
+    } catch (e) {
+        if (e instanceof WitnessExit) code = e.code;
+        else if (e instanceof InterruptedExit) code = EXIT.REFUSED;
+        else console.error('ERR ' + ((e && e.stack) || e));
+    } finally {
+        try {
+            if (artifacts.interruptedSignal !== null) await stopActiveChild(artifacts);
+            await cleanupRunArtifacts(artifacts);
+        } catch (e) {
+            console.error('CLEANUP ERROR: ' + ((e && e.stack) || e));
+            code = EXIT.REFUSED;
+        }
+    }
+    removeSignalHandlers();
+    if (artifacts.interruptedSignal !== null)
+        code = artifacts.interruptedSignal === 'SIGINT' ? 130 : 143;
+    process.exitCode = code;
 }
 
 function provePreconditions(o, p) {
@@ -538,11 +753,15 @@ function provePreconditions(o, p) {
                'from-genesis replay of mainnet history is a different tool');
 }
 
-async function main() {
+async function main(artifacts) {
     const o = parseArgs(process.argv.slice(2));
     const p = explicitDbParams(o);
     const prefix = o.schemaPrefix || ('ma_witness_replay_' + o.coin.toLowerCase());
-    const workdir = o.workdir || fs.mkdtempSync(path.join(require('os').tmpdir(), 'ma-witness-'));
+    artifacts.keep = o.keep;
+    artifacts.db = p;
+    const workdir = createWorkdir(o.workdir, artifacts);
+    const schemas = replaySchemaNames(prefix, o.sides);
+    throwIfInterrupted(artifacts);
 
     console.log('# below-the-flag replay witness for the mirror-admission family (BF4, AB4)');
     console.log('# chain ' + o.coin + '/' + o.network + '   boundary height ' + o.activationHeight);
@@ -558,14 +777,18 @@ async function main() {
 
     if (o.dryRun) {
         console.log('\nREFUSED: --dry-run proved the sides and their arming and replayed nothing');
-        process.exit(EXIT.REFUSED);
+        throw new WitnessExit(EXIT.REFUSED);
     }
+
+    await createReplaySchemas(p, schemas, artifacts);
+    throwIfInterrupted(artifacts);
 
     section('replay');
     const results = {};
     for (const side of o.sides) {
         const logPath = path.join(workdir, side + '.log');
-        const res = await runSideProcess(side, sideEnv(o, p, side, prefix + '_' + side), logPath, sideArgs(o));
+        const res = await runSideProcess(side, sideEnv(o, p, side, prefix + '_' + side), logPath, sideArgs(o), artifacts);
+        throwIfInterrupted(artifacts);
         const parsed = parseSideOutput(side, res);
         if (res.status !== 0 || parsed === null)
             refuse('side ' + side + ' exited ' + res.status + ' without a result; its log is ' + logPath);
@@ -596,7 +819,7 @@ async function main() {
     if (offBelow.length === 0) {
         console.log('\nVACUOUS: the corpus carries no block below ' + o.activationHeight +
                     ', so the boundary comparison measured nothing');
-        process.exit(EXIT.VACUOUS);
+        throw new WitnessExit(EXIT.VACUOUS);
     }
     const div = firstDivergence(offBelow, bndBelow);
     check(div === null, 'all four hashes agree at every one of the ' + offBelow.length + ' blocks below the boundary',
@@ -616,9 +839,10 @@ async function main() {
     console.log('\n' + (failures === 0 ? 'PASS' : 'FAIL') + ': ' + offBelow.length +
                 ' blocks below the boundary compared on ledger, actions, contract and state hashes; ' +
                 results.off.chain.length + ' blocks in the corpus');
-    process.exit(failures === 0 ? EXIT.PASS : EXIT.FAIL);
+    return failures === 0 ? EXIT.PASS : EXIT.FAIL;
 }
 
 module.exports = { queryIndexerDb, parseArgs, explicitDbParams, eraExpectation, armValueFor, belowBoundary,
                    firstDivergence, sideEnv, sideArgs, sideMirrorDb, resolvedEra, admissionColumnsFor, loadMirror,
-                   corpusRefusal, skippedPassRefusal, ADMISSION_TABLE_PASSES, SIDES, EXIT, HASH_FIELDS, ARM_ENV };
+                   corpusRefusal, skippedPassRefusal, cleanupRunArtifacts, createRunArtifacts, createWorkdir,
+                   replaySchemaNames, installSignalHandlers, ADMISSION_TABLE_PASSES, SIDES, EXIT, HASH_FIELDS, ARM_ENV };

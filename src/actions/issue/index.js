@@ -117,7 +117,8 @@ class Issue {
         // Programmable policy layer: bind/unbind a guard contract to one action-class of this token
         // (append-only token_controllers model). One binding change per action; UNBIND=1 drops the
         // live binding for ACTION_CLASS (CONTROLLER then ignored). COOLDOWN_BLOCKS is committed at
-        // bind time and is the friction on a later drop. See Controller_Bound_Tokens.md.
+        // bind time and is the friction on a later drop. See
+        // xchain-documentation/protocol/controller-bound-tokens.md.
         this.formats[6] = 'VERSION|TICK|CONTROLLER|ACTION_CLASS|COOLDOWN_BLOCKS|UNBIND|MEMO';
         // Token bridge: the issuer's opt-in, owner-only and free (the issuance fee is
         // first-issuance only). Admitted ONLY at/above TOKEN_BRIDGE_ACTIVATION - below it

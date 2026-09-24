@@ -299,11 +299,35 @@ module.exports = {
             // open foreign transaction when invoked on the view - defeating the reorg-path isolation
             // that routes createReorg / the rollback read-phase through this view (REORG-1).
             this._apiView.doQueryStrict = (query, args) => this.poolQuery(query, args);
-            // Own block_time memo so a federation read's getBlockTime (XCC-2 expiration filter)
-            // can never torn-write or evict the block loop's shared _blockTimeCache, which feeds
-            // the consensus-path ProtocolChanges.isEnabled. Without this the view inherits the
-            // instance's single-entry memo by reference (Object.create) and the two paths race.
+            // Own both time memos so an API read cannot refill or evict the block loop's
+            // caches while a reorg clears them. Without these properties the view inherits
+            // the instance's single-entry memos by reference through Object.create.
             this._apiView._blockTimeCache = { block_index: null, block_time: null };
+            this._apiView._protocolTimeCache = { block_index: null, block_time: null };
+            // clearBlockTimeCache() replaces the parent's memo objects and never reaches
+            // the view's own, so a rolled-back height would keep serving the orphaned
+            // chain's time to API reads. Each time read first notices the parent's memo
+            // was replaced since the last sync and drops the view's copies. Done at read
+            // time, not by aliasing, so a read already in flight still fills its own memo.
+            const parent = this;
+            const view = this._apiView;
+            let seenBlock = parent._blockTimeCache;
+            let seenProtocol = parent._protocolTimeCache;
+            const syncWithParent = () => {
+                if(parent._blockTimeCache === seenBlock && parent._protocolTimeCache === seenProtocol) return;
+                seenBlock = parent._blockTimeCache;
+                seenProtocol = parent._protocolTimeCache;
+                view._blockTimeCache = { block_index: null, block_time: null };
+                view._protocolTimeCache = { block_index: null, block_time: null };
+            };
+            for(const method of ['getRawBlockTime', 'getBlockTime']){
+                const inherited = parent[method];
+                if(typeof inherited !== 'function') continue;
+                view[method] = function(...args){
+                    syncWithParent();
+                    return inherited.apply(this, args);
+                };
+            }
         }
         return this._apiView;
     },

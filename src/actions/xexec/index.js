@@ -88,8 +88,9 @@ class Xexec {
         // The admission map the hub signed, rebuilt from the mirrored row's admit_block_*
         // columns and era-keyed on the ROW's snapshot_block. Both phases carry it on the hub
         // side, so both twins here do too: a dispatch that bound by height while its result
-        // bound by effective_time is the split the admission design removes. Empty below the
-        // producer activation (legacy bytes unchanged); a modern row with no columns REFUSES.
+        // bound by effective_time is the split the admission design removes. Empty unless this
+        // node reads the row's era as armed and the row carries a map (legacy bytes otherwise,
+        // never a throw); a mismatched signature fails the quorum check like any other.
         raw += ah.admissionCanonicalField('CrossChainCall', c.network, c.snapshot_block, ah.columnsAdmitBlocks(c));
         // EQUIV header: TAG=XCALL, ROUND_ID = sha256('XCALLROUND|dispatch|'+call_id)
         // (phase folded in, so dispatch/result get distinct keys), VIEW = finalizing_view.

@@ -185,9 +185,18 @@ function validateNativeTickShape(tick, parsed, ctx, pass){
 
     // A dotted native name cannot be rooted: the parent split takes everything before
     // the LAST dot, so `BTC.PEPE.CASH` would need a `BTC.PEPE` row the bridge never
-    // creates. Lifting this needs a prefix walk the bridge does not implement.
-    // This also catches a subasset of THIS chain's own coin root, which parseBridgedTick
-    // deliberately returns null for.
+    // creates. This also catches a subasset of THIS chain's own coin root, which
+    // parseBridgedTick deliberately returns null for.
+    //
+    // Lifting this needs a prefix walk that would touch three surfaces: this refusal,
+    // the OPT-IN format-7 refusal in actions/issue/bridge_opt_in.js, and the two-part
+    // split in utility/ledger.js parseBridgedTick. That walk is dormant, on purpose,
+    // for a later train: it was scoped out of this one deliberately, and this
+    // refusal already keeps a dotted native tick from stranding anyone, so nothing here
+    // is broken while it waits. This note replaces an older one ("Lifting this needs a
+    // prefix walk the bridge does not implement") that read as a gap rather than a
+    // recorded decision; the walk was never implemented and no validation behavior here
+    // changes.
     if(String(tick).indexOf('.') !== -1)
         return { valid: false, verdict: VERDICTS.TICK_SUBASSET, origin: null };
 

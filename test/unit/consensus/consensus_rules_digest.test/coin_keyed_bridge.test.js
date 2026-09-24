@@ -133,13 +133,20 @@ describe('consensus_rules_digest: the coin-keyed bridge gate', function () {
         });
     });
 
+    // mirror_admission_activation is excluded alongside KEY: dq4 (a) shipped its
+    // LTC:testnet leg null while BTC:testnet and DOGE:testnet stay armed, so it is now a
+    // SECOND coin-keyed gate whose own coin argument moves it independently of the bridge
+    // gate this test otherwise covers, exactly the 'coin inert while a sibling arms' shape
+    // the cases above already carve out for KEY itself.
+    const COIN_DIVERGENT = [KEY, 'mirror_admission_activation.MIRROR_ADMISSION_ACTIVATION',
+        'mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION'];
     it('leaves every network-keyed gate answering the same with a coin named as without', function () {
         for (const net of ['mainnet', 'testnet', 'regtest']) {
             for (const h of [0, 150780, 999999999]) {
-                const bare = crd.activeGatesAt(h, net).filter(k => k !== KEY);
+                const bare = crd.activeGatesAt(h, net).filter(k => !COIN_DIVERGENT.includes(k));
                 for (const coin of ['BTC', 'LTC', 'DOGE']) {
-                    assert.deepStrictEqual(crd.activeGatesAt(h, net, coin).filter(k => k !== KEY), bare,
-                        'the coin argument must only move the coin-keyed gate: ' + net + ' ' + h + ' ' + coin);
+                    assert.deepStrictEqual(crd.activeGatesAt(h, net, coin).filter(k => !COIN_DIVERGENT.includes(k)), bare,
+                        'the coin argument must only move a coin-keyed gate: ' + net + ' ' + h + ' ' + coin);
                 }
             }
         }

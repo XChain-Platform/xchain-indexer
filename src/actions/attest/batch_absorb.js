@@ -27,6 +27,10 @@ const swq     = require('../../consensus/stake_weighted_quorum.js');
 // into xchain-hub so the publisher that BUILDS a batch and this parser cannot
 // disagree about its bytes.
 const abw     = require('./attest_batch_wire.js');
+// The era predicate the wire takes to pick a batch's row field set from its own
+// signed anchor: admit_block_btc is signed and required only at or above the BTC
+// mirror-admission producer activation, so history keeps the bytes it was signed over.
+const { isAdmissionEra } = require('../../consensus/gates/mirror_admission_gate.js');
 const { getLogger } = require('../../observability/index.js');
 const { ATTEST_BATCH_COMPLETION_STAMP } = require('./constants.js');
 
@@ -59,7 +63,7 @@ module.exports = {
         }]);
         if(abw.attestChunkCoverage(chunks, head.totalChunks) === null) return;
 
-        let assembled = abw.reassembleAttestBatch(head, chunks);
+        let assembled = abw.reassembleAttestBatch(head, chunks, isAdmissionEra);
         let failure   = assembled.ok ? null : assembled.status;
         let batch     = assembled.ok ? assembled.batch : null;
         if(batch){
@@ -149,7 +153,7 @@ module.exports = {
     async verifyBatchQuorum(batch){
         let anchor    = Number(batch.btc_block_height);
         let network   = this.config['NETWORK'];
-        let canonical = abw.buildAttestBatchCanonical(batch);
+        let canonical = abw.buildAttestBatchCanonical(batch, isAdmissionEra);
 
         // Same truncation fallback the PRICE batch carries: getValidatorsByCapability caps
         // at VALIDATOR_QUERY_LIMIT and hasCapability does not, so treating a TRUNCATED read

@@ -90,10 +90,16 @@ module.exports = {
     async bootstrapAll() {
         if (this._bootstrapping) return;                     // reconnect + retry timer may overlap
         this._bootstrapping = true;
+        const drainEpoch = this._wsEpoch;
         try {
             this._pendingBootstrapHeights = null;
             let drained = await this.drainEveryTable();
-            if (drained.allDrained && drained.marks.length > 0) this.certifyFullDrain(drained.marks);
+            // A disconnect leaves a delivery gap that only the replacement
+            // connection's own drain can close. Results started on the prior
+            // connection cannot certify its replacement.
+            const sameConnection = this._wsEpoch === drainEpoch;
+            if (drained.allDrained && drained.marks.length > 0 && sameConnection)
+                this.certifyFullDrain(drained.marks, drainEpoch);
             else if (this.running) this.scheduleBootstrapRetry();
         } finally {
             this._bootstrapping = false;
@@ -136,7 +142,11 @@ module.exports = {
 
     // Every table drained in full: open the heartbeat gate and advance the stream
     // watermark to the oldest per-table mark, unless this mirror is in poll mode.
-    certifyFullDrain(marks) {
+    certifyFullDrain(marks, drainEpoch) {
+        // Keep the epoch check at the certification boundary as well as at the
+        // bootstrap caller. No alternate caller may open the gate with a drain
+        // whose socket closed before certification.
+        if (this._wsEpoch !== drainEpoch) return false;
         this._bootstrapDrained = true;
         // A clean full drain proves the hub's schema_version matched (a
         // mismatch parks the bootstrap), so any earlier live mismatch is
@@ -167,6 +177,7 @@ module.exports = {
             this.noteHeights(this._pendingBootstrapHeights || this._readyHeights);
             this.advanceWatermark(Math.min.apply(null, marks));
         }
+        return true;
     },
 
     // A partial drain leaves the gate closed and comes back around after one poll interval.

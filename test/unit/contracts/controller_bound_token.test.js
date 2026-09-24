@@ -23,7 +23,7 @@
  * fields are gone, while the reusable guard engine (runControllerGuard +
  * VM_GUARD_GAS_CEILING) remains. Pure (no DB/VM) so they run on any Node version.
  *
- * Spec: xchain-documentation/protocol/Controller_Bound_Tokens.md
+ * Spec: xchain-documentation/protocol/controller-bound-tokens.md
  ********************************************************************/
 
 const assert = require('assert');

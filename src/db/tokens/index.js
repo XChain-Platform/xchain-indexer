@@ -66,8 +66,10 @@ module.exports = {
                 for(let row of results)
                     tokens.push(row.tick);
         }
-        // Loop through tokens and update basic info
-        await Promise.all(tokens.map(t => this.updateTokenInfo(t)));
+        // Ticker ids are consensus state. Keep caller order so each MAX(id)+1 reservation
+        // is inserted before the next token reads the dense counter.
+        for(const tick of tokens)
+            await this.updateTokenInfo(tick);
     },
 
     // Mark a token's ownership as held in escrow by an ORDER/SWAP/DISPENSER action.
@@ -178,7 +180,8 @@ module.exports = {
      * "At most one live controller per (subject, class)" is enforced by the handlers: a BIND is
      * rejected when an effective controller already gates that class (replace = unbind-then-bind,
      * which preserves the cooldown's teeth). action_class ∈ {transfer, trade, burn, mint, stake,
-     * ownership}, validated by the handler. See Controller_Bound_Tokens.md.
+     * ownership}, validated by the handler. See
+     * xchain-documentation/protocol/controller-bound-tokens.md.
      */
 
     // Append a token controller bind/unbind event. `evt` carries action_index, tick_id, action_class,

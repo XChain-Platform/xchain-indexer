@@ -83,6 +83,81 @@ function splitSqlStatements(sql) {
     return statements.map((s) => s.trim()).filter(Boolean);
 }
 
+// The indexes a twin file declares: inline `KEY name (cols)` / `UNIQUE KEY name (cols)`
+// lines inside the CREATE TABLE block plus standalone `CREATE [UNIQUE] INDEX name ON
+// table (cols)`. Column names are lowercased with prefix widths stripped for the live
+// comparison; `cols` keeps the declared text for the ADD. PRIMARY KEY and FULLTEXT are
+// left to the CREATE TABLE that made the table.
+function parseDeclaredIndexes(sql, table) {
+    const stripped = stripSqlLineComments(sql);
+    const declared = [];
+    const seen = new Set();
+    const push = (unique, name, colsText) => {
+        const key = name.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        const columns = colsText.split(',').map((c) => c.trim().replace(/`/g, '').replace(/\(.*$/, '').toLowerCase()).filter(Boolean);
+        declared.push({ unique, name, columns, cols: colsText.trim() });
+    };
+    // The column list runs to the paren that balances the opener, so a prefix width such
+    // as `addr(62)` inside it is kept whole.
+    const balanced = (from) => {
+        let depth = 0;
+        for (let i = from; i < stripped.length; i++) {
+            if (stripped[i] === '(') depth++;
+            else if (stripped[i] === ')' && --depth === 0) return stripped.slice(from + 1, i);
+        }
+        return null;
+    };
+    const scan = (re, uniqueGroup, nameGroup) => {
+        let m;
+        while ((m = re.exec(stripped)) !== null) {
+            const colsText = balanced(m.index + m[0].length - 1);
+            if (colsText !== null) push(Boolean(m[uniqueGroup]), m[nameGroup], colsText);
+        }
+    };
+    scan(/^\s*(UNIQUE\s+)?(?:KEY|INDEX)\s+`?([A-Za-z0-9_]+)`?\s*\(/gim, 1, 2);
+    scan(new RegExp('CREATE\\s+(UNIQUE\\s+)?INDEX\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?`?([A-Za-z0-9_]+)`?\\s+ON\\s+`?' + table + '`?\\s*\\(', 'gi'), 1, 2);
+    return declared;
+}
+
+// Add to an EXISTING mirror table every index its twin file declares that the live table
+// lacks. ensureTables gates on table existence, so a KEY added to a twin after the mirror
+// was first built (idx_status_timestamp_round on price_snapshots, 2026-09-06) otherwise
+// never reaches a deployed consumer: the barrier reads that lead on it fell back to a
+// full scan of a million-row mirror on every poll (measured 2026-09-23 on the regtest
+// rail, 2 s per read per indexer). Satisfied by name OR by ordered column set, never
+// DROPs, and every failure is logged and skipped: an index is a speed matter and must
+// never crash-loop the consumer that is applying rows.
+async function reconcileDeclaredIndexes(dbConn, table, data) {
+    const declared = parseDeclaredIndexes(data, table);
+    if (declared.length === 0) return;
+    const rows = await dbConn.doQuery(
+        'SELECT INDEX_NAME, NON_UNIQUE, COLUMN_NAME, SEQ_IN_INDEX FROM information_schema.statistics '
+        + 'WHERE table_schema = DATABASE() AND table_name = ? ORDER BY INDEX_NAME, SEQ_IN_INDEX', [table]);
+    const liveByName = new Map();
+    for (const r of rows || []) {
+        const name = String(r.INDEX_NAME);
+        if (!liveByName.has(name)) liveByName.set(name, { unique: Number(r.NON_UNIQUE) === 0, columns: [] });
+        liveByName.get(name).columns.push(String(r.COLUMN_NAME).toLowerCase());
+    }
+    const liveNames  = new Set([...liveByName.keys()].map((n) => n.toLowerCase()));
+    const liveByCols = new Map([...liveByName.values()].map((i) => [i.columns.join(','), i]));
+    for (const idx of declared) {
+        if (liveNames.has(idx.name.toLowerCase())) continue;
+        const live = liveByCols.get(idx.columns.join(','));
+        if (live && (!idx.unique || live.unique)) continue;
+        const ddl = 'ALTER TABLE `' + table + '` ADD ' + (idx.unique ? 'UNIQUE ' : '') + 'INDEX `' + idx.name + '` (' + idx.cols + ')';
+        try {
+            await dbConn.doQuery(ddl);
+            getLogger().info('ensureTables: added missing index ' + idx.name + ' (' + idx.columns.join(',') + ') on mirror table ' + table);
+        } catch (err) {
+            getLogger().warn('ensureTables: could not add index ' + idx.name + ' on mirror table ' + table
+                + ' (' + (err && err.message) + '); continuing without it');
+        }
+    }
+}
+
 // Create the mirror tables from the vendored SQL twin files in sqlDir, for
 // consumers that (unlike the indexer, whose verifyTables() owns its schema)
 // have no table-creation machinery of their own, e.g. the explorer's embedded
@@ -113,7 +188,13 @@ async function ensureTables(dbConn, sqlDir) {
                 // the retry loop so a transient blip on the probe itself also
                 // retries (caught live in the keyed-feed drill 2026-07-06).
                 const existing = await dbConn.doQuery('SHOW TABLES LIKE ?', [table]);
-                if (existing && existing.length > 0) { done = true; break; }
+                if (existing && existing.length > 0) {
+                    // An existing table skipped the CREATE, so its index set is whatever
+                    // the twin declared when it was first built; converge it now.
+                    await reconcileDeclaredIndexes(dbConn, table, data);
+                    done = true;
+                    break;
+                }
                 for (const query of queries)
                     await dbConn.doQuery(query);
                 done = true;
@@ -132,4 +213,4 @@ async function ensureTables(dbConn, sqlDir) {
     }
 }
 
-module.exports = { ensureTables };
+module.exports = { ensureTables, parseDeclaredIndexes, reconcileDeclaredIndexes };

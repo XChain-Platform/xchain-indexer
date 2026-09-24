@@ -345,6 +345,37 @@ const MIGRATION_PRECONDITIONS = {
                    'qualified reward identity and this migration has nothing left to rebuild.';
         }
     },
+    // Creates bridge_transfers, bridge_settlements, policy_snapshots and xbridges. It is
+    // mode=manual and every statement is CREATE TABLE IF NOT EXISTS copied from src/sql, so
+    // once the boot-time verifyTables() has built all four, running the file changes nothing.
+    // Baseline exactly when assertBridgeTablesPresent passes (same query, same four names);
+    // a missing table or an unreadable answer returns null and the file stays pending.
+    '2026-09-12-bridge-tables.sql': {
+        sql: "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = ? " +
+             "AND table_name IN ('bridge_transfers', 'bridge_settlements', 'policy_snapshots', 'xbridges')",
+        skipWhen: (rows) => {
+            if(!Array.isArray(rows)) return null;
+            const live = new Set(rows.map(r => String((r && r.name) || '').toLowerCase()));
+            const required = ['bridge_transfers', 'bridge_settlements', 'policy_snapshots', 'xbridges'];
+            if(!required.every(t => live.has(t))) return null;
+            return 'bridge_transfers, bridge_settlements, policy_snapshots and xbridges are all ' +
+                   'present, built from their src/sql definitions at boot, so this migration has ' +
+                   'no table left to create.';
+        }
+    },
+    // Widens oracle_prices.tick to 250. mode=manual, so a database created from the current
+    // src/sql/oracle_prices.sql (already 250) would sit PENDING forever; baseline only while the
+    // live column is already 250 or wider. An absent or unreadable length never baselines.
+    '2026-09-22-oracle-prices-widen-tick.sql': {
+        sql: "SELECT CHARACTER_MAXIMUM_LENGTH AS len FROM information_schema.columns " +
+             "WHERE table_schema = ? AND table_name = 'oracle_prices' AND column_name = 'tick'",
+        skipWhen: (rows) => {
+            if(!rows.length || rows[0].len == null) return null;
+            const len = Number(rows[0].len);
+            if(Number.isNaN(len) || len < 250) return null;
+            return 'oracle_prices.tick is already ' + len + ' characters wide, so there is no narrow column to widen.';
+        }
+    },
 };
 
 module.exports = {

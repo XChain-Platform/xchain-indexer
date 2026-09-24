@@ -47,11 +47,18 @@ function height(v){
 }
 
 /**
- * Rebuild the XCHECKPOINT v0 canonical for a mirrored state_checkpoints row. MUST byte-match
- * actions/anchor.js `canonical` (FORMAT 0) and the hub's StateCheckpointEngine, which is why
- * the root suffix is appended UNCONDITIONALLY here too: anchor.js does it alone among the four
- * builders, deliberately. A gated suffix here
- * would reject every genuine mirrored checkpoint the fleet has signed.
+ * Rebuild the XCHECKPOINT v0 canonical for a mirrored state_checkpoints row. One of six
+ * checkpoint-family copies: the hub's canonical_forms.js canonicalCheckpoint, the SDK's and
+ * sync's checkpoint.js canonicalCheckpoint and the explorer's canonicalCheckpointString gate
+ * the root suffix on CHECKPOINT_COMMITMENT at snapshot_block; this file and actions/anchor
+ * `canonical` (FORMAT 0) append it UNCONDITIONALLY. The archive family (actions/anchor FORMAT 1,
+ * bin/recovery.js wrapperCanonical, the hub's archiveCanonical) is rootless and separate.
+ *
+ * The unconditional append is the safety property, not a parity accident: the row's roots are
+ * what selectCheckpoint hands the escrow check. Below the flag day the hub signs the rootless
+ * form, so a gated rebuild would pass those signatures and adopt roots no quorum signed; this
+ * form fails them instead, and the pick moves to a later root-committing checkpoint. At and
+ * above the flag day every root-bearing row rebuilds the gated bytes exactly.
  *
  * @param {Object} cp - a state_checkpoints row
  * @returns {string}

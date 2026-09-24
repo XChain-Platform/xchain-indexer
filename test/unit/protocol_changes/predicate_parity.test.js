@@ -42,6 +42,7 @@ const SKIPPED = {
         'no boolean predicate: widenSlots(atBlock, requestBlock, deadlineBlock, network) returns a slot count',
     'train_activation.TRAIN_ACTIVATION':
         'ruleset unit: resolveRuleSet(height, network) returns a version and activeAt() throws unsupported unit; W4 needs a ruleSetAt() reader',
+    // Each mirror row's value is held to its gate row by activations/activation_constants_parity.test/mirror_rows.test.js.
     'protocol/constants.STAKE_WEIGHTED_QUORUM_ACTIVATION': 'documentation mirror row, no predicate in that file',
     'protocol/constants.EQUIV_HEADER_ACTIVATION': 'documentation mirror row, no predicate in that file',
     'protocol/constants.STATE_COMMITMENT_ACTIVATION': 'documentation mirror row, no predicate in that file',

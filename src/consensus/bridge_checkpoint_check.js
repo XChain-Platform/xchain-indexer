@@ -66,9 +66,9 @@
  *     verdict that decides whether an action index is assigned is consensus-visible. A
  *     checkpoint not yet held locally must therefore stall the pass, the way
  *     waitForSnapshotSync already stalls it for the roster, and never read as "refuse".
- * Keeping the signature rule out of here is also what keeps the XCHECKPOINT canonical to its
- * existing four byte-matched copies; a fifth copy inside a verifier is a fork waiting to
- * happen.
+ * Keeping the signature rule out of here also keeps a further XCHECKPOINT canonical copy out
+ * of this module. The caller's copy for mirrored rows is bridge_proof_client/checkpoint_source.js
+ * checkpointCanonical, whose header lists the other copies it must stay byte-matched with.
  *
  ********************************************************************/
 

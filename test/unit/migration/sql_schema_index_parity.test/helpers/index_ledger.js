@@ -57,6 +57,10 @@ function normalizeIndexColumns(list){
         .filter(c => c.length > 0);
 }
 
+// Track a table-level PRIMARY KEY under this synthetic name on both paths (the engine
+// reserves PRIMARY for the primary key, so no declared index can collide with it).
+const PRIMARY_INDEX = 'primary';
+
 // The optional word between CREATE/ADD and INDEX, reduced to the two flags that make one
 // index a different index from another of the same name. FULLTEXT is admitted alongside
 // UNIQUE because contracts.meta_search is a FULLTEXT index declared on BOTH paths: read
@@ -91,9 +95,14 @@ function collectDeclaredIndexes(){
 
         // Inline: KEY / UNIQUE KEY <name> (...) inside the CREATE TABLE block.
         const createTable = raw.match(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?/i);
-        if(createTable)
+        if(createTable){
             for(const m of raw.matchAll(/^\s*(UNIQUE\s+)?KEY\s+`?(\w+)`?\s*\(([^)]*(?:\([^)]*\)[^)]*)*)\)/gim))
                 add(createTable[1], m[2], m[1], m[3]);
+            // Table-level PRIMARY KEY (...) as the synthetic index PRIMARY_INDEX. A column-level
+            // `... PRIMARY KEY` is left to the column-spec suite, which already compares it.
+            for(const m of raw.matchAll(/^\s*PRIMARY\s+KEY\s*\(([^)]*(?:\([^)]*\)[^)]*)*)\)/gim))
+                add(createTable[1], PRIMARY_INDEX, 'UNIQUE', m[1]);
+        }
     }
     return declared;
 }
@@ -109,11 +118,16 @@ function collectMigrationIndexes(){
 
         for(const m of raw.matchAll(/CREATE\s+(UNIQUE\s+|FULLTEXT\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s+on\s+`?(\w+)`?\s*\(([^)]*(?:\([^)]*\)[^)]*)*)\)/gi))
             added.push(Object.assign({ file, table: m[3], index: m[2].toLowerCase(), columns: normalizeIndexColumns(m[4]) }, indexKind(m[1])));
+
+        // ADD PRIMARY KEY is usually a later clause of one ALTER TABLE (after DROP PRIMARY KEY,),
+        // so the scan spans the statement up to its semicolon; comments are stripped first.
+        for(const m of stripSqlComments(raw).matchAll(/ALTER\s+TABLE\s+`?(\w+)`?\s[^;]*?\bADD\s+PRIMARY\s+KEY\s*\(([^)]*(?:\([^)]*\)[^)]*)*)\)/gi))
+            added.push(Object.assign({ file, table: m[1], index: PRIMARY_INDEX, columns: normalizeIndexColumns(m[2]) }, indexKind('UNIQUE')));
     }
     return added;
 }
 
 module.exports = {
-    SQL_DIR, MIG_DIR, INDEX_BASELINE,
+    SQL_DIR, MIG_DIR, INDEX_BASELINE, PRIMARY_INDEX,
     collectLedgerCreatedTables, collectDeclaredIndexes, collectMigrationIndexes,
 };

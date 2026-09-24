@@ -101,17 +101,18 @@ module.exports = {
         await purgeSql.repairRollcallEvictions(this.indexerDb, this.config, block_index);
     },
 
-    // The two BTC-side ROLLCALL tables delete on close_block. They are declared
-    // rollback: 'special' rather than 'block' because neither has a block_index
-    // column, so the generic blockTables loop below would throw 1054 on them and
-    // fail the entire rollback transaction on every reorg.
-    // Absences before verdicts, so a partial failure cannot leave an absence row
-    // pointing at an epoch whose verdict is already gone; the catch swallows ONLY
-    // the schema gap on a node that predates the ROLLCALL migration, where the
-    // tables do not exist and there is nothing to unwind. This is the ONLY
-    // roll-call unwind: xchain-sync/src/client/rollback.js carries the replica's
-    // mirror of it, and a second copy here re-raises 1146 on a pre-migration node
-    // and aborts the reorg this guard exists to keep alive.
+    // The three BTC-side ROLLCALL tables (rollcall_gates, rollcall_absences,
+    // rollcalls) delete on close_block. They are declared rollback: 'special'
+    // rather than 'block' because none has a block_index column, so the generic
+    // blockTables loop below would throw 1054 on them and fail the entire
+    // rollback transaction on every reorg.
+    // Gates and absences before verdicts, so a partial failure cannot leave a
+    // derived row pointing at an epoch whose verdict is already gone; the catch
+    // swallows ONLY the schema gap on a node that predates the ROLLCALL
+    // migration, where the tables do not exist and there is nothing to unwind.
+    // This is the ONLY roll-call unwind: xchain-sync/src/client/rollback.js
+    // carries the replica's mirror of it, and a second copy here re-raises 1146
+    // on a pre-migration node and aborts the reorg this guard exists to keep alive.
     async unwindRollcallEpochs(block_index){
         await purgeSql.unwindRollcallEpochs(this.indexerDb, block_index);
     },

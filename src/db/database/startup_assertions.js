@@ -167,15 +167,17 @@ module.exports = {
         }
     },
 
-    // Assert the three bridge tables exist: bridge_transfers and policy_snapshots (the
-    // hub-mirrored, quorum-signed rows the XBRIDGE and XPOLICY passes apply from) and
-    // bridge_settlements (the local idempotency and rollback record for every applied leg).
+    // Assert the four bridge tables exist: bridge_transfers and policy_snapshots (the
+    // hub-mirrored, quorum-signed rows the XBRIDGE and XPOLICY passes apply from),
+    // bridge_settlements (the local idempotency and rollback record for every applied leg)
+    // and xbridges (the local record of every lock and burn mined here, the source side).
     //
     // WHAT GOES WRONG WITHOUT THEM, and why it is worse than a missing column: the mirror
     // ingest for a table this database cannot write fails by OMISSION. Nothing errors; the
     // bridge barrier simply never opens, and this chain stops applying transfers whose
     // source legs have already debited on the other side. An indexer in that state looks
-    // healthy and is silently half of a broken bridge.
+    // healthy and is silently half of a broken bridge. Without xbridges the first lock or
+    // burn throws inside the block transaction, and getpendingbridgetransfers has no rows.
     //
     // REGISTERED in Database.STARTUP_ASSERTED_MIGRATIONS and tagged
     // `deploy-precondition=required` in 2026-09-12-bridge-tables.sql's own header, which is
@@ -188,7 +190,7 @@ module.exports = {
     // Passes through (never halts) when a count is unreadable: an answer we could not read
     // is not evidence of a missing table, the same convention as the two assertions above.
     async assertBridgeTablesPresent(){
-        const REQUIRED = ['bridge_transfers', 'bridge_settlements', 'policy_snapshots'];
+        const REQUIRED = ['bridge_transfers', 'bridge_settlements', 'policy_snapshots', 'xbridges'];
         // Name the exact file in the halt: a bare `node src/db/migration/migrate.js` on an aged fleet
         // database means "apply every pending manual migration", which is never what a
         // scoped recovery wants.
@@ -199,7 +201,7 @@ module.exports = {
             conn = await this.getConnection();
             const rows = await conn.query(
                 "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = ? " +
-                "AND table_name IN ('bridge_transfers', 'bridge_settlements', 'policy_snapshots')",
+                "AND table_name IN ('bridge_transfers', 'bridge_settlements', 'policy_snapshots', 'xbridges')",
                 [this.dbName]
             );
             if(!rows) return;                       // unreadable answer: not evidence of drift
@@ -210,7 +212,8 @@ module.exports = {
                 'the bridge tables ' + missing.join(', ') + ' are absent, but this build applies ' +
                 'hub-mirrored bridge rows: the mirror for a table this database cannot write fails ' +
                 'by omission, so the bridge barrier never opens and transfers whose source leg has ' +
-                'already debited on the other chain are never applied here.' + remedy
+                'already debited on the other chain are never applied here; without xbridges no ' +
+                'lock or burn mined here is recorded for the hub to sign.' + remedy
             );
         } finally {
             if(conn && this.transactionConnection == null){

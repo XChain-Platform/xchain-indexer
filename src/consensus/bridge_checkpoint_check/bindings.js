@@ -31,9 +31,10 @@ const M = require('../merkle.js');
 // is the same module the block path and getblockhashes derive it from, so this check and the
 // value the fleet stamps into the signed checkpoint cannot come apart.
 const stateSubtree = require('../gates/state_subtree_gate.js');
-const { ESCROW_CHAIN, ESCROW_PROOF_REASON, fail, pass } = require('./reasons.js');
+const { ESCROW_PROOF_REASON, fail, pass } = require('./reasons.js');
 const { str, height, version, scaled } = require('./fields.js');
 const { resolveEscrowAddress } = require('./escrow_address.js');
+const { resolveTransferOrigin } = require('./origin.js');
 
 /**
  * Link 1: is this leg one this check judges at all, and does the row carry what the check
@@ -58,6 +59,10 @@ function screenLeg(row, ctx){
     if(srcChain === destChain)
         return { verdict: fail(ESCROW_PROOF_REASON.ROW_FIELDS) };
 
+    const origin = resolveTransferOrigin(row);
+    if(!origin)
+        return { verdict: fail(ESCROW_PROOF_REASON.IN_LEG_ORIGIN) };
+
     // The transfer must be for the network this indexer is on. A foreign-network row is
     // refused outright by the settle pass too; it is re-checked here because every key and
     // every root below is network-scoped, so proceeding on a mismatch would prove a balance
@@ -70,25 +75,23 @@ function screenLeg(row, ctx){
     // from a burn on the other side. A row naming neither side as this chain is not ours.
     if(thisChain !== destChain) return { verdict: fail(ESCROW_PROOF_REASON.NOT_THIS_CHAIN) };
 
-    // Direction is DERIVED and is never a column. The OUT leg releases an escrow that
-    // is an ordinary balance on this very chain, where the local ledger is authoritative and
-    // the would-go-negative refusal in the settle pass is the guard: a remote checkpoint can
-    // add nothing to a balance this node holds itself.
-    if(thisChain === ESCROW_CHAIN) return { verdict: pass(ESCROW_PROOF_REASON.OUT_LEG) };
+    // Direction is DERIVED from the asset origin and is never a column. The OUT leg releases
+    // an escrow on the native asset's own chain, where the local ledger is authoritative and
+    // the would-go-negative refusal in the settle pass is the guard.
+    if(thisChain === origin.originChain) return { verdict: pass(ESCROW_PROOF_REASON.OUT_LEG) };
 
-    // Everything else is an IN leg: this chain is about to MINT, so it needs the proof. The
-    // exemption is keyed on THIS chain being the escrow chain and never on the row's
-    // src_chain, and that ordering is the whole point. Read the other way round, a forged row
-    // naming any non-escrow source chain would derive as an "out leg" and mint here with no
-    // cross-check at all, which is precisely the forgery this cross-check exists to stop. A mint can only
-    // come from a lock on the escrow chain, so a source chain that is not it is refused.
-    if(srcChain !== ESCROW_CHAIN) return { verdict: fail(ESCROW_PROOF_REASON.IN_LEG_ORIGIN) };
+    // Everything else is an IN leg: this chain is about to MINT, so it needs a proof from the
+    // derived origin. A mint can only come from a bare lock on that chain. In particular, a
+    // rooted tick whose prefix is not dest_chain cannot pose as either direction.
+    if(srcChain !== origin.originChain || origin.kind !== 'lock')
+        return { verdict: fail(ESCROW_PROOF_REASON.IN_LEG_ORIGIN) };
 
     const amount = scaled(row.amount);
     if(amount === null || amount <= 0n)
         return { verdict: fail(ESCROW_PROOF_REASON.ROW_AMOUNT) };
 
-    return { fields: { srcChain, destChain, rowNet, tick, snapshot, amount } };
+    return { fields: { srcChain, destChain, rowNet, originChain: origin.originChain,
+                       tick: origin.nativeTick, snapshot, amount } };
 }
 
 /**
@@ -107,7 +110,7 @@ function bindCheckpoint(proof, f){
     // The checkpoint must be the ORIGIN chain's, on this network. A checkpoint of the
     // destination chain proves nothing about the escrow, and one of another network proves
     // a balance in another ledger entirely.
-    if(str(cp.chain) !== f.srcChain || str(cp.network) !== f.rowNet)
+    if(str(cp.chain) !== f.originChain || str(cp.network) !== f.rowNet)
         return { verdict: fail(ESCROW_PROOF_REASON.CHECKPOINT_BINDING) };
 
     const cpHeight = height(cp.block_index);
@@ -135,13 +138,13 @@ function bindEnvelope(proof, f, cpHeight){
     // The roots in the envelope must be the roots of the block the checkpoint commits, or
     // the reassembly below would compare roots from two different heights.
     const proofHeight = height(proof.block_index);
-    if(str(proof.chain) !== f.srcChain || str(proof.network) !== f.rowNet || proofHeight !== cpHeight)
+    if(str(proof.chain) !== f.originChain || str(proof.network) !== f.rowNet || proofHeight !== cpHeight)
         return { verdict: fail(ESCROW_PROOF_REASON.PROOF_BINDING) };
 
     // The escrow address is resolved HERE from the origin chain's own config, never taken
     // from the envelope: an attacker who could name the address would simply prove the
     // balance of an address it had funded itself.
-    const escrow = resolveEscrowAddress(f.srcChain, f.destChain, f.rowNet);
+    const escrow = resolveEscrowAddress(f.originChain, f.destChain, f.rowNet);
     if(!escrow)
         return { verdict: fail(ESCROW_PROOF_REASON.ESCROW_UNRESOLVED) };
     if(str(proof.address) !== escrow || str(proof.tick) !== f.tick)
@@ -186,7 +189,7 @@ function bindRootVersion(cp, f, cpHeight){
     const stampedVersion  = version(cp.state_root_version);
     // srcChain and rowNet ARE the checkpoint's own chain and network: the binding check above
     // refused the row unless cp.chain and cp.network matched them exactly.
-    const derivedVersion  = stateSubtree.stateRootVersion(cpHeight, f.rowNet, f.srcChain);
+    const derivedVersion  = stateSubtree.stateRootVersion(cpHeight, f.rowNet, f.originChain);
     if(stampedVersion === null || stampedVersion !== derivedVersion)
         return { verdict: fail(ESCROW_PROOF_REASON.ROOT_VERSION) };
 
@@ -235,7 +238,7 @@ function deriveClaimedLeaf(proof, f, escrow){
     }
 
     let key;
-    try { key = M.balanceKey(f.srcChain, f.rowNet, escrow, f.tick); }
+    try { key = M.balanceKey(f.originChain, f.rowNet, escrow, f.tick); }
     catch(e){ return { verdict: fail(ESCROW_PROOF_REASON.PROOF_MALFORMED) }; }
 
     return { claimed: claimed, leaf: leaf, key: key };

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-09-23
+
+### Fixed
+- Re-slid BTC/DOGE testnet activations with LTC inert; canonical admission is non-throwing, and INERT legacy-signature mismatches stay on the invalid-row path.
+
+
 ## [0.20.0] - 2026-09-17
 
 ### Added

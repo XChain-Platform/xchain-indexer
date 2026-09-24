@@ -47,7 +47,7 @@ const statementsOf  = (raw) => Database.prototype.splitSqlStatements.call(Databa
 // absent column is a fresh install rather than drift - which is why a bare fake conn that
 // returns [] has always satisfied them. assertBridgeTablesPresent reads
 // information_schema.TABLES, where an empty answer is NOT ambiguous: zero rows means the
-// three tables really are gone, and halting is the whole point of the guard.
+// bridge tables really are gone, and halting is the whole point of the guard.
 //
 // So the harnesses below seed the probe the same way makeDb() seeds the migrated pubkey
 // width: they are testing the migration RUNNER against a deliberately bare ledger, not the
@@ -55,7 +55,7 @@ const statementsOf  = (raw) => Database.prototype.splitSqlStatements.call(Databa
 // boot without the bridge tables. The production assertion is left exactly as written; the
 // halt it exists for is pinned by the Database.runMigrations() bridge-table schema assertion describe block in schema_assertions.test.js.
 const BRIDGE_TABLES_PROBE = /information_schema\.tables[\s\S]*bridge_transfers/i;
-const BRIDGE_TABLE_ROWS   = Object.freeze(['bridge_transfers', 'bridge_settlements', 'policy_snapshots']);
+const BRIDGE_TABLE_ROWS   = Object.freeze(['bridge_transfers', 'bridge_settlements', 'policy_snapshots', 'xbridges']);
 const bridgeTablesPresent = () => BRIDGE_TABLE_ROWS.map((name) => ({ name }));
 
 module.exports = { assert, fs, path, Database, requireWithFreshConfig, DB_PATH, modeOf, stripComments, destructiveOf, statementsOf, BRIDGE_TABLES_PROBE, BRIDGE_TABLE_ROWS, bridgeTablesPresent };

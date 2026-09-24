@@ -24,7 +24,26 @@ const BIN = path.join(REPO, 'bin', 'consensus-identity.js');
 const PIN = path.join(REPO, 'bin', 'pins', 'at1-consensus-identity.json');
 
 function run(args) {
-    return spawnSync(process.execPath, [BIN, ...args], { cwd: REPO, encoding: 'utf8' });
+    return spawnSync(process.execPath, [BIN, ...args], { cwd: REPO, encoding: 'utf8', env: childEnv() });
+}
+
+// The variables the child is allowed to see. A regtest venue arms gate rows from
+// the environment (src/protocol_changes/shared_rows.js REGTEST_ARMING), and the
+// pin selects its armed block only when EVERY lever of the pair matches, so a
+// process holding one of them answers to neither block: the fingerprint and the
+// digest read armed while the comparison runs against the bare pin. A suite that
+// throws between arming a lever and restoring it leaves exactly that state, and
+// an inherited environment would carry it into this guard and red it for a reason
+// that is not drift. The list is closed rather than a subtraction of known levers,
+// so a lever added later cannot ride in unnoticed.
+const CHILD_ENV_KEYS = ['PATH', 'HOME', 'TMPDIR'];
+
+function childEnv() {
+    const env = {};
+    for (const key of CHILD_ENV_KEYS) {
+        if (process.env[key] !== undefined) env[key] = process.env[key];
+    }
+    return env;
 }
 
 describe('consensus identity GATES field and pin comparison', function () {
@@ -41,6 +60,24 @@ describe('consensus identity GATES field and pin comparison', function () {
         const result = run(['--compare', PIN]);
         assert.strictEqual(result.status, 0, result.stdout + result.stderr);
         assert.match(result.stdout, /^ok gates_field_hash$/m);
+    });
+
+    it('exits zero with an arming lever left set in this process', function () {
+        // One lever of the pair, which is what a hook that throws between arming and
+        // restoring leaves behind. The child must not see it.
+        const key = 'XC_ROLLCALL_REGTEST_ACTIVATION';
+        const had = Object.prototype.hasOwnProperty.call(process.env, key);
+        const previous = process.env[key];
+        process.env[key] = 'armed';
+        try {
+            assert.strictEqual(childEnv()[key], undefined);
+            const result = run(['--compare', PIN]);
+            assert.strictEqual(result.status, 0, result.stdout + result.stderr);
+            assert.match(result.stdout, /^ok gates_field_hash$/m);
+        } finally {
+            if (had) process.env[key] = previous;
+            else delete process.env[key];
+        }
     });
 
     it('exits one and names an altered scalar field', function () {

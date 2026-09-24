@@ -66,9 +66,14 @@ function buildNodeproofWire(epoch, ledgerHash, passKeys, verifiers) {
 // One round is enough: the window bounds collapse to that round and its anchor equals the
 // header anchor, which is what the parser requires and what keeps the batch off both
 // straddle rules. A wider window would exercise batching, not the reward rule under test.
+//
+// NETWORK is passed as the fifth argument because it is half the mirror admission
+// activation key: an absent fifth argument reads as the inert network and rebuilds the
+// LEGACY canonical, so an admission-era round would be signed over bytes the indexer never
+// reconstructs and the scenario would red on a signature it built itself.
 function buildPriceBatchWire(round, timestamp, pairs, signers, btcHeight) {
     const rounds  = [{ round: round, timestamp: timestamp, btcBlockHeight: btcHeight, pairs: pairs }];
-    const payload = Buffer.from(ed25519.buildPriceBatchPayload(round, round, btcHeight, rounds), 'utf8');
+    const payload = Buffer.from(ed25519.buildPriceBatchPayload(round, round, btcHeight, rounds, NETWORK), 'utf8');
     const pairFields = [];
     for (const p of pairs) pairFields.push(p.pair, p.price);
     const sigFields = [];

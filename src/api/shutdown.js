@@ -33,10 +33,12 @@
 // runs dotenv.config() before anything loads config.js, so a .env-supplied budget is kept.
 const { CONFIG_ENV } = require('../config.js');
 
-// Hard-exit budget for the whole drain. Docker's default stop grace is 10s and
-// xchain-node issues a bare `docker stop`, so the default sits under it: an
-// overrun that ends in our own logged exit is diagnosable, one that ends in the
-// daemon's SIGKILL is not. SHUTDOWN_TIMEOUT_MS overrides for a slow chain.
+// Hard-exit budget for the whole drain. xchain-node stops an indexer with a
+// 30 s budget (stamped on the container as --stop-timeout), and a container
+// created before that budget existed still gets docker's ten seconds, so the
+// default sits under both: an overrun that ends in our own logged exit is
+// diagnosable, one that ends in the daemon's SIGKILL is not.
+// SHUTDOWN_TIMEOUT_MS overrides for a slow chain.
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 8000;
 
 function resolveTimeoutMs(timeoutMs, env){

@@ -41,9 +41,9 @@ const { getLogger } = require('../../observability/index.js');
  *
  * Called with the handler as `this` (it reads this.indexerDb and builds the canonical
  * with this.canonical). The canonical is built only after the snapshot check and the
- * signature parse, as the handler always built it: canonical() can throw on a row
- * whose admission columns disagree with its era, and an unsynced snapshot must defer
- * such a row, not abort the block.
+ * signature parse, as the handler always built it: canonical() throws only when a row's
+ * admission column holds a value that is not a usable height, and an unsynced snapshot
+ * must defer such a row, not abort the block.
  *
  * @param {Object} m - the mirrored cross_chain_matches row
  * @returns {Promise<boolean>} true only when the match may settle on this chain

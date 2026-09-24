@@ -47,7 +47,7 @@ module.exports = {
     // that no longer does. Runs after the loop, so the tokens rows are
     // already gone before the orphan sweep evaluates the sub-query.
     async sweepOrphanedIcons(){
-        await rederiveSql.sweepOrphanedIcons(this.indexerDb);
+        this.recordSweepStats([await rederiveSql.sweepOrphanedIcons(this.indexerDb)]);
     },
 
     // Re-derive tokens.escrow_action_index (the ownership-escrow gate) for every

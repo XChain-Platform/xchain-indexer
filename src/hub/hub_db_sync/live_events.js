@@ -27,6 +27,7 @@ const { getLogger } = require('../../observability/index.js');
 const { HUB_SCHEMA_VERSION } = require('../hub_schema_version');
 const { CROSS_CHAIN_TABLES } = require('./mirror_tables.js');
 const { PENDING_PRICE_EVENT_CAP } = require('./mirror_bounds.js');
+const { applyMirrorWrite } = require('./mirror_write.js');
 
 module.exports = {
 
@@ -60,6 +61,10 @@ module.exports = {
             this._schemaMismatchSeen = true;
             return;
         }
+        if (event.type === 'row:anchor-stamped' && event.table === 'cross_chain_matches') {
+            await this.applyMatchAnchorStamp(event);
+            return;
+        }
         if (event.table === 'price_snapshots' && !this._priceDrained) {
             this.bufferPriceEvent(event);
             return;
@@ -91,6 +96,17 @@ module.exports = {
             // never retracted at all.
             if (event.table === 'cross_chain_matches' || event.table === 'cross_chain_calls') await this.releaseSnapshotWaiters();
         }
+    },
+
+    // Apply only the post-archive metadata to a match the mirror already admitted.
+    // There is deliberately no INSERT fallback: a missing row stays missing until a
+    // REST bootstrap evaluates the full row through the normal admission path.
+    async applyMatchAnchorStamp(event) {
+        if (typeof event.match_id !== 'string' || event.match_id.length === 0 ||
+            typeof event.anchor_txid !== 'string' || event.anchor_txid.length === 0) return;
+        await applyMirrorWrite(this.hubDb,
+            'UPDATE cross_chain_matches SET anchor_txid = COALESCE(anchor_txid, ?) WHERE match_id = ?',
+            [event.anchor_txid, event.match_id]);
     },
 
     // Queue a live price_snapshots event for replay after the price bootstrap

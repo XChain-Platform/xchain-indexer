@@ -31,6 +31,7 @@
 
 const cpCheck     = require('../bridge_checkpoint_check.js');
 const proofClient = require('../bridge_proof_client.js');
+const { resolveTransferOrigin } = require('../bridge_checkpoint_check/origin.js');
 const { XBRIDGE_MAX_PER_BLOCK, XPOLICY_MAX_PER_BLOCK } = require('../../protocol/constants.js');
 const { int } = require('./reasons.js');
 
@@ -52,9 +53,8 @@ const { int } = require('./reasons.js');
  *
  * OUT LEGS NEED NO PROOF and are not stalled for one: the escrow an out leg releases is an
  * ordinary balance on THIS chain, where the local ledger is authoritative and the
- * would-go-negative refusal is the guard. The exemption is keyed on the check module's own
- * escrow-chain constant and derived exactly as the check derives it, so the two can never
- * disagree about which leg needs a proof.
+ * would-go-negative refusal is the guard. The exemption and the proof origin use the same
+ * transfer-origin resolver as the check, so the two cannot disagree about the leg direction.
  *
  * @param {Object} row - the bridge_transfers row about to be applied
  * @param {Object} ctx - the pass context
@@ -65,13 +65,13 @@ async function fetchProofForTransfer(row, ctx){
     const srcChain  = String(row.src_chain || '');
     const destChain = String(row.dest_chain || '');
     const thisChain = String(ctx.coin || '');
-    // Not our leg, or an out leg: the check answers those from the row alone.
-    if(thisChain !== destChain || thisChain === cpCheck.ESCROW_CHAIN) return null;
-    // A source chain that is not the escrow chain is refused by the check itself (IN_LEG_ORIGIN)
-    // and is not worth a network round trip.
-    if(srcChain !== cpCheck.ESCROW_CHAIN) return null;
+    const origin = resolveTransferOrigin(row);
+    // Not our leg, an invalid origin shape, or an out leg: the check answers these from
+    // the row alone and no remote request can change its verdict.
+    if(thisChain !== destChain || !origin || thisChain === origin.originChain) return null;
+    if(srcChain !== origin.originChain || origin.kind !== 'lock') return null;
 
-    const escrow = cpCheck.resolveEscrowAddress(srcChain, destChain, String(row.network || ''));
+    const escrow = cpCheck.resolveEscrowAddress(origin.originChain, destChain, String(row.network || ''));
     // An unresolvable escrow address is a CONFIG fact, identical on every node running this
     // build, so it is the check's refusal (ESCROW_UNRESOLVED) and not a stall.
     if(!escrow) return null;

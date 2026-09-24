@@ -72,7 +72,9 @@ async function seedPendingObligations(db) {
 }
 
 before(async function () {
-    this.timeout(30000);
+    // Match the tier's --timeout: a slow CI runner's MariaDB took over 30s to create
+    // the 135 indexer tables, and a timed-out root hook tears the schema down mid-build.
+    this.timeout(120000);
     await createDatabases(__filename);
     await resetIndexerDb();
     indexer = await initIndexer();

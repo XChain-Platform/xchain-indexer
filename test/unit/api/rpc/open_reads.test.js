@@ -123,7 +123,7 @@ describe('JSON-RPC betting family @regression @tier1', function () {
 describe('JSON-RPC bridge family @regression @tier1', function () {
     afterEach(function () { sinon.restore(); });
 
-    it('getpendingbridgetransfers derives the kind from the version, unroots a v4 tick and stamps the generation read first', async function () {
+    it('getpendingbridgetransfers derives the kind from the version, retains a rooted v4 tick and stamps the generation read first', async function () {
         const rows = [
             { action_index: 1, version: 0, block_index: 90, amount: '1.5', decimals: 8, min_depth: null, dest_chain: 'DOGE', tick: 'XCHAIN', dest_address: 'D', src_address: 'B', tx_hash: 'a'.repeat(64) },
             { action_index: 2, version: 4, block_index: 95, amount: '7', decimals: null, min_depth: 3, dest_chain: 'DOGE', tick: 'BTC.FUFU', dest_address: 'D', src_address: 'B', tx_hash: 'b'.repeat(64) }
@@ -138,7 +138,7 @@ describe('JSON-RPC bridge family @regression @tier1', function () {
         assert.deepStrictEqual(res.transfers[0], { transfer_kind: 'lock', src_chain: 'BTC', src_action_index: 1, src_address: 'B', dest_chain: 'DOGE',
             dest_address: 'D', tick: 'XCHAIN', decimals: 8, amount: '1.5', min_depth: 0, block_index: 90, confirmations: 11, tx_hash: 'a'.repeat(64), push_generation: 9 });
         assert.strictEqual(res.transfers[1].transfer_kind, 'burn');
-        assert.strictEqual(res.transfers[1].tick, 'FUFU');
+        assert.strictEqual(res.transfers[1].tick, 'BTC.FUFU');
         assert.strictEqual(res.transfers[1].decimals, 0);
         assert.strictEqual(res.transfers[1].min_depth, 3);
     });
@@ -200,16 +200,21 @@ describe('JSON-RPC token policy family @regression @tier1', function () {
 
     it('getappliedpolicy reports the local row with the applied snapshot identity when one landed', async function () {
         const view = recordingView({
-            getTokenInfo: (t) => (t === 'FUFU' ? { ALLOW_LIST: '7', BLOCK_LIST: null, BRIDGED: 1 } : null),
+            getTokenInfo: (t) => (t === 'DOGE.FUFU' ? { ALLOW_LIST: '7', BLOCK_LIST: null, BRIDGED: 1 } : null),
             getLatestBlockIndex: 66, isTickSleeping: 1,
-            getAppliedPolicySnapshot: (t) => ({ policy_seq: '2', origin_block: '40', policy_hash: 'h' })
+            getAppliedPolicySnapshot: (origin, name) => {
+                assert.deepStrictEqual([origin, name], ['DOGE', 'FUFU']);
+                return { policy_seq: '2', origin_block: '40', policy_hash: 'h' };
+            }
         });
-        const rpc = buildTokenPolicyRpc({ indexer: fakeIndexer({ view }) });
-        assert.deepStrictEqual(await rpc.getappliedpolicy({ tick: 'FUFU' }),
-            { tick: 'FUFU', bridged: true, allow_list: 7, block_list: null, sleeping: true, policy_seq: 2, origin_block: 40, policy_hash: 'h' });
-        assert.deepStrictEqual(view.calls[2], ['isTickSleeping', 'FUFU', 66]);
+        const util = { parseBridgedTick: (tick) => tick === 'DOGE.FUFU' ? { origin: 'DOGE', name: 'FUFU' } : null };
+        const rpc = buildTokenPolicyRpc({ indexer: fakeIndexer({ view, util }) });
+        assert.deepStrictEqual(await rpc.getappliedpolicy({ tick: 'DOGE.FUFU' }),
+            { tick: 'DOGE.FUFU', bridged: true, allow_list: 7, block_list: null, sleeping: true, policy_seq: 2, origin_block: 40, policy_hash: 'h' });
+        assert.deepStrictEqual(view.calls[2], ['isTickSleeping', 'DOGE.FUFU', 66]);
+        assert.deepStrictEqual(view.calls[3], ['getAppliedPolicySnapshot', 'DOGE', 'FUFU']);
         view.getAppliedPolicySnapshot = async () => null;
-        assert.strictEqual((await rpc.getappliedpolicy({ tick: 'FUFU' })).policy_seq, null);
+        assert.strictEqual((await rpc.getappliedpolicy({ tick: 'DOGE.FUFU' })).policy_seq, null);
         assert.deepStrictEqual(await rpc.getappliedpolicy({ tick: 'NOPE' }), { error: 'tick has no local row on this chain' });
         assert.deepStrictEqual(await rpc.getappliedpolicy({}), { error: 'tick required' });
     });

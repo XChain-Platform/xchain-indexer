@@ -28,7 +28,8 @@
 
 // Verify CONTROLLER references an existing, active contract on this chain.
 // The bound contract's `guard` method is consulted before guarded native
-// actions on this token settle (see Controller_Bound_Tokens.md). Mirrors the
+// actions on this token settle (see
+// xchain-documentation/protocol/controller-bound-tokens.md). Mirrors the
 // contract-active check in actions/execute/index.js so a token can only bind to a
 // contract the indexer can actually execute. A guard whose `guard` method is
 // missing/throws is fail-closed at runtime (denies the action), not here.

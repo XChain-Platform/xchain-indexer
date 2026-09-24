@@ -48,7 +48,7 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 const {
-    SQL_DIR, INDEX_BASELINE, collectLedgerCreatedTables, collectDeclaredIndexes, collectMigrationIndexes,
+    SQL_DIR, INDEX_BASELINE, PRIMARY_INDEX, collectLedgerCreatedTables, collectDeclaredIndexes, collectMigrationIndexes,
 } = require('./sql_schema_index_parity.test/helpers/index_ledger.js');
 
 describe('SQL schema index parity (definition path vs ledger path) @regression', function(){
@@ -74,6 +74,20 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
         assert.ok(ft, 'standalone CREATE FULLTEXT INDEX form no longer parsed');
         assert.strictEqual(ft.fulltext, true, 'contracts.meta_search parsed but not as FULLTEXT');
         assert.strictEqual(ft.unique, false, 'FULLTEXT must not be read as UNIQUE');
+        // anchor_actions declares a table-level PRIMARY KEY (...); pin it so a regex regression
+        // cannot drop every primary key out of the cases below without failing one.
+        const pk = declared['anchor_actions'] && declared['anchor_actions'].get(PRIMARY_INDEX);
+        assert.ok(pk, 'table-level PRIMARY KEY (...) form no longer parsed');
+        assert.deepStrictEqual(pk.columns, ['action_index', 'section_index']);
+        assert.strictEqual(pk.unique, true, 'a primary key must be read as UNIQUE');
+    });
+
+    it('sanity: the parser reads ADD PRIMARY KEY off the ledger path', function(){
+        const pk = collectMigrationIndexes().filter(a => a.table === 'anchor_actions' && a.index === PRIMARY_INDEX);
+        assert.ok(pk.length > 0,
+            'no ALTER TABLE ... ADD PRIMARY KEY parsed out of src/sql/migrations; a primary key moved by a ' +
+            'dated migration would be unguarded on the ledger path');
+        assert.ok(pk.every(a => a.unique === true && a.fulltext === false), 'a primary key must be read as UNIQUE');
     });
 
     it('sanity: the parser reads a FULLTEXT index off the ledger path too', function(){

@@ -149,13 +149,11 @@ describe('the admission map rides the on-chain price wire one slot per round (ro
     describe('the on-chain batch action, driven through the real parser', function () {
         batchHooks();
 
-        it('the canonical refuses in both directions: an era round with no map, a legacy round with one', function () {
+        it('the canonical uses legacy bytes in both directions of the version seam', function () {
             const era = twoRounds(ADMIT_AT);
-            assert.throws(() => armed.ed.buildPriceBatchPayload(100, 101, ADMIT_AT + 1, era, NETWORK),
-                          /admission-era row at block 799000 .* has no admit_blocks/);
+            assert.strictEqual(/admit_blocks/.test(armed.ed.buildPriceBatchPayload(100, 101, ADMIT_AT + 1, era, NETWORK)), false);
             const legacy = twoRounds(LEGACY_AT - 10, MAPS);
-            assert.throws(() => armed.ed.buildPriceBatchPayload(100, 101, LEGACY_AT - 9, legacy, NETWORK),
-                          /legacy-era row .* was handed admit_blocks/);
+            assert.strictEqual(/admit_blocks/.test(armed.ed.buildPriceBatchPayload(100, 101, LEGACY_AT - 9, legacy, NETWORK)), false);
             // And a caller that omits the network rebuilds LEGACY bytes: an era batch then fails
             // to verify rather than verifying as legacy, which is the fail-closed direction.
             assert.strictEqual(/admit/.test(armed.ed.buildPriceBatchPayload(100, 101, LEGACY_AT - 9, twoRounds(LEGACY_AT - 10))), false);

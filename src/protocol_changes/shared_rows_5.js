@@ -108,9 +108,16 @@ addGate('train_activation.TRAIN_ACTIVATION', 'ruleset', {
     // the LTC leg of this family two days off its BTC counterpart a day after the first cut.
     // That lead is the rolling-upgrade window the fleet roll must finish inside (24x the 90
     // minute roll budget), and every testnet mirror-admission height sits above it on the same
-    // BTC clock (the BTC producer at 153,222 is 106 blocks and about 17.0 h further up), so a
-    // node lacking this rule set halts before it can grade an admission-stamped row.
-    '0.20.0': { mainnet: 9999999999, testnet: 153116, regtest: 0 },
+    // BTC clock, so a node lacking this rule set halts before it can grade an admission-stamped
+    // row.
+    // RE-SLID 2026-09-23 for the v0.20.1 patch train, after the live tips overran the
+    // 2026-09-19 slide before the freeze: margin is 40 h to the nearest armed height, converted
+    // at each coin's fastest defensible cadence. Chain_tip TBTC 153,698 at 2026-09-23T15:55Z
+    // + 376 blocks, ceil(40 h / 383.04 s per block, the least-squares bound). The
+    // mirror-admission family below re-slides onto the same instant plus its own 17 h and 6 h
+    // offsets. LTC:testnet mirror admission ships disabled on this train and is
+    // untouched by this reslide; it arms on a later train.
+    '0.20.0': { mainnet: 9999999999, testnet: 154074, regtest: 0 },
 });
 
 // xchain_bridge_activation

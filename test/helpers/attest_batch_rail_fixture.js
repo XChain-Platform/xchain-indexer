@@ -18,6 +18,7 @@ const sinon  = require('sinon');
 const { createMockIndexer, createBaseData } = require('../fixtures/mocks');
 const Attest = require('../../src/actions/attest/index.js');
 const abw    = require('../../src/actions/attest/attest_batch_wire.js');
+const { isAdmissionEra } = require('../../src/consensus/gates/mirror_admission_gate.js');
 const { PUBKEY_A, SIG_A } = require('./attest_fixture.js');
 
 const ANCHOR = 900000;
@@ -103,7 +104,7 @@ function chunkedBatch(want) {
             row_count: n, btc_block_height: ANCHOR, rows,
             sigs: [{ pubkey: PUBKEY_A, sig: SIG_A }],
         };
-        const enc = abw.encodeAttestBatch(win);
+        const enc = abw.encodeAttestBatch(win, isAdmissionEra);
         if (enc.totalChunks === want) return { win, enc };
     }
     throw new Error('no window of this fixture shape encodes to ' + want + ' chunks');

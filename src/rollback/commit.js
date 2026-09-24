@@ -268,13 +268,17 @@ module.exports = {
 
     // Structured completion summary so a successful rollback is distinguishable
     // from a hung/partial one in the log stream (#1812): target block, the rolled-
-    // back action range, the staged hub retractions, and elapsed time.
+    // back action range, the staged hub retractions, each orphan sweep's time and
+    // rows removed, and elapsed time.
     logRollbackSummary(block_index, firstActionIndex, lastActionIndex, stagedRetractions, rollbackStartedAt){
         const elapsedMs     = Date.now() - rollbackStartedAt;
         const retractionIds = stagedRetractions.map(r => r.pushType + '#' + r.id);
+        const sweeps        = (this.sweepStats || []).map(s =>
+            s.table + ' ' + s.ms + 'ms ' + (s.rows === null ? '?' : s.rows) + ' rows');
         getLogger().info('Rollback complete: to block ' + block_index +
             ', action range [' + firstActionIndex + ', ' + lastActionIndex + ']' +
             ', staged retractions ' + (retractionIds.length ? retractionIds.join(', ') : 'none') +
+            ', sweeps [' + (sweeps.length ? sweeps.join('; ') : 'none') + ']' +
             ', elapsed ' + elapsedMs + 'ms');
     },
 

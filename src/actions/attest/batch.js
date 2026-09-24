@@ -25,6 +25,8 @@
 // into xchain-hub so the publisher that BUILDS a batch and this parser cannot
 // disagree about its bytes.
 const abw     = require('./attest_batch_wire.js');
+// Picks the row field set a batch must carry from its own signed anchor (see batch_absorb.js).
+const { isAdmissionEra } = require('../../consensus/gates/mirror_admission_gate.js');
 const { getLogger } = require('../../observability/index.js');
 const { BATCH_CHAIN } = require('./constants.js');
 
@@ -148,7 +150,7 @@ module.exports = {
         let batch = null;
         if(!error){
             let stored = (head.totalChunks === 1) ? [] : mine;
-            let assembled = abw.reassembleAttestBatch(head, stored);
+            let assembled = abw.reassembleAttestBatch(head, stored, isAdmissionEra);
             if(assembled.ok) batch = assembled.batch;
             // Incomplete coverage is the ONE failure that is not a verdict: the missing
             // chunks may still be mined. Every other one is the batch's, and is recorded

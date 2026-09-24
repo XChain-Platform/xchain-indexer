@@ -21,7 +21,7 @@
  * actions.actionExecute.runControllerGuard); no DB, no VM, so they run on any Node.
  * The real guard run (VM execution, gas metering) is exercised on Node 22 / regtest.
  *
- * Spec: xchain-documentation/protocol/Controller_Bound_Tokens.md
+ * Spec: xchain-documentation/protocol/controller-bound-tokens.md
  ********************************************************************/
 
 const assert = require('assert');

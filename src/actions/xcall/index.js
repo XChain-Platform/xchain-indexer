@@ -195,9 +195,9 @@ class Xcall {
         ].join('|');
         // The admission map the hub signed, rebuilt from the mirrored row's admit_block_*
         // columns and era-keyed on the ROW's snapshot_block, the same field and position the
-        // dispatch twin in xexec.js appends. Empty below the producer activation, so the
-        // legacy bytes are unchanged; a modern row with no columns REFUSES rather than
-        // rebuilding legacy bytes no honest quorum signed.
+        // dispatch twin in xexec.js appends. Empty unless this node reads the row's era as
+        // armed and the row carries a map, so the legacy bytes are unchanged in every other
+        // cell and a mismatched signature fails the quorum check rather than throwing.
         raw += ah.admissionCanonicalField('CrossChainCall', r.network, r.snapshot_block, ah.columnsAdmitBlocks(r));
         // EQUIV header (the equivocation flag day): TAG=XCALL, ROUND_ID = sha256('XCALLROUND|result|'+call_id)
         // (distinct from the dispatch key), VIEW = finalizing_view.

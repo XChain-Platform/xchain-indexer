@@ -26,7 +26,7 @@
 const crypto = require('crypto');
 
 // Why a row did not apply. LOG reasons, never consensus verdict strings: an injected settle
-// leg writes no STATUS (actions/xbridge.js returns a system-injected v2/v5 untouched, so the
+// leg writes no STATUS (actions/xbridge/index.js returns a system-injected v2/v5 untouched, so the
 // settle pass is the only writer of that row) and no canonical carries any of these. The
 // boolean beside them is the consensus-visible part.
 const SETTLE_REASON = {

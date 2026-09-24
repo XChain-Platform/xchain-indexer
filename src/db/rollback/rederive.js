@@ -23,6 +23,8 @@
 
 'use strict';
 
+const { timedSweep } = require('./sweeps.js');
+
 module.exports = {
 
     // Every dataTables row at or above the first orphaned action, sparing retraction write-aheads.
@@ -48,11 +50,11 @@ module.exports = {
         }
     },
 
-    // icons rows whose token is gone.
+    // icons rows whose token is gone, timed.
     async sweepOrphanedIcons(db){
         let query;
         query = `DELETE FROM icons WHERE token_id NOT IN (SELECT id FROM tokens)`;
-        await db.doQuery(query, []);
+        return timedSweep(db, 'icons', query, []);
     },
 
     // tokens.escrow_action_index re-derived from the surviving open GIVE_OWNERSHIP offers.

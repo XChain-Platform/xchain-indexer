@@ -83,7 +83,8 @@ function buildPriceV0Payload(round, timestamp, pairs, network, btcBlockHeight, a
     });
     // The admission map, height-gated on the round's OWN BTC anchor and never on this
     // indexer's height, so the era for a round is fixed when it is signed and the two eras
-    // can never share a signature. Refuses in BOTH directions. Appended to the body BEFORE
+    // can never share a signature. Set only for an armed era with a map present; both mixed
+    // cells rebuild the legacy bytes without throwing. Appended to the body BEFORE
     // the EQUIV wrapper, the same position every other rail puts it in, so the wrapper
     // stays a pure function of the bytes it wraps.
     raw += adm.admissionCanonicalField('buildPriceV0Payload', network, btcBlockHeight, admitBlocks);
@@ -118,8 +119,9 @@ function buildPriceV0Payload(round, timestamp, pairs, network, btcBlockHeight, a
 // producer observed each chain", and the rounds in an hourly window were opened at
 // different tips, so one map for the batch would sign a claim no producer made. In the
 // admission era the entry gains a LAST key, `admit_blocks`, holding the same canonical
-// spelling the v0 field uses (CODE:digits in ASCII order, comma-joined); below it the
-// entry is byte-identical to the pre-admission form and a map is refused. `network` is
+// spelling the v0 field uses (CODE:digits in ASCII order, comma-joined); below it, or with
+// no map, the entry is byte-identical to the pre-admission form and a map is ignored rather
+// than refused, so a version seam fails signature verification instead of throwing. `network` is
 // half the activation key and absent reads INERT, so a caller that omits it rebuilds the
 // legacy bytes and an admission-era batch then fails to verify rather than verifying
 // as legacy.

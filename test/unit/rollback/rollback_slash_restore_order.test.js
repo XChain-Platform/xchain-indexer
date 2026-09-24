@@ -37,7 +37,9 @@ const { makeMigrationDb }   = require('../../helpers/sqlMigrationDb');
 
 const Rollback = require('../../../src/rollback/index.js');
 
-// The restore statements rollback() actually issues, keyed by stake table.
+// The restore statements rollback() actually issues, keyed by stake table
+// (contract_stakes/contract_unstakes for the VM-emitted twin, stakes/unstakes
+// for the capability-slash twin under test here).
 async function shippedRestores(){
     const indexer = createMockIndexer();
     indexer.protocolChanges = {
@@ -51,8 +53,9 @@ async function shippedRestores(){
     const out = {};
     for(const call of indexer.indexerDb.doQuery.getCalls()){
         const sql = String(call.args[0]);
-        if(!/UPDATE contract_(?:un)?stakes/.test(sql)) continue;
-        if(!sql.includes('contract_slash_debits') || !sql.includes('prev_amount')) continue;
+        if(!/UPDATE (?:contract_)?(?:un)?stakes\b/.test(sql)) continue;
+        if(!sql.includes('prev_amount')) continue;
+        if(!sql.includes('contract_slash_debits') && !sql.includes('capability_slash_debits')) continue;
         out[call.args[1][0]] = { sql, args: call.args[1] };
     }
     return out;
@@ -90,6 +93,31 @@ function restoredAmount(restore, debits){
         }
         h.db.prepare(toSqliteUpdate(restore.sql)).run(...restore.args);
         return h.rows('SELECT amount FROM contract_stakes WHERE action_index = 900')[0].amount;
+    } finally {
+        h.close();
+    }
+}
+
+// One capability stake row and its debit chain, rolled back to block 100.
+// debit = { slash_action_index, prev_amount, amount, block_index }
+function restoredCapabilityAmount(restore, debits){
+    const h = makeMigrationDb(['stakes.sql', 'capability_slash_debits.sql']);
+    try {
+        const post = debits.length ? debits[debits.length - 1] : null;
+        h.insert('stakes', {
+            action_index: 900, source_id: 1, version: 1, signing_pubkey_id: 1,
+            amount: post ? String(Number(post.prev_amount) - Number(post.amount)) : '1000',
+            status_id: 1, block_index: 90, activation_block: 90
+        });
+        for(const d of debits){
+            h.insert('capability_slash_debits', {
+                slash_action_index: d.slash_action_index,
+                target_table: 'stakes', stake_action_index: 900,
+                prev_amount: d.prev_amount, amount: d.amount, block_index: d.block_index
+            });
+        }
+        h.db.prepare(toSqliteUpdate(restore.sql)).run(...restore.args);
+        return h.rows('SELECT amount FROM stakes WHERE action_index = 900')[0].amount;
     } finally {
         h.close();
     }
@@ -171,6 +199,70 @@ describe('Rollback contract slash-restore order @regression @tier3', function(){
         const got = restoredAmount(restores['contract_stakes'], [
             { execution_index: 500, slash_position: 0, prev_amount: '1000', amount:   '0', block_index: 100 },
             { execution_index: 501, slash_position: 0, prev_amount: '1000', amount: '300', block_index: 100 }
+        ]);
+        assert.strictEqual(got, '1000');
+    });
+});
+
+// The CAPABILITY-stake equivocation-slash twin (WI-2 bump 2): restoreCapabilitySlashAmounts
+// runs the same restore shape over stakes/unstakes + capability_slash_debits. Unlike the
+// VM-emitted contract twin above, capability slashes are permissionless SLASH WIRE actions
+// with no nested re-entrancy, so the pick is simply the EARLIEST orphaned debit
+// (min block_index, then slash_action_index) rather than a value-ordered chain walk. Run for
+// real on sqlite for the same reason as the contract twin: a stubbed doQuery cannot observe
+// which debit the predicate picks, and a wrong pick under-restores active capability stake,
+// which moves VM staker weighting and quorum eligibility.
+describe('Rollback capability slash-restore order @regression @tier3', function(){
+    before(prepareRestores);
+
+    it('issues a restore for both capability stake-ledger tables', function(){
+        assert.ok(restores['stakes'],   'expected a stakes restore');
+        assert.ok(restores['unstakes'], 'expected an unstakes restore');
+        assert.deepStrictEqual(restores['stakes'].args,   ['stakes', 100, 100]);
+        assert.deepStrictEqual(restores['unstakes'].args, ['unstakes', 100, 100]);
+    });
+
+    it('restores the pre-slash amount when the orphaned slashes arrive in ascending slash_action_index order', function(){
+        const got = restoredCapabilityAmount(restores['stakes'], [
+            { slash_action_index: 500, prev_amount: '1000', amount: '300', block_index: 100 },
+            { slash_action_index: 502, prev_amount:  '700', amount: '700', block_index: 100 }
+        ]);
+        assert.strictEqual(got, '1000');
+    });
+
+    it('restores the pre-slash amount when the orphaned slashes arrive in descending slash_action_index order', function(){
+        // slash_action_index is a wire action_index, not an emission position, so nothing
+        // guarantees the debit rows land in ascending order. The restore must still pick the
+        // EARLIEST orphaned debit (lowest slash_action_index within the orphaned range), not
+        // whichever row the predicate happens to see first.
+        const got = restoredCapabilityAmount(restores['stakes'], [
+            { slash_action_index: 502, prev_amount:  '700', amount: '700', block_index: 100 },
+            { slash_action_index: 500, prev_amount: '1000', amount: '300', block_index: 100 }
+        ]);
+        assert.strictEqual(got, '1000',
+            'the restore must copy back the amount before the FIRST orphaned debit, not the lowest slash_action_index seen last');
+    });
+
+    it('leaves debits below the rollback height applied', function(){
+        const got = restoredCapabilityAmount(restores['stakes'], [
+            { slash_action_index: 400, prev_amount: '1200', amount: '200', block_index:  99 },
+            { slash_action_index: 500, prev_amount: '1000', amount: '300', block_index: 100 }
+        ]);
+        assert.strictEqual(got, '1000', 'a surviving debit stays applied; only the orphaned range reverts');
+    });
+
+    it('touches nothing when every debit survives the rollback', function(){
+        const got = restoredCapabilityAmount(restores['stakes'], [
+            { slash_action_index: 400, prev_amount: '1200', amount: '200', block_index: 98 },
+            { slash_action_index: 450, prev_amount: '1000', amount: '300', block_index: 99 }
+        ]);
+        assert.strictEqual(got, '700', 'no orphaned debit means no restore');
+    });
+
+    it('picks the same row deterministically when two orphaned debits carry the same prev_amount', function(){
+        const got = restoredCapabilityAmount(restores['stakes'], [
+            { slash_action_index: 501, prev_amount: '1000', amount: '300', block_index: 100 },
+            { slash_action_index: 500, prev_amount: '1000', amount: '1000', block_index: 100 }
         ]);
         assert.strictEqual(got, '1000');
     });

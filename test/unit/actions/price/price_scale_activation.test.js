@@ -34,6 +34,7 @@ const crypto = require('crypto');
 const sinon  = require('sinon');
 
 const { createMockIndexer, createBaseData } = require('../../../fixtures/mocks');
+const { getTestConfig } = require('../../../fixtures/config');
 
 const Price      = require('../../../../src/actions/price/index.js');
 const ed25519    = require('../../../../src/consensus/ed25519.js');
@@ -85,11 +86,19 @@ function sixRounds(price){
     return rounds;
 }
 
+// The network these batches are signed for: the mock indexer's own, read from the
+// config fixture so the signing key and the key batch_signatures.js verifies under
+// cannot be typed apart. Named rather than omitted because buildPriceBatchPayload
+// reads an absent fifth argument as the inert network and rebuilds the LEGACY
+// canonical silently, which would strand an admission-era batch behind a bogus
+// signature failure.
+const NETWORK = getTestConfig().NETWORK;
+
 function signBatch(rounds, identities){
     const firstRound     = rounds[0].round;
     const lastRound      = rounds[rounds.length - 1].round;
     const btcBlockHeight = rounds[rounds.length - 1].btcBlockHeight;
-    const payload = ed25519.buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds);
+    const payload = ed25519.buildPriceBatchPayload(firstRound, lastRound, btcBlockHeight, rounds, NETWORK);
     const sigs    = identities.map(id => ({ pubkey: id.pubkey, sig: signWith(id, payload) }));
     return { firstRound, lastRound, btcBlockHeight, rounds, sigs };
 }

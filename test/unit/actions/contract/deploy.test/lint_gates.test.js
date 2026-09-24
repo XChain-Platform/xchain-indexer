@@ -105,6 +105,35 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             assert.strictEqual(opts.enforceLintGlobalAlias, true, 'regtest is genesis-armed');
         });
     });
+
+    // banned-rest is the deploy half of REST_PATTERN_METER, resolved through
+    // protocolChanges for this deploy's block. validateSyntax reads an OMITTED flag as
+    // enforced, so a dropped leg would not crash: deploy would silently refuse a rest
+    // pattern that execute accepts. The gate table is stubbed here, so these pin the
+    // WIRING (flag present, resolved from that change, for this block), not the instant.
+    describe('REST_PATTERN_METER deploy-lint gate threading (banned-rest)', function () {
+        it('threads exactly the six enforce* flags validateSyntax reads', async function () {
+            const { opts } = await optsFor('regtest', 'BTC', 0);
+            assert.deepStrictEqual(Object.keys(opts).sort(), [
+                'enforceBannedAsync', 'enforceBannedGenerator', 'enforceBannedRest',
+                'enforceBannedWasm', 'enforceLintGlobalAlias', 'enforceLintHardening',
+            ], 'deploy lint-flag option set drifted; an omitted flag reads as enforced in validateSyntax');
+        });
+
+        it('below the flag day: enforceBannedRest OFF, contract still accepted', async function () {
+            actionsCtx.protocolChanges.isEnabled.withArgs('REST_PATTERN_METER', sinon.match.any).resolves(false);
+            const { data, opts } = await optsFor('mainnet', 'BTC', 900000);
+            assert.strictEqual(opts.enforceBannedRest, false);
+            assert.strictEqual(data['STATUS'], 'valid', 'below-gate deploy verdict must be unchanged (accepted)');
+            sinon.assert.calledWith(actionsCtx.protocolChanges.isEnabled, 'REST_PATTERN_METER', 900000);
+        });
+
+        it('at the flag day: enforceBannedRest ON', async function () {
+            actionsCtx.protocolChanges.isEnabled.withArgs('REST_PATTERN_METER', sinon.match.any).resolves(true);
+            const { opts } = await optsFor('mainnet', 'BTC', 900000);
+            assert.strictEqual(opts.enforceBannedRest, true);
+        });
+    });
 });
 
 describe('Deploy (DEPLOY) @regression @tier2', function () {

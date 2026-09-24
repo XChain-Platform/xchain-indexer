@@ -172,17 +172,30 @@ describe('policy apply: token-policy inheritance onto a bridged copy', function(
 
         it('is TERMINAL for a foreign network and for a foreign btc_chain_id', async function(){
             const keys = [makeKey(), makeKey(), makeKey()];
-            const foreignNet = await BS.applyPolicySnapshot(
-                makeSnapshot(keys, { row: { network: 'mainnet' } }), makeCtx({ validators: snapshotSet(keys) }).ctx);
-            assert.strictEqual(foreignNet.terminal, true);
-            assert.strictEqual(foreignNet.reason, BS.SETTLE_REASON.NETWORK);
+            const lines = [];
+            const origWarn = console.warn;
+            BS.resetRefusalMemo();
+            console.warn = (...a) => lines.push(a.join(' '));
+            try {
+                const foreignNet = await BS.applyPolicySnapshot(
+                    makeSnapshot(keys, { row: { network: 'mainnet' } }),
+                    makeCtx({ validators: snapshotSet(keys) }).ctx);
+                assert.strictEqual(foreignNet.terminal, true);
+                assert.strictEqual(foreignNet.reason, BS.SETTLE_REASON.NETWORK);
 
-            const c = makeCtx({ validators: snapshotSet(keys) });
-            c.ctx.config['BTC_CHAIN_ID'] = 'c'.repeat(64);
-            const foreignChain = await BS.applyPolicySnapshot(
-                makeSnapshot(keys, { row: { btc_chain_id: 'b'.repeat(64) } }), c.ctx);
-            assert.strictEqual(foreignChain.terminal, true);
-            assert.strictEqual(foreignChain.reason, BS.SETTLE_REASON.CHAIN_ID);
+                const c = makeCtx({ validators: snapshotSet(keys) });
+                c.ctx.config['BTC_CHAIN_ID'] = 'c'.repeat(64);
+                const foreignChain = await BS.applyPolicySnapshot(
+                    makeSnapshot(keys, { row: { btc_chain_id: 'b'.repeat(64) } }), c.ctx);
+                assert.strictEqual(foreignChain.terminal, true);
+                assert.strictEqual(foreignChain.reason, BS.SETTLE_REASON.CHAIN_ID);
+            } finally {
+                console.warn = origWarn;
+            }
+            assert.deepStrictEqual(lines, [
+                '\t XPOLICY : dddddddddddddddd... : ' + BS.SETTLE_REASON.NETWORK + ' : terminal',
+                '\t XPOLICY : dddddddddddddddd... : ' + BS.SETTLE_REASON.CHAIN_ID + ' : terminal'
+            ]);
         });
     });
 });

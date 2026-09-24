@@ -107,23 +107,29 @@ module.exports = {
 
     // Applied XPOLICY snapshot metadata for a tick on THIS chain (getappliedpolicy RPC,
     // token-bridge-policy spec section 6, D25): the highest policy_seq this chain has
-    // already MATERIALIZED, read as the join of the local idempotency record
-    // (bridge_settlements, kind='policy') against the mirrored policy_snapshots row it
-    // names. No row means no snapshot has applied here yet, which is not an error: a
-    // bridged copy can exist before its first snapshot lands (the in-leg barrier gates on
-    // it, the read does not).
-    async getAppliedPolicySnapshot(tick){
-        let rows = await this.doQuery(
-            `SELECT ps.policy_seq, ps.origin_block, ps.policy_hash
-             FROM
-                bridge_settlements bs
-                INNER JOIN policy_snapshots ps ON (ps.snapshot_id=bs.transfer_id)
-             WHERE
-                bs.kind='policy' AND ps.tick=? AND ps.network=?
-             ORDER BY
-                ps.policy_seq DESC, ps.id DESC
+    // already MATERIALIZED. bridge_settlements is local while policy_snapshots may live
+    // on a separate mirror connection, so the read first collects the locally applied ids
+    // for this native tick and then resolves their signed metadata through mirrorDb(). No
+    // row means no snapshot has applied here yet, which is not an error: a bridged copy can
+    // exist before its first snapshot lands (the in-leg barrier gates on it, the read does
+    // not).
+    async getAppliedPolicySnapshot(origin, tick){
+        let applied = await this.doQuery(
+            `SELECT bs.transfer_id
+             FROM bridge_settlements bs
+             WHERE bs.kind='policy' AND bs.tick=?`,
+            [String(tick)]);
+        if(applied.length === 0) return null;
+
+        let ids  = applied.map(row => row.transfer_id);
+        let rows = await this.mirrorDb().doQuery(
+            `SELECT policy_seq, origin_block, policy_hash
+             FROM policy_snapshots
+             WHERE network = ? AND origin_chain = ? AND tick = ?
+               AND snapshot_id IN (${ids.map(() => '?').join(',')})
+             ORDER BY policy_seq DESC, id DESC
              LIMIT 1`,
-            [String(tick), this.config['NETWORK']]);
+            [this.config['NETWORK'], String(origin), String(tick)].concat(ids));
         return (rows.length > 0) ? rows[0] : null;
     },
 

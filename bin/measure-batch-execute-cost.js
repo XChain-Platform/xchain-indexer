@@ -119,13 +119,11 @@
  * ------------------------------------------------------------------------------
  * FIDELITY: how the driven loop relates to production
  *
- * The block body here mirrors XChainIndexer.start()'s inner block body, and it
- * mirrors it more closely than test/integration's processBlocks() does, in one way
- * that matters for this measurement specifically: it calls `vm.beginBlock()` and
- * `vm.endBlock()` around the transaction loop. Production does; processBlocks()
- * does not. Those two calls own the per-block contract COMPILATION CACHE, so
- * omitting them would measure a cache that production clears at a different rhythm,
- * and the whole question here is whether per-execution VM cost amortizes across N.
+ * The block body here mirrors XChainIndexer.start()'s inner block body. It calls
+ * `vm.beginBlock()` before the transaction loop and `vm.endBlock()` after the
+ * post-transaction passes. Those calls bound the contract COMPILATION CACHE to one
+ * measured block, so executions within a block can amortize compilation while
+ * separate measured blocks cannot reuse compiled contracts.
  *
  * Deliberately absent, because none of it fires on this corpus and each would add
  * fixed per-block cost that the regression intercept absorbs anyway: the hub-sync

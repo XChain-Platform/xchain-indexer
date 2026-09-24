@@ -24,9 +24,9 @@ const { assert, crd, stubRegistryRow } = require('./helpers/consensus_rules_dige
 // the indexer's own instance of the same guard, so a one-sided edit here cannot pass by
 // running only on the other repo.
 describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', function () {
-    it('is sorted, has 33 entries, and contains the gates the last three trains append', function () {
+    it('is sorted, has 34 entries, and contains the gates the last three trains append', function () {
         const keys = crd.knownGateKeys();
-        assert.strictEqual(keys.length, 33, 'SHARED_GATES total entry count moved; re-derive this floor before changing it');
+        assert.strictEqual(keys.length, 34, 'SHARED_GATES total entry count moved; re-derive this floor before changing it');
         assert.deepStrictEqual(keys, [...keys].sort());
         for (const k of [
             'attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION',
@@ -49,7 +49,9 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
             'mirror_admission_activation.encodeAdmitBlocks',
             'mirror_admission_activation.decodeAdmitBlocks',
             'mirror_admission_activation.isAdmissionEra',
-            'mirror_admission_activation.admissionCanonicalField'
+            'mirror_admission_activation.admissionCanonicalField',
+            // The token leg gate both repos evaluate per bridge leg.
+            'token_bridge_activation.TOKEN_BRIDGE_ACTIVATION'
         ]) assert.ok(keys.includes(k), 'missing ' + k);
     });
 });
@@ -67,7 +69,7 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
     // the environment: a venue process launched armed has a different, equally correct digest,
     // and a pin that moved with a drill lever would be a test of the launcher. The pinned value
     // is the fleet's: every shipped process reads the unarmed maps.
-    it('digests to the pinned value, which moved when the v0.19.0 cut armed the bridge on testnet (and again at the 16:33Z ladder re-cut)', function () {
+    it('digests to the pinned value, which moved when the v0.19.0 cut armed the bridge on testnet (and again at the 16:33Z ladder re-cut, and again when LTC:testnet mirror admission shipped null under dq4 (a))', function () {
         // Every gate module still on disk, not just the admission one: the family's arming
         // lever is shared, so the anchor-attest gate resolves from the same variable and a
         // cached copy of it would keep a drill's heights in the digest after the variable
@@ -84,7 +86,7 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
             for (const [p] of saved) delete require.cache[p];
             const fresh = require('../../../../src/consensus_rules_digest.js');
             assert.strictEqual(fresh.computeConsensusRulesDigest().digest,
-                'ee6476f2445fe454b6b262e6f9dbea1b922bd31ba7eec55a6c7b30dbb513cf5e',
+                'f69861138e062d4feb1dc7f9975fd28284a1f297e7e8375e6d870c020f3d97fd',
                 'the consensus rules digest moved; a gate was added, removed, reordered or re-armed');
         } finally {
             for (const [p, mod] of saved) { if (mod === undefined) delete require.cache[p]; else require.cache[p] = mod; }
@@ -117,8 +119,9 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
         assert.deepStrictEqual(mods.slice(0, PRE_EXISTING.length), PRE_EXISTING,
             'a SHARED_GATES entry was inserted mid-list; that reorders the preimage of every gate after it');
         assert.deepStrictEqual(mods.slice(PRE_EXISTING.length),
-            ['mirror_admission_activation', 'anchor_reward_activation', 'mirror_admission_activation'],
-            'the family must be the LAST three entries, the encoder registration last of all');
+            ['mirror_admission_activation', 'anchor_reward_activation', 'mirror_admission_activation',
+                'token_bridge_activation'],
+            'the family must follow the bridge gate, the encoder registration last, then the token leg gate');
     });
 
     // The 2026-09-09 genesis-arm ruling left no SHIPPED gate on the far-future sentinel,
@@ -172,6 +175,35 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
 
     it('includes a gate exactly at its own activation height (<=, not <)', function () {
         assert.ok(crd.activeGatesAt(0, 'regtest').includes('attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION'));
+    });
+
+    it('resolves both admission maps by coin while a sibling slot stays on the sentinel', function () {
+        const CRD     = require.resolve('../../../../src/consensus_rules_digest.js');
+        const realCrd = require.cache[CRD];
+        const keys = [
+            'mirror_admission_activation.MIRROR_ADMISSION_ACTIVATION',
+            'mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION',
+        ];
+        for (const key of keys) {
+            const restore = stubRegistryRow(key, {
+                'BTC:testnet': 100,
+                'LTC:testnet': crd.FAR_FUTURE_HEIGHT_SENTINEL,
+                testnet:       crd.FAR_FUTURE_HEIGHT_SENTINEL,
+            });
+            try {
+                delete require.cache[CRD];
+                const fresh = require('../../../../src/consensus_rules_digest.js');
+                assert.ok(fresh.activeGatesAt(100, 'testnet', 'BTC').includes(key),
+                    key + ' must be active at its own coin\'s armed height');
+                assert.ok(!fresh.activeGatesAt(100, 'testnet', 'LTC').includes(key),
+                    key + ' must not inherit an armed sibling coin\'s height');
+                assert.ok(!fresh.activeGatesAt(crd.FAR_FUTURE_HEIGHT_SENTINEL, 'testnet', 'LTC').includes(key),
+                    key + ' sentinel slot must stay inactive however high the chain climbs');
+            } finally {
+                restore();
+                require.cache[CRD] = realCrd;
+            }
+        }
     });
 
     it('returns [] for a non-finite height', function () {

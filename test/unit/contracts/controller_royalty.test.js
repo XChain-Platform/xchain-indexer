@@ -22,7 +22,7 @@
  * legs → seller keeps everything). Pure (no DB/VM) so they run on any Node version. The
  * end-to-end match settlement is exercised on Node 22 / regtest.
  *
- * Spec: xchain-documentation/protocol/Controller_Bound_Tokens.md
+ * Spec: xchain-documentation/protocol/controller-bound-tokens.md
  ********************************************************************/
 
 const assert = require('assert');

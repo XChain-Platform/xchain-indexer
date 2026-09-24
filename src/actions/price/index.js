@@ -45,6 +45,9 @@
 const v0         = require('./v0.js');
 const batchSigs  = require('./batch_signatures.js');
 const v1         = require('./v1.js');
+// The trailing-data refusal is a new validity rule, so it arms on a flag day rather than
+// re-judging history: the mirror admission producer era, read on the batch's own anchor.
+const { isAdmissionEra } = require('../../consensus/gates/mirror_admission_gate.js');
 
 const { getLogger } = require('../../observability/index.js');
 class Price {
@@ -110,6 +113,31 @@ class Price {
         // Parse the batch's window bounds and round list from the wire fields
         let batch    = v0.parseBatchBody(this.config, data, inflated.fields, inflated.error);
         error        = batch.error;
+
+        // STRICT PARAMETER LENGTH. Nothing downstream checks whether the field list was
+        // consumed to its end, so a wire with junk appended after the last signature would
+        // otherwise parse identically to the same batch without it and land the same row
+        // under the same EQUIV key: two byte-distinct spellings of one batch under one
+        // equiv key is exactly the shape equivocation reasoning depends on being
+        // impossible. Computed from the counts parseBatchBody already resolved (rounds,
+        // pairs per round, admit-block presence, sig count), so this stays byte-exact with
+        // what was actually consumed and needs no second parse of the wire.
+        //
+        // HEIGHT-GATED. Every node through v0.20.0 accepted such a wire, so applying the
+        // refusal to a batch already on chain would turn a valid prices row and its hub
+        // push invalid on replay. It binds only a batch whose signed BTC anchor is in the
+        // mirror admission era (the BTC producer activation for this network), the flag day
+        // this train already carries; below it the leftover fields stay unread, as before.
+        if(!error && isAdmissionEra(this.config['NETWORK'], batch.btcBlockHeight)){
+            let expectedFields = 5;
+            for(let round of batch.rounds){
+                expectedFields += 4 + (2 * round.pairs.length);
+                if(round.admitBlocks !== undefined) expectedFields += 1;
+            }
+            expectedFields += 1 + (2 * batch.sigCount);
+            if(inflated.fields.length !== expectedFields)
+                error = 'invalid: trailing data after batch signatures';
+        }
 
         if(!error){
             let straddle = v0.checkBatchStraddle(this.config, batch.rounds);

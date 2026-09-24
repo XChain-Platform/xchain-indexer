@@ -178,7 +178,8 @@ const transportMethods = {
                     // it a frozen watermark is indistinguishable from a quiet hub.
                     this.noteHubTip(event.ts);
                     this.handleWatermarkFrame(event);
-                } else if (event.type === 'row:inserted' || event.type === 'row:deleted') {
+                } else if (event.type === 'row:inserted' || event.type === 'row:deleted' ||
+                           event.type === 'row:anchor-stamped') {
                     // Schema fail-closed check, price-event buffering
                     // (#2422), and the apply-and-refresh path all live
                     // in handleRowEvent (extracted for testability).

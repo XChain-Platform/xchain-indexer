@@ -94,17 +94,22 @@ const ATTEST_BATCH_MAX_CHUNKS = 256;
 const ATTEST_BATCH_MAX_INFLATE_RATIO = 150;
 
 /**
- * The per-row fields the batch carries, in canonical order: every
+ * The per-row fields a LEGACY batch carries, in canonical order: every
  * `attestation_responses` column except `id` (hub-local paging cursor),
- * `finalized_at` (hub wall clock, audit only) and `batch_action_index` (set by
- * the batch landing itself, so a batch cannot carry its own).
+ * `finalized_at` (hub wall clock, audit only), `batch_action_index` (set by
+ * the batch landing itself, so a batch cannot carry its own) and
+ * `admit_block_btc` (see the admission set below).
  *
  * Carrying `signatures` and `signer_pubkeys` is what makes a batch-fed node's
  * `attests` rows byte-identical to a mirror-fed node's: the per-row responsible
  * -set signatures ride the chain, not just the batch quorum's.
+ *
+ * This is the set every batch on chain below the mirror-admission producer
+ * activation was signed over and is still judged by, so it is frozen: adding a
+ * field here rewrites the signed bytes and the presence check of history.
  * @type {string[]}
  */
-const ATTEST_BATCH_ROW_FIELDS = [
+const ATTEST_BATCH_LEGACY_ROW_FIELDS = Object.freeze([
     'network',
     'request_id',
     'request_action_index',
@@ -118,7 +123,43 @@ const ATTEST_BATCH_ROW_FIELDS = [
     'signer_pubkeys',
     'signatures',
     'widen'
-];
+]);
+
+/**
+ * The per-row fields an ADMISSION-ERA batch carries: the legacy set plus the
+ * row's signed BTC admission height, placed after `effective_time`. A batch is in
+ * the admission era when its own signed `btc_block_height` is at or above the
+ * BTC mirror-admission producer activation for its network, the same flag day
+ * that arms the admit_block_* columns. primitives.js attestBatchRowFields is the
+ * one place that choice is made, and both the signed canonical and the
+ * reassembly presence check read it there.
+ * @type {string[]}
+ */
+const ATTEST_BATCH_ADMISSION_ROW_FIELDS = Object.freeze([
+    'network',
+    'request_id',
+    'request_action_index',
+    'request_block_index',
+    'provider_id',
+    'status',
+    'response_payload',
+    'response_hash',
+    'meta',
+    'effective_time',
+    'admit_block_btc',
+    'signer_pubkeys',
+    'signatures',
+    'widen'
+]);
+
+/**
+ * Every field either era's batch can carry: the admission set, which is a
+ * superset of the legacy one. For reading and projecting rows (a SELECT list, a
+ * row copy) and never for signing or checking a batch, which must take the
+ * era's own set from attestBatchRowFields.
+ * @type {string[]}
+ */
+const ATTEST_BATCH_ROW_FIELDS = ATTEST_BATCH_ADMISSION_ROW_FIELDS;
 
 /**
  * Failure reasons. STABLE STRINGS: they reach the chain inside the action's
@@ -161,6 +202,8 @@ module.exports = {
     ATTEST_BATCH_MAX_ROWS,
     ATTEST_BATCH_MAX_CHUNKS,
     ATTEST_BATCH_MAX_INFLATE_RATIO,
+    ATTEST_BATCH_LEGACY_ROW_FIELDS,
+    ATTEST_BATCH_ADMISSION_ROW_FIELDS,
     ATTEST_BATCH_ROW_FIELDS,
     FAIL,
     CANONICAL_BASE64,
