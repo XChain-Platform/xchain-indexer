@@ -158,6 +158,61 @@ async function reconcileDeclaredIndexes(dbConn, table, data) {
     }
 }
 
+// Parse declared columns in source order, retaining the full definition so an
+// added column keeps its declared DEFAULT.
+function parseDeclaredColumns(sql) {
+    const stripped = stripSqlLineComments(sql);
+    const m = stripped.match(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?\S+\s*\(([\s\S]+?)\)\s*ENGINE/i);
+    if (!m) return null;
+    const parts = m[1].split(/,(?![^()]*\))/g);
+    const columns = [];
+    for (const raw of parts) {
+        const line = raw.trim();
+        if (!line) continue;
+        if (/^(PRIMARY|UNIQUE|INDEX|KEY|CHECK|CONSTRAINT|FOREIGN)\b/i.test(line)) continue;
+        const tokens = line.split(/\s+/);
+        if (tokens.length < 2) continue;
+        const name     = tokens[0].replace(/`/g, '');
+        const notNull  = /\bNOT\s+NULL\b/i.test(line) || /\bPRIMARY\s+KEY\b/i.test(line) || /\bAUTO_INCREMENT\b/i.test(line);
+        const hasDefault = /\bDEFAULT\b/i.test(line);
+        columns.push({ name, definition: line, notNull, hasDefault });
+    }
+    return columns.length > 0 ? columns : null;
+}
+
+// Add missing columns using their declared definitions and source positions.
+// Existing columns are never modified or dropped.
+async function reconcileDeclaredColumns(dbConn, table, data) {
+    const declared = parseDeclaredColumns(data);
+    if (!declared) return;
+    const rows = await dbConn.doQuery(
+        'SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?', [table]);
+    const liveNames = new Set((rows || []).map((r) => String(r.COLUMN_NAME).toLowerCase()));
+    for (let i = 0; i < declared.length; i++) {
+        const col = declared[i];
+        if (liveNames.has(col.name.toLowerCase())) continue;
+        if (col.notNull && !col.hasDefault) {
+            getLogger().warn('ensureTables: column ' + col.name + ' missing on mirror table ' + table
+                + ' is NOT NULL with no DEFAULT in the twin; cannot backfill existing rows safely. Skipping; add manually.');
+            continue;
+        }
+        let anchor = null;
+        for (let j = i - 1; j >= 0 && !anchor; j--) {
+            if (liveNames.has(declared[j].name.toLowerCase())) anchor = declared[j].name;
+        }
+        const placement = anchor ? ' AFTER `' + anchor + '`' : ' FIRST';
+        const ddl = 'ALTER TABLE `' + table + '` ADD COLUMN ' + col.definition + placement;
+        try {
+            await dbConn.doQuery(ddl);
+            liveNames.add(col.name.toLowerCase());
+            getLogger().info('ensureTables: added missing column ' + col.name + ' on mirror table ' + table);
+        } catch (err) {
+            getLogger().warn('ensureTables: could not add column ' + col.name + ' on mirror table ' + table
+                + ' (' + (err && err.message) + '); continuing without it');
+        }
+    }
+}
+
 // Create the mirror tables from the vendored SQL twin files in sqlDir, for
 // consumers that (unlike the indexer, whose verifyTables() owns its schema)
 // have no table-creation machinery of their own, e.g. the explorer's embedded
@@ -189,8 +244,9 @@ async function ensureTables(dbConn, sqlDir) {
                 // retries (caught live in the keyed-feed drill 2026-07-06).
                 const existing = await dbConn.doQuery('SHOW TABLES LIKE ?', [table]);
                 if (existing && existing.length > 0) {
-                    // An existing table skipped the CREATE, so its index set is whatever
-                    // the twin declared when it was first built; converge it now.
+                    // Reconcile columns before indexes because a declared index may
+                    // reference a column added in this pass.
+                    await reconcileDeclaredColumns(dbConn, table, data);
                     await reconcileDeclaredIndexes(dbConn, table, data);
                     done = true;
                     break;
@@ -213,4 +269,4 @@ async function ensureTables(dbConn, sqlDir) {
     }
 }
 
-module.exports = { ensureTables, parseDeclaredIndexes, reconcileDeclaredIndexes };
+module.exports = { ensureTables, parseDeclaredIndexes, reconcileDeclaredIndexes, parseDeclaredColumns, reconcileDeclaredColumns };
