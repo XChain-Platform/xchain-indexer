@@ -178,7 +178,7 @@ if (require.main === module) {
     if (process.argv.includes('--side')) {
         runSide().catch((e) => { console.error('SIDE ERROR: ' + ((e && e.stack) || e)); process.exit(1); });
     } else {
-        runParent();
+        runParent(process.argv.slice(2));
     }
 }
 
@@ -382,9 +382,9 @@ function parseArgs(argv) {
     return o;
 }
 
-function createRunArtifacts() {
+function createRunArtifacts(keep = false) {
     return {
-        keep: false, workdir: null, ownsWorkdir: false, schemaNames: [], db: null,
+        keep: keep === true, workdir: null, ownsWorkdir: false, schemaNames: [], db: null,
         activeChild: null, activeChildDone: null, cleanupPromise: null, keptReported: false,
         interruptedSignal: null,
     };
@@ -508,11 +508,14 @@ function cleanupRunArtifacts(artifacts, deps = {}) {
                 artifacts.schemaNames.length = 0;
             } catch (e) { errors.push(e); }
         }
-        if (artifacts.ownsWorkdir && artifacts.workdir && fs.existsSync(artifacts.workdir)) {
+        if (artifacts.ownsWorkdir && artifacts.workdir) {
             try {
-                assertSafeOwnedWorkdir(artifacts.workdir);
-                fs.rmSync(artifacts.workdir, { recursive: true, force: true });
+                if (fs.existsSync(artifacts.workdir)) {
+                    assertSafeOwnedWorkdir(artifacts.workdir);
+                    fs.rmSync(artifacts.workdir, { recursive: true, force: true });
+                }
                 artifacts.workdir = null;
+                artifacts.ownsWorkdir = false;
             } catch (e) { errors.push(e); }
         }
         if (errors.length) throw new Error(errors.map((e) => e.message || String(e)).join('; '));
@@ -703,27 +706,32 @@ function installSignalHandlers(artifacts, emitter = process) {
     };
 }
 
-async function runParent() {
-    const artifacts = createRunArtifacts();
-    const removeSignalHandlers = installSignalHandlers(artifacts);
+async function runParent(argv) {
+    let artifacts = null;
+    let removeSignalHandlers = () => {};
     let code = EXIT.REFUSED;
     try {
-        code = await main(artifacts);
+        const o = parseArgs(argv);
+        artifacts = createRunArtifacts(o.keep);
+        removeSignalHandlers = installSignalHandlers(artifacts);
+        code = await main(artifacts, o);
     } catch (e) {
         if (e instanceof WitnessExit) code = e.code;
         else if (e instanceof InterruptedExit) code = EXIT.REFUSED;
         else console.error('ERR ' + ((e && e.stack) || e));
     } finally {
         try {
-            if (artifacts.interruptedSignal !== null) await stopActiveChild(artifacts);
-            await cleanupRunArtifacts(artifacts);
+            if (artifacts !== null) {
+                if (artifacts.interruptedSignal !== null) await stopActiveChild(artifacts);
+                await cleanupRunArtifacts(artifacts);
+            }
         } catch (e) {
             console.error('CLEANUP ERROR: ' + ((e && e.stack) || e));
             code = EXIT.REFUSED;
         }
     }
     removeSignalHandlers();
-    if (artifacts.interruptedSignal !== null)
+    if (artifacts !== null && artifacts.interruptedSignal !== null)
         code = artifacts.interruptedSignal === 'SIGINT' ? 130 : 143;
     process.exitCode = code;
 }
@@ -753,11 +761,9 @@ function provePreconditions(o, p) {
                'from-genesis replay of mainnet history is a different tool');
 }
 
-async function main(artifacts) {
-    const o = parseArgs(process.argv.slice(2));
+async function main(artifacts, o) {
     const p = explicitDbParams(o);
     const prefix = o.schemaPrefix || ('ma_witness_replay_' + o.coin.toLowerCase());
-    artifacts.keep = o.keep;
     artifacts.db = p;
     const workdir = createWorkdir(o.workdir, artifacts);
     const schemas = replaySchemaNames(prefix, o.sides);

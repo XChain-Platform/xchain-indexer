@@ -25,6 +25,48 @@ function fixture(network, changed, holdMs) {
     return value;
 }
 
+function realHistoryCorpus() {
+    const history = [
+        {
+            block_index: 67908224,
+            ledger: '26181a31aa23e7e93d819370d8920095b45553792615f738bb871845300ad1d4',
+            actions: 'a165ff7a30cdb559e6df78124118b0a047ba101628fd9946e9bfd79b9ecaaf9a',
+            contracts: 'ae10376be42286b97c94fe9ff466b9dbb15476df87d7cbdf3cb3ac6802b20759',
+            state: 'ac3e288a35862f1078e7a992bb8d945b080864a951d71bcee871801e009a8e61',
+        },
+        {
+            block_index: 67908225,
+            ledger: '7ae20a0fa6160c5dc7a2c720ac3e639e0fc39e565d613b9675dd1ca59f29a65f',
+            actions: 'f5ebb3de1d980a1df2f8aeb9a15db0bde3e76caaafd65d1fcf417ad91504e476',
+            contracts: '8f43744a03f656cd1e1e46839e9d24afdbf232f67598c76a1bfee62e86dcbd04',
+            state: '0f5d4bdc14a98e62ae4927ef53ec09406e815faba5c6deea7f962c2241b75e0f',
+        },
+        {
+            block_index: 67908226,
+            ledger: 'f0290ef03de330339902ca46d0adf1a2ab9cbe3cbdaa41d0ed2de2decfdaec5e',
+            actions: 'c03e91a279125b7007bbe51c3697ab4d6fedc209d7df48b0cd014e39f72c8c54',
+            contracts: 'f830e6d51973063af133b9deb20ca44e8906fde4065c142ada6e08ed9f7bc073',
+            state: '682f8522573a48a52e92dc51641b13d932c032b0b7d9af8a9299f2903c76c1b6',
+        },
+    ];
+    return {
+        format: witness.RESOLVED_CORPUS_FORMAT,
+        network: 'testnet',
+        capture: {
+            id: 'doge-testnet-list-1947-block-67908225',
+            source: 'indexer-history',
+            chain: 'DOGE',
+            network: 'testnet',
+            boundary_block: 67908225,
+            list_action_indexes: [1947],
+        },
+        sides: {
+            legacy: JSON.parse(JSON.stringify(history)),
+            off: JSON.parse(JSON.stringify(history)),
+        },
+    };
+}
+
 function writeFixture(directory, value) {
     const filename = path.join(directory, 'corpus.json');
     fs.writeFileSync(filename, JSON.stringify(value) + '\n');
@@ -126,6 +168,7 @@ describe('LIST owner replay witness: success and retention', function () {
             const result = runTool(args);
             assert.strictEqual(result.status, witness.EXIT.PASS, result.stdout + result.stderr);
             assert.match(result.stdout, /PASS: LEGACY and OFF are hash-identical across 2 below-the-flag blocks/);
+            assert.match(result.stdout, /SYNTHETIC: raw record corpus is not indexer-history evidence/);
             assert.strictEqual(fs.existsSync(workdir), keep);
             fs.rmSync(parent, { recursive: true, force: true });
         });
@@ -146,6 +189,72 @@ describe('LIST owner replay witness: success and retention', function () {
         fs.copyFileSync(original, corpus);
         const restored = spawnSync('cmp', [original, corpus], { encoding: 'utf8' });
         assert.strictEqual(restored.status, 0, restored.stdout + restored.stderr);
+        fs.rmSync(parent, { recursive: true, force: true });
+    });
+
+    it('passes the pinned two-sided corpus captured at a real LIST history boundary', function () {
+        const parent = temporaryDirectory('real-history');
+        const corpus = writeFixture(parent, realHistoryCorpus());
+        const replay = witness.readCorpusFile(corpus, 'testnet', witness.gateValues().testnet);
+        assert.deepStrictEqual(replay.fields, witness.HASH_FIELDS);
+        assert.strictEqual(replay.capture.chain, 'DOGE');
+        assert.strictEqual(replay.capture.boundary_block, 67908225);
+        const result = runTool(['--network', 'testnet', '--corpus-file', corpus,
+            '--workdir', path.join(parent, 'work')]);
+        assert.strictEqual(result.status, witness.EXIT.PASS, result.stdout + result.stderr);
+        assert.match(result.stdout, /hash-identical across 3 below-the-flag blocks/);
+        assert.match(result.stdout, /verified pinned indexer-history capture doge-testnet-list-1947-block-67908225/);
+        fs.rmSync(parent, { recursive: true, force: true });
+    });
+
+    it('refuses arbitrary duplicated hashes relabeled as the real history capture', function () {
+        const parent = temporaryDirectory('fake-history');
+        const value = realHistoryCorpus();
+        for (const side of ['legacy', 'off']) {
+            for (const record of value.sides[side]) {
+                for (const field of witness.HASH_FIELDS) record[field] = 'a'.repeat(64);
+            }
+        }
+        const corpus = writeFixture(parent, value);
+        const result = runTool(['--network', 'testnet', '--corpus-file', corpus,
+            '--workdir', path.join(parent, 'work')]);
+        assert.strictEqual(result.status, witness.EXIT.REFUSED, result.stdout + result.stderr);
+        assert.match(result.stdout, /does not match pinned indexer-history digest/);
+        fs.rmSync(parent, { recursive: true, force: true });
+    });
+
+    it('refuses history capture metadata on the unauthenticated raw format', function () {
+        const parent = temporaryDirectory('raw-history-label');
+        const value = fixture('testnet', false);
+        value.capture = realHistoryCorpus().capture;
+        const corpus = writeFixture(parent, value);
+        const result = runTool(['--network', 'testnet', '--corpus-file', corpus,
+            '--workdir', path.join(parent, 'work')]);
+        assert.strictEqual(result.status, witness.EXIT.REFUSED, result.stdout + result.stderr);
+        assert.match(result.stdout, /capture metadata requires format resolved-four-hash-v1/);
+        fs.rmSync(parent, { recursive: true, force: true });
+    });
+
+    it('finds the exact changed commitment after loading the authenticated history corpus', function () {
+        const parent = temporaryDirectory('real-history-mismatch');
+        const corpus = writeFixture(parent, realHistoryCorpus());
+        const replay = witness.readCorpusFile(corpus, 'testnet', witness.gateValues().testnet);
+        replay.off[1].state = '1' + replay.off[1].state.slice(1);
+        const divergence = witness.firstDivergence(replay.legacy, replay.off, replay.fields);
+        assert.strictEqual(divergence.block, 67908225);
+        assert.strictEqual(divergence.field, 'state');
+        fs.rmSync(parent, { recursive: true, force: true });
+    });
+
+    it('refuses metadata that moves the pinned history boundary', function () {
+        const parent = temporaryDirectory('real-history-refusal');
+        const value = realHistoryCorpus();
+        value.capture.boundary_block = 67908227;
+        const corpus = writeFixture(parent, value);
+        const result = runTool(['--network', 'testnet', '--corpus-file', corpus,
+            '--workdir', path.join(parent, 'work')]);
+        assert.strictEqual(result.status, witness.EXIT.REFUSED, result.stdout + result.stderr);
+        assert.match(result.stdout, /has untrusted boundary_block/);
         fs.rmSync(parent, { recursive: true, force: true });
     });
 

@@ -270,7 +270,7 @@ describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
     });
 });
 
-// The rest of the suite lives in tier2_balance_mutations.test/. test:mutation globs only the top
+// The rest of the suite lives in tier2_balance_mutations.test/. test:guard-dependencies globs only the top
 // level of suites/, so this file loads each part itself and every title stays
 // collected under this file.
 require('./tier2_balance_mutations.test/returns_and_sql_filters.test.js');

@@ -13233,7 +13233,7 @@
         "test:e2e",
         "test:smoke",
         "test:chaos",
-        "test:mutation",
+        "test:guard-dependencies",
         "test:fuzz:quick"
       ]
     },
@@ -14181,7 +14181,7 @@
         "test/integration/schema_isolation.test.js": "7f87cdd50704d954"
       }
     },
-    "test:mutation": {
+    "test:guard-dependencies": {
       "fileCount": 5,
       "titleCount": 125,
       "files": {
@@ -14192,7 +14192,7 @@
         "test/mutation/suites/tier2_state_mutations.test.js": "8bb74067ba0602a4"
       }
     },
-    "test:mutation:report": {
+    "test:guard-dependencies:report": {
       "fileCount": 5,
       "titleCount": 125,
       "files": {
@@ -14203,7 +14203,7 @@
         "test/mutation/suites/tier2_state_mutations.test.js": "8bb74067ba0602a4"
       }
     },
-    "test:mutation:tier1": {
+    "test:guard-dependencies:tier1": {
       "fileCount": 3,
       "titleCount": 96,
       "files": {
@@ -14217,7 +14217,7 @@
         "check:consensus-time",
         "test",
         "test:chaos",
-        "test:mutation",
+        "test:guard-dependencies",
         "test:fuzz:quick"
       ]
     },

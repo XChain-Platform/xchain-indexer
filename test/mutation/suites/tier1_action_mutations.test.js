@@ -230,7 +230,7 @@ describe('Mutation : Tier 1: Send Handler @tier1', function () {
     });
 });
 
-// The rest of the suite lives in tier1_action_mutations.test/. test:mutation globs only the top
+// The rest of the suite lives in tier1_action_mutations.test/. test:guard-dependencies globs only the top
 // level of suites/, so this file loads each part itself and every title stays
 // collected under this file.
 require('./tier1_action_mutations.test/send_value_mutations.test.js');
