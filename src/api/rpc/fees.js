@@ -22,6 +22,20 @@
 
 const { getLogger } = require('../../observability/index.js');
 
+const hasOwn = (object, property) => Object.prototype.hasOwnProperty.call(object, property);
+
+// A fee quote may still be resolving the tip time when rollback clears the block loop's
+// memos. Fail closed unless the API view owns distinct memo objects, otherwise the late
+// read can refill an inherited consensus cache with data from the orphaned chain.
+function timeMemoIsolatedApiView(db){
+    let view = db.apiView();
+    for(const property of ['_blockTimeCache', '_protocolTimeCache']){
+        if(hasOwn(db, property) && (!hasOwn(view, property) || view[property] === db[property]))
+            throw new Error('API database view does not isolate ' + property);
+    }
+    return view;
+}
+
 // The opt-in dry-run is decided here, once per boot, from the ENABLE_DRYRUN flag
 // src/api.js derives; see that flag's note for why the method is gated at all.
 function buildFeesRpc(ctx){
@@ -101,7 +115,7 @@ function oracleFeeQuoteRpc({ indexer }){
             if(!indexer.indexerDb || !indexer.util)
                 return { error: 'indexer not ready' };
             try {
-                let db = indexer.indexerDb.apiView();
+                let db = timeMemoIsolatedApiView(indexer.indexerDb);
                 let ts = Number(blockTime);
                 if(!Number.isFinite(ts) || ts <= 0){
                     let tip = await db.getLatestBlockIndex();

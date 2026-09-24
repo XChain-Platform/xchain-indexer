@@ -1,6 +1,8 @@
-# Pinned to node:22-bookworm: xchain-vm's isolated-vm native build fails
-# against Node 26+ V8 headers (same Node-version pin as xchain-utxo-tracker).
-FROM node:22-bookworm
+# Pinned by digest, not by the floating node:22-bookworm tag, to the exact
+# image whose V8/ICU build matches xchain-vm's consensus runtime pin: a
+# floating tag can advance to a Node patch that fails that check (same
+# Node-version pin as xchain-utxo-tracker).
+FROM node:22.23.2-bookworm@sha256:dd5847a04b0deee391fa145f1f4c6d214196668b6bcc7988ebed67249f226844
 
 RUN mkdir /XChainIndexer/
 # xchain-vm is staged into the build context by xchain-node's install path

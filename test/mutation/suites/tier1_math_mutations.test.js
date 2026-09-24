@@ -362,7 +362,7 @@ describe('Mutation: Tier 1: Math Functions @tier1', function () {
     });
 });
 
-// The rest of the suite lives in tier1_math_mutations.test/. test:mutation globs only the top
+// The rest of the suite lives in tier1_math_mutations.test/. test:guard-dependencies globs only the top
 // level of suites/, so this file loads each part itself and every title stays
 // collected under this file.
 require('./tier1_math_mutations.test/reorder_return_error.test.js');

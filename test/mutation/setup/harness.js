@@ -11,11 +11,16 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Mutation Testing Harness: engine, operator factories, and reporter
+ * Guard-Dependency Harness: engine, operator factories, and reporter
  *
  * Provides runtime mutation operators that apply sinon stubs to swap,
- * negate, or remove logic in the production code. Each mutation test
- * verifies the existing test suite would detect the introduced defect.
+ * negate, or remove logic in the production code. Each guard-dependency
+ * test verifies the existing test suite would detect the introduced defect.
+ *
+ * The reported "score" is a kill rate over this harness's own hand-written
+ * stub set, not a mutation score: it says nothing about the mutants a real
+ * mutation-testing tool would generate from the source AST, so it cannot be
+ * compared against one.
  */
 
 process.env.INDEXER_COIN = 'BTC';

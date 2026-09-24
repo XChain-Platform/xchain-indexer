@@ -21,15 +21,18 @@
  * Regtest is refused by name. Its gate is active at height zero, so its entire
  * corpus is above the flag and cannot prove below-the-flag replay identity.
  *
- * A JSON corpus file is also accepted for offline drives and unit tests. It has
- * this shape:
+ * A JSON corpus file is also accepted for offline drives and unit tests. A raw
+ * record corpus has this shape:
  *
  *   {"network":"testnet","sides":{"legacy":[records],"off":[records]}}
  *
  * Each record needs a nonnegative integer block_index. The remaining fields are
  * canonicalized and folded into a SHA-256 chain independently for each side.
- * This mode is useful for archived two-sided replay output and falsification. A
- * database corpus uses the production indexer and its resolved four-hash chain.
+ * This mode is synthetic and is not accepted as indexer-history evidence.
+ * Archived indexer output instead names format "resolved-four-hash-v1" and a
+ * pinned capture id. The tool verifies the capture metadata and content digest
+ * before comparing its ledger, actions, contracts and state commitments. A
+ * database corpus uses the production indexer and the same four-hash chain.
  *
  * USAGE
  *   node bin/verify-list-owner-replay-equivalence.js \
@@ -57,8 +60,20 @@ const REPO = path.resolve(__dirname, '..');
 const GATE = 'list_owner_activation.LIST_OWNER_ACTIVATION';
 const SIDE_MARK = '###LIST-OWNER-SIDE###';
 const HASH_FIELDS = ['ledger', 'actions', 'contracts', 'state'];
+const RESOLVED_CORPUS_FORMAT = 'resolved-four-hash-v1';
 const EXIT = Object.freeze({ PASS: 0, FAIL: 1, REFUSED: 2, VACUOUS: 3, USAGE: 64 });
 const SCHEMA_NAME = /^[A-Za-z0-9_]+$/;
+const HASH_HEX = /^[0-9a-f]{64}$/;
+const TRUSTED_HISTORY_CAPTURES = Object.freeze({
+    'doge-testnet-list-1947-block-67908225': Object.freeze({
+        source: 'indexer-history',
+        chain: 'DOGE',
+        network: 'testnet',
+        boundary_block: 67908225,
+        list_action_indexes: Object.freeze([1947]),
+        sha256: '61e46aa0146b5c0c558ebf155cbb708e5c060aa871528121f8e99ab89a3b8a20',
+    }),
+});
 
 class NamedRefusal extends Error {}
 
@@ -156,6 +171,70 @@ function buildHashChain(records) {
     });
 }
 
+function resolvedHashChain(records, side) {
+    if (!Array.isArray(records)) throw new NamedRefusal('corpus side ' + side + ' must be an array of records');
+    let previous = -1;
+    return records.map((record, position) => {
+        if (!record || !Number.isSafeInteger(record.block_index) || record.block_index < 0)
+            throw new NamedRefusal('corpus side ' + side + ' record ' + position +
+                ' needs a nonnegative integer block_index');
+        if (record.block_index <= previous)
+            throw new NamedRefusal('corpus side ' + side + ' block indexes must be strictly increasing');
+        previous = record.block_index;
+        const output = { block_index: record.block_index };
+        for (const field of HASH_FIELDS) {
+            if (!HASH_HEX.test(String(record[field] || '')))
+                throw new NamedRefusal('corpus side ' + side + ' block ' + record.block_index +
+                    ' needs a lowercase 64-hex ' + field + ' hash');
+            output[field] = record[field];
+        }
+        return output;
+    });
+}
+
+function historyCaptureDigest(network, capture, legacy, off) {
+    const payload = {
+        format: RESOLVED_CORPUS_FORMAT,
+        network,
+        capture: {
+            id: capture.id,
+            source: capture.source,
+            chain: capture.chain,
+            network: capture.network,
+            boundary_block: capture.boundary_block,
+            list_action_indexes: capture.list_action_indexes,
+        },
+        sides: { legacy, off },
+    };
+    return crypto.createHash('sha256').update(canonicalJson(payload)).digest('hex');
+}
+
+function validateHistoryCapture(capture, network, legacy, off) {
+    if (!capture || typeof capture.id !== 'string')
+        throw new NamedRefusal(RESOLVED_CORPUS_FORMAT + ' requires a pinned capture.id');
+    const trusted = TRUSTED_HISTORY_CAPTURES[capture.id];
+    if (!trusted)
+        throw new NamedRefusal('capture id ' + JSON.stringify(capture.id) + ' is not pinned as indexer history');
+    for (const field of ['source', 'chain', 'network', 'boundary_block']) {
+        if (capture[field] !== trusted[field])
+            throw new NamedRefusal('capture ' + capture.id + ' has untrusted ' + field);
+    }
+    if (canonicalJson(capture.list_action_indexes) !== canonicalJson(trusted.list_action_indexes))
+        throw new NamedRefusal('capture ' + capture.id + ' has untrusted list_action_indexes');
+    if (capture.network !== network)
+        throw new NamedRefusal('capture network ' + JSON.stringify(capture.network) +
+            ' does not match corpus network ' + network);
+    for (const [side, chain] of [['legacy', legacy], ['off', off]]) {
+        if (!chain.some((record) => record.block_index === capture.boundary_block))
+            throw new NamedRefusal('corpus side ' + side + ' does not include capture boundary block ' +
+                capture.boundary_block);
+    }
+    const digest = historyCaptureDigest(network, capture, legacy, off);
+    if (digest !== trusted.sha256)
+        throw new NamedRefusal('capture ' + capture.id + ' content digest ' + digest +
+            ' does not match pinned indexer-history digest');
+}
+
 function firstDivergence(chainA, chainB, fields) {
     const comparedFields = fields || ['hash'];
     const length = Math.min(chainA.length, chainB.length);
@@ -184,13 +263,30 @@ function readCorpusFile(filename, expectedNetwork, activationHeight) {
         throw new NamedRefusal('corpus network ' + JSON.stringify(corpus.network) +
             ' does not match --network ' + expectedNetwork);
     const sides = corpus.sides || {};
-    const legacy = buildHashChain(sides.legacy);
-    const off = buildHashChain(sides.off);
+    let legacy;
+    let off;
+    let fields;
+    let capture = null;
+    if (corpus.format === RESOLVED_CORPUS_FORMAT) {
+        legacy = resolvedHashChain(sides.legacy, 'legacy');
+        off = resolvedHashChain(sides.off, 'off');
+        fields = HASH_FIELDS;
+        validateHistoryCapture(corpus.capture, corpus.network, legacy, off);
+        capture = corpus.capture;
+    } else {
+        if (corpus.format)
+            throw new NamedRefusal('unknown corpus format ' + JSON.stringify(corpus.format));
+        if (corpus.capture)
+            throw new NamedRefusal('capture metadata requires format ' + RESOLVED_CORPUS_FORMAT);
+        legacy = buildHashChain(sides.legacy);
+        off = buildHashChain(sides.off);
+        fields = ['hash'];
+    }
     for (const item of legacy.concat(off)) {
         if (item.block_index >= activationHeight)
             throw new NamedRefusal('corpus block ' + item.block_index + ' is not below activation height ' + activationHeight);
     }
-    return { legacy, off, holdMs: Number(corpus._hold_ms || 0) };
+    return { legacy, off, fields, capture, holdMs: Number(corpus._hold_ms || 0) };
 }
 
 function rollBackListOwner(source) {
@@ -352,8 +448,9 @@ async function runFileCorpus(options, gates) {
         await wait(replay.holdMs);
     }
     if (replay.legacy.length === 0) return { code: EXIT.VACUOUS, blocks: 0, divergence: null };
-    const divergence = firstDivergence(replay.legacy, replay.off, ['hash']);
-    return { code: divergence ? EXIT.FAIL : EXIT.PASS, blocks: replay.legacy.length, divergence };
+    const divergence = firstDivergence(replay.legacy, replay.off, replay.fields);
+    return { code: divergence ? EXIT.FAIL : EXIT.PASS, blocks: replay.legacy.length,
+             divergence, capture: replay.capture };
 }
 
 async function runDatabaseCorpus(options, state, gates) {
@@ -421,6 +518,8 @@ async function runCli() {
         const result = options.corpusFile ? await runFileCorpus(options, gates) : await runDatabaseCorpus(options, state, gates);
         if (result.code === EXIT.PASS) {
             console.log('PASS: LEGACY and OFF are hash-identical across ' + result.blocks + ' below-the-flag blocks');
+            if (result.capture) console.log('HISTORY: verified pinned indexer-history capture ' + result.capture.id);
+            else if (options.corpusFile) console.log('SYNTHETIC: raw record corpus is not indexer-history evidence');
         } else if (result.code === EXIT.FAIL) {
             console.log('MISMATCH: first divergence at block ' + result.divergence.block + ' on ' + result.divergence.field +
                 ': legacy=' + result.divergence.legacy + ' off=' + result.divergence.off);
@@ -442,6 +541,8 @@ async function runCli() {
 }
 
 module.exports = {
-    EXIT, GATE, HASH_FIELDS, parseArgs, gateValues, validateOptions, canonicalJson,
-    buildHashChain, firstDivergence, readCorpusFile, rollBackListOwner, cleanupState,
+    EXIT, GATE, HASH_FIELDS, RESOLVED_CORPUS_FORMAT, TRUSTED_HISTORY_CAPTURES,
+    parseArgs, gateValues, validateOptions, canonicalJson, buildHashChain, resolvedHashChain,
+    historyCaptureDigest, validateHistoryCapture, firstDivergence, readCorpusFile,
+    rollBackListOwner, cleanupState,
 };

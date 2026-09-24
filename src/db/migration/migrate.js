@@ -24,17 +24,22 @@
  *
  *   node src/db/migration/migrate.js                   # or: npm run migrate
  *   node src/db/migration/migrate.js --file <name.sql> # scope the run to named file(s)
+ *   node src/db/migration/migrate.js --status [--json] # read-only: report, apply nothing
  *
  * Any argument this CLI does not recognize is REFUSED with the usage text and
  * exit 2. It is never ignored: a no-argument run means APPLY EVERYTHING, so an
  * ignored token (a typo, `--dry-run`, `--help`) would silently apply every
- * pending manual migration the operator was only asking about.
+ * pending manual migration the operator was only asking about. `--status`
+ * exists for the same reason: before it shipped, the only way to see what a
+ * blanket run would touch was to run it.
  *
  * Reads INDEXER_DB_* from the service environment (.env). Run with the indexer
  * process stopped if a pending migration's header says so.
  *
  ********************************************************************/
 
+const fs       = require('fs');
+const path     = require('path');
 const dotenv   = require('dotenv');
 dotenv.config();
 
@@ -54,6 +59,9 @@ const USAGE = [
     '                         Manual migrations are the destructive / backfill ones.',
     '  --file, -f <name.sql>  APPLY ONE. Runs only the named migration file(s).',
     '                         Repeat the flag or comma-separate to name several.',
+    '  --status               READ-ONLY. Reports which migrations are applied vs',
+    '                         pending against INDEXER_DB_NAME. Applies nothing.',
+    '  --status --json        Same report, as JSON on stdout.',
     '  --help, -h             Print this usage and exit 0. Touches no database.',
     '',
     'Reads INDEXER_DB_HOST / INDEXER_DB_PORT / INDEXER_DB_NAME / INDEXER_DB_USER /',
@@ -70,11 +78,14 @@ function refuse(message){
     return null;
 }
 
-// Parse `--file <name>` / `--file=<name>` / `-f <name>` occurrences into a list of
-// migration filenames. Values may be comma-separated. [] means no targeting flag
-// (the apply-everything default); null means refused or served, so main() must stop.
-function parseFileTargets(argv){
+// Parse the full argv into { only, status, json }. `only` holds `--file <name>` /
+// `--file=<name>` / `-f <name>` occurrences (values may be comma-separated); []
+// means no targeting flag (the apply-everything default). Returns null when the
+// request was already refused or served (--help), so main() must stop.
+function parseArgs(argv){
     const targets = [];
+    let status = false;
+    let json   = false;
     const push = (v) => {
         for(const part of String(v).split(',')){
             const name = part.trim();
@@ -90,6 +101,8 @@ function parseFileTargets(argv){
             process.exit(0);
             return null;  // (unreachable when exit is real; keeps a stubbed exit from applying)
         }
+        if(a === '--status'){ status = true; continue; }
+        if(a === '--json'){ json = true; continue; }
         const named = targets.length;
         if(a === '--file' || a === '-f'){
             const v = argv[i + 1];
@@ -112,14 +125,72 @@ function parseFileTargets(argv){
             return refuse(a + ' names no migration file.');
         }
     }
-    return targets;
+    if(json && !status) return refuse('--json only means something alongside --status.');
+    if(status && targets.length) return refuse('--status cannot be combined with --file/-f.');
+    return { only: targets, status, json };
+}
+
+// Migration source directory, resolved the same way runMigrations resolves it
+// (src/db/database/../../sql/migrations); migrate.js sits one directory over, at
+// src/db/migration/, but two levels up lands in the same place.
+const MIGRATIONS_DIR = path.join(__dirname, '..', '..', 'sql', 'migrations');
+
+// The applied-migration ledger, read-only. A missing schema_migrations table (a
+// database no run has ever touched) is not an error here: it just means nothing
+// is applied yet, same as runMigrations' own dir-missing case.
+async function readAppliedLedger(db){
+    const conn = await db.getConnection();
+    try {
+        const rows = await conn.query('SELECT name, mode, applied_at FROM schema_migrations');
+        return new Map(rows.map(r => [r.name, { mode: r.mode, appliedAt: r.applied_at }]));
+    } catch(err){
+        if(err && (err.errno === 1146 || err.code === 'ER_NO_SUCH_TABLE')) return new Map();
+        throw err;
+    } finally {
+        try { await conn.release(); } catch(_){}
+    }
+}
+
+// `--status`: report applied vs. pending against the live ledger without ever
+// opening the migration lock or running a statement.
+async function reportStatus(db, dbName, json){
+    let files;
+    try { files = fs.readdirSync(MIGRATIONS_DIR).filter(f => f.endsWith('.sql')).sort(); }
+    catch(_){ files = []; }
+
+    const applied = await readAppliedLedger(db);
+    const rows = files.map(file => {
+        const record = applied.get(file);
+        return record
+            ? { file, applied: true, mode: record.mode, appliedAt: record.appliedAt }
+            : { file, applied: false, mode: db.migrationMode(fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8')), appliedAt: null };
+    });
+    const pendingCount = rows.filter(r => !r.applied).length;
+
+    if(json){
+        console.log(JSON.stringify({
+            database: dbName,
+            total: rows.length,
+            applied: rows.length - pendingCount,
+            pending: pendingCount,
+            migrations: rows,
+        }, null, 2));
+        return;
+    }
+
+    console.log('migrate: status for ' + dbName + ' (read-only; nothing applied)');
+    for(const r of rows){
+        console.log('  [' + (r.applied ? 'applied' : 'PENDING') + ', mode=' + r.mode + '] ' + r.file +
+            (r.applied && r.appliedAt ? ' (applied_at=' + r.appliedAt + ')' : ''));
+    }
+    console.log('migrate: ' + rows.length + ' migration(s), ' + (rows.length - pendingCount) + ' applied, ' + pendingCount + ' pending.');
 }
 
 async function main(){
     // Argv is settled first so `--help` answers without a loaded .env, and so a
     // refused argument never reaches the database checks below.
-    const only = parseFileTargets(process.argv.slice(2));
-    if(only === null) return;
+    const parsed = parseArgs(process.argv.slice(2));
+    if(parsed === null) return;
 
     const host = CONFIG_ENV.INDEXER_DB_HOST;
     const port = CONFIG_ENV.INDEXER_DB_PORT;
@@ -137,11 +208,23 @@ async function main(){
     const indexerLike = { config: cfg, util: new Utility(cfg) };
     const db = new Database(host, port, name, user, pass, indexerLike);
 
+    if(parsed.status){
+        try {
+            await reportStatus(db, name, parsed.json);
+        } catch(err){
+            console.error('migrate: STATUS FAILED: ' + ((err && err.stack) || err));
+            process.exitCode = 1;
+        } finally {
+            try { if(db.pool) await db.pool.end(); } catch(_){}
+        }
+        return;
+    }
+
     try {
         const runOpts = { includeManual: true };
-        if(only.length){
-            runOpts.only = only;
-            console.log('migrate: applying ONLY targeted migration(s) ' + JSON.stringify(only) + ' to ' + name + ' ...');
+        if(parsed.only.length){
+            runOpts.only = parsed.only;
+            console.log('migrate: applying ONLY targeted migration(s) ' + JSON.stringify(parsed.only) + ' to ' + name + ' ...');
         } else {
             console.log('migrate: applying pending migrations (auto + manual) to ' + name + ' ...');
         }
