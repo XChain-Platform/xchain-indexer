@@ -62,6 +62,7 @@ const M = require('../../../src/consensus/merkle.js');
 const GLOBAL_COLUMN_EXCLUSIONS = ['created_at', 'created', 'updated', 'logged_at'];
 const TABLE_COLUMN_EXCLUSIONS = {
     events: ['time'],
+    schema_migrations: ['applied_at'],
     // computed_at defaults to CURRENT_TIMESTAMP. The sync snapshot refuses to ship it
     // as per-node wall clock, and the follower's commitment check compares only the
     // roots at a height (balances_root, block_merkle_root, state_root).
