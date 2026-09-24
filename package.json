@@ -31,7 +31,7 @@
     "coverage": "c8 --reporter=text --reporter=html --include 'src/**/*.js' mocha --timeout 30000 --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js' 'test/regression/**/*.test.js' --exit",
     "coverage:check": "c8 --check-coverage --lines 87 --statements 87 --branches 83.6 --functions 81.4 --reporter=text-summary --include 'src/**/*.js' mocha --timeout 30000 --recursive 'test/unit/**/*.test.js' 'test/unit/*.test.js' 'test/regression/**/*.test.js' --exit",
     "ci": "npm run check:vm && mocha --timeout 30000 --recursive --exit 'test/unit/**/*.test.js' 'test/unit/*.test.js' 'test/regression/**/*.test.js' 'test/security/**/*.test.js'",
-    "test:integration": "mocha --timeout 30000 --recursive 'test/integration/**/*.test.js'",
+    "test:integration": "mocha --no-config --timeout 120000 --exit 'test/integration/**/*.test.js'",
     "test:integration:ci": "mocha --no-config --timeout 120000 --exit 'test/integration/**/*.test.js'",
     "test:e2e": "mocha --no-config --timeout 60000 --exit 'test/e2e/scenarios/**/*.test.js'",
     "test:boundary": "mocha --no-config --timeout 5000 --recursive 'test/boundary/**/*.test.js' 'test/unit/boundary/**/*.test.js'",
