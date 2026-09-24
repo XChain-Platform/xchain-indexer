@@ -25,6 +25,8 @@
  *
  * Run manually and commit the output:
  *   node test/fixtures/gen-merkle-vectors.js
+ * Verify the committed JSON is current without writing (exits 1 on drift):
+ *   node test/fixtures/gen-merkle-vectors.js --check
  *
  ********************************************************************/
 
@@ -181,7 +183,16 @@ function main(){
     };
 
     const dest = path.join(__dirname, 'merkle-vectors.json');
-    fs.writeFileSync(dest, JSON.stringify(out, null, 2) + '\n');
+    const body = JSON.stringify(out, null, 2) + '\n';
+    if(process.argv.includes('--check')){
+        if(fs.readFileSync(dest, 'utf8') !== body){
+            console.error('merkle-vectors.json is stale: rerun node test/fixtures/gen-merkle-vectors.js and commit');
+            process.exit(1);
+        }
+        console.log('merkle-vectors.json is current');
+        return;
+    }
+    fs.writeFileSync(dest, body);
     console.log('wrote ' + dest);
     console.log('balances_root:     ' + balances_root);
     console.log('stakes_root:       ' + stakes_root);

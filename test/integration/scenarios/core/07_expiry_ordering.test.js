@@ -71,21 +71,6 @@ async function seedPendingObligations(db) {
     }
 }
 
-before(async function () {
-    // Match the tier's --timeout: a slow CI runner's MariaDB took over 30s to create
-    // the 135 indexer tables, and a timed-out root hook tears the schema down mid-build.
-    this.timeout(120000);
-    await createDatabases(__filename);
-    await resetIndexerDb();
-    indexer = await initIndexer();
-});
-
-after(async function () {
-    await destroyIndexer(indexer);
-    await destroyFileIndexers(__filename);
-    await closeAll();
-});
-
 function registerExpiryOrderingTests() {
     it('getExpiredCoinpayObligations returns same-block expirations in ascending action_index order', async function () {
         const db = indexer.indexerDb;
@@ -146,5 +131,21 @@ function registerExpiryOrderingTests() {
 
 describe('07 Deterministic simultaneous-expiry ordering @regression @tier2', function () {
     this.timeout(60000);
+
+    before(async function () {
+        // Match the tier's --timeout: a slow CI runner's MariaDB took over 30s to create
+        // the 135 indexer tables, and a timed-out root hook tears the schema down mid-build.
+        this.timeout(120000);
+        await createDatabases(__filename);
+        await resetIndexerDb();
+        indexer = await initIndexer();
+    });
+
+    after(async function () {
+        await destroyIndexer(indexer);
+        await destroyFileIndexers(__filename);
+        await closeAll();
+    });
+
     registerExpiryOrderingTests();
 });
