@@ -114,6 +114,7 @@ const GATES = [
     ['anchor_reward_activation.js',         'ARCHIVE_REWARD_AMOUNT'],
     ['anchor_reward_activation.js',         'ANCHOR_REWARD_MIRROR_MATURITY'],
     ['price_pair_activation.js',            'PRICE_PAIR_WIDEN_ACTIVATION'],
+    ['price_scale_activation',              'PRICE_SCALE_ACTIVATION'],
     // The consensus wire-format bounds that gate selects between: canon says a change is
     // "a one-line edit here plus the byte-equal edit in the vendored copies", so lock them.
     ['price_pair_activation.js',            'PRICE_PAIR_TICKER_MAX_LEGACY'],
