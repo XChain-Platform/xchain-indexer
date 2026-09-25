@@ -275,8 +275,10 @@ function buildBatch(batchSeq, rawMatches, oracleKeys, crossKeys, opts) {
             signing_pubkey: kp.pubkey, source: sourceFor(kp.pubkey), amount: snapAmount });
     }
     let signaturePriceBlocks = new Set(prices.filter(row => {
-        if (row.status !== 'finalized') return false;
-        try { return JSON.parse(row.consensus_proof).length > 0; } catch (e) { return false; }
+        try {
+            let proof = JSON.parse(row.consensus_proof);
+            return Array.isArray(proof) && proof.length > 0;
+        } catch (e) { return false; }
     }).map(row => Number(row.reference_block)));
     for (let block of signaturePriceBlocks)
         for (let kp of priceKeys) snaps.push({ snapshot_block: block, capability: 'price',

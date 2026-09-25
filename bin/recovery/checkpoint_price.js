@@ -124,7 +124,7 @@ function signatureGroups(rows){
     let groups = new Map();
     for(let row of rows){
         let proof = validatePrice(row);
-        if(row.status !== 'finalized' || !Array.isArray(proof) || proof.length === 0) continue;
+        if(!Array.isArray(proof) || proof.length === 0) continue;
         let key = row.round_number + '\0' + row.consensus_proof;
         if(!groups.has(key)) groups.set(key, { rows: [], proof });
         groups.get(key).rows.push(row);
@@ -137,9 +137,17 @@ function admitBlocks(row){
     return { BTC: row.admit_block_btc, LTC: row.admit_block_ltc, DOGE: row.admit_block_doge };
 }
 
+function sameSignedPriceFields(first, row){
+    return ['round_number', 'reference_block', 'block_timestamp',
+        'admit_block_btc', 'admit_block_ltc', 'admit_block_doge']
+        .every(key => String(first[key]) === String(row[key]));
+}
+
 function verifyPrices(rows, ctx){
     for(let group of signatureGroups(rows)){
         let first = group.rows[0];
+        if(group.rows.some(row => !sameSignedPriceFields(first, row)))
+            fail('price round', first.round_number, 'has inconsistent signed fields');
         let pairs = group.rows.map(row => ({ coinPair: row.coin_pair, price: row.price }));
         let canonical = ed25519.buildPriceV0Payload(first.round_number, first.block_timestamp,
             pairs, ctx.network, first.reference_block, admitBlocks(first));

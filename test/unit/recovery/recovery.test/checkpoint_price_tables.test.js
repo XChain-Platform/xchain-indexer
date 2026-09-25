@@ -120,6 +120,28 @@ describe('AnchorRecovery checkpoint and price tables @regression @tier2', functi
         assert.strictEqual(db.prices.length, 0);
     });
 
+    it('rejects a forged disputed price proof and writes none of the batch', async function(){
+        let honest = buildBatch(0, [], oracleKeys, crossKeys, {
+            prices: [rawPrice(204, 'BTC/USD')]
+        });
+        let archive = await new AnchorRecovery(memDb([], []), quiet).verifyBatch(honest.v1);
+        let proof = JSON.parse(archive.price_snapshots[0].consensus_proof);
+        proof[0].sig = '00'.repeat(64);
+        let forged = buildBatch(1, [rawMatch('m1')], oracleKeys, crossKeys, {
+            prices: [rawPrice(204, 'BTC/USD', {
+                consensus_proof: JSON.stringify(proof), status: 'disputed'
+            })]
+        });
+        let db = memDb([forged.v1], forged.v2s);
+        let report = await new AnchorRecovery(db, quiet).run();
+
+        assert.strictEqual(report.verified, 0);
+        assert.ok(report.failed[0].reason.includes('price round'));
+        assert.ok(report.failed[0].reason.includes('fails quorum'));
+        assert.strictEqual(db.matches.length, 0);
+        assert.strictEqual(db.prices.length, 0);
+    });
+
     it('lets later batches overwrite a disputed flip and a late batch_block_time', async function(){
         let initial = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys,
             { prices: [rawPrice(204, 'BTC/USD')] });
