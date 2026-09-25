@@ -195,11 +195,45 @@ function callRows(calls, sql, params) {
     return undefined;
 }
 
+function bridgePolicyRows(bridges, policies, sql, params) {
+    if (sql.startsWith('SELECT transfer_id FROM bridge_transfers'))
+        return bridges.filter(r => r.transfer_id === params[0]).map(r => ({ transfer_id: r.transfer_id }));
+    if (sql.startsWith('UPDATE bridge_transfers SET status')) {
+        for (let row of bridges) if (row.transfer_id === params[1]) row.status = params[0];
+        return [];
+    }
+    if (sql.startsWith('INSERT INTO bridge_transfers')) {
+        bridges.push({ id: params[0], transfer_id: params[1], snapshot_block: params[2], network: params[3],
+                       src_chain: params[4], src_action_index: params[5], src_address: params[6],
+                       dest_chain: params[7], dest_address: params[8], tick: params[9], decimals: params[10],
+                       amount: params[11], effective_time: params[12], admit_block_btc: params[13],
+                       admit_block_ltc: params[14], admit_block_doge: params[15], finalizing_view: params[16],
+                       validator_signatures: params[17], status: params[18] });
+        return [];
+    }
+    if (sql.startsWith('SELECT snapshot_id FROM policy_snapshots WHERE snapshot_id'))
+        return policies.filter(r => r.snapshot_id === params[0]).map(r => ({ snapshot_id: r.snapshot_id }));
+    if (String(sql).replace(/\s+/g, ' ').trim().startsWith('SELECT snapshot_id FROM policy_snapshots WHERE network'))
+        return policies.filter(r => r.network === params[0] && r.origin_chain === params[1] &&
+            r.tick === params[2] && Number(r.policy_seq) === Number(params[3]))
+            .map(r => ({ snapshot_id: r.snapshot_id }));
+    if (sql.startsWith('INSERT IGNORE INTO policy_snapshots')) {
+        policies.push({ id: params[0], snapshot_id: params[1], snapshot_block: params[2], network: params[3],
+                        origin_chain: params[4], tick: params[5], policy_seq: params[6], origin_block: params[7],
+                        policy_hash: params[8], allow_list: params[9], block_list: params[10], sleeping: params[11],
+                        effective_time: params[12], admit_block_btc: params[13], admit_block_ltc: params[14],
+                        admit_block_doge: params[15], finalizing_view: params[16],
+                        validator_signatures: params[17], status: params[18] });
+        return [];
+    }
+    return undefined;
+}
+
 /**
  * Give memDb's handle begin/commit/rollback over its three row arrays.
  * @returns {object} the same handle, now with a transaction API
  */
-function withSnapshotTx(db, matches, snapshots, calls) {
+function withSnapshotTx(db, matches, snapshots, calls, bridges, policies) {
     let saved = null;
     const clone = (rows) => rows.map(r => Object.assign({}, r));
     const restore = (target, rows) => { target.length = 0; for (let r of rows) target.push(r); };
@@ -211,7 +245,8 @@ function withSnapshotTx(db, matches, snapshots, calls) {
     db.beginTransaction = async function () {
         assert.strictEqual(db.txDepth, 0, 'recovery must not nest transactions on one handle');
         db.txDepth = 1;
-        saved = { matches: clone(matches), snapshots: clone(snapshots), calls: clone(calls) };
+        saved = { matches: clone(matches), snapshots: clone(snapshots), calls: clone(calls),
+                  bridges: clone(bridges), policies: clone(policies) };
     };
     db.commitTransaction = async function () {
         assert.strictEqual(db.txDepth, 1, 'commit without an open transaction');
@@ -221,6 +256,7 @@ function withSnapshotTx(db, matches, snapshots, calls) {
         if (db.txDepth === 0) return;                     // no-op after a commit, like Database
         db.txDepth = 0; db.rollbacks++;
         restore(matches, saved.matches); restore(snapshots, saved.snapshots); restore(calls, saved.calls);
+        restore(bridges, saved.bridges); restore(policies, saved.policies);
         saved = null;
     };
     return db;
@@ -233,9 +269,9 @@ function withSnapshotTx(db, matches, snapshots, calls) {
 // transaction is exercised by every test in this file.
 function memDb(v1s, v2s, opts) {
     opts = opts || {};
-    let matches = [], snapshots = [], calls = [];
+    let matches = [], snapshots = [], calls = [], bridges = [], policies = [];
     let db = {
-        matches, snapshots, calls,
+        matches, snapshots, calls, bridges, policies,
         async doQuery(sql, params) {
             params = params || [];
             // Each statement family answers its own statements and passes on the rest.
@@ -243,11 +279,12 @@ function memDb(v1s, v2s, opts) {
             if (rows === undefined) rows = archiveChunkRows(v1s, v2s, sql, params);
             if (rows === undefined) rows = matchRows(matches, snapshots, sql, params);
             if (rows === undefined) rows = callRows(calls, sql, params);
+            if (rows === undefined) rows = bridgePolicyRows(bridges, policies, sql, params);
             return rows === undefined ? [] : rows;
         }
     };
-    if (opts.noTx) return { matches, snapshots, calls, doQuery: db.doQuery };
-    return withSnapshotTx(db, matches, snapshots, calls);
+    if (opts.noTx) return { matches, snapshots, calls, bridges, policies, doQuery: db.doQuery };
+    return withSnapshotTx(db, matches, snapshots, calls, bridges, policies);
 }
 
 // BTC indexer stub. The two cross-checks resolve the SAME db.js methods at two different

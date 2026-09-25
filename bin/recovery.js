@@ -83,6 +83,7 @@ const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
 // SAME heads the live mirror path reads, so a new publisher-bearing version added to
 // ARCHIVE_HEAD_VERSIONS cannot reach one path and silently skip the other.
 const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../src/consensus/state_hash.js');
+const bridgePolicy = require('./recovery/bridge_policy.js');
 
 // Capabilities whose archived snapshot is re-resolvable from the BTC capability stakes.
 // Both cross-checks gate on this one set (_verifyStakes for its delegated-key admission,
@@ -119,7 +120,8 @@ class AnchorRecovery {
     }
 
     async run(){
-        let report = { batches: 0, verified: 0, failed: [], matches: 0, snapshots: 0, calls: 0, rewards: 0 };
+        let report = { batches: 0, verified: 0, failed: [], matches: 0, snapshots: 0,
+                       calls: 0, rewards: 0, bridges: 0, policies: 0 };
 
         // Restrict to the SAME statuses every other reader of anchor_actions accepts
         // (getArchiveReplayWatermarks / getMaxAnchorCheckpointSeq: archive-head or
@@ -176,10 +178,14 @@ class AnchorRecovery {
                     report.calls     += (archive.calls || []).length;
                     report.snapshots += (archive.capability_snapshots || []).length;
                     report.rewards   += (archive.rewards || []).length;
+                    report.bridges  += (archive.bridge_transfers || []).length;
+                    report.policies += (archive.policy_snapshots || []).length;
                 }
                 report.verified++;
                 this.log('recovery: batch ' + batchSeq + ' OK (' + archive.matches.length + ' matches, ' +
-                         ((archive.calls || []).length) + ' calls, ' + ((archive.rewards || []).length) + ' rewards)');
+                         ((archive.calls || []).length) + ' calls, ' + ((archive.rewards || []).length) + ' rewards, ' +
+                         ((archive.bridge_transfers || []).length) + ' bridges, ' +
+                         ((archive.policy_snapshots || []).length) + ' policies)');
             } catch(e){
                 report.failed.push({ batch_seq: batchSeq, reason: e.message });
                 this.log('recovery: batch ' + batchSeq + ' FAILED: ' + e.message);
@@ -188,7 +194,8 @@ class AnchorRecovery {
 
         this.log('recovery: ' + report.verified + '/' + report.batches + ' batches verified, ' +
                  report.matches + ' match rows, ' + report.calls + ' call rows, ' +
-                 report.snapshots + ' snapshot rows, ' + report.rewards + ' reward rows' +
+                 report.snapshots + ' snapshot rows, ' + report.rewards + ' reward rows, ' +
+                 report.bridges + ' bridge rows, ' + report.policies + ' policy rows' +
                  (this.dryRun ? ' (dry run, nothing written)' : ''));
         return report;
     }
@@ -318,6 +325,14 @@ class AnchorRecovery {
             if(!this.quorumVerified(this.callCanonical(c), sigs, set, swq.isStakeWeightedQuorumActive(c.snapshot_block, c.network)))
                 throw new Error('call ' + String(c.call_id).substring(0, 16) + '... (' + c.phase + ') fails quorum against the archived cross_chain set');
         }
+
+        bridgePolicy.verifyArchive(archive, {
+            network: v1.network,
+            setFor,
+            parseSigs: raw => this.parseSigs(raw),
+            quorumVerified: (canonical, sigs, set, weighted) =>
+                this.quorumVerified(canonical, sigs, set, weighted)
+        });
 
         // 4. Shape-check archived anchor-publish rewards (absent pre-rewards
         // archives, treated as empty). Reward rows carry no per-row signatures; they are
@@ -833,7 +848,7 @@ class AnchorRecovery {
 
         // Counters stay local until both commits land, so a rolled-back batch never
         // inflates the run report with rows that are not in the DB.
-        let delta  = { matches: 0, snapshots: 0, calls: 0, rewards: 0 };
+        let delta  = { matches: 0, snapshots: 0, calls: 0, rewards: 0, bridges: 0, policies: 0 };
         // Both begins sit INSIDE the try: if the second one fails, the first transaction is
         // still open and holding Database's transaction mutex, and the next batch's
         // beginTransaction would block on that lock forever (a silent hang mid-recovery).
@@ -853,6 +868,8 @@ class AnchorRecovery {
         report.snapshots += delta.snapshots;
         report.calls     += delta.calls;
         report.rewards   += delta.rewards;
+        report.bridges   += delta.bridges;
+        report.policies  += delta.policies;
     }
 
     async writeBatch(archive, report, network, anchorTxid, rewards){
@@ -868,6 +885,7 @@ class AnchorRecovery {
                 [Number(s.snapshot_block), String(s.capability), String(s.signing_pubkey).toLowerCase(), String(s.amount), String(s.source || '')]);
             report.snapshots++;
         }
+        await bridgePolicy.writeArchive(this.db, archive, report);
         for(let m of archive.matches){
             let existing = await this.db.doQuery(
                 'SELECT match_id FROM cross_chain_matches WHERE match_id = ? LIMIT 1', [m.match_id]);
