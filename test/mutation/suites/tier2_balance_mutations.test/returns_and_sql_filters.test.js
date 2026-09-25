@@ -30,7 +30,7 @@ const {
 
 const Database = require('../../../../src/db');
 
-describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
+describe('Guard dependency: Tier 2: Balance & Ledger @tier2', function () {
     afterEach(function () { sinon.restore(); });
 
     // ── EMR: Empty Return Mutations ──────────────────────────────────────
@@ -88,7 +88,7 @@ describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
     });
 });
 
-describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
+describe('Guard dependency: Tier 2: Balance & Ledger @tier2', function () {
     afterEach(function () { sinon.restore(); });
 
     describe('EMR: Empty Return in Supply', function () {
@@ -113,7 +113,7 @@ describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
     });
 });
 
-describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
+describe('Guard dependency: Tier 2: Balance & Ledger @tier2', function () {
     afterEach(function () { sinon.restore(); });
 
     // ── SDL: SQL Filter Mutations ────────────────────────────────────────
@@ -151,7 +151,7 @@ describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
     });
 });
 
-describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
+describe('Guard dependency: Tier 2: Balance & Ledger @tier2', function () {
     afterEach(function () { sinon.restore(); });
 
     describe('SDL: SQL Filter Mutations in Supply', function () {
@@ -186,7 +186,7 @@ describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
     });
 });
 
-describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
+describe('Guard dependency: Tier 2: Balance & Ledger @tier2', function () {
     afterEach(function () { sinon.restore(); });
 
     // ── BCR: Boundary in SQL filters ─────────────────────────────────────
@@ -223,7 +223,7 @@ describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
     });
 });
 
-describe('Mutation: Tier 2: Balance & Ledger @tier2', function () {
+describe('Guard dependency: Tier 2: Balance & Ledger @tier2', function () {
     afterEach(function () { sinon.restore(); });
 
     describe('BCR: SQL Filter Boundary Operators', function () {
