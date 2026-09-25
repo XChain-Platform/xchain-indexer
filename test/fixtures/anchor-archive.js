@@ -274,12 +274,15 @@ function buildBatch(batchSeq, rawMatches, oracleKeys, crossKeys, opts) {
         for (let kp of oracleKeys) snaps.push({ snapshot_block: block, capability: 'oracle_publish',
             signing_pubkey: kp.pubkey, source: sourceFor(kp.pubkey), amount: snapAmount });
     }
-    let signaturePriceBlocks = new Set(prices.filter(row => {
+    let signaturePriceBlocks = new Set(prices.map(row => {
         try {
             let proof = JSON.parse(row.consensus_proof);
-            return Array.isArray(proof) && proof.length > 0;
-        } catch (e) { return false; }
-    }).map(row => Number(row.reference_block)));
+            if(Array.isArray(proof)) return proof.length > 0 ? Number(row.reference_block) : null;
+            if(proof && proof.batch && Array.isArray(proof.sigs) && proof.sigs.length > 0)
+                return Number(proof.batch.btc_block_height);
+        } catch (e) { return null; }
+        return null;
+    }).filter(block => block !== null));
     for (let block of signaturePriceBlocks)
         for (let kp of priceKeys) snaps.push({ snapshot_block: block, capability: 'price',
             signing_pubkey: kp.pubkey, source: sourceFor(kp.pubkey), amount: snapAmount });

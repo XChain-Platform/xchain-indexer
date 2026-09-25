@@ -124,9 +124,10 @@ function signatureGroups(rows){
     let groups = new Map();
     for(let row of rows){
         let proof = validatePrice(row);
-        if(!Array.isArray(proof) || proof.length === 0) continue;
-        let key = row.round_number + '\0' + row.consensus_proof;
-        if(!groups.has(key)) groups.set(key, { rows: [], proof });
+        if(Array.isArray(proof) && proof.length === 0) continue;
+        let batch = !Array.isArray(proof);
+        let key = (batch ? 'batch' : row.round_number) + '\0' + row.consensus_proof;
+        if(!groups.has(key)) groups.set(key, { rows: [], proof, batch });
         groups.get(key).rows.push(row);
     }
     return groups.values();
@@ -143,8 +144,49 @@ function sameSignedPriceFields(first, row){
         .every(key => String(first[key]) === String(row[key]));
 }
 
+function batchRounds(group){
+    let byRound = new Map();
+    for(let row of group.rows){
+        let key = Number(row.round_number);
+        if(!byRound.has(key)) byRound.set(key, []);
+        byRound.get(key).push(row);
+    }
+    let rounds = [...byRound.entries()].sort((a, b) => a[0] - b[0]).map(([round, rows]) => {
+        let first = rows[0];
+        if(rows.some(row => !sameSignedPriceFields(first, row)))
+            fail('price batch', round, 'has inconsistent signed fields');
+        return {
+            round,
+            timestamp: first.block_timestamp,
+            btcBlockHeight: first.admit_block_btc == null ? first.reference_block : first.admit_block_btc,
+            pairs: rows.map(row => ({ coinPair: row.coin_pair, price: row.price })),
+            admitBlocks: admitBlocks(first)
+        };
+    });
+    let batch = group.proof.batch;
+    if(rounds.length !== batch.last_round - batch.first_round + 1 ||
+       rounds[0].round !== batch.first_round || rounds[rounds.length - 1].round !== batch.last_round)
+        fail('price batch', batch.first_round, 'does not contain its complete signed round range');
+    return rounds;
+}
+
+function verifyBatchPriceGroup(group, ctx){
+    let batch = group.proof.batch;
+    let canonical = ed25519.buildPriceBatchPayload(batch.first_round, batch.last_round,
+        batch.btc_block_height, batchRounds(group), ctx.network);
+    let set = ctx.setFor('price', batch.btc_block_height);
+    let sigs = ctx.parseSigs(group.proof.sigs);
+    let weighted = swq.isStakeWeightedQuorumActive(batch.btc_block_height, ctx.network);
+    if(!ctx.quorumVerified(canonical, sigs, set, weighted))
+        fail('price batch', batch.first_round, 'fails quorum against the archived price set');
+}
+
 function verifyPrices(rows, ctx){
     for(let group of signatureGroups(rows)){
+        if(group.batch){
+            verifyBatchPriceGroup(group, ctx);
+            continue;
+        }
         let first = group.rows[0];
         if(group.rows.some(row => !sameSignedPriceFields(first, row)))
             fail('price round', first.round_number, 'has inconsistent signed fields');

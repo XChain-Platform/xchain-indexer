@@ -16,8 +16,9 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 
 const AnchorRecovery = require('../../../../bin/recovery.js');
+const ed25519 = require('../../../../src/consensus/ed25519.js');
 const {
-    makeKeypair, buildBatch, rawMatch, rawCheckpoint, rawPrice,
+    makeKeypair, signHex, buildBatch, rawMatch, rawCheckpoint, rawPrice,
     CHECKPOINT_KEYS, PRICE_KEYS
 } = require('../../../fixtures/anchor-archive.js');
 const { util, memDb } = require('../../../helpers/recovery_stubs.js');
@@ -43,15 +44,21 @@ describe('AnchorRecovery checkpoint and price tables @regression @tier2', functi
     beforeEach(freshKeys);
 
     it('uses the ABP archive key orders and only the full writer restores both tables', async function(){
+        let batchPrice = rawPrice(202, 'DOGE/USD', { reference_block: 99 });
+        let canonical = ed25519.buildPriceBatchPayload(202, 202, 99, [{
+            round: 202, timestamp: batchPrice.block_timestamp, btcBlockHeight: batchPrice.reference_block,
+            pairs: [{ coinPair: batchPrice.coin_pair, price: batchPrice.price }], admitBlocks: null
+        }], 'regtest');
         let batchProof = JSON.stringify({
-            batch: { first_round: 202, last_round: 207, btc_block_height: 99 },
-            sigs: [{ pubkey: oracleKeys[0].pubkey, sig: 'aa'.repeat(64) }]
+            batch: { first_round: 202, last_round: 202, btc_block_height: 99 },
+            sigs: oracleKeys.slice(0, 3).map(key => ({ pubkey: key.pubkey, sig: signHex(key, canonical) }))
         });
+        batchPrice.consensus_proof = batchProof;
         let batch = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys, {
             checkpoints: [rawCheckpoint(101)],
             prices: [
                 rawPrice(201, 'BTC/USD'),
-                rawPrice(202, 'DOGE/USD', { consensus_proof: batchProof }),
+                batchPrice,
                 rawPrice(203, 'LTC/USD', {
                     price: null, validator_count: 0, consensus_proof: '[]', status: 'skipped',
                     source_action_index: null
@@ -137,6 +144,30 @@ describe('AnchorRecovery checkpoint and price tables @regression @tier2', functi
 
         assert.strictEqual(report.verified, 0);
         assert.ok(report.failed[0].reason.includes('price round'));
+        assert.ok(report.failed[0].reason.includes('fails quorum'));
+        assert.strictEqual(db.matches.length, 0);
+        assert.strictEqual(db.prices.length, 0);
+    });
+
+    it('rejects an object-form batch proof that lacks price quorum', async function(){
+        let price = rawPrice(204, 'BTC/USD');
+        let canonical = ed25519.buildPriceBatchPayload(204, 204, 100, [{
+            round: 204, timestamp: price.block_timestamp, btcBlockHeight: price.reference_block,
+            pairs: [{ coinPair: price.coin_pair, price: price.price }], admitBlocks: null
+        }], 'regtest');
+        let proof = JSON.stringify({
+            batch: { first_round: 204, last_round: 204, btc_block_height: 100 },
+            sigs: [{ pubkey: oracleKeys[0].pubkey, sig: signHex(oracleKeys[0], canonical) }]
+        });
+        price.consensus_proof = proof;
+        let batch = buildBatch(0, [rawMatch('m1')], oracleKeys, crossKeys, {
+            prices: [price]
+        });
+        let db = memDb([batch.v1], batch.v2s);
+        let report = await new AnchorRecovery(db, quiet).run();
+
+        assert.strictEqual(report.verified, 0);
+        assert.ok(report.failed[0].reason.includes('price batch'));
         assert.ok(report.failed[0].reason.includes('fails quorum'));
         assert.strictEqual(db.matches.length, 0);
         assert.strictEqual(db.prices.length, 0);
