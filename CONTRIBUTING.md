@@ -73,7 +73,7 @@ The indexer runs a layered suite. Pick the tier that matches your change:
 | Boundary | `npm run test:boundary` | No |
 | Fuzz | `npm run test:fuzz` (`:quick` for 1,000 iterations) | No |
 | Chaos | `npm run test:chaos` | No |
-| Mutation | `npm run test:mutation` | No |
+| Guard dependencies | `npm run test:guard-dependencies` | No |
 | Integration | `npm run test:integration` | MariaDB + decoder DB |
 | End-to-end | `npm run test:e2e` | Full stack |
 
