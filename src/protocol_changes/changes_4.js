@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Time table part 4 of 4: BATCH_ISSUANCE_LIMITS through CONTRACT_META_REQUIRED.
+ * Time table part 4 of 4: BATCH_ISSUANCE_LIMITS through BROADCAST_FEE_LENGTH.
  *
  * One row per protocol change, in registration order, as the argument list of
  * ProtocolChanges.addChange(name, version, mainnet_time, testnet_time,
@@ -37,6 +37,8 @@ const {
     DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME,
     CONTRACT_META_REQUIRED_MAINNET_TIME,
     CONTRACT_META_REQUIRED_TESTNET_TIME,
+    BROADCAST_FEE_LENGTH_MAINNET_TIME,
+    BROADCAST_FEE_LENGTH_TESTNET_TIME,
 } = require('./flag_times.js');
 const {
     BATCH_ISSUANCE_LIMITS_MAINNET_TIME,
@@ -374,6 +376,10 @@ module.exports = [
     // release pins the instant (the constants above carry the reasoning and the TBTC
     // history that forbids a past instant), regtest at genesis (0).
     ['CONTRACT_META_REQUIRED', '0.2.0',CONTRACT_META_REQUIRED_MAINNET_TIME,CONTRACT_META_REQUIRED_TESTNET_TIME,0,0,0,0],
+
+    // BROADCAST_FEE_LENGTH rejects a FEE wider than the 11-character storage column.
+    // Mainnet and testnet stay inert until armed; regtest activates at genesis.
+    ['BROADCAST_FEE_LENGTH', '0.2.0',BROADCAST_FEE_LENGTH_MAINNET_TIME,BROADCAST_FEE_LENGTH_TESTNET_TIME,0,0,0,0],
 
     // NOTE: STAKE_WEIGHTED_QUORUM (WI-1) is deliberately NOT registered here.
     // Standard activations gate on the LOCAL processing block via isEnabled();

@@ -38,6 +38,7 @@ const manifest = require('../../../../src/consensus/armed_map/manifest.js');
 const { canonicalValue } = require('../../../../src/consensus/armed_map/canonical.js');
 const ProtocolChanges = require('../../../../src/protocol_changes.js');
 const { GATE_MODULE_PATHS, REPLACED_STEMS } = require('../../../helpers/gate_modules.js');
+const PREDICATE_ONLY_ROWS = ['archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION'];
 
 // The two declaration shapes that made a file a carrier. ACTIVATION_MAP is the
 // activation-map rule the platform's code-structure gate grades with, and
@@ -110,7 +111,7 @@ describe('armed_map/manifest: completeness guard', function () {
         }
     });
 
-    it('every non-function export of every shim module is a row, and every row but the time table, the VM mirror and the W4-replaced predicates is exported by one', function () {
+    it('every non-function shim export is a row, and only allowed predicate rows have no export', function () {
         const keys = rowKeys();
         const missing = [];
         const exported = new Set();
@@ -122,14 +123,14 @@ describe('armed_map/manifest: completeness guard', function () {
             }
         }
         assert.deepStrictEqual(missing, [], 'exported data outside the v2 rows: ' + missing.join(', '));
-        // A row nobody exports is read only through activeAt() by its literal
-        // key: that is exactly the W4 census, one row per replaced shim, and a
-        // new row that no module and no census names still reds here.
+        // A row nobody exports is read through activeAt() by its literal key.
+        // These are the W4 census plus rows registered before their handlers land.
         const unexported = [...keys].filter((k) => !k.startsWith('protocol_changes.') && !k.startsWith('xchain-vm.') && !exported.has(k));
         const replaced = [...keys].filter((k) => REPLACED_STEMS.includes(k.slice(0, k.lastIndexOf('.'))));
         assert.strictEqual(replaced.length, REPLACED_STEMS.length, 'one registry row per replaced shim');
-        assert.deepStrictEqual(unexported, replaced, 'rows no shim exports, beyond the W4-replaced set: ' +
-            unexported.filter((k) => !replaced.includes(k)).join(', '));
+        const expected = replaced.concat(PREDICATE_ONLY_ROWS);
+        assert.deepStrictEqual(unexported.slice().sort(), expected.slice().sort(), 'rows no shim exports, beyond the allowed predicate-only set: ' +
+            unexported.filter((k) => !expected.includes(k)).join(', '));
     });
 
 });
@@ -148,7 +149,7 @@ describe('armed_map/manifest: the row list', function () {
         const table = Object.keys(new ProtocolChanges({ config: {}, util: {} }).changes).sort();
         const rows = [...rowKeys()].filter((k) => k.startsWith('protocol_changes.changes.')).map((k) => k.slice('protocol_changes.changes.'.length)).sort();
         assert.deepStrictEqual(rows, table);
-        assert.strictEqual(table.length, 97);
+        assert.strictEqual(table.length, 98);
     });
 
     it('never lists a key twice and never enumerates the file system', function () {
@@ -172,7 +173,7 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(res.ok, true, res.reason);
         assert.deepStrictEqual(res.rows.map((r) => r[0]), manifest.ENTRIES.map((e) => e[0]));
         for (const [, value] of res.rows) canonicalValue(value);
-        assert.strictEqual(res.rows.length, 301);
+        assert.strictEqual(res.rows.length, 305);
     });
 
     it('carries the three row families the design names', function () {

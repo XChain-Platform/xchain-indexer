@@ -125,7 +125,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "bd20fc3f46b75f05bab62af849155cba172a3da4854a5989e212105d1ec42eac",
+      "hash": "e15f2df93cdfdccc1edb7b0001716940b1a9b2af9fdacaf1d470887fec9c6807",
       "twins": []
     },
     "rollcall_activation": {
@@ -1808,6 +1808,13 @@
       "to": "90d7040d61391bb2a42ed6ebcf8ad250914a4e81f1bab11ec98420877bae66a9",
       "reason": "SHARED_GATES appends token_bridge_activation.TOKEN_BRIDGE_ACTIVATION",
       "date": "2026-09-23"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "bd20fc3f46b75f05bab62af849155cba172a3da4854a5989e212105d1ec42eac",
+      "to": "e15f2df93cdfdccc1edb7b0001716940b1a9b2af9fdacaf1d470887fec9c6807",
+      "reason": "consensus-bound indexer rows",
+      "date": "2026-09-25"
     }
   ]
 }
