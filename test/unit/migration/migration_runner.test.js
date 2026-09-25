@@ -23,6 +23,7 @@
  ********************************************************************/
 
 const { assert, fs, path, Database, modeOf } = require('./migration_runner.test/helpers/migration_fixtures.js');
+const crypto = require('crypto');
 
 
 describe('Database._migrationMode() @regression @tier1', function () {
@@ -154,6 +155,83 @@ describe('legacy migration rename: ledger remap + ordering @regression @tier1', 
         Object.entries(RENAMES).forEach(function ([oldName, newName]) {
             assert.strictEqual(byFrom.get(oldName), newName);
         });
+    });
+});
+
+describe('fresh schema migration ledger @regression @tier1', function () {
+    it('records every committed migration with its checksum, mode and database timestamp', async function () {
+        const inserts = [];
+        let ensured = false;
+        const db = {
+            ensureMigrationsLedger: async function (conn) {
+                ensured = true;
+                assert.strictEqual(conn, connection);
+            },
+            migrationMode: Database.prototype.migrationMode,
+            recordFreshSchemaMigrations: Database.prototype.recordFreshSchemaMigrations,
+        };
+        const connection = {
+            async query(sql, params) { inserts.push({ sql, params }); },
+        };
+
+        await db.recordFreshSchemaMigrations(connection);
+
+        const files = fs.readdirSync(MIG_DIR).filter(f => f.endsWith('.sql')).sort();
+        assert.ok(ensured, 'the ledger table must exist before fresh-schema rows are recorded');
+        assert.strictEqual(inserts.length, files.length);
+        assert.deepStrictEqual(inserts.map(i => i.params[0]), files);
+        for(const insert of inserts){
+            const [file, checksum, mode] = insert.params;
+            const raw = fs.readFileSync(path.join(MIG_DIR, file), 'utf8');
+            assert.strictEqual(checksum, crypto.createHash('sha256').update(raw).digest('hex'));
+            assert.strictEqual(mode, modeOf(raw));
+            assert.match(insert.sql,
+                /^INSERT INTO schema_migrations \(name, checksum, mode, applied_at\) VALUES \(\?, \?, \?, NOW\(\)\)$/);
+            assert.strictEqual(insert.params.length, 3, 'applied_at must come from NOW(), not a JavaScript value');
+        }
+        assert.ok(inserts.some(i => i.params[0] === '2026-09-12-bridge-tables.sql'),
+            'the fresh bridge tables migration must be present in the applied ledger');
+    });
+
+    async function verifySchema(existingTable) {
+        const created = [];
+        let recorded = 0;
+        const connection = {
+            async query(sql, params) {
+                if(/information_schema\.tables/i.test(sql))
+                    return params[1] === existingTable ? [{}] : [];
+                throw new Error('unexpected statement: ' + sql);
+            },
+            async release() {},
+        };
+        const db = {
+            dbName: 'fake_indexer',
+            util: { throwError(message) { throw new Error(message); } },
+            getConnection: async () => connection,
+            createTable: async file => { created.push(file); },
+            alterTableForDrift: async () => {},
+            reconcileTableIndexes: async () => {},
+            recordFreshSchemaMigrations: async conn => {
+                assert.strictEqual(conn, connection);
+                recorded++;
+            },
+            schemaShapeSummary: () => 'Schema shape: test fixture.',
+            verifyTables: Database.prototype.verifyTables,
+        };
+        await db.verifyTables();
+        return { created, recorded };
+    }
+
+    it('seeds the ledger only when verifyTables built the whole declarative schema', async function () {
+        const sqlFiles = fs.readdirSync(path.join(MIG_DIR, '..'))
+            .filter(file => file.endsWith('.sql'));
+        const fresh = await verifySchema(null);
+        assert.strictEqual(fresh.created.length, sqlFiles.length);
+        assert.strictEqual(fresh.recorded, 1);
+
+        const aged = await verifySchema(sqlFiles[0].slice(0, -4));
+        assert.strictEqual(aged.created.length, sqlFiles.length - 1);
+        assert.strictEqual(aged.recorded, 0);
     });
 });
 

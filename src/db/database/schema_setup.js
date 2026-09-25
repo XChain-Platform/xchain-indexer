@@ -29,6 +29,7 @@
 const mariadb = require('mariadb');
 const fs      = require('fs');
 const path    = require('path');
+const crypto  = require('crypto');
 const stakeWeightCollation = require('../../consensus/gates/stake_weight_collation_gate');
 const { getLogger } = require('../../observability/index.js');
 // The class itself, for the statics these methods read. db/index.js publishes it before it
@@ -149,10 +150,30 @@ module.exports = {
                 }
             }
         }
+        if(checked > 0 && created === checked)
+            await this.recordFreshSchemaMigrations(db);
         await db.release();
         getLogger().info('Database and tables verified (' + checked + ' tables, ' + created + ' created).');
         getLogger().info(this.schemaShapeSummary());
         return true;
+    },
+
+    async recordFreshSchemaMigrations(db){
+        const dir = path.join(__dirname, '..', '..', 'sql', 'migrations');
+        let files = [];
+        try { files = fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort(); }
+        catch(_){ return; }
+        if(!files.length) return;
+
+        await this.ensureMigrationsLedger(db);
+        for(const file of files){
+            const raw = fs.readFileSync(path.join(dir, file), 'utf8');
+            const checksum = crypto.createHash('sha256').update(raw).digest('hex');
+            await db.query(
+                'INSERT INTO schema_migrations (name, checksum, mode, applied_at) VALUES (?, ?, ?, NOW())',
+                [file, checksum, this.migrationMode(raw)]
+            );
+        }
     },
 
     // One line (plus a per-table breakdown when there is one) naming everything live that
