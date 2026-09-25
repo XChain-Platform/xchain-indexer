@@ -21,6 +21,7 @@ const crypto = require('crypto');
 const zlib   = require('zlib');
 const eq     = require('../../src/consensus/equivocation_header.js');
 const gateRegistry = require('../../src/consensus/gate_registry');
+const bridgeSettle = require('../../src/consensus/bridge_settle.js');
 const CROSS_CHAIN_ROYALTY_KEY = 'cross_chain_royalty_activation.CROSS_CHAIN_ROYALTY_ACTIVATION';
 
 // ── Real Ed25519 helpers ────────────────────────────────────────────────────
@@ -86,6 +87,44 @@ function serializeCall(c) {
             out[k] = String(v == null ? '' : v);
     }
     return out;
+}
+
+const BRIDGE_KEYS = ['id', 'transfer_id', 'snapshot_block', 'network',
+    'src_chain', 'src_action_index', 'src_address', 'dest_chain', 'dest_address',
+    'tick', 'decimals', 'amount', 'effective_time',
+    'admit_block_btc', 'admit_block_ltc', 'admit_block_doge',
+    'finalizing_view', 'validator_signatures', 'status'];
+const POLICY_KEYS = ['id', 'snapshot_id', 'snapshot_block', 'network',
+    'origin_chain', 'tick', 'policy_seq', 'origin_block', 'policy_hash',
+    'allow_list', 'block_list', 'sleeping', 'effective_time',
+    'admit_block_btc', 'admit_block_ltc', 'admit_block_doge',
+    'finalizing_view', 'validator_signatures', 'status'];
+const ARCHIVE_INTEGER_KEYS = new Set(['id', 'snapshot_block', 'src_action_index', 'decimals',
+    'effective_time', 'policy_seq', 'origin_block']);
+const ARCHIVE_NULLABLE_INTS = new Set(['admit_block_btc', 'admit_block_ltc', 'admit_block_doge']);
+
+function serializeQuorumRow(keys, row) {
+    let out = {};
+    for (let key of keys) {
+        let value = row[key];
+        if (ARCHIVE_INTEGER_KEYS.has(key)) out[key] = Number(value);
+        else if (ARCHIVE_NULLABLE_INTS.has(key)) out[key] = value == null ? null : Number(value);
+        else if (key === 'finalizing_view') out[key] = Number(value) || 0;
+        else if (key === 'sleeping') out[key] = Number(value) ? 1 : 0;
+        else if (key === 'validator_signatures') out[key] = value;
+        else if (key === 'allow_list' || key === 'block_list') out[key] = value == null ? null : String(value);
+        else out[key] = String(value == null ? '' : value);
+    }
+    return out;
+}
+
+function signQuorumRows(rows, keys, canonical, crossKeys, signers) {
+    return rows.map(raw => {
+        let row = Object.assign({}, raw);
+        row.validator_signatures = JSON.stringify(crossKeys.slice(0, signers || 3)
+            .map(kp => ({ pubkey: kp.pubkey, sig: signHex(kp, canonical(row)) })));
+        return serializeQuorumRow(keys, row);
+    });
 }
 // Byte-identical to recovery.callCanonical / hub StateAnchorPublisher.callCanonical.
 function callCanonical(c) {
@@ -162,9 +201,15 @@ function buildBatch(batchSeq, rawMatches, oracleKeys, crossKeys, opts) {
             .map(kp => ({ pubkey: kp.pubkey, sig: signHex(kp, canon) })));
         return serializeCall(c);
     });
+    let bridges = signQuorumRows(opts.bridges || [], BRIDGE_KEYS,
+        row => bridgeSettle.transferCanonical(row), opts.bridgeKeys || crossKeys, opts.bridgeSigners);
+    let policies = signQuorumRows(opts.policies || [], POLICY_KEYS,
+        row => bridgeSettle.policyCanonical(row), opts.policyKeys || crossKeys, opts.policySigners);
     let obj = { v: 1, network: 'regtest', batch_seq: batchSeq, matches: matches };
     if (opts.rewards) obj.rewards = opts.rewards;
     if (opts.calls) obj.calls = calls;
+    if (bridges.length > 0) obj.bridge_transfers = bridges;
+    if (policies.length > 0) obj.policy_snapshots = policies;
     obj.capability_snapshots = snaps;
     let json = JSON.stringify(obj);
     let crc  = crc32Hex(json);
@@ -223,10 +268,39 @@ function rawCall(call_id, phase, overrides) {
     return Object.assign(base, overrides || {});
 }
 
+function rawBridge(transfer_id, status, overrides) {
+    return Object.assign({
+        id: 10, transfer_id, snapshot_block: SNAPSHOT_BLOCK, network: 'regtest',
+        src_chain: 'BTC', src_action_index: 20, src_address: 'src-address',
+        dest_chain: 'DOGE', dest_address: 'dest-address', tick: 'XCP', decimals: 8,
+        amount: '150000000', effective_time: 1700000010,
+        admit_block_btc: null, admit_block_ltc: null, admit_block_doge: null,
+        finalizing_view: 0, status: status || 'finalized'
+    }, overrides || {});
+}
+
+function rawPolicy(snapshot_id, overrides) {
+    let row = Object.assign({
+        id: 20, snapshot_id, snapshot_block: SNAPSHOT_BLOCK, network: 'regtest',
+        origin_chain: 'BTC', tick: 'XCP', policy_seq: 3, origin_block: 95,
+        allow_list: JSON.stringify(['addr1', 'addr2']), block_list: JSON.stringify(['addr9']),
+        sleeping: 0, effective_time: 1700000020,
+        admit_block_btc: null, admit_block_ltc: null, admit_block_doge: null,
+        finalizing_view: 0, status: 'finalized'
+    }, overrides || {});
+    if (!Object.prototype.hasOwnProperty.call(overrides || {}, 'policy_hash')) {
+        let allow = bridgeSettle.parseMembership(row.allow_list);
+        let block = bridgeSettle.parseMembership(row.block_list);
+        row.policy_hash = bridgeSettle.policyHash(allow, block, !!row.sleeping);
+    }
+    return row;
+}
+
 module.exports = {
     makeKeypair, signHex,
     MATCH_KEYS, serializeMatch, matchCanonical,
     CALL_KEYS, serializeCall, callCanonical,
+    BRIDGE_KEYS, POLICY_KEYS,
     crc32Hex, SNAPSHOT_BLOCK, CP,
-    buildBatch, rawMatch, rawCall,
+    buildBatch, rawMatch, rawCall, rawBridge, rawPolicy,
 };
