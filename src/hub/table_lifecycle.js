@@ -101,6 +101,10 @@
  *               needed (typically: a deterministic projection of hashed
  *               actions, where any divergence surfaces through the ledger/
  *               actions/contracts hashes of the affected blocks on replay).
+ *   anchorRecovery  full-parse recovery policy for a quorum-class hub mirror:
+ *                 'archive' rebuilt from the on-chain ANCHOR archive
+ *                 'none'    intentionally not rebuilt by anchor recovery
+ *   anchorRecoveryNote  required rationale when anchorRecovery is 'none'
  *   note        rationale worth keeping next to the classification
  *
  ********************************************************************/
@@ -316,6 +320,13 @@ function hashClassTables(cls){
     return tablesWhere(t => t.hashed && t.hashed.classes.indexOf(cls) !== -1);
 }
 
+// Quorum-class hub mirrors rebuilt from the on-chain ANCHOR archive. Recovery
+// derives its operator-facing table list from this helper so a registry change
+// cannot silently leave the runbook or run log naming a stale subset.
+function anchorRecoveryTables(){
+    return tablesWhere(t => t.anchorRecovery === 'archive');
+}
+
 // ── Content-parity derivation helpers ─────────────────────────
 
 // The operator carve-out reason for a table on a dbType, or null when the table
@@ -356,6 +367,7 @@ module.exports = {
     allTables, entry, tablesWhere,
     rollbackTables, replicaRollbackTables, streamTopology, blockKey,
     rollbackBuckets, replicaRollbackBuckets, hashClassTables,
+    anchorRecoveryTables,
     contentParityCarveOut, contentParityMutableTables,
     contentParityExcludedColumns, contentParityLookupBound,
 };
