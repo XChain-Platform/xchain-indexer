@@ -1267,7 +1267,7 @@ class AnchorRecovery {
 // can call it without constructing a full AnchorRecovery(db, opts) instance.
 // Delegates to the real instance method; does not change its output.
 AnchorRecovery.wrapperCanonicalForTest = function(v1){
-    return AnchorRecovery.prototype.wrapperCanonical.call({}, v1);
+    return AnchorRecovery.prototype.wrapperCanonical.call(AnchorRecovery.prototype, v1);
 };
 
 module.exports = AnchorRecovery;
