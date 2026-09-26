@@ -383,4 +383,9 @@ module.exports = [
     // The gate + predicate live in src/stake_weighted_quorum.js
     // (isStakeWeightedQuorumActive / meetsStakeThreshold). Canonical activation
     // height: xchain-documentation/protocol/constants.js.
+
+    // JSON_STRINGIFY_HOOK: mirrors xchain-vm's JSON_STRINGIFY_HOOK_GATE_BLOCK_TIME
+    // (VM CONSENSUS_VERSION 5, the value-hook depth-bypass fix). All three network
+    // slots carry the VM's own instant; the release cut moves both literals together.
+    ['JSON_STRINGIFY_HOOK', '0.2.0',9999999999,9999999999,9999999999,0,0,0],
 ];
