@@ -194,6 +194,7 @@ describe('capability-snapshot reorg burial @regression @tier1', function () {
                 explorerUrl: 'http://explorer.invalid',
                 trustedCheckpoint: { block_index: 41, network: 'regtest', state_root: '0'.repeat(64) },
                 toHeight: 42,
+                btcCoin: 'BTC',
                 fetchImpl,
             });
             assert.strictEqual(out.reason, 'VALIDATOR_SET_UNVERIFIED@42',
