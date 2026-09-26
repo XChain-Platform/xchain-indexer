@@ -18,7 +18,7 @@
  *
  ********************************************************************/
 
-// ASSEMBLER. The flag-day constants, the 98 time-table rows and registry API live
+// ASSEMBLER. The flag-day constants, the 99 time-table rows and registry API live
 // in the part files under src/protocol_changes/. This entry builds its table from
 // the registry rows and re-exports every constant under the name it always had.
 const {
@@ -167,7 +167,7 @@ class ProtocolChanges {
 
 
     parseChanges(){
-        // The 98 rows live in src/protocol_changes/changes_*.js; see CHANGE_PARTS.
+        // The 99 rows live in src/protocol_changes/changes_*.js; see CHANGE_PARTS.
         applyChanges(this, CHANGE_PARTS);
     }
 
