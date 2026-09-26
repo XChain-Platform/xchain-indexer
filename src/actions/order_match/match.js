@@ -224,11 +224,14 @@ module.exports = {
 
         // Deny an address when any attached allow list resolves empty after activation.
         let emptyAllowListDenies = gateRegistry.activeAt(EMPTY_ALLOW_LIST_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
+        // The readers turn a NULL list column into 0, and a list edit may store 0 to
+        // remove a list; either way no list is attached, so only a real list id counts.
+        const attachedList = (id) => !this.util.isNull(id) && Number(id) !== 0;
         let deniedByEmptyAllowList = emptyAllowListDenies &&
-            ((getTokenInfo && !this.util.isNull(getTokenInfo['ALLOW_LIST']) && getTokenAllowList.length === 0) ||
-             (giveTokenInfo && !this.util.isNull(giveTokenInfo['ALLOW_LIST']) && giveTokenAllowList.length === 0) ||
-             (!this.util.isNull(orderInfo['ALLOW_LIST']) && orderInfoAllowList.length === 0) ||
-             (!this.util.isNull(matchInfo['ALLOW_LIST']) && matchInfoAllowList.length === 0));
+            ((getTokenInfo && attachedList(getTokenInfo['ALLOW_LIST']) && getTokenAllowList.length === 0) ||
+             (giveTokenInfo && attachedList(giveTokenInfo['ALLOW_LIST']) && giveTokenAllowList.length === 0) ||
+             (attachedList(orderInfo['ALLOW_LIST']) && orderInfoAllowList.length === 0) ||
+             (attachedList(matchInfo['ALLOW_LIST']) && matchInfoAllowList.length === 0));
 
         // Check if GET_ADDRESS for both sides of swap are allowed (ALLOW/BLOCK list support)
         if(deniedByEmptyAllowList ||
