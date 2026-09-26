@@ -67,10 +67,8 @@ describe('assignActionAddressIds: pre-handler-error skip (#4888) @regression @ti
             await actions.assignActionAddressIds('MINT', params, data, null);
             assert.deepStrictEqual(created, [NEW_DEST], 'a clean MINT interns its new destination id');
         } finally {
-            // makeActions() builds a real Actions instance, which forks a persistent
-            // VM subprocess (execution: 'subprocess'); nothing else here ever shut
-            // it down.
-            await actions.vm.shutdown();
+            // Stop every persistent VM worker owned by this Actions instance.
+            await actions.shutdown();
         }
     });
 
@@ -80,7 +78,7 @@ describe('assignActionAddressIds: pre-handler-error skip (#4888) @regression @ti
             await actions.assignActionAddressIds('MINT', params, data, 'invalid: ACTION is not yet activated');
             assert.deepStrictEqual(created, [], 'a pre-handler-rejected action mints no index ids');
         } finally {
-            await actions.vm.shutdown();
+            await actions.shutdown();
         }
     });
 });

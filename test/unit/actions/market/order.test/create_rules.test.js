@@ -23,6 +23,7 @@ const { OWNER_ADDR, OTHER_ADDR, BLOCK_TIME, EXPIRATION, makeParams, makeOrderCon
 const gateRegistry = require('../../../../../src/consensus/gate_registry');
 
 const MAKER_POLICY_ADMISSION_KEY = 'order_swap_maker_policy_admission.ORDER_SWAP_MAKER_POLICY_ADMISSION';
+const PAYOUT_POLICY_KEY = 'order_swap_payout_policy_activation.ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN';
 
 let indexer;
 let actionsCtx;
@@ -31,6 +32,12 @@ let order;
 // Each test starts from its own mock indexer and ORDER handler.
 function freshOrder() {
     ({ indexer, actionsCtx, order } = makeOrderContext());
+}
+
+function disablePayoutPolicy() {
+    const activeAt = gateRegistry.activeAt;
+    sinon.stub(gateRegistry, 'activeAt').callsFake((key, ...args) =>
+        key === PAYOUT_POLICY_KEY ? false : activeAt(key, ...args));
 }
 
 describe('Order action handler @regression @tier2', function () {
@@ -49,7 +56,19 @@ describe('Order action handler @regression @tier2', function () {
             });
         });
 
-        it('rejects a maker GET_ADDRESS forbidden by the GIVE token policy after activation', async function () {
+        it('admits a GET_ADDRESS allowed for GET_TICK but blocked for GIVE_TICK after payout-policy activation', async function () {
+            indexer.indexerDb.isActionAllowed.withArgs(OTHER_ADDR, 'RAREPEPE').resolves(false);
+            const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10||${OTHER_ADDR}|${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await order.parse(params, data, false);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            sinon.assert.calledOnce(indexer.indexerDb.updateBalances);
+        });
+
+        it('refuses the same policy split below payout-policy activation', async function () {
+            disablePayoutPolicy();
             indexer.indexerDb.isActionAllowed.withArgs(OTHER_ADDR, 'RAREPEPE').resolves(false);
             const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10||${OTHER_ADDR}|${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
@@ -60,7 +79,19 @@ describe('Order action handler @regression @tier2', function () {
             sinon.assert.notCalled(indexer.indexerDb.updateBalances);
         });
 
-        it('rejects a maker GET_ADDRESS forbidden by the GET token policy after activation', async function () {
+        it('refuses a GET_ADDRESS allowed for GIVE_TICK but blocked for GET_TICK after payout-policy activation', async function () {
+            indexer.indexerDb.isActionAllowed.withArgs(OTHER_ADDR, 'PEPECASH').resolves(false);
+            const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10||${OTHER_ADDR}|${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await order.parse(params, data, false);
+
+            assert.strictEqual(data['STATUS'], 'invalid: GET_ADDRESS (not authorized for GET_TICK)');
+            sinon.assert.notCalled(indexer.indexerDb.updateBalances);
+        });
+
+        it('keeps the GET_TICK refusal for the reverse split below payout-policy activation', async function () {
+            disablePayoutPolicy();
             indexer.indexerDb.isActionAllowed.withArgs(OTHER_ADDR, 'PEPECASH').resolves(false);
             const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10||${OTHER_ADDR}|${EXPIRATION}|||`);
             const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });

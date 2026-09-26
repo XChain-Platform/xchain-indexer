@@ -15,9 +15,11 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../../fixtures/mocks');
 const Swap = require('../../../../../src/actions/swap/index.js');
+const gateRegistry = require('../../../../../src/consensus/gate_registry');
 
 const VALID_GET_ADDRESS = 'mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp';
 const FUTURE_EXPIRATION = 9999999999;
+const PAYOUT_POLICY_KEY = 'order_swap_payout_policy_activation.ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN';
 
 let indexer;
 let handler;
@@ -55,11 +57,26 @@ function makerParams() {
         String(FUTURE_EXPIRATION), '', '', ''];
 }
 
+function disablePayoutPolicy() {
+    const activeAt = gateRegistry.activeAt;
+    sinon.stub(gateRegistry, 'activeAt').callsFake((key, ...args) =>
+        key === PAYOUT_POLICY_KEY ? false : activeAt(key, ...args));
+}
+
 describe('Swap action handler maker policy admission @regression @tier2', function () {
     beforeEach(setupSwap);
     afterEach(() => sinon.restore());
 
-    it('rejects a maker GET_ADDRESS forbidden by the GIVE token policy after activation', async function () {
+    it('admits a GET_ADDRESS allowed for GET_TICK but blocked for GIVE_TICK after payout-policy activation', async function () {
+        indexer.indexerDb.isActionAllowed.withArgs(VALID_GET_ADDRESS, 'GIVE').resolves(false);
+        const data = createBaseData({ ACTION: 'SWAP', FORMAT: 0, BLOCK_TIME: 1700000000 });
+        await handler.parse(makerParams(), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+        sinon.assert.calledOnce(indexer.indexerDb.updateBalances);
+    });
+
+    it('refuses the same policy split below payout-policy activation', async function () {
+        disablePayoutPolicy();
         indexer.indexerDb.isActionAllowed.withArgs(VALID_GET_ADDRESS, 'GIVE').resolves(false);
         const data = createBaseData({ ACTION: 'SWAP', FORMAT: 0, BLOCK_TIME: 1700000000 });
         await handler.parse(makerParams(), data, null);
@@ -67,7 +84,16 @@ describe('Swap action handler maker policy admission @regression @tier2', functi
         sinon.assert.notCalled(indexer.indexerDb.updateBalances);
     });
 
-    it('rejects a maker GET_ADDRESS forbidden by the GET token policy after activation', async function () {
+    it('refuses a GET_ADDRESS allowed for GIVE_TICK but blocked for GET_TICK after payout-policy activation', async function () {
+        indexer.indexerDb.isActionAllowed.withArgs(VALID_GET_ADDRESS, 'GET').resolves(false);
+        const data = createBaseData({ ACTION: 'SWAP', FORMAT: 0, BLOCK_TIME: 1700000000 });
+        await handler.parse(makerParams(), data, null);
+        assert.strictEqual(data['STATUS'], 'invalid: GET_ADDRESS (not authorized for GET_TICK)');
+        sinon.assert.notCalled(indexer.indexerDb.updateBalances);
+    });
+
+    it('keeps the GET_TICK refusal for the reverse split below payout-policy activation', async function () {
+        disablePayoutPolicy();
         indexer.indexerDb.isActionAllowed.withArgs(VALID_GET_ADDRESS, 'GET').resolves(false);
         const data = createBaseData({ ACTION: 'SWAP', FORMAT: 0, BLOCK_TIME: 1700000000 });
         await handler.parse(makerParams(), data, null);

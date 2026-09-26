@@ -77,14 +77,8 @@ describe('Smoke: handler instantiation and basic action processing', function ()
             assert.ok(actionsInstance.actionAirdrop,    'Airdrop handler loaded');
             assert.ok(actionsInstance.actionUnknown,    'Unknown handler loaded');
         } finally {
-            // The Actions constructor builds XChainVM with execution:'subprocess',
-            // which forks a persistent worker process for contract-execution crash
-            // isolation (xchain-vm/src/process-executor.js). Nothing else in this
-            // suite ever calls vm.shutdown(), so the fork outlives every test and
-            // the mocha process never exits on its own. shutdown() is xchain-vm's
-            // own documented teardown hook ("call from long-lived hosts on shutdown
-            // and from tests").
-            await actionsInstance.vm.shutdown();
+            // Stop every persistent VM worker owned by this Actions instance.
+            await actionsInstance.shutdown();
         }
     });
 });

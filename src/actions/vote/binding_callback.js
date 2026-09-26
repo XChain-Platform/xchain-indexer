@@ -29,6 +29,8 @@ const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
 const { buildInjectedExecContext, SYNTH_EXEC_TX_HASH, SYNTH_TAGS } = require('../../consensus/exec_context.js');
 const gateRegistry = require('../../consensus/gate_registry.js');
 const { getLogger } = require('../../observability/index.js');
+const { MAX_CODE_SIZE } = require('../../protocol/constants.js');
+const callbackProbeVm = require('./callback_probe_vm.js');
 
 const USABLE_CALLBACK_GATE = 'vote_callback_binding_activation.VOTE_CALLBACK_BINDING_REQUIRES_USABLE_METHOD';
 
@@ -75,7 +77,7 @@ async function validateCallbackTarget(data, error){
         error = 'invalid: CALLBACK_METHOD (required for a binding poll)';
     // The 64-character cap: CALLBACK_METHOD is stored on the poll row and replayed
     // verbatim into the injected EXECUTE, so it has to fit that action's method field.
-    if(!error && String(data['CALLBACK_METHOD']).length > 64)
+    if(!error && String(data['CALLBACK_METHOD']).length > callbackProbeVm.CALLBACK_METHOD_MAX_CHARS)
         error = 'invalid: CALLBACK_METHOD (length)';
     // Once the admission rule is active, refuse a callback already guaranteed to fail.
     if(!error && gateRegistry.activeAt(USABLE_CALLBACK_GATE, this.config['NETWORK'], null, data['BLOCK_INDEX'], null)){
@@ -96,15 +98,17 @@ async function validateCallbackTarget(data, error){
 }
 
 // Ask the VM's non-dispatching manifest reader whether runtime routing would find
-// this method. Mapping that boolean onto hasInitialize avoids executing the callback.
+// this method. The probe VM needs a fixed allowance because the appended inspection
+// suffix would otherwise push valid near-cap contract code over the VM input cap.
 async function isCallbackMethodUsable(contract, method, data){
     if(!this.actions.vm || typeof this.actions.vm.readManifest !== 'function')
         throw new Error('VOTE callback admission requires the contract manifest reader');
-    let methodKey = JSON.stringify(String(method));
-    let probeCode = String(contract.code) + '\n;module.exports={initialize:' +
-        '(typeof module.exports==="function"||typeof module.exports[' + methodKey + ']==="function")' +
-        '?function(){}:null};';
-    let result = await this.actions.vm.readManifest(probeCode, {
+    let code = String(contract.code);
+    if(Buffer.byteLength(code, 'utf8') > MAX_CODE_SIZE)
+        return false;
+    let probeCode = callbackProbeVm.buildProbeCode(code, method);
+    let probeVm = this.actions.getVoteCallbackProbeVm();
+    let result = await probeVm.readManifest(probeCode, {
         network:         this.config['NETWORK'],
         contractAddress: 'C:' + this.config['CHAIN'] + ':' + contract.action_index,
         blockContext: {

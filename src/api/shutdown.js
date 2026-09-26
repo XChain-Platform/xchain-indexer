@@ -146,7 +146,8 @@ function createShutdown({ drain, timeoutMs, exit, log } = {}){
  *   2. stop() the indexer (stopFlag + hub push queue).
  *   3. drain the HTTP server and the block loop together; the loop breaks at the
  *      block boundary checked in XChainIndexer.start(), never mid-transaction.
- *   4. close DB pools LAST, since both of the above still need them.
+ *   4. stop the Actions VM workers, then close DB pools LAST, since both of the
+ *      preceding drains still need them.
  *
  * The wait on step 3 is deliberately unbounded HERE and bounded by the caller's
  * hard-exit timer instead, because the only two ways it can overrun both end the
@@ -177,6 +178,13 @@ function createIndexerDrain({ indexer, server, loopSettled, onDraining, log } = 
             // rejection here is that same handled error and must not fail the drain.
             Promise.resolve(loopSettled).catch(() => {})
         ]);
+
+        // Stop the main and callback-probe VM workers after block processing has
+        // settled, but before the process releases its remaining resources.
+        if(indexer && indexer.actions && typeof indexer.actions.shutdown === 'function'){
+            try { await indexer.actions.shutdown(); }
+            catch(err){ logger.warn('Shutdown: closing Actions VM workers failed: ' + (err && err.message ? err.message : err)); }
+        }
 
         await closeDatabases(
             indexer ? [indexer.indexerDb, indexer.decoderDb, indexer.hubDb] : [],

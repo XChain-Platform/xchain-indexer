@@ -23,6 +23,7 @@
 const gateRegistry = require('../../consensus/gate_registry');
 
 const MAKER_POLICY_ADMISSION_KEY = 'order_swap_maker_policy_admission.ORDER_SWAP_MAKER_POLICY_ADMISSION';
+const PAYOUT_POLICY_KEY = 'order_swap_payout_policy_activation.ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN';
 
 // Coins and ticks: both COIN networks supported, GIVE on this network, cross-chain
 // enabled, no coin-for-coin, and each tick known wherever it can be checked here.
@@ -165,8 +166,8 @@ async function validateOwnership(handler, st){
 }
 
 // General checks: SOURCE and TICK awake, MEMO free of delimiters and short enough, SOURCE
-// authorized for the tick, a local maker's GET_ADDRESS authorized for both token
-// policies, the cancelled or edited order known, owned and open, and an EXPIRATION
+// authorized for the tick, a local maker's GET_ADDRESS authorized for its received
+// token, the cancelled or edited order known, owned and open, and an EXPIRATION
 // still in the future.
 async function validateGeneral(handler, st){
     let { format, data, isNativeCoinGive, isNativeCoinGet, isCrossChain, orderInfo } = st;
@@ -196,10 +197,13 @@ async function validateGeneral(handler, st){
     if(!error && format==0 && !isNativeCoinGive && await handler.indexerDb.isActionAllowed(data['SOURCE'], data['GIVE_TICK'], data['BLOCK_INDEX']) == false)
         error = 'invalid: SOURCE (not authorized)';
 
-    // Verify the local maker's proceeds address can hold both tokens before its GIVE is escrowed
+    // Below ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN check each legacy policy; at or above
+    // it check only the policy for the token the maker receives.
     let checkMakerPolicy = !error && format==0 && !isCrossChain &&
         gateRegistry.activeAt(MAKER_POLICY_ADMISSION_KEY, handler.config['NETWORK'], handler.config['COIN'], data['BLOCK_INDEX'], null);
-    if(checkMakerPolicy && !isNativeCoinGive && await handler.indexerDb.isActionAllowed(data['GET_ADDRESS'], data['GIVE_TICK'], data['BLOCK_INDEX']) == false)
+    let perTokenPayoutPolicy = checkMakerPolicy &&
+        gateRegistry.activeAt(PAYOUT_POLICY_KEY, handler.config['NETWORK'], handler.config['COIN'], data['BLOCK_INDEX'], null);
+    if(checkMakerPolicy && !perTokenPayoutPolicy && !isNativeCoinGive && await handler.indexerDb.isActionAllowed(data['GET_ADDRESS'], data['GIVE_TICK'], data['BLOCK_INDEX']) == false)
         error = 'invalid: GET_ADDRESS (not authorized for GIVE_TICK)';
     if(!error && checkMakerPolicy && !isNativeCoinGet && await handler.indexerDb.isActionAllowed(data['GET_ADDRESS'], data['GET_TICK'], data['BLOCK_INDEX']) == false)
         error = 'invalid: GET_ADDRESS (not authorized for GET_TICK)';
