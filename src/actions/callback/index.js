@@ -76,6 +76,7 @@ class Callback {
         await this.chargeCallbackFee(data, s.fees, s.recipients);
         error = await validate.validateCallbackToken.call(this, data, s.tokenInfo, s.callbackTokenInfo, error);
         error = await validate.validateCallbackState.call(this, data, s.tokenInfo, error);
+        error = validate.validateCallbackCompensation.call(this, data, s.holders, s.recipients, error);
         error = await validate.validateCallbackFunding.call(this, data, s, error, totals.totalCallbackTickAmount);
         // Determine final status
         let status = (error) ? error : 'valid';

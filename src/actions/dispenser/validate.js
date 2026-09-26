@@ -176,7 +176,7 @@ module.exports = {
                 // Only check a LIST field that was actually set to a list ID
                 if(!error && !this.util.isNull(data[name]) && this.util.isNumeric(data[name])){
                     // Get LIST type and information
-                    let type = await this.indexerDb.getListType(data[name]);
+                    let type = await this.indexerDb.getListType(data[name], data['BLOCK_INDEX']);
 
                     // Verify LIST exist
                     if(!error && type===false)

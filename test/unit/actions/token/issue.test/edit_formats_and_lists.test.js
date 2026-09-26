@@ -136,6 +136,7 @@ describe('Issue handler @regression @tier1', function () {
             await handler.parse(params, data, null);
 
             assert.strictEqual(data.STATUS, 'valid');
+            sinon.assert.calledWithExactly(indexer.indexerDb.isValidList, '5', 2, LOW_BLOCK);
         });
 
         it('invalid BLOCK_LIST reference → invalid', async function () {

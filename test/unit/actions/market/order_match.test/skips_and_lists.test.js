@@ -153,6 +153,7 @@ describe('Order_Match action handler @regression @tier2', function () {
 
         // ALLOW_LIST for orderInfo includes both addresses → both sides permitted
         indexer.indexerDb.getList.resolves([orderAddr, matchAddr]);
+        indexer.config.NETWORK = 'mainnet';
 
         const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
         await orderMatch.parse([], data, false);

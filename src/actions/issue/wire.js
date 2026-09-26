@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * ISSUE wire parse: the three flag days resolved once for the action's block, the
+ * ISSUE wire parse: the four flag days resolved once for the action's block, the
  * FORMAT gate, the positional PARAMS, the ^<id> address references, the storage clone
  * and the number formats.
  *
@@ -30,9 +30,10 @@
 const gateRegistry = require('../../consensus/gate_registry');
 const TOKEN_BRIDGE_KEY = 'token_bridge_activation.TOKEN_BRIDGE_ACTIVATION';
 const TOKEN_POLICY_INHERITANCE_KEY = 'token_policy_activation.TOKEN_POLICY_INHERITANCE_ACTIVATION';
+const POLICY_LIST_DETACH_KEY = 'issue_policy_list_detach.ISSUE_POLICY_LIST_DETACH';
 
 // The flag days, the FORMAT gate and the positional PARAMS. Returns the context: the
-// FORMAT, the (possibly replaced) data object, the verdict so far and the three flags.
+// FORMAT, the (possibly replaced) data object, the verdict so far and the four flags.
 async function parseWire(params, data, error){
     // Validate that format is known
     let format = data['FORMAT'];
@@ -42,6 +43,7 @@ async function parseWire(params, data, error){
     // parsed, never on a transfer's snapshot_block.
     let tokenBridgeActive = gateRegistry.activeAt(TOKEN_BRIDGE_KEY, this.config['NETWORK'], null, data['BLOCK_INDEX'], null);
     let policyInheritance = gateRegistry.activeAt(TOKEN_POLICY_INHERITANCE_KEY, this.config['NETWORK'], null, data['BLOCK_INDEX'], null);
+    let policyListDetach  = gateRegistry.activeAt(POLICY_LIST_DETACH_KEY, this.config['NETWORK'], null, data['BLOCK_INDEX'], null);
     // The tick-namespace flag day has its OWN constant, not the bridge's: the
     // bridge arms only after its own cross-check, and the namespace has to close
     // before anyone squats a future chain root, not after.
@@ -57,7 +59,7 @@ async function parseWire(params, data, error){
     if(!error)
         data = this.util.setActionParams(data, params, this.formats, format);
 
-    return { format, data, error, tokenBridgeActive, policyInheritance, namespaceActive };
+    return { format, data, error, tokenBridgeActive, policyInheritance, policyListDetach, namespaceActive };
 }
 
 // The ^<id> references, the storage clone (ctx.issue, the pre-merge wire snapshot the

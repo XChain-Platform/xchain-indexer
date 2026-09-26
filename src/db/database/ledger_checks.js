@@ -59,8 +59,9 @@ module.exports = {
     // Validate if a list is a valid type
     // @param {action_index}  integer  ACTION_INDEX to a list
     // @param {type}          string   List Type (1=TICK, 2=ADDRESS)
-    async isValidList(action_index, type){
-        let list_type = await this.getListType(action_index);
+    // @param {block_index}   integer  block being processed
+    async isValidList(action_index, type, block_index){
+        let list_type = await this.getListType(action_index, block_index);
         if(list_type==type)
             return true;
         return false;

@@ -23,6 +23,10 @@
 
 'use strict';
 
+const gateRegistry = require('../../consensus/gate_registry');
+
+const CALLBACK_COMPENSATION_KEY = 'callback_compensation_activation.CALLBACK_COMPENSATES_EVERY_DEBITED_HOLDER';
+
 // The TICK, ACTION and FORMAT validations.
 async function validateCallbackToken(data, tokenInfo, callbackTokenInfo, error){
     /*****************************************************************
@@ -105,6 +109,19 @@ async function validateCallbackState(data, tokenInfo, error){
     return error;
 }
 
+// Require every recalled holder to qualify for the compensation token.
+function validateCallbackCompensation(data, holders, recipients, error){
+    let enforceCoverage = gateRegistry.activeAt(CALLBACK_COMPENSATION_KEY,
+        this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
+    if(!error && enforceCoverage){
+        let unpaidHolder = Object.keys(holders).some((address) =>
+            address != data['SOURCE'] && !Object.prototype.hasOwnProperty.call(recipients, address));
+        if(unpaidHolder)
+            error = 'invalid: CALLBACK_TICK (holder not authorized)';
+    }
+    return error;
+}
+
 // Funding: the CALLBACK_TICK owed and the fee, each debited from the working balances so
 // the next check sees what the previous one spent. The debited balances go back on state.
 async function validateCallbackFunding(data, s, error, totalCallbackTickAmount){
@@ -146,4 +163,4 @@ async function validateCallbackFunding(data, s, error, totalCallbackTickAmount){
     return error;
 }
 
-module.exports = { validateCallbackToken, validateCallbackState, validateCallbackFunding };
+module.exports = { validateCallbackToken, validateCallbackState, validateCallbackCompensation, validateCallbackFunding };

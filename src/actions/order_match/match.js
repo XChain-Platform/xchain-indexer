@@ -1,7 +1,9 @@
 const { getLogger } = require('../../observability/index.js');
 const gateRegistry = require('../../consensus/gate_registry');
+const { tokenPolicyRejects } = require('../../consensus/order_swap_payout_policy/token_policy');
 
 const EMPTY_ALLOW_LIST_KEY = 'empty_allow_list_denies_activation.EMPTY_ALLOW_LIST_DENIES';
+const PAYOUT_POLICY_KEY = 'order_swap_payout_policy_activation.ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN';
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -213,7 +215,7 @@ module.exports = {
         return true;
     },
 
-    // Both GET_ADDRESSes pass the token lists, this order's lists and the candidate's own
+    // Each payout passes its received token's policy, this order's lists and the candidate's own
     async isListAllowed(data, orderInfo, matchInfo, lists){
         let { getTokenInfo, giveTokenInfo, getTokenAllowList, getTokenBlockList, giveTokenAllowList, giveTokenBlockList,
               orderInfoAllowList, orderInfoBlockList } = lists;
@@ -233,12 +235,10 @@ module.exports = {
              (attachedList(orderInfo['ALLOW_LIST']) && orderInfoAllowList.length === 0) ||
              (attachedList(matchInfo['ALLOW_LIST']) && matchInfoAllowList.length === 0));
 
-        // Check if GET_ADDRESS for both sides of swap are allowed (ALLOW/BLOCK list support)
+        // Check each payout against the policy for the token delivered there.
+        let perTokenPolicy = gateRegistry.activeAt(PAYOUT_POLICY_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
         if(deniedByEmptyAllowList ||
-           (getTokenAllowList.length  && (!getTokenAllowList.includes(orderInfo['GET_ADDRESS'])  || !getTokenAllowList.includes(matchInfo['GET_ADDRESS'])))  ||
-           (getTokenBlockList.length  && ( getTokenBlockList.includes(orderInfo['GET_ADDRESS'])  ||  getTokenBlockList.includes(matchInfo['GET_ADDRESS'])))  ||
-           (giveTokenAllowList.length && (!giveTokenAllowList.includes(orderInfo['GET_ADDRESS']) || !giveTokenAllowList.includes(matchInfo['GET_ADDRESS']))) ||
-           (giveTokenBlockList.length && ( giveTokenBlockList.includes(orderInfo['GET_ADDRESS']) ||  giveTokenBlockList.includes(matchInfo['GET_ADDRESS']))) ||
+           tokenPolicyRejects(lists, orderInfo['GET_ADDRESS'], matchInfo['GET_ADDRESS'], perTokenPolicy) ||
            (orderInfoAllowList.length && !orderInfoAllowList.includes(matchInfo['GET_ADDRESS'])) ||
            (orderInfoBlockList.length &&  orderInfoBlockList.includes(matchInfo['GET_ADDRESS'])) ||
            (matchInfoAllowList.length && !matchInfoAllowList.includes(orderInfo['GET_ADDRESS'])) ||

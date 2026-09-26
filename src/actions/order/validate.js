@@ -22,6 +22,8 @@
 
 const gateRegistry = require('../../consensus/gate_registry');
 
+const MAKER_POLICY_ADMISSION_KEY = 'order_swap_maker_policy_admission.ORDER_SWAP_MAKER_POLICY_ADMISSION';
+
 // Coins and ticks: both COIN networks supported, GIVE on this network, cross-chain
 // enabled, no coin-for-coin, and each tick known wherever it can be checked here.
 function validateTickAndCoin(handler, st){
@@ -163,10 +165,11 @@ async function validateOwnership(handler, st){
 }
 
 // General checks: SOURCE and TICK awake, MEMO free of delimiters and short enough, SOURCE
-// authorized for the tick, the cancelled or edited order known, owned and open, and an
-// EXPIRATION still in the future.
+// authorized for the tick, a local maker's GET_ADDRESS authorized for both token
+// policies, the cancelled or edited order known, owned and open, and an EXPIRATION
+// still in the future.
 async function validateGeneral(handler, st){
-    let { format, data, isNativeCoinGive, orderInfo } = st;
+    let { format, data, isNativeCoinGive, isNativeCoinGet, isCrossChain, orderInfo } = st;
     let error = st.error;
 
     // Verify SOURCE is not sleeping
@@ -192,6 +195,14 @@ async function validateGeneral(handler, st){
     // Verify TICK action is allowed from SOURCE (allow/block lists); skip for native coin
     if(!error && format==0 && !isNativeCoinGive && await handler.indexerDb.isActionAllowed(data['SOURCE'], data['GIVE_TICK'], data['BLOCK_INDEX']) == false)
         error = 'invalid: SOURCE (not authorized)';
+
+    // Verify the local maker's proceeds address can hold both tokens before its GIVE is escrowed
+    let checkMakerPolicy = !error && format==0 && !isCrossChain &&
+        gateRegistry.activeAt(MAKER_POLICY_ADMISSION_KEY, handler.config['NETWORK'], handler.config['COIN'], data['BLOCK_INDEX'], null);
+    if(checkMakerPolicy && !isNativeCoinGive && await handler.indexerDb.isActionAllowed(data['GET_ADDRESS'], data['GIVE_TICK'], data['BLOCK_INDEX']) == false)
+        error = 'invalid: GET_ADDRESS (not authorized for GIVE_TICK)';
+    if(!error && checkMakerPolicy && !isNativeCoinGet && await handler.indexerDb.isActionAllowed(data['GET_ADDRESS'], data['GET_TICK'], data['BLOCK_INDEX']) == false)
+        error = 'invalid: GET_ADDRESS (not authorized for GET_TICK)';
 
     // Validate ORDER_ACTION_INDEX is valid SWAP
     if(!error && (format==1 || format==2) && !orderInfo)
@@ -231,7 +242,7 @@ async function validateLists(handler, st){
             // Only look up and validate this list field when it holds a numeric list id
             if(!error && !handler.util.isNull(data[name]) && handler.util.isNumeric(data[name])){
                 // Get LIST type and information
-                let type = await handler.indexerDb.getListType(data[name]);
+                let type = await handler.indexerDb.getListType(data[name], data['BLOCK_INDEX']);
 
                 // Verify LIST exist
                 if(!error && type===false)

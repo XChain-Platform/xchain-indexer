@@ -82,7 +82,7 @@ module.exports = {
 
         // Lookup list information
         if(!error){
-            type = await this.indexerDb.getListType(airdrop['LIST_ACTION_INDEX']);
+            type = await this.indexerDb.getListType(airdrop['LIST_ACTION_INDEX'], data['BLOCK_INDEX']);
             list = await this.indexerDb.getList(airdrop['LIST_ACTION_INDEX'], data['BLOCK_INDEX']);
         }
 

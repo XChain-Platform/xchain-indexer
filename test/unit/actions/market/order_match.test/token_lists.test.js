@@ -31,6 +31,59 @@ const bind = (h) => { ({ indexer, orderMatch } = h); };
 describe('Order_Match action handler @regression @tier2', function () {
     useOrderMatchHarness(bind);
 
+    it('keeps the below-gate rule that checks the GET-token policy against both payouts', async function () {
+        const orderAddr = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+
+        indexer.config.NETWORK = 'mainnet';
+        indexer.indexerDb.getTokenInfo
+            .withArgs('PEPECASH', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'PEPECASH', TICK_ID: 20, ALLOW_LIST: '90', BLOCK_LIST: null }));
+        indexer.indexerDb.getList.withArgs('90', sinon.match.any).resolves([orderAddr]);
+        indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({ GET_ADDRESS: orderAddr }));
+        indexer.indexerDb.findOrderMatches.resolves([makeMatchInfo()]);
+
+        const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
+        await orderMatch.parse([], data, false);
+
+        sinon.assert.notCalled(indexer.indexerDb.createOrderMatch);
+    });
+
+    it('checks the active GET-token policy only against the order payout', async function () {
+        const orderAddr = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
+
+        indexer.indexerDb.getTokenInfo
+            .withArgs('PEPECASH', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'PEPECASH', TICK_ID: 20, ALLOW_LIST: '90', BLOCK_LIST: null }));
+        indexer.indexerDb.getList.withArgs('90', sinon.match.any).resolves([orderAddr]);
+        indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({ GET_ADDRESS: orderAddr }));
+        indexer.indexerDb.findOrderMatches.resolves([makeMatchInfo()]);
+
+        const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
+        await orderMatch.parse([], data, false);
+
+        sinon.assert.calledOnce(indexer.indexerDb.createOrderMatch);
+    });
+
+    it('checks the active GIVE-token policy only against the matching payout', async function () {
+        const matchAddr = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
+
+        indexer.indexerDb.getTokenInfo
+            .withArgs('RAREPEPE', sinon.match.any, sinon.match.any)
+            .resolves(createTokenInfo({ TICK: 'RAREPEPE', TICK_ID: 10, ALLOW_LIST: '91', BLOCK_LIST: null }));
+        indexer.indexerDb.getList.withArgs('91', sinon.match.any).resolves([matchAddr]);
+        indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo());
+        indexer.indexerDb.findOrderMatches.resolves([makeMatchInfo({ GET_ADDRESS: matchAddr })]);
+
+        const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
+        await orderMatch.parse([], data, false);
+
+        sinon.assert.calledOnce(indexer.indexerDb.createOrderMatch);
+    });
+});
+
+describe('Order_Match action handler @regression @tier2', function () {
+    useOrderMatchHarness(bind);
+
     it('token GET_TICK ALLOW_LIST set → getList called for token allow list (line 72 true branch)', async function () {
         const orderAddr = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
         const matchAddr = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
@@ -61,9 +114,10 @@ describe('Order_Match action handler @regression @tier2', function () {
         sinon.assert.calledOnce(indexer.indexerDb.createOrderMatch);
     });
 
-    it('token GIVE_TICK BLOCK_LIST set → skip when GET_ADDRESS is in block list (line 77 true branch)', async function () {
+    it('below gate, token GIVE_TICK BLOCK_LIST skips when either GET_ADDRESS is listed', async function () {
         const matchAddr = 'mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM';
 
+        indexer.config.NETWORK = 'mainnet';
         indexer.indexerDb.getTokenInfo
             .withArgs('RAREPEPE', sinon.match.any, sinon.match.any)
             .resolves(createTokenInfo({ TICK: 'RAREPEPE', TICK_ID: 10, ALLOW_LIST: null, BLOCK_LIST: null }));

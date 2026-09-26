@@ -23,15 +23,26 @@ const path    = require('path');
 // The list-edit resolution flag day is a registry row read by literal key (W5), keyed
 // '<COIN>:<network>' so the coin goes with the height.
 const gateRegistry = require('../../consensus/gate_registry');
+const { getListHeadIndex } = require('./head_resolution');
 const LIST_EDIT_RESOLUTION_KEY = 'list_edit_resolution_activation.LIST_EDIT_RESOLUTION_ACTIVATION';
+const LIST_REFERENCE_VALIDITY_KEY = 'list_reference_validity_activation.LIST_REFERENCE_REQUIRES_VALID_LIST';
 
 module.exports = {
 
-    // Return a list type given a tx_hash
-    async getListType(action_index){
+    getListHeadIndex,
+
+    // Return a list type given an action index. Once the validity gate is active,
+    // only a LIST action with a valid verdict can supply a reference type.
+    async getListType(action_index, block_index){
         let type  = false;
         if(!this.util.isNull(action_index) && this.util.isNumeric(action_index)){
             let query = "SELECT type FROM lists WHERE action_index=? LIMIT 1";
+            if(gateRegistry.activeAt(LIST_REFERENCE_VALIDITY_KEY, this.config['NETWORK'], this.config['COIN'], block_index, null))
+                query = `SELECT l.type
+                         FROM lists l
+                         INNER JOIN index_statuses s ON (s.id=l.status_id)
+                         WHERE l.action_index=? AND s.status='valid'
+                         LIMIT 1`;
             let args  = [action_index];
             let results = await this.doQuery(query, args);
             if(results.length > 0)
@@ -63,36 +74,11 @@ module.exports = {
         return root;
     },
 
-    // Resolve a LIST reference to the action whose list_items rows ARE the list's
-    // CURRENT membership: the newest VALID action in its edit chain, or the create
-    // itself when it has no valid edits. Every valid edit persists a COMPLETE
-    // membership snapshot (list.js splices the final item array and writes all of
-    // it), so the head's rows are the whole list, never a delta. Ordering is by
-    // action_index DESC, a total order (action_index is unique and monotonic), so
-    // independently-built nodes resolve the same head. Invalid edits are excluded:
-    // they write no list_items rows at all, so picking one would empty the list.
-    // @param {action_index}  integer  ACTION_INDEX of any LIST create or edit
-    async getListHeadIndex(action_index){
-        let root = await this.getListRootIndex(action_index);
-        let query = `SELECT
-                        l.action_index
-                    FROM
-                        lists l
-                        INNER JOIN index_statuses s ON (s.id=l.status_id)
-                    WHERE
-                        l.list_action_index=?
-                        AND s.status='valid'
-                    ORDER BY l.action_index DESC
-                    LIMIT 1`;
-        let rows = await this.doQuery(query, [root]);
-        return (rows.length > 0) ? rows[0]['action_index'] : root;
-    },
-
     // Return a list given a tx_hash
     // @param {action_index}  integer  ACTION_INDEX of a LIST (as pinned by consumers)
     // @param {block_index}   integer  block being processed; gates edit resolution
     async getList(action_index, block_index){
-        let type = await this.getListType(action_index);
+        let type = await this.getListType(action_index, block_index);
         let list = [];
         if(type){
             // a LIST edit writes its resulting items under the EDIT's own
@@ -105,7 +91,7 @@ module.exports = {
             // legacy create-index read runs unchanged.
             let resolved = action_index;
             if(gateRegistry.activeAt(LIST_EDIT_RESOLUTION_KEY, this.config['NETWORK'], this.config['COIN'], block_index, null))
-                resolved = await this.getListHeadIndex(action_index);
+                resolved = await this.getListHeadIndex(action_index, block_index);
             let query = '';
             let args  = [resolved];
             // CONSENSUS: list_items has no ORDER BY on the AUTO_INCREMENT insert
@@ -160,7 +146,7 @@ module.exports = {
     // @param {action_index}  integer  ACTION_INDEX of a LIST (as pinned by consumers)
     // @param {block_index}   integer  the height to resolve the list's membership AS OF
     async getListAtBlock(action_index, block_index){
-        let type = await this.getListType(action_index);
+        let type = await this.getListType(action_index, block_index);
         let list = [];
         if(type){
             let root     = await this.getListRootIndex(action_index);
@@ -169,20 +155,7 @@ module.exports = {
             // legacy create-index membership stands, which is already immutable and needs
             // no bound.
             if(this.isListEditResolutionActive(block_index)){
-                let headQuery = `SELECT
-                                    l.action_index
-                                FROM
-                                    lists l
-                                    INNER JOIN index_statuses s ON (s.id=l.status_id)
-                                    INNER JOIN actions        a ON (a.action_index=l.action_index)
-                                WHERE
-                                    l.list_action_index=?
-                                    AND s.status='valid'
-                                    AND a.block_index<=?
-                                ORDER BY l.action_index DESC
-                                LIMIT 1`;
-                let headRows = await this.doQuery(headQuery, [root, block_index]);
-                resolved = (headRows.length > 0) ? headRows[0]['action_index'] : root;
+                resolved = await this.getListHeadIndex(root, block_index, block_index);
             }
             let query = '';
             let args  = [resolved];

@@ -19,7 +19,10 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 const { createBaseData } = require('../../../../fixtures/mocks');
-const { OWNER_ADDR, BLOCK_TIME, EXPIRATION, makeParams, makeOrderContext } = require('./helpers/order_context.js');
+const { OWNER_ADDR, OTHER_ADDR, BLOCK_TIME, EXPIRATION, makeParams, makeOrderContext } = require('./helpers/order_context.js');
+const gateRegistry = require('../../../../../src/consensus/gate_registry');
+
+const MAKER_POLICY_ADMISSION_KEY = 'order_swap_maker_policy_admission.ORDER_SWAP_MAKER_POLICY_ADMISSION';
 
 let indexer;
 let actionsCtx;
@@ -35,6 +38,60 @@ describe('Order action handler @regression @tier2', function () {
     afterEach(() => sinon.restore());
 
     describe('Format 0 – Create Order', function () {
+        it('registers maker policy admission at the required network heights', function () {
+            assert.deepStrictEqual(gateRegistry.get(MAKER_POLICY_ADMISSION_KEY), {
+                mainnet: 9999999999,
+                'BTC:testnet': 9999999999,
+                'LTC:testnet': 9999999999,
+                'DOGE:testnet': 9999999999,
+                testnet: 9999999999,
+                regtest: 0,
+            });
+        });
+
+        it('rejects a maker GET_ADDRESS forbidden by the GIVE token policy after activation', async function () {
+            indexer.indexerDb.isActionAllowed.withArgs(OTHER_ADDR, 'RAREPEPE').resolves(false);
+            const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10||${OTHER_ADDR}|${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await order.parse(params, data, false);
+
+            assert.strictEqual(data['STATUS'], 'invalid: GET_ADDRESS (not authorized for GIVE_TICK)');
+            sinon.assert.notCalled(indexer.indexerDb.updateBalances);
+        });
+
+        it('rejects a maker GET_ADDRESS forbidden by the GET token policy after activation', async function () {
+            indexer.indexerDb.isActionAllowed.withArgs(OTHER_ADDR, 'PEPECASH').resolves(false);
+            const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10||${OTHER_ADDR}|${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await order.parse(params, data, false);
+
+            assert.strictEqual(data['STATUS'], 'invalid: GET_ADDRESS (not authorized for GET_TICK)');
+            sinon.assert.notCalled(indexer.indexerDb.updateBalances);
+        });
+
+        it('preserves legacy admission below the maker policy gate', async function () {
+            indexer.config['NETWORK'] = 'mainnet';
+            indexer.indexerDb.isActionAllowed.withArgs(OTHER_ADDR, 'RAREPEPE').resolves(false);
+            indexer.indexerDb.isActionAllowed.withArgs(OTHER_ADDR, 'PEPECASH').resolves(false);
+            const params = makeParams(`0|BTC|RAREPEPE|1||BTC|PEPECASH|10||${OTHER_ADDR}|${EXPIRATION}|||`);
+            const data   = createBaseData({ ACTION: 'ORDER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
+
+            await order.parse(params, data, false);
+
+            assert.strictEqual(data['STATUS'], 'valid');
+            sinon.assert.calledOnce(indexer.indexerDb.updateBalances);
+        });
+    });
+});
+
+describe('Order action handler @regression @tier2', function () {
+    beforeEach(freshOrder);
+    afterEach(() => sinon.restore());
+
+    describe('Format 0 – Create Order', function () {
+
         it('SOURCE sleeping returns invalid', async function () {
             indexer.indexerDb.isActionAllowed
                 .withArgs(OWNER_ADDR, null, sinon.match.any)

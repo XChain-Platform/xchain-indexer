@@ -1,6 +1,8 @@
 const gateRegistry = require('../../consensus/gate_registry');
+const { tokenPolicyRejects } = require('../../consensus/order_swap_payout_policy/token_policy');
 
 const EMPTY_ALLOW_LIST_KEY = 'empty_allow_list_denies_activation.EMPTY_ALLOW_LIST_DENIES';
+const PAYOUT_POLICY_KEY = 'order_swap_payout_policy_activation.ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN';
 
 /*********************************************************************
  *
@@ -53,6 +55,7 @@ module.exports = {
     async findSwapMatch(data, swap, swapInfo, matches){
         let { getTokenInfo, giveTokenInfo, getTokenAllowList, getTokenBlockList, giveTokenAllowList, giveTokenBlockList,
               swapInfoAllowList, swapInfoBlockList } = await this.loadSwapLists(data, swap, swapInfo);
+        let perTokenPolicy = gateRegistry.activeAt(PAYOUT_POLICY_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
 
         // Loop through matches and determine if we have a valid match
         let matchInfo = false;
@@ -90,12 +93,10 @@ module.exports = {
                  (attachedList(swapInfo['ALLOW_LIST']) && swapInfoAllowList.length === 0) ||
                  (attachedList(match['ALLOW_LIST']) && matchInfoAllowList.length === 0));
 
-            // Check if GET_ADDRESS for both sides of swap are allowed (ALLOW/BLOCK list support)
+            // Check each payout against the policy for the token delivered there.
             if(deniedByEmptyAllowList ||
-               (getTokenAllowList.length  && (!getTokenAllowList.includes(swapInfo['GET_ADDRESS'])  || !getTokenAllowList.includes(match['GET_ADDRESS'])))  ||
-               (getTokenBlockList.length  && ( getTokenBlockList.includes(swapInfo['GET_ADDRESS'])  ||  getTokenBlockList.includes(match['GET_ADDRESS'])))  ||
-               (giveTokenAllowList.length && (!giveTokenAllowList.includes(swapInfo['GET_ADDRESS']) || !giveTokenAllowList.includes(match['GET_ADDRESS']))) ||
-               (giveTokenBlockList.length && ( giveTokenBlockList.includes(swapInfo['GET_ADDRESS']) ||  giveTokenBlockList.includes(match['GET_ADDRESS']))) ||
+               tokenPolicyRejects({ getTokenAllowList, getTokenBlockList, giveTokenAllowList, giveTokenBlockList },
+                                  swapInfo['GET_ADDRESS'], match['GET_ADDRESS'], perTokenPolicy) ||
                (swapInfoAllowList.length  && !swapInfoAllowList.includes(match['GET_ADDRESS']))     ||
                (swapInfoBlockList.length  &&  swapInfoBlockList.includes(match['GET_ADDRESS']))     ||
                (matchInfoAllowList.length && !matchInfoAllowList.includes(swapInfo['GET_ADDRESS'])) ||

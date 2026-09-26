@@ -26,7 +26,7 @@
 // The TICK row, the distribution probe, the merge into empty PARAMS and the
 // CALLBACK_TICK row. Leaves ctx.tokenInfo, ctx.isDistributed and ctx.cbInfo.
 async function loadTokenState(ctx){
-    let { data, error, batchIssuanceLimitsV2 } = ctx;
+    let { data, error, issue, format, batchIssuanceLimitsV2, policyListDetach } = ctx;
 
     // Get information on token, then check distribution passing tokenInfo to avoid a second getTokenInfo call
     let tokenInfo     = await this.gatedGetTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX'], error, batchIssuanceLimitsV2);
@@ -43,6 +43,14 @@ async function loadTokenState(ctx){
             if(this.util.isNull(data[key]))
                 data[key] = tokenInfo[key];
         }
+    }
+
+    // Read the format-5 `0` sentinel as no list while retaining it in the ISSUE row.
+    // Empty fields stay inherited from tokenInfo through the merge above.
+    if(policyListDetach && Number(format)===5){
+        for(let name of ['ALLOW_LIST', 'BLOCK_LIST'])
+            if(String(issue[name])==='0')
+                data[name] = null;
     }
 
     // Get information on CALLBACK_TICK

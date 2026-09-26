@@ -90,3 +90,87 @@ addGate('token_gate_list_at_block.TOKEN_GATE_LIST_AT_BLOCK', 'height', {
     testnet: UNARMED,
     regtest: 0,
 });
+
+// order_swap_maker_policy_admission
+// At or above this height a local ORDER or SWAP maker's GET_ADDRESS must pass
+// both token policies before the GIVE side enters escrow.
+addGate('order_swap_maker_policy_admission.ORDER_SWAP_MAKER_POLICY_ADMISSION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// list_reference_validity_activation
+// Require referenced LIST actions to carry a valid verdict. Below activation,
+// reference validation accepts any stored LIST row of the right type.
+addGate('list_reference_validity_activation.LIST_REFERENCE_REQUIRES_VALID_LIST', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// list_head_follows_edit_chain
+// At or above this height, LIST head resolution follows legacy edits that
+// reference another edit instead of only considering direct children of CREATE.
+addGate('list_head_follows_edit_chain.LIST_HEAD_FOLLOWS_EDIT_CHAIN', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// callback_compensation_activation
+// Reject a CALLBACK when a holder of the recalled TICK cannot receive the
+// CALLBACK_TICK compensation. Below this height legacy settlement is retained.
+addGate('callback_compensation_activation.CALLBACK_COMPENSATES_EVERY_DEBITED_HOLDER', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// vote_callback_binding_activation
+// Require a VOTE binding callback to target a currently active contract and a
+// callable export. Below this height creation checks only contract existence.
+addGate('vote_callback_binding_activation.VOTE_CALLBACK_BINDING_REQUIRES_USABLE_METHOD', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// order_swap_payout_policy_activation
+// At or above this height, each ORDER or SWAP payout address is checked only
+// against the generic policy of the token delivered to it.
+addGate('order_swap_payout_policy_activation.ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// issue_policy_list_detach
+// At or above this height an ISSUE format 5 may carry `0` in ALLOW_LIST or
+// BLOCK_LIST to detach that policy list. Empty fields inherit current ids.
+addGate('issue_policy_list_detach.ISSUE_POLICY_LIST_DETACH', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});

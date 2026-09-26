@@ -20,7 +20,7 @@
  * test/unit/votes_tally_invariants.test.js.
  *
  * This file holds the escrow-conservation and binding-callback blocks. The
- * three flag days (VOTE_POLL_TICK_VISIBLE, VOTE_BINDING_MINIMUMS and
+ * three earlier flag days (VOTE_POLL_TICK_VISIBLE, VOTE_BINDING_MINIMUMS and
  * VOTE_CALLBACK_TIMELOCK) live beside it in vote_invariants.test/, each opening
  * the same describe title so every full test title is unchanged;
  * vote_invariants.test/helpers/vote_fixtures.js builds the mock handler and the
@@ -36,10 +36,10 @@ const sinon  = require('sinon');
 const { createBaseData } = require('../../../fixtures/mocks');
 const { freshVote, poll } = require('./vote_invariants.test/helpers/vote_fixtures.js');
 
-let indexer, handler, executeStub, gas, donate1;
+let indexer, actionsCtx, handler, executeStub, vm, gas, donate1;
 
 function freshHandler() {
-    ({ indexer, handler, executeStub, gas, donate1 } = freshVote());
+    ({ indexer, actionsCtx, handler, executeStub, vm, gas, donate1 } = freshVote());
 }
 
 function restoreStubs() {
@@ -95,6 +95,84 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
             assert.strictEqual(creditSum, 120, 'forfeit + refund legs still conserve the released escrow exactly');
 
             assert.ok(indexer.indexerDb.setPollDepositResolved.calledOnceWith(100, 'forfeited'));
+        });
+    });
+});
+
+// Drive a binding v0 through its real admission path.
+function bindingCreateParams() {
+    return ['0', 'TEST', '200', 'yes,no', '', '', '', '0.1', '1', '', '', '', '',
+            '5', 'onResult', '', 'pass', ''];
+}
+
+function stubBindingCreate(contract, status) {
+    indexer.indexerDb.getTokenInfo.resolves({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0, SUPPLY: '1000' });
+    indexer.indexerDb.createTicker.resolves(1);
+    indexer.indexerDb.getAddressBalances.resolves({ 1: '100' });
+    indexer.indexerDb.getContract = sinon.stub().resolves(contract);
+    indexer.indexerDb.getStatusString = sinon.stub().resolves(status);
+    indexer.indexerDb.createPoll = sinon.stub().resolves();
+}
+
+async function runBindingCreate() {
+    const data = createBaseData({ ACTION: 'VOTE', FORMAT: 0, BLOCK_INDEX: 100, ACTION_INDEX: 50, SOURCE: 'creatorAddr' });
+    await handler.parse(bindingCreateParams(), data, null);
+    return data;
+}
+
+describe('Vote invariants (escrow conservation + callback metering) @regression @tier1', function () {
+    beforeEach(freshHandler);
+    afterEach(restoreStubs);
+
+    describe('VOTE_CALLBACK_BINDING_REQUIRES_USABLE_METHOD admission', function () {
+        it('gate ACTIVE: rejects an inactive callback contract before probing its method', async function () {
+            stubBindingCreate({ action_index: 5, code: 'module.exports={onResult:function(){}}', status_id: 2 }, 'invalid: disabled');
+
+            const data = await runBindingCreate();
+
+            assert.strictEqual(data.STATUS, 'invalid: CALLBACK_CONTRACT (not active)');
+            assert.ok(vm.readManifest.notCalled, 'an inactive contract has no usable callback to probe');
+            assert.ok(indexer.indexerDb.createPoll.notCalled);
+        });
+
+        it('gate ACTIVE: rejects a callback method the active contract does not export', async function () {
+            stubBindingCreate({ action_index: 5, code: 'module.exports={other:function(){}}', status_id: 1 }, 'valid');
+            vm.readManifest.resolves({ success: true, manifest: { hasInitialize: false }, error: null });
+
+            const data = await runBindingCreate();
+
+            assert.strictEqual(data.STATUS, 'invalid: CALLBACK_METHOD (unavailable)');
+            assert.ok(vm.readManifest.calledOnce);
+            assert.match(vm.readManifest.firstCall.args[0], /module\.exports\["onResult"\]/,
+                'the manifest probe asks about the callback method carried on the poll');
+            assert.ok(indexer.indexerDb.createPoll.notCalled);
+        });
+
+        it('gate ACTIVE: accepts an active contract with a callable callback export', async function () {
+            stubBindingCreate({ action_index: 5, code: 'module.exports={onResult:function(){}}', status_id: 1 }, 'valid');
+
+            const data = await runBindingCreate();
+
+            assert.strictEqual(data.STATUS, 'valid');
+            assert.ok(indexer.indexerDb.createPoll.calledOnce);
+            assert.deepStrictEqual(vm.readManifest.firstCall.args[1], {
+                network: 'regtest',
+                contractAddress: 'C:BTC:5',
+                blockContext: { height: 100, timestamp: 1700000000 }
+            });
+        });
+
+        it('gate INACTIVE: preserves legacy acceptance without status or method reads', async function () {
+            actionsCtx.config.NETWORK = 'mainnet';
+            stubBindingCreate({ action_index: 5, code: 'module.exports={other:function(){}}', status_id: 2 }, 'invalid: disabled');
+            vm.readManifest.resolves({ success: true, manifest: { hasInitialize: false }, error: null });
+
+            const data = await runBindingCreate();
+
+            assert.strictEqual(data.STATUS, 'valid');
+            assert.ok(indexer.indexerDb.getStatusString.notCalled, 'legacy admission checks existence only');
+            assert.ok(vm.readManifest.notCalled, 'legacy admission does not inspect the method');
+            assert.ok(indexer.indexerDb.createPoll.calledOnce);
         });
     });
 });
@@ -243,6 +321,31 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
             assert.ok(indexer.indexerDb.rollbackToSavepoint.calledOnce, 'only the callback\'s savepoint is rolled back');
             assert.ok(indexer.indexerDb.releaseSavepoint.notCalled, 'the savepoint is not released on failure');
             assert.ok(indexer.indexerDb.setPollCallbackIndex.notCalled, 'no callback index recorded for a failed injection');
+        });
+    });
+});
+
+describe('Vote invariants (escrow conservation + callback metering) @regression @tier1', function () {
+    beforeEach(freshHandler);
+    afterEach(restoreStubs);
+
+    describe('binding-callback rejected execution handling', function () {
+
+        it('a non-valid callback EXECUTE leaves the poll terminal and refunds its escrow', async function () {
+            const p = bindingPoll({ poll_status: 'open' });
+            stubFinalize(p, { poll_status: 'finalized', winning_option: 0, total_counted_weight: '10', total_voters: 1, quorum_met: true, min_voters_met: true });
+            executeStub.parse.callsFake(async (params, executionData) => {
+                executionData.STATUS = 'invalid: contract (not active)';
+            });
+
+            const data = createBaseData({ ACTION: 'VOTE', FORMAT: 2, ACTION_INDEX: null, IS_SYNTHETIC: true });
+            await handler.parse(['2', '100'], data, null);
+
+            assert.strictEqual(data.STATUS, 'valid', 'callback failure does not un-finalize the poll');
+            assert.ok(indexer.indexerDb.createEscrow.calledOnce, 'the combined deposit and gas hold is released first');
+            assert.ok(indexer.indexerDb.setPollDepositResolved.calledOnceWith(100, 'refunded'));
+            assert.ok(indexer.indexerDb.setPollCallbackIndex.calledOnceWith(100, 200),
+                'the rejected EXECUTE remains the terminal callback attempt');
         });
     });
 });

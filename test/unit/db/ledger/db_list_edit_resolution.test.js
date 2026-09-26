@@ -43,6 +43,7 @@ const Utility           = require('../../../../src/utility');
 const Database          = require('../../../../src/db');
 const gateRegistry      = require('../../../../src/consensus/gate_registry');
 
+const LIST_HEAD_FOLLOWS_EDIT_CHAIN_KEY = 'list_head_follows_edit_chain.LIST_HEAD_FOLLOWS_EDIT_CHAIN';
 const TOKEN_GATE_LIST_AT_BLOCK_KEY = 'token_gate_list_at_block.TOKEN_GATE_LIST_AT_BLOCK';
 
 const ADDR_A = 'mmqFL1hiu2RDuyS69KS9ko6uaMryhANwsz';
@@ -66,11 +67,21 @@ function dbWithLists(rows, items) {
             const row = rowFor(args[0]);
             return Promise.resolve(row ? [{ type: row.type }] : []);
         }
+        if (/SELECT l\.type FROM lists l INNER JOIN index_statuses/i.test(q)) {
+            const row = rowFor(args[0]);
+            return Promise.resolve(row && row.status === 'valid' ? [{ type: row.type }] : []);
+        }
         if (/SELECT list_action_index FROM lists WHERE action_index=\?/i.test(q)) {
             const row = rowFor(args[0]);
             return Promise.resolve(row ? [{ list_action_index: row.list_action_index }] : []);
         }
         if (/FROM lists l INNER JOIN index_statuses/i.test(q)) {
+            if (/SELECT\s+l\.action_index,\s+s\.status/i.test(q)) {
+                const children = rows
+                    .filter(r => String(r.list_action_index) === String(args[0]))
+                    .sort((a, b) => b.action_index - a.action_index);
+                return Promise.resolve(children.map(r => ({ action_index: r.action_index, status: r.status })));
+            }
             const heads = rows
                 .filter(r => r.status === 'valid' && String(r.list_action_index) === String(args[0]))
                 .sort((a, b) => b.action_index - a.action_index);
@@ -95,6 +106,17 @@ function removeFixture() {
             { action_index: 2021, type: 2, list_action_index: 2020, status: 'valid' }
         ],
         { '2020': [ADDR_A], '2021': [] }
+    );
+}
+
+function legacyEditOfEditFixture() {
+    return dbWithLists(
+        [
+            { action_index: 10, type: 2, list_action_index: null, status: 'valid' },
+            { action_index: 11, type: 2, list_action_index: 10,   status: 'valid' },
+            { action_index: 12, type: 2, list_action_index: 11,   status: 'valid' }
+        ],
+        { '10': [ADDR_A], '11': [ADDR_A, ADDR_B], '12': [ADDR_C] }
     );
 }
 
@@ -138,6 +160,33 @@ describe('db.getList() LIST edit resolution @regression @tier1', function () {
         );
         const list = await db.getList(10, 100);
         assert.deepStrictEqual(list, [ADDR_B], 'membership is the newest edit snapshot, not the create');
+    });
+});
+
+describe('db.getList() chained edit resolution @regression @tier1', function () {
+    it('below LIST_HEAD_FOLLOWS_EDIT_CHAIN keeps the direct-child head', async function () {
+        const db = legacyEditOfEditFixture();
+        sinon.stub(gateRegistry, 'activeAt').callThrough()
+            .withArgs(LIST_HEAD_FOLLOWS_EDIT_CHAIN_KEY, 'regtest', 'BTC', 100, null).returns(false);
+        const list = await db.getList(10, 100);
+        assert.deepStrictEqual(list.slice().sort(), [ADDR_A, ADDR_B].sort());
+    });
+
+    it('at LIST_HEAD_FOLLOWS_EDIT_CHAIN resolves the deepest legacy edit', async function () {
+        const db = legacyEditOfEditFixture();
+        const list = await db.getList(10, 100);
+        assert.deepStrictEqual(list, [ADDR_C]);
+    });
+
+    it('registers LIST_HEAD_FOLLOWS_EDIT_CHAIN with the deployment heights', function () {
+        assert.deepStrictEqual(gateRegistry.get(LIST_HEAD_FOLLOWS_EDIT_CHAIN_KEY), {
+            mainnet: 9999999999,
+            'BTC:testnet': 9999999999,
+            'LTC:testnet': 9999999999,
+            'DOGE:testnet': 9999999999,
+            testnet: 9999999999,
+            regtest: 0,
+        });
     });
 
     it('an INVALID edit is never the head (it writes no items, so it would empty the list)', async function () {

@@ -69,9 +69,9 @@ const GATE_MODULE_PATHS = Object.freeze({
     snapshot_reorg_buffer: 'consensus/snapshot_reorg_buffer.js',
 });
 
-// The key stems whose predicate W4 (25) and W5 (13, the predicate-only twins)
-// replaced with activeAt(): no module exports these rows any more, the callers
-// spell the key at the call site.
+// The key stems whose predicates use activeAt() directly: the W4 and W5
+// predicate-only rows plus later gates added without a carrier module. No module
+// exports these rows; callers spell the key at the call site.
 const REPLACED_STEMS = Object.freeze([
     'anchor_activation',
     'archive_batch_author_activation',
@@ -122,6 +122,13 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'empty_allow_list_denies_activation',
     'list_edit_remove_activation',
     'token_gate_list_at_block',
+    'order_swap_maker_policy_admission',
+    'list_reference_validity_activation',
+    'list_head_follows_edit_chain',
+    'callback_compensation_activation',
+    'vote_callback_binding_activation',
+    'order_swap_payout_policy_activation',
+    'issue_policy_list_detach',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));

@@ -152,15 +152,19 @@ describe('db.getListAtBlock (policy spec D3) @regression @tier1', function(){
             calls.push({ query, args });
             if(/FROM\s+lists l/i.test(query)){
                 assert.match(query, /a\.block_index<=\?/, 'head query must bound by block_index');
-                assert.deepStrictEqual(args, [11, 500]);
-                return [{ action_index: 77 }];
+                if(args[0] === 11){
+                    assert.deepStrictEqual(args, [11, 500]);
+                    return [{ action_index: 77, status: 'valid' }];
+                }
+                assert.deepStrictEqual(args, [77, 500]);
+                return [];
             }
             return [{ item: 'addrY' }];
         });
         const list = await db.getListAtBlock(11, 500);
         assert.deepStrictEqual(list, ['addrY']);
-        assert.strictEqual(calls.length, 2);
-        assert.deepStrictEqual(calls[1].args, [77], 'list_items must be read off the BOUNDED head, not the root');
+        assert.strictEqual(calls.length, 3);
+        assert.deepStrictEqual(calls[2].args, [77], 'list_items must be read off the BOUNDED head, not the root');
     });
 
     it('type 1 (TICK list) orders by a binary-collated tick, type 2 by a binary-collated address', async function(){
@@ -262,7 +266,9 @@ describe('db.getAppliedPolicySnapshot (policy spec D25) @regression @tier1', fun
         assert.strictEqual(db.doQuery.callCount, 1);
         assert.strictEqual(mirror.doQuery.callCount, 1);
     });
+});
 
+describe('db.getAppliedPolicySnapshot isolation @regression @tier1', function(){
     it('uses network, origin and native tick to reject another copy with a higher sequence', async function(){
         const db = newDb();
         const localId = 'c'.repeat(64);

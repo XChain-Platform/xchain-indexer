@@ -32,6 +32,9 @@ function freshVote() {
     const donate1 = indexer.config['ADDRESS']['DONATE1'];
 
     const executeStub = { parse: sinon.stub().resolves() };
+    const vm = {
+        readManifest: sinon.stub().resolves({ success: true, manifest: { hasInitialize: true }, error: null }),
+    };
     const actionsCtx = {
         config:        indexer.config,
         util:          indexer.util,
@@ -39,6 +42,7 @@ function freshVote() {
         decoderDb:     indexer.decoderDb,
         indexerDb:     indexer.indexerDb,
         actionExecute: executeStub,
+        vm:            vm,
         protocolChanges: {
             isDefined: sinon.stub().returns(true),
             isEnabled: sinon.stub().resolves(true),
@@ -53,7 +57,7 @@ function freshVote() {
     indexer.indexerDb.getAddressById       = sinon.stub().resolves('creatorAddr');
     indexer.indexerDb.setPollDepositResolved = sinon.stub().resolves();
 
-    return { indexer, actionsCtx, handler, executeStub, gas, donate1 };
+    return { indexer, actionsCtx, handler, executeStub, vm, gas, donate1 };
 }
 
 // The poll row the handler reads: a deposit of 100 held beside a gas_escrow of 20.
