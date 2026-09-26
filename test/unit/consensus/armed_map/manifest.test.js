@@ -37,7 +37,7 @@ const PARTS = path.join(SRC, 'protocol_changes');
 const manifest = require('../../../../src/consensus/armed_map/manifest.js');
 const { canonicalValue } = require('../../../../src/consensus/armed_map/canonical.js');
 const ProtocolChanges = require('../../../../src/protocol_changes.js');
-const { GATE_MODULE_PATHS, REPLACED_STEMS } = require('../../../helpers/gate_modules.js');
+const { GATE_MODULE_PATHS, REPLACED_STEMS, REGISTRY_ONLY_STEMS } = require('../../../helpers/gate_modules.js');
 
 // The two declaration shapes that made a file a carrier. ACTIVATION_MAP is the
 // activation-map rule the platform's code-structure gate grades with, and
@@ -122,11 +122,12 @@ describe('armed_map/manifest: completeness guard', function () {
         }
         assert.deepStrictEqual(missing, [], 'exported data outside the v2 rows: ' + missing.join(', '));
         // A row nobody exports is read only through activeAt() by its literal
-        // key: that is exactly the W4 census, one row per replaced shim, and a
-        // new row that no module and no census names still reds here.
+        // key: that is exactly the W4 census plus the registry-only rows, one row
+        // per stem, and a new row that no module and no list names still reds here.
+        const stems = REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS);
         const unexported = [...keys].filter((k) => !k.startsWith('protocol_changes.') && !k.startsWith('xchain-vm.') && !exported.has(k));
-        const replaced = [...keys].filter((k) => REPLACED_STEMS.includes(k.slice(0, k.lastIndexOf('.'))));
-        assert.strictEqual(replaced.length, REPLACED_STEMS.length, 'one registry row per replaced shim');
+        const replaced = [...keys].filter((k) => stems.includes(k.slice(0, k.lastIndexOf('.'))));
+        assert.strictEqual(replaced.length, stems.length, 'one registry row per replaced shim or registry-only stem');
         assert.deepStrictEqual(unexported, replaced, 'rows no shim exports, beyond the W4-replaced set: ' +
             unexported.filter((k) => !replaced.includes(k)).join(', '));
     });
@@ -171,7 +172,7 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(res.ok, true, res.reason);
         assert.deepStrictEqual(res.rows.map((r) => r[0]), manifest.ENTRIES.map((e) => e[0]));
         for (const [, value] of res.rows) canonicalValue(value);
-        assert.strictEqual(res.rows.length, 303);
+        assert.strictEqual(res.rows.length, 308);
     });
 
     it('carries the three row families the design names', function () {

@@ -91,7 +91,9 @@ describe('Mode B create requires an effective oracle price @regression @tier2', 
         indexer.indexerDb.getTickerId.resolves(99);
         indexer.indexerDb.isOwnershipEscrowed.resolves(false);
         indexer.indexerDb.setTokenEscrow = sinon.stub().resolves();
-        indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000' }]);
+        // Settleable rows: a DISPENSE at BLOCK_TIME pairs this oracle price with this snapshot.
+        indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000', timestamp: BLOCK_TIME - 7200 }]);
+        indexer.indexerDb.getOraclePricesInTimeRange = sinon.stub().resolves([{ price: '0.05', effectiveAt: BLOCK_TIME - 3600 }]);
     });
 
     afterEach(function () { sinon.restore(); });
@@ -145,7 +147,9 @@ describe('Mode B create requires an effective oracle price @regression @tier2', 
         indexer.indexerDb.getTickerId.resolves(99);
         indexer.indexerDb.isOwnershipEscrowed.resolves(false);
         indexer.indexerDb.setTokenEscrow = sinon.stub().resolves();
-        indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000' }]);
+        // Settleable rows: a DISPENSE at BLOCK_TIME pairs this oracle price with this snapshot.
+        indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000', timestamp: BLOCK_TIME - 7200 }]);
+        indexer.indexerDb.getOraclePricesInTimeRange = sinon.stub().resolves([{ price: '0.05', effectiveAt: BLOCK_TIME - 3600 }]);
     });
 
     afterEach(function () { sinon.restore(); });
@@ -199,7 +203,9 @@ describe('Mode B create requires an effective oracle price @regression @tier2', 
         indexer.indexerDb.getTickerId.resolves(99);
         indexer.indexerDb.isOwnershipEscrowed.resolves(false);
         indexer.indexerDb.setTokenEscrow = sinon.stub().resolves();
-        indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000' }]);
+        // Settleable rows: a DISPENSE at BLOCK_TIME pairs this oracle price with this snapshot.
+        indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000', timestamp: BLOCK_TIME - 7200 }]);
+        indexer.indexerDb.getOraclePricesInTimeRange = sinon.stub().resolves([{ price: '0.05', effectiveAt: BLOCK_TIME - 3600 }]);
     });
 
     afterEach(function () { sinon.restore(); });
@@ -253,7 +259,9 @@ describe('Mode B create requires an effective oracle price @regression @tier2', 
         indexer.indexerDb.getTickerId.resolves(99);
         indexer.indexerDb.isOwnershipEscrowed.resolves(false);
         indexer.indexerDb.setTokenEscrow = sinon.stub().resolves();
-        indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000' }]);
+        // Settleable rows: a DISPENSE at BLOCK_TIME pairs this oracle price with this snapshot.
+        indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000', timestamp: BLOCK_TIME - 7200 }]);
+        indexer.indexerDb.getOraclePricesInTimeRange = sinon.stub().resolves([{ price: '0.05', effectiveAt: BLOCK_TIME - 3600 }]);
     });
 
     afterEach(function () { sinon.restore(); });
@@ -309,7 +317,9 @@ describe('Mode B create requires an effective oracle price @regression @tier2', 
         indexer.indexerDb.getTickerId.resolves(99);
         indexer.indexerDb.isOwnershipEscrowed.resolves(false);
         indexer.indexerDb.setTokenEscrow = sinon.stub().resolves();
-        indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000' }]);
+        // Settleable rows: a DISPENSE at BLOCK_TIME pairs this oracle price with this snapshot.
+        indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000', timestamp: BLOCK_TIME - 7200 }]);
+        indexer.indexerDb.getOraclePricesInTimeRange = sinon.stub().resolves([{ price: '0.05', effectiveAt: BLOCK_TIME - 3600 }]);
     });
 
     afterEach(function () { sinon.restore(); });

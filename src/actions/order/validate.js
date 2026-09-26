@@ -20,6 +20,8 @@
  *
  ********************************************************************/
 
+const gateRegistry = require('../../consensus/gate_registry');
+
 // Coins and ticks: both COIN networks supported, GIVE on this network, cross-chain
 // enabled, no coin-for-coin, and each tick known wherever it can be checked here.
 function validateTickAndCoin(handler, st){
@@ -188,7 +190,7 @@ async function validateGeneral(handler, st){
         error = 'invalid: MEMO (length)';
 
     // Verify TICK action is allowed from SOURCE (allow/block lists); skip for native coin
-    if(!error && format==0 && !isNativeCoinGive && await handler.indexerDb.isActionAllowed(data['SOURCE'], data['GIVE_TICK']) == false)
+    if(!error && format==0 && !isNativeCoinGive && await handler.indexerDb.isActionAllowed(data['SOURCE'], data['GIVE_TICK'], data['BLOCK_INDEX']) == false)
         error = 'invalid: SOURCE (not authorized)';
 
     // Validate ORDER_ACTION_INDEX is valid SWAP
@@ -213,12 +215,19 @@ async function validateGeneral(handler, st){
 // The ALLOW_LIST / BLOCK_LIST fields: a numeric list id must name a known LIST of a type
 // this action supports.
 async function validateLists(handler, st){
-    let { data } = st;
+    let { format, data } = st;
     let error = st.error;
+
+    // At/after the list_edit_remove_activation row an edit (Version 2) may carry `0` to
+    // remove the list; below it `0` falls through to the lookup and is an unknown list.
+    let removeActive = (format==2) && gateRegistry.activeAt('list_edit_remove_activation.LIST_EDIT_REMOVE_ACTIVATION', handler.config['NETWORK'], null, null, data['BLOCK_TIME']);
 
     // Validate LIST fields (ALLOW_LIST / BLOCK_LIST)
     if(!error){
         for(let name of handler.config['LIST_FIELDS']){
+            // A `0` that removes the list names no LIST, so there is nothing to look up
+            if(removeActive && String(data[name])==='0')
+                continue;
             // Only look up and validate this list field when it holds a numeric list id
             if(!error && !handler.util.isNull(data[name]) && handler.util.isNumeric(data[name])){
                 // Get LIST type and information

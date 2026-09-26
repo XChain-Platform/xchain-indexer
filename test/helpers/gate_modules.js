@@ -113,11 +113,23 @@ const REPLACED_STEMS = Object.freeze([
     'xchain_bridge_activation',
 ]);
 
-const REPLACED = new Set(REPLACED_STEMS);
+// Key stems born in the registry after W5: no module ever exported them, the
+// callers read the row through activeAt() by its literal key from the start.
+// Kept apart from REPLACED_STEMS so that list stays the W4 and W5 census.
+const REGISTRY_ONLY_STEMS = Object.freeze([
+    'dispenser_settlement_price_activation',
+    'dispenser_freshness_proven_use_activation',
+    'empty_allow_list_denies_activation',
+    'list_edit_remove_activation',
+    'token_gate_list_at_block',
+]);
+
+const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));
 
 /**
  * The absolute path of the module that exports a registry key's rows, or
- * null when W4 or W5 replaced that module's predicate with activeAt().
+ * null when W4 or W5 replaced that module's predicate with activeAt(), or the
+ * row was born in the registry with no module (REGISTRY_ONLY_STEMS).
  * @param {string} stem  the registry key stem (`<stem>.<EXPORT>`)
  * @returns {?string}
  */
@@ -173,4 +185,4 @@ function stubGate(sinon, key, value) {
     return handle;
 }
 
-module.exports = { SRC, GATE_MODULE_PATHS, REPLACED_STEMS, modulePathFor, stubActiveAt, stubGate };
+module.exports = { SRC, GATE_MODULE_PATHS, REPLACED_STEMS, REGISTRY_ONLY_STEMS, modulePathFor, stubActiveAt, stubGate };

@@ -36,8 +36,16 @@ function modeBParams(escrow = '1000') {
 const modeBData = () => createBaseData(
     { ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
 
+// Price rows a DISPENSE at BLOCK_TIME could settle against (a validator snapshot two
+// hours old paired with an oracle price one hour old), so the create is priceable.
+function settleablePrices(){
+    indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000', timestamp: BLOCK_TIME - 7200 }]);
+    indexer.indexerDb.getOraclePricesInTimeRange = sinon.stub().resolves([{ price: '0.05', effectiveAt: BLOCK_TIME - 3600 }]);
+}
+
 describe('Dispenser action handler @regression @tier2', function () {
     useDispenserHarness(bind);
+    beforeEach(settleablePrices);
 
     // Counterparty parity. A Mode B dispenser (ORACLE_ADDRESS set) pays the
     // oracle operator UP FRONT as a real native-coin output, charged to the address
@@ -48,7 +56,7 @@ describe('Dispenser action handler @regression @tier2', function () {
     describe('Format 0 - oracle usage fee', function () {
         it('rejects the create when the oracle fee output is missing', async function () {
             indexer.indexerDb.getOraclePrice = sinon.stub().resolves({ value: '0.05', fee: '0.01' });
-            indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000' }]);
+            indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000', timestamp: BLOCK_TIME - 7200 }]);
 
             const data = modeBData();                 // no TX_OUTPUTS at all
             await dispenser.parse(modeBParams(), data, false);
@@ -61,7 +69,7 @@ describe('Dispenser action handler @regression @tier2', function () {
 
         it('accepts the create when the output pays the oracle', async function () {
             indexer.indexerDb.getOraclePrice = sinon.stub().resolves({ value: '0.05', fee: '0.01' });
-            indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000' }]);
+            indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000', timestamp: BLOCK_TIME - 7200 }]);
 
             const data = modeBData();
             data['TX_OUTPUTS'] = [{ address: ORACLE_ADDR, value: '0.00001' }];
@@ -75,6 +83,7 @@ describe('Dispenser action handler @regression @tier2', function () {
 
 describe('Dispenser action handler @regression @tier2', function () {
     useDispenserHarness(bind);
+    beforeEach(settleablePrices);
 
     describe('Format 0 - oracle usage fee', function () {
         it('rejects the create when the oracle has no effective price', async function () {
@@ -107,6 +116,7 @@ describe('Dispenser action handler @regression @tier2', function () {
 
 describe('Dispenser action handler @regression @tier2', function () {
     useDispenserHarness(bind);
+    beforeEach(settleablePrices);
 
     describe('Format 0 - oracle usage fee', function () {
         it('does not charge below the activation gate', async function () {

@@ -41,6 +41,9 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../../../fixtures/config');
 const Utility           = require('../../../../src/utility');
 const Database          = require('../../../../src/db');
+const gateRegistry      = require('../../../../src/consensus/gate_registry');
+
+const TOKEN_GATE_LIST_AT_BLOCK_KEY = 'token_gate_list_at_block.TOKEN_GATE_LIST_AT_BLOCK';
 
 const ADDR_A = 'mmqFL1hiu2RDuyS69KS9ko6uaMryhANwsz';
 const ADDR_B = 'mk7MdP3qzVkgyjaYNR2sUY8Ggn4DWxt2KS';
@@ -200,6 +203,36 @@ describe('db.getList() LIST edit resolution @regression @tier1', function () {
 
 });
 
+describe('db.isActionAllowed() token LIST block pin @regression @tier1', function () {
+    function tokenGateDb(){
+        const db = removeFixture();
+        sinon.stub(db, 'getTokenInfo').resolves({ ALLOW_LIST: 2020, BLOCK_LIST: null });
+        sinon.stub(db, 'isTickSleeping').resolves(false);
+        sinon.stub(db, 'isAddressSleeping').resolves(false);
+        return db;
+    }
+
+    it('keeps create-time membership below TOKEN_GATE_LIST_AT_BLOCK', async function () {
+        const activeAt = sinon.stub(gateRegistry, 'activeAt').callThrough();
+        activeAt.withArgs(TOKEN_GATE_LIST_AT_BLOCK_KEY).returns(false);
+        const db = tokenGateDb();
+
+        assert.strictEqual(await db.isActionAllowed(ADDR_A, 'TEST', 100), true);
+        assert.ok(db.getTokenInfo.calledWith('TEST', undefined), 'legacy token state lookup stays unbounded');
+        const listRead = db._calls.find(c => /FROM\s+list_items/i.test(c.query));
+        assert.strictEqual(String(listRead.args[0]), '2020', 'legacy lookup reads the create membership');
+    });
+
+    it('applies the edited membership when TOKEN_GATE_LIST_AT_BLOCK is active', async function () {
+        const db = tokenGateDb();
+
+        assert.strictEqual(await db.isActionAllowed(ADDR_A, 'TEST', 100), false);
+        assert.ok(db.getTokenInfo.calledWith('TEST', 100), 'token state lookup is pinned to the action block');
+        const listRead = db._calls.find(c => /FROM\s+list_items/i.test(c.query));
+        assert.strictEqual(String(listRead.args[0]), '2021', 'the action-block lookup reads the edited membership');
+    });
+});
+
 
 describe('getList() call sites carry block context (ratchet) @regression @tier1', function () {
 
@@ -237,6 +270,38 @@ describe('getList() call sites carry block context (ratchet) @regression @tier1'
         }
         assert.deepStrictEqual(offenders, [],
             'every getList() call must pass block_index, or the flag day silently stays inert there');
+    });
+});
+
+describe('isActionAllowed() call sites carry block context (ratchet) @regression @tier1', function () {
+    it('no isActionAllowed() caller omits the block_index argument', function () {
+        const fs   = require('fs');
+        const path = require('path');
+        const root = path.join(__dirname, '..', '..', '..', '..', 'src');
+        const files = [];
+        (function walk(dir) {
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                if (entry.name === 'node_modules' || entry.name === 'tmp') continue;
+                const full = path.join(dir, entry.name);
+                if (entry.isDirectory()) walk(full);
+                else if (entry.name.endsWith('.js')) files.push(full);
+            }
+        })(root);
+
+        const offenders = [];
+        for (const file of files) {
+            const lines = fs.readFileSync(file, 'utf8').split('\n');
+            lines.forEach((line, i) => {
+                const trimmed = line.trim();
+                if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return;
+                const m = line.match(/(?<![A-Za-z])isActionAllowed\(([^()]*)\)/);
+                if (!m || /async\s+isActionAllowed\(/.test(line)) return;
+                if (m[1].split(',').length >= 3) return;
+                offenders.push(path.relative(root, file) + ':' + (i + 1) + ' ' + line.trim());
+            });
+        }
+        assert.deepStrictEqual(offenders, [],
+            'every isActionAllowed() caller must pass the action block_index');
     });
 
 });

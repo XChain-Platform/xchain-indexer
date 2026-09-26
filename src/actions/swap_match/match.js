@@ -1,3 +1,7 @@
+const gateRegistry = require('../../consensus/gate_registry');
+
+const EMPTY_ALLOW_LIST_KEY = 'empty_allow_list_denies_activation.EMPTY_ALLOW_LIST_DENIES';
+
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -41,12 +45,13 @@ module.exports = {
         let swapInfoAllowList = (!this.util.isNull(swapInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(swapInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : [];
         let swapInfoBlockList = (!this.util.isNull(swapInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(swapInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : [];
 
-        return { getTokenAllowList, getTokenBlockList, giveTokenAllowList, giveTokenBlockList, swapInfoAllowList, swapInfoBlockList };
+        return { getTokenInfo, giveTokenInfo, getTokenAllowList, getTokenBlockList, giveTokenAllowList,
+                 giveTokenBlockList, swapInfoAllowList, swapInfoBlockList };
     },
 
     // The first candidate that passes reciprocity and the allow/block lists, or false
     async findSwapMatch(data, swap, swapInfo, matches){
-        let { getTokenAllowList, getTokenBlockList, giveTokenAllowList, giveTokenBlockList,
+        let { getTokenInfo, giveTokenInfo, getTokenAllowList, getTokenBlockList, giveTokenAllowList, giveTokenBlockList,
               swapInfoAllowList, swapInfoBlockList } = await this.loadSwapLists(data, swap, swapInfo);
 
         // Loop through matches and determine if we have a valid match
@@ -74,8 +79,17 @@ module.exports = {
             let matchInfoAllowList = (!this.util.isNull(match['ALLOW_LIST'])) ? await this.indexerDb.getList(match['ALLOW_LIST'], data['BLOCK_INDEX']) : [];
             let matchInfoBlockList = (!this.util.isNull(match['BLOCK_LIST'])) ? await this.indexerDb.getList(match['BLOCK_LIST'], data['BLOCK_INDEX']) : [];
 
+            // Deny an address when any attached allow list resolves empty after activation.
+            let emptyAllowListDenies = gateRegistry.activeAt(EMPTY_ALLOW_LIST_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
+            let deniedByEmptyAllowList = emptyAllowListDenies &&
+                ((getTokenInfo && !this.util.isNull(getTokenInfo['ALLOW_LIST']) && getTokenAllowList.length === 0) ||
+                 (giveTokenInfo && !this.util.isNull(giveTokenInfo['ALLOW_LIST']) && giveTokenAllowList.length === 0) ||
+                 (!this.util.isNull(swapInfo['ALLOW_LIST']) && swapInfoAllowList.length === 0) ||
+                 (!this.util.isNull(match['ALLOW_LIST']) && matchInfoAllowList.length === 0));
+
             // Check if GET_ADDRESS for both sides of swap are allowed (ALLOW/BLOCK list support)
-            if((getTokenAllowList.length  && (!getTokenAllowList.includes(swapInfo['GET_ADDRESS'])  || !getTokenAllowList.includes(match['GET_ADDRESS'])))  ||
+            if(deniedByEmptyAllowList ||
+               (getTokenAllowList.length  && (!getTokenAllowList.includes(swapInfo['GET_ADDRESS'])  || !getTokenAllowList.includes(match['GET_ADDRESS'])))  ||
                (getTokenBlockList.length  && ( getTokenBlockList.includes(swapInfo['GET_ADDRESS'])  ||  getTokenBlockList.includes(match['GET_ADDRESS'])))  ||
                (giveTokenAllowList.length && (!giveTokenAllowList.includes(swapInfo['GET_ADDRESS']) || !giveTokenAllowList.includes(match['GET_ADDRESS']))) ||
                (giveTokenBlockList.length && ( giveTokenBlockList.includes(swapInfo['GET_ADDRESS']) ||  giveTokenBlockList.includes(match['GET_ADDRESS']))) ||

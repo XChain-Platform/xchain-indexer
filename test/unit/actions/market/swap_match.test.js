@@ -14,8 +14,11 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon = require('sinon');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../fixtures/mocks');
+const { stubGate } = require('../../../helpers/gate_modules.js');
 
 const Swap_Match = require('../../../../src/actions/swap_match/index.js');
+
+const EMPTY_ALLOW_LIST_KEY = 'empty_allow_list_denies_activation.EMPTY_ALLOW_LIST_DENIES';
 
 let indexer, actionsCtx, handler;
 
@@ -84,6 +87,9 @@ function withTokenLists({ getList, giveList }) {
 
 describe('Swap_Match action handler @regression @tier2', function () {
     beforeEach(setupSwapMatch);
+    afterEach(function () {
+        sinon.restore();
+    });
 
     // ─── Returns early when swap is missing ───────────────────────────
 
@@ -171,6 +177,23 @@ describe('Swap_Match action handler @regression @tier2', function () {
         const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 });
         await handler.parse(null, data, null);
         assert.ok(indexer.indexerDb.createSwapMatch.notCalled, 'Should not match when address is blocked');
+    });
+
+    it('keeps an attached empty SWAP allow list fail-open below activation', async function () {
+        stubGate(sinon, EMPTY_ALLOW_LIST_KEY, false);
+        indexer.indexerDb.getSwapInfo.resolves(makeSwapInfo({ ALLOW_LIST: 999 }));
+        indexer.indexerDb.findSwapMatches.resolves([makeMatchInfo()]);
+        indexer.indexerDb.getList.resolves([]);
+        await handler.parse(null, createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 }), null);
+        assert.ok(indexer.indexerDb.createSwapMatch.calledOnce);
+    });
+
+    it('denies a match through an attached empty SWAP allow list after activation', async function () {
+        indexer.indexerDb.getSwapInfo.resolves(makeSwapInfo({ ALLOW_LIST: 999 }));
+        indexer.indexerDb.findSwapMatches.resolves([makeMatchInfo()]);
+        indexer.indexerDb.getList.resolves([]);
+        await handler.parse(null, createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 }), null);
+        assert.ok(indexer.indexerDb.createSwapMatch.notCalled);
     });
 });
 

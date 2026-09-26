@@ -272,6 +272,9 @@ function createMockDb() {
         // Default false = no prior XChain activity = fresh address; tests that need a
         // stale/non-fresh GET_ADDRESS resolve(true).
         hasXChainActivityBefore: sinon.stub().resolves(false),
+        // The proven-use verdict behind DISPENSER_FRESHNESS_PROVEN_USE_ACTIVATION.
+        // Default false = no proven prior use = fresh address.
+        hasProvenUseBefore: sinon.stub().resolves(false),
         // Derived dispenser caps counts (dispenser_caps_activation.js). Defaults model
         // a fresh dispenser (no refills, no dispenses); cap tests resolve specific counts.
         getDispenserRefillCount: sinon.stub().resolves(0),

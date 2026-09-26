@@ -107,7 +107,7 @@ module.exports = {
             // credits are unconditional (nothing may wedge exit)
             if(!error && await this.indexerDb.isActionAllowed(null, feedInfo['TICK'], data['BLOCK_INDEX']) == false)
                 error = 'invalid: TICK (sleeping)';
-            if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], feedInfo['TICK']) == false)
+            if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], feedInfo['TICK'], data['BLOCK_INDEX']) == false)
                 error = 'invalid: SOURCE (not authorized)';
         }
 
@@ -146,7 +146,7 @@ module.exports = {
 
         // Verify SOURCE may act on the wagered tick (house token allow/block lists, create
         // only; place checks the feed tick above)
-        if(!error && format==0 && await this.indexerDb.isActionAllowed(data['SOURCE'], data['TICK']) == false)
+        if(!error && format==0 && await this.indexerDb.isActionAllowed(data['SOURCE'], data['TICK'], data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (not authorized)';
 
         // Verify no pipe in MEMO (pipe is field delimiter)

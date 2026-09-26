@@ -55,14 +55,15 @@ describe('Dispenser action handler @regression @tier2', function () {
 
     describe('GET_ADDRESS different from SOURCE validation (freshness)', function () {
         // ── AT/ABOVE the freshness flag-day (regtest is genesis-active): the verdict
-        //    derives from indexer-local chain state (db.hasXChainActivityBefore); the
-        //    external utxo-tracker is NEVER consulted. dispenser_freshness_activation.js.
+        //    derives from indexer-local chain state; the external utxo-tracker is NEVER
+        //    consulted. dispenser_freshness_activation.js. Regtest genesis also has the
+        //    proven-use flag-day active, so the local query is db.hasProvenUseBefore.
         describe('local path (freshness flag-day active, regtest genesis)', function () {
             it('fresh GET_ADDRESS (no prior XChain activity) is allowed, and the tracker is NOT consulted', async function () {
                 indexer.indexerDb.getAddressPreferences
                     .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
                     .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
-                indexer.indexerDb.hasXChainActivityBefore.resolves(false); // fresh
+                indexer.indexerDb.hasProvenUseBefore.resolves(false); // fresh
 
                 // Wire a tracker too, to prove the local path never touches it.
                 const getFirstSeen = sinon.stub().resolves({ height: 1 }); // would say "not fresh" if consulted
@@ -75,7 +76,7 @@ describe('Dispenser action handler @regression @tier2', function () {
                 await dispenser.parse(params, data, false);
 
                 assert.strictEqual(data['STATUS'], 'valid');
-                assert.ok(indexer.indexerDb.hasXChainActivityBefore.calledWith(OTHER_ADDR, data['BLOCK_INDEX']),
+                assert.ok(indexer.indexerDb.hasProvenUseBefore.calledWith(OTHER_ADDR, data['BLOCK_INDEX']),
                     'local freshness query must be consulted with BLOCK_INDEX');
                 assert.ok(getFirstSeen.notCalled, 'the external utxo-tracker must NOT be consulted above the gate');
             });
@@ -84,7 +85,7 @@ describe('Dispenser action handler @regression @tier2', function () {
                 indexer.indexerDb.getAddressPreferences
                     .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
                     .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
-                indexer.indexerDb.hasXChainActivityBefore.resolves(true); // has history
+                indexer.indexerDb.hasProvenUseBefore.resolves(true); // has history
 
                 const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
                 const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC' });
@@ -106,7 +107,7 @@ describe('Dispenser action handler @regression @tier2', function () {
                 indexer.indexerDb.getAddressPreferences
                     .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
                     .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
-                indexer.indexerDb.hasXChainActivityBefore.resolves(true); // not fresh
+                indexer.indexerDb.hasProvenUseBefore.resolves(true); // not fresh
                 indexer.indexerDb.hasDispenserOriginStanding
                     .withArgs(OWNER_ADDR, OTHER_ADDR, sinon.match.any)
                     .resolves(true);
@@ -132,7 +133,7 @@ describe('Dispenser action handler @regression @tier2', function () {
                 indexer.indexerDb.getAddressPreferences
                     .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
                     .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
-                indexer.indexerDb.hasXChainActivityBefore.resolves(true); // not fresh
+                indexer.indexerDb.hasProvenUseBefore.resolves(true); // not fresh
                 // Default hasDispenserOriginStanding resolves false.
 
                 const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
@@ -147,7 +148,7 @@ describe('Dispenser action handler @regression @tier2', function () {
                 indexer.indexerDb.getAddressPreferences
                     .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
                     .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
-                indexer.indexerDb.hasXChainActivityBefore.resolves(true); // not fresh
+                indexer.indexerDb.hasProvenUseBefore.resolves(true); // not fresh
                 actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(
                     async (name) => name !== 'DISPENSER_ORIGIN_STANDING',
                 );

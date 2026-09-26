@@ -103,11 +103,11 @@ module.exports = {
             error = 'invalid: MEMO (length)';
 
         // Verify TICK action is allowed from SOURCE (allow/block lists)
-        if(!error && format==0 && await this.indexerDb.isActionAllowed(data['SOURCE'], data['GIVE_TICK']) == false)
+        if(!error && format==0 && await this.indexerDb.isActionAllowed(data['SOURCE'], data['GIVE_TICK'], data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (not authorized)';
 
         // Verify TICK action is allowed from GET_ADDRESS (allow/block lists)
-        if(!error && format==0 && await this.indexerDb.isActionAllowed(data['GET_ADDRESS'], data['GIVE_TICK']) == false)
+        if(!error && format==0 && await this.indexerDb.isActionAllowed(data['GET_ADDRESS'], data['GIVE_TICK'], data['BLOCK_INDEX']) == false)
             error = 'invalid: GET_ADDRESS (not authorized)';
 
     ctx.data = data;
@@ -157,15 +157,22 @@ module.exports = {
     // Expiration, the LIST fields, and the GIVE_ESCROW balance check that debits
     // `balances` for the settlement below.
     async validateExpirationListsAndEscrow(ctx){
-    let { data, error, isOwnershipGive, giveTokenInfo, balances } = ctx;
+    let { data, error, format, isOwnershipGive, giveTokenInfo, balances } = ctx;
 
         // Validate that EXPIRATION is greater than current BLOCK_TIME
         if(!error && !this.util.isNull(data['EXPIRATION']) && this.util.bclte(data['EXPIRATION'], data['BLOCK_TIME']))
             error = "invalid: EXPIRATION (past)";
 
+        // At/after the list_edit_remove_activation row an edit (Version 2) may carry `0` to
+        // remove the list; below it `0` falls through to the lookup and is an unknown list.
+        let removeActive = (format==2) && gateRegistry.activeAt('list_edit_remove_activation.LIST_EDIT_REMOVE_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);
+
         // Validate LIST fields (ALLOW_LIST / BLOCK_LIST)
         if(!error){
             for(let name of this.config['LIST_FIELDS']){
+                // A `0` that removes the list names no LIST, so there is nothing to look up
+                if(removeActive && String(data[name])==='0')
+                    continue;
                 // Only check a LIST field that was actually set to a list ID
                 if(!error && !this.util.isNull(data[name]) && this.util.isNumeric(data[name])){
                     // Get LIST type and information
@@ -195,4 +202,3 @@ module.exports = {
     ctx.balances = balances;
     },
 };
-
