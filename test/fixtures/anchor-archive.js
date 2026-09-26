@@ -20,9 +20,11 @@
 const crypto = require('crypto');
 const zlib   = require('zlib');
 const eq     = require('../../src/consensus/equivocation_header.js');
+const ed25519 = require('../../src/consensus/ed25519.js');
 const gateRegistry = require('../../src/consensus/gate_registry');
 const bridgeSettle = require('../../src/consensus/bridge_settle.js');
 const CROSS_CHAIN_ROYALTY_KEY = 'cross_chain_royalty_activation.CROSS_CHAIN_ROYALTY_ACTIVATION';
+const CHECKPOINT_COMMITMENT_KEY = 'checkpoint_commitment_activation.CHECKPOINT_COMMITMENT_ACTIVATION';
 
 // ── Real Ed25519 helpers ────────────────────────────────────────────────────
 function makeKeypair() {
@@ -99,9 +101,22 @@ const POLICY_KEYS = ['id', 'snapshot_id', 'snapshot_block', 'network',
     'allow_list', 'block_list', 'sleeping', 'effective_time',
     'admit_block_btc', 'admit_block_ltc', 'admit_block_doge',
     'finalizing_view', 'validator_signatures', 'status'];
+const CHECKPOINT_KEYS = ['id', 'chain', 'network', 'block_index', 'block_hash',
+    'ledger_hash', 'actions_hash', 'contract_hash', 'checkpoint_seq', 'snapshot_block',
+    'state_root', 'state_root_version', 'block_merkle_root', 'block_merkle_version',
+    'validator_signatures'];
+const PRICE_KEYS = ['id', 'round_number', 'coin_pair', 'price', 'reference_block',
+    'reference_chain', 'block_timestamp', 'validator_count', 'consensus_round',
+    'consensus_proof', 'status', 'source_chain', 'source_action_index', 'batch_block_time',
+    'admit_block_btc', 'admit_block_ltc', 'admit_block_doge'];
 const ARCHIVE_INTEGER_KEYS = new Set(['id', 'snapshot_block', 'src_action_index', 'decimals',
-    'effective_time', 'policy_seq', 'origin_block']);
-const ARCHIVE_NULLABLE_INTS = new Set(['admit_block_btc', 'admit_block_ltc', 'admit_block_doge']);
+    'effective_time', 'policy_seq', 'origin_block', 'block_index', 'checkpoint_seq',
+    'round_number', 'reference_block', 'block_timestamp', 'validator_count', 'consensus_round',
+    'batch_block_time']);
+const ARCHIVE_NULLABLE_INTS = new Set(['admit_block_btc', 'admit_block_ltc', 'admit_block_doge',
+    'state_root_version', 'block_merkle_version', 'source_action_index']);
+const ARCHIVE_NULLABLE_TEXT = new Set(['allow_list', 'block_list', 'state_root',
+    'block_merkle_root', 'price']);
 
 function serializeQuorumRow(keys, row) {
     let out = {};
@@ -111,9 +126,53 @@ function serializeQuorumRow(keys, row) {
         else if (ARCHIVE_NULLABLE_INTS.has(key)) out[key] = value == null ? null : Number(value);
         else if (key === 'finalizing_view') out[key] = Number(value) || 0;
         else if (key === 'sleeping') out[key] = Number(value) ? 1 : 0;
-        else if (key === 'validator_signatures') out[key] = value;
-        else if (key === 'allow_list' || key === 'block_list') out[key] = value == null ? null : String(value);
+        else if (key === 'validator_signatures' || key === 'consensus_proof') out[key] = value;
+        else if (ARCHIVE_NULLABLE_TEXT.has(key)) out[key] = value == null ? null : String(value);
         else out[key] = String(value == null ? '' : value);
+    }
+    return out;
+}
+
+function checkpointCanonical(cp) {
+    let raw = ['XCHECKPOINT', cp.chain, cp.network, String(cp.block_index), cp.block_hash,
+        cp.ledger_hash, cp.actions_hash, cp.contract_hash,
+        String(cp.checkpoint_seq), String(cp.snapshot_block)].join('|');
+    if (gateRegistry.activeAt(CHECKPOINT_COMMITMENT_KEY, cp.network, null, cp.snapshot_block, null) &&
+        cp.state_root != null && cp.block_merkle_root != null &&
+        cp.state_root_version != null && cp.block_merkle_version != null)
+        raw += '|' + [String(cp.state_root).toLowerCase(), String(cp.state_root_version),
+            String(cp.block_merkle_root).toLowerCase(), String(cp.block_merkle_version)].join('|');
+    if (eq.isEquivHeaderActive(cp.snapshot_block, cp.network))
+        return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT,
+            cp.chain + '|' + cp.network + '|' + cp.block_index + '|' + cp.checkpoint_seq, 0, raw);
+    return raw;
+}
+
+function priceAdmitBlocks(row) {
+    if (row.admit_block_btc == null && row.admit_block_ltc == null && row.admit_block_doge == null) return null;
+    return { BTC: row.admit_block_btc, LTC: row.admit_block_ltc, DOGE: row.admit_block_doge };
+}
+
+function signPriceRows(rows, keys, signers) {
+    let byRound = new Map();
+    for (let raw of rows) {
+        let row = Object.assign({}, raw);
+        let key = String(row.round_number);
+        if (!byRound.has(key)) byRound.set(key, []);
+        byRound.get(key).push(row);
+    }
+    let out = [];
+    for (let group of byRound.values()) {
+        if (group.every(row => row.consensus_proof === undefined && row.status === 'finalized')) {
+            let first = group[0];
+            let pairs = group.map(row => ({ coinPair: row.coin_pair, price: row.price }));
+            let canonical = ed25519.buildPriceV0Payload(first.round_number, first.block_timestamp,
+                pairs, first.network || 'regtest', first.reference_block, priceAdmitBlocks(first));
+            let proof = JSON.stringify(keys.slice(0, signers || 3)
+                .map(kp => ({ pubkey: kp.pubkey, sig: signHex(kp, canonical) })));
+            for (let row of group) row.consensus_proof = proof;
+        }
+        for (let row of group) out.push(serializeQuorumRow(PRICE_KEYS, row));
     }
     return out;
 }
@@ -205,11 +264,38 @@ function buildBatch(batchSeq, rawMatches, oracleKeys, crossKeys, opts) {
         row => bridgeSettle.transferCanonical(row), opts.bridgeKeys || crossKeys, opts.bridgeSigners);
     let policies = signQuorumRows(opts.policies || [], POLICY_KEYS,
         row => bridgeSettle.policyCanonical(row), opts.policyKeys || crossKeys, opts.policySigners);
+    let checkpoints = signQuorumRows(opts.checkpoints || [], CHECKPOINT_KEYS,
+        checkpointCanonical, opts.checkpointKeys || oracleKeys, opts.checkpointSigners);
+    let priceKeys = opts.priceKeys || oracleKeys;
+    let prices = signPriceRows(opts.prices || [], opts.priceSignKeys || priceKeys, opts.priceSigners);
+    let checkpointBlocks = new Set(checkpoints.map(cp => Number(cp.snapshot_block)));
+    checkpointBlocks.delete(SNAPSHOT_BLOCK);
+    for (let block of checkpointBlocks) {
+        for (let kp of oracleKeys) snaps.push({ snapshot_block: block, capability: 'oracle_publish',
+            signing_pubkey: kp.pubkey, source: sourceFor(kp.pubkey), amount: snapAmount });
+    }
+    let signaturePriceBlocks = new Set(prices.map(row => {
+        try {
+            let proof = JSON.parse(row.consensus_proof);
+            if(Array.isArray(proof)) return proof.length > 0 ? Number(row.reference_block) : null;
+            if(proof && proof.batch && Array.isArray(proof.sigs) && proof.sigs.length > 0)
+                return Number(proof.batch.btc_block_height);
+        } catch (e) { return null; }
+        return null;
+    }).filter(block => block !== null));
+    for (let block of signaturePriceBlocks)
+        for (let kp of priceKeys) snaps.push({ snapshot_block: block, capability: 'price',
+            signing_pubkey: kp.pubkey, source: sourceFor(kp.pubkey), amount: snapAmount });
     let obj = { v: 1, network: 'regtest', batch_seq: batchSeq, matches: matches };
     if (opts.rewards) obj.rewards = opts.rewards;
     if (opts.calls) obj.calls = calls;
     if (bridges.length > 0) obj.bridge_transfers = bridges;
     if (policies.length > 0) obj.policy_snapshots = policies;
+    if (checkpoints.length > 0) obj.state_checkpoints = checkpoints;
+    if (prices.length > 0) obj.price_snapshots = prices;
+    if ((opts.tombstones || []).length > 0) obj.price_tombstones = opts.tombstones.map(row => ({
+        round_number: Number(row.round_number), coin_pair: String(row.coin_pair)
+    }));
     obj.capability_snapshots = snaps;
     let json = JSON.stringify(obj);
     let crc  = crc32Hex(json);
@@ -296,11 +382,30 @@ function rawPolicy(snapshot_id, overrides) {
     return row;
 }
 
+function rawCheckpoint(checkpoint_seq, overrides) {
+    return Object.assign({
+        id: checkpoint_seq, chain: 'BTC', network: 'regtest', block_index: 500 + checkpoint_seq,
+        block_hash: '11'.repeat(32), ledger_hash: '22'.repeat(32), actions_hash: '33'.repeat(32),
+        contract_hash: '44'.repeat(32), checkpoint_seq, snapshot_block: SNAPSHOT_BLOCK,
+        state_root: '55'.repeat(32), state_root_version: 1,
+        block_merkle_root: '66'.repeat(32), block_merkle_version: 1
+    }, overrides || {});
+}
+
+function rawPrice(round_number, coin_pair, overrides) {
+    return Object.assign({
+        id: round_number, round_number, coin_pair, price: '100.25', reference_block: SNAPSHOT_BLOCK,
+        reference_chain: 'BTC', block_timestamp: 1700000100, validator_count: 3,
+        consensus_round: 1, status: 'finalized', source_chain: 'BTC', source_action_index: 30,
+        batch_block_time: 0, admit_block_btc: null, admit_block_ltc: null, admit_block_doge: null
+    }, overrides || {});
+}
+
 module.exports = {
     makeKeypair, signHex,
     MATCH_KEYS, serializeMatch, matchCanonical,
     CALL_KEYS, serializeCall, callCanonical,
-    BRIDGE_KEYS, POLICY_KEYS,
+    BRIDGE_KEYS, POLICY_KEYS, CHECKPOINT_KEYS, PRICE_KEYS,
     crc32Hex, SNAPSHOT_BLOCK, CP,
-    buildBatch, rawMatch, rawCall, rawBridge, rawPolicy,
+    buildBatch, rawMatch, rawCall, rawBridge, rawPolicy, rawCheckpoint, rawPrice,
 };

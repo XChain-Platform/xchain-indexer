@@ -84,6 +84,8 @@ const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
 // ARCHIVE_HEAD_VERSIONS cannot reach one path and silently skip the other.
 const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../src/consensus/state_hash.js');
 const bridgePolicy = require('./recovery/bridge_policy.js');
+const checkpointPrice = require('./recovery/checkpoint_price.js');
+const CHECKPOINT_COMMITMENT_KEY = 'checkpoint_commitment_activation.CHECKPOINT_COMMITMENT_ACTIVATION';
 
 // Capabilities whose archived snapshot is re-resolvable from the BTC capability stakes.
 // Both cross-checks gate on this one set (_verifyStakes for its delegated-key admission,
@@ -121,7 +123,8 @@ class AnchorRecovery {
 
     async run(){
         let report = { batches: 0, verified: 0, failed: [], matches: 0, snapshots: 0,
-                       calls: 0, rewards: 0, bridges: 0, policies: 0 };
+                       calls: 0, rewards: 0, bridges: 0, policies: 0,
+                       checkpoints: 0, prices: 0, tombstones: 0 };
 
         // Restrict to the SAME statuses every other reader of anchor_actions accepts
         // (getArchiveReplayWatermarks / getMaxAnchorCheckpointSeq: archive-head or
@@ -180,12 +183,18 @@ class AnchorRecovery {
                     report.rewards   += (archive.rewards || []).length;
                     report.bridges  += (archive.bridge_transfers || []).length;
                     report.policies += (archive.policy_snapshots || []).length;
+                    report.checkpoints += (archive.state_checkpoints || []).length;
+                    report.prices      += (archive.price_snapshots || []).length;
+                    report.tombstones  += (archive.price_tombstones || []).length;
                 }
                 report.verified++;
                 this.log('recovery: batch ' + batchSeq + ' OK (' + archive.matches.length + ' matches, ' +
                          ((archive.calls || []).length) + ' calls, ' + ((archive.rewards || []).length) + ' rewards, ' +
                          ((archive.bridge_transfers || []).length) + ' bridges, ' +
-                         ((archive.policy_snapshots || []).length) + ' policies)');
+                         ((archive.policy_snapshots || []).length) + ' policies, ' +
+                         ((archive.state_checkpoints || []).length) + ' checkpoints, ' +
+                         ((archive.price_snapshots || []).length) + ' prices, ' +
+                         ((archive.price_tombstones || []).length) + ' tombstones)');
             } catch(e){
                 report.failed.push({ batch_seq: batchSeq, reason: e.message });
                 this.log('recovery: batch ' + batchSeq + ' FAILED: ' + e.message);
@@ -195,7 +204,9 @@ class AnchorRecovery {
         this.log('recovery: ' + report.verified + '/' + report.batches + ' batches verified, ' +
                  report.matches + ' match rows, ' + report.calls + ' call rows, ' +
                  report.snapshots + ' snapshot rows, ' + report.rewards + ' reward rows, ' +
-                 report.bridges + ' bridge rows, ' + report.policies + ' policy rows' +
+                 report.bridges + ' bridge rows, ' + report.policies + ' policy rows, ' +
+                 report.checkpoints + ' checkpoint rows, ' + report.prices + ' price rows, ' +
+                 report.tombstones + ' price tombstones' +
                  (this.dryRun ? ' (dry run, nothing written)' : ''));
         return report;
     }
@@ -330,6 +341,14 @@ class AnchorRecovery {
             network: v1.network,
             setFor,
             parseSigs: raw => this.parseSigs(raw),
+            quorumVerified: (canonical, sigs, set, weighted) =>
+                this.quorumVerified(canonical, sigs, set, weighted)
+        });
+        checkpointPrice.verifyArchive(archive, {
+            network: v1.network,
+            setFor,
+            parseSigs: raw => this.parseSigs(raw),
+            checkpointCanonical: row => this.checkpointCanonical(row),
             quorumVerified: (canonical, sigs, set, weighted) =>
                 this.quorumVerified(canonical, sigs, set, weighted)
         });
@@ -848,7 +867,8 @@ class AnchorRecovery {
 
         // Counters stay local until both commits land, so a rolled-back batch never
         // inflates the run report with rows that are not in the DB.
-        let delta  = { matches: 0, snapshots: 0, calls: 0, rewards: 0, bridges: 0, policies: 0 };
+        let delta  = { matches: 0, snapshots: 0, calls: 0, rewards: 0, bridges: 0, policies: 0,
+                       checkpoints: 0, prices: 0, tombstones: 0 };
         // Both begins sit INSIDE the try: if the second one fails, the first transaction is
         // still open and holding Database's transaction mutex, and the next batch's
         // beginTransaction would block on that lock forever (a silent hang mid-recovery).
@@ -870,6 +890,9 @@ class AnchorRecovery {
         report.rewards   += delta.rewards;
         report.bridges   += delta.bridges;
         report.policies  += delta.policies;
+        report.checkpoints += delta.checkpoints;
+        report.prices      += delta.prices;
+        report.tombstones  += delta.tombstones;
     }
 
     async writeBatch(archive, report, network, anchorTxid, rewards){
@@ -886,6 +909,7 @@ class AnchorRecovery {
             report.snapshots++;
         }
         await bridgePolicy.writeArchive(this.db, archive, report);
+        await checkpointPrice.writeArchive(this.db, archive, report);
         for(let m of archive.matches){
             let existing = await this.db.doQuery(
                 'SELECT match_id FROM cross_chain_matches WHERE match_id = ? LIMIT 1', [m.match_id]);
@@ -1113,12 +1137,31 @@ class AnchorRecovery {
     // Hub StateCheckpointEngine canonical + the v1 archive extension (anchor.js).
     // v1 ROUND_ID appends batch_seq (distinct from the v0 per-block key, so each batch in a block signs its own round);
     // gated on the BTC snapshot_block + network, VIEW=0. Must byte-match anchor.canonical.
+    rawCheckpointCanonical(cp){
+        return ['XCHECKPOINT', cp.chain, cp.network, String(cp.block_index), cp.block_hash,
+                cp.ledger_hash, cp.actions_hash, cp.contract_hash,
+                String(cp.checkpoint_seq), String(cp.snapshot_block)].join('|');
+    }
+
+    checkpointCanonical(cp){
+        let raw = this.rawCheckpointCanonical(cp);
+        let rootsActive = gateRegistry.activeAt(CHECKPOINT_COMMITMENT_KEY,
+            cp.network, null, cp.snapshot_block, null);
+        if(rootsActive && cp.state_root != null && cp.block_merkle_root != null &&
+           cp.state_root_version != null && cp.block_merkle_version != null)
+            raw += '|' + [String(cp.state_root).toLowerCase(), String(cp.state_root_version),
+                          String(cp.block_merkle_root).toLowerCase(),
+                          String(cp.block_merkle_version)].join('|');
+        if(eq.isEquivHeaderActive(cp.snapshot_block, cp.network))
+            return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT,
+                cp.chain + '|' + cp.network + '|' + cp.block_index + '|' + cp.checkpoint_seq, 0, raw);
+        return raw;
+    }
+
     wrapperCanonical(v1){
-        let raw = ['XCHECKPOINT', v1.chain, v1.network, String(v1.block_index), v1.block_hash,
-                v1.ledger_hash, v1.actions_hash, v1.contract_hash,
-                String(v1.checkpoint_seq), String(v1.snapshot_block),
-                String(v1.match_batch_seq), String(v1.match_count), v1.batch_crc32,
-                String(v1.total_chunks)].join('|');
+        let raw = this.rawCheckpointCanonical(v1) + '|' +
+                [String(v1.match_batch_seq), String(v1.match_count), v1.batch_crc32,
+                 String(v1.total_chunks)].join('|');
         if(eq.isEquivHeaderActive(v1.snapshot_block, v1.network))
             return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT,
                 v1.chain + '|' + v1.network + '|' + v1.block_index + '|' + v1.checkpoint_seq + '|' + v1.match_batch_seq, 0, raw);
@@ -1224,7 +1267,7 @@ class AnchorRecovery {
 // can call it without constructing a full AnchorRecovery(db, opts) instance.
 // Delegates to the real instance method; does not change its output.
 AnchorRecovery.wrapperCanonicalForTest = function(v1){
-    return AnchorRecovery.prototype.wrapperCanonical.call({}, v1);
+    return AnchorRecovery.prototype.wrapperCanonical.call(AnchorRecovery.prototype, v1);
 };
 
 module.exports = AnchorRecovery;
