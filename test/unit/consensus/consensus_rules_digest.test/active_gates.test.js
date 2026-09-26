@@ -86,7 +86,7 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
             for (const [p] of saved) delete require.cache[p];
             const fresh = require('../../../../src/consensus_rules_digest.js');
             assert.strictEqual(fresh.computeConsensusRulesDigest().digest,
-                'f69861138e062d4feb1dc7f9975fd28284a1f297e7e8375e6d870c020f3d97fd',
+                'e507f00a7adf06b8e3a663a4ed2247f62423b6bdf0da20e74cb2e53073ba8694',
                 'the consensus rules digest moved; a gate was added, removed, reordered or re-armed');
         } finally {
             for (const [p, mod] of saved) { if (mod === undefined) delete require.cache[p]; else require.cache[p] = mod; }
