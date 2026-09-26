@@ -13,7 +13,8 @@
  * DISPENSER handler part: PER-FORMAT FIELD VALIDATION.
  *
  * The amount, ownership, address, expiration and fiat field rules for each format,
- * the Mode B oracle price precondition, and the PRICE v1 oracle usage fee. parse()
+ * the Mode B oracle price precondition, the FIAT settlement price check on a create
+ * or refill, and the PRICE v1 oracle usage fee. parse()
  * calls these between validateTickCoinFiat and validateGeneralRules, which is where
  * they ran inline.
  *
@@ -180,6 +181,33 @@ module.exports = {
             }, this.indexerDb);
             if(!priceCheck.valid)
                 error = priceCheck.error;
+        }
+
+    ctx.data = data;
+    ctx.error = error;
+    },
+
+    // A FIAT create or refill must be priceable by the DISPENSE path at this block.
+    async validateSettlementPrice(ctx){
+    let { data, error, format, dispenserInfo } = ctx;
+
+        // Verify a FIAT create, or an edit adding escrow, has the price a DISPENSE at this block
+        // would settle against. Accepting one without it opened (or topped up) a dispenser whose
+        // every payment is rejected while the buyer's coin stays with the seller.
+        let isRefill = format==2 && dispenserInfo && !this.util.isNull(data['GIVE_ESCROW']) && this.util.bcgt(data['GIVE_ESCROW'], '0');
+        let fiatDispenser = (format==0) ? {
+            FIAT: data['FIAT_CODE'], ORACLE_ADDRESS: data['ORACLE_ADDRESS'],
+            GIVE_COIN: data['GIVE_COIN'], GIVE_TICK: data['GIVE_TICK'], GET_COIN: data['GET_COIN'],
+        } : (isRefill ? dispenserInfo : null);
+
+        // Gated (dispenser_settlement_price_activation row): below it both were accepted as before.
+        if(!error && fiatDispenser && !this.util.isNull(fiatDispenser['FIAT']) &&
+           gateRegistry.activeAt('dispenser_settlement_price_activation.DISPENSER_SETTLEMENT_PRICE_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']) &&
+           await this.actions.protocolChanges.isEnabled('FIAT_DISPENSER_PRICING', data['BLOCK_INDEX'])){
+            let gap = await this.util.findSettlementPriceGap(fiatDispenser, Number(data['BLOCK_TIME']),
+                Number(this.config['FIAT_DISPENSER_PRICE_WINDOW']), this.indexerDb);
+            if(gap)
+                error = gap;
         }
 
     ctx.data = data;

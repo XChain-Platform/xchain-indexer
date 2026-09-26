@@ -41,13 +41,17 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../../../fixtures/config');
 const Utility           = require('../../../../src/utility');
 const Database          = require('../../../../src/db');
+const gateRegistry      = require('../../../../src/consensus/gate_registry');
+
+const LIST_HEAD_FOLLOWS_EDIT_CHAIN_KEY = 'list_head_follows_edit_chain.LIST_HEAD_FOLLOWS_EDIT_CHAIN';
+const TOKEN_GATE_LIST_AT_BLOCK_KEY = 'token_gate_list_at_block.TOKEN_GATE_LIST_AT_BLOCK';
 
 const ADDR_A = 'mmqFL1hiu2RDuyS69KS9ko6uaMryhANwsz';
 const ADDR_B = 'mk7MdP3qzVkgyjaYNR2sUY8Ggn4DWxt2KS';
 const ADDR_C = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 
 // A Database backed by a tiny in-memory model of the list tables.
-//   rows:  [{ action_index, type, list_action_index, status }]
+//   rows:  [{ action_index, type, list_action_index, status, block_index }]
 //   items: { action_index: [item, ...] }
 function dbWithLists(rows, items) {
     const config = getTestConfig();
@@ -63,11 +67,22 @@ function dbWithLists(rows, items) {
             const row = rowFor(args[0]);
             return Promise.resolve(row ? [{ type: row.type }] : []);
         }
+        if (/SELECT l\.type FROM lists l INNER JOIN index_statuses/i.test(q)) {
+            const row = rowFor(args[0]);
+            return Promise.resolve(row && row.status === 'valid' ? [{ type: row.type }] : []);
+        }
         if (/SELECT list_action_index FROM lists WHERE action_index=\?/i.test(q)) {
             const row = rowFor(args[0]);
             return Promise.resolve(row ? [{ list_action_index: row.list_action_index }] : []);
         }
         if (/FROM lists l INNER JOIN index_statuses/i.test(q)) {
+            if (/SELECT\s+l\.action_index,\s+s\.status/i.test(q)) {
+                const children = rows
+                    .filter(r => String(r.list_action_index) === String(args[0]))
+                    .filter(r => args.length < 2 || r.block_index === undefined || r.block_index <= args[1])
+                    .sort((a, b) => b.action_index - a.action_index);
+                return Promise.resolve(children.map(r => ({ action_index: r.action_index, status: r.status })));
+            }
             const heads = rows
                 .filter(r => r.status === 'valid' && String(r.list_action_index) === String(args[0]))
                 .sort((a, b) => b.action_index - a.action_index);
@@ -92,6 +107,17 @@ function removeFixture() {
             { action_index: 2021, type: 2, list_action_index: 2020, status: 'valid' }
         ],
         { '2020': [ADDR_A], '2021': [] }
+    );
+}
+
+function legacyEditOfEditFixture() {
+    return dbWithLists(
+        [
+            { action_index: 10, type: 2, list_action_index: null, status: 'valid' },
+            { action_index: 11, type: 2, list_action_index: 10,   status: 'valid' },
+            { action_index: 12, type: 2, list_action_index: 11,   status: 'valid' }
+        ],
+        { '10': [ADDR_A], '11': [ADDR_A, ADDR_B], '12': [ADDR_C] }
     );
 }
 
@@ -136,6 +162,33 @@ describe('db.getList() LIST edit resolution @regression @tier1', function () {
         const list = await db.getList(10, 100);
         assert.deepStrictEqual(list, [ADDR_B], 'membership is the newest edit snapshot, not the create');
     });
+});
+
+describe('db.getList() chained edit resolution @regression @tier1', function () {
+    it('below LIST_HEAD_FOLLOWS_EDIT_CHAIN keeps the direct-child head', async function () {
+        const db = legacyEditOfEditFixture();
+        sinon.stub(gateRegistry, 'activeAt').callThrough()
+            .withArgs(LIST_HEAD_FOLLOWS_EDIT_CHAIN_KEY, 'regtest', 'BTC', 100, null).returns(false);
+        const list = await db.getList(10, 100);
+        assert.deepStrictEqual(list.slice().sort(), [ADDR_A, ADDR_B].sort());
+    });
+
+    it('at LIST_HEAD_FOLLOWS_EDIT_CHAIN resolves the deepest legacy edit', async function () {
+        const db = legacyEditOfEditFixture();
+        const list = await db.getList(10, 100);
+        assert.deepStrictEqual(list, [ADDR_C]);
+    });
+
+    it('registers LIST_HEAD_FOLLOWS_EDIT_CHAIN with the deployment heights', function () {
+        assert.deepStrictEqual(gateRegistry.get(LIST_HEAD_FOLLOWS_EDIT_CHAIN_KEY), {
+            mainnet: 9999999999,
+            'BTC:testnet': 9999999999,
+            'LTC:testnet': 9999999999,
+            'DOGE:testnet': 9999999999,
+            testnet: 9999999999,
+            regtest: 0,
+        });
+    });
 
     it('an INVALID edit is never the head (it writes no items, so it would empty the list)', async function () {
         const db = dbWithLists(
@@ -149,6 +202,46 @@ describe('db.getList() LIST edit resolution @regression @tier1', function () {
         const list = await db.getList(10, 100);
         assert.deepStrictEqual(list.slice().sort(), [ADDR_A, ADDR_B].sort(),
             'an invalid edit must leave the previous head standing');
+    });
+
+    it('getListAtBlock resolves a long branched chain without future membership', async function () {
+        const rows = [];
+        const items = {};
+        for(let action_index = 100; action_index <= 120; action_index++){
+            rows.push({
+                action_index,
+                type: 2,
+                list_action_index: action_index === 100 ? null : action_index - 1,
+                status: 'valid',
+                block_index: action_index
+            });
+            items[String(action_index)] = ['member-' + action_index];
+        }
+        rows.push({
+            action_index: 121,
+            type: 2,
+            list_action_index: 100,
+            status: 'valid',
+            block_index: 120
+        });
+        items['121'] = ['member-121'];
+        const db = dbWithLists(rows, items);
+
+        for(const block_index of [120, 121]){
+            assert.deepStrictEqual(
+                await db.getListAtBlock(120, block_index),
+                await db.getList(120, block_index),
+                'height ' + block_index + ' must agree with the current list reader'
+            );
+        }
+
+        assert.deepStrictEqual(await db.getListAtBlock(120, 100), ['member-100']);
+        assert.deepStrictEqual(await db.getListAtBlock(120, 102), ['member-102']);
+
+        db._calls.length = 0;
+        await db.getListAtBlock(120, 120);
+        const parentReads = db._calls.filter(c => /SELECT list_action_index FROM lists/i.test(c.query));
+        assert.strictEqual(parentReads.length, 21, 'the reference reaches CREATE in one parent walk');
     });
 });
 
@@ -200,6 +293,36 @@ describe('db.getList() LIST edit resolution @regression @tier1', function () {
 
 });
 
+describe('db.isActionAllowed() token LIST block pin @regression @tier1', function () {
+    function tokenGateDb(){
+        const db = removeFixture();
+        sinon.stub(db, 'getTokenInfo').resolves({ ALLOW_LIST: 2020, BLOCK_LIST: null });
+        sinon.stub(db, 'isTickSleeping').resolves(false);
+        sinon.stub(db, 'isAddressSleeping').resolves(false);
+        return db;
+    }
+
+    it('keeps create-time membership below TOKEN_GATE_LIST_AT_BLOCK', async function () {
+        const activeAt = sinon.stub(gateRegistry, 'activeAt').callThrough();
+        activeAt.withArgs(TOKEN_GATE_LIST_AT_BLOCK_KEY).returns(false);
+        const db = tokenGateDb();
+
+        assert.strictEqual(await db.isActionAllowed(ADDR_A, 'TEST', 100), true);
+        assert.ok(db.getTokenInfo.calledWith('TEST', undefined), 'legacy token state lookup stays unbounded');
+        const listRead = db._calls.find(c => /FROM\s+list_items/i.test(c.query));
+        assert.strictEqual(String(listRead.args[0]), '2020', 'legacy lookup reads the create membership');
+    });
+
+    it('applies the edited membership when TOKEN_GATE_LIST_AT_BLOCK is active', async function () {
+        const db = tokenGateDb();
+
+        assert.strictEqual(await db.isActionAllowed(ADDR_A, 'TEST', 100), false);
+        assert.ok(db.getTokenInfo.calledWith('TEST', 100), 'token state lookup is pinned to the action block');
+        const listRead = db._calls.find(c => /FROM\s+list_items/i.test(c.query));
+        assert.strictEqual(String(listRead.args[0]), '2021', 'the action-block lookup reads the edited membership');
+    });
+});
+
 
 describe('getList() call sites carry block context (ratchet) @regression @tier1', function () {
 
@@ -237,6 +360,38 @@ describe('getList() call sites carry block context (ratchet) @regression @tier1'
         }
         assert.deepStrictEqual(offenders, [],
             'every getList() call must pass block_index, or the flag day silently stays inert there');
+    });
+});
+
+describe('isActionAllowed() call sites carry block context (ratchet) @regression @tier1', function () {
+    it('no isActionAllowed() caller omits the block_index argument', function () {
+        const fs   = require('fs');
+        const path = require('path');
+        const root = path.join(__dirname, '..', '..', '..', '..', 'src');
+        const files = [];
+        (function walk(dir) {
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                if (entry.name === 'node_modules' || entry.name === 'tmp') continue;
+                const full = path.join(dir, entry.name);
+                if (entry.isDirectory()) walk(full);
+                else if (entry.name.endsWith('.js')) files.push(full);
+            }
+        })(root);
+
+        const offenders = [];
+        for (const file of files) {
+            const lines = fs.readFileSync(file, 'utf8').split('\n');
+            lines.forEach((line, i) => {
+                const trimmed = line.trim();
+                if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return;
+                const m = line.match(/(?<![A-Za-z])isActionAllowed\(([^()]*)\)/);
+                if (!m || /async\s+isActionAllowed\(/.test(line)) return;
+                if (m[1].split(',').length >= 3) return;
+                offenders.push(path.relative(root, file) + ':' + (i + 1) + ' ' + line.trim());
+            });
+        }
+        assert.deepStrictEqual(offenders, [],
+            'every isActionAllowed() caller must pass the action block_index');
     });
 
 });

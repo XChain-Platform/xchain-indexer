@@ -43,6 +43,10 @@ function makeIndexer(order){
         indexerDb: db('indexerDb'),
         decoderDb: db('decoderDb'),
         hubDb:     db('hubDb'),
+        actions: {
+            closed: false,
+            async shutdown(){ this.closed = true; order.push('close:actions'); }
+        },
         loop,
         // The real stop() only sets stopFlag; the loop breaks at the next block
         // boundary, which the test models by resolving the loop promise later.
@@ -214,6 +218,7 @@ function registerIndexerDrainOrderingTests(){
             assert.strictEqual(running, false, '/status must stop reporting the indexer running');
             assert.strictEqual(indexer.stopped, true);
             assert.strictEqual(server.closed, true);
+            assert.strictEqual(indexer.actions.closed, true);
 
             // The health flag must go down BEFORE stop(), because stop() only sets
             // stopFlag and the block loop can take a whole block to notice it.
@@ -226,6 +231,8 @@ function registerIndexerDrainOrderingTests(){
                 assert.ok(order.indexOf('close:' + name) > order.indexOf('stop'),
                     name + ' must close after the block loop was told to stop');
             }
+            assert.ok(order.indexOf('close:actions') > order.indexOf('server.close'));
+            assert.ok(order.indexOf('close:actions') < order.indexOf('close:indexerDb'));
             assert.ok(indexer.indexerDb.closed && indexer.decoderDb.closed && indexer.hubDb.closed);
         });
         it('waits for the block loop to break before closing pools', async function(){

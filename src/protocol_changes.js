@@ -37,6 +37,7 @@ require('./protocol_changes/shared_rows_5.js');
 require('./protocol_changes/gates_1.js');
 require('./protocol_changes/gates_2.js');
 require('./protocol_changes/gates_3.js');
+require('./protocol_changes/gates_4.js');
 require('./protocol_changes/gates_flag_times.js');
 const {
     VM_BANNED_ASYNC_MAINNET_TIME,

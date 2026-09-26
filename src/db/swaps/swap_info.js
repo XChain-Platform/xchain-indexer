@@ -56,9 +56,11 @@ module.exports = {
             let edit = await this.getSwapEdits(action_index);
             if(edit.expiration)
                 swap['EXPIRATION'] = edit.expiration;
-            if(edit.allow_list)
+            // A list edit to 0 (the LIST_EDIT_REMOVE sentinel) removes the list: 0 is the value
+            // a never-listed row already reads as. No valid edit below that flag day holds 0.
+            if(edit.allow_list !== false)
                 swap['ALLOW_LIST'] = edit.allow_list;
-            if(edit.block_list)
+            if(edit.block_list !== false)
                 swap['BLOCK_LIST'] = edit.block_list;
         }
         return swap;

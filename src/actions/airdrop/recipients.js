@@ -65,8 +65,10 @@ module.exports = {
         let approved = new Set();
         let hasAllowList = tokenInfo && !this.util.isNull(tokenInfo['ALLOW_LIST']) && this.util.isNumeric(tokenInfo['ALLOW_LIST']);
         let hasBlockList = tokenInfo && !this.util.isNull(tokenInfo['BLOCK_LIST']) && this.util.isNumeric(tokenInfo['BLOCK_LIST']);
-        let recipientAllowList = hasAllowList ? new Set(await this.indexerDb.getList(tokenInfo['ALLOW_LIST'], data['BLOCK_INDEX'])) : null;
-        let recipientBlockList = hasBlockList ? new Set(await this.indexerDb.getList(tokenInfo['BLOCK_LIST'], data['BLOCK_INDEX'])) : null;
+        let allowMembers = hasAllowList ? await this.indexerDb.getList(tokenInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : null;
+        let blockMembers = hasBlockList ? await this.indexerDb.getList(tokenInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : null;
+        let recipientAllowList = Array.isArray(allowMembers) ? new Set(allowMembers) : null;
+        let recipientBlockList = Array.isArray(blockMembers) ? new Set(blockMembers) : null;
 
         // Verify airdrop is allowed to recipient (allow/block lists)
         for(let address of recipients){

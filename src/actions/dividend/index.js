@@ -141,8 +141,8 @@ class Dividend {
         // Held as Sets: the holder loop below probes membership once per holder, so an O(1)
         // hash probe replaces a scan of the whole list. Emptiness still gates the check, so a
         // configured-but-empty ALLOW_LIST keeps admitting everyone exactly as before.
-        let allowList = (dividendTokenInfo && dividendTokenInfo['ALLOW_LIST']) ? new Set(await this.indexerDb.getList(dividendTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX'])) : new Set();
-        let blockList = (dividendTokenInfo && dividendTokenInfo['BLOCK_LIST']) ? new Set(await this.indexerDb.getList(dividendTokenInfo['BLOCK_LIST'], data['BLOCK_INDEX'])) : new Set();
+        let allowList = (dividendTokenInfo && dividendTokenInfo['ALLOW_LIST']) ? new Set(await this.indexerDb.getList(dividendTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX']) || []) : new Set();
+        let blockList = (dividendTokenInfo && dividendTokenInfo['BLOCK_LIST']) ? new Set(await this.indexerDb.getList(dividendTokenInfo['BLOCK_LIST'], data['BLOCK_INDEX']) || []) : new Set();
 
         // Loop through list of holders and build out valid recipients list
         dividend['DEBIT'] = 0;

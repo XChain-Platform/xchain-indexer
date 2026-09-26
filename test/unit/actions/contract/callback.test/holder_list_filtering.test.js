@@ -18,11 +18,25 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon = require('sinon');
 const { createBaseData } = require('../../../../fixtures/mocks');
+const { stubGate } = require('../../../../helpers/gate_modules.js');
 const {
     OWNER, HOLDER1, HOLDER2, makeTokenInfo, makeCallbackTokenInfo, freshCallback,
 } = require('./helpers/callback_fixtures.js');
 
+const EMPTY_ALLOW_LIST_KEY = 'empty_allow_list_denies_activation.EMPTY_ALLOW_LIST_DENIES';
+const CALLBACK_COMPENSATION_KEY = 'callback_compensation_activation.CALLBACK_COMPENSATES_EVERY_DEBITED_HOLDER';
+
 let indexer, handler;
+
+function setup(cbOverrides) {
+    indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(makeTokenInfo());
+    indexer.indexerDb.getTokenInfo.withArgs('CBTEST').resolves(makeCallbackTokenInfo(cbOverrides));
+    indexer.indexerDb.getAddressBalances.resolves({ 1: '1', 2: '100' });
+    indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
+    // include the SOURCE as a holder to drive the source-skip branch too
+    indexer.indexerDb.getHolders.resolves({ [OWNER]: '5', [HOLDER1]: '10', [HOLDER2]: '20' });
+    indexer.indexerDb.isActionAllowed.resolves(true);
+}
 
 // ─── CALLBACK_TICK ALLOW/BLOCK list filters holders ───────────────────
 describe('Callback @regression @tier3', function () {
@@ -35,18 +49,8 @@ describe('Callback @regression @tier3', function () {
     });
 
     describe('holder allow/block list filtering', function () {
-
-        function setup(cbOverrides) {
-            indexer.indexerDb.getTokenInfo.withArgs('TEST').resolves(makeTokenInfo());
-            indexer.indexerDb.getTokenInfo.withArgs('CBTEST').resolves(makeCallbackTokenInfo(cbOverrides));
-            indexer.indexerDb.getAddressBalances.resolves({ 1: '1', 2: '100' });
-            indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
-            // include the SOURCE as a holder to drive the source-skip branch too
-            indexer.indexerDb.getHolders.resolves({ [OWNER]: '5', [HOLDER1]: '10', [HOLDER2]: '20' });
-            indexer.indexerDb.isActionAllowed.resolves(true);
-        }
-
         it('excludes holders not on the CALLBACK_TICK ALLOW_LIST', async function () {
+            stubGate(sinon, CALLBACK_COMPENSATION_KEY, false);
             setup({ ALLOW_LIST: 70 });
             indexer.indexerDb.getList.callsFake(async (id) => (id === 70 ? [HOLDER1] : []));
             const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100 });
@@ -59,6 +63,7 @@ describe('Callback @regression @tier3', function () {
         });
 
         it('excludes holders on the CALLBACK_TICK BLOCK_LIST', async function () {
+            stubGate(sinon, CALLBACK_COMPENSATION_KEY, false);
             setup({ BLOCK_LIST: 71 });
             indexer.indexerDb.getList.callsFake(async (id) => (id === 71 ? [HOLDER2] : []));
             const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100 });
@@ -68,9 +73,46 @@ describe('Callback @regression @tier3', function () {
             assert.ok(!credited.includes(HOLDER2));
         });
 
-        // Load-bearing: emptiness gates the check here, so a configured-but-empty ALLOW_LIST
-        // credits every holder. AIRDROP gates on list existence and would credit nobody.
-        it('an ALLOW_LIST that resolves empty still credits every holder', async function () {
+        it('below the gate preserves the legacy uncompensated holder debit', async function () {
+            stubGate(sinon, CALLBACK_COMPENSATION_KEY, false);
+            setup({ BLOCK_LIST: 71 });
+            indexer.indexerDb.getList.callsFake(async (id) => (id === 71 ? [HOLDER2] : []));
+            const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100 });
+            await handler.parse(['0', 'TEST', null], data, null);
+            const debited = indexer.indexerDb.createDebit.getCalls()
+                .map(c => [c.args[1], c.args[3]]);
+            const credited = indexer.indexerDb.createCredit.getCalls()
+                .map(c => [c.args[1], c.args[3]]);
+            assert.strictEqual(data['STATUS'], 'valid');
+            assert.ok(debited.some(([tick, address]) => tick === 'TEST' && address === HOLDER2));
+            assert.ok(!credited.some(([tick, address]) => tick === 'CBTEST' && address === HOLDER2));
+        });
+
+        it('rejects a callback that would debit a holder without compensation', async function () {
+            setup({ BLOCK_LIST: 71 });
+            indexer.indexerDb.getList.callsFake(async (id) => (id === 71 ? [HOLDER2] : []));
+            const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100 });
+            await handler.parse(['0', 'TEST', null], data, null);
+            assert.strictEqual(data['STATUS'], 'invalid: CALLBACK_TICK (holder not authorized)');
+            assert.strictEqual(indexer.indexerDb.createDebit.callCount, 0);
+            assert.strictEqual(indexer.indexerDb.createCredit.callCount, 0);
+        });
+    });
+});
+
+describe('Callback @regression @tier3', function () {
+    beforeEach(function () {
+        ({ indexer, handler } = freshCallback());
+    });
+
+    afterEach(function () {
+        sinon.restore();
+    });
+
+    describe('holder allow/block list filtering', function () {
+
+        it('an ALLOW_LIST that resolves empty still credits every holder below activation', async function () {
+            stubGate(sinon, EMPTY_ALLOW_LIST_KEY, false);
             setup({ ALLOW_LIST: 70 });
             indexer.indexerDb.getList.resolves([]);
             const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100 });
@@ -79,6 +121,18 @@ describe('Callback @regression @tier3', function () {
             const credited = indexer.indexerDb.createCredit.getCalls().map(c => c.args[3]);
             assert.ok(credited.includes(HOLDER1));
             assert.ok(credited.includes(HOLDER2));
+        });
+
+        it('an ALLOW_LIST that resolves empty credits no holder after activation', async function () {
+            stubGate(sinon, CALLBACK_COMPENSATION_KEY, false);
+            setup({ ALLOW_LIST: 70 });
+            indexer.indexerDb.getList.resolves([]);
+            const data = createBaseData({ ACTION: 'CALLBACK', FORMAT: 0, SOURCE: OWNER, BLOCK_INDEX: 100 });
+            await handler.parse(['0', 'TEST', null], data, null);
+            assert.strictEqual(data['STATUS'], 'valid');
+            const credited = indexer.indexerDb.createCredit.getCalls().map(c => c.args[3]);
+            assert.ok(!credited.includes(HOLDER1));
+            assert.ok(!credited.includes(HOLDER2));
         });
     });
 });

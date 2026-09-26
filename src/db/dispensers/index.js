@@ -108,9 +108,11 @@ module.exports = {
             let edit = await this.getDispenserEdits(action_index, block_time);
             if(edit.expiration)
                 dispenser['EXPIRATION'] = edit.expiration;
-            if(edit.allow_list)
+            // A list edit to 0 (the LIST_EDIT_REMOVE sentinel) removes the list: 0 is the value
+            // a never-listed row already reads as. No valid edit below that flag day holds 0.
+            if(edit.allow_list !== false)
                 dispenser['ALLOW_LIST'] = edit.allow_list;
-            if(edit.block_list)
+            if(edit.block_list !== false)
                 dispenser['BLOCK_LIST'] = edit.block_list;
             // Ownership dispensers expose virtual '1' for GIVE_AMOUNT / GIVE_ESCROW so the
             // matching engine and dispense flow can compare amounts uniformly. Settlement

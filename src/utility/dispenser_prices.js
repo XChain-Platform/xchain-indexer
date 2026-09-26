@@ -168,6 +168,37 @@ module.exports = {
         return null;
     },
 
+    // Why a DISPENSE at blockTime could not be priced for this FIAT dispenser, or null when it
+    // could. Makes the price reads of the two reverse matches above with no payment amount, so
+    // a create or refill is judged by the rows its dispenses will settle against.
+    //
+    //   dispenser: { FIAT, ORACLE_ADDRESS, GIVE_COIN, GIVE_TICK, GET_COIN }
+    async findSettlementPriceGap(dispenser, blockTime, priceWindow, db){
+        let priceDb   = (db.indexer && db.indexer.hubDb) ? db.indexer.hubDb : db;
+        let startTime = blockTime - priceWindow;
+        let coinPair  = dispenser['GET_COIN'] + '/' + dispenser['FIAT'];
+
+        // Verify Mode A has a validator snapshot inside the window reversePriceMatch reads
+        if(this.isNull(dispenser['ORACLE_ADDRESS'])){
+            let snapshots = await priceDb.getPricesInTimeRange(coinPair, startTime, blockTime);
+            return (snapshots && snapshots.length) ? null : 'invalid: FIAT_CODE (no price snapshot in the settlement window)';
+        }
+
+        // Verify Mode B has an oracle price inside the window reverseOraclePriceMatch reads
+        let oraclePrices = await priceDb.getOraclePricesInTimeRange(dispenser['ORACLE_ADDRESS'],
+            dispenser['GIVE_COIN'], dispenser['GIVE_TICK'], dispenser['FIAT'], startTime, blockTime);
+        if(!oraclePrices || oraclePrices.length === 0)
+            return 'invalid: ORACLE_ADDRESS (stale oracle price)';
+
+        // Verify one of those oracle prices pairs with a validator price by the same bounds
+        // reverseOraclePriceMatch applies: at or before its effective_at, at most one window older
+        let payPair = (this.isNull(dispenser['GET_COIN']) ? dispenser['GIVE_COIN'] : dispenser['GET_COIN']) + '/' + dispenser['FIAT'];
+        let validatorPrices = await priceDb.getPricesInTimeRange(payPair, startTime - priceWindow, blockTime) || [];
+        let paired = oraclePrices.some(op => validatorPrices.some(p =>
+            p.timestamp <= op.effectiveAt && p.timestamp >= op.effectiveAt - priceWindow));
+        return paired ? null : 'invalid: ORACLE_ADDRESS (no validator price pairs with the oracle price)';
+    },
+
     // Handle checking if any sends were to an active dispenser address
     //
     // VALUE SCOPE (BATCH_ISSUANCE_LIMITS, spec row 20). Each DISPENSE below is settled

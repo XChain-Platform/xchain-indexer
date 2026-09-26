@@ -28,13 +28,16 @@ const fs = require('fs');
 const path = require('path');
 const ProtocolChanges = require('../../../src/protocol_changes.js');
 const { TABLE, compareAll } = require('./helpers/predicate_parity.js');
-const { SRC, REPLACED_STEMS, modulePathFor } = require('../../helpers/gate_modules.js');
+const { SRC, REPLACED_STEMS, REGISTRY_ONLY_STEMS, modulePathFor } = require('../../helpers/gate_modules.js');
 
 // The rows whose predicate W4 (row 18) and W5 (row 21) replaced with activeAt()
 // itself: the callers spell the key at the call site, so there is no predicate
 // to compare.
-const REPLACED = new Set(REPLACED_STEMS.map((stem) => ProtocolChanges.rows()
-    .map(([k]) => k).find((k) => k.startsWith(stem + '.'))));
+const keyOf = (stem) => ProtocolChanges.rows().map(([k]) => k).find((k) => k.startsWith(stem + '.'));
+const REPLACED = new Set(REPLACED_STEMS.map(keyOf));
+
+// The rows born in the registry after W5 with no predicate module at all.
+const REGISTRY_ONLY = new Set(REGISTRY_ONLY_STEMS.map(keyOf));
 
 // Gate rows the table cannot compare, and why.
 const SKIPPED = {
@@ -70,16 +73,18 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
             .filter((k) => ['height', 'time', 'epoch', 'ruleset'].includes(ProtocolChanges.registry.unitOf(k)));
         const tabled = TABLE.map(([k]) => k);
         assert.strictEqual(new Set(tabled).size, tabled.length, 'a key is tabled twice');
-        const covered = new Set(tabled.concat(Object.keys(SKIPPED), [...REPLACED]));
+        const covered = new Set(tabled.concat(Object.keys(SKIPPED), [...REPLACED], [...REGISTRY_ONLY]));
         assert.deepStrictEqual(gateKeys.filter((k) => !covered.has(k)), [], 'gate rows with no parity case');
         assert.deepStrictEqual(tabled.filter((k) => !gateKeys.includes(k)), [], 'tabled keys that are not gate rows');
         assert.deepStrictEqual(Object.keys(SKIPPED).filter((k) => tabled.includes(k)), [], 'skipped and tabled');
         assert.deepStrictEqual([...REPLACED].filter((k) => tabled.includes(k) || k === undefined), [], 'replaced and tabled, or replaced with no row');
+        assert.deepStrictEqual([...REGISTRY_ONLY].filter((k) => tabled.includes(k) || k === undefined), [], 'registry-only and tabled, or registry-only with no row');
     });
 
     it('every replaced row is still a registry row and has no module left in src/ to read it through', function () {
         assert.strictEqual(REPLACED.size, 38, 'the W4 census of 25 predicate-only shims plus the 13 predicate-only twins of W5');
-        for (const key of REPLACED) {
+        assert.strictEqual(REGISTRY_ONLY.size, 12, 'the registry-only gate census moved');
+        for (const key of [...REPLACED, ...REGISTRY_ONLY]) {
             assert.ok(['height', 'time'].includes(ProtocolChanges.registry.unitOf(key)), key + ' is a height or time row');
             const stem = key.slice(0, key.lastIndexOf('.'));
             assert.strictEqual(modulePathFor(stem), null, stem + ' is mapped to a module');

@@ -85,6 +85,9 @@ function initWatermarkState(sync) {
     // subscription), a heartbeat must not certify the mirror as caught-up.
     // Reset on disconnect; re-set after the reconnect re-bootstrap drains.
     sync._bootstrapDrained = false;
+    // Track recent row or table progress so the block-loop ceiling does not replace
+    // the connection beneath a healthy long drain. Null means no drain is active.
+    sync._bootstrapLastProgressAt = null;
     sync._readyWatermark   = null;
 }
 

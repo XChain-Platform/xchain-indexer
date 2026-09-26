@@ -17,8 +17,6 @@ const { createMockIndexer, createBaseData, createTokenInfo } = require('../../..
 
 const Swap = require('../../../../src/actions/swap/index.js');
 
-const VALID_GET_ADDRESS = 'mqmJDcs5nXFHrj9q7a2G5sBVmjcQTDdUZp';
-
 let indexer, actionsCtx, handler;
 
 function setupSwap() {

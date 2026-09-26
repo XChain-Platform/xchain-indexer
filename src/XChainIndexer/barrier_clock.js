@@ -151,8 +151,8 @@ module.exports = {
                 Math.round(this.barrierHoldCeilingMs / 1000) + 's ceiling (HUB_SYNC_BARRIER_HOLD_CEILING_S, default ' +
                 HUB_SYNC_BARRIER_HOLD_CEILING_S + 's). The block is still deferring, which is correct. ' +
                 (mirrorBarrier
-                    ? 'Forcing a hub-mirror resync: a stream watermark that stops advancing holds every ' +
-                      'one of these barriers open-endedly, and only a fresh subscribe-then-bootstrap re-arms it.'
+                    ? 'Requesting hub-mirror recovery: a stream watermark that stops advancing holds every ' +
+                      'one of these barriers open-endedly. An active drain may finish while it keeps making progress.'
                     : 'Not a hub-mirror barrier, so no resync is forced; this is a host fault to investigate.'));
         }
         if(mirrorBarrier && this.hubDbSync && typeof this.hubDbSync.requestResync === 'function')

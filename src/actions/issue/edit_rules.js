@@ -83,11 +83,11 @@ async function validateCallbackAndListFields(ctx){
         error = 'invalid: CALLBACK_AMOUNT (supply distributed)';
 
     // Verify ALLOW_LIST is a valid list of addresses
-    if(!error && !this.util.isNull(data['ALLOW_LIST']) && await this.indexerDb.isValidList(data['ALLOW_LIST'],2) == false)
+    if(!error && !this.util.isNull(data['ALLOW_LIST']) && await this.indexerDb.isValidList(data['ALLOW_LIST'],2,data['BLOCK_INDEX']) == false)
         error = 'invalid: ALLOW_LIST (bad list)';
 
     // Verify BLOCK_LIST is a valid list of addresses
-    if(!error && !this.util.isNull(data['BLOCK_LIST']) && await this.indexerDb.isValidList(data['BLOCK_LIST'],2) == false)
+    if(!error && !this.util.isNull(data['BLOCK_LIST']) && await this.indexerDb.isValidList(data['BLOCK_LIST'],2,data['BLOCK_INDEX']) == false)
         error = 'invalid: BLOCK_LIST (bad list)';
 
     ctx.error = error;

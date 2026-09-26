@@ -82,7 +82,7 @@ module.exports = {
 
         // Lookup list information
         if(!error){
-            type = await this.indexerDb.getListType(airdrop['LIST_ACTION_INDEX']);
+            type = await this.indexerDb.getListType(airdrop['LIST_ACTION_INDEX'], data['BLOCK_INDEX']);
             list = await this.indexerDb.getList(airdrop['LIST_ACTION_INDEX'], data['BLOCK_INDEX']);
         }
 
@@ -101,7 +101,7 @@ module.exports = {
     // TICK's allow/block lists for SOURCE, and a balance that covers one AMOUNT
     async validateAirdropSource(airdrop, tokenInfo, ctx, error){
         // Verify TICK action is allowed from SOURCE (allow/block lists)
-        if(!error && await this.indexerDb.isActionAllowed(airdrop['SOURCE'], airdrop['TICK']) == false)
+        if(!error && await this.indexerDb.isActionAllowed(airdrop['SOURCE'], airdrop['TICK'], airdrop['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (not authorized)';
 
         // Verify SOURCE has enough balances to cover airdrop AMOUNT

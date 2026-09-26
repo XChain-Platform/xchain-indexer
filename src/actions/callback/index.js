@@ -1,4 +1,7 @@
 const { getLogger } = require('../../observability/index.js');
+const gateRegistry = require('../../consensus/gate_registry');
+
+const EMPTY_ALLOW_LIST_KEY = 'empty_allow_list_denies_activation.EMPTY_ALLOW_LIST_DENIES';
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -69,10 +72,11 @@ class Callback {
 
         let s = await this.loadCallbackState(data);
         let callback = s.callback;
-        let totals = this.buildCallbackTotals(data, s.tokenInfo, s.callbackTokenInfo, s.holders, s.allowList, s.blockList, s.recipients);
+        let totals = this.buildCallbackTotals(data, s.tokenInfo, s.callbackTokenInfo, s.holders, s.allowList, s.blockList, s.hasAllowList, s.recipients);
         await this.chargeCallbackFee(data, s.fees, s.recipients);
         error = await validate.validateCallbackToken.call(this, data, s.tokenInfo, s.callbackTokenInfo, error);
         error = await validate.validateCallbackState.call(this, data, s.tokenInfo, error);
+        error = validate.validateCallbackCompensation.call(this, data, s.holders, s.recipients, error);
         error = await validate.validateCallbackFunding.call(this, data, s, error, totals.totalCallbackTickAmount);
         // Determine final status
         let status = (error) ? error : 'valid';
@@ -114,10 +118,14 @@ class Callback {
 
         // List of addresses allowed or blocked from holding CALLBACK_TICK
         // Held as Sets: the holder loop below probes membership once per holder, so an O(1)
-        // hash probe replaces a scan of the whole list. Emptiness still gates the check, so a
-        // configured-but-empty ALLOW_LIST keeps admitting everyone exactly as before.
-        let allowList = (callbackTokenInfo && callbackTokenInfo['ALLOW_LIST']) ? new Set(await this.indexerDb.getList(callbackTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX'])) : new Set();
-        let blockList = (callbackTokenInfo && callbackTokenInfo['BLOCK_LIST']) ? new Set(await this.indexerDb.getList(callbackTokenInfo['BLOCK_LIST'], data['BLOCK_INDEX'])) : new Set();
+        // hash probe replaces a scan of the whole list.
+        // Below activation the legacy size check remains fail-open; after activation
+        // hasAllowList distinguishes an absent policy from an attached empty policy.
+        let allowMembers = (callbackTokenInfo && callbackTokenInfo['ALLOW_LIST']) ? await this.indexerDb.getList(callbackTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : null;
+        let blockMembers = (callbackTokenInfo && callbackTokenInfo['BLOCK_LIST']) ? await this.indexerDb.getList(callbackTokenInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : null;
+        let hasAllowList = Array.isArray(allowMembers);
+        let allowList = new Set(allowMembers || []);
+        let blockList = new Set(blockMembers || []);
 
         // Create the fees object
         let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
@@ -134,15 +142,16 @@ class Callback {
         }
 
         return { callback: callback, tokenInfo: tokenInfo, callbackTokenInfo: callbackTokenInfo, balances: balances,
-                 preferences: preferences, holders: holders, allowList: allowList, blockList: blockList,
+                 preferences: preferences, holders: holders, allowList: allowList, blockList: blockList, hasAllowList: hasAllowList,
                  fees: fees, recipients: recipients };
     }
 
     // The per-holder tally: who is owed CALLBACK_TICK, and the TICK and CALLBACK_TICK totals.
-    buildCallbackTotals(data, tokenInfo, callbackTokenInfo, holders, allowList, blockList, recipients){
+    buildCallbackTotals(data, tokenInfo, callbackTokenInfo, holders, allowList, blockList, hasAllowList, recipients){
         // Placeholders for total amounts for TICK and CALLBACK_TICK
         let totalTickAmount         = 0;
         let totalCallbackTickAmount = 0;
+        let emptyAllowListDenies = gateRegistry.activeAt(EMPTY_ALLOW_LIST_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
 
         // Loop through list of holders and build out valid recipients list and calculate total TICK and CALLBACK_TICK amounts
         if(tokenInfo){
@@ -154,7 +163,9 @@ class Callback {
                    continue;
 
                 // Check if recipient is on the allow or block lists and only add valid addresses to the recipients list
-                if((allowList.size && !allowList.has(address)) || (blockList.size && blockList.has(address)))
+                if((allowList.size && !allowList.has(address)) ||
+                   (emptyAllowListDenies && hasAllowList && allowList.size === 0) ||
+                   (blockList.size && blockList.has(address)))
                     valid = false;
 
                 if(valid){

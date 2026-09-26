@@ -123,6 +123,18 @@ class Dispenser {
         }
     }
 
+    // The local fresh-address verdict: does GET_ADDRESS have activity strictly before
+    // BLOCK_INDEX? At/after the proven-use flag-day (the
+    // dispenser_freshness_proven_use_activation row) only activity that proves use counts,
+    // so anyone publishing a LIST that names the address cannot spend its exception.
+    // Below it any index_addresses row counts, byte-identically.
+    async hasPriorLocalActivity(data){
+        let provenUseOnly = gateRegistry.activeAt('dispenser_freshness_proven_use_activation.DISPENSER_FRESHNESS_PROVEN_USE_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);
+        if(provenUseOnly)
+            return await this.indexerDb.hasProvenUseBefore(data['GET_ADDRESS'], data['BLOCK_INDEX']);
+        return await this.indexerDb.hasXChainActivityBefore(data['GET_ADDRESS'], data['BLOCK_INDEX']);
+    }
+
     // Handle parsing the DISPENSER transaction
     async parse(params, data, error){
         /*****************************************************************
@@ -146,6 +158,7 @@ class Dispenser {
         await this.validateAmountFields(ctx);
         await this.validateAddressAndExpirationFields(ctx);
         await this.validateOraclePrecondition(ctx);
+        await this.validateSettlementPrice(ctx);
         await this.validateOracleUsageFee(ctx);
         await this.validateGeneralRules(ctx);
         await this.checkGetAddressPermission(ctx);
@@ -183,7 +196,7 @@ class Dispenser {
                 // the gate the legacy tracker HTTP path runs byte-identically so historical
                 // replay is preserved.
                 if(gateRegistry.activeAt('dispenser_freshness_activation.DISPENSER_FRESHNESS_ACTIVATION', this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null)){
-                    isFresh = !(await this.indexerDb.hasXChainActivityBefore(data['GET_ADDRESS'], data['BLOCK_INDEX']));
+                    isFresh = !(await this.hasPriorLocalActivity(data));
                 } else if(this.utxoTracker && this.utxoTracker.enabled){
                     try {
                         // Oracle-shape flag-day (the dispenser_freshness_shape_activation row).

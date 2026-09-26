@@ -153,7 +153,7 @@ module.exports = {
             for(let name of ['ALLOW_LIST', 'BLOCK_LIST']){
                 // Only check a LIST field that was actually provided
                 if(!error && !this.util.isNull(data[name])){
-                    let type = await this.indexerDb.getListType(data[name]);
+                    let type = await this.indexerDb.getListType(data[name], data['BLOCK_INDEX']);
                     if(type===false)
                         error = 'invalid: ' + name + ' (unknown)';
                     else if(!this.listTypes.includes(type))

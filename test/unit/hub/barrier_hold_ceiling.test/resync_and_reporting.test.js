@@ -66,6 +66,71 @@ describe('HubDbSync.requestResync @regression @tier1', function () {
         assert.strictEqual(sync.requestResync('third'), true);
         assert.strictEqual(sync.forcedResyncCount, 2);
     });
+});
+
+describe('HubDbSync.requestResync bootstrap progress @regression @tier1', function () {
+    beforeEach(function () { warn = sinon.stub(console, 'warn'); });
+    afterEach(function () { warn.restore(); });
+
+    it('lets a progressing bootstrap finish across repeated ceiling windows', async function () {
+        const clock = sinon.useFakeTimers({ now: 1800000000000 });
+        try {
+            const sync = makeSync();
+            sync.running = true;
+            sync.ws = {
+                terminate() { sync.resetOnSocketClose(); }
+            };
+            let finishDrain;
+            const drainPending = new Promise(resolve => { finishDrain = resolve; });
+            sinon.stub(sync, 'drainEveryTable').returns(drainPending);
+            sinon.stub(sync, 'applyRow').resolves();
+            const drain = {
+                table: 'price_snapshots', priceHorizon: 0, lastId: 0,
+                applied: 0, applyErrors: 0, servedMatchIds: null,
+                servedPriceKeys: null, servedSnapshotKeys: null
+            };
+
+            const bootstrap = sync.bootstrapAll();
+            for (let id = 1; id <= 3; id++) {
+                await clock.tickAsync(sync.barrierHoldCeilingMs);
+                await sync.applyPendingRow(drain, { id: id });
+                assert.strictEqual(sync.requestResync('barrier still held'), false,
+                    'fresh drain progress must not replace the connection');
+            }
+            finishDrain({ allDrained: true, marks: [5000] });
+            await bootstrap;
+
+            assert.strictEqual(sync._bootstrapDrained, true, 'the original drain must certify');
+            assert.strictEqual(sync.streamWatermark, 5000);
+            assert.strictEqual(sync._wsEpoch, 0, 'the connection must stay stable during the drain');
+            assert.strictEqual(sync.forcedResyncCount, 0);
+        } finally {
+            clock.restore();
+        }
+    });
+});
+
+describe('HubDbSync.requestResync recovery @regression @tier1', function () {
+    beforeEach(function () { warn = sinon.stub(console, 'warn'); });
+    afterEach(function () { warn.restore(); });
+
+    it('still forces recovery after an active bootstrap stops making progress', async function () {
+        const clock = sinon.useFakeTimers({ now: 1800000000000 });
+        try {
+            const sync = makeSync();
+            sync.running = true;
+            sync.ws = fakeSocket();
+            sync._bootstrapping = true;
+            sync._bootstrapLastProgressAt = Date.now();
+
+            await clock.tickAsync(sync.barrierHoldCeilingMs + 1);
+            assert.strictEqual(sync.requestResync('bootstrap stopped'), true);
+            assert.strictEqual(sync.ws.terminated, 1);
+            assert.strictEqual(sync.forcedResyncCount, 1);
+        } finally {
+            clock.restore();
+        }
+    });
 
     it('re-drives the bootstrap directly when there is no live socket', async function () {
         const sync = makeSync();

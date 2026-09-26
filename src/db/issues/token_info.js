@@ -181,6 +181,11 @@ const issueReplay = {
             // Prevent changing decimal precision 
             if(key=='DECIMALS' && data[key] > value)
                 continue;
+            // Treat the ISSUE policy detach sentinel as no effective list.
+            if((key=='ALLOW_LIST' || key=='BLOCK_LIST') && String(value)==='0'){
+                data[key] = null;
+                continue;
+            }
             // Skip setting value if value is null or empty (use last explicit value)
             if(db.util.isNull(value) || value==='')
                 continue;

@@ -183,6 +183,7 @@ const installMethods     = require('./actions_class/install_methods.js');
 
 // The dry-run engine and both public read-only surfaces, bound below to the fee-quote policy above.
 const quoteSurfaceMethods = require('./actions_class/quote_surfaces.js');
+const voteCallbackProbeVm = require('./vote/callback_probe_vm.js');
 
 const PreflightMemo      = require('../chain/preflight_memo.js');
 
@@ -252,6 +253,7 @@ class Actions {
         assertVmRuntimeLoadable(XChainVM, vmLoadError);
 
         this.vm = new XChainVM(vmOptions(this.config));
+        this.voteCallbackProbeVm = null;
 
         // Consensus-runtime gate: fail CLOSED on an off-pin engine.
         assertConsensusRuntime(XChainVM);
@@ -279,6 +281,23 @@ class Actions {
     // policy stays defined once, beside the dispatch tables it reads.
     isBatchProbeForbiddenSubAction(action){
         return isBatchProbeForbiddenSubAction(action);
+    }
+
+    // Return the VOTE manifest probe shared by every callback admission check.
+    getVoteCallbackProbeVm(){
+        return voteCallbackProbeVm.getProbeVm(this);
+    }
+
+    // Retire a probe that threw so a later admission gets a clean worker.
+    async discardVoteCallbackProbeVm(expectedVm){
+        await voteCallbackProbeVm.discardProbeVm(this, expectedVm);
+    }
+
+    // Stop both persistent VM workers when the Actions host shuts down.
+    async shutdown(){
+        let probeShutdown = voteCallbackProbeVm.discardProbeVm(this);
+        let mainShutdown = this.vm && typeof this.vm.shutdown === 'function' ? this.vm.shutdown() : Promise.resolve();
+        await Promise.all([probeShutdown, mainShutdown]);
     }
 
 }

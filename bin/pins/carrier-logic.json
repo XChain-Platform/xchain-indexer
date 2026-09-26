@@ -125,7 +125,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "e15f2df93cdfdccc1edb7b0001716940b1a9b2af9fdacaf1d470887fec9c6807",
+      "hash": "de549b45d45d4228f6843ea2b7e9717d3d0998fa6119bd0aba1d3f216b3631f2",
       "twins": []
     },
     "rollcall_activation": {
@@ -1812,9 +1812,16 @@
     {
       "id": "protocol_changes",
       "from": "bd20fc3f46b75f05bab62af849155cba172a3da4854a5989e212105d1ec42eac",
-      "to": "e15f2df93cdfdccc1edb7b0001716940b1a9b2af9fdacaf1d470887fec9c6807",
+      "to": "ed523c9d2a50135b6f91e1d8ec75853d3dc4a038ad529015e2a273e5a0bb3ebc",
+      "reason": "Merge seven consensus activation rows",
+      "date": "2026-09-26"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "ed523c9d2a50135b6f91e1d8ec75853d3dc4a038ad529015e2a273e5a0bb3ebc",
+      "to": "de549b45d45d4228f6843ea2b7e9717d3d0998fa6119bd0aba1d3f216b3631f2",
       "reason": "consensus-bound indexer rows",
-      "date": "2026-09-25"
+      "date": "2026-09-26"
     }
   ]
 }

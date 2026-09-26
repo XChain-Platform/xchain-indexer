@@ -230,7 +230,7 @@ async function validateSourceAllowed(data, ctx){
         return { valid: false, verdict: v.SOURCE_SLEEPING };
     if(await this.indexerDb.isActionAllowed(null, ctx.tick, data['BLOCK_INDEX']) == false)
         return { valid: false, verdict: v.TICK_SLEEPING };
-    if(await this.indexerDb.isActionAllowed(data['SOURCE'], ctx.tick) == false)
+    if(await this.indexerDb.isActionAllowed(data['SOURCE'], ctx.tick, data['BLOCK_INDEX']) == false)
         return { valid: false, verdict: v.SOURCE_UNAUTHORIZED };
     return { valid: true, verdict: null };
 }

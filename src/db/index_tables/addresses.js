@@ -83,6 +83,33 @@ module.exports = {
         return results.length > 0;
     },
 
+    // The narrower fresh-address verdict behind the proven-use flag-day
+    // (dispenser_freshness_proven_use_activation). True iff `address` shows activity that
+    // proves use strictly before `blockIndex`: it was the SOURCE of an action, it was
+    // credited, or it is the GET_ADDRESS of a valid dispenser (it already takes dispense
+    // payments). A bare mention, such as an item in someone's LIST, is not use.
+    async hasProvenUseBefore(address, blockIndex){
+        let query = `SELECT
+                        a1.id
+                    FROM
+                        index_addresses a1
+                    WHERE
+                        a1.address=? AND (
+                            EXISTS (SELECT 1 FROM actions x1
+                                    WHERE x1.source_id=a1.id AND x1.block_index < ?)
+                            OR EXISTS (SELECT 1 FROM credits c1
+                                    INNER JOIN actions x2 ON (x2.action_index=c1.action_index)
+                                    WHERE c1.address_id=a1.id AND x2.block_index < ?)
+                            OR EXISTS (SELECT 1 FROM dispensers d1
+                                    INNER JOIN actions        x3 ON (x3.action_index=d1.action_index)
+                                    INNER JOIN index_statuses s1 ON (s1.id=d1.status_id)
+                                    WHERE d1.get_address_id=a1.id AND s1.status='valid' AND x3.block_index < ?)
+                        )
+                    LIMIT 1`;
+        let results = await this.doQuery(query, [address, blockIndex, blockIndex, blockIndex]);
+        return results.length > 0;
+    },
+
     // Handle returning the next explicit id for the `index_addresses` table.
     // Mirrors getNextActionIndex: the surviving MAX(id)+1 (1 on an empty table).
     // Assigning ids explicitly (rather than via AUTO_INCREMENT, which never rewinds

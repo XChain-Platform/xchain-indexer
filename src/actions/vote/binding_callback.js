@@ -27,7 +27,12 @@
 
 const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
 const { buildInjectedExecContext, SYNTH_EXEC_TX_HASH, SYNTH_TAGS } = require('../../consensus/exec_context.js');
+const gateRegistry = require('../../consensus/gate_registry.js');
 const { getLogger } = require('../../observability/index.js');
+const { MAX_CODE_SIZE } = require('../../protocol/constants.js');
+const callbackProbeVm = require('./callback_probe_vm.js');
+
+const USABLE_CALLBACK_GATE = 'vote_callback_binding_activation.VOTE_CALLBACK_BINDING_REQUIRES_USABLE_METHOD';
 
 // Declare the fixed finalization slots that open every callback's params, in wire order.
 const POLL_CALLBACK_FIXED_SLOTS = Object.freeze([
@@ -57,12 +62,13 @@ async function validateCreateCallback(data, error, deposit){
 // Binding-poll phase - the callback target itself: which contract, which method, and
 // on which finalization outcome it fires.
 async function validateCallbackTarget(data, error){
+    let contract = null;
     // CALLBACK_CONTRACT names a contract by its numeric index, not an address, and
     // the contract has to exist now: a poll cannot bind to something deployed later.
     if(!this.util.isNumeric(data['CALLBACK_CONTRACT'])){
         error = 'invalid: CALLBACK_CONTRACT (format)';
     } else {
-        let contract = await this.indexerDb.getContract(parseInt(data['CALLBACK_CONTRACT']));
+        contract = await this.indexerDb.getContract(parseInt(data['CALLBACK_CONTRACT']));
         if(this.util.isNull(contract))
             error = 'invalid: CALLBACK_CONTRACT (unknown contract)';
     }
@@ -71,8 +77,16 @@ async function validateCallbackTarget(data, error){
         error = 'invalid: CALLBACK_METHOD (required for a binding poll)';
     // The 64-character cap: CALLBACK_METHOD is stored on the poll row and replayed
     // verbatim into the injected EXECUTE, so it has to fit that action's method field.
-    if(!error && String(data['CALLBACK_METHOD']).length > 64)
+    if(!error && String(data['CALLBACK_METHOD']).length > callbackProbeVm.CALLBACK_METHOD_MAX_CHARS)
         error = 'invalid: CALLBACK_METHOD (length)';
+    // Once the admission rule is active, refuse a callback already guaranteed to fail.
+    if(!error && gateRegistry.activeAt(USABLE_CALLBACK_GATE, this.config['NETWORK'], null, data['BLOCK_INDEX'], null)){
+        let contractStatus = await this.indexerDb.getStatusString(contract.status_id);
+        if(contractStatus !== 'valid')
+            error = 'invalid: CALLBACK_CONTRACT (not active)';
+        else if(!await isCallbackMethodUsable.call(this, contract, data['CALLBACK_METHOD'], data))
+            error = 'invalid: CALLBACK_METHOD (unavailable)';
+    }
     // CALLBACK_ON: default 'pass' (fire only on a finalized win); 'always'
     // fires on every finalization including failed_quorum.
     if(this.util.isNull(data['CALLBACK_ON'])) data['CALLBACK_ON'] = 'pass';
@@ -81,6 +95,28 @@ async function validateCallbackTarget(data, error){
     if(!error && !['pass','always'].includes(data['CALLBACK_ON']))
         error = 'invalid: CALLBACK_ON (pass|always)';
     return error;
+}
+
+// Ask the VM's non-dispatching manifest reader whether runtime routing would find
+// this method. The probe VM needs a fixed allowance because the appended inspection
+// suffix would otherwise push valid near-cap contract code over the VM input cap.
+async function isCallbackMethodUsable(contract, method, data){
+    if(!this.actions.vm || typeof this.actions.vm.readManifest !== 'function')
+        throw new Error('VOTE callback admission requires the contract manifest reader');
+    let code = String(contract.code);
+    if(Buffer.byteLength(code, 'utf8') > MAX_CODE_SIZE)
+        return false;
+    let probeCode = callbackProbeVm.buildProbeCode(code, method);
+    let probeVm = this.actions.getVoteCallbackProbeVm();
+    let result = await probeVm.readManifest(probeCode, {
+        network:         this.config['NETWORK'],
+        contractAddress: 'C:' + this.config['CHAIN'] + ':' + contract.action_index,
+        blockContext: {
+            height:    data['BLOCK_INDEX'],
+            timestamp: data['BLOCK_TIME']
+        }
+    });
+    return !!(result && result.success && result.manifest && result.manifest.hasInitialize === true);
 }
 
 // Binding-poll phase - the policy a binding poll must satisfy: the turnout floors, the
