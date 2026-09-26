@@ -16,7 +16,7 @@
  *
  * MEMBERSHIP IS THE REGISTRY. Since the carriers became shims, every table
  * the process applies is a registry row, and the manifest is rows() plus the
- * eleven VM mirror rows. What this guard has to catch is the one way a table
+ * twelve VM mirror rows. What this guard has to catch is the one way a table
  * can escape that: a map literal declared somewhere under src/ instead of in
  * a registry part file. So the scan that used to check "declared, therefore
  * listed" now fails on ANY declaration outside src/protocol_changes/, and the
@@ -50,6 +50,14 @@ function rowKeys() {
     return new Set(manifest.ENTRIES.map((e) => e[0]));
 }
 
+function declarationsIn(text, rel) {
+    const names = new Set();
+    for (const re of [ACTIVATION_MAP, CARRIER_DECL]) {
+        for (const m of text.matchAll(re)) names.add(m[1]);
+    }
+    return [...names].map((name) => [rel, name]);
+}
+
 // [file relative to src/, declared name] for every declaration under src/.
 function scanDeclarations(root) {
     const found = [];
@@ -61,11 +69,7 @@ function scanDeclarations(root) {
             if (e.isDirectory()) { walk(abs, r); continue; }
             if (!e.name.endsWith('.js')) continue;
             const text = fs.readFileSync(abs, 'utf8');
-            const names = new Set();
-            for (const re of [ACTIVATION_MAP, CARRIER_DECL]) {
-                for (const m of text.matchAll(re)) names.add(m[1]);
-            }
-            for (const name of names) found.push([r, name]);
+            found.push(...declarationsIn(text, r));
         }
     })(root, '');
     return found;
@@ -100,14 +104,9 @@ describe('armed_map/manifest: completeness guard', function () {
     });
 
     it('the scan still finds a declaration when one exists (it is not vacuous)', function () {
-        const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'armed-map-scan-'));
-        try {
-            fs.writeFileSync(path.join(dir, 'x_activation.js'), 'const X_ACTIVATION = { mainnet: 1 };\nmodule.exports = { X_ACTIVATION };\n');
-            fs.writeFileSync(path.join(dir, 'y.js'), 'const MIN_STAKE_ACTIVATIONS = Object.freeze({ mainnet: {} });\n');
-            assert.deepStrictEqual(scanDeclarations(dir).sort(), [['x_activation.js', 'X_ACTIVATION'], ['y.js', 'MIN_STAKE_ACTIVATIONS']]);
-        } finally {
-            fs.rmSync(dir, { recursive: true, force: true });
-        }
+        const found = declarationsIn('const X_ACTIVATION = { mainnet: 1 };\n', 'x_activation.js')
+            .concat(declarationsIn('const MIN_STAKE_ACTIVATIONS = Object.freeze({ mainnet: {} });\n', 'y.js'));
+        assert.deepStrictEqual(found.sort(), [['x_activation.js', 'X_ACTIVATION'], ['y.js', 'MIN_STAKE_ACTIVATIONS']]);
     });
 
     it('every non-function export of every shim module is a row, and every row but the time table, the VM mirror and the W4-replaced predicates is exported by one', function () {
@@ -136,19 +135,19 @@ describe('armed_map/manifest: completeness guard', function () {
 
 describe('armed_map/manifest: the row list', function () {
 
-    it('carries the registry rows first, in registry order, then the eleven VM mirror rows', function () {
+    it('carries the registry rows first, in registry order, then the twelve VM mirror rows', function () {
         const registryKeys = ProtocolChanges.rows().map(([k]) => k);
         const keys = manifest.ENTRIES.map((e) => e[0]);
         assert.deepStrictEqual(keys.slice(0, registryKeys.length), registryKeys);
         assert.deepStrictEqual(keys.slice(registryKeys.length), manifest.VM_EXPORT_NAMES.map((n) => 'xchain-vm.' + n));
-        assert.strictEqual(manifest.VM_EXPORT_NAMES.length, 11);
+        assert.strictEqual(manifest.VM_EXPORT_NAMES.length, 12);
     });
 
     it('carries exactly the ProtocolChanges table as protocol_changes.changes.* rows', function () {
         const table = Object.keys(new ProtocolChanges({ config: {}, util: {} }).changes).sort();
         const rows = [...rowKeys()].filter((k) => k.startsWith('protocol_changes.changes.')).map((k) => k.slice('protocol_changes.changes.'.length)).sort();
         assert.deepStrictEqual(rows, table);
-        assert.strictEqual(table.length, 97);
+        assert.strictEqual(table.length, 98);
     });
 
     it('never lists a key twice and never enumerates the file system', function () {
@@ -172,7 +171,7 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(res.ok, true, res.reason);
         assert.deepStrictEqual(res.rows.map((r) => r[0]), manifest.ENTRIES.map((e) => e[0]));
         for (const [, value] of res.rows) canonicalValue(value);
-        assert.strictEqual(res.rows.length, 301);
+        assert.strictEqual(res.rows.length, 303);
     });
 
     it('carries the three row families the design names', function () {
@@ -185,7 +184,7 @@ describe('armed_map/manifest: collectRows', function () {
         assert.ok(keys.has('mirror_admission_activation.CHAIN_CODE_RE'), 'a RegExp row');
     });
 
-    it('appends the eleven VM mirror rows with the VM values', function () {
+    it('appends the twelve VM mirror rows with the VM values', function () {
         const vm = require('xchain-vm');
         const res = manifest.collectRows();
         assert.strictEqual(res.ok, true, res.reason);

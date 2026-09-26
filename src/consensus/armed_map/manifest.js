@@ -29,7 +29,7 @@
  * (test/unit/consensus/armed_map/manifest.test.js): it scans src/ for a map
  * declared outside the registry's part files and fails on any hit.
  *
- * THE ELEVEN VM MIRROR ROWS are the one thing beside the registry: the bundled
+ * THE TWELVE VM MIRROR ROWS are the one thing beside the registry: the bundled
  * xchain-vm resolves its own gate heights and instants inside this process, so
  * they are read from the loaded module, as `xchain-vm.<EXPORT>`, and a vm that
  * does not load poisons the fingerprint rather than dropping out of it.
@@ -63,6 +63,7 @@ const VM_EXPORT_NAMES = [
     'REST_PATTERN_METER_GATE_BLOCK_TIME',
     'STATE_KEY_TYPE_GATE_BLOCK_TIME',
     'VM_LINT_HARDENING_GATE_BLOCK_TIME',
+    'JSON_STRINGIFY_HOOK_GATE_BLOCK_TIME',
 ];
 
 // Reads one own property, refusing a missing one outright: an absent export

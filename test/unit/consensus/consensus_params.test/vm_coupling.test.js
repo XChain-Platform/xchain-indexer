@@ -29,7 +29,10 @@ const { siblingCheckout, skipOrFail } = require('../../../helpers/sibling_checko
 // Epoch 4: REST_PATTERN_METER added the `banned-rest` deploy rule VM-side, and a
 // CONSENSUS_RULES change moves the epoch. This pin and the digests below are ONE
 // unit; bumping the integer alone makes every assertion under it vacuous.
-const EXPECTED_VM_CONSENSUS_VERSION = '4';
+// Epoch 5: JSON_STRINGIFY_HOOK closes the JSON.stringify value-hook depth
+// bypass (a toJSON/replacer/getter presenting a shallow value to the native
+// depth guard and a deep one to the serializer); see the coupling check below.
+const EXPECTED_VM_CONSENSUS_VERSION = '5';
 // Frozen digest of the bundled VM's deploy/execution contract surface, asserted in
 // lockstep with the version above. Any change to the sandbox strip set or the deploy
 // validator's CONSENSUS_RULES must bump EXPECTED_VM_CONSENSUS_VERSION (and the VM's
@@ -223,6 +226,25 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
             assert.strictEqual(vm[gate], pc.VM_BANNED_ASYNC_MAINNET_TIME,
                 'xchain-vm ' + gate + ' != indexer VM_BANNED_ASYNC mainnet_time; update both repos in lockstep (one-sided edit forks the fleet at the flag-day)');
         }
+    });
+
+    it('the bundled VM JSON_STRINGIFY_HOOK_GATE_BLOCK_TIME matches the indexer JSON_STRINGIFY_HOOK row', function(){
+        // Epoch-5 coupling: unlike the epoch-4 gates above, this one carries no shared
+        // 2.0.0 timestamp, so it is checked against the indexer's own row instead of
+        // VM_BANNED_ASYNC_MAINNET_TIME.
+        const { vm, full, pkgErr, refused } = resolveVmConsensus();
+        if(!vm || !full){
+            if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                assert.fail('XCHAIN_REQUIRE_SIBLINGS=1 but xchain-vm did not resolve to its full package surface (stale/absent vendored VM): ' + (pkgErr ? String(pkgErr.message) : 'package not present') + (refused ? '; sibling fallback refused: ' + refused.reason : ''));
+            this.skip(); return;
+        }
+        assert.notStrictEqual(vm.JSON_STRINGIFY_HOOK_GATE_BLOCK_TIME, undefined,
+            'xchain-vm did not export JSON_STRINGIFY_HOOK_GATE_BLOCK_TIME (stale vendored copy? run npm run vendor:vm)');
+        const pc = require('../../../../src/protocol_changes.js');
+        const row = pc.get('protocol_changes.changes.JSON_STRINGIFY_HOOK');
+        assert.strictEqual(vm.JSON_STRINGIFY_HOOK_GATE_BLOCK_TIME, row.mainnet_time, 'mainnet_time');
+        assert.strictEqual(vm.JSON_STRINGIFY_HOOK_GATE_BLOCK_TIME, row.testnet_time, 'testnet_time');
+        assert.strictEqual(vm.JSON_STRINGIFY_HOOK_GATE_BLOCK_TIME, row.regtest_time, 'regtest_time');
     });
 
     it('the indexer NATIVE_FEE_PRICE_TIME_GATE flag-day matches the coordinated 2.0.0 timestamp', function(){
