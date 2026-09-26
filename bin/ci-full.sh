@@ -153,7 +153,7 @@ run_tier "drift: pre-flight <-> handler gate" \
   env XCHAIN_INDEXER_PATH="$SELF" node "$SIB/xchain-sdk/bin/check-preflight-drift.js"
 
 # --- job: coverage ---------------------------------------------------------
-run_tier "coverage ratchet (coverage:check)" npm run coverage:check
+run_tier "coverage ratchet (coverage:check)" env XCHAIN_REQUIRE_SIBLINGS=1 npm run coverage:check
 
 echo
 # >>> ci-tier summary (generated) >>>
