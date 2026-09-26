@@ -118,6 +118,19 @@ describe('Order_Match action handler @regression @tier2', function () {
 
         sinon.assert.notCalled(indexer.indexerDb.createOrderMatch);
     });
+
+    for(const field of ['ALLOW_LIST', 'BLOCK_LIST']){
+        it('treats an ORDER invalid-referenced ' + field + ' as absent', async function () {
+            indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({ [field]: '5' }));
+            indexer.indexerDb.findOrderMatches.resolves([makeMatchInfo()]);
+            indexer.indexerDb.getList.withArgs('5', sinon.match.any).resolves(null);
+
+            const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
+            await orderMatch.parse([], data, false);
+
+            sinon.assert.calledOnce(indexer.indexerDb.createOrderMatch);
+        });
+    }
 });
 
 describe('Order_Match action handler @regression @tier2', function () {

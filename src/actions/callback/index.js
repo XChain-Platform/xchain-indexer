@@ -121,9 +121,11 @@ class Callback {
         // hash probe replaces a scan of the whole list.
         // Below activation the legacy size check remains fail-open; after activation
         // hasAllowList distinguishes an absent policy from an attached empty policy.
-        let hasAllowList = Boolean(callbackTokenInfo && callbackTokenInfo['ALLOW_LIST']);
-        let allowList = hasAllowList ? new Set(await this.indexerDb.getList(callbackTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX'])) : new Set();
-        let blockList = (callbackTokenInfo && callbackTokenInfo['BLOCK_LIST']) ? new Set(await this.indexerDb.getList(callbackTokenInfo['BLOCK_LIST'], data['BLOCK_INDEX'])) : new Set();
+        let allowMembers = (callbackTokenInfo && callbackTokenInfo['ALLOW_LIST']) ? await this.indexerDb.getList(callbackTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : null;
+        let blockMembers = (callbackTokenInfo && callbackTokenInfo['BLOCK_LIST']) ? await this.indexerDb.getList(callbackTokenInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : null;
+        let hasAllowList = Array.isArray(allowMembers);
+        let allowList = new Set(allowMembers || []);
+        let blockList = new Set(blockMembers || []);
 
         // Create the fees object
         let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);

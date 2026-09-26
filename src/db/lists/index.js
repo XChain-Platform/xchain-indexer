@@ -27,6 +27,18 @@ const { getListHeadIndex } = require('./head_resolution');
 const LIST_EDIT_RESOLUTION_KEY = 'list_edit_resolution_activation.LIST_EDIT_RESOLUTION_ACTIVATION';
 const LIST_REFERENCE_VALIDITY_KEY = 'list_reference_validity_activation.LIST_REFERENCE_REQUIRES_VALID_LIST';
 
+// Distinguish a stored LIST rejected by the validity gate from an unknown id.
+// Policy readers treat the rejected reference as absent, while unknown getList
+// lookups retain their empty-array contract.
+async function isRejectedListReference(db, action_index, block_index){
+    if(db.util.isNull(action_index) || !db.util.isNumeric(action_index))
+        return false;
+    if(!gateRegistry.activeAt(LIST_REFERENCE_VALIDITY_KEY, db.config['NETWORK'], db.config['COIN'], block_index, null))
+        return false;
+    let rows = await db.doQuery("SELECT type FROM lists WHERE action_index=? LIMIT 1", [action_index]);
+    return rows.length > 0;
+}
+
 module.exports = {
 
     getListHeadIndex,
@@ -55,14 +67,15 @@ module.exports = {
     // Walk a LIST reference up to the CREATE action that roots its edit chain.
     // An edit row carries the index of the list it edits in lists.list_action_index;
     // a create row carries NULL. Post-flag-day list.js normalizes every edit to
-    // point straight at the root, so this is a single hop in practice; the bounded
-    // loop covers legacy rows that named another edit (and can never spin on a
-    // cycle, which a malformed chain could otherwise produce).
+    // point straight at the root, so this is a single hop in practice. The default
+    // bound preserves legacy reads; gated head resolution can request a complete
+    // walk, with cycle detection bounding malformed chains.
     // @param {action_index}  integer  ACTION_INDEX of any LIST create or edit
-    async getListRootIndex(action_index){
+    async getListRootIndex(action_index, max_hops=16){
         let root = action_index;
         let seen = {};
-        for(let hop = 0; hop < 16; hop++){
+        let hop = 0;
+        while(max_hops===null || hop < max_hops){
             if(seen[String(root)]) break;
             seen[String(root)] = true;
             let rows = await this.doQuery("SELECT list_action_index FROM lists WHERE action_index=? LIMIT 1", [root]);
@@ -70,15 +83,19 @@ module.exports = {
             let parent = rows[0]['list_action_index'];
             if(this.util.isNull(parent)) break;
             root = parent;
+            hop++;
         }
         return root;
     },
 
-    // Return a list given a tx_hash
+    // Return a list given an action index, or null for a stored reference rejected
+    // by the active validity gate.
     // @param {action_index}  integer  ACTION_INDEX of a LIST (as pinned by consumers)
     // @param {block_index}   integer  block being processed; gates edit resolution
     async getList(action_index, block_index){
         let type = await this.getListType(action_index, block_index);
+        if(!type && await isRejectedListReference(this, action_index, block_index))
+            return null;
         let list = [];
         if(type){
             // a LIST edit writes its resulting items under the EDIT's own
@@ -143,19 +160,21 @@ module.exports = {
     // token's policy at a past origin_block: the head must be bounded to the last action
     // index AT that block, not this chain's own tip. Read-path only: this never enters
     // isActionAllowed, so no consensus verdict moves.
+    // May return null when the active validity gate rejects a stored LIST reference.
     // @param {action_index}  integer  ACTION_INDEX of a LIST (as pinned by consumers)
     // @param {block_index}   integer  the height to resolve the list's membership AS OF
     async getListAtBlock(action_index, block_index){
         let type = await this.getListType(action_index, block_index);
+        if(!type && await isRejectedListReference(this, action_index, block_index))
+            return null;
         let list = [];
         if(type){
-            let root     = await this.getListRootIndex(action_index);
-            let resolved = root;
+            let resolved = action_index;
             // Same activation gate as getList: below it (or with no block context) the
             // legacy create-index membership stands, which is already immutable and needs
             // no bound.
             if(this.isListEditResolutionActive(block_index)){
-                resolved = await this.getListHeadIndex(root, block_index, block_index);
+                resolved = await this.getListHeadIndex(action_index, block_index, block_index);
             }
             let query = '';
             let args  = [resolved];

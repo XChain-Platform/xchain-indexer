@@ -112,9 +112,11 @@ async function directChildHead(db, root, max_block_index){
 // they write no list_items rows at all, so picking one would empty the list.
 // @param {action_index}  integer  ACTION_INDEX of any LIST create or edit
 async function getListHeadIndex(action_index, block_index, max_block_index=null){
-    let root = await this.getListRootIndex(action_index);
     let followsEditChain = gateRegistry.activeAt(LIST_HEAD_FOLLOWS_EDIT_CHAIN_KEY,
         this.config['NETWORK'], this.config['COIN'], block_index, null);
+    // A complete root walk belongs to the same gate as complete descendant
+    // traversal. The default bound keeps below-gate replay behavior unchanged.
+    let root = await this.getListRootIndex(action_index, followsEditChain ? null : 16);
     if(followsEditChain)
         return followEditChain(this, root, max_block_index);
     return directChildHead(this, root, max_block_index);

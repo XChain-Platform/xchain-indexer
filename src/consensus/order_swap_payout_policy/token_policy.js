@@ -24,17 +24,17 @@ function tokenPolicyRejects(lists, getTokenRecipient, giveTokenRecipient, perTok
     let { getTokenAllowList, getTokenBlockList, giveTokenAllowList, giveTokenBlockList } = lists;
 
     if(perTokenPolicy){
-        return (getTokenAllowList.length  && !getTokenAllowList.includes(getTokenRecipient))  ||
-               (getTokenBlockList.length  &&  getTokenBlockList.includes(getTokenRecipient))  ||
-               (giveTokenAllowList.length && !giveTokenAllowList.includes(giveTokenRecipient)) ||
-               (giveTokenBlockList.length &&  giveTokenBlockList.includes(giveTokenRecipient));
+        return (getTokenAllowList && getTokenAllowList.length  && !getTokenAllowList.includes(getTokenRecipient))  ||
+               (getTokenBlockList && getTokenBlockList.length  &&  getTokenBlockList.includes(getTokenRecipient))  ||
+               (giveTokenAllowList && giveTokenAllowList.length && !giveTokenAllowList.includes(giveTokenRecipient)) ||
+               (giveTokenBlockList && giveTokenBlockList.length &&  giveTokenBlockList.includes(giveTokenRecipient));
     }
 
     // Apply both token policies to both payout addresses below activation.
-    return (getTokenAllowList.length  && (!getTokenAllowList.includes(getTokenRecipient)  || !getTokenAllowList.includes(giveTokenRecipient)))  ||
-           (getTokenBlockList.length  && ( getTokenBlockList.includes(getTokenRecipient)  ||  getTokenBlockList.includes(giveTokenRecipient)))  ||
-           (giveTokenAllowList.length && (!giveTokenAllowList.includes(getTokenRecipient) || !giveTokenAllowList.includes(giveTokenRecipient))) ||
-           (giveTokenBlockList.length && ( giveTokenBlockList.includes(getTokenRecipient) ||  giveTokenBlockList.includes(giveTokenRecipient)));
+    return (getTokenAllowList && getTokenAllowList.length  && (!getTokenAllowList.includes(getTokenRecipient)  || !getTokenAllowList.includes(giveTokenRecipient)))  ||
+           (getTokenBlockList && getTokenBlockList.length  && ( getTokenBlockList.includes(getTokenRecipient)  ||  getTokenBlockList.includes(giveTokenRecipient)))  ||
+           (giveTokenAllowList && giveTokenAllowList.length && (!giveTokenAllowList.includes(getTokenRecipient) || !giveTokenAllowList.includes(giveTokenRecipient))) ||
+           (giveTokenBlockList && giveTokenBlockList.length && ( giveTokenBlockList.includes(getTokenRecipient) ||  giveTokenBlockList.includes(giveTokenRecipient)));
 }
 
 module.exports = { tokenPolicyRejects };

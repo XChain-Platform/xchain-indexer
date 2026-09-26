@@ -185,6 +185,7 @@ describe('db.getListAtBlock (policy spec D3) @regression @tier1', function(){
     it('returns [] when the action_index names no list at all', async function(){
         const db = newDb();
         sinon.stub(db, 'getListType').resolves(false);
+        sinon.stub(db, 'doQuery').resolves([]);
         const list = await db.getListAtBlock(999, 10);
         assert.deepStrictEqual(list, []);
     });

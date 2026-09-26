@@ -51,7 +51,7 @@ const ADDR_B = 'mk7MdP3qzVkgyjaYNR2sUY8Ggn4DWxt2KS';
 const ADDR_C = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
 
 // A Database backed by a tiny in-memory model of the list tables.
-//   rows:  [{ action_index, type, list_action_index, status }]
+//   rows:  [{ action_index, type, list_action_index, status, block_index }]
 //   items: { action_index: [item, ...] }
 function dbWithLists(rows, items) {
     const config = getTestConfig();
@@ -79,6 +79,7 @@ function dbWithLists(rows, items) {
             if (/SELECT\s+l\.action_index,\s+s\.status/i.test(q)) {
                 const children = rows
                     .filter(r => String(r.list_action_index) === String(args[0]))
+                    .filter(r => args.length < 2 || r.block_index === undefined || r.block_index <= args[1])
                     .sort((a, b) => b.action_index - a.action_index);
                 return Promise.resolve(children.map(r => ({ action_index: r.action_index, status: r.status })));
             }
@@ -201,6 +202,46 @@ describe('db.getList() chained edit resolution @regression @tier1', function () 
         const list = await db.getList(10, 100);
         assert.deepStrictEqual(list.slice().sort(), [ADDR_A, ADDR_B].sort(),
             'an invalid edit must leave the previous head standing');
+    });
+
+    it('getListAtBlock resolves a long branched chain without future membership', async function () {
+        const rows = [];
+        const items = {};
+        for(let action_index = 100; action_index <= 120; action_index++){
+            rows.push({
+                action_index,
+                type: 2,
+                list_action_index: action_index === 100 ? null : action_index - 1,
+                status: 'valid',
+                block_index: action_index
+            });
+            items[String(action_index)] = ['member-' + action_index];
+        }
+        rows.push({
+            action_index: 121,
+            type: 2,
+            list_action_index: 100,
+            status: 'valid',
+            block_index: 120
+        });
+        items['121'] = ['member-121'];
+        const db = dbWithLists(rows, items);
+
+        for(const block_index of [120, 121]){
+            assert.deepStrictEqual(
+                await db.getListAtBlock(120, block_index),
+                await db.getList(120, block_index),
+                'height ' + block_index + ' must agree with the current list reader'
+            );
+        }
+
+        assert.deepStrictEqual(await db.getListAtBlock(120, 100), ['member-100']);
+        assert.deepStrictEqual(await db.getListAtBlock(120, 102), ['member-102']);
+
+        db._calls.length = 0;
+        await db.getListAtBlock(120, 120);
+        const parentReads = db._calls.filter(c => /SELECT list_action_index FROM lists/i.test(c.query));
+        assert.strictEqual(parentReads.length, 21, 'the reference reaches CREATE in one parent walk');
     });
 });
 

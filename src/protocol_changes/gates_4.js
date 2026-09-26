@@ -105,7 +105,8 @@ addGate('order_swap_maker_policy_admission.ORDER_SWAP_MAKER_POLICY_ADMISSION', '
 
 // list_reference_validity_activation
 // Require referenced LIST actions to carry a valid verdict. Below activation,
-// reference validation accepts any stored LIST row of the right type.
+// reference validation accepts any stored LIST row of the right type. An invalid
+// stored reference counts as no list for policy consumers after activation.
 addGate('list_reference_validity_activation.LIST_REFERENCE_REQUIRES_VALID_LIST', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': UNARMED,

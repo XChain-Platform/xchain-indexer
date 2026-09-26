@@ -93,12 +93,12 @@ module.exports = {
             // block and BLOCK_LIST WINS: an address on both lists is rejected
             if(!error && !this.util.isNull(feedInfo['ALLOW_LIST'])){
                 let allowList = await this.indexerDb.getList(feedInfo['ALLOW_LIST'], data['BLOCK_INDEX']);
-                if(!allowList.includes(data['SOURCE']))
+                if(allowList && !allowList.includes(data['SOURCE']))
                     error = 'invalid: SOURCE (not authorized)';
             }
             if(!error && !this.util.isNull(feedInfo['BLOCK_LIST'])){
                 let blockList = await this.indexerDb.getList(feedInfo['BLOCK_LIST'], data['BLOCK_INDEX']);
-                if(blockList.includes(data['SOURCE']))
+                if(blockList && blockList.includes(data['SOURCE']))
                     error = 'invalid: SOURCE (not authorized)';
             }
 
