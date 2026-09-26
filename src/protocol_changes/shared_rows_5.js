@@ -67,6 +67,9 @@ const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
 //     federation signs would not be the membership the chain actually held.
 addGate('token_policy_activation.TOKEN_POLICY_INHERITANCE_ACTIVATION', 'height', {
     mainnet: 9999999999,
+    'BTC:testnet': 9999999999,
+    'LTC:testnet': 9999999999,
+    'DOGE:testnet': 9999999999,
     testnet: 9999999999,
     regtest: 0,
 });
