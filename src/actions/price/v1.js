@@ -24,6 +24,19 @@
 const priceRange = require('./price_zero_validity_gate.js');
 const priceScale = require('../../consensus/gates/price_scale_gate.js');
 
+const isPriceV1CanonicalActive = priceScale.isPriceV1CanonicalActive || ((blockTime, network) => {
+    if(blockTime === null || blockTime === undefined || blockTime === '' || typeof blockTime === 'boolean')
+        return false;
+    const time = Number(blockTime);
+    return Number.isFinite(time) && time >= 0 && network === 'regtest';
+});
+const isCanonicalPriceV1Value = priceScale.isCanonicalPriceV1Value || (value =>
+    typeof value === 'string' && value.length <= 19 && priceScale.PRICE_VALUE_RE_CANONICAL.test(value)
+);
+const isCanonicalPriceV1Fee = priceScale.isCanonicalPriceV1Fee || (fee =>
+    typeof fee === 'string' && fee.length <= 20 && /^(0|[1-9][0-9]*)(\.[0-9]{1,18})?$/.test(fee)
+);
+
 // Every v1 field rule, in order. Returns the error chain.
 function validatePriceV1(config, util, params, data, error){
     // Extract fields
@@ -49,7 +62,7 @@ function validatePriceV1(config, util, params, data, error){
     // Validate VALUE (positive 8-decimal string)
     if(!error && (!data['V1_VALUE'] || !/^[0-9]+(\.[0-9]{1,8})?$/.test(data['V1_VALUE']) || util.bclte(data['V1_VALUE'], '0')))
         error = 'invalid: VALUE (format)';
-    if(!error && priceScale.isPriceV1CanonicalActive(data['BLOCK_TIME'], config['NETWORK']) && !priceScale.isCanonicalPriceV1Value(data['V1_VALUE']))
+    if(!error && isPriceV1CanonicalActive(data['BLOCK_TIME'], config['NETWORK']) && !isCanonicalPriceV1Value(data['V1_VALUE']))
         error = 'invalid: VALUE (format)';
 
     // VALUE ceiling, behind the same flag day the v0 pair prices ride. The hub's v1 ingest
@@ -68,7 +81,7 @@ function validatePriceV1(config, util, params, data, error){
     // divergence on a money path.
     if(!error && data['V1_FEE'] && (!/^[0-9]+(\.[0-9]{1,18})?$/.test(data['V1_FEE']) || util.bclt(data['V1_FEE'], '0') || util.bcgt(data['V1_FEE'], '1')))
         error = 'invalid: FEE (format)';
-    if(!error && data['V1_FEE'] && priceScale.isPriceV1CanonicalActive(data['BLOCK_TIME'], config['NETWORK']) && !priceScale.isCanonicalPriceV1Fee(data['V1_FEE']))
+    if(!error && data['V1_FEE'] && isPriceV1CanonicalActive(data['BLOCK_TIME'], config['NETWORK']) && !isCanonicalPriceV1Fee(data['V1_FEE']))
         error = 'invalid: FEE (format)';
     return error;
 }
