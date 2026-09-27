@@ -65,4 +65,8 @@ function regtestHeight(raw, armedHeight, label, envName) {
     return null;
 }
 
-module.exports = { regtestHeight };
+function regtestTimeOverride(envName) {
+    return () => parseInt(process.env[envName]) || 0;
+}
+
+module.exports = { regtestHeight, regtestTimeOverride };
