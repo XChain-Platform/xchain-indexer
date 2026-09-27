@@ -23,6 +23,14 @@ const MIGRATION_DIR  = path.join(SQL_DIR, 'migrations');
 const MIGRATION_SCAN = path.join(__dirname, '..', '..', '..', 'src', 'db',
     'database', 'migration_scan.js');
 
+const EXPECTED_MIGRATIONS = [
+    '2026-09-27-datetime-anchor-reward-attestations.sql',
+    '2026-09-27-datetime-bridge-policy.sql',
+    '2026-09-27-datetime-hub-mirrors.sql',
+    '2026-09-27-datetime-not-null-columns.sql',
+    '2026-09-27-datetime-state-tree-roots.sql',
+];
+
 const EXPECTED_MODIFIES = [
     'anchor_reward_attestations.created_at',
     'bridge_transfers.created_at',
@@ -85,8 +93,7 @@ describe('dated DATETIME migrations are complete @regression', function () {
     const files = datetimeMigrationFiles();
 
     it('MODIFYs exactly the ten expected columns once each', function () {
-        assert.strictEqual(files.length, 4,
-            'expected exactly four DATETIME migrations, found: ' + files.join(', '));
+        assert.deepStrictEqual(files, EXPECTED_MIGRATIONS);
         assert.deepStrictEqual(datetimeModifies(files), [...EXPECTED_MODIFIES].sort());
     });
 
