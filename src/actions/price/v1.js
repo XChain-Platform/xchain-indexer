@@ -22,6 +22,7 @@
  ********************************************************************/
 
 const priceRange = require('./price_zero_validity_gate.js');
+const priceScale = require('../../consensus/gates/price_scale_gate.js');
 
 // Every v1 field rule, in order. Returns the error chain.
 function validatePriceV1(config, util, params, data, error){
@@ -48,6 +49,8 @@ function validatePriceV1(config, util, params, data, error){
     // Validate VALUE (positive 8-decimal string)
     if(!error && (!data['V1_VALUE'] || !/^[0-9]+(\.[0-9]{1,8})?$/.test(data['V1_VALUE']) || util.bclte(data['V1_VALUE'], '0')))
         error = 'invalid: VALUE (format)';
+    if(!error && priceScale.isPriceV1CanonicalActive(data['BLOCK_TIME'], config['NETWORK']) && !priceScale.isCanonicalPriceV1Value(data['V1_VALUE']))
+        error = 'invalid: VALUE (format)';
 
     // VALUE ceiling, behind the same flag day the v0 pair prices ride. The hub's v1 ingest
     // refuses a value not `< PRICE_MAX` and the check above bounds only the lower end, so
@@ -64,6 +67,8 @@ function validatePriceV1(config, util, params, data, error){
     // downstream bcmath (bcmul @18) treats it as > 1, a validator/consensus-math
     // divergence on a money path.
     if(!error && data['V1_FEE'] && (!/^[0-9]+(\.[0-9]{1,18})?$/.test(data['V1_FEE']) || util.bclt(data['V1_FEE'], '0') || util.bcgt(data['V1_FEE'], '1')))
+        error = 'invalid: FEE (format)';
+    if(!error && data['V1_FEE'] && priceScale.isPriceV1CanonicalActive(data['BLOCK_TIME'], config['NETWORK']) && !priceScale.isCanonicalPriceV1Fee(data['V1_FEE']))
         error = 'invalid: FEE (format)';
     return error;
 }

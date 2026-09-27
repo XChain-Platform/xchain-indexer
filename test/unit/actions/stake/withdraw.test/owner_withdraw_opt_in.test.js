@@ -87,7 +87,9 @@ describe('Withdraw handler @regression @tier2', function () {
     describe('OWNER_WITHDRAW_OPT_IN edges', function () {
 
         it('a contract deployed before the flag day keeps the owner withdraw without declaring it', async function () {
-            actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name) => name !== 'OWNER_WITHDRAW_OPT_IN');
+            actionsCtx.protocolChanges.isEnabled = sinon.stub().callsFake(async (name) => {
+                return name !== 'OWNER_WITHDRAW_OPT_IN' && name !== 'CONTROLLER_CUSTODY_GUARD';
+            });
             contractWithMeta(null);
             const r = await withdraw();
             assert.strictEqual(r.status, 'valid');
