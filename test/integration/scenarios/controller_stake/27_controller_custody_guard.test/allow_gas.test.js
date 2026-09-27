@@ -15,6 +15,10 @@
 
 const assert = require('assert');
 const crypto = require('crypto');
+
+assert.ok(process.env.TEST_DB_PASS, 'TEST_DB_PASS is required for the real MariaDB integration');
+require('xchain-vm');
+
 const {
     createDatabases,
     createDecoderSchema,
@@ -47,6 +51,7 @@ const T0 = 1700000000;
 const ACTIVATION_TIME = T0 + 500;
 const DEPOSIT_BLOCK = 102;
 const WITHDRAW_BLOCK = 103;
+const SOURCE_ALLOW_GUARD = "module.exports={ meta:{ name:'Source Allow Guard', description:'Permits every source custody transfer.', version:'1.0.0' }, guard:function(){ return {}; } };";
 const TARGET = "module.exports={ meta:{ name:'Custody Target', description:'Accepts deposits and permits owner withdrawal.', version:'1.0.0', ownerWithdraw:true }, noop:function(){} };";
 const b64 = value => Buffer.from(value, 'utf8').toString('base64');
 const sha = value => crypto.createHash('sha256').update(value).digest('hex');
@@ -55,6 +60,7 @@ let seeder;
 let indexer;
 let restoreCustodyGuard;
 let allowIndex;
+let sourceAllowIndex;
 let targetIndex;
 let gasBefore;
 
@@ -88,15 +94,11 @@ async function validCustodyRows() {
 
 async function guardExecutions() {
     return await indexerQuery(
-        `SELECT block_index, gas_used, gas_used * ? AS metered_fee
+        `SELECT block_index, contract_index, gas_used, gas_used * ? AS metered_fee
          FROM contract_executions
          WHERE block_index IN (?, ?) AND method_name = 'guard'
          ORDER BY block_index`,
         [indexer.config.GAS_PRICE, DEPOSIT_BLOCK, WITHDRAW_BLOCK]);
-}
-
-function billedGuardRuns(executions) {
-    return executions.flatMap(row => [row, row]);
 }
 
 async function seedScenario() {
@@ -105,25 +107,25 @@ async function seedScenario() {
     await seeder.seedBlock(100, T0, [
         { source: SOURCE, data: `ISSUE|0|${TICK}|1000|1000|0|custody allow token|1000` },
         { source: SOURCE, data: `DEPLOY|0|${b64(ALLOW_GUARD)}|300000|` },
+        { source: SOURCE, data: `DEPLOY|0|${b64(SOURCE_ALLOW_GUARD)}|300000|` },
         { source: SOURCE, data: `DEPLOY|0|${b64(TARGET)}|300000|` },
     ]);
     indexer = await initIndexer();
     await processBlocks(indexer);
     allowIndex = await contractIndexByCode(ALLOW_GUARD);
+    sourceAllowIndex = await contractIndexByCode(SOURCE_ALLOW_GUARD);
     targetIndex = await contractIndexByCode(TARGET);
 }
 
 async function bindAllowControllers() {
     await seeder.seedBlock(101, T0 + 100, [
         { source: SOURCE, data: bindTokenLine(TICK, allowIndex, 'all', 'bind-token-allow') },
-        { source: SOURCE, data: bindAddressLine(allowIndex, 'all', 'bind-source-allow') },
     ]);
     await processBlocks(indexer);
     gasBefore = await balanceOf(SOURCE, indexer.config.GAS);
 }
 
 async function setupSuite() {
-    try { require('xchain-vm'); } catch (error) { return this.skip(); }
     process.env.INDEXER_COIN = process.env.INDEXER_COIN || 'BTC';
     process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
     restoreCustodyGuard = armCustodyGuardAt(ACTIVATION_TIME);
@@ -145,6 +147,7 @@ async function teardownSuite() {
 
 async function testSetup() {
     assert.ok(allowIndex, 'allow guard deployed');
+    assert.ok(sourceAllowIndex, 'source allow guard deployed');
     assert.ok(targetIndex, 'custody target deployed');
     assert.strictEqual(await balanceOf(SOURCE, TICK), '1000');
 }
@@ -155,6 +158,7 @@ async function testAllowedDeposit() {
         { source: SOURCE, data: depositLine(targetIndex, TICK, 40) },
     ]);
     assert.strictEqual(await processBlocks(indexer), 1);
+    await indexer.indexerDb.sanityCheck(DEPOSIT_BLOCK);
     assert.strictEqual(await balanceOf(SOURCE, TICK), '960');
     assert.strictEqual(await balanceOf(custody, TICK), '40');
 }
@@ -162,9 +166,12 @@ async function testAllowedDeposit() {
 async function testAllowedWithdrawalAndGas() {
     const custody = custodyAddress(indexer.config.CHAIN, targetIndex);
     await seeder.seedBlock(WITHDRAW_BLOCK, T0 + 1100, [
+        { source: SOURCE, data: `ISSUE|6|${TICK}||all|0|1|unbind-token-allow` },
+        { source: SOURCE, data: bindAddressLine(sourceAllowIndex, 'all', 'bind-source-allow') },
         { source: SOURCE, data: withdrawLine(targetIndex, TICK, 15) },
     ]);
     assert.strictEqual(await processBlocks(indexer), 1);
+    await indexer.indexerDb.sanityCheck(WITHDRAW_BLOCK);
     assert.strictEqual(await balanceOf(SOURCE, TICK), '975');
     assert.strictEqual(await balanceOf(custody, TICK), '25');
 
@@ -175,11 +182,14 @@ async function testAllowedWithdrawalAndGas() {
     ]);
 
     const executions = await guardExecutions();
-    assert.strictEqual(executions.length, 2, 'one shared guard execution row persisted per custody leg');
+    assert.deepStrictEqual(executions.map(row => [Number(row.block_index), Number(row.contract_index)]), [
+        [DEPOSIT_BLOCK, allowIndex],
+        [WITHDRAW_BLOCK, sourceAllowIndex],
+    ]);
     assert.ok(executions.every(row => Number(row.gas_used) > 0), 'both persisted guard meters are nonzero');
     const gasAfter = await balanceOf(SOURCE, indexer.config.GAS);
     const gasBurn = Number(indexer.util.bcsub(gasBefore, gasAfter, 8));
-    assert.strictEqual(gasBurn, sumMeteredFees(billedGuardRuns(executions)));
+    assert.strictEqual(gasBurn, sumMeteredFees(executions));
 }
 
 describe('Controller custody guard ALLOW legs and metered GAS burn', function () {
