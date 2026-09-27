@@ -188,3 +188,20 @@ addGate('bridge_policy_detach_activation.BRIDGE_POLICY_DETACH', 'height', {
     testnet: UNARMED,
     regtest: 0,
 });
+
+// vm_lint_optional_chain_heights
+// Per-chain height on the processing chain's own block_index. At or after it,
+// the deploy-lint global-object and Math-object matchers also look through a
+// parenthesized optional chain. Mainnet is unarmed by ruling, and testnet stays
+// unarmed until a measured height is armed. MUST equal xchain-vm
+// LINT_OPTIONAL_CHAIN_ACTIVATION, whose null is this row's UNARMED.
+addGate('vm_lint_optional_chain_heights.VM_LINT_OPTIONAL_CHAIN_ACTIVATION', 'height', {
+    'BTC:mainnet': UNARMED,
+    'LTC:mainnet': UNARMED,
+    'DOGE:mainnet': UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
