@@ -125,7 +125,8 @@ async function reassembleAtChunk(handler, data, parent, scope, error){
                     block_index:     data['BLOCK_INDEX']
                 });
                 await handler.indexerDb.setAnchorArchiveStatus(Number(parent.action_index), 'invalid_archive');
-            } else if(gateRegistry.activeAt('archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION', handler.config['NETWORK'], null, Number(parent.block_index_doge), null) &&
+            } else if(parent.match_count != null &&
+                      gateRegistry.activeAt('archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION', handler.config['NETWORK'], null, Number(parent.block_index_doge), null) &&
                       handler.archiveMatchCount(b64) !== Number(parent.match_count)){
                 getLogger().warn("\t ANCHOR v2 : batch " + data['MATCH_BATCH_SEQ'] + ' reassembly MATCH_COUNT mismatch, flagging invalid_archive');
                 diag.noteAnchorFailed({
