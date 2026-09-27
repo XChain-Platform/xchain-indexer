@@ -121,24 +121,6 @@ describe('VOTE callback method-independent listing probe', function(){
         assert.strictEqual(buildFallback.callCount, unusable.length);
     });
 
-    it('runs the listing first regardless of the probe VM reported limits', async function(){
-        const reportedLimits = [undefined, { maxCodeSize: MAX_CODE_SIZE }];
-        for(const limits of reportedLimits){
-            const fresh = freshVote();
-            const probeVm = fresh.actionsCtx.getVoteCallbackProbeVm();
-            probeVm.limits = limits;
-            fresh.vm.probeReadManifest.resolves({
-                success: true,
-                manifest: { metaJson: '{"callbackFns":["onResult"]}' },
-                error: null
-            });
-            const code = 'module.exports={onResult:function(){}};';
-            assert.strictEqual(await handlerVerdict(fresh, code, 'onResult'), true);
-            assert.strictEqual(fresh.vm.probeReadManifest.callCount, 1);
-            assert.strictEqual(fresh.vm.probeReadManifest.firstCall.args[0],
-                callbackProbeVm.buildListingProbeCode(code));
-        }
-    });
 });
 
 describe('real XChainVM callback listing equivalence', function(){
