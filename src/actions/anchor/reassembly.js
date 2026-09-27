@@ -22,9 +22,16 @@
 
 const gateRegistry = require('../../consensus/gate_registry');
 const aaq  = require('./anchor_action_query.js');
-const diag = require('./diagnostic_events.js');
+const { reportArchiveFailure } = require('./archive_verdict.js');
 
-const { getLogger } = require('../../observability/index.js');
+const FOLD_GATE = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
+const VERDICT_GATE = 'archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION';
+
+function archiveFailureIsSectionScoped(handler, version, height){
+    return Number(version) === 3 &&
+        gateRegistry.activeAt(VERDICT_GATE, handler.config['NETWORK'], null, Number(height), null) &&
+        gateRegistry.activeAt(FOLD_GATE, handler.config['NETWORK'], null, Number(height), null);
+}
 
 // Head-side archive reassembly gate: the chunk-side gate in parseContinuation only
 // fires when the parent archive head already exists, so when the completing
@@ -68,28 +75,34 @@ async function reassembleAtHead(handler, data, error, format){
             for(let c of ordered) b64 += c.archive_b64;
             let crc = handler.archiveCrc(b64);
             if(crc === null || crc !== String(data['BATCH_CRC32'])){
-                getLogger().warn("\t ANCHOR v" + format + " : batch " + data['MATCH_BATCH_SEQ'] + ' head-side reassembly CRC mismatch, flagging invalid_archive');
-                diag.noteAnchorFailed({
-                    chain:           data['CHAIN'],
-                    reason:          'invalid_archive: head-side reassembly CRC mismatch',
-                    network:         data['NETWORK'],
-                    version:         format,
-                    match_batch_seq: data['MATCH_BATCH_SEQ'],
-                    block_index:     data['BLOCK_INDEX']
-                });
-                await handler.indexerDb.setAnchorArchiveStatus(Number(data['ACTION_INDEX']), 'invalid_archive');
+                let sectionScoped = archiveFailureIsSectionScoped(handler, format, data['BLOCK_INDEX']);
+                await reportArchiveFailure(handler, {
+                    logLine: "\t ANCHOR v" + format + " : batch " + data['MATCH_BATCH_SEQ'] + ' head-side reassembly CRC mismatch, flagging invalid_archive',
+                    event: {
+                        chain:           data['CHAIN'],
+                        reason:          'invalid_archive: head-side reassembly CRC mismatch',
+                        network:         data['NETWORK'],
+                        version:         format,
+                        match_batch_seq: data['MATCH_BATCH_SEQ'],
+                        block_index:     data['BLOCK_INDEX']
+                    },
+                    actionIndex: Number(data['ACTION_INDEX'])
+                }, sectionScoped);
             } else if(gateRegistry.activeAt('archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION', handler.config['NETWORK'], null, Number(data['BLOCK_INDEX']), null) &&
                       handler.archiveMatchCount(b64) !== Number(data['MATCH_COUNT'])){
-                getLogger().warn("\t ANCHOR v" + format + " : batch " + data['MATCH_BATCH_SEQ'] + ' head-side reassembly MATCH_COUNT mismatch, flagging invalid_archive');
-                diag.noteAnchorFailed({
-                    chain:           data['CHAIN'],
-                    reason:          'invalid_archive: head-side reassembly MATCH_COUNT mismatch',
-                    network:         data['NETWORK'],
-                    version:         format,
-                    match_batch_seq: data['MATCH_BATCH_SEQ'],
-                    block_index:     data['BLOCK_INDEX']
-                });
-                await handler.indexerDb.setAnchorArchiveStatus(Number(data['ACTION_INDEX']), 'invalid_archive');
+                let sectionScoped = archiveFailureIsSectionScoped(handler, format, data['BLOCK_INDEX']);
+                await reportArchiveFailure(handler, {
+                    logLine: "\t ANCHOR v" + format + " : batch " + data['MATCH_BATCH_SEQ'] + ' head-side reassembly MATCH_COUNT mismatch, flagging invalid_archive',
+                    event: {
+                        chain:           data['CHAIN'],
+                        reason:          'invalid_archive: head-side reassembly MATCH_COUNT mismatch',
+                        network:         data['NETWORK'],
+                        version:         format,
+                        match_batch_seq: data['MATCH_BATCH_SEQ'],
+                        block_index:     data['BLOCK_INDEX']
+                    },
+                    actionIndex: Number(data['ACTION_INDEX'])
+                }, sectionScoped);
             }
         }
     }
@@ -115,29 +128,35 @@ async function reassembleAtChunk(handler, data, parent, scope, error){
             for(let c of ordered) b64 += c.archive_b64;
             let crc = handler.archiveCrc(b64);
             if(crc === null || crc !== String(parent.batch_crc32)){
-                getLogger().warn("\t ANCHOR v2 : batch " + data['MATCH_BATCH_SEQ'] + ' reassembly CRC mismatch, flagging invalid_archive');
-                diag.noteAnchorFailed({
-                    chain:           parent.chain,
-                    reason:          'invalid_archive: reassembly CRC mismatch',
-                    network:         handler.config['NETWORK'],
-                    version:         2,
-                    match_batch_seq: data['MATCH_BATCH_SEQ'],
-                    block_index:     data['BLOCK_INDEX']
-                });
-                await handler.indexerDb.setAnchorArchiveStatus(Number(parent.action_index), 'invalid_archive');
+                let sectionScoped = archiveFailureIsSectionScoped(handler, parent.version, parent.block_index_doge);
+                await reportArchiveFailure(handler, {
+                    logLine: "\t ANCHOR v2 : batch " + data['MATCH_BATCH_SEQ'] + ' reassembly CRC mismatch, flagging invalid_archive',
+                    event: {
+                        chain:           parent.chain,
+                        reason:          'invalid_archive: reassembly CRC mismatch',
+                        network:         handler.config['NETWORK'],
+                        version:         2,
+                        match_batch_seq: data['MATCH_BATCH_SEQ'],
+                        block_index:     data['BLOCK_INDEX']
+                    },
+                    actionIndex: Number(parent.action_index)
+                }, sectionScoped);
             } else if(parent.match_count != null &&
                       gateRegistry.activeAt('archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION', handler.config['NETWORK'], null, Number(parent.block_index_doge), null) &&
                       handler.archiveMatchCount(b64) !== Number(parent.match_count)){
-                getLogger().warn("\t ANCHOR v2 : batch " + data['MATCH_BATCH_SEQ'] + ' reassembly MATCH_COUNT mismatch, flagging invalid_archive');
-                diag.noteAnchorFailed({
-                    chain:           parent.chain,
-                    reason:          'invalid_archive: reassembly MATCH_COUNT mismatch',
-                    network:         handler.config['NETWORK'],
-                    version:         2,
-                    match_batch_seq: data['MATCH_BATCH_SEQ'],
-                    block_index:     data['BLOCK_INDEX']
-                });
-                await handler.indexerDb.setAnchorArchiveStatus(Number(parent.action_index), 'invalid_archive');
+                let sectionScoped = archiveFailureIsSectionScoped(handler, parent.version, parent.block_index_doge);
+                await reportArchiveFailure(handler, {
+                    logLine: "\t ANCHOR v2 : batch " + data['MATCH_BATCH_SEQ'] + ' reassembly MATCH_COUNT mismatch, flagging invalid_archive',
+                    event: {
+                        chain:           parent.chain,
+                        reason:          'invalid_archive: reassembly MATCH_COUNT mismatch',
+                        network:         handler.config['NETWORK'],
+                        version:         2,
+                        match_batch_seq: data['MATCH_BATCH_SEQ'],
+                        block_index:     data['BLOCK_INDEX']
+                    },
+                    actionIndex: Number(parent.action_index)
+                }, sectionScoped);
             }
         }
     }
