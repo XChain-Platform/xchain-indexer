@@ -71,19 +71,19 @@ describe('PRICE v1 canonical reference oracle @regression @tier3', function () {
         assert.strictEqual(isCanonicalV1FeeText('0.' + '1'.repeat(19), Infinity), false);
     });
 
-    // The row's own 20-character example ('12345678901.1234567') measures 19
-    // chars and is admitted at cap 19, so it cannot show the cap boundary it
-    // was named for; this string is the same shape at the length the row
-    // describes (11 integer digits, 8 fraction digits, 20 chars total).
     it('caps VALUE length at maxLength', function () {
         const nineteen = '1234567890.12345678';
-        const twenty   = '12345678901.12345678';
+        const suppliedTwenty = '12345678901.1234567';
+        const actualTwenty = suppliedTwenty + '8';
         assert.strictEqual(nineteen.length, 19);
-        assert.strictEqual(twenty.length, 20);
+        assert.strictEqual(suppliedTwenty.length, 19);
+        assert.strictEqual(actualTwenty.length, 20);
 
         assert.strictEqual(isCanonicalV1ValueText(nineteen, 19), true);
-        assert.strictEqual(isCanonicalV1ValueText(twenty, 19), false);
-        assert.strictEqual(isCanonicalV1ValueText(twenty, 20), true);
+        assert.strictEqual(isCanonicalV1ValueText(suppliedTwenty, 19), true);
+        assert.strictEqual(isCanonicalV1ValueText(suppliedTwenty, 20), true);
+        assert.strictEqual(isCanonicalV1ValueText(actualTwenty, 19), false);
+        assert.strictEqual(isCanonicalV1ValueText(actualTwenty, 20), true);
     });
 
     it('refuses a non-string text', function () {
