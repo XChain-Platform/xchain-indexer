@@ -122,9 +122,17 @@ function isBetStatusStateHashActive(blockIndex, network, coin){
 const ARCHIVE_HEAD_VERSIONS = copy('stateHash.ARCHIVE_HEAD_VERSIONS');
 const ARCHIVE_HEAD_VERSIONS_SQL = copy('stateHash.ARCHIVE_HEAD_VERSIONS_SQL');
 
+function archiveHeadPredicate(alias){
+    return alias + ".match_batch_seq IS NOT NULL AND " + alias + ".version <> 2";
+}
+
+function checkpointSectionPredicate(alias){
+    return alias + ".chain IS NOT NULL";
+}
+
 const ARCHIVE_INVALID_STATE_HASH_ACTIVATION = copy('stateHash.ARCHIVE_INVALID_STATE_HASH_ACTIVATION');
 
-// Whether the anchor_invalid class covers the full archive-head version set at
+// Whether the anchor_invalid class uses the archive-head row predicate at
 // `blockIndex` on `network` for `coin`. Below the threshold / unknown network ->
 // off (safe; the class keeps its legacy v1-only selection, preimage unchanged).
 function isArchiveInvalidStateHashActive(blockIndex, network, coin){
@@ -262,8 +270,8 @@ async function buildStateHashData(db, blockIndex, opts){
     //    parent's action_index is in an earlier block, so it is invisible to the
     //    action-scoped consensus hashes and to the per-block stream. Resolved via
     //    the status name (not status_id) to stay id-independent across nodes.
-    //    Version predicate GATED: legacy v1-only below the
-    //    ARCHIVE_INVALID_STATE_HASH activation, the full ARCHIVE_HEAD_VERSIONS set
+    //    Row predicate GATED: legacy v1-only below the
+    //    ARCHIVE_INVALID_STATE_HASH activation, archive-head row attributes
     //    at/after it, so the pre-flag preimage stays byte-identical.
     //    Chunk-height key ALSO GATED, on its own separate flag day: the legacy
     //    `c.block_index` key is NEVER populated on a v2 continuation row, so this
@@ -281,7 +289,7 @@ async function buildStateHashData(db, blockIndex, opts){
             "JOIN anchor_actions c ON c.version = 2 AND c.match_batch_seq = p.match_batch_seq " +
             "JOIN index_statuses s ON s.id = p.status_id AND s.status = 'invalid_archive' " +
             "JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid' " +
-            "WHERE p.version " + (archiveInvalidActive ? ARCHIVE_HEAD_VERSIONS_SQL : "= 1") +
+            "WHERE " + (archiveInvalidActive ? archiveHeadPredicate('p') : "p.version = 1") +
             " AND " + chunkHeightCol + " BETWEEN ? AND ? " +
             "ORDER BY p.action_index ASC",
             [B, B]);
@@ -432,6 +440,7 @@ module.exports = { buildStateHashData, STATE_HASH_VERSION,
                    TOKEN_SUPPLY_STATE_HASH_ACTIVATION, isTokenSupplyStateHashActive,
                    BET_STATUS_STATE_HASH_ACTIVATION, isBetStatusStateHashActive,
                    ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL,
+                   archiveHeadPredicate, checkpointSectionPredicate,
                    ARCHIVE_INVALID_STATE_HASH_ACTIVATION, isArchiveInvalidStateHashActive,
                    ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION, isArchiveInvalidHeightKeyActive,
                    ARCHIVE_CHUNK_HEIGHT_COL, ARCHIVE_CHUNK_HEIGHT_COL_LEGACY };
