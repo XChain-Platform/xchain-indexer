@@ -24,11 +24,17 @@ const CALLBACK_METHOD_MAX_CHARS = 64;
 const JSON_ESCAPE_MAX_BYTES_PER_CHAR = 6;
 const PROBE_PREFIX = '\n;module.exports={initialize:(typeof module.exports==="function"||typeof module.exports[';
 const PROBE_SUFFIX = ']==="function")?function(){}:null};';
+const LISTING_PROBE_SUFFIX = '\n;(()=>{let E=module.exports,L=[];if(typeof E==="function")L="*";else if(E!=null){let S=new Set(),O=Object(E);while(O!==null){for(let N of Object.getOwnPropertyNames(O)){if(typeof N==="string"&&N.length<=' +
+    CALLBACK_METHOD_MAX_CHARS + '&&!S.has(N)){S.add(N);try{if(typeof E[N]==="function")L.push(N)}catch(e){}}}O=Object.getPrototypeOf(O)}}module.exports={initialize:null,meta:{callbackFns:L}}})();';
 
 // Reserve enough VM input for the fixed probe syntax plus a method whose every
 // UTF-16 code unit needs JSON's six-byte \uXXXX escape.
-const PROBE_SUFFIX_ALLOWANCE = Buffer.byteLength(PROBE_PREFIX + '""' + PROBE_SUFFIX, 'utf8') +
+const METHOD_PROBE_SUFFIX_ALLOWANCE = Buffer.byteLength(PROBE_PREFIX + '""' + PROBE_SUFFIX, 'utf8') +
     CALLBACK_METHOD_MAX_CHARS * JSON_ESCAPE_MAX_BYTES_PER_CHAR;
+const PROBE_SUFFIX_ALLOWANCE = Math.max(
+    METHOD_PROBE_SUFFIX_ALLOWANCE,
+    Buffer.byteLength(LISTING_PROBE_SUFFIX, 'utf8')
+);
 
 // Append the non-dispatching initialize probe and enforce the derived allowance
 // before code reaches the VM configured to accept it.
@@ -37,6 +43,25 @@ function buildProbeCode(code, method){
     if(Buffer.byteLength(suffix, 'utf8') > PROBE_SUFFIX_ALLOWANCE)
         throw new Error('VOTE callback manifest probe suffix exceeds its configured allowance');
     return String(code) + suffix;
+}
+
+// Append one method-independent inspection suffix so the VM can reuse its code-text
+// caches for every callback method on the same contract.
+function buildListingProbeCode(code){
+    return String(code) + LISTING_PROBE_SUFFIX;
+}
+
+// Convert a complete callback listing into the same boolean produced by the
+// per-method probe, or request that probe when the listing cannot be trusted.
+function listingVerdict(manifest, method){
+    if(!manifest || manifest.metaOversize === true || manifest.metaError === true ||
+        typeof manifest.metaJson !== 'string') return null;
+    let parsed;
+    try { parsed = JSON.parse(manifest.metaJson); } catch(e) { return null; }
+    let callbackFns = parsed && parsed.callbackFns;
+    if(callbackFns === '*') return true;
+    if(!Array.isArray(callbackFns) || !callbackFns.every(name => typeof name === 'string')) return null;
+    return callbackFns.includes(String(method));
 }
 
 // Copy the main VM's execution mode, gas settings and limits so the probe differs
@@ -76,6 +101,8 @@ module.exports = {
     CALLBACK_METHOD_MAX_CHARS,
     PROBE_SUFFIX_ALLOWANCE,
     buildProbeCode,
+    buildListingProbeCode,
+    listingVerdict,
     getProbeVm,
     discardProbeVm
 };
