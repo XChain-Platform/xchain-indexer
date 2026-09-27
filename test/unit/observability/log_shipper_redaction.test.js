@@ -134,11 +134,11 @@ describe('log shipper redaction and formatting', function () {
 
         it('enables shipping only with a truthy flag and an HTTP or HTTPS URL', function () {
             const cases = [
-                [{ LOG_SHIP_ENABLED: 'true', LOG_SHIP_URL: 'https://logs.example.test' }, true],
-                [{ LOG_SHIP_ENABLED: '1', LOG_SHIP_URL: 'http://logs.example.test' }, true],
-                [{ LOG_SHIP_ENABLED: 'false', LOG_SHIP_URL: 'https://logs.example.test' }, false],
-                [{ LOG_SHIP_URL: 'https://logs.example.test' }, false],
-                [{ LOG_SHIP_ENABLED: 'true', LOG_SHIP_URL: 'ftp://logs.example.test' }, false],
+                [{ LOG_SHIP_ENABLED: 'true', LOG_SHIP_URL: 'https://127.0.0.1' }, true],
+                [{ LOG_SHIP_ENABLED: '1', LOG_SHIP_URL: 'http://127.0.0.1' }, true],
+                [{ LOG_SHIP_ENABLED: 'false', LOG_SHIP_URL: 'https://127.0.0.1' }, false],
+                [{ LOG_SHIP_URL: 'https://127.0.0.1' }, false],
+                [{ LOG_SHIP_ENABLED: 'true', LOG_SHIP_URL: 'ftp://127.0.0.1' }, false],
                 [{ LOG_SHIP_ENABLED: 'true', LOG_SHIP_URL: 'not a URL' }, false]
             ];
 
@@ -151,7 +151,7 @@ describe('log shipper redaction and formatting', function () {
             const secret = 'unique-log-ship-token';
             const config = readLogEnv({
                 LOG_SHIP_ENABLED: 'true',
-                LOG_SHIP_URL: 'https://logs.example.test',
+                LOG_SHIP_URL: 'https://127.0.0.1',
                 LOG_SHIP_TOKEN: secret
             });
             const { token, ...otherFields } = config;
