@@ -171,7 +171,7 @@
     },
     "stateHash": {
       "path": "src/consensus/state_hash.js",
-      "hash": "b410a31b2888a718982824da33e1fac4ec09cf65bea7e1b50e8b22dc50259c0b",
+      "hash": "ab592efeee1c1791a7c684db0fc0e53c640cda600433adcfcc8386d189759776",
       "twins": [
         "xchain-sync"
       ]
@@ -1842,6 +1842,13 @@
       "from": "b05f00a4261548cf90aac0339c0100e82f54fbd58377b909f45614271962ddf6",
       "to": "620591ddfdc77d2bef26bab8efe5293db8ea6a4299c190bdff50b6778da827ac",
       "reason": "owner withdraw opt-in time-table row",
+      "date": "2026-09-27"
+    },
+    {
+      "id": "stateHash",
+      "from": "b410a31b2888a718982824da33e1fac4ec09cf65bea7e1b50e8b22dc50259c0b",
+      "to": "ab592efeee1c1791a7c684db0fc0e53c640cda600433adcfcc8386d189759776",
+      "reason": "restore effective archive version-set discriminator",
       "date": "2026-09-27"
     }
   ]

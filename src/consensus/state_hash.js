@@ -285,7 +285,7 @@ async function buildStateHashData(db, blockIndex, opts){
             "JOIN index_statuses s ON s.id = p.status_id AND s.status = 'invalid_archive' " +
             "JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid' " +
             "WHERE " + (archiveInvalidActive
-                ? archiveHeadPredicate('p') + " AND (p.version " + ARCHIVE_HEAD_VERSIONS_SQL + " OR p.version <> 2)"
+                ? archiveHeadPredicate('p') + " AND p.version " + ARCHIVE_HEAD_VERSIONS_SQL
                 : "p.version = 1") +
             " AND " + chunkHeightCol + " BETWEEN ? AND ? " +
             "ORDER BY p.action_index ASC",
