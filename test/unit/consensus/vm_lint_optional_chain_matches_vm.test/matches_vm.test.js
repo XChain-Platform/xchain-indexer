@@ -38,11 +38,11 @@ function indexerActivation() {
         .copy('vm_lint_optional_chain_heights.VM_LINT_OPTIONAL_CHAIN_ACTIVATION');
 }
 
-describe('consensus/vm_lint_optional_chain_matches_vm: optional-chain activation parity @regression @tier1', function () {
+describe('consensus/vm_lint_optional_chain_matches_vm: VM activation map @regression @tier1', function () {
     it('matches every VM mainnet and testnet activation', function () {
         const indexer = indexerActivation();
         if (!verdict.usable)
-            return skipOrFail(this, verdict, 'the optional-chain activation parity witness');
+            return skipOrFail(this, verdict, 'the optional-chain activation map');
 
         const vmActivation = require(verdict.path).LINT_OPTIONAL_CHAIN_ACTIVATION;
         for (const coinKey of COIN_KEYS) {
