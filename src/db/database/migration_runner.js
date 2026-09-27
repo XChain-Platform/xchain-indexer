@@ -38,6 +38,28 @@ const { reorderVerdict, describeReorder } = require('./migration_reorder.js');
 // requires any part, so this resolves to the finished class rather than a half-built export.
 const Database = require('../index.js');
 
+function migrationQueryTimeoutMs(){
+    const raw = CONFIG_ENV.MIGRATE_QUERY_TIMEOUT;
+    if(raw == null || String(raw).trim() === '') return 3600000;
+    const ms = Number(raw);
+    return Number.isFinite(ms) && ms >= 0 ? ms : 3600000;
+}
+
+async function setSessionStatementTime(conn, ms){
+    await conn.query('SET SESSION max_statement_time = ?', [ms / 1000]);
+}
+
+async function restoreRuntimeTimeoutAndReleaseLock(conn, lockName, runtimeTimeout){
+    let restored = true;
+    try { await setSessionStatementTime(conn, runtimeTimeout); }
+    catch(_){ restored = false; }
+    try { await conn.query('SELECT RELEASE_LOCK(?)', [lockName]); } catch(_){}
+    if(!restored && typeof conn.destroy === 'function'){
+        try { await conn.destroy(); } catch(_){}
+    }
+    return restored;
+}
+
 // Targeted rollout: a name that matches no committed migration is almost
 // always a typo. Fail loudly (silently applying nothing would look like a
 // successful no-op run) and list what IS available.
@@ -314,6 +336,7 @@ module.exports = {
 
         const lockName = 'xchain_migrate_' + this.dbName;
         let conn = await this.getConnection();
+        let returnToPool = true;
         try {
             // DB-scoped advisory lock so two processes don't apply concurrently. GET_LOCK
             // is server-global, so the name is namespaced by dbName (the shared MariaDB on
@@ -328,12 +351,14 @@ module.exports = {
                 return result;
             }
             try {
+                await setSessionStatementTime(conn, migrationQueryTimeoutMs());
                 await applyPendingMigrations(this, conn, files, { dir, only, includeManual, result });
             } finally {
-                try { await conn.query('SELECT RELEASE_LOCK(?)', [lockName]); } catch(_){}
+                const runtimeTimeout = (this.connectionPoolParams && this.connectionPoolParams.queryTimeout) || 0;
+                returnToPool = await restoreRuntimeTimeoutAndReleaseLock(conn, lockName, runtimeTimeout);
             }
         } finally {
-            try { await conn.release(); } catch(_){}
+            if(returnToPool) try { await conn.release(); } catch(_){}
         }
 
         if(result.applied.length) getLogger().info('runMigrations: ' + result.applied.length + ' migration(s) applied to ' + this.dbName + '.');
