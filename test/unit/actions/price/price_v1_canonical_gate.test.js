@@ -48,10 +48,8 @@ describe('PRICE v1 canonical gate honest values', function () {
 });
 
 describe('PRICE v1 canonical gate armed on regtest', function () {
-    const valueMaxLength = priceScale.PRICE_V1_VALUE_MAX_LENGTH || 19;
-    const feeMaxLength   = priceScale.PRICE_V1_FEE_MAX_LENGTH || 20;
-    const overlongValue  = '1'.repeat(valueMaxLength + 1);
-    const overlongFee    = '0'.repeat(feeMaxLength - 2) + '0.5';
+    const overlongValue = '1'.repeat(priceScale.PRICE_V1_VALUE_MAX_LENGTH + 1);
+    const overlongFee   = '0'.repeat(priceScale.PRICE_V1_FEE_MAX_LENGTH - 2) + '0.5';
     const cases = [
         ['01.5', '0.5', 'invalid: VALUE (format)', 'leading-zero VALUE'],
         ['1.5', '00.5', 'invalid: FEE (format)', 'leading-zero FEE'],
