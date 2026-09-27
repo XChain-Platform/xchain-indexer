@@ -12,7 +12,9 @@
  *
  **********************************************************************
  *
- * The SHARED block, part 5 of 5: token_policy_activation to xchain_bridge_activation
+ * The SHARED block, part 5 of 5: token_policy_activation to
+ * xchain_bridge_activation, then anchor_fold_activation and
+ * archive_section_verdict_activation
  *
  * One SHARED block part. The region between the two marker lines is
  * BYTE-TWINNED into the registry of xchain-sync, xchain-hub, xchain-explorer
@@ -167,4 +169,9 @@ addGate('xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION', 'height', {
     testnet:        9999999999,   // fallback: a testnet coin with no entry above stays dark
     regtest:        0,            // genesis-active so the e2e rail exercises the armed rule
 });
+// Part 5 holds these earlier rows because parts 1 to 4 are near their line limit and have concurrent additions.
+// anchor_fold_activation
+addGate('anchor_fold_activation.ANCHOR_FOLD_ACTIVATION', 'height', { mainnet: UNARMED, testnet: UNARMED, regtest: UNPINNED });
+// archive_section_verdict_activation
+addGate('archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION', 'height', { mainnet: UNARMED, testnet: UNARMED, regtest: UNPINNED });
 // SHARED-GATES END
