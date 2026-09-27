@@ -41,15 +41,16 @@ function goldenParams() {
     return parts.slice(1);
 }
 
-beforeEach(function () {
-    ({ indexer, handler, verifyStub, swqStub, deriveGateStub } = armAnchor());
-});
+describe('Anchor bundle order gate', function () {
+    beforeEach(function () {
+        ({ indexer, handler, verifyStub, swqStub, deriveGateStub } = armAnchor());
+    });
 
-afterEach(function () {
-    disarmAnchor({ verifyStub, swqStub, deriveGateStub });
-});
+    afterEach(function () {
+        disarmAnchor({ verifyStub, swqStub, deriveGateStub });
+    });
 
-describe('Anchor bundle legacy wire order', function () {
+    describe('Anchor bundle legacy wire order', function () {
     for (const network of LEGACY_ORDER_NETWORKS) {
         it(`accepts DOGE before BTC on ${network}`, async function () {
             const data = await parseBundle(network, {
@@ -67,7 +68,7 @@ describe('Anchor bundle legacy wire order', function () {
     }
 });
 
-describe('Anchor bundle ascending order and ties', function () {
+    describe('Anchor bundle ascending order and ties', function () {
     for (const network of NETWORKS) {
         it(`accepts the three-chain bundle on ${network}`, async function () {
             const data = await parseBundle(network, { sections: THREE_CHAINS });
@@ -83,7 +84,7 @@ describe('Anchor bundle ascending order and ties', function () {
     }
 });
 
-describe('Anchor bundle duplicate chains', function () {
+    describe('Anchor bundle duplicate chains', function () {
     for (const network of NETWORKS) {
         it(`refuses a repeated chain on ${network}`, async function () {
             const data = await parseBundle(network, {
@@ -94,11 +95,13 @@ describe('Anchor bundle duplicate chains', function () {
     }
 });
 
-describe('Anchor bundle golden wire', function () {
+    describe('Anchor bundle golden wire', function () {
     it('accepts the frozen v0 vector on regtest', async function () {
         setNetwork('regtest');
         const data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE', BLOCK_INDEX: 70000000 });
         await handler.parse(goldenParams(), data, null);
         assert.strictEqual(data['STATUS'], 'valid');
     });
+});
+
 });
