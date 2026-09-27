@@ -42,7 +42,7 @@ const config   = require('../../src/config.js');
 const Utility  = require('../../src/utility.js');
 
 const dbc = require('./setup/db-connection');
-const { DB_HOST, DB_PORT, DB_USER, DB_PASS } = dbc;   // empty DB_PASS => self-skip
+const { DB_HOST, DB_PORT, DB_USER, DB_PASS } = dbc;
 const DB_NAME = process.env.TEST_DATETIME_MIGRATIONS_DB
     || dbc.scopedDbName(dbc.INDEXER_DB, dbc.fileKey(__filename));
 const FRESH_DB_NAME = process.env.TEST_DATETIME_MIGRATIONS_FRESH_DB
@@ -340,7 +340,8 @@ describe('DATETIME migration rehearsal against a real MariaDB @tier3', function 
     const ctx = {};
 
     before(async function () {
-        if (!DB_PASS) this.skip();
+        if (process.env.TEST_DB_PASS === undefined) this.skip();
+        assert.ok(DB_PASS, 'DB_PASS must be available when TEST_DB_PASS is set');
         await setUp(ctx);
     });
 
