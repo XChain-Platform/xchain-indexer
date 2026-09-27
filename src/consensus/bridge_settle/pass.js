@@ -14,7 +14,7 @@
  *
  * XChain Platform - bridge settle pass: the end-of-block driver and its due sets.
  *
- * The pass driver, the proof fetch that runs before each transfer leg, and the two ordered,
+ * The pass driver, the proof fetch available to each transfer leg, and the two ordered,
  * capped due-set reads. The order inside the pass and the order inside each due set are
  * consensus-visible (they decide which action indexes exist at this block), so both are
  * spelled here exactly as they were.
@@ -36,7 +36,7 @@ const { XBRIDGE_MAX_PER_BLOCK, XPOLICY_MAX_PER_BLOCK } = require('../../protocol
 const { int } = require('./reasons.js');
 
 /**
- * Build ctx.proof for one transfer, or STALL the whole pass.
+ * Build a proof for one transfer, or STALL the whole pass.
  *
  * WHY THE PASS AND NOT THE CHECK FETCHES IT. bridge_checkpoint_check.js is synchronous and
  * pure by design, so it cannot make two nodes disagree because one of them had a slower
@@ -100,16 +100,22 @@ async function processBridgeSettlePass(deps, ctx){
     const { applyBridgeTransfer } = deps.transfer;
     const { applyPolicySnapshot } = deps.policy;
     const applied = { policies: [], transfers: [] };
+    delete ctx.proof;
+    delete ctx.fetchProof;
     for(const row of await duePolicySnapshots(deps, ctx)){
         const res = await applyPolicySnapshot(row, ctx);
         if(res.applied) applied.policies.push(row.snapshot_id);
     }
     for(const row of await dueBridgeTransfers(deps, ctx)){
-        ctx.proof = await fetchProofForTransfer(row, ctx);
-        const res = await applyBridgeTransfer(row, ctx);
-        if(res.applied) applied.transfers.push(row.transfer_id);
+        ctx.fetchProof = () => fetchProofForTransfer(row, ctx);
+        try {
+            const res = await applyBridgeTransfer(row, ctx);
+            if(res.applied) applied.transfers.push(row.transfer_id);
+        } finally {
+            delete ctx.proof;
+            delete ctx.fetchProof;
+        }
     }
-    delete ctx.proof;
     return applied;
 }
 
