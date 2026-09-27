@@ -18,13 +18,8 @@
 --
 -- Migration: retype three pre-ledger NOT NULL columns from TIMESTAMP to DATETIME
 --
--- WHY
--- ---
--- TIMESTAMP stores UTC and converts on read through the session time_zone, so a
--- row read back under a different time_zone than it was written under shifts.
--- DATETIME stores the literal value with no conversion. cross_chain_calls.created_at,
--- state_checkpoints.created_at and state_tree_roots.computed_at are provenance
--- timestamps, not consensus-visible, and gain nothing from TIMESTAMP's conversion.
+-- WHY: TIMESTAMP converts values through session time_zone; DATETIME stores them
+-- literally. These provenance timestamps need no session conversion.
 --
 -- IDEMPOTENT: re-running MODIFY to the same type is a no-op.
 --

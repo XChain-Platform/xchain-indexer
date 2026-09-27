@@ -13,12 +13,9 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Retype guard: cross_chain_calls.created_at, state_checkpoints.created_at and
- * state_tree_roots.computed_at moved from TIMESTAMP to DATETIME (no session
- * time_zone conversion on read, which these provenance columns never needed).
- * Pins all three legs: the definition no longer declares bare TIMESTAMP, the
- * pre-ledger baseline is re-frozen to the new shape, and the dated migration
- * that converges an aged DB is tagged manual and carries the three MODIFYs.
+ * Pins definition, baseline and migration coverage for the three provenance
+ * columns retyped from TIMESTAMP to DATETIME without session time_zone
+ * conversion on read.
  ********************************************************************/
 
 const assert = require('assert');
