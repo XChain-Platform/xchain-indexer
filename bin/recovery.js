@@ -14,14 +14,16 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Full-parse recovery CLI to rebuild the cross-chain match mirror from the
- * on-chain ANCHOR archive, with NO surviving hub database.
+ * Full-parse recovery CLI to rebuild archive-backed hub mirrors from the
+ * on-chain ANCHOR archive, with NO surviving hub database. The authoritative
+ * table list is derived from table_lifecycle.anchorRecoveryTables() and printed
+ * at run start and used by the batch and summary logs.
  *
  * Reads the DOGE indexer's anchor_actions (populated purely by chain parse),
  * reassembles each archive batch (v1 + v2 continuation chunks), and for every
- * batch that passes verification rebuilds cross_chain_matches and
- * capability_snapshots so a from-genesis reindex of BTC/LTC/DOGE re-derives
- * cross-chain settlements identically.
+ * batch that passes verification rebuilds every table declared for archive
+ * recovery so a from-genesis reindex of BTC/LTC/DOGE re-derives consensus
+ * inputs and cross-chain settlements identically.
  *
  * Verification per batch (all self-contained in the archive):
  *   1. CRC32 of the decompressed JSON must equal the v1's signed BATCH_CRC32.
@@ -85,7 +87,37 @@ const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
 const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../src/consensus/state_hash.js');
 const bridgePolicy = require('./recovery/bridge_policy.js');
 const checkpointPrice = require('./recovery/checkpoint_price.js');
+const lifecycle = require('../src/hub/table_lifecycle.js');
 const CHECKPOINT_COMMITMENT_KEY = 'checkpoint_commitment_activation.CHECKPOINT_COMMITMENT_ACTIVATION';
+
+const ANCHOR_RECOVERY_TABLES = lifecycle.anchorRecoveryTables();
+const RECOVERY_TABLE_FIELDS = Object.freeze({
+    capability_snapshots: { archive: 'capability_snapshots', report: 'snapshots' },
+    cross_chain_matches:  { archive: 'matches',              report: 'matches' },
+    cross_chain_calls:    { archive: 'calls',                report: 'calls' },
+    bridge_transfers:     { archive: 'bridge_transfers',     report: 'bridges' },
+    policy_snapshots:     { archive: 'policy_snapshots',     report: 'policies' },
+    state_checkpoints:    { archive: 'state_checkpoints',    report: 'checkpoints' },
+    price_snapshots:      { archive: 'price_snapshots',      report: 'prices' },
+});
+const UNMAPPED_RECOVERY_TABLES = ANCHOR_RECOVERY_TABLES.filter(table => !RECOVERY_TABLE_FIELDS[table]);
+if(UNMAPPED_RECOVERY_TABLES.length > 0)
+    throw new Error('archive recovery tables have no log fields: ' + UNMAPPED_RECOVERY_TABLES.join(', '));
+
+function recoveryTableLogFromReport(report){
+    return ANCHOR_RECOVERY_TABLES.map(table => {
+        let fields = RECOVERY_TABLE_FIELDS[table];
+        return report[fields.report] + ' ' + table + ' rows';
+    }).join(', ');
+}
+
+function recoveryTableLogFromArchive(archive){
+    return ANCHOR_RECOVERY_TABLES.map(table => {
+        let fields = RECOVERY_TABLE_FIELDS[table];
+        let rows = archive[fields.archive];
+        return (Array.isArray(rows) ? rows.length : 0) + ' ' + table;
+    }).join(', ');
+}
 
 // Capabilities whose archived snapshot is re-resolvable from the BTC capability stakes.
 // Both cross-checks gate on this one set (_verifyStakes for its delegated-key admission,
@@ -125,6 +157,8 @@ class AnchorRecovery {
         let report = { batches: 0, verified: 0, failed: [], matches: 0, snapshots: 0,
                        calls: 0, rewards: 0, bridges: 0, policies: 0,
                        checkpoints: 0, prices: 0, tombstones: 0 };
+
+        this.log('recovery: archive-backed hub mirrors: ' + ANCHOR_RECOVERY_TABLES.join(', '));
 
         // Restrict to the SAME statuses every other reader of anchor_actions accepts
         // (getArchiveReplayWatermarks / getMaxAnchorCheckpointSeq: archive-head or
@@ -188,12 +222,8 @@ class AnchorRecovery {
                     report.tombstones  += (archive.price_tombstones || []).length;
                 }
                 report.verified++;
-                this.log('recovery: batch ' + batchSeq + ' OK (' + archive.matches.length + ' matches, ' +
-                         ((archive.calls || []).length) + ' calls, ' + ((archive.rewards || []).length) + ' rewards, ' +
-                         ((archive.bridge_transfers || []).length) + ' bridges, ' +
-                         ((archive.policy_snapshots || []).length) + ' policies, ' +
-                         ((archive.state_checkpoints || []).length) + ' checkpoints, ' +
-                         ((archive.price_snapshots || []).length) + ' prices, ' +
+                this.log('recovery: batch ' + batchSeq + ' OK (' + recoveryTableLogFromArchive(archive) + ', ' +
+                         ((archive.rewards || []).length) + ' rewards, ' +
                          ((archive.price_tombstones || []).length) + ' tombstones)');
             } catch(e){
                 report.failed.push({ batch_seq: batchSeq, reason: e.message });
@@ -202,10 +232,7 @@ class AnchorRecovery {
         }
 
         this.log('recovery: ' + report.verified + '/' + report.batches + ' batches verified, ' +
-                 report.matches + ' match rows, ' + report.calls + ' call rows, ' +
-                 report.snapshots + ' snapshot rows, ' + report.rewards + ' reward rows, ' +
-                 report.bridges + ' bridge rows, ' + report.policies + ' policy rows, ' +
-                 report.checkpoints + ' checkpoint rows, ' + report.prices + ' price rows, ' +
+                 recoveryTableLogFromReport(report) + ', ' + report.rewards + ' reward rows, ' +
                  report.tombstones + ' price tombstones' +
                  (this.dryRun ? ' (dry run, nothing written)' : ''));
         return report;
