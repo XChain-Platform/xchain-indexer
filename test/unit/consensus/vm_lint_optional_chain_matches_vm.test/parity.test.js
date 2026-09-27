@@ -40,11 +40,11 @@ function indexerActivation() {
 
 describe('consensus/vm_lint_optional_chain_matches_vm: optional-chain activation parity @regression @tier1', function () {
     it('matches every VM mainnet and testnet activation', function () {
+        const indexer = indexerActivation();
         if (!verdict.usable)
             return skipOrFail(this, verdict, 'the optional-chain activation parity witness');
 
         const vmActivation = require(verdict.path).LINT_OPTIONAL_CHAIN_ACTIVATION;
-        const indexer = indexerActivation();
         for (const coinKey of COIN_KEYS) {
             const vmHeight = vmActivation[coinKey];
             if (vmHeight === null) {
