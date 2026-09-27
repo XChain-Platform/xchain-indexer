@@ -29,6 +29,7 @@
 // Module-level state and pure helpers that the split keeps in one place, so the class
 // and every mixin read the same instance of each.
 const { opensBackslashEscape } = require('../shared.js');
+const { retypeLedgerAppliedAt } = require('./ledger_retype.js');
 // The class itself, for the statics these methods read. db/index.js publishes it before it
 // requires any part, so this resolves to the finished class rather than a half-built export.
 const Database = require('../index.js');
@@ -280,9 +281,10 @@ module.exports = {
             "name VARCHAR(255) NOT NULL PRIMARY KEY, " +
             "checksum VARCHAR(64) NOT NULL, " +
             "mode VARCHAR(10) NOT NULL DEFAULT 'manual', " +
-            'applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP' +
+            'applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP' +
             ') ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci'
         );
+        await retypeLedgerAppliedAt(conn);
     },
 
     // Evaluate a migration's declared precondition against the live schema. Returns a
