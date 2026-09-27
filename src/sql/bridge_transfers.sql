@@ -48,7 +48,7 @@ CREATE TABLE bridge_transfers (
     status               VARCHAR(20)  NOT NULL DEFAULT 'finalized',-- finalized / retracted
     push_generation      BIGINT       NOT NULL DEFAULT 0,          -- source-chain reorg fence; an unfenced quorum-class retraction is refused outright
     btc_chain_id         CHAR(64),                                 -- hash of BTC block 1 on the writing hub's chain; NULL accepted by every mirror; transport, not consensus
-    created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uq_transfer_id (transfer_id),
     KEY idx_snapshot_block (snapshot_block),
     KEY idx_src_ref (src_chain, src_action_index),
