@@ -24,9 +24,9 @@ const { assert, crd, stubRegistryRow } = require('./helpers/consensus_rules_dige
 // the indexer's own instance of the same guard, so a one-sided edit here cannot pass by
 // running only on the other repo.
 describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', function () {
-    it('is sorted, has 35 entries, and contains the gates the last trains append', function () {
+    it('is sorted, has 38 entries, and contains the gates the last trains append', function () {
         const keys = crd.knownGateKeys();
-        assert.strictEqual(keys.length, 35, 'SHARED_GATES total entry count moved; re-derive this floor before changing it');
+        assert.strictEqual(keys.length, 38, 'SHARED_GATES total entry count moved; re-derive this floor before changing it');
         assert.deepStrictEqual(keys, [...keys].sort());
         for (const k of [
             'attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION',
@@ -52,7 +52,10 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
             'mirror_admission_activation.admissionCanonicalField',
             // The token leg gate both repos evaluate per bridge leg.
             'token_bridge_activation.TOKEN_BRIDGE_ACTIVATION',
-            'anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION'
+            'anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION',
+            'price_scale_activation.PRICE_V1_CANONICAL_ACTIVATION',
+            'price_scale_activation.PRICE_V1_VALUE_MAX_LENGTH',
+            'price_scale_activation.PRICE_V1_FEE_MAX_LENGTH'
         ]) assert.ok(keys.includes(k), 'missing ' + k);
     });
 });
@@ -89,7 +92,7 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
             for (const [p] of saved) delete require.cache[p];
             const fresh = require('../../../../src/consensus_rules_digest.js');
             assert.strictEqual(fresh.computeConsensusRulesDigest().digest,
-                '9b65c9a7da2ed2eb358d17f2078d2d29fca1c230a456681d85ecf4ed20c2dcea',
+                '82b52b64b59c7161e5ff8b5401593287ddcd3a438e3dab37aab7d4a2fb297ae0',
                 'the consensus rules digest moved; a gate was added, removed, reordered or re-armed');
         } finally {
             for (const [p, mod] of saved) { if (mod === undefined) delete require.cache[p]; else require.cache[p] = mod; }
@@ -123,7 +126,7 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
             'a SHARED_GATES entry was inserted mid-list; that reorders the preimage of every gate after it');
         assert.deepStrictEqual(mods.slice(PRE_EXISTING.length),
             ['mirror_admission_activation', 'anchor_reward_activation', 'mirror_admission_activation',
-                'token_bridge_activation', 'anchor_bundle_order_activation'],
+                'token_bridge_activation', 'anchor_bundle_order_activation', 'price_scale_activation'],
             'the family must follow the bridge gate, then the token and anchor bundle gates must remain appended');
     });
 

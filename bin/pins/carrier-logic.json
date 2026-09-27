@@ -54,7 +54,7 @@
     },
     "consensus_rules_digest": {
       "path": "src/consensus_rules_digest.js",
-      "hash": "d1952b0474e68584339150bb0e5124f1bff0910c24048c16ae9c1a7d55c5281a",
+      "hash": "4b63bb80a0788ae30c0c0bcc4e34664b2d27c31079db04dbfb784987a0e8f790",
       "twins": [
         "xchain-hub"
       ]
@@ -1849,6 +1849,13 @@
       "from": "b410a31b2888a718982824da33e1fac4ec09cf65bea7e1b50e8b22dc50259c0b",
       "to": "ab592efeee1c1791a7c684db0fc0e53c640cda600433adcfcc8386d189759776",
       "reason": "restore effective archive version-set discriminator",
+      "date": "2026-09-27"
+    },
+    {
+      "id": "consensus_rules_digest",
+      "from": "d1952b0474e68584339150bb0e5124f1bff0910c24048c16ae9c1a7d55c5281a",
+      "to": "4b63bb80a0788ae30c0c0bcc4e34664b2d27c31079db04dbfb784987a0e8f790",
+      "reason": "PRICE v1 canonical bounds in shared rules digest",
       "date": "2026-09-27"
     },
     {
