@@ -163,6 +163,12 @@ class Broadcast {
         if(!error && String(data['VALUE']).length > this.config['MAX_BROADCAST_VALUE_LENGTH'])
             error = 'invalid: VALUE (length)';
 
+        // Verify FEE is shorter than MAX_BROADCAST_FEE_LENGTH once the gate is active
+        if(!error && !this.util.isNull(data['FEE'])
+           && String(data['FEE']).length > this.config['MAX_BROADCAST_FEE_LENGTH']
+           && await this.actions.protocolChanges.isEnabled('BROADCAST_FEE_LENGTH', data['BLOCK_INDEX']))
+            error = 'invalid: FEE (length)';
+
         // Verify no pipe in MEMO (pipe is field delimiter)
         if(!error && String(data['MEMO']).indexOf('|')!=-1)
             error = 'invalid: MEMO (pipe)';
