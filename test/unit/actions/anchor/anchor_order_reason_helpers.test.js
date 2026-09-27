@@ -29,6 +29,7 @@ describe('ANCHOR order reason helpers', function () {
     });
 
     it('flags DOGE after LTC under plain-string CHAIN order', function () {
+        assert.strictEqual(String('DOGE') < String('LTC'), true);
         assert.deepStrictEqual(
             sectionWalkReasons(['BTC', 'LTC', 'DOGE']),
             [null, null, 'CHAIN (order)']
