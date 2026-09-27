@@ -28,6 +28,13 @@ describe('ANCHOR order reason helpers', function () {
         assert.deepStrictEqual(sectionWalkReasons(['BTC', 'DOGE', 'LTC']), [null, null, null]);
     });
 
+    it('flags DOGE after LTC under plain-string CHAIN order', function () {
+        assert.deepStrictEqual(
+            sectionWalkReasons(['BTC', 'LTC', 'DOGE']),
+            [null, null, 'CHAIN (order)']
+        );
+    });
+
     it('flags a CHAIN that sorts before its predecessor', function () {
         assert.deepStrictEqual(sectionWalkReasons(['DOGE', 'BTC']), [null, 'CHAIN (order)']);
     });
