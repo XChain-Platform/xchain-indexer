@@ -68,6 +68,22 @@ describe('Anchor bundle order gate', function () {
     }
 });
 
+    describe('Anchor bundle enforced wire order', function () {
+        it('refuses DOGE before BTC on regtest', async function () {
+            const data = await parseBundle('regtest', {
+                sections: [{ chain: 'DOGE' }, { chain: 'BTC' }]
+            });
+            assert.strictEqual(data['STATUS'], 'invalid: SECTION 1 CHAIN (order)');
+        });
+
+        it('refuses PUBKEY_B before PUBKEY_A on regtest', async function () {
+            const data = await parseBundle('regtest', {
+                sections: [{ chain: 'BTC', sigs: [[PUBKEY_B, SIG], [PUBKEY_A, SIG]] }]
+            });
+            assert.strictEqual(data['STATUS'], 'invalid: SECTION 0 SIGS (order)');
+        });
+    });
+
     describe('Anchor bundle ascending order and ties', function () {
     for (const network of NETWORKS) {
         it(`accepts the three-chain bundle on ${network}`, async function () {
