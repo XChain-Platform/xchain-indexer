@@ -34,6 +34,7 @@ describe('protocol_changes/helpers/price_v1_expected_rows @regression @tier1', f
             'price_scale_activation.PRICE_V1_FEE_MAX_LENGTH',
         ]);
         assert.strictEqual(rows['price_scale_activation.PRICE_V1_CANONICAL_ACTIVATION'].kind, 'time');
+        assert.strictEqual(rows['price_scale_activation.PRICE_V1_FEE_RE_CANONICAL'].kind, 'constant');
         assert.strictEqual(rows['price_scale_activation.PRICE_V1_VALUE_MAX_LENGTH'].kind, 'constant');
         assert.strictEqual(rows['price_scale_activation.PRICE_V1_VALUE_MAX_LENGTH'].value, 19);
         assert.strictEqual(rows['price_scale_activation.PRICE_V1_FEE_MAX_LENGTH'].kind, 'constant');
