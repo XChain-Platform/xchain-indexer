@@ -22,7 +22,7 @@
 // Load required libraries
 const mariadb = require('mariadb');
 const path    = require('path');
-const { buildStateHashData, ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../../consensus/state_hash');
+const { buildStateHashData, archiveHeadPredicate } = require('../../consensus/state_hash');
 const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
         ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow,
@@ -206,7 +206,7 @@ module.exports = {
         return rows.length > 0 ? rows[0] : null;
     },
 
-    // The two watermarks the v1 archive replay guard needs, read from ONE row
+    // The two watermarks the archive replay guard needs, read from ONE row
     // set so they cannot disagree: the highest archive batch seq recorded, and the
     // highest wrapper checkpoint seq among those same archive-head rows.
     //
@@ -215,10 +215,8 @@ module.exports = {
     // independently-read watermarks could describe row sets that never coexisted
     // (one stubbed, one live; one filtered on a drifted version list) and the guard
     // would then reject a legitimate archive or admit a replay. Reading both in one
-    // statement makes the impossible combination unrepresentable, and the version
-    // predicate comes from ARCHIVE_HEAD_VERSIONS rather than a hand-copied literal
-    // for the same reason getMaxAnchorCheckpointSeq stopped hand-copying its set
-    // (a copied literal once omitted a live archive-head version and froze that guard).
+    // statement makes the impossible combination unrepresentable. The row predicate
+    // is shared with the state-hash fold so every folded archive head contributes.
     //
     // 'unverified' is included for the same reason it is in getMaxAnchorCheckpointSeq:
     // a node with no mirrored oracle_publish snapshot cannot verify signatures and
@@ -227,14 +225,13 @@ module.exports = {
     // that exposure: a poisoned row can only push either watermark UP, which makes
     // the guard stricter, never more permissive.
     async getArchiveReplayWatermarks(){
-        let versions = ARCHIVE_HEAD_VERSIONS;
         let query = `SELECT MAX(a.match_batch_seq) AS max_batch_seq,
                             MAX(a.checkpoint_seq)  AS max_checkpoint_seq
                      FROM anchor_actions a
                      JOIN index_statuses s ON s.id = a.status_id
-                     WHERE a.version IN (${versions.map(() => '?').join(', ')})
+                     WHERE ${archiveHeadPredicate('a')}
                        AND s.status IN ('valid', 'unverified')`;
-        let rows = await this.doQuery(query, [...versions]);
+        let rows = await this.doQuery(query, []);
         let row  = rows.length > 0 ? rows[0] : {};
         return {
             batchSeq:      (row.max_batch_seq      != null) ? Number(row.max_batch_seq)      : null,
@@ -242,11 +239,11 @@ module.exports = {
         };
     },
 
-    // The archive-head anchor (v1, which always carries the publisher tail) that started an
+    // The archive-head anchor that started an
     // archive batch (status irrelevant - chunk geometry checks belong to the caller).
     // match_batch_seq is NOT unique: the replay guard in anchor.js parseCheckpoint accepts
     // an EQUAL MATCH_BATCH_SEQ ('never below the recorded max; equal is allowed'), so a
-    // permissionless re-broadcast or failover double-publish stores a SECOND v1 row for
+    // permissionless re-broadcast or failover double-publish stores a SECOND head row for
     // the same batch. The returned parent feeds a consensus-visible geometry/CRC verdict in
     // anchor.js parseContinuation (TOTAL_CHUNKS gate + batch_crc32 reassembly, which stamps
     // setAnchorArchiveStatus(parent.action_index,'invalid_archive')), so the pick MUST be a
@@ -273,18 +270,12 @@ module.exports = {
     // fail-closed (the chunk lands 'orphan' rather than authenticated against nothing).
     async getAnchorV1ByBatchSeq(batchSeq, author){
         let scoped = (author !== undefined && author !== null);
-        // Version set from ARCHIVE_HEAD_VERSIONS, never a hand-copied literal, for the
-        // reason getArchiveReplayWatermarks states above: this is the same earliest-head
-        // pick as ARCHIVE_HEAD_AUTHOR_SQL in anchor_action_query.js, and it feeds the
-        // consensus-visible geometry/CRC verdict in anchor.js parseContinuation. A
-        // hand-copied set drifts the moment a new publisher-bearing head version is
-        // added, and the two head picks would then disagree fleet-wide.
         let rows = await this.doQuery(
             `SELECT a.*, adr.address AS source
              FROM anchor_actions a
              LEFT JOIN actions         act ON act.action_index = a.action_index
              LEFT JOIN index_addresses adr ON adr.id           = act.source_id
-             WHERE a.version ${ARCHIVE_HEAD_VERSIONS_SQL} AND a.match_batch_seq = ?` +
+             WHERE ${archiveHeadPredicate('a')} AND a.match_batch_seq = ?` +
             (scoped ? ` AND adr.address = ?` : ``) +
             ` ORDER BY a.action_index ASC LIMIT 1`,
             scoped ? [batchSeq, String(author)] : [batchSeq]);
