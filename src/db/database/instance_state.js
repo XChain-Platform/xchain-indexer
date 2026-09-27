@@ -33,7 +33,8 @@ function connectionParams(self){
         user:     self.user,
         password: self.pass,
         database: self.dbName,
-        port:     self.port
+        port:     self.port,
+        timezone: 'Z'
     };
 }
 
@@ -45,6 +46,10 @@ function connectionPoolParams(self){
         password: self.pass,
         database: self.dbName,
         port:     self.port,
+        // Encode and decode JS Dates as UTC and issue SET time_zone='+00:00'
+        // per connection, so NOW(), CURRENT_TIMESTAMP and DATETIME literals agree
+        // on every host and TIMESTAMP-to-DATETIME retypes preserve the UTC instant.
+        timezone: 'Z',
         // Connection options
         connectionLimit:      10,
         connectTimeout:       parseInt(CONFIG_ENV.DB_CONNECT_TIMEOUT) || 10000,
