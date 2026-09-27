@@ -27,7 +27,7 @@
  * past the readability limit, and column-zero bytes are what the consumers
  * can twin without a shared receiver name.
  *
- * REGTEST ARMING. Five rows let a regtest venue arm their regtest entry from
+ * REGTEST ARMING. Seven rows let a regtest venue arm their regtest entry from
  * an environment variable (the modules' own resolvers document the grammar;
  * regtest_env.js carries it for the registry). The block writes those entries
  * UNPINNED, the inert default, so it stays data that every consumer can copy;
@@ -52,6 +52,10 @@ function addGate(key, unit, table) { queued.push([key, unit, table]); }
 
 // key -> { env, label, armedHeight, keys }: the regtest entries a venue arms.
 const REGTEST_ARMING = {
+    'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION':
+        { env: 'XC_ANCHOR_FOLD_REGTEST_ACTIVATION', label: 'ANCHOR FOLD', armedHeight: 0, keys: ['regtest'] },
+    'archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION':
+        { env: 'XC_ANCHOR_FOLD_REGTEST_ACTIVATION', label: 'ANCHOR FOLD', armedHeight: 0, keys: ['regtest'] },
     'rollcall_activation.ROLLCALL_ACTIVATION':
         { env: 'XC_ROLLCALL_REGTEST_ACTIVATION', label: 'ROLLCALL', armedHeight: 0, keys: ['regtest'] },
     'rollcall_gates_activation.ROLLCALL_GATES_ACTIVATION':
@@ -72,6 +76,7 @@ const REGTEST_ARMING = {
 // (kept for the warning text) selects a reader instead of indexing the object.
 // A rule naming a variable with no reader here is a defect, not an inert row.
 const ENV_READERS = {
+    XC_ANCHOR_FOLD_REGTEST_ACTIVATION:    (env) => env.XC_ANCHOR_FOLD_REGTEST_ACTIVATION,
     XC_ROLLCALL_REGTEST_ACTIVATION:       (env) => env.XC_ROLLCALL_REGTEST_ACTIVATION,
     XC_ROLLCALL_GATES_REGTEST_ACTIVATION: (env) => env.XC_ROLLCALL_GATES_REGTEST_ACTIVATION,
     XC_MIRROR_ADMISSION_ACTIVATION:       (env) => env.XC_MIRROR_ADMISSION_ACTIVATION,
