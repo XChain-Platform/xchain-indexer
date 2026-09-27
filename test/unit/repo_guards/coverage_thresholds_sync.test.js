@@ -40,4 +40,10 @@ describe('coverage ratchet floors', () => {
   it('fails the job on a shortfall rather than only reporting it', () => {
     assert.match(pkg.scripts['coverage:check'], /--check-coverage/);
   });
+
+  for (const scriptName of ['coverage', 'coverage:check']) {
+    it(`${scriptName} includes files not loaded by the test suite`, () => {
+      assert.match(pkg.scripts[scriptName], /(?:^|\s)c8\s+--all(?:\s|$)/);
+    });
+  }
 });
