@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Time table part 3 of 4: COOLDOWN_BLOCKS_INTEGER through BATCH_SUBACTION_NORMALIZATION.
+ * Time table part 3 of 5: COOLDOWN_BLOCKS_INTEGER through BATCH_SUBACTION_NORMALIZATION.
  *
  * One row per protocol change, in registration order, as the argument list of
  * ProtocolChanges.addChange(name, version, mainnet_time, testnet_time,

@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Time table part 2 of 4: VOTE_POLL_TICK_VISIBLE through LOCK_NULL_PRIOR_UNSET.
+ * Time table part 2 of 5: VOTE_POLL_TICK_VISIBLE through LOCK_NULL_PRIOR_UNSET.
  *
  * One row per protocol change, in registration order, as the argument list of
  * ProtocolChanges.addChange(name, version, mainnet_time, testnet_time,
@@ -30,12 +30,13 @@
 const {
     VM_BANNED_ASYNC_MAINNET_TIME,
 } = require('./flag_times.js');
+const { regtestTimeOverride } = require('./regtest_env.js');
 
 // Resolved when the table is BUILT rather than when this file loads, which is what
 // the row had inside parseChanges(): the royalty drill suite sets the override, drops
 // the entry module from the require cache and expects a fresh table to carry it. An
 // argument written as a function is what core.applyChanges() resolves at build time.
-const ccRoyaltyRegtestTime = () => parseInt(process.env.CROSS_CHAIN_ROYALTY_REGTEST_TIME) || 0;
+const ccRoyaltyRegtestTime = regtestTimeOverride('CROSS_CHAIN_ROYALTY_REGTEST_TIME');
 
 module.exports = [
     // BonkDAO lesson 4: expose a poll's electorate TICK to

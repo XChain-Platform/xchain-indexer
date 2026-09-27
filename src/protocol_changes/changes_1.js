@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Time table part 1 of 4: ADDRESS through VOTE_RESPECTS_SLEEP.
+ * Time table part 1 of 5: ADDRESS through VOTE_RESPECTS_SLEEP.
  *
  * One row per protocol change, in registration order, as the argument list of
  * ProtocolChanges.addChange(name, version, mainnet_time, testnet_time,

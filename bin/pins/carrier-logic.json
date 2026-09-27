@@ -125,7 +125,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "de549b45d45d4228f6843ea2b7e9717d3d0998fa6119bd0aba1d3f216b3631f2",
+      "hash": "b05f00a4261548cf90aac0339c0100e82f54fbd58377b909f45614271962ddf6",
       "twins": []
     },
     "rollcall_activation": {
@@ -1822,6 +1822,13 @@
       "to": "de549b45d45d4228f6843ea2b7e9717d3d0998fa6119bd0aba1d3f216b3631f2",
       "reason": "consensus-bound indexer rows",
       "date": "2026-09-26"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "de549b45d45d4228f6843ea2b7e9717d3d0998fa6119bd0aba1d3f216b3631f2",
+      "to": "b05f00a4261548cf90aac0339c0100e82f54fbd58377b909f45614271962ddf6",
+      "reason": "controller custody guard time-table row",
+      "date": "2026-09-27"
     }
   ]
 }
