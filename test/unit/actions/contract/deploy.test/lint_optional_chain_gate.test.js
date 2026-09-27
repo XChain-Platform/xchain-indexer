@@ -16,9 +16,6 @@ const sinon  = require('sinon');
 const { VALID_CODE_B64, makeVm, deployData, freshDeploySuite } = require('./helpers/deploy_suite.js');
 
 const Deploy = require('../../../../../src/actions/deploy/index.js');
-const gateRegistry = require('../../../../../src/consensus/gate_registry.js');
-
-const OPTIONAL_CHAIN_GATE = 'vm_lint_optional_chain_heights.VM_LINT_OPTIONAL_CHAIN_ACTIVATION';
 
 let actionsCtx, handler;
 function freshSuite() {
@@ -41,11 +38,6 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
     afterEach(function () { sinon.restore(); });
 
     describe('optional-chain deploy-lint gate threading', function () {
-        before(function () {
-            const registered = gateRegistry.rows().some(([key]) => key === OPTIONAL_CHAIN_GATE);
-            if (!registered) this.skip();
-        });
-
         it('is ON for BTC regtest from genesis', async function () {
             const opts = await optsFor('regtest', 'BTC', 0);
             assert.strictEqual(opts.enforceLintOptionalChain, true);
