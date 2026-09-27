@@ -30,8 +30,10 @@
 'use strict';
 
 const { SETTLE_REASON, POLICY_LEG_ORDINAL, POLICY_TX_PREFIX,
-        LIST_TYPE_ADDRESS, LIST_EDIT_ADD, LIST_EDIT_REMOVE, isNull } = require('./reasons.js');
+        LIST_TYPE_ADDRESS, LIST_EDIT_ADD, LIST_EDIT_REMOVE } = require('./reasons.js');
+const gateRegistry = require('../gate_registry');
 const { recordSettlement } = require('./settlements.js');
+const { planListLeg } = require('./policy_list_plan.js');
 
 /**
  * The injectors for one snapshot's legs, closed over the action indexes they mint.
@@ -67,16 +69,14 @@ function legInjectors(row, ctx, f, target, actionIndexes){
         return applied;
     };
 
-    // One list's legs: create it with the full membership when the copy has none, otherwise
-    // bring the existing list to the new membership with edits. A LIST format 1 carries ONE
-    // edit verb for the whole action (list.js:51), so a change with both removals and
-    // additions is two actions, which is exactly why the removal and the addition have
-    // separate ordinals. A null target injects nothing at all and leaves the copy's field
-    // NULL: an absent origin list is no gate, and materializing it as an EMPTY list would
-    // turn it into deny-everyone.
-    const applyList = async (list, existingIndex, createOrRemoveOrdinal, addOrdinal) => {
-        if(list === null) return { created: null };
-        if(isNull(existingIndex)){
+    // Create a missing list or edit an attached list to match the snapshot. A format 1 LIST
+    // carries one verb, so removals and additions use separate pinned ordinals.
+    // Detach emits no LIST leg; ISSUE 5 clears the pointer with its zero sentinel.
+    const applyList = async (list, hasField, detachActive, existingIndex, createOrRemoveOrdinal, addOrdinal) => {
+        const plan = planListLeg({ list, hasField, detachActive, existingIndex });
+        if(plan.op === 'skip') return { created: null };
+        if(plan.op === 'detach') return { created: 0 };
+        if(plan.op === 'create'){
             const created = await inject(['LIST', '0', LIST_TYPE_ADDRESS, ''].concat(list), createOrRemoveOrdinal);
             if(!created || created['STATUS'] !== 'valid') return { created: false };
             return { created: Number(created['ACTION_INDEX']) };
@@ -137,19 +137,21 @@ async function legFailure(deps, ctx, f, actionIndexes, which){
  */
 async function injectPolicyLegs(row, ctx, f, target, member, actionIndexes){
     const { inject, applyList } = legInjectors(row, ctx, f, target, actionIndexes);
+    const detachActive = gateRegistry.activeAt('bridge_policy_detach_activation.BRIDGE_POLICY_DETACH',
+                                                ctx.network, ctx.coin, ctx.blockIndex, null);
+    const hasAllowField = Object.prototype.hasOwnProperty.call(row, 'allow_list');
+    const hasBlockField = Object.prototype.hasOwnProperty.call(row, 'block_list');
 
-    const allowRes = await applyList(member.allow, target.info['ALLOW_LIST'],
+    const allowRes = await applyList(member.allow, hasAllowField, detachActive, target.info['ALLOW_LIST'],
                                      POLICY_LEG_ORDINAL.ALLOW_CREATE_OR_REMOVE, POLICY_LEG_ORDINAL.ALLOW_ADD);
     if(allowRes.created === false) return { failed: 'allow list' };
-    const blockRes = await applyList(member.block, target.info['BLOCK_LIST'],
+    const blockRes = await applyList(member.block, hasBlockField, detachActive, target.info['BLOCK_LIST'],
                                      POLICY_LEG_ORDINAL.BLOCK_CREATE_OR_REMOVE, POLICY_LEG_ORDINAL.BLOCK_ADD);
     if(blockRes.created === false) return { failed: 'block list' };
 
-    // ISSUE 5 points the bridged row at the lists, and is injected ONLY when a list was
-    // created this snapshot: an edit writes under the edit's own action index and never moves
-    // the pointer, and an ISSUE 5 with both fields empty back-fills both from the current row
-    // (issue.js), so injecting it unconditionally would be a leg that does nothing and still
-    // consumes an action index on every node.
+    // Point the copy only when a list was created or detached. Edits retain their pointer;
+    // empty ISSUE 5 fields inherit current ids, so skip a pointer leg when both results
+    // are null.
     if(allowRes.created !== null || blockRes.created !== null){
         const point = await inject(['ISSUE', '5', target.copyTick,
                                     allowRes.created === null ? '' : String(allowRes.created),
