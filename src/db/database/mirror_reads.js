@@ -174,4 +174,21 @@ module.exports = {
         return row.max_batch_seq != null ? Number(row.max_batch_seq) : null;
     },
 
+    // Archive heads at one match_batch_seq authored by one address, unwired: not
+    // called from any action path yet. Modeled on getMaxArchiveBatchSeqByAuthor's
+    // joins, keyed by seq instead of aggregated to a max.
+    async getArchiveHeadsByAuthorAndSeq(author, batchSeq){
+        let rows = await this.doQuery(
+            `SELECT a.batch_crc32, a.match_count, s.status
+             FROM anchor_actions a
+             JOIN index_statuses s  ON s.id = a.status_id
+             JOIN actions act       ON act.action_index = a.action_index
+             JOIN index_addresses adr ON adr.id = act.source_id
+             WHERE a.match_batch_seq = ? AND a.version <> 2
+               AND s.status IN ('valid', 'unverified')
+               AND adr.address = ?`,
+            [Number(batchSeq), String(author)]);
+        return rows;
+    },
+
 };
