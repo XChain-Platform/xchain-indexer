@@ -40,8 +40,11 @@ describe('Withdraw custody guard helper routing @regression @tier1', function ()
     it('sends the custody-to-SOURCE leg to the token and SOURCE transfer guards', async function () {
         const context = makeWithdrawCustodyContext({
             custodyGuard: true,
-            tokenBinding: binding(ALLOW_CONTROLLER),
+            tokenBinding: binding(DENY_CONTROLLER),
             addressBinding: binding(ALLOW_CONTROLLER),
+            verdicts: {
+                [DENY_CONTROLLER]: { allow: true, gasBilled: 1000 },
+            },
         });
         const data = makeData();
 
@@ -54,6 +57,9 @@ describe('Withdraw custody guard helper routing @regression @tier1', function ()
             assert.strictEqual(request.from, CONTRACT_ADDRESS);
             assert.strictEqual(request.to, SOURCE);
         }
+        assert.deepStrictEqual(context.guardCalls.map(request => request.controllerIndex), [
+            DENY_CONTROLLER, ALLOW_CONTROLLER,
+        ]);
         assert.strictEqual(context.indexer.indexerDb.getAddressId.calledWithExactly(SOURCE), true);
         assert.strictEqual(
             context.indexer.indexerDb.getEffectiveAddressControllerForGuard.calledWithExactly(
