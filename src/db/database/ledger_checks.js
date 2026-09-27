@@ -196,8 +196,8 @@ module.exports = {
             null
         );
         const lookupBlockIndex = (addressAndTick && !policyAtBlock) ? undefined : block_index;
-        // Validate block_index is good
-        if(allow && !this.util.isNull(lookupBlockIndex) && this.util.isNumeric(lookupBlockIndex)){
+        // Check sleep only on single-subject calls with a numeric block index
+        if(!addressAndTick && allow && !this.util.isNull(lookupBlockIndex) && this.util.isNumeric(lookupBlockIndex)){
             // Validate TICK and ADDRESS sleep status in parallel
             const [tickSleeping, addressSleeping] = await Promise.all([
                 (!this.util.isNull(tick))     ? this.isTickSleeping(tick, lookupBlockIndex)       : Promise.resolve(false),
