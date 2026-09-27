@@ -36,6 +36,14 @@ const EXPECTED_MODIFIES = [
     'state_tree_roots.computed_at',
 ];
 
+const EXPECTED_MIGRATIONS = [
+    '2026-09-27-datetime-anchor-reward-attestations.sql',
+    '2026-09-27-datetime-bridge-policy.sql',
+    '2026-09-27-datetime-hub-mirrors.sql',
+    '2026-09-27-datetime-not-null-columns.sql',
+    '2026-09-27-datetime-state-tree-roots.sql',
+];
+
 const TIMESTAMP_COLUMN = /^`?[A-Za-z_][A-Za-z0-9_$]*`?\s+TIMESTAMP\b/i;
 const TIMESTAMP_TYPE   = /`?[A-Za-z_][A-Za-z0-9_$]*`?\s+TIMESTAMP\b/i;
 const DATETIME_MODIFY  = new RegExp(
@@ -83,6 +91,10 @@ describe('SQL definitions contain no TIMESTAMP columns @regression', function ()
 
 describe('dated DATETIME migrations are complete @regression', function () {
     const files = datetimeMigrationFiles();
+
+    it('includes exactly the expected dated migration files', function () {
+        assert.deepStrictEqual(files, EXPECTED_MIGRATIONS);
+    });
 
     it('MODIFYs exactly the ten expected columns once each', function () {
         assert.deepStrictEqual(datetimeModifies(files), [...EXPECTED_MODIFIES].sort());
