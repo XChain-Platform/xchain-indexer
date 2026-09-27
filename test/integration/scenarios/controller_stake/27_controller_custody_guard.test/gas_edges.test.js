@@ -90,6 +90,16 @@ async function latestDepositStatus(address, tick) {
          WHERE ia.address = ? AND it.tick = ? ORDER BY d.action_index DESC LIMIT 1`, [address, tick]);
     return rows.length ? rows[0].status : null;
 }
+async function latestDepositLegCounts(address, tick) {
+    const rows = await indexerQuery(
+        `SELECT (SELECT COUNT(*) FROM credits c WHERE c.action_index = d.action_index) AS credits,
+                (SELECT COUNT(*) FROM debits b WHERE b.action_index = d.action_index) AS debits
+         FROM deposits d
+         JOIN index_addresses ia ON ia.id = d.source_id
+         JOIN index_tickers   it ON it.id = d.tick_id
+         WHERE ia.address = ? AND it.tick = ? ORDER BY d.action_index DESC LIMIT 1`, [address, tick]);
+    return rows.length ? { credits: Number(rows[0].credits), debits: Number(rows[0].debits) } : null;
+}
 async function contractExecutionsCount() {
     const rows = await indexerQuery('SELECT COUNT(*) AS c FROM contract_executions', []);
     return Number(rows[0].c);
@@ -152,6 +162,8 @@ async function testGaslessBoundDepositRefused() {
     assert.strictEqual(await balanceOf(SOURCE_NOGAS, BOUND), '500', 'SOURCE balance untouched');
     assert.strictEqual(await balanceOf(custody, BOUND), '0', 'custody never credited');
     assert.strictEqual(await balanceOf(SOURCE_NOGAS, GAS_TICK), '0', 'still no GAS debited');
+    assert.deepStrictEqual(await latestDepositLegCounts(SOURCE_NOGAS, BOUND),
+        { credits: 0, debits: 0 }, 'no credit or debit leg rows were written');
     assert.strictEqual(await contractExecutionsCount(), beforeExecs, 'no guard leg was written');
 }
 
