@@ -132,7 +132,7 @@ function checkpointSectionPredicate(alias){
 
 const ARCHIVE_INVALID_STATE_HASH_ACTIVATION = copy('stateHash.ARCHIVE_INVALID_STATE_HASH_ACTIVATION');
 
-// Whether the anchor_invalid class uses the archive-head row predicate at
+// Whether the anchor_invalid class covers the full archive-head version set at
 // `blockIndex` on `network` for `coin`. Below the threshold / unknown network ->
 // off (safe; the class keeps its legacy v1-only selection, preimage unchanged).
 function isArchiveInvalidStateHashActive(blockIndex, network, coin){
