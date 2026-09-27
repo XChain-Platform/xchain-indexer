@@ -302,6 +302,6 @@ function main() {
   return runPlan(result.plan);
 }
 
-module.exports = { resolveBase, selectFastTests };
+module.exports = { findTrackedRequirers, resolveBase, selectFastTests };
 
 if (require.main === module) process.exitCode = main();

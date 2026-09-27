@@ -14,9 +14,12 @@
 
 const assert = require('node:assert');
 const fs = require('node:fs');
-const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { resolveBase, selectFastTests } = require('../ci_fast_select.js');
+const {
+  findTrackedRequirers,
+  resolveBase,
+  selectFastTests
+} = require('../ci_fast_select.js');
 
 function git(args, options = {}) {
   try {
@@ -32,37 +35,9 @@ function gitLines(args, options) {
   return output ? output.split(/\r?\n/) : [];
 }
 
-function relativeRequireTargets(file) {
-  const source = fs.readFileSync(file, 'utf8');
-  const targets = [];
-  const pattern = /require\(\s*['"](\.[^'"]+)['"]\s*\)/g;
-  let match;
-  while ((match = pattern.exec(source))) {
-    const base = path.resolve(path.dirname(file), match[1]);
-    const resolved = path.extname(base) ? [base] : [`${base}.js`, path.join(base, 'index.js')];
-    targets.push(...resolved.map((item) => path.relative(process.cwd(), item).split(path.sep).join('/')));
-  }
-  return targets;
-}
-
-function findRequirers(moduleFile) {
-  const basename = path.posix.basename(moduleFile, '.js');
-  const importers = gitLines(
-    ['grep', '-l', '-F', basename, '--', 'src', 'test'],
-    { allowNoMatches: true }
-  )
-    .filter((file) => relativeRequireTargets(file).includes(moduleFile));
-  const moduleTail = moduleFile.replace(/\.js$/, '');
-  const namedTests = gitLines(
-    ['grep', '-l', '-F', moduleTail, '--', 'test'],
-    { allowNoMatches: true }
-  );
-  return [...new Set([...importers, ...namedTests])];
-}
-
 const dependencies = {
   listTests: () => gitLines(['ls-files', 'test/**']),
-  findRequirers
+  findRequirers: findTrackedRequirers
 };
 
 function select(changedFiles) {
@@ -80,8 +55,7 @@ describe('ci fast selector', function () {
   it('maps a source module to tests that name its git-grep tail', function () {
     const source = 'src/actions/actions_class/dispatch.js';
     const file = 'test/unit/action_dispatch/action_manifest_conformance.test.js';
-    assert(!relativeRequireTargets(file).includes(source));
-    assert(gitLines(['grep', '-l', '-F', source.replace(/\.js$/, ''), '--', file]).includes(file));
+    assert(findTrackedRequirers(source).includes(file));
     assert(select([source]).tests.some((test) => test.group === 'main' && test.file === file));
   });
 
