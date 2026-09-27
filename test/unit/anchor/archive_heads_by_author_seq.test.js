@@ -37,7 +37,7 @@ describe('getArchiveHeadsByAuthorAndSeq()', function () {
     });
 
     it('returns an empty array when no row matches', async function () {
-        const result = await readHeads([]);
+        const result = await readHeads(null);
         assert.deepStrictEqual(result.value, []);
     });
 });

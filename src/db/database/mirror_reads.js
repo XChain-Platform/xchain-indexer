@@ -188,7 +188,7 @@ module.exports = {
                AND s.status IN ('valid', 'unverified')
                AND adr.address = ?`,
             [Number(batchSeq), String(author)]);
-        return rows;
+        return Array.isArray(rows) ? rows : [];
     },
 
 };
