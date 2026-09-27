@@ -25,6 +25,7 @@ const validate   = require('./validate.js');
 const quorum     = require('./quorum.js');
 const settle     = require('./settle.js');
 const reassembly = require('./reassembly.js');
+const gateRegistry = require('../../consensus/gate_registry');
 
 const { getLogger } = require('../../observability/index.js');
 
@@ -131,6 +132,9 @@ async function parseArchiveHead(handler, params, data, error, format){
         let crc = handler.archiveCrc(data['ARCHIVE_B64']);
         if(crc === null)                          error = 'invalid: ARCHIVE_B64 (not gzip)';
         else if(crc !== data['BATCH_CRC32'])      error = 'invalid: BATCH_CRC32 (archive mismatch)';
+        else if(gateRegistry.activeAt('archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION', handler.config['NETWORK'], null, Number(data['BLOCK_INDEX']), null) &&
+                handler.archiveMatchCount(data['ARCHIVE_B64']) !== Number(data['MATCH_COUNT']))
+            error = 'invalid: MATCH_COUNT (archive mismatch)';
     }
 
     let q = await quorum.verifyHeadQuorum(handler, data, sigs, error);

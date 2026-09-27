@@ -282,6 +282,14 @@ class Anchor {
         let n = zlib.crc32 ? zlib.crc32(Buffer.from(json, 'utf8')) : this.crc32Fallback(Buffer.from(json, 'utf8'));
         return (n >>> 0).toString(16).padStart(8, '0');
     }
+    archiveMatchCount(b64){
+        let archive;
+        try {
+            let json = zlib.gunzipSync(Buffer.from(String(b64), 'base64url'), { maxOutputLength: 16 * 1024 * 1024 }).toString('utf8');
+            archive = JSON.parse(json);
+        } catch(e){ return null; }
+        return archive && Array.isArray(archive.matches) ? archive.matches.length : null;
+    }
     crc32Fallback(buf){
         let c, crc = 0xFFFFFFFF;
         for(let i = 0; i < buf.length; i++){

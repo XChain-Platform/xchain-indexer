@@ -78,6 +78,18 @@ async function reassembleAtHead(handler, data, error, format){
                     block_index:     data['BLOCK_INDEX']
                 });
                 await handler.indexerDb.setAnchorArchiveStatus(Number(data['ACTION_INDEX']), 'invalid_archive');
+            } else if(gateRegistry.activeAt('archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION', handler.config['NETWORK'], null, Number(data['BLOCK_INDEX']), null) &&
+                      handler.archiveMatchCount(b64) !== Number(data['MATCH_COUNT'])){
+                getLogger().warn("\t ANCHOR v" + format + " : batch " + data['MATCH_BATCH_SEQ'] + ' head-side reassembly MATCH_COUNT mismatch, flagging invalid_archive');
+                diag.noteAnchorFailed({
+                    chain:           data['CHAIN'],
+                    reason:          'invalid_archive: head-side reassembly MATCH_COUNT mismatch',
+                    network:         data['NETWORK'],
+                    version:         format,
+                    match_batch_seq: data['MATCH_BATCH_SEQ'],
+                    block_index:     data['BLOCK_INDEX']
+                });
+                await handler.indexerDb.setAnchorArchiveStatus(Number(data['ACTION_INDEX']), 'invalid_archive');
             }
         }
     }
@@ -107,6 +119,19 @@ async function reassembleAtChunk(handler, data, parent, scope, error){
                 diag.noteAnchorFailed({
                     chain:           parent.chain,
                     reason:          'invalid_archive: reassembly CRC mismatch',
+                    network:         handler.config['NETWORK'],
+                    version:         2,
+                    match_batch_seq: data['MATCH_BATCH_SEQ'],
+                    block_index:     data['BLOCK_INDEX']
+                });
+                await handler.indexerDb.setAnchorArchiveStatus(Number(parent.action_index), 'invalid_archive');
+            } else if(parent.match_count != null &&
+                      gateRegistry.activeAt('archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION', handler.config['NETWORK'], null, Number(parent.block_index_doge), null) &&
+                      handler.archiveMatchCount(b64) !== Number(parent.match_count)){
+                getLogger().warn("\t ANCHOR v2 : batch " + data['MATCH_BATCH_SEQ'] + ' reassembly MATCH_COUNT mismatch, flagging invalid_archive');
+                diag.noteAnchorFailed({
+                    chain:           parent.chain,
+                    reason:          'invalid_archive: reassembly MATCH_COUNT mismatch',
                     network:         handler.config['NETWORK'],
                     version:         2,
                     match_batch_seq: data['MATCH_BATCH_SEQ'],
