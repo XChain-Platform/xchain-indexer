@@ -32,9 +32,9 @@ describe('protocol_changes/CONTROLLER_CUSTODY_GUARD row @regression @tier1', fun
         else process.env[ENV] = saved;
     });
 
-    it('is the sole row in part 5 with both public networks unarmed', function () {
+    it('is the first row in part 5 with both public networks unarmed', function () {
         const rows = require('../../../src/protocol_changes/changes_5.js');
-        assert.strictEqual(rows.length, 1);
+        assert.strictEqual(rows.length, 2);
         assert.strictEqual(rows[0][0], 'CONTROLLER_CUSTODY_GUARD');
         assert.strictEqual(ProtocolChanges.CONTROLLER_CUSTODY_GUARD_MAINNET_TIME, ProtocolChanges.UNARMED);
         assert.strictEqual(ProtocolChanges.CONTROLLER_CUSTODY_GUARD_TESTNET_TIME, ProtocolChanges.UNARMED);
