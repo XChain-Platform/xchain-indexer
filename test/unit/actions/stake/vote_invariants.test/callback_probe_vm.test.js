@@ -87,13 +87,16 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
             assert.strictEqual(vm.probeInstances.length, 0, 'inactive contracts are refused before probing');
 
             freshHandler();
-            stubBindingCreate({ action_index: 5, code: 'module.exports={other:function(){}}', status_id: 1 });
-            vm.probeReadManifest.resolves({ success: true, manifest: { hasInitialize: false }, error: null });
+            const code = 'module.exports={other:function(){}}';
+            stubBindingCreate({ action_index: 5, code, status_id: 1 });
+            vm.probeReadManifest.resolves({
+                success: true, manifest: { metaJson: '{"callbackFns":["other"]}' }, error: null
+            });
             let missing = await runBindingCreate();
             assert.strictEqual(missing.STATUS, 'invalid: CALLBACK_METHOD (unavailable)');
             assert.ok(vm.probeReadManifest.calledOnce);
-            assert.match(vm.probeReadManifest.firstCall.args[0], /module\.exports\["onResult"\]/,
-                'the manifest probe asks about the callback method carried on the poll');
+            assert.strictEqual(vm.probeReadManifest.firstCall.args[0],
+                callbackProbeVm.buildListingProbeCode(code));
             assert.ok(indexer.indexerDb.createPoll.notCalled);
         });
 
@@ -106,6 +109,9 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
         });
 
         it('accepts cap-minus-one and cap contracts with one reused probe VM', async function(){
+            vm.probeReadManifest.resolves({
+                success: true, manifest: { metaJson: '{"callbackFns":["onResult"]}' }, error: null
+            });
             stubBindingCreate({ action_index: 5, code: codeAtSize(MAX_CODE_SIZE - 1), status_id: 1 });
             let belowCap = await runBindingCreate();
             assert.strictEqual(belowCap.STATUS, 'valid');
@@ -130,12 +136,17 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
             stubBindingCreate({ action_index: 5, code: codeAtSize(100), status_id: 1 });
             vm.probeReadManifest.onFirstCall().rejects(new Error('probe worker failed'));
             vm.probeReadManifest.onSecondCall().resolves({ success: true, manifest: { hasInitialize: true }, error: null });
-            await assert.rejects(runBindingCreate(), /probe worker failed/);
+            vm.probeReadManifest.onThirdCall().resolves({
+                success: true, manifest: { metaJson: '{"callbackFns":["onResult"]}' }, error: null
+            });
+            const recovered = await runBindingCreate();
+            assert.strictEqual(recovered.STATUS, 'valid');
             const probeVm = vm.probeInstances[0];
             assert.ok(probeVm.shutdown.notCalled);
 
             const retried = await runBindingCreate();
             assert.strictEqual(retried.STATUS, 'valid');
+            assert.strictEqual(vm.probeReadManifest.callCount, 3);
             assert.strictEqual(vm.probeInstances.length, 1, 'the executor restarts its worker inside the same VM');
             assert.strictEqual(actionsCtx.getVoteCallbackProbeVm.secondCall.returnValue, probeVm);
         });

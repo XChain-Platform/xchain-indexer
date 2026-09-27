@@ -106,8 +106,24 @@ async function isCallbackMethodUsable(contract, method, data){
     let code = String(contract.code);
     if(Buffer.byteLength(code, 'utf8') > MAX_CODE_SIZE)
         return false;
-    let probeCode = callbackProbeVm.buildProbeCode(code, method);
     let probeVm = this.actions.getVoteCallbackProbeVm();
+    let result;
+    try {
+        result = await readCallbackManifest.call(
+            this, probeVm, callbackProbeVm.buildListingProbeCode(code), contract, data
+        );
+        if(!result || result.success !== true) return false;
+        let verdict = callbackProbeVm.listingVerdict(result.manifest, method);
+        if(verdict !== null) return verdict;
+    } catch(e) { result = null; }
+    result = await readCallbackManifest.call(
+        this, probeVm, callbackProbeVm.buildProbeCode(code, method), contract, data
+    );
+    return !!(result && result.success && result.manifest && result.manifest.hasInitialize === true);
+}
+
+// Read either probe under the target contract's deterministic block context.
+async function readCallbackManifest(probeVm, probeCode, contract, data){
     let result = await probeVm.readManifest(probeCode, {
         network:         this.config['NETWORK'],
         contractAddress: 'C:' + this.config['CHAIN'] + ':' + contract.action_index,
@@ -116,7 +132,7 @@ async function isCallbackMethodUsable(contract, method, data){
             timestamp: data['BLOCK_TIME']
         }
     });
-    return !!(result && result.success && result.manifest && result.manifest.hasInitialize === true);
+    return result;
 }
 
 // Binding-poll phase - the policy a binding poll must satisfy: the turnout floors, the
