@@ -305,10 +305,11 @@ function buildBatch(batchSeq, rawMatches, oracleKeys, crossKeys, opts) {
     let chunks      = [];
     for (let i = 0; i < b64.length; i += chunkSize) chunks.push(b64.slice(i, i + chunkSize));
     let totalChunks = chunks.length;
+    let matchCount  = opts.matchCount != null ? opts.matchCount : matches.length;
 
     let rawWrapper = ['XCHECKPOINT', CP.chain, CP.network, String(CP.block_index), CP.block_hash,
         CP.ledger_hash, CP.actions_hash, CP.contract_hash, String(CP.checkpoint_seq), String(SNAPSHOT_BLOCK),
-        String(batchSeq), String(matches.length), crc, String(totalChunks)].join('|');
+        String(batchSeq), String(matchCount), crc, String(totalChunks)].join('|');
     // EQUIV active in regtest (WI-2 bump 2): the v1 archive ROUND_ID appends batch_seq to
     // the v0 round id (R-4 distinct-key fix), VIEW=0. Byte-matches recovery.wrapperCanonical.
     let wrapperCanonical = eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT,
@@ -318,7 +319,7 @@ function buildBatch(batchSeq, rawMatches, oracleKeys, crossKeys, opts) {
 
     let v1 = Object.assign({}, CP, {
         version: 1, snapshot_block: SNAPSHOT_BLOCK, match_batch_seq: batchSeq,
-        match_count: matches.length, batch_crc32: (opts.corruptCrc ? 'deadbeef' : crc),
+        match_count: matchCount, batch_crc32: (opts.corruptCrc ? 'deadbeef' : crc),
         total_chunks: totalChunks, archive_b64: chunks[0],
         validator_signatures: JSON.stringify(wrapperSigs)
     });

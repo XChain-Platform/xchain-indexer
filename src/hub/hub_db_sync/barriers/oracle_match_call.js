@@ -67,9 +67,9 @@ module.exports = {
         if (this.oracleSyncTimestamp !== null && this.oracleSyncTimestamp >= blockTime) return true;
         // Stream watermark: the hub has sent us every row it produced through
         // blockTime + grace, so the set of prices effective at or before this
-        // block is final, so quiet oracles must not stall the chain (#1984). The
-        // grace margin covers first-publish rows arriving after their (retro-
-        // active) effective_at; see the PriceAggregator retroactivity finding.
+        // block is final, so quiet oracles must not stall the chain (#1984). PRICE
+        // v1 rows are stamped 24 hours forward, so the grace only needs to cover
+        // ordinary hub-to-mirror stream lag, like the match and call barriers.
         if (this.oracleBootstrapped && this.streamWatermark >= blockTime + this.oracleWatermarkGraceS) return true;
         return false;
     },

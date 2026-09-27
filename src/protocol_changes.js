@@ -18,7 +18,7 @@
  *
  ********************************************************************/
 
-// ASSEMBLER. The flag-day constants, the 99 time-table rows and registry API live
+// ASSEMBLER. The flag-day constants, the 100 time-table rows and registry API live
 // in the part files under src/protocol_changes/. This entry builds its table from
 // the registry rows and re-exports every constant under the name it always had.
 const {
@@ -51,6 +51,7 @@ const {
     DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME,
     CONTRACT_META_REQUIRED_MAINNET_TIME, CONTRACT_META_REQUIRED_TESTNET_TIME,
     BROADCAST_FEE_LENGTH_MAINNET_TIME, BROADCAST_FEE_LENGTH_TESTNET_TIME,
+    CONTROLLER_CUSTODY_GUARD_MAINNET_TIME, CONTROLLER_CUSTODY_GUARD_TESTNET_TIME,
 } = require('./protocol_changes/flag_times.js');
 const {
     BATCH_ISSUANCE_LIMITS_MAINNET_TIME,
@@ -64,9 +65,8 @@ const {
 const CHANGES_1 = require('./protocol_changes/changes_1.js');
 const CHANGES_2 = require('./protocol_changes/changes_2.js');
 const CHANGES_3 = require('./protocol_changes/changes_3.js');
-const CHANGES_4 = require('./protocol_changes/changes_4.js');
-const CHANGE_PARTS = [CHANGES_1, CHANGES_2, CHANGES_3, CHANGES_4];
-
+const CHANGES_4 = require('./protocol_changes/changes_4.js'), CHANGES_5 = require('./protocol_changes/changes_5.js');
+const CHANGE_PARTS = [CHANGES_1, CHANGES_2, CHANGES_3, CHANGES_4, CHANGES_5];
 // The compiled consensus-version pin lives in its own part file (with the
 // history of every move it has made) so the registry can register it as a row.
 const { CONSENSUS_VERSION } = require('./protocol_changes/consensus_version.js');
@@ -166,9 +166,8 @@ class ProtocolChanges {
         this.parseChanges();
     }
 
-
     parseChanges(){
-        // The 99 rows live in src/protocol_changes/changes_*.js; see CHANGE_PARTS.
+        // The 100 rows live in src/protocol_changes/changes_*.js; see CHANGE_PARTS.
         applyChanges(this, CHANGE_PARTS);
     }
 
@@ -300,7 +299,6 @@ class ProtocolChanges {
     }
  
 }
-
 // THE registry (activation-registry spec 6.1), built once per load from the
 // gate-row parts and the same time-table parts parseChanges() feeds the class.
 // The venue's regtest arming is read here, at load, so a process that reloads
@@ -351,6 +349,8 @@ module.exports.CONTRACT_META_REQUIRED_MAINNET_TIME = CONTRACT_META_REQUIRED_MAIN
 module.exports.CONTRACT_META_REQUIRED_TESTNET_TIME = CONTRACT_META_REQUIRED_TESTNET_TIME;
 module.exports.BROADCAST_FEE_LENGTH_MAINNET_TIME = BROADCAST_FEE_LENGTH_MAINNET_TIME;
 module.exports.BROADCAST_FEE_LENGTH_TESTNET_TIME = BROADCAST_FEE_LENGTH_TESTNET_TIME;
+module.exports.CONTROLLER_CUSTODY_GUARD_MAINNET_TIME = CONTROLLER_CUSTODY_GUARD_MAINNET_TIME;
+module.exports.CONTROLLER_CUSTODY_GUARD_TESTNET_TIME = CONTROLLER_CUSTODY_GUARD_TESTNET_TIME;
 // ARMED mainnet instant for the BATCH issuance-limits rework (1786838400, 2026-08-16T00:00Z,
 // armed 2026-08-14 pre-launch), exported so the suite can pin the ratified value, assert it
 // was never retroactive, that it never precedes BATCH_SUBACTION_NORMALIZATION, and that it

@@ -122,7 +122,8 @@ const SHARED_GATES = [
     // The token leg of the bridge: the hub gates every token leg on it and the indexer gates
     // XBRIDGE v3/v4 and ISSUE format 7 on it, so a train that sizes it on one side only must
     // report a rules mismatch. Appended at the END for the preimage-ordering reason above.
-    ['token_bridge_activation',                 ['TOKEN_BRIDGE_ACTIVATION']]
+    ['token_bridge_activation',                 ['TOKEN_BRIDGE_ACTIVATION']],
+    ['anchor_bundle_order_activation',          ['ANCHOR_BUNDLE_ORDER_ACTIVATION']]
 ];
 
 // A per-network height at or above this value is a far-future placeholder, not an

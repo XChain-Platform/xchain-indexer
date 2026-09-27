@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Time table part 4 of 4: BATCH_ISSUANCE_LIMITS through BROADCAST_FEE_LENGTH.
+ * Time table part 4 of 5: BATCH_ISSUANCE_LIMITS through BROADCAST_FEE_LENGTH.
  *
  * One row per protocol change, in registration order, as the argument list of
  * ProtocolChanges.addChange(name, version, mainnet_time, testnet_time,

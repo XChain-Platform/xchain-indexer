@@ -14,7 +14,7 @@
  * test/unit/hub/hub_db_sync/hub_db_sync_grace_resolver.test.js
  *
  * Watermark-grace resolver (/ Package 12). The four barrier grace margins
- * are frozen protocol constants (price 4800, oracle/match/call 600/120/120):
+ * are frozen protocol constants (price 4800, oracle/match/call 120/120/120):
  * a per-node divergence forks settlement, and a NaN value wedges the tip via
  * `blockTime + NaN`. The resolver pins the constants, ignores env overrides
  * off-regtest with a loud warning (mirroring resolveFeeDestination), honors
@@ -84,6 +84,27 @@ describe('HubDbSync watermark-grace resolver @regression @tier1', function () {
         sync.streamWatermark = blockTime + 4800;
         assert.strictEqual(sync.priceTimeSyncSatisfied(blockTime), true,
             'the escape opens exactly at blockTime + 4800');
+    });
+
+    it('the oracle grace is 120s for ordinary stream lag, and gates the escape exactly there', function () {
+        clearGraceEnv();
+        assert.strictEqual(FROZEN.oracle, 120,
+            'HUB_SYNC_WATERMARK_GRACE_S.oracle must match the ordinary stream-lag margin');
+
+        const sync = makeSync('mainnet');
+        assert.strictEqual(sync.oracleWatermarkGraceS, 120);
+
+        const blockTime = 1700000000;
+        sync.oracleBootstrapped = true;
+        sync.oracleSyncTimestamp = 0;   // mirror holds nothing at/past blockTime
+
+        sync.streamWatermark = blockTime + 120 - 1;
+        assert.strictEqual(sync.oracleSyncSatisfied(blockTime), false,
+            'one second short of the grace must still defer');
+
+        sync.streamWatermark = blockTime + 120;
+        assert.strictEqual(sync.oracleSyncSatisfied(blockTime), true,
+            'the escape opens exactly at blockTime + 120');
     });
 
     // The call barrier used to borrow matchWatermarkGraceS, which silently coupled it

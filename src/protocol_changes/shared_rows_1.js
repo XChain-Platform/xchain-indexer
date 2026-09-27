@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * The SHARED block, part 1 of 5: anchor_reward_activation to attest_responsible_widening_activation
+ * The SHARED block, part 1 of 5: anchor_bundle_order_activation to attest_responsible_widening_activation
  *
  * One SHARED block part. The region between the two marker lines is
  * BYTE-TWINNED into the registry of xchain-sync, xchain-hub, xchain-explorer
@@ -35,6 +35,13 @@
 const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
 
 // SHARED-GATES BEGIN
+// anchor_bundle_order_activation
+addGate('anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
 // anchor_reward_activation
 // Per-network activation height, interpreted as the BTC-anchored snapshot_block
 // carried by the ANCHOR canonical (NOT the local processing height), so every chain

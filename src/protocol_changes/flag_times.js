@@ -207,6 +207,12 @@ const BROADCAST_FEE_LENGTH_MAINNET_TIME = UNARMED;
 // BROADCAST_FEE_LENGTH testnet stays inert until the operator arms it.
 const BROADCAST_FEE_LENGTH_TESTNET_TIME = UNARMED;
 
+// D1: mainnet ships inert under the write hold and joins the genesis-arm set
+// only when that hold lifts after a fresh history count.
+const CONTROLLER_CUSTODY_GUARD_MAINNET_TIME = UNARMED;
+// D2: testnet ships inert until a release cut pins a future fleet-wide instant.
+const CONTROLLER_CUSTODY_GUARD_TESTNET_TIME = UNARMED;
+
 module.exports = {
     VM_BANNED_ASYNC_MAINNET_TIME,
     NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME,
@@ -221,4 +227,6 @@ module.exports = {
     CONTRACT_META_REQUIRED_TESTNET_TIME,
     BROADCAST_FEE_LENGTH_MAINNET_TIME,
     BROADCAST_FEE_LENGTH_TESTNET_TIME,
+    CONTROLLER_CUSTODY_GUARD_MAINNET_TIME,
+    CONTROLLER_CUSTODY_GUARD_TESTNET_TIME,
 };

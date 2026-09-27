@@ -77,7 +77,7 @@ describe('bin/consensus-identity.js --assert-no-absent', function () {
         assert.strictEqual(res.stderr, '');
         const identity = JSON.parse(res.stdout);
         assert.strictEqual(identity.consensus_rules_gates_absent, 0);
-        assert.strictEqual(identity.consensus_rules_gates_resolved, 34);
+        assert.strictEqual(identity.consensus_rules_gates_resolved, 35);
     });
 
     it('reads every gate with a carrier hidden: the value is the registry row, never the file', function () {
@@ -97,7 +97,7 @@ describe('bin/consensus-identity.js --assert-no-absent', function () {
         assert.strictEqual(res.status, 0, res.stdout + res.stderr);
         const identity = JSON.parse(res.stdout);
         assert.strictEqual(identity.consensus_rules_gates_absent, 0);
-        assert.strictEqual(identity.consensus_rules_gates_resolved, 34);
+        assert.strictEqual(identity.consensus_rules_gates_resolved, 35);
         assert.ok(identity.consensus_rules_gates[KEY], 'the hidden carrier\'s gate still resolves');
     });
 
