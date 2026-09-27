@@ -324,6 +324,18 @@ addGate('price_scale_activation.PRICE_VALUE_RE_LEGACY', 'constant', /^[0-9]+(\.[
 // {1,8}: PRICE_SCALE_MAX_DECIMALS wide; the two move together.
 addGate('price_scale_activation.PRICE_VALUE_RE_CANONICAL', 'constant', /^(0|[1-9][0-9]*)(\.[0-9]{1,8})?$/);
 
+addGate('price_scale_activation.PRICE_V1_CANONICAL_ACTIVATION', 'time', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+addGate('price_scale_activation.PRICE_V1_FEE_RE_CANONICAL', 'constant', /^(0|[1-9][0-9]*)(\.[0-9]{1,18})?$/);
+
+// Caps over the fixture read at 2026-09-25T21:52:09.659Z.
+addGate('price_scale_activation.PRICE_V1_VALUE_MAX_LENGTH', 'constant', 19);
+addGate('price_scale_activation.PRICE_V1_FEE_MAX_LENGTH', 'constant', 20);
+
 // price_sig_tally_activation
 // Per-network activation height (LOCAL COPY of the canonical map in
 // xchain-documentation/protocol/constants.js). Keyed on the round's BTC-anchored
