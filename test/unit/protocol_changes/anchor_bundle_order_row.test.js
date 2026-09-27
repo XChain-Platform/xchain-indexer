@@ -36,8 +36,9 @@ describe('protocol_changes anchor bundle order row', function () {
         }
     });
 
-    it('appends the activation to SHARED_GATES', function () {
-        assert.deepStrictEqual(SHARED_GATES[SHARED_GATES.length - 1],
-            ['anchor_bundle_order_activation', ['ANCHOR_BUNDLE_ORDER_ACTIVATION']]);
+    it('lists the activation in SHARED_GATES exactly once', function () {
+        const hits = SHARED_GATES.filter(([mod]) => mod === 'anchor_bundle_order_activation');
+        assert.deepStrictEqual(hits,
+            [['anchor_bundle_order_activation', ['ANCHOR_BUNDLE_ORDER_ACTIVATION']]]);
     });
 });
