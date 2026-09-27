@@ -149,7 +149,7 @@ describe('PRICE price-range flag day @regression @tier3', function () {
 
         it('AT the gate refuses the at-ceiling value the lower-bound check alone let through', async function () {
             const data = v1Data({ BLOCK_TIME: 1700000000 });
-            await newHandler().parse(v1Params('10000000000.00000000'), data, null);
+            await newHandler().parse(v1Params('10000000000'), data, null);
             assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
             assert.ok(String(data['STATUS']).includes('range'), data['STATUS']);
         });
