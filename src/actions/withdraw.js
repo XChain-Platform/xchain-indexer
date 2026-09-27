@@ -1,4 +1,5 @@
 const { getLogger } = require('../observability/index.js');
+const { declaresOwnerWithdraw } = require('./deploy/contract_meta.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -16,7 +17,8 @@ const { getLogger } = require('../observability/index.js');
  * XChain Platform Action - WITHDRAW
  *
  * This action withdraws tokens from a contract's custody back to the owner.
- * Only the contract owner (deployer) can withdraw.
+ * Only the contract owner (deployer) can withdraw, and from the OWNER_WITHDRAW_OPT_IN
+ * flag day only from a contract whose meta declares ownerWithdraw: true.
  * No gas fee; on-chain transaction cost is sufficient.
  *
  * PARAMS:
@@ -110,6 +112,15 @@ class Withdraw {
             if(ownerId === null || Number(ownerId) !== Number(contractInfo.source_id))
                 error = 'invalid: SOURCE (not contract owner)';
         }
+
+        // Verify the contract lets its owner withdraw. WITHDRAW moves custody without
+        // running contract code, so a contract deployed at/after OWNER_WITHDRAW_OPT_IN
+        // must ask for it in its meta; without that its tokens leave only through its
+        // own logic. Judged at the contract's DEPLOY block, so older contracts keep the
+        // owner's recovery path they were deployed with.
+        if(!error && contractInfo && !declaresOwnerWithdraw(contractInfo.meta_json)
+            && await this.actions.protocolChanges.isEnabled('OWNER_WITHDRAW_OPT_IN', contractInfo.block_index))
+            error = 'invalid: CONTRACT_ACTION_INDEX (owner withdraw not enabled)';
 
         return error;
     }

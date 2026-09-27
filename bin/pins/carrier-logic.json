@@ -125,7 +125,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "b05f00a4261548cf90aac0339c0100e82f54fbd58377b909f45614271962ddf6",
+      "hash": "620591ddfdc77d2bef26bab8efe5293db8ea6a4299c190bdff50b6778da827ac",
       "twins": []
     },
     "rollcall_activation": {
@@ -1835,6 +1835,13 @@
       "from": "de549b45d45d4228f6843ea2b7e9717d3d0998fa6119bd0aba1d3f216b3631f2",
       "to": "b05f00a4261548cf90aac0339c0100e82f54fbd58377b909f45614271962ddf6",
       "reason": "controller custody guard time-table row",
+      "date": "2026-09-27"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "b05f00a4261548cf90aac0339c0100e82f54fbd58377b909f45614271962ddf6",
+      "to": "620591ddfdc77d2bef26bab8efe5293db8ea6a4299c190bdff50b6778da827ac",
+      "reason": "owner withdraw opt-in time-table row",
       "date": "2026-09-27"
     }
   ]
