@@ -267,7 +267,8 @@ async function buildStateHashData(db, blockIndex, opts){
     //    reassembled blob fails its CRC check, anchor.js stamps the parent archive head (v1) 'invalid_archive' in place. The parent's action_index is in an
     //    earlier block, so it is invisible to the action-scoped consensus hashes and to the per-block stream. Resolved via the status name (not status_id) to stay id-independent across nodes.
 
-    //    Row predicate GATED: legacy v1-only below the ARCHIVE_INVALID_STATE_HASH activation, archive-head row attributes
+    //    Version predicate GATED: legacy v1-only below the
+    //    ARCHIVE_INVALID_STATE_HASH activation, the full ARCHIVE_HEAD_VERSIONS set
     //    at/after it, so the pre-flag preimage stays byte-identical.
     let archiveInvalidActive = isArchiveInvalidStateHashActive(B, network, coin);
 
