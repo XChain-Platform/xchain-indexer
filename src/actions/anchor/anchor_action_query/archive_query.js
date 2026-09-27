@@ -118,11 +118,35 @@ function validateArchiveAnchorParams({ chain, network, block_index, checkpoint_s
 // attribute). Address comparison is exact, not case-folded: base58/bech32 addresses
 // are case-significant in the first form and canonically lowercase in the second, so
 // folding could equate two different addresses.
+function sameStoredSignatures(left, right) {
+    return left.validator_signatures != null && right.validator_signatures != null &&
+        String(left.validator_signatures) === String(right.validator_signatures);
+}
+
+function deriveFoldWrapper(rows, archive) {
+    if (!archive || Number(archive.version) !== 3 || archive.chain != null) return archive;
+    let matches = (rows || []).filter(row =>
+        Number(row.version) === 3 && row.chain != null &&
+        Number(row.action_index) === Number(archive.action_index) &&
+        sameStoredSignatures(row, archive));
+    if (matches.length !== 1) return archive;
+    let wrapper = matches[0];
+    return Object.assign({}, archive, {
+        chain: wrapper.chain,
+        network: wrapper.network,
+        block_index: wrapper.block_index,
+        checkpoint_seq: wrapper.checkpoint_seq,
+        snapshot_block: wrapper.snapshot_block
+    });
+}
+
 function selectArchiveHeadRow(rows, filter) {
     let f = filter || {};
-    let candidates = Array.isArray(rows) ? rows : [];
+    let allRows = Array.isArray(rows) ? rows : [];
+    let candidates = allRows.filter(row =>
+        row.match_batch_seq != null && Number(row.version) !== 2);
     if (f.author) candidates = candidates.filter(r => r.source != null && String(r.source) === String(f.author));
-    return candidates.length > 0 ? candidates[0] : null;
+    return candidates.length > 0 ? deriveFoldWrapper(allRows, candidates[0]) : null;
 }
 
 // The continuation-chunk indexes present for a head, as a sorted array. `chunkRows`
@@ -195,6 +219,6 @@ function buildArchiveAnchorResponse(config, latest, head, chunkRows) {
 
 module.exports = {
     ARCHIVE_CRC_RE, dedupeArchiveChunks, archiveChunkCoverage,
-    validateArchiveAnchorParams, selectArchiveHeadRow, presentChunkIndexes,
+    validateArchiveAnchorParams, deriveFoldWrapper, selectArchiveHeadRow, presentChunkIndexes,
     buildArchiveAnchorResponse
 };
