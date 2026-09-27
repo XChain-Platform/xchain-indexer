@@ -22,6 +22,7 @@ const diag     = require('./diagnostic_events.js');
 const validate = require('./validate.js');
 const quorum   = require('./quorum.js');
 const settle   = require('./settle.js');
+const gateRegistry = require('../../consensus/gate_registry');
 
 const { getLogger } = require('../../observability/index.js');
 
@@ -33,6 +34,10 @@ const { getLogger } = require('../../observability/index.js');
 function walkSections(handler, params, data, error){
     let sections = [];
     let cursor   = 4;
+    let prevChain = null;
+    let enforceOrder = gateRegistry.activeAt(
+        'anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION',
+        handler.config['NETWORK'], null, Number(data['BLOCK_INDEX']), null);
     // Chains already claimed by an earlier section of THIS bundle, for the one-section-per-chain
     // duplicate guard below. Scoped to the walk so it cannot leak across actions.
     let seenChains = new Set();
@@ -41,10 +46,15 @@ function walkSections(handler, params, data, error){
             let s = validate.readSection(params, cursor, i, data['NETWORK']);
             let reason = handler.validateSectionShape(s, seenChains);
             if(reason){ error = 'invalid: SECTION ' + i + ' ' + reason; break; }
+            reason = enforceOrder && validate.sectionOrderReason(prevChain, s);
+            if(reason){ error = 'invalid: SECTION ' + i + ' ' + reason; break; }
             seenChains.add(s.CHAIN);
+            prevChain = s.CHAIN;
 
             let sectionSigs = validate.parseSectionSigs(params, cursor, i);
             if(sectionSigs.error){ error = sectionSigs.error; break; }
+            reason = enforceOrder && validate.sigOrderReason(sectionSigs.sigs);
+            if(reason){ error = 'invalid: SECTION ' + i + ' ' + reason; break; }
             s.SIGS = sectionSigs.sigs;
             sections.push(s);
             cursor += validate.SECTION_FIXED_FIELDS + 2 * sectionSigs.sigCount;
