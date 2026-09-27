@@ -41,16 +41,19 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         disarmAnchor({ verifyStub, swqStub, deriveGateStub });
     });
 
-    // At/above ANCHOR_ACTIVATION the wire set is exactly {0, 1, 2}, so every
-    // pre-restart byte - the per-chain anchors AND the old bundle/archive-head pair a
-    // not-yet-redeployed hub might still emit - falls out of the unknown-version check.
-    it('the pre-restart versions no longer parse at all, v6 and v7 included', async function () {
-        for (const v of [3, 4, 5, 6, 7]) {
+    // At/above ANCHOR_ACTIVATION the retired pre-restart bytes stay unknown.
+    // Version 3 is reserved for the separately activated folded wire.
+    it('keeps v4 through v7 retired while v3 is fold-gated', async function () {
+        for (const v of [4, 5, 6, 7]) {
             let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: v, COIN: 'DOGE' });
             await handler.parse(['' + v, 'BTC', 'regtest'], data, null);
             assert.strictEqual(data['STATUS'], 'invalid: VERSION (unknown)',
                 'ANCHOR v' + v + ' is retired; its parser is deleted, not merely unused');
         }
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 3, COIN: 'DOGE' });
+        await handler.parse(['3', 'regtest', '100', '0'], data, null);
+        assert.strictEqual(data['STATUS'], 'invalid: ANCHOR v3 before fold activation',
+            'ANCHOR v3 is fold-gated rather than retired');
     });
 
     // The activation gate runs BEFORE the format table, so a wire that is
