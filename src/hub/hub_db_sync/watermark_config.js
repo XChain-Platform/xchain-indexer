@@ -64,7 +64,9 @@ const HUB_SYNC_WATERMARK_GRACE_S = Object.freeze({
     // mirror already far ahead of the tip so the barrier opens immediately
     // regardless of grace.
     price:  4800,
-    oracle: 600,
+    // PRICE v1 rows are stamped 24 hours forward, so this only needs to cover
+    // ordinary hub-to-mirror stream lag, like the match and call barriers.
+    oracle: 120,
     match:  120,
     // Calls carry their OWN margin, currently equal to match's, because the two
     // producers stamp effective_time differently: CrossChainDexEngine stamps the
