@@ -94,6 +94,10 @@ const PRICE_SCALE_ACTIVATION = copy('price_scale_activation.PRICE_SCALE_ACTIVATI
 
 const PRICE_VALUE_RE_LEGACY = copy('price_scale_activation.PRICE_VALUE_RE_LEGACY');
 const PRICE_VALUE_RE_CANONICAL = copy('price_scale_activation.PRICE_VALUE_RE_CANONICAL');
+const PRICE_V1_CANONICAL_ACTIVATION = copy('price_scale_activation.PRICE_V1_CANONICAL_ACTIVATION');
+const PRICE_V1_FEE_RE_CANONICAL = copy('price_scale_activation.PRICE_V1_FEE_RE_CANONICAL');
+const PRICE_V1_VALUE_MAX_LENGTH = copy('price_scale_activation.PRICE_V1_VALUE_MAX_LENGTH');
+const PRICE_V1_FEE_MAX_LENGTH = copy('price_scale_activation.PRICE_V1_FEE_MAX_LENGTH');
 
 // Whether the canonical form binds for an action at `blockTime` on `network`.
 //
@@ -116,6 +120,26 @@ function isPriceScaleCanonicalActive(blockTime, network){
     return t >= threshold;
 }
 
+function isPriceV1CanonicalActive(blockTime, network){
+    if(blockTime === null || blockTime === undefined || blockTime === '' || typeof blockTime === 'boolean')
+        return false;
+    let t = Number(blockTime);
+    if(!Number.isFinite(t)) return false;
+    let threshold = PRICE_V1_CANONICAL_ACTIVATION[network];
+    if(threshold === undefined) return false;
+    return t >= threshold;
+}
+
+function isCanonicalPriceV1Value(value){
+    return typeof value === 'string' && value.length <= PRICE_V1_VALUE_MAX_LENGTH
+        && PRICE_VALUE_RE_CANONICAL.test(value);
+}
+
+function isCanonicalPriceV1Fee(fee){
+    return typeof fee === 'string' && fee.length <= PRICE_V1_FEE_MAX_LENGTH
+        && PRICE_V1_FEE_RE_CANONICAL.test(fee);
+}
+
 // The price-value matcher in force for an action at `blockTime` on `network`.
 function priceValuePattern(blockTime, network){
     return isPriceScaleCanonicalActive(blockTime, network)
@@ -135,7 +159,14 @@ module.exports = {
     PRICE_SCALE_ACTIVATION,
     PRICE_VALUE_RE_LEGACY,
     PRICE_VALUE_RE_CANONICAL,
+    PRICE_V1_CANONICAL_ACTIVATION,
+    PRICE_V1_FEE_RE_CANONICAL,
+    PRICE_V1_VALUE_MAX_LENGTH,
+    PRICE_V1_FEE_MAX_LENGTH,
     isPriceScaleCanonicalActive,
+    isPriceV1CanonicalActive,
+    isCanonicalPriceV1Value,
+    isCanonicalPriceV1Fee,
     priceValuePattern,
     isValidPriceValue,
 };
