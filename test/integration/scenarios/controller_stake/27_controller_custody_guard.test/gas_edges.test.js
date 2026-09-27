@@ -35,6 +35,12 @@
 
 const assert = require('assert');
 const crypto = require('crypto');
+
+// Require explicit credentials before the database helper can read local defaults.
+assert.ok(process.env.TEST_DB_PASS, 'TEST_DB_PASS is required for the real MariaDB integration');
+// Load the guard VM eagerly so missing native support fails the suite.
+require('xchain-vm');
+
 const { createDatabases, createDecoderSchema, decoderQuery, indexerQuery,
         closeAll } = require('../../../setup/db-connection');
 const DecoderSeeder = require('../../../setup/decoder-seeder');
@@ -82,8 +88,6 @@ async function contractExecutionsCount() {
 }
 
 async function setupGasEdgeSuite() {
-    try { require('xchain-vm'); } catch (e) { return this.skip(); }
-    if (!process.env.TEST_DB_PASS) return this.skip();
     process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
     process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
     await createDatabases(__filename);
