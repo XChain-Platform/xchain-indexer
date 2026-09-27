@@ -164,14 +164,23 @@ describe('migration reorder verdict @regression @tier1', function () {
 // sorts before; deleting exactly that name from a full ledger reproduces that database.
 describe('runMigrations() reorder discrimination @regression @tier1', function () {
     const HARMLESS = '2026-09-12-state-tree-roots-block-index-idx.sql';
+    const ORDERED_COMPANION = '2026-09-27-datetime-state-tree-roots.sql';
     // The jumped pair from the same window, kept as an assertion rather than a comment so a
     // later migration landing between them cannot silently change what this case tests.
     const REQUIRED_JUMPED = ['2026-09-12-token-bridge-fields.sql', '2026-09-13-destroys-sends-leg-ordinal.sql'];
-    const jumpedFiles = () => allFiles().filter(f => f > HARMLESS);
+    const jumpedFiles = () => allFiles().filter(f => f > HARMLESS && f !== ORDERED_COMPANION);
+    const ledgerForHarmlessPair = () => {
+        const ledger = ledgerOfAll();
+        ledger.delete(HARMLESS);
+        ledger.delete(ORDERED_COMPANION);
+        return ledger;
+    };
 
-    it('the audited pair really is disjoint at the object level', function () {
+    it('keeps the same-table companion pending so the pair runs in date order', function () {
         const mine = tablesOfFile(HARMLESS);
         assert.deepStrictEqual(mine.tables, ['state_tree_roots']);
+        assert.ok(HARMLESS < ORDERED_COMPANION);
+        assert.ok(tablesOfFile(ORDERED_COMPANION).tables.includes('state_tree_roots'));
         const jumped = jumpedFiles();
         for (const required of REQUIRED_JUMPED) {
             assert.ok(jumped.includes(required), required + ' must remain among the jumped migrations');
@@ -185,11 +194,12 @@ describe('runMigrations() reorder discrimination @regression @tier1', function (
     });
 
     it('does not fail the operator path for a reorder it can prove harmless', async function () {
-        const ledger = ledgerOfAll();
-        ledger.delete(HARMLESS);
-        const { logged, applied, result, threw } = await runAgainst(ledger, { includeManual: true });
+        const { logged, applied, result, threw } = await runAgainst(
+            ledgerForHarmlessPair(), { includeManual: true });
         assert.strictEqual(threw, null, 'a provably harmless reorder must not fail closed: ' + (threw && threw.message));
         assert.ok(applied.includes(HARMLESS), 'the migration must still apply');
+        assert.ok(applied.indexOf(HARMLESS) < applied.indexOf(ORDERED_COMPANION),
+            'the same-table companion must apply after the index migration');
         const line = logged.find(l => /PROVABLY HARMLESS/.test(l));
         assert.ok(line, 'expected the harmless verdict to be recorded: ' + logged.join(' | '));
         assert.ok(line.includes('state_tree_roots'), 'the verdict must name the objects it checked: ' + line);
@@ -197,9 +207,7 @@ describe('runMigrations() reorder discrimination @regression @tier1', function (
     });
 
     it('records the checked reorder in the run result, not only in the log', async function () {
-        const ledger = ledgerOfAll();
-        ledger.delete(HARMLESS);
-        const { result } = await runAgainst(ledger, { includeManual: true });
+        const { result } = await runAgainst(ledgerForHarmlessPair(), { includeManual: true });
         assert.deepStrictEqual(result.reordered, [{
             file:      HARMLESS,
             frontier:  jumpedFiles()[jumpedFiles().length - 1],
