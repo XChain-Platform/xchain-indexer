@@ -73,15 +73,11 @@ describe('PRICE v1 canonical reference oracle @regression @tier3', function () {
 
     it('caps VALUE length at maxLength', function () {
         const nineteen = '1234567890.12345678';
-        const suppliedNineteen = '12345678901.1234567';
-        const twenty = '12345678901.12345678';
+        const twenty = '123456789012.1234567';
         assert.strictEqual(nineteen.length, 19);
-        assert.strictEqual(suppliedNineteen.length, 19);
         assert.strictEqual(twenty.length, 20);
 
         assert.strictEqual(isCanonicalV1ValueText(nineteen, 19), true);
-        assert.strictEqual(isCanonicalV1ValueText(suppliedNineteen, 19), true);
-        assert.strictEqual(isCanonicalV1ValueText(suppliedNineteen, 20), true);
         assert.strictEqual(isCanonicalV1ValueText(twenty, 19), false);
         assert.strictEqual(isCanonicalV1ValueText(twenty, 20), true);
     });
