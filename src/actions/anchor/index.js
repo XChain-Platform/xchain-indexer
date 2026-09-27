@@ -315,7 +315,7 @@ class Anchor {
 
         if(!error) error = foldArchiveReason(this, archive, data);
         error = await checkFoldSeqs(this, sections, archive, error);
-
+        error = await archiveHead.checkFoldArchiveReissue(this, data, archive, error);
         for(let section of sections)
             Object.defineProperty(section, 'FOLD_ARCHIVE', { value: archive, configurable: true });
         let oracleSetFor = quorum.makeOracleSetResolver(this);
