@@ -113,12 +113,15 @@ module.exports = {
     // row means no snapshot has applied here yet, which is not an error: a bridged copy can
     // exist before its first snapshot lands (the in-leg barrier gates on it, the read does
     // not).
-    async getAppliedPolicySnapshot(origin, tick){
+    async getAppliedPolicySnapshot(origin, tick, blockIndex){
+        let blockClause = (blockIndex === undefined) ? '' : ' AND bs.block_index <= ?';
+        let localArgs = [String(tick)];
+        if(blockIndex !== undefined) localArgs.push(blockIndex);
         let applied = await this.doQuery(
             `SELECT bs.transfer_id
              FROM bridge_settlements bs
-             WHERE bs.kind='policy' AND bs.tick=?`,
-            [String(tick)]);
+             WHERE bs.kind='policy' AND bs.tick=?${blockClause}`,
+            localArgs);
         if(applied.length === 0) return null;
 
         let ids  = applied.map(row => row.transfer_id);
