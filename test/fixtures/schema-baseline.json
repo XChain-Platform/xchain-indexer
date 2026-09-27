@@ -1308,7 +1308,7 @@
       },
       {
         "name": "created_at",
-        "spec": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+        "spec": "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
       }
     ],
     "cross_chain_matches": [
@@ -3374,7 +3374,7 @@
       },
       {
         "name": "created_at",
-        "spec": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+        "spec": "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
       }
     ],
     "state_tree_nodes": [
@@ -3430,7 +3430,7 @@
       },
       {
         "name": "computed_at",
-        "spec": "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP"
+        "spec": "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP"
       }
     ],
     "swap_cancels": [

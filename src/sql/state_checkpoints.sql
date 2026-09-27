@@ -28,7 +28,7 @@ CREATE TABLE state_checkpoints (
     block_merkle_root    CHAR(64),                                 -- SPV per-block content Merkle root (§5); NULL pre-flag-day
     block_merkle_version TINYINT UNSIGNED,                         -- merkle.js BLOCK_MERKLE_VERSION
     validator_signatures TEXT         NOT NULL,                    -- JSON [{pubkey,sig}], 2f+1 over the XCHECKPOINT canonical (incl. roots post-flag-day)
-    created_at           TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at           DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     -- Hub-mirrored (hub_db_sync), like capability_snapshots: INSERT-IGNORE apply,
     -- never retracted. Append-only: a reorged height is superseded by a NEW row
     -- with a higher checkpoint_seq (readers take MAX(checkpoint_seq) per height).
