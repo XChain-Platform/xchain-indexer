@@ -135,6 +135,9 @@ function anchorConfirmationsRpc({ indexer }){
 // `chunks_present` / `chunks_complete` + the head's own `match_batch_seq` let a
 // resuming publisher re-send only the chunks that are actually missing, in the
 // slots of the batch its previous process allocated.
+//
+// An author-only request instead returns that publisher's highest usable archive
+// sequence. It shares the method so existing content-key callers need no wire change.
 function archiveAnchorRpc({ indexer }){
     return {
         async getarchiveanchor({chain, network, block_index, checkpoint_seq, batch_crc32, match_count, author}){
@@ -146,6 +149,11 @@ function archiveAnchorRpc({ indexer }){
             // Federation READ isolation: committed-only, off the block tx.
             let db = indexer.indexerDb.apiView();
             try {
+                // Route the publisher-only shape to its aggregate instead of the content key.
+                if(v.author_only){
+                    let matchBatchSeq = await db.getMaxArchiveBatchSeqByAuthor(v.author);
+                    return { exists: matchBatchSeq !== null, match_batch_seq: matchBatchSeq };
+                }
                 let latest = await db.getLatestBlockIndex();
                 let found  = await db.getArchiveAnchorByContent(chain, network, v.block_index,
                     v.checkpoint_seq, v.batch_crc32, v.match_count, v.author);
