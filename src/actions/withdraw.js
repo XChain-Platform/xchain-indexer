@@ -156,7 +156,7 @@ class Withdraw {
     }
 
     // Store the withdrawal row and move the balance out of contract custody back to SOURCE
-    async settleWithdrawal(data, contractAddress, status){
+    async settleWithdrawal(data, contractAddress, status, guardFee){
 
         // Create record in withdrawals table
         await this.indexerDb.createWithdrawal(data);
@@ -174,6 +174,10 @@ class Withdraw {
         if(status === 'valid'){
             debits.push([data['TICK'], data['AMOUNT'], contractAddress]);
             credits.push([data['TICK'], data['AMOUNT'], data['SOURCE']]);
+            if(this.util.bcgt(guardFee, 0)){
+                debits.push([this.config['GAS'], guardFee, data['SOURCE']]);
+                this.util.addAddressTicker(data['SOURCE'], this.config['GAS']);
+            }
         }
 
         // Process any transaction ledger changes (credits / debits)
