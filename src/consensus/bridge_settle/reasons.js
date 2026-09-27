@@ -45,6 +45,7 @@ const SETTLE_REASON = {
     ESCROW_SHORT:    'escrow balance would go negative',
     TOKEN_ROW:       'the bridged token row could not be created',
     AMOUNT:          'amount is not a positive decimal at the signed decimals',
+    IN_LEG_NO_POLICY: 'the in-leg token policy snapshot has not applied yet',
     // Policy-only
     POLICY_HASH:     'recomputed policy_hash does not match the signed hash',
     POLICY_ORDER:    'membership array is not in canonical order',

@@ -33,6 +33,7 @@
 
 // One pure resolver owns both the asset namespace and the leg direction.
 const { resolveTransferOrigin } = require('../bridge_checkpoint_check/origin.js');
+const gateRegistry = require('../gate_registry.js');
 const { SETTLE_REASON, isNull, int } = require('./reasons.js');
 const { buildInLegEffects, buildOutLegEffects } = require('./leg_effects.js');
 const { isSettled, isSourceLegSettled, recordSettlement } = require('./settlements.js');
@@ -297,6 +298,12 @@ async function applyBridgeTransfer(deps, row, ctx){
     // retains its BTC origin. The checkpoint check uses this same resolver.
     const isInLeg = (origin.kind === 'lock');
     const gasTick = ctx.config ? String(ctx.config['GAS']) : 'XCHAIN';
+    if(isInLeg && f.tick !== gasTick &&
+       typeof ctx.indexerDb.getAppliedPolicySnapshot === 'function' &&
+       gateRegistry.activeAt('token_policy_activation.TOKEN_POLICY_INHERITANCE_ACTIVATION',
+                             ctx.network, null, ctx.blockIndex, null) &&
+       !await ctx.indexerDb.getAppliedPolicySnapshot(origin.originChain, f.tick))
+        return out(false, SETTLE_REASON.IN_LEG_NO_POLICY);
     const addresses = (ctx.config && ctx.config['ADDRESS']) || {};
     const amount = String(row.amount);
 
