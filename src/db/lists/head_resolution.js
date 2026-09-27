@@ -57,6 +57,7 @@ function childQuery(db, parent, max_block_index){
 // Follow every reachable edit while bounding malformed cycles.
 async function followEditChain(db, root, max_block_index){
     let head = root;
+    let foundHead = false;
     let pending = [root];
     let seen = { [String(root)]: true };
     while(pending.length > 0){
@@ -69,11 +70,15 @@ async function followEditChain(db, root, max_block_index){
             if(seen[childKey]) continue;
             seen[childKey] = true;
             pending.push(childIndex);
-            if(child['status']=='valid' && Number(childIndex) > Number(head))
+            if(child['status']=='valid' && Number(childIndex) > Number(head)){
                 head = childIndex;
+                foundHead = true;
+            }
         }
     }
-    return head;
+    if(foundHead)
+        return head;
+    return db.getListRootIndex(root, 0, max_block_index);
 }
 
 // Preserve the direct-child lookup used below activation.
@@ -99,7 +104,9 @@ async function directChildHead(db, root, max_block_index){
                 ORDER BY l.action_index DESC
                 LIMIT 1`;
     let rows = await db.doQuery(query, args);
-    return (rows.length > 0) ? rows[0]['action_index'] : root;
+    if(rows.length > 0)
+        return rows[0]['action_index'];
+    return db.getListRootIndex(root, 0, max_block_index);
 }
 
 // Resolve a LIST reference to the action whose list_items rows ARE the list's
