@@ -74,15 +74,16 @@ function txidRow(overrides) {
 }
 
 describe('anchor-action-query: CHECKPOINT_VERSIONS', function () {
-    it('is exactly the checkpoint-bearing versions (v2 continuation excluded)', function () {
+    it('includes folded v3 checkpoints while excluding v2 continuations', function () {
         // 0 is the bundle SECTION, which carries a full checkpoint identity of its own;
-        // 1 is the archive head, which carries its wrapper checkpoint's. Every pre-restart
+        // 1 is the archive head, which carries its wrapper checkpoint's; 3 is the folded
+        // action, whose chain-bearing row carries the checkpoint. Every other retired
         // version is OUT: nothing parses them any more, and admitting one would let a
         // pre-restart row keep raising the replay watermark that
         // getMaxAnchorCheckpointSeq reads off this same set.
-        assert.deepStrictEqual(CHECKPOINT_VERSIONS, [0, 1]);
+        assert.deepStrictEqual(CHECKPOINT_VERSIONS, [0, 1, 3]);
         assert.ok(!CHECKPOINT_VERSIONS.includes(2), 'v2 (archive continuation) is not a checkpoint');
-        for (const retired of [3, 4, 5, 6, 7])
+        for (const retired of [4, 5, 6, 7])
             assert.ok(!CHECKPOINT_VERSIONS.includes(retired),
                 'ANCHOR v' + retired + ' is pre-restart and must not re-enter the checkpoint set');
     });
