@@ -22,7 +22,7 @@
 // Load required libraries
 const mariadb = require('mariadb');
 const path    = require('path');
-const { buildStateHashData, archiveHeadPredicate } = require('../../consensus/state_hash');
+const { buildStateHashData, archiveHeadPredicate, ARCHIVE_HEAD_VERSIONS } = require('../../consensus/state_hash');
 const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
         ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow,
@@ -216,7 +216,10 @@ module.exports = {
     // (one stubbed, one live; one filtered on a drifted version list) and the guard
     // would then reject a legitimate archive or admit a replay. Reading both in one
     // statement makes the impossible combination unrepresentable. The row predicate
-    // is shared with the state-hash fold so every folded archive head contributes.
+    // is shared with the state-hash fold so every folded archive head contributes,
+    // ORed with the exported ARCHIVE_HEAD_VERSIONS set (never a hand-copied literal)
+    // so this watermark's version coverage cannot drift from the checkpoint-bearing
+    // definition, the same discipline getMaxAnchorCheckpointSeq already states.
     //
     // 'unverified' is included for the same reason it is in getMaxAnchorCheckpointSeq:
     // a node with no mirrored oracle_publish snapshot cannot verify signatures and
@@ -225,13 +228,14 @@ module.exports = {
     // that exposure: a poisoned row can only push either watermark UP, which makes
     // the guard stricter, never more permissive.
     async getArchiveReplayWatermarks(){
+        let versions = ARCHIVE_HEAD_VERSIONS;
         let query = `SELECT MAX(a.match_batch_seq) AS max_batch_seq,
                             MAX(a.checkpoint_seq)  AS max_checkpoint_seq
                      FROM anchor_actions a
                      JOIN index_statuses s ON s.id = a.status_id
-                     WHERE ${archiveHeadPredicate('a')}
+                     WHERE (${archiveHeadPredicate('a')} OR a.version IN (${versions.map(() => '?').join(', ')}))
                        AND s.status IN ('valid', 'unverified')`;
-        let rows = await this.doQuery(query, []);
+        let rows = await this.doQuery(query, versions);
         let row  = rows.length > 0 ? rows[0] : {};
         return {
             batchSeq:      (row.max_batch_seq      != null) ? Number(row.max_batch_seq)      : null,

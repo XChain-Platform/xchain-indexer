@@ -15,6 +15,7 @@
 const assert = require('assert');
 
 const anchorMethods = require('../../../src/db/anchors');
+const { ARCHIVE_HEAD_VERSIONS } = require('../../../src/consensus/state_hash');
 
 async function capture(method, args){
     const calls = [];
@@ -35,10 +36,15 @@ function assertFoldPredicate(sql){
 }
 
 describe('archive-head database readers', function(){
-    it('uses the fold row predicate for replay watermarks without version parameters', async function(){
+    // Replay watermarks OR the fold predicate (folded v3 rows) with an explicit
+    // ARCHIVE_HEAD_VERSIONS version filter, so the version parameter list is not empty
+    // here as it is for the other fold-only readers below.
+    it('uses the fold row predicate plus the exported version set for replay watermarks', async function(){
         const { sql, params } = await capture('getArchiveReplayWatermarks', []);
-        assertFoldPredicate(sql);
-        assert.deepStrictEqual(params, []);
+        assert.match(sql, /a\.match_batch_seq IS NOT NULL AND a\.version <> 2/);
+        assert.match(sql, new RegExp('a\\.version IN \\(' +
+            ARCHIVE_HEAD_VERSIONS.map(() => '\\?').join(', ') + '\\)'));
+        assert.deepStrictEqual(params, ARCHIVE_HEAD_VERSIONS);
     });
 
     it('uses the fold row predicate for an unscoped batch lookup', async function(){
