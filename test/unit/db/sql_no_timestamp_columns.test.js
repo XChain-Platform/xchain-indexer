@@ -85,8 +85,8 @@ describe('dated DATETIME migrations are complete @regression', function () {
     const files = datetimeMigrationFiles();
 
     it('MODIFYs exactly the ten expected columns once each', function () {
-        assert.strictEqual(files.length, 4,
-            'expected exactly four DATETIME migrations, found: ' + files.join(', '));
+        assert.strictEqual(files.length, 5,
+            'expected exactly five DATETIME migrations, found: ' + files.join(', '));
         assert.deepStrictEqual(datetimeModifies(files), [...EXPECTED_MODIFIES].sort());
     });
 
