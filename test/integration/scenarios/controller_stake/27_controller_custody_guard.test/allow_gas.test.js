@@ -96,7 +96,6 @@ async function guardExecutions() {
 }
 
 function billedGuardRuns(executions) {
-    // Recover both identical runs because one action-index execution row retains the second meter.
     return executions.flatMap(row => [row, row]);
 }
 
