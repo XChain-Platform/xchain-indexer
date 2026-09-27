@@ -69,9 +69,12 @@ module.exports = {
     // a create row carries NULL. Post-flag-day list.js normalizes every edit to
     // point straight at the root, so this is a single hop in practice. The default
     // bound preserves legacy reads; gated head resolution can request a complete
-    // walk, with cycle detection bounding malformed chains.
+    // walk, with cycle detection bounding malformed chains. A block ceiling only
+    // extends a capped walk when its candidate is newer than that ceiling.
     // @param {action_index}  integer  ACTION_INDEX of any LIST create or edit
-    async getListRootIndex(action_index, max_hops=16){
+    // @param {max_hops}  integer|null  ordinary parent-walk limit
+    // @param {max_block_index} integer|null candidate block-height ceiling
+    async getListRootIndex(action_index, max_hops=16, max_block_index=null){
         let root = action_index;
         let seen = {};
         let hop = 0;
@@ -84,6 +87,26 @@ module.exports = {
             if(this.util.isNull(parent)) break;
             root = parent;
             hop++;
+        }
+        if(!this.util.isNull(max_block_index)){
+            let boundedSeen = {};
+            while(!boundedSeen[String(root)]){
+                boundedSeen[String(root)] = true;
+                let query = `SELECT
+                                l.list_action_index
+                            FROM
+                                lists l
+                                INNER JOIN actions a ON (a.action_index=l.action_index)
+                            WHERE
+                                l.action_index=?
+                                AND a.block_index>?
+                            LIMIT 1`;
+                let rows = await this.doQuery(query, [root, max_block_index]);
+                if(rows.length == 0) break;
+                let parent = rows[0]['list_action_index'];
+                if(this.util.isNull(parent)) break;
+                root = parent;
+            }
         }
         return root;
     },
