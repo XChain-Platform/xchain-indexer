@@ -27,7 +27,7 @@ const LEGACY_FEE_RE   = /^[0-9]+(\.[0-9]{1,18})?$/;
 
 const CANONICAL_VALUE_RE = ProtocolChanges.get('price_scale_activation.PRICE_VALUE_RE_CANONICAL');
 // Design section 1 FEE pattern: the canonical VALUE pattern with its 8-digit
-// fraction widened to 18, per SFI-1's PRICE_V1_FEE_RE_CANONICAL derivation.
+// fraction widened to 18, following the Design section 1 FEE derivation.
 const CANONICAL_FEE_RE = new RegExp(CANONICAL_VALUE_RE.source.replace('{1,8}', '{1,18}'));
 
 describe('PRICE v1 refusal case fixtures', function () {
