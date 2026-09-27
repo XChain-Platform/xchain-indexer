@@ -123,7 +123,8 @@ const SHARED_GATES = [
     // XBRIDGE v3/v4 and ISSUE format 7 on it, so a train that sizes it on one side only must
     // report a rules mismatch. Appended at the END for the preimage-ordering reason above.
     ['token_bridge_activation',                 ['TOKEN_BRIDGE_ACTIVATION']],
-    ['anchor_bundle_order_activation',          ['ANCHOR_BUNDLE_ORDER_ACTIVATION']]
+    ['anchor_bundle_order_activation',          ['ANCHOR_BUNDLE_ORDER_ACTIVATION']],
+    ['price_scale_activation',                  ['PRICE_V1_CANONICAL_ACTIVATION', 'PRICE_V1_VALUE_MAX_LENGTH', 'PRICE_V1_FEE_MAX_LENGTH']]
 ];
 
 // A per-network height at or above this value is a far-future placeholder, not an

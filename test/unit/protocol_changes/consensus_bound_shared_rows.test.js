@@ -37,6 +37,13 @@ describe('protocol_changes consensus-bound shared rows', function () {
         ]);
     });
 
+    it('keeps the PRICE v1 canonical bounds last in the shared digest', function () {
+        assert.deepStrictEqual(SHARED_GATES[SHARED_GATES.length - 1], [
+            'price_scale_activation',
+            ['PRICE_V1_CANONICAL_ACTIVATION', 'PRICE_V1_VALUE_MAX_LENGTH', 'PRICE_V1_FEE_MAX_LENGTH'],
+        ]);
+    });
+
     it('resolves the existing price scale rows through the gate registry', function () {
         const names = [
             'PRICE_SCALE_ACTIVATION',
