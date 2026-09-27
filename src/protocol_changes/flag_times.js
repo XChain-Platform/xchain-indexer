@@ -25,6 +25,8 @@
 
 'use strict';
 
+const { UNARMED } = require('./core.js');
+
 // VM async/Promise flag-day, single source of truth for the cross-repo coupling
 // guard. This MUST stay byte-identical to xchain-vm's ASYNC_SURFACE_GATE_BLOCK_TIME;
 // a one-sided edit forks the fleet on the first async-using DEPLOY/EXECUTE after the
@@ -200,6 +202,11 @@ const CONTRACT_META_REQUIRED_MAINNET_TIME = 0;
 // exercise the rule from block 0.
 const CONTRACT_META_REQUIRED_TESTNET_TIME = 1789257600;
 
+// BROADCAST_FEE_LENGTH mainnet stays inert until the operator arms it.
+const BROADCAST_FEE_LENGTH_MAINNET_TIME = UNARMED;
+// BROADCAST_FEE_LENGTH testnet stays inert until the operator arms it.
+const BROADCAST_FEE_LENGTH_TESTNET_TIME = UNARMED;
+
 module.exports = {
     VM_BANNED_ASYNC_MAINNET_TIME,
     NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME,
@@ -212,4 +219,6 @@ module.exports = {
     DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME,
     CONTRACT_META_REQUIRED_MAINNET_TIME,
     CONTRACT_META_REQUIRED_TESTNET_TIME,
+    BROADCAST_FEE_LENGTH_MAINNET_TIME,
+    BROADCAST_FEE_LENGTH_TESTNET_TIME,
 };

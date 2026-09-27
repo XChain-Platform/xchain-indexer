@@ -18,11 +18,9 @@
  *
  ********************************************************************/
 
-// ASSEMBLER. The flag-day constants, the 97 time-table rows and the registry API
-// live in the part files under src/protocol_changes/; this file is the one entry
-// every reader requires and it puts them together. The class below builds its
-// table from the same rows the registry exposes through rows(), so the two
-// cannot disagree, and it re-exports every constant under the name it always had.
+// ASSEMBLER. The flag-day constants, the 99 time-table rows and registry API live
+// in the part files under src/protocol_changes/. This entry builds its table from
+// the registry rows and re-exports every constant under the name it always had.
 const {
     UNARMED, UNPINNED, RegistryMissError, createRegistry, applyChanges,
 } = require('./protocol_changes/core.js');
@@ -51,8 +49,8 @@ const {
     ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME,
     DEPLOY_DEFERRED_ASSEMBLY_MAINNET_TIME,
     DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME,
-    CONTRACT_META_REQUIRED_MAINNET_TIME,
-    CONTRACT_META_REQUIRED_TESTNET_TIME,
+    CONTRACT_META_REQUIRED_MAINNET_TIME, CONTRACT_META_REQUIRED_TESTNET_TIME,
+    BROADCAST_FEE_LENGTH_MAINNET_TIME, BROADCAST_FEE_LENGTH_TESTNET_TIME,
 } = require('./protocol_changes/flag_times.js');
 const {
     BATCH_ISSUANCE_LIMITS_MAINNET_TIME,
@@ -170,7 +168,7 @@ class ProtocolChanges {
 
 
     parseChanges(){
-        // The 97 rows live in src/protocol_changes/changes_*.js; see CHANGE_PARTS.
+        // The 99 rows live in src/protocol_changes/changes_*.js; see CHANGE_PARTS.
         applyChanges(this, CHANGE_PARTS);
     }
 
@@ -351,6 +349,8 @@ module.exports.DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME = DEPLOY_DEFERRED_ASSEMBLY_
 // contracts, none of which exports a meta-shaped object.
 module.exports.CONTRACT_META_REQUIRED_MAINNET_TIME = CONTRACT_META_REQUIRED_MAINNET_TIME;
 module.exports.CONTRACT_META_REQUIRED_TESTNET_TIME = CONTRACT_META_REQUIRED_TESTNET_TIME;
+module.exports.BROADCAST_FEE_LENGTH_MAINNET_TIME = BROADCAST_FEE_LENGTH_MAINNET_TIME;
+module.exports.BROADCAST_FEE_LENGTH_TESTNET_TIME = BROADCAST_FEE_LENGTH_TESTNET_TIME;
 // ARMED mainnet instant for the BATCH issuance-limits rework (1786838400, 2026-08-16T00:00Z,
 // armed 2026-08-14 pre-launch), exported so the suite can pin the ratified value, assert it
 // was never retroactive, that it never precedes BATCH_SUBACTION_NORMALIZATION, and that it

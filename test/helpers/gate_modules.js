@@ -129,6 +129,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'vote_callback_binding_activation',
     'order_swap_payout_policy_activation',
     'issue_policy_list_detach',
+    'archive_match_count_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));
