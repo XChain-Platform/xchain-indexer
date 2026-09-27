@@ -213,6 +213,23 @@ const CONTROLLER_CUSTODY_GUARD_MAINNET_TIME = UNARMED;
 // D2: testnet ships inert until a release cut pins a future fleet-wide instant.
 const CONTROLLER_CUSTODY_GUARD_TESTNET_TIME = UNARMED;
 
+// Arms for OWNER_WITHDRAW_OPT_IN, the rule that makes owner WITHDRAW something a
+// contract must ask for. A contract deployed at/above the flag day refuses its
+// owner's WITHDRAW unless its exported meta declares ownerWithdraw: true, because
+// WITHDRAW moves custody without running contract code: on a pool, escrow or vault
+// it lets the deployer take other people's tokens and leaves the contract's own
+// accounting (an AMM's state reserves) above what it really holds.
+//
+// Mainnet ships inert, as CONTROLLER_CUSTODY_GUARD does under the mainnet write hold.
+const OWNER_WITHDRAW_OPT_IN_MAINNET_TIME = UNARMED;
+
+// Testnet: ARMED 2026-09-27 at 1790492400 = 2026-09-27T07:00:00Z, the tip at the cut
+// with no forward margin (testnet activations arm at the tip). The rule keys on the
+// contract's DEPLOY block, so only a contract deployed between this instant and the
+// fleet roll, and then withdrawn from before the roll, grades differently on a fresh
+// replay than on a node that indexed it live.
+const OWNER_WITHDRAW_OPT_IN_TESTNET_TIME = 1790492400;
+
 module.exports = {
     VM_BANNED_ASYNC_MAINNET_TIME,
     NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME,
@@ -229,4 +246,6 @@ module.exports = {
     BROADCAST_FEE_LENGTH_TESTNET_TIME,
     CONTROLLER_CUSTODY_GUARD_MAINNET_TIME,
     CONTROLLER_CUSTODY_GUARD_TESTNET_TIME,
+    OWNER_WITHDRAW_OPT_IN_MAINNET_TIME,
+    OWNER_WITHDRAW_OPT_IN_TESTNET_TIME,
 };
