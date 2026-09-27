@@ -38,7 +38,6 @@ const manifest = require('../../../../src/consensus/armed_map/manifest.js');
 const { canonicalValue } = require('../../../../src/consensus/armed_map/canonical.js');
 const ProtocolChanges = require('../../../../src/protocol_changes.js');
 const { GATE_MODULE_PATHS, REPLACED_STEMS, REGISTRY_ONLY_STEMS } = require('../../../helpers/gate_modules.js');
-const PREDICATE_ONLY_ROWS = ['archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION'];
 
 // The two declaration shapes that made a file a carrier. ACTIVATION_MAP is the
 // activation-map rule the platform's code-structure gate grades with, and
@@ -110,7 +109,7 @@ describe('armed_map/manifest: completeness guard', function () {
         assert.deepStrictEqual(found.sort(), [['x_activation.js', 'X_ACTIVATION'], ['y.js', 'MIN_STAKE_ACTIVATIONS']]);
     });
 
-    it('every non-function shim export is a row, and only allowed predicate rows have no export', function () {
+    it('every non-function export of every shim module is a row, and every row but the time table, the VM mirror and the W4-replaced predicates is exported by one', function () {
         const keys = rowKeys();
         const missing = [];
         const exported = new Set();
@@ -124,15 +123,13 @@ describe('armed_map/manifest: completeness guard', function () {
         assert.deepStrictEqual(missing, [], 'exported data outside the v2 rows: ' + missing.join(', '));
         // A row nobody exports is read only through activeAt() by its literal
         // key: that is exactly the W4 census plus the registry-only rows, one row
-        // per stem, plus the allowed predicate-only rows, and a new row that no
-        // module and no list names still reds here.
+        // per stem, and a new row that no module and no list names still reds here.
         const stems = REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS);
         const unexported = [...keys].filter((k) => !k.startsWith('protocol_changes.') && !k.startsWith('xchain-vm.') && !exported.has(k));
         const replaced = [...keys].filter((k) => stems.includes(k.slice(0, k.lastIndexOf('.'))));
         assert.strictEqual(replaced.length, stems.length, 'one registry row per replaced shim or registry-only stem');
-        const expected = replaced.concat(PREDICATE_ONLY_ROWS);
-        assert.deepStrictEqual(unexported.slice().sort(), expected.slice().sort(), 'rows no shim exports, beyond the W4-replaced and predicate-only set: ' +
-            unexported.filter((k) => !expected.includes(k)).join(', '));
+        assert.deepStrictEqual(unexported, replaced, 'rows no shim exports, beyond the W4-replaced set: ' +
+            unexported.filter((k) => !replaced.includes(k)).join(', '));
     });
 
 });
