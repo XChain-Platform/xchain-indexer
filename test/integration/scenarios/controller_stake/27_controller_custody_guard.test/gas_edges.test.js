@@ -83,6 +83,7 @@ async function contractExecutionsCount() {
 
 async function setupGasEdgeSuite() {
     try { require('xchain-vm'); } catch (e) { return this.skip(); }
+    if (!process.env.TEST_DB_PASS) return this.skip();
     process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
     process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
     await createDatabases(__filename);
