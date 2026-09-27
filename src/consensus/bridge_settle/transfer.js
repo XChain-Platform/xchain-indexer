@@ -299,6 +299,7 @@ async function applyBridgeTransfer(deps, row, ctx){
     const isInLeg = (origin.kind === 'lock');
     const gasTick = ctx.config ? String(ctx.config['GAS']) : 'XCHAIN';
     if(isInLeg && f.tick !== gasTick &&
+       typeof ctx.indexerDb.getAppliedPolicySnapshot === 'function' &&
        gateRegistry.activeAt('token_policy_activation.TOKEN_POLICY_INHERITANCE_ACTIVATION',
                              ctx.network, null, ctx.blockIndex, null) &&
        !await ctx.indexerDb.getAppliedPolicySnapshot(origin.originChain, f.tick))
