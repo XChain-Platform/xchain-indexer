@@ -175,3 +175,16 @@ addGate('issue_policy_list_detach.ISSUE_POLICY_LIST_DETACH', 'height', {
     testnet: UNARMED,
     regtest: 0,
 });
+
+// bridge_policy_detach_activation
+// Read by the bridge policy settle pass at the destination chain's own block index.
+// At or above it a signed snapshot whose allow or block list is null detaches the bridged copy's matching list; below it a null list leaves the copy's list attached (byte-identical replay).
+// It must never arm ahead of issue_policy_list_detach.ISSUE_POLICY_LIST_DETACH, whose `0` sentinel it injects.
+addGate('bridge_policy_detach_activation.BRIDGE_POLICY_DETACH', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});

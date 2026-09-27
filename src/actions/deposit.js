@@ -65,7 +65,7 @@ class Deposit {
 
         error = await this.validateContract(data, error);
 
-        error = await this.validateTokenAndBalance(data, error);
+        ({ error } = await this.validateTokenAndBalance(data, error));
 
         // Determine final status
         let status = (error) ? error : 'valid';
@@ -154,11 +154,11 @@ class Deposit {
         if(!error && await this.indexerDb.isActionAllowed(null, data['TICK'], data['BLOCK_INDEX']) == false)
             error = 'invalid: TICK (sleeping)';
 
-        return error;
+        return { error, balances };
     }
 
     // Store the deposit row and move the stake into the contract's derived custody address
-    async settleDeposit(data, status){
+    async settleDeposit(data, status, guardFee = 0){
 
         // Create record in deposits table
         await this.indexerDb.createDeposit(data);
@@ -179,6 +179,11 @@ class Deposit {
         if(status === 'valid'){
             debits.push([data['TICK'], data['AMOUNT'], data['SOURCE']]);
             credits.push([data['TICK'], data['AMOUNT'], contractAddress]);
+            // Burn controller-guard gas from SOURCE without a matching credit or escrow
+            if(this.util.bcgt(guardFee, 0)){
+                debits.push([this.config['GAS'], guardFee, data['SOURCE']]);
+                this.util.addAddressTicker(data['SOURCE'], this.config['GAS']);
+            }
         }
 
         // Process any transaction ledger changes (credits / debits)

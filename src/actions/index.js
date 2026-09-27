@@ -60,14 +60,16 @@ const FEE_QUOTE_STATIC = new Set(['DEPLOY', 'EXECUTE']);
 // dispatches REAL sub-handlers, so "denied at top level" is not a wide enough net - an action the
 // top-level gate lets through for its own reasons still enters the VM when a batch runs it.
 //   ATTEST - v1 response injects a callback EXECUTE (attest.js injectCallbackExecute).
-//   VOTE   - a v2 finalize on a binding poll injects a callback EXECUTE (vote.js
-//            injectCallbackExecute), and VOTE is 'quotable', so the fee-quote classes do not
-//            cover it. That reach is NOT open today: vote.js refuses a v2 whose data is not
-//            IS_SYNTHETIC, which no probe sets, so this is defence in depth rather than a fix.
-//            It is deliberately kept anyway: that refusal exists to stop a user finalizing
-//            someone else's poll, which is a different question from "may an unauthenticated
-//            dry-run enter the VM", and relaxing it would silently open this door. The cost is
-//            named honestly: a batch of legitimate VOTE v0/v1 sub-commands loses its
+//   VOTE   - a v0 binding create at or above VOTE_CALLBACK_BINDING_REQUIRES_USABLE_METHOD
+//            reaches contract code in the callback probe VM through readManifest
+//            (binding_callback.js isCallbackMethodUsable) wherever that gate is active. A v2
+//            finalize on a binding poll injects a callback EXECUTE (vote.js
+//            injectCallbackExecute), but that reach stays closed: vote.js refuses a v2 whose
+//            data is not IS_SYNTHETIC, which no probe sets. VOTE is 'quotable', so its public
+//            fee-quote dry-run dispatches the real handler, probe included, under the block-loop
+//            mutex. It is deliberately kept in this set because the v0 create probe reaches the
+//            VM, and because relaxing the v2 refusal would silently open another VM door. The
+//            cost is named honestly: a batch of legitimate VOTE v0/v1 sub-commands loses its
 //            pre-flight, which is the safe direction of a real parity trade.
 //   XCALL  - injects a callback EXECUTE (xcall.js). Already 'exempt', listed so the set is a
 //            complete statement of VM reach rather than a residue of another gate's choices.

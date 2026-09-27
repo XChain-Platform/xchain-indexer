@@ -45,6 +45,9 @@ function setupDepositFixture() {
     actionsCtx = {
         config: indexer.config, util: indexer.util, mapper: indexer.mapper,
         decoderDb: indexer.decoderDb, indexerDb: indexer.indexerDb,
+        protocolChanges: {
+            isEnabled: sinon.stub().callsFake(async (name) => name !== 'CONTROLLER_CUSTODY_GUARD'),
+        },
     };
     handler = new Deposit(actionsCtx);
     indexer.util.resetLists();

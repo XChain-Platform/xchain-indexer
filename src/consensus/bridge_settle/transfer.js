@@ -180,10 +180,13 @@ async function guardQuorumAndEscrow(deps, row, ctx, f){
         return SETTLE_REASON.QUORUM;
     }
 
-    // THE ESCROW CHECK HOOK, called UNCONDITIONALLY and AFTER quorum verification but BEFORE any effect.
-    // Unconditional on purpose: the module decides for itself which legs need a proof (an out
-    // leg passes, because the escrow it releases is a local balance this node is authoritative
-    // over), so there is no branch here that could be gated wrong. ok:false applies NOTHING.
+    // Proof transport starts only after every terminal guard and quorum verification. The
+    // fetcher decides which legs need a proof; an out leg resolves to null because its escrow
+    // is a local balance this node is authoritative over.
+    if(typeof ctx.fetchProof === 'function') ctx.proof = await ctx.fetchProof();
+
+    // THE ESCROW CHECK HOOK, called UNCONDITIONALLY and BEFORE any effect. ok:false applies
+    // NOTHING. Direct callers may supply ctx.proof themselves; the pass supplies fetchProof.
     const cross = deps.verifyEscrowAgainstCheckpoint(row, ctx);
     if(!cross.ok){
         warnOnce('XBRIDGE', f.id, SETTLE_REASON.ESCROW_PROOF,

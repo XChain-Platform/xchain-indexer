@@ -60,7 +60,7 @@ CREATE TABLE anchor_reward_attestations (
     reward_amount          VARCHAR(32)  NOT NULL,                    -- audit only; the indexer credits the FROZEN constant, never this wire value
     publisher_attestations TEXT         NOT NULL,                    -- JSON [{pubkey,sig}], the 2f+1 XANCPUB oracle_publish quorum over the reward canonical
     doge_anchor_txid       VARCHAR(64)  DEFAULT NULL,                -- the MINED DOGE ANCHOR this reward is proof-bound to (see the mined-anchor note below)
-    created_at             TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at             DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     -- Hub-mirrored (hub_db_sync HUB_STATE_TABLES), like state_checkpoints: INSERT-IGNORE
     -- apply, never retracted. Written only AFTER the XANCPUB quorum resolves for a
     -- FINALIZED checkpoint, so there is no un-finalize to retract; a DOGE reorg cannot
