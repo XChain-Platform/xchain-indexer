@@ -236,7 +236,11 @@ function requireTargets(file) {
 function findTrackedRequirers(moduleFile) {
   const basename = path.posix.basename(moduleFile, '.js');
   const candidates = gitLines(['grep', '-l', '-F', basename, '--', 'src', 'test'], true);
-  return candidates.filter((file) => requireTargets(file).includes(moduleFile));
+  const importers = candidates.filter((file) => requireTargets(file).includes(moduleFile));
+  const moduleTail = moduleFile.replace(/\.js$/, '');
+  const namedTests = gitLines(['grep', '-l', '-F', moduleTail, '--', 'test'], true)
+    .filter((file) => matchingGroup(file));
+  return [...new Set([...importers, ...namedTests])];
 }
 
 function computePlan() {

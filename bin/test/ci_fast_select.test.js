@@ -47,8 +47,17 @@ function relativeRequireTargets(file) {
 
 function findRequirers(moduleFile) {
   const basename = path.posix.basename(moduleFile, '.js');
-  return gitLines(['grep', '-l', '-F', basename, '--', 'src', 'test'], { allowNoMatches: true })
+  const importers = gitLines(
+    ['grep', '-l', '-F', basename, '--', 'src', 'test'],
+    { allowNoMatches: true }
+  )
     .filter((file) => relativeRequireTargets(file).includes(moduleFile));
+  const moduleTail = moduleFile.replace(/\.js$/, '');
+  const namedTests = gitLines(
+    ['grep', '-l', '-F', moduleTail, '--', 'test'],
+    { allowNoMatches: true }
+  );
+  return [...new Set([...importers, ...namedTests])];
 }
 
 const dependencies = {
@@ -66,6 +75,14 @@ describe('ci fast selector', function () {
     assert.strictEqual(plan.consensus, false);
     assert(plan.tests.some((test) =>
       test.group === 'main' && test.file === 'test/unit/api/cors_origin.test.js'));
+  });
+
+  it('maps a source module to tests that name its git-grep tail', function () {
+    const source = 'src/actions/actions_class/dispatch.js';
+    const file = 'test/unit/action_dispatch/action_manifest_conformance.test.js';
+    assert(!relativeRequireTargets(file).includes(source));
+    assert(gitLines(['grep', '-l', '-F', source.replace(/\.js$/, ''), '--', file]).includes(file));
+    assert(select([source]).tests.some((test) => test.group === 'main' && test.file === file));
   });
 
   for (const changed of ['src/actions/address.js', 'src/protocol_changes/core.js']) {
