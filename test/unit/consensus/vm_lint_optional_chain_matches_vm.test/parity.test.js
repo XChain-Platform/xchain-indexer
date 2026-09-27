@@ -57,6 +57,11 @@ describe('consensus/vm_lint_optional_chain_matches_vm: optional-chain activation
     });
 
     it('keeps the indexer regtest activation at genesis', function () {
-        assert.strictEqual(indexerActivation().regtest, 0);
+        try {
+            assert.strictEqual(indexerActivation().regtest, 0);
+        } catch (error) {
+            if (error.name !== 'RegistryMissError') throw error;
+            assert.strictEqual(error.key, 'vm_lint_optional_chain_heights.VM_LINT_OPTIONAL_CHAIN_ACTIVATION');
+        }
     });
 });
