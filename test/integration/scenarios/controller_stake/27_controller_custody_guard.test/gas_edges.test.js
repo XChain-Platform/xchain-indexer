@@ -10,27 +10,35 @@
  * license (without AGPL source-disclosure terms) is available -
  * contact legal@dankest.llc.
  *
- **********************************************************************
- * Integration: DEPOSIT custody guard gas edges, above the CONTROLLER_CUSTODY_GUARD
- * override (real MariaDB + real isolated-vm guard).
- *
- * Same harness model as
- * test/integration/scenarios/controller_stake/25_controller_bulk_transfer_gating.test.js,
- * seeded through 27_controller_custody_guard.test/helpers/custody_rail.js. Proves, over
- * real DB rows + a real guard VM, both above the override:
- *   1. A GAS-less BTC SOURCE depositing a transfer-bound tick is refused
- *      'insufficient funds (guard gas)' before the guard ever runs: no custody credit,
- *      no SOURCE debit, no contract_executions row.
- *   2. An unbound tick deposited from an address with no controller binding of its own
- *      settles valid and leaves the SOURCE's GAS balance unchanged (no controller ever
- *      resolves, so no guard-gas reservation applies at all).
- *
- * Run (disposable MariaDB, e.g. the integration venue):
- *   TEST_DB_HOST=127.0.0.1 TEST_DB_PORT=<port> TEST_DB_USER=<u> TEST_DB_PASS=<pw> \
- *   TEST_DECODER_DB=cv_bt_decoder TEST_INDEXER_DB=cv_bt_indexer TEST_INDEXER_DB_B=cv_bt_indexer_b \
- *   XCHAIN_DECODER_SQL_PATH=<xchain-decoder/src/sql> INDEXER_COIN=BTC INDEXER_NETWORK=regtest \
- *   npx mocha --no-config --exit test/integration/scenarios/controller_stake/27_controller_custody_guard.test/gas_edges.test.js
  ********************************************************************/
+
+// Exercise DEPOSIT custody guard gas edges above the CONTROLLER_CUSTODY_GUARD
+// override with real MariaDB rows and the real isolated-vm guard.
+// Keep every scenario block at or after the configured override time.
+
+// Follow the scenario 25 harness model and seed through
+// 27_controller_custody_guard.test/helpers/custody_rail.js.
+// Use the shared seeder, indexer launcher, and database connection manager.
+
+// Verify a GAS-less BTC SOURCE depositing a transfer-bound tick is refused before
+// the guard runs, with no custody credit, SOURCE debit, or contract execution row.
+// Expect the exact status 'invalid: insufficient funds (guard gas)'.
+
+// Verify an unbound tick from an unbound SOURCE settles valid without changing its
+// GAS balance because no controller resolves and no guard-gas reservation applies.
+// Confirm the deposit still moves the requested token amount into custody.
+
+// Supply TEST_DB values only when the integration venue does not use harness defaults.
+
+// Override schema names when the venue requires dedicated test databases.
+
+// Run against a disposable MariaDB integration venue:
+// TEST_DB_HOST=127.0.0.1 TEST_DB_PORT=<port> TEST_DB_USER=<u> TEST_DB_PASS=<pw> \
+// TEST_DECODER_DB=cv_bt_decoder TEST_INDEXER_DB=cv_bt_indexer TEST_INDEXER_DB_B=cv_bt_indexer_b \
+
+// Continue with the decoder schema and indexer network settings:
+// XCHAIN_DECODER_SQL_PATH=<xchain-decoder/src/sql> INDEXER_COIN=BTC INDEXER_NETWORK=regtest \
+// npx mocha --no-config --exit test/integration/scenarios/controller_stake/27_controller_custody_guard.test/gas_edges.test.js
 'use strict';
 
 const assert = require('assert');
@@ -91,12 +99,12 @@ async function setupGasEdgeSuite() {
     await createDatabases(__filename);
     await createDecoderSchema();
     seeder = new DecoderSeeder(decoderQuery);
-    // Arm the override at T0: every scenario block below runs at or after T0, so the
-    // whole file is "above the override" (the below-override cases live in
-    // deposit_guard.test.js beside this file).
+    // Place the override at T0 so every scenario block runs above it.
+    // Keep this file limited to behavior after activation.
+    // Leave below-override cases to the neighboring deposit guard suite.
     restoreCustodyGuard = armCustodyGuardAt(T0);
     await seedGas(seeder, { addresses: [OWNER, SOURCE_PLAIN], amount: '10' });
-    // Block 100: issue both ticks and deploy the guard the bound tick will use.
+    // Deploy the guard alongside issuance so its action index is available for binding.
     await seeder.seedBlock(100, T0, [
         { source: OWNER, data: `ISSUE|0|${BOUND}|100000|10000|0|gas edge bound|1000` },
         { source: OWNER, data: `ISSUE|0|${PLAIN}|100000|10000|0|gas edge plain|1000` },
@@ -106,13 +114,13 @@ async function setupGasEdgeSuite() {
     await processBlocks(indexer);
     contractIndex = await contractIndexByCode(ALLOW_GUARD);
     custody = custodyAddress('BTC', contractIndex);
-    // Block 101: distribute BEFORE binding (an ungated SEND).
+    // Distribute the ticks before binding so these setup SENDs remain ungated.
     await seeder.seedBlock(101, T0 + 100, [
         { source: OWNER, data: `SEND|0|${BOUND}|500|${SOURCE_NOGAS}|seed-nogas` },
         { source: OWNER, data: `SEND|0|${PLAIN}|500|${SOURCE_PLAIN}|seed-plain` },
     ]);
     await processBlocks(indexer);
-    // Block 102: bind BOUND's transfer class only; PLAIN and both SOURCE addresses stay unbound.
+    // Bind only BOUND so PLAIN and both SOURCE addresses remain unbound.
     await seeder.seedBlock(102, T0 + 200, [
         { source: OWNER, data: bindTokenLine(BOUND, contractIndex, 'transfer', 'bind-bound-transfer') },
     ]);
