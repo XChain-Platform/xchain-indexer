@@ -736,7 +736,7 @@
       },
       {
         "name": "created_at",
-        "spec": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+        "spec": "DATETIME DEFAULT CURRENT_TIMESTAMP"
       }
     ],
     "coinpay_expires": [
@@ -1398,7 +1398,7 @@
       },
       {
         "name": "created_at",
-        "spec": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+        "spec": "DATETIME DEFAULT CURRENT_TIMESTAMP"
       }
     ],
     "cross_chain_settlements": [
@@ -2572,7 +2572,7 @@
       },
       {
         "name": "created_at",
-        "spec": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+        "spec": "DATETIME DEFAULT CURRENT_TIMESTAMP"
       }
     ],
     "order_cancels": [
@@ -3004,7 +3004,7 @@
       },
       {
         "name": "created_at",
-        "spec": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+        "spec": "DATETIME DEFAULT CURRENT_TIMESTAMP"
       }
     ],
     "prices": [
