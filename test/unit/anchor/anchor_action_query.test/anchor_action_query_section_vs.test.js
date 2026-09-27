@@ -160,7 +160,7 @@ describe('anchor-action-query: section vs co-located archive head', function () 
         // Neither family may be empty, and together they must be the whole served set:
         // a version in CHECKPOINT_VERSIONS that is in neither would be silently
         // unrankable, which is the defect wearing a new version byte.
-        assert.deepStrictEqual(CHECKPOINT_SECTION_VERSIONS, [0]);
+        assert.deepStrictEqual(CHECKPOINT_SECTION_VERSIONS, [0, 3]);
         let union = CHECKPOINT_SECTION_VERSIONS.concat(
             CHECKPOINT_VERSIONS.filter(v => ARCHIVE_HEAD_VERSIONS.includes(v)));
         assert.deepStrictEqual(union.slice().sort((a, b) => a - b), CHECKPOINT_VERSIONS.slice().sort((a, b) => a - b));
