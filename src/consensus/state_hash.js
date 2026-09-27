@@ -284,7 +284,9 @@ async function buildStateHashData(db, blockIndex, opts){
             "JOIN anchor_actions c ON c.version = 2 AND c.match_batch_seq = p.match_batch_seq " +
             "JOIN index_statuses s ON s.id = p.status_id AND s.status = 'invalid_archive' " +
             "JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid' " +
-            "WHERE " + (archiveInvalidActive ? archiveHeadPredicate('p') : "p.version = 1") +
+            "WHERE " + (archiveInvalidActive
+                ? archiveHeadPredicate('p') + " AND (p.version " + ARCHIVE_HEAD_VERSIONS_SQL + " OR p.version <> 2)"
+                : "p.version = 1") +
             " AND " + chunkHeightCol + " BETWEEN ? AND ? " +
             "ORDER BY p.action_index ASC",
             [B, B]);
