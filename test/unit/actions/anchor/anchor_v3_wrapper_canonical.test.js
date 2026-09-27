@@ -25,7 +25,7 @@ describe('ANCHOR v3 wrapper section canonical', function () {
     const archive = archiveFromFixture(fixture.bundle_v3);
 
     it('builds the archive suffix in canonical field order', function () {
-        const expected = ['42', '17', '9c4e1b22', '1']
+        const expected = ['42', '17', '8665563e', '1']
             .map(value => SEP + value).join('');
         assert.strictEqual(archiveCanonicalSuffix(archive), expected);
     });

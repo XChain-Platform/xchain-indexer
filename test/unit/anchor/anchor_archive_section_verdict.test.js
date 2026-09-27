@@ -24,7 +24,7 @@ const zlib = require('zlib');
 const { createBaseData } = require('../../fixtures/mocks.js');
 const gateRegistry = require('../../../src/consensus/gate_registry.js');
 const { stubActiveAt } = require('../../helpers/gate_modules.js');
-const { v3Params } = require('../actions/anchor/anchor.test/helpers/anchor_v3_fixtures.js');
+const { v3Params, vectors } = require('../actions/anchor/anchor.test/helpers/anchor_v3_fixtures.js');
 const {
     PUBLISHER, armAnchor, crc32Hex
 } = require('../actions/anchor/anchor.test/helpers/anchor_fixtures.js');
@@ -40,7 +40,7 @@ function splitArchiveWire() {
     const b64 = zlib.gzipSync(Buffer.from(json, 'utf8')).toString('base64url');
     const cut = Math.ceil(b64.length / 2);
     const params = v3Params();
-    const crcIndex = params.indexOf('9c4e1b22');
+    const crcIndex = params.indexOf(vectors.fixture.bundle_v3.batch_crc32);
     params[crcIndex] = crc32Hex(json);
     params[crcIndex + 1] = '2';
     params[crcIndex + 2] = b64.slice(0, cut);

@@ -12,7 +12,7 @@ const swq = require('../../../src/consensus/stake_weighted_quorum.js');
 const ar = require('../../../src/consensus/gates/anchor_reward_gate.js');
 const { deriveFoldWrapper } = require(
     '../../../src/actions/anchor/anchor_action_query/archive_query.js');
-const { v3Params } = require('../actions/anchor/anchor.test/helpers/anchor_v3_fixtures.js');
+const { v3Params, vectors } = require('../actions/anchor/anchor.test/helpers/anchor_v3_fixtures.js');
 const { crc32Hex } = require('../actions/anchor/anchor.test/helpers/anchor_fixtures.js');
 const { createMockIndexer } = require('../../fixtures/mocks.js');
 
@@ -46,7 +46,7 @@ function rows(indexer){
 function validV3Params(){
     let params = v3Params();
     let archive = JSON.stringify({ matches: Array.from({ length: 17 }, (_, id) => ({ id })) });
-    let crcIndex = params.indexOf('9c4e1b22');
+    let crcIndex = params.indexOf(vectors.fixture.bundle_v3.batch_crc32);
     params[crcIndex] = crc32Hex(archive);
     params[crcIndex + 2] = zlib.gzipSync(Buffer.from(archive, 'utf8')).toString('base64url');
     return { params, crc: params[crcIndex] };

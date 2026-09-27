@@ -24,7 +24,7 @@ function validWire(options = {}){
     let params = v3Params(options);
     if(options.archive === false) return { params, crc: null };
     let archive = JSON.stringify({ matches: Array.from({ length: 17 }, (_, id) => ({ id })) });
-    let crcIndex = params.indexOf('9c4e1b22');
+    let crcIndex = params.indexOf(vectors.fixture.bundle_v3.batch_crc32);
     params[crcIndex] = crc32Hex(archive);
     params[crcIndex + 2] = zlib.gzipSync(Buffer.from(archive, 'utf8')).toString('base64url');
     return { params, crc: params[crcIndex] };
