@@ -22,7 +22,8 @@
 // Load required libraries
 const mariadb = require('mariadb');
 const path    = require('path');
-const { buildStateHashData, archiveHeadPredicate, ARCHIVE_HEAD_VERSIONS } = require('../../consensus/state_hash');
+const { buildStateHashData, ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL,
+        archiveHeadPredicate } = require('../../consensus/state_hash');
 const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
         ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow,
