@@ -263,10 +263,17 @@ async function buildStateHashData(db, blockIndex, opts){
         } catch(e){ if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e; /* table may not exist on older schemas */ }
     }
 
-    // Hash invalid archive heads at the completing chunk height after both gates.
-    // Preserve the v1 parent predicate and legacy height key before their separate
-    // activations because either correction changes the consensus preimage.
+    // 6. invalid_archive stamp on anchor_actions archive-head parent rows. When the final v2 chunk of a chunked archive batch lands at block B and the
+    //    reassembled blob fails its CRC check, anchor.js stamps the parent archive head (v1) 'invalid_archive' in place. The parent's action_index is in an
+    //    earlier block, so it is invisible to the action-scoped consensus hashes and to the per-block stream. Resolved via the status name (not status_id) to stay id-independent across nodes.
+
+    //    Row predicate GATED: legacy v1-only below the ARCHIVE_INVALID_STATE_HASH activation, archive-head row attributes
+    //    at/after it, so the pre-flag preimage stays byte-identical.
     let archiveInvalidActive = isArchiveInvalidStateHashActive(B, network, coin);
+
+    //    Chunk-height key ALSO GATED, on its own separate flag day: the legacy `c.block_index` key is NEVER populated on a v2 continuation row, so this class
+    //    matched nothing on every node from the day it landed. At/after ARCHIVE_INVALID_HEIGHT_KEY it uses `c.block_index_doge`, the height the completing chunk
+    //    actually landed at. See the constant for why the two gates are separate and why repairing it is preimage-moving.
     let chunkHeightCol = isArchiveInvalidHeightKeyActive(B, network, coin)
                             ? ARCHIVE_CHUNK_HEIGHT_COL : ARCHIVE_CHUNK_HEIGHT_COL_LEGACY;
     let anchor_invalid = [];
