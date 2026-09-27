@@ -83,4 +83,23 @@ describe('bridge policy barrier block ordering @regression @tier1', function(){
         assert.doesNotMatch(localQueries[0].sql, /bs\.block_index <= \?/);
         assert.deepStrictEqual(localQueries[0].args, ['PEPECASH']);
     });
+
+    it('includes a policy settlement from the block being checked', async function(){
+        const localQueries = [];
+        const db = {
+            config: { NETWORK: 'regtest' },
+            doQuery: async (sql, args) => {
+                localQueries.push({ sql, args });
+                return [{ transfer_id: 'f'.repeat(64) }];
+            },
+            mirrorDb: () => ({
+                doQuery: async () => [{ policy_seq: 3, origin_block: 18203, policy_hash: '1'.repeat(64) }]
+            })
+        };
+
+        const result = await bridgesMixin.getAppliedPolicySnapshot.call(db, 'BTC', 'PEPECASH', 18203);
+        assert.strictEqual(result.policy_seq, 3);
+        assert.match(localQueries[0].sql, /AND bs\.block_index <= \?/);
+        assert.deepStrictEqual(localQueries[0].args, ['PEPECASH', 18203]);
+    });
 });
