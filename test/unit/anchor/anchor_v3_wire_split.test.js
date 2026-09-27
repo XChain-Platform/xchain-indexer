@@ -45,44 +45,51 @@ function expectedSection(section){
     return fields;
 }
 
-function expectedAttestationTail(bundle){
-    const fields = [String(bundle.attest_sigs.length)];
-    for(const signature of bundle.attest_sigs)
+function expectedAttestationTail(signatures){
+    const fields = [String(signatures.length)];
+    for(const signature of signatures)
         fields.push(signature.pubkey, signature.sig);
     return fields;
 }
 
-function assertBundleFields(actual, bundle, archiveCount){
+function fixtureArray(bundleName, field){
+    const bundle = fixture.fixture[bundleName];
+    if(Array.isArray(bundle[field])) return bundle[field];
+    assert.strictEqual(bundle[field], `same as bundle_v3.${field}`);
+    return fixture.fixture.bundle_v3[field];
+}
+
+function assertBundleFields(actual, bundleName){
+    const bundle = fixture.fixture[bundleName];
+    const sections = fixtureArray(bundleName, 'sections');
+    const attestations = fixtureArray(bundleName, 'attest_sigs');
     assert.strictEqual(actual.header.NETWORK, bundle.network);
     assert.strictEqual(actual.header.SNAPSHOT_BLOCK, String(bundle.snapshot_block));
-    assert.strictEqual(actual.header.SECTION_COUNT, String(bundle.sections.length));
-    assert.strictEqual(actual.sections.length, bundle.sections.length);
-    const wireSections = [...bundle.sections].sort((a, b) => a.chain.localeCompare(b.chain));
+    assert.strictEqual(actual.header.SECTION_COUNT, String(sections.length));
+    assert.strictEqual(actual.sections.length, sections.length);
+    const wireSections = [...sections].sort((a, b) => a.chain.localeCompare(b.chain));
     wireSections.forEach((section, index) => {
         assert.deepStrictEqual(actual.sections[index], expectedSection(section));
     });
-    assert.strictEqual(actual.ARCHIVE_COUNT, String(archiveCount));
+    assert.strictEqual(actual.ARCHIVE_COUNT, String(bundle.archive_count));
     assert.strictEqual(actual.PUBLISHER, bundle.publisher);
-    assert.deepStrictEqual(actual.attestationTail, expectedAttestationTail(bundle));
+    assert.deepStrictEqual(actual.attestationTail, expectedAttestationTail(attestations));
 }
 
 describe('ANCHOR v3 wire splitter', function () {
     it('splits the frozen archive-bearing vector field by field', function () {
         const bundle = fixture.fixture.bundle_v3;
         const actual = splitV3Wire(paramsFor('v3'));
-        assertBundleFields(actual, bundle, bundle.archive_count);
+        assertBundleFields(actual, 'bundle_v3');
         assert.ok(actual.archive);
         for(const [wireName, fixtureName] of ARCHIVE_FIELDS)
             assert.strictEqual(actual.archive[wireName], String(bundle[fixtureName]));
     });
 
     it('splits the frozen archive-free vector without consuming its publisher tail', function () {
-        const bundle = Object.assign({}, fixture.fixture.bundle_v3_no_archive, {
-            sections: fixture.fixture.bundle_v3.sections,
-            attest_sigs: fixture.fixture.bundle_v3.attest_sigs
-        });
+        const bundle = fixture.fixture.bundle_v3_no_archive;
         const actual = splitV3Wire(paramsFor('v3_no_archive'));
-        assertBundleFields(actual, bundle, bundle.archive_count);
+        assertBundleFields(actual, 'bundle_v3_no_archive');
         assert.strictEqual(actual.archive, null);
     });
 
