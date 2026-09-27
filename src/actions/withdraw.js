@@ -19,7 +19,7 @@ const { declaresOwnerWithdraw } = require('./deploy/contract_meta.js');
  * This action withdraws tokens from a contract's custody back to the owner.
  * Only the contract owner (deployer) can withdraw, and from the OWNER_WITHDRAW_OPT_IN
  * flag day only from a contract whose meta declares ownerWithdraw: true.
- * No gas fee; on-chain transaction cost is sufficient.
+ * A controller guard may burn GAS; otherwise the on-chain transaction cost is sufficient.
  *
  * PARAMS:
  * - VERSION              - Format Version
@@ -72,6 +72,23 @@ class Withdraw {
 
         error = await this.validateTokenAndBalance(data, contractAddress, error);
 
+        let guardFee = 0;
+        if(!error){
+            let guard = await this.util.maybeRunCustodyGuard(this.actions, this.indexerDb, {
+                actionType: 'WITHDRAW',
+                tick: data['TICK'],
+                from: contractAddress,
+                to: data['SOURCE'],
+                amount: data['AMOUNT'],
+                data: data,
+                gasBalances: null
+            });
+            if(guard.error)
+                error = 'invalid: ' + guard.error;
+            else
+                guardFee = guard.guardFee;
+        }
+
         // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
@@ -79,7 +96,7 @@ class Withdraw {
         // Print status message
         getLogger().info("\t WITHDRAW : contract=" + data['CONTRACT_ACTION_INDEX'] + ' : ' + data['TICK'] + ' : ' + this.util.logAmount(data['AMOUNT']) + ' : ' + data['STATUS']);
 
-        await this.settleWithdrawal(data, contractAddress, status);
+        await this.settleWithdrawal(data, contractAddress, status, guardFee);
     }
 
     /*****************************************************************
