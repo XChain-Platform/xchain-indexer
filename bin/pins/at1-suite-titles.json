@@ -6463,6 +6463,20 @@
       "bin/consensus-identity.js --assert-no-absent exits 0 and prints no ABSENT line when every shared gate resolves",
       "bin/consensus-identity.js --assert-no-absent reads every gate with a carrier hidden: the value is the registry row, never the file"
     ],
+    "db5cccdf7f214cc5": [
+      "DATETIME migration rehearsal against a real MariaDB @tier3 a fresh install and the fully migrated aged database agree on every retyped column",
+      "DATETIME migration rehearsal against a real MariaDB @tier3 applies 2026-09-27-datetime-anchor-reward-attestations.sql and retypes its column(s) to DATETIME",
+      "DATETIME migration rehearsal against a real MariaDB @tier3 applies 2026-09-27-datetime-bridge-policy.sql and retypes its column(s) to DATETIME",
+      "DATETIME migration rehearsal against a real MariaDB @tier3 applies 2026-09-27-datetime-hub-mirrors.sql and retypes its column(s) to DATETIME",
+      "DATETIME migration rehearsal against a real MariaDB @tier3 applies 2026-09-27-datetime-not-null-columns.sql and retypes its column(s) to DATETIME",
+      "DATETIME migration rehearsal against a real MariaDB @tier3 applies 2026-09-27-datetime-state-tree-roots.sql and retypes its column(s) to DATETIME",
+      "DATETIME migration rehearsal against a real MariaDB @tier3 re-running 2026-09-27-datetime-anchor-reward-attestations.sql is a no-op and leaves its column(s) unchanged",
+      "DATETIME migration rehearsal against a real MariaDB @tier3 re-running 2026-09-27-datetime-bridge-policy.sql is a no-op and leaves its column(s) unchanged",
+      "DATETIME migration rehearsal against a real MariaDB @tier3 re-running 2026-09-27-datetime-hub-mirrors.sql is a no-op and leaves its column(s) unchanged",
+      "DATETIME migration rehearsal against a real MariaDB @tier3 re-running 2026-09-27-datetime-not-null-columns.sql is a no-op and leaves its column(s) unchanged",
+      "DATETIME migration rehearsal against a real MariaDB @tier3 re-running 2026-09-27-datetime-state-tree-roots.sql is a no-op and leaves its column(s) unchanged",
+      "DATETIME migration rehearsal against a real MariaDB @tier3 the aged fixture stores every retyped column as TIMESTAMP, shifted by the read session"
+    ],
     "e14c6c636323351f": [
       "Guard dependency: Tier 2: State Management @tier2 ACR: Array Index Mutations ACR-200: destructuring swap [amount, tick, address] instead of [tick, amount, address]",
       "Guard dependency: Tier 2: State Management @tier2 ACR: Array Index Mutations ACR-201: key components swapped : address\\0tick instead of tick\\0address",
@@ -13277,8 +13291,8 @@
       }
     },
     "test:integration": {
-      "fileCount": 838,
-      "titleCount": 10006,
+      "fileCount": 839,
+      "titleCount": 10018,
       "files": {
         "test/integration/anchor_confirmations_pagination.test.js": "3fcd109353e0dc95",
         "test/integration/anchor_reward_late_publisher.test.js": "2ad75222c81c995b",
@@ -13287,6 +13301,7 @@
         "test/integration/attest_relay_identity.test.js": "34e85525857991c5",
         "test/integration/attest_relay_identity.test/attest_relay_identity_migration.test.js": "feadcd4727782c6d",
         "test/integration/attest_relay_identity.test/attest_relay_identity_request_id.test.js": "38927f13832ace8b",
+        "test/integration/datetime_migrations_real.test.js": "db5cccdf7f214cc5",
         "test/integration/hub_mirror_rebuilt_source.test.js": "a6481b1d2e081845",
         "test/integration/hub_push_starvation.test.js": "7a21a49cd5237573",
         "test/integration/markets_native_coin_migration.test.js": "3bd193539b3a5957",
@@ -14121,8 +14136,8 @@
       }
     },
     "test:integration:ci": {
-      "fileCount": 55,
-      "titleCount": 293,
+      "fileCount": 56,
+      "titleCount": 305,
       "files": {
         "test/integration/anchor_confirmations_pagination.test.js": "3fcd109353e0dc95",
         "test/integration/anchor_reward_late_publisher.test.js": "2ad75222c81c995b",
@@ -14131,6 +14146,7 @@
         "test/integration/attest_relay_identity.test.js": "34e85525857991c5",
         "test/integration/attest_relay_identity.test/attest_relay_identity_migration.test.js": "feadcd4727782c6d",
         "test/integration/attest_relay_identity.test/attest_relay_identity_request_id.test.js": "38927f13832ace8b",
+        "test/integration/datetime_migrations_real.test.js": "db5cccdf7f214cc5",
         "test/integration/hub_mirror_rebuilt_source.test.js": "a6481b1d2e081845",
         "test/integration/hub_push_starvation.test.js": "7a21a49cd5237573",
         "test/integration/markets_native_coin_migration.test.js": "3bd193539b3a5957",
