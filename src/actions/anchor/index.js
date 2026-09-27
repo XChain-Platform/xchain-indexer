@@ -80,6 +80,41 @@ const { foldArchiveReason } = require('./v3_archive_check.js');
 const { extendSectionCanonicalBase } = require('./v3_canonical.js');
 const { recordFoldAction } = require('./v3/v3_record.js');
 
+function foldHeaderReason(config, data, error){
+    if(error) return error;
+    if(String(data['NETWORK']) !== String(config['NETWORK'] || '')) return 'invalid: NETWORK (not this network)';
+    if(!/^[0-9]+$/.test(String(data['SNAPSHOT_BLOCK']))) return 'invalid: SNAPSHOT_BLOCK (format)';
+    return /^[0-9]+$/.test(String(data['SECTION_COUNT'])) ? error : 'invalid: SECTION_COUNT (format)';
+}
+async function checkFoldSeqs(handler, sections, archive, error){
+    if(error) return error;
+    for(let section of sections){
+        let maximum = await handler.indexerDb.getMaxAnchorCheckpointSeq(section.CHAIN, section.NETWORK);
+        if(maximum !== null && Number(section.CHECKPOINT_SEQ) < maximum)
+            return 'invalid: SECTION ' + section.SECTION_INDEX + ' CHECKPOINT_SEQ ' +
+                '(stale; replay of an older checkpoint)';
+    }
+    if(archive === null) return null;
+    let wrapper = sections[Number(archive.WRAPPER_SECTION_INDEX)];
+    let watermark = await handler.indexerDb.getArchiveReplayWatermarks();
+    let batchStale = watermark.batchSeq !== null && Number(archive.MATCH_BATCH_SEQ) < watermark.batchSeq;
+    let checkpointStale = watermark.checkpointSeq !== null && Number(wrapper.CHECKPOINT_SEQ) < watermark.checkpointSeq;
+    return batchStale && checkpointStale ?
+        'invalid: MATCH_BATCH_SEQ (stale; replay of an older archive batch)' : null;
+}
+function foldOrderReason(handler, data, sections, error){
+    let active = gateRegistry.activeAt('anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION',
+        handler.config['NETWORK'], null, Number(data['BLOCK_INDEX']), null);
+    if(error || !active) return error;
+    for(let i = 0; i < sections.length; i++){
+        let previous = i === 0 ? null : sections[i - 1].CHAIN;
+        let reason = validate.sectionOrderReason(previous, sections[i]);
+        if(!reason) reason = validate.sigOrderReason(sections[i].SIGS);
+        if(reason) return 'invalid: SECTION ' + i + ' ' + reason;
+    }
+    return null;
+}
+
 class Anchor {
 
     constructor(action){
@@ -259,8 +294,9 @@ class Anchor {
     }
 
     async parseFold(params, data, error){
-        bundle.readFoldHeader(params, data);
-        error = bundle.foldHeaderReason(this.config, data, error);
+        Object.assign(data, { NETWORK: String(params[1] || ''), SNAPSHOT_BLOCK: params[2],
+            SECTION_COUNT: params[3] });
+        error = foldHeaderReason(this.config, data, error);
 
         let split = splitV3Wire(params);
         if(!error && split.error) error = split.error;
@@ -270,7 +306,7 @@ class Anchor {
         let walked = walkFoldSections(this, split.error ? { sections: [] } : split, data, error);
         let sections = walked.sections;
         error = walked.error;
-        error = bundle.foldOrderReason(this, data, sections, error);
+        error = foldOrderReason(this, data, sections, error);
 
         let tailParams = split.error ? [] : [split.PUBLISHER].concat(split.attestationTail);
         let tail = validate.parseBundleTail(tailParams, data, 0, error);
@@ -278,12 +314,13 @@ class Anchor {
         error = tail.error;
 
         if(!error) error = foldArchiveReason(this, archive, data);
-        error = await bundle.checkFoldSeqs(this, sections, archive, error);
+        error = await checkFoldSeqs(this, sections, archive, error);
 
-        bundle.markFoldCanonical(sections, archive);
+        for(let section of sections)
+            Object.defineProperty(section, 'FOLD_ARCHIVE', { value: archive, configurable: true });
         let oracleSetFor = quorum.makeOracleSetResolver(this);
         let verdict = await quorum.verifySections(this, data, sections, oracleSetFor, error);
-        bundle.clearFoldCanonical(sections);
+        for(let section of sections) delete section.FOLD_ARCHIVE;
         error = verdict.error;
 
         if(!error && sections.length > 0 && verdict.bundleSet && verdict.bundleSet.oracleN > 0){

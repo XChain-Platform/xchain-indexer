@@ -63,66 +63,6 @@ function walkSections(handler, params, data, error){
     return { error, sections, cursor };
 }
 
-function readFoldHeader(params, data){
-    data['NETWORK'] = String(params[1] || '');
-    data['SNAPSHOT_BLOCK'] = params[2];
-    data['SECTION_COUNT'] = params[3];
-}
-
-function foldHeaderReason(config, data, error){
-    if(!error && String(data['NETWORK']) !== String(config['NETWORK'] || ''))
-        error = 'invalid: NETWORK (not this network)';
-    if(!error && !/^[0-9]+$/.test(String(data['SNAPSHOT_BLOCK'])))
-        error = 'invalid: SNAPSHOT_BLOCK (format)';
-    if(!error && !/^[0-9]+$/.test(String(data['SECTION_COUNT'])))
-        error = 'invalid: SECTION_COUNT (format)';
-    return error;
-}
-
-async function checkFoldSeqs(handler, sections, archive, error){
-    if(error) return error;
-    for(let section of sections){
-        let maximum = await handler.indexerDb.getMaxAnchorCheckpointSeq(
-            section.CHAIN, section.NETWORK);
-        if(maximum !== null && Number(section.CHECKPOINT_SEQ) < maximum)
-            return 'invalid: SECTION ' + section.SECTION_INDEX +
-                ' CHECKPOINT_SEQ (stale; replay of an older checkpoint)';
-    }
-    if(archive === null) return null;
-    let wrapper = sections[Number(archive.WRAPPER_SECTION_INDEX)];
-    let watermark = await handler.indexerDb.getArchiveReplayWatermarks();
-    let batchStale = watermark.batchSeq !== null &&
-        Number(archive.MATCH_BATCH_SEQ) < watermark.batchSeq;
-    let checkpointStale = watermark.checkpointSeq !== null &&
-        Number(wrapper.CHECKPOINT_SEQ) < watermark.checkpointSeq;
-    return batchStale && checkpointStale
-        ? 'invalid: MATCH_BATCH_SEQ (stale; replay of an older archive batch)'
-        : null;
-}
-
-function markFoldCanonical(sections, archive){
-    for(let section of sections)
-        Object.defineProperty(section, 'FOLD_ARCHIVE', { value: archive, configurable: true });
-}
-
-function clearFoldCanonical(sections){
-    for(let section of sections) delete section.FOLD_ARCHIVE;
-}
-
-function foldOrderReason(handler, data, sections, error){
-    let active = gateRegistry.activeAt(
-        'anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION',
-        handler.config['NETWORK'], null, Number(data['BLOCK_INDEX']), null);
-    if(error || !active) return error;
-    for(let i = 0; i < sections.length; i++){
-        let previous = i === 0 ? null : sections[i - 1].CHAIN;
-        let reason = validate.sectionOrderReason(previous, sections[i]);
-        if(!reason) reason = validate.sigOrderReason(sections[i].SIGS);
-        if(reason) return 'invalid: SECTION ' + i + ' ' + reason;
-    }
-    return null;
-}
-
 // Stale-seq replay guard, per section, against that chain's own watermark. Strictly
 // less, exactly as the archive leg reads it: an equal seq is a signature-bound
 // re-broadcast that can only produce a duplicate row, while a genuinely lower seq
@@ -250,7 +190,4 @@ async function parseBundleAction(handler, params, data, error){
     await handler.mapper.createMappings(data);
 }
 
-module.exports = {
-    parseBundleAction, readFoldHeader, foldHeaderReason, checkFoldSeqs,
-    markFoldCanonical, clearFoldCanonical, foldOrderReason
-};
+module.exports = { parseBundleAction };
