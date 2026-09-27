@@ -114,6 +114,7 @@ const GATES = [
     ['anchor_reward_activation.js',         'ARCHIVE_REWARD_AMOUNT'],
     ['anchor_reward_activation.js',         'ANCHOR_REWARD_MIRROR_MATURITY'],
     ['archive_match_count_activation',       'ARCHIVE_MATCH_COUNT_ACTIVATION'],
+    ['anchor_bundle_order_activation',       'ANCHOR_BUNDLE_ORDER_ACTIVATION'],
     ['price_pair_activation.js',            'PRICE_PAIR_WIDEN_ACTIVATION'],
     ['price_scale_activation',              'PRICE_SCALE_ACTIVATION'],
     // The consensus wire-format bounds that gate selects between: canon says a change is
