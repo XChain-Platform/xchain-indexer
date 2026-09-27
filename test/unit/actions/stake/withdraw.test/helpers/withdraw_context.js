@@ -48,7 +48,7 @@ function makeActionsCtx(indexer) {
         indexerDb:       indexer.indexerDb,
         protocolChanges: {
             isDefined:  sinon.stub().returns(true),
-            isEnabled:  sinon.stub().resolves(true),
+            isEnabled:  sinon.stub().callsFake(async name => name !== 'CONTROLLER_CUSTODY_GUARD'),
         },
         processAction: sinon.stub().resolves(),
     };
