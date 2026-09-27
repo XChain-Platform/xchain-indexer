@@ -22,7 +22,7 @@
 
 'use strict';
 
-const { ARCHIVE_HEAD_VERSIONS_SQL } = require('../../consensus/state_hash.js');
+const { ARCHIVE_HEAD_VERSIONS_SQL, archiveHeadPredicate } = require('../../consensus/state_hash.js');
 const { archiveAuthorScopeJoin } = require('../../consensus/gates/archive_rollback_author_scope_gate.js');
 // Wire versions only, for the ATTEST batch-link retraction below: the head and the
 // continuation are what make an `attests` row part of a batch, and naming them from the
@@ -67,6 +67,8 @@ module.exports = {
             // Rationale + arming precondition: archive_rollback_author_scope_activation.js.
             await db.createStatus('unverified');
             let authorScope = archiveAuthorScopeJoin(block_index, String(config['NETWORK'] || ''));
+            // AND the fold row predicate so heads are picked as the state hash picks them; a
+            // head with no batch seq never matched the chunk join, so pre-fold resets are unchanged.
             query = `UPDATE anchor_actions p
                         JOIN index_statuses ps ON ps.id = p.status_id AND ps.status = 'invalid_archive'
                         JOIN anchor_actions c
@@ -78,7 +80,8 @@ module.exports = {
                         JOIN index_statuses us ON us.status = 'unverified'
                         SET p.status_id = us.id
                         WHERE p.version ${ARCHIVE_HEAD_VERSIONS_SQL}
-                          AND p.action_index < ?`;
+                          AND p.action_index < ?
+                          AND ${archiveHeadPredicate('p')}`;
             args = [firstActionIndex, firstActionIndex];
             await db.doQuery(query, args);
         }
