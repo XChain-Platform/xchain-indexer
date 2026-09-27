@@ -16,10 +16,10 @@
 -- (manual: the auto classifier refuses any MODIFY restating NOT NULL, since
 --  it cannot tell that restatement apart from a narrowing.)
 --
--- Migration: retype two pre-ledger NOT NULL columns from TIMESTAMP to DATETIME
+-- Migration: retype state_tree_roots.computed_at from TIMESTAMP to DATETIME
 --
 -- WHY: TIMESTAMP converts values through session time_zone; DATETIME stores them
--- literally. These provenance timestamps need no session conversion.
+-- literally. This provenance timestamp needs no session conversion.
 --
 -- IDEMPOTENT: re-running MODIFY to the same type is a no-op.
 --
@@ -27,5 +27,4 @@
 --   node src/db/migration/migrate.js
 
 SET time_zone = '+00:00';
-ALTER TABLE cross_chain_calls MODIFY created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP;
-ALTER TABLE state_checkpoints MODIFY created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE state_tree_roots MODIFY computed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP;

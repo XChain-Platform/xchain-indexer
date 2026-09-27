@@ -164,7 +164,7 @@ describe('migration reorder verdict @regression @tier1', function () {
 // sorts before; deleting exactly that name from a full ledger reproduces that database.
 describe('runMigrations() reorder discrimination @regression @tier1', function () {
     const HARMLESS = '2026-09-12-state-tree-roots-block-index-idx.sql';
-    const ORDERED_COMPANION = '2026-09-27-datetime-not-null-columns.sql';
+    const ORDERED_COMPANION = '2026-09-27-datetime-state-tree-roots.sql';
     // The jumped pair from the same window, kept as an assertion rather than a comment so a
     // later migration landing between them cannot silently change what this case tests.
     const REQUIRED_JUMPED = ['2026-09-12-token-bridge-fields.sql', '2026-09-13-destroys-sends-leg-ordinal.sql'];

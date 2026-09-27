@@ -26,14 +26,16 @@ const Database = require('../../../src/db');
 
 const SQL_DIR = path.join(__dirname, '..', '..', '..', 'src', 'sql');
 const MIG_DIR = path.join(SQL_DIR, 'migrations');
-const MIGRATION_FILE = '2026-09-27-datetime-not-null-columns.sql';
 
 const stripComments = (sql) => Database.prototype.stripSqlLineComments.call({}, sql);
 
 const DEFINITIONS = [
-    { file: 'cross_chain_calls.sql', table: 'cross_chain_calls', column: 'created_at' },
-    { file: 'state_checkpoints.sql', table: 'state_checkpoints', column: 'created_at' },
-    { file: 'state_tree_roots.sql',  table: 'state_tree_roots',  column: 'computed_at' },
+    { file: 'cross_chain_calls.sql', table: 'cross_chain_calls', column: 'created_at',
+        migration: '2026-09-27-datetime-not-null-columns.sql' },
+    { file: 'state_checkpoints.sql', table: 'state_checkpoints', column: 'created_at',
+        migration: '2026-09-27-datetime-not-null-columns.sql' },
+    { file: 'state_tree_roots.sql',  table: 'state_tree_roots',  column: 'computed_at',
+        migration: '2026-09-27-datetime-state-tree-roots.sql' },
 ];
 
 // A TIMESTAMP token that is the column TYPE, not the CURRENT_TIMESTAMP default.
@@ -75,21 +77,26 @@ describe('schema-baseline.json: re-frozen entries read DATETIME NOT NULL DEFAULT
     }
 });
 
-describe('2026-09-27-datetime-not-null-columns.sql: manual mode and the three MODIFYs @regression', function () {
-    const raw = fs.readFileSync(path.join(MIG_DIR, MIGRATION_FILE), 'utf8');
+describe('2026-09-27 DATETIME migrations: manual mode and the three MODIFYs @regression', function () {
+    const migrationFiles = [...new Set(DEFINITIONS.map(({ migration }) => migration))];
 
-    it('is tagged mode=manual (the auto classifier refuses a MODIFY restating NOT NULL)', function () {
-        assert.strictEqual(Database.prototype.migrationMode(raw), 'manual');
-    });
+    for (const migration of migrationFiles) {
+        it(migration + ' is manual and sets UTC', function () {
+            const raw = fs.readFileSync(path.join(MIG_DIR, migration), 'utf8');
+            assert.strictEqual(Database.prototype.migrationMode(raw), 'manual');
+            assert.ok(/SET\s+time_zone\s*=\s*'\+00:00'\s*;/i.test(stripComments(raw)),
+                migration + ': missing SET time_zone statement');
+        });
+    }
 
-    it('holds SET time_zone and MODIFYs all three columns to DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP', function () {
-        const stripped = stripComments(raw);
-        assert.ok(/SET\s+time_zone\s*=\s*'\+00:00'\s*;/i.test(stripped), 'missing SET time_zone statement');
-        for (const { table, column } of DEFINITIONS) {
+    for (const { table, column, migration } of DEFINITIONS) {
+        it(migration + ' MODIFYs ' + table + '.' + column + ' to DATETIME NOT NULL', function () {
+            const raw = fs.readFileSync(path.join(MIG_DIR, migration), 'utf8');
+            const stripped = stripComments(raw);
             const re = new RegExp(
                 'ALTER\\s+TABLE\\s+' + table + '\\s+MODIFY\\s+' + column +
                 '\\s+DATETIME\\s+NOT\\s+NULL\\s+DEFAULT\\s+CURRENT_TIMESTAMP\\s*;', 'i');
             assert.ok(re.test(stripped), table + '.' + column + ': no matching MODIFY statement');
-        }
-    });
+        });
+    }
 });
