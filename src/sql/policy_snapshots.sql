@@ -49,7 +49,7 @@ CREATE TABLE policy_snapshots (
     status               VARCHAR(20)  NOT NULL DEFAULT 'finalized',-- finalized / retracted
     push_generation      BIGINT       NOT NULL DEFAULT 0,          -- origin-chain reorg fence
     btc_chain_id         CHAR(64),                                 -- hash of BTC block 1 on the writing hub's chain; transport, not consensus
-    created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uq_policy_seq (network, origin_chain, tick, policy_seq),
     UNIQUE KEY uq_snapshot_id (snapshot_id),
     KEY idx_effective (effective_time),
