@@ -66,23 +66,28 @@ function archiveChunkCoverage(chunks, totalChunks) {
     return ordered;
 }
 
-// Validate a getarchiveanchor request. Returns
-// {ok:true, block_index, checkpoint_seq, batch_crc32, match_count, author} or
-// {ok:false, error}.
+// Validate a getarchiveanchor request.
 //
-// batch_crc32 and match_count are REQUIRED, not optional narrowing filters: without
-// both, the query degenerates into "is this checkpoint archived at all", which is
-// true for a DIFFERENT batch wrapped in the same checkpoint and would tell a hub its
-// unpublished archive is already on-chain. That direction loses match rows
-// permanently, so the content terms are part of the question, never a refinement of it.
+// An author-only request returns {ok:true, author, author_only:true}. Every
+// content-key field must be omitted so a partial content lookup cannot be mistaken
+// for the publisher sequence lookup.
 //
-// `author` is optional and, when supplied, scopes the answer to "did THIS publisher
-// address already publish this batch". The hub always supplies its own DOGE address:
-// unscoped, a third party who copied our already-mined head onto the chain (or a
-// co-signer who front-ran it) would answer "already published" for a batch whose
-// CHUNKS that party never sent, and the hub would skip its own head and strand the
-// archive. Scoping makes the check answer only for spends this publisher made.
+// A content request returns the normalized content key and optional author.
+// Invalid requests return {ok:false, error}.
+//
+// For a content request, batch_crc32 and match_count are required parts of the
+// question. Without both, a different batch in the same checkpoint could answer
+// yes and cause the publisher to discard its own unpublished matches.
+//
+// The optional content-request author asks whether this publisher sent the batch.
+// Without that scope, a copied head could answer yes even though its publisher never
+// sent the chunks, causing the original publisher to strand the archive.
 function validateArchiveAnchorParams({ chain, network, block_index, checkpoint_seq, batch_crc32, match_count, author }) {
+    // Accept the publisher-only request only when every content-key field is omitted.
+    let authorOnly = chain === undefined && network === undefined && block_index === undefined &&
+                     checkpoint_seq === undefined && batch_crc32 === undefined && match_count === undefined;
+    if (authorOnly && typeof author === 'string' && author !== '')
+        return { ok: true, author, author_only: true };
     if (typeof chain !== 'string' || !chain || typeof network !== 'string' || !network)
         return { ok: false, error: 'chain and network are required strings' };
     let bi = Number(block_index);
