@@ -33,8 +33,7 @@ async function optsFor(network, coin, blockIndex) {
     return vm.validateSyntax.firstCall.args[1];
 }
 
-// W3L-7 removes this skip when the registry row and deploy wiring land.
-describe.skip('Deploy (DEPLOY) @regression @tier2', function () {
+describe('Deploy (DEPLOY) @regression @tier2', function () {
     beforeEach(freshSuite);
     afterEach(function () { sinon.restore(); });
 
