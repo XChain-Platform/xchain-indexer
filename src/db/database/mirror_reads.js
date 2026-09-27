@@ -157,4 +157,21 @@ module.exports = {
         return { head, chunks };
     },
 
+    // Return this publisher's highest usable v1 archive batch sequence. Invalid
+    // heads cannot seed an allocator, while unverified heads remain usable on a
+    // node that lacks the mirrored snapshot needed to verify their signatures.
+    async getMaxArchiveBatchSeqByAuthor(author){
+        let rows = await this.doQuery(
+            `SELECT MAX(a.match_batch_seq) AS max_batch_seq
+             FROM anchor_actions a
+             JOIN index_statuses s  ON s.id = a.status_id
+             JOIN actions act       ON act.action_index = a.action_index
+             JOIN index_addresses adr ON adr.id = act.source_id
+             WHERE a.version = 1 AND s.status IN ('valid', 'unverified')
+               AND adr.address = ?`,
+            [String(author)]);
+        let row = rows.length > 0 ? rows[0] : {};
+        return row.max_batch_seq != null ? Number(row.max_batch_seq) : null;
+    },
+
 };

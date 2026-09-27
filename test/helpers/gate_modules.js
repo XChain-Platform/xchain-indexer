@@ -130,6 +130,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'order_swap_payout_policy_activation',
     'issue_policy_list_detach',
     'archive_match_count_activation',
+    'anchor_bundle_order_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));
