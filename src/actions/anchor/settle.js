@@ -21,6 +21,8 @@
 
 const ar    = require('../../consensus/gates/anchor_reward_gate.js');
 const arKey = require('./anchor_reward_key.js');
+const gateRegistry = require('../../consensus/gate_registry');
+const { rewardTypeFor } = require('./reward_family.js');
 
 const { getLogger } = require('../../observability/index.js');
 
@@ -35,7 +37,14 @@ async function creditArchiveReward(handler, data, attQuorumMet, snapPubkeys, for
         // attestation-quorum check above still runs (anchor validity is unaffected);
         // only the createValidatorReward/reconcile write is relocated.
     } else if(attQuorumMet && snapPubkeys.has(String(data['PUBLISHER']))){
-        let rewardType  = 'anchor_archive';
+        let foldActive = gateRegistry.activeAt(
+            'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION',
+            handler.config.NETWORK, null, Number(data.BLOCK_INDEX), null);
+        let rewardType = rewardTypeFor(format, foldActive);
+        if(rewardType === null){
+            getLogger().warn('\t ANCHOR v' + format + ' : archive reward is retired at the fold; reward skipped');
+            return;
+        }
         let rewardRound = Number(data['MATCH_BATCH_SEQ']);
         let rewardAmt   = ar.ARCHIVE_REWARD_AMOUNT;
         // The archive leg's rewardRound is MATCH_BATCH_SEQ, the dense hub counter the

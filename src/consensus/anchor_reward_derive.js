@@ -57,10 +57,12 @@ const swq     = require('./stake_weighted_quorum.js');
 const eq      = require('./equivocation_header.js');
 const ar      = require('./gates/anchor_reward_gate.js');
 const arKey   = require('../actions/anchor/anchor_reward_key.js');
+const { getLogger } = require('../observability/index.js');
 // The proof-and-mint step and the logical-reward grouping live beside this file in
 // anchor_reward_derive/. Every activation read (ar) stays here.
 const { AnchorProofUnavailableError, mintProvenRow } = require('./anchor_reward_derive/mint_row.js');
 const { groupByLogicalReward } = require('./anchor_reward_derive/reward_groups.js');
+const { recordLateDerive } = require('./anchor_reward_derive/late_derive_counter.js');
 // No coin-registry require here on purpose: nothing inside the block transaction may read a
 // field the registry advertises as operator-tunable (see minConfirmations below).
 
@@ -219,7 +221,14 @@ async function deriveAnchorRewards(indexerDb, config, blockIndex, proof){
             // An anchor that cannot be proven either way throws AnchorProofUnavailableError,
             // which defers the whole block.
             let amount = (String(row.reward_type) === 'anchor_archive') ? ar.ARCHIVE_REWARD_AMOUNT : ar.ANCHOR_REWARD_AMOUNT;
-            if(await mintProvenRow(indexerDb, row, { blockIndex, proof, minConfirmations, amount })) anyWritten = true;
+            if(await mintProvenRow(indexerDb, row, { blockIndex, proof, minConfirmations, amount })){
+                try {
+                    recordLateDerive(getLogger(), row, blockIndex, ar.ANCHOR_REWARD_MIRROR_MATURITY);
+                } catch(e){
+                    getLogger().warn('Anchor reward late-derive observation failed: ' + (e && e.message ? e.message : e));
+                }
+                anyWritten = true;
+            }
         }
         if(anyWritten){
             let first = groupRows[0];
