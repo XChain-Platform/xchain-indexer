@@ -22,7 +22,8 @@
 // Load required libraries
 const mariadb = require('mariadb');
 const path    = require('path');
-const { buildStateHashData, ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../../consensus/state_hash');
+const { buildStateHashData, ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL,
+        archiveHeadPredicate } = require('../../consensus/state_hash');
 const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
         ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow,
@@ -303,6 +304,14 @@ module.exports = {
     async setAnchorArchiveStatus(actionIndex, status){
         let status_id = await this.createStatus(status);
         await this.doQuery("UPDATE anchor_actions SET status_id = ? WHERE action_index = ?", [status_id, actionIndex]);
+    },
+
+    async setAnchorArchiveRowStatus(actionIndex, status){
+        let status_id = await this.createStatus(status);
+        await this.doQuery(
+            "UPDATE anchor_actions a SET a.status_id = ? WHERE a.action_index = ? AND " +
+            archiveHeadPredicate('a'),
+            [status_id, actionIndex]);
     },
 
 
