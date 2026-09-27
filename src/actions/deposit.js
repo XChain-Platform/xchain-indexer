@@ -16,7 +16,7 @@ const { getLogger } = require('../observability/index.js');
  * XChain Platform Action - DEPOSIT
  *
  * This action transfers tokens from a user to a contract's custody.
- * No gas fee; on-chain transaction cost is sufficient.
+ * A controller guard may burn a metered gas fee from the depositor.
  *
  * PARAMS:
  * - VERSION              - Format Version
@@ -65,7 +65,25 @@ class Deposit {
 
         error = await this.validateContract(data, error);
 
-        ({ error } = await this.validateTokenAndBalance(data, error));
+        let balances;
+        ({ error, balances } = await this.validateTokenAndBalance(data, error));
+
+        let guardFee = 0;
+        if(!error){
+            let guard = await this.util.maybeRunCustodyGuard(this.actions, this.indexerDb, {
+                actionType: 'DEPOSIT',
+                tick: data['TICK'],
+                from: data['SOURCE'],
+                to: 'C:' + this.config['CHAIN'] + ':' + data['CONTRACT_ACTION_INDEX'],
+                amount: data['AMOUNT'],
+                data: data,
+                gasBalances: balances,
+            });
+            if(guard.error)
+                error = 'invalid: ' + guard.error;
+            else
+                guardFee = guard.guardFee;
+        }
 
         // Determine final status
         let status = (error) ? error : 'valid';
@@ -74,7 +92,7 @@ class Deposit {
         // Print status message
         getLogger().info("\t DEPOSIT : contract=" + data['CONTRACT_ACTION_INDEX'] + ' : ' + data['TICK'] + ' : ' + this.util.logAmount(data['AMOUNT']) + ' : ' + data['STATUS']);
 
-        await this.settleDeposit(data, status);
+        await this.settleDeposit(data, status, guardFee);
     }
 
     /*****************************************************************
