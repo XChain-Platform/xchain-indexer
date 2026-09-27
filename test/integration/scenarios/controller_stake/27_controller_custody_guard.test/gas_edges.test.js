@@ -44,6 +44,8 @@
 const assert = require('assert');
 const crypto = require('crypto');
 
+// Require explicit credentials before the database helper can read local defaults.
+assert.ok(process.env.TEST_DB_PASS, 'TEST_DB_PASS is required for the real MariaDB integration');
 // Load the guard VM eagerly so missing native support fails the suite.
 require('xchain-vm');
 
