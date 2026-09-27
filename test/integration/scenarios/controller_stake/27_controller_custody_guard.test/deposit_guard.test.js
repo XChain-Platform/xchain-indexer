@@ -79,9 +79,11 @@ async function balanceOf(address, tick) {
 }
 
 async function setupCustodyGuardSuite() {
-    try { require('xchain-vm'); } catch (e) { return this.skip(); }
     // Require explicit disposable-database credentials instead of falling back to deployment credentials.
-    if (process.env.TEST_DB_PASS === undefined) return this.skip();
+    assert.notStrictEqual(process.env.TEST_DB_PASS, undefined,
+        'TEST_DB_PASS is required for the disposable integration database');
+    // Require the real guard runtime so a missing VM fails this integration suite.
+    assert.doesNotThrow(() => require('xchain-vm'), 'xchain-vm is required for the controller guard integration');
     process.env.INDEXER_COIN    = 'BTC';
     process.env.INDEXER_NETWORK = 'regtest';
     restoreGuard = armCustodyGuardAt(OVERRIDE_TIME);
