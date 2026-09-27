@@ -123,6 +123,7 @@ describe('deriveAnchorRewards per-row mint loop, pinned against the mint_row wir
         const db = stubDb(keys, [rowA, rowB]);
         const derived = await deriveMod.deriveAnchorRewards(db, cfg, maturedAt(200), stubProof());
         assert.strictEqual(derived, 0);
+        assert.strictEqual(mintStub.callCount, 2, 'both logical-reward groups get a mint attempt');
         assert.ok(db.reconcileAnchorRewardWinner.notCalled);
     });
 
