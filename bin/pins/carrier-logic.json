@@ -54,7 +54,7 @@
     },
     "consensus_rules_digest": {
       "path": "src/consensus_rules_digest.js",
-      "hash": "90d7040d61391bb2a42ed6ebcf8ad250914a4e81f1bab11ec98420877bae66a9",
+      "hash": "d1952b0474e68584339150bb0e5124f1bff0910c24048c16ae9c1a7d55c5281a",
       "twins": [
         "xchain-hub"
       ]
@@ -1822,6 +1822,13 @@
       "to": "de549b45d45d4228f6843ea2b7e9717d3d0998fa6119bd0aba1d3f216b3631f2",
       "reason": "consensus-bound indexer rows",
       "date": "2026-09-26"
+    },
+    {
+      "id": "consensus_rules_digest",
+      "from": "90d7040d61391bb2a42ed6ebcf8ad250914a4e81f1bab11ec98420877bae66a9",
+      "to": "d1952b0474e68584339150bb0e5124f1bff0910c24048c16ae9c1a7d55c5281a",
+      "reason": "append anchor bundle order activation to shared rules digest",
+      "date": "2026-09-27"
     }
   ]
 }

@@ -125,7 +125,9 @@ describe('armed_map/manifest: completeness guard', function () {
         // key: that is exactly the W4 census plus the registry-only rows, one row
         // per stem, and a new row that no module and no list names still reds here.
         const stems = REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS);
-        const unexported = [...keys].filter((k) => !k.startsWith('protocol_changes.') && !k.startsWith('xchain-vm.') && !exported.has(k));
+        const registryOnly = ['anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION'];
+        const unexported = [...keys].filter((k) => !k.startsWith('protocol_changes.') && !k.startsWith('xchain-vm.')
+            && !exported.has(k) && !registryOnly.includes(k));
         const replaced = [...keys].filter((k) => stems.includes(k.slice(0, k.lastIndexOf('.'))));
         assert.strictEqual(replaced.length, stems.length, 'one registry row per replaced shim or registry-only stem');
         assert.deepStrictEqual(unexported, replaced, 'rows no shim exports, beyond the W4-replaced set: ' +
@@ -172,7 +174,7 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(res.ok, true, res.reason);
         assert.deepStrictEqual(res.rows.map((r) => r[0]), manifest.ENTRIES.map((e) => e[0]));
         for (const [, value] of res.rows) canonicalValue(value);
-        assert.strictEqual(res.rows.length, 319);
+        assert.strictEqual(res.rows.length, 320);
     });
 
     it('carries the three row families the design names', function () {
