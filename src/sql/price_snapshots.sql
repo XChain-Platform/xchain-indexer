@@ -40,7 +40,7 @@ CREATE TABLE price_snapshots (
     admit_block_btc     BIGINT UNSIGNED DEFAULT NULL,
     admit_block_ltc     BIGINT UNSIGNED DEFAULT NULL,
     admit_block_doge    BIGINT UNSIGNED DEFAULT NULL,
-    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY idx_round_pair (round_number, coin_pair),
     KEY idx_pair_block (coin_pair, reference_block),
     KEY idx_pair_timestamp (coin_pair, block_timestamp),
