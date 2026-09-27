@@ -37,6 +37,7 @@ const {
     ARCHIVE_HEAD_VERSIONS, validateArchiveAnchorParams, selectArchiveHeadRow,
     presentChunkIndexes, buildArchiveAnchorResponse
 } = require('../../../src/actions/anchor/anchor_action_query');
+const { archiveHeadPredicate } = require('../../../src/consensus/state_hash.js');
 
 const CONFIG = { COIN: 'DOGE', NETWORK: 'regtest' };
 const CRC    = 'deadbeef';
@@ -123,12 +124,11 @@ describe('archive-anchor content query: ARCHIVE_ANCHOR_BY_CONTENT_SQL @regressio
         assert.ok(/a\.match_batch_seq/.test(ARCHIVE_ANCHOR_BY_CONTENT_SQL));
     });
 
-    it('restricts to ARCHIVE HEAD versions only (a v2 chunk carries no checkpoint identity)', function () {
+    it('uses the shared archive-head row predicate (a v2 chunk carries no checkpoint identity)', function () {
         assert.deepStrictEqual(ARCHIVE_HEAD_VERSIONS, [1]);
-        assert.ok(/a\.version IN \(1\)/.test(ARCHIVE_ANCHOR_BY_CONTENT_SQL));
-        assert.ok(!/a\.version\s*=\s*1\b/.test(ARCHIVE_ANCHOR_BY_CONTENT_SQL),
-            'the predicate must stay spliced from the shared set: a hand-copied version ' +
-            'literal drifts the moment a new head version lands');
+        assert.ok(ARCHIVE_ANCHOR_BY_CONTENT_SQL.includes(archiveHeadPredicate('a')));
+        assert.ok(!/a\.version\s+IN\s*\(/.test(ARCHIVE_ANCHOR_BY_CONTENT_SQL),
+            'the archive-head predicate must classify folded rows by attributes');
     });
 
     it('is bounded and picks the EARLIEST head, the same canonical rule the other head picks use', function () {
