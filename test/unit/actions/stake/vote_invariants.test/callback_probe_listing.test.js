@@ -121,6 +121,40 @@ describe('VOTE callback method-independent listing probe', function(){
         assert.strictEqual(buildFallback.callCount, unusable.length);
     });
 
+    it('uses the listing without a legacy probe regardless of reported limits', async function(){
+        const reportedLimits = [undefined, { maxCodeSize: MAX_CODE_SIZE }];
+        const buildFallback = sinon.spy(callbackProbeVm, 'buildProbeCode');
+        for(const limits of reportedLimits){
+            const fresh = freshVote();
+            fresh.actionsCtx.getVoteCallbackProbeVm().limits = limits;
+            fresh.vm.probeReadManifest.resolves({
+                success: true,
+                manifest: { metaJson: '{"callbackFns":["onResult"]}' },
+                error: null
+            });
+            const code = 'module.exports={onResult:function(){}};';
+            assert.strictEqual(await handlerVerdict(fresh, code, 'onResult'), true);
+            assert.strictEqual(fresh.vm.probeReadManifest.callCount, 1);
+            assert.strictEqual(fresh.vm.probeReadManifest.firstCall.args[0],
+                callbackProbeVm.buildListingProbeCode(code));
+        }
+        assert.strictEqual(buildFallback.callCount, 0);
+    });
+
+    it('falls back exactly once when the listing probe throws', async function(){
+        const fresh = freshVote();
+        const buildFallback = sinon.spy(callbackProbeVm, 'buildProbeCode');
+        fresh.vm.probeReadManifest.onFirstCall().rejects(new Error('listing failed'));
+        fresh.vm.probeReadManifest.onSecondCall().resolves({
+            success: true, manifest: { hasInitialize: true }, error: null
+        });
+        assert.strictEqual(await handlerVerdict(
+            fresh, 'module.exports={onResult:function(){}};', 'onResult'
+        ), true);
+        assert.strictEqual(fresh.vm.probeReadManifest.callCount, 2);
+        assert.strictEqual(buildFallback.callCount, 1);
+    });
+
 });
 
 describe('real XChainVM callback listing equivalence', function(){
