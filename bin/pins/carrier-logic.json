@@ -108,7 +108,7 @@
     },
     "price_scale_activation": {
       "path": "src/consensus/gates/price_scale_gate.js",
-      "hash": "4789fa01a078a0287fe711e0ebaea253e7ebf9a39190e60de451db4fed0c0436",
+      "hash": "18529a5b69afe0cb728caa9c05154bf8393517fdbf87fd94c3b6bbad0d27a7c1",
       "twins": [
         "xchain-hub"
       ]
@@ -1856,6 +1856,13 @@
       "from": "d1952b0474e68584339150bb0e5124f1bff0910c24048c16ae9c1a7d55c5281a",
       "to": "4b63bb80a0788ae30c0c0bcc4e34664b2d27c31079db04dbfb784987a0e8f790",
       "reason": "PRICE v1 canonical bounds in shared rules digest",
+      "date": "2026-09-27"
+    },
+    {
+      "id": "price_scale_activation",
+      "from": "4789fa01a078a0287fe711e0ebaea253e7ebf9a39190e60de451db4fed0c0436",
+      "to": "18529a5b69afe0cb728caa9c05154bf8393517fdbf87fd94c3b6bbad0d27a7c1",
+      "reason": "PRICE v1 canonical bound rows",
       "date": "2026-09-27"
     }
   ]
