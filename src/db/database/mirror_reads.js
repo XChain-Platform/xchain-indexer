@@ -163,7 +163,7 @@ module.exports = {
     // node that lacks the mirrored snapshot needed to verify their signatures.
     async getMaxArchiveBatchSeqByAuthor(author){
         let rows = await this.doQuery(
-            `SELECT MAX(a.match_batch_seq) AS max_batch_seq
+            `SELECT /* a.version = 1 */ MAX(a.match_batch_seq) AS max_batch_seq
              FROM anchor_actions a
              JOIN index_statuses s  ON s.id = a.status_id
              JOIN actions act       ON act.action_index = a.action_index
