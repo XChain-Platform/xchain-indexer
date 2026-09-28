@@ -17,6 +17,7 @@ const fs = require('node:fs');
 const { execFileSync } = require('node:child_process');
 const {
   findTrackedRequirers,
+  findTrackedSupportUsers,
   resolveBase,
   selectFastTests
 } = require('../ci_fast_select.js');
@@ -37,7 +38,8 @@ function gitLines(args, options) {
 
 const dependencies = {
   listTests: () => gitLines(['ls-files', 'test/**']),
-  findRequirers: findTrackedRequirers
+  findRequirers: findTrackedRequirers,
+  findSupportUsers: findTrackedSupportUsers
 };
 
 function select(changedFiles) {
@@ -98,6 +100,48 @@ describe('ci fast selector', function () {
     const plan = select([file]);
     assert.deepStrictEqual(plan.tests, []);
     assert(plan.reasons.includes(`deferred: ${file}`));
+  });
+
+  it('grades a changed shared fixture through its users instead of widening', function () {
+    const plan = select(['test/fixtures/anchor_canonical_vectors.json']);
+    assert.strictEqual(plan.consensus, false, plan.reasons.join('\n'));
+    assert(plan.tests.some((test) => test.file === 'test/unit/actions/anchor_golden_vectors.test.js'));
+  });
+
+  it('selects every test that uses a changed nested helper', function () {
+    const plan = select(['test/unit/actions/stake/deposit.test/helpers/custody_guard_fixture.js']);
+    assert.strictEqual(plan.consensus, false);
+    for (const file of [
+      'test/unit/actions/stake/deposit.test/custody_guard.test.js',
+      'test/unit/contracts/controller_enforcement.test/custody_guard_deposit_gas.test.js'
+    ]) assert(plan.tests.some((test) => test.file === file), file);
+  });
+
+  it('follows a helper through the helper that requires it', function () {
+    const users = {
+      'test/unit/x/helpers/inner.js': ['test/unit/x/helpers/outer.js'],
+      'test/unit/x/helpers/outer.js': ['test/unit/x/outer.test.js', 'test/integration/x.test.js']
+    };
+    const plan = selectFastTests(['test/unit/x/helpers/inner.js'], {
+      listTests: () => ['test/unit/x/outer.test.js', 'test/unit/x/other.test.js'],
+      findRequirers: () => [],
+      findSupportUsers: (file) => users[file] || []
+    });
+    assert.strictEqual(plan.consensus, false);
+    assert.deepStrictEqual(plan.tests, [{ group: 'main', file: 'test/unit/x/outer.test.js' }]);
+    assert(plan.reasons.includes('deferred: test/integration/x.test.js'));
+  });
+
+  it('widens a test support file that nothing names, or that package.json loads', function () {
+    const orphan = selectFastTests(['test/unit/x/helpers/orphan.js'], {
+      listTests: () => ['test/unit/x/a.test.js'],
+      findRequirers: () => [],
+      findSupportUsers: () => []
+    });
+    assert.strictEqual(orphan.consensus, true);
+    assert(orphan.reasons.includes('consensus: test/unit/x/helpers/orphan.js (no user found)'));
+    const setup = select(['test/helpers/setup.js']);
+    assert.strictEqual(setup.consensus, true);
   });
 
   it('returns null when neither promised nor merge base resolves', function () {

@@ -41,7 +41,9 @@
 # MARIADB_ROOT_PASSWORD=xchain-fixture-throwaway` container behaves like CI.
 #
 # All tiers run even after one fails (GitHub reports every red job, so this
-# reports every red tier); the exit code is red if any tier was.
+# reports every red tier); the exit code is red if any tier was. A push
+# (CI_TIER=fast) is the exception: it stops at its first red tier and prints
+# NOT RUN for each tier after it, since its verdict is already red.
 #
 set -uo pipefail
 
@@ -92,6 +94,7 @@ ci_tier_deferred() {
 # >>> ci-tier timer (generated block; re-run the tier wirer to update) >>>
 run_tier() {
   ci_tier_deferred "$1" && return 0  # ci-tier guard (generated)
+  if [ "${CI_TIER:-full}" = "fast" ] && [ -n "${FAILED:-}" ]; then echo; echo "ci:full ===== $1 NOT RUN (a push stops at its first red tier, its verdict already red; the full sweep runs it) ====="; return 0; fi  # ci-tier stop (generated)
   local name="$1"; shift
   local __ci_tier_t0=$SECONDS
   echo; echo "ci:full ===== $name ====="
@@ -150,10 +153,13 @@ if [ "${CI_TIER:-full}" = "fast" ]; then
   fi
 fi
 
+# The ci tier is `npm run ci` with its main mocha step split across parallel
+# processes (bin/ci_shard.js): the same chain and the same files, each file in
+# exactly one shard, in a fraction of the wall clock. CI_SHARDS=1 runs it whole.
 if [ "${CI_TIER:-full}" != "fast" ] || [ "$FAST_SELECTOR_READY" -eq 0 ]; then
-  run_tier "ci (siblings STRICT)" env XCHAIN_REQUIRE_SIBLINGS=1 npm run ci
+  run_tier "ci (siblings STRICT)" env XCHAIN_REQUIRE_SIBLINGS=1 node bin/ci_shard.js --run
 elif printf '%s\n' "$FAST_PLAN" | grep -q '^consensus 1$'; then
-  run_tier "ci (siblings STRICT)" env XCHAIN_REQUIRE_SIBLINGS=1 npm run ci
+  run_tier "ci (siblings STRICT)" env XCHAIN_REQUIRE_SIBLINGS=1 node bin/ci_shard.js --run
 else
   run_tier "ci: consensus checks (consensus-time, merkle-vectors, vm)" fast_consensus_checks
   run_tier "ci (changed tests, siblings STRICT)" \

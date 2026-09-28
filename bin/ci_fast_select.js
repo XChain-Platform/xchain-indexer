@@ -40,7 +40,13 @@ const CONSENSUS = [
   'bin/lib/',
   'bin/vendor-vm.sh'
 ];
-const WIDEN = ['test/helpers/', 'test/fixtures/'];
+// A changed file under test/ that no runner owns (a helper, a fixture) cannot
+// change consensus code, so it is graded through the tests that use it rather
+// than by running the whole unit tier. It still widens when something outside
+// the test graph names it (package.json, the mocha config, src/, or bin/ outside
+// its own tests), or when no user of it can be found, because then nothing says
+// what it can break.
+const SUPPORT_OUTSIDE = /^(?:src\/|bin\/(?!test\/)|package\.json$|\.mocharc)/;
 const ALWAYS = [];
 const GROUPS = [
   {
@@ -120,7 +126,7 @@ function matchesPrefix(file, prefix) {
 function addConsensusReasons(changedFiles, findRequirers, reasons) {
   let consensus = false;
   for (const file of changedFiles) {
-    const direct = [...CONSENSUS, ...WIDEN].some((prefix) => matchesPrefix(file, prefix));
+    const direct = CONSENSUS.some((prefix) => matchesPrefix(file, prefix));
     if (direct || file === 'package.json') {
       reasons.add(`consensus: ${file}`);
       consensus = true;
@@ -174,7 +180,42 @@ function isTestFile(file) {
   return /(?:\.test\.js|\.fuzz\.js)$/.test(file);
 }
 
-function selectFastTests(changedFiles, { listTests, findRequirers }) {
+function isSupportFile(file) {
+  return file.startsWith('test/') && !isTestFile(file) && !file.endsWith('.md');
+}
+
+// Walks outward from each changed support file through the files that name it:
+// a runner-owned test is selected, a test no runner owns is deferred, and a
+// support file that names it is walked in turn, so a helper reached only
+// through another helper still selects its tests. Returns true to widen.
+function addSupportTests(supportFiles, { existing, findSupportUsers }, reasons, selected) {
+  let widen = false;
+  const seen = new Set(supportFiles);
+  const queue = [...supportFiles];
+  while (queue.length) {
+    const file = queue.shift();
+    const users = findSupportUsers ? findSupportUsers(file).filter((user) => user !== file) : [];
+    const outside = users.find((user) => SUPPORT_OUTSIDE.test(user));
+    if (!users.length || outside) {
+      reasons.add(`consensus: ${file} (${outside ? `named by ${outside}` : 'no user found'})`);
+      widen = true;
+      continue;
+    }
+    for (const user of users) {
+      if (matchingGroup(user)) {
+        if (existing.has(user)) selected.add(user);
+      } else if (isTestFile(user)) {
+        reasons.add(`deferred: ${user}`);
+      } else if (isSupportFile(user) && !seen.has(user)) {
+        seen.add(user);
+        queue.push(user);
+      }
+    }
+  }
+  return widen;
+}
+
+function selectFastTests(changedFiles, { listTests, findRequirers, findSupportUsers }) {
   const changed = [...new Set(changedFiles.map((file) => file.replace(/^\.\//, '')))];
   const allTests = [...new Set(listTests())].filter((file) => matchingGroup(file));
   const existing = new Set(allTests);
@@ -184,11 +225,13 @@ function selectFastTests(changedFiles, { listTests, findRequirers }) {
   for (const file of changed.filter((item) => item.startsWith('src/'))) {
     requirers.set(file, findRequirers(file));
   }
+  const support = changed.filter(isSupportFile);
+  const supportWidens = addSupportTests(support, { existing, findSupportUsers }, reasons, selected);
   const consensus = addConsensusReasons(
     changed,
     (file) => requirers.get(file) || [],
     reasons
-  );
+  ) || supportWidens;
   for (const file of changed) {
     if (existing.has(file)) selected.add(file);
     else if (file.startsWith('test/') && isTestFile(file) && !matchingGroup(file)) {
@@ -243,6 +286,19 @@ function findTrackedRequirers(moduleFile) {
   return [...new Set([...importers, ...namedTests])];
 }
 
+// Every tracked file that names a test support file by its stem (the parent
+// directory for an index.js): a require, a path.join of the fixture name, or a
+// package script. A plain mention is enough on purpose; selecting a test that
+// only mentions the name costs time, while missing a real user costs a red
+// develop that the full sweep finds hours later.
+function findTrackedSupportUsers(supportFile) {
+  const ext = path.posix.extname(supportFile);
+  let stem = path.posix.basename(supportFile, ext);
+  if (stem === 'index') stem = path.posix.basename(path.posix.dirname(supportFile));
+  return gitLines(['grep', '-l', '-F', '-e', stem, '--', 'test', 'src', 'bin', 'package.json', '.mocharc.yml'], true)
+    .filter((file) => !(file.startsWith('test/') && file.endsWith('.md')));
+}
+
 function computePlan() {
   const base = resolveBase({ env: process.env, git: systemGit });
   if (!base) {
@@ -255,7 +311,8 @@ function computePlan() {
     const changed = gitLines(['diff', '--name-only', `${base}...HEAD`]);
     return { plan: selectFastTests(changed, {
       listTests: listTrackedTests,
-      findRequirers: findTrackedRequirers
+      findRequirers: findTrackedRequirers,
+      findSupportUsers: findTrackedSupportUsers
     }) };
   } catch (error) {
     return { error: `git-error ${error.message}`, status: 2 };
@@ -302,6 +359,6 @@ function main() {
   return runPlan(result.plan);
 }
 
-module.exports = { findTrackedRequirers, resolveBase, selectFastTests };
+module.exports = { findTrackedRequirers, findTrackedSupportUsers, resolveBase, selectFastTests };
 
 if (require.main === module) process.exitCode = main();
