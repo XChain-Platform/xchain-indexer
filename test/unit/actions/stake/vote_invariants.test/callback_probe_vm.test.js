@@ -21,12 +21,13 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon  = require('sinon');
-const XChainVM = require('xchain-vm');
 
 const { createBaseData } = require('../../../../fixtures/mocks');
 const { freshVote } = require('./helpers/vote_fixtures.js');
+const { resolveXChainVM } = require('./helpers/xchain_vm_optional.js');
 const { MAX_CODE_SIZE } = require('../../../../../src/protocol/constants.js');
 const callbackProbeVm = require('../../../../../src/actions/vote/callback_probe_vm.js');
+const { XChainVM, available: xchainVmAvailable } = resolveXChainVM();
 
 let indexer, actionsCtx, handler, vm;
 
@@ -167,6 +168,8 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
     afterEach(function(){ sinon.restore(); });
 
     describe('real XChainVM callback probe boundary', function(){
+        before(function(){ if(!xchainVmAvailable) this.skip(); });
+
         it('accepts a callable contract at MAX_CODE_SIZE', async function(){
             this.timeout(30000);
             const realProbe = new XChainVM(realProbeOptions());

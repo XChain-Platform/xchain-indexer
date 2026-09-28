@@ -21,12 +21,13 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon  = require('sinon');
-const XChainVM = require('xchain-vm');
 
 const { freshVote } = require('./helpers/vote_fixtures.js');
+const { resolveXChainVM } = require('./helpers/xchain_vm_optional.js');
 const { MAX_CODE_SIZE } = require('../../../../../src/protocol/constants.js');
 const bindingCallback = require('../../../../../src/actions/vote/binding_callback.js');
 const callbackProbeVm = require('../../../../../src/actions/vote/callback_probe_vm.js');
+const { XChainVM, available: xchainVmAvailable } = resolveXChainVM();
 
 function codeAtSize(size){
     const source = 'module.exports={onResult:function(){}};';
@@ -159,6 +160,8 @@ describe('VOTE callback method-independent listing probe', function(){
 
 describe('real XChainVM callback listing equivalence', function(){
     let fresh, realProbe;
+
+    before(function(){ if(!xchainVmAvailable) this.skip(); });
 
     before(function(){
         fresh = freshVote();
