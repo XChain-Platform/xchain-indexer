@@ -89,7 +89,7 @@ describe('ANCHOR v3 same-publisher archive re-issue', function(){
 
         const data = await parseFold(handler, wire.params);
 
-        assert.strictEqual(data.STATUS, 'invalid: ANCHOR v3 before fold activation');
+        assert.strictEqual(data.STATUS, 'invalid: VERSION (unknown)');
         sinon.assert.notCalled(indexer.indexerDb.getArchiveHeadsByAuthorAndSeq);
     });
 

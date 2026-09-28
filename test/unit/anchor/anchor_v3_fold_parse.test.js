@@ -97,7 +97,7 @@ describe('ANCHOR v3 fold parse', function(){
 
         await handler.parse(v3Params(), data, null);
 
-        assert.strictEqual(data.STATUS, 'invalid: ANCHOR v3 before fold activation');
+        assert.strictEqual(data.STATUS, 'invalid: VERSION (unknown)');
         assert.ok(rows(indexer).every(row => row.STATUS === data.STATUS));
         assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
     });
