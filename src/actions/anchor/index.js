@@ -259,14 +259,14 @@ class Anchor {
         if(!error && !gateRegistry.activeAt('anchor_activation.ANCHOR_ACTIVATION', this.config['NETWORK'], null, Number(data['BLOCK_INDEX']), null))
             error = 'invalid: ANCHOR before activation';
 
-        // Verify VERSION is one this parser knows (the table in the constructor is the whole wire set)
-        if(!error && (format === null || this.formats[format] === undefined))
-            error = 'invalid: VERSION (unknown)';
-
-        if(!error && Number(format) === 3 && !gateRegistry.activeAt(
+        let foldActive = format === 3 && gateRegistry.activeAt(
             'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION', this.config['NETWORK'],
-            null, Number(data['BLOCK_INDEX']), null))
-            error = 'invalid: ANCHOR v3 before fold activation';
+            null, Number(data['BLOCK_INDEX']), null);
+
+        // Verify VERSION is one this parser knows (the table in the constructor is the whole wire set)
+        if(!error && (format === null || this.formats[format] === undefined ||
+            (format === 3 && !foldActive)))
+            error = 'invalid: VERSION (unknown)';
 
         // ANCHOR is valid only on the anchor chain: DOGE (all networks).
         if(!error && String(this.config['COIN']) !== 'DOGE')
@@ -276,7 +276,7 @@ class Anchor {
         // the error), and the archive-head parser is the fall-through, so a rejected action
         // is recorded rather than dropped.
         if(format === 2) return await this.parseContinuation(params, data, error);
-        if(format === 3) return await this.parseFold(params, data, error);
+        if(format === 3 && foldActive) return await this.parseFold(params, data, error);
         if(format === 0) return await this.parseBundle(params, data, error);
         return await this.parseCheckpoint(params, data, error, format);
     }

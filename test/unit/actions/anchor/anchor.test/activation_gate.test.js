@@ -52,8 +52,8 @@ describe('Anchor (ANCHOR) @regression @tier3', function () {
         }
         let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 3, COIN: 'DOGE' });
         await handler.parse(['3', 'regtest', '100', '0'], data, null);
-        assert.strictEqual(data['STATUS'], 'invalid: ANCHOR v3 before fold activation',
-            'ANCHOR v3 is fold-gated rather than retired');
+        assert.strictEqual(data['STATUS'], 'invalid: VERSION (unknown)',
+            'ANCHOR v3 is unknown until the fold gate activates');
     });
 
     // The activation gate runs BEFORE the format table, so a wire that is
