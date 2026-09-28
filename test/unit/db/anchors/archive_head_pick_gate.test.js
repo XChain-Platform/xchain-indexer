@@ -50,6 +50,13 @@ async function capture(method, receiver, args) {
     return calls;
 }
 
+function assertBoundCall(call, sql, params, floorIndex, floor) {
+    assert.strictEqual(call.sql, sql);
+    assert.strictEqual((call.sql.match(/\?/g) || []).length, call.params.length);
+    assert.deepStrictEqual(call.params, params);
+    assert.strictEqual(call.params[floorIndex], floor);
+}
+
 describe('archive-head canonical pick fold gate', function () {
     afterEach(function () { sinon.restore(); });
 
@@ -101,12 +108,15 @@ describe('archive-head canonical pick fold gate', function () {
         assert.ok(gate.indexOf('block_index_doge >= ?') < gate.indexOf('h.match_batch_seq = ?'));
     });
 
-    it('binds the floor between both batch parameters in the installed chunk read', async function () {
+    it('embeds the author query exactly once in the shared chunk query', function () {
+        const embedded = '(' + anchorSql.ARCHIVE_HEAD_AUTHOR_SQL + ')';
+        assert.strictEqual(anchorSql.ARCHIVE_CHUNK_SET_SQL.split(embedded).length - 1, 1);
+    });
+
+    it('binds the embedded author floor in the installed chunk read', async function () {
         stubFoldFloor(73);
         const calls = await capture(Database.prototype.getAnchorChunks, {}, [42]);
-        assert.strictEqual(calls[0].sql, anchorSql.ARCHIVE_CHUNK_SET_SQL);
-        assert.strictEqual((calls[0].sql.match(/\?/g) || []).length, calls[0].params.length);
-        assert.deepStrictEqual(calls[0].params, [42, 73, 42]);
+        assertBoundCall(calls[0], anchorSql.ARCHIVE_CHUNK_SET_SQL, [42, 73, 42], 1, 73);
     });
 
     it('uses each recovery row network for gate and chunk floor bindings', async function () {
@@ -122,11 +132,7 @@ describe('archive-head canonical pick fold gate', function () {
         const head = { match_batch_seq: 42, network: 'regtest', source: 'DPublisher',
                        total_chunks: 2, archive_b64: '' };
         await assert.rejects(() => recovery.verifyBatch(head), /incomplete batch/);
-        assert.strictEqual(calls[0].sql, anchorSql.ARCHIVE_HEAD_GATE_SQL);
-        assert.strictEqual((calls[0].sql.match(/\?/g) || []).length, calls[0].params.length);
-        assert.deepStrictEqual(calls[0].params, [73, 42]);
-        assert.strictEqual(calls[1].sql, anchorSql.ARCHIVE_CHUNK_SET_SQL);
-        assert.strictEqual((calls[1].sql.match(/\?/g) || []).length, calls[1].params.length);
-        assert.deepStrictEqual(calls[1].params, [42, 73, 42]);
+        assertBoundCall(calls[0], anchorSql.ARCHIVE_HEAD_GATE_SQL, [73, 42], 0, 73);
+        assertBoundCall(calls[1], anchorSql.ARCHIVE_CHUNK_SET_SQL, [42, 73, 42], 1, 73);
     });
 });
