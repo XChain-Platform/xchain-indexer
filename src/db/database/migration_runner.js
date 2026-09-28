@@ -363,6 +363,7 @@ module.exports = {
                     timeoutTouched = true;
                     await setSessionStatementTime(conn, migrationQueryTimeoutMs());
                 };
+                if(!only) await activateQueryTimeout();
                 await applyPendingMigrations(this, conn, files, {
                     dir, only, includeManual, result, activateQueryTimeout,
                 });

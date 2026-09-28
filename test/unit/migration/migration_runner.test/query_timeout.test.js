@@ -66,7 +66,8 @@ async function runAgainst(DatabaseClass = Database, options = {}){
     const realLog = console.log, realError = console.error, realWarn = console.warn;
     console.log = console.error = console.warn = () => {};
     try {
-        const result = await DatabaseClass.prototype.runMigrationsInner.call(db, { includeManual: true });
+        const runOptions = { includeManual: true, ...options.runOptions };
+        const result = await DatabaseClass.prototype.runMigrationsInner.call(db, runOptions);
         return { calls, lifecycle, result, error: null };
     } catch(error){
         return { calls, lifecycle, result: null, error };
@@ -93,7 +94,8 @@ describe('migration-scoped query timeout @regression @tier1', function () {
             const lastMigration = calls.map(call => call.sql).findLastIndex(sql => /^ALTER TABLE state_tree_roots/i.test(sql.trim()));
             const restore = calls.findIndex(call => statementTimeCalls([call])[0]?.params[0] === 30);
             const releaseLock = calls.findIndex(call => /RELEASE_LOCK/i.test(call.sql));
-            assert.ok(getLock < migrationTimeout && migrationTimeout < firstMigration);
+            assert.strictEqual(migrationTimeout, getLock + 1);
+            assert.ok(migrationTimeout < firstMigration);
             assert.ok(lastMigration < restore && restore < releaseLock);
         } finally {
             if(previous === undefined) delete process.env.MIGRATE_QUERY_TIMEOUT;
@@ -135,12 +137,30 @@ describe('migration-scoped query timeout cleanup @regression @tier1', function (
         assert.deepStrictEqual(statementTimeCalls(calls), []);
     });
 
-    it('does not change max_statement_time when no migration is pending', async function () {
+    it('sets and restores max_statement_time before checking for pending migrations', async function () {
         const ledger = ledgerMissingLast();
         const last = shippedMigrations().at(-1);
         ledger.set(last, crypto.createHash('sha256')
             .update(fs.readFileSync(path.join(MIG_DIR, last), 'utf8')).digest('hex'));
         const { calls, error } = await runAgainst(Database, { ledger });
+        assert.strictEqual(error, null);
+        assert.deepStrictEqual(statementTimeCalls(calls).map(call => call.params[0]), [3600, 30]);
+        const getLock = calls.findIndex(call => /GET_LOCK/i.test(call.sql));
+        const migrationTimeout = calls.findIndex(call => statementTimeCalls([call])[0]?.params[0] === 3600);
+        const ledgerRead = calls.findIndex(call => /SELECT name, checksum FROM schema_migrations/i.test(call.sql));
+        assert.strictEqual(migrationTimeout, getLock + 1);
+        assert.ok(migrationTimeout < ledgerRead);
+    });
+
+    it('does not change max_statement_time for a scoped no-op run', async function () {
+        const ledger = ledgerMissingLast();
+        const last = shippedMigrations().at(-1);
+        ledger.set(last, crypto.createHash('sha256')
+            .update(fs.readFileSync(path.join(MIG_DIR, last), 'utf8')).digest('hex'));
+        const { calls, error } = await runAgainst(Database, {
+            ledger,
+            runOptions: { only: last },
+        });
         assert.strictEqual(error, null);
         assert.deepStrictEqual(statementTimeCalls(calls), []);
     });
