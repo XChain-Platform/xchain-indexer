@@ -49,6 +49,7 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../../fixtures/config');
 const Utility           = require('../../../src/utility');
 const Database          = require('../../../src/db');
+const { foldArchiveHeadFloor } = require('../../../src/db/anchors/archive_head_pick.js');
 
 function makeDb() {
     const config  = getTestConfig();
@@ -165,7 +166,8 @@ describe('Database.getAnchorV1ByBatchSeq() head-selection determinism @regressio
             sinon.stub(db, 'doQuery').callsFake(async (sql, params) => { captured = sql; args = params; return []; });
             await db.getAnchorV1ByBatchSeq(42, 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH');
             assert.match(captured, /adr\.address\s*=\s*\?/i, 'the author must be a bound parameter, never inlined');
-            assert.deepStrictEqual(args, [42, 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH']);
+            assert.deepStrictEqual(args,
+                [foldArchiveHeadFloor(db.config['NETWORK']), 42, 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH']);
             assert.match(captured, /ORDER BY\s+(?:[A-Za-z0-9_]+\.)?action_index\s+ASC/i);
             assert.match(captured, /LIMIT\s+1/i);
             const joins = captured.match(/\b(LEFT\s+JOIN|INNER\s+JOIN|(?<!LEFT\s)(?<!OUTER\s)JOIN)\b/gi) || [];
@@ -179,7 +181,7 @@ describe('Database.getAnchorV1ByBatchSeq() head-selection determinism @regressio
             await db.getAnchorV1ByBatchSeq(42);
             assert.doesNotMatch(captured, /adr\.address\s*=/i,
                 'the legacy canonical-head pick must not gain an authorship predicate');
-            assert.deepStrictEqual(args, [42]);
+            assert.deepStrictEqual(args, [foldArchiveHeadFloor(db.config['NETWORK']), 42]);
         });
 
         it('returns the earliest head OF THAT AUTHOR, not the earliest head overall', async function () {
@@ -191,7 +193,7 @@ describe('Database.getAnchorV1ByBatchSeq() head-selection determinism @regressio
                     { action_index: 1, source: 'OUTSIDER', batch_crc32: 'junk' },
                     { action_index: 5, source: 'PUBLISHER', batch_crc32: 'aaaa' },
                     { action_index: 9, source: 'PUBLISHER', batch_crc32: 'bbbb' }
-                ].filter(r => /adr\.address\s*=\s*\?/i.test(sql) ? r.source === params[1] : true);
+                ].filter(r => /adr\.address\s*=\s*\?/i.test(sql) ? r.source === params[2] : true);
                 return applyOrder(rows, orderClause(sql)).slice(0, 1);
             });
             const head = await db.getAnchorV1ByBatchSeq(42, 'PUBLISHER');
