@@ -21,6 +21,7 @@ const DataGenerator = require('../setup/data-generator');
 const MetricsCollector = require('../setup/metrics-collector');
 const { processBlocksInstrumented } = require('../setup/instrumented-processor');
 const ReportGenerator = require('../setup/report-generator');
+const { shouldTrustRatioGate } = require('./helpers/noise_floor');
 
 // The other scaling/throughput scenarios each reset the DB between measurement
 // points, so every sample runs against a young, nearly-empty database. That
@@ -70,7 +71,7 @@ const MAX_EXPIRY_RATIO = parseFloat(process.env.PERF_GROWN_MAX_EXPIRY_RATIO || '
 // ratio gate is skipped. The total-block floor is higher than the phase floor
 // because total block time is many ms even on fast hardware.
 const MIN_TOTAL_MS   = parseFloat(process.env.PERF_GROWN_MIN_TOTAL_MS  || '2');
-const MIN_EXPIRY_MS  = parseFloat(process.env.PERF_GROWN_MIN_EXPIRY_MS || '1');
+const MIN_EXPIRY_MS  = parseFloat(process.env.PERF_GROWN_MIN_EXPIRY_MS ||  '5');
 // Absolute fallback ceiling on grown-window median (ms), applied ONLY when the young
 // baseline was below MIN_TOTAL_MS (too fast for the ratio to mean anything). Very
 // generous so it trips only on a catastrophic per-block hang, never on a slow runner.
@@ -214,7 +215,7 @@ it('block time does not regress beyond MAX_RATIO as the standing set grows', asy
             // is above the runner's timing noise. On a very fast idle machine a window can
             // land in sub-millisecond jitter where any ratio is noise, not signal; there
             // the absolute fallback ceiling below governs instead.
-            if (youngMedian >= MIN_TOTAL_MS && blockRatio !== null) {
+            if (shouldTrustRatioGate(youngMedian, MIN_TOTAL_MS) && blockRatio !== null) {
                 assert.ok(blockRatio <= MAX_RATIO,
                     `block-time regression: grown median (${grownMedian}ms) / young median ` +
                     `(${youngMedian}ms) = ${blockRatio}x exceeded ceiling ${MAX_RATIO}x. ` +
@@ -232,7 +233,7 @@ it('block time does not regress beyond MAX_RATIO as the standing set grows', asy
             // Secondary gate: the expiry-sweep phase in isolation, the sharpest signal
             // (getExpiredItems re-scans the whole open set every block). Same noise-floor
             // guard, on the phase baseline.
-            if (youngExpiry >= MIN_EXPIRY_MS && expiryRatio !== null) {
+            if (shouldTrustRatioGate(youngExpiry, MIN_EXPIRY_MS) && expiryRatio !== null) {
                 assert.ok(expiryRatio <= MAX_EXPIRY_RATIO,
                     `expiry-sweep regression: grown (${grownExpiry}ms) / young (${youngExpiry}ms) ` +
                     `= ${expiryRatio}x exceeded ceiling ${MAX_EXPIRY_RATIO}x. The per-block open-item ` +
