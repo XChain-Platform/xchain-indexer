@@ -10,7 +10,7 @@ const {
     foldArchiveHeadFloor,
 } = require('../../../../src/db/anchors/archive_head_pick.js');
 const anchorMethods = require('../../../../src/db/anchors/index.js');
-const mirrorReads = require('../../../../src/db/database/mirror_reads.js');
+const Database = require('../../../../src/db/index.js');
 const anchorSql = require('../../../../src/db/anchor_sql.js');
 const AnchorRecovery = require('../../../../bin/recovery.js');
 
@@ -101,10 +101,11 @@ describe('archive-head canonical pick fold gate', function () {
         assert.ok(gate.indexOf('block_index_doge >= ?') < gate.indexOf('h.match_batch_seq = ?'));
     });
 
-    it('binds the floor between both batch parameters in the mirror chunk read', async function () {
+    it('binds the floor between both batch parameters in the installed chunk read', async function () {
         stubFoldFloor(73);
-        const calls = await capture(mirrorReads.getAnchorChunks, {}, [42]);
+        const calls = await capture(Database.prototype.getAnchorChunks, {}, [42]);
         assert.strictEqual(calls[0].sql, anchorSql.ARCHIVE_CHUNK_SET_SQL);
+        assert.strictEqual((calls[0].sql.match(/\?/g) || []).length, calls[0].params.length);
         assert.deepStrictEqual(calls[0].params, [42, 73, 42]);
     });
 
@@ -122,8 +123,10 @@ describe('archive-head canonical pick fold gate', function () {
                        total_chunks: 2, archive_b64: '' };
         await assert.rejects(() => recovery.verifyBatch(head), /incomplete batch/);
         assert.strictEqual(calls[0].sql, anchorSql.ARCHIVE_HEAD_GATE_SQL);
+        assert.strictEqual((calls[0].sql.match(/\?/g) || []).length, calls[0].params.length);
         assert.deepStrictEqual(calls[0].params, [73, 42]);
         assert.strictEqual(calls[1].sql, anchorSql.ARCHIVE_CHUNK_SET_SQL);
+        assert.strictEqual((calls[1].sql.match(/\?/g) || []).length, calls[1].params.length);
         assert.deepStrictEqual(calls[1].params, [42, 73, 42]);
     });
 });
