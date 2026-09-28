@@ -30,7 +30,7 @@
 // it the mirrored selects bind rows by their signed admission height instead of by the clock.
 const { isMirrorAdmissionConsumerActive } = require('../../consensus/gates/mirror_admission_gate.js');
 const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL, ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow, dedupeArchiveChunks } = require('../../actions/anchor/anchor_action_query');
-const { foldArchiveHeadFloor } = require('../anchors/archive_head_pick.js');
+const { archiveHeadPickPredicate, foldArchiveHeadFloor } = require('../anchors/archive_head_pick.js');
 
 module.exports = {
 
@@ -163,13 +163,16 @@ module.exports = {
     // heads cannot seed an allocator, while unverified heads remain usable on a
     // node that lacks the mirrored snapshot needed to verify their signatures.
     async getMaxArchiveBatchSeqByAuthor(author){
+        let network = this.config && this.config['NETWORK'];
+        let headPredicate = archiveHeadPickPredicate('a')
+            .replace('?', String(foldArchiveHeadFloor(network)));
         let rows = await this.doQuery(
             `SELECT MAX(a.match_batch_seq) AS max_batch_seq
              FROM anchor_actions a
              JOIN index_statuses s  ON s.id = a.status_id
              JOIN actions act       ON act.action_index = a.action_index
              JOIN index_addresses adr ON adr.id = act.source_id
-             WHERE a.version = 1 AND s.status IN ('valid', 'unverified')
+             WHERE ${headPredicate} AND s.status IN ('valid', 'unverified')
                AND adr.address = ?`,
             [String(author)]);
         let row = rows.length > 0 ? rows[0] : {};
