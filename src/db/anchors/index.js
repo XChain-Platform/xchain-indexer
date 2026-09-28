@@ -34,6 +34,7 @@ const arKey = require('../../actions/anchor/anchor_reward_key.js');
 // The column coercion that lets even a rejected ANCHOR wire store its row lives beside
 // this mixin in anchors/, so createAnchorAction reads as the upsert it is.
 const { anchorActionRow } = require('./anchor_action_row.js');
+const { archiveHeadPickPredicate, foldArchiveHeadFloor } = require('./archive_head_pick.js');
 
 module.exports = {
 
@@ -268,8 +269,8 @@ module.exports = {
     // that address, i.e. the batch key becomes (match_batch_seq, head author). The
     // caller (anchor.js, gated on the flag day) passes it so a junk head broadcast at
     // another publisher's batch seq can no longer be the parent that governs that
-    // publisher's chunks. Omitted / null keeps the legacy canonical-head pick exactly,
-    // including the query text, so nothing moves below the flag day. The narrowing
+    // publisher's chunks. Omitted / null keeps the legacy canonical-head candidate set
+    // below the fold activation. The narrowing
     // rides on the SAME LEFT-joined address the row already exposes as `source`: a head
     // whose author cannot be resolved compares unequal and is skipped, which is
     // fail-closed (the chunk lands 'orphan' rather than authenticated against nothing).
@@ -280,10 +281,12 @@ module.exports = {
              FROM anchor_actions a
              LEFT JOIN actions         act ON act.action_index = a.action_index
              LEFT JOIN index_addresses adr ON adr.id           = act.source_id
-             WHERE ${archiveHeadPredicate('a')} AND a.match_batch_seq = ?` +
+             WHERE ${archiveHeadPickPredicate('a')} AND a.match_batch_seq = ?` +
             (scoped ? ` AND adr.address = ?` : ``) +
             ` ORDER BY a.action_index ASC LIMIT 1`,
-            scoped ? [batchSeq, String(author)] : [batchSeq]);
+            scoped
+                ? [foldArchiveHeadFloor(this.config['NETWORK']), batchSeq, String(author)]
+                : [foldArchiveHeadFloor(this.config['NETWORK']), batchSeq]);
         return rows.length > 0 ? rows[0] : null;
     },
 
