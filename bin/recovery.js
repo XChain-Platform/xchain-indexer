@@ -85,6 +85,7 @@ const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
 // SAME heads the live mirror path reads, so a new publisher-bearing version added to
 // ARCHIVE_HEAD_VERSIONS cannot reach one path and silently skip the other.
 const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../src/consensus/state_hash.js');
+const { foldArchiveHeadFloor } = require('../src/db/anchors/archive_head_pick.js');
 const bridgePolicy = require('./recovery/bridge_policy.js');
 const checkpointPrice = require('./recovery/checkpoint_price.js');
 const lifecycle = require('../src/hub/table_lifecycle.js');
@@ -246,7 +247,8 @@ class AnchorRecovery {
     // NETWORK is not this indexer's ('invalid: NETWORK (not this network)'), so every
     // replayable row already carries the network the live gate resolved against.
     async archiveAuthorScope(v1){
-        let gate = await this.db.doQuery(ARCHIVE_HEAD_GATE_SQL, [Number(v1.match_batch_seq)]);
+        let gate = await this.db.doQuery(ARCHIVE_HEAD_GATE_SQL,
+            [foldArchiveHeadFloor(v1.network), Number(v1.match_batch_seq)]);
         let head = (gate && gate.length > 0) ? gate[0] : null;
         if(!head) return null;
         if(!gateRegistry.activeAt('archive_batch_author_activation.ARCHIVE_BATCH_AUTHOR_ACTIVATION', v1.network, null, Number(head.block_index_doge), null)) return null;
@@ -274,13 +276,14 @@ class AnchorRecovery {
             // out. Gated on the batch's canonical head (earliest v1 row, the one row
             // resolved identically on every node without consulting status), byte-for-byte
             // the anchor the live parse path uses, so recovery and the live path never
-            // apply different rules to the same batch. Below the flag day the legacy
-            // canonical-head query runs unchanged.
+            // apply different rules to the same batch. Below fold activation the legacy
+            // canonical-head candidate set is preserved.
             let scope = await this.archiveAuthorScope(v1);
             let rows = (scope !== null)
                 ? await this.db.doQuery(ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL, [Number(v1.match_batch_seq), scope])
                 : await this.db.doQuery(ARCHIVE_CHUNK_SET_SQL,
-                    [Number(v1.match_batch_seq), Number(v1.match_batch_seq)]);
+                    [Number(v1.match_batch_seq), foldArchiveHeadFloor(v1.network),
+                     Number(v1.match_batch_seq)]);
             // Completeness is exact index coverage of {1..totalChunks-1}, NOT a bare chunk
             // count — byte-identical to the live head/chunk gates via archiveChunkCoverage,
             // so recovery and the live path never disagree on whether a batch assembles or on

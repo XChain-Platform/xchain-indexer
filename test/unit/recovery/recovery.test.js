@@ -23,6 +23,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 
 const AnchorRecovery = require('../../../bin/recovery.js');
+const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_HEAD_GATE_SQL } = require('../../../src/db/anchor_sql.js');
 
 // Publisher-faithful archive builder shared with the recovery-determinism e2e
 // (test/integration/recovery_determinism_e2e.test.js). Single source for the
@@ -46,6 +47,37 @@ function freshKeys() {
     crossKeys  = [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()];
 }
 const quiet = { log: () => {}, util };
+
+function foldAwareMemDb(v1s, v2s) {
+    const db = memDb(v1s, v2s);
+    const query = db.doQuery.bind(db);
+    const source = row => row.source === undefined ? AUTHOR : row.source;
+    const pick = (batchSeq, floor) => v1s
+        .filter(row => row.match_batch_seq != null && Number(row.match_batch_seq) === Number(batchSeq))
+        .filter(row => Number(row.version) === 1 ||
+            (Number(row.version) === 3 && row.chain == null && Number(row.block_index_doge) >= Number(floor)))
+        .sort((a, b) => Number(a.action_index || 0) - Number(b.action_index || 0))[0];
+    db.doQuery = async (sql, params) => {
+        if(sql === ARCHIVE_HEAD_GATE_SQL) {
+            const head = pick(params[1], params[0]);
+            return head ? [{ action_index: head.action_index, block_index_doge: head.block_index_doge }] : [];
+        }
+        if(sql === ARCHIVE_CHUNK_SET_SQL) {
+            const head = pick(params[2], params[1]);
+            return v2s
+                .filter(row => Number(row.match_batch_seq) === Number(params[0]))
+                .filter(row => !String(row.status == null ? 'valid' : row.status).startsWith('invalid:'))
+                .filter(row => head && source(row) === source(head))
+                .sort((a, b) => (Number(a.chunk_index) - Number(b.chunk_index)) ||
+                    (Number(a.action_index || 0) - Number(b.action_index || 0)));
+        }
+        const rows = await query(sql, params);
+        return /^SELECT a\.\*/.test(String(sql).replace(/\s+/g, ' ').trim())
+            ? rows.filter(row => Number(row.version) === 1)
+            : rows;
+    };
+    return db;
+}
 
 describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () {
     beforeEach(freshKeys);
@@ -245,7 +277,16 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
 });
 
 describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () {
-    beforeEach(freshKeys);
+    let foldEnv;
+    beforeEach(function () {
+        freshKeys();
+        foldEnv = process.env.XC_ANCHOR_FOLD_REGTEST_ACTIVATION;
+        process.env.XC_ANCHOR_FOLD_REGTEST_ACTIVATION = String(ARMED_DOGE_BLOCK);
+    });
+    afterEach(function () {
+        if(foldEnv === undefined) delete process.env.XC_ANCHOR_FOLD_REGTEST_ACTIVATION;
+        else process.env.XC_ANCHOR_FOLD_REGTEST_ACTIVATION = foldEnv;
+    });
 
     // a junk head at the same batch seq used to CAPTURE the batch. It is the
     // earliest v1/v6 row, the head pick is status-agnostic (it must be, or mirrored and
@@ -258,17 +299,43 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
         // The capture: broadcast first (lowest action_index), signatures that do not
         // verify (stored 'invalid: ...', so the replay driver skips it while the head
         // pick still sees it), and a bogus geometry for good measure.
-        let junkHead = Object.assign({}, multi.v1, {
-            action_index: 1, source: OUTSIDER, status: 'invalid: insufficient valid signatures',
+        let foldedJunk = Object.assign({}, multi.v1, {
+            version: 3, chain: null, action_index: 1, source: OUTSIDER,
+            status: 'invalid: insufficient valid signatures',
             total_chunks: 99, archive_b64: 'JUNK', block_index_doge: ARMED_DOGE_BLOCK });
-        let realHead = Object.assign({}, multi.v1, { action_index: 50, source: AUTHOR, block_index_doge: ARMED_DOGE_BLOCK });
+        let legacyJunk = Object.assign({}, multi.v1, {
+            action_index: 2, source: OUTSIDER, status: 'invalid: insufficient valid signatures',
+            total_chunks: 99, archive_b64: 'JUNK', block_index_doge: -1 });
+        let realHead = Object.assign({}, multi.v1, {
+            action_index: 50, source: AUTHOR, block_index_doge: ARMED_DOGE_BLOCK });
         let chunks   = multi.v2s.map(c => Object.assign({ action_index: 100, source: AUTHOR }, c));
-        let db = memDb([junkHead, realHead], chunks);
+        let db = foldAwareMemDb([foldedJunk, legacyJunk, realHead], chunks);
         let report = await new AnchorRecovery(db, quiet).run();
 
         assert.strictEqual(report.verified, 1, JSON.stringify(report.failed));
         assert.strictEqual(db.matches.length, 1);
         assert.strictEqual(db.matches[0].match_id, 'm6');
+    });
+
+    it('below fold a version-1 junk head still denies the real archive', async function () {
+        let multi = buildBatch(7, [rawMatch('m8')], oracleKeys, crossKeys, { chunkSize: 200 });
+        let foldedJunk = Object.assign({}, multi.v1, {
+            version: 3, chain: null, action_index: 1, source: OUTSIDER,
+            status: 'invalid: insufficient valid signatures',
+            block_index_doge: ARMED_DOGE_BLOCK - 1 });
+        let legacyJunk = Object.assign({}, multi.v1, {
+            action_index: 1, source: OUTSIDER, status: 'invalid: insufficient valid signatures',
+            total_chunks: 99, archive_b64: 'JUNK', block_index_doge: -1 });
+        let realHead = Object.assign({}, multi.v1, {
+            action_index: 50, source: AUTHOR, block_index_doge: ARMED_DOGE_BLOCK - 1 });
+        let chunks   = multi.v2s.map(c => Object.assign({ action_index: 100, source: AUTHOR }, c));
+        let db = foldAwareMemDb([foldedJunk, legacyJunk, realHead], chunks);
+        let report = await new AnchorRecovery(db, quiet).run();
+
+        assert.strictEqual(report.verified, 0);
+        assert.strictEqual(report.failed.length, 1);
+        assert.match(report.failed[0].reason, /incomplete batch/);
+        assert.strictEqual(db.matches.length, 0);
     });
 
     // Teeth: the junk head's own (unpublished) batch still fails on its own merits, so
@@ -277,15 +344,39 @@ describe('AnchorRecovery (full-parse recovery) @regression @tier2', function () 
     it('a junk head reassembles only its own chunks, so it still fails', async function () {
         let multi = buildBatch(6, [rawMatch('m7')], oracleKeys, crossKeys, { chunkSize: 200 });
         // status 'valid', so the driver replays it too.
-        let junkHead = Object.assign({}, multi.v1, { action_index: 1, source: OUTSIDER, block_index_doge: ARMED_DOGE_BLOCK });
-        let realHead = Object.assign({}, multi.v1, { action_index: 50, source: AUTHOR, block_index_doge: ARMED_DOGE_BLOCK });
+        let foldedJunk = Object.assign({}, multi.v1, {
+            version: 3, chain: null, action_index: 1, source: OUTSIDER,
+            block_index_doge: ARMED_DOGE_BLOCK });
+        let junkHead = Object.assign({}, multi.v1, {
+            action_index: 2, source: OUTSIDER, block_index_doge: -1 });
+        let realHead = Object.assign({}, multi.v1, {
+            action_index: 50, source: AUTHOR, block_index_doge: ARMED_DOGE_BLOCK });
         let chunks   = multi.v2s.map(c => Object.assign({ action_index: 100, source: AUTHOR }, c));
-        let db = memDb([junkHead, realHead], chunks);
+        let db = foldAwareMemDb([foldedJunk, junkHead, realHead], chunks);
         let report = await new AnchorRecovery(db, quiet).run();
 
         assert.strictEqual(report.verified, 1, 'the real publisher batch still verifies');
         assert.strictEqual(report.failed.length, 1, 'the outsider head has no chunks of its own');
         assert.match(report.failed[0].reason, /incomplete batch/);
+    });
+
+    it('below fold both heads use the version-1 junk head chunk set', async function () {
+        let multi = buildBatch(8, [rawMatch('m9')], oracleKeys, crossKeys, { chunkSize: 200 });
+        let foldedJunk = Object.assign({}, multi.v1, {
+            version: 3, chain: null, action_index: 1, source: OUTSIDER,
+            block_index_doge: ARMED_DOGE_BLOCK - 1 });
+        let junkHead = Object.assign({}, multi.v1, {
+            action_index: 2, source: OUTSIDER, block_index_doge: -1 });
+        let realHead = Object.assign({}, multi.v1, {
+            action_index: 50, source: AUTHOR, block_index_doge: ARMED_DOGE_BLOCK - 1 });
+        let chunks   = multi.v2s.map(c => Object.assign({ action_index: 100, source: AUTHOR }, c));
+        let db = foldAwareMemDb([foldedJunk, junkHead, realHead], chunks);
+        let report = await new AnchorRecovery(db, quiet).run();
+
+        assert.strictEqual(report.verified, 0);
+        assert.strictEqual(report.failed.length, 2);
+        assert.ok(report.failed.every(row => /incomplete batch/.test(row.reason)));
+        assert.strictEqual(db.matches.length, 0);
     });
 
     it('rejects a sub-quorum wrapper and sub-quorum match signatures', async function () {

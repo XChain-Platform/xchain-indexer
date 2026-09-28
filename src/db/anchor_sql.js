@@ -34,6 +34,7 @@
 'use strict';
 
 const { ARCHIVE_HEAD_VERSIONS, archiveHeadPredicate } = require('../consensus/state_hash.js');
+const { archiveHeadPickPredicate } = require('./anchors/archive_head_pick.js');
 
 // ANCHOR versions that carry a full checkpoint identity (chain/network/block_index/
 // checkpoint_seq + the state hashes). Version 2 is an archive continuation chunk with
@@ -153,7 +154,7 @@ const ARCHIVE_HEAD_AUTHOR_SQL =
      FROM anchor_actions h
      LEFT JOIN actions         hact ON hact.action_index = h.action_index
      LEFT JOIN index_addresses hadr ON hadr.id           = hact.source_id
-     WHERE ${archiveHeadPredicate('h')} AND h.match_batch_seq = ?
+     WHERE ${archiveHeadPickPredicate('h')} AND h.match_batch_seq = ?
      ORDER BY h.action_index ASC
      LIMIT 1`;
 
@@ -166,7 +167,7 @@ const ARCHIVE_HEAD_AUTHOR_SQL =
 // broadcast ahead of the head can only be excluded here.
 //
 // Callers dedupe to one row per chunk_index (lowest action_index wins) after this
-// query; the ORDER BY makes that deterministic. Params: [batchSeq, batchSeq].
+// query; the ORDER BY makes that deterministic. Params: [batchSeq, foldFloor, batchSeq].
 // Shared verbatim by db.getAnchorChunks and recovery.js's reassembly (which holds only
 // a doQuery handle) so the two can no longer drift. Two other places join v2 chunks and
 // deliberately need NO authorship term, because both already require status 'valid',
@@ -212,11 +213,11 @@ const ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL =
 // straddle two rules. block_index_doge, not block_index: the latter is the
 // checkpointed height on the checkpointed chain (and is NULL on a v2 chunk), while
 // the flag day is a height on the chain the ANCHOR itself lands on.
-// Params: [batchSeq].
+// Params: [foldFloor, batchSeq].
 const ARCHIVE_HEAD_GATE_SQL =
     `SELECT h.action_index, h.block_index_doge
      FROM anchor_actions h
-     WHERE ${archiveHeadPredicate('h')} AND h.match_batch_seq = ?
+     WHERE ${archiveHeadPickPredicate('h')} AND h.match_batch_seq = ?
      ORDER BY h.action_index ASC
      LIMIT 1`;
 

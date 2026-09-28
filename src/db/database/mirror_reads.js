@@ -31,6 +31,7 @@
 const { isMirrorAdmissionConsumerActive } = require('../../consensus/gates/mirror_admission_gate.js');
 const { archiveHeadPredicate } = require('../../consensus/state_hash.js');
 const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL, ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow, dedupeArchiveChunks } = require('../../actions/anchor/anchor_action_query');
+const { foldArchiveHeadFloor } = require('../anchors/archive_head_pick.js');
 
 module.exports = {
 
@@ -112,11 +113,12 @@ module.exports = {
     // batches. anchor.js supplies it (gated) so the chunk set a head reassembles - and
     // the occupancy set the duplicate guard reads - belong to that head's own
     // publisher, not to whoever happened to broadcast the earliest row for the seq.
-    // Omitted / null runs the legacy canonical-head query unchanged.
+    // Omitted / null keeps the legacy canonical-head candidate set below fold activation.
     async getAnchorChunks(batchSeq, author){
         let rows = (author !== undefined && author !== null)
             ? await this.doQuery(ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL, [batchSeq, String(author)])
-            : await this.doQuery(ARCHIVE_CHUNK_SET_SQL, [batchSeq, batchSeq]);
+            : await this.doQuery(ARCHIVE_CHUNK_SET_SQL,
+                [batchSeq, foldArchiveHeadFloor(this.config['NETWORK']), batchSeq]);
         return dedupeArchiveChunks(rows);
     },
 
