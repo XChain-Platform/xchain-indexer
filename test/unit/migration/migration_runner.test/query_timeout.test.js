@@ -44,7 +44,8 @@ async function runAgainst(DatabaseClass = Database, options = {}){
             if(/GET_LOCK/i.test(sql)) return [{ l: options.lockResult === undefined ? 1 : options.lockResult }];
             if(/RELEASE_LOCK/i.test(sql)) return [{}];
             if(/SELECT name, checksum FROM schema_migrations/i.test(sql)){
-                return Array.from(ledgerMissingLast(), ([name, checksum]) => ({ name, checksum }));
+                const ledger = options.ledger || ledgerMissingLast();
+                return Array.from(ledger, ([name, checksum]) => ({ name, checksum }));
             }
             if(options.throwMigration && /^ALTER TABLE state_tree_roots/i.test(sql.trim())){
                 throw new Error('migration failed');
@@ -131,6 +132,16 @@ describe('migration-scoped query timeout cleanup @regression @tier1', function (
         const { calls, result, error } = await runAgainst(Database, { lockResult: 0 });
         assert.strictEqual(error, null);
         assert.strictEqual(result.lockSkipped, true);
+        assert.deepStrictEqual(statementTimeCalls(calls), []);
+    });
+
+    it('does not change max_statement_time when no migration is pending', async function () {
+        const ledger = ledgerMissingLast();
+        const last = shippedMigrations().at(-1);
+        ledger.set(last, crypto.createHash('sha256')
+            .update(fs.readFileSync(path.join(MIG_DIR, last), 'utf8')).digest('hex'));
+        const { calls, error } = await runAgainst(Database, { ledger });
+        assert.strictEqual(error, null);
         assert.deepStrictEqual(statementTimeCalls(calls), []);
     });
 

@@ -53,11 +53,15 @@ async function restoreRuntimeTimeoutAndReleaseLock(conn, lockName, runtimeTimeou
     let restored = true;
     try { await setSessionStatementTime(conn, runtimeTimeout); }
     catch(_){ restored = false; }
-    try { await conn.query('SELECT RELEASE_LOCK(?)', [lockName]); } catch(_){}
+    await releaseMigrationLock(conn, lockName);
     if(!restored && typeof conn.destroy === 'function'){
         try { await conn.destroy(); } catch(_){}
     }
     return restored;
+}
+
+async function releaseMigrationLock(conn, lockName){
+    try { await conn.query('SELECT RELEASE_LOCK(?)', [lockName]); } catch(_){}
 }
 
 // Targeted rollout: a name that matches no committed migration is almost
@@ -142,7 +146,7 @@ async function migrateFile(self, conn, file, appliedByName, ctx){
     // deferred mode=manual file cannot be told apart from a backdated one.
     if(mode === 'auto') guardBackdatedFrontier(self, ctx, file, raw, appliedByName);
 
-    await applyMigrationFile(self, conn, file, raw, checksum, mode, result);
+    await applyMigrationFile(self, conn, file, raw, checksum, mode, ctx);
 }
 
 // An applied file whose content changed: heal a pinned reviewed rebaseline, else fail closed
@@ -283,7 +287,8 @@ function guardBackdatedFrontier(self, ctx, file, raw, appliedByName){
 }
 
 // Split, guard and apply one pending file, then record it in the ledger.
-async function applyMigrationFile(self, conn, file, raw, checksum, mode, result){
+async function applyMigrationFile(self, conn, file, raw, checksum, mode, ctx){
+    const { result } = ctx;
     // Quote-aware split into statements: strips `--` line comments and
     // breaks on ';' only outside quoted strings, so a ';' in a comment
     // header or inside a string literal never terminates a statement, and
@@ -302,6 +307,7 @@ async function applyMigrationFile(self, conn, file, raw, checksum, mode, result)
                 'Re-tag the file `-- xchain:migration mode=manual` and apply it deliberately via `node src/db/migration/migrate.js`.');
         }
     }
+    await ctx.activateQueryTimeout();
     getLogger().info('runMigrations: applying ' + file + ' (mode=' + mode + ', ' + statements.length + ' statement(s))...');
     try {
         for(const stmt of statements){ await conn.query(stmt); }
@@ -337,6 +343,7 @@ module.exports = {
         const lockName = 'xchain_migrate_' + this.dbName;
         let conn = await this.getConnection();
         let returnToPool = true;
+        let timeoutTouched = false;
         try {
             // DB-scoped advisory lock so two processes don't apply concurrently. GET_LOCK
             // is server-global, so the name is namespaced by dbName (the shared MariaDB on
@@ -351,11 +358,19 @@ module.exports = {
                 return result;
             }
             try {
-                await setSessionStatementTime(conn, migrationQueryTimeoutMs());
-                await applyPendingMigrations(this, conn, files, { dir, only, includeManual, result });
+                const activateQueryTimeout = async () => {
+                    if(timeoutTouched) return;
+                    timeoutTouched = true;
+                    await setSessionStatementTime(conn, migrationQueryTimeoutMs());
+                };
+                await applyPendingMigrations(this, conn, files, {
+                    dir, only, includeManual, result, activateQueryTimeout,
+                });
             } finally {
-                const runtimeTimeout = (this.connectionPoolParams && this.connectionPoolParams.queryTimeout) || 0;
-                returnToPool = await restoreRuntimeTimeoutAndReleaseLock(conn, lockName, runtimeTimeout);
+                if(timeoutTouched){
+                    const runtimeTimeout = (this.connectionPoolParams && this.connectionPoolParams.queryTimeout) || 0;
+                    returnToPool = await restoreRuntimeTimeoutAndReleaseLock(conn, lockName, runtimeTimeout);
+                } else await releaseMigrationLock(conn, lockName);
             }
         } finally {
             if(returnToPool) try { await conn.release(); } catch(_){}
