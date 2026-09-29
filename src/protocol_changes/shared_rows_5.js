@@ -123,6 +123,7 @@ addGate('train_activation.TRAIN_ACTIVATION', 'ruleset', {
     // offsets. LTC:testnet mirror admission ships disabled on this train and is
     // untouched by this reslide; it arms on a later train.
     '0.20.0': { mainnet: 9999999999, testnet: 154074, regtest: 0 },
+    '0.21.0': { mainnet: 9999999999, testnet: 155452, regtest: 0 },
 });
 
 // xchain_bridge_activation
