@@ -62,7 +62,8 @@ async function gatherStakeEntries(db, blockIndex){
     return entries;
 }
 
-// Rebuild the stakes tree only when the stake set actually changed.
+// Reuse the stakes tree when the stake set is unchanged, and update it from the
+// direct predecessor when only part of the set changed.
 //
 // buildFull writes SMT_DEPTH nodes per key, so this tree costs keys x 256 node
 // writes on EVERY BTC block - 12,544 on the regtest venue's 49 keys - and the
@@ -76,22 +77,22 @@ async function gatherStakeEntries(db, blockIndex){
 // test/unit/state_commitment/state_commitment.test.js pins both halves of that - equality with the merkle.js
 // reference, and insert-order independence.
 //
-// Every way this can be wrong is a way it rebuilds. It shortcuts ONLY when the
-// entries are identical to those of the block IMMEDIATELY BEFORE it, which this
-// same process built and committed, and whose nodes are therefore already durable
-// (state_tree_nodes is COW and rollback-exempt). Keyed on block CONTINUITY and not
-// on the digest alone, so a reorg, a rollback, or a cold start lands on a block
-// that is not the memo's successor and rebuilds. That direction matters: a cache
-// in a consensus path may only ever fail toward the slow correct answer, and an
-// earlier cache that failed the other way here did so because it was keyed on a
-// MUTABLE dense id rather than on its own inputs.
+// The memo applies only to the block immediately after the one this process built
+// and committed. A gap, re-parse, other chain or network, cold start, or missing
+// root rebuilds from the full entry set.
 let stakesMemo = null;
+
+function stakeEntriesMap(entries){
+    const byKey = new Map();
+    for(const [key, leaf] of entries) byKey.set(String(key), String(leaf));
+    return byKey;
+}
 
 function stakeEntriesDigest(entries){
     // Sorted, because buildFull is order-independent: an entry set that merely
     // reordered must still hit. Length-prefixed and separator-joined so no pair
     // boundary can be forged by a value that happens to contain the separator.
-    const pairs = entries.map(e => String(e[0]) + ':' + String(e[1])).sort();
+    const pairs = Array.from(entries, e => String(e[0]) + ':' + String(e[1])).sort();
     return M.toHex(M.sha256(Buffer.from(pairs.length + '|' + pairs.join('|'), 'utf8')));
 }
 
@@ -100,22 +101,34 @@ function stakeEntriesDigest(entries){
 function resetStakesMemo(){ stakesMemo = null; }
 
 async function buildStakesRoot(smt, chain, network, blockIndex, entries){
-    const digest = stakeEntriesDigest(entries);
-    const memo   = stakesMemo;
+    const entriesByKey = stakeEntriesMap(entries);
+    const digest = stakeEntriesDigest(entriesByKey);
+    const memo = stakesMemo;
     if(memo && memo.chain === chain && memo.network === network
-            && memo.blockIndex === blockIndex - 1 && memo.digest === digest){
+            && memo.blockIndex === blockIndex - 1){
         // One indexed read weighed against 12,544 writes: proves the memoized tree
         // is still IN the store before trusting it. It does not prove every interior
         // node survived - only a prune could remove one, and reachability marking
         // keeps whatever a retained root reaches - so this is a cheap floor, stated
         // as such rather than sold as verification.
         if(memo.root === EMPTY_ROOT_HEX || await smt.store.get(memo.root)){
-            stakesMemo = { chain, network, blockIndex, digest, root: memo.root };
-            return memo.root;
+            let root = memo.root;
+            if(memo.digest !== digest){
+                for(const key of memo.entries.keys()){
+                    if(!entriesByKey.has(key))
+                        root = await smt.update(root, M.toBuf(key), null);
+                }
+                for(const [key, leaf] of entriesByKey){
+                    if(memo.entries.get(key) !== leaf)
+                        root = await smt.update(root, M.toBuf(key), leaf);
+                }
+            }
+            stakesMemo = { chain, network, blockIndex, digest, root, entries: entriesByKey };
+            return root;
         }
     }
     const root = await smt.buildFull(entries);
-    stakesMemo = { chain, network, blockIndex, digest, root };
+    stakesMemo = { chain, network, blockIndex, digest, root, entries: entriesByKey };
     return root;
 }
 
