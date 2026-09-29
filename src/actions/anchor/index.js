@@ -77,9 +77,8 @@ const reassembly   = require('./reassembly.js');
 const { splitV3Wire } = require('./v3_wire.js');
 const { walkFoldSections } = require('./v3_sections.js');
 const { foldArchiveReason } = require('./v3_archive_check.js');
-const { extendSectionCanonicalBase } = require('./v3_canonical.js');
+const { signsExtendedCanonical, extendSectionCanonicalBase } = require('./v3_canonical.js');
 const { recordFoldAction } = require('./v3/v3_record.js');
-
 function foldHeaderReason(config, data, error){
     if(error) return error;
     if(String(data['NETWORK']) !== String(config['NETWORK'] || '')) return 'invalid: NETWORK (not this network)';
@@ -195,6 +194,7 @@ class Anchor {
             // its own SECTION_SNAPSHOT_BLOCK, the block its signatures were produced over.
             base += '|' + [String(d['STATE_ROOT'] || '').toLowerCase(), String(d['STATE_ROOT_VERSION']),
                            String(d['BLOCK_MERKLE_ROOT'] || '').toLowerCase(), String(d['BLOCK_MERKLE_VERSION'])].join('|');
+            if(signsExtendedCanonical(d['SECTION_INDEX'], d['FOLD_ARCHIVE'])) roundId += '|' + d['FOLD_ARCHIVE']['MATCH_BATCH_SEQ'];
             base = extendSectionCanonicalBase(base, d['SECTION_INDEX'], d['FOLD_ARCHIVE']);
         }
         if(eq.isEquivHeaderActive(d['SNAPSHOT_BLOCK'], d['NETWORK']))
