@@ -26,7 +26,7 @@
 
 const { getLogger } = require('../../observability/index.js');
 const { HUB_SCHEMA_VERSION } = require('../hub_schema_version');
-const { REBUILT_SOURCE_IDENTITY_COLUMNS, REBUILT_SOURCE_PROBE_ROWS, MIRROR_NATURAL_IDS } = require('./mirror_tables.js');
+const { REBUILT_SOURCE_IDENTITY_COLUMNS, REBUILT_SOURCE_PROBE_ROWS } = require('./mirror_tables.js');
 
 module.exports = {
 
@@ -80,15 +80,6 @@ module.exports = {
     // happened to contain. A filtered snapshot endpoint, a paging hole or a partial drain
     // can each make a valid row look unserved; none of them can make it change network.
     async purgeForeignNetworkRows(table, network) {
-        // Name up to ten of the rows about to go, for the tables whose refusals are traced by id.
-        let idCol = MIRROR_NATURAL_IDS[table];
-        let ids = [];
-        if (idCol) {
-            try {
-                let rows = await this.hubDb.doQuery('SELECT ' + idCol + ' AS id FROM ' + table + ' WHERE network <> ? LIMIT 10', [network]);
-                if (Array.isArray(rows)) ids = rows.map(r => String(r.id));
-            } catch (e) { ids = []; }
-        }
         let result;
         try {
             result = await this.hubDb.doQuery('DELETE FROM ' + table + ' WHERE network <> ?', [network]);
@@ -109,8 +100,7 @@ module.exports = {
         if (removed <= 0) return 0;
         getLogger().warn('HubDbSync: removed ' + removed + ' row(s) from ' + table + ' belonging to a network ' +
             'other than ' + network + '; a mirror holds only what the hub it follows serves, and those rows ' +
-            'block both the id cursor and the id-parity apply' +
-            (ids.length ? ' (' + idCol + ' ' + ids.join(', ') + (removed > ids.length ? ', ...' : '') + ')' : ''));
+            'block both the id cursor and the id-parity apply');
         return removed;
     },
 

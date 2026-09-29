@@ -172,14 +172,7 @@ const REBUILT_SOURCE_IDENTITY_COLUMNS = Object.freeze({
 // overlap case reachable in the first place.
 const REBUILT_SOURCE_PROBE_ROWS = 200;
 
-// The column that names a row in the cross-chain tables whose refusals an operator has to
-// match against a settlement screen or an acceptance journal. A mirror-layer refusal of one
-// of these rows names it by this column, so a refused snapshot or transfer can be traced by id
-// rather than only counted.
-const MIRROR_NATURAL_IDS = { policy_snapshots: 'snapshot_id', bridge_transfers: 'transfer_id' };
-
 module.exports = {
-    MIRROR_NATURAL_IDS,
     RETRACTION_COLUMNS, RETRACTION_CHAIN_COLUMNS,
     CROSS_CHAIN_TABLES, FULL_REPAGE_TABLES, HUB_STATE_TABLES,
     REBUILT_SOURCE_IDENTITY_COLUMNS, REBUILT_SOURCE_PROBE_ROWS,
