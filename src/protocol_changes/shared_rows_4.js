@@ -389,7 +389,7 @@ addGate('token_bridge_activation.TOKEN_BRIDGE_ACTIVATION', 'height', {
     mainnet: 9999999999,
     'BTC:testnet': 154567, // set by the v0.21.0 freeze height plan
     'LTC:testnet': 4903068, // set by the v0.21.0 freeze height plan
-    'DOGE:testnet': 67949959, // set by the v0.21.0 freeze height plan
+    'DOGE:testnet': 67951140, // set by the v0.21.0 freeze height plan
     testnet: 9999999999,
     regtest: 0,
 });
