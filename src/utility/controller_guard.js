@@ -107,6 +107,12 @@ module.exports = {
         return GUARD_INERT_SENTINEL + ' (' + detail + ')';
     },
 
+    // The same refusal for a probe that would run a caller-named contract outside any controller
+    // binding (the VOTE binding-poll callback-method check), naming that contract and its role.
+    guardInertContractProbeError(contractIndex, role){
+        return GUARD_INERT_SENTINEL + ' (contract ' + Number(contractIndex) + ' ' + String(role) + ')';
+    },
+
     // Just the controller detail out of a guard-inert status string. The parenthetical is
     // OPTIONAL by design: a bare sentinel with no parenthetical (e.g. one relayed by an
     // older node) still yields a usable phrase rather than an empty parenthesis or a crash.

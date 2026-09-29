@@ -9,7 +9,7 @@
 // CONSENSUS-CRITICAL: protocol special-address canonicalization for the block
 // hash preimage.
 //
-// The ledger/actions/contracts hashes (db.js getBlockHashes) hash the RESOLVED
+// The ledger/actions/contracts hashes (src/db/actions.js getBlockHashes) hash the RESOLVED
 // address strings so the preimage is independent of each node's local id space.
 // But the protocol's own special addresses (BURN / GAS / DONATE1 / DONATE2 /
 // REWARD) are encoded per chain (a BTC base58 address differs from the LTC and
@@ -31,9 +31,10 @@
 // never enters a ledger hash, and it is env-overridable (would defeat a frozen
 // map).
 //
-// xchain-sync/src/client/block_hasher.js vendors a byte-identical copy of ROLE_BY_ADDRESS
-// and canonicalizeHashAddress; the indexer unit suite asserts this map matches
-// the coin bundles so config edits can never silently drift the consensus map.
+// xchain-sync/src/util/protocol_address_roles.js vendors a frozen snapshot of ROLE_BY_ADDRESS
+// and a byte-identical canonicalizeHashAddress, which xchain-sync/src/client/block_hasher.js
+// consumes; the indexer unit suite asserts this map matches the coin bundles so
+// config edits can never silently drift the consensus map.
 
 // BRIDGE_<COIN> joins the hashed roles for the same reason REWARD is here: the
 // XBRIDGE escrow is an ordinary balance at a per-chain address, so a v0/v3 lock

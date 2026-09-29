@@ -146,14 +146,16 @@ function restoredRewardRearmFloor(reorgBlock, network){
 // horizonTime + ANCHOR_ATTEST_ARRIVAL_MARGIN_S certifies this node holds every row that
 // pass will read, which is the completeness property in full.
 //
-// BYTE-IDENTICAL across xchain-{hub,indexer}/src/anchor_reward_activation.js and value-
-// identical to xchain-documentation/protocol/constants.js, held by the activation-constants parity
-// suite. Both values are hashed into the consensus-rules digest (SHARED_GATES), so a
-// one-sided edit surfaces as a rules mismatch rather than as silent drift.
+// Both values are anchor_reward_activation.* rows of the registry part shared_rows_1.js (a
+// byte twin in hub and indexer), held value-identical to
+// xchain-documentation/protocol/constants.js by the indexer's activation-constants parity
+// suite and hashed into the consensus-rules digest (SHARED_GATES), so a one-sided edit
+// surfaces as a rules mismatch rather than as silent drift.
 
 // The arming seam is SHARED with the mirror-admission family deliberately: one venue lever
-// (XC_MIRROR_ADMISSION_ACTIVATION) arms both flag days, so a regtest drill cannot end up
-// with the admission axis armed and the horizon axis inert and still be called a drill.
+// (XC_MIRROR_ADMISSION_ACTIVATION, via REGTEST_ARMING in the registry part shared_rows.js)
+// arms both flag days, so a regtest drill cannot end up with the admission axis armed and
+// the horizon axis inert and still be called a drill.
 const { resolveMirrorAdmissionRegtest } = require('./mirror_admission_gate.js');
 
 const ANCHOR_ATTEST_ARRIVAL_MARGIN_S = copy('anchor_reward_activation.ANCHOR_ATTEST_ARRIVAL_MARGIN_S');

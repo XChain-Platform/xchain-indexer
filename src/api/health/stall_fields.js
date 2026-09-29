@@ -53,9 +53,10 @@ function stallFields(indexer){
         // identically as a growing lag.
         // When the decoder has halted (durable REORG_HALT marker), attribute the stall to that
         // rather than reporting ordinary lag/null. A halted decoder cannot advance, so the
-        // indexer's lag is a downstream symptom, not an indexer-side stall.
+        // indexer's lag is a downstream symptom, not an indexer-side stall. Names both
+        // remedies the decoder probe's log names; readers key on the leading word only.
         stallReason:      indexer.decoderReorgHalted
-                            ? (indexer.stallReason || 'decoder_reorg_halt: decoder wrote a REORG_HALT marker; full decoder resync required')
+                            ? (indexer.stallReason || 'decoder_reorg_halt: decoder wrote a REORG_HALT marker; resync the decoder, or clear the reviewed halt in place with `xchain-node clear-reorg-halt`')
                             : (indexer.stallReason || null),
         decoderReorgHalted: !!indexer.decoderReorgHalted,
         // PLATFORM-TRAIN ACTIVATION. The one field here

@@ -26,8 +26,10 @@
  *
  * LOCAL COPY of the canonical map in xchain-documentation/protocol/constants.js,
  * kept byte-equal by the cross-service regression suite (a divergence forks the
- * additive root and halts the xchain-sync follower). The byte-identical twin lives
- * in xchain-sync/src/state_commitment_activation.js.
+ * additive root and halts the xchain-sync follower). The copy is the
+ * state_commitment_activation row in the gate registry's shared_rows_4.js
+ * (xchain-sync src/consensus/gate_registry/, xchain-indexer src/protocol_changes/),
+ * and this module is byte-identical in both repos under src/consensus/gates/.
  *
  ********************************************************************/
 

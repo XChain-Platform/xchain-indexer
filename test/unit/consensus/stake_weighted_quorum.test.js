@@ -154,17 +154,15 @@ function registerStakeActivationTests() {
 function registerStakeActivationParityTest() {
     describe('cross-service activation parity', function () {
         it('indexer activation map == canonical constants.js', function () {
-            // Monorepo-relative: the canonical doc is present in the monorepo/aggregator
-            // checkout but NOT in standalone single-repo CI, where this skips. The
-            // authoritative cross-repo byte-identity is enforced by the dedicated
-            // consensus-primitive conformance gate, so the skip is not a false green.
-            // Judged before the require: a lane symlink into a live main checkout would
-            // load uncommitted constants and pass against them.
+            // Skip only an unusable sibling in a permissive run; XCHAIN_REQUIRE_SIBLINGS=1 fails it, and a
+            // present canon that throws on load fails in either mode. Judged before the require: a lane
+            // symlink into a live main checkout would load uncommitted constants and pass against them.
             const docs = siblingCheckout(__dirname, '../../../../xchain-documentation/protocol/constants.js');
             if (!docs.usable) return skipOrFail(this, docs, 'the canonical constants.js stake-weighted activation parity');
-            let canonical;
-            try { canonical = require('../../../../xchain-documentation/protocol/constants.js').STAKE_WEIGHTED_QUORUM_ACTIVATION; }
-            catch (e) { return this.skip(); }
+            // Keep this case: the conformance gate compares only the carrier files, which read the map
+            // from src/protocol_changes/shared_rows_3.js, whose cross-repo twin compare lives in the hub.
+            const canonical = require('../../../../xchain-documentation/protocol/constants.js').STAKE_WEIGHTED_QUORUM_ACTIVATION;
+            assert.ok(canonical && typeof canonical === 'object', 'canonical constants.js exports no STAKE_WEIGHTED_QUORUM_ACTIVATION');
             assert.deepStrictEqual(swq.STAKE_WEIGHTED_QUORUM_ACTIVATION, canonical);
         });
     });

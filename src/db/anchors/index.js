@@ -179,10 +179,11 @@ module.exports = {
 
     // Look up the on-chain ANCHOR checkpoint record for one checkpoint identity
     // (chain, network, block_index, checkpoint_seq), joined to its status. Only
-    // checkpoint-bearing versions (0/1, per the ANCHOR_CHECKPOINT_VERSIONS constant
-    // below; a v0 row is one bundle SECTION and carries its own checkpoint identity,
-    // v1 is the archive head and carries its wrapper checkpoint's, and v2 is an
-    // archive continuation chunk with no checkpoint identity at all). A bundle
+    // checkpoint-bearing versions (0/1/3, per CHECKPOINT_VERSIONS in db/anchor_sql.js,
+    // imported above as ANCHOR_CHECKPOINT_VERSIONS; a v0 row is one bundle SECTION and
+    // carries its own checkpoint identity, v1 is the archive head and carries its
+    // wrapper checkpoint's, a v3 folded action's chain rows are its sections, and v2 is
+    // an archive continuation chunk with no checkpoint identity at all). A bundle
     // therefore answers this read per section, with no bundle-level RPC of its own.
     // Returns the highest action_index
     // match (a reorg-replayed re-anchor supersedes an earlier one) or null. Read path
@@ -190,8 +191,8 @@ module.exports = {
     // landed on-chain, with the matching payload, at DOGE depth, before trusting an
     // anchor-gossip stamp/reward (the block_index_doge column carries the DOGE height).
     async getAnchorActionByCheckpoint(chain, network, block_index, checkpoint_seq){
-        // Version set is the single source of truth in anchor_action_query.js (shared
-        // with the RPC + tests) so the SQL filter can never drift from it.
+        // Version set is the single source of truth in db/anchor_sql.js (re-exported
+        // through anchor_action_query.js to the RPC + tests) so the SQL filter can never drift from it.
         let versions = ANCHOR_CHECKPOINT_VERSIONS;
         let query = `SELECT a.action_index, a.version, a.chain, a.network, a.block_index,
                             a.block_hash, a.ledger_hash, a.actions_hash, a.contract_hash,

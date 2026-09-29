@@ -94,7 +94,8 @@ module.exports = {
     // Create/Update record in `dispenser_statuses` table
     // @param {action_index}            integer Action index of action
     // @param {dispenser_action_index}  integer Action index of dispenser
-    // @param {status}                  string  Status of the referenced dispenser (open/complete/closing/cancelled/expired)
+    // @param {status}                  string  Status of the referenced dispenser: live 'open'/'cancelling', or terminal 'cancelled'/'empty'/'max_dispenses_reached'/'expired'
+    //                                          (the terminal four are the set util.isDispenserSettled guards the refund with; keep the two lists equal)
     // @param {cancelled_by}            string  (optional) Address that triggered the cancel - recorded for the 'cancelling' status so dispenser_close can route escrow correctly
     async createDispenserStatus(action_index, dispenser_action_index, status, cancelled_by){
         // Normalize data

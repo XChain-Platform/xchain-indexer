@@ -49,6 +49,7 @@ const fs     = require('fs');
 const path   = require('path');
 const {
     SQL_DIR, INDEX_BASELINE, PRIMARY_INDEX, collectLedgerCreatedTables, collectDeclaredIndexes, collectMigrationIndexes,
+    parseAlterTableIndexes,
 } = require('./sql_schema_index_parity.test/helpers/index_ledger.js');
 
 describe('SQL schema index parity (definition path vs ledger path) @regression', function(){
@@ -97,6 +98,43 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
             'FULLTEXT INDEX form has gone stale in the regexes above and such an index would be ' +
             'unguarded on the ledger path');
         assert.ok(ft.every(a => a.unique === false), 'FULLTEXT must not be read as UNIQUE');
+    });
+});
+
+describe('SQL schema index parity (definition path vs ledger path) @regression', function(){
+    // contract_state.idx_latest_bin is added by the SECOND clause of one ALTER (after an
+    // ADD COLUMN), so a parser reading only a leading ADD INDEX misses it on the ledger path.
+    it('sanity: the parser reads an ADD INDEX from a non-leading ALTER clause', function(){
+        const hit = collectMigrationIndexes().find(a => a.table === 'contract_state' && a.index === 'idx_latest_bin');
+        assert.ok(hit, 'an ADD INDEX in a non-leading ALTER clause is no longer parsed (contract_state.idx_latest_bin)');
+        assert.strictEqual(hit.file, '2026-07-10-contract-state-bin-key-index.sql');
+        assert.deepStrictEqual(hit.columns, ['contract_index', 'state_key_bin', 'iddesc']);
+        assert.strictEqual(hit.unique, false);
+        assert.strictEqual(hit.fulltext, false);
+    });
+
+    it('sanity: the clause parser reads every ADD index spelling and nothing else', function(){
+        const read = sql => parseAlterTableIndexes(sql, 'x.sql')
+            .map(a => [a.table, a.index, a.columns.join(','), a.unique, a.fulltext]);
+        assert.deepStrictEqual(read('ALTER TABLE t ADD COLUMN c VARCHAR(9) GENERATED ALWAYS AS (CONCAT(a, b)) VIRTUAL, ADD INDEX i1 (a, b);'),
+            [['t', 'i1', 'a,b', false, false]]);
+        assert.deepStrictEqual(read('ALTER TABLE t ADD KEY k1 (a);'), [['t', 'k1', 'a', false, false]]);
+        assert.deepStrictEqual(read('ALTER TABLE t ADD UNIQUE KEY u1 (a, b);'), [['t', 'u1', 'a,b', true, false]]);
+        assert.deepStrictEqual(read('ALTER TABLE t ADD UNIQUE u2 (a);'), [['t', 'u2', 'a', true, false]]);
+        assert.deepStrictEqual(read('ALTER TABLE t ADD FULLTEXT KEY f1 (a);'), [['t', 'f1', 'a', false, true]]);
+        assert.deepStrictEqual(read('ALTER TABLE t ADD INDEX IF NOT EXISTS i1 (a), ADD INDEX i2 (b);'),
+            [['t', 'i1', 'a', false, false], ['t', 'i2', 'b', false, false]]);
+        assert.deepStrictEqual(read('ALTER TABLE t1 ADD INDEX i1 (a);\nALTER TABLE t2 ADD COLUMN c INT, ADD KEY i2 (c);'),
+            [['t1', 'i1', 'a', false, false], ['t2', 'i2', 'c', false, false]]);
+        assert.deepStrictEqual(read("ALTER TABLE t ADD COLUMN c VARCHAR(9) COMMENT 'x, ADD INDEX z (q)', ADD INDEX i1 (c);"),
+            [['t', 'i1', 'c', false, false]]);
+        for(const none of ['ALTER TABLE t ADD PRIMARY KEY (a);',
+                           'ALTER TABLE t ADD CONSTRAINT fk FOREIGN KEY (a) REFERENCES u(b);',
+                           'ALTER TABLE t ADD FOREIGN KEY (a) REFERENCES u(b);',
+                           'ALTER TABLE t ADD COLUMN c INT;',
+                           'ALTER TABLE t DROP INDEX IF EXISTS x;',
+                           '-- ALTER TABLE t ADD INDEX x (a)'])
+            assert.deepStrictEqual(read(none), [], none);
     });
 });
 

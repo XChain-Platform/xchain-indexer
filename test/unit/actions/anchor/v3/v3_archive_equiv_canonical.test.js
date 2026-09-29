@@ -33,6 +33,7 @@ function section(){
 
 describe('ANCHOR v3 archive equivocation canonical', function () {
     it('matches the hub canonical exactly for an archive wrapper section', function () {
+        // Same literal as the hub's fold_signing_canonical_vector.test.js; keep both byte-identical.
         const expected = 'EQUIV|XCHECKPOINT|BTC|regtest|100007|7|5|0||XCHECKPOINT|BTC|regtest|100007|aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc|dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|7|41647|eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|1|ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|5|1|8665563e|1';
 
         assert.strictEqual(Anchor.prototype.canonical.call({}, section()), expected);

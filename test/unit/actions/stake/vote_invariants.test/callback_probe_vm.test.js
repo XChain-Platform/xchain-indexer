@@ -54,10 +54,18 @@ function stubBindingCreate(contract, status = 'valid'){
     indexer.indexerDb.createPoll = sinon.stub().resolves();
 }
 
-async function runBindingCreate(){
-    const data = createBaseData({ ACTION: 'VOTE', FORMAT: 0, BLOCK_INDEX: 100, ACTION_INDEX: 50, SOURCE: 'creatorAddr' });
-    await handler.parse(bindingCreateParams(), data, null);
+async function runBindingCreate(overrides = {}, params = bindingCreateParams()){
+    const data = createBaseData({ ACTION: 'VOTE', FORMAT: 0, BLOCK_INDEX: 100, ACTION_INDEX: 50, SOURCE: 'creatorAddr', ...overrides });
+    await handler.parse(params, data, null);
     return data;
+}
+
+// The same create with CALLBACK_CONTRACT and CALLBACK_METHOD blank: a signaling poll.
+function signalingCreateParams(){
+    const params = bindingCreateParams();
+    params[13] = '';
+    params[14] = '';
+    return params;
 }
 
 function realProbeOptions(){
@@ -159,6 +167,44 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
             assert.strictEqual(data.STATUS, 'valid');
             assert.ok(indexer.indexerDb.getStatusString.notCalled);
             assert.strictEqual(vm.probeInstances.length, 0);
+        });
+    });
+
+    describe('VOTE callback probe on the public guard-inert dry-run', function(){
+        it('refuses the method probe as unjudged and never builds the probe VM', async function(){
+            stubBindingCreate({ action_index: 5, code: codeAtSize(100), status_id: 1 });
+            const data = await runBindingCreate({ GUARD_INERT: true });
+            assert.ok(String(data.STATUS).startsWith('invalid: '), data.STATUS);
+            assert.ok(indexer.util.isGuardInertError(data.STATUS), data.STATUS);
+            assert.ok(String(data.STATUS).includes('contract 5'), data.STATUS);
+            assert.strictEqual(vm.probeInstances.length, 0);
+            assert.ok(vm.probeReadManifest.notCalled);
+            assert.ok(actionsCtx.getVoteCallbackProbeVm.notCalled);
+            assert.ok(indexer.indexerDb.createPoll.notCalled);
+        });
+
+        it('keeps the real verdict for an inactive callback contract', async function(){
+            stubBindingCreate({ action_index: 5, code: codeAtSize(100), status_id: 2 }, 'invalid: disabled');
+            const data = await runBindingCreate({ GUARD_INERT: true });
+            assert.strictEqual(data.STATUS, 'invalid: CALLBACK_CONTRACT (not active)');
+            assert.strictEqual(vm.probeInstances.length, 0);
+        });
+
+        it('leaves a signaling poll create fully judged', async function(){
+            stubBindingCreate({ action_index: 5, code: codeAtSize(100), status_id: 1 });
+            const data = await runBindingCreate({ GUARD_INERT: true }, signalingCreateParams());
+            assert.strictEqual(data.STATUS, 'valid');
+            assert.strictEqual(vm.probeInstances.length, 0);
+        });
+
+        it('still probes a block transaction, where GUARD_INERT is false', async function(){
+            stubBindingCreate({ action_index: 5, code: codeAtSize(100), status_id: 1 });
+            vm.probeReadManifest.resolves({
+                success: true, manifest: { metaJson: '{"callbackFns":["onResult"]}' }, error: null
+            });
+            const data = await runBindingCreate({ GUARD_INERT: false });
+            assert.strictEqual(data.STATUS, 'valid');
+            assert.ok(vm.probeReadManifest.calledOnce);
         });
     });
 });

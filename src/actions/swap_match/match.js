@@ -24,7 +24,7 @@ const PAYOUT_POLICY_KEY = 'order_swap_payout_policy_activation.ORDER_SWAP_PAYOUT
  *
  ********************************************************************/
 
-// Installed onto Swap_Match.prototype by swap_match.js; each method runs with `this`
+// Installed onto Swap_Match.prototype by index.js; each method runs with `this`
 // bound to the handler, exactly as the class method it was.
 module.exports = {
 

@@ -18,7 +18,7 @@
  * class body produces: the class reaches them as this.<method>, suites can stub them
  * through the prototype, and for-in over an instance or its prototype stays empty. A
  * plain Object.assign would make every installed method enumerable, which a class
- * method never is. Same install as bet.js and db/index.js use for their mixins.
+ * method never is. Same install as bet/index.js and db/index.js use for their mixins.
  *
  *********************************************************************/
 

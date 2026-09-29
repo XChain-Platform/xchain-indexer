@@ -64,6 +64,7 @@ const controllerGuardPart = require('./controller_guard.js');
 const settlePart = require('./settle.js');
 
 const { getLogger } = require('../../observability/index.js');
+const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
 class Dispenser {
 
     // Handle constructing a class instance
@@ -94,7 +95,7 @@ class Dispenser {
     // get_first_seen_status: that verdict is replay-frozen (it decides DISPENSER
     // validity already baked into hashed history), so the call feeding it must not
     // change method. A tracker deployed before the sibling existed answers -32601,
-    // and the caller's catch turns any throw into isFresh=false, i.e. a rejection
+    // and the caller's catch turns an RPC error answer into isFresh=false, i.e. a rejection
     // of a create the chain already accepted. This call cannot reach that path: it
     // runs after the verdict is fixed, swallows everything, and is skipped entirely
     // when the client has no getFirstSeenStatus.
@@ -198,30 +199,7 @@ class Dispenser {
                 if(gateRegistry.activeAt('dispenser_freshness_activation.DISPENSER_FRESHNESS_ACTIVATION', this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null)){
                     isFresh = !(await this.hasPriorLocalActivity(data));
                 } else if(this.utxoTracker && this.utxoTracker.enabled){
-                    try {
-                        // Oracle-shape flag-day (the dispenser_freshness_shape_activation row).
-                        // At/after it a non-null get_first_seen answer with no numeric height
-                        // throws and the catch below reads as not fresh; below it that answer
-                        // is the legacy null, which grants the exception. Passed in because
-                        // the gate is keyed on this chain's block_index and the client has no
-                        // block context.
-                        let strictShape = gateRegistry.activeAt(
-                            'dispenser_freshness_shape_activation.DISPENSER_FRESHNESS_SHAPE_ACTIVATION',
-                            this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
-                        let firstSeen = await this.utxoTracker.getFirstSeen(data['GET_ADDRESS'], { strictShape: strictShape });
-                        isFresh = !firstSeen || firstSeen.height >= data['BLOCK_INDEX'];
-                        // get_first_seen answers null both for "never appeared on chain"
-                        // and for "this tracker has not indexed that far yet, or is halted
-                        // on an unwinding reorg", so a fresh-by-null verdict computed
-                        // against a lagging tracker is a false positive that leaves no
-                        // trace (the catch below only fires on a hard RPC failure, not on
-                        // a stale-but-successful answer). Record when that happened.
-                        // Log-only, and never an input to isFresh.
-                        if(isFresh && !firstSeen)
-                            await this.logStaleFreshness(data);
-                    } catch (err) {
-                        getLogger().info('WARNING: utxo-tracker get_first_seen failed for ' + data['GET_ADDRESS'] + ': ', err);
-                    }
+                    isFresh = await this.readLegacyTrackerFreshness(data);
                 }
                 let hasStanding = false;
                 if(!isFresh && await this.actions.protocolChanges.isEnabled('DISPENSER_ORIGIN_STANDING', data['BLOCK_INDEX']))
@@ -233,6 +211,40 @@ class Dispenser {
 
     ctx.data = data;
     ctx.error = error;
+    }
+
+    // The legacy (below-gate) tracker verdict: fresh when get_first_seen reports no sighting
+    // before BLOCK_INDEX. Kept byte-identical for replay; only a tracker outage now halts.
+    async readLegacyTrackerFreshness(data){
+        let isFresh = false;
+        try {
+            // Oracle-shape flag-day (the dispenser_freshness_shape_activation row).
+            // At/after it a non-null get_first_seen answer with no numeric height
+            // throws and the catch below reads as not fresh; below it that answer
+            // is the legacy null, which grants the exception. Passed in because
+            // the gate is keyed on this chain's block_index and the client has no
+            // block context.
+            let strictShape = gateRegistry.activeAt(
+                'dispenser_freshness_shape_activation.DISPENSER_FRESHNESS_SHAPE_ACTIVATION',
+                this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
+            let firstSeen = await this.utxoTracker.getFirstSeen(data['GET_ADDRESS'], { strictShape: strictShape });
+            isFresh = !firstSeen || firstSeen.height >= data['BLOCK_INDEX'];
+            // get_first_seen answers null both for "never appeared on chain"
+            // and for "this tracker has not indexed that far yet, or is halted
+            // on an unwinding reorg", so a fresh-by-null verdict computed
+            // against a lagging tracker is a false positive that leaves no
+            // trace (the catch below only fires on a hard RPC failure, not on
+            // a stale-but-successful answer). Record when that happened.
+            // Log-only, and never an input to isFresh.
+            if(isFresh && !firstSeen)
+                await this.logStaleFreshness(data);
+        } catch (err) {
+            // Halt and retry the block when the tracker gave no answer (a node-local
+            // outage); an RPC error answer or a shape violation still reads as not fresh.
+            rethrowIfInfraFault(err);
+            getLogger().info('WARNING: utxo-tracker get_first_seen failed for ' + data['GET_ADDRESS'] + ': ', err);
+        }
+        return isFresh;
     }
 
     // Kept in this file for the same reason: test/unit/escrow_journal_writer.test.js reads
@@ -262,7 +274,7 @@ class Dispenser {
 // Install the phase methods from dispenser/ NON-ENUMERABLE, the shape the class body they
 // came from produced: parse() reaches them as this.<method>, suites can stub them through
 // Dispenser.prototype, and for-in over a handler stays empty. Same install as
-// dispenser_close.js and db/index.js use.
+// dispenser_close/index.js and db/index.js use.
 for(const part of [contextPart, validatePart, validateFormatPart, feesPart, controllerGuardPart, settlePart]){
     const descriptors = Object.getOwnPropertyDescriptors(part);
     for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;

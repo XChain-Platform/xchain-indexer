@@ -104,10 +104,11 @@ addGate('protocol/constants.CHECKPOINT_COMMITMENT_ACTIVATION', 'height', {
 // Below the flag-day the old push path stands and v4/v5 anchors are rejected. Consensus-relevant (the
 // credited reward becomes a COLLECT-spendable per-block ledger row), so it must deploy hub + ALL
 // indexers atomically. Like CHECKPOINT_COMMITMENT_ACTIVATION / STAKE_WEIGHTED_QUORUM_ACTIVATION it gates
-// on the BTC-anchored `snapshot_block` carried by every ANCHOR canonical. Kept byte-identical to the
-// local copies in xchain-{hub,indexer}/src/anchor_reward_activation.js by the cross-service regression
-// suite. Same ARMED height and deploy-by convention as the maps above: mainnet is armed to 961000
-// (2026-07-07; BTC anchor ~2026-08-04), not a disabled placeholder.
+// on the BTC-anchored `snapshot_block` carried by every ANCHOR canonical. Kept equal to the local
+// anchor_reward_activation.* rows of the registry part shared_rows_1.js (hub and indexer) by the
+// activation-constants parity suite. Same ARMED height and deploy-by convention as the maps
+// above: mainnet is armed to 961000 (2026-07-07; BTC anchor ~2026-08-04), not a disabled
+// placeholder.
 addGate('protocol/constants.ANCHOR_REWARD_ACTIVATION', 'height', {
     mainnet: 961000,      // ARMED 2026-07-07: BTC anchor ~2026-08-04; deploy hub + ALL indexers (+ sdk/explorer/sync copies) before this height
     testnet: 0,
@@ -125,8 +126,8 @@ addGate('protocol/constants.ANCHOR_REWARD_AMOUNT', 'constant', '10.00000000');
 // keyed on MATCH_BATCH_SEQ). This retires the last insider-with-key reward-forge surface the
 // per-chain ANCHOR_REWARD flag-day left open. Below the flag-day the legacy v1 + push path stands
 // and v6 anchors are rejected. Consensus-relevant, same deploy rules and snapshot_block gating as
-// ANCHOR_REWARD_ACTIVATION; kept byte-identical to the local copies in
-// xchain-{hub,indexer}/src/anchor_reward_activation.js by the cross-service regression suite.
+// ANCHOR_REWARD_ACTIVATION; kept equal to the local anchor_reward_activation.* rows of the
+// registry part shared_rows_1.js (hub and indexer) by the activation-constants parity suite.
 addGate('protocol/constants.ARCHIVE_REWARD_ACTIVATION', 'height', {
     mainnet: 963000,      // ARMED 2026-07-16, RE-PINNED 2026-08-12 off 969500 onto the pre-freeze train boundary (tip 959,853 on 07-27 at ~144 blocks/day + 21d); deploy every consumer before this era
     testnet: 0,

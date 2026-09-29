@@ -38,6 +38,12 @@ const { SETTLE_REASON, isNull, int } = require('./reasons.js');
 const { buildInLegEffects, buildOutLegEffects } = require('./leg_effects.js');
 const { isSettled, isSourceLegSettled, recordSettlement } = require('./settlements.js');
 
+// Decide "is this the gas tick" case-folded, the rule origin.js and leg_effects.js use
+// (every ticker lookup is LOWER(tick), so a signed row may carry any casing of GAS).
+function isGasTick(tick, gasTick){
+    return String(tick).toUpperCase() === String(gasTick).toUpperCase();
+}
+
 /**
  * The refusals that read the ROW and the block alone, in order, before any database work.
  *
@@ -211,7 +217,7 @@ async function mintSettleAction(deps, row, ctx, f, amount, gasTick, effects, isI
     const db = ctx.indexerDb;
     const data = {
         ACTION:      'XBRIDGE',
-        FORMAT:      (f.tick === gasTick) ? 2 : 5,
+        FORMAT:      isGasTick(f.tick, gasTick) ? 2 : 5,
         BLOCK_INDEX: ctx.blockIndex,
         BLOCK_TIME:  ctx.blockTime
     };
@@ -301,10 +307,10 @@ async function applyBridgeTransfer(deps, row, ctx){
     // retains its BTC origin. The checkpoint check uses this same resolver.
     const isInLeg = (origin.kind === 'lock');
     const gasTick = ctx.config ? String(ctx.config['GAS']) : 'XCHAIN';
-    if(isInLeg && f.tick !== gasTick &&
+    if(isInLeg && !isGasTick(f.tick, gasTick) &&
        typeof ctx.indexerDb.getAppliedPolicySnapshot === 'function' &&
        gateRegistry.activeAt('token_policy_activation.TOKEN_POLICY_INHERITANCE_ACTIVATION',
-                             ctx.network, null, ctx.blockIndex, null) &&
+                             ctx.network, ctx.coin, ctx.blockIndex, null) &&
        !await ctx.indexerDb.getAppliedPolicySnapshot(origin.originChain, f.tick, ctx.blockIndex)){
         deps.refusalLog.warnOnce('XBRIDGE', f.id, SETTLE_REASON.IN_LEG_NO_POLICY,
             SETTLE_REASON.IN_LEG_NO_POLICY + ' : deferring');

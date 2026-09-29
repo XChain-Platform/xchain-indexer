@@ -227,6 +227,75 @@ describe('Utility.validateOracleFee() - @regression @tier1', function () {
     });
 });
 
+// Build a fresh Utility on a COPY of the config so COIN never leaks into other tests.
+function utilFor(coin, network) {
+    return new Utility(Object.assign({}, new Utility().config, { COIN: coin, NETWORK: network }));
+}
+
+describe('Utility.getDustThresholdCoin() per coin - @regression @tier1', function () {
+    const coins = require('../../../src/coins');
+
+    it('reads each coin and network dust floor from its own bundle', function () {
+        // DOGE is 100000 koinu and LTC 5460 litoshi; a Bitcoin-shaped 546 on either is a fork.
+        const want = { BTC: '0.00000546', LTC: '0.00005460', DOGE: '0.00100000' };
+        for (const coin of coins.ALLOWED_COINS) {
+            for (const network of coins.NETWORKS) {
+                const u = utilFor(coin, network);
+                assert.strictEqual(u.bcformat(u.getDustThresholdCoin(), 8), want[coin],
+                    coin + '/' + network + ' dust floor');
+            }
+        }
+    });
+
+    it('on DOGE a fee under 0.001 needs no output where BTC demands one', async function () {
+        // The default fixture owes 0.00001: below DOGE dust, above BTC dust.
+        const r = await utilFor('DOGE', 'regtest').validateOracleFee(
+            withOutputs([]), dispenserFields(), fakeDb());
+        assert.strictEqual(r.valid, true, r.error);
+        assert.strictEqual(r.belowDust, true);
+    });
+
+    it('on DOGE the fee exactly at dust requires an output (the compare is strict)', async function () {
+        const under = await utilFor('DOGE', 'regtest').validateOracleFee(
+            withOutputs([]), dispenserFields({ GIVE_ESCROW: '99999' }), fakeDb());
+        assert.strictEqual(under.valid, true, under.error);
+        assert.strictEqual(under.belowDust, true);
+        const at = await utilFor('DOGE', 'regtest').validateOracleFee(
+            withOutputs([]), dispenserFields({ GIVE_ESCROW: '100000' }), fakeDb());
+        assert.strictEqual(at.valid, false);
+        assert.match(at.error, /missing oracle fee output/);
+    });
+});
+
+describe('Utility.getDustThresholdCoin() fails closed - @regression @tier1', function () {
+    const sinon = require('sinon');
+    const coins = require('../../../src/coins');
+
+    afterEach(function () { sinon.restore(); });
+
+    const broken = {
+        'the bundle lookup throws': () => { throw new Error('unknown coin'); },
+        'the bundle has no dustThreshold': () => ({ net: {} }),
+        'the bundle dustThreshold is 0': () => ({ net: { dustThreshold: 0 } }),
+    };
+    for (const [label, fake] of Object.entries(broken)) {
+        it('throws instead of using a 0 floor when ' + label, async function () {
+            const fresh = utilFor('BTC', 'regtest');
+            sinon.stub(coins, 'getCoinConfig').callsFake(fake);
+            assert.throws(() => fresh.getDustThresholdCoin(), /dustThreshold/);
+            await assert.rejects(fresh.quoteOracleFee(BLOCK_TIME, dispenserFields(), fakeDb()), /dustThreshold/);
+        });
+    }
+
+    it('does not cache a failed lookup', function () {
+        const fresh = utilFor('BTC', 'regtest');
+        sinon.stub(coins, 'getCoinConfig').throws(new Error('transient'));
+        assert.throws(() => fresh.getDustThresholdCoin(), /dustThreshold/);
+        sinon.restore();
+        assert.strictEqual(String(fresh.getDustThresholdCoin()), '0.00000546');
+    });
+});
+
 describe('Utility.validateOracleFee() - @regression @tier1', function () {
     oracleFeeHooks();
     // The whole point of the oraclefeequote API is that a payer can size an output the

@@ -301,7 +301,7 @@ describe('Database.getAddressEscrows() @regression @tier1', function () {
         const db = makeDb();
         sinon.stub(db, 'createAddress').resolves(1);
         const dq = sinon.stub(db, 'doQuery').resolves([]);
-        const escrows = await db.getAddressEscrows('addr1', null, null);
+        const escrows = await db.getAddressEscrows('addr1');
         assert.deepStrictEqual(escrows, []);
         // 3 queries: orders, swaps, dispensers
         assert.strictEqual(dq.callCount, 3);
@@ -314,7 +314,7 @@ describe('Database.getAddressEscrows() @regression @tier1', function () {
         dq.onCall(0).resolves([{ action_index: 5 }]);   // orders
         dq.onCall(1).resolves([{ action_index: 8 }]);   // swaps
         dq.onCall(2).resolves([]);                       // dispensers
-        const escrows = await db.getAddressEscrows('addr1', null, null);
+        const escrows = await db.getAddressEscrows('addr1');
         assert.strictEqual(escrows.length, 2);
         assert.strictEqual(escrows[0].type, 'order');
         assert.strictEqual(escrows[1].type, 'swap');

@@ -213,15 +213,16 @@ const CONTENT_PARITY_CARVE_OUTS = Object.freeze([
 // preimage, so the check still covers everything the two sides must agree on.
 // `validator_rewards.id` reaches the same place by a different route: the row
 // normally streams with every column, carrying the source id, but the RB-ANCHOR
-// reorg restore (xchain-indexer/src/rollback/index.js and its mirror in
-// xchain-sync/src/client/rollback.js) re-INSERTs a deleted loser naming only
-// source_id/signing_pubkey_id/reward_type/round_reference/amount/block_index/
-// derive_block_index, so each side mints its own AUTO_INCREMENT value off a
+// reorg restore (xchain-indexer/src/rollback/index.js, whose SQL is in
+// src/db/rollback/purge.js, and its mirror in xchain-sync/src/client/rollback.js)
+// re-INSERTs a deleted loser naming only source_id/signing_pubkey_id/reward_type/
+// round_reference/round_qualifier/amount/block_index/derive_block_index, so each
+// side mints its own AUTO_INCREMENT value off a
 // counter the other never sees (the source burns values on every ignored
 // createValidatorReward INSERT IGNORE). The difference is permanent, because
 // validator_rewards is in ClientApplier.ignoreTables: a later re-stream carrying
 // the source id is IGNOREd on the reward_unique key and the replica keeps its
-// own forever. The seven restored columns stay in the preimage and reward_unique
+// own forever. The eight restored columns stay in the preimage and reward_unique
 // still identifies the row, so nothing the two sides must agree on drops out.
 // Hashing any of these would turn a by-design difference into a permanent alarm.
 const CONTENT_PARITY_EXCLUDED_COLUMNS = Object.freeze({

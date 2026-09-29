@@ -32,7 +32,7 @@
 // the v2 stream until its own uq_cap_snap is widened (2026-07-20 migration).
 //
 // v3: the mirror set gained anchor_reward_attestations (HUB_STATE_TABLES
-// in hub_db_sync.js). It carries the hub's XANCPUB publisher-attestation quorum,
+// in hub_db_sync/mirror_tables.js). It carries the hub's XANCPUB publisher-attestation quorum,
 // from which this indexer derives the COLLECT-spendable anchor/archive reward, so
 // an indexer predating the table under-derives a money rail rather than merely
 // missing history. That table shipped under an unbumped v2, so a pre
@@ -48,7 +48,7 @@
 // applied the 2026-08-13-anchor-reward-attestations-doge-anchor-txid migration.
 //
 // v5: the mirror set gained attestation_responses (HUB_STATE_TABLES in
-// hub_db_sync.js). It carries a finalized ATTEST response, signed by the
+// hub_db_sync/mirror_tables.js). It carries a finalized ATTEST response, signed by the
 // responsible set over the mirror-era canonical, so the response no longer
 // needs a validator-paid on-chain ATTEST v1 transaction and its Bitcoin fee
 // (the ATTEST response-mirror design). A v4 indexer does not
@@ -58,7 +58,7 @@
 // 2026-09-03-attestation-responses migration.
 //
 // v6: the mirror set gained bridge_transfers and policy_snapshots (CROSS_CHAIN_TABLES in
-// hub_db_sync.js). bridge_transfers carries the cross_chain quorum's signed transfer
+// hub_db_sync/mirror_tables.js). bridge_transfers carries the cross_chain quorum's signed transfer
 // record, from which this indexer injects the XBRIDGE settle leg that credits a
 // destination address and moves that chain's supply; policy_snapshots carries the signed
 // origin-token policy the destination materializes onto a bridged copy. A v5 indexer does

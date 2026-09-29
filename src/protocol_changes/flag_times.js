@@ -30,7 +30,8 @@ const { UNARMED } = require('./core.js');
 // VM async/Promise flag-day, single source of truth for the cross-repo coupling
 // guard. This MUST stay byte-identical to xchain-vm's ASYNC_SURFACE_GATE_BLOCK_TIME;
 // a one-sided edit forks the fleet on the first async-using DEPLOY/EXECUTE after the
-// earlier of the two timestamps. consensus-params.test.js asserts the two are equal.
+// earlier of the two timestamps. test/unit/consensus/consensus_params.test/vm_coupling.test.js
+// asserts the two are equal.
 const VM_BANNED_ASYNC_MAINNET_TIME = 1786060800;
 
 // H-3 flag-day: deterministic (time-gated) price_snapshots selection for

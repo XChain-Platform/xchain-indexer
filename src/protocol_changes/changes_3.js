@@ -301,7 +301,7 @@ module.exports = [
     // utility.getFeeOraclePrices via isNativeFeePriceTimeGateActive() above;
     // registered here so the flag-day inventory carries it. The block loop's
     // time-keyed price barrier is NOT a consumer of this flag: it is unconditional
-    // on every chain (XChainIndexer.js:877-888), and re-conditioning it on this
+    // on every chain (XChainIndexer/price_barriers.js deferOnPriceSync), and re-conditioning it on this
     // flag-day would re-open the LTC/DOGE FIAT-dispense divergence window.
     ['NATIVE_FEE_PRICE_TIME_GATE', '0.2.0', NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME,0,0,0,0,0],
 
@@ -319,8 +319,8 @@ module.exports = [
     // flag), so not a byte-locked twin; the VM readManifest change ships alongside.
     ['DEPLOY_INIT_STRICT', '0.2.0',1786060800,0,0,0,0,0],
 
-    // BATCH sub-action normalization: the top-level dispatcher
-    // (actions.js) rewrites ACTION aliases (TRANSFER->SEND, ADDR->ADDRESS,
+    // BATCH sub-action normalization: the top-level path
+    // (actions/actions_class/transaction.js) rewrites ACTION aliases (TRANSFER->SEND, ADDR->ADDRESS,
     // DROP->AIRDROP, CAST->BROADCAST, MSG->MESSAGE) and injects the implied
     // legacy VERSION 0 for BTNS-style ISSUE/MINT/SEND params, but batch.js
     // historically did neither for its sub-actions: an aliased sub-action

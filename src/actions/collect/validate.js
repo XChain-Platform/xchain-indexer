@@ -19,7 +19,7 @@
  *
  ********************************************************************/
 
-// Installed onto Collect.prototype by collect.js; each method runs with `this` bound to
+// Installed onto Collect.prototype by index.js; each method runs with `this` bound to
 // the handler, exactly as the class method it was.
 module.exports = {
 

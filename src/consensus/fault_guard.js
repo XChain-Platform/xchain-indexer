@@ -23,8 +23,9 @@
  * That is correct ONLY for a deterministic, contract-caused failure. An
  * infrastructure fault handled the same way commits a validator-local,
  * non-deterministic verdict into the block hash and forks the chain, because
- * a healthy peer records the opposite outcome. Three fault classes must instead
- * HALT block processing so the whole block rolls back and retries:
+ * a healthy peer records the opposite outcome. These fault classes must instead
+ * HALT block processing so the whole block rolls back and retries (the host
+ * assert and the UTXO tracker outage are commented at their checks below):
  *
  *   1. A VM host fault (HostFaultError, code 'EXECUTOR_UNAVAILABLE'): the
  *      out-of-process executor cannot run ANY contract on this machine. Its
@@ -66,6 +67,9 @@ function rethrowIfInfraFault(e){
     // uncovered-mirror verdict that healthy peers do not reach (a prior incident recorded
     // every XCALL execution injected on a transaction-less block as result_status='error').
     if(e && e.code === 'PRICE_BARRIER_DEFERRED') throw e;
+    // UTXO tracker gave no answer (unreachable, non-2xx, unreadable, unconfigured): a
+    // node-local fault whose healthy peers got an answer, so a verdict here would fork.
+    if(e && e.code === 'UTXO_TRACKER_UNAVAILABLE') throw e;
     if(e && typeof e.errno === 'number' && e.errno !== 1146 && e.errno !== 1054) throw e;
 }
 

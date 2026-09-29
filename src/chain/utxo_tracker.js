@@ -34,6 +34,13 @@
  *
  ********************************************************************/
 
+// Build the error for a call the tracker never answered (a node-local fault, not a verdict).
+function unavailable(message, cause){
+    let err = cause ? new Error(message, { cause: cause }) : new Error(message);
+    err.code = 'UTXO_TRACKER_UNAVAILABLE';
+    return err;
+}
+
 class UtxoTracker {
     constructor(url, port){
         this.url     = url;
@@ -43,9 +50,12 @@ class UtxoTracker {
     }
 
     // POST a JSON-RPC request and return responseData.result, or throw.
+    // A failure where the tracker gave NO answer (unconfigured, unreachable, non-2xx,
+    // unreadable body) carries code UTXO_TRACKER_UNAVAILABLE so a consensus caller can
+    // halt and retry; a JSON-RPC error body is the tracker's answer and stays untagged.
     async call(method, params){
         if(!this.enabled)
-            throw new Error('UTXO tracker not configured (UTXO_TRACKER_URL / UTXO_TRACKER_API_PORT)');
+            throw unavailable('UTXO tracker not configured (UTXO_TRACKER_URL / UTXO_TRACKER_API_PORT)');
 
         let body = JSON.stringify({
             jsonrpc: '2.0',
@@ -54,16 +64,26 @@ class UtxoTracker {
             id:      1
         });
 
-        let response = await fetch(this.endpoint, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    body
-        });
+        let response;
+        try {
+            response = await fetch(this.endpoint, {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    body
+            });
+        } catch (e) {
+            throw unavailable('UTXO tracker unreachable: ' + (e && e.message), e);
+        }
 
         if(!response.ok)
-            throw new Error('UTXO tracker HTTP error: ' + response.status);
+            throw unavailable('UTXO tracker HTTP error: ' + response.status);
 
-        let json = await response.json();
+        let json;
+        try {
+            json = await response.json();
+        } catch (e) {
+            throw unavailable('UTXO tracker unreadable response: ' + (e && e.message), e);
+        }
         if(json.error)
             throw new Error('UTXO tracker RPC error: ' + JSON.stringify(json.error));
 
@@ -76,8 +96,8 @@ class UtxoTracker {
     // verdict (dispenser_freshness_shape_activation.js), passed in rather than read
     // here because the gate is keyed on the processing chain's block_index and this
     // client has no block context. At/after the flag day a NON-NULL answer whose
-    // `height` is not a number throws, joining the transport / HTTP / RPC-error
-    // surfaces the caller already turns into "not fresh"; below it the answer maps
+    // `height` is not a number throws (untagged), joining the RPC-error answers
+    // the caller turns into "not fresh"; below it the answer maps
     // to null, which the caller reads as "never appeared on chain" and grants the
     // fresh-address exception for. The legacy default is off, so every existing
     // caller keeps the deployed shape.

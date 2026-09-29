@@ -56,9 +56,9 @@ const FEE_INSUFFICIENT   = 'invalid: insufficient funds (FEE)';
  * order is the token spec's own refusal list, which is why TICK_NOT_BRIDGEABLE is reached
  * before DEST_COIN: a destination the issuer never opted into is a fact about the TOKEN.
  */
-const VERDICTS = {
+const VERDICTS = Object.freeze({
     // Shared gates, common to every version.
-    BEFORE_ACTIVATION:   'invalid: XBRIDGE before activation',        // below XCHAIN_BRIDGE_ACTIVATION for this CHAIN (coin-keyed) / TOKEN_BRIDGE_ACTIVATION for this network
+    BEFORE_ACTIVATION:   'invalid: XBRIDGE before activation',        // below XCHAIN_BRIDGE_ACTIVATION / TOKEN_BRIDGE_ACTIVATION for this CHAIN (both coin-keyed)
     UNKNOWN_VERSION:     'invalid: VERSION (unknown)',                // a version byte outside 0-5; a KNOWN version below its gate is BEFORE_ACTIVATION instead
     BTC_ONLY:            'invalid: XBRIDGE (BTC only)',               // v0 broadcast on any chain other than BTC; the literal the five BTC-only handlers share
     V1_NOT_ON_BTC:       'invalid: XBRIDGE v1 is not valid on BTC',   // v1 broadcast on BTC (the inverse-chain shape anchor.js uses)
@@ -99,7 +99,7 @@ const VERDICTS = {
     MEMO_LENGTH:         MEMO_LENGTH,                                 // MEMO longer than MAX_MEMO_LENGTH (send.js)
     FEE_NATIVE_REQUIRED: FEE_NATIVE_REQUIRED,                         // off BTC a protocol fee must be a native-coin output (sweep.js)
     FEE_INSUFFICIENT:    FEE_INSUFFICIENT,                            // the source cannot cover XBRIDGE_BASE in XCHAIN (sweep.js)
-};
+});
 
 module.exports = {
     VERDICTS,

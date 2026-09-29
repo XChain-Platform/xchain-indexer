@@ -56,7 +56,7 @@ function slashConsolidationActive(data, slashLedger){
 // has to merge over exactly what collides: two spellings that resolve to
 // one tick_id (a case variant, a caret ref) key two buckets, each total
 // is short, and the later write erases the earlier row anyway. tickId is
-// the resolved id from the getTickerId call above.
+// the id resolveSlashTarget (./slash_target.js) resolves via getTickerId.
 function runningTotal(consolidate, bucket, key, amount, scale){
     if(!consolidate) return amount;
     let sum = this.util.bcstr(this.util.bcadd(bucket.get(key) || '0', amount, scale));

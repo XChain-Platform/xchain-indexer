@@ -215,7 +215,8 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', () => 
     // 0/1 are the live wires; 4-7 are the pre-restart bytes, kept so an attested
     // reward maturing after the version restart still finds its anchor (6/7 prove
     // their renumbered family, 4/5 reject deterministically via the family map).
-    assert.deepStrictEqual(AnchorProofClient.ATTESTED_VERSIONS.slice().sort((a, b) => a - b), [0, 1, 4, 5, 6, 7]);
+    // 3 is the fold wire, a live bundle-family carrier once the fold is armed.
+    assert.deepStrictEqual(AnchorProofClient.ATTESTED_VERSIONS.slice().sort((a, b) => a - b), [0, 1, 3, 4, 5, 6, 7]);
     });
 
     it('rejects every per-chain reward_type, whatever the transaction carries', function () {

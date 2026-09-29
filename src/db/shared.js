@@ -159,7 +159,7 @@ const BLOCK_HASH_VERSION = 1;
 // AFTER the '^'. Non-canonical caret strings (`^007`, `^1.5`, `^-1`, `^0x10`, `^1e3`,
 // `^ 1`, `^`) are rejected so they cannot alias to a canonical id or coerce onto an
 // integer FK column; the digit string is handed to SQL verbatim (never via Number()) so a
-// large id keeps full precision. See xchain-documentation/protocol/Index_Id_References.md.
+// large id keeps full precision. See xchain-documentation/protocol/index-id-references.md.
 const CANONICAL_CARET_ID = /^[1-9][0-9]*$/;
 
 // Whether this indexer resolves `capability` from the hub-mirrored capability_snapshots

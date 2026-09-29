@@ -137,7 +137,7 @@ module.exports = [
     // action: the real HEIGHT gates are XCHAIN_BRIDGE_ACTIVATION (v0-v2,
     // xchain_bridge_activation.js, keyed '<COIN>:<network>' because the three
     // chains arm at three heights) and TOKEN_BRIDGE_ACTIVATION (v3-v5,
-    // token_bridge_activation.js, keyed per network), not this registry, so
+    // token_bridge_activation.js, keyed the same way), not this registry, so
     // mainnet stays inert here until those are armed.
     // (See xchain-documentation/protocol/actions/xbridge.md)
     ['XBRIDGE',            '0.2.0',0,0,0,0,0,0],

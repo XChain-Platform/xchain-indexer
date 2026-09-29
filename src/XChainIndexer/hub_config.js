@@ -140,7 +140,12 @@ const hubConfigMethods = {
         let hubHash = coinConsensusHashes[network] && coinConsensusHashes[network][coin];
         if(!hubHash) return;
         let localHash = coins.consensusHash(coin, network);
-        if(hubHash !== localHash)
+        // Log only when the mismatch changes, since this runs on every poll: a standing
+        // divergence must not flood the log, and a match re-arms it for the next drift.
+        let key = (hubHash !== localHash) ? (coin + '/' + network + ': hub ' + hubHash + ' vs bundled ' + localHash) : '';
+        if(key === (this._lastConsensusMismatchKey || '')) return;
+        this._lastConsensusMismatchKey = key;
+        if(key)
             getLogger().error('CONSENSUS HASH MISMATCH: hub serves ' + hubHash + ' for ' + coin + '/' + network +
                 ' but this node bundles ' + localHash + '. The hub config diverges from this node; not applying hub consensus values (they are pinned-verify-only). Upgrade the lagging side.');
     },

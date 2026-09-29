@@ -18,7 +18,7 @@
  *
  ********************************************************************/
 
-// Installed onto Dispenser_Expire.prototype by dispenser_expire.js; each method runs with
+// Installed onto Dispenser_Expire.prototype by index.js; each method runs with
 // `this` bound to the handler, exactly as the class method it was.
 module.exports = {
 

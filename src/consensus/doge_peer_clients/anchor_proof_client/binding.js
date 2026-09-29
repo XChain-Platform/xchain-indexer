@@ -31,7 +31,12 @@
 // only per-chain anchors judges 'rejected' rather than deferring, exactly as it did
 // before the restart. Which versions can PROVE which family stays the job of
 // REWARD_FAMILY_VERSIONS below; membership here only says "this is an attested anchor".
-const ATTESTED_VERSIONS = [0, 1, 4, 5, 6, 7];
+//
+// 3 is the fold wire, which the DOGE parse credits as an anchor_bundle reward. Leaving it
+// out made a fold-era reward eternally 'unknown' (the same halt as 150456). A v3 row parsed
+// before the fold is armed carries the deterministic 'invalid: VERSION (unknown)', so it
+// can only turn such a txid into 'rejected', never into 'verified'.
+const ATTESTED_VERSIONS = [0, 1, 3, 4, 5, 6, 7];
 
 // Which anchor versions can prove which reward FAMILY, and nothing else.
 //
@@ -56,10 +61,26 @@ const ATTESTED_VERSIONS = [0, 1, 4, 5, 6, 7];
 // legacy byte cannot ride in: at/above ANCHOR_ACTIVATION those bytes parse
 // 'invalid: VERSION (unknown)', a wire-determined status every DOGE node computes
 // identically, and the deterministic-invalid filter in judge drops the row as evidence.
+//
+// The fold wire (3) joins the bundle family only: a fold-era archive head earns no reward
+// (reward_family.rewardTypeFor), and isBundleSectionRow below keeps a fold's archive row
+// from standing in for one of its chain sections.
 const REWARD_FAMILY_VERSIONS = {
     archive: [1, 6],
-    bundle:  [0, 7]
+    bundle:  [0, 3, 7]
 };
+
+// Can this bundle-family row be a checkpoint SECTION? A v3 fold writes its chain sections
+// and its archive head under one action_index, and the archive row inherits the fold's
+// header SNAPSHOT_BLOCK, network and publisher. Only a row naming a chain and no archive
+// batch is a section; an archive-only fold's header block is never checked against any
+// section and earns no bundle reward, so it must never bind as bundle proof. Every other
+// version passes unchanged, so the v0/v7 verdicts stay byte-identical.
+function isBundleSectionRow(a){
+    if(Number(a && a.version) !== 3) return true;
+    if(String((a && a.checkpoint_chain) || '') === '') return false;
+    return a.match_batch_seq === null || a.match_batch_seq === undefined;
+}
 
 // The reward family a reward_type names. reward_type is inside the XANCPUB canonical the
 // caller re-verifies (anchor_reward_derive.rewardCanonical), so it is quorum-signed; the
@@ -163,9 +184,10 @@ function bundleHeaderBlocks(anchors, network, publisher){
     let byAction = new Map();
     let filtered = null;
     for(let a of anchors){
-        // Either era's bundle rows (v0, or pre-restart v7) reconstruct the header;
-        // one bundle is one era, so the eras never mix within an action.
+        // Every era's bundle SECTION rows (v0, v3 fold sections, pre-restart v7) reconstruct
+        // the header; one bundle is one era, so the eras never mix within an action.
         if(!REWARD_FAMILY_VERSIONS.bundle.includes(Number(a.version))) continue;
+        if(!isBundleSectionRow(a)) continue;
         let b = Number(a.snapshot_block);
         if(!Number.isFinite(b)) continue;
         let ai = Number(a.action_index);
@@ -211,6 +233,8 @@ function bindsToTuple(a, t, headers){
     // reconstructed header above. The two together prove the row is the header-block
     // section of the bundle the reward names.
     if(t.family === 'bundle'){
+        // Refuse a v3 fold's archive row, or an archive-only fold, as bundle proof.
+        if(!isBundleSectionRow(a)) return false;
         let ai = Number(a.action_index);
         let header = headers.byAction.has(ai) ? headers.byAction.get(ai)
                                               : headers.filtered;
@@ -267,5 +291,6 @@ function judgeAnchors(anchors, e){
 
 module.exports = {
     ATTESTED_VERSIONS, REWARD_FAMILY_VERSIONS, NODE_CLASS_DEPENDENT_STATUS,
-    rewardFamily, isRewardCandidateRow, bundleHeaderBlocks, bindsToTuple, judgeAnchors
+    rewardFamily, isRewardCandidateRow, isBundleSectionRow, bundleHeaderBlocks, bindsToTuple,
+    judgeAnchors
 };

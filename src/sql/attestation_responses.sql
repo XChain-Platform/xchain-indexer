@@ -39,7 +39,9 @@
 -- vocabulary. The retryable statuses (no_quorum, timeout, provider_error) are
 -- deliberately NOT mirrored: they have no chain effect today beyond an audit row,
 -- and they are the only unbounded multiplier on the size of the periodic on-chain
--- batch that makes this table reconstructible from chain parse.
+-- batch. That batch lets a DOGE re-parse re-insert rows through the hub's batch-push
+-- path, but only when a DOGE indexer parses it: nothing rebuilds a row on demand, a
+-- window whose batch never landed has no chain copy, and BTC replay regenerates none.
 --
 -- NATURAL-KEY MIRROR, not id-parity. Every hub that holds the finalized artifact
 -- writes its own row: the responsible set reaches quorum, and the result is then

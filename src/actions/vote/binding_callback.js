@@ -84,6 +84,11 @@ async function validateCallbackTarget(data, error){
         let contractStatus = await this.indexerDb.getStatusString(contract.status_id);
         if(contractStatus !== 'valid')
             error = 'invalid: CALLBACK_CONTRACT (not active)';
+        // Leave the method check unjudged on the public read-only dry-run: the probe runs the named
+        // contract's code under the block-loop mutex. GUARD_INERT is never set on a block transaction.
+        else if(data['GUARD_INERT'] === true)
+            error = 'invalid: ' + this.util.guardInertContractProbeError(
+                contract.action_index, 'as a VOTE binding-poll callback');
         else if(!await isCallbackMethodUsable.call(this, contract, data['CALLBACK_METHOD'], data))
             error = 'invalid: CALLBACK_METHOD (unavailable)';
     }

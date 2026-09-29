@@ -75,7 +75,7 @@ const { CONSENSUS_VERSION } = require('./protocol_changes/consensus_version.js')
 // XChainIndexer's time-keyed price barrier is deliberately NOT gated on this
 // predicate: it runs on every chain whenever hub-db sync is enabled, because FIAT
 // dispenser settlement reads price_snapshots by time from day one. Rationale and
-// the divergence it closes: XChainIndexer.js:877-888. Semantics match the
+// the divergence it closes: XChainIndexer/price_barriers.js deferOnPriceSync. Semantics match the
 // registry entry: testnet/regtest active from genesis, mainnet at the
 // flag-day; an unknown/empty network is treated like mainnet (conservative:
 // requires the flag-day).
@@ -307,8 +307,8 @@ registerRows(registry, process.env);
 applyChanges(registry, CHANGE_PARTS);
 
 module.exports = ProtocolChanges;
-// Canonical async-gate flag-day, exported for the cross-repo byte-identity guard in
-// test/unit/consensus-params.test.js (must equal xchain-vm ASYNC_SURFACE_GATE_BLOCK_TIME).
+// Canonical async-gate flag-day (must equal xchain-vm ASYNC_SURFACE_GATE_BLOCK_TIME), exported
+// for the byte-identity guard in test/unit/consensus/consensus_params.test/vm_coupling.test.js.
 module.exports.VM_BANNED_ASYNC_MAINNET_TIME = VM_BANNED_ASYNC_MAINNET_TIME;
 // H-3 price-selection flag-day + its shared gate predicate (see registration).
 module.exports.NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME = NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME;

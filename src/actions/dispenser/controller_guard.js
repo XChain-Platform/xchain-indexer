@@ -31,7 +31,9 @@ module.exports = {
         // Controller-bound GIVE token: the bound contract's `guard` must approve
         // opening a dispenser that sells this token before it opens. This guard is
         // VETO-ONLY at create: only result.error and result.guardFee are consumed
-        // below; the guard's payoutLegs are intentionally discarded here.
+        // below. runControllerGuard still validates any returned payoutLegs, so a
+        // malformed or over-cap set arrives here as result.error and denies the
+        // dispenser; only a valid set is discarded unapplied.
         // SOURCE pays the bounded guard gas (reserved up front).
         //
         // KNOWN GAP: unlike ORDER and SWAP sales of a controller-bound token

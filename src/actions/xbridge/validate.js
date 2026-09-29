@@ -41,10 +41,11 @@ const VERDICTS = v.VERDICTS;
 const USER_VERSIONS     = [0, 1, 3, 4];
 const INJECTED_VERSIONS = [2, 5];
 
-// v0/v1/v2 are the XCHAIN bridge and gate on XCHAIN_BRIDGE_ACTIVATION (keyed
-// '<COIN>:<network>'); v3/v4/v5 are the general token bridge and gate on
-// TOKEN_BRIDGE_ACTIVATION (network-keyed). The parity test pins TOKEN >= XCHAIN for every
-// chain key, so a chain can never admit v3 without an engine behind it.
+// v0/v1/v2 are the XCHAIN bridge and gate on XCHAIN_BRIDGE_ACTIVATION; v3/v4/v5 are the
+// general token bridge and gate on TOKEN_BRIDGE_ACTIVATION. Both maps are keyed
+// '<COIN>:<network>' with the bare network key as fallback, so both are read with this
+// chain's coin. The parity test pins TOKEN >= XCHAIN for every chain key, so a chain can
+// never admit v3 without an engine behind it.
 const TOKEN_VERSIONS    = [3, 4, 5];
 
 /**
@@ -66,9 +67,9 @@ const TOKEN_VERSIONS    = [3, 4, 5];
  *                        the parsed wire fields; never mutated by this method
  * @param {Object} ctx  - handler context: { coin, network, blockIndex, blockTime,
  *                        isGenesis }. `coin` is this chain's coin, which decides
- *                        BTC_ONLY versus V1_NOT_ON_BTC and, with `network`, keys the
- *                        XCHAIN activation map ('<COIN>:<network>', bare network as the
- *                        fallback); the token map is network-keyed and ignores the coin
+ *                        BTC_ONLY versus V1_NOT_ON_BTC and, with `network`, keys both
+ *                        activation maps ('<COIN>:<network>', bare network as the
+ *                        fallback)
  * @returns {{valid: boolean, verdict: (string|null)}} verdict is one of
  *          VERDICTS.BEFORE_ACTIVATION, UNKNOWN_VERSION, BTC_ONLY, V1_NOT_ON_BTC,
  *          V2_SYSTEM_INJECTED, V5_SYSTEM_INJECTED, or null when the format passes
@@ -90,11 +91,11 @@ function validateFormat(data, ctx){
     // that a pre-activation chain gives ONE answer for the whole action rather than a
     // per-version taxonomy of a feature that is not live yet.
     //
-    // The XCHAIN map is keyed '<COIN>:<network>', so the coin goes with the height: BTC,
-    // LTC and DOGE reach the bridge at three different heights on one network, and
-    // passing the network alone would judge a DOGE block against a BTC number.
+    // Both maps are keyed '<COIN>:<network>', so the coin goes with the height: BTC, LTC
+    // and DOGE reach the bridge at three different heights on one network, and passing
+    // the network alone would read only the bare fallback the arming tool leaves dark.
     let active = (TOKEN_VERSIONS.indexOf(format) !== -1)
-        ? gateRegistry.activeAt(TOKEN_BRIDGE_KEY, ctx.network, null, ctx.blockIndex, null)
+        ? gateRegistry.activeAt(TOKEN_BRIDGE_KEY, ctx.network, ctx.coin, ctx.blockIndex, null)
         : gateRegistry.activeAt(XCHAIN_BRIDGE_KEY, ctx.network, ctx.coin, ctx.blockIndex, null);
     if(!active)
         return { valid: false, verdict: VERDICTS.BEFORE_ACTIVATION };

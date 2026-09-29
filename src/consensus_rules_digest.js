@@ -44,9 +44,9 @@
  * directory scan. Each repo carries activation maps the other does not (the
  * indexer alone has ~20 that no hub evaluates), so a scan would make the two
  * sides disagree by construction and the digest would be useless for exactly
- * the comparison it exists to serve. A gate this repo does not carry
- * contributes the ABSENT sentinel rather than being skipped, so a build that
- * LOSES a gate is a mismatch rather than an invisible shortening of the list.
+ * the comparison it exists to serve. A gate this repo does not carry makes
+ * loadGateValue throw, never contribute an ABSENT sentinel, so a build that
+ * LOSES a gate is a refusal rather than an invisible shortening of the list.
  *
  * BYTE-TWIN of xchain-hub/src/consensus_rules_digest.js. The two copies
  * must agree or every cross-process comparison reports a false mismatch and

@@ -18,7 +18,7 @@ const { getLogger } = require('../../observability/index.js');
  *
  ********************************************************************/
 
-// Installed onto Coinpay.prototype by coinpay.js; each method runs with `this` bound to
+// Installed onto Coinpay.prototype by index.js; each method runs with `this` bound to
 // the handler, exactly as the class method it was.
 module.exports = {
 

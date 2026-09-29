@@ -142,9 +142,10 @@ module.exports = {
         // deterministically on the reference chain itself. On every other chain
         // the gate is vacuous against the local height, so at/after the
         // flag-day selection switches to the round's consensus timestamp vs
-        // this block's time (deterministic across nodes and on replay). The
-        // block loop enforces the matching time-keyed price barrier
-        // (XChainIndexer/hub_db_sync), gated by the SAME shared predicate.
+        // this block's time (deterministic across nodes and on replay). This is
+        // the predicate's only consumer: the block loop's time-keyed price barrier
+        // (XChainIndexer/price_barriers.js deferOnPriceSync) is deliberately NOT
+        // gated on it and runs on every chain whenever hub-db sync is enabled.
         let network      = this.config['NETWORK'] || CONFIG_ENV.INDEXER_NETWORK;
         // One chain-derived anchor drives the gate, the selection and the staleness guard.
         let selectByTime = (coin !== 'BTC') &&

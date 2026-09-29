@@ -123,7 +123,8 @@ module.exports = {
         // the whole CoinPay lane in every wallet that pre-flights (measured 2026-07-29 on LTC
         // regtest). Captured here rather than in the two handlers so one rule covers both, and
         // scoped per transaction by processTransaction above. These two actions are never
-        // top-level: the decoder cannot produce them and the public quote deny-lists them.
+        // top-level: the decoder cannot produce them, and the public fee quote classifies them
+        // 'exempt' (FEE_QUOTE_EXEMPT in actions/index.js), so it answers without a dry-run.
         if((action == 'ORDER_MATCH' || action == 'SWAP_MATCH') && data && this._primaryVerdict == null)
             this._primaryVerdict = { status: data['STATUS'], actionIndex: data['ACTION_INDEX'] };
 

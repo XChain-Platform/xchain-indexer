@@ -252,8 +252,8 @@ addGate('state_subtree_activation.STATE_SUBTREE_SHADOW', 'constant', {
 // ). ARMED ON BTC:regtest AT BLOCK 11200 (2026-07-30), and nowhere else.
 // The derivation exists: an append-only, source-authored and
 // replicated escrow_leaf_journal whose totals are the escrows LEDGER rows
-// re-keyed to their locker (xchain-indexer/src/escrowJournalWriter.js), read
-// by the byte-identical escrowLeafSubtree.js twin. Arming this moves
+// re-keyed to their locker (xchain-indexer/src/consensus/escrow_journal_writer.js),
+// read by the byte-identical escrow_leaf_subtree.js twin. Arming this moves
 // balances_root, the one sub-root every deployed light client already depends
 // on, which is why Stage B arms after Stage A and on its own flag day.
 //
@@ -277,7 +277,7 @@ addGate('state_subtree_activation.STATE_SUBTREE_SHADOW', 'constant', {
 // arming mid-chain does not apply. That holds only where indexer state is rebuilt from the
 // chain, which is a precondition of this height.
 //
-// The derivation carries no coin gate (see escrowLeafSubtree.js and escrowJournalWriter.js),
+// The derivation carries no coin gate (see escrow_leaf_subtree.js and escrow_journal_writer.js),
 // so the three chains arm together. Mainnet stays unarmed because live light clients depend
 // on balances_root there, which is the whole reason this is staged at all.
 addGate('state_subtree_activation.ESCROW_LOCKED_LEAF_ACTIVATION', 'height', {

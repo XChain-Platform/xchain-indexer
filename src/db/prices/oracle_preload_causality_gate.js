@@ -32,8 +32,8 @@
  * the four preload reads carries an ADDITIONAL `block_timestamp <= ?` bound
  * against the block's own consensus timestamp. The round's consensus timestamp
  * and the block time are the same two chain-derived quantities the staleness
- * guard already compares, and getLatestPrice's H-3 branch (db.js, keyed by
- * utility.js's `(coin !== 'BTC') && isNativeFeePriceTimeGateActive`) already
+ * guard already compares, and getLatestPrice's H-3 branch (db/prices/index.js, keyed by
+ * utility/native_fee.js's `(coin !== 'BTC') && isNativeFeePriceTimeGateActive`) already
  * selects on exactly this axis for exactly this reason. Determinism across
  * nodes rests on the time-keyed price barrier: XChainIndexer's
  * waitForPriceSyncTime(blockTime) runs on EVERY chain, while the height barrier

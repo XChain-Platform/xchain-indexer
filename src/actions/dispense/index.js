@@ -80,7 +80,7 @@ class Dispense {
 // Install the pass methods from dispense/ NON-ENUMERABLE, the shape the class body they
 // came from produced: parse() reaches them as this.<method>, suites can stub them through
 // Dispense.prototype, and for-in over a handler stays empty. Same install as
-// dispenser_close.js and db/index.js use.
+// dispenser_close/index.js and db/index.js use.
 for(const part of [contextPart, pricingPart, pricingPathsPart, settlePart]){
     const descriptors = Object.getOwnPropertyDescriptors(part);
     for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;

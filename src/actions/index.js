@@ -66,15 +66,18 @@ const FEE_QUOTE_STATIC = new Set(['DEPLOY', 'EXECUTE']);
 //            finalize on a binding poll injects a callback EXECUTE (vote.js
 //            injectCallbackExecute), but that reach stays closed: vote.js refuses a v2 whose
 //            data is not IS_SYNTHETIC, which no probe sets. VOTE is 'quotable', so its public
-//            fee-quote dry-run dispatches the real handler, probe included, under the block-loop
-//            mutex. It is deliberately kept in this set because the v0 create probe reaches the
-//            VM, and because relaxing the v2 refusal would silently open another VM door. The
-//            cost is named honestly: a batch of legitimate VOTE v0/v1 sub-commands loses its
-//            pre-flight, which is the safe direction of a real parity trade.
+//            fee-quote dry-run dispatches the real handler, but that handler refuses the callback
+//            probe when GUARD_INERT is set and reports the create as guard-inert (unjudged), so
+//            the public path never enters the probe VM. It is deliberately kept in this set
+//            because the v0 create probe still reaches the VM in block processing and on the
+//            API-key dry-run, and because relaxing the v2 refusal would silently open another
+//            VM door. The cost is named honestly: a batch of legitimate VOTE v0/v1
+//            sub-commands loses its pre-flight, which is the safe direction of a real parity trade.
 //   XCALL  - injects a callback EXECUTE (xcall.js). Already 'exempt', listed so the set is a
 //            complete statement of VM reach rather than a residue of another gate's choices.
 // Kept as an explicit literal, and bound to the dispatch table by
-// test/unit/action_manifest_conformance.test.js so a new action cannot default into 'allowed'.
+// test/unit/action_dispatch/action_manifest_conformance.test.js so a new action cannot default
+// into 'allowed'.
 const PROBE_VM_REACHING_ACTIONS = new Set(['ATTEST', 'VOTE', 'XCALL']);
 
 // Settlement and lifecycle legs that stage NO protocol fee: the fee was already charged when

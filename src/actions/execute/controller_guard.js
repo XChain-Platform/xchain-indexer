@@ -165,6 +165,8 @@ async function runGuardVm(ctx, snapshot){
 // the seller's proceeds applied at match (Utility.applyProceedsSplit). Validate fail-closed
 // BEFORE committing emissions: a malformed leg or a total over CONTROLLER_MAX_TAKE_BPS DENIES
 // the action (no savepoint exists yet, so nothing to roll back).
+// Runs for EVERY action type, not only ORDER/SWAP create: a bad set denies a dispenser or a
+// SEND too, and only the ORDER/SWAP create callers persist a valid set.
 // Returns { deny } or { payoutLegs }.
 async function parseGuardPayoutLegs(ctx){
     let gasBilled = ctx.gasBilled;
