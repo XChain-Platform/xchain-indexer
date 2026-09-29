@@ -69,9 +69,9 @@ const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
 //     federation signs would not be the membership the chain actually held.
 addGate('token_policy_activation.TOKEN_POLICY_INHERITANCE_ACTIVATION', 'height', {
     mainnet: 9999999999,
-    'BTC:testnet': 9999999999,
-    'LTC:testnet': 9999999999,
-    'DOGE:testnet': 9999999999,
+    'BTC:testnet': 154567, // set by the v0.21.0 freeze height plan
+    'LTC:testnet': 4903068, // set by the v0.21.0 freeze height plan
+    'DOGE:testnet': 67949959, // set by the v0.21.0 freeze height plan
     testnet: 9999999999,
     regtest: 0,
 });
@@ -123,7 +123,7 @@ addGate('train_activation.TRAIN_ACTIVATION', 'ruleset', {
     // offsets. LTC:testnet mirror admission ships disabled on this train and is
     // untouched by this reslide; it arms on a later train.
     '0.20.0': { mainnet: 9999999999, testnet: 154074, regtest: 0 },
-    '0.21.0': { mainnet: 9999999999, testnet: 155452, regtest: 0 },
+    '0.21.0': { mainnet: 9999999999, testnet: 154566, regtest: 0 },
 });
 
 // xchain_bridge_activation

@@ -216,9 +216,9 @@ addGate('mirror_admission_activation.MIRROR_ADMISSION_ACTIVATION', 'height', {
     'BTC:mainnet':  null,
     'LTC:mainnet':  null,
     'DOGE:mainnet': null,
-    'BTC:testnet':  155453, // set by the v0.21.0 freeze height plan
-    'LTC:testnet':  4907632, // set by the v0.21.0 freeze height plan
-    'DOGE:testnet': 67968273, // set by the v0.21.0 freeze height plan
+    'BTC:testnet':  154567, // set by the v0.21.0 freeze height plan
+    'LTC:testnet':  4903068, // set by the v0.21.0 freeze height plan
+    'DOGE:testnet': 67949959, // set by the v0.21.0 freeze height plan
     'BTC:regtest':  UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
     'LTC:regtest':  UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
     'DOGE:regtest': UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
@@ -228,9 +228,9 @@ addGate('mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION', 'hei
     'BTC:mainnet':  null,
     'LTC:mainnet':  null,
     'DOGE:mainnet': null,
-    'BTC:testnet':  155499, // set by the v0.21.0 freeze height plan
-    'LTC:testnet':  4907862, // set by the v0.21.0 freeze height plan
-    'DOGE:testnet': 67969217, // set by the v0.21.0 freeze height plan
+    'BTC:testnet':  154614, // set by the v0.21.0 freeze height plan
+    'LTC:testnet':  4903291, // set by the v0.21.0 freeze height plan
+    'DOGE:testnet': 67950901, // set by the v0.21.0 freeze height plan
     'BTC:regtest':  UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
     'LTC:regtest':  UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
     'DOGE:regtest': UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration

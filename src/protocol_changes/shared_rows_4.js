@@ -387,9 +387,9 @@ addGate('swq_source_cap_activation.SWQ_SOURCE_CAP_ACTIVATION', 'height', {
 // network. Regtest is 0 so the e2e rail exercises the armed rule from genesis.
 addGate('token_bridge_activation.TOKEN_BRIDGE_ACTIVATION', 'height', {
     mainnet: 9999999999,
-    'BTC:testnet': 9999999999,
-    'LTC:testnet': 9999999999,
-    'DOGE:testnet': 9999999999,
+    'BTC:testnet': 154567, // set by the v0.21.0 freeze height plan
+    'LTC:testnet': 4903068, // set by the v0.21.0 freeze height plan
+    'DOGE:testnet': 67949959, // set by the v0.21.0 freeze height plan
     testnet: 9999999999,
     regtest: 0,
 });
