@@ -2,7 +2,7 @@
 
 const assert = require('assert');
 
-const Anchor = require('../../../../src/actions/anchor/index.js');
+const Anchor = require('../../../../../src/actions/anchor/index.js');
 
 function section(){
     return {
