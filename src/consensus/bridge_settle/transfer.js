@@ -305,8 +305,11 @@ async function applyBridgeTransfer(deps, row, ctx){
        typeof ctx.indexerDb.getAppliedPolicySnapshot === 'function' &&
        gateRegistry.activeAt('token_policy_activation.TOKEN_POLICY_INHERITANCE_ACTIVATION',
                              ctx.network, null, ctx.blockIndex, null) &&
-       !await ctx.indexerDb.getAppliedPolicySnapshot(origin.originChain, f.tick, ctx.blockIndex))
+       !await ctx.indexerDb.getAppliedPolicySnapshot(origin.originChain, f.tick, ctx.blockIndex)){
+        deps.refusalLog.warnOnce('XBRIDGE', f.id, SETTLE_REASON.IN_LEG_NO_POLICY,
+            SETTLE_REASON.IN_LEG_NO_POLICY + ' : deferring');
         return out(false, SETTLE_REASON.IN_LEG_NO_POLICY);
+    }
     const addresses = (ctx.config && ctx.config['ADDRESS']) || {};
     const amount = String(row.amount);
 
