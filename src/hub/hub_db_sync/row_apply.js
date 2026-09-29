@@ -117,6 +117,8 @@ module.exports = {
         // bootstrap's accounting can tell a refused relic from an applied row; the caller
         // moves its cursor past it either way, since a refusal is not an apply error.
         if (this.refuseForeignChainRow(table, row)) return false;
+        // Network fence for the id-traced tables, reported with the chain refusals.
+        if (await this.refuseForeignNetworkRow(table, row)) return false;
         // Stake re-derivation fence for capability_snapshots, on the SAME footing as the
         // chain-identity fence above and for the same reason: this is the one mirrored
         // table that arrives with no authentication at all, so a hub that serves a forged

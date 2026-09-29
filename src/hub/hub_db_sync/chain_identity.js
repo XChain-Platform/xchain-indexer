@@ -26,7 +26,27 @@
  ********************************************************************/
 
 const { getLogger } = require('../../observability/index.js');
-const { CROSS_CHAIN_TABLES } = require('./mirror_tables.js');
+const { CROSS_CHAIN_TABLES, MIRROR_NATURAL_IDS } = require('./mirror_tables.js');
+
+// At most this many ids are named per refusal line; the count still covers every row.
+const MAX_REFUSED_IDS = 10;
+
+// Record one refused row on its report entry: bump the count and keep its natural id.
+function noteRefusedRow(map, key, fields, table, row) {
+    let entry = map.get(key);
+    if (entry) entry.count++;
+    else { entry = Object.assign({ table: table, count: 1, ids: [] }, fields); map.set(key, entry); }
+    let col = MIRROR_NATURAL_IDS[table];
+    let id  = (col && row && row[col] !== undefined && row[col] !== null) ? String(row[col]) : null;
+    if (id && entry.ids.length < MAX_REFUSED_IDS && entry.ids.indexOf(id) === -1) entry.ids.push(id);
+}
+
+// ' (snapshot_id a, b)' for a report entry that kept ids, '' otherwise.
+function refusedIdsNote(entry) {
+    let col = MIRROR_NATURAL_IDS[entry.table];
+    if (!col || !entry.ids || entry.ids.length === 0) return '';
+    return ' (' + col + ' ' + entry.ids.join(', ') + (entry.count > entry.ids.length ? ', ...' : '') + ')';
+}
 
 module.exports = {
 
@@ -162,10 +182,23 @@ module.exports = {
         if (!expected) return false;
         let rowChainId = (row && typeof row.btc_chain_id === 'string') ? row.btc_chain_id.trim().toLowerCase() : null;
         if (!rowChainId || rowChainId === expected) return false;
-        let key   = table + '|' + rowChainId;
-        let entry = this._refusedChainIdRows.get(key);
-        if (entry) entry.count++;
-        else this._refusedChainIdRows.set(key, { table: table, hash: rowChainId, count: 1 });
+        noteRefusedRow(this._refusedChainIdRows, table + '|' + rowChainId, { hash: rowChainId }, table, row);
+        return true;
+    },
+
+    // Network fence for the rows a settlement screen refuses by network. The settlement
+    // readers select only this mirror's network, so a foreign-network row that reached the
+    // mirror sat there unread and unreported until the next bootstrap purged it. Refusing
+    // it at apply, on the same terms as purgeForeignNetworkRows (the consumer named its
+    // network and the table carries the column), reports it by id at once. True = refuse.
+    async refuseForeignNetworkRow(table, row) {
+        if (!MIRROR_NATURAL_IDS[table]) return false;
+        let rowNetwork = (row && typeof row.network === 'string') ? row.network : null;
+        if (!rowNetwork) return false;
+        let scope = await this.mirrorNetworkScope(table);
+        if (!scope || rowNetwork === scope) return false;
+        noteRefusedRow(this._refusedChainIdRows, table + '|network|' + rowNetwork,
+            { network: rowNetwork, scope: scope }, table, row);
         return true;
     },
 
@@ -225,8 +258,13 @@ module.exports = {
         for (let [key, entry] of Array.from(this._refusedChainIdRows.entries())) {
             if (entry.table !== table) continue;
             this._refusedChainIdRows.delete(key);
+            if (entry.network) {
+                getLogger().warn('HubDbSync: refused ' + entry.count + ' ' + entry.table + ' row(s) served for network ' +
+                    entry.network + ' (this mirror serves ' + entry.scope + ')' + refusedIdsNote(entry));
+                continue;
+            }
             getLogger().warn('HubDbSync: refused ' + entry.count + ' ' + entry.table + ' row(s) carrying btc_chain_id ' +
-                entry.hash + ' (this chain is ' + this._expectedBtcChainId + ')');
+                entry.hash + ' (this chain is ' + this._expectedBtcChainId + ')' + refusedIdsNote(entry));
         }
     },
 
