@@ -124,7 +124,8 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
         assert.strictEqual(refusal.length, 1, 'one line per foreign chain, not one per row');
         assert.strictEqual(refusal[0],
             'HubDbSync: refused 2 cross_chain_matches row(s) carrying btc_chain_id ' + CHAIN_OLD +
-            ' (this chain is ' + CHAIN_NEW + ')');
+            ' (this chain is ' + CHAIN_NEW + ') [match_id m1, m2]',
+            'the line names each refused row by its natural key, so an operator can say which rows');
         assert.ok(lines(log).some((l) => /bootstrapped 2 rows into cross_chain_matches/.test(l)),
             'the drain must not count refused rows as mirrored');
     });

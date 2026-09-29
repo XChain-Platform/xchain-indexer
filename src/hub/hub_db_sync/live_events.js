@@ -78,6 +78,7 @@ module.exports = {
             await this.maybeAdoptHubChainId(event.table, event.row);
             await this.applyRow(event.table, event.row);
             this.reportRefusedChainRows(event.table);
+            this.reportRefusedNetworkRows(event.table);
             if (event.table === 'price_snapshots')     await this.refreshPriceSyncHeight();
             if (event.table === 'oracle_prices')       await this.refreshOracleSyncTimestamp();
             if (event.table === 'cross_chain_matches') await this.refreshMatchSyncTimestamp();

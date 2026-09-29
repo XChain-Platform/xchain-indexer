@@ -172,15 +172,31 @@ const REBUILT_SOURCE_IDENTITY_COLUMNS = Object.freeze({
 // overlap case reachable in the first place.
 const REBUILT_SOURCE_PROBE_ROWS = 200;
 
-// The column that names a row in the cross-chain tables whose refusals an operator has to
-// match against a settlement screen or an acceptance journal. A mirror-layer refusal of one
-// of these rows names it by this column, so a refused snapshot or transfer can be traced by id
-// rather than only counted.
-const MIRROR_NATURAL_IDS = { policy_snapshots: 'snapshot_id', bridge_transfers: 'transfer_id' };
+// The column that names a mirrored row to an operator when a mirror fence refuses or purges
+// it, and the settlement family tag its refusal carries. A fence runs BEFORE the settlement
+// screen, so for a refused row the fence's own line is the only record of which row it was;
+// the tag is the one the screen would have logged under (XPOLICY, XBRIDGE), so an operator
+// or a rail drill that greps a family for an id finds the refusal wherever it happened. Each
+// column is that table's UNIQUE natural key; a table not listed is named by its hub id.
+const REFUSED_ROW_NAMES = Object.freeze({
+    policy_snapshots:      Object.freeze({ column: 'snapshot_id', tag: 'XPOLICY' }),
+    bridge_transfers:      Object.freeze({ column: 'transfer_id', tag: 'XBRIDGE' }),
+    cross_chain_matches:   Object.freeze({ column: 'match_id',    tag: null }),
+    cross_chain_calls:     Object.freeze({ column: 'call_id',     tag: null }),
+    attestation_responses: Object.freeze({ column: 'request_id',  tag: null })
+});
+
+// At most this many ids are named on one refusal line; the rest are counted. A relic table
+// can hold thousands of rows, and ten is enough to find the rest by their shared cause.
+const REFUSED_ROW_NAME_LIMIT = 10;
+
+// How many named ids a process remembers, so that one refused row is named once however
+// many bootstraps re-serve it (every reconnect re-pages the table). Oldest forgotten first.
+const REFUSED_ROW_NAMED_CAP = 10000;
 
 module.exports = {
-    MIRROR_NATURAL_IDS,
     RETRACTION_COLUMNS, RETRACTION_CHAIN_COLUMNS,
     CROSS_CHAIN_TABLES, FULL_REPAGE_TABLES, HUB_STATE_TABLES,
     REBUILT_SOURCE_IDENTITY_COLUMNS, REBUILT_SOURCE_PROBE_ROWS,
+    REFUSED_ROW_NAMES, REFUSED_ROW_NAME_LIMIT, REFUSED_ROW_NAMED_CAP,
 };
