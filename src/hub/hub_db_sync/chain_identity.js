@@ -26,7 +26,8 @@
  ********************************************************************/
 
 const { getLogger } = require('../../observability/index.js');
-const { CROSS_CHAIN_TABLES } = require('./mirror_tables.js');
+const { CROSS_CHAIN_TABLES, REFUSED_ROW_NAMES, REFUSED_ROW_NAME_LIMIT,
+        REFUSED_ROW_NAMED_CAP } = require('./mirror_tables.js');
 
 module.exports = {
 
@@ -165,8 +166,45 @@ module.exports = {
         let key   = table + '|' + rowChainId;
         let entry = this._refusedChainIdRows.get(key);
         if (entry) entry.count++;
-        else this._refusedChainIdRows.set(key, { table: table, hash: rowChainId, count: 1 });
+        else this._refusedChainIdRows.set(key, entry = { table: table, hash: rowChainId, count: 1, names: [] });
+        this.noteRefusedRowName(entry, table, row);
         return true;
+    },
+
+    // The natural id that names `row` of `table` (REFUSED_ROW_NAMES), or its hub id for a
+    // table with none listed; null when the row carries neither.
+    refusedRowName(table, row) {
+        let spec  = REFUSED_ROW_NAMES[table];
+        let value = row ? row[spec ? spec.column : 'id'] : null;
+        return (value === null || value === undefined || value === '') ? null : String(value);
+    },
+
+    // Keep a refused row's name on its pending report entry. Only a bounded handful per entry:
+    // the report names at most REFUSED_ROW_NAME_LIMIT of them and counts the rest.
+    noteRefusedRowName(entry, table, row) {
+        let name = this.refusedRowName(table, row);
+        if (name && entry.names.length < REFUSED_ROW_NAME_LIMIT * 5 && entry.names.indexOf(name) === -1)
+            entry.names.push(name);
+    },
+
+    // The suffix a refusal or purge line carries to name its rows, or '' when every one of
+    // them was already named by this process. Names each id ONCE: a refused row is re-served
+    // on every reconnect, and one line per id is what makes the log answer "which row"
+    // without repeating itself. `total` is how many rows the line accounts for.
+    nameRefusedRows(table, names, total) {
+        if (!this._namedRefusedRows) this._namedRefusedRows = new Set();
+        let fresh = (names || []).filter(n => !this._namedRefusedRows.has(table + '|' + n));
+        if (fresh.length === 0) return '';
+        let shown = fresh.slice(0, REFUSED_ROW_NAME_LIMIT);
+        for (let n of shown) {
+            if (this._namedRefusedRows.size >= REFUSED_ROW_NAMED_CAP)
+                this._namedRefusedRows.delete(this._namedRefusedRows.values().next().value);
+            this._namedRefusedRows.add(table + '|' + n);
+        }
+        let spec = REFUSED_ROW_NAMES[table];
+        let more = Math.max(0, Number(total) - shown.length);
+        return ' [' + (spec && spec.tag ? spec.tag + ' ' : '') + (spec ? spec.column : 'id') + ' ' +
+            shown.join(', ') + (more > 0 ? ' and ' + more + ' more' : '') + ']';
     },
 
     // The authoritative-stake database, resolved lazily. Capability stakes are indexed
@@ -226,7 +264,8 @@ module.exports = {
             if (entry.table !== table) continue;
             this._refusedChainIdRows.delete(key);
             getLogger().warn('HubDbSync: refused ' + entry.count + ' ' + entry.table + ' row(s) carrying btc_chain_id ' +
-                entry.hash + ' (this chain is ' + this._expectedBtcChainId + ')');
+                entry.hash + ' (this chain is ' + this._expectedBtcChainId + ')' +
+                this.nameRefusedRows(entry.table, entry.names, entry.count));
         }
     },
 

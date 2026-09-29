@@ -26,7 +26,8 @@
 
 const { getLogger } = require('../../observability/index.js');
 const { HUB_SCHEMA_VERSION } = require('../hub_schema_version');
-const { REBUILT_SOURCE_IDENTITY_COLUMNS, REBUILT_SOURCE_PROBE_ROWS } = require('./mirror_tables.js');
+const { REBUILT_SOURCE_IDENTITY_COLUMNS, REBUILT_SOURCE_PROBE_ROWS, REFUSED_ROW_NAMES,
+        REFUSED_ROW_NAME_LIMIT } = require('./mirror_tables.js');
 
 module.exports = {
 
@@ -80,6 +81,7 @@ module.exports = {
     // happened to contain. A filtered snapshot endpoint, a paging hole or a partial drain
     // can each make a valid row look unserved; none of them can make it change network.
     async purgeForeignNetworkRows(table, network) {
+        let names = await this.foreignNetworkRowNames(table, network);
         let result;
         try {
             result = await this.hubDb.doQuery('DELETE FROM ' + table + ' WHERE network <> ?', [network]);
@@ -100,8 +102,59 @@ module.exports = {
         if (removed <= 0) return 0;
         getLogger().warn('HubDbSync: removed ' + removed + ' row(s) from ' + table + ' belonging to a network ' +
             'other than ' + network + '; a mirror holds only what the hub it follows serves, and those rows ' +
-            'block both the id cursor and the id-parity apply');
+            'block both the id cursor and the id-parity apply' + this.nameRefusedRows(table, names, removed));
         return removed;
+    },
+
+    // The names of the rows purgeForeignNetworkRows is about to delete, read first so its line
+    // can say which rows went. A bounded read; a failure names nothing and deletes as before.
+    async foreignNetworkRowNames(table, network) {
+        let spec = REFUSED_ROW_NAMES[table];
+        let column = spec ? spec.column : 'id';
+        try {
+            let rows = await this.hubDb.doQuery('SELECT ' + column + ' AS name FROM ' + table +
+                ' WHERE network <> ? ORDER BY id LIMIT ' + (REFUSED_ROW_NAME_LIMIT * 5), [network]);
+            return (Array.isArray(rows) ? rows : []).map(r => r && r.name)
+                .filter(n => n !== null && n !== undefined && n !== '').map(String);
+        } catch (e) {
+            return [];
+        }
+    },
+
+    // True when a row the hub served names a network other than the one this mirror serves,
+    // and must therefore not be applied. The apply-time twin of purgeForeignNetworkRows, on
+    // the same proof (mirrorNetworkScope: the consumer named its network and the local table
+    // carries the column) and for the same reason. Without it such a row was MIRRORED on
+    // arrival and removed only by the purge at the next bootstrap, so between the two it sat
+    // in the mirror unrefused, and no line ever said a row had been kept out (bridge rail
+    // policy AT4, 2026-09-29). A NULL or absent network applies as before, like the purge's
+    // `network <> ?`. Refusals are counted for reportRefusedNetworkRows, like the chain fence.
+    async refuseForeignNetworkRow(table, row) {
+        let rowNetwork = (row && typeof row.network === 'string') ? row.network : null;
+        if (!rowNetwork) return false;
+        let scope = await this.mirrorNetworkScope(table);
+        if (!scope || rowNetwork === scope) return false;
+        if (!this._refusedNetworkRows) this._refusedNetworkRows = new Map();
+        let key   = table + '|' + rowNetwork;
+        let entry = this._refusedNetworkRows.get(key);
+        if (entry) entry.count++;
+        else this._refusedNetworkRows.set(key, entry = { table: table, network: rowNetwork, scope: scope, count: 1, names: [] });
+        this.noteRefusedRowName(entry, table, row);
+        return true;
+    },
+
+    // Report the foreign-network refusals counted for `table` since the last report, one line
+    // per foreign network, naming the rows, and clear them. Called wherever the chain fence
+    // reports: at the end of a table's drain and after a refused live row.
+    reportRefusedNetworkRows(table) {
+        if (!this._refusedNetworkRows) return;
+        for (let [key, entry] of Array.from(this._refusedNetworkRows.entries())) {
+            if (entry.table !== table) continue;
+            this._refusedNetworkRows.delete(key);
+            getLogger().warn('HubDbSync: refused ' + entry.count + ' ' + entry.table + ' row(s) for network ' +
+                entry.network + ' (this mirror serves ' + entry.scope + ')' +
+                this.nameRefusedRows(entry.table, entry.names, entry.count));
+        }
     },
 
     // Clear a mirrored table whose local rows belong to an id space the hub no longer has.
