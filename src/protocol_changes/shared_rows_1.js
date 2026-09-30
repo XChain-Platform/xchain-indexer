@@ -306,7 +306,7 @@ addGate('anchor_reward_activation.ANCHOR_ATTEST_BARRIER_ACTIVATION', 'height', {
     // member is BTC-only: the same instant as the family's BTC CONSUMER height, so the one
     // member that keeps BOTH certificates gains them together rather than carrying a lone extra
     // rule for 6 h. The canon carries the measurement.
-    testnet: 154291,
+    testnet: 154614, // set by the v0.21.0 freeze height plan
     regtest: UNPINNED,   // shares the family's arming seam so one venue lever arms both
 });
 
