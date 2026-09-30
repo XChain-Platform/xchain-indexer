@@ -290,8 +290,15 @@ function readCorpusFile(filename, expectedNetwork, activationHeight) {
 }
 
 function rollBackListOwner(source) {
+    const ownerCheckLines = [
+        "            let ownerCheck  = gateRegistry.activeAt('list_owner_activation.LIST_OWNER_ACTIVATION', this.config['NETWORK'], null, data['BLOCK_INDEX'], null);\n",
+        "            let ownerCheck  = gateRegistry.activeAt('list_owner_activation.LIST_OWNER_ACTIVATION', this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);\n",
+    ];
+    const matchingOwnerChecks = ownerCheckLines.filter((line) => source.split(line).length === 2);
+    if (matchingOwnerChecks.length !== 1)
+        throw new NamedRefusal('the LIST owner rollback no longer matches src/actions/list.js exactly');
     const edits = [
-        ["            let ownerCheck  = gateRegistry.activeAt('list_owner_activation.LIST_OWNER_ACTIVATION', this.config['NETWORK'], null, data['BLOCK_INDEX'], null);\n", ''],
+        [matchingOwnerChecks[0], ''],
         ['            if(bridgeRoles.length || ownerCheck){', '            if(bridgeRoles.length){'],
         ["                if(!error && ownerCheck && listSource && listSource != data['SOURCE'])\n                    error = 'invalid: LIST_ACTION_INDEX (not owner)';\n", ''],
     ];
