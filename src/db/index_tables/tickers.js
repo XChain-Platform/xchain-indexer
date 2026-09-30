@@ -212,8 +212,15 @@ module.exports = {
     async createTickerExact(tick, blockIndex){
         if(this.util.isNull(tick))
             return null;
-        if(String(tick).substring(0,1) === '^')
-            return await this.getTickerId(tick);
+        let str = String(tick);
+        let pid = str.substring(1);
+        if(str.substring(0,1) === '^'){
+            if(!CANONICAL_CARET_ID.test(pid))
+                return null;
+            let caretRows = await this.doQuery(
+                "SELECT id FROM index_tickers WHERE id=? AND block_index IS NOT NULL LIMIT 1", [pid]);
+            return (caretRows.length > 0) ? Number(caretRows[0].id) : null;
+        }
         const lookup = "SELECT id FROM index_tickers WHERE tick=? LIMIT 1";
         let results = await this.doQuery(lookup, [tick]);
         let id      = (results.length > 0) ? Number(results[0].id) : null;

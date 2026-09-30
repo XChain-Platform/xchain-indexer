@@ -97,10 +97,21 @@ describe('Database createTickerExact @unit @regression', function () {
         assert.strictEqual(inserts.length, 1);
     });
 
-    it('returns null for an empty tick and never interns a caret reference', async function () {
+    it('resolves carets without getTickerId or the case-folded intern cache', async function () {
         const { db, inserts } = harness();
+        db.getTickerId = async function () {
+            throw new Error('createTickerExact delegated to cache-capable getTickerId');
+        };
+        Object.defineProperty(db, '_internCache', {
+            get(){
+                throw new Error('createTickerExact read the case-folded intern cache');
+            },
+        });
+
         assert.strictEqual(await db.createTickerExact(null), null);
+        assert.strictEqual(await db.createTickerExact('^40'), 40);
         assert.strictEqual(await db.createTickerExact('^999'), null);
+        assert.strictEqual(await db.createTickerExact('^040'), null);
         assert.strictEqual(inserts.length, 0);
     });
 });
