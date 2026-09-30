@@ -30,6 +30,7 @@ module.exports = {
     noteBlockFault(error, lastIndexerBlock){
         if(this.noteExecutorOrAnchorFault(error, lastIndexerBlock)) return;
         if(this.noteBridgeOrRollcallFault(error, lastIndexerBlock)) return;
+        if(this.noteListShareFault(error, lastIndexerBlock)) return;
         // Log the error
         this.util.logError(`Error while parsing block data at block ${lastIndexerBlock}:`, error);
     },
@@ -109,5 +110,21 @@ module.exports = {
             return true;
         }
         return false;
+    },
+
+    noteListShareFault(error, lastIndexerBlock){
+        if(!error || error.name !== 'ListShareHaltError') return false;
+        if(error.reason === 'SNAPSHOT_ABSENT'){
+            getLogger().warn(`LIST SHARE SNAPSHOT ABSENT at block ${lastIndexerBlock}: ` +
+                'deferring block processing until the snapshot is available.');
+            this.stallReason = 'list_share_snapshot_barrier';
+            this.stallClearsAt = null;
+            return true;
+        }
+        getLogger().error(`LIST SHARE HALT at block ${lastIndexerBlock}: ${error.reason} ` +
+            'HALTING block processing (not committing; a missing or altered list version would fork)');
+        this.stallReason = 'list_share_halt';
+        this.stallClearsAt = null;
+        return true;
     }
 };
