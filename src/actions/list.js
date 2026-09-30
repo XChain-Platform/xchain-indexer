@@ -44,6 +44,15 @@ const gateRegistry = require('../consensus/gate_registry');
 const { getOpenOrdersByList, getOpenSwapsByList } = require('../db/lists/rematch.js');
 const { planListRematch } = require('../consensus/list_rematch/plan.js');
 
+const addressRefPart = require('./list/address_ref.js');
+const feesPart       = require('./list/fees.js');
+const itemsPart      = require('./list/items.js');
+const ownerPart      = require('./list/owner.js');
+const sharePart      = require('./list/share.js');
+const storePart      = require('./list/store.js');
+const transferPart   = require('./list/transfer.js');
+const unionPart      = require('./list/union.js');
+
 const { getLogger } = require('../observability/index.js');
 class List {
 
@@ -61,6 +70,8 @@ class List {
         this.formats[0] = 'VERSION|TYPE|MEMO|ITEM';
         this.formats[1] = 'VERSION|EDIT|LIST_ACTION_INDEX|MEMO|ITEM';
 
+        this.formatGates = {};
+
         // First params index carrying an ITEM, per format. ITEM is a variadic tail,
         // so the item loop below cannot read its position from the format string the
         // way a fixed field does - it has to know where the fixed prefix ends. Kept
@@ -70,6 +81,13 @@ class List {
         this.itemStartIndex = {};
         this.itemStartIndex[0] = 3;   // VERSION|TYPE|MEMO|...
         this.itemStartIndex[1] = 4;   // VERSION|EDIT|LIST_ACTION_INDEX|MEMO|...
+
+        for(const spec of [this.shareFormat(), this.transferFormat()]){
+            if(!spec) continue;
+            this.formats[spec.format] = spec.fields;
+            this.formatGates[spec.format] = spec.gate;
+            this.itemStartIndex[spec.format] = spec.fields.split('|').indexOf('ITEM');
+        }
 
         // Define array of list types (1=Tick, 2=Address)
         this.listTypes = [1,2];
@@ -107,7 +125,7 @@ class List {
 
         // Validate that format is known
         let format = data['FORMAT'];
-        if(!error && (format===null || this.formats[format] === undefined ))
+        if(!error && !this.isFormatActive(format, data))
             error = 'invalid: VERSION (unknown)';
 
         // Parse PARAMS using given VERSION format and update transaction data object
@@ -132,14 +150,24 @@ class List {
 
         error = await this.validateFields(data, error);
 
+        error = await this.validateFormatRules(data, format, list, error);
+
+        let changes = 0;
+
         // Handle building out some data arrays using list items
-        if(!error){
+        if(!error && (format==0 || format==1)){
 
             await this.collectEditItems(data, format, params, edit);
 
-            this.applyEditItems(data, format, edit, list, invalid);
+            changes = this.applyEditItems(data, format, edit, list, invalid);
 
         }
+
+        error = await this.validateResult(data, format, list, changes, error);
+
+        let fee = await this.chargeFee(data, format, changes, error);
+        error = fee.error;
+        fee = fee.fees;
 
         // Determine final status
         let status = (error) ? error : 'valid';
@@ -148,14 +176,14 @@ class List {
         // Print status message
         getLogger().info("\t LIST : " + data['STATUS']);
 
-        await this.storeList(data, status, edit, list, invalid);
+        await this.storeList(data, status, edit, list, invalid, fee);
 
         await this.rematchMarkets(data, format, status);
 
     }
 
     async rematchMarkets(data, format, status){
-        if(status!='valid' || data['TYPE']!=2 ||
+        if(format>1 || status!='valid' || data['TYPE']!=2 ||
            !gateRegistry.activeAt('list_change_rematch_activation.LIST_CHANGE_REMATCH_ACTIVATION', this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null))
             return;
 
@@ -167,6 +195,28 @@ class List {
             await this.actions.processAction(step.action, null, step.data, null);
     }
 
+    isFormatActive(format, data){
+        if(format===null || this.formats[format] === undefined)
+            return false;
+        let gate = this.formatGates[format];
+        return !gate || gateRegistry.activeAt(gate, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
+    }
+
+    isTypeActive(type, data){
+        type = Number(type);
+        return this.listTypes.includes(type) || (type==3 && this.unionTypeActive(data));
+    }
+
+    async validateFormatRules(data, format, list, error){
+        error = await this.validateShare(data, format, list, error);
+        return this.validateTransfer(data, format, list, error);
+    }
+
+    async validateResult(data, format, list, changes, error){
+        error = await this.validateSharedEdit(data, format, list, changes, error);
+        return this.validateUnionResult(data, format, list, changes, error);
+    }
+
     // FORMAT Validations
     async validateAndLoadList(data, format, error){
 
@@ -175,7 +225,7 @@ class List {
         let list = [];
 
         // Validate TYPE
-        if(!error && format==0 && !this.listTypes.includes(Number(data['TYPE'])))
+        if(!error && format==0 && !this.isTypeActive(data['TYPE'], data))
             error = 'invalid: TYPE (unknown)';
 
         // Validate EDIT
@@ -183,17 +233,19 @@ class List {
             error = 'invalid: EDIT (unknown)';
 
         // Parse in the list type (if any)
-        if(!error && format==1)
-            type = await this.indexerDb.getListType(data['LIST_ACTION_INDEX'], data['BLOCK_INDEX']);
+        if(!error && format>0){
+            let getStoredType = this.indexerDb.getListStoredType || this.indexerDb.getListType;
+            type = await getStoredType.call(this.indexerDb, data['LIST_ACTION_INDEX'], data['BLOCK_INDEX']);
+        }
 
         // Validate LIST_ACTION_INDEX
-        if(!error && format==1 && type===false){
+        if(!error && format>0 && type===false){
             error = 'invalid: LIST_ACTION_INDEX (unknown)';
             data['LIST_ACTION_INDEX'] = null;
         }
 
         // Lookup list information
-        if(!error && format==1){
+        if(!error && format>0){
             data['TYPE'] = type;
             // Normalize LIST_ACTION_INDEX to the CREATE that roots the edit chain,
             // so every edit of a list hangs off the same parent and the "newest
@@ -207,7 +259,7 @@ class List {
             // Reads the CURRENT membership (the head of the edit chain), so edits
             // compose: an ADD after a REMOVE builds on the removal, not on the
             // create-time item set.
-            list = await this.indexerDb.getList(data['LIST_ACTION_INDEX'], data['BLOCK_INDEX']);
+            list = await this.loadListMembers(data);
         }
 
         return { error, list };
@@ -238,7 +290,7 @@ class List {
             if(bridgeRoles.length || ownerCheck){
 
                 let rootIndex  = await this.indexerDb.getListRootIndex(data['LIST_ACTION_INDEX']);
-                let listSource = await this.indexerDb.getListSource(rootIndex);
+                let listSource  = await this.listOwner(rootIndex, data);
 
                 // BRIDGE-OWNED LISTS. A materialized policy list on a bridged copy is the
                 // issuer's policy carried from the origin chain and signed by the federation;
@@ -285,101 +337,13 @@ class List {
         return error;
     }
 
-    // Build out array of edit items and status for each
-    async collectEditItems(data, format, params, edit){
+}
 
-        let firstItemIndex = this.itemStartIndex[format];
-        for(let idx in params){
-            let status = 'valid';
-            let item   = params[idx];
-            // Get list items (everything from the end of the fixed prefix onward).
-            // `idx` is a string here (for..in over an array), so compare numerically
-            // rather than leaning on coercion.
-            if(Number(idx) >= firstItemIndex){
-
-                // Verify TICK 
-                if(data['TYPE']==1){
-                    let tokenInfo = await this.indexerDb.getTokenInfo(item);
-                    if(!tokenInfo)
-                        status = 'invalid: TICK (unknown)';
-                }
-
-                // Verify ADDRESS.
-                //
-                // ANY-COIN ITEMS at/above TOKEN_POLICY_INHERITANCE_ACTIVATION: a bridged
-                // copy inherits ONE list from its origin row, so that list has to be able
-                // to name holders on every chain a copy lives on. isAnyCoinAddress loops
-                // the existing coin-and-network-aware validator over COINS rather than
-                // introducing a second address validator. Below the flag it is the
-                // one-argument call this line has always made.
-                //
-                // The widening is hash-visible, which is why it is gated at all: an
-                // admitted item writes a list_items row and that table is hashed DERIVED.
-                // The ACTION's own status never moved either way (a bad item is recorded
-                // in list_items_invalid and the LIST stays valid), so only the membership
-                // is at stake.
-                if(data['TYPE']==2 && !this.indexerDb.isAnyCoinAddress(item, data['BLOCK_INDEX']))
-                    status = 'invalid: ADDRESS (format)';
-
-                // Add item and status to edits array
-                edit[item] = status;
-            }
-        }
-    }
-
-    // Build out final array of list items
-    applyEditItems(data, format, edit, list, invalid){
-
-        for(let item in edit){
-            let status = edit[item];
-
-            // VALID items
-            if(status=='valid'){
-
-                // ADD items
-                if((format==0 || (format==1 && data['EDIT']==1)) && !list.includes(item))
-                    list.push(item);
-
-                // REMOVE items
-                if(format==1 && data['EDIT']==2 && list.includes(item))
-                    list.splice(list.indexOf(item),1);
-
-            } else {
-                // INVALID items
-                invalid[item] = status;
-            }
-        }
-    }
-
-    // Persist the LIST action row, its edits and the resulting membership
-    async storeList(data, status, edit, list, invalid){
-
-        // Create record in lists table
-        await this.indexerDb.createList(data);
-
-        // Store the SOURCE in addresses list
-        this.util.addAddressTicker(data['SOURCE']);
-
-        // If this was a valid transaction, then create the list and edit records
-        if(status=='valid'){
-
-            // Create record of edits and status for each
-            for(let item in edit)
-                await this.indexerDb.createListEdit(data, item, edit[item]);
-
-            // Create record of items on list
-            for(let item of list)
-                await this.indexerDb.createListItem(data, item);
-
-            // Create record of invalid list items
-            for(let item in invalid)
-                await this.indexerDb.createListItemInvalid(data, item, invalid[item]);
-        }
-
-        // Create action mappings
-        await this.mapper.createMappings(data);
-
-    }
+for(const part of [addressRefPart, feesPart, itemsPart, ownerPart, sharePart,
+                   storePart, transferPart, unionPart]){
+    const descriptors = Object.getOwnPropertyDescriptors(part);
+    for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;
+    Object.defineProperties(List.prototype, descriptors);
 }
 
 module.exports = List;

@@ -24,6 +24,7 @@ const path    = require('path');
 // '<COIN>:<network>' so the coin goes with the height.
 const gateRegistry = require('../../consensus/gate_registry');
 const { getListHeadIndex } = require('./head_resolution');
+const { listItemId } = require('./membership');
 const LIST_EDIT_RESOLUTION_KEY = 'list_edit_resolution_activation.LIST_EDIT_RESOLUTION_ACTIVATION';
 const LIST_REFERENCE_VALIDITY_KEY = 'list_reference_validity_activation.LIST_REFERENCE_REQUIRES_VALID_LIST';
 
@@ -46,6 +47,11 @@ module.exports = {
     // Return a list type given an action index. Once the validity gate is active,
     // only a LIST action with a valid verdict can supply a reference type.
     async getListType(action_index, block_index){
+        let getStoredType = this.getListStoredType || module.exports.getListStoredType;
+        return getStoredType.call(this, action_index, block_index);
+    },
+
+    async getListStoredType(action_index, block_index){
         let type  = false;
         if(!this.util.isNull(action_index) && this.util.isNumeric(action_index)){
             let query = "SELECT type FROM lists WHERE action_index=? LIMIT 1";
@@ -297,11 +303,7 @@ module.exports = {
     async createListEdit(data, item, status){
         let action_index = data['ACTION_INDEX'];
         let status_id = await this.createStatus(status);
-        let item_id   = null;
-        if(data['TYPE']==1)
-            item_id = await this.createTicker(item);
-        if(data['TYPE']==2)
-            item_id = await this.createAddress(item);
+        let item_id   = await listItemId(this, data['TYPE'], item);
         // Check if record already exists for this list
         let query  = "SELECT item_id FROM list_edits WHERE action_index=? AND item_id=? AND status_id=? LIMIT 1";
         let args   = [action_index, item_id, status_id];
@@ -319,11 +321,7 @@ module.exports = {
     // Create record in `list_items` table
     async createListItem(data, item){
         let action_index = data['ACTION_INDEX'];
-        let item_id      = null;
-        if(data['TYPE']==1)
-            item_id = await this.createTicker(item);
-        if(data['TYPE']==2)
-            item_id = await this.createAddress(item);
+        let item_id      = await listItemId(this, data['TYPE'], item);
         // Check if record already exists for this list
         let query  = "SELECT item_id FROM list_items WHERE action_index=? AND item_id=? LIMIT 1";
         let args   = [action_index, item_id];
@@ -342,11 +340,7 @@ module.exports = {
     async createListItemInvalid(data, item, status){
         let action_index = data['ACTION_INDEX'];
         let status_id    = await this.createStatus(status);
-        let item_id      = null;
-        if(data['TYPE']==1)
-            item_id = await this.createTicker(item);
-        if(data['TYPE']==2)
-            item_id = await this.createAddress(item);
+        let item_id      = await listItemId(this, data['TYPE'], item);
         // Check if record already exists for this list
         let query  = "SELECT item_id FROM list_items_invalid WHERE action_index=? AND item_id=? AND status_id=? LIMIT 1";
         let args   = [action_index, item_id, status_id];
