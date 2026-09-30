@@ -15,7 +15,7 @@
  *********************************************************************/
 
 const assert = require('assert');
-const { planListRematch } = require('../../../src/consensus/list_rematch_plan');
+const { planListRematch } = require('../../../../src/consensus/list_rematch/plan');
 
 function listData(){
     return {
