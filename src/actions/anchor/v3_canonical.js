@@ -2,9 +2,14 @@
 
 const SEP = String.fromCharCode(124);
 
+// Embed the batch CRC32 lower-case; every ANCHOR archive canonical builder calls this.
+function canonicalBatchCrc(crc){
+    return String(crc).toLowerCase();
+}
+
 function archiveCanonicalSuffix(archive){
-    return [archive.MATCH_BATCH_SEQ, archive.MATCH_COUNT, archive.BATCH_CRC32,
-            archive.TOTAL_CHUNKS].map(value => SEP + String(value)).join('');
+    return [String(archive.MATCH_BATCH_SEQ), String(archive.MATCH_COUNT), canonicalBatchCrc(archive.BATCH_CRC32),
+            String(archive.TOTAL_CHUNKS)].map(value => SEP + value).join('');
 }
 
 function signsExtendedCanonical(sectionIndex, archive){
@@ -19,6 +24,7 @@ function extendSectionCanonicalBase(base, sectionIndex, archive){
 }
 
 module.exports = {
+    canonicalBatchCrc,
     archiveCanonicalSuffix,
     signsExtendedCanonical,
     extendSectionCanonicalBase,
