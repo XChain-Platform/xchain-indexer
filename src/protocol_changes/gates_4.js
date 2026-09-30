@@ -229,3 +229,15 @@ addGate('market_list_source_activation.MARKET_LIST_SOURCE_ACTIVATION', 'height',
     testnet: UNARMED,
     regtest: 0,
 });
+
+// list_change_rematch_activation
+// At or above this height a valid address LIST create or edit re-runs matching
+// for open ORDERs and SWAPs whose own policy resolves to the changed list.
+addGate('list_change_rematch_activation.LIST_CHANGE_REMATCH_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
