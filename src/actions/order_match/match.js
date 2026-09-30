@@ -4,6 +4,7 @@ const { tokenPolicyRejects } = require('../../consensus/order_swap_payout_policy
 
 const EMPTY_ALLOW_LIST_KEY = 'empty_allow_list_denies_activation.EMPTY_ALLOW_LIST_DENIES';
 const PAYOUT_POLICY_KEY = 'order_swap_payout_policy_activation.ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN';
+const MARKET_LIST_SOURCE_KEY = 'market_list_source_activation.MARKET_LIST_SOURCE_ACTIVATION';
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -238,12 +239,17 @@ module.exports = {
 
         // Check each payout against the policy for the token delivered there.
         let perTokenPolicy = gateRegistry.activeAt(PAYOUT_POLICY_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
+        let checkCounterpartySource = gateRegistry.activeAt(MARKET_LIST_SOURCE_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
         if(deniedByEmptyAllowList ||
            tokenPolicyRejects(lists, orderInfo['GET_ADDRESS'], matchInfo['GET_ADDRESS'], perTokenPolicy) ||
            (orderInfoAllowList && orderInfoAllowList.length && !orderInfoAllowList.includes(matchInfo['GET_ADDRESS'])) ||
            (orderInfoBlockList && orderInfoBlockList.length &&  orderInfoBlockList.includes(matchInfo['GET_ADDRESS'])) ||
            (matchInfoAllowList && matchInfoAllowList.length && !matchInfoAllowList.includes(orderInfo['GET_ADDRESS'])) ||
-           (matchInfoBlockList && matchInfoBlockList.length &&  matchInfoBlockList.includes(orderInfo['GET_ADDRESS']))){
+           (matchInfoBlockList && matchInfoBlockList.length &&  matchInfoBlockList.includes(orderInfo['GET_ADDRESS'])) ||
+           (checkCounterpartySource && orderInfoAllowList && orderInfoAllowList.length && !orderInfoAllowList.includes(matchInfo['SOURCE'])) ||
+           (checkCounterpartySource && orderInfoBlockList && orderInfoBlockList.length &&  orderInfoBlockList.includes(matchInfo['SOURCE'])) ||
+           (checkCounterpartySource && matchInfoAllowList && matchInfoAllowList.length && !matchInfoAllowList.includes(orderInfo['SOURCE'])) ||
+           (checkCounterpartySource && matchInfoBlockList && matchInfoBlockList.length &&  matchInfoBlockList.includes(orderInfo['SOURCE']))){
             if(this.debug)
                 getLogger().info('Skipping match due to allow/block list');
             return false;
