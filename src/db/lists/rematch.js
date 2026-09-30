@@ -18,14 +18,13 @@
 
 'use strict';
 
-function listReferenceSql(alias){
-    return `(${alias}.allow_list=? OR
-             ${alias}.block_list=? OR
-             ${alias}.allow_list IN (SELECT action_index FROM lists WHERE list_action_index=?) OR
-             ${alias}.block_list IN (SELECT action_index FROM lists WHERE list_action_index=?))`;
+function listReferenceSql(alias, referenceCount){
+    let placeholders = Array(referenceCount).fill('?').join(', ');
+    return `(${alias}.allow_list IN (${placeholders}) OR
+             ${alias}.block_list IN (${placeholders}))`;
 }
 
-function candidateSql(kind){
+function candidateSql(kind, referenceCount){
     let table = kind + 's';
     let edits = kind + '_edits';
     let statuses = kind + '_statuses';
@@ -49,32 +48,49 @@ function candidateSql(kind){
                     ) AND
                     st.status='open' AND
                     (
-                        ${listReferenceSql(marketAlias)} OR
+                        ${listReferenceSql(marketAlias, referenceCount)} OR
                         EXISTS (
                             SELECT 1
                             FROM ${edits} ${editAlias}
                             WHERE
                                 ${editAlias}.${marketKey}=${marketAlias}.action_index AND
-                                ${listReferenceSql(editAlias)}
+                                ${listReferenceSql(editAlias, referenceCount)}
                         )
                     )
                 ORDER BY ${marketAlias}.action_index ASC`;
 }
 
 async function targetReferences(db, list_root){
-    let rows = await db.doQuery(
-        `SELECT action_index
-         FROM lists
-         WHERE list_action_index=?`,
-        [list_root]
-    );
     let references = [list_root];
-    for(let row of rows) references.push(row.action_index);
+    let pending = [list_root];
+    let seen = { [String(list_root)]: true };
+    while(pending.length > 0){
+        let parent = pending.shift();
+        let rows = await db.doQuery(
+            `SELECT action_index
+             FROM lists
+             WHERE list_action_index=?`,
+            [parent]
+        );
+        for(let row of rows){
+            let actionIndex = row.action_index;
+            let key = String(actionIndex);
+            if(seen[key]) continue;
+            seen[key] = true;
+            references.push(actionIndex);
+            pending.push(actionIndex);
+        }
+    }
     return references;
 }
 
-function candidateArgs(list_root){
-    return Array(8).fill(list_root);
+function candidateArgs(references){
+    return [
+        ...references,
+        ...references,
+        ...references,
+        ...references
+    ];
 }
 
 function referencesTarget(value, targets){
@@ -86,7 +102,7 @@ function referencesTarget(value, targets){
 async function getOpenMarketsByList(db, list_root, kind, editMethod){
     let references = await targetReferences(db, list_root);
     let targets = new Set(references.map(String));
-    let rows = await db.doQuery(candidateSql(kind), candidateArgs(list_root));
+    let rows = await db.doQuery(candidateSql(kind, references.length), candidateArgs(references));
     let matches = [];
     for(let row of rows){
         let allowList = row.allow_list;

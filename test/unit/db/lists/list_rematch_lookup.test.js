@@ -27,12 +27,14 @@ const { getOpenOrdersByList, getOpenSwapsByList } = require('../../../../src/db/
 
 const LIST_ROOT = 500;
 const LIST_EDIT = 501;
+const LIST_EDIT_OF_EDIT = 502;
 
 function marketRows(){
     return [
         { action_index: 80, allow_list: null, block_list: 600 },
         { action_index: 20, allow_list: null, block_list: LIST_ROOT },
         { action_index: 70, allow_list: LIST_EDIT, block_list: null },
+        { action_index: 90, allow_list: LIST_EDIT_OF_EDIT, block_list: null },
         { action_index: 10, allow_list: LIST_ROOT, block_list: null },
         { action_index: 60, allow_list: LIST_ROOT, block_list: null },
         { action_index: 50, allow_list: 600, block_list: null },
@@ -42,7 +44,7 @@ function marketRows(){
 }
 
 function statusRows(){
-    let rows = [10, 20, 30, 40, 50, 70, 80].map(action_index => ({
+    let rows = [10, 20, 30, 40, 50, 70, 80, 90].map(action_index => ({
         action_index: action_index * 10,
         market_action_index: action_index,
         status: 'open'
@@ -83,14 +85,20 @@ function dbWithMarkets(kind){
     const statuses = statusRows();
     const edits = editRows();
     const candidateIndexes = [];
+    const listParentsRead = [];
 
     sinon.stub(db, 'doQuery').callsFake((query, args) => {
         const sql = query.replace(/\s+/g, ' ');
         if(new RegExp(`FROM ${kind}s [os] INNER JOIN ${kind}_statuses`, 'i').test(sql)){
             assert.match(sql, /SELECT MAX\(latest\.action_index\)/i);
             assert.match(sql, /st\.status='open'/i);
-            assert.deepStrictEqual(args, Array(8).fill(LIST_ROOT));
-            const targets = new Set([String(LIST_ROOT), String(LIST_EDIT)]);
+            assert.deepStrictEqual(args, [
+                LIST_ROOT, LIST_EDIT, LIST_EDIT_OF_EDIT,
+                LIST_ROOT, LIST_EDIT, LIST_EDIT_OF_EDIT,
+                LIST_ROOT, LIST_EDIT, LIST_EDIT_OF_EDIT,
+                LIST_ROOT, LIST_EDIT, LIST_EDIT_OF_EDIT
+            ]);
+            const targets = new Set([String(LIST_ROOT), String(LIST_EDIT), String(LIST_EDIT_OF_EDIT)]);
             const rows = markets.filter(market => {
                 const latest = latestStatus(statuses, market.action_index);
                 const namedByEdit = edits.some(edit =>
@@ -102,8 +110,15 @@ function dbWithMarkets(kind){
             return Promise.resolve(rows);
         }
 
-        if(/^SELECT action_index FROM lists WHERE list_action_index=\?/i.test(sql))
-            return Promise.resolve([{ action_index: LIST_EDIT }]);
+        if(/^SELECT action_index FROM lists WHERE list_action_index=\?/i.test(sql)){
+            listParentsRead.push(args[0]);
+            const children = {
+                [LIST_ROOT]: [{ action_index: LIST_EDIT }],
+                [LIST_EDIT]: [{ action_index: LIST_EDIT_OF_EDIT }],
+                [LIST_EDIT_OF_EDIT]: [{ action_index: LIST_ROOT }]
+            };
+            return Promise.resolve(children[args[0]] || []);
+        }
 
         const editAlias = kind === 'order' ? 'o' : 's1';
         if(new RegExp(`FROM ${kind}_edits ${editAlias} INNER JOIN index_statuses`, 'i').test(sql)){
@@ -121,6 +136,7 @@ function dbWithMarkets(kind){
         return Promise.resolve([]);
     });
     db._candidateIndexes = candidateIndexes;
+    db._listParentsRead = listParentsRead;
     return db;
 }
 
@@ -136,8 +152,9 @@ for(const testCase of [
 
         const indexes = await testCase.lookup(db, LIST_ROOT);
 
-        assert.deepStrictEqual(indexes, [10, 20, 30, 70, 80]);
-        assert.deepStrictEqual(db._candidateIndexes, [10, 20, 30, 40, 50, 70, 80]);
+        assert.deepStrictEqual(indexes, [10, 20, 30, 70, 80, 90]);
+        assert.deepStrictEqual(db._candidateIndexes, [10, 20, 30, 40, 50, 70, 80, 90]);
+        assert.deepStrictEqual(db._listParentsRead, [LIST_ROOT, LIST_EDIT, LIST_EDIT_OF_EDIT]);
         assert.ok(editSpy.calledWith(40), 'the 0 edit candidate must be resolved and removed');
         assert.ok(editSpy.calledWith(50), 'the invalid edit candidate must be resolved and ignored');
         assert.ok(!editSpy.calledWith(60), 'a market whose latest status is not open must be excluded');
