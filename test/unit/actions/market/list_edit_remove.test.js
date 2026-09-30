@@ -34,6 +34,13 @@ function removeInactive() {
     sinon.stub(gateRegistry, 'activeAt').callsFake((key, ...rest) => (key === REMOVE_KEY ? false : real(key, ...rest)));
 }
 
+// Arm only the BTC slot of the remove row, the shape a per-chain arming train writes.
+function removeArmedForBtcOnly() {
+    const real = gateRegistry.activeAt;
+    sinon.stub(gateRegistry, 'activeAt').callsFake((key, network, coin, ...rest) =>
+        (key === REMOVE_KEY ? coin === 'BTC' : real(key, network, coin, ...rest)));
+}
+
 function openRow(extra) {
     return Object.assign({
         SOURCE: OWNER_ADDR, GET_ADDRESS: OWNER_ADDR, GIVE_COIN: 'BTC', GET_COIN: 'BTC',
@@ -107,6 +114,12 @@ for (const c of CASES) {
 
         it('at/after the flag-day a BLOCK_LIST of 0 is valid too', async function () {
             const { data } = await runEdit(c, c.edit('', '0'));
+            assert.strictEqual(data['STATUS'], 'valid');
+        });
+
+        it('follows an arm of the configured coin slot alone', async function () {
+            removeArmedForBtcOnly();
+            const { data } = await runEdit(c, c.edit('0', ''));
             assert.strictEqual(data['STATUS'], 'valid');
         });
 

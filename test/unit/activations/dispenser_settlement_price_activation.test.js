@@ -189,6 +189,14 @@ describe('FIAT admission below the settlement price gate @regression @tier2', fu
         assert.strictEqual(modeA.data['STATUS'], 'valid', modeA.data['STATUS']);
     });
 
+    // Arm only the configured coin's slot, the shape a per-chain arming train writes.
+    it('follows an arm of the configured coin slot alone', async function () {
+        sinon.stub(gateRegistry, 'activeAt').callThrough()
+            .withArgs(GATE_KEY).callsFake((key, network, coin) => coin === 'BTC');
+        const { data } = await run(MODE_B_CREATE(), [oracle(PRICE_EFFECTIVE_AT)], [validator(BLOCK_TIME - HOUR)]);
+        assert.strictEqual(data['STATUS'], STALE);
+    });
+
     it('is armed from genesis on regtest and unarmed on mainnet and testnet', function () {
         assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'regtest', null, null, 0), true);
         assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'mainnet', null, null, BLOCK_TIME), false);

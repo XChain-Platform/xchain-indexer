@@ -121,6 +121,17 @@ describe('getContractStakeDataForVM() staker tie-order determinism @regression @
         assert.strictEqual(survivorsA[999], 'pk0999');
         assert.ok(!survivorsA.includes('pk1000'), 'the lexicographically-largest pubkey is dropped');
     });
+
+    // (3b) The cap lives in the post-sort slice, so the stake query itself stays unbounded.
+    it('issues an unbounded stake query, never capping rows with a SQL LIMIT', async function () {
+        const db = makeDb();
+        sinon.stub(db, 'getStatusId').resolves(1);
+        const doQuery = sinon.stub(db, 'doQuery').resolves([]);
+        await db.getContractStakeDataForVM(42, 306);
+        const sql = doQuery.getCalls().map(c => String(c.args[0])).find(s => /FROM\s+contract_stakes/i.test(s));
+        assert.ok(sql, 'the contract_stakes snapshot query was issued');
+        assert.ok(!/\bLIMIT\b/i.test(sql), 'a LIMIT would cut raw rows before aggregation and the sort');
+    });
 });
 
 describe('getContractStakeDataForVM() staker tie-order determinism @regression @tier1', function () {

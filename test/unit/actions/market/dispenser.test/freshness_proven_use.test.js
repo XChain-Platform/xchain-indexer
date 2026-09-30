@@ -64,6 +64,17 @@ describe('Dispenser fresh-address proven use @regression @tier2', function () {
             assert.ok(indexer.indexerDb.hasXChainActivityBefore.notCalled);
         });
 
+        // Arm only the configured coin's slot, the shape a per-chain arming train writes.
+        it('follows an arm of the configured coin slot alone', async function () {
+            listedOnly();
+            const real = gateRegistry.activeAt;
+            sinon.stub(gateRegistry, 'activeAt').callsFake((key, network, coin, ...rest) =>
+                (key === PROVEN_USE_KEY ? coin === 'BTC' : real(key, network, coin, ...rest)));
+            dispenser = new Dispenser(actionsCtx);
+            const data = await openOnOther();
+            assert.strictEqual(data['STATUS'], 'valid');
+        });
+
         it('a GET_ADDRESS with proven prior use is not permitted', async function () {
             listedOnly();
             indexer.indexerDb.hasProvenUseBefore.resolves(true);

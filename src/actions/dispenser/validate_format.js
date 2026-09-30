@@ -202,7 +202,7 @@ module.exports = {
 
         // Gated (dispenser_settlement_price_activation row): below it both were accepted as before.
         if(!error && fiatDispenser && !this.util.isNull(fiatDispenser['FIAT']) &&
-           gateRegistry.activeAt('dispenser_settlement_price_activation.DISPENSER_SETTLEMENT_PRICE_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']) &&
+           gateRegistry.activeAt('dispenser_settlement_price_activation.DISPENSER_SETTLEMENT_PRICE_ACTIVATION', this.config['NETWORK'], this.config['COIN'], null, data['BLOCK_TIME']) &&
            await this.actions.protocolChanges.isEnabled('FIAT_DISPENSER_PRICING', data['BLOCK_INDEX'])){
             let gap = await this.util.findSettlementPriceGap(fiatDispenser, Number(data['BLOCK_TIME']),
                 Number(this.config['FIAT_DISPENSER_PRICE_WINDOW']), this.indexerDb);

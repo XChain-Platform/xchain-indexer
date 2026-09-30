@@ -76,8 +76,8 @@ describe('bin/consensus-identity.js --assert-no-absent', function () {
         assert.strictEqual(res.status, 0, res.stderr);
         assert.strictEqual(res.stderr, '');
         const identity = JSON.parse(res.stdout);
-        assert.strictEqual(identity.consensus_rules_gates_absent, 0);
-        assert.strictEqual(identity.consensus_rules_gates_resolved, 38);
+        assert.deepStrictEqual(identity.absent_gates, []);
+        assert.strictEqual(identity.gate_key_count, 38);
     });
 
     it('reads every gate with a carrier hidden: the value is the registry row, never the file', function () {
@@ -96,8 +96,8 @@ describe('bin/consensus-identity.js --assert-no-absent', function () {
 
         assert.strictEqual(res.status, 0, res.stdout + res.stderr);
         const identity = JSON.parse(res.stdout);
-        assert.strictEqual(identity.consensus_rules_gates_absent, 0);
-        assert.strictEqual(identity.consensus_rules_gates_resolved, 38);
+        assert.deepStrictEqual(identity.absent_gates, []);
+        assert.strictEqual(identity.gate_key_count, 38);
         assert.ok(identity.consensus_rules_gates[KEY], 'the hidden carrier\'s gate still resolves');
     });
 
@@ -163,7 +163,7 @@ describe('bin/consensus-identity.js function-valued gate rows', function () {
         const res = run(['--json']);
         assert.strictEqual(res.status, 0, res.stderr);
         const identity = JSON.parse(res.stdout);
-        assert.strictEqual(Object.keys(identity.consensus_rules_gates).length, identity.consensus_rules_gates_resolved,
+        assert.strictEqual(Object.keys(identity.consensus_rules_gates).length, identity.gate_key_count,
             'the printed map must hold every gate the count names');
         for (const key of FUNCTION_KEYS) assert.strictEqual(identity.consensus_rules_gates[key], '<function>', key);
     });
@@ -177,5 +177,58 @@ describe('bin/consensus-identity.js function-valued gate rows', function () {
             .find(r => r.field === 'consensus_rules_gates.' + FUNCTION_KEYS[0]);
         assert.ok(row, 'the dropped row must be compared by name');
         assert.strictEqual(row.same, false, 'a row the pin lacks must not read as ok');
+    });
+});
+
+describe('bin/consensus-identity.js --compare against a flat --out reading', function () {
+    // Write this tree's own --out reading, edited by `mutate`, and return its path.
+    function flatPin(mutate) {
+        const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'identity-flat-'));
+        const file = path.join(dir, 'identity.json');
+        assert.strictEqual(run(['--out', file, '--json']).status, 0);
+        const identity = JSON.parse(fs.readFileSync(file, 'utf8'));
+        if (mutate) mutate(identity);
+        fs.writeFileSync(file, JSON.stringify(identity));
+        return file;
+    }
+
+    // Write `body` as a pin file and return its path.
+    function pinFile(body) {
+        const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'identity-pin-'));
+        const file = path.join(dir, 'pin.json');
+        fs.writeFileSync(file, JSON.stringify(body));
+        return file;
+    }
+
+    it('round-trips its own --out file with every field ok, arrays included', function () {
+        const res = run(['--compare', flatPin()]);
+        assert.strictEqual(res.status, 0, res.stdout + res.stderr);
+        assert.strictEqual(res.stderr, '');
+        assert.ok(!res.stdout.includes('MISMATCH'), res.stdout);
+        assert.ok(res.stdout.split('\n').includes('ok absent_gates'), res.stdout);
+    });
+
+    it('skips a stored tip visibly rather than reading it as a mismatch', function () {
+        const res = run(['--compare', flatPin((id) => { id.tip = { block_index: 1, state_hash: 'x' }; })]);
+        assert.strictEqual(res.status, 0, res.stdout + res.stderr);
+        assert.ok(res.stdout.includes('skip tip'), res.stdout);
+        assert.ok(!res.stdout.includes('MISMATCH'), res.stdout);
+    });
+
+    it('still reports a moved gate in a flat reading as a mismatch', function () {
+        const res = run(['--compare', flatPin((id) => { id.consensus_rules_gates[KEY] = 'moved'; })]);
+        assert.strictEqual(res.status, 1, res.stdout + res.stderr);
+        assert.ok(res.stdout.includes('MISMATCH consensus_rules_gates.' + KEY), res.stdout);
+    });
+
+    it('refuses a shapeless, hub or blockless pin with one named line (exit 2)', function () {
+        const bodies = [{}, [], { hub_schema_version: 1, consensus_rules_digest: 'x' },
+            { armed_regtest_venue: { env: { XC_IDENTITY_TEST_UNSET_VAR: 'armed' } } }];
+        for (const body of bodies) {
+            const res = run(['--compare', pinFile(body)]);
+            assert.strictEqual(res.status, 2, JSON.stringify(body) + res.stdout + res.stderr);
+            assert.strictEqual(res.stderr.trim().split('\n').length, 1, res.stderr);
+            assert.ok(!res.stderr.includes('Cannot convert'), res.stderr);
+        }
     });
 });

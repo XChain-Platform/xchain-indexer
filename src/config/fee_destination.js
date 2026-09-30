@@ -24,9 +24,10 @@
 // FEE_DESTINATION would therefore ACCEPT actions a correctly-configured node
 // rejects, a consensus-acceptance divergence. Fail closed at startup rather than
 // ship a divergent indexer (the coin configs carry real defaults, so this only
-// fires on an explicit misconfiguration).
+// fires on an explicit misconfiguration). Classify with detectFeePaymentMode's own rule
+// (every chain but BTC is native-fee), so a newly onboarded chain fails closed here too.
 function assertFeeDestination(fullConfig, coin, network){
-    if(coin === 'LTC' || coin === 'DOGE'){
+    if(coin !== 'BTC'){
         let fd = fullConfig['ADDRESS'] ? fullConfig['ADDRESS']['FEE_DESTINATION'] : null;
         if(!fd || fd === 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'){
             throw new Error('FEE_DESTINATION is required on ' + coin + ' (native-fee chain). It is the consensus-pinned coin-bundle default (src/coins/' + coin + '.js); the XCHAIN_FEE_DESTINATION_' + coin + '_' + String(network).toUpperCase() + ' env var is honored on regtest ONLY and is ignored on mainnet/testnet. Restore the coin-bundle default (or, on regtest, set that env var). A missing value would make every action fall back to XCHAIN fee mode and diverge from a correctly-configured node.');

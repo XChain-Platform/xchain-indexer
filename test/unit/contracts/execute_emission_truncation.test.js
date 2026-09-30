@@ -16,16 +16,15 @@
  * Emission amount truncation (item 5346) @regression @tier1
  *
  * Contracts compute with 64-digit bignum precision, so an emitted action can carry an amount
- * with more fractional digits than its tick's decimals. Execute.truncateEmissionAmounts
- * normalizes every amount-bearing emission field to its tick's decimals BEFORE the emission is
- * validated/dispatched, using the SAME normalization the ledger applies
- * (createLedgerChangeRecord -> util.bcadd(amount, 0, decimals)). This keeps a contract's
+ * with more fractional digits than its tick's decimals. Execute.roundEmissionAmounts
+ * rounds every amount-bearing emission field HALF-UP (util.bcadd, never truncation) to its
+ * tick's decimals BEFORE the emission is validated/dispatched. This keeps a contract's
  * over-precise output from being rejected by isValidAmountFormat (which would revert e.g.
  * every AMM swap) while keeping the stored action amount equal to the ledger row.
  *
  * Two guards live here:
  *   1. Coverage: every emittable action that carries an amount appears in
- *      EMISSION_AMOUNT_FIELDS (so a new emittable action cannot silently skip truncation).
+ *      EMISSION_AMOUNT_FIELDS (so a new emittable action cannot silently skip rounding).
  *   2. Behavior: amounts are normalized to the tick's decimals, byte-identically to bcadd.
  */
 'use strict';
@@ -100,7 +99,7 @@ describe('Emission amount truncation (item 5346) @regression @tier1', function()
         it('SEND quantity is rounded to the tick decimals, matching bcadd', async function(){
             const ex = makeExecute({ TKN:true, __d:8 });
             const params = { tick:'TKN', destination:'addr', quantity:'3.333333333333333' };
-            await ex.truncateEmissionAmounts('SEND', params);
+            await ex.roundEmissionAmounts('SEND', params);
             assert.strictEqual(params.quantity, String(util.bcadd('3.333333333333333', 0, 8)));
             assert.strictEqual(params.quantity, '3.33333333');
         });
@@ -108,15 +107,16 @@ describe('Emission amount truncation (item 5346) @regression @tier1', function()
         it('non-divisible tick (decimals 0) collapses to an integer', async function(){
             const ex = makeExecute({ TKN:true, __d:0 });
             const params = { tick:'TKN', destination:'addr', quantity:'5.9999999' };
-            await ex.truncateEmissionAmounts('SEND', params);
+            await ex.roundEmissionAmounts('SEND', params);
             assert.strictEqual(params.quantity, String(util.bcadd('5.9999999', 0, 0)));
+            assert.strictEqual(params.quantity, '6', 'emission rounds half-up, never truncates');
         });
 
         it('ORDER normalizes give/get legs to their own tick decimals', async function(){
             // giveTick and getTick both resolve; both use the stubbed decimals (4 here).
             const ex = makeExecute({ A:true, B:true, __d:4 });
             const params = { giveTick:'A', giveAmount:'1.123456789', getTick:'B', getAmount:'2.987654321' };
-            await ex.truncateEmissionAmounts('ORDER', params);
+            await ex.roundEmissionAmounts('ORDER', params);
             assert.strictEqual(params.giveAmount, String(util.bcadd('1.123456789', 0, 4)));
             assert.strictEqual(params.getAmount,  String(util.bcadd('2.987654321', 0, 4)));
         });
@@ -124,7 +124,7 @@ describe('Emission amount truncation (item 5346) @regression @tier1', function()
         it('ISSUE uses its inline declared decimals (tick not in issues table yet)', async function(){
             const ex = makeExecute({ __d:99 }); // getTickerId would return null; declared path is used
             const params = { tick:'NEW', decimals:'2', maxSupply:'1000.12345', mintSupply:'10.999' };
-            await ex.truncateEmissionAmounts('ISSUE', params);
+            await ex.roundEmissionAmounts('ISSUE', params);
             assert.strictEqual(params.maxSupply,  String(util.bcadd('1000.12345', 0, 2)));
             assert.strictEqual(params.mintSupply, String(util.bcadd('10.999', 0, 2)));
         });
@@ -138,7 +138,7 @@ describe('Emission amount truncation (item 5346) @regression @tier1', function()
             };
             const ex = new Execute({ config:{ GAS:'XCHAIN' }, decoderDb:{}, indexerDb, util, mapper:{} });
             const params = { tick:'TKN', deposit:'1.234567891234', gasEscrow:'0.999999999' };
-            await ex.truncateEmissionAmounts('VOTE', params);
+            await ex.roundEmissionAmounts('VOTE', params);
             assert.strictEqual(params.deposit,   String(util.bcadd('1.234567891234', 0, 8)));
             assert.strictEqual(params.gasEscrow, String(util.bcadd('0.999999999', 0, 8)));
         });
@@ -147,7 +147,7 @@ describe('Emission amount truncation (item 5346) @regression @tier1', function()
             // giveTick A is known; getTick FOREIGN is not (getTickerId -> null).
             const ex = makeExecute({ A:true, __d:8 });
             const params = { giveTick:'A', giveAmount:'1.123456789', getTick:'FOREIGN', getAmount:'9.999999999' };
-            await ex.truncateEmissionAmounts('ORDER', params);
+            await ex.roundEmissionAmounts('ORDER', params);
             assert.strictEqual(params.giveAmount, String(util.bcadd('1.123456789', 0, 8)));
             assert.strictEqual(params.getAmount, '9.999999999', 'foreign-tick leg must be left as-is');
         });
@@ -159,7 +159,7 @@ describe('Emission amount truncation (item 5346) @regression @tier1', function()
         it('skips null/empty amount fields', async function(){
             const ex = makeExecute({ TKN:true, __d:8 });
             const params = { tick:'TKN', destination:'addr', quantity:'' };
-            await ex.truncateEmissionAmounts('SEND', params);
+            await ex.roundEmissionAmounts('SEND', params);
             assert.strictEqual(params.quantity, '');
         });
 
@@ -167,7 +167,7 @@ describe('Emission amount truncation (item 5346) @regression @tier1', function()
             const ex = makeExecute({ __d:8 });
             const params = { method:'foo' };
             const before = JSON.stringify(params);
-            await ex.truncateEmissionAmounts('XCALL', params);
+            await ex.roundEmissionAmounts('XCALL', params);
             assert.strictEqual(JSON.stringify(params), before);
         });
     });

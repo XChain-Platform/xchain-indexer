@@ -46,7 +46,7 @@ CREATE TABLE bridge_settlements (
     src_action_index BIGINT UNSIGNED NULL,     -- lock/burn action_index (NULL for a policy row: a snapshot has no single source action)
     dest_chain       VARCHAR(10)     NULL,     -- chain the credit landed on (NULL for a policy row: a snapshot targets every chain holding a copy)
     dest_address     VARCHAR(255)    NULL,     -- address credited (NULL for a policy row)
-    tick             VARCHAR(250)    NULL,     -- the native tick the leg moved, as signed
+    tick             VARCHAR(250)    NULL,     -- the tick the leg moved, as signed: bare native on a lock, dest-rooted <ORIGIN>.<NAME> on a v4 burn
     UNIQUE KEY uq_transfer_kind (transfer_id, kind),
     KEY idx_action_index (action_index),
     KEY idx_block_index (block_index),

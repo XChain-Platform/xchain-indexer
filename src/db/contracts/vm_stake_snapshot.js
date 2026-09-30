@@ -30,7 +30,10 @@ module.exports = {
     // The snapshot is scoped to THIS contract (targetContractIndex) - a contract
     // calling xchain.contract.* cannot see other contracts' stakes through this
     // accessor (implicit slash authorization). The 1000-staker cap on getStakers
-    // is applied here at query time (LIMIT clause).
+    // is NOT a SQL LIMIT: the query below is deliberately unbounded, and the cap is
+    // the arr.slice(0, 1000) in snapshotShape.serialize, taken after per-(pubkey, tick)
+    // aggregation and the total-order sort. A LIMIT here would cut raw rows before
+    // both, so getStakers() membership would follow engine row order and fork nodes.
     //
     // SIGNING-KEY ROTATIONS (#4366). This reads contract_stakes.signing_pubkey_id and nothing
     // else - deliberately, and it must stay that way. A DELEGATE v1 rotation reaches the
@@ -38,7 +41,8 @@ module.exports = {
     // delegation's activation block (CONTRACT_DELEGATION_MATERIALIZE), so the pubkey a contract
     // sees in getStakers is by construction the same one slashContractStake can debit. Joining
     // contract_delegations in HERE instead would hand the contract a key the SLASH path cannot
-    // find, and the emitted punishment would silently no-op at execute.js's zero-slashed guard.
+    // find, and the emitted punishment would silently no-op at the zero-slashed guard in
+    // processSlashEmission (actions/execute/slash_emission.js).
     async getContractStakeDataForVM(targetContractIndex, blockIndex){
         let valid_id = await this.getStatusId('valid');
         let stakes = [];

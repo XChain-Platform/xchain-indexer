@@ -156,7 +156,7 @@ class List {
 
     async rematchMarkets(data, format, status){
         if(status!='valid' || data['TYPE']!=2 ||
-           !gateRegistry.activeAt('list_change_rematch_activation.LIST_CHANGE_REMATCH_ACTIVATION', this.config['NETWORK'], null, data['BLOCK_INDEX'], null))
+           !gateRegistry.activeAt('list_change_rematch_activation.LIST_CHANGE_REMATCH_ACTIVATION', this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null))
             return;
 
         let listRoot = (format==0) ? data['ACTION_INDEX'] : data['LIST_ACTION_INDEX'];

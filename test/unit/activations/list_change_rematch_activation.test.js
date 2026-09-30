@@ -128,6 +128,16 @@ describe('LIST change rematch activation @regression @tier2', function () {
         assert.deepStrictEqual([swapBook[5].status, swapBook[25].status], ['filled', 'filled']);
     });
 
+    // Arm only the configured coin's slot, the shape a per-chain arming train writes.
+    it('follows an arm of the configured coin slot alone', async function () {
+        const { handler, orderBook, swapBook } = setup(false);
+        stubGate(sinon, GATE_KEY, false).callsFake((key, network, coin) => coin === 'BTC');
+
+        await addCounterparty(handler);
+
+        assert.deepStrictEqual([orderBook[10].status, swapBook[5].status], ['filled', 'filled']);
+    });
+
     it('leaves the same compatible ORDERs and SWAPs crossed before activation', async function () {
         const { indexer, actionsCtx, handler, members, orderBook, swapBook } = setup(false);
 

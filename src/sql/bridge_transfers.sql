@@ -19,7 +19,7 @@
 --
 -- Fresh installs get this table from the directory scan in db.verifyTables(); an aged
 -- database gets it from src/sql/migrations/2026-09-12-bridge-tables.sql, whose CREATE
--- TABLE block is byte-consistent with this one (sql-schema-column-parity.test.js compares
+-- TABLE block is byte-consistent with this one (sql_schema_column_parity.test.js compares
 -- the two paths).
 CREATE TABLE bridge_transfers (
     id                   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, -- mirror cursor (matches hub id)
@@ -31,7 +31,7 @@ CREATE TABLE bridge_transfers (
     src_address          VARCHAR(255) NOT NULL,                    -- the locking/burning source address
     dest_chain           VARCHAR(10)  NOT NULL,                    -- chain the credit lands on
     dest_address         VARCHAR(255) NOT NULL,                    -- address credited by the XBRIDGE v2/v5 settle leg
-    tick                 VARCHAR(250) NOT NULL,                    -- the asset's NATIVE tick (never the rooted form); XCHAIN for every base-spec row
+    tick                 VARCHAR(250) NOT NULL,                    -- the action's tick as signed: the bare native tick on a lock (XCHAIN for every base-spec row), the dest-rooted <ORIGIN>.<NAME> on a v4 burn (resolveTransferOrigin reads the direction from it)
     decimals             TINYINT UNSIGNED NOT NULL,                -- the token's DECIMALS (8 for XCHAIN); the precision `amount` is formatted at
     amount               VARCHAR(250) NOT NULL,                    -- decimal string at `decimals` fractional digits; VARCHAR because amounts are bignumber math
     effective_time       BIGINT UNSIGNED NOT NULL,                 -- protocol-time instant every indexer applies at; compared against the block loop's block_time (median-time-past off mainnet)

@@ -321,3 +321,32 @@ describe('Rollback coverage guard @regression', function () {
         }
     });
 });
+
+// Return the generically rolled-back entries that declare a non-default blockKey.
+function genericRollbackKeyViolations(entries) {
+    return entries.filter(t => (t.rollback === 'block' || t.rollback === 'index') &&
+                               t.blockKey && t.blockKey !== 'block_index');
+}
+
+describe('Rollback coverage guard @regression', function () {
+
+    it('keeps every non-default blockKey out of the generic block and index rollback lists', function () {
+        const bad = genericRollbackKeyViolations(lifecycle.allTables());
+        assert.deepStrictEqual(bad.map(t => `${t.table}:${t.blockKey}`), [],
+            'purgeBlockScopedTables and the replica loop delete by block_index; classify these rows ' +
+            "rollback/replicaRollback 'special' with a delete on the declared column, as rollcalls does");
+        assert.ok(lifecycle.tablesWhere(t => t.rollback === 'block').length > 0, 'no rollback block rows were visited');
+        const keyed = lifecycle.allTables().filter(t => t.blockKey && t.blockKey !== 'block_index');
+        assert.ok(keyed.length >= 3, 'expected the close_block tables to declare a blockKey');
+        for (const t of keyed)
+            assert.deepStrictEqual([t.rollback, t.replicaRollback], ['special', 'special'], t.table);
+    });
+
+    it('flags a generically rolled-back row with a non-default blockKey', function () {
+        const row = { table: 'synthetic_close_keyed', replication: 'stream:block', replicaRollback: 'mirror' };
+        assert.strictEqual(genericRollbackKeyViolations([{ ...row, rollback: 'block', blockKey: 'close_block' }]).length, 1);
+        assert.strictEqual(genericRollbackKeyViolations([{ ...row, rollback: 'index', blockKey: 'close_block' }]).length, 1);
+        assert.strictEqual(genericRollbackKeyViolations([{ ...row, rollback: 'block', blockKey: 'block_index' }]).length, 0);
+        assert.strictEqual(genericRollbackKeyViolations([{ ...row, rollback: 'special', blockKey: 'close_block' }]).length, 0);
+    });
+});

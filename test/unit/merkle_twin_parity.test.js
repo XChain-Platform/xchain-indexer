@@ -13,8 +13,8 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * src/consensus/merkle.js is carried byte-identically by four repos, and nothing
- * enforced that.
+ * src/consensus/merkle.js and the byte layer it requires, merkle/primitives.js
+ * (prefixes, encodings, key derivations), are carried byte-identically by four repos.
  *
  * The indexer commits block_merkle_root with this module; the explorer proof
  * server locates a row's leaf index with it; sync re-derives roots with it;
@@ -58,22 +58,30 @@ const SIBLING_CARRIERS = [
     ['xchain-sdk',      'merkle.js'],
 ];
 
+// The byte layer merkle.js requires, carried beside each copy of merkle.js.
+const PRIMITIVES_SIBLING_CARRIERS = [
+    ['xchain-explorer', ['consensus/merkle/primitives.js', 'merkle/primitives.js']],
+    ['xchain-sync',     'merkle/primitives.js'],
+    ['xchain-sdk',      'merkle/primitives.js'],
+];
+
 // This repo's own canonical copy, resolved from inside this checkout rather than through
 // the sibling parent above, and never passed through siblingCheckout: that helper judges
 // whether a SIBLING entry beside this checkout may be trusted, and the own copy is not a
 // sibling, it lives inside this checkout, so that question does not apply to it.
 const OWN_COPY = path.resolve(__dirname, '..', '..', 'src', 'consensus', 'merkle.js');
+const OWN_PRIMITIVES = path.resolve(__dirname, '..', '..', 'src', 'consensus', 'merkle', 'primitives.js');
 
 // Resolves a spelling list to its first path on disk. A present checkout holding none fails
 // naming every spelling, since a missing copy would drop out of the comparison unseen; an
 // absent checkout returns the first spelling, which the loop drops like any absent sibling.
-function carrierPath(root, repo, spellings) {
+function carrierPath(root, repo, spellings, moduleName) {
     if (!Array.isArray(spellings)) return spellings;
     const hit = spellings.find((rel) => fs.existsSync(path.join(root, repo, 'src', rel)));
     if (hit) return hit;
     const checkout = path.join(root, repo);
     assert.ok(!fs.existsSync(checkout),
-        repo + ' is checked out at ' + checkout + ' but carries merkle.js at neither '
+        repo + ' is checked out at ' + checkout + ' but carries ' + moduleName + ' at neither '
         + spellings.map((rel) => repo + '/src/' + rel).join(' nor ')
         + '; repoint its SIBLING_CARRIERS entry at the current path');
     return spellings[0];
@@ -83,61 +91,72 @@ function sha256File(p) {
     return crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
 }
 
+// Assert every present carrier of one module matches this repo's own copy byte for byte.
+function assertCarriersIdentical(ctx, ownCopy, ownRel, siblings, moduleName) {
+    const root = path.resolve(__dirname, '..', '..', '..');
+    const found = [];
+    // A carrier counts only when its checkout may be trusted. One that exists but is
+    // refused (a lane symlink into a live main checkout) is kept aside with its
+    // verdict, so the skip or the strict failure can name why it dropped out.
+    const refused = [];
+    // This repo's own copy is resolved directly from this checkout (OWN_COPY above),
+    // never through the sibling loop below: it is not a sibling, so it can never be
+    // refused as a lane symlink, and a missing file here fails loudly right away
+    // rather than silently dropping the canonical out of found[]. This also leaves
+    // the canonical-refused branch a few lines down permanently unreachable for
+    // xchain-indexer specifically, since that repo no longer appears in refused[];
+    // it is left in place rather than deleted, since a sibling carrier could in
+    // principle still be named 'xchain-indexer' by a future SIBLING_CARRIERS entry.
+    assert.ok(fs.existsSync(ownCopy),
+        'the canonical copy did not resolve at ' + ownCopy + '; repoint OWN_COPY at its current path');
+    found.push(['xchain-indexer/src/' + ownRel, sha256File(ownCopy)]);
+    for (const [repo, spellings] of siblings) {
+        const rel = carrierPath(root, repo, spellings, moduleName);
+        const p = path.join(root, repo, 'src', rel);
+        const verdict = siblingCheckout(__dirname, p);
+        if (verdict.usable) found.push([repo + '/src/' + rel, sha256File(p)]);
+        else if (fs.existsSync(p)) refused.push([repo, verdict]);
+    }
+    // A canonical that is on disk but refused has not moved, so it takes the refusal
+    // path instead of the repoint message below.
+    const canonRefused = refused.find(([repo]) => repo === 'xchain-indexer');
+    if (canonRefused) return skipOrFail(ctx, canonRefused[1], 'the ' + moduleName + ' canonical pin');
+    // This repo's own copy is never optional: it is the canonical the others are
+    // vendored from, so a path that stopped resolving here has to fail rather than
+    // leave the siblings comparing against each other.
+    assert.ok(found.some(([label]) => label.startsWith('xchain-indexer/')),
+        'the canonical copy did not resolve; repoint CARRIERS at its current path');
+    // Under XCHAIN_REQUIRE_SIBLINGS=1 a refused carrier fails naming its reason; in soft
+    // mode the usable carriers are still compared among themselves.
+    if (refused.length && siblingsRequired())
+        return skipOrFail(ctx, refused[0][1], 'the ' + moduleName + ' carrier byte comparison');
+    // Fewer than two carriers means the siblings are not checked out next to
+    // this repo; the pin above still runs, so a standalone CI lane is not
+    // silently toothless, it just cannot compare.
+    if (found.length < 2) return ctx.skip();
+
+    const [baseRepo, expected] = found[0];
+    for (const [repo, digest] of found) {
+        assert.strictEqual(digest, expected,
+            `${repo} (${digest.slice(0, 16)}) differs from ${baseRepo} (${expected.slice(0, 16)}); `
+            + moduleName + ' is a consensus primitive whose leaf order and preimage are position-defined, '
+            + 'so the copies must be edited in lockstep or commit and proof disagree');
+    }
+}
+
 describe('src/consensus/merkle.js is byte-identical across its four carriers', function () {
 
     it('this repo carries the module at all', function () {
-        assert.strictEqual(fs.existsSync(path.resolve(__dirname, '..', '..', 'src', 'consensus', 'merkle.js')), true);
+        assert.strictEqual(fs.existsSync(OWN_COPY), true);
+        assert.strictEqual(fs.existsSync(OWN_PRIMITIVES), true);
     });
 
     it('every carrier present on disk has the same bytes', function () {
-        const root = path.resolve(__dirname, '..', '..', '..');
-        const found = [];
-        // A carrier counts only when its checkout may be trusted. One that exists but is
-        // refused (a lane symlink into a live main checkout) is kept aside with its
-        // verdict, so the skip or the strict failure can name why it dropped out.
-        const refused = [];
-        // This repo's own copy is resolved directly from this checkout (OWN_COPY above),
-        // never through the sibling loop below: it is not a sibling, so it can never be
-        // refused as a lane symlink, and a missing file here fails loudly right away
-        // rather than silently dropping the canonical out of found[]. This also leaves
-        // the canonical-refused branch a few lines down permanently unreachable for
-        // xchain-indexer specifically, since that repo no longer appears in refused[];
-        // it is left in place rather than deleted, since a sibling carrier could in
-        // principle still be named 'xchain-indexer' by a future SIBLING_CARRIERS entry.
-        assert.ok(fs.existsSync(OWN_COPY),
-            'the canonical copy did not resolve at ' + OWN_COPY + '; repoint OWN_COPY at its current path');
-        found.push(['xchain-indexer/src/consensus/merkle.js', sha256File(OWN_COPY)]);
-        for (const [repo, spellings] of SIBLING_CARRIERS) {
-            const rel = carrierPath(root, repo, spellings);
-            const p = path.join(root, repo, 'src', rel);
-            const verdict = siblingCheckout(__dirname, p);
-            if (verdict.usable) found.push([repo + '/src/' + rel, sha256File(p)]);
-            else if (fs.existsSync(p)) refused.push([repo, verdict]);
-        }
-        // A canonical that is on disk but refused has not moved, so it takes the refusal
-        // path instead of the repoint message below.
-        const canonRefused = refused.find(([repo]) => repo === 'xchain-indexer');
-        if (canonRefused) return skipOrFail(this, canonRefused[1], 'the merkle.js canonical pin');
-        // This repo's own copy is never optional: it is the canonical the others are
-        // vendored from, so a path that stopped resolving here has to fail rather than
-        // leave the siblings comparing against each other.
-        assert.ok(found.some(([label]) => label.startsWith('xchain-indexer/')),
-            'the canonical copy did not resolve; repoint CARRIERS at its current path');
-        // Under XCHAIN_REQUIRE_SIBLINGS=1 a refused carrier fails naming its reason; in soft
-        // mode the usable carriers are still compared among themselves.
-        if (refused.length && siblingsRequired())
-            return skipOrFail(this, refused[0][1], 'the merkle.js carrier byte comparison');
-        // Fewer than two carriers means the siblings are not checked out next to
-        // this repo; the pin above still runs, so a standalone CI lane is not
-        // silently toothless, it just cannot compare.
-        if (found.length < 2) return this.skip();
+        return assertCarriersIdentical(this, OWN_COPY, 'consensus/merkle.js', SIBLING_CARRIERS, 'merkle.js');
+    });
 
-        const [baseRepo, expected] = found[0];
-        for (const [repo, digest] of found) {
-            assert.strictEqual(digest, expected,
-                `${repo} (${digest.slice(0, 16)}) differs from ${baseRepo} (${expected.slice(0, 16)}); `
-                + 'merkle.js is a consensus primitive whose leaf order and preimage are position-defined, '
-                + 'so the copies must be edited in lockstep or commit and proof disagree');
-        }
+    it('every merkle/primitives.js carrier present on disk has the same bytes', function () {
+        return assertCarriersIdentical(this, OWN_PRIMITIVES, 'consensus/merkle/primitives.js',
+            PRIMITIVES_SIBLING_CARRIERS, 'merkle/primitives.js');
     });
 });
