@@ -41,6 +41,8 @@ describe('armed_map/fingerprint: the running process', function () {
         assert.strictEqual(out.hex, expected.hex);
         assert.strictEqual(out.count, manifest.ENTRIES.length);
         assert.deepStrictEqual(out.rows, expected.rows);
+        assert.strictEqual(out.rows['list_owner_activation.LIST_OWNER_ACTIVATION'],
+            '95e34322344784c66ed84f586b7088d141fb9fb3167c5ce20771018edc8208c2');
     });
 
     it('is memoized per process', function () {

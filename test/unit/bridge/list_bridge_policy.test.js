@@ -85,6 +85,11 @@ function makeIndexer({ coin = 'BTC', network = 'mainnet', bridgeAddresses = {} }
     return indexer;
 }
 
+function armListOwnerOnlyOnLtcTestnet(){
+    const gate = stubActiveAt(sinon, LIST_OWNER_ROW, false);
+    gate.withArgs(LIST_OWNER_ROW).callsFake((key, network, coin) => network === 'testnet' && coin === 'LTC');
+}
+
 // LIST format 0: VERSION|TYPE|MEMO|ITEM...
 async function runCreate(indexer, items){
     const handler = new List(makeActionsCtx(indexer));
@@ -208,6 +213,15 @@ describe('LIST bridge policy rules @regression @consensus', function(){
             indexer.indexerDb.getListSource.resolves(OWNER);
             assert.strictEqual(await runEdit(indexer, { source: STRANGER }), 'valid');
         });
+
+        for(const [coin, expected] of [['BTC', 'valid'], ['LTC', 'invalid: LIST_ACTION_INDEX (not owner)'], ['DOGE', 'valid']]){
+            it(`uses the ${coin}:testnet height when only LTC:testnet is armed`, async function(){
+                armListOwnerOnlyOnLtcTestnet();
+                const indexer = makeIndexer({ coin, network: 'testnet' });
+                indexer.indexerDb.getListSource.resolves(OWNER);
+                assert.strictEqual(await runEdit(indexer, { source: STRANGER }), expected);
+            });
+        }
 
         it('exempts an injected edit even above the flag', async function(){
             stubActiveAt(sinon, LIST_OWNER_ROW, true);
