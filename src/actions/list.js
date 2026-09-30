@@ -41,6 +41,8 @@
 // which the SDK and the wallet read as the same map when they decide whether to offer
 // an edit form.
 const gateRegistry = require('../consensus/gate_registry');
+const { getOpenOrdersByList, getOpenSwapsByList } = require('../db/lists/rematch.js');
+const { planListRematch } = require('../consensus/list_rematch/plan.js');
 
 const { getLogger } = require('../observability/index.js');
 class List {
@@ -148,6 +150,21 @@ class List {
 
         await this.storeList(data, status, edit, list, invalid);
 
+        await this.rematchMarkets(data, format, status);
+
+    }
+
+    async rematchMarkets(data, format, status){
+        if(status!='valid' || data['TYPE']!=2 ||
+           !gateRegistry.activeAt('list_change_rematch_activation.LIST_CHANGE_REMATCH_ACTIVATION', this.config['NETWORK'], null, data['BLOCK_INDEX'], null))
+            return;
+
+        let listRoot = (format==0) ? data['ACTION_INDEX'] : data['LIST_ACTION_INDEX'];
+        let orderIndexes = await getOpenOrdersByList(this.indexerDb, listRoot);
+        let swapIndexes = await getOpenSwapsByList(this.indexerDb, listRoot);
+        let plan = planListRematch(data, orderIndexes, swapIndexes);
+        for(let step of plan)
+            await this.actions.processAction(step.action, null, step.data, null);
     }
 
     // FORMAT Validations
