@@ -51,7 +51,7 @@ describe('db/list_share_mirrors SQL contract', function () {
         const { db, calls } = bindMixin([rows]);
         assert.strictEqual(await db.getListSnapshotsAfter('regtest', 'DOGE', 41, 1), rows);
         assert.deepStrictEqual(calls, [{
-            sql: "SELECT *, seq AS position FROM list_snapshots WHERE status = 'finalized' AND network = ? AND home_chain = ? AND home_list_index = ? AND seq > ? ORDER BY seq ASC, position ASC",
+            sql: "SELECT * FROM list_snapshots WHERE status = 'finalized' AND network = ? AND home_chain = ? AND home_list_index = ? AND seq > ? ORDER BY seq ASC",
             args: ['regtest', 'DOGE', 41, 1]
         }]);
     });
@@ -130,7 +130,7 @@ describe('db/list_share_mirrors SQL contract', function () {
         for(const call of calls){
             assert.doesNotMatch(call.sql, /ORDER BY\s+(?:[^,]+,\s*)?id\b/i);
         }
-        assert.match(calls[1].sql, /ORDER BY seq ASC, position ASC$/);
+        assert.match(calls[1].sql, /ORDER BY seq ASC$/);
         assert.strictEqual(calls.filter(call => /ORDER BY/.test(call.sql)).length, 1);
     });
 

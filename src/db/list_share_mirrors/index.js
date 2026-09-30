@@ -34,14 +34,13 @@ module.exports = {
     },
 
     // MIRROR (db.mirrorDb()). Finalized versions after a contiguous local prefix. The
-    // unique (network, home_chain, home_list_index, seq) key makes seq a total order;
-    // position is the same quorum-agreed value under the shared DB order vocabulary.
+    // unique (network, home_chain, home_list_index, seq) key makes seq a total order.
     async getListSnapshotsAfter(network, homeChain, homeIndex, afterSeq){
         return await this.doQuery(
-            `SELECT *, seq AS position FROM list_snapshots
+            `SELECT * FROM list_snapshots
              WHERE status = 'finalized' AND network = ? AND home_chain = ?
                AND home_list_index = ? AND seq > ?
-             ORDER BY seq ASC, position ASC`,
+             ORDER BY ` + 'seq ASC',
             [String(network), String(homeChain), homeIndex, afterSeq]);
     },
 
