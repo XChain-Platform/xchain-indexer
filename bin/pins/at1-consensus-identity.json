@@ -6,11 +6,11 @@
   "v0190_recut_note": "Re-pinned again at the v0.19.0 ladder re-cut, 2026-09-16 16:33Z, on the release branch: TBTC reached the first sizing's train boundary (152716) before the cut, so the four testnet heights were re-sized from the new tips (train 152787, BTC bridge 152929, LTC 4887898, DOGE 67902062) and both blocks were re-read by the same two invocations (bare, and with the armed env below). Only the values those heights move changed: the armed-map fingerprint, the rules digest, and the train_activation.TRAIN_ACTIVATION and xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION rows.",
   "bare_checkout": {
     "network": "regtest",
-    "coin_registry_consensus_hash": "ae89ab099baa3acd02926daba4f3790377b6527dbb19bd4580bab558a61f16a2",
+    "coin_registry_consensus_hash": "ccce368181889952af80893f5303863144ff50ce6b82bcd8f6ee7bd8e8802a79",
     "coin_registry_consensus_hashes": {
-      "BTC": "63ee757834f6f815045321090fd89b446e784f442e3e7abf84b8c0fb3b479324",
-      "LTC": "ab30c1d1fd444ca3dca1a9ec855bd587422e87d5e5e5e6b6f9ddadd1d2fb587d",
-      "DOGE": "34f8dafeff36f7c8ca3b327c3c915251e78e64448742860620522a92a69368a0"
+      "BTC": "603b402538620934ad2b81fd3013b5c1651c32cf62cc56bea8dc53ddc247ec9a",
+      "LTC": "68a3751176e9a2b3857d5ea34cacfc1f0b2d88c17d46b8ccaf477c2a3baa7ffc",
+      "DOGE": "ab3c2ce46d3ac6eff3f12d6dca037b05dd27e456369124f48928598fcdb72173"
     },
     "armed_map_fingerprint": "0ac7612e00c38b7a2b678ddc92ead8b99e74269e909cc9c74184399b1f95ba60",
     "armed_map_fingerprint_version": 2,
@@ -66,11 +66,11 @@
       "XC_ROLLCALL_GATES_REGTEST_ACTIVATION": "armed"
     },
     "network": "regtest",
-    "coin_registry_consensus_hash": "ae89ab099baa3acd02926daba4f3790377b6527dbb19bd4580bab558a61f16a2",
+    "coin_registry_consensus_hash": "ccce368181889952af80893f5303863144ff50ce6b82bcd8f6ee7bd8e8802a79",
     "coin_registry_consensus_hashes": {
-      "BTC": "63ee757834f6f815045321090fd89b446e784f442e3e7abf84b8c0fb3b479324",
-      "LTC": "ab30c1d1fd444ca3dca1a9ec855bd587422e87d5e5e5e6b6f9ddadd1d2fb587d",
-      "DOGE": "34f8dafeff36f7c8ca3b327c3c915251e78e64448742860620522a92a69368a0"
+      "BTC": "603b402538620934ad2b81fd3013b5c1651c32cf62cc56bea8dc53ddc247ec9a",
+      "LTC": "68a3751176e9a2b3857d5ea34cacfc1f0b2d88c17d46b8ccaf477c2a3baa7ffc",
+      "DOGE": "ab3c2ce46d3ac6eff3f12d6dca037b05dd27e456369124f48928598fcdb72173"
     },
     "armed_map_fingerprint": "fb6d8bc25579f709ad8968bf422e8f47af51355abc1891824852bbcc9f4dadfd",
     "armed_map_fingerprint_version": 2,
