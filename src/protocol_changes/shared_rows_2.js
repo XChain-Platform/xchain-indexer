@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * The SHARED block, part 2 of 5: attest_responsible_widening_activation to rollcall_activation
+ * The SHARED block, part 2 of 5: attest_responsible_widening_activation to retraction_signing_activation
  *
  * One SHARED block part. The region between the two marker lines is
  * BYTE-TWINNED into the registry of xchain-sync, xchain-hub, xchain-explorer
@@ -216,9 +216,9 @@ addGate('mirror_admission_activation.MIRROR_ADMISSION_ACTIVATION', 'height', {
     'BTC:mainnet':  null,
     'LTC:mainnet':  null,
     'DOGE:mainnet': null,
-    'BTC:testnet':  154234,      // RE-SLID 2026-09-23: train 154,074 + 160 blocks (17 h at the 383.04 s/blk bound, 25.6 h at the 575.89 s/blk 84 h trailing mean), the v0.20.1 patch reslide
-    'LTC:testnet':  null,        // disabled for v0.20.1, 2026-09-18: LTC:testnet mirror admission ships null on this train; arms on a later train
-    'DOGE:testnet': 67936053,    // RE-SLID 2026-09-23: tip 67,924,397 at 17:48Z + 11656 blocks (83.8 h at 25.89 s/blk, the 84 h trailing mean, the same instant as the BTC producer), the v0.20.1 patch reslide
+    'BTC:testnet':  154567, // set by the v0.21.0 freeze height plan
+    'LTC:testnet':  4903068, // set by the v0.21.0 freeze height plan
+    'DOGE:testnet': 67951140, // set by the v0.21.0 freeze height plan
     'BTC:regtest':  UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
     'LTC:regtest':  UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
     'DOGE:regtest': UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
@@ -228,9 +228,9 @@ addGate('mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION', 'hei
     'BTC:mainnet':  null,
     'LTC:mainnet':  null,
     'DOGE:mainnet': null,
-    'BTC:testnet':  154291,      // RE-SLID 2026-09-23: its producer + 57 blocks (6 h at the 383.04 s/blk bound, 9.1 h at the 575.89 s/blk 84 h trailing mean), strictly above, never equal
-    'LTC:testnet':  null,        // disabled for v0.20.1, 2026-09-18: LTC:testnet mirror admission ships null on this train; arms on a later train
-    'DOGE:testnet': 67936888,    // RE-SLID 2026-09-23: its producer + 835 blocks (6 h at 25.89 s/blk, the 84 h trailing mean), strictly above, never equal
+    'BTC:testnet':  154614, // set by the v0.21.0 freeze height plan
+    'LTC:testnet':  4903291, // set by the v0.21.0 freeze height plan
+    'DOGE:testnet': 67952082, // set by the v0.21.0 freeze height plan
     'BTC:regtest':  UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
     'LTC:regtest':  UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
     'DOGE:regtest': UNPINNED,   // ARMS by XC_MIRROR_ADMISSION_ACTIVATION at registration
@@ -324,6 +324,18 @@ addGate('price_scale_activation.PRICE_VALUE_RE_LEGACY', 'constant', /^[0-9]+(\.[
 // {1,8}: PRICE_SCALE_MAX_DECIMALS wide; the two move together.
 addGate('price_scale_activation.PRICE_VALUE_RE_CANONICAL', 'constant', /^(0|[1-9][0-9]*)(\.[0-9]{1,8})?$/);
 
+addGate('price_scale_activation.PRICE_V1_CANONICAL_ACTIVATION', 'time', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+addGate('price_scale_activation.PRICE_V1_FEE_RE_CANONICAL', 'constant', /^(0|[1-9][0-9]*)(\.[0-9]{1,18})?$/);
+
+// Caps over the fixture read at 2026-09-25T21:52:09.659Z.
+addGate('price_scale_activation.PRICE_V1_VALUE_MAX_LENGTH', 'constant', 19);
+addGate('price_scale_activation.PRICE_V1_FEE_MAX_LENGTH', 'constant', 20);
+
 // price_sig_tally_activation
 // Per-network activation height (LOCAL COPY of the canonical map in
 // xchain-documentation/protocol/constants.js). Keyed on the round's BTC-anchored
@@ -362,39 +374,4 @@ addGate('retraction_signing_activation.RETRACTION_SIGNING_ACTIVATION', 'height',
     regtest: 0,
 });
 
-// rollcall_activation
-// Per-network BTC height at/above which ROLLCALL epochs exist at all.
-// MAINNET ARMS AT 0 by the 2026-09-09 ruling: eviction can only reinterpret a chain that
-// has validators to evict, and mainnet carries 0 validators, 0 stakes and 0 roll-calls
-// (measured 2026-09-09), so every epoch below the tip closes empty and the from-genesis
-// OLD-vs-ON replay per chain is the witness. null is still a legitimate value here (regtest
-// holds it until the venue opts in), so every read MUST go through the Number.isFinite
-// guard below: a bare `height >= ROLLCALL_ACTIVATION[network]` would arm a null network at
-// height 0, since `0 >= null` is true in JS.
-addGate('rollcall_activation.ROLLCALL_ACTIVATION', 'epoch', {
-    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 validators, 0 stakes, 0 roll-calls, measured 2026-09-09)
-    testnet: 151200,      // 1008 x 150 = 144 x 1050; tip was 150400 on 2026-08-30, ~5.5 days out
-    regtest: UNPINNED,   // ARMS AT 0 when the venue sets XC_ROLLCALL_REGTEST_ACTIVATION
-});
-
-// The documented regtest arming height: genesis. It is a multiple of the
-// 30-block regtest interval, so epoch 0 is a real epoch and the first close is
-// not skipped. This is the height a regtest venue arms AT, not a height it is
-// armed at by default -- see resolveRegtestActivation for why the default is
-// inert and how a venue opts in.
-addGate('rollcall_activation.ROLLCALL_REGTEST_ARMED_HEIGHT', 'constant', 0);
-
-// The one environment variable this module reads, and only ever for regtest.
-addGate('rollcall_activation.ROLLCALL_REGTEST_ENV', 'constant', 'XC_ROLLCALL_REGTEST_ACTIVATION');
-
-// Epoch cadence in BTC blocks. Weekly on the live networks per the 2026-08-30
-// ruling: with K=2 an outage shorter than one epoch minus the accept window
-// (~6 days) can never evict, and 2-3 weeks idle always does. Regtest uses 30 so
-// an acceptance run does not have to mine 2 x 1008 blocks.
-addGate('rollcall_activation.ROLLCALL_INTERVAL_BLOCKS', 'constant', { mainnet: 1008, testnet: 1008, regtest: 30 });
-
-// How long after the epoch block a signature may still land, in BTC blocks. The
-// BTC header stamp at E + this value is what cuts the DOGE chain (see
-// rollcallWindowEndHeight / the epoch close).
-addGate('rollcall_activation.ROLLCALL_ACCEPT_WINDOW_BLOCKS', 'constant', { mainnet: 144, testnet: 144, regtest: 12 });
 // SHARED-GATES END

@@ -82,7 +82,8 @@ module.exports = {
                 getLogger().info('Resuming block parsing at block ' + startBlock + '...');
         }
 
-        this.beginPollPass();
+        let nextBlock = this.util.isNull(lastIndexerBlock) ? null : Number(lastIndexerBlock) + 1;
+        this.beginPollPass(nextBlock);
         let caughtUp = await this.catchUpToDecoder(indexerReorgView, REORG_RECHECK_BLOCKS,
                                                    lastProcessedReorgId, lastIndexerBlock, lastDecoderBlock);
         lastIndexerBlock = caughtUp.lastIndexerBlock;

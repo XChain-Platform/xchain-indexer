@@ -69,9 +69,9 @@ const GATE_MODULE_PATHS = Object.freeze({
     snapshot_reorg_buffer: 'consensus/snapshot_reorg_buffer.js',
 });
 
-// The key stems whose predicate W4 (25) and W5 (13, the predicate-only twins)
-// replaced with activeAt(): no module exports these rows any more, the callers
-// spell the key at the call site.
+// The key stems whose predicates use activeAt() directly: the W4 and W5
+// predicate-only rows plus later gates added without a carrier module. No module
+// exports these rows; callers spell the key at the call site.
 const REPLACED_STEMS = Object.freeze([
     'anchor_activation',
     'archive_batch_author_activation',
@@ -113,11 +113,36 @@ const REPLACED_STEMS = Object.freeze([
     'xchain_bridge_activation',
 ]);
 
-const REPLACED = new Set(REPLACED_STEMS);
+// Key stems born in the registry after W5: no module ever exported them, the
+// callers read the row through activeAt() by its literal key from the start.
+// Kept apart from REPLACED_STEMS so that list stays the W4 and W5 census.
+const REGISTRY_ONLY_STEMS = Object.freeze([
+    'dispenser_settlement_price_activation',
+    'dispenser_freshness_proven_use_activation',
+    'empty_allow_list_denies_activation',
+    'list_edit_remove_activation',
+    'token_gate_list_at_block',
+    'order_swap_maker_policy_admission',
+    'list_reference_validity_activation',
+    'list_head_follows_edit_chain',
+    'callback_compensation_activation',
+    'vote_callback_binding_activation',
+    'order_swap_payout_policy_activation',
+    'issue_policy_list_detach',
+    'archive_match_count_activation',
+    'anchor_bundle_order_activation',
+    'anchor_fold_activation',
+    'archive_section_verdict_activation',
+    'bridge_policy_detach_activation',
+    'vm_lint_optional_chain_heights',
+]);
+
+const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));
 
 /**
  * The absolute path of the module that exports a registry key's rows, or
- * null when W4 or W5 replaced that module's predicate with activeAt().
+ * null when W4 or W5 replaced that module's predicate with activeAt(), or the
+ * row was born in the registry with no module (REGISTRY_ONLY_STEMS).
  * @param {string} stem  the registry key stem (`<stem>.<EXPORT>`)
  * @returns {?string}
  */
@@ -173,4 +198,4 @@ function stubGate(sinon, key, value) {
     return handle;
 }
 
-module.exports = { SRC, GATE_MODULE_PATHS, REPLACED_STEMS, modulePathFor, stubActiveAt, stubGate };
+module.exports = { SRC, GATE_MODULE_PATHS, REPLACED_STEMS, REGISTRY_ONLY_STEMS, modulePathFor, stubActiveAt, stubGate };

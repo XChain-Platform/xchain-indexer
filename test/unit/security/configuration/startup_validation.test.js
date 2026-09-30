@@ -161,11 +161,8 @@ describe('Security: VM runtime boot refusal @regression @tier4', function () {
         try {
             assert.ok(actions.vm, 'vm must be wired when xchain-vm loads');
         } finally {
-            // Unlike SEC-43/44/45 (whose Broken constructor throws before this.vm is
-            // set), this is the one real Actions construction in the file, so it
-            // forks a real persistent VM subprocess (execution: 'subprocess') that
-            // nothing else here ever shut down.
-            await actions.vm.shutdown();
+            // Stop every persistent VM worker owned by the healthy Actions instance.
+            await actions.shutdown();
         }
     });
 });

@@ -24,8 +24,8 @@
 'use strict';
 
 // The ATTEST response-mirror flag day, read from the LOCAL v0 request row: the same
-// registry row attest.js's isMirrorEraRequest seam reads by literal key (W5), so the
-// applier pass and the handler can never disagree about which era a request is in.
+// registry row actions/attest/response.js's isMirrorEraRequest seam reads by literal key
+// (W5), so the applier pass and the handler can never disagree about which era a request is in.
 // The zero-confirmation flag day is read the same way, also from the LOCAL v0 request
 // row. Change C of that height is this file's: above it the applier falls through an
 // inert candidate row to the next one instead of stranding the request until its
@@ -135,8 +135,8 @@ function pendingMirrorRequests(requestRows, block, network){
         if(String(req.request_status) !== 'pending')                    continue;
         if(!(block <= Number(req.deadline_block)))                      continue;
         // The flag day is keyed on the REQUEST's own block, read from the
-        // local row. attest.js's isMirrorEraRequest is the same module: the applier
-        // re-checks it as its own gate, and the chain-side gate calls it too.
+        // local row. actions/attest/response.js's isMirrorEraRequest reads the same row: the
+        // applier re-checks it as its own gate, and the chain-side gate calls it too.
         if(!gateRegistry.activeAt(RESPONSE_MIRROR_KEY, network, null, req.block_index, null)) continue;
         let reqId = String(req.request_id).toLowerCase();
         byId.set(reqId, req);

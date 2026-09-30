@@ -23,12 +23,12 @@
  *
  * Every shared gate VALUE is an activation-registry row now, so the state the
  * flag was written for (a carrier moved out from under the build reading as
- * ABSENT) cannot be reached by hiding a carrier: the tool still reads 34 and
- * exits 0, which is the point. A build that LACKS a row is a defect the digest
- * refuses to measure at all, flag or no flag: the registry throws naming the
- * key and the tool exits 2 with that one line. The refusal is driven through a
- * preload that makes the registry miss one key in the child, because no real
- * checkout may drop a row.
+ * ABSENT) cannot be reached by hiding a carrier: the tool still resolves every
+ * shared gate (the assertions below pin the count) and exits 0, which is the
+ * point. A build that LACKS a row is a defect the digest refuses to measure at
+ * all, flag or no flag: the registry throws naming the key and the tool exits
+ * 2 with that one line. The refusal is driven through a preload that makes the
+ * registry miss one key in the child, because no real checkout may drop a row.
  */
 
 'use strict';
@@ -77,7 +77,7 @@ describe('bin/consensus-identity.js --assert-no-absent', function () {
         assert.strictEqual(res.stderr, '');
         const identity = JSON.parse(res.stdout);
         assert.strictEqual(identity.consensus_rules_gates_absent, 0);
-        assert.strictEqual(identity.consensus_rules_gates_resolved, 34);
+        assert.strictEqual(identity.consensus_rules_gates_resolved, 38);
     });
 
     it('reads every gate with a carrier hidden: the value is the registry row, never the file', function () {
@@ -97,7 +97,7 @@ describe('bin/consensus-identity.js --assert-no-absent', function () {
         assert.strictEqual(res.status, 0, res.stdout + res.stderr);
         const identity = JSON.parse(res.stdout);
         assert.strictEqual(identity.consensus_rules_gates_absent, 0);
-        assert.strictEqual(identity.consensus_rules_gates_resolved, 34);
+        assert.strictEqual(identity.consensus_rules_gates_resolved, 38);
         assert.ok(identity.consensus_rules_gates[KEY], 'the hidden carrier\'s gate still resolves');
     });
 

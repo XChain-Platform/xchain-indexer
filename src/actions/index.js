@@ -60,19 +60,24 @@ const FEE_QUOTE_STATIC = new Set(['DEPLOY', 'EXECUTE']);
 // dispatches REAL sub-handlers, so "denied at top level" is not a wide enough net - an action the
 // top-level gate lets through for its own reasons still enters the VM when a batch runs it.
 //   ATTEST - v1 response injects a callback EXECUTE (attest.js injectCallbackExecute).
-//   VOTE   - a v2 finalize on a binding poll injects a callback EXECUTE (vote.js
-//            injectCallbackExecute), and VOTE is 'quotable', so the fee-quote classes do not
-//            cover it. That reach is NOT open today: vote.js refuses a v2 whose data is not
-//            IS_SYNTHETIC, which no probe sets, so this is defence in depth rather than a fix.
-//            It is deliberately kept anyway: that refusal exists to stop a user finalizing
-//            someone else's poll, which is a different question from "may an unauthenticated
-//            dry-run enter the VM", and relaxing it would silently open this door. The cost is
-//            named honestly: a batch of legitimate VOTE v0/v1 sub-commands loses its
-//            pre-flight, which is the safe direction of a real parity trade.
+//   VOTE   - a v0 binding create at or above VOTE_CALLBACK_BINDING_REQUIRES_USABLE_METHOD
+//            reaches contract code in the callback probe VM through readManifest
+//            (binding_callback.js isCallbackMethodUsable) wherever that gate is active. A v2
+//            finalize on a binding poll injects a callback EXECUTE (vote.js
+//            injectCallbackExecute), but that reach stays closed: vote.js refuses a v2 whose
+//            data is not IS_SYNTHETIC, which no probe sets. VOTE is 'quotable', so its public
+//            fee-quote dry-run dispatches the real handler, but that handler refuses the callback
+//            probe when GUARD_INERT is set and reports the create as guard-inert (unjudged), so
+//            the public path never enters the probe VM. It is deliberately kept in this set
+//            because the v0 create probe still reaches the VM in block processing and on the
+//            API-key dry-run, and because relaxing the v2 refusal would silently open another
+//            VM door. The cost is named honestly: a batch of legitimate VOTE v0/v1
+//            sub-commands loses its pre-flight, which is the safe direction of a real parity trade.
 //   XCALL  - injects a callback EXECUTE (xcall.js). Already 'exempt', listed so the set is a
 //            complete statement of VM reach rather than a residue of another gate's choices.
 // Kept as an explicit literal, and bound to the dispatch table by
-// test/unit/action_manifest_conformance.test.js so a new action cannot default into 'allowed'.
+// test/unit/action_dispatch/action_manifest_conformance.test.js so a new action cannot default
+// into 'allowed'.
 const PROBE_VM_REACHING_ACTIONS = new Set(['ATTEST', 'VOTE', 'XCALL']);
 
 // Settlement and lifecycle legs that stage NO protocol fee: the fee was already charged when
@@ -183,6 +188,7 @@ const installMethods     = require('./actions_class/install_methods.js');
 
 // The dry-run engine and both public read-only surfaces, bound below to the fee-quote policy above.
 const quoteSurfaceMethods = require('./actions_class/quote_surfaces.js');
+const voteCallbackProbeVm = require('./vote/callback_probe_vm.js');
 
 const PreflightMemo      = require('../chain/preflight_memo.js');
 
@@ -252,6 +258,7 @@ class Actions {
         assertVmRuntimeLoadable(XChainVM, vmLoadError);
 
         this.vm = new XChainVM(vmOptions(this.config));
+        this.voteCallbackProbeVm = null;
 
         // Consensus-runtime gate: fail CLOSED on an off-pin engine.
         assertConsensusRuntime(XChainVM);
@@ -279,6 +286,23 @@ class Actions {
     // policy stays defined once, beside the dispatch tables it reads.
     isBatchProbeForbiddenSubAction(action){
         return isBatchProbeForbiddenSubAction(action);
+    }
+
+    // Return the VOTE manifest probe shared by every callback admission check.
+    getVoteCallbackProbeVm(){
+        return voteCallbackProbeVm.getProbeVm(this);
+    }
+
+    // Retire a probe that threw so a later admission gets a clean worker.
+    async discardVoteCallbackProbeVm(expectedVm){
+        await voteCallbackProbeVm.discardProbeVm(this, expectedVm);
+    }
+
+    // Stop both persistent VM workers when the Actions host shuts down.
+    async shutdown(){
+        let probeShutdown = voteCallbackProbeVm.discardProbeVm(this);
+        let mainShutdown = this.vm && typeof this.vm.shutdown === 'function' ? this.vm.shutdown() : Promise.resolve();
+        await Promise.all([probeShutdown, mainShutdown]);
     }
 
 }

@@ -29,7 +29,7 @@
  * about that chain's reserved slots.
  *
  * Why a gate and not a plain version flip: the chains flip at different heights
- * (they always have - see state_commitment_activation.js), so one map per slot
+ * (they always have - see state_commitment_gate.js), so one map per slot
  * lets a slot arm on testnet while mainnet is still on version 1. The reported
  * state_root_version is DERIVED from these maps rather than configured beside
  * them, which removes the failure mode where the version column and the actually
@@ -45,7 +45,7 @@
  * (ESCROW_LOCKED_LEAF_ACTIVATION below) lives here because it gates the same
  * kind of consensus surface, but it moves balances_root, not the slot list.
  *
- * Gate semantics FOLLOW state_commitment_activation.js in shape (keyed on the
+ * Gate semantics FOLLOW state_commitment_gate.js in shape (keyed on the
  * processing chain's OWN local block_index; unknown -> inert/off) but
  * deliberately DROP its bare-network fallback: these heights are chain-local
  * block indexes and the chains differ by orders of magnitude, so one bare
@@ -55,10 +55,17 @@
  * shell. Arming is a code change that deploys fleet-wide first.
  *
  * BYTE-IDENTICAL ACROSS FOUR CARRIERS:
- *   xchain-indexer/src/state_subtree_activation.js   (SOURCE)
- *   xchain-sync/src/state_subtree_activation.js      (FOLLOWER)
- *   xchain-sdk/src/state_subtree_activation.js       (CLIENT)
- *   xchain-explorer/src/state_subtree_activation.js  (PROOF SERVER)
+ *   xchain-indexer/src/consensus/gates/state_subtree_gate.js   (SOURCE)
+ *   xchain-sync/src/consensus/gates/state_subtree_gate.js      (FOLLOWER)
+ *   xchain-sdk/src/consensus/gates/state_subtree_gate.js       (CLIENT)
+ *   xchain-explorer/src/consensus/gates/state_subtree_gate.js  (PROOF SERVER)
+ *
+ * That list is the gate LOGIC only. The HEIGHTS it loads through copy() are the
+ * state_subtree_activation.* rows of the registry part shared_rows_4.js, canonical
+ * at xchain-indexer/src/protocol_changes/shared_rows_4.js and a byte twin at
+ * src/consensus/gate_registry/shared_rows_4.js in sync, sdk, explorer and hub
+ * (plus the xchain-documentation reference-impl). Comparing the gate files
+ * compares logic, not heights; the heights must match across those carriers.
  *
  * The follower recomputes every root and HALTs on divergence, so a drifted copy
  * turns the divergence detector into a false-halt generator. The SDK copy is
@@ -74,8 +81,10 @@
  * "prove" absence below its armed height requires the map itself.
  *
  * Locked equal by the cross-repo loop in
- * xchain-sync/test/unit/rollback-coverage.test.js and, so a standalone SDK
- * checkout is covered too, by xchain-sdk/test/unit/stateSubtreeConstants.test.js.
+ * xchain-sync/test/unit/rollback_coverage.test.js and, for a standalone SDK
+ * checkout, by xchain-sdk/test/unit/consensus/state_subtree_constants.test.js.
+ * Those lock the gate files only; the shared_rows_4.js carriers are held equal
+ * by the platform's cross-repo twin check, which compares them byte for byte.
  * ALL FOUR must ship before any armed height is reached: an SDK release that
  * lags the fleet tells clients a live slot is inert, which is the same wrong
  * answer as no export at all.

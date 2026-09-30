@@ -18,9 +18,12 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const sinon  = require('sinon');
 const { createBaseData } = require('../../../../fixtures/mocks');
+const { stubGate } = require('../../../../helpers/gate_modules.js');
 const {
     BLOCK_TIME, makeOrderInfo, makeMatchInfo, useOrderMatchHarness,
 } = require('./helpers/order_match_harness.js');
+
+const EMPTY_ALLOW_LIST_KEY = 'empty_allow_list_denies_activation.EMPTY_ALLOW_LIST_DENIES';
 
 // Each test gets a fresh harness from useOrderMatchHarness; bind() hands it to
 // the names the test bodies use.
@@ -93,6 +96,46 @@ describe('Order_Match action handler @regression @tier2', function () {
 describe('Order_Match action handler @regression @tier2', function () {
     useOrderMatchHarness(bind);
 
+    it('keeps an attached empty ORDER allow list fail-open below activation', async function () {
+        stubGate(sinon, EMPTY_ALLOW_LIST_KEY, false);
+        indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({ ALLOW_LIST: '5' }));
+        indexer.indexerDb.findOrderMatches.resolves([makeMatchInfo()]);
+        indexer.indexerDb.getList.resolves([]);
+
+        const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
+        await orderMatch.parse([], data, false);
+
+        sinon.assert.calledOnce(indexer.indexerDb.createOrderMatch);
+    });
+
+    it('denies a match through an attached empty ORDER allow list after activation', async function () {
+        indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({ ALLOW_LIST: '5' }));
+        indexer.indexerDb.findOrderMatches.resolves([makeMatchInfo()]);
+        indexer.indexerDb.getList.resolves([]);
+
+        const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
+        await orderMatch.parse([], data, false);
+
+        sinon.assert.notCalled(indexer.indexerDb.createOrderMatch);
+    });
+
+    for(const field of ['ALLOW_LIST', 'BLOCK_LIST']){
+        it('treats an ORDER invalid-referenced ' + field + ' as absent', async function () {
+            indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo({ [field]: '5' }));
+            indexer.indexerDb.findOrderMatches.resolves([makeMatchInfo()]);
+            indexer.indexerDb.getList.withArgs('5', sinon.match.any).resolves(null);
+
+            const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
+            await orderMatch.parse([], data, false);
+
+            sinon.assert.calledOnce(indexer.indexerDb.createOrderMatch);
+        });
+    }
+});
+
+describe('Order_Match action handler @regression @tier2', function () {
+    useOrderMatchHarness(bind);
+
     it('skips match when matchInfo ALLOW_LIST does not include order GET_ADDRESS', async function () {
         indexer.indexerDb.getOrderInfo.resolves(makeOrderInfo());
         indexer.indexerDb.findOrderMatches.resolves([makeMatchInfo({ ALLOW_LIST: '7' })]);
@@ -123,6 +166,7 @@ describe('Order_Match action handler @regression @tier2', function () {
 
         // ALLOW_LIST for orderInfo includes both addresses → both sides permitted
         indexer.indexerDb.getList.resolves([orderAddr, matchAddr]);
+        indexer.config.NETWORK = 'mainnet';
 
         const data = createBaseData({ ACTION: 'ORDER_MATCH', BLOCK_TIME, ACTION_INDEX: 1 });
         await orderMatch.parse([], data, false);

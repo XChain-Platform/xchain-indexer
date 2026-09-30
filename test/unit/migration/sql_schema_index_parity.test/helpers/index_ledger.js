@@ -107,14 +107,50 @@ function collectDeclaredIndexes(){
     return declared;
 }
 
+// Split an ALTER TABLE body into its top-level clauses: commas inside parentheses (column
+// lists, GENERATED ALWAYS AS (...)) or inside a quoted string do not end a clause.
+function splitTopLevelClauses(body){
+    const clauses = [];
+    let depth = 0, quoted = false, start = 0;
+    for(let i = 0; i < body.length; i++){
+        const ch = body[i];
+        if(ch === "'") quoted = !quoted;
+        if(quoted) continue;
+        if(ch === '(') depth++;
+        if(ch === ')') depth--;
+        if(ch === ',' && depth === 0){ clauses.push(body.slice(start, i)); start = i + 1; }
+    }
+    clauses.push(body.slice(start));
+    return clauses.map(c => c.trim()).filter(c => c.length > 0);
+}
+
+// One ALTER clause that adds a secondary index: ADD [UNIQUE|FULLTEXT] {INDEX|KEY} name (cols),
+// where INDEX/KEY is optional after UNIQUE or FULLTEXT. PRIMARY, FOREIGN and CONSTRAINT never match.
+const ADD_INDEX_CLAUSE = /^ADD\s+(?:(UNIQUE|FULLTEXT)\s+(?:(?:INDEX|KEY)\s+)?|(?:INDEX|KEY)\s+)(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s*\(([^)]*(?:\([^)]*\)[^)]*)*)\)/i;
+
+// Every index an ALTER TABLE adds, read per top-level clause of each `;`-terminated statement,
+// so an ADD INDEX after an ADD COLUMN in the same ALTER is seen. Pure, so it is testable on made-up SQL.
+function parseAlterTableIndexes(sql, file){
+    const added = [];
+    for(const stmt of stripSqlComments(sql).split(';')){
+        const t = stmt.match(/ALTER\s+TABLE\s+`?(\w+)`?/i);
+        if(!t) continue;
+        for(const clause of splitTopLevelClauses(stmt.slice(t.index + t[0].length))){
+            const m = clause.match(ADD_INDEX_CLAUSE);
+            if(!m) continue;
+            added.push(Object.assign({ file, table: t[1], index: m[2].toLowerCase(), columns: normalizeIndexColumns(m[3]) }, indexKind(m[1])));
+        }
+    }
+    return added;
+}
+
 // Every index a dated migration adds: {file, table, index, unique, fulltext, columns}.
 function collectMigrationIndexes(){
     const added = [];
     for(const file of fs.readdirSync(MIG_DIR).filter(f => f.endsWith('.sql'))){
         const raw = fs.readFileSync(path.join(MIG_DIR, file), 'utf8');
 
-        for(const m of raw.matchAll(/ALTER\s+TABLE\s+`?(\w+)`?\s+ADD\s+(UNIQUE\s+|FULLTEXT\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s*\(([^)]*(?:\([^)]*\)[^)]*)*)\)/gi))
-            added.push(Object.assign({ file, table: m[1], index: m[3].toLowerCase(), columns: normalizeIndexColumns(m[4]) }, indexKind(m[2])));
+        added.push(...parseAlterTableIndexes(raw, file));
 
         for(const m of raw.matchAll(/CREATE\s+(UNIQUE\s+|FULLTEXT\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?\s+on\s+`?(\w+)`?\s*\(([^)]*(?:\([^)]*\)[^)]*)*)\)/gi))
             added.push(Object.assign({ file, table: m[3], index: m[2].toLowerCase(), columns: normalizeIndexColumns(m[4]) }, indexKind(m[1])));
@@ -130,4 +166,5 @@ function collectMigrationIndexes(){
 module.exports = {
     SQL_DIR, MIG_DIR, INDEX_BASELINE, PRIMARY_INDEX,
     collectLedgerCreatedTables, collectDeclaredIndexes, collectMigrationIndexes,
+    parseAlterTableIndexes,
 };

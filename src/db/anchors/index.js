@@ -22,7 +22,8 @@
 // Load required libraries
 const mariadb = require('mariadb');
 const path    = require('path');
-const { buildStateHashData, ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../../consensus/state_hash');
+const { buildStateHashData, ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL,
+        archiveHeadPredicate } = require('../../consensus/state_hash');
 const { CHECKPOINT_VERSIONS: ANCHOR_CHECKPOINT_VERSIONS,
         ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
         ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow,
@@ -33,6 +34,7 @@ const arKey = require('../../actions/anchor/anchor_reward_key.js');
 // The column coercion that lets even a rejected ANCHOR wire store its row lives beside
 // this mixin in anchors/, so createAnchorAction reads as the upsert it is.
 const { anchorActionRow } = require('./anchor_action_row.js');
+const { archiveHeadPickPredicate, foldArchiveHeadFloor } = require('./archive_head_pick.js');
 
 module.exports = {
 
@@ -177,10 +179,11 @@ module.exports = {
 
     // Look up the on-chain ANCHOR checkpoint record for one checkpoint identity
     // (chain, network, block_index, checkpoint_seq), joined to its status. Only
-    // checkpoint-bearing versions (0/1, per the ANCHOR_CHECKPOINT_VERSIONS constant
-    // below; a v0 row is one bundle SECTION and carries its own checkpoint identity,
-    // v1 is the archive head and carries its wrapper checkpoint's, and v2 is an
-    // archive continuation chunk with no checkpoint identity at all). A bundle
+    // checkpoint-bearing versions (0/1/3, per CHECKPOINT_VERSIONS in db/anchor_sql.js,
+    // imported above as ANCHOR_CHECKPOINT_VERSIONS; a v0 row is one bundle SECTION and
+    // carries its own checkpoint identity, v1 is the archive head and carries its
+    // wrapper checkpoint's, a v3 folded action's chain rows are its sections, and v2 is
+    // an archive continuation chunk with no checkpoint identity at all). A bundle
     // therefore answers this read per section, with no bundle-level RPC of its own.
     // Returns the highest action_index
     // match (a reorg-replayed re-anchor supersedes an earlier one) or null. Read path
@@ -188,8 +191,8 @@ module.exports = {
     // landed on-chain, with the matching payload, at DOGE depth, before trusting an
     // anchor-gossip stamp/reward (the block_index_doge column carries the DOGE height).
     async getAnchorActionByCheckpoint(chain, network, block_index, checkpoint_seq){
-        // Version set is the single source of truth in anchor_action_query.js (shared
-        // with the RPC + tests) so the SQL filter can never drift from it.
+        // Version set is the single source of truth in db/anchor_sql.js (re-exported
+        // through anchor_action_query.js to the RPC + tests) so the SQL filter can never drift from it.
         let versions = ANCHOR_CHECKPOINT_VERSIONS;
         let query = `SELECT a.action_index, a.version, a.chain, a.network, a.block_index,
                             a.block_hash, a.ledger_hash, a.actions_hash, a.contract_hash,
@@ -206,7 +209,7 @@ module.exports = {
         return rows.length > 0 ? rows[0] : null;
     },
 
-    // The two watermarks the v1 archive replay guard needs, read from ONE row
+    // The two watermarks the archive replay guard needs, read from ONE row
     // set so they cannot disagree: the highest archive batch seq recorded, and the
     // highest wrapper checkpoint seq among those same archive-head rows.
     //
@@ -215,10 +218,11 @@ module.exports = {
     // independently-read watermarks could describe row sets that never coexisted
     // (one stubbed, one live; one filtered on a drifted version list) and the guard
     // would then reject a legitimate archive or admit a replay. Reading both in one
-    // statement makes the impossible combination unrepresentable, and the version
-    // predicate comes from ARCHIVE_HEAD_VERSIONS rather than a hand-copied literal
-    // for the same reason getMaxAnchorCheckpointSeq stopped hand-copying its set
-    // (a copied literal once omitted a live archive-head version and froze that guard).
+    // statement makes the impossible combination unrepresentable. The row predicate
+    // is shared with the state-hash fold so every folded archive head contributes,
+    // ORed with the exported ARCHIVE_HEAD_VERSIONS set (never a hand-copied literal)
+    // so this watermark's version coverage cannot drift from the checkpoint-bearing
+    // definition, the same discipline getMaxAnchorCheckpointSeq already states.
     //
     // 'unverified' is included for the same reason it is in getMaxAnchorCheckpointSeq:
     // a node with no mirrored oracle_publish snapshot cannot verify signatures and
@@ -232,9 +236,9 @@ module.exports = {
                             MAX(a.checkpoint_seq)  AS max_checkpoint_seq
                      FROM anchor_actions a
                      JOIN index_statuses s ON s.id = a.status_id
-                     WHERE a.version IN (${versions.map(() => '?').join(', ')})
+                     WHERE (${archiveHeadPredicate('a')} OR a.version IN (${versions.map(() => '?').join(', ')}))
                        AND s.status IN ('valid', 'unverified')`;
-        let rows = await this.doQuery(query, [...versions]);
+        let rows = await this.doQuery(query, versions);
         let row  = rows.length > 0 ? rows[0] : {};
         return {
             batchSeq:      (row.max_batch_seq      != null) ? Number(row.max_batch_seq)      : null,
@@ -242,11 +246,11 @@ module.exports = {
         };
     },
 
-    // The archive-head anchor (v1, which always carries the publisher tail) that started an
+    // The archive-head anchor that started an
     // archive batch (status irrelevant - chunk geometry checks belong to the caller).
     // match_batch_seq is NOT unique: the replay guard in anchor.js parseCheckpoint accepts
     // an EQUAL MATCH_BATCH_SEQ ('never below the recorded max; equal is allowed'), so a
-    // permissionless re-broadcast or failover double-publish stores a SECOND v1 row for
+    // permissionless re-broadcast or failover double-publish stores a SECOND head row for
     // the same batch. The returned parent feeds a consensus-visible geometry/CRC verdict in
     // anchor.js parseContinuation (TOTAL_CHUNKS gate + batch_crc32 reassembly, which stamps
     // setAnchorArchiveStatus(parent.action_index,'invalid_archive')), so the pick MUST be a
@@ -266,28 +270,24 @@ module.exports = {
     // that address, i.e. the batch key becomes (match_batch_seq, head author). The
     // caller (anchor.js, gated on the flag day) passes it so a junk head broadcast at
     // another publisher's batch seq can no longer be the parent that governs that
-    // publisher's chunks. Omitted / null keeps the legacy canonical-head pick exactly,
-    // including the query text, so nothing moves below the flag day. The narrowing
+    // publisher's chunks. Omitted / null keeps the legacy canonical-head candidate set
+    // below the fold activation. The narrowing
     // rides on the SAME LEFT-joined address the row already exposes as `source`: a head
     // whose author cannot be resolved compares unequal and is skipped, which is
     // fail-closed (the chunk lands 'orphan' rather than authenticated against nothing).
     async getAnchorV1ByBatchSeq(batchSeq, author){
         let scoped = (author !== undefined && author !== null);
-        // Version set from ARCHIVE_HEAD_VERSIONS, never a hand-copied literal, for the
-        // reason getArchiveReplayWatermarks states above: this is the same earliest-head
-        // pick as ARCHIVE_HEAD_AUTHOR_SQL in anchor_action_query.js, and it feeds the
-        // consensus-visible geometry/CRC verdict in anchor.js parseContinuation. A
-        // hand-copied set drifts the moment a new publisher-bearing head version is
-        // added, and the two head picks would then disagree fleet-wide.
         let rows = await this.doQuery(
             `SELECT a.*, adr.address AS source
              FROM anchor_actions a
              LEFT JOIN actions         act ON act.action_index = a.action_index
              LEFT JOIN index_addresses adr ON adr.id           = act.source_id
-             WHERE a.version ${ARCHIVE_HEAD_VERSIONS_SQL} AND a.match_batch_seq = ?` +
+             WHERE ${archiveHeadPickPredicate('a')} AND a.match_batch_seq = ?` +
             (scoped ? ` AND adr.address = ?` : ``) +
             ` ORDER BY a.action_index ASC LIMIT 1`,
-            scoped ? [batchSeq, String(author)] : [batchSeq]);
+            scoped
+                ? [foldArchiveHeadFloor(this.config['NETWORK']), batchSeq, String(author)]
+                : [foldArchiveHeadFloor(this.config['NETWORK']), batchSeq]);
         return rows.length > 0 ? rows[0] : null;
     },
 
@@ -303,6 +303,14 @@ module.exports = {
     async setAnchorArchiveStatus(actionIndex, status){
         let status_id = await this.createStatus(status);
         await this.doQuery("UPDATE anchor_actions SET status_id = ? WHERE action_index = ?", [status_id, actionIndex]);
+    },
+
+    async setAnchorArchiveRowStatus(actionIndex, status){
+        let status_id = await this.createStatus(status);
+        await this.doQuery(
+            "UPDATE anchor_actions a SET a.status_id = ? WHERE a.action_index = ? AND " +
+            archiveHeadPredicate('a'),
+            [status_id, actionIndex]);
     },
 
 

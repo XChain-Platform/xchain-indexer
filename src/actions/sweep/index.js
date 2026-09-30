@@ -124,7 +124,7 @@ class Sweep {
         let balances    = await this.indexerDb.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let preferences = await this.indexerDb.getAddressPreferences(data['SOURCE'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
         let ownerships  = await this.indexerDb.getAddressOwnerships(data['SOURCE']);
-        let escrowed    = await this.indexerDb.getAddressEscrows(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let escrowed    = await this.indexerDb.getAddressEscrows(data['SOURCE']);
 
         // Create the fees object
         let fees = await this.util.createFeesObject(this.indexerDb, data, preferences);
@@ -158,7 +158,7 @@ class Sweep {
 
 // Install the phase methods from sweep/ NON-ENUMERABLE, the shape the class body they came
 // from produced: parse() reaches them as this.<method>, suites can stub them through
-// Sweep.prototype, and for-in over a handler stays empty. Same install as collect.js and
+// Sweep.prototype, and for-in over a handler stays empty. Same install as collect/index.js and
 // db/index.js use for their parts.
 for(const part of [validatePart, feesPart, controllerGuardPart, settlePart]){
     const descriptors = Object.getOwnPropertyDescriptors(part);

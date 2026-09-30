@@ -44,9 +44,9 @@
  * directory scan. Each repo carries activation maps the other does not (the
  * indexer alone has ~20 that no hub evaluates), so a scan would make the two
  * sides disagree by construction and the digest would be useless for exactly
- * the comparison it exists to serve. A gate this repo does not carry
- * contributes the ABSENT sentinel rather than being skipped, so a build that
- * LOSES a gate is a mismatch rather than an invisible shortening of the list.
+ * the comparison it exists to serve. A gate this repo does not carry makes
+ * loadGateValue throw, never contribute an ABSENT sentinel, so a build that
+ * LOSES a gate is a refusal rather than an invisible shortening of the list.
  *
  * BYTE-TWIN of xchain-hub/src/consensus_rules_digest.js. The two copies
  * must agree or every cross-process comparison reports a false mismatch and
@@ -122,7 +122,9 @@ const SHARED_GATES = [
     // The token leg of the bridge: the hub gates every token leg on it and the indexer gates
     // XBRIDGE v3/v4 and ISSUE format 7 on it, so a train that sizes it on one side only must
     // report a rules mismatch. Appended at the END for the preimage-ordering reason above.
-    ['token_bridge_activation',                 ['TOKEN_BRIDGE_ACTIVATION']]
+    ['token_bridge_activation',                 ['TOKEN_BRIDGE_ACTIVATION']],
+    ['anchor_bundle_order_activation',          ['ANCHOR_BUNDLE_ORDER_ACTIVATION']],
+    ['price_scale_activation',                  ['PRICE_V1_CANONICAL_ACTIVATION', 'PRICE_V1_VALUE_MAX_LENGTH', 'PRICE_V1_FEE_MAX_LENGTH']]
 ];
 
 // A per-network height at or above this value is a far-future placeholder, not an

@@ -18,7 +18,7 @@
  *
  ********************************************************************/
 
-// Installed onto Order_Expire.prototype by order_expire.js; each method runs with `this`
+// Installed onto Order_Expire.prototype by index.js; each method runs with `this`
 // bound to the handler, exactly as the class method it was.
 module.exports = {
 

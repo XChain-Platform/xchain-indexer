@@ -111,8 +111,8 @@ module.exports = {
         return supply;
     },
 
-    // Get escrowed tokens for a given address
-    async getAddressEscrows(address, block_index, action_index){
+    // Get escrowed tokens for a given address: every item whose latest status is still 'open', not scoped to a block or action
+    async getAddressEscrows(address){
         let id      = await this.createAddress(address);
         let escrows = [];
         let args    = [id];

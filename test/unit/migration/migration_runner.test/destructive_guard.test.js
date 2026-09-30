@@ -334,3 +334,54 @@ describe('Database._destructiveAutoStatement() @regression @tier1', function () 
         assert.strictEqual(destructiveOf(['ALTER TABLE t ADD COLUMN partition_id INT NULL']), null);
     });
 });
+
+describe('Database._destructiveAutoStatement() prefix forms @regression @tier1', function () {
+    it('runs the ALTER clause checks on ALTER ONLINE TABLE', function () {
+        assert.ok(destructiveOf(['ALTER ONLINE TABLE balances DROP COLUMN quantity']));
+        assert.ok(destructiveOf(['ALTER ONLINE TABLE t RENAME COLUMN a TO b']));
+        assert.ok(destructiveOf(['ALTER ONLINE TABLE t CHANGE a b INT']));
+        assert.ok(destructiveOf(['ALTER ONLINE TABLE t MODIFY c VARCHAR(10) NOT NULL']));
+        assert.ok(destructiveOf(['alter\n  online\tTABLE balances drop column quantity']));
+    });
+
+    it('flags every ALTER IGNORE TABLE (IGNORE deletes duplicate-key rows)', function () {
+        assert.ok(destructiveOf(['ALTER IGNORE TABLE t ADD UNIQUE INDEX u (c)']));
+        assert.ok(destructiveOf(['ALTER ONLINE IGNORE TABLE t ADD UNIQUE INDEX u (c)']));
+        assert.ok(destructiveOf(['ALTER IGNORE ONLINE TABLE t ADD COLUMN c INT NULL']));
+        assert.ok(destructiveOf(['ALTER IGNORE TABLE transactions DROP COLUMN raw']));
+    });
+
+    it('still allows additive ALTER ONLINE TABLE and a table merely named ignore', function () {
+        assert.strictEqual(destructiveOf(['ALTER ONLINE TABLE t ADD INDEX i (c)']), null);
+        assert.strictEqual(destructiveOf(['ALTER ONLINE TABLE t ADD COLUMN x INT NULL']), null);
+        assert.strictEqual(destructiveOf(['ALTER ONLINE TABLE t DROP INDEX idx_c']), null);
+        assert.strictEqual(destructiveOf(['ALTER TABLE ignore_list ADD COLUMN x INT NULL']), null);
+    });
+
+    it('flags CREATE TRIGGER / EVENT / routine / view and any non-table ALTER', function () {
+        assert.ok(destructiveOf(['CREATE TRIGGER zero_bal BEFORE INSERT ON balances FOR EACH ROW SET NEW.quantity = 0']));
+        assert.ok(destructiveOf(['CREATE TRIGGER purge AFTER INSERT ON blocks FOR EACH ROW DELETE FROM balances']));
+        assert.ok(destructiveOf(["CREATE OR REPLACE DEFINER='a b'@'%' TRIGGER t BEFORE UPDATE ON balances FOR EACH ROW SET NEW.quantity = 0"]));
+        assert.ok(destructiveOf(['CREATE DEFINER=CURRENT_USER EVENT e ON SCHEDULE AT CURRENT_TIMESTAMP DO TRUNCATE balances']));
+        assert.ok(destructiveOf(['CREATE PROCEDURE p() DELETE FROM balances']));
+        assert.ok(destructiveOf(['CREATE AGGREGATE FUNCTION g(x INT) RETURNS INT BEGIN RETURN x']));
+        assert.ok(destructiveOf(['CREATE VIEW v AS SELECT 1']));
+        assert.ok(destructiveOf(['ALTER EVENT e DO TRUNCATE balances']));
+    });
+
+    it('still allows the committed CREATE TABLE / CREATE INDEX forms', function () {
+        assert.strictEqual(destructiveOf(['CREATE TABLE t (id BIGINT, event VARCHAR(32), trigger_name VARCHAR(32))']), null);
+        assert.strictEqual(destructiveOf(['CREATE TEMPORARY TABLE t (id INT)']), null);
+        assert.strictEqual(destructiveOf(['CREATE INDEX IF NOT EXISTS i ON t (a)']), null);
+        assert.strictEqual(destructiveOf(['CREATE UNIQUE INDEX u ON t (a)']), null);
+    });
+
+    it('catches ALTER ONLINE and CREATE TRIGGER end to end from raw file text', function () {
+        for (const body of ['ALTER ONLINE TABLE balances DROP COLUMN quantity;',
+            'CREATE TRIGGER purge AFTER INSERT ON blocks FOR EACH ROW DELETE FROM balances;']) {
+            const raw = '-- xchain:migration mode=auto\n' + body + '\n';
+            assert.strictEqual(modeOf(raw), 'auto');
+            assert.ok(destructiveOf(statementsOf(raw)), body);
+        }
+    });
+});

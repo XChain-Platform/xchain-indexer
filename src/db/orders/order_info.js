@@ -183,9 +183,11 @@ module.exports = {
             let edit = await this.getOrderEdits(action_index);
             if(edit.expiration)
                 order['EXPIRATION'] = edit.expiration;
-            if(edit.allow_list)
+            // A list edit to 0 (the LIST_EDIT_REMOVE sentinel) removes the list: 0 is the value
+            // a never-listed row already reads as. No valid edit below that flag day holds 0.
+            if(edit.allow_list !== false)
                 order['ALLOW_LIST'] = edit.allow_list;
-            if(edit.block_list)
+            if(edit.block_list !== false)
                 order['BLOCK_LIST'] = edit.block_list;
             // Ownership orders carry no amount on the ownership side. Expose virtual '1'
             // so price math + match comparison work uniformly. Settlement code branches on

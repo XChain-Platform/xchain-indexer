@@ -57,10 +57,8 @@ function setupActions() {
 
 async function cleanupActions() {
     sinon.restore();
-    // beforeEach's `new Actions(indexer)` forks a persistent VM subprocess
-    // (execution: 'subprocess'); nothing else in this suite ever called
-    // vm.shutdown(), so each test's fork outlived the process.
-    await actions.vm.shutdown();
+    // Stop every persistent VM worker owned by this Actions fixture.
+    await actions.shutdown();
 }
 
 function useActionsFixture() {

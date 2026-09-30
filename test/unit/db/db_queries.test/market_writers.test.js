@@ -286,7 +286,7 @@ describe('Database.createDispenserStatus() @regression @tier1', function () {
         const dq = sinon.stub(db, 'doQuery');
         dq.onCall(0).resolves([{ action_index: 50 }]);
         dq.onCall(1).resolves([]);
-        await db.createDispenserStatus(50, 25, 'complete', null);
+        await db.createDispenserStatus(50, 25, 'cancelled', null);
         assert.ok(String(dq.args[1][0]).includes('UPDATE'));
     });
 });

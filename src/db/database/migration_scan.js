@@ -29,6 +29,7 @@
 // Module-level state and pure helpers that the split keeps in one place, so the class
 // and every mixin read the same instance of each.
 const { opensBackslashEscape } = require('../shared.js');
+const { retypeLedgerAppliedAt } = require('./ledger_retype.js');
 // The class itself, for the statics these methods read. db/index.js publishes it before it
 // requires any part, so this resolves to the finished class rather than a half-built export.
 const Database = require('../index.js');
@@ -112,6 +113,16 @@ function keywordDestroys(self, stmt){
     return false;
 }
 
+// destructiveAutoStatement, the CREATE allow-list: true for any CREATE other than a table or
+// an index. A trigger, event, routine or view carries SQL this classifier never reads, and the
+// server runs it later (a trigger on every row write), the same blind spot as CALL above.
+function createOutsideAllowList(stmt){
+    if(!/^CREATE\b/i.test(stmt))                                      return false;
+    // Allow the additive forms committed auto migrations use: [TEMPORARY] TABLE and INDEX.
+    if(/^CREATE\s+(?:TEMPORARY\s+)?TABLE\b/i.test(stmt))              return false;
+    return !/^CREATE\s+(?:(?:UNIQUE|FULLTEXT|SPATIAL)\s+)?INDEX\b/i.test(stmt);
+}
+
 // destructiveAutoStatement, the ALTER TABLE clause checks: true when any clause can lose or
 // rename data.
 function alterTableDestroys(stmt){
@@ -176,7 +187,9 @@ module.exports = {
         // body-buried protection (the scan stops at the first non-comment, non-blank
         // line, so no data literal or trailing prose can be seen) while accommodating
         // any length of leading comment banner. Kept byte-for-byte in step with the
-        // sibling runner at xchain-decoder/src/db.js:migrationMode.
+        // sibling runner at xchain-decoder/src/db/migration_statements.js:migrationMode, and
+        // the xchain-node deploy guard mirrors the same scan, tag regex and default at
+        // src/services/migration_precondition_service/migration_scan.js:migrationMode.
         const lines    = String(raw).split('\n');
         const prologue = [];
         for(const line of lines){
@@ -201,14 +214,18 @@ module.exports = {
     // ALTER TABLE ... RENAME (except RENAME INDEX/KEY), ALTER TABLE ... CHANGE
     // (rename+retype), MODIFY ... NOT NULL (the statically detectable
     // narrowing; a width reduction cannot be seen without the live schema and
-    // stays covered by the manual-tag convention), and any ALTER TABLE PARTITION or
-    // TABLESPACE clause.
+    // stays covered by the manual-tag convention), any ALTER TABLE PARTITION or
+    // TABLESPACE clause, ALTER IGNORE TABLE (deletes duplicate-key rows), any other
+    // ALTER than ALTER [ONLINE] TABLE, and any CREATE other than [TEMPORARY] TABLE and
+    // [UNIQUE|FULLTEXT|SPATIAL] INDEX (triggers, events, routines and views run SQL
+    // the scanner cannot read).
     //
     // Deliberately NOT flagged (legitimate existing auto patterns): DROP INDEX/KEY,
     // DROP FOREIGN KEY/CONSTRAINT/CHECK/DEFAULT/PRIMARY KEY (structural, no row
     // data lost), ADD ..., plain CREATE TABLE / CREATE TABLE IF NOT EXISTS (additive;
-    // but CREATE OR REPLACE TABLE IS flagged - it is an atomic DROP+CREATE), and
-    // MODIFY that widens/nullables a column.
+    // but CREATE OR REPLACE TABLE IS flagged - it is an atomic DROP+CREATE), CREATE
+    // [UNIQUE] INDEX, MODIFY that widens/nullables a column, and ALTER ONLINE TABLE
+    // under the same clause rules as plain ALTER TABLE.
     destructiveAutoStatement(statements){
         for(const raw of (statements || [])){
             // Executable (versioned) comments are the one /* */ form the server RUNS:
@@ -231,7 +248,14 @@ module.exports = {
             // comment introducer the classifier can still see is non-auto-eligible.
             if(hasUnquotedHash(stmt))                            return raw;
             if(keywordDestroys(this, stmt))                      return raw;
-            if(/^ALTER\s+TABLE\b/i.test(stmt) && alterTableDestroys(stmt)) return raw;
+            if(createOutsideAllowList(stmt))                     return raw;
+            // MariaDB spells it ALTER [ONLINE] [IGNORE] TABLE. ONLINE only picks the lock mode, so
+            // it gets the plain clause checks; IGNORE silently deletes duplicate-key rows, so never.
+            const alterHead = /^ALTER\s+((?:(?:ONLINE|IGNORE)\s+)*)TABLE\b/i.exec(stmt);
+            if(alterHead && /\bIGNORE\b/i.test(alterHead[1]))   return raw;
+            if(alterHead && alterTableDestroys(stmt))            return raw;
+            // Any other ALTER (EVENT, VIEW, DATABASE, ...) is outside the allow-list, like CREATE.
+            if(!alterHead && /^ALTER\b/i.test(stmt))             return raw;
         }
         return null;
     },
@@ -280,9 +304,10 @@ module.exports = {
             "name VARCHAR(255) NOT NULL PRIMARY KEY, " +
             "checksum VARCHAR(64) NOT NULL, " +
             "mode VARCHAR(10) NOT NULL DEFAULT 'manual', " +
-            'applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP' +
+            'applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP' +
             ') ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci'
         );
+        await retypeLedgerAppliedAt(conn);
     },
 
     // Evaluate a migration's declared precondition against the live schema. Returns a

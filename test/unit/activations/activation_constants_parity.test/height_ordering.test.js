@@ -76,9 +76,9 @@ describe('activation-gate constant parity to canonical constants.js @regression'
     // chain where v0 is not. Read straight off the canon, not off the local copies, so a
     // canon that itself violated the rule is caught.
     //
-    // PER CHAIN KEY, not per network (row 28). XCHAIN_BRIDGE_ACTIVATION is keyed
-    // '<COIN>:<network>' with a bare network fallback while TOKEN_BRIDGE_ACTIVATION is still
-    // network-keyed, so comparing the bare keys alone would leave every coin-keyed bridge
+    // PER CHAIN KEY, not per network (row 28). XCHAIN_BRIDGE_ACTIVATION and
+    // TOKEN_BRIDGE_ACTIVATION are both keyed '<COIN>:<network>' with a bare network
+    // fallback, so comparing the bare keys alone would leave every coin-keyed bridge
     // height unchecked the moment the arming train writes one. The union of both maps' keys
     // is walked and each side is resolved through the SAME fallback the predicates use, so a
     // 'DOGE:testnet' bridge height is compared against the height a DOGE testnet chain

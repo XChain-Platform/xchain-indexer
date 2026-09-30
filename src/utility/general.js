@@ -99,7 +99,7 @@ module.exports = {
     // Throw an error and log to console
     throwError(error){
         getLogger().error('throwError:', error);
-        throw error;
+        throw (error instanceof Error) ? error : new Error(String(error));
     },
 
     // Log an error to the error.log file

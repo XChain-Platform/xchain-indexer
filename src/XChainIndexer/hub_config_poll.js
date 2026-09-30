@@ -44,7 +44,7 @@ function effectiveHubConfigPollIntervalMs(){
 }
 // An overlay older than this is reported `stale`. Three poll intervals tolerates a couple of
 // missed/slow polls before flagging: a purely operational outage-observability margin.
-// This is independent of the WS_WATERMARK_GRACE constants (600s price/oracle, 120s match),
+// This is independent of the WS_WATERMARK_GRACE constants (4800s price, 120s oracle/match),
 // which gate consensus-critical block-processing barriers; the two serve different concerns
 // and their values need not (and do not) match.
 function hubConfigStalenessLimitMs(){

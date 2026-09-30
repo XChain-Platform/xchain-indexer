@@ -85,7 +85,7 @@ describe('mirror-admission replay witness', function () {
 describe('mirror-admission replay witness: owned artifact cleanup', function () {
     it('removes owned schemas and workdir by default, but --keep preserves and prints both', async function () {
         const removedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-witness-unit-remove-'));
-        const removed = witness.createRunArtifacts();
+        const removed = witness.createRunArtifacts(false);
         removed.db = { test: true };
         removed.workdir = removedDir;
         removed.ownsWorkdir = true;
@@ -98,10 +98,11 @@ describe('mirror-admission replay witness: owned artifact cleanup', function () 
         if (removedDirExists) fs.rmdirSync(removedDir);
         assert.deepStrictEqual(dropped, [{ db: { test: true }, names: ['ma_witness_unit_off', 'ma_witness_unit_on'] }]);
         assert.strictEqual(removedDirExists, false, 'default cleanup left its owned workdir behind');
+        assert.strictEqual(removed.ownsWorkdir, false);
+        assert.strictEqual(removed.workdir, null);
 
         const keptDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-witness-unit-keep-'));
-        const kept = witness.createRunArtifacts();
-        kept.keep = true;
+        const kept = witness.createRunArtifacts(true);
         kept.workdir = keptDir;
         kept.ownsWorkdir = true;
         kept.schemaNames.push('ma_witness_unit_boundary');
@@ -116,7 +117,7 @@ describe('mirror-admission replay witness: owned artifact cleanup', function () 
         fs.rmdirSync(keptDir);
     });
 
-    it('applies cleanup on a refused CLI exit in both default and --keep modes', function () {
+    it('applies workdir cleanup on a refusal before schemas are created', function () {
         const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-witness-unit-cli-'));
         const removedDir = path.join(parent, 'removed');
         const keptDir = path.join(parent, 'kept');
@@ -135,6 +136,75 @@ describe('mirror-admission replay witness: owned artifact cleanup', function () 
         } finally {
             if (fs.existsSync(removedDir)) fs.rmdirSync(removedDir);
             if (fs.existsSync(keptDir)) fs.rmdirSync(keptDir);
+            if (fs.existsSync(parent)) fs.rmdirSync(parent);
+        }
+    });
+
+    it('makes --keep control schema and workdir cleanup through the CLI', function () {
+        this.timeout(20000);
+        const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-witness-unit-cli-db-'));
+        const preload = path.join(parent, 'fake-mariadb.js');
+        const events = path.join(parent, 'events.jsonl');
+        const removedDir = path.join(parent, 'removed');
+        const keptDir = path.join(parent, 'kept');
+        fs.writeFileSync(preload, [
+            "'use strict';",
+            "const fs = require('fs');",
+            "const Module = require('module');",
+            "const originalLoad = Module._load;",
+            "let creates = 0;",
+            "const record = (sql) => fs.appendFileSync(process.env.MA_WITNESS_SQL_EVENTS, JSON.stringify(sql) + '\\n');",
+            "Module._load = function (request) {",
+            "    if (request !== 'mariadb') return originalLoad.apply(this, arguments);",
+            "    return { createConnection: async () => ({",
+            "        query: async (sql) => {",
+            "            record(sql);",
+            "            if (/^SELECT SCHEMA_NAME/.test(sql)) return [];",
+            "            if (/^CREATE DATABASE/.test(sql) && ++creates === 2) throw new Error('forced schema creation failure');",
+            "            return [];",
+            "        },",
+            "        end: async () => undefined,",
+            "    }) };",
+            "};",
+        ].join('\n'));
+
+        const baseArgs = (workdir, prefix) => [TOOL,
+            '--coin', 'BTC', '--network', 'regtest', '--decoder-db', 'decoder', '--mirror-db', 'mirror',
+            '--activation-height', '2', '--schema-prefix', prefix, '--db-host', '127.0.0.1', '--db-port', '3306',
+            '--db-user', 'unit', '--db-pass-env', 'MA_WITNESS_UNIT_PASS', '--workdir', workdir,
+        ];
+        const run = (workdir, prefix, keep) => {
+            fs.writeFileSync(events, '');
+            const args = baseArgs(workdir, prefix).concat(keep ? ['--keep'] : []);
+            const env = Object.assign({}, process.env, {
+                NODE_OPTIONS: [process.env.NODE_OPTIONS, '--require=' + preload].filter(Boolean).join(' '),
+                MA_WITNESS_SQL_EVENTS: events,
+                MA_WITNESS_UNIT_PASS: 'unused',
+            });
+            const result = spawnSync(process.execPath, args, { env, encoding: 'utf8' });
+            const sql = fs.readFileSync(events, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
+            return { result, sql };
+        };
+
+        try {
+            const removed = run(removedDir, 'ma_cli_remove', false);
+            assert.strictEqual(removed.result.status, witness.EXIT.REFUSED, removed.result.stdout + removed.result.stderr);
+            assert.ok(removed.sql.includes('CREATE DATABASE `ma_cli_remove_off`'), JSON.stringify(removed.sql));
+            assert.ok(removed.sql.includes('DROP DATABASE IF EXISTS `ma_cli_remove_off`'), JSON.stringify(removed.sql));
+            assert.strictEqual(fs.existsSync(removedDir), false, 'default CLI run left its workdir behind');
+
+            const kept = run(keptDir, 'ma_cli_keep', true);
+            assert.strictEqual(kept.result.status, witness.EXIT.REFUSED, kept.result.stdout + kept.result.stderr);
+            assert.ok(kept.sql.includes('CREATE DATABASE `ma_cli_keep_off`'), JSON.stringify(kept.sql));
+            assert.ok(!kept.sql.some((sql) => /^DROP DATABASE/.test(sql)), JSON.stringify(kept.sql));
+            assert.strictEqual(fs.existsSync(keptDir), true, '--keep CLI run removed its workdir');
+            assert.ok(kept.result.stdout.includes('kept schemas: ma_cli_keep_off'), kept.result.stdout);
+            assert.ok(kept.result.stdout.includes('kept workdir: ' + keptDir), kept.result.stdout);
+        } finally {
+            if (fs.existsSync(removedDir)) fs.rmSync(removedDir, { recursive: true, force: true });
+            if (fs.existsSync(keptDir)) fs.rmSync(keptDir, { recursive: true, force: true });
+            if (fs.existsSync(events)) fs.unlinkSync(events);
+            if (fs.existsSync(preload)) fs.unlinkSync(preload);
             if (fs.existsSync(parent)) fs.rmdirSync(parent);
         }
     });

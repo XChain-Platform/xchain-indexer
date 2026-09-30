@@ -22,7 +22,7 @@
 // spelling below is the marker bin/check-flagday-deploy.sh greps this file for.
 const gateRegistry = require('../../consensus/gate_registry');
 
-// Installed onto Dispenser_Close.prototype by dispenser_close.js; each method runs with
+// Installed onto Dispenser_Close.prototype by index.js; each method runs with
 // `this` bound to the handler, exactly as the class method it was.
 module.exports = {
 

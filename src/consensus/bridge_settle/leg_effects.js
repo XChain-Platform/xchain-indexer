@@ -30,6 +30,16 @@ const Genesis = require('../../chain/genesis.js');
 const { SETTLE_REASON, BRIDGE_TX_PREFIX, isNull } = require('./reasons.js');
 const { resolveTransferOrigin } = require('../bridge_checkpoint_check/origin.js');
 
+async function injectBridgedToken(ctx, params){
+    const genesis = new Genesis(ctx.actions, ctx.indexerDb, ctx.config, ctx.util);
+    const injectCtx = {
+        blockIndex: ctx.blockIndex,
+        blockTime: ctx.blockTime,
+        txHashPrefix: BRIDGE_TX_PREFIX
+    };
+    return await genesis.injectBridgedToken(params, injectCtx);
+}
+
 /**
  * IN leg: this chain MINTS. The token row is created lazily by the first in-leg, which
  * is what keeps genesis byte-identical on every chain.
@@ -39,13 +49,17 @@ const { resolveTransferOrigin } = require('../bridge_checkpoint_check/origin.js'
 async function buildInLegEffects(deps, row, ctx, f, amount, gasTick, addresses){
     const { warnOnce } = deps.refusalLog;
     const db = ctx.indexerDb;
-    const genesis = new Genesis(ctx.actions, db, ctx.config, ctx.util);
-    const injectCtx = { blockIndex: ctx.blockIndex, blockTime: ctx.blockTime, txHashPrefix: BRIDGE_TX_PREFIX };
     const origin = resolveTransferOrigin(row);
     if(!origin || origin.kind !== 'lock')
         return { reason: SETTLE_REASON.ROW_FIELDS };
     let localTick = origin.nativeTick;
     if(origin.nativeTick.toUpperCase() === gasTick.toUpperCase()){
+        const genesis = new Genesis(ctx.actions, db, ctx.config, ctx.util);
+        const injectCtx = {
+            blockIndex: ctx.blockIndex,
+            blockTime: ctx.blockTime,
+            txHashPrefix: BRIDGE_TX_PREFIX
+        };
         // The byte-identical injectGasToken parameter set, taken from the ONE place that
         // owns it. Retyping the values here is the drift the helper exists to prevent
         // because a drifted parameter is a different token row, which is a different
@@ -56,8 +70,8 @@ async function buildInLegEffects(deps, row, ctx, f, amount, gasTick, addresses){
         const owner = addresses['BRIDGE_' + origin.originChain];
         if(isNull(owner))
             return { reason: SETTLE_REASON.ESCROW_MISSING };
-        const made = await genesis.injectBridgedToken(
-            { origin: origin.originChain, name: origin.nativeTick, decimals: f.decimals, owner: owner }, injectCtx);
+        const made = await injectBridgedToken(ctx,
+            { origin: origin.originChain, name: origin.nativeTick, decimals: f.decimals, owner: owner });
         if(!made.ok){
             warnOnce('XBRIDGE', f.id, SETTLE_REASON.TOKEN_ROW,
                       SETTLE_REASON.TOKEN_ROW + ': ' + made.reason + ' : skipping');
@@ -110,4 +124,4 @@ async function buildOutLegEffects(deps, row, ctx, f, amount, addresses){
     };
 }
 
-module.exports = { buildInLegEffects, buildOutLegEffects };
+module.exports = { injectBridgedToken, buildInLegEffects, buildOutLegEffects };

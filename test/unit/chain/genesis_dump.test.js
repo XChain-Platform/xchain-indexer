@@ -110,6 +110,26 @@ describe('GenesisDump.read @regression', function () {
         assert.match(db.inserts[0].sql, /INSERT INTO `tokens`/);
     });
 
+    it('does not insert schema_migrations rows carried by an older dump', async function () {
+        const oldDump = [
+            { meta: { ...META, tableOrder: ['schema_migrations', 'tokens'] } },
+            { t: 'schema_migrations', cols: ['name', 'checksum', 'mode', 'applied_at'] },
+            { r: ['2026-09-12-bridge-tables.sql', 'abc123', 'manual', '2026-09-24T10:00:00.000Z'] },
+            { t: 'tokens', cols: ['id', 'tick_id'] },
+            { r: [1, 5] },
+        ];
+        const { file, contentHash } = buildDump(oldDump);
+        const db = mockDb(HASHES);
+        const gd = new GenesisDump(db, util, { GENESIS_BLOCK: 100, GENESIS_DUMP_HASH: contentHash });
+
+        const result = await gd.read(file);
+
+        assert.equal(result.rowsImported, 1);
+        assert.equal(db.inserts.length, 1);
+        assert.match(db.inserts[0].sql, /INSERT INTO `tokens`/);
+        assert.doesNotMatch(db.inserts[0].sql, /schema_migrations/);
+    });
+
     it('rejects an injected table identifier (unpinned)', async function () {
         const bad = [ { meta: META }, { t: 'tokens`; DROP TABLE tokens; --', cols: ['id'] }, { r: [1] } ];
         const { file } = buildDump(bad);
@@ -133,6 +153,32 @@ describe('GenesisDump.read @regression', function () {
         const { file } = buildDump(bad);
         const gd = new GenesisDump(mockDb(HASHES), util, { GENESIS_BLOCK: 100, GENESIS_DUMP_HASH: null });
         await assert.rejects(() => gd.read(file), /missing columns/);
+    });
+});
+
+describe('GenesisDump.write @regression', function () {
+    afterEach(function () {
+        for (const f of fs.readdirSync(os.tmpdir()))
+            if (f.startsWith(`xchain-gd-unit-${process.pid}-`))
+                try { fs.unlinkSync(path.join(os.tmpdir(), f)); } catch (_) {}
+    });
+
+    it('leaves a non-empty schema_migrations table out of tableOrder', async function () {
+        const file = path.join(os.tmpdir(), `xchain-gd-unit-${process.pid}-${counter++}.ndjson.gz`);
+        const db = mockDb(HASHES);
+        db.listTableNames = async () => ['schema_migrations', 'tokens'];
+        db.countRowsInTable = async table => table === 'schema_migrations' ? 2 : 1;
+        db.listTableColumnNames = async () => ['id'];
+        db.readAllRowsByFirstColumn = async () => [{ id: 1 }];
+        const gd = new GenesisDump(db, util, { COIN: 'BTC', GENESIS_BLOCK: 100 });
+
+        await gd.write(file);
+        const content = zlib.gunzipSync(fs.readFileSync(file)).toString('utf8');
+        const meta = JSON.parse(content.split('\n')[0]).meta;
+
+        assert.deepStrictEqual(meta.tableOrder, ['tokens']);
+        assert.deepStrictEqual(meta.rowCounts, { tokens: 1 });
+        assert.doesNotMatch(content, /schema_migrations/);
     });
 });
 

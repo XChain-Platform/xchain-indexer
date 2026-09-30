@@ -231,6 +231,11 @@ class Price {
         // Create record in prices table
         await this.indexerDb.createPrice(data);
 
+        // Store the SOURCE in addresses list, invalid publishes included as on
+        // LIST/LINK/BROADCAST: a v1 SOURCE is a user oracle, and a rejected quote
+        // is the row its operator most needs to find in per-address history.
+        this.util.addAddressTicker(data['SOURCE']);
+
         // Push to hub for cross-chain aggregation (Phase 4 implements full lock window logic)
         // via the same durable transactional outbox as v0. A v1 oracle_price is a user-submitted
         // action keyed by (source_address, source_chain, action_index) and is never re-emitted by
@@ -250,9 +255,9 @@ class Price {
             this.indexerDb.stageHubPush({ id: pushId, pushType: 'oracle_price', payload });
         }
 
-            // Create action mappings
-            await this.mapper.createMappings(data);
-        }
+        // Create action mappings
+        await this.mapper.createMappings(data);
     }
+}
 
-    module.exports = Price;
+module.exports = Price;

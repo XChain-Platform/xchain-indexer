@@ -161,6 +161,37 @@ describe('Price (PRICE) @regression @tier3', function () {
     });
 });
 
+// ───────────────────────────────────────────────────────────────────────
+// Address mapping - mirrors the BROADCAST/LIST "stages SOURCE" pattern: a
+// PRICE v1 is a user oracle publish, valid or not, and must be findable in
+// the per-address history the same way BROADCAST/LIST are.
+// ───────────────────────────────────────────────────────────────────────
+describe('Price (PRICE) @regression @tier3', function () {
+    beforeEach(setupPrice);
+    afterEach(restorePrice);
+    describe('v1 - SOURCE address mapping', function () {
+        it('stages SOURCE for the address mapping on a valid oracle price', async function () {
+            const data = v1Data();
+            await handler.parse(v1Params(), data, null);
+            assert.strictEqual(data['VALIDATION_STATUS'], 'valid');
+            assert.ok(Object.keys(indexer.util.getAddressesList()).includes(data['SOURCE']));
+        });
+
+        it('stages SOURCE for an invalid oracle price too, so the rejection is findable', async function () {
+            const data = v1Data();
+            await handler.parse(v1Params({ fiat: 'ZZZ' }), data, null);
+            assert.strictEqual(data['VALIDATION_STATUS'], 'invalid');
+            assert.ok(Object.keys(indexer.util.getAddressesList()).includes(data['SOURCE']));
+        });
+
+        it('does NOT stage SOURCE for a v0 batch round (validator, no user SOURCE mapping)', async function () {
+            const data = createBaseData({ ACTION: 'PRICE', FORMAT: 0 });
+            await handler.parse(['0'], data, null);
+            assert.ok(!Object.keys(indexer.util.getAddressesList()).includes(data['SOURCE']));
+        });
+    });
+});
+
 describe('Price (PRICE) @regression @tier3', function () {
     beforeEach(setupPrice);
     afterEach(restorePrice);

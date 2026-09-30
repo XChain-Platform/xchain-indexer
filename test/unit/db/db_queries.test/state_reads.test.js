@@ -219,6 +219,7 @@ describe('Database.getListType() @regression @tier1', function () {
         const type = await db.getListType(10);
         assert.strictEqual(type, false);
     });
+
 });
 
 // ---------------------------------------------------------------------------
@@ -256,7 +257,8 @@ describe('Database.isValidList() @regression @tier1', function () {
     it('returns true when types match', async function () {
         const db = makeDb();
         sinon.stub(db, 'getListType').resolves(1);
-        assert.strictEqual(await db.isValidList(10, 1), true);
+        assert.strictEqual(await db.isValidList(10, 1, 73), true);
+        sinon.assert.calledOnceWithExactly(db.getListType, 10, 73);
     });
 
     it('returns false when types differ', async function () {

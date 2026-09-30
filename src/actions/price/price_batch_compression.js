@@ -81,12 +81,12 @@ const zlib = require('zlib');
 // Wire marker occupying the FIRST_ROUND slot on the compressed form.
 const PRICE_BATCH_COMPRESSION_MARKER = 'Z';
 
-// PRICE wire ceiling. LOCAL COPY: must equal MAX_DATA_BYTES in
-// xchain-encoder/src/common/validator.js, the same value and the same name already
-// carried by OraclePublisher.js, AttestationPublisher.js and AttestationRelay.js.
-// The vendored twin cannot require across repo boundaries, so the value is
-// pinned by test instead: the parity tests read the declaration out of
-// xchain-hub/src/OraclePublisher.js and fail if the two ever diverge.
+// PRICE wire ceiling. LOCAL COPY: must equal MAX_DATA_BYTES in xchain-encoder/src/common/validator.js
+// and PRICE_WIRE_MAX_BYTES in xchain-hub/src/oracle/publisher.js (ATTEST_WIRE_MAX_BYTES in
+// the hub's src/attestation/{publisher,relay}/constants.js).
+// The vendored twin cannot require across repo boundaries, so the parity tests read the hub
+// publisher's declaration and fail if the two diverge. No test reads the encoder's computed
+// MAX_DATA_BYTES, so that side of the pin is held by review only.
 // An inflated body above this could not have ridden the wire uncompressed, so
 // admitting one would let the compressed form carry batches the uncompressed
 // form cannot express, and the two forms would no longer agree on validity.

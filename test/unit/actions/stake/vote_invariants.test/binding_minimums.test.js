@@ -51,7 +51,8 @@ function stubCreate() {
     indexer.indexerDb.getTokenInfo.resolves({ TICK: 'TEST', TICK_ID: 1, DECIMALS: 0, SUPPLY: '1000' });
     indexer.indexerDb.createTicker.resolves(1);
     indexer.indexerDb.getAddressBalances.resolves({ 1: '100' });
-    indexer.indexerDb.getContract = sinon.stub().resolves({ contract_index: 5 });
+    indexer.indexerDb.getContract = sinon.stub().resolves({ action_index: 5, code: 'module.exports={onResult:function(){}}', status_id: 1 });
+    indexer.indexerDb.getStatusString = sinon.stub().resolves('valid');
     indexer.indexerDb.createPoll  = sinon.stub().resolves();
 }
 

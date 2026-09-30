@@ -20,6 +20,11 @@
  *
  ********************************************************************/
 
+const gateRegistry = require('../../consensus/gate_registry');
+
+const MAKER_POLICY_ADMISSION_KEY = 'order_swap_maker_policy_admission.ORDER_SWAP_MAKER_POLICY_ADMISSION';
+const PAYOUT_POLICY_KEY = 'order_swap_payout_policy_activation.ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN';
+
 // Coins and ticks: both COIN networks supported, GIVE on this network, cross-chain
 // enabled, no coin-for-coin, and each tick known wherever it can be checked here.
 function validateTickAndCoin(handler, st){
@@ -161,10 +166,11 @@ async function validateOwnership(handler, st){
 }
 
 // General checks: SOURCE and TICK awake, MEMO free of delimiters and short enough, SOURCE
-// authorized for the tick, the cancelled or edited order known, owned and open, and an
-// EXPIRATION still in the future.
+// authorized for the tick, a local maker's GET_ADDRESS authorized for its received
+// token, the cancelled or edited order known, owned and open, and an EXPIRATION
+// still in the future.
 async function validateGeneral(handler, st){
-    let { format, data, isNativeCoinGive, orderInfo } = st;
+    let { format, data, isNativeCoinGive, isNativeCoinGet, isCrossChain, orderInfo } = st;
     let error = st.error;
 
     // Verify SOURCE is not sleeping
@@ -188,8 +194,19 @@ async function validateGeneral(handler, st){
         error = 'invalid: MEMO (length)';
 
     // Verify TICK action is allowed from SOURCE (allow/block lists); skip for native coin
-    if(!error && format==0 && !isNativeCoinGive && await handler.indexerDb.isActionAllowed(data['SOURCE'], data['GIVE_TICK']) == false)
+    if(!error && format==0 && !isNativeCoinGive && await handler.indexerDb.isActionAllowed(data['SOURCE'], data['GIVE_TICK'], data['BLOCK_INDEX']) == false)
         error = 'invalid: SOURCE (not authorized)';
+
+    // Below ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN check each legacy policy; at or above
+    // it check only the policy for the token the maker receives.
+    let checkMakerPolicy = !error && format==0 && !isCrossChain &&
+        gateRegistry.activeAt(MAKER_POLICY_ADMISSION_KEY, handler.config['NETWORK'], handler.config['COIN'], data['BLOCK_INDEX'], null);
+    let perTokenPayoutPolicy = checkMakerPolicy &&
+        gateRegistry.activeAt(PAYOUT_POLICY_KEY, handler.config['NETWORK'], handler.config['COIN'], data['BLOCK_INDEX'], null);
+    if(checkMakerPolicy && !perTokenPayoutPolicy && !isNativeCoinGive && await handler.indexerDb.isActionAllowed(data['GET_ADDRESS'], data['GIVE_TICK'], data['BLOCK_INDEX']) == false)
+        error = 'invalid: GET_ADDRESS (not authorized for GIVE_TICK)';
+    if(!error && checkMakerPolicy && !isNativeCoinGet && await handler.indexerDb.isActionAllowed(data['GET_ADDRESS'], data['GET_TICK'], data['BLOCK_INDEX']) == false)
+        error = 'invalid: GET_ADDRESS (not authorized for GET_TICK)';
 
     // Validate ORDER_ACTION_INDEX is valid SWAP
     if(!error && (format==1 || format==2) && !orderInfo)
@@ -213,16 +230,23 @@ async function validateGeneral(handler, st){
 // The ALLOW_LIST / BLOCK_LIST fields: a numeric list id must name a known LIST of a type
 // this action supports.
 async function validateLists(handler, st){
-    let { data } = st;
+    let { format, data } = st;
     let error = st.error;
+
+    // At/after the list_edit_remove_activation row an edit (Version 2) may carry `0` to
+    // remove the list; below it `0` falls through to the lookup and is an unknown list.
+    let removeActive = (format==2) && gateRegistry.activeAt('list_edit_remove_activation.LIST_EDIT_REMOVE_ACTIVATION', handler.config['NETWORK'], null, null, data['BLOCK_TIME']);
 
     // Validate LIST fields (ALLOW_LIST / BLOCK_LIST)
     if(!error){
         for(let name of handler.config['LIST_FIELDS']){
+            // A `0` that removes the list names no LIST, so there is nothing to look up
+            if(removeActive && String(data[name])==='0')
+                continue;
             // Only look up and validate this list field when it holds a numeric list id
             if(!error && !handler.util.isNull(data[name]) && handler.util.isNumeric(data[name])){
                 // Get LIST type and information
-                let type = await handler.indexerDb.getListType(data[name]);
+                let type = await handler.indexerDb.getListType(data[name], data['BLOCK_INDEX']);
 
                 // Verify LIST exist
                 if(!error && type===false)

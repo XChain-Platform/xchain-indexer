@@ -23,6 +23,8 @@ const sinon = require('sinon');
 
 const { createMockIndexer } = require('../../../../../fixtures/mocks');
 const Vote = require('../../../../../../src/actions/vote/index.js');
+const callbackProbeVm = require('../../../../../../src/actions/vote/callback_probe_vm.js');
+const { MAX_CODE_SIZE } = require('../../../../../../src/protocol/constants.js');
 
 // A fresh mock indexer, action context and VOTE handler, rebuilt before every
 // case, with the savepoint and poll-write stubs every block relies on.
@@ -32,6 +34,26 @@ function freshVote() {
     const donate1 = indexer.config['ADDRESS']['DONATE1'];
 
     const executeStub = { parse: sinon.stub().resolves() };
+    const probeInstances = [];
+    const probeReadManifest = sinon.stub().resolves({ success: true, manifest: { hasInitialize: true }, error: null });
+    class ProbeVm {
+        constructor(config) {
+            this.config = config;
+            this.readManifest = probeReadManifest;
+            this.shutdown = sinon.stub().resolves();
+            probeInstances.push(this);
+        }
+    }
+    const vm = {
+        readManifest: sinon.stub(),
+        limits: { maxCodeSize: MAX_CODE_SIZE, maxMemory: 8 },
+        execution: 'subprocess',
+        gasSchedule: {},
+        gasCeiling: 1000000,
+        constructor: ProbeVm,
+        probeInstances,
+        probeReadManifest,
+    };
     const actionsCtx = {
         config:        indexer.config,
         util:          indexer.util,
@@ -39,6 +61,14 @@ function freshVote() {
         decoderDb:     indexer.decoderDb,
         indexerDb:     indexer.indexerDb,
         actionExecute: executeStub,
+        vm:            vm,
+        voteCallbackProbeVm: null,
+        getVoteCallbackProbeVm: sinon.stub().callsFake(function(){
+            return callbackProbeVm.getProbeVm(this);
+        }),
+        discardVoteCallbackProbeVm: sinon.stub().callsFake(async function(expectedVm){
+            await callbackProbeVm.discardProbeVm(this, expectedVm);
+        }),
         protocolChanges: {
             isDefined: sinon.stub().returns(true),
             isEnabled: sinon.stub().resolves(true),
@@ -53,7 +83,7 @@ function freshVote() {
     indexer.indexerDb.getAddressById       = sinon.stub().resolves('creatorAddr');
     indexer.indexerDb.setPollDepositResolved = sinon.stub().resolves();
 
-    return { indexer, actionsCtx, handler, executeStub, gas, donate1 };
+    return { indexer, actionsCtx, handler, executeStub, vm, gas, donate1 };
 }
 
 // The poll row the handler reads: a deposit of 100 held beside a gas_escrow of 20.

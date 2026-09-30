@@ -345,7 +345,7 @@ describe('BCR: Rollback Boundary', function () {
     });
 }
 
-describe('Mutation : Tier 2: State Management @tier2', function () {
+describe('Guard dependency: Tier 2: State Management @tier2', function () {
     beforeEach(function () {
         util = new Utility();
     });

@@ -19,7 +19,7 @@
  *
  ********************************************************************/
 
-// Installed onto Sweep.prototype by sweep.js; each method runs with `this` bound to
+// Installed onto Sweep.prototype by index.js; each method runs with `this` bound to
 // the handler, exactly as the parse() code it came from. `state` is the object
 // loadSweepState() built: the guard gas accrues in state.guardFee and each reserve
 // replaces state.balances.

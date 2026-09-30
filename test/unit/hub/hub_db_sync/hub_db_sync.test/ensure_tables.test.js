@@ -220,3 +220,109 @@ describe('HubDbSync.ensureTables index reconciliation @regression @tier3', funct
         await ensureTables({ doQuery }, dir);                      // resolves
     });
 });
+
+describe('HubDbSync.ensureTables column reconciliation @regression @tier3', function () {
+    const { parseDeclaredColumns } = require('../../../../../src/hub/hub_db_sync/ensure_tables.js');
+    const PRICE_TWIN = 'CREATE TABLE price_snapshots (\n'
+        + '  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,\n'
+        + '  coin_pair VARCHAR(20) NOT NULL,\n'
+        + '  push_generation BIGINT NOT NULL DEFAULT 0,\n'
+        + '  batch_block_time BIGINT NOT NULL DEFAULT 0,\n'
+        + '  round_number BIGINT NOT NULL,\n'
+        + '  KEY idx_pair_batchtime_round (coin_pair, batch_block_time, round_number)\n'
+        + ') ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;';
+
+    it('parses declared columns with their verbatim definition and NOT NULL/DEFAULT shape', function () {
+        const got = parseDeclaredColumns(PRICE_TWIN).map((c) => [c.name, c.notNull, c.hasDefault]);
+        assert.deepStrictEqual(got, [
+            ['id', true, false],
+            ['coin_pair', true, false],
+            ['push_generation', true, true],
+            ['batch_block_time', true, true],
+            ['round_number', true, false]
+        ]);
+    });
+
+    async function run(liveColumnNames) {
+        const dir = makeSqlDir({ 'price_snapshots.sql': PRICE_TWIN });
+        const alters = [];
+        const doQuery = async (sql, args) => {
+            if (/^SHOW TABLES/.test(sql)) return [{ t: 'price_snapshots' }];
+            if (/information_schema\.columns/.test(sql)) return liveColumnNames.map((n) => ({ COLUMN_NAME: n }));
+            if (/information_schema\.statistics/.test(sql)) return liveColumnNames.includes('batch_block_time')
+                ? [{ INDEX_NAME: 'idx_pair_batchtime_round', NON_UNIQUE: 1, COLUMN_NAME: 'coin_pair', SEQ_IN_INDEX: 1 }]
+                : [];
+            if (/^ALTER TABLE/.test(sql)) { alters.push(sql); return []; }
+            throw new Error('unexpected statement: ' + sql);
+        };
+        await ensureTables({ doQuery }, dir);
+        return alters;
+    }
+
+    it('adds a missing column the twin declares, with its DEFAULT and AFTER the nearest live preceding column', async function () {
+        const alters = await run(['id', 'coin_pair', 'push_generation', 'round_number']);
+        assert.strictEqual(alters[0], 'ALTER TABLE `price_snapshots` ADD COLUMN batch_block_time BIGINT NOT NULL DEFAULT 0 AFTER `push_generation`');
+    });
+
+    it('does not touch a mirror that already has every declared column', async function () {
+        const alters = await run(['id', 'coin_pair', 'push_generation', 'batch_block_time', 'round_number']);
+        assert.deepStrictEqual(alters.filter((s) => /ADD COLUMN/.test(s)), []);
+    });
+
+    it('places a safe missing leading column FIRST when it has no live preceding anchor', async function () {
+        const dir = makeSqlDir({
+            't.sql': 'CREATE TABLE t (\n  added BIGINT DEFAULT 0,\n  existing BIGINT\n) ENGINE=InnoDB DEFAULT CHARSET=utf8;'
+        });
+        const alters = [];
+        const doQuery = async (sql) => {
+            if (/^SHOW TABLES/.test(sql)) return [{ t: 't' }];
+            if (/information_schema\.columns/.test(sql)) return [{ COLUMN_NAME: 'existing' }];
+            if (/^ALTER TABLE/.test(sql)) { alters.push(sql); return []; }
+            throw new Error('unexpected statement: ' + sql);
+        };
+        await ensureTables({ doQuery }, dir);
+        assert.deepStrictEqual(alters, ['ALTER TABLE `t` ADD COLUMN added BIGINT DEFAULT 0 FIRST']);
+    });
+
+    it('never MODIFYs or DROPs, only ADD COLUMN', async function () {
+        const alters = await run(['id', 'coin_pair', 'push_generation', 'round_number']);
+        assert.deepStrictEqual(alters.filter((s) => /ADD COLUMN/.test(s)), [
+            'ALTER TABLE `price_snapshots` ADD COLUMN batch_block_time BIGINT NOT NULL DEFAULT 0 AFTER `push_generation`'
+        ]);
+        assert.ok(!alters.some((s) => /MODIFY|DROP/.test(s)));
+    });
+
+    it('a NOT NULL column with no DEFAULT is skipped, not added', async function () {
+        const dir = makeSqlDir({
+            't.sql': 'CREATE TABLE t (\n  id BIGINT NOT NULL,\n  owner VARCHAR(40) NOT NULL\n) ENGINE=InnoDB DEFAULT CHARSET=utf8;'
+        });
+        const alters = [];
+        const doQuery = async (sql) => {
+            if (/^SHOW TABLES/.test(sql)) return [{ t: 't' }];
+            if (/information_schema\.columns/.test(sql)) return [{ COLUMN_NAME: 'id' }];
+            if (/information_schema\.statistics/.test(sql)) return [];
+            if (/^ALTER TABLE/.test(sql)) { alters.push(sql); return []; }
+            throw new Error('unexpected statement: ' + sql);
+        };
+        await ensureTables({ doQuery }, dir);
+        assert.deepStrictEqual(alters, []);
+    });
+
+    it('an ADD COLUMN failure is logged and skipped, never thrown', async function () {
+        const dir = makeSqlDir({ 'price_snapshots.sql': PRICE_TWIN });
+        const doQuery = async (sql) => {
+            if (/^SHOW TABLES/.test(sql)) return [{ t: 'price_snapshots' }];
+            if (/information_schema\.columns/.test(sql)) return [{ COLUMN_NAME: 'id' }, { COLUMN_NAME: 'coin_pair' }, { COLUMN_NAME: 'push_generation' }, { COLUMN_NAME: 'round_number' }];
+            if (/information_schema\.statistics/.test(sql)) return [];
+            throw new Error('Duplicate column name');
+        };
+        await ensureTables({ doQuery }, dir);                      // resolves
+    });
+
+    it('does not query live columns for a twin the parser cannot recognize (no ENGINE clause)', async function () {
+        const dir = makeSqlDir({ 'plain.sql': 'CREATE TABLE plain (id INT);' });
+        const calls = [];
+        await ensureTables({ doQuery: async (sql) => { calls.push(sql); return [{ t: 'plain' }]; } }, dir);
+        assert.deepStrictEqual(calls.filter((s) => !/^SHOW TABLES/.test(s)), []);
+    });
+});

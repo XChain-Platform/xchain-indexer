@@ -248,15 +248,15 @@ module.exports = {
     // Read-only reorg observability counters for the /health payload (#1813): the total
     // number of processed reorgs, plus the block index and timestamp of the most recent
     // one. Sourced from the durable REORG markers in the events table (see createReorg).
-    // Uses doQuery (not strict) and never throws: health must degrade to null fields, not
-    // fail, when the DB read hiccups or the events table is absent.
+    // Reads strictly but never throws: a field whose read fails stays null, because the
+    // dashboard reads null as "not read this tick" and a 0 as a real count to rebaseline on.
     async getReorgHealthStats(){
-        let stats = { reorgsProcessed: 0, lastReorgBlock: null, lastReorgAt: null };
+        let stats = { reorgsProcessed: null, lastReorgBlock: null, lastReorgAt: null };
         try {
-            let countRows = await this.doQuery("SELECT COUNT(*) AS n FROM events WHERE code='REORG'");
+            let countRows = await this.doQueryStrict("SELECT COUNT(*) AS n FROM events WHERE code='REORG'");
             if(countRows.length > 0 && countRows[0].n != null)
                 stats.reorgsProcessed = Number(countRows[0].n);
-            let lastRows = await this.doQuery("SELECT time, data FROM events WHERE code='REORG' ORDER BY id DESC LIMIT 1");
+            let lastRows = await this.doQueryStrict("SELECT time, data FROM events WHERE code='REORG' ORDER BY id DESC LIMIT 1");
             if(lastRows.length > 0){
                 let ms = new Date(lastRows[0].time).getTime();
                 stats.lastReorgAt = Number.isFinite(ms) ? ms : null;

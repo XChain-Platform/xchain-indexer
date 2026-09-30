@@ -54,7 +54,9 @@ function setupDispenserHarness() {
     indexer.indexerDb.getAddressPreferences.resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0 });
     indexer.indexerDb.getTickerId.resolves(99);
     indexer.indexerDb.getOraclePrice = sinon.stub().resolves({ value: '0.05', fee: '0.01' });
-    indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000' }]);
+    // Settleable rows: a DISPENSE at BLOCK_TIME pairs this oracle price with this snapshot.
+    indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000', timestamp: BLOCK_TIME - 7200 }]);
+    indexer.indexerDb.getOraclePricesInTimeRange = sinon.stub().resolves([{ price: '0.05', effectiveAt: BLOCK_TIME - 3600 }]);
 }
 
 describe('BATCH sub-command pre-flight (spec row 46) @regression @tier1', function () {

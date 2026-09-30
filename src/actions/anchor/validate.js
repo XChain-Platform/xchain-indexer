@@ -261,6 +261,18 @@ function sectionShapeReason(s, seenChains){
     return null;
 }
 
+function sectionOrderReason(prevChain, s){
+    if(prevChain !== null && String(s.CHAIN) < String(prevChain)) return 'CHAIN (order)';
+    return null;
+}
+
+function sigOrderReason(sigs){
+    for(let i = 1; i < sigs.length; i++){
+        if(String(sigs[i].pubkey) < String(sigs[i - 1].pubkey)) return 'SIGS (order)';
+    }
+    return null;
+}
+
 // ANCHOR v2: the continuation chunk's fields onto `data`, shape-checked.
 function validateChunkFields(params, data, error){
     data['MATCH_BATCH_SEQ'] = params[1];
@@ -285,6 +297,7 @@ function validateChunkFields(params, data, error){
 module.exports = {
     SECTION_FIXED_FIELDS,
     readHeadFields, validateHeadShape, parseHeadSigs, parseHeadPublisherTail,
-    validateBundleHeader, readSection, parseSectionSigs, parseBundleTail, sectionShapeReason,
+    validateBundleHeader, readSection, parseSectionSigs, parseBundleTail,
+    sectionShapeReason, sectionOrderReason, sigOrderReason,
     validateChunkFields
 };

@@ -66,23 +66,28 @@ function archiveChunkCoverage(chunks, totalChunks) {
     return ordered;
 }
 
-// Validate a getarchiveanchor request. Returns
-// {ok:true, block_index, checkpoint_seq, batch_crc32, match_count, author} or
-// {ok:false, error}.
+// Validate a getarchiveanchor request.
 //
-// batch_crc32 and match_count are REQUIRED, not optional narrowing filters: without
-// both, the query degenerates into "is this checkpoint archived at all", which is
-// true for a DIFFERENT batch wrapped in the same checkpoint and would tell a hub its
-// unpublished archive is already on-chain. That direction loses match rows
-// permanently, so the content terms are part of the question, never a refinement of it.
+// An author-only request returns {ok:true, author, author_only:true}. Every
+// content-key field must be omitted so a partial content lookup cannot be mistaken
+// for the publisher sequence lookup.
 //
-// `author` is optional and, when supplied, scopes the answer to "did THIS publisher
-// address already publish this batch". The hub always supplies its own DOGE address:
-// unscoped, a third party who copied our already-mined head onto the chain (or a
-// co-signer who front-ran it) would answer "already published" for a batch whose
-// CHUNKS that party never sent, and the hub would skip its own head and strand the
-// archive. Scoping makes the check answer only for spends this publisher made.
+// A content request returns the normalized content key and optional author.
+// Invalid requests return {ok:false, error}.
+//
+// For a content request, batch_crc32 and match_count are required parts of the
+// question. Without both, a different batch in the same checkpoint could answer
+// yes and cause the publisher to discard its own unpublished matches.
+//
+// The optional content-request author asks whether this publisher sent the batch.
+// Without that scope, a copied head could answer yes even though its publisher never
+// sent the chunks, causing the original publisher to strand the archive.
 function validateArchiveAnchorParams({ chain, network, block_index, checkpoint_seq, batch_crc32, match_count, author }) {
+    // Accept the publisher-only request only when every content-key field is omitted.
+    let authorOnly = chain === undefined && network === undefined && block_index === undefined &&
+                     checkpoint_seq === undefined && batch_crc32 === undefined && match_count === undefined;
+    if (authorOnly && typeof author === 'string' && author !== '')
+        return { ok: true, author, author_only: true };
     if (typeof chain !== 'string' || !chain || typeof network !== 'string' || !network)
         return { ok: false, error: 'chain and network are required strings' };
     let bi = Number(block_index);
@@ -113,11 +118,35 @@ function validateArchiveAnchorParams({ chain, network, block_index, checkpoint_s
 // attribute). Address comparison is exact, not case-folded: base58/bech32 addresses
 // are case-significant in the first form and canonically lowercase in the second, so
 // folding could equate two different addresses.
+function sameStoredSignatures(left, right) {
+    return left.validator_signatures != null && right.validator_signatures != null &&
+        String(left.validator_signatures) === String(right.validator_signatures);
+}
+
+function deriveFoldWrapper(rows, archive) {
+    if (!archive || Number(archive.version) !== 3 || archive.chain != null) return archive;
+    let matches = (rows || []).filter(row =>
+        Number(row.version) === 3 && row.chain != null &&
+        Number(row.action_index) === Number(archive.action_index) &&
+        sameStoredSignatures(row, archive));
+    if (matches.length !== 1) return archive;
+    let wrapper = matches[0];
+    return Object.assign({}, archive, {
+        chain: wrapper.chain,
+        network: wrapper.network,
+        block_index: wrapper.block_index,
+        checkpoint_seq: wrapper.checkpoint_seq,
+        snapshot_block: wrapper.snapshot_block
+    });
+}
+
 function selectArchiveHeadRow(rows, filter) {
     let f = filter || {};
-    let candidates = Array.isArray(rows) ? rows : [];
+    let allRows = Array.isArray(rows) ? rows : [];
+    let candidates = allRows.filter(row =>
+        row.match_batch_seq != null && Number(row.version) !== 2);
     if (f.author) candidates = candidates.filter(r => r.source != null && String(r.source) === String(f.author));
-    return candidates.length > 0 ? candidates[0] : null;
+    return candidates.length > 0 ? deriveFoldWrapper(allRows, candidates[0]) : null;
 }
 
 // The continuation-chunk indexes present for a head, as a sorted array. `chunkRows`
@@ -190,6 +219,6 @@ function buildArchiveAnchorResponse(config, latest, head, chunkRows) {
 
 module.exports = {
     ARCHIVE_CRC_RE, dedupeArchiveChunks, archiveChunkCoverage,
-    validateArchiveAnchorParams, selectArchiveHeadRow, presentChunkIndexes,
+    validateArchiveAnchorParams, deriveFoldWrapper, selectArchiveHeadRow, presentChunkIndexes,
     buildArchiveAnchorResponse
 };

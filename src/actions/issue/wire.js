@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * ISSUE wire parse: the three flag days resolved once for the action's block, the
+ * ISSUE wire parse: the four flag days resolved once for the action's block, the
  * FORMAT gate, the positional PARAMS, the ^<id> address references, the storage clone
  * and the number formats.
  *
@@ -30,22 +30,27 @@
 const gateRegistry = require('../../consensus/gate_registry');
 const TOKEN_BRIDGE_KEY = 'token_bridge_activation.TOKEN_BRIDGE_ACTIVATION';
 const TOKEN_POLICY_INHERITANCE_KEY = 'token_policy_activation.TOKEN_POLICY_INHERITANCE_ACTIVATION';
+const POLICY_LIST_DETACH_KEY = 'issue_policy_list_detach.ISSUE_POLICY_LIST_DETACH';
 
 // The flag days, the FORMAT gate and the positional PARAMS. Returns the context: the
-// FORMAT, the (possibly replaced) data object, the verdict so far and the three flags.
+// FORMAT, the (possibly replaced) data object, the verdict so far and the four flags.
 async function parseWire(params, data, error){
     // Validate that format is known
     let format = data['FORMAT'];
 
     // Token-bridge flag days, resolved once against THIS action's block so every check
     // below sees one activation state. Keyed on the block_index of the chain being
-    // parsed, never on a transfer's snapshot_block.
-    let tokenBridgeActive = gateRegistry.activeAt(TOKEN_BRIDGE_KEY, this.config['NETWORK'], null, data['BLOCK_INDEX'], null);
-    let policyInheritance = gateRegistry.activeAt(TOKEN_POLICY_INHERITANCE_KEY, this.config['NETWORK'], null, data['BLOCK_INDEX'], null);
+    // parsed, never on a transfer's snapshot_block. All four maps are keyed
+    // '<COIN>:<network>', so each is read with this chain's coin (a null coin reads only
+    // the bare fallback, which per-chain arming leaves dark).
+    const coin = this.config['COIN'];
+    let tokenBridgeActive = gateRegistry.activeAt(TOKEN_BRIDGE_KEY, this.config['NETWORK'], coin, data['BLOCK_INDEX'], null);
+    let policyInheritance = gateRegistry.activeAt(TOKEN_POLICY_INHERITANCE_KEY, this.config['NETWORK'], coin, data['BLOCK_INDEX'], null);
+    let policyListDetach  = gateRegistry.activeAt(POLICY_LIST_DETACH_KEY, this.config['NETWORK'], coin, data['BLOCK_INDEX'], null);
     // The tick-namespace flag day has its OWN constant, not the bridge's: the
     // bridge arms only after its own cross-check, and the namespace has to close
     // before anyone squats a future chain root, not after.
-    let namespaceActive   = gateRegistry.activeAt('tick_namespace_activation.TICK_NAMESPACE_ACTIVATION', this.config['NETWORK'], null, data['BLOCK_INDEX'], null);
+    let namespaceActive   = gateRegistry.activeAt('tick_namespace_activation.TICK_NAMESPACE_ACTIVATION', this.config['NETWORK'], coin, data['BLOCK_INDEX'], null);
 
     // Format 7 does not exist below TOKEN_BRIDGE_ACTIVATION: it falls through to the
     // same 'invalid: VERSION (unknown)' an unknown version has always produced, so a
@@ -57,7 +62,7 @@ async function parseWire(params, data, error){
     if(!error)
         data = this.util.setActionParams(data, params, this.formats, format);
 
-    return { format, data, error, tokenBridgeActive, policyInheritance, namespaceActive };
+    return { format, data, error, tokenBridgeActive, policyInheritance, policyListDetach, namespaceActive };
 }
 
 // The ^<id> references, the storage clone (ctx.issue, the pre-merge wire snapshot the

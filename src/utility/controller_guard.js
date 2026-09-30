@@ -60,16 +60,17 @@ module.exports = {
     // silently fall into a controlled class. An unmapped action returns null (never gated).
     controllerActionClass(actionType){
         switch(actionType){
-            // Every native OUTBOUND transfer of a controlled token routes through the `transfer`
-            // class so a bound controller's rule (allowlist/freeze/compliance) is unavoidable. SEND
-            // is the direct 1:1 transfer; AIRDROP/DIVIDEND/SWEEP are bulk moves gated on the
-            // AGGREGATE outbound move per controlled tick (one guard run: from=SOURCE, amount=total),
-            // never per recipient (bounded VM work; a controller needing per-recipient control denies
-            // the aggregate).
+            // Route direct and aggregate outbound moves through `transfer`. From the
+            // CONTROLLER_CUSTODY_GUARD flag day, the DEPOSIT and WITHDRAW custody legs also make
+            // a bound transfer rule (allowlist/freeze/compliance) unavoidable.
+            // Gate AIRDROP/DIVIDEND/SWEEP on the aggregate outbound move per controlled tick
+            // (one run: from=SOURCE, amount=total), never per recipient, to keep VM work bounded.
             case 'SEND':
             case 'AIRDROP':
             case 'DIVIDEND':
-            case 'SWEEP':            return 'transfer';
+            case 'SWEEP':
+            case 'DEPOSIT':
+            case 'WITHDRAW':         return 'transfer';
             // The deed-over of a token's OWNERSHIP record is a separate capability from moving its
             // balance, so it routes to its own `ownership` class (an issuer can make ownership
             // non-sweepable while balances stay freely transferable, or vice versa). SWEEP_OWNERSHIP is
@@ -104,6 +105,12 @@ module.exports = {
         if(binding && binding.actionClass) detail += ' controls ' + String(binding.actionClass);
         if(binding && binding.subject)     detail += ' for ' + String(binding.subject);
         return GUARD_INERT_SENTINEL + ' (' + detail + ')';
+    },
+
+    // The same refusal for a probe that would run a caller-named contract outside any controller
+    // binding (the VOTE binding-poll callback-method check), naming that contract and its role.
+    guardInertContractProbeError(contractIndex, role){
+        return GUARD_INERT_SENTINEL + ' (contract ' + Number(contractIndex) + ' ' + String(role) + ')';
     },
 
     // Just the controller detail out of a guard-inert status string. The parenthetical is
@@ -163,6 +170,40 @@ module.exports = {
         if(!effective) return none;
         return this.invokeController(actions, db, Number(effective.contract_index), opts,
             { actionClass: opts.actionClass, subject: 'address ' + String(opts.address) });
+    },
+
+    // Run the token guard and SOURCE's transfer-address guard for a custody move after its flag
+    // day. The second reservation sees the first guard's fee, while caller-owned balances stay
+    // unchanged until the handler settles the allowed move.
+    async maybeRunCustodyGuard(actions, db, opts){
+        let none = { error: null, guardFee: 0, payoutLegs: null };
+        let data = opts.data;
+        if(!(await actions.protocolChanges.isEnabled('CONTROLLER_CUSTODY_GUARD', data['BLOCK_INDEX'])))
+            return none;
+
+        data['_CUSTODY_GUARD_ARMED'] = true;
+        let gasInfo = await db.getTokenInfo(db.config['GAS'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let gasBalances = opts.gasBalances;
+        if(this.isNull(gasBalances))
+            gasBalances = await db.getAddressBalances(data['SOURCE'], null, data['BLOCK_INDEX'], data['ACTION_INDEX']);
+        let guardOpts = {
+            actionType: opts.actionType, tick: opts.tick, from: opts.from, to: opts.to,
+            amount: opts.amount, data: data, gasInfo: gasInfo, gasBalances: gasBalances, seq: 0
+        };
+
+        let token = await this.maybeRunControllerGuard(actions, db, guardOpts);
+        if(token.error)
+            return { error: token.error, guardFee: 0, payoutLegs: null };
+
+        let reserveBalances = gasBalances;
+        if(gasInfo && this.bcgt(token.guardFee, 0))
+            reserveBalances = this.debitBalances(Object.assign({}, gasBalances), gasInfo['TICK_ID'], token.guardFee);
+        let address = await this.maybeRunAddressControllerGuard(actions, db, Object.assign({}, guardOpts, {
+            actionClass: 'transfer', address: data['SOURCE'], gasBalances: reserveBalances
+        }));
+        if(address.error)
+            return { error: address.error, guardFee: 0, payoutLegs: null };
+        return { error: null, guardFee: this.bcadd(token.guardFee, address.guardFee, 8), payoutLegs: null };
     },
 
     // Shared tail for both controller kinds: the guard-of-guard skip, the gas-ceiling reservation

@@ -229,6 +229,8 @@ describe('Sweep @regression @tier3', function () {
             await handler.parse(params, data, null);
 
             assert.ok(indexer.indexerDb.createDispenserStatus.called, 'createDispenserStatus should be called');
+            // Escrows load by source address alone (the lookup is not block or action scoped)
+            sinon.assert.calledOnceWithExactly(indexer.indexerDb.getAddressEscrows, SOURCE);
         });
 
     });

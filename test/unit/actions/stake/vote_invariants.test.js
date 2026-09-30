@@ -20,7 +20,7 @@
  * test/unit/votes_tally_invariants.test.js.
  *
  * This file holds the escrow-conservation and binding-callback blocks. The
- * three flag days (VOTE_POLL_TICK_VISIBLE, VOTE_BINDING_MINIMUMS and
+ * three earlier flag days (VOTE_POLL_TICK_VISIBLE, VOTE_BINDING_MINIMUMS and
  * VOTE_CALLBACK_TIMELOCK) live beside it in vote_invariants.test/, each opening
  * the same describe title so every full test title is unchanged;
  * vote_invariants.test/helpers/vote_fixtures.js builds the mock handler and the
@@ -36,10 +36,10 @@ const sinon  = require('sinon');
 const { createBaseData } = require('../../../fixtures/mocks');
 const { freshVote, poll } = require('./vote_invariants.test/helpers/vote_fixtures.js');
 
-let indexer, handler, executeStub, gas, donate1;
+let indexer, actionsCtx, handler, executeStub, vm, gas, donate1;
 
 function freshHandler() {
-    ({ indexer, handler, executeStub, gas, donate1 } = freshVote());
+    ({ indexer, actionsCtx, handler, executeStub, vm, gas, donate1 } = freshVote());
 }
 
 function restoreStubs() {
@@ -243,6 +243,31 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
             assert.ok(indexer.indexerDb.rollbackToSavepoint.calledOnce, 'only the callback\'s savepoint is rolled back');
             assert.ok(indexer.indexerDb.releaseSavepoint.notCalled, 'the savepoint is not released on failure');
             assert.ok(indexer.indexerDb.setPollCallbackIndex.notCalled, 'no callback index recorded for a failed injection');
+        });
+    });
+});
+
+describe('Vote invariants (escrow conservation + callback metering) @regression @tier1', function () {
+    beforeEach(freshHandler);
+    afterEach(restoreStubs);
+
+    describe('binding-callback rejected execution handling', function () {
+
+        it('a non-valid callback EXECUTE leaves the poll terminal and refunds its escrow', async function () {
+            const p = bindingPoll({ poll_status: 'open' });
+            stubFinalize(p, { poll_status: 'finalized', winning_option: 0, total_counted_weight: '10', total_voters: 1, quorum_met: true, min_voters_met: true });
+            executeStub.parse.callsFake(async (params, executionData) => {
+                executionData.STATUS = 'invalid: contract (not active)';
+            });
+
+            const data = createBaseData({ ACTION: 'VOTE', FORMAT: 2, ACTION_INDEX: null, IS_SYNTHETIC: true });
+            await handler.parse(['2', '100'], data, null);
+
+            assert.strictEqual(data.STATUS, 'valid', 'callback failure does not un-finalize the poll');
+            assert.ok(indexer.indexerDb.createEscrow.calledOnce, 'the combined deposit and gas hold is released first');
+            assert.ok(indexer.indexerDb.setPollDepositResolved.calledOnceWith(100, 'refunded'));
+            assert.ok(indexer.indexerDb.setPollCallbackIndex.calledOnceWith(100, 200),
+                'the rejected EXECUTE remains the terminal callback attempt');
         });
     });
 });

@@ -137,9 +137,8 @@ function validateBridgeFieldValues(ctx){
 
 // OPT-IN DIRECTION. A token whose policy lives in chain-local state cannot be
 // bridged while nothing carries that policy to the copy: a regulated issuer's
-// block on BTC has to hold on DOGE. A list can never be cleared (format 5
-// back-fills), so a token that has ever set one stays unbridgeable until
-// policy inheritance arms.
+// block on BTC has to hold on DOGE. A detached list reads as null in token state
+// and does not bind this check.
 async function validateOptInDirection(ctx, bridgeChainsSet){
     let { data, tokenInfo, format, policyInheritance } = ctx;
     let error = ctx.error;
@@ -180,13 +179,15 @@ async function validateOptInDirection(ctx, bridgeChainsSet){
 // every re-issue and would otherwise refuse an ordinary format 0 that carries no
 // list at all.
 function validatePolicyDirection(ctx, bridgeChainsSet){
-    let { issue, tokenInfo, format, policyInheritance } = ctx;
+    let { issue, tokenInfo, format, policyInheritance, policyListDetach } = ctx;
     let error = ctx.error;
 
     let bridgedOut  = !!(tokenInfo && Number(tokenInfo['BRIDGED']) === 1);
-    let carriesList = !this.util.isNull(issue['ALLOW_LIST']) || !this.util.isNull(issue['BLOCK_LIST']);
+    let carriesList = [issue['ALLOW_LIST'], issue['BLOCK_LIST']].some((value) =>
+        !this.util.isNull(value) && !(policyListDetach && Number(format)===5 && String(value)==='0'));
+    let editsPolicy = format === 5 && (!policyListDetach || carriesList);
     if(!error && tokenInfo && (bridgeChainsSet || bridgedOut) &&
-       (format === 6 || (!policyInheritance && (format === 5 || (format === 0 && carriesList)))))
+       (format === 6 || (!policyInheritance && (editsPolicy || (format === 0 && carriesList)))))
         error = 'invalid: TICK (bridged tokens cannot be policy-bound yet)';
 
     ctx.error = error;

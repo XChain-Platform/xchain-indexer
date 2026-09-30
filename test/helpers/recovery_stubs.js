@@ -195,11 +195,84 @@ function callRows(calls, sql, params) {
     return undefined;
 }
 
+function bridgePolicyRows(bridges, policies, sql, params) {
+    if (sql.startsWith('SELECT transfer_id FROM bridge_transfers'))
+        return bridges.filter(r => r.transfer_id === params[0]).map(r => ({ transfer_id: r.transfer_id }));
+    if (sql.startsWith('UPDATE bridge_transfers SET status')) {
+        for (let row of bridges) if (row.transfer_id === params[1]) row.status = params[0];
+        return [];
+    }
+    if (sql.startsWith('INSERT INTO bridge_transfers')) {
+        bridges.push({ id: params[0], transfer_id: params[1], snapshot_block: params[2], network: params[3],
+                       src_chain: params[4], src_action_index: params[5], src_address: params[6],
+                       dest_chain: params[7], dest_address: params[8], tick: params[9], decimals: params[10],
+                       amount: params[11], effective_time: params[12], admit_block_btc: params[13],
+                       admit_block_ltc: params[14], admit_block_doge: params[15], finalizing_view: params[16],
+                       validator_signatures: params[17], status: params[18] });
+        return [];
+    }
+    if (sql.startsWith('SELECT snapshot_id FROM policy_snapshots WHERE snapshot_id'))
+        return policies.filter(r => r.snapshot_id === params[0]).map(r => ({ snapshot_id: r.snapshot_id }));
+    if (String(sql).replace(/\s+/g, ' ').trim().startsWith('SELECT snapshot_id FROM policy_snapshots WHERE network'))
+        return policies.filter(r => r.network === params[0] && r.origin_chain === params[1] &&
+            r.tick === params[2] && Number(r.policy_seq) === Number(params[3]))
+            .map(r => ({ snapshot_id: r.snapshot_id }));
+    if (sql.startsWith('INSERT IGNORE INTO policy_snapshots')) {
+        policies.push({ id: params[0], snapshot_id: params[1], snapshot_block: params[2], network: params[3],
+                        origin_chain: params[4], tick: params[5], policy_seq: params[6], origin_block: params[7],
+                        policy_hash: params[8], allow_list: params[9], block_list: params[10], sleeping: params[11],
+                        effective_time: params[12], admit_block_btc: params[13], admit_block_ltc: params[14],
+                        admit_block_doge: params[15], finalizing_view: params[16],
+                        validator_signatures: params[17], status: params[18] });
+        return [];
+    }
+    return undefined;
+}
+
+function checkpointPriceRows(checkpoints, prices, sql, params) {
+    if (sql.startsWith('SELECT chain, network, block_index'))
+        return checkpoints.filter(r => r.chain === params[0] && r.network === params[1] &&
+            Number(r.checkpoint_seq) === Number(params[2])).map(r => Object.assign({}, r));
+    if (sql.startsWith('INSERT IGNORE INTO state_checkpoints')) {
+        checkpoints.push({ id: params[0], chain: params[1], network: params[2], block_index: params[3],
+            block_hash: params[4], ledger_hash: params[5], actions_hash: params[6], contract_hash: params[7],
+            checkpoint_seq: params[8], snapshot_block: params[9], state_root: params[10],
+            state_root_version: params[11], block_merkle_root: params[12], block_merkle_version: params[13],
+            validator_signatures: params[14] });
+        return [];
+    }
+    if (sql.startsWith('SELECT round_number FROM price_snapshots'))
+        return prices.filter(r => Number(r.round_number) === Number(params[0]) && r.coin_pair === params[1])
+            .map(r => ({ round_number: r.round_number }));
+    let priceColumns = ['price', 'reference_block', 'reference_chain', 'block_timestamp',
+        'validator_count', 'consensus_round', 'consensus_proof', 'status', 'source_chain',
+        'source_action_index', 'batch_block_time', 'admit_block_btc', 'admit_block_ltc', 'admit_block_doge'];
+    if (sql.startsWith('UPDATE price_snapshots SET price')) {
+        let row = prices.find(r => Number(r.round_number) === Number(params[14]) && r.coin_pair === params[15]);
+        if (row) priceColumns.forEach((column, index) => { row[column] = params[index]; });
+        return [];
+    }
+    if (sql.startsWith('INSERT INTO price_snapshots')) {
+        let incoming = {};
+        let columns = ['id', 'round_number', 'coin_pair'].concat(priceColumns);
+        columns.forEach((column, index) => { incoming[column] = params[index]; });
+        prices.push(incoming);
+        return [];
+    }
+    if (sql.startsWith('DELETE FROM price_snapshots')) {
+        for (let i = prices.length - 1; i >= 0; i--)
+            if (Number(prices[i].round_number) === Number(params[0]) && prices[i].coin_pair === params[1])
+                prices.splice(i, 1);
+        return [];
+    }
+    return undefined;
+}
+
 /**
  * Give memDb's handle begin/commit/rollback over its three row arrays.
  * @returns {object} the same handle, now with a transaction API
  */
-function withSnapshotTx(db, matches, snapshots, calls) {
+function withSnapshotTx(db, matches, snapshots, calls, bridges, policies, checkpoints, prices) {
     let saved = null;
     const clone = (rows) => rows.map(r => Object.assign({}, r));
     const restore = (target, rows) => { target.length = 0; for (let r of rows) target.push(r); };
@@ -211,7 +284,9 @@ function withSnapshotTx(db, matches, snapshots, calls) {
     db.beginTransaction = async function () {
         assert.strictEqual(db.txDepth, 0, 'recovery must not nest transactions on one handle');
         db.txDepth = 1;
-        saved = { matches: clone(matches), snapshots: clone(snapshots), calls: clone(calls) };
+        saved = { matches: clone(matches), snapshots: clone(snapshots), calls: clone(calls),
+                  bridges: clone(bridges), policies: clone(policies),
+                  checkpoints: clone(checkpoints), prices: clone(prices) };
     };
     db.commitTransaction = async function () {
         assert.strictEqual(db.txDepth, 1, 'commit without an open transaction');
@@ -221,6 +296,8 @@ function withSnapshotTx(db, matches, snapshots, calls) {
         if (db.txDepth === 0) return;                     // no-op after a commit, like Database
         db.txDepth = 0; db.rollbacks++;
         restore(matches, saved.matches); restore(snapshots, saved.snapshots); restore(calls, saved.calls);
+        restore(bridges, saved.bridges); restore(policies, saved.policies);
+        restore(checkpoints, saved.checkpoints); restore(prices, saved.prices);
         saved = null;
     };
     return db;
@@ -233,9 +310,9 @@ function withSnapshotTx(db, matches, snapshots, calls) {
 // transaction is exercised by every test in this file.
 function memDb(v1s, v2s, opts) {
     opts = opts || {};
-    let matches = [], snapshots = [], calls = [];
+    let matches = [], snapshots = [], calls = [], bridges = [], policies = [], checkpoints = [], prices = [];
     let db = {
-        matches, snapshots, calls,
+        matches, snapshots, calls, bridges, policies, checkpoints, prices,
         async doQuery(sql, params) {
             params = params || [];
             // Each statement family answers its own statements and passes on the rest.
@@ -243,11 +320,13 @@ function memDb(v1s, v2s, opts) {
             if (rows === undefined) rows = archiveChunkRows(v1s, v2s, sql, params);
             if (rows === undefined) rows = matchRows(matches, snapshots, sql, params);
             if (rows === undefined) rows = callRows(calls, sql, params);
+            if (rows === undefined) rows = bridgePolicyRows(bridges, policies, sql, params);
+            if (rows === undefined) rows = checkpointPriceRows(checkpoints, prices, sql, params);
             return rows === undefined ? [] : rows;
         }
     };
-    if (opts.noTx) return { matches, snapshots, calls, doQuery: db.doQuery };
-    return withSnapshotTx(db, matches, snapshots, calls);
+    if (opts.noTx) return { matches, snapshots, calls, bridges, policies, checkpoints, prices, doQuery: db.doQuery };
+    return withSnapshotTx(db, matches, snapshots, calls, bridges, policies, checkpoints, prices);
 }
 
 // BTC indexer stub. The two cross-checks resolve the SAME db.js methods at two different

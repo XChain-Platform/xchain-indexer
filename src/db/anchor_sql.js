@@ -33,7 +33,8 @@
 
 'use strict';
 
-const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../consensus/state_hash.js');
+const { ARCHIVE_HEAD_VERSIONS, archiveHeadPredicate } = require('../consensus/state_hash.js');
+const { archiveHeadPickPredicate } = require('./anchors/archive_head_pick.js');
 
 // ANCHOR versions that carry a full checkpoint identity (chain/network/block_index/
 // checkpoint_seq + the state hashes). Version 2 is an archive continuation chunk with
@@ -43,17 +44,20 @@ const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../consens
 // 0 is the checkpoint BUNDLE, whose rows are per-SECTION and each carry a full
 // checkpoint identity, so a (chain, network, block_index, checkpoint_seq) lookup
 // resolves to exactly the section row the caller asked for and needs no new RPC (D17).
-// 1 is the archive head, which carries the wrapper checkpoint's identity. Every
+// 1 is the legacy archive head, which carries the wrapper checkpoint's identity.
+// Version 3 is the folded action: a non-null chain marks its checkpoint section,
+// while a non-null match_batch_seq marks its archive head. Every
 // pre-activation version is OUT: the indexer no longer parses them, so admitting them
 // here would let a pre-restart row keep raising the replay watermark
 // (getMaxAnchorCheckpointSeq reads this same set) against bundles it can never be
 // compared with. Rows on chain keep their version byte and stay readable through the
 // txid-keyed reads, which filter no version at all.
-const CHECKPOINT_VERSIONS = [0, 1];
+const CHECKPOINT_VERSIONS = [0, 1, 3];
 
 // The subset of CHECKPOINT_VERSIONS that IS a checkpoint in its own right: a v0
-// bundle SECTION. The other member (1) is the archive head, which carries its
-// WRAPPER checkpoint's identity, so an archive head and a bundle section can and do
+// bundle SECTION or the chain-bearing side of a folded action. Version 1 is the
+// legacy archive head, which carries its WRAPPER checkpoint's identity, so an
+// archive head and a bundle section can and do
 // collide on one (chain, network, block_index, checkpoint_seq) key - both legs anchor
 // the same checkpoint, for different purposes. On that shared key the archive head is
 // typically the higher action_index, so a plain "newest wins" pick answers a
@@ -150,7 +154,7 @@ const ARCHIVE_HEAD_AUTHOR_SQL =
      FROM anchor_actions h
      LEFT JOIN actions         hact ON hact.action_index = h.action_index
      LEFT JOIN index_addresses hadr ON hadr.id           = hact.source_id
-     WHERE h.version ${ARCHIVE_HEAD_VERSIONS_SQL} AND h.match_batch_seq = ?
+     WHERE ${archiveHeadPickPredicate('h')} AND h.match_batch_seq = ?
      ORDER BY h.action_index ASC
      LIMIT 1`;
 
@@ -163,7 +167,7 @@ const ARCHIVE_HEAD_AUTHOR_SQL =
 // broadcast ahead of the head can only be excluded here.
 //
 // Callers dedupe to one row per chunk_index (lowest action_index wins) after this
-// query; the ORDER BY makes that deterministic. Params: [batchSeq, batchSeq].
+// query; the ORDER BY makes that deterministic. Params: [batchSeq, foldFloor, batchSeq].
 // Shared verbatim by db.getAnchorChunks and recovery.js's reassembly (which holds only
 // a doQuery handle) so the two can no longer drift. Two other places join v2 chunks and
 // deliberately need NO authorship term, because both already require status 'valid',
@@ -209,11 +213,11 @@ const ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL =
 // straddle two rules. block_index_doge, not block_index: the latter is the
 // checkpointed height on the checkpointed chain (and is NULL on a v2 chunk), while
 // the flag day is a height on the chain the ANCHOR itself lands on.
-// Params: [batchSeq].
+// Params: [foldFloor, batchSeq].
 const ARCHIVE_HEAD_GATE_SQL =
     `SELECT h.action_index, h.block_index_doge
      FROM anchor_actions h
-     WHERE h.version ${ARCHIVE_HEAD_VERSIONS_SQL} AND h.match_batch_seq = ?
+     WHERE ${archiveHeadPickPredicate('h')} AND h.match_batch_seq = ?
      ORDER BY h.action_index ASC
      LIMIT 1`;
 
@@ -270,7 +274,7 @@ const ARCHIVE_ANCHOR_BY_CONTENT_SQL =
      LEFT JOIN index_addresses    adr ON adr.id           = act.source_id
      LEFT JOIN transactions       t   ON t.tx_index       = act.tx_index
      LEFT JOIN index_transactions it  ON it.id            = t.tx_hash_id
-     WHERE a.version ${ARCHIVE_HEAD_VERSIONS_SQL}
+     WHERE ${archiveHeadPredicate('a')}
        AND a.chain = ? AND a.network = ? AND a.block_index = ? AND a.checkpoint_seq = ?
        AND a.batch_crc32 = ? AND a.match_count = ?
      ORDER BY a.action_index ASC

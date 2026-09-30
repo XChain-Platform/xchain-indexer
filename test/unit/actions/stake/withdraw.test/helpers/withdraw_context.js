@@ -32,6 +32,8 @@ const TICK             = 'TEST';
 const BLOCK            = 100;
 // Contract address as computed by the handler: 'C:BTC:<contract_action_index>'
 const CONTRACT_ADDRESS = 'C:BTC:' + CONTRACT_INDEX;
+// A stored meta that opts the contract in to owner WITHDRAW
+const OPTED_IN_META    = JSON.stringify({ name: 'Vault', description: 'Test vault', version: '1.0.0', ownerWithdraw: true });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -46,7 +48,7 @@ function makeActionsCtx(indexer) {
         indexerDb:       indexer.indexerDb,
         protocolChanges: {
             isDefined:  sinon.stub().returns(true),
-            isEnabled:  sinon.stub().resolves(true),
+            isEnabled:  sinon.stub().callsFake(async name => name !== 'CONTROLLER_CUSTODY_GUARD'),
         },
         processAction: sinon.stub().resolves(),
     };
@@ -70,8 +72,9 @@ function makeWithdrawContext() {
     indexer.indexerDb.createWithdrawal = sinon.stub().resolves();
     indexer.indexerDb.getContract      = sinon.stub().resolves(null);
 
-    // Default: contract exists and caller is owner (source_id matches)
-    indexer.indexerDb.getContract.resolves({ source_id: 42 });
+    // Default: contract exists, caller is owner (source_id matches) and the contract
+    // opts in to owner WITHDRAW (OWNER_WITHDRAW_OPT_IN reads as active under the stub)
+    indexer.indexerDb.getContract.resolves({ source_id: 42, block_index: BLOCK, meta_json: OPTED_IN_META });
     indexer.indexerDb.getAddressId.resolves(42);
 
     // Default: token exists
@@ -89,6 +92,6 @@ function makeWithdrawContext() {
 }
 
 module.exports = {
-    SOURCE, CONTRACT_INDEX, TICK, BLOCK, CONTRACT_ADDRESS,
+    SOURCE, CONTRACT_INDEX, TICK, BLOCK, CONTRACT_ADDRESS, OPTED_IN_META,
     makeActionsCtx, makeData, makeToken, makeWithdrawContext,
 };

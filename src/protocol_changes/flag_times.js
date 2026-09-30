@@ -25,10 +25,13 @@
 
 'use strict';
 
+const { UNARMED } = require('./core.js');
+
 // VM async/Promise flag-day, single source of truth for the cross-repo coupling
 // guard. This MUST stay byte-identical to xchain-vm's ASYNC_SURFACE_GATE_BLOCK_TIME;
 // a one-sided edit forks the fleet on the first async-using DEPLOY/EXECUTE after the
-// earlier of the two timestamps. consensus-params.test.js asserts the two are equal.
+// earlier of the two timestamps. test/unit/consensus/consensus_params.test/vm_coupling.test.js
+// asserts the two are equal.
 const VM_BANNED_ASYNC_MAINNET_TIME = 1786060800;
 
 // H-3 flag-day: deterministic (time-gated) price_snapshots selection for
@@ -200,6 +203,34 @@ const CONTRACT_META_REQUIRED_MAINNET_TIME = 0;
 // exercise the rule from block 0.
 const CONTRACT_META_REQUIRED_TESTNET_TIME = 1789257600;
 
+// BROADCAST_FEE_LENGTH mainnet stays inert until the operator arms it.
+const BROADCAST_FEE_LENGTH_MAINNET_TIME = UNARMED;
+// BROADCAST_FEE_LENGTH testnet stays inert until the operator arms it.
+const BROADCAST_FEE_LENGTH_TESTNET_TIME = UNARMED;
+
+// D1: mainnet ships inert under the write hold and joins the genesis-arm set
+// only when that hold lifts after a fresh history count.
+const CONTROLLER_CUSTODY_GUARD_MAINNET_TIME = UNARMED;
+// D2: testnet ships inert until a release cut pins a future fleet-wide instant.
+const CONTROLLER_CUSTODY_GUARD_TESTNET_TIME = UNARMED;
+
+// Arms for OWNER_WITHDRAW_OPT_IN, the rule that makes owner WITHDRAW something a
+// contract must ask for. A contract deployed at/above the flag day refuses its
+// owner's WITHDRAW unless its exported meta declares ownerWithdraw: true, because
+// WITHDRAW moves custody without running contract code: on a pool, escrow or vault
+// it lets the deployer take other people's tokens and leaves the contract's own
+// accounting (an AMM's state reserves) above what it really holds.
+//
+// Mainnet ships inert, as CONTROLLER_CUSTODY_GUARD does under the mainnet write hold.
+const OWNER_WITHDRAW_OPT_IN_MAINNET_TIME = UNARMED;
+
+// Testnet: ARMED 2026-09-27 at 1790492400 = 2026-09-27T07:00:00Z, the tip at the cut
+// with no forward margin (testnet activations arm at the tip). The rule keys on the
+// contract's DEPLOY block, so only a contract deployed between this instant and the
+// fleet roll, and then withdrawn from before the roll, grades differently on a fresh
+// replay than on a node that indexed it live.
+const OWNER_WITHDRAW_OPT_IN_TESTNET_TIME = 1790492400;
+
 module.exports = {
     VM_BANNED_ASYNC_MAINNET_TIME,
     NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME,
@@ -212,4 +243,10 @@ module.exports = {
     DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME,
     CONTRACT_META_REQUIRED_MAINNET_TIME,
     CONTRACT_META_REQUIRED_TESTNET_TIME,
+    BROADCAST_FEE_LENGTH_MAINNET_TIME,
+    BROADCAST_FEE_LENGTH_TESTNET_TIME,
+    CONTROLLER_CUSTODY_GUARD_MAINNET_TIME,
+    CONTROLLER_CUSTODY_GUARD_TESTNET_TIME,
+    OWNER_WITHDRAW_OPT_IN_MAINNET_TIME,
+    OWNER_WITHDRAW_OPT_IN_TESTNET_TIME,
 };

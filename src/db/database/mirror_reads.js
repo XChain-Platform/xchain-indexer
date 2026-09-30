@@ -30,6 +30,7 @@
 // it the mirrored selects bind rows by their signed admission height instead of by the clock.
 const { isMirrorAdmissionConsumerActive } = require('../../consensus/gates/mirror_admission_gate.js');
 const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL, ARCHIVE_ANCHOR_BY_CONTENT_SQL, selectArchiveHeadRow, dedupeArchiveChunks } = require('../../actions/anchor/anchor_action_query');
+const { archiveHeadPickPredicate, foldArchiveHeadFloor } = require('../anchors/archive_head_pick.js');
 
 module.exports = {
 
@@ -111,11 +112,12 @@ module.exports = {
     // batches. anchor.js supplies it (gated) so the chunk set a head reassembles - and
     // the occupancy set the duplicate guard reads - belong to that head's own
     // publisher, not to whoever happened to broadcast the earliest row for the seq.
-    // Omitted / null runs the legacy canonical-head query unchanged.
+    // Omitted / null keeps the legacy canonical-head candidate set below fold activation.
     async getAnchorChunks(batchSeq, author){
         let rows = (author !== undefined && author !== null)
             ? await this.doQuery(ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL, [batchSeq, String(author)])
-            : await this.doQuery(ARCHIVE_CHUNK_SET_SQL, [batchSeq, batchSeq]);
+            : await this.doQuery(ARCHIVE_CHUNK_SET_SQL,
+                [batchSeq, foldArchiveHeadFloor(this.config['NETWORK']), batchSeq]);
         return dedupeArchiveChunks(rows);
     },
 
@@ -155,6 +157,43 @@ module.exports = {
             ? await this.getAnchorChunks(Number(head.match_batch_seq), String(head.source))
             : [];
         return { head, chunks };
+    },
+
+    // Return this publisher's highest usable v1 archive batch sequence. Invalid
+    // heads cannot seed an allocator, while unverified heads remain usable on a
+    // node that lacks the mirrored snapshot needed to verify their signatures.
+    async getMaxArchiveBatchSeqByAuthor(author){
+        let network = this.config && this.config['NETWORK'];
+        let headPredicate = archiveHeadPickPredicate('a')
+            .replace('?', String(foldArchiveHeadFloor(network)));
+        let rows = await this.doQuery(
+            `SELECT MAX(a.match_batch_seq) AS max_batch_seq
+             FROM anchor_actions a
+             JOIN index_statuses s  ON s.id = a.status_id
+             JOIN actions act       ON act.action_index = a.action_index
+             JOIN index_addresses adr ON adr.id = act.source_id
+             WHERE ${headPredicate} AND s.status IN ('valid', 'unverified')
+               AND adr.address = ?`,
+            [String(author)]);
+        let row = rows.length > 0 ? rows[0] : {};
+        return row.max_batch_seq != null ? Number(row.max_batch_seq) : null;
+    },
+
+    // Archive heads at one match_batch_seq authored by one address, unwired: not
+    // called from any action path yet. Modeled on getMaxArchiveBatchSeqByAuthor's
+    // joins, keyed by seq instead of aggregated to a max.
+    async getArchiveHeadsByAuthorAndSeq(author, batchSeq){
+        let rows = await this.doQuery(
+            `SELECT a.batch_crc32, a.match_count, s.status
+             FROM anchor_actions a
+             JOIN index_statuses s  ON s.id = a.status_id
+             JOIN actions act       ON act.action_index = a.action_index
+             JOIN index_addresses adr ON adr.id = act.source_id
+             WHERE a.match_batch_seq = ? AND a.version <> 2
+               AND s.status IN ('valid', 'unverified')
+               AND adr.address = ?`,
+            [Number(batchSeq), String(author)]);
+        return Array.isArray(rows) ? rows : [];
     },
 
 };

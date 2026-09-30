@@ -16,7 +16,7 @@ const { getLogger } = require('../observability/index.js');
  * XChain Platform Action - DEPOSIT
  *
  * This action transfers tokens from a user to a contract's custody.
- * No gas fee; on-chain transaction cost is sufficient.
+ * A controller guard may burn a metered gas fee from the depositor.
  *
  * PARAMS:
  * - VERSION              - Format Version
@@ -65,7 +65,25 @@ class Deposit {
 
         error = await this.validateContract(data, error);
 
-        error = await this.validateTokenAndBalance(data, error);
+        let balances;
+        ({ error, balances } = await this.validateTokenAndBalance(data, error));
+
+        let guardFee = 0;
+        if(!error){
+            let guard = await this.util.maybeRunCustodyGuard(this.actions, this.indexerDb, {
+                actionType: 'DEPOSIT',
+                tick: data['TICK'],
+                from: data['SOURCE'],
+                to: 'C:' + this.config['CHAIN'] + ':' + data['CONTRACT_ACTION_INDEX'],
+                amount: data['AMOUNT'],
+                data: data,
+                gasBalances: balances,
+            });
+            if(guard.error)
+                error = 'invalid: ' + guard.error;
+            else
+                guardFee = guard.guardFee;
+        }
 
         // Determine final status
         let status = (error) ? error : 'valid';
@@ -74,7 +92,7 @@ class Deposit {
         // Print status message
         getLogger().info("\t DEPOSIT : contract=" + data['CONTRACT_ACTION_INDEX'] + ' : ' + data['TICK'] + ' : ' + this.util.logAmount(data['AMOUNT']) + ' : ' + data['STATUS']);
 
-        await this.settleDeposit(data, status);
+        await this.settleDeposit(data, status, guardFee);
     }
 
     /*****************************************************************
@@ -154,11 +172,11 @@ class Deposit {
         if(!error && await this.indexerDb.isActionAllowed(null, data['TICK'], data['BLOCK_INDEX']) == false)
             error = 'invalid: TICK (sleeping)';
 
-        return error;
+        return { error, balances };
     }
 
     // Store the deposit row and move the stake into the contract's derived custody address
-    async settleDeposit(data, status){
+    async settleDeposit(data, status, guardFee = 0){
 
         // Create record in deposits table
         await this.indexerDb.createDeposit(data);
@@ -179,6 +197,11 @@ class Deposit {
         if(status === 'valid'){
             debits.push([data['TICK'], data['AMOUNT'], data['SOURCE']]);
             credits.push([data['TICK'], data['AMOUNT'], contractAddress]);
+            // Burn controller-guard gas from SOURCE without a matching credit or escrow
+            if(this.util.bcgt(guardFee, 0)){
+                debits.push([this.config['GAS'], guardFee, data['SOURCE']]);
+                this.util.addAddressTicker(data['SOURCE'], this.config['GAS']);
+            }
         }
 
         // Process any transaction ledger changes (credits / debits)

@@ -29,6 +29,7 @@ function applyFileAndBroadcastLimits(config){
     // BROADCAST lengths
     config['MAX_BROADCAST_MESSAGE_LENGTH']  = 250;
     config['MAX_BROADCAST_VALUE_LENGTH']    = 25;
+    config['MAX_BROADCAST_FEE_LENGTH']      = 11;
 }
 
 function applyMessageMethods(config){

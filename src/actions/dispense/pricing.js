@@ -222,16 +222,16 @@ module.exports = {
                 let giveTokenInfo = await this.indexerDb.getTokenInfo(dispenser['GIVE_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
                 // List of addresses allowed or blocked from holding GET_TICK
-                let getTokenAllowList = (getTokenInfo && !this.util.isNull(getTokenInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(getTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : [];
-                let getTokenBlockList = (getTokenInfo && !this.util.isNull(getTokenInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(getTokenInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : [];
+                let getTokenAllowList = (getTokenInfo && !this.util.isNull(getTokenInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(getTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX']) || [] : [];
+                let getTokenBlockList = (getTokenInfo && !this.util.isNull(getTokenInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(getTokenInfo['BLOCK_LIST'], data['BLOCK_INDEX']) || [] : [];
 
                 // List of addresses allowed or blocked from holding GIVE_TICK
-                let giveTokenAllowList = (giveTokenInfo && !this.util.isNull(giveTokenInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(giveTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : [];
-                let giveTokenBlockList = (giveTokenInfo && !this.util.isNull(giveTokenInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(giveTokenInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : [];
+                let giveTokenAllowList = (giveTokenInfo && !this.util.isNull(giveTokenInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(giveTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX']) || [] : [];
+                let giveTokenBlockList = (giveTokenInfo && !this.util.isNull(giveTokenInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(giveTokenInfo['BLOCK_LIST'], data['BLOCK_INDEX']) || [] : [];
 
                 // List of addresses allowed or blocked from matching with this ORDER
-                let dispenserAllowList = (!this.util.isNull(dispenser['ALLOW_LIST'])) ? await this.indexerDb.getList(dispenser['ALLOW_LIST'], data['BLOCK_INDEX']) : [];
-                let dispenserBlockList = (!this.util.isNull(dispenser['BLOCK_LIST'])) ? await this.indexerDb.getList(dispenser['BLOCK_LIST'], data['BLOCK_INDEX']) : [];
+                let dispenserAllowList = (!this.util.isNull(dispenser['ALLOW_LIST'])) ? await this.indexerDb.getList(dispenser['ALLOW_LIST'], data['BLOCK_INDEX']) || [] : [];
+                let dispenserBlockList = (!this.util.isNull(dispenser['BLOCK_LIST'])) ? await this.indexerDb.getList(dispenser['BLOCK_LIST'], data['BLOCK_INDEX']) || [] : [];
 
             error = await this.checkDispenseLists(ctx, row, error, dispenser,
                 getTokenAllowList, getTokenBlockList, giveTokenAllowList, giveTokenBlockList,
@@ -393,4 +393,3 @@ module.exports = {
             });
     },
 };
-

@@ -58,17 +58,12 @@ function makeTx(overrides = {}) {
     };
 }
 
-// Every buildActions() call below constructs a real Actions instance, which
-// forks a persistent VM subprocess worker (src/actions/index.js, execution:
-// 'subprocess'). Nothing here ever called vm.shutdown(), so those forks
-// outlived every test and the mocha process never exited on its own. Track
-// each VM buildActions() creates so the describes' afterEach hooks can shut
-// them all down.
-const pendingVms = [];
+// Track each Actions fixture so afterEach can stop all persistent VM workers it owns.
+const pendingActions = [];
 
 async function shutdownPendingVms() {
-    while (pendingVms.length) {
-        await pendingVms.pop().shutdown();
+    while (pendingActions.length) {
+        await pendingActions.pop().shutdown();
     }
 }
 
@@ -81,7 +76,7 @@ function buildActions(protocolChangesOverrides = {}) {
     indexer.protocolChanges = makeProtocolChanges(protocolChangesOverrides);
 
     const actions = new Actions(indexer);
-    pendingVms.push(actions.vm);
+    pendingActions.push(actions);
 
     // Stub every handler's parse() with a resolved stub.
     //

@@ -18,7 +18,7 @@
  *
  ********************************************************************/
 
-// Installed onto Bet.prototype by bet.js; each method runs with `this` bound to the
+// Installed onto Bet.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
 module.exports = {
 
@@ -93,12 +93,12 @@ module.exports = {
             // block and BLOCK_LIST WINS: an address on both lists is rejected
             if(!error && !this.util.isNull(feedInfo['ALLOW_LIST'])){
                 let allowList = await this.indexerDb.getList(feedInfo['ALLOW_LIST'], data['BLOCK_INDEX']);
-                if(!allowList.includes(data['SOURCE']))
+                if(allowList && !allowList.includes(data['SOURCE']))
                     error = 'invalid: SOURCE (not authorized)';
             }
             if(!error && !this.util.isNull(feedInfo['BLOCK_LIST'])){
                 let blockList = await this.indexerDb.getList(feedInfo['BLOCK_LIST'], data['BLOCK_INDEX']);
-                if(blockList.includes(data['SOURCE']))
+                if(blockList && blockList.includes(data['SOURCE']))
                     error = 'invalid: SOURCE (not authorized)';
             }
 
@@ -107,7 +107,7 @@ module.exports = {
             // credits are unconditional (nothing may wedge exit)
             if(!error && await this.indexerDb.isActionAllowed(null, feedInfo['TICK'], data['BLOCK_INDEX']) == false)
                 error = 'invalid: TICK (sleeping)';
-            if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], feedInfo['TICK']) == false)
+            if(!error && await this.indexerDb.isActionAllowed(data['SOURCE'], feedInfo['TICK'], data['BLOCK_INDEX']) == false)
                 error = 'invalid: SOURCE (not authorized)';
         }
 
@@ -146,7 +146,7 @@ module.exports = {
 
         // Verify SOURCE may act on the wagered tick (house token allow/block lists, create
         // only; place checks the feed tick above)
-        if(!error && format==0 && await this.indexerDb.isActionAllowed(data['SOURCE'], data['TICK']) == false)
+        if(!error && format==0 && await this.indexerDb.isActionAllowed(data['SOURCE'], data['TICK'], data['BLOCK_INDEX']) == false)
             error = 'invalid: SOURCE (not authorized)';
 
         // Verify no pipe in MEMO (pipe is field delimiter)

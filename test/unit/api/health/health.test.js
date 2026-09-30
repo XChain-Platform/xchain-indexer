@@ -171,6 +171,15 @@ describe('health() response builder', function(){
             'stallReason must attribute the stall to the decoder halt, got ' + JSON.stringify(res.stallReason));
     });
 
+    it('decoder halt stallReason names the in-place clear beside the resync', async function(){
+        // The decoder honours an audited clear, so a resync-only remedy sends the
+        // operator to the heavy fix; readers key on the leading word, which stays put.
+        const res = await call(makeIndexer({ decoderReorgHalted: true }));
+        assert.ok(/^decoder_reorg_halt:/.test(res.stallReason), JSON.stringify(res.stallReason));
+        assert.ok(/xchain-node clear-reorg-halt/.test(res.stallReason), JSON.stringify(res.stallReason));
+        assert.ok(/resync/.test(res.stallReason), JSON.stringify(res.stallReason));
+    });
+
     it('decoder halt does not clobber an existing indexer-side stallReason (#2736)', async function(){
         const res = await call(makeIndexer({ decoderReorgHalted: true, stallReason: 'price-barrier-timeout' }));
         assert.strictEqual(res.decoderReorgHalted, true);

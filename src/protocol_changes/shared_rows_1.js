@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * The SHARED block, part 1 of 5: anchor_reward_activation to attest_responsible_widening_activation
+ * The SHARED block, part 1 of 5: anchor_bundle_order_activation to attest_responsible_widening_activation
  *
  * One SHARED block part. The region between the two marker lines is
  * BYTE-TWINNED into the registry of xchain-sync, xchain-hub, xchain-explorer
@@ -35,6 +35,13 @@
 const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
 
 // SHARED-GATES BEGIN
+// anchor_bundle_order_activation
+addGate('anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
 // anchor_reward_activation
 // Per-network activation height, interpreted as the BTC-anchored snapshot_block
 // carried by the ANCHOR canonical (NOT the local processing height), so every chain
@@ -299,7 +306,7 @@ addGate('anchor_reward_activation.ANCHOR_ATTEST_BARRIER_ACTIVATION', 'height', {
     // member is BTC-only: the same instant as the family's BTC CONSUMER height, so the one
     // member that keeps BOTH certificates gains them together rather than carrying a lone extra
     // rule for 6 h. The canon carries the measurement.
-    testnet: 154291,
+    testnet: 154614, // set by the v0.21.0 freeze height plan
     regtest: UNPINNED,   // shares the family's arming seam so one venue lever arms both
 });
 

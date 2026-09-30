@@ -32,7 +32,7 @@ const {
 // Destroy Handler Mutations
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Mutation : Tier 1: Destroy Handler @tier1', function () {
+describe('Guard dependency: Tier 1: Destroy Handler @tier1', function () {
     let indexer, handler;
     beforeEach(function () { ({ indexer, handler } = destroyContext()); });
     afterEach(function () { sinon.restore(); });
@@ -77,7 +77,7 @@ describe('Mutation : Tier 1: Destroy Handler @tier1', function () {
     });
 });
 
-describe('Mutation : Tier 1: Destroy Handler @tier1', function () {
+describe('Guard dependency: Tier 1: Destroy Handler @tier1', function () {
     let indexer, handler;
     beforeEach(function () { ({ indexer, handler } = destroyContext()); });
     afterEach(function () { sinon.restore(); });
@@ -130,7 +130,7 @@ describe('Mutation : Tier 1: Destroy Handler @tier1', function () {
     });
 });
 
-describe('Mutation : Tier 1: Destroy Handler @tier1', function () {
+describe('Guard dependency: Tier 1: Destroy Handler @tier1', function () {
     let indexer, handler;
     beforeEach(function () { ({ indexer, handler } = destroyContext()); });
     afterEach(function () { sinon.restore(); });

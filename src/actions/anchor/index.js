@@ -15,8 +15,8 @@
  * XChain Platform Action - ANCHOR (validator-broadcast, DOGE-only)
  *
  * On-chain commitment of federation state: the per-network checkpoint BUNDLE
- * (v0), the publisher-bearing cross-chain match archive head (v1), and archive
- * continuation chunks (v2).
+ * (v0), the publisher-bearing cross-chain match archive head (v1), archive
+ * continuation chunks (v2), and the folded checkpoint/archive bundle (v3).
  * Parsed rows land in anchor_actions: the permanent on-chain record that
  * makes every checkpoint + the complete match archive recoverable from a
  * full chain parse alone (bin/recovery.js). Live indexers keep settling
@@ -39,6 +39,7 @@
  *        sections, one publisher-attestation tail (see parseBundle)
  *   v1 - VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|MATCH_BATCH_SEQ|MATCH_COUNT|BATCH_CRC32|TOTAL_CHUNKS|ARCHIVE_B64|SIG_COUNT|PUBKEY|SIG|...|PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|...
  *   v2 - VERSION|MATCH_BATCH_SEQ|CHUNK_INDEX|TOTAL_CHUNKS|ARCHIVE_B64_CHUNK
+ *   v3 - the v0 bundle with ARCHIVE_COUNT and one optional archive section
  *
  * ACTIVATION. The version set RESTARTS at 0 at ANCHOR_ACTIVATION (see
  * the anchor_activation row in src/protocol_changes/), so the first check in parse() is the anchor's own
@@ -65,11 +66,53 @@ const ar      = require('../../consensus/gates/anchor_reward_gate.js');
 // (W4): no predicate module stands between this file and the row it judges by.
 const gateRegistry = require('../../consensus/gate_registry');
 
-// The three wire families and their shared steps, one part file each.
+// The wire families and their shared steps, one part file each.
 const validate     = require('./validate.js');
 const archiveHead  = require('./archive_head.js');
 const bundle       = require('./bundle.js');
 const archiveChunk = require('./archive_chunk.js');
+const quorum       = require('./quorum.js');
+const settle       = require('./settle.js');
+const reassembly   = require('./reassembly.js');
+const { splitV3Wire } = require('./v3_wire.js');
+const { walkFoldSections } = require('./v3_sections.js');
+const { foldArchiveReason } = require('./v3_archive_check.js');
+const { signsExtendedCanonical, extendSectionCanonicalBase } = require('./v3_canonical.js');
+const { recordFoldAction } = require('./v3/v3_record.js');
+function foldHeaderReason(config, data, error){
+    if(error) return error;
+    if(String(data['NETWORK']) !== String(config['NETWORK'] || '')) return 'invalid: NETWORK (not this network)';
+    if(!/^[0-9]+$/.test(String(data['SNAPSHOT_BLOCK']))) return 'invalid: SNAPSHOT_BLOCK (format)';
+    return /^[0-9]+$/.test(String(data['SECTION_COUNT'])) ? error : 'invalid: SECTION_COUNT (format)';
+}
+async function checkFoldSeqs(handler, sections, archive, error){
+    if(error) return error;
+    for(let section of sections){
+        let maximum = await handler.indexerDb.getMaxAnchorCheckpointSeq(section.CHAIN, section.NETWORK);
+        if(maximum !== null && Number(section.CHECKPOINT_SEQ) < maximum)
+            return 'invalid: SECTION ' + section.SECTION_INDEX + ' CHECKPOINT_SEQ ' +
+                '(stale; replay of an older checkpoint)';
+    }
+    if(archive === null) return null;
+    let wrapper = sections[Number(archive.WRAPPER_SECTION_INDEX)];
+    let watermark = await handler.indexerDb.getArchiveReplayWatermarks();
+    let batchStale = watermark.batchSeq !== null && Number(archive.MATCH_BATCH_SEQ) < watermark.batchSeq;
+    let checkpointStale = watermark.checkpointSeq !== null && Number(wrapper.CHECKPOINT_SEQ) < watermark.checkpointSeq;
+    return batchStale && checkpointStale ?
+        'invalid: MATCH_BATCH_SEQ (stale; replay of an older archive batch)' : null;
+}
+function foldOrderReason(handler, data, sections, error){
+    let active = gateRegistry.activeAt('anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION',
+        handler.config['NETWORK'], null, Number(data['BLOCK_INDEX']), null);
+    if(error || !active) return error;
+    for(let i = 0; i < sections.length; i++){
+        let previous = i === 0 ? null : sections[i - 1].CHAIN;
+        let reason = validate.sectionOrderReason(previous, sections[i]);
+        if(!reason) reason = validate.sigOrderReason(sections[i].SIGS);
+        if(reason) return 'invalid: SECTION ' + i + ' ' + reason;
+    }
+    return null;
+}
 
 class Anchor {
 
@@ -105,6 +148,7 @@ class Anchor {
         // the degraded round and a tail-less archive wire is not a legal encoding.
         this.formats[1] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|MATCH_BATCH_SEQ|MATCH_COUNT|BATCH_CRC32|TOTAL_CHUNKS|ARCHIVE_B64|SIG_COUNT|PUBKEY|SIG|...|PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|...';
         this.formats[2] = 'VERSION|MATCH_BATCH_SEQ|CHUNK_INDEX|TOTAL_CHUNKS|ARCHIVE_B64_CHUNK';
+        this.formats[3] = 'VERSION|NETWORK|SNAPSHOT_BLOCK|SECTION_COUNT|...|ARCHIVE_COUNT|...|PUBLISHER|ATTEST_SIG_COUNT|...';
     }
 
     // Canonical signing string: MUST byte-match the hub's
@@ -150,6 +194,8 @@ class Anchor {
             // its own SECTION_SNAPSHOT_BLOCK, the block its signatures were produced over.
             base += '|' + [String(d['STATE_ROOT'] || '').toLowerCase(), String(d['STATE_ROOT_VERSION']),
                            String(d['BLOCK_MERKLE_ROOT'] || '').toLowerCase(), String(d['BLOCK_MERKLE_VERSION'])].join('|');
+            if(signsExtendedCanonical(d['SECTION_INDEX'], d['FOLD_ARCHIVE'])) roundId += '|' + d['FOLD_ARCHIVE']['MATCH_BATCH_SEQ'];
+            base = extendSectionCanonicalBase(base, d['SECTION_INDEX'], d['FOLD_ARCHIVE']);
         }
         if(eq.isEquivHeaderActive(d['SNAPSHOT_BLOCK'], d['NETWORK']))
             return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT, roundId, 0, base);
@@ -213,8 +259,13 @@ class Anchor {
         if(!error && !gateRegistry.activeAt('anchor_activation.ANCHOR_ACTIVATION', this.config['NETWORK'], null, Number(data['BLOCK_INDEX']), null))
             error = 'invalid: ANCHOR before activation';
 
+        let foldActive = format === 3 && gateRegistry.activeAt(
+            'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION', this.config['NETWORK'],
+            null, Number(data['BLOCK_INDEX']), null);
+
         // Verify VERSION is one this parser knows (the table in the constructor is the whole wire set)
-        if(!error && (format === null || this.formats[format] === undefined))
+        if(!error && (format === null || this.formats[format] === undefined ||
+            (format === 3 && !foldActive)))
             error = 'invalid: VERSION (unknown)';
 
         // ANCHOR is valid only on the anchor chain: DOGE (all networks).
@@ -225,6 +276,7 @@ class Anchor {
         // the error), and the archive-head parser is the fall-through, so a rejected action
         // is recorded rather than dropped.
         if(format === 2) return await this.parseContinuation(params, data, error);
+        if(format === 3 && foldActive) return await this.parseFold(params, data, error);
         if(format === 0) return await this.parseBundle(params, data, error);
         return await this.parseCheckpoint(params, data, error, format);
     }
@@ -239,6 +291,50 @@ class Anchor {
     // chain checkpointed this cycle. The body lives in bundle.js.
     async parseBundle(params, data, error){
         return await bundle.parseBundleAction(this, params, data, error);
+    }
+
+    async parseFold(params, data, error){
+        Object.assign(data, { NETWORK: String(params[1] || ''), SNAPSHOT_BLOCK: params[2],
+            SECTION_COUNT: params[3] });
+        error = foldHeaderReason(this.config, data, error);
+
+        let split = splitV3Wire(params);
+        if(!error && split.error) error = split.error;
+        let archive = split.error ? null : split.archive;
+        data['ARCHIVE_COUNT'] = split.error ? null : split.ARCHIVE_COUNT;
+
+        let walked = walkFoldSections(this, split.error ? { sections: [] } : split, data, error);
+        let sections = walked.sections;
+        error = walked.error;
+        error = foldOrderReason(this, data, sections, error);
+
+        let tailParams = split.error ? [] : [split.PUBLISHER].concat(split.attestationTail);
+        let tail = validate.parseBundleTail(tailParams, data, 0, error);
+        let publisherSigs = tail.publisherSigs;
+        error = tail.error;
+
+        if(!error) error = foldArchiveReason(this, archive, data);
+        error = await checkFoldSeqs(this, sections, archive, error);
+        error = await archiveHead.checkFoldArchiveReissue(this, data, archive, error);
+        for(let section of sections)
+            Object.defineProperty(section, 'FOLD_ARCHIVE', { value: archive, configurable: true });
+        let oracleSetFor = quorum.makeOracleSetResolver(this);
+        let verdict = await quorum.verifySections(this, data, sections, oracleSetFor, error);
+        for(let section of sections) delete section.FOLD_ARCHIVE;
+        error = verdict.error;
+
+        if(!error && sections.length > 0 && verdict.bundleSet && verdict.bundleSet.oracleN > 0){
+            let met = quorum.bundleAttestationMet(this, data, verdict.bundleSet, publisherSigs);
+            await settle.creditBundleReward(this, data, met, verdict.bundleSet);
+        }
+
+        await recordFoldAction(this, data, sections, archive, publisherSigs, error);
+        if(archive !== null){
+            let wrapper = sections[Number(archive.WRAPPER_SECTION_INDEX)] || {};
+            await reassembly.reassembleAtHead(
+                this, Object.assign({}, data, wrapper, archive), error, 3);
+        }
+        await this.mapper.createMappings(data);
     }
 
     // Shape-check one v0 section's fixed fields: the failure reason, or null when the
@@ -281,6 +377,14 @@ class Anchor {
         catch(e){ return null; }
         let n = zlib.crc32 ? zlib.crc32(Buffer.from(json, 'utf8')) : this.crc32Fallback(Buffer.from(json, 'utf8'));
         return (n >>> 0).toString(16).padStart(8, '0');
+    }
+    archiveMatchCount(b64){
+        let archive;
+        try {
+            let json = zlib.gunzipSync(Buffer.from(String(b64), 'base64url'), { maxOutputLength: 16 * 1024 * 1024 }).toString('utf8');
+            archive = JSON.parse(json);
+        } catch(e){ return null; }
+        return archive && Array.isArray(archive.matches) ? archive.matches.length : null;
     }
     crc32Fallback(buf){
         let c, crc = 0xFFFFFFFF;

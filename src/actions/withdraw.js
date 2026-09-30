@@ -1,4 +1,5 @@
 const { getLogger } = require('../observability/index.js');
+const { declaresOwnerWithdraw } = require('./deploy/contract_meta.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -16,8 +17,9 @@ const { getLogger } = require('../observability/index.js');
  * XChain Platform Action - WITHDRAW
  *
  * This action withdraws tokens from a contract's custody back to the owner.
- * Only the contract owner (deployer) can withdraw.
- * No gas fee; on-chain transaction cost is sufficient.
+ * Only the contract owner (deployer) can withdraw, and from the OWNER_WITHDRAW_OPT_IN
+ * flag day only from a contract whose meta declares ownerWithdraw: true.
+ * A controller guard may burn GAS; otherwise the on-chain transaction cost is sufficient.
  *
  * PARAMS:
  * - VERSION              - Format Version
@@ -70,6 +72,23 @@ class Withdraw {
 
         error = await this.validateTokenAndBalance(data, contractAddress, error);
 
+        let guardFee = 0;
+        if(!error){
+            let guard = await this.util.maybeRunCustodyGuard(this.actions, this.indexerDb, {
+                actionType: 'WITHDRAW',
+                tick: data['TICK'],
+                from: contractAddress,
+                to: data['SOURCE'],
+                amount: data['AMOUNT'],
+                data: data,
+                gasBalances: null
+            });
+            if(guard.error)
+                error = 'invalid: ' + guard.error;
+            else
+                guardFee = guard.guardFee;
+        }
+
         // Determine final status
         let status = (error) ? error : 'valid';
         data['STATUS'] = status;
@@ -77,7 +96,7 @@ class Withdraw {
         // Print status message
         getLogger().info("\t WITHDRAW : contract=" + data['CONTRACT_ACTION_INDEX'] + ' : ' + data['TICK'] + ' : ' + this.util.logAmount(data['AMOUNT']) + ' : ' + data['STATUS']);
 
-        await this.settleWithdrawal(data, contractAddress, status);
+        await this.settleWithdrawal(data, contractAddress, status, guardFee);
     }
 
     /*****************************************************************
@@ -110,6 +129,15 @@ class Withdraw {
             if(ownerId === null || Number(ownerId) !== Number(contractInfo.source_id))
                 error = 'invalid: SOURCE (not contract owner)';
         }
+
+        // Verify the contract lets its owner withdraw. WITHDRAW moves custody without
+        // running contract code, so a contract deployed at/after OWNER_WITHDRAW_OPT_IN
+        // must ask for it in its meta; without that its tokens leave only through its
+        // own logic. Judged at the contract's DEPLOY block, so older contracts keep the
+        // owner's recovery path they were deployed with.
+        if(!error && contractInfo && !declaresOwnerWithdraw(contractInfo.meta_json)
+            && await this.actions.protocolChanges.isEnabled('OWNER_WITHDRAW_OPT_IN', contractInfo.block_index))
+            error = 'invalid: CONTRACT_ACTION_INDEX (owner withdraw not enabled)';
 
         return error;
     }
@@ -156,7 +184,7 @@ class Withdraw {
     }
 
     // Store the withdrawal row and move the balance out of contract custody back to SOURCE
-    async settleWithdrawal(data, contractAddress, status){
+    async settleWithdrawal(data, contractAddress, status, guardFee){
 
         // Create record in withdrawals table
         await this.indexerDb.createWithdrawal(data);
@@ -174,6 +202,10 @@ class Withdraw {
         if(status === 'valid'){
             debits.push([data['TICK'], data['AMOUNT'], contractAddress]);
             credits.push([data['TICK'], data['AMOUNT'], data['SOURCE']]);
+            if(this.util.bcgt(guardFee, 0)){
+                debits.push([this.config['GAS'], guardFee, data['SOURCE']]);
+                this.util.addAddressTicker(data['SOURCE'], this.config['GAS']);
+            }
         }
 
         // Process any transaction ledger changes (credits / debits)

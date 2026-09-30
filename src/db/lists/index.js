@@ -23,15 +23,38 @@ const path    = require('path');
 // The list-edit resolution flag day is a registry row read by literal key (W5), keyed
 // '<COIN>:<network>' so the coin goes with the height.
 const gateRegistry = require('../../consensus/gate_registry');
+const { getListHeadIndex } = require('./head_resolution');
 const LIST_EDIT_RESOLUTION_KEY = 'list_edit_resolution_activation.LIST_EDIT_RESOLUTION_ACTIVATION';
+const LIST_REFERENCE_VALIDITY_KEY = 'list_reference_validity_activation.LIST_REFERENCE_REQUIRES_VALID_LIST';
+
+// Distinguish a stored LIST rejected by the validity gate from an unknown id.
+// Policy readers treat the rejected reference as absent, while unknown getList
+// lookups retain their empty-array contract.
+async function isRejectedListReference(db, action_index, block_index){
+    if(db.util.isNull(action_index) || !db.util.isNumeric(action_index))
+        return false;
+    if(!gateRegistry.activeAt(LIST_REFERENCE_VALIDITY_KEY, db.config['NETWORK'], db.config['COIN'], block_index, null))
+        return false;
+    let rows = await db.doQuery("SELECT type FROM lists WHERE action_index=? LIMIT 1", [action_index]);
+    return rows.length > 0;
+}
 
 module.exports = {
 
-    // Return a list type given a tx_hash
-    async getListType(action_index){
+    getListHeadIndex,
+
+    // Return a list type given an action index. Once the validity gate is active,
+    // only a LIST action with a valid verdict can supply a reference type.
+    async getListType(action_index, block_index){
         let type  = false;
         if(!this.util.isNull(action_index) && this.util.isNumeric(action_index)){
             let query = "SELECT type FROM lists WHERE action_index=? LIMIT 1";
+            if(gateRegistry.activeAt(LIST_REFERENCE_VALIDITY_KEY, this.config['NETWORK'], this.config['COIN'], block_index, null))
+                query = `SELECT l.type
+                         FROM lists l
+                         INNER JOIN index_statuses s ON (s.id=l.status_id)
+                         WHERE l.action_index=? AND s.status='valid'
+                         LIMIT 1`;
             let args  = [action_index];
             let results = await this.doQuery(query, args);
             if(results.length > 0)
@@ -44,14 +67,18 @@ module.exports = {
     // Walk a LIST reference up to the CREATE action that roots its edit chain.
     // An edit row carries the index of the list it edits in lists.list_action_index;
     // a create row carries NULL. Post-flag-day list.js normalizes every edit to
-    // point straight at the root, so this is a single hop in practice; the bounded
-    // loop covers legacy rows that named another edit (and can never spin on a
-    // cycle, which a malformed chain could otherwise produce).
+    // point straight at the root, so this is a single hop in practice. The default
+    // bound preserves legacy reads; gated head resolution can request a complete
+    // walk, with cycle detection bounding malformed chains. A block ceiling only
+    // extends a capped walk when its candidate is newer than that ceiling.
     // @param {action_index}  integer  ACTION_INDEX of any LIST create or edit
-    async getListRootIndex(action_index){
+    // @param {max_hops}  integer|null  ordinary parent-walk limit
+    // @param {max_block_index} integer|null candidate block-height ceiling
+    async getListRootIndex(action_index, max_hops=16, max_block_index=null){
         let root = action_index;
         let seen = {};
-        for(let hop = 0; hop < 16; hop++){
+        let hop = 0;
+        while(max_hops===null || hop < max_hops){
             if(seen[String(root)]) break;
             seen[String(root)] = true;
             let rows = await this.doQuery("SELECT list_action_index FROM lists WHERE action_index=? LIMIT 1", [root]);
@@ -59,40 +86,39 @@ module.exports = {
             let parent = rows[0]['list_action_index'];
             if(this.util.isNull(parent)) break;
             root = parent;
+            hop++;
+        }
+        if(!this.util.isNull(max_block_index)){
+            let boundedSeen = {};
+            while(!boundedSeen[String(root)]){
+                boundedSeen[String(root)] = true;
+                let query = `SELECT
+                                l.list_action_index
+                            FROM
+                                lists l
+                                INNER JOIN actions a ON (a.action_index=l.action_index)
+                            WHERE
+                                l.action_index=?
+                                AND a.block_index>?
+                            LIMIT 1`;
+                let rows = await this.doQuery(query, [root, max_block_index]);
+                if(rows.length == 0) break;
+                let parent = rows[0]['list_action_index'];
+                if(this.util.isNull(parent)) break;
+                root = parent;
+            }
         }
         return root;
     },
 
-    // Resolve a LIST reference to the action whose list_items rows ARE the list's
-    // CURRENT membership: the newest VALID action in its edit chain, or the create
-    // itself when it has no valid edits. Every valid edit persists a COMPLETE
-    // membership snapshot (list.js splices the final item array and writes all of
-    // it), so the head's rows are the whole list, never a delta. Ordering is by
-    // action_index DESC, a total order (action_index is unique and monotonic), so
-    // independently-built nodes resolve the same head. Invalid edits are excluded:
-    // they write no list_items rows at all, so picking one would empty the list.
-    // @param {action_index}  integer  ACTION_INDEX of any LIST create or edit
-    async getListHeadIndex(action_index){
-        let root = await this.getListRootIndex(action_index);
-        let query = `SELECT
-                        l.action_index
-                    FROM
-                        lists l
-                        INNER JOIN index_statuses s ON (s.id=l.status_id)
-                    WHERE
-                        l.list_action_index=?
-                        AND s.status='valid'
-                    ORDER BY l.action_index DESC
-                    LIMIT 1`;
-        let rows = await this.doQuery(query, [root]);
-        return (rows.length > 0) ? rows[0]['action_index'] : root;
-    },
-
-    // Return a list given a tx_hash
+    // Return a list given an action index, or null for a stored reference rejected
+    // by the active validity gate.
     // @param {action_index}  integer  ACTION_INDEX of a LIST (as pinned by consumers)
     // @param {block_index}   integer  block being processed; gates edit resolution
     async getList(action_index, block_index){
-        let type = await this.getListType(action_index);
+        let type = await this.getListType(action_index, block_index);
+        if(!type && await isRejectedListReference(this, action_index, block_index))
+            return null;
         let list = [];
         if(type){
             // a LIST edit writes its resulting items under the EDIT's own
@@ -105,7 +131,7 @@ module.exports = {
             // legacy create-index read runs unchanged.
             let resolved = action_index;
             if(gateRegistry.activeAt(LIST_EDIT_RESOLUTION_KEY, this.config['NETWORK'], this.config['COIN'], block_index, null))
-                resolved = await this.getListHeadIndex(action_index);
+                resolved = await this.getListHeadIndex(action_index, block_index);
             let query = '';
             let args  = [resolved];
             // CONSENSUS: list_items has no ORDER BY on the AUTO_INCREMENT insert
@@ -157,32 +183,21 @@ module.exports = {
     // token's policy at a past origin_block: the head must be bounded to the last action
     // index AT that block, not this chain's own tip. Read-path only: this never enters
     // isActionAllowed, so no consensus verdict moves.
+    // May return null when the active validity gate rejects a stored LIST reference.
     // @param {action_index}  integer  ACTION_INDEX of a LIST (as pinned by consumers)
     // @param {block_index}   integer  the height to resolve the list's membership AS OF
     async getListAtBlock(action_index, block_index){
-        let type = await this.getListType(action_index);
+        let type = await this.getListType(action_index, block_index);
+        if(!type && await isRejectedListReference(this, action_index, block_index))
+            return null;
         let list = [];
         if(type){
-            let root     = await this.getListRootIndex(action_index);
-            let resolved = root;
+            let resolved = action_index;
             // Same activation gate as getList: below it (or with no block context) the
             // legacy create-index membership stands, which is already immutable and needs
             // no bound.
             if(this.isListEditResolutionActive(block_index)){
-                let headQuery = `SELECT
-                                    l.action_index
-                                FROM
-                                    lists l
-                                    INNER JOIN index_statuses s ON (s.id=l.status_id)
-                                    INNER JOIN actions        a ON (a.action_index=l.action_index)
-                                WHERE
-                                    l.list_action_index=?
-                                    AND s.status='valid'
-                                    AND a.block_index<=?
-                                ORDER BY l.action_index DESC
-                                LIMIT 1`;
-                let headRows = await this.doQuery(headQuery, [root, block_index]);
-                resolved = (headRows.length > 0) ? headRows[0]['action_index'] : root;
+                resolved = await this.getListHeadIndex(action_index, block_index, block_index);
             }
             let query = '';
             let args  = [resolved];

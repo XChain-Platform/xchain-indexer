@@ -63,6 +63,13 @@ describe('XBRIDGE action handler @regression @tier3', function(){
             assert.strictEqual(V.ORIGIN_ADDRESS,      'invalid: ORIGIN_ADDRESS');
         });
 
+        it('cannot be mutated at runtime', function(){
+            // An in-process write to a key would silently change what validate.js writes.
+            assert.ok(Object.isFrozen(XBridge.VERDICTS));
+            assert.throws(() => { 'use strict'; XBridge.VERDICTS.BEFORE_ACTIVATION = 'x'; }, TypeError);
+            assert.strictEqual(XBridge.VERDICTS.BEFORE_ACTIVATION, 'invalid: XBRIDGE before activation');
+        });
+
         it('carries a user format for exactly v0, v1, v3 and v4', function(){
             let { handler } = makeHandler();
             assert.deepStrictEqual(Object.keys(handler.formats).sort(), ['0','1','3','4']);

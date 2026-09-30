@@ -56,6 +56,7 @@ module.exports = {
         // One line per foreign chain this drain refused rows from, rather than one per row:
         // a hub database that outlived a venue re-genesis serves its whole relic table.
         this.reportRefusedChainRows(table);
+        this.reportRefusedNetworkRows(table);
         if (await this.probeRebuiltSource(drain)) return await this.bootstrapTable(table, true);
         await this.catchUpToReadyCeiling(drain);
 

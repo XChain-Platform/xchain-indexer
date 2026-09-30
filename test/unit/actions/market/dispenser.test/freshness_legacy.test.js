@@ -132,6 +132,40 @@ describe('Dispenser action handler @regression @tier2', function () {
     });
 });
 
+// Run a below-gate non-owner create against a tracker whose getFirstSeen rejects with `err`.
+function parseBelowGateWithTrackerError(err) {
+    indexer.indexerDb.getAddressPreferences
+        .withArgs(OTHER_ADDR, sinon.match.any, sinon.match.any)
+        .resolves({ FEE_PREFERENCE: 0, REQUIRE_MEMO: 0, DISPENSER_PREFERENCE: 0 });
+    mainnetBelowGateCtx();
+    actionsCtx.utxoTracker = { enabled: true, getFirstSeen: sinon.stub().rejects(err) };
+    dispenser = new Dispenser(actionsCtx);
+    const params = makeParams(`0|BTC|JDOG|1||10|BTC||0.01|${OTHER_ADDR}||||${EXPIRATION}|||`);
+    const data   = createBaseData({ ACTION: 'DISPENSER', FORMAT: 0, SOURCE: OWNER_ADDR, BLOCK_TIME, COIN: 'BTC', BLOCK_INDEX: 500 });
+    return { data, run: () => dispenser.parse(params, data, false) };
+}
+
+// An outage is node-local: a healthy peer's tracker answered, so committing a verdict
+// here would fork. The block must halt (parse rejects); an RPC error answer must not.
+describe('Dispenser action handler @regression @tier2', function () {
+    useDispenserHarness(bind);
+
+    describe('legacy freshness path: tracker outage vs tracker answer', function () {
+        it('tracker giving no answer (UTXO_TRACKER_UNAVAILABLE) halts the block instead of committing not permitted', async function () {
+            const outage = Object.assign(new Error('UTXO tracker unreachable: ECONNREFUSED'), { code: 'UTXO_TRACKER_UNAVAILABLE' });
+            const { data, run } = parseBelowGateWithTrackerError(outage);
+            await assert.rejects(run, (e) => e === outage);
+            assert.ok(!String(data['STATUS'] || '').includes('not permitted'));
+        });
+
+        it('tracker RPC error answer (untagged) still reads as not fresh', async function () {
+            const { data, run } = parseBelowGateWithTrackerError(new Error('UTXO tracker RPC error: {"code":-32603,"message":"Invalid address"}'));
+            await run();
+            assert.ok(data['STATUS'].includes('GET_ADDRESS') && data['STATUS'].includes('not permitted'));
+        });
+    });
+});
+
 describe('Dispenser action handler @regression @tier2', function () {
     useDispenserHarness(bind);
 

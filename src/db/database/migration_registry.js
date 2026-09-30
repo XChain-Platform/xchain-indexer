@@ -171,9 +171,11 @@ const startupAssertedMigrationFile = function(assertion){
 // non-blank, non-comment line), so a token buried in body prose or a data literal
 // cannot arm it. Pure string logic, unit-tested directly.
 //
-// Twin: xchain-node/src/services/migration_precondition_service.js carries the same
-// parser, because the deploy tool reads these files from a source tree it has only
-// cloned and cannot require this module. Keep the two in step.
+// Twins: xchain-node/src/services/migration_precondition_service/migration_scan.js
+// (migrationDeclaresDeployPrecondition) and xchain-decoder/src/db/migration_preconditions.js
+// (Database.migrationDeclaresDeployPrecondition) carry the same parser, because the deploy
+// tool reads these files from a source tree it has only cloned and cannot require this
+// module. Keep all three in step.
 const migrationDeclaresDeployPrecondition = function(raw){
     const prologue = [];
     for(const line of String(raw).split('\n')){

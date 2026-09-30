@@ -35,7 +35,42 @@
 const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
 
 // SHARED-GATES BEGIN
-// rollcall_activation (continued)
+// rollcall_activation
+// Per-network BTC height at/above which ROLLCALL epochs exist at all.
+// MAINNET ARMS AT 0 by the 2026-09-09 ruling: eviction can only reinterpret a chain that
+// has validators to evict, and mainnet carries 0 validators, 0 stakes and 0 roll-calls
+// (measured 2026-09-09), so every epoch below the tip closes empty and the from-genesis
+// OLD-vs-ON replay per chain is the witness. null is still a legitimate value here (regtest
+// holds it until the venue opts in), so every read MUST go through the Number.isFinite
+// guard below: a bare `height >= ROLLCALL_ACTIVATION[network]` would arm a null network at
+// height 0, since `0 >= null` is true in JS.
+addGate('rollcall_activation.ROLLCALL_ACTIVATION', 'epoch', {
+    mainnet: 0,           // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 validators, 0 stakes, 0 roll-calls, measured 2026-09-09)
+    testnet: 151200,      // 1008 x 150 = 144 x 1050; tip was 150400 on 2026-08-30, ~5.5 days out
+    regtest: UNPINNED,   // ARMS AT 0 when the venue sets XC_ROLLCALL_REGTEST_ACTIVATION
+});
+
+// The documented regtest arming height: genesis. It is a multiple of the
+// 30-block regtest interval, so epoch 0 is a real epoch and the first close is
+// not skipped. This is the height a regtest venue arms AT, not a height it is
+// armed at by default -- see resolveRegtestActivation for why the default is
+// inert and how a venue opts in.
+addGate('rollcall_activation.ROLLCALL_REGTEST_ARMED_HEIGHT', 'constant', 0);
+
+// The one environment variable this module reads, and only ever for regtest.
+addGate('rollcall_activation.ROLLCALL_REGTEST_ENV', 'constant', 'XC_ROLLCALL_REGTEST_ACTIVATION');
+
+// Epoch cadence in BTC blocks. Weekly on the live networks per the 2026-08-30
+// ruling: with K=2 an outage shorter than one epoch minus the accept window
+// (~6 days) can never evict, and 2-3 weeks idle always does. Regtest uses 30 so
+// an acceptance run does not have to mine 2 x 1008 blocks.
+addGate('rollcall_activation.ROLLCALL_INTERVAL_BLOCKS', 'constant', { mainnet: 1008, testnet: 1008, regtest: 30 });
+
+// How long after the epoch block a signature may still land, in BTC blocks. The
+// BTC header stamp at E + this value is what cuts the DOGE chain (see
+// rollcallWindowEndHeight / the epoch close).
+addGate('rollcall_activation.ROLLCALL_ACCEPT_WINDOW_BLOCKS', 'constant', { mainnet: 144, testnet: 144, regtest: 12 });
+
 // BTC blocks after the window closes before the epoch closes, giving the DOGE
 // side time to bury. MUST be >= 1 on every network: a block's `block_time` is
 // written by createBlock AFTER that block's own processing, so the window

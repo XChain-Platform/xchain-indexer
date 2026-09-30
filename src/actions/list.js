@@ -167,7 +167,7 @@ class List {
 
         // Parse in the list type (if any)
         if(!error && format==1)
-            type = await this.indexerDb.getListType(data['LIST_ACTION_INDEX']);
+            type = await this.indexerDb.getListType(data['LIST_ACTION_INDEX'], data['BLOCK_INDEX']);
 
         // Validate LIST_ACTION_INDEX
         if(!error && format==1 && type===false){

@@ -33,6 +33,8 @@
 const { SETTLE_REASON, isNull, int } = require('./reasons.js');
 const { policyHash, verifyMembershipOrder, parseMembership } = require('./policy_membership.js');
 const { isSettled, recordSettlement } = require('./settlements.js');
+const { injectBridgedToken } = require('./leg_effects.js');
+const { resolveTransferOrigin } = require('../bridge_checkpoint_check/origin.js');
 const createPolicyLegs = require('./policy_legs.js');
 
 /**
@@ -148,12 +150,34 @@ function verifyMembership(deps, row, f){
  * The signature quorum over the policy canonical, then the bridged copy this snapshot is
  * materialized onto.
  *
- * The bridged copy on THIS chain. A chain that holds no copy of the tick has nothing to
- * materialize the policy onto, and that is a CARRIED outcome: a copy can appear later, on
- * the first in-leg of a transfer of that tick.
+ * The bridged copy on THIS chain. When the row is absent, the first finalized in-leg for the
+ * tick supplies its signed decimals and the policy apply creates the copy before materializing
+ * the policy. Without a matching transfer, the snapshot carries forward.
  *
  * @returns {Promise<{reason: string, terminal: boolean}|{copyTick: string, owner: *, info: Object}>}
  */
+async function signedCopyDecimals(deps, ctx, f){
+    const mirror = ctx.indexerDb.mirrorDb();
+    if(typeof mirror.getFinalizedBridgeTransfersForChain !== 'function') return null;
+    const bind = deps.canonicals.mirrorBindClause(ctx);
+    const rows = await mirror.getFinalizedBridgeTransfersForChain(ctx.network, ctx.coin, bind);
+    for(const row of (rows || [])){
+        const origin = resolveTransferOrigin(row);
+        if(origin && origin.kind === 'lock' && origin.originChain === f.origin &&
+           origin.nativeTick === f.name){
+            const decimals = int(row.decimals);
+            if(decimals !== null) return decimals;
+        }
+    }
+    return null;
+}
+
+function noCopy(deps, copyTick, detail){
+    const message = SETTLE_REASON.POLICY_NO_COPY + (detail ? ': ' + detail : '') + ' : deferring';
+    deps.refusalLog.warnOnce('XPOLICY', copyTick, SETTLE_REASON.POLICY_NO_COPY, message);
+    return { reason: SETTLE_REASON.POLICY_NO_COPY, terminal: false };
+}
+
 async function guardQuorumAndCopy(deps, row, ctx, f){
     const { verifyQuorum }    = deps.quorum;
     const { policyCanonical } = deps.canonicals;
@@ -173,12 +197,20 @@ async function guardQuorumAndCopy(deps, row, ctx, f){
 
     const copyTick = f.origin + '.' + f.name;
     const owner    = ((ctx.config && ctx.config['ADDRESS']) || {})['BRIDGE_' + f.origin];
-    const tickId   = await db.getTickerId(copyTick);
-    if(isNull(tickId) || isNull(owner))
-        return { reason: SETTLE_REASON.POLICY_NO_COPY, terminal: false };
-    const info = await db.getTokenInfo(copyTick, ctx.blockIndex);
-    if(!info)
-        return { reason: SETTLE_REASON.POLICY_NO_COPY, terminal: false };
+    let tickId     = await db.getTickerId(copyTick);
+    let info       = isNull(tickId) ? null : await db.getTokenInfo(copyTick, ctx.blockIndex);
+    if(info && !isNull(owner)) return { copyTick: copyTick, owner: owner, info: info };
+    if(isNull(owner)) return noCopy(deps, copyTick, 'bridge role address is not configured');
+
+    const decimals = await signedCopyDecimals(deps, ctx, f);
+    if(decimals === null) return noCopy(deps, copyTick, 'no finalized in-leg supplies decimals');
+    const made = await injectBridgedToken(ctx,
+        { origin: f.origin, name: f.name, decimals: decimals, owner: owner });
+    if(!made.ok) return noCopy(deps, copyTick, made.reason);
+
+    tickId = await db.getTickerId(copyTick);
+    info = isNull(tickId) ? null : await db.getTokenInfo(copyTick, ctx.blockIndex);
+    if(!info) return noCopy(deps, copyTick, 'token row creation produced no local row');
     return { copyTick: copyTick, owner: owner, info: info };
 }
 

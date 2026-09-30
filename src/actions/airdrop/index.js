@@ -177,7 +177,7 @@ class Airdrop {
 
 // Install the phase methods from airdrop/ NON-ENUMERABLE, the shape the class body they came
 // from produced: parse() reaches them as this.<method>, suites can stub them through
-// Airdrop.prototype, and for-in over a handler stays empty. Same install as dispenser_close.js
+// Airdrop.prototype, and for-in over a handler stays empty. Same install as dispenser_close/index.js
 // and db/index.js use.
 for(const part of [legsPart, validatePart, recipientsPart, feesPart, controllerGuardPart, settlePart]){
     const descriptors = Object.getOwnPropertyDescriptors(part);

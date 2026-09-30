@@ -1,4 +1,9 @@
 const { getLogger } = require('../../observability/index.js');
+const gateRegistry = require('../../consensus/gate_registry');
+const { tokenPolicyRejects } = require('../../consensus/order_swap_payout_policy/token_policy');
+
+const EMPTY_ALLOW_LIST_KEY = 'empty_allow_list_denies_activation.EMPTY_ALLOW_LIST_DENIES';
+const PAYOUT_POLICY_KEY = 'order_swap_payout_policy_activation.ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN';
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -21,7 +26,7 @@ const { getLogger } = require('../../observability/index.js');
  *
  ********************************************************************/
 
-// Installed onto Order_Match.prototype by order_match.js; each method runs with `this`
+// Installed onto Order_Match.prototype by index.js; each method runs with `this`
 // bound to the handler, exactly as the class method it was.
 module.exports = {
 
@@ -33,16 +38,16 @@ module.exports = {
         let giveTokenInfo = await this.indexerDb.getTokenInfo(orderInfo['GIVE_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
 
         // List of addresses allowed or blocked from holding GET_TICK
-        let getTokenAllowList = (getTokenInfo && !this.util.isNull(getTokenInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(getTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : [];
-        let getTokenBlockList = (getTokenInfo && !this.util.isNull(getTokenInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(getTokenInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : [];
+        let getTokenAllowList = (getTokenInfo && !this.util.isNull(getTokenInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(getTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : null;
+        let getTokenBlockList = (getTokenInfo && !this.util.isNull(getTokenInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(getTokenInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : null;
 
         // List of addresses allowed or blocked from holding GIVE_TICK
-        let giveTokenAllowList = (giveTokenInfo && !this.util.isNull(giveTokenInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(giveTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : [];
-        let giveTokenBlockList = (giveTokenInfo && !this.util.isNull(giveTokenInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(giveTokenInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : [];
+        let giveTokenAllowList = (giveTokenInfo && !this.util.isNull(giveTokenInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(giveTokenInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : null;
+        let giveTokenBlockList = (giveTokenInfo && !this.util.isNull(giveTokenInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(giveTokenInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : null;
 
         // List of addresses allowed or blocked from matching with this ORDER
-        let orderInfoAllowList = (!this.util.isNull(orderInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(orderInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : [];
-        let orderInfoBlockList = (!this.util.isNull(orderInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(orderInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : [];
+        let orderInfoAllowList = (!this.util.isNull(orderInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(orderInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : null;
+        let orderInfoBlockList = (!this.util.isNull(orderInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(orderInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : null;
 
         return { getTokenInfo, giveTokenInfo, getTokenAllowList, getTokenBlockList, giveTokenAllowList,
                  giveTokenBlockList, orderInfoAllowList, orderInfoBlockList };
@@ -210,24 +215,35 @@ module.exports = {
         return true;
     },
 
-    // Both GET_ADDRESSes pass the token lists, this order's lists and the candidate's own
+    // Each payout passes its received token's policy, this order's lists and the candidate's own
     async isListAllowed(data, orderInfo, matchInfo, lists){
-        let { getTokenAllowList, getTokenBlockList, giveTokenAllowList, giveTokenBlockList,
+        let { getTokenInfo, giveTokenInfo, getTokenAllowList, getTokenBlockList, giveTokenAllowList, giveTokenBlockList,
               orderInfoAllowList, orderInfoBlockList } = lists;
 
         // List of addresses allowed or blocked from matching with this matching ORDER
-        let matchInfoAllowList = (!this.util.isNull(matchInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(matchInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : [];
-        let matchInfoBlockList = (!this.util.isNull(matchInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(matchInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : [];
+        let matchInfoAllowList = (!this.util.isNull(matchInfo['ALLOW_LIST'])) ? await this.indexerDb.getList(matchInfo['ALLOW_LIST'], data['BLOCK_INDEX']) : null;
+        let matchInfoBlockList = (!this.util.isNull(matchInfo['BLOCK_LIST'])) ? await this.indexerDb.getList(matchInfo['BLOCK_LIST'], data['BLOCK_INDEX']) : null;
 
-        // Check if GET_ADDRESS for both sides of swap are allowed (ALLOW/BLOCK list support)
-        if((getTokenAllowList.length  && (!getTokenAllowList.includes(orderInfo['GET_ADDRESS'])  || !getTokenAllowList.includes(matchInfo['GET_ADDRESS'])))  ||
-           (getTokenBlockList.length  && ( getTokenBlockList.includes(orderInfo['GET_ADDRESS'])  ||  getTokenBlockList.includes(matchInfo['GET_ADDRESS'])))  ||
-           (giveTokenAllowList.length && (!giveTokenAllowList.includes(orderInfo['GET_ADDRESS']) || !giveTokenAllowList.includes(matchInfo['GET_ADDRESS']))) ||
-           (giveTokenBlockList.length && ( giveTokenBlockList.includes(orderInfo['GET_ADDRESS']) ||  giveTokenBlockList.includes(matchInfo['GET_ADDRESS']))) ||
-           (orderInfoAllowList.length && !orderInfoAllowList.includes(matchInfo['GET_ADDRESS'])) ||
-           (orderInfoBlockList.length &&  orderInfoBlockList.includes(matchInfo['GET_ADDRESS'])) ||
-           (matchInfoAllowList.length && !matchInfoAllowList.includes(orderInfo['GET_ADDRESS'])) ||
-           (matchInfoBlockList.length &&  matchInfoBlockList.includes(orderInfo['GET_ADDRESS']))){
+        // Deny an address when any attached allow list resolves empty after activation.
+        let emptyAllowListDenies = gateRegistry.activeAt(EMPTY_ALLOW_LIST_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
+        // Readers turn a NULL list column into 0, and an edit can store 0 to remove
+        // a list. Count only a nonzero id whose reader confirms a valid reference;
+        // null membership means the validity gate rejected the stored reference.
+        const attachedList = (id, list) => !this.util.isNull(id) && Number(id) !== 0 && Array.isArray(list);
+        let deniedByEmptyAllowList = emptyAllowListDenies &&
+            ((getTokenInfo && attachedList(getTokenInfo['ALLOW_LIST'], getTokenAllowList) && getTokenAllowList.length === 0) ||
+             (giveTokenInfo && attachedList(giveTokenInfo['ALLOW_LIST'], giveTokenAllowList) && giveTokenAllowList.length === 0) ||
+             (attachedList(orderInfo['ALLOW_LIST'], orderInfoAllowList) && orderInfoAllowList.length === 0) ||
+             (attachedList(matchInfo['ALLOW_LIST'], matchInfoAllowList) && matchInfoAllowList.length === 0));
+
+        // Check each payout against the policy for the token delivered there.
+        let perTokenPolicy = gateRegistry.activeAt(PAYOUT_POLICY_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
+        if(deniedByEmptyAllowList ||
+           tokenPolicyRejects(lists, orderInfo['GET_ADDRESS'], matchInfo['GET_ADDRESS'], perTokenPolicy) ||
+           (orderInfoAllowList && orderInfoAllowList.length && !orderInfoAllowList.includes(matchInfo['GET_ADDRESS'])) ||
+           (orderInfoBlockList && orderInfoBlockList.length &&  orderInfoBlockList.includes(matchInfo['GET_ADDRESS'])) ||
+           (matchInfoAllowList && matchInfoAllowList.length && !matchInfoAllowList.includes(orderInfo['GET_ADDRESS'])) ||
+           (matchInfoBlockList && matchInfoBlockList.length &&  matchInfoBlockList.includes(orderInfo['GET_ADDRESS']))){
             if(this.debug)
                 getLogger().info('Skipping match due to allow/block list');
             return false;

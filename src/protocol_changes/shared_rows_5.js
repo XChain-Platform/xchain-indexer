@@ -12,7 +12,9 @@
  *
  **********************************************************************
  *
- * The SHARED block, part 5 of 5: token_policy_activation to xchain_bridge_activation
+ * The SHARED block, part 5 of 5: token_policy_activation to
+ * xchain_bridge_activation, then anchor_fold_activation and
+ * archive_section_verdict_activation
  *
  * One SHARED block part. The region between the two marker lines is
  * BYTE-TWINNED into the registry of xchain-sync, xchain-hub, xchain-explorer
@@ -67,6 +69,9 @@ const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
 //     federation signs would not be the membership the chain actually held.
 addGate('token_policy_activation.TOKEN_POLICY_INHERITANCE_ACTIVATION', 'height', {
     mainnet: 9999999999,
+    'BTC:testnet': 154567, // set by the v0.21.0 freeze height plan
+    'LTC:testnet': 4903068, // set by the v0.21.0 freeze height plan
+    'DOGE:testnet': 67951140, // set by the v0.21.0 freeze height plan
     testnet: 9999999999,
     regtest: 0,
 });
@@ -118,6 +123,7 @@ addGate('train_activation.TRAIN_ACTIVATION', 'ruleset', {
     // offsets. LTC:testnet mirror admission ships disabled on this train and is
     // untouched by this reslide; it arms on a later train.
     '0.20.0': { mainnet: 9999999999, testnet: 154074, regtest: 0 },
+    '0.21.0': { mainnet: 9999999999, testnet: 154566, regtest: 0 },
 });
 
 // xchain_bridge_activation
@@ -164,4 +170,9 @@ addGate('xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION', 'height', {
     testnet:        9999999999,   // fallback: a testnet coin with no entry above stays dark
     regtest:        0,            // genesis-active so the e2e rail exercises the armed rule
 });
+// Part 5 holds these earlier rows because parts 1 to 4 are near their line limit and have concurrent additions.
+// anchor_fold_activation
+addGate('anchor_fold_activation.ANCHOR_FOLD_ACTIVATION', 'height', { mainnet: UNARMED, testnet: UNARMED, regtest: UNPINNED });
+// archive_section_verdict_activation
+addGate('archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION', 'height', { mainnet: UNARMED, testnet: UNARMED, regtest: UNPINNED });
 // SHARED-GATES END

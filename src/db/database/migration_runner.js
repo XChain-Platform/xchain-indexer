@@ -38,6 +38,32 @@ const { reorderVerdict, describeReorder } = require('./migration_reorder.js');
 // requires any part, so this resolves to the finished class rather than a half-built export.
 const Database = require('../index.js');
 
+function migrationQueryTimeoutMs(){
+    const raw = CONFIG_ENV.MIGRATE_QUERY_TIMEOUT;
+    if(raw == null || String(raw).trim() === '') return 3600000;
+    const ms = Number(raw);
+    return Number.isFinite(ms) && ms >= 0 ? ms : 3600000;
+}
+
+async function setSessionStatementTime(conn, ms){
+    await conn.query('SET SESSION max_statement_time = ?', [ms / 1000]);
+}
+
+async function restoreRuntimeTimeoutAndReleaseLock(conn, lockName, runtimeTimeout){
+    let restored = true;
+    try { await setSessionStatementTime(conn, runtimeTimeout); }
+    catch(_){ restored = false; }
+    await releaseMigrationLock(conn, lockName);
+    if(!restored && typeof conn.destroy === 'function'){
+        try { await conn.destroy(); } catch(_){}
+    }
+    return restored;
+}
+
+async function releaseMigrationLock(conn, lockName){
+    try { await conn.query('SELECT RELEASE_LOCK(?)', [lockName]); } catch(_){}
+}
+
 // Targeted rollout: a name that matches no committed migration is almost
 // always a typo. Fail loudly (silently applying nothing would look like a
 // successful no-op run) and list what IS available.
@@ -120,7 +146,7 @@ async function migrateFile(self, conn, file, appliedByName, ctx){
     // deferred mode=manual file cannot be told apart from a backdated one.
     if(mode === 'auto') guardBackdatedFrontier(self, ctx, file, raw, appliedByName);
 
-    await applyMigrationFile(self, conn, file, raw, checksum, mode, result);
+    await applyMigrationFile(self, conn, file, raw, checksum, mode, ctx);
 }
 
 // An applied file whose content changed: heal a pinned reviewed rebaseline, else fail closed
@@ -261,7 +287,8 @@ function guardBackdatedFrontier(self, ctx, file, raw, appliedByName){
 }
 
 // Split, guard and apply one pending file, then record it in the ledger.
-async function applyMigrationFile(self, conn, file, raw, checksum, mode, result){
+async function applyMigrationFile(self, conn, file, raw, checksum, mode, ctx){
+    const { result } = ctx;
     // Quote-aware split into statements: strips `--` line comments and
     // breaks on ';' only outside quoted strings, so a ';' in a comment
     // header or inside a string literal never terminates a statement, and
@@ -280,6 +307,7 @@ async function applyMigrationFile(self, conn, file, raw, checksum, mode, result)
                 'Re-tag the file `-- xchain:migration mode=manual` and apply it deliberately via `node src/db/migration/migrate.js`.');
         }
     }
+    await ctx.activateQueryTimeout();
     getLogger().info('runMigrations: applying ' + file + ' (mode=' + mode + ', ' + statements.length + ' statement(s))...');
     try {
         for(const stmt of statements){ await conn.query(stmt); }
@@ -314,6 +342,8 @@ module.exports = {
 
         const lockName = 'xchain_migrate_' + this.dbName;
         let conn = await this.getConnection();
+        let returnToPool = true;
+        let timeoutTouched = false;
         try {
             // DB-scoped advisory lock so two processes don't apply concurrently. GET_LOCK
             // is server-global, so the name is namespaced by dbName (the shared MariaDB on
@@ -328,12 +358,23 @@ module.exports = {
                 return result;
             }
             try {
-                await applyPendingMigrations(this, conn, files, { dir, only, includeManual, result });
+                const activateQueryTimeout = async () => {
+                    if(timeoutTouched) return;
+                    timeoutTouched = true;
+                    await setSessionStatementTime(conn, migrationQueryTimeoutMs());
+                };
+                if(!only) await activateQueryTimeout();
+                await applyPendingMigrations(this, conn, files, {
+                    dir, only, includeManual, result, activateQueryTimeout,
+                });
             } finally {
-                try { await conn.query('SELECT RELEASE_LOCK(?)', [lockName]); } catch(_){}
+                if(timeoutTouched){
+                    const runtimeTimeout = (this.connectionPoolParams && this.connectionPoolParams.queryTimeout) || 0;
+                    returnToPool = await restoreRuntimeTimeoutAndReleaseLock(conn, lockName, runtimeTimeout);
+                } else await releaseMigrationLock(conn, lockName);
             }
         } finally {
-            try { await conn.release(); } catch(_){}
+            if(returnToPool) try { await conn.release(); } catch(_){}
         }
 
         if(result.applied.length) getLogger().info('runMigrations: ' + result.applied.length + ' migration(s) applied to ' + this.dbName + '.');

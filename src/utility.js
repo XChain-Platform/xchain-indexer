@@ -373,7 +373,7 @@ async function releaseContractCooldowns(util, db, contractRows, completionAttrib
 
 // Install the behaviour parts from utility/ NON-ENUMERABLE, the shape the class body they came
 // from produced: call sites reach them as this.<method> or util.<method>, suites can stub them
-// through Utility.prototype, and for-in over an instance stays empty. Same install as coinpay.js
+// through Utility.prototype, and for-in over an instance stays empty. Same install as coinpay/index.js
 // and db/index.js use for their parts. The ATTEST mirror part is built from the mirror-admission
 // capture above, so every load of this file binds its own.
 const attestMirrorPart = createAttestMirror({ isMirrorAdmissionConsumerActive, isRowReadableAt });

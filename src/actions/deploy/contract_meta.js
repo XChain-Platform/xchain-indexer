@@ -163,6 +163,28 @@ function evaluateMetaFields(parsed, metaJson){
     };
 }
 
+/**
+ * Whether a stored meta opts the contract in to owner WITHDRAW (OWNER_WITHDRAW_OPT_IN).
+ *
+ * The one meta key consensus reads after deploy. It is judged from the stored
+ * contracts.meta_json bytes, so the answer never depends on re-running the contract.
+ * Only the boolean true opts in: an absent key, false, "true", 1, a null meta_json
+ * (no conforming meta was stored) or bytes that do not parse to a plain object all
+ * read as not opted in, failing toward the protection rather than the capability.
+ *
+ * @param   {?string} metaJson  the contract's stored meta_json
+ * @returns {boolean}
+ */
+function declaresOwnerWithdraw(metaJson){
+    if(typeof metaJson !== 'string')
+        return false;
+    let parsed;
+    try { parsed = JSON.parse(metaJson); } catch(e) { return false; }
+    if(parsed === null || typeof parsed !== 'object' || Array.isArray(parsed))
+        return false;
+    return Object.prototype.hasOwnProperty.call(parsed, 'ownerWithdraw') && parsed.ownerWithdraw === true;
+}
+
 module.exports = {
     META_NAME_MAX_BYTES,
     META_DESCRIPTION_MAX_BYTES,
@@ -170,5 +192,6 @@ module.exports = {
     META_JSON_MAX_CHARS,
     VERDICTS,
     isValidMetaText,
-    evaluateContractMeta
+    evaluateContractMeta,
+    declaresOwnerWithdraw
 };

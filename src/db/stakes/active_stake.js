@@ -144,7 +144,7 @@ module.exports = {
     // delay for BTC reorg safety.
     //
     // CONSENSUS-PATH, stake-ownership view. This is the load-bearing primitive for STAKE/UNSTAKE/
-    // DELEGATE block processing (unstake.js, stake.js, delegate.js): it answers "does THIS pubkey
+    // DELEGATE block processing (actions/{unstake,stake,delegate}/): it answers "does THIS pubkey
     // own a direct stake, and how much" for collision, ownership and unstake-AMOUNT decisions. It
     // deliberately does NOT apply the DELEGATE v2 revocation exclusion or resolve delegated keys to
     // their backing source. Those are capability-membership semantics that belong to the federation

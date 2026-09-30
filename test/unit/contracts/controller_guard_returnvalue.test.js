@@ -149,3 +149,31 @@ describe('runControllerGuard: guard returnValue parsing (royalty payoutLegs) @re
         assert.ok(/cap|payout/.test(res.reason || ''));
     });
 });
+
+// Pins that returned legs are VALIDATED at every invocation point, not silently discarded:
+// only ORDER/SWAP create apply them, but a bad set still denies a dispenser or a SEND.
+describe('runControllerGuard: payoutLegs are validated outside ORDER/SWAP create @regression @tier1', function () {
+    for (const actionType of ['DISPENSER_CREATE', 'SEND']) {
+        const optsFor = () => Object.assign(opts(), { actionType });
+
+        it(actionType + ': a malformed leg denies with controller (bad payout leg)', async function () {
+            const handler = buildHandler(vmOk(JSON.stringify({ payoutLegs: [{ to: 'not-an-address', bps: 250 }] })));
+            const res = await handler.runControllerGuard(optsFor());
+            assert.strictEqual(res.allow, false);
+            assert.strictEqual(res.reason, 'controller (bad payout leg)');
+        });
+
+        it(actionType + ': an over-cap total denies with controller (payout exceeds cap)', async function () {
+            const handler = buildHandler(vmOk(JSON.stringify({ payoutLegs: [{ to: ADDR, bps: 9000 }, { to: ADDR, bps: 2000 }] })));
+            const res = await handler.runControllerGuard(optsFor());
+            assert.strictEqual(res.allow, false);
+            assert.strictEqual(res.reason, 'controller (payout exceeds cap)');
+        });
+
+        it(actionType + ': a well-formed in-cap leg is allowed', async function () {
+            const handler = buildHandler(vmOk(JSON.stringify({ payoutLegs: [{ to: ADDR, bps: 250 }] })));
+            const res = await handler.runControllerGuard(optsFor());
+            assert.strictEqual(res.allow, true);
+        });
+    }
+});

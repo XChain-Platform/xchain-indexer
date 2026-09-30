@@ -18,11 +18,9 @@
  *
  ********************************************************************/
 
-// ASSEMBLER. The flag-day constants, the 97 time-table rows and the registry API
-// live in the part files under src/protocol_changes/; this file is the one entry
-// every reader requires and it puts them together. The class below builds its
-// table from the same rows the registry exposes through rows(), so the two
-// cannot disagree, and it re-exports every constant under the name it always had.
+// ASSEMBLER. The flag-day constants, the 100 time-table rows and registry API live
+// in the part files under src/protocol_changes/. This entry builds its table from
+// the registry rows and re-exports every constant under the name it always had.
 const {
     UNARMED, UNPINNED, RegistryMissError, createRegistry, applyChanges,
 } = require('./protocol_changes/core.js');
@@ -39,6 +37,7 @@ require('./protocol_changes/shared_rows_5.js');
 require('./protocol_changes/gates_1.js');
 require('./protocol_changes/gates_2.js');
 require('./protocol_changes/gates_3.js');
+require('./protocol_changes/gates_4.js');
 require('./protocol_changes/gates_flag_times.js');
 const {
     VM_BANNED_ASYNC_MAINNET_TIME,
@@ -46,12 +45,12 @@ const {
     UNCAPPED_MAX_SUPPLY_ZERO_MAINNET_TIME,
     CROSS_SETTLE_CAP_MAINNET_TIME,
     BATCH_ROOT_SUB_INDEX_MAINNET_TIME,
-    ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME,
-    ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME,
-    DEPLOY_DEFERRED_ASSEMBLY_MAINNET_TIME,
-    DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME,
-    CONTRACT_META_REQUIRED_MAINNET_TIME,
-    CONTRACT_META_REQUIRED_TESTNET_TIME,
+    ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME, ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME,
+    DEPLOY_DEFERRED_ASSEMBLY_MAINNET_TIME, DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME,
+    CONTRACT_META_REQUIRED_MAINNET_TIME, CONTRACT_META_REQUIRED_TESTNET_TIME,
+    BROADCAST_FEE_LENGTH_MAINNET_TIME, BROADCAST_FEE_LENGTH_TESTNET_TIME,
+    CONTROLLER_CUSTODY_GUARD_MAINNET_TIME, CONTROLLER_CUSTODY_GUARD_TESTNET_TIME,
+    OWNER_WITHDRAW_OPT_IN_MAINNET_TIME, OWNER_WITHDRAW_OPT_IN_TESTNET_TIME,
 } = require('./protocol_changes/flag_times.js');
 const {
     BATCH_ISSUANCE_LIMITS_MAINNET_TIME,
@@ -65,9 +64,8 @@ const {
 const CHANGES_1 = require('./protocol_changes/changes_1.js');
 const CHANGES_2 = require('./protocol_changes/changes_2.js');
 const CHANGES_3 = require('./protocol_changes/changes_3.js');
-const CHANGES_4 = require('./protocol_changes/changes_4.js');
-const CHANGE_PARTS = [CHANGES_1, CHANGES_2, CHANGES_3, CHANGES_4];
-
+const CHANGES_4 = require('./protocol_changes/changes_4.js'), CHANGES_5 = require('./protocol_changes/changes_5.js');
+const CHANGE_PARTS = [CHANGES_1, CHANGES_2, CHANGES_3, CHANGES_4, CHANGES_5];
 // The compiled consensus-version pin lives in its own part file (with the
 // history of every move it has made) so the registry can register it as a row.
 const { CONSENSUS_VERSION } = require('./protocol_changes/consensus_version.js');
@@ -77,7 +75,7 @@ const { CONSENSUS_VERSION } = require('./protocol_changes/consensus_version.js')
 // XChainIndexer's time-keyed price barrier is deliberately NOT gated on this
 // predicate: it runs on every chain whenever hub-db sync is enabled, because FIAT
 // dispenser settlement reads price_snapshots by time from day one. Rationale and
-// the divergence it closes: XChainIndexer.js:877-888. Semantics match the
+// the divergence it closes: XChainIndexer/price_barriers.js deferOnPriceSync. Semantics match the
 // registry entry: testnet/regtest active from genesis, mainnet at the
 // flag-day; an unknown/empty network is treated like mainnet (conservative:
 // requires the flag-day).
@@ -167,9 +165,8 @@ class ProtocolChanges {
         this.parseChanges();
     }
 
-
     parseChanges(){
-        // The 97 rows live in src/protocol_changes/changes_*.js; see CHANGE_PARTS.
+        // The 100 rows live in src/protocol_changes/changes_*.js; see CHANGE_PARTS.
         applyChanges(this, CHANGE_PARTS);
     }
 
@@ -301,7 +298,6 @@ class ProtocolChanges {
     }
  
 }
-
 // THE registry (activation-registry spec 6.1), built once per load from the
 // gate-row parts and the same time-table parts parseChanges() feeds the class.
 // The venue's regtest arming is read here, at load, so a process that reloads
@@ -311,8 +307,8 @@ registerRows(registry, process.env);
 applyChanges(registry, CHANGE_PARTS);
 
 module.exports = ProtocolChanges;
-// Canonical async-gate flag-day, exported for the cross-repo byte-identity guard in
-// test/unit/consensus-params.test.js (must equal xchain-vm ASYNC_SURFACE_GATE_BLOCK_TIME).
+// Canonical async-gate flag-day (must equal xchain-vm ASYNC_SURFACE_GATE_BLOCK_TIME), exported
+// for the byte-identity guard in test/unit/consensus/consensus_params.test/vm_coupling.test.js.
 module.exports.VM_BANNED_ASYNC_MAINNET_TIME = VM_BANNED_ASYNC_MAINNET_TIME;
 // H-3 price-selection flag-day + its shared gate predicate (see registration).
 module.exports.NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME = NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME;
@@ -350,6 +346,11 @@ module.exports.DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME = DEPLOY_DEFERRED_ASSEMBLY_
 // contracts, none of which exports a meta-shaped object.
 module.exports.CONTRACT_META_REQUIRED_MAINNET_TIME = CONTRACT_META_REQUIRED_MAINNET_TIME;
 module.exports.CONTRACT_META_REQUIRED_TESTNET_TIME = CONTRACT_META_REQUIRED_TESTNET_TIME;
+module.exports.BROADCAST_FEE_LENGTH_MAINNET_TIME = BROADCAST_FEE_LENGTH_MAINNET_TIME;
+module.exports.BROADCAST_FEE_LENGTH_TESTNET_TIME = BROADCAST_FEE_LENGTH_TESTNET_TIME;
+module.exports.CONTROLLER_CUSTODY_GUARD_MAINNET_TIME = CONTROLLER_CUSTODY_GUARD_MAINNET_TIME;
+module.exports.CONTROLLER_CUSTODY_GUARD_TESTNET_TIME = CONTROLLER_CUSTODY_GUARD_TESTNET_TIME;
+Object.assign(module.exports, { OWNER_WITHDRAW_OPT_IN_MAINNET_TIME, OWNER_WITHDRAW_OPT_IN_TESTNET_TIME });
 // ARMED mainnet instant for the BATCH issuance-limits rework (1786838400, 2026-08-16T00:00Z,
 // armed 2026-08-14 pre-launch), exported so the suite can pin the ratified value, assert it
 // was never retroactive, that it never precedes BATCH_SUBACTION_NORMALIZATION, and that it

@@ -90,6 +90,7 @@ module.exports = {
     async bootstrapAll() {
         if (this._bootstrapping) return;                     // reconnect + retry timer may overlap
         this._bootstrapping = true;
+        this._bootstrapLastProgressAt = Date.now();
         const drainEpoch = this._wsEpoch;
         try {
             this._pendingBootstrapHeights = null;
@@ -103,6 +104,7 @@ module.exports = {
             else if (this.running) this.scheduleBootstrapRetry();
         } finally {
             this._bootstrapping = false;
+            this._bootstrapLastProgressAt = null;
         }
     },
 
@@ -131,7 +133,10 @@ module.exports = {
             try {
                 let mark = await this.bootstrapTable(table);
                 if (mark === null) allDrained = false;
-                else marks.push(mark);
+                else {
+                    marks.push(mark);
+                    this._bootstrapLastProgressAt = Date.now();
+                }
             } catch (err) {
                 allDrained = false;
                 getLogger().warn('HubDbSync: ' + table + ' bootstrap failed:', err);
@@ -261,11 +266,9 @@ module.exports = {
     // rows keeps deferring after the resync, which is the fail-closed outcome. It only
     // ensures the wait is bounded by a re-drive rather than by nothing at all.
     //
-    // Safe to fire while a re-bootstrap is already draining, which is the case it is most
-    // likely to hit: bootstrapTable pages from the LOCAL max id as since_id, so a restarted
-    // drain resumes where the applied rows end rather than starting over. The cost of a
-    // mistimed resync is one in-flight page refetched, and the throttle below caps that at
-    // one per ceiling window.
+    // Leave an active bootstrap on its current connection while it is making progress.
+    // Full-repage tables restart at id 0, so replacing that connection discards the work.
+    // A drain with no progress for a full ceiling window still resyncs.
     //
     // Rate-limited to one resync per ceiling window, and a no-op on a disabled or
     // stopped mirror, so the block loop can call it on every deferring poll tick.
@@ -274,6 +277,8 @@ module.exports = {
         if (!this.enabled || !this.running) return false;
         if (!Number.isFinite(this.barrierHoldCeilingMs) || this.barrierHoldCeilingMs <= 0) return false;
         const now = Date.now();
+        if (this._bootstrapping && Number.isFinite(this._bootstrapLastProgressAt) &&
+            (now - this._bootstrapLastProgressAt) < this.barrierHoldCeilingMs) return false;
         if (this._lastResyncRequestAt && (now - this._lastResyncRequestAt) < this.barrierHoldCeilingMs) return false;
         this._lastResyncRequestAt = now;
         return this.driveResync(reason);

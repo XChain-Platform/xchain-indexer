@@ -954,15 +954,6 @@
           "iddesc"
         ],
         "unique": false
-      },
-      {
-        "name": "idx_latest_bin",
-        "columns": [
-          "contract_index",
-          "state_key_bin",
-          "iddesc"
-        ],
-        "unique": false
       }
     ],
     "contract_unstakes": [

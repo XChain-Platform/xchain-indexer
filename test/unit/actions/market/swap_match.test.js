@@ -10,13 +10,13 @@
 
 process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
-
 const assert = require('assert');
 const sinon = require('sinon');
 const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../fixtures/mocks');
-
+const { stubGate } = require('../../../helpers/gate_modules.js');
 const Swap_Match = require('../../../../src/actions/swap_match/index.js');
 
+const EMPTY_ALLOW_LIST_KEY = 'empty_allow_list_denies_activation.EMPTY_ALLOW_LIST_DENIES';
 let indexer, actionsCtx, handler;
 
 function makeSwapInfo(overrides) {
@@ -84,6 +84,9 @@ function withTokenLists({ getList, giveList }) {
 
 describe('Swap_Match action handler @regression @tier2', function () {
     beforeEach(setupSwapMatch);
+    afterEach(function () {
+        sinon.restore();
+    });
 
     // ─── Returns early when swap is missing ───────────────────────────
 
@@ -142,6 +145,7 @@ describe('Swap_Match action handler @regression @tier2', function () {
 
 describe('Swap_Match action handler @regression @tier2', function () {
     beforeEach(setupSwapMatch);
+    afterEach(() => sinon.restore());
     // ─── Only first valid match is used ──────────────────────────────
 
     it('uses first valid match and ignores subsequent matches', async function () {
@@ -171,6 +175,23 @@ describe('Swap_Match action handler @regression @tier2', function () {
         const data = createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 });
         await handler.parse(null, data, null);
         assert.ok(indexer.indexerDb.createSwapMatch.notCalled, 'Should not match when address is blocked');
+    });
+
+    it('keeps an attached empty SWAP allow list fail-open below activation', async function () {
+        stubGate(sinon, EMPTY_ALLOW_LIST_KEY, false);
+        indexer.indexerDb.getSwapInfo.resolves(makeSwapInfo({ ALLOW_LIST: 999 }));
+        indexer.indexerDb.findSwapMatches.resolves([makeMatchInfo()]);
+        indexer.indexerDb.getList.resolves([]);
+        await handler.parse(null, createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 }), null);
+        assert.ok(indexer.indexerDb.createSwapMatch.calledOnce);
+    });
+
+    it('denies a match through an attached empty SWAP allow list after activation', async function () {
+        indexer.indexerDb.getSwapInfo.resolves(makeSwapInfo({ ALLOW_LIST: 999 }));
+        indexer.indexerDb.findSwapMatches.resolves([makeMatchInfo()]);
+        indexer.indexerDb.getList.resolves([]);
+        await handler.parse(null, createBaseData({ ACTION: 'SWAP_MATCH', ACTION_INDEX: 10, BLOCK_INDEX: 200 }), null);
+        assert.ok(indexer.indexerDb.createSwapMatch.notCalled);
     });
 });
 
@@ -296,7 +317,8 @@ describe('Swap_Match action handler @regression @tier2', function () {
         assert.ok(indexer.indexerDb.createSwapMatch.notCalled);
     });
 
-    it('rejects a match whose address is on the GET-token BLOCK_LIST', async function () {
+    it('below gate, rejects either payout address on the GET-token BLOCK_LIST', async function () {
+        indexer.config.NETWORK = 'mainnet';
         withTokenLists({ getList: { block: 12 } });
         indexer.indexerDb.getList.callsFake(async (id) => (id === 12 ? ['mjrCrhL4qjKo1oGYJb78Lp8GoBiF6yFTZM'] : []));
         indexer.indexerDb.getSwapInfo.resolves(makeSwapInfo());
@@ -364,7 +386,8 @@ describe('Swap_Match action handler @regression @tier2', function () {
 
     // ALLOW_LIST that contains the swap's GET_ADDRESS but NOT the match address;
     // drives the second operand of the allow-list short-circuit.
-    it('rejects when GET ALLOW_LIST has the swap address but not the match address', async function () {
+    it('below gate, rejects when GET ALLOW_LIST has the swap address but not the match address', async function () {
+        indexer.config.NETWORK = 'mainnet';
         withTokenLists({ getList: { allow: 51 } });
         indexer.indexerDb.getList.callsFake(async (id) =>
             (id === 51 ? ['mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH'] : []));

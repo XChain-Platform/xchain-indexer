@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * The registry's own constants as rows: the 16 flag-day instants the
+ * The registry's own constants as rows: the 22 flag-day instants the
  * time-table parts share and the compiled consensus-version pin, under the
  * `protocol_changes.<NAME>` keys the entry has always exported them by. The
  * values stay declared in flag_times.js, flag_times_batch_fees.js and
@@ -38,6 +38,12 @@ const {
     DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME,
     CONTRACT_META_REQUIRED_MAINNET_TIME,
     CONTRACT_META_REQUIRED_TESTNET_TIME,
+    BROADCAST_FEE_LENGTH_MAINNET_TIME,
+    BROADCAST_FEE_LENGTH_TESTNET_TIME,
+    CONTROLLER_CUSTODY_GUARD_MAINNET_TIME,
+    CONTROLLER_CUSTODY_GUARD_TESTNET_TIME,
+    OWNER_WITHDRAW_OPT_IN_MAINNET_TIME,
+    OWNER_WITHDRAW_OPT_IN_TESTNET_TIME,
 } = require('./flag_times.js');
 const {
     BATCH_ISSUANCE_LIMITS_MAINNET_TIME,
@@ -65,3 +71,9 @@ addGate('protocol_changes.BATCH_COST_WEIGHTING_MAINNET_TIME', 'constant', BATCH_
 addGate('protocol_changes.EMISSION_ISSUANCE_LIMITS_MAINNET_TIME', 'constant', EMISSION_ISSUANCE_LIMITS_MAINNET_TIME);
 addGate('protocol_changes.UNIFIED_FEES_SWEEP_CALLBACK_MAINNET_TIME', 'constant', UNIFIED_FEES_SWEEP_CALLBACK_MAINNET_TIME);
 addGate('protocol_changes.UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME', 'constant', UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME);
+addGate('protocol_changes.BROADCAST_FEE_LENGTH_MAINNET_TIME', 'constant', BROADCAST_FEE_LENGTH_MAINNET_TIME);
+addGate('protocol_changes.BROADCAST_FEE_LENGTH_TESTNET_TIME', 'constant', BROADCAST_FEE_LENGTH_TESTNET_TIME);
+addGate('protocol_changes.CONTROLLER_CUSTODY_GUARD_MAINNET_TIME', 'constant', CONTROLLER_CUSTODY_GUARD_MAINNET_TIME);
+addGate('protocol_changes.CONTROLLER_CUSTODY_GUARD_TESTNET_TIME', 'constant', CONTROLLER_CUSTODY_GUARD_TESTNET_TIME);
+addGate('protocol_changes.OWNER_WITHDRAW_OPT_IN_MAINNET_TIME', 'constant', OWNER_WITHDRAW_OPT_IN_MAINNET_TIME);
+addGate('protocol_changes.OWNER_WITHDRAW_OPT_IN_TESTNET_TIME', 'constant', OWNER_WITHDRAW_OPT_IN_TESTNET_TIME);

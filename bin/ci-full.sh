@@ -41,7 +41,9 @@
 # MARIADB_ROOT_PASSWORD=xchain-fixture-throwaway` container behaves like CI.
 #
 # All tiers run even after one fails (GitHub reports every red job, so this
-# reports every red tier); the exit code is red if any tier was.
+# reports every red tier); the exit code is red if any tier was. A push
+# (CI_TIER=fast) is the exception: it stops at its first red tier and prints
+# NOT RUN for each tier after it, since its verdict is already red.
 #
 set -uo pipefail
 
@@ -50,6 +52,16 @@ SELF="$(pwd)"
 SIB="$(cd .. && pwd)"
 
 FAILED=""
+fast_defer() {
+  DEFERRED="$DEFERRED [$1]"
+  echo; echo "ci:full ===== $1 DEFERRED (CI_TIER=fast, runs in the full sweep) ====="
+}
+
+fast_consensus_checks() {
+  npm run check:consensus-time &&
+    npm run check:merkle-vectors &&
+    npm run check:vm
+}
 # >>> ci-tier (generated block; re-run the tier wirer to update) >>>
 # Tier classes. A push grades the FAST tier only: the unit job, the pin and
 # drift guards, and the structure and hygiene checks the hook runs before it
@@ -79,17 +91,21 @@ ci_tier_deferred() {
   return 1
 }
 # <<< ci-tier <<<
+# >>> ci-tier timer (generated block; re-run the tier wirer to update) >>>
 run_tier() {
   ci_tier_deferred "$1" && return 0  # ci-tier guard (generated)
+  if [ "${CI_TIER:-full}" = "fast" ] && [ -n "${FAILED:-}" ]; then echo; echo "ci:full ===== $1 NOT RUN (a push stops at its first red tier, its verdict already red; the full sweep runs it) ====="; return 0; fi  # ci-tier stop (generated)
   local name="$1"; shift
+  local __ci_tier_t0=$SECONDS
   echo; echo "ci:full ===== $name ====="
   if "$@"; then
-    echo "ci:full ----- $name PASS"
+    echo "ci:full ----- $name PASS ($(( SECONDS - __ci_tier_t0 ))s)"
   else
     FAILED="$FAILED [$name]"
-    echo "ci:full ----- $name FAIL"
+    echo "ci:full ----- $name FAIL ($(( SECONDS - __ci_tier_t0 ))s)"
   fi
 }
+# <<< ci-tier timer <<<
 need_sib() {
   local s
   for s in "$@"; do
@@ -112,15 +128,51 @@ export XCHAIN_SDK_PATH="${XCHAIN_SDK_PATH:-$SIB/xchain-sdk}"
 
 need_sib xchain-vm xchain-decoder xchain-sdk xchain-hub
 
+# Stage the gitignored vendored VM from the canonical sibling before ANY tier
+# runs: the ci tier's own unit suite requires xchain-vm too (actions_class),
+# so staging it only ahead of integration left a from-scratch checkout's ci
+# tier dying on `Cannot find module 'xchain-vm'` before vendor:vm ever ran.
+run_tier "vendor:vm (stage from ../xchain-vm)" npm run vendor:vm
+
 # --- job: ci (XChain-Platform/.github ci-reusable.yml -> npm run ci) -------
-run_tier "ci (siblings STRICT)" env XCHAIN_REQUIRE_SIBLINGS=1 npm run ci
+FAST_PLAN=""
+FAST_SELECTOR_READY=0
+if [ "${CI_TIER:-full}" = "fast" ]; then
+  if [ ! -f bin/ci_fast_select.js ]; then
+    echo "ci:full: fast selector unavailable (helper missing); running the full unit tier"
+  else
+    FAST_PLAN="$(node bin/ci_fast_select.js --plan 2>&1)"
+    FAST_PLAN_STATUS=$?
+    printf '%s\n' "$FAST_PLAN"
+    if [ "$FAST_PLAN_STATUS" -eq 0 ]; then
+      FAST_SELECTOR_READY=1
+    else
+      FAST_SELECTOR_WHY="$(printf '%s\n' "$FAST_PLAN" | tail -n 1)"
+      echo "ci:full: fast selector unavailable ($FAST_SELECTOR_WHY); running the full unit tier"
+    fi
+  fi
+fi
+
+# The ci tier is `npm run ci` with its main mocha step split across parallel
+# processes (bin/ci_shard.js): the same chain and the same files, each file in
+# exactly one shard, in a fraction of the wall clock. CI_SHARDS=1 runs it whole.
+if [ "${CI_TIER:-full}" != "fast" ] || [ "$FAST_SELECTOR_READY" -eq 0 ]; then
+  run_tier "ci (siblings STRICT)" env XCHAIN_REQUIRE_SIBLINGS=1 node bin/ci_shard.js --run
+elif printf '%s\n' "$FAST_PLAN" | grep -q '^consensus 1$'; then
+  run_tier "ci (siblings STRICT)" env XCHAIN_REQUIRE_SIBLINGS=1 node bin/ci_shard.js --run
+else
+  run_tier "ci: consensus checks (consensus-time, merkle-vectors, vm)" fast_consensus_checks
+  run_tier "ci (changed tests, siblings STRICT)" \
+    env XCHAIN_REQUIRE_SIBLINGS=1 node bin/ci_fast_select.js --run
+  fast_defer "ci (siblings STRICT)"
+fi
 
 # --- job: integration ------------------------------------------------------
-# The workflow stages the gitignored vendored VM from the canonical sibling
-# BEFORE the tier (a missing vendored copy fails at require time as `deploy VM
-# executor unavailable`, not at install time).
-run_tier "vendor:vm (stage from ../xchain-vm)" npm run vendor:vm
-run_tier "integration (test:integration:ci)" npm run test:integration:ci
+if [ "${CI_TIER:-full}" = "fast" ]; then
+  fast_defer "integration (test:integration:ci)"
+else
+  run_tier "integration (test:integration:ci)" npm run test:integration:ci
+fi
 
 # --- job: perf-regression --------------------------------------------------
 # Ratio-gated within a single run, so the verdicts hold on any host. The
@@ -148,7 +200,7 @@ run_tier "drift: pre-flight <-> handler gate" \
   env XCHAIN_INDEXER_PATH="$SELF" node "$SIB/xchain-sdk/bin/check-preflight-drift.js"
 
 # --- job: coverage ---------------------------------------------------------
-run_tier "coverage ratchet (coverage:check)" npm run coverage:check
+run_tier "coverage ratchet (coverage:check)" env XCHAIN_REQUIRE_SIBLINGS=1 npm run coverage:check
 
 echo
 # >>> ci-tier summary (generated) >>>

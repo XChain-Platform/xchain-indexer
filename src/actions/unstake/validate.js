@@ -19,7 +19,7 @@
  *
  ********************************************************************/
 
-// Installed onto Unstake.prototype by unstake.js; each method runs with `this` bound to
+// Installed onto Unstake.prototype by index.js; each method runs with `this` bound to
 // the handler, exactly as the class code it came from.
 module.exports = {
 

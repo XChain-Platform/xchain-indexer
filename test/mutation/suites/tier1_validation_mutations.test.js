@@ -28,7 +28,7 @@ const {
     registry, operators, Utility, sinon,
 } = require('../setup/harness');
 
-describe('Mutation: Tier 1 - Validation Functions @tier1', function () {
+describe('Guard dependency: Tier 1 - Validation Functions @tier1', function () {
     let util;
     beforeEach(function () { util = new Utility(); });
     afterEach(function () { sinon.restore(); });
@@ -77,7 +77,7 @@ describe('Mutation: Tier 1 - Validation Functions @tier1', function () {
     });
 });
 
-describe('Mutation: Tier 1 - Validation Functions @tier1', function () {
+describe('Guard dependency: Tier 1 - Validation Functions @tier1', function () {
     let util;
     beforeEach(function () { util = new Utility(); });
     afterEach(function () { sinon.restore(); });
@@ -126,7 +126,7 @@ describe('Mutation: Tier 1 - Validation Functions @tier1', function () {
     });
 });
 
-describe('Mutation: Tier 1 - Validation Functions @tier1', function () {
+describe('Guard dependency: Tier 1 - Validation Functions @tier1', function () {
     let util;
     beforeEach(function () { util = new Utility(); });
     afterEach(function () { sinon.restore(); });
@@ -181,7 +181,7 @@ describe('Mutation: Tier 1 - Validation Functions @tier1', function () {
     });
 });
 
-describe('Mutation: Tier 1 - Validation Functions @tier1', function () {
+describe('Guard dependency: Tier 1 - Validation Functions @tier1', function () {
     let util;
     beforeEach(function () { util = new Utility(); });
     afterEach(function () { sinon.restore(); });
@@ -233,7 +233,7 @@ describe('Mutation: Tier 1 - Validation Functions @tier1', function () {
     });
 });
 
-describe('Mutation: Tier 1 - Validation Functions @tier1', function () {
+describe('Guard dependency: Tier 1 - Validation Functions @tier1', function () {
     let util;
     beforeEach(function () { util = new Utility(); });
     afterEach(function () { sinon.restore(); });
@@ -283,7 +283,7 @@ describe('Mutation: Tier 1 - Validation Functions @tier1', function () {
     });
 });
 
-describe('Mutation: Tier 1 - Validation Functions @tier1', function () {
+describe('Guard dependency: Tier 1 - Validation Functions @tier1', function () {
     let util;
     beforeEach(function () { util = new Utility(); });
     afterEach(function () { sinon.restore(); });
@@ -306,7 +306,7 @@ describe('Mutation: Tier 1 - Validation Functions @tier1', function () {
     });
 });
 
-// The rest of the suite lives in tier1_validation_mutations.test/. test:mutation globs only the top
+// The rest of the suite lives in tier1_validation_mutations.test/. test:guard-dependencies globs only the top
 // level of suites/, so this file loads each part itself and every title stays
 // collected under this file.
 require('./tier1_validation_mutations.test/value_deletion_return.test.js');

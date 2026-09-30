@@ -4,7 +4,7 @@
 # XChain Platform Indexer
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.20.1-blue" alt="Version">
+  <img src="https://img.shields.io/badge/version-0.21.0-blue" alt="Version">
   <img src="https://img.shields.io/badge/tests-10%2C603%2B%20passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/node-%3E%3D22-green" alt="Node">
   <img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue" alt="License">
@@ -155,9 +155,9 @@ neither source sets one, so these defaults hold on an unconfigured box:
 | `npm run test:fuzz:quick` | Quick fuzz (1,000 iterations, tier1, 84 tests) |
 | `npm run test:fuzz:full` | Full fuzz (10,000 iterations, 122 tests) |
 | `npm run test:chaos` | Chaos engineering tests (44 tests) |
-| `npm run test:mutation` | Mutation tests |
-| `npm run test:mutation:tier1` | Tier1 mutation tests |
-| `npm run test:mutation:report` | Mutation tests with coverage report |
+| `npm run test:guard-dependencies` | Guard dependency tests |
+| `npm run test:guard-dependencies:tier1` | Tier1 guard dependency tests |
+| `npm run test:guard-dependencies:report` | Guard dependency tests with coverage report |
 | `npm run test:perf` | All performance tests (26 tests) |
 | `npm run test:perf:regimes` | Load-regime scenarios: fast chain (DOGE) and fee spike (9 tests) |
 | `npm run test:regression` | Regression tests (tagged across all suites, 8,566 tests) |

@@ -45,7 +45,7 @@ CREATE TABLE state_tree_roots (
     -- the contract-state shadow threads through its own. Nothing outside the
     -- derivation reads it.
     balances_root_escrow_shadow CHAR(64) NULL,
-    computed_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    computed_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uq_chain_net_block (chain, network, block_index)
     -- Per-block light-client commitments (SPV spec §4/§5), written atomically with
     -- the block. Reorg deletes rows >= the orphan height inside the rollback txn;

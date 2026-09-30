@@ -21,7 +21,7 @@
 
 const gateRegistry = require('../../consensus/gate_registry');
 
-// Installed onto Sweep.prototype by sweep.js; each method runs with `this` bound to
+// Installed onto Sweep.prototype by index.js; each method runs with `this` bound to
 // the handler, exactly as the parse() code it came from.
 module.exports = {
 

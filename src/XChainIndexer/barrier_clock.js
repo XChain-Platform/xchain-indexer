@@ -100,16 +100,16 @@ module.exports = {
         process.exit(1);
     },
 
-    // Start a poll pass with no stall named. stallReason is written only by the defer sites
-    // and cleared only by a commit, so a reason left over from an earlier pass (a block that
-    // since moved on to a different hold, or a pass that never reached a block at all)
-    // would keep /status naming a hold that is no longer current. Clearing it here means
-    // whatever is named after the pass was set by this pass. barrierHold is deliberately
-    // left alone: it is keyed on the block and folded once the pass ends (noteBarrierHold),
-    // so a block deferred on consecutive passes keeps its accumulated hold.
-    beginPollPass(){
+    // Keep a same-block hold named while that block is retried, because its defer site may
+    // not run again until a long barrier wait expires. Clear anything else so /status does
+    // not name a reason from a different block or from a pass that reached no block at all.
+    // barrierHold is deliberately left alone: it is keyed on the block and folded once the
+    // pass ends (noteBarrierHold), so consecutive deferrals keep their accumulated hold.
+    beginPollPass(nextBlock){
+        if(this.stallReason && nextBlock !== null && nextBlock === this.stallBlock) return;
         this.stallReason   = null;
         this.stallClearsAt = null;
+        this.stallBlock    = null;
     },
 
     // Fold one poll-loop pass into the mirror-barrier hold, and act when it crosses the
@@ -127,6 +127,7 @@ module.exports = {
     //
     // Returns the hold in ms (0 when nothing is held), for the caller and for tests.
     noteBarrierHold(blockToParse, now = Date.now()){
+        this.stallBlock = this.stallReason ? blockToParse : null;
         let prev = this.barrierHold;
         this.barrierHold = nextBarrierHold(prev, blockToParse, this.stallReason, this.stallClearsAt, now);
         let hold = this.barrierHold;
@@ -151,8 +152,8 @@ module.exports = {
                 Math.round(this.barrierHoldCeilingMs / 1000) + 's ceiling (HUB_SYNC_BARRIER_HOLD_CEILING_S, default ' +
                 HUB_SYNC_BARRIER_HOLD_CEILING_S + 's). The block is still deferring, which is correct. ' +
                 (mirrorBarrier
-                    ? 'Forcing a hub-mirror resync: a stream watermark that stops advancing holds every ' +
-                      'one of these barriers open-endedly, and only a fresh subscribe-then-bootstrap re-arms it.'
+                    ? 'Requesting hub-mirror recovery: a stream watermark that stops advancing holds every ' +
+                      'one of these barriers open-endedly. An active drain may finish while it keeps making progress.'
                     : 'Not a hub-mirror barrier, so no resync is forced; this is a host fault to investigate.'));
         }
         if(mirrorBarrier && this.hubDbSync && typeof this.hubDbSync.requestResync === 'function')

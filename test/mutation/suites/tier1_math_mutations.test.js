@@ -33,7 +33,7 @@ const {
 // Register the report hook once (only the first loaded file needs this)
 setupReportHook();
 
-describe('Mutation: Tier 1: Math Functions @tier1', function () {
+describe('Guard dependency: Tier 1: Math Functions @tier1', function () {
     let util;
     beforeEach(function () { util = new Utility(); });
     afterEach(function () { sinon.restore(); });
@@ -85,7 +85,7 @@ describe('Mutation: Tier 1: Math Functions @tier1', function () {
     });
 });
 
-describe('Mutation: Tier 1: Math Functions @tier1', function () {
+describe('Guard dependency: Tier 1: Math Functions @tier1', function () {
     let util;
     beforeEach(function () { util = new Utility(); });
     afterEach(function () { sinon.restore(); });
@@ -139,7 +139,7 @@ describe('Mutation: Tier 1: Math Functions @tier1', function () {
     });
 });
 
-describe('Mutation: Tier 1: Math Functions @tier1', function () {
+describe('Guard dependency: Tier 1: Math Functions @tier1', function () {
     let util;
     beforeEach(function () { util = new Utility(); });
     afterEach(function () { sinon.restore(); });
@@ -191,7 +191,7 @@ describe('Mutation: Tier 1: Math Functions @tier1', function () {
     });
 });
 
-describe('Mutation: Tier 1: Math Functions @tier1', function () {
+describe('Guard dependency: Tier 1: Math Functions @tier1', function () {
     let util;
     beforeEach(function () { util = new Utility(); });
     afterEach(function () { sinon.restore(); });
@@ -213,7 +213,7 @@ describe('Mutation: Tier 1: Math Functions @tier1', function () {
     });
 });
 
-describe('Mutation: Tier 1: Math Functions @tier1', function () {
+describe('Guard dependency: Tier 1: Math Functions @tier1', function () {
     let util;
     beforeEach(function () { util = new Utility(); });
     afterEach(function () { sinon.restore(); });
@@ -263,7 +263,7 @@ describe('Mutation: Tier 1: Math Functions @tier1', function () {
     });
 });
 
-describe('Mutation: Tier 1: Math Functions @tier1', function () {
+describe('Guard dependency: Tier 1: Math Functions @tier1', function () {
     let util;
     beforeEach(function () { util = new Utility(); });
     afterEach(function () { sinon.restore(); });
@@ -285,7 +285,7 @@ describe('Mutation: Tier 1: Math Functions @tier1', function () {
     });
 });
 
-describe('Mutation: Tier 1: Math Functions @tier1', function () {
+describe('Guard dependency: Tier 1: Math Functions @tier1', function () {
     let util;
     beforeEach(function () { util = new Utility(); });
     afterEach(function () { sinon.restore(); });
@@ -338,7 +338,7 @@ describe('Mutation: Tier 1: Math Functions @tier1', function () {
     });
 });
 
-describe('Mutation: Tier 1: Math Functions @tier1', function () {
+describe('Guard dependency: Tier 1: Math Functions @tier1', function () {
     let util;
     beforeEach(function () { util = new Utility(); });
     afterEach(function () { sinon.restore(); });
@@ -362,7 +362,7 @@ describe('Mutation: Tier 1: Math Functions @tier1', function () {
     });
 });
 
-// The rest of the suite lives in tier1_math_mutations.test/. test:mutation globs only the top
+// The rest of the suite lives in tier1_math_mutations.test/. test:guard-dependencies globs only the top
 // level of suites/, so this file loads each part itself and every title stays
 // collected under this file.
 require('./tier1_math_mutations.test/reorder_return_error.test.js');

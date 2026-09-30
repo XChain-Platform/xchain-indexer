@@ -96,6 +96,8 @@ function nativeCoinPriceBoundaryCases() {
         // skip would reject both worked examples in that page. Asserted as "not this
         // error" rather than "valid": FIAT creates carry unrelated preconditions of
         // their own, and only the new rule is under test here.
+        // A validator snapshot an hour old, so the FIAT create is priceable at BLOCK_TIME.
+        indexer.indexerDb.getPricesInTimeRange = sinon.stub().resolves([{ price: '50000', timestamp: BLOCK_TIME - 3600 }]);
         for (const getAmount of ['0', '']) {
             const status = await createWithGetAmount(getAmount, { fiatCode: 'USD', fiatAmount: '0.05' });
             assert.notStrictEqual(status, 'invalid: GET_AMOUNT (must be positive)');

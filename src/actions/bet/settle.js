@@ -18,7 +18,7 @@
  *
  ********************************************************************/
 
-// Installed onto Bet.prototype by bet.js; each method runs with `this` bound to the
+// Installed onto Bet.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
 module.exports = {
 

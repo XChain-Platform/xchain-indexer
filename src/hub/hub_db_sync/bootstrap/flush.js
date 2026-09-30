@@ -88,6 +88,7 @@ module.exports = {
         // restarts at 0 on every drain and never carries this position forward.
         let rowId = Number(row.id);
         if (Number.isFinite(rowId) && rowId > drain.lastId) drain.lastId = rowId;
+        if (this._bootstrapping) this._bootstrapLastProgressAt = Date.now();
         return true;
     },
 

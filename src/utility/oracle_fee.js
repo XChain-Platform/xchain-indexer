@@ -151,15 +151,23 @@ module.exports = {
     // Consensus-relevant (it decides whether an oracle-fee output is required at all),
     // so it is read from the pinned coin bundle rather than from anything an operator
     // can set. Cached because it is constant for the life of the process.
+    //
+    // Fails closed like every other consensus input: a failed lookup or a missing,
+    // zero or non-integer threshold throws, so the block rolls back and retries rather
+    // than committing a verdict on a 0 floor. Only a validated value is cached.
     getDustThresholdCoin(){
         if(this._dustThresholdCoin === undefined){
-            let sats = 0;
+            let coin = this.config['COIN'], network = this.config['NETWORK'];
+            let bundle;
             try {
-                let bundle = coinRegistry.getCoinConfig(this.config['COIN'], this.config['NETWORK']);
-                sats = (bundle && bundle.net && bundle.net.dustThreshold) || 0;
+                bundle = coinRegistry.getCoinConfig(coin, network);
             } catch(e){
-                sats = 0;   // unknown coin/network: no dust floor rather than a hard failure
+                throw new Error('dustThreshold lookup failed for ' + coin + '/' + network + ': ' + (e && e.message ? e.message : e));
             }
+            let sats = bundle && bundle.net ? bundle.net.dustThreshold : undefined;
+            // Require a positive whole number of satoshis (a 0 floor would demand outputs peers skip)
+            if(!Number.isInteger(sats) || sats <= 0)
+                throw new Error('dustThreshold missing or invalid for ' + coin + '/' + network + ' (expected a positive integer of satoshis, got ' + JSON.stringify(sats) + ')');
             this._dustThresholdCoin = this.bcdiv(sats, '100000000', 8);
         }
         return this._dustThresholdCoin;

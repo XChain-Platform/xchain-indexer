@@ -19,9 +19,10 @@
  *
  * The ENTRY file (test/unit/contract_state_subtree.test.js) deliberately keeps
  * its own copy instead of requiring this one: the entry is byte-locked to
- * xchain-sync/test/unit/contractStateSubtree.test.js, whose parts directory is
- * spelled in camelCase, so a require naming this directory would differ across
- * the pair and break that lock.
+ * xchain-sync/test/unit/contract_state_subtree.test.js, and when this copy was
+ * split out sync spelled its parts directory in camelCase, so a require naming
+ * this directory would have differed across the pair and broken that lock. Both
+ * repos now use the same directory name, so the entry could require this helper.
  *
  * STUB HONESTY, restated from the entry because it bounds what every vector
  * built on this proves: FakeDb implements the SEMANTICS of the three
