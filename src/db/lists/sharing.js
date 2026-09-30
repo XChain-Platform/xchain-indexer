@@ -40,7 +40,7 @@ async function getSharedLists(db){
          INNER JOIN index_statuses s ON (s.id=l.status_id)
          WHERE a.action_format=2
            AND s.status='valid'
-         ORDER BY share_action_index ASC`,
+         ORDER BY l.action_index ASC`,
         []
     );
 }

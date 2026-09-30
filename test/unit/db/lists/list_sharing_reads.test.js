@@ -65,7 +65,7 @@ describe('shared list storage reads', function(){
             assert.match(query, /a\.block_index AS share_block/);
             assert.match(query, /a\.action_format=2/);
             assert.match(query, /s\.status='valid'/);
-            assert.match(query, /ORDER BY share_action_index ASC$/);
+            assert.match(query, /ORDER BY l\.action_index ASC$/);
             assert.deepStrictEqual(args, []);
             return rows;
         });
