@@ -321,9 +321,9 @@ addGate('sweep_zero_leg_activation.SWEEP_ZERO_LEG_ACTIVATION', 'height', {
 // would re-verdict it and move that chain's hashes.
 addGate('tick_namespace_activation.TICK_NAMESPACE_ACTIVATION', 'height', {
     mainnet: 9999999999,
-    'BTC:testnet': 9999999999,
-    'LTC:testnet': 9999999999,
-    'DOGE:testnet': 9999999999,
+    'BTC:testnet': 154567, // set by the v0.21.0 freeze height plan
+    'LTC:testnet': 4903068, // set by the v0.21.0 freeze height plan
+    'DOGE:testnet': 67951140, // set by the v0.21.0 freeze height plan
     testnet: 9999999999,
     regtest: 0,
 });

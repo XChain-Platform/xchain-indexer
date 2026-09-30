@@ -86,6 +86,7 @@ const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
 // ARCHIVE_HEAD_VERSIONS cannot reach one path and silently skip the other.
 const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../src/consensus/state_hash.js');
 const { foldArchiveHeadFloor } = require('../src/db/anchors/archive_head_pick.js');
+const { canonicalBatchCrc } = require('../src/actions/anchor/v3_canonical.js');
 const bridgePolicy = require('./recovery/bridge_policy.js');
 const checkpointPrice = require('./recovery/checkpoint_price.js');
 const lifecycle = require('../src/hub/table_lifecycle.js');
@@ -1190,7 +1191,7 @@ class AnchorRecovery {
 
     wrapperCanonical(v1){
         let raw = this.rawCheckpointCanonical(v1) + '|' +
-                [String(v1.match_batch_seq), String(v1.match_count), v1.batch_crc32,
+                [String(v1.match_batch_seq), String(v1.match_count), canonicalBatchCrc(v1.batch_crc32),
                  String(v1.total_chunks)].join('|');
         if(eq.isEquivHeaderActive(v1.snapshot_block, v1.network))
             return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT,

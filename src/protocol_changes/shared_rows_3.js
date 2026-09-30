@@ -120,7 +120,7 @@ addGate('rollcall_gates_activation.ROLLCALL_GATES_REGTEST_ENV', 'constant', 'XC_
 // snapshots at. 6 = the BTC confirmation depth the platform already treats as
 // buried (XCHAIN_CONFIRMATIONS_BTC). CONSENSUS-CRITICAL: the hub subtracts this
 // before every snapshot lookup and refuses to boot on mainnet/testnet when a local
-// override diverges (CapabilitySnapshot._resolveReorgBuffer), so a verifier that
+// override diverges (CapabilitySnapshot.resolveReorgBuffer), so a verifier that
 // buries by a different depth resolves a different set than the signer.
 addGate('snapshot_reorg_buffer.CANONICAL_REORG_BUFFER', 'constant', 6);
 
