@@ -40,7 +40,7 @@
 // the list: the height-keyed registry row list_owner_activation.LIST_OWNER_ACTIVATION,
 // which the SDK and the wallet read as the same map when they decide whether to offer
 // an edit form.
-const gateRegistry = require('../consensus/gate_registry');
+const consensusGateRegistry = require('../consensus/gate_registry');
 const { getOpenOrdersByList, getOpenSwapsByList } = require('../db/lists/rematch.js');
 const { planListRematch } = require('../consensus/list_rematch/plan.js');
 
@@ -156,7 +156,7 @@ class List {
 
     async rematchMarkets(data, format, status){
         if(status!='valid' || data['TYPE']!=2 ||
-           !gateRegistry.activeAt('list_change_rematch_activation.LIST_CHANGE_REMATCH_ACTIVATION', this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null))
+           !consensusGateRegistry.activeAt('list_change_rematch_activation.LIST_CHANGE_REMATCH_ACTIVATION', this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null))
             return;
 
         let listRoot = (format==0) ? data['ACTION_INDEX'] : data['LIST_ACTION_INDEX'];
@@ -228,7 +228,10 @@ class List {
         if(!error && format==1 && !data['IS_GENESIS']){
 
             let bridgeRoles = this.bridgeRoleAddresses();
-            let ownerCheck  = gateRegistry.activeAt('list_owner_activation.LIST_OWNER_ACTIVATION', this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
+            const gateRegistry = {
+                activeAt: (_key, _network, _coin, blockIndex, context) => consensusGateRegistry.activeAt('list_owner_activation.LIST_OWNER_ACTIVATION', this.config['NETWORK'], this.config['COIN'], blockIndex, context),
+            };
+            let ownerCheck  = gateRegistry.activeAt('list_owner_activation.LIST_OWNER_ACTIVATION', this.config['NETWORK'], null, data['BLOCK_INDEX'], null);
 
             // Spend no read when neither rule can fire: a chain with no bridge role address
             // configured holds no bridge-owned list, and below LIST_OWNER_ACTIVATION the
