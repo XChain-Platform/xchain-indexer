@@ -28,6 +28,7 @@
 
 const swqCap = require('../../consensus/gates/swq_source_cap_gate');
 const stakeWeightCollation = require('../../consensus/gates/stake_weight_collation_gate');
+const srb = require('../../consensus/snapshot_reorg_buffer.js');
 const { getLogger } = require('../../observability/index.js');
 // Module-level state and pure helpers that the split keeps in one place, so the class
 // and every mixin read the same instance of each.
@@ -139,7 +140,7 @@ module.exports = {
     },
 
     // Re-derive ONE hub-mirrored capability_snapshots row against this node's OWN
-    // authoritative stakes at the row's snapshot_block, and say whether the hub's
+    // authoritative stakes at the row's BURIED snapshot_block, and say whether the hub's
     // claim contradicts what this chain can prove.
     //
     // capability_snapshots is the only mirrored table with no authentication on the
@@ -159,7 +160,7 @@ module.exports = {
     //
     // Verdict shape is anchor_proof_client.js's, deliberately:
     //   'verified' - the row's (signing_pubkey, source, amount) matches this node's own
-    //                effective-signer set and source aggregate at snapshot_block.
+    //                effective-signer set and source aggregate at the buried snapshot_block.
     //   'refused'  - this node CAN re-derive that block and the row contradicts it.
     //   'unknown'  - this node cannot judge (block not reached, capability not local,
     //                set truncated, read failed). The caller applies the row as before:
@@ -187,15 +188,23 @@ module.exports = {
         let block = Number(row.snapshot_block);
         if(!Number.isFinite(block) || block < 0 || Math.floor(block) !== block)
             return { verdict: 'unknown', reason: 'unusable snapshot_block ' + String(row.snapshot_block).slice(0, 32) };
-        // Availability fence. Below our own tip the stake history at `block` is whatever
+        // The hub resolves every capability set at the BURIED height (declared minus
+        // CANONICAL_REORG_BUFFER) but writes the row under the declared block, and the
+        // wire convention is that every consumer buries it exactly once, locally. Resolving
+        // at the declared block instead false-refused every honest row declared within the
+        // buffer after a stake activation or deactivation. Below the burial
+        // flag-day the helper hands the declared block back verbatim.
+        let at = srb.buriedSnapshotBlock(block, this.config['NETWORK']);
+        let where = 'block ' + block + ' (resolved at ' + at + ')';
+        // Availability fence. Below our own tip the stake history at `at` is whatever
         // we have parsed so far, which for an unreached block is nothing - refusing there
         // would reject every honest row served ahead of our sync.
         let tip = await this.getLatestBlockIndex();
-        if(!(Number(tip) >= block))
-            return { verdict: 'unknown', reason: 'local tip ' + tip + ' has not reached snapshot_block ' + block };
+        if(!(Number(tip) >= at))
+            return { verdict: 'unknown', reason: 'local tip ' + tip + ' has not reached snapshot_block ' + block + ' (resolved at ' + at + ')' };
         let local;
         try {
-            local = await this.getStakeWeightsByCapability(capability, block, '0');
+            local = await this.getStakeWeightsByCapability(capability, at, '0');
         } catch(e) {
             return { verdict: 'unknown', reason: 'local stake re-derivation failed: ' + (e && e.message ? e.message : e) };
         }
@@ -204,7 +213,7 @@ module.exports = {
         // A truncated set is a PARTIAL set: a row missing from it may be missing only
         // because the cap cut it off, so no refusal can be drawn from this block.
         if(local.truncated)
-            return { verdict: 'unknown', reason: 'local stake set truncated at block ' + block };
+            return { verdict: 'unknown', reason: 'local stake set truncated at ' + where };
         let pubkey = String(row.signing_pubkey == null ? '' : row.signing_pubkey).toLowerCase();
         let source = String(row.source == null ? '' : row.source).toLowerCase();
         let match = null;
@@ -215,10 +224,10 @@ module.exports = {
         if(match === null)
             return { verdict: 'refused',
                      reason: 'no local stake makes ' + pubkey.slice(0, 16) + ' an effective signer for source ' +
-                             source.slice(0, 24) + ' at block ' + block };
+                             source.slice(0, 24) + ' at ' + where };
         if(normalizeStakeAmount(match.weight) !== normalizeStakeAmount(row.amount))
             return { verdict: 'refused',
-                     reason: 'weight for ' + pubkey.slice(0, 16) + '/' + source.slice(0, 24) + ' at block ' + block +
+                     reason: 'weight for ' + pubkey.slice(0, 16) + '/' + source.slice(0, 24) + ' at ' + where +
                              ' is locally ' + String(match.weight).slice(0, 32) + ', hub served ' +
                              String(row.amount).slice(0, 32) };
         return { verdict: 'verified' };
