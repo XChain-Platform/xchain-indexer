@@ -1,5 +1,7 @@
 'use strict';
 
+// GENERATED
+
 const assert = require('assert');
 
 const {
