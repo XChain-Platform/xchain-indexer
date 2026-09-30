@@ -138,6 +138,11 @@ addGate('equivocation_header.ENGINE_TAGS', 'constant', {
     // over both would make a validator that signed one transfer and one snapshot at the same
     // round id provably equivocating. ROUND_ID is the snapshot_id.
     POLICY:     'XPOLICY',
+    // Shared-list version records. ROUND_ID is the list snapshot_id, VIEW the live PBFT view
+    // on the hub and the finalizing_view on an indexer. A DISTINCT tag from POLICY because
+    // the two canonicals share no layout and SLASH judges one tag family. It maps to the
+    // cross_chain capability.
+    LIST_SHARE: 'XLISTSHARE',
 });
 
 // list_edit_resolution_activation
