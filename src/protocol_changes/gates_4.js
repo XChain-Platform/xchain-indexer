@@ -241,3 +241,51 @@ addGate('list_change_rematch_activation.LIST_CHANGE_REMATCH_ACTIVATION', 'height
     testnet: UNARMED,
     regtest: 0,
 });
+
+// list_share_activation
+// At or above this height LIST format 2, shared-edit fees and the shared-list
+// member cap are active on the chain being parsed.
+addGate('list_share_activation.LIST_SHARE_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// list_union_activation
+// At or above this height LIST type 3 resolves the union of its member lists.
+addGate('list_union_activation.LIST_UNION_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// list_transfer_activation
+// At or above this height LIST format 3 transfers ownership to its destination.
+addGate('list_transfer_activation.LIST_TRANSFER_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+// list_address_ref_activation
+// At or above this height an address LIST item may use an index-id reference.
+addGate('list_address_ref_activation.LIST_ADDRESS_REF_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+addGate('protocol/constants.LIST_SHARE_MAX_MEMBERS', 'constant', 10000);
+addGate('protocol/constants.LIST_UNION_MAX_MEMBERS', 'constant', 16);
