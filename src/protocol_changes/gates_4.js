@@ -217,3 +217,15 @@ addGate('swap_edit_rematch_activation.SWAP_EDIT_REMATCH_ACTIVATION', 'height', {
     testnet: UNARMED,
     regtest: 0,
 });
+
+// market_list_source_activation
+// At or above this height each ORDER or SWAP also applies its own allow and
+// block lists to the counterparty's SOURCE. Existing GET_ADDRESS checks remain.
+addGate('market_list_source_activation.MARKET_LIST_SOURCE_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
