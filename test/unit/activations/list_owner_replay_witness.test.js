@@ -131,6 +131,9 @@ describe('LIST owner replay witness: gate and hash comparison', function () {
 
     it('rolls back only the executable general-owner checks in a legacy tree', function () {
         const source = fs.readFileSync(path.join(__dirname, '../../../src/actions/list.js'), 'utf8');
+        assert.ok(source.includes(
+            "gateRegistry.activeAt('" + witness.GATE + "', this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null)"
+        ));
         const legacy = witness.rollBackListOwner(source);
         assert.ok(!legacy.includes("gateRegistry.activeAt('" + witness.GATE + "'"));
         assert.ok(legacy.includes('if(bridgeRoles.length){'));

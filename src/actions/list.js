@@ -228,7 +228,7 @@ class List {
         if(!error && format==1 && !data['IS_GENESIS']){
 
             let bridgeRoles = this.bridgeRoleAddresses();
-            let ownerCheck  = gateRegistry.activeAt('list_owner_activation.LIST_OWNER_ACTIVATION', this.config['NETWORK'], null, data['BLOCK_INDEX'], null);
+            let ownerCheck  = gateRegistry.activeAt('list_owner_activation.LIST_OWNER_ACTIVATION', this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
 
             // Spend no read when neither rule can fire: a chain with no bridge role address
             // configured holds no bridge-owned list, and below LIST_OWNER_ACTIVATION the
