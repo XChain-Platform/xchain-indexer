@@ -201,4 +201,41 @@ module.exports = {
         return id;
     },
 
+    // Case-exact twin of createTicker: index_tickers.tick is utf8mb4_bin with a binary unique
+    // index, so case variants may coexist and each resolves to its own row. The lookup matches
+    // the stored bytes (tick=?) and never reads or writes the case-folded genesis _internCache.
+    // Returns null when the rollback refresh phase suppresses creation or when the insert is
+    // ignored and no exact row exists.
+    // @param {tick}        string  Ticker name, matched byte for byte
+    // @param {blockIndex}  integer Block at which the id is first assigned (defaults to
+    //                              this.blockIndex)
+    async createTickerExact(tick, blockIndex){
+        if(this.util.isNull(tick))
+            return null;
+        if(String(tick).substring(0,1) === '^')
+            return await this.getTickerId(tick);
+        const lookup = "SELECT id FROM index_tickers WHERE tick=? LIMIT 1";
+        let results = await this.doQuery(lookup, [tick]);
+        let id      = (results.length > 0) ? Number(results[0].id) : null;
+        if(id === null){
+            if(this.suppressIndexIdCreation)
+                return null;
+            if(this.transactionConnection != null){
+                let bi = (blockIndex !== undefined && blockIndex !== null) ? blockIndex : this.blockIndex;
+                id = await this.getNextTickerId();
+                let query = "INSERT IGNORE INTO index_tickers (`id`, `tick`, `block_index`) values (?, ?, ?)";
+                await this.doQuery(query, [id, tick, (this.util.isNull(bi) ? null : bi)]);
+            } else {
+                if(this.deterministicIndexingStarted)
+                    getLogger().warn('Index id invariant: out-of-band index_tickers insert ("' + tick +
+                        '") after deterministic indexing began; this offsets the id counter.');
+                let query = "INSERT IGNORE INTO index_tickers (tick) values (?)";
+                await this.doQuery(query, [tick]);
+            }
+            results = await this.doQuery(lookup, [tick]);
+            id      = (results.length > 0) ? Number(results[0].id) : null;
+        }
+        return id;
+    },
+
 };
