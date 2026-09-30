@@ -135,6 +135,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'archive_section_verdict_activation',
     'bridge_policy_detach_activation',
     'vm_lint_optional_chain_heights',
+    'swap_edit_rematch_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));

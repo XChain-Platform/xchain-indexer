@@ -205,3 +205,15 @@ addGate('vm_lint_optional_chain_heights.VM_LINT_OPTIONAL_CHAIN_ACTIVATION', 'hei
     testnet: UNARMED,
     regtest: 0,
 });
+
+// swap_edit_rematch_activation
+// At or above this height a SWAP edit looks for matches against the resting
+// swap it updates. Below it the lookup retains the edit action index.
+addGate('swap_edit_rematch_activation.SWAP_EDIT_REMATCH_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
