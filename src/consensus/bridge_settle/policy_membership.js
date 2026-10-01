@@ -39,18 +39,30 @@ const { sha256 } = require('./reasons.js');
  * @param {Array<string>|null} allow
  * @param {Array<string>|null} block
  * @param {boolean} sleeping
+ * @param {{allow?: string|null, block?: string|null}} [refs]
  * @returns {string} lowercase sha256 hex
  */
-function policyHash(allow, block, sleeping){
-    const part = (label, list) => {
+function policyHash(allow, block, sleeping, refs){
+    const part = (label, list, ref) => {
+        if(ref !== null && ref !== undefined) return [label, 'REF', String(ref)];
         if(list === null || list === undefined) return [label, '-'];
         return [label, String(list.length)].concat(list.map(String));
     };
-    const text = part('ALLOW', allow)
-        .concat(part('BLOCK', block))
+    const text = part('ALLOW', allow, refs && refs.allow)
+        .concat(part('BLOCK', block, refs && refs.block))
         .concat(['SLEEP', sleeping ? '1' : '0'])
         .join('|');
     return sha256(text);
+}
+
+/**
+ * True only for a shared-list reference in its canonical CHAIN:root-index form.
+ *
+ * @param {*} value
+ * @returns {boolean}
+ */
+function isListRef(value){
+    return typeof value === 'string' && /^(?:BTC|LTC|DOGE):[1-9][0-9]*$/.test(value);
 }
 
 /**
@@ -95,4 +107,27 @@ function parseMembership(value){
     return parsed.map(String);
 }
 
-module.exports = { policyHash, verifyMembershipOrder, parseMembership };
+/**
+ * Parse a transport membership column that may carry either members or a shared-list ref.
+ *
+ * @param {*} value
+ * @returns {{list: Array<string>|null}|{ref: string}|false} false means malformed
+ */
+function parseMembershipOrRef(value){
+    if(value === null) return { list: null };
+    if(Array.isArray(value)) return { list: value.map(String) };
+    let parsed;
+    try { parsed = JSON.parse(String(value)); } catch(e){ return false; }
+    if(parsed === null) return { list: null };
+    if(Array.isArray(parsed)) return { list: parsed.map(String) };
+    if(isListRef(parsed)) return { ref: parsed };
+    return false;
+}
+
+module.exports = {
+    policyHash,
+    isListRef,
+    verifyMembershipOrder,
+    parseMembership,
+    parseMembershipOrRef,
+};

@@ -50,8 +50,10 @@ const FIELD = {
 };
 
 function listShareSlashable(msgA, prefix, network){
-    let field = String(msgA).slice(String(prefix).length).split('|')[2];
-    return /^[0-9]+$/.test(String(field)) &&
+    if(typeof msgA !== 'string' || typeof prefix !== 'string' || !msgA.startsWith(prefix))
+        return false;
+    const field = msgA.slice(prefix.length).split('|')[2];
+    return typeof field === 'string' && /^[0-9]+$/.test(field) &&
         gateRegistry.activeAt(LIST_SHARE_PRODUCER_GATE, network, null, Number(field), null);
 }
 

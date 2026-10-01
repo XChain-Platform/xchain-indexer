@@ -35,4 +35,50 @@ function mergeUnionMembers(lists) {
     .map((entry) => entry.item);
 }
 
-module.exports = { mergeUnionMembers };
+async function getUnionMemberRoots(db, actionIndex) {
+  const rows = await db.doQuery(
+    `SELECT item_id AS action_index
+     FROM list_items
+     WHERE action_index=?`,
+    [actionIndex]
+  );
+  return rows.map((row) => row.action_index);
+}
+
+async function getUnionResolution(db, actionIndex, storedType, blockIndex) {
+  if (Number(storedType) !== 3) return null;
+
+  const rootIndex = await db.getListRootIndex(actionIndex);
+  const roots = await db.doQuery(
+    `SELECT l.action_index
+     FROM lists l
+     INNER JOIN index_statuses s ON (s.id=l.status_id)
+     WHERE l.action_index=?
+       AND l.list_action_index IS NULL
+       AND l.type=3
+       AND s.status='valid'
+     LIMIT 1`,
+    [rootIndex]
+  );
+  if (roots.length === 0) return null;
+
+  const memberRoots = await getUnionMemberRoots(db, rootIndex);
+  if (memberRoots.length === 0) return null;
+  const getStoredType = db.getListStoredType;
+  const memberType = await getStoredType.call(db, memberRoots[0], blockIndex);
+  if (memberType !== 1 && memberType !== 2) return null;
+  return { rootIndex, memberType };
+}
+
+async function readUnionMembers(db, headIndex, blockIndex, atBlock) {
+  const memberRoots = await getUnionMemberRoots(db, headIndex);
+  const lists = [];
+  for (const memberRoot of memberRoots) {
+    lists.push(atBlock
+      ? await db.getListAtBlock(memberRoot, blockIndex)
+      : await db.getList(memberRoot, blockIndex));
+  }
+  return mergeUnionMembers(lists);
+}
+
+module.exports = { mergeUnionMembers, getUnionResolution, readUnionMembers };
