@@ -15,6 +15,7 @@
 'use strict';
 
 const assert = require('assert');
+const childProcess = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -29,7 +30,37 @@ const DOCS_DIR = process.env.XCHAIN_DOCS_DIR || path.resolve(
     __dirname,
     '../../../../xchain-documentation',
 );
-const VECTOR_PATH = path.join(DOCS_DIR, 'protocol/test-vectors/list_share.json');
+const VECTOR_RELATIVE_PATH = 'protocol/test-vectors/list_share.json';
+const VECTOR_PATH = path.join(DOCS_DIR, VECTOR_RELATIVE_PATH);
+
+function readVectors(ctx) {
+    const verdict = siblingCheckout(__dirname, VECTOR_PATH);
+    if (verdict.usable)
+        return JSON.parse(fs.readFileSync(VECTOR_PATH, 'utf8'));
+    if (!fs.existsSync(verdict.path)) {
+        skipOrFail(ctx, verdict, 'the canonical list share vectors');
+        return null;
+    }
+
+    let text;
+    try {
+        const docsRoot = fs.realpathSync(DOCS_DIR);
+        const revision = childProcess.execFileSync(
+            'git', ['-C', docsRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' },
+        ).trim();
+        text = childProcess.execFileSync(
+            'git', ['-C', docsRoot, 'show', revision + ':' + VECTOR_RELATIVE_PATH],
+            { encoding: 'utf8' },
+        );
+    } catch (error) {
+        skipOrFail(ctx, {
+            usable: false,
+            reason: verdict.reason + '; the vector is unavailable from the sibling HEAD commit',
+        }, 'the canonical list share vectors');
+        return null;
+    }
+    return JSON.parse(text);
+}
 
 function vectorRows(vector) {
     const row = { ...vector, finalizing_view: vector.view };
@@ -69,11 +100,8 @@ function fixture(overrides = {}) {
 
 describe('list share pure settle parts', function () {
     it('rebuilds every snapshot id and signed canonical vector byte for byte', function () {
-        const verdict = siblingCheckout(__dirname, VECTOR_PATH);
-        if (!verdict.usable)
-            return skipOrFail(this, verdict, 'the canonical list share vectors');
-
-        const vectors = JSON.parse(fs.readFileSync(VECTOR_PATH, 'utf8'));
+        const vectors = readVectors(this);
+        if (!vectors) return;
         for (const vector of vectors.snapshotIds) {
             assert.strictEqual(
                 deriveListSnapshotId(
