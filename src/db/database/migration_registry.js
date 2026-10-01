@@ -153,6 +153,11 @@ const STARTUP_ASSERTED_MIGRATIONS = [
         file:      '2026-09-12-bridge-tables.sql',
         assertion: 'assertBridgeTablesPresent',
         symptom:   'Fatal indexer error: the bridge tables bridge_transfers, bridge_settlements, policy_snapshots, xbridges are absent'
+    },
+    {
+        file:      '2026-09-30-list-share-tables.sql',
+        assertion: 'assertListShareTablesPresent',
+        symptom:   'Fatal indexer error: the shared-list tables list_snapshots and list_share_mirrors are absent'
     }
 ];
 
