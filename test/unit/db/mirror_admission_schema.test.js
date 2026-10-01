@@ -122,7 +122,7 @@ describe('mirror admission schema: the manifest against the hub DDL (sibling)', 
     before(function(){ skipOrFail(this, verdict, 'the hub DDL comparison'); });
 
     it('every manifest table carries exactly its columns in the hub DDL, each with the one definition', function(){
-        for(const t of M.MIRROR_ADMISSION_TABLES){
+        for(const t of Object.keys(M.MIRROR_ADMISSION_COLUMNS)){
             const hub = M.admissionColumnsOf(columnsOf(HUB_SQL_DIR, t));
             assert.deepStrictEqual(hub.map(c => c.name), [...M.MIRROR_ADMISSION_COLUMNS[t].columns], t + ': hub column set');
             for(const c of hub) assert.strictEqual(c.definition, M.ADMISSION_COLUMN_DDL, t + '.' + c.name);
@@ -130,7 +130,7 @@ describe('mirror admission schema: the manifest against the hub DDL (sibling)', 
     });
 
     it('every manifest block sits at the hub position its AFTER anchor names', function(){
-        for(const t of M.MIRROR_ADMISSION_TABLES)
+        for(const t of Object.keys(M.MIRROR_ADMISSION_COLUMNS))
             assert.strictEqual(anchorOf(columnsOf(HUB_SQL_DIR, t)), M.MIRROR_ADMISSION_COLUMNS[t].hubAfter || M.MIRROR_ADMISSION_COLUMNS[t].after, t);
     });
 
@@ -141,7 +141,7 @@ describe('mirror admission schema: the manifest against the hub DDL (sibling)', 
             if(cols.length) carrying[f.slice(0, -4)] = cols;
         }
         const expected = {};
-        for(const t of M.MIRROR_ADMISSION_TABLES) expected[t] = [...M.MIRROR_ADMISSION_COLUMNS[t].columns];
+        for(const t of Object.keys(M.MIRROR_ADMISSION_COLUMNS)) expected[t] = [...M.MIRROR_ADMISSION_COLUMNS[t].columns];
         for(const t of Object.keys(M.HUB_ONLY_ADMISSION_COLUMNS)) expected[t] = [...M.HUB_ONLY_ADMISSION_COLUMNS[t]];
         assert.deepStrictEqual(carrying, expected,
             'the hub DDL admission columns are not the manifest plus the declared hub-only set');
@@ -150,7 +150,7 @@ describe('mirror admission schema: the manifest against the hub DDL (sibling)', 
     it('the hub migrateAdmissionColumns map is the manifest plus the hub-only set, column for column', function(){
         const map = scrapeHubMigrationMap(fs.readFileSync(HUB_COLUMNS, 'utf8'));
         const expected = {};
-        for(const t of M.MIRROR_ADMISSION_TABLES) if(t !== 'oracle_prices') expected[t] = [...M.MIRROR_ADMISSION_COLUMNS[t].columns];
+        for(const t of Object.keys(M.MIRROR_ADMISSION_COLUMNS)) if(t !== 'oracle_prices') expected[t] = [...M.MIRROR_ADMISSION_COLUMNS[t].columns];
         for(const t of Object.keys(M.HUB_ONLY_ADMISSION_COLUMNS)) expected[t] = [...M.HUB_ONLY_ADMISSION_COLUMNS[t]];
         assert.deepStrictEqual(map, expected);
         // The oracle rail is migrated by its own single-column call, outside the map.

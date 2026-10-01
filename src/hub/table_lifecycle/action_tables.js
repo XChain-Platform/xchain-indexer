@@ -119,6 +119,7 @@ const TABLES = [
     // retraction, so "did this chain already apply it?" has to be answered from a local,
     // reorg-rollback-able table rather than from the mirror.
     { table: 'bridge_settlements',          owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
+    { table: 'list_share_mirrors',           owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'cross_chain_call_executions', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'cross_chain_call_callbacks',  owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror', hashed: DERIVED },
     { table: 'xcalls', owner: 'indexer', replication: 'stream:action', rollback: 'action', replicaRollback: 'mirror',

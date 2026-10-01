@@ -97,6 +97,12 @@
 // indexer above the activation against a v6 hub would see no heights and defer
 // forever under the fail-closed rule, while below the activation the same
 // mismatched pair only parks the mirror for the roll window.
-const HUB_SCHEMA_VERSION = 7;
+//
+// v8: the mirror set gains list_snapshots, the quorum-signed append-only shared-list
+// version stream. Strict equality applies in both directions: the hub rolls first,
+// then every indexer and the explorer follow back to back. The roll completes below
+// every LIST_SHARE_CONSUMER_ACTIVATION height, before any consumer can require the
+// new mirror table.
+const HUB_SCHEMA_VERSION = 8;
 
 module.exports = { HUB_SCHEMA_VERSION };
