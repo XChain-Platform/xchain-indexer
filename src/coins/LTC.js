@@ -216,6 +216,8 @@ module.exports = {
     FEE_TOLERANCE_MIN:                '0.95',
     FEE_TOLERANCE_MAX:                '1.10',
     ORACLE_MAX_PRICE_AGE_SECONDS:     1800,
+    ORACLE_MAX_PRICE_AGE_HOURLY_SECONDS: 4500, // Fee-gate bound after ORACLE_PRICE_AGE_HOURLY_ACTIVATION:
+                                              // one six-round hourly PRICE wire (3600 s) plus a 900 s margin; below it, 1800 applies.
     VALIDATOR_QUERY_LIMIT:            1000,
 
     GAS_SCHEDULE: {

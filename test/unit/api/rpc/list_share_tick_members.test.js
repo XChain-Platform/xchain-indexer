@@ -19,6 +19,7 @@ const crypto = require('crypto');
 const sinon = require('sinon');
 
 const { buildListShareRpc } = require('../../../../src/api/rpc/list_share.js');
+const { qualifyTickMembers } = require('../../../../src/api/rpc/list_share_tick_members.js');
 const { recordingView, fakeIndexer } = require('./helpers/fake_indexer.js');
 
 function sha256(value){
@@ -32,10 +33,67 @@ function dogeRpc(view){
     }) });
 }
 
-describe('getlistat ticker member qualification @regression @tier1', function(){
+describe('shared list tick member qualification', function(){
+    const coins = ['BTC', 'LTC', 'DOGE'];
+
     afterEach(function(){ sinon.restore(); });
 
-    it('qualifies bare names, preserves foreign items, deduplicates, and byte-sorts before hashing', async function(){
+    it('qualifies bare members, preserves qualified members, and sorts UTF-8 bytes', async function(){
+        let lookups = 0;
+        const db = { getTickerId: async () => { lookups++; return 5; } };
+        const members = ['PEPE', 'BTC:^5'];
+
+        assert.deepStrictEqual(await qualifyTickMembers(db, members, 'DOGE', coins), [
+            'BTC:^5',
+            'DOGE:PEPE'
+        ]);
+        assert.strictEqual(lookups, 0);
+        assert.deepStrictEqual(members, ['PEPE', 'BTC:^5']);
+    });
+
+    it('uses one ticker lookup when the qualified name would exceed the limit', async function(){
+        let lookups = [];
+        const item = 'A'.repeat(196);
+        const db = {
+            getTickerId: async tick => {
+                lookups.push(tick);
+                return 9;
+            }
+        };
+
+        assert.deepStrictEqual(await qualifyTickMembers(db, [item], 'DOGE', coins), ['DOGE:^9']);
+        assert.deepStrictEqual(lookups, [item]);
+    });
+
+    it('drops duplicates after qualification', async function(){
+        const db = { getTickerId: async () => { throw new Error('unexpected lookup'); } };
+
+        assert.deepStrictEqual(
+            await qualifyTickMembers(db, ['PEPE', 'DOGE:PEPE'], 'DOGE', coins),
+            ['DOGE:PEPE']
+        );
+    });
+
+    it('throws when an over-long ticker name has no indexed id', async function(){
+        const item = 'A'.repeat(196);
+        const db = { getTickerId: async () => null };
+
+        await assert.rejects(
+            qualifyTickMembers(db, [item], 'DOGE', coins),
+            /index_tickers/
+        );
+    });
+
+    it('refuses a non-array member value', async function(){
+        const db = { getTickerId: async () => { throw new Error('unexpected lookup'); } };
+
+        await assert.rejects(
+            qualifyTickMembers(db, 'PEPE', 'DOGE', coins),
+            TypeError
+        );
+    });
+
+    it('qualifies, deduplicates, and byte-sorts getlistat members before hashing', async function(){
         const view = recordingView({
             getListType: 1,
             getListAtBlock: ['PEPE', 'BTC:^5', 'PEPE'],
@@ -53,7 +111,7 @@ describe('getlistat ticker member qualification @regression @tier1', function(){
         ]);
     });
 
-    it('uses a ticker id when the qualified name would exceed 200 characters', async function(){
+    it('uses a ticker id in getlistat when the qualified name exceeds 200 characters', async function(){
         const longName = 'P'.repeat(196);
         const view = recordingView({
             getListType: 1,

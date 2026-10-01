@@ -17,14 +17,13 @@
 const {
     LIST_TICK_COIN_SEPARATOR,
     LIST_TICK_COIN_MAX_ITEM_LENGTH,
-    parseTickCoinItem,
+    parseTickCoinItem
 } = require('../../consensus/list_tick_coin.js');
 
-function byteOrder(left, right){
-    return Buffer.compare(Buffer.from(left, 'utf8'), Buffer.from(right, 'utf8'));
-}
-
 async function qualifyTickMembers(db, members, coin, coins){
+    if(!Array.isArray(members))
+        throw new TypeError('members must be an array');
+
     let qualified = [];
     for(let item of members){
         if(parseTickCoinItem(item, coins) !== null){
@@ -32,16 +31,21 @@ async function qualifyTickMembers(db, members, coin, coins){
             continue;
         }
 
-        let nameForm = coin + LIST_TICK_COIN_SEPARATOR + item;
-        if(nameForm.length <= LIST_TICK_COIN_MAX_ITEM_LENGTH){
-            qualified.push(nameForm);
+        let name = coin + LIST_TICK_COIN_SEPARATOR + item;
+        if(name.length <= LIST_TICK_COIN_MAX_ITEM_LENGTH){
+            qualified.push(name);
             continue;
         }
 
-        let id = await db.getTickerId(item);
-        qualified.push(coin + LIST_TICK_COIN_SEPARATOR + '^' + id);
+        let tickId = await db.getTickerId(item);
+        if(tickId === null)
+            throw new Error('shared list ticker is missing from index_tickers');
+        qualified.push(coin + LIST_TICK_COIN_SEPARATOR + '^' + tickId);
     }
-    return Array.from(new Set(qualified)).sort(byteOrder);
+
+    return [...new Set(qualified)].sort((left, right) =>
+        Buffer.compare(Buffer.from(left, 'utf8'), Buffer.from(right, 'utf8'))
+    );
 }
 
 module.exports = { qualifyTickMembers };
