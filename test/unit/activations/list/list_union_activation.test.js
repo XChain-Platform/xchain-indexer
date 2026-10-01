@@ -6,20 +6,20 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon = require('sinon');
 
-const { createBaseData } = require('../../fixtures/mocks');
-const { stubGate } = require('../../helpers/gate_modules.js');
+const { createBaseData } = require('../../../fixtures/mocks');
+const { stubGate } = require('../../../helpers/gate_modules.js');
 const {
     listItemId,
     isValidListRoot,
     getUnionMemberRoots,
     getUnionMemberType,
-} = require('../../../src/db/lists/membership.js');
+} = require('../../../../src/db/lists/membership.js');
 const {
     SOURCE,
     ADDR1,
     ADDR2,
     makeListContext,
-} = require('../actions/contract/list.test/helpers/list_context.js');
+} = require('../../actions/contract/list.test/helpers/list_context.js');
 
 const GATE_KEY = 'list_union_activation.LIST_UNION_ACTIVATION';
 const UNION_ROOT = 100;
