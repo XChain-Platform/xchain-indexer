@@ -124,7 +124,11 @@ const SHARED_GATES = [
     // report a rules mismatch. Appended at the END for the preimage-ordering reason above.
     ['token_bridge_activation',                 ['TOKEN_BRIDGE_ACTIVATION']],
     ['anchor_bundle_order_activation',          ['ANCHOR_BUNDLE_ORDER_ACTIVATION']],
-    ['price_scale_activation',                  ['PRICE_V1_CANONICAL_ACTIVATION', 'PRICE_V1_VALUE_MAX_LENGTH', 'PRICE_V1_FEE_MAX_LENGTH']]
+    ['price_scale_activation',                  ['PRICE_V1_CANONICAL_ACTIVATION', 'PRICE_V1_VALUE_MAX_LENGTH', 'PRICE_V1_FEE_MAX_LENGTH']],
+    // The indexer selects the hourly price-snapshot age at this per-chain height,
+    // while hubs select hourly batch windows from this network's first round.
+    ['oracle_price_age_hourly_activation',       ['ORACLE_PRICE_AGE_HOURLY_ACTIVATION']],
+    ['oracle_hourly_window_activation',          ['ORACLE_HOURLY_WINDOW_FIRST_ROUND']]
 ];
 
 // A per-network height at or above this value is a far-future placeholder, not an
