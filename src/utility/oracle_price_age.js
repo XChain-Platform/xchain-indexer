@@ -12,18 +12,14 @@
  *
  ********************************************************************/
 
-'use strict';
-
 const gateRegistry = require('../consensus/gate_registry');
 const { pickMaxPriceAgeSeconds } = require('./price_age/pick.js');
 
-const HOURLY_PRICE_AGE_GATE =
-    'oracle_price_age_hourly_activation.ORACLE_PRICE_AGE_HOURLY_ACTIVATION';
+const HOURLY_GATE = 'oracle_price_age_hourly_activation.ORACLE_PRICE_AGE_HOURLY_ACTIVATION';
 
 function maxPriceAgeSecondsAt(config, network, chainKey, blockIndex){
-    let hourlyActive = gateRegistry.activeAt(
-        HOURLY_PRICE_AGE_GATE, network, chainKey, blockIndex, null);
-    return pickMaxPriceAgeSeconds(config, hourlyActive);
+    let hourly = gateRegistry.activeAt(HOURLY_GATE, network, chainKey, blockIndex, null);
+    return pickMaxPriceAgeSeconds(config, hourly);
 }
 
 module.exports = { maxPriceAgeSecondsAt };
