@@ -6,14 +6,14 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon = require('sinon');
 
-const { createBaseData } = require('../../fixtures/mocks');
-const { stubGate } = require('../../helpers/gate_modules.js');
+const { createBaseData } = require('../../../fixtures/mocks');
+const { stubGate } = require('../../../helpers/gate_modules.js');
 const {
     SOURCE,
     ADDR1,
     ADDR2,
     makeListContext,
-} = require('../actions/contract/list.test/helpers/list_context.js');
+} = require('../../actions/contract/list.test/helpers/list_context.js');
 
 const SHARE_GATE = 'list_share_activation.LIST_SHARE_ACTIVATION';
 const OWNER_GATE = 'list_owner_activation.LIST_OWNER_ACTIVATION';
@@ -21,6 +21,20 @@ const REMATCH_GATE = 'list_change_rematch_activation.LIST_CHANGE_REMATCH_ACTIVAT
 const LIST_ROOT = 50;
 const SHARE_INDEX = 90;
 const MEMBER_LIMIT = 10000;
+
+// No shared-list read (isListShared, getSharedLists: the format 2 query) may run. The
+// transfer-aware owner lookup reads list_transfers through the same doQuery, so the
+// guard names the shared read rather than refusing every query.
+// The list already carries a valid SHARE: the format 2 read answers one row, and the
+// transfer-aware owner lookup finds no transfer, so ownership falls back to the source.
+function sharedListRow(db){
+    db.doQuery.callsFake(async sql => (/list_transfers/.test(String(sql)) ? [] : [{}]));
+}
+
+function assertNoSharedRead(db){
+    const shared = db.doQuery.getCalls().filter(call => /action_format=2/.test(String(call.args[0])));
+    assert.strictEqual(shared.length, 0, 'a shared-list read ran: ' + shared.map(call => call.args[0]).join('; '));
+}
 
 function members(count){
     return Array.from({ length: count }, (_, index) => 'member-' + index);
@@ -82,21 +96,21 @@ describe('LIST share activation @regression @tier2', function () {
         sinon.assert.notCalled(parseParams);
         sinon.assert.notCalled(indexer.indexerDb.getListType);
         sinon.assert.notCalled(indexer.indexerDb.getList);
-        sinon.assert.notCalled(indexer.indexerDb.doQuery);
+        assertNoSharedRead(indexer.indexerDb);
         assert.strictEqual(shareGate.calledWith('regtest', 'BTC', 200, null), true);
     });
 
     it('does not read or enforce the shared-edit cap below the gate', async function () {
         const list = members(MEMBER_LIMIT);
         const { indexer, handler } = setup(false, list);
-        indexer.indexerDb.doQuery.resolves([{}]);
+        sharedListRow(indexer.indexerDb);
         sinon.stub(handler, 'storeList').resolves();
 
         const data = await add(handler);
 
         assert.strictEqual(list.length, MEMBER_LIMIT + 1);
         assert.strictEqual(data.STATUS, 'valid');
-        sinon.assert.notCalled(indexer.indexerDb.doQuery);
+        assertNoSharedRead(indexer.indexerDb);
     });
 
     it('accepts the owner SHARE and snapshots every current member at the SHARE index', async function () {
@@ -122,7 +136,7 @@ describe('LIST share activation @regression @tier2', function () {
         const data = await share(handler, { SOURCE: ADDR2 });
 
         assert.strictEqual(data.STATUS, 'invalid: LIST_ACTION_INDEX (not owner)');
-        sinon.assert.notCalled(indexer.indexerDb.doQuery);
+        assertNoSharedRead(indexer.indexerDb);
         sinon.assert.notCalled(indexer.indexerDb.createListItem);
     });
 
@@ -132,12 +146,12 @@ describe('LIST share activation @regression @tier2', function () {
         const data = await share(handler);
 
         assert.strictEqual(data.STATUS, 'invalid: LIST_ACTION_INDEX (type)');
-        sinon.assert.notCalled(indexer.indexerDb.doQuery);
+        assertNoSharedRead(indexer.indexerDb);
     });
 
     it('refuses a second SHARE', async function () {
         const { indexer, handler } = setup(true);
-        indexer.indexerDb.doQuery.resolves([{}]);
+        sharedListRow(indexer.indexerDb);
 
         const data = await share(handler);
 
@@ -164,7 +178,7 @@ describe('LIST share activation @regression @tier2', function () {
     it('refuses an ADD past the cap only after the list has been shared', async function () {
         const sharedList = members(MEMBER_LIMIT);
         const shared = setup(true, sharedList);
-        shared.indexer.indexerDb.doQuery.resolves([{}]);
+        sharedListRow(shared.indexer.indexerDb);
         sinon.stub(shared.handler, 'storeList').resolves();
         const rejected = await add(shared.handler);
         assert.strictEqual(sharedList.length, MEMBER_LIMIT + 1);
@@ -184,19 +198,19 @@ describe('LIST share activation @regression @tier2', function () {
     it('does not apply SHARE validation or the edit cap to genesis-injected mirror legs', async function () {
         const mirror = setup(true, members(MEMBER_LIMIT + 1), 3);
         mirror.indexer.indexerDb.getListSource.resolves(ADDR2);
-        mirror.indexer.indexerDb.doQuery.resolves([{}]);
+        sharedListRow(mirror.indexer.indexerDb);
         sinon.stub(mirror.handler, 'storeList').resolves();
         const shared = await share(mirror.handler, { IS_GENESIS: true });
         assert.strictEqual(shared.STATUS, 'valid');
         sinon.assert.notCalled(mirror.indexer.indexerDb.getListSource);
-        sinon.assert.notCalled(mirror.indexer.indexerDb.doQuery);
+        assertNoSharedRead(mirror.indexer.indexerDb);
 
         sinon.restore();
         const edit = setup(true, members(MEMBER_LIMIT));
-        edit.indexer.indexerDb.doQuery.resolves([{}]);
+        sharedListRow(edit.indexer.indexerDb);
         sinon.stub(edit.handler, 'storeList').resolves();
         const added = await add(edit.handler, { IS_GENESIS: true });
         assert.strictEqual(added.STATUS, 'valid');
-        sinon.assert.notCalled(edit.indexer.indexerDb.doQuery);
+        assertNoSharedRead(edit.indexer.indexerDb);
     });
 });

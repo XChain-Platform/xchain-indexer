@@ -5,15 +5,15 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon = require('sinon');
-const gateRegistry = require('../../../src/consensus/gate_registry');
-const transferPart = require('../../../src/actions/list/transfer.js');
-const { createBaseData } = require('../../fixtures/mocks');
+const gateRegistry = require('../../../../src/consensus/gate_registry');
+const transferPart = require('../../../../src/actions/list/transfer.js');
+const { createBaseData } = require('../../../fixtures/mocks');
 const {
     SOURCE,
     ADDR1,
     ADDR2,
     makeListContext,
-} = require('../actions/contract/list.test/helpers/list_context.js');
+} = require('../../actions/contract/list.test/helpers/list_context.js');
 
 const GATE = 'list_transfer_activation.LIST_TRANSFER_ACTIVATION';
 const ROOT = 5;
