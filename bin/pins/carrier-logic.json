@@ -54,7 +54,7 @@
     },
     "consensus_rules_digest": {
       "path": "src/consensus_rules_digest.js",
-      "hash": "4b63bb80a0788ae30c0c0bcc4e34664b2d27c31079db04dbfb784987a0e8f790",
+      "hash": "0149ecc8ec5ef941b1d9628b7d71a619837d2c5f55a440cf65d682c51fa155c0",
       "twins": [
         "xchain-hub"
       ]
@@ -1870,6 +1870,13 @@
       "from": "22ff03ab33345bb63cbd6fda35f8d26dc2c0dafb626be509c27d4090d4cdb2c6",
       "to": "bbc15d2d47cebe6e7e77868eb90de683849de91902fb1649700a8e5756ddebbe",
       "reason": "LS-2 adds LIST_SHARE_MAX_MEMBERS and LIST_UNION_MAX_MEMBERS",
+      "date": "2026-10-01"
+    },
+    {
+      "id": "consensus_rules_digest",
+      "from": "4b63bb80a0788ae30c0c0bcc4e34664b2d27c31079db04dbfb784987a0e8f790",
+      "to": "0149ecc8ec5ef941b1d9628b7d71a619837d2c5f55a440cf65d682c51fa155c0",
+      "reason": "OF-5 hourly PRICE gates",
       "date": "2026-10-01"
     }
   ]
