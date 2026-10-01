@@ -24,6 +24,7 @@
  ********************************************************************/
 
 const { getLogger } = require('../observability/index.js');
+const gateRegistry = require('../consensus/gate_registry');
 
 module.exports = {
 
@@ -145,6 +146,22 @@ module.exports = {
                 this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'policyWatermarkGraceS', blockToParse);
                 return true;
             }
+        }
+        return false;
+    },
+
+    async deferOnListShareSync(blockToParse, blockTime){
+        if(!this.hubDbSync ||
+           !gateRegistry.activeAt('list_share_consumer_activation.LIST_SHARE_CONSUMER_ACTIVATION',
+               this.config['NETWORK'], this.config['COIN'], blockToParse, null) ||
+           !this.mirrorAdmissionActiveAt(blockToParse)) return false;
+        try {
+            await this.hubDbSync.waitForListShareSync(this.priceSyncTimeoutMs, blockToParse);
+        } catch(err){
+            getLogger().warn('Deferring block ' + blockToParse + ' (list share sync)', err);
+            this.stallReason = 'list_share_sync_barrier';
+            this.stallClearsAt = null;
+            return true;
         }
         return false;
     },
