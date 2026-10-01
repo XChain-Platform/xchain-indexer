@@ -49,7 +49,8 @@ function applyDelta(current, added, removed){
 function nextMembership(current, row){
     let membership;
     if(row.seq === 1 || row.seq === '1' || row.seq === 1n){
-        if(current !== null || !Array.isArray(row.added))
+        if(current !== null || !isCanonicalOrder(row.added) ||
+            !Array.isArray(row.removed) || row.removed.length !== 0)
             return { halt: LIST_SHARE_HALT_REASON.DELTA };
         membership = row.added.slice();
     } else {

@@ -93,6 +93,28 @@ describe('shared-list due planning and membership steps @regression @tier1', fun
         assert.deepStrictEqual(nextMembership([], transport), { halt: 'DELTA' });
     });
 
+    it('requires canonical added members for version 1', function(){
+        const members = ['bc1qmemberalpha', 'ltc1qmemberbeta'];
+        for(const added of [members.slice().reverse(), [members[0], members[0]]]){
+            assert.deepStrictEqual(nextMembership(null, {
+                seq: 1,
+                added,
+                removed: [],
+                members_hash: listMembershipHash(added)
+            }), { halt: 'DELTA' });
+        }
+    });
+
+    it('requires an empty removed list for version 1', function(){
+        const added = ['bc1qmemberalpha'];
+        assert.deepStrictEqual(nextMembership(null, {
+            seq: 1,
+            added,
+            removed: ['ltc1qmemberbeta'],
+            members_hash: listMembershipHash(added)
+        }), { halt: 'DELTA' });
+    });
+
     it('removes and adds members in canonical byte order', function(){
         const vector = vectors.deltas.find(item => item.name === 'remove and add in one version');
         const result = nextMembership(vector.prev, {
