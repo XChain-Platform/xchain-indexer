@@ -345,7 +345,12 @@ describe('HubDbSync stream-position watermark @regression @tier3', function () {
 
     it('_bootstrapAll opens the heartbeat gate and adopts the OLDEST per-table watermark only when every table drains', async function () {
         const sync = makeWatermarkSync();
-        const marks = { price_snapshots: 900, oracle_prices: 880, cross_chain_matches: 910, cross_chain_calls: 915, capability_snapshots: 905, state_checkpoints: 920, anchor_reward_attestations: 925, attestation_responses: 930, bridge_transfers: 935, policy_snapshots: 940 };
+        const marks = {
+            price_snapshots: 900, oracle_prices: 880, cross_chain_matches: 910,
+            cross_chain_calls: 915, capability_snapshots: 905, state_checkpoints: 920,
+            anchor_reward_attestations: 925, attestation_responses: 930,
+            bridge_transfers: 935, policy_snapshots: 940, list_snapshots: 945
+        };
         sinon.stub(sync, 'bootstrapTable').callsFake(async (table) => marks[table]);
         await sync.bootstrapAll();
         assert.strictEqual(sync._bootstrapDrained, true);
