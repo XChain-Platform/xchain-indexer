@@ -15,7 +15,6 @@
 'use strict';
 
 const assert = require('assert');
-const childProcess = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -30,36 +29,13 @@ const DOCS_DIR = process.env.XCHAIN_DOCS_DIR || path.resolve(
     __dirname,
     '../../../../xchain-documentation',
 );
-const VECTOR_RELATIVE_PATH = 'protocol/test-vectors/list_share.json';
-const VECTOR_PATH = path.join(DOCS_DIR, VECTOR_RELATIVE_PATH);
+const VECTOR_PATH = path.join(DOCS_DIR, 'protocol/test-vectors/list_share.json');
 
 function readVectors(ctx) {
     const verdict = siblingCheckout(__dirname, VECTOR_PATH);
-    if (verdict.usable)
-        return JSON.parse(fs.readFileSync(VECTOR_PATH, 'utf8'));
-    if (!fs.existsSync(verdict.path)) {
-        skipOrFail(ctx, verdict, 'the canonical list share vectors');
-        return null;
-    }
-
-    let text;
-    try {
-        const docsRoot = fs.realpathSync(DOCS_DIR);
-        const revision = childProcess.execFileSync(
-            'git', ['-C', docsRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' },
-        ).trim();
-        text = childProcess.execFileSync(
-            'git', ['-C', docsRoot, 'show', revision + ':' + VECTOR_RELATIVE_PATH],
-            { encoding: 'utf8' },
-        );
-    } catch (error) {
-        skipOrFail(ctx, {
-            usable: false,
-            reason: verdict.reason + '; the vector is unavailable from the sibling HEAD commit',
-        }, 'the canonical list share vectors');
-        return null;
-    }
-    return JSON.parse(text);
+    if (!verdict.usable)
+        return skipOrFail(ctx, verdict, 'the canonical list share vectors');
+    return JSON.parse(fs.readFileSync(VECTOR_PATH, 'utf8'));
 }
 
 function vectorRows(vector) {
@@ -128,6 +104,8 @@ describe('list share pure settle parts', function () {
 
     it('returns normalized fields for a full snapshot and a delta', function () {
         const screen = createScreen({ ah }).screenListSnapshot;
+        assert.strictEqual(screen.name, 'screenListSnapshot');
+        assert.strictEqual(screen.length, 2);
         const ctx = { coin: 'BTC', network: 'regtest', config: { BTC_CHAIN_ID: 'chain-a' } };
         const full = screen(fixture({ btc_chain_id: 'chain-a' }), ctx);
         assert.deepStrictEqual(full.fields.added, ['a', 'b']);

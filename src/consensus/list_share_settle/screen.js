@@ -82,7 +82,7 @@ function screenContent(row, ctx, identity) {
     return { listType, added, removed };
 }
 
-function screenListSnapshot(deps, row, ctx) {
+function screenListSnapshotWithDeps(deps, row, ctx) {
     const identity = screenIdentity(row, ctx);
     if (identity.halt) return identity;
     const content = screenContent(row, ctx, identity);
@@ -109,9 +109,11 @@ function screenListSnapshot(deps, row, ctx) {
 }
 
 function createScreen(deps) {
-    return {
-        screenListSnapshot: (row, ctx) => screenListSnapshot(deps, row, ctx),
-    };
+    function screenListSnapshot(row, ctx) {
+        return screenListSnapshotWithDeps(deps, row, ctx);
+    }
+
+    return { screenListSnapshot };
 }
 
 module.exports = { createScreen };
