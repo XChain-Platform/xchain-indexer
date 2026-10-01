@@ -38,7 +38,7 @@ function makeHarness({ pauseMaxReads = false } = {}){
         assignments: [],
 
         async doQuery(sql, args = []){
-            if(/SELECT id FROM index_tickers WHERE LOWER\(tick\)=\? LIMIT 1/.test(sql)){
+            if(/SELECT id FROM index_tickers WHERE LOWER\(tick\)=\? ORDER BY id ASC LIMIT 1/.test(sql)){
                 const wanted = String(args[0]).toLowerCase();
                 const row = rows.find(item => item.tick.toLowerCase() === wanted);
                 return row ? [{ id: row.id }] : [];
