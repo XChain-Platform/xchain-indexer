@@ -39,8 +39,7 @@ async function getUnionMemberRoots(db, actionIndex) {
   const rows = await db.doQuery(
     `SELECT item_id AS action_index
      FROM list_items
-     WHERE action_index=?
-     ORDER BY item_id ASC`,
+     WHERE action_index=?`,
     [actionIndex]
   );
   return rows.map((row) => row.action_index);
