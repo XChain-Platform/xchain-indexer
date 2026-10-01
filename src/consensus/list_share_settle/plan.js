@@ -15,7 +15,6 @@
  *********************************************************************/
 
 const COINS = new Set(['BTC', 'LTC', 'DOGE']);
-const { LIST_SHARE_HALT_REASON } = require('./halt.js');
 
 function toInt(value, label){
     if(typeof value === 'bigint')
@@ -70,12 +69,12 @@ function walkList(entry, column, blockIndex){
 
         if(!found){
             if(laterDue)
-                return { halt: { reason: LIST_SHARE_HALT_REASON.SEQ_GAP, seq: Number(seq) }, due };
+                return { halt: { reason: 'SEQ_GAP', seq: Number(seq) }, due };
             return { due };
         }
         if(found.height === null){
             if(laterDue)
-                return { halt: { reason: LIST_SHARE_HALT_REASON.NO_HEIGHT, seq: Number(seq) }, due };
+                return { halt: { reason: 'NO_HEIGHT', seq: Number(seq) }, due };
             return { due };
         }
         if(found.height > blockIndex)
@@ -116,11 +115,10 @@ function planDueVersions({ lists, coin, blockIndex, cap }){
                 }
             };
         }
-        if(due.length < cap)
-            due.push(...walked.due.slice(0, cap - due.length));
+        due.push(...walked.due);
     }
 
-    return { due };
+    return { due: due.slice(0, cap) };
 }
 
 module.exports = { planDueVersions };
