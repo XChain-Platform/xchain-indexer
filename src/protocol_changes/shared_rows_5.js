@@ -195,16 +195,16 @@ addGate('list_share_consumer_activation.LIST_SHARE_CONSUMER_ACTIVATION', 'height
 addGate('oracle_price_age_hourly_activation.ORACLE_PRICE_AGE_HOURLY_ACTIVATION', 'height', {
     mainnet: UNARMED,
     testnet: UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 154751,
+    'LTC:testnet': 4904963,
+    'DOGE:testnet': 67956461,
     regtest: 0,
 });
 // oracle_hourly_window_activation: gates the first oracle round from which hubs
 // group rounds into hourly windows.
 addGate('oracle_hourly_window_activation.ORACLE_HOURLY_WINDOW_FIRST_ROUND', 'constant', {
     mainnet: UNARMED,
-    testnet: UNARMED,
+    testnet: 5052,
     regtest: 0,
 });
 // SHARED-GATES END
