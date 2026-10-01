@@ -122,7 +122,9 @@ const EXPECTED = [
     ['vm_executor_unavailable',         null,                          'null'],
     ['anchor_reward_proof_unavailable', null,                          'null'],
     ['bridge_proof_barrier',            null,                          'null'],
-    ['rollcall_proof_unavailable',      null,                          'null']
+    ['rollcall_proof_unavailable',      null,                          'null'],
+    ['list_share_snapshot_barrier',     null,                          'null'],
+    ['list_share_halt',                 null,                          'null']
 ];
 describe('barrier stallClearsAt grace-field mapping @regression', function () {
 

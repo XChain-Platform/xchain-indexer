@@ -160,7 +160,7 @@ describe('isMirrorBarrierReason @regression @tier1', function () {
         [...INDEXER_SRC.matchAll(/this\.stallReason = '([a-z_]+)'/g)].map(m => m[1]))];
 
     const HOST_FAULTS = ['vm_executor_unavailable', 'anchor_reward_proof_unavailable',
-                         'rollcall_proof_unavailable'];
+                         'rollcall_proof_unavailable', 'list_share_halt'];
 
     it('finds every stall reason the block loop actually sets', function () {
         assert.ok(REASONS.length >= 10, 'expected the full set of defer sites, got ' + REASONS.join(','));

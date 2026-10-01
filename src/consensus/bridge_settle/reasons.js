@@ -53,6 +53,8 @@ const SETTLE_REASON = {
     POLICY_NO_COPY:  'no bridged copy of the tick exists on this chain yet',
     POLICY_SEQ_GAP:  'an earlier policy_seq for this tick is finalized and not applied yet',
     POLICY_LEG:      'an injected policy leg did not apply',
+    POLICY_REF_PENDING:         'a by-reference list names no mirror or home list on this chain yet',
+    POLICY_REF_BEFORE_CONSUMER: 'a by-reference list arrived below the list share consumer gate',
 };
 
 // The injected policy legs, ordinal per leg. CONSENSUS-VISIBLE and pinned for every node

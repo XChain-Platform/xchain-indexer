@@ -171,6 +171,7 @@ const MIXIN_FILES = [
     './bets/index.js',
     './blocks/index.js',
     './bridge_settlements/index.js',
+    './list_share_mirrors/index.js',
     './bridges/index.js',
     './broadcasts/index.js',
     './callbacks/index.js',
