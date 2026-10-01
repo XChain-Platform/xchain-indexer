@@ -40,11 +40,17 @@ async function getUnionMemberRoots(db, headIndex){
 }
 
 async function getUnionMemberType(db, root){
-    let roots = await getUnionMemberRoots(db, root);
-    if(roots.length === 0)
+    let rows = await db.doQuery(
+        `SELECT item_id AS action_index
+         FROM list_items
+         WHERE action_index=?
+         LIMIT 1`,
+        [root]
+    );
+    if(rows.length === 0)
         return false;
     let getStoredType = db.getListStoredType || db.getListType;
-    return getStoredType.call(db, roots[0]);
+    return getStoredType.call(db, String(rows[0]['action_index']));
 }
 
 module.exports = {

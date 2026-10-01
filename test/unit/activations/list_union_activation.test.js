@@ -57,6 +57,8 @@ function setup(armed=true){
             return validRoots.has(String(args[0])) ? [{ valid: 1 }] : [];
         if(query.includes('FROM list_items'))
             return (unionMembers.get(String(args[0])) || []).map((action_index) => ({ action_index }));
+        if(query.includes('FROM list_transfers'))
+            return [];
         throw new Error('unexpected query');
     });
 
@@ -197,5 +199,22 @@ describe('LIST union activation @regression @tier2', function () {
         assert.strictEqual(await getUnionMemberType(db, 100), 2);
         sinon.assert.notCalled(db.createTicker);
         sinon.assert.notCalled(db.createAddress);
+    });
+
+    it('derives edit member type from the root create wire order, not root index order', async function () {
+        const wireRows = [{ action_index: 20 }, { action_index: 10 }];
+        const db = {
+            getListStoredType: sinon.stub().callsFake(async (index) =>
+                String(index)==='20' ? 1 : 2
+            ),
+            doQuery: sinon.stub().callsFake(async (query) =>
+                query.includes('ORDER BY item_id ASC')
+                    ? wireRows.slice().sort((a, b) => a.action_index-b.action_index)
+                    : wireRows
+            ),
+        };
+
+        assert.strictEqual(await getUnionMemberType(db, 100), 1);
+        sinon.assert.calledOnceWithExactly(db.getListStoredType, '20');
     });
 });
