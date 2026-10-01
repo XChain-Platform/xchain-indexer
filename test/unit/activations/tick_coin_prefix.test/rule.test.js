@@ -5,7 +5,7 @@ const assert = require('assert');
 const {
     TICK_COIN_PREFIX_REFUSAL,
     tickCoinPrefixNeedsProbe,
-} = require('../../../../src/utility/tick_coin_prefix_rule.js');
+} = require('../../../../src/utility/list_tick/tick_coin_prefix_rule.js');
 
 const COINS = ['BTC', 'LTC', 'DOGE'];
 

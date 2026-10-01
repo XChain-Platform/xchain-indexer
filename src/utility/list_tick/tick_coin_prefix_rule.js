@@ -1,6 +1,6 @@
 'use strict';
 
-const { coinQualifierRoot } = require('../consensus/list_tick_coin.js');
+const { coinQualifierRoot } = require('../../consensus/list_tick_coin.js');
 
 const TICK_COIN_PREFIX_REFUSAL = 'invalid: TICK (reserved)';
 
