@@ -25,6 +25,7 @@
 const stateCommitment    = require('../state_commitment/index.js');
 const stateCommitAct     = require('../consensus/gates/state_commitment_gate.js');
 const anchorRewardDerive = require('../consensus/anchor_reward_derive.js');
+const listShareSettle    = require('../consensus/list_share_settle.js');
 const bridgeSettle       = require('../consensus/bridge_settle.js');
 const rollcallClose      = require('../consensus/rollcall_close.js');
 
@@ -85,6 +86,22 @@ module.exports = {
         // (validator-signed, mirror-delivered; verified inside CROSS_SETTLE)
         await this.util.processCrossChainSettlements(this.actions, this.indexerDb, blockToParse, blockTime);
 
+        const settleCtx = {
+            actions:    this.actions,
+            indexerDb:  this.indexerDb,
+            util:       this.util,
+            mapper:     this.mapper,
+            config:     this.config,
+            coin:       this.config['COIN'],
+            network:    this.config['NETWORK'],
+            blockIndex: blockToParse,
+            blockTime:  blockTime
+        };
+
+        // This position is pinned because the pass assigns action indexes, and
+        // each mirror must exist before the XPOLICY pass binds it by reference.
+        await listShareSettle.processListSharePass(settleCtx);
+
         // XBRIDGE settle pass: materialize any hub-mirrored token policy
         // snapshot and then apply this chain's leg of every effective,
         // unapplied bridge transfer (the injected XBRIDGE v2 / v5 legs).
@@ -101,17 +118,7 @@ module.exports = {
         // Throws BridgeProofUnavailableError when the bridge escrow cross-check
         // cannot be supplied a proof yet; processBlock's catch defers the block
         // rather than letting an absence read as a refusal.
-        await bridgeSettle.processBridgeSettlePass({
-            actions:    this.actions,
-            indexerDb:  this.indexerDb,
-            util:       this.util,
-            mapper:     this.mapper,
-            config:     this.config,
-            coin:       this.config['COIN'],
-            network:    this.config['NETWORK'],
-            blockIndex: blockToParse,
-            blockTime:  blockTime
-        });
+        await bridgeSettle.processBridgeSettlePass(settleCtx);
     },
 
     // Cross-chain contract calls, then the pinned ATTEST response pass.

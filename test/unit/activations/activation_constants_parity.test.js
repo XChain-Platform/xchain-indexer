@@ -164,6 +164,7 @@ const GATES = [
     ['list_union_activation',              'LIST_UNION_ACTIVATION'],
     ['list_transfer_activation',           'LIST_TRANSFER_ACTIVATION'],
     ['list_address_ref_activation',        'LIST_ADDRESS_REF_ACTIVATION'],
+    ['list_tick_coin_activation',          'LIST_TICK_COIN_ACTIVATION'],
     // Not activation MAPS but the consensus constants the bridge and policy passes read: the
     // per-block caps decide WHICH rows land in WHICH block (an action-index change, so a hash
     // change), and XPOLICY_MAX_MEMBERS decides which opt-in is refused. A one-sided edit to any

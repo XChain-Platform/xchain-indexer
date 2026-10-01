@@ -289,3 +289,13 @@ addGate('list_address_ref_activation.LIST_ADDRESS_REF_ACTIVATION', 'height', {
 
 addGate('protocol/constants.LIST_SHARE_MAX_MEMBERS', 'constant', 10000);
 addGate('protocol/constants.LIST_UNION_MAX_MEMBERS', 'constant', 16);
+
+// list_tick_coin_activation
+addGate('list_tick_coin_activation.LIST_TICK_COIN_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    regtest: 0,
+});
