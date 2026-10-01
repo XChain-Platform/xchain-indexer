@@ -83,9 +83,10 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
 
     it('every replaced row is still a registry row and has no module left in src/ to read it through', function () {
         assert.strictEqual(REPLACED.size, 38, 'the W4 census of 25 predicate-only shims plus the 13 predicate-only twins of W5');
-        assert.strictEqual(REGISTRY_ONLY.size, 27, 'the registry-only gate census moved');
+        assert.strictEqual(REGISTRY_ONLY.size, 29, 'the registry-only gate census moved');
         for (const key of [...REPLACED, ...REGISTRY_ONLY]) {
-            assert.ok(['height', 'time'].includes(ProtocolChanges.registry.unitOf(key)), key + ' is a height or time row');
+            assert.ok(['height', 'time', 'constant'].includes(ProtocolChanges.registry.unitOf(key)),
+                key + ' is a height, time or constant row');
             const stem = key.slice(0, key.lastIndexOf('.'));
             assert.strictEqual(modulePathFor(stem), null, stem + ' is mapped to a module');
             assert.strictEqual(fs.existsSync(path.join(SRC, stem + '.js')), false, 'src/' + stem + '.js still exists');

@@ -80,6 +80,7 @@
  ********************************************************************/
 
 const ed25519 = require('../../consensus/ed25519.js');
+const eq      = require('../../consensus/equivocation_header.js');
 const srb     = require('../../consensus/snapshot_reorg_buffer.js');
 
 const { getLogger } = require('../../observability/index.js');
@@ -88,7 +89,7 @@ const { getLogger } = require('../../observability/index.js');
 // about the submitted bytes or about payout policy.
 const { CONFIG_CAPABILITY, readProofWire, deriveEquivKey,
         capabilityForEngine } = require('./proof_wire.js');
-const { resolveSlot: resolveProofSlot } = require('./resolve_slot.js');
+const { resolveSlot: resolveProofSlot, listShareSlashable } = require('./resolve_slot.js');
 const { bountyTreasurySplit: splitBountyTreasury } = require('./bounty.js');
 
 class Slash {
@@ -119,6 +120,9 @@ class Slash {
         let equivKey   = key.equivKey;
         let capability = cap.capability;
         error = cap.error;
+        if(!error && key.engineTag === eq.ENGINE_TAGS.LIST_SHARE &&
+           !listShareSlashable(wire.msgA, key.prefix, this.config['NETWORK']))
+            error = 'invalid: ENGINE_TAG (not slashable)';
 
         // (3) BOTH signatures verify against OFFENDER_PUBKEY over the FULL signed bytes.
         if(!error && !ed25519.verify(wire.msgA, String(wire.sigA), offender))

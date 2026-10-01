@@ -190,4 +190,21 @@ addGate('list_share_consumer_activation.LIST_SHARE_CONSUMER_ACTIVATION', 'height
     'DOGE:testnet': 9999999999,
     regtest: 0,
 });
+// oracle_price_age_hourly_activation: gates the hourly price-snapshot age limit
+// for fee pricing, fee views, attest settlement and VM oracle data.
+addGate('oracle_price_age_hourly_activation.ORACLE_PRICE_AGE_HOURLY_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    regtest: 0,
+});
+// oracle_hourly_window_activation: gates the first oracle round from which hubs
+// group rounds into hourly windows.
+addGate('oracle_hourly_window_activation.ORACLE_HOURLY_WINDOW_FIRST_ROUND', 'constant', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
 // SHARED-GATES END
