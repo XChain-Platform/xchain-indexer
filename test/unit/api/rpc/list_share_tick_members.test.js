@@ -33,12 +33,12 @@ function dogeRpc(view){
     }) });
 }
 
-describe('shared list tick member qualification', function(){
+describe('shared list tick member qualification', function () {
     const coins = ['BTC', 'LTC', 'DOGE'];
 
     afterEach(function(){ sinon.restore(); });
 
-    it('qualifies bare members, preserves qualified members, and sorts UTF-8 bytes', async function(){
+    it('qualifies bare members, preserves qualified members, and sorts UTF-8 bytes', async function () {
         let lookups = 0;
         const db = { getTickerId: async () => { lookups++; return 5; } };
         const members = ['PEPE', 'BTC:^5'];
@@ -51,11 +51,11 @@ describe('shared list tick member qualification', function(){
         assert.deepStrictEqual(members, ['PEPE', 'BTC:^5']);
     });
 
-    it('uses one ticker lookup when the qualified name would exceed the limit', async function(){
+    it('uses one ticker lookup when the qualified name would exceed the limit', async function () {
         let lookups = [];
         const item = 'A'.repeat(196);
         const db = {
-            getTickerId: async tick => {
+            getTickerId: async (tick) => {
                 lookups.push(tick);
                 return 9;
             }
@@ -65,7 +65,7 @@ describe('shared list tick member qualification', function(){
         assert.deepStrictEqual(lookups, [item]);
     });
 
-    it('drops duplicates after qualification', async function(){
+    it('drops duplicates after qualification', async function () {
         const db = { getTickerId: async () => { throw new Error('unexpected lookup'); } };
 
         assert.deepStrictEqual(
@@ -74,7 +74,7 @@ describe('shared list tick member qualification', function(){
         );
     });
 
-    it('throws when an over-long ticker name has no indexed id', async function(){
+    it('throws when an over-long ticker name has no indexed id', async function () {
         const item = 'A'.repeat(196);
         const db = { getTickerId: async () => null };
 
@@ -84,7 +84,7 @@ describe('shared list tick member qualification', function(){
         );
     });
 
-    it('refuses a non-array member value', async function(){
+    it('refuses a non-array member value', async function () {
         const db = { getTickerId: async () => { throw new Error('unexpected lookup'); } };
 
         await assert.rejects(
