@@ -144,6 +144,8 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'list_union_activation',
     'list_transfer_activation',
     'list_address_ref_activation',
+    'oracle_price_age_hourly_activation',
+    'oracle_hourly_window_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));
