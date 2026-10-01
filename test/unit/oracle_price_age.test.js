@@ -11,6 +11,8 @@
 'use strict';
 
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 const Utility = require('../../src/utility.js');
 const gateRegistry = require('../../src/consensus/gate_registry.js');
 const { getCoinConfig } = require('../../src/coins/index.js');
@@ -22,6 +24,10 @@ const CHAINS = ['BTC', 'LTC', 'DOGE'];
 const FEE_DESTINATION = 'feeDestinationAddr111111111111111';
 const BLOCK_TIME = 10_000;
 const SNAPSHOT_TIME = BLOCK_TIME - 3_000;
+
+function compactSource(relativePath){
+    return fs.readFileSync(path.join(__dirname, '../..', relativePath), 'utf8').replace(/\s+/g, '');
+}
 
 describe('hourly price age', function(){
     it('selects 1800 below and the pinned 4500 at the gate for every chain key', function(){
@@ -72,4 +78,51 @@ describe('hourly price age', function(){
         assert.strictEqual(at.valid, true, at.error);
         assert.strictEqual(at.oracleRound, 7);
     });
+
+    let consumerWiring = [
+        {
+            name: 'fee pricing',
+            file: 'src/actions/actions_class/fee_pricing.js',
+            select: "maxPriceAgeSecondsAt(this.config,this.config['NETWORK'],coin,blockIndex)",
+            read: 'getFeeOraclePrices(this.indexerDb,coin,blockIndex,refTime,maxPriceAgeSeconds)'
+        },
+        {
+            name: 'fee schedule views',
+            file: 'src/actions/actions_class/fee_views.js',
+            select: "maxPriceAgeSecondsAt(this.config,this.config['NETWORK'],coin,blockIndex)",
+            read: 'getFeeOraclePrices(this.indexerDb,coin,blockIndex,refTime,maxPriceAgeSeconds)'
+        },
+        {
+            name: 'attestation settlement',
+            file: 'src/actions/attest/settle.js',
+            select: "maxPriceAgeSecondsAt(this.config,this.config['NETWORK'],this.config['COIN'],data['BLOCK_INDEX'])",
+            read: "getFeeOraclePrices(this.indexerDb,this.config['COIN'],data['BLOCK_INDEX'],data['BLOCK_TIME'],maxPriceAgeSeconds)"
+        },
+        {
+            name: 'deployment constructors',
+            file: 'src/actions/deploy/constructor_run.js',
+            select: "maxPriceAgeSecondsAt(deploy.config,deploy.config['NETWORK'],deploy.config['COIN'],data['BLOCK_INDEX'])",
+            read: "getOracleDataForVM(data['BLOCK_INDEX'],data['BLOCK_TIME'],maxPriceAgeSeconds)"
+        },
+        {
+            name: 'controller guards',
+            file: 'src/actions/execute/controller_guard.js',
+            select: "maxPriceAgeSecondsAt(this.config,this.config['NETWORK'],this.config['COIN'],hostData['BLOCK_INDEX'])",
+            read: "getOracleDataForVM(hostData['BLOCK_INDEX'],hostData['BLOCK_TIME'],maxPriceAgeSeconds)"
+        },
+        {
+            name: 'VM execution',
+            file: 'src/actions/execute/run_vm.js',
+            select: "maxPriceAgeSecondsAt(this.config,this.config['NETWORK'],this.config['COIN'],data['BLOCK_INDEX'])",
+            read: "getOracleDataForVM(data['BLOCK_INDEX'],data['BLOCK_TIME'],maxPriceAgeSeconds)"
+        }
+    ];
+
+    for(let consumer of consumerWiring){
+        it('wires the action block age through ' + consumer.name, function(){
+            let source = compactSource(consumer.file);
+            assert.ok(source.includes(consumer.select), consumer.file + ' must select age at its action block');
+            assert.ok(source.includes(consumer.read), consumer.file + ' must pass selected age to its oracle read');
+        });
+    }
 });
