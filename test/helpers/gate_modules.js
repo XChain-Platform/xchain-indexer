@@ -138,6 +138,8 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'swap_edit_rematch_activation',
     'market_list_source_activation',
     'list_change_rematch_activation',
+    'oracle_price_age_hourly_activation',
+    'oracle_hourly_window_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));
