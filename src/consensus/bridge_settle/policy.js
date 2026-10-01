@@ -31,7 +31,8 @@
 'use strict';
 
 const { SETTLE_REASON, isNull, int } = require('./reasons.js');
-const { policyHash, verifyMembershipOrder, parseMembership } = require('./policy_membership.js');
+const { policyHash, verifyMembershipOrder, parseMembershipOrRef } = require('./policy_membership.js');
+const gateRegistry = require('../gate_registry');
 const { isSettled, recordSettlement } = require('./settlements.js');
 const { injectBridgedToken } = require('./leg_effects.js');
 const { resolveTransferOrigin } = require('../bridge_checkpoint_check/origin.js');
@@ -121,17 +122,22 @@ async function guardApplyOrder(deps, row, ctx, f){
  * refuses the row. Malformed transport is a hash-class failure: it cannot be read as an
  * empty list, because empty and absent mean opposite things under isActionAllowed.
  *
- * @returns {{reason: string, terminal: boolean}|{allow: *, block: *, sleeping: boolean}}
+ * @returns {{reason: string, terminal: boolean}|{allow: *, block: *, allowRef: ?string,
+ *           blockRef: ?string, sleeping: boolean}}
  */
 function verifyMembership(deps, row, f){
     const { warnOnce } = deps.refusalLog;
-    const allow = parseMembership(row.allow_list);
-    const block = parseMembership(row.block_list);
-    if(allow === false || block === false){
+    const allowParsed = parseMembershipOrRef(row.allow_list);
+    const blockParsed = parseMembershipOrRef(row.block_list);
+    if(allowParsed === false || blockParsed === false){
         warnOnce('XPOLICY', f.id, SETTLE_REASON.POLICY_HASH,
-                  SETTLE_REASON.POLICY_HASH + ' (membership transport is not a JSON array) : terminal');
+                  SETTLE_REASON.POLICY_HASH + ' (membership transport is not a JSON array or ref) : terminal');
         return { reason: SETTLE_REASON.POLICY_HASH, terminal: true };
     }
+    const allow = Object.prototype.hasOwnProperty.call(allowParsed, 'list') ? allowParsed.list : null;
+    const block = Object.prototype.hasOwnProperty.call(blockParsed, 'list') ? blockParsed.list : null;
+    const allowRef = allowParsed.ref || null;
+    const blockRef = blockParsed.ref || null;
     // Order is VERIFIED, never repaired. Re-sorting here would silently accept a row
     // whose hash the fleet computed over a different byte string.
     if(!verifyMembershipOrder(allow) || !verifyMembershipOrder(block)){
@@ -139,11 +145,19 @@ function verifyMembership(deps, row, f){
         return { reason: SETTLE_REASON.POLICY_ORDER, terminal: true };
     }
     const sleeping = !!int(row.sleeping);
-    if(policyHash(allow, block, sleeping) !== String(row.policy_hash || '').toLowerCase()){
+    if(policyHash(allow, block, sleeping, { allow: allowRef, block: blockRef }) !==
+       String(row.policy_hash || '').toLowerCase()){
         warnOnce('XPOLICY', f.id, SETTLE_REASON.POLICY_HASH, SETTLE_REASON.POLICY_HASH + ' : terminal');
         return { reason: SETTLE_REASON.POLICY_HASH, terminal: true };
     }
-    return { allow: allow, block: block, sleeping: sleeping };
+    return { allow: allow, block: block, allowRef, blockRef, sleeping: sleeping };
+}
+
+function guardConsumerGate(member, ctx){
+    if(!member.allowRef && !member.blockRef) return null;
+    const active = gateRegistry.activeAt('list_share_consumer_activation.LIST_SHARE_CONSUMER_ACTIVATION',
+                                         ctx.network, ctx.coin, ctx.blockIndex, null);
+    return active ? null : { reason: SETTLE_REASON.POLICY_REF_BEFORE_CONSUMER, terminal: false };
 }
 
 /**
@@ -298,6 +312,8 @@ async function applyPolicySnapshot(deps, row, ctx){
 
     const member = verifyMembership(deps, row, f);
     if(member.reason) return out(false, member.reason, member.terminal);
+    const gated = guardConsumerGate(member, ctx);
+    if(gated) return out(false, gated.reason, gated.terminal);
 
     const target = await guardQuorumAndCopy(deps, row, ctx, f);
     if(target.reason) return out(false, target.reason, target.terminal);
@@ -306,6 +322,8 @@ async function applyPolicySnapshot(deps, row, ctx){
 
     const actionIndexes = [];
     const failed = await injectPolicyLegs(row, ctx, f, target, member, actionIndexes);
+    if(failed && failed.pending)
+        return out(false, SETTLE_REASON.POLICY_REF_PENDING, false, actionIndexes);
     if(failed) return await legFailure(ctx, f, actionIndexes, failed.failed);
 
     await recordApplied(deps, ctx, f, target, actionIndexes);

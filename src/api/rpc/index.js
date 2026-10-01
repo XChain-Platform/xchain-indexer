@@ -31,17 +31,20 @@ const { buildBetsRpc } = require('./bets');
 const { buildBridgeRpc } = require('./bridge');
 const { buildTokenPolicyRpc } = require('./token_policy');
 const { buildListShareRpc } = require('./list_share');
+const { buildListShareMirrorRpc } = require('./list_share_mirror');
 const { buildCrossChainCallsRpc } = require('./cross_chain_calls');
 const { buildPriceBatchesRpc } = require('./price_batches');
 const { buildAnchorRpc } = require('./anchor');
 const { buildRollcallRpc } = require('./rollcall');
 const { buildReorgHistoryRpc } = require('./reorg_history');
 
+const getsharedlistFamily = buildListShareMirrorRpc;
+
 const FAMILIES = [
     buildSystemRpc, buildFeesRpc, buildStakesRpc, buildCapabilitiesRpc, buildAttestationRpc,
     buildOrdersRpc, buildBetsRpc, buildBridgeRpc, buildTokenPolicyRpc, buildListShareRpc,
-    buildCrossChainCallsRpc, buildPriceBatchesRpc, buildAnchorRpc, buildRollcallRpc,
-    buildReorgHistoryRpc,
+    getsharedlistFamily, buildCrossChainCallsRpc, buildPriceBatchesRpc, buildAnchorRpc,
+    buildRollcallRpc, buildReorgHistoryRpc,
 ];
 
 // NOTE: `pushvalidatorrewards` is RETIRED and the method is gone from this

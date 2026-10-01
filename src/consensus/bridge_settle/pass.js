@@ -34,6 +34,9 @@ const proofClient = require('../bridge_proof_client.js');
 const { resolveTransferOrigin } = require('../bridge_checkpoint_check/origin.js');
 const { XBRIDGE_MAX_PER_BLOCK, XPOLICY_MAX_PER_BLOCK } = require('../../protocol/constants.js');
 const { int } = require('./reasons.js');
+const { parseMembershipOrRef } = require('./policy_membership.js');
+const { dropRefRowsFromFirst } = require('./policy_ref_due.js');
+const gateRegistry = require('../gate_registry');
 
 /**
  * Build a proof for one transfer, or STALL the whole pass.
@@ -178,13 +181,27 @@ async function dueBridgeTransfers(deps, ctx){
  * of comparisons can contradict), and two ticks never interleave, which is what the seq rule
  * is for: a tick's seq 2 can never be applied before its seq 1.
  */
+function carriesPolicyRef(row){
+    const allow = parseMembershipOrRef(row.allow_list);
+    const block = parseMembershipOrRef(row.block_list);
+    return !!((allow && allow.ref) || (block && block.ref));
+}
+
+function prunePreConsumerRefs(rows, ctx){
+    if(gateRegistry.activeAt('list_share_consumer_activation.LIST_SHARE_CONSUMER_ACTIVATION',
+                             ctx.network, ctx.coin, ctx.blockIndex, null)) return rows;
+    return dropRefRowsFromFirst(rows, carriesPolicyRef);
+}
+
 async function duePolicySnapshots(deps, ctx){
     const db   = ctx.indexerDb;
     // No chain clause, deliberately: every chain reads every snapshot. In the admission era
     // THIS chain's column decides, and a row whose map never named this chain has that column
     // NULL and binds by the clock, which is the fail-closed direction for a chain added later.
     const bind = deps.canonicals.mirrorBindClause(ctx);
-    const rows = await db.mirrorDb().getFinalizedPolicySnapshots(ctx.network, bind);
+    let rows = await db.mirrorDb().getFinalizedPolicySnapshots(ctx.network, bind);
+    if(rows.length === 0) return [];
+    rows = prunePreConsumerRefs(rows, ctx);
     if(rows.length === 0) return [];
 
     const groupRank = new Map();
