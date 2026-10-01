@@ -222,4 +222,34 @@ module.exports = {
         }
     },
 
+    // Assert both sides of shared-list materialization exist. A missing mirror table
+    // drops signed versions by omission; a missing mapping table loses the stable link
+    // from a home list to its locally injected LIST create.
+    async assertListShareTablesPresent(){
+        const REQUIRED = ['list_snapshots', 'list_share_mirrors'];
+        const remedy = ' Run the pending migration: node src/db/migration/migrate.js --file ' +
+            Database.startupAssertedMigrationFile('assertListShareTablesPresent');
+        let conn;
+        try {
+            conn = await this.getConnection();
+            const rows = await conn.query(
+                "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = ? " +
+                "AND table_name IN ('list_snapshots', 'list_share_mirrors')",
+                [this.dbName]
+            );
+            if(!rows) return;
+            const live = new Set((rows || []).map(r => String(r.name || '').toLowerCase()));
+            const missing = REQUIRED.filter(t => !live.has(t));
+            if(!missing.length) return;
+            throw new Error(
+                'the shared-list tables ' + missing.join(', ') + ' are absent, but this build ' +
+                'requires the hub mirror and its local list mapping.' + remedy
+            );
+        } finally {
+            if(conn && this.transactionConnection == null){
+                try { await conn.release(); } catch(_){}
+            }
+        }
+    },
+
 };
