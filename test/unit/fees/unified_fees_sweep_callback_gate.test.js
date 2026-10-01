@@ -131,6 +131,17 @@ describe('SWEEP/CALLBACK unified-fee flag day @regression @tier1', function(){
             // a replay from the fleet. That distinction is asserted above.
             const now     = Math.floor(Date.now() / 1000);
             const instant = ProtocolChanges.UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME;
+            // v0.21.0 shipped this instant and was rolled to the testnet fleet before it
+            // lapsed at 2026-10-01T00:00:00Z, so it is now crossed history: moving it would
+            // fork every synced node against a fresh reindex. Once lapsed, the only legal
+            // value is the one the rolled release carries; before that, it must lie ahead.
+            const CROSSED_ON_TESTNET = 1790812800;
+            if (instant <= now) {
+                assert.strictEqual(instant, CROSSED_ON_TESTNET,
+                    'testnet instant ' + instant + ' has lapsed and is not the crossed instant the ' +
+                    'rolled release carries: a crossed flag day never moves');
+                return;
+            }
             assert.ok(instant > now,
                 'testnet instant ' + instant + ' has lapsed: re-pin it forward, or the ' +
                 'live fleet applies the legacy price past it while a replay applies the new one');
