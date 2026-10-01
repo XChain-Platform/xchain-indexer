@@ -16,6 +16,7 @@
 
 const bridgeSettle = require('../../src/consensus/bridge_settle.js');
 const listCanonical = require('../../src/consensus/list_share_settle/canonical.js');
+const swq = require('../../src/consensus/stake_weighted_quorum.js');
 
 const HEX64 = /^[0-9a-f]{64}$/;
 const HOME_CHAINS = new Set(['BTC', 'LTC', 'DOGE']);
@@ -73,6 +74,22 @@ function validateListSnapshot(row, network){
     if(row.snapshot_id !== expected) fail(id, 'snapshot_id does not match list sequence');
 }
 
+function verifyArchive(archive, ctx){
+    let rows = archive.list_snapshots;
+    if(rows === undefined || rows === null) return;
+    if(!Array.isArray(rows)) throw new Error('malformed list archive rows');
+    if(rows.length > 0 && typeof ctx.listShareCanonical !== 'function')
+        throw new Error('listShareCanonical must be a function');
+    for(let row of rows){
+        validateListSnapshot(row, ctx.network);
+        let set = ctx.setFor('cross_chain', row.snapshot_block);
+        let sigs = ctx.parseSigs(row.validator_signatures);
+        let weighted = swq.isStakeWeightedQuorumActive(row.snapshot_block, row.network);
+        if(!ctx.quorumVerified(ctx.listShareCanonical(row), sigs, set, weighted))
+            fail(row.snapshot_id, 'fails quorum against the archived cross_chain set');
+    }
+}
+
 async function writeListSnapshot(db, row){
     let byId = await db.doQuery(
         'SELECT snapshot_id FROM list_snapshots WHERE snapshot_id = ? LIMIT 1', [row.snapshot_id]);
@@ -107,4 +124,4 @@ async function writeArchive(db, archive, report){
     }
 }
 
-module.exports = { validateListSnapshot, writeListSnapshot, writeArchive };
+module.exports = { validateListSnapshot, verifyArchive, writeListSnapshot, writeArchive };

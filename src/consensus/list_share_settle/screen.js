@@ -29,17 +29,30 @@ function integer(value){
         return value >= 0n && value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : null;
     if(typeof value === 'number')
         return Number.isSafeInteger(value) && value >= 0 ? value : null;
-    if(typeof value !== 'string' || !/^[0-9]+$/.test(value))
+    if(typeof value !== 'string' || !/^(0|[1-9][0-9]*)$/.test(value))
         return null;
     const parsed = Number(value);
-    return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+    return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
 function isSet(value){
     return value !== null && value !== undefined && value !== '';
 }
 
-function screenListSnapshot(deps, row, ctx){
+function admissionColumns(row){
+    const map = {};
+    for(const coin of HOME_CHAINS){
+        const value = row['admit_block_' + coin.toLowerCase()];
+        if(value === null || value === undefined) continue;
+        const height = Number(value);
+        if(!Number.isSafeInteger(height) || height < 0)
+            throw new Error('invalid admission height');
+        map[coin] = height;
+    }
+    return Object.keys(map).length ? map : null;
+}
+
+function screenListSnapshotWithDeps(deps, row, ctx){
     row = row && typeof row === 'object' ? row : {};
     ctx = ctx && typeof ctx === 'object' ? ctx : {};
 
@@ -114,11 +127,15 @@ function screenListSnapshot(deps, row, ctx){
     };
 }
 
+function screenListSnapshot(row, ctx){
+    return screenListSnapshotWithDeps({ ah: { columnsAdmitBlocks: admissionColumns } }, row, ctx);
+}
+
 function createScreen({ ah }){
     const deps = { ah };
     return {
-        screenListSnapshot: screenListSnapshot.bind(null, deps),
+        screenListSnapshot: screenListSnapshotWithDeps.bind(null, deps),
     };
 }
 
-module.exports = { createScreen };
+module.exports = { createScreen, screenListSnapshot };
