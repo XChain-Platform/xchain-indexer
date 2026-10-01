@@ -31,14 +31,6 @@ const { parseOracleContent, parseBatchContent } = require('./content_parsers.js'
 
 const LIST_SHARE_PRODUCER_GATE = 'list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION';
 
-function listShareSlashable(msgA, prefix, network){
-    if(typeof msgA !== 'string' || typeof prefix !== 'string' || !msgA.startsWith(prefix))
-        return false;
-    const field = msgA.slice(prefix.length).split('|')[2];
-    return typeof field === 'string' && /^[0-9]+$/.test(field) &&
-        gateRegistry.activeAt(LIST_SHARE_PRODUCER_GATE, network, null, Number(field), null);
-}
-
 // In-content snapshot_block field index per engine (raw canonical layout).
 const FIELD = {
     [eq.ENGINE_TAGS.DEX]:        2,   // XMATCH|match_id|snapshot_block|...
@@ -58,8 +50,10 @@ const FIELD = {
 };
 
 function listShareSlashable(msgA, prefix, network){
-    let field = String(msgA).slice(String(prefix).length).split('|')[2];
-    return /^[0-9]+$/.test(String(field)) &&
+    if(typeof msgA !== 'string' || typeof prefix !== 'string' || !msgA.startsWith(prefix))
+        return false;
+    const field = msgA.slice(prefix.length).split('|')[2];
+    return typeof field === 'string' && /^[0-9]+$/.test(field) &&
         gateRegistry.activeAt(LIST_SHARE_PRODUCER_GATE, network, null, Number(field), null);
 }
 
