@@ -54,7 +54,7 @@
     },
     "consensus_rules_digest": {
       "path": "src/consensus_rules_digest.js",
-      "hash": "0149ecc8ec5ef941b1d9628b7d71a619837d2c5f55a440cf65d682c51fa155c0",
+      "hash": "beda7a4249de7e5c90fe61f6919c6cedf0c6f22440b090d8b4eb0db742265540",
       "twins": [
         "xchain-hub"
       ]
@@ -1877,6 +1877,13 @@
       "from": "4b63bb80a0788ae30c0c0bcc4e34664b2d27c31079db04dbfb784987a0e8f790",
       "to": "0149ecc8ec5ef941b1d9628b7d71a619837d2c5f55a440cf65d682c51fa155c0",
       "reason": "OF-5 hourly PRICE gates",
+      "date": "2026-10-01"
+    },
+    {
+      "id": "consensus_rules_digest",
+      "from": "0149ecc8ec5ef941b1d9628b7d71a619837d2c5f55a440cf65d682c51fa155c0",
+      "to": "beda7a4249de7e5c90fe61f6919c6cedf0c6f22440b090d8b4eb0db742265540",
+      "reason": "append list share producer activation to shared rules digest",
       "date": "2026-10-01"
     }
   ]
