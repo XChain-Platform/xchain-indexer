@@ -16,7 +16,7 @@
 
 const assert = require('assert');
 
-const { ENGINE_TAGS } = require('../../../src/consensus/equivocation_header.js');
+const { ENGINE_TAGS } = require('../../../../src/consensus/equivocation_header.js');
 
 const PRE_LIST_SHARE_TAGS = {
     DEX: 'XDEX',
