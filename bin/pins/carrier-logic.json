@@ -120,7 +120,7 @@
     },
     "protocol/constants": {
       "path": "src/protocol/constants.js",
-      "hash": "22ff03ab33345bb63cbd6fda35f8d26dc2c0dafb626be509c27d4090d4cdb2c6",
+      "hash": "bbc15d2d47cebe6e7e77868eb90de683849de91902fb1649700a8e5756ddebbe",
       "twins": []
     },
     "protocol_changes": {
@@ -1864,6 +1864,13 @@
       "to": "18529a5b69afe0cb728caa9c05154bf8393517fdbf87fd94c3b6bbad0d27a7c1",
       "reason": "PRICE v1 canonical bound rows",
       "date": "2026-09-27"
+    },
+    {
+      "id": "protocol/constants",
+      "from": "22ff03ab33345bb63cbd6fda35f8d26dc2c0dafb626be509c27d4090d4cdb2c6",
+      "to": "bbc15d2d47cebe6e7e77868eb90de683849de91902fb1649700a8e5756ddebbe",
+      "reason": "LS-2 adds LIST_SHARE_MAX_MEMBERS and LIST_UNION_MAX_MEMBERS",
+      "date": "2026-10-01"
     }
   ]
 }

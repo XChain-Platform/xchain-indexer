@@ -16,7 +16,11 @@ describe('LIST part seams @regression @tier3', function () {
         sinon.restore();
     });
 
-    for(const format of [2, 3]){
+    // A format stays a no-op seam only until its row fills it: LS-13 declares format 2
+    // (SHARE) and LS-14 format 3 (TRANSFER), and their activation tests cover each one
+    // below and above its gate, so this case runs only for a format no part declares yet.
+    const undeclared = [2, 3].filter(format => makeListContext().handler.formats[format] === undefined);
+    for(const format of undeclared){
         it('keeps format ' + format + ' unknown and stores only its LIST row', async function () {
             const { indexer, handler } = makeListContext();
             const data = createBaseData({ ACTION: 'LIST', FORMAT: format, SOURCE });
