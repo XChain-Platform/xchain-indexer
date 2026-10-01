@@ -1,12 +1,21 @@
 'use strict';
 
+const gateRegistry = require('../../consensus/gate_registry');
+const { parseTickCoinItem } = require('../../consensus/list_tick_coin');
+
+const LIST_TICK_COIN_KEY = 'list_tick_coin_activation.LIST_TICK_COIN_ACTIVATION';
+
 function canonicalListIndex(item){
     return typeof item === 'string' && /^[1-9][0-9]*$/.test(item) ? item : null;
 }
 
 async function listItemId(db, type, item){
-    if(type==1)
+    if(type==1){
+        if(gateRegistry.activeAt(LIST_TICK_COIN_KEY, db.config['NETWORK'], db.config['COIN'], db.blockIndex, null) &&
+           parseTickCoinItem(item, db.config['COINS']) !== null)
+            return db.createTickerExact(item);
         return db.createTicker(item);
+    }
     if(type==2)
         return db.createAddress(item);
     if(type==3)
