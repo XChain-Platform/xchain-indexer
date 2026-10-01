@@ -160,11 +160,16 @@ describe('activation-gate constant parity to canonical constants.js @regression'
     });
 
     it('holds LIST_SHARE_CONSUMER_ACTIVATION >= LIST_TICK_COIN_ACTIVATION for every chain key', function () {
+        const armedKeys = [
+            'BTC:mainnet', 'BTC:testnet',
+            'LTC:mainnet', 'LTC:testnet',
+            'DOGE:mainnet', 'DOGE:testnet',
+        ];
         const synthetic = assertGateOrdering(
-            'LIST_SHARE_CONSUMER_ACTIVATION', { 'BTC:mainnet': 200 },
-            'LIST_TICK_COIN_ACTIVATION', { 'BTC:mainnet': 100 });
-        assert.deepStrictEqual(synthetic.compared, ['BTC:mainnet'],
-            'not vacuous: the synthetic armed chain key must be compared');
+            'LIST_SHARE_CONSUMER_ACTIVATION', Object.fromEntries(armedKeys.map(key => [key, 200])),
+            'LIST_TICK_COIN_ACTIVATION', Object.fromEntries(armedKeys.map(key => [key, 100])));
+        assert.deepStrictEqual(synthetic.compared, armedKeys,
+            'not vacuous: every synthetic armed chain key must be compared');
         assert.throws(() => assertGateOrdering(
             'LIST_SHARE_CONSUMER_ACTIVATION', { 'BTC:mainnet': 99 },
             'LIST_TICK_COIN_ACTIVATION', { 'BTC:mainnet': 100 }),
