@@ -36,6 +36,7 @@ const crypto = require('crypto');
 const { resolveRootDiscriminator } = require('../../consensus/batch_root_discriminator.js');
 
 const { commitGuardEffects } = require('./guard_effects.js');
+const { maxPriceAgeSecondsAt } = require('../../utility/oracle_price_age.js');
 
 // Reserved method name a controller-bound token's contract must export. The
 // indexer invokes it before a guarded native action (SEND/ORDER/SWAP/DISPENSER)
@@ -75,8 +76,10 @@ async function loadGuardContract(ctx){
 async function loadGuardSnapshot(ctx){
     let hostData = ctx.hostData;
     let snapshot = {};
+    let maxPriceAgeSeconds = maxPriceAgeSecondsAt(
+        this.config, this.config['NETWORK'], this.config['COIN'], hostData['BLOCK_INDEX']);
     snapshot.contractState = await this.indexerDb.getContractState(ctx.contractIndex, hostData['BLOCK_INDEX']);
-    snapshot.oracleData = await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(hostData['BLOCK_INDEX'], hostData['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800);
+    snapshot.oracleData = await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(hostData['BLOCK_INDEX'], hostData['BLOCK_TIME'], maxPriceAgeSeconds);
     snapshot.crossChainData = await this.indexerDb.getCrossChainDataForVM(hostData['BLOCK_INDEX']);
     // Expose each poll's electorate TICK in the VM snapshot at/after the flag-day.
     let pollTickVisible = await this.actions.protocolChanges.isEnabled('VOTE_POLL_TICK_VISIBLE', hostData['BLOCK_INDEX']);

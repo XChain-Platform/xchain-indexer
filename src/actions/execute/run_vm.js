@@ -33,6 +33,7 @@ const crypto = require('crypto');
 const { resolveRootDiscriminator } = require('../../consensus/batch_root_discriminator.js');
 
 const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
+const { maxPriceAgeSecondsAt } = require('../../utility/oracle_price_age.js');
 
 // Read-only data the gateway sees. Every member is loaded at the host block, and
 // each flag-day gated member stays null below its activation so a heterogeneous
@@ -40,6 +41,8 @@ const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
 async function loadVmSnapshot(ctx){
     let data = ctx.data;
     let snapshot = {};
+    let maxPriceAgeSeconds = maxPriceAgeSecondsAt(
+        this.config, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX']);
 
     // Load contract state from DB. BLOCK_INDEX drives the state_key collation
     // flag-day (binary-collation reload at/after activation, so case-colliding
@@ -47,7 +50,7 @@ async function loadVmSnapshot(ctx){
     snapshot.contractState = await this.indexerDb.getContractState(data['CONTRACT_ACTION_INDEX'], data['BLOCK_INDEX']);
 
     // Load read-only data for gateway (price data lives in local hub DB when configured)
-    snapshot.oracleData = await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(data['BLOCK_INDEX'], data['BLOCK_TIME'], parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800);
+    snapshot.oracleData = await ((this.actions && this.actions.hubDb) || this.indexerDb).getOracleDataForVM(data['BLOCK_INDEX'], data['BLOCK_TIME'], maxPriceAgeSeconds);
     snapshot.crossChainData = await this.indexerDb.getCrossChainDataForVM(data['BLOCK_INDEX']);
     // Expose each poll's electorate TICK in the VM snapshot at/after the flag-day.
     let pollTickVisible = await this.actions.protocolChanges.isEnabled('VOTE_POLL_TICK_VISIBLE', data['BLOCK_INDEX']);
