@@ -22,6 +22,7 @@ const Database = require('../../../src/db');
 const lifecycle = require('../../../src/hub/table_lifecycle.js');
 const { DERIVED } = require('../../../src/hub/table_lifecycle/action_tables.js');
 const { HUB_SCHEMA_VERSION } = require('../../../src/hub/hub_schema_version.js');
+const admissionManifest = require('../db/mirror_admission_schema.test/helpers/manifest.js');
 
 const ROOT = path.resolve(__dirname, '../../..');
 const MIGRATION_FILE = '2026-09-30-list-share-tables.sql';
@@ -91,5 +92,14 @@ describe('shared-list table contracts @regression @tier1', function () {
 
     it('pins the shared-list mirror contract to hub schema version 8', function () {
         assert.strictEqual(HUB_SCHEMA_VERSION, 8);
+    });
+
+    it('classifies list snapshot admission heights as indexer mirror columns', function () {
+        assert.deepStrictEqual(
+            [...admissionManifest.MIRROR_ADMISSION_COLUMNS.list_snapshots.columns],
+            ['admit_block_btc', 'admit_block_ltc', 'admit_block_doge']
+        );
+        assert.strictEqual(admissionManifest.MIRROR_ADMISSION_COLUMNS.list_snapshots.after, 'origin_block');
+        assert.ok(!Object.hasOwn(admissionManifest.HUB_ONLY_ADMISSION_COLUMNS, 'list_snapshots'));
     });
 });
