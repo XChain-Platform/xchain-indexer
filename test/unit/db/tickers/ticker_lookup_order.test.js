@@ -43,8 +43,10 @@ describe('Database getTickerId lookup order @unit @regression', function () {
         const { db, queries } = harness([]);
 
         assert.strictEqual(await db.getTickerId('DOGE:PEPE'), null);
-        assert.strictEqual(queries.length, 1);
-        assert.match(queries[0].sql, /WHERE LOWER\(tick\)=\? ORDER BY id ASC LIMIT 1/);
+        assert.deepStrictEqual(queries, [{
+            sql: 'SELECT id FROM index_tickers WHERE LOWER(tick)=? ORDER BY id ASC LIMIT 1',
+            args: ['doge:pepe'],
+        }]);
     });
 
     it('keeps canonical caret lookups on the id query', async function () {
