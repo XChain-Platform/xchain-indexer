@@ -27,6 +27,7 @@ const crypto = require('crypto');
 // with execute.js so a constructor's emissions derive ids the same way an EXECUTE's do.
 const { resolveRootDiscriminator } = require('../../consensus/batch_root_discriminator.js');
 const { GAS_CEILING } = require('./constants.js');
+const { maxPriceAgeSecondsAt } = require('../../utility/oracle_price_age.js');
 
 /**
  * Decide whether the constructor runs and resolve its root discriminator.
@@ -126,6 +127,8 @@ async function constructorLedger(deploy, run){
 async function callConstructor(deploy, run, blockHash, vmLedger){
     let data = run.data;
     let constructorParams = run.constructorParams;
+    let maxPriceAgeSeconds = maxPriceAgeSecondsAt(
+        deploy.config, deploy.config['NETWORK'], deploy.config['COIN'], data['BLOCK_INDEX']);
     return await deploy.actions.vm.execute({
         code:             run.code,
         state:            {},
@@ -166,7 +169,7 @@ async function callConstructor(deploy, run, blockHash, vmLedger){
         balances:         vmLedger.balances,
         tokenInfo:        vmLedger.tokenInfo,
         network:          deploy.config['NETWORK'],
-        oracleData:       await ((deploy.actions && deploy.actions.hubDb) || deploy.indexerDb).getOracleDataForVM(data['BLOCK_INDEX'], data['BLOCK_TIME'], parseInt(deploy.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800),
+        oracleData:       await ((deploy.actions && deploy.actions.hubDb) || deploy.indexerDb).getOracleDataForVM(data['BLOCK_INDEX'], data['BLOCK_TIME'], maxPriceAgeSeconds),
         crossChainData:   await deploy.indexerDb.getCrossChainDataForVM(data['BLOCK_INDEX']),
         // Expose each poll's electorate TICK in the VM snapshot at/after the flag-day.
         pollData:         await deploy.indexerDb.getPollResultsForVM(data['BLOCK_INDEX'], await deploy.actions.protocolChanges.isEnabled('VOTE_POLL_TICK_VISIBLE', data['BLOCK_INDEX'])),

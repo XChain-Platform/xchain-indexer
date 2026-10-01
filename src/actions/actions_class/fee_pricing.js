@@ -21,6 +21,7 @@
  ********************************************************************/
 
 const deploy = require('../deploy/index.js');
+const { maxPriceAgeSecondsAt } = require('../../utility/oracle_price_age.js');
 
 // The zero-fee answer priceFeeQuote returns when there is no protocol fee to price.
 function zeroFeeQuote(base){
@@ -68,7 +69,8 @@ module.exports = {
         // Value it in native coin via current oracle prices (shared with validateNativeCoinFee).
         let blockIndex         = (base.blockIndex !== undefined && base.blockIndex !== null)
                                ? base.blockIndex : await this.indexerDb.getLatestBlockIndex();
-        let maxPriceAgeSeconds = parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800;
+        let maxPriceAgeSeconds = maxPriceAgeSecondsAt(
+            this.config, this.config['NETWORK'], coin, blockIndex);
         // Anchor the WHOLE price read (round selection, staleness, flag-day gate) on the
         // quoted block's own time, because that is the single quantity the on-chain check uses
         // (validateNativeCoinFee passes BLOCK_TIME). A pre-flight anchored on the operator's wall

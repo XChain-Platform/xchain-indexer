@@ -20,6 +20,8 @@
  *
  ********************************************************************/
 
+const { maxPriceAgeSecondsAt } = require('../../utility/oracle_price_age.js');
+
 // Which database the fee schedule's price read came out of. Resolved exactly the way
 // util.getFeeOraclePrices resolves it, so the disclosure cannot drift from the
 // read it describes.
@@ -125,8 +127,9 @@ module.exports = {
         let coin           = this.config['COIN'];
         let feeDestination = this.config['ADDRESS'] ? this.config['ADDRESS']['FEE_DESTINATION'] : null;
         let enabled        = !!(feeDestination && feeDestination !== 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX');
-        let maxPriceAgeSeconds = parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800;
         let blockIndex     = await this.indexerDb.getLatestBlockIndex();
+        let maxPriceAgeSeconds = maxPriceAgeSecondsAt(
+            this.config, this.config['NETWORK'], coin, blockIndex);
         let blockTime      = await this.indexerDb.getBlockTime(blockIndex);
 
         // Current oracle prices (best-effort; a missing/stale feed doesn't fail the schedule call;
