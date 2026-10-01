@@ -34,8 +34,8 @@ const EXPECTED = [
     'getfullnodeverifiers', 'getstakeweightsbycapability', 'getpendingattestation_requests',
     'getrelayedattestation_requests', 'getopencrosschainorders', 'getbetfeeds', 'getbetfeed', 'getbets',
     'getpendingbridgetransfers', 'getbridgetransfer', 'getbridgebalances', 'getbridgeescrowproof',
-    'gettokenpolicy', 'getappliedpolicy', 'getlistat', 'getsharedlists', 'getpendingcrosschaincalls',
-    'getcrosschaincallresult',
+    'gettokenpolicy', 'getappliedpolicy', 'getlistat', 'getsharedlists', 'getsharedlist',
+    'getpendingcrosschaincalls', 'getcrosschaincallresult',
     'getpricebatches', 'getactionconfirmations', 'getanchoraction', 'getrollcallsigners',
     'getanchorconfirmations', 'getarchiveanchor', 'getreorghistory', 'getstakesourcebypubkey',
     'getrollcalls', 'getrollcallabsences'
@@ -83,6 +83,6 @@ describe('JSON-RPC controller merge @regression @tier1', function () {
                     if (Object.prototype.hasOwnProperty.call(controller, name)) throw new Error('duplicate ' + name);
                     else controller[name] = true;
         }, /duplicate getbets/, 'sanity: the fixture really collides');
-        assert.strictEqual(FAMILIES.length, 15, 'one factory per family file under src/api/rpc/');
+        assert.strictEqual(FAMILIES.length, 16, 'one factory per family file under src/api/rpc/');
     });
 });
