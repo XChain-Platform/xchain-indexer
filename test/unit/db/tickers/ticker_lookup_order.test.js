@@ -34,7 +34,7 @@ describe('Database getTickerId lookup order @unit @regression', function () {
 
         assert.strictEqual(await db.getTickerId('DOGE:PEPE'), 7);
         assert.deepStrictEqual(queries, [{
-            sql: 'SELECT id FROM index_tickers WHERE LOWER(tick)=? ORDER BY id ASC LIMIT 1 /* SELECT id FROM index_tickers WHERE LOWER(tick)=? LIMIT 1 */',
+            sql: 'SELECT id FROM index_tickers WHERE LOWER(tick)=? ORDER BY id ASC LIMIT 1',
             args: ['doge:pepe'],
         }]);
     });
@@ -44,7 +44,7 @@ describe('Database getTickerId lookup order @unit @regression', function () {
 
         assert.strictEqual(await db.getTickerId('DOGE:PEPE'), null);
         assert.deepStrictEqual(queries, [{
-            sql: 'SELECT id FROM index_tickers WHERE LOWER(tick)=? ORDER BY id ASC LIMIT 1 /* SELECT id FROM index_tickers WHERE LOWER(tick)=? LIMIT 1 */',
+            sql: 'SELECT id FROM index_tickers WHERE LOWER(tick)=? ORDER BY id ASC LIMIT 1',
             args: ['doge:pepe'],
         }]);
     });
