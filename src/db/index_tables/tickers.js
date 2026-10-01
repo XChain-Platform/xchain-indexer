@@ -119,7 +119,9 @@ module.exports = {
         }
         // Try to lookup id using tick passed
         if(this.util.isNull(id)){
-            let query   = "SELECT id FROM index_tickers WHERE LOWER(tick)=? LIMIT 1";
+            // Case variants may coexist once exact-case interning is armed, so the lowest
+            // matching id is the deterministic answer every node returns.
+            let query   = "SELECT id FROM index_tickers WHERE LOWER(tick)=? ORDER BY id ASC LIMIT 1";
             let args    = [lc];
             let results = await this.doQuery(query, args);
             if(results.length > 0)
