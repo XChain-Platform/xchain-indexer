@@ -94,16 +94,20 @@ module.exports = {
         // hashed whole, so every coin and network hash moves even though nothing
         // charges these keys below LIST_SHARE_ACTIVATION. Every vendoring service
         // must ship the new pins in one wave. Mainnet remains null.
+        // REGENERATED 2026-10-01: ORACLE_MAX_PRICE_AGE_HOURLY_SECONDS joins the
+        // consensus subset. Every hash moves even though the 4500-second fee-gate
+        // bound is inert below ORACLE_PRICE_AGE_HOURLY_ACTIVATION. Every vendoring
+        // service must ship the new pins in one wave. Mainnet remains null.
         testnet: {
-            BTC:  '5d076adf982dc81c21c6e6855325265e0320f58f0dd61b938adaf42544895535',
-            LTC:  '2083cb4b90fa59172bc46a65eecff29a4f803e8d913a1c8d269ec7f17e4d4062',
-            DOGE: '3eebc68bca5024a757fae7170a98b9e2b8307ca0f2f037c4c6025dfd94e45128',
+            BTC:  '3e0083d555399e54eff2670a0ea5e8d76c8935d3e7423451c1221ae698386b5a',
+            LTC:  'd9c315b36adf5ab8bd6831ccc59a2a01124df70ba9fc8141662ec682285251e8',
+            DOGE: '82c6bc814e3de4a1e023d008457b7186c5a6ac142c85be9bf0a18f2d5989fd72',
         },
 
         regtest: {
-            BTC:  '603b402538620934ad2b81fd3013b5c1651c32cf62cc56bea8dc53ddc247ec9a',
-            LTC:  '68a3751176e9a2b3857d5ea34cacfc1f0b2d88c17d46b8ccaf477c2a3baa7ffc',
-            DOGE: 'ab3c2ce46d3ac6eff3f12d6dca037b05dd27e456369124f48928598fcdb72173',
+            BTC:  'ad800ecb8d28448f9d39743bd3a28e6aac121d0e9add30743ee1dcbbf694af86',
+            LTC:  '16dd43ca2299880704e076e5f7c262eae6b5e32823ad49c9748c33f014f44c36',
+            DOGE: 'd7bd53f527d961f1cf0cfc7de725d61e625975f7086532976c777a04c08988f6',
         },
     },
 };
