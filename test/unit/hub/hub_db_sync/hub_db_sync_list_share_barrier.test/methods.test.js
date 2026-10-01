@@ -21,7 +21,10 @@ function makeSync(options = {}) {
     const doQuery = sinon.stub().callsFake(async (sql, args) => {
         if (/information_schema\.TABLES/i.test(sql))
             return options.tablePresent === false ? [] : [{ TABLE_NAME: args[0] }];
-        if (/FROM list_snapshots/i.test(sql) && options.readError) throw options.readError;
+        if (/FROM list_snapshots/i.test(sql)) {
+            if (options.readError) throw options.readError;
+            return options.listRows || [];
+        }
         return [];
     });
     const sync = new HubDbSync({ doQuery }, { hubUrl: 'enabled', coin: 'BTC', network: 'regtest' });
@@ -41,9 +44,43 @@ describe('list share sync barrier @regression @tier1', function () {
     it('stays closed when the height entry is absent or shorter than B minus four', function () {
         const { sync } = makeSync();
         sync.listShareBootstrapped = true;
+        sync.listShareMirrorEmpty = false;
 
         assert.strictEqual(sync.listShareSyncSatisfied(100), false);
         sync.heightWatermarks = { list_snapshots: { BTC: 95 } };
+        assert.strictEqual(sync.listShareSyncSatisfied(100), false);
+    });
+
+    it('opens for a bootstrapped empty mirror without a height entry', async function () {
+        const { sync } = makeSync({ listRows: [] });
+        sync._bootstrapDrained = true;
+
+        await sync.refreshListShareSyncState();
+
+        assert.strictEqual(sync.listShareMirrorEmpty, true);
+        assert.strictEqual(sync.listShareSyncSatisfied(100), true);
+    });
+
+    it('closes after the first mirror row arrives until its height is published', async function () {
+        const options = { listRows: [] };
+        const { sync } = makeSync(options);
+        sync._bootstrapDrained = true;
+        await sync.refreshListShareSyncState();
+        assert.strictEqual(sync.listShareSyncSatisfied(100), true);
+
+        options.listRows = [{ present: 1 }];
+        await sync.refreshListShareSyncState();
+
+        assert.strictEqual(sync.listShareMirrorEmpty, false);
+        assert.strictEqual(sync.listShareSyncSatisfied(100), false);
+    });
+
+    it('stays closed for an unbootstrapped empty mirror', async function () {
+        const { sync } = makeSync({ listRows: [] });
+
+        await sync.refreshListShareSyncState(false);
+
+        assert.strictEqual(sync.listShareMirrorEmpty, true);
         assert.strictEqual(sync.listShareSyncSatisfied(100), false);
     });
 
@@ -58,7 +95,7 @@ describe('list share sync barrier @regression @tier1', function () {
     });
 
     it('ends a timed-out waiter message with the list snapshot height tail', async function () {
-        const { sync } = makeSync();
+        const { sync } = makeSync({ listRows: [{ present: 1 }] });
         sync.listShareBootstrapped = true;
         sync.heightWatermarks = { list_snapshots: { BTC: 95 } };
 

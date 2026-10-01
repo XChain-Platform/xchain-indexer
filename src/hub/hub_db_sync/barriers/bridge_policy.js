@@ -300,7 +300,8 @@ module.exports = {
     async refreshListShareSyncState(armBootstrap = this._bootstrapDrained) {
         if (!await mirrorTablePresent(this, LIST_SHARE_TABLE)) return;
         try {
-            await this.hubDb.doQuery("SELECT 1 FROM list_snapshots LIMIT 1");
+            let rows = await this.hubDb.doQuery("SELECT 1 FROM list_snapshots LIMIT 1");
+            this.listShareMirrorEmpty = rows.length === 0;
         } catch (e) {
             noteWatermarkReadFailure(this, LIST_SHARE_TABLE, e);
             return;
@@ -310,6 +311,7 @@ module.exports = {
     },
 
     listShareSyncSatisfied(blockHeight) {
+        if (this.listShareBootstrapped && this.listShareMirrorEmpty) return true;
         return this.listShareBootstrapped && this.heightSatisfied(LIST_SHARE_TABLE, blockHeight);
     },
 

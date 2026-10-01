@@ -130,6 +130,7 @@ function initContentBarrierState(sync) {
     sync._policyWaiters      = [];
 
     sync.listShareBootstrapped = false;
+    sync.listShareMirrorEmpty  = false;
     sync._listShareWaiters     = [];
 }
 
