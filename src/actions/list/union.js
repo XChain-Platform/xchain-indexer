@@ -86,7 +86,7 @@ module.exports = {
     },
 
     async validateUnionResult(data, format, list, changes, error){
-        if(error || data['TYPE']!=3)
+        if(error || data['TYPE']!=3 || data['IS_GENESIS'])
             return error;
 
         let merged = new Set();

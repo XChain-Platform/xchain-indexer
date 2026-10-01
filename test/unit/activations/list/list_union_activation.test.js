@@ -156,6 +156,16 @@ describe('LIST union activation @regression @tier2', function () {
         sinon.assert.notCalled(ctx.indexer.indexerDb.createListItem);
     });
 
+    it('does not cap a genesis-injected union action', async function () {
+        const ctx = setup();
+        const data = actionData({ TYPE: 3, IS_GENESIS: true });
+
+        const error = await ctx.handler.validateUnionResult(data, 2, ['10'], 0, null);
+
+        assert.strictEqual(error, null);
+        sinon.assert.notCalled(ctx.indexer.indexerDb.getList);
+    });
+
     it('rejects a create with no valid member list', async function () {
         const ctx = setup();
         const data = actionData();
@@ -214,6 +224,8 @@ describe('LIST union activation @regression @tier2', function () {
         assert.strictEqual(await isValidListRoot(db, 10), true);
         assert.deepStrictEqual(await getUnionMemberRoots(db, 100), ['10', '20']);
         assert.strictEqual(await getUnionMemberType(db, 100), 2);
+        assert.match(db.doQuery.secondCall.args[0], /ORDER BY action_index ASC, item_id ASC/);
+        assert.match(db.doQuery.thirdCall.args[0], /ORDER BY li\.action_index ASC, li\.item_id ASC/);
         sinon.assert.notCalled(db.createTicker);
         sinon.assert.notCalled(db.createAddress);
     });
@@ -234,7 +246,7 @@ describe('LIST union activation @regression @tier2', function () {
         };
 
         assert.strictEqual(await getUnionMemberType(db, 100), 1);
-        assert.match(db.doQuery.firstCall.args[0], /ORDER BY li\.item_id ASC/);
+        assert.match(db.doQuery.firstCall.args[0], /ORDER BY li\.action_index ASC, li\.item_id ASC/);
         assert.deepStrictEqual(db.getListRootIndex.getCalls().map((call) => call.args[0]), ['21', '10']);
         sinon.assert.calledOnceWithExactly(db.getListStoredType, '20');
     });

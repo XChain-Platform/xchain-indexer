@@ -33,7 +33,7 @@ async function getUnionMemberRoots(db, headIndex){
         `SELECT item_id AS action_index
          FROM list_items
          WHERE action_index=?
-         ORDER BY item_id ASC`,
+         ORDER BY action_index ASC, item_id ASC`,
         [headIndex]
     );
     return rows.map((row) => String(row['action_index']));
@@ -81,7 +81,7 @@ async function getUnionMemberType(db, root){
          LEFT JOIN actions a ON (a.action_index=li.action_index)
          LEFT JOIN transactions t ON (t.tx_index=a.tx_index)
          WHERE li.action_index=?
-         ORDER BY li.item_id ASC`,
+         ORDER BY li.action_index ASC, li.item_id ASC`,
         [root]
     );
     if(rows.length === 0)
