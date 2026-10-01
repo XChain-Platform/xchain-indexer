@@ -223,9 +223,9 @@ addGate('swap_edit_rematch_activation.SWAP_EDIT_REMATCH_ACTIVATION', 'height', {
 // block lists to the counterparty's SOURCE. Existing GET_ADDRESS checks remain.
 addGate('market_list_source_activation.MARKET_LIST_SOURCE_ACTIVATION', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 154777,
+    'LTC:testnet': 4905004,
+    'DOGE:testnet': 67956922,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -235,9 +235,9 @@ addGate('market_list_source_activation.MARKET_LIST_SOURCE_ACTIVATION', 'height',
 // for open ORDERs and SWAPs whose own policy resolves to the changed list.
 addGate('list_change_rematch_activation.LIST_CHANGE_REMATCH_ACTIVATION', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 154777,
+    'LTC:testnet': 4905004,
+    'DOGE:testnet': 67956922,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -247,9 +247,9 @@ addGate('list_change_rematch_activation.LIST_CHANGE_REMATCH_ACTIVATION', 'height
 // member cap are active on the chain being parsed.
 addGate('list_share_activation.LIST_SHARE_ACTIVATION', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 154777,
+    'LTC:testnet': 4905004,
+    'DOGE:testnet': 67956922,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -258,9 +258,9 @@ addGate('list_share_activation.LIST_SHARE_ACTIVATION', 'height', {
 // At or above this height LIST type 3 resolves the union of its member lists.
 addGate('list_union_activation.LIST_UNION_ACTIVATION', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 154777,
+    'LTC:testnet': 4905004,
+    'DOGE:testnet': 67956922,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -269,9 +269,9 @@ addGate('list_union_activation.LIST_UNION_ACTIVATION', 'height', {
 // At or above this height LIST format 3 transfers ownership to its destination.
 addGate('list_transfer_activation.LIST_TRANSFER_ACTIVATION', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 154777,
+    'LTC:testnet': 4905004,
+    'DOGE:testnet': 67956922,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -280,9 +280,9 @@ addGate('list_transfer_activation.LIST_TRANSFER_ACTIVATION', 'height', {
 // At or above this height an address LIST item may use an index-id reference.
 addGate('list_address_ref_activation.LIST_ADDRESS_REF_ACTIVATION', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 154777,
+    'LTC:testnet': 4905004,
+    'DOGE:testnet': 67956922,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -294,8 +294,8 @@ addGate('protocol/constants.LIST_UNION_MAX_MEMBERS', 'constant', 16);
 addGate('list_tick_coin_activation.LIST_TICK_COIN_ACTIVATION', 'height', {
     mainnet: UNARMED,
     testnet: UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 154777,
+    'LTC:testnet': 4905004,
+    'DOGE:testnet': 67956922,
     regtest: 0,
 });
