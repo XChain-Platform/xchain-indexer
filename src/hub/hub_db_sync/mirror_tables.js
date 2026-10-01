@@ -38,10 +38,11 @@ const RETRACTION_COLUMNS = {
     // one column names the range. cross_chain_matches is two-sided and has its own branch
     // in applyRetraction; this table does not need one.
     //
-    // policy_snapshots deliberately has NO entry here, and the omission is the decision:
-    // a superseding policy arrives as a NEW row at a higher policy_seq, never as a
-    // deletion, and this map names a numeric source-chain action index that table does
-    // not carry. Absent from the map, applyRetraction skips any deletion event naming it.
+    // policy_snapshots and list_snapshots deliberately have NO entry here, and the
+    // omission is the decision: a superseding version arrives as a NEW row at a higher
+    // sequence, never as a deletion, and this map names a numeric source-chain action
+    // index neither table carries. Absent from the map, applyRetraction skips any
+    // deletion event naming either one.
     bridge_transfers: 'src_action_index'
 };
 
@@ -66,17 +67,19 @@ const RETRACTION_CHAIN_COLUMNS = {
 // both handled specially in applyRetraction; capability_snapshots are
 // immutable history and never retracted.
 //
-// bridge_transfers and policy_snapshots join the list because membership buys exactly the
-// two things a federation-signed mirrored table needs and nothing else: refuseForeignChainRow
-// fences their btc_chain_id (both DDLs carry the column, and a regtest venue that re-genesises
+// bridge_transfers, policy_snapshots and list_snapshots join the list because membership
+// buys exactly the two things a federation-signed mirrored table needs and nothing else:
+// refuseForeignChainRow fences their btc_chain_id (all three DDLs carry the column, and a
+// regtest venue that re-genesises
 // its Bitcoin chain otherwise keeps serving dead-chain transfers to every fresh indexer), and
 // applyRetraction treats a deletion naming them as quorum-class, so it demands the
 // push_generation fence and the 2f+1 co-signature set instead of accepting a bare wire event.
 // Membership also puts them in the bootstrap concat loop below, ahead of the one heavy table.
-// bridge_transfers additionally gets the RETRACTION_COLUMNS pair above; policy_snapshots is
-// never retracted, so a deletion event naming it is skipped rather than applied.
+// bridge_transfers additionally gets the RETRACTION_COLUMNS pair above; policy_snapshots and
+// list_snapshots are never retracted, so deletion events naming them are skipped rather
+// than applied.
 const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots',
-                            'bridge_transfers', 'policy_snapshots'];
+                            'bridge_transfers', 'policy_snapshots', 'list_snapshots'];
 
 // Tables that must re-page from since_id=0 on EVERY bootstrap. A cursor of
 // since_id = MAX(local id) is INSERT-shaped: it can only deliver rows with a NEW id,
@@ -103,17 +106,18 @@ const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'cross_chain_calls', 'capabil
 // natural key (network, request_id) dedupes the re-page, and a missed response here is a
 // permanent fork rather than a lag, so the O(table) re-page per bootstrap is cheap.
 //
-// bridge_transfers and policy_snapshots are deliberately NOT here, and the omission rests on
-// the two properties this list actually tests for. Neither is upgraded in place on the hub:
+// bridge_transfers, policy_snapshots and list_snapshots are deliberately NOT here, and the
+// omission rests on the two properties this list actually tests for. None is upgraded in
+// place on the hub:
 // a bridge transfer's terms are fixed by the signed canonical the round closed on, and a
-// changed policy is a NEW row at the next policy_seq rather than an edit of the old one, so
-// there is no in-place upgrade a since_id cursor could miss. And neither strips its wire id
+// changed policy or shared list is a NEW row at the next sequence rather than an edit of the old one, so
+// there is no in-place upgrade a since_id cursor could miss. And none strips its wire id
 // in applyRow (they keep hub-id parity like cross_chain_matches/calls, which is what makes
 // since_id = MAX(local id) a real position in the followed hub's id space). What a re-page
-// could not re-serve for either is a RETRACTION, and that is why bridge_transfers rides the
-// quorum-class fence in applyRetraction rather than a re-page, while policy_snapshots is
-// never retracted at all. Both tables are small (one row per transfer, one per policy edit),
-// so the cost was not the deciding argument in either direction.
+// could not re-serve for any is a RETRACTION, and that is why bridge_transfers rides the
+// quorum-class fence in applyRetraction rather than a re-page, while policy_snapshots and
+// list_snapshots are never retracted at all. All three tables keep hub-id parity, so the
+// cost was not the deciding argument in either direction.
 const FULL_REPAGE_TABLES = ['capability_snapshots', 'price_snapshots', 'cross_chain_calls', 'cross_chain_matches',
                             'attestation_responses'];
 
@@ -140,13 +144,13 @@ const FULL_REPAGE_TABLES = ['capability_snapshots', 'price_snapshots', 'cross_ch
 // NATURAL-KEY mirror on (network, request_id) rather than an id-parity one, unlike the two
 // above; see the id strip in applyRow and the FULL_REPAGE_TABLES entry that follows from it.
 //
-// bridge_transfers and policy_snapshots are deliberately NOT here either, even though
-// policy_snapshots is otherwise shaped like state_checkpoints. Membership of THIS list means
+// bridge_transfers, policy_snapshots and list_snapshots are deliberately NOT here either,
+// even though policy_snapshots is otherwise shaped like state_checkpoints. Membership of
+// THIS list means
 // one thing operationally: the table rides the global streamWatermark instead of a per-table
 // watermark (see mirrorStatus), which is only correct for tables no block-loop barrier gates
-// on. Both of these gate one: waitForBridgeSync and waitForPolicySync each cache their own
-// MAX(effective_time), scoped to the chains that can apply the row, so each reports that
-// scalar rather than the global watermark.
+// on. Each gates one: waitForBridgeSync and waitForPolicySync cache their own
+// MAX(effective_time), while waitForListShareSync uses the per-chain height watermark.
 const HUB_STATE_TABLES = ['state_checkpoints', 'anchor_reward_attestations', 'attestation_responses'];
 
 // Tables whose local id N and hub id N are THE SAME ROW, and whose rows are never updated
@@ -179,6 +183,7 @@ const REBUILT_SOURCE_PROBE_ROWS = 200;
 // or a rail drill that greps a family for an id finds the refusal wherever it happened. Each
 // column is that table's UNIQUE natural key; a table not listed is named by its hub id.
 const REFUSED_ROW_NAMES = Object.freeze({
+    list_snapshots:        Object.freeze({ column: 'snapshot_id', tag: 'XLISTSHARE' }),
     policy_snapshots:      Object.freeze({ column: 'snapshot_id', tag: 'XPOLICY' }),
     bridge_transfers:      Object.freeze({ column: 'transfer_id', tag: 'XBRIDGE' }),
     cross_chain_matches:   Object.freeze({ column: 'match_id',    tag: null }),
