@@ -85,6 +85,7 @@ module.exports = {
             if (event.table === 'cross_chain_calls')   await this.refreshCallSyncTimestamp();
             if (event.table === 'bridge_transfers')    await this.refreshBridgeSyncTimestamp();
             if (event.table === 'policy_snapshots')    await this.refreshPolicySyncTimestamp();
+            if (event.table === 'list_snapshots')      await this.refreshListShareSyncState();
             if (CROSS_CHAIN_TABLES.indexOf(event.table) !== -1) await this.releaseSnapshotWaiters();
         } else if (event.type === 'row:deleted' && event.table) {
             await this.applyRetraction(event);

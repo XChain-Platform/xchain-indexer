@@ -165,7 +165,7 @@ module.exports = {
 
         // At/after the list_edit_remove_activation row an edit (Version 2) may carry `0` to
         // remove the list; below it `0` falls through to the lookup and is an unknown list.
-        let removeActive = (format==2) && gateRegistry.activeAt('list_edit_remove_activation.LIST_EDIT_REMOVE_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);
+        let removeActive = (format==2) && gateRegistry.activeAt('list_edit_remove_activation.LIST_EDIT_REMOVE_ACTIVATION', this.config['NETWORK'], this.config['COIN'], null, data['BLOCK_TIME']);
 
         // Validate LIST fields (ALLOW_LIST / BLOCK_LIST)
         if(!error){

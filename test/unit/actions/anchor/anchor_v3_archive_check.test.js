@@ -36,6 +36,13 @@ describe('ANCHOR v3 archive check', function () {
             'invalid: BATCH_CRC32 (archive mismatch)');
     });
 
+    it('rejects an upper-case batch CRC on format before any CRC compare', function () {
+        const { handler, archive, data } = fixtures();
+        archive.BATCH_CRC32 = 'ABCDEF01';
+
+        assert.strictEqual(foldArchiveReason(handler, archive, data), 'invalid: BATCH_CRC32 (format)');
+    });
+
     it('returns the v1 reason for a non-numeric batch sequence', function () {
         const { handler, archive, data } = fixtures();
         archive.MATCH_BATCH_SEQ = 'not-a-number';

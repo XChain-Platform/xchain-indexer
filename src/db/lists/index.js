@@ -24,6 +24,8 @@ const path    = require('path');
 // '<COIN>:<network>' so the coin goes with the height.
 const gateRegistry = require('../../consensus/gate_registry');
 const { getListHeadIndex } = require('./head_resolution');
+const { listItemId } = require('./membership');
+const { getUnionResolution, readUnionMembers } = require('./union');
 const LIST_EDIT_RESOLUTION_KEY = 'list_edit_resolution_activation.LIST_EDIT_RESOLUTION_ACTIVATION';
 const LIST_REFERENCE_VALIDITY_KEY = 'list_reference_validity_activation.LIST_REFERENCE_REQUIRES_VALID_LIST';
 
@@ -45,7 +47,19 @@ module.exports = {
 
     // Return a list type given an action index. Once the validity gate is active,
     // only a LIST action with a valid verdict can supply a reference type.
-    async getListType(action_index, block_index){
+    async getListType(action_index, block_index, resolution=null){
+        let getStoredType = this.getListStoredType || module.exports.getListStoredType;
+        let storedType = await getStoredType.call(this, action_index, block_index);
+        let union = await getUnionResolution(this, action_index, storedType, block_index);
+        if(union){
+            if(resolution)
+                resolution.union = union;
+            return union.memberType;
+        }
+        return storedType;
+    },
+
+    async getListStoredType(action_index, block_index){
         let type  = false;
         if(!this.util.isNull(action_index) && this.util.isNumeric(action_index)){
             let query = "SELECT type FROM lists WHERE action_index=? LIMIT 1";
@@ -116,7 +130,8 @@ module.exports = {
     // @param {action_index}  integer  ACTION_INDEX of a LIST (as pinned by consumers)
     // @param {block_index}   integer  block being processed; gates edit resolution
     async getList(action_index, block_index){
-        let type = await this.getListType(action_index, block_index);
+        let resolution = {};
+        let type = await this.getListType(action_index, block_index, resolution);
         if(!type && await isRejectedListReference(this, action_index, block_index))
             return null;
         let list = [];
@@ -132,6 +147,8 @@ module.exports = {
             let resolved = action_index;
             if(gateRegistry.activeAt(LIST_EDIT_RESOLUTION_KEY, this.config['NETWORK'], this.config['COIN'], block_index, null))
                 resolved = await this.getListHeadIndex(action_index, block_index);
+            if(resolution.union)
+                return readUnionMembers(this, resolved, block_index, false);
             let query = '';
             let args  = [resolved];
             // CONSENSUS: list_items has no ORDER BY on the AUTO_INCREMENT insert
@@ -187,7 +204,8 @@ module.exports = {
     // @param {action_index}  integer  ACTION_INDEX of a LIST (as pinned by consumers)
     // @param {block_index}   integer  the height to resolve the list's membership AS OF
     async getListAtBlock(action_index, block_index){
-        let type = await this.getListType(action_index, block_index);
+        let resolution = {};
+        let type = await this.getListType(action_index, block_index, resolution);
         if(!type && await isRejectedListReference(this, action_index, block_index))
             return null;
         let list = [];
@@ -199,6 +217,8 @@ module.exports = {
             if(this.isListEditResolutionActive(block_index)){
                 resolved = await this.getListHeadIndex(action_index, block_index, block_index);
             }
+            if(resolution.union)
+                return readUnionMembers(this, resolved, block_index, true);
             let query = '';
             let args  = [resolved];
             // Same deterministic total order as getList (see its comment for why the
@@ -297,11 +317,7 @@ module.exports = {
     async createListEdit(data, item, status){
         let action_index = data['ACTION_INDEX'];
         let status_id = await this.createStatus(status);
-        let item_id   = null;
-        if(data['TYPE']==1)
-            item_id = await this.createTicker(item);
-        if(data['TYPE']==2)
-            item_id = await this.createAddress(item);
+        let item_id   = await listItemId(this, data['TYPE'], item);
         // Check if record already exists for this list
         let query  = "SELECT item_id FROM list_edits WHERE action_index=? AND item_id=? AND status_id=? LIMIT 1";
         let args   = [action_index, item_id, status_id];
@@ -319,11 +335,7 @@ module.exports = {
     // Create record in `list_items` table
     async createListItem(data, item){
         let action_index = data['ACTION_INDEX'];
-        let item_id      = null;
-        if(data['TYPE']==1)
-            item_id = await this.createTicker(item);
-        if(data['TYPE']==2)
-            item_id = await this.createAddress(item);
+        let item_id      = await listItemId(this, data['TYPE'], item);
         // Check if record already exists for this list
         let query  = "SELECT item_id FROM list_items WHERE action_index=? AND item_id=? LIMIT 1";
         let args   = [action_index, item_id];
@@ -342,11 +354,7 @@ module.exports = {
     async createListItemInvalid(data, item, status){
         let action_index = data['ACTION_INDEX'];
         let status_id    = await this.createStatus(status);
-        let item_id      = null;
-        if(data['TYPE']==1)
-            item_id = await this.createTicker(item);
-        if(data['TYPE']==2)
-            item_id = await this.createAddress(item);
+        let item_id      = await listItemId(this, data['TYPE'], item);
         // Check if record already exists for this list
         let query  = "SELECT item_id FROM list_items_invalid WHERE action_index=? AND item_id=? AND status_id=? LIMIT 1";
         let args   = [action_index, item_id, status_id];

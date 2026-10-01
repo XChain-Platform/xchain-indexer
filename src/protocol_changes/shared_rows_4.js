@@ -373,13 +373,14 @@ addGate('swq_source_cap_activation.SWQ_SOURCE_CAP_ACTIVATION', 'height', {
 });
 
 // token_bridge_activation
-// TOKEN_BRIDGE_ACTIVATION: the height (per network) on the chain being parsed at/above
+// TOKEN_BRIDGE_ACTIVATION: the height (per chain) on the chain being parsed at/above
 // which XBRIDGE v3/v4 and ISSUE format 7 are legal. Below it v3 and v4 return the base
 // spec's own string 'invalid: XBRIDGE before activation', v5 is never injected, and an
 // ISSUE|7 keeps the parse verdict 'invalid: VERSION (unknown)' so no historical ISSUE on
 // any chain changes status on replay.
 //
-// Keyed on the chain's OWN block_index, as XCHAIN_BRIDGE_ACTIVATION.
+// Keyed '<COIN>:<network>' (bare network as fallback) on the chain's OWN block_index, as
+// XCHAIN_BRIDGE_ACTIVATION.
 //
 // Mainnet and testnet sit at the house sentinel 9999999999. Testnet is NOT armed with the
 // XCHAIN bridge: no third-party token can be offered on a hub-trusted mint, so this gate

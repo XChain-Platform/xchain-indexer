@@ -54,6 +54,7 @@ module.exports = {
         this.releaseCallWaiters();
         this.releaseBridgeWaiters();
         this.releasePolicyWaiters();
+        this.releaseListShareWaiters();
         this.releaseAnchorAttestWaiters();
         this.releaseAttestResponseWaiters();
     },
@@ -70,6 +71,7 @@ module.exports = {
         this.releaseCallWaiters();
         this.releaseBridgeWaiters();
         this.releasePolicyWaiters();
+        this.releaseListShareWaiters();
         this.releaseAnchorAttestWaiters();
         this.releaseAttestResponseWaiters();
     },

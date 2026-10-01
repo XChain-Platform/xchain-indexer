@@ -23,6 +23,7 @@ const assert = require('assert');
 const sinon  = require('sinon');
 
 const { createBaseData } = require('../../../../fixtures/mocks');
+const { stubGate } = require('../../../../helpers/gate_modules.js');
 const { freshVote } = require('./helpers/vote_fixtures.js');
 const { resolveXChainVM } = require('./helpers/xchain_vm_optional.js');
 const { MAX_CODE_SIZE } = require('../../../../../src/protocol/constants.js');
@@ -158,6 +159,15 @@ describe('Vote invariants (escrow conservation + callback metering) @regression 
             assert.strictEqual(vm.probeReadManifest.callCount, 3);
             assert.strictEqual(vm.probeInstances.length, 1, 'the executor restarts its worker inside the same VM');
             assert.strictEqual(actionsCtx.getVoteCallbackProbeVm.secondCall.returnValue, probeVm);
+        });
+
+        // Arm only the configured coin slot, the shape a per-chain arming train writes.
+        it('follows an arm of the configured coin slot alone', async function(){
+            stubGate(sinon, 'vote_callback_binding_activation.VOTE_CALLBACK_BINDING_REQUIRES_USABLE_METHOD', false)
+                .callsFake((key, network, coin) => coin === 'BTC');
+            stubBindingCreate({ action_index: 5, code: codeAtSize(100), status_id: 2 }, 'invalid: disabled');
+            const data = await runBindingCreate();
+            assert.strictEqual(data.STATUS, 'invalid: CALLBACK_CONTRACT (not active)');
         });
 
         it('preserves below-gate admission without status reads or a probe', async function(){

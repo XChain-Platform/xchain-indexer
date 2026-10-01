@@ -52,8 +52,8 @@ const MIGRATIONS_DIR = path.resolve(__dirname, '..', '..', '..', '..', '..', 'sr
 // table -> { columns (in DDL order), after (the indexer twin column the block follows),
 // hubAfter (the hub DDL column the block follows, only when it differs from after) }.
 //
-// Seven tables, not the frontier's six: oracle_prices is the unsigned rail of R5 (a)
-// and B13 and takes ONE unqualified column keyed on its publishing chain. The five
+// Eight mirror tables carry admission columns. oracle_prices is the unsigned rail of
+// R5 (a) and B13 and takes ONE unqualified column keyed on its publishing chain. The
 // mapped rails take the three federation chains in the fixed order btc, ltc, doge;
 // attestation_responses is BTC-only by the indexer's own call-site guard.
 const MIRROR_ADMISSION_COLUMNS = Object.freeze({
@@ -62,6 +62,7 @@ const MIRROR_ADMISSION_COLUMNS = Object.freeze({
     cross_chain_calls:     Object.freeze({ columns: Object.freeze(['admit_block_btc', 'admit_block_ltc', 'admit_block_doge']), after: 'finalizing_view',  hubAfter: 'effective_time' }),
     bridge_transfers:      Object.freeze({ columns: Object.freeze(['admit_block_btc', 'admit_block_ltc', 'admit_block_doge']), after: 'effective_time' }),
     policy_snapshots:      Object.freeze({ columns: Object.freeze(['admit_block_btc', 'admit_block_ltc', 'admit_block_doge']), after: 'network' }),
+    list_snapshots:        Object.freeze({ columns: Object.freeze(['admit_block_btc', 'admit_block_ltc', 'admit_block_doge']), after: 'origin_block' }),
     price_snapshots:       Object.freeze({ columns: Object.freeze(['admit_block_btc', 'admit_block_ltc', 'admit_block_doge']), after: 'batch_block_time', hubAfter: 'push_generation' }),
     oracle_prices:         Object.freeze({ columns: Object.freeze(['admit_block']),                                           after: 'push_generation' }),
 });
@@ -78,9 +79,11 @@ const HUB_ONLY_ADMISSION_COLUMNS = Object.freeze({
     anchor_reward_attestations: Object.freeze(['admit_block_btc']),
 });
 
-// Every table name the manifest carries, in the order the migration and the compat gate
-// list them, so two consumers that both enumerate the manifest agree on the order.
-const MIRROR_ADMISSION_TABLES = Object.freeze(Object.keys(MIRROR_ADMISSION_COLUMNS));
+// The tables altered by the dated admission migration, in the order the migration and
+// compat gate list them. list_snapshots is created with its columns by its own manual
+// table migration, so it belongs to the manifest above but not this legacy ALTER set.
+const MIRROR_ADMISSION_TABLES = Object.freeze(Object.keys(MIRROR_ADMISSION_COLUMNS)
+    .filter(table => table !== 'list_snapshots'));
 
 /**
  * The column lines of one CREATE TABLE body, in source order, from comment-stripped
@@ -112,7 +115,8 @@ function admissionColumnsOf(columns){
  */
 function migrationStatements(manifest){
     const m = manifest || MIRROR_ADMISSION_COLUMNS;
-    return Object.keys(m).map(table => {
+    const tables = manifest ? Object.keys(m) : MIRROR_ADMISSION_TABLES;
+    return tables.map(table => {
         let prev = m[table].after;
         const clauses = m[table].columns.map(col => {
             const clause = '  ADD COLUMN IF NOT EXISTS ' + col + ' ' + ADMISSION_COLUMN_DDL + ' AFTER ' + prev;
@@ -129,7 +133,7 @@ function migrationStatements(manifest){
  * affected table fails that gate rather than skipping.
  */
 function compatGateTables(manifest){
-    return Object.keys(manifest || MIRROR_ADMISSION_COLUMNS);
+    return manifest ? Object.keys(manifest) : [...MIRROR_ADMISSION_TABLES];
 }
 
 module.exports = {

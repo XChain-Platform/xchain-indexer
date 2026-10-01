@@ -228,8 +228,8 @@ class XBridge {
 
     /**
      * The handler context every method below shares. `coin` is this chain's coin: it
-     * decides BTC_ONLY versus V1_NOT_ON_BTC and, with `network`, keys the XCHAIN
-     * activation map ('<COIN>:<network>'); the token map is network-keyed.
+     * decides BTC_ONLY versus V1_NOT_ON_BTC and, with `network`, keys both the XCHAIN
+     * and the token activation maps ('<COIN>:<network>', bare network as fallback).
      * `credits` / `debits` are the ledger plan applyLock / applyBurn fill in, so the
      * two apply methods can stay pure verdict functions from the caller's side.
      *

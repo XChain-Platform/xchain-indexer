@@ -130,7 +130,7 @@ class Dispenser {
     // so anyone publishing a LIST that names the address cannot spend its exception.
     // Below it any index_addresses row counts, byte-identically.
     async hasPriorLocalActivity(data){
-        let provenUseOnly = gateRegistry.activeAt('dispenser_freshness_proven_use_activation.DISPENSER_FRESHNESS_PROVEN_USE_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);
+        let provenUseOnly = gateRegistry.activeAt('dispenser_freshness_proven_use_activation.DISPENSER_FRESHNESS_PROVEN_USE_ACTIVATION', this.config['NETWORK'], this.config['COIN'], null, data['BLOCK_TIME']);
         if(provenUseOnly)
             return await this.indexerDb.hasProvenUseBefore(data['GET_ADDRESS'], data['BLOCK_INDEX']);
         return await this.indexerDb.hasXChainActivityBefore(data['GET_ADDRESS'], data['BLOCK_INDEX']);

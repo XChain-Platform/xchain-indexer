@@ -39,80 +39,10 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 
-const { getTestConfig } = require('../../../fixtures/config');
-const Utility           = require('../../../../src/utility');
-const Database          = require('../../../../src/db');
-const HubDbSync         = require('../../../../src/hub/hub_db_sync.js');
-
-// The BTC-anchored boundary the hub locked this validator set at.
-const SNAP_BLOCK = 961234;
-
-// This node's own authoritative stake rows at SNAP_BLOCK, in the shape
-// stakeWeightsWithCap reads them (weight = the SOURCE aggregate, carried on every
-// effective key of that source; `_sr` is the source rank the capped branch ranks on).
-const LOCAL_STAKES = [
-    { pubkey: 'aa11', source: 'src1', weight: '5000.00000000', _sr: 1 },
-    { pubkey: 'bb22', source: 'src2', weight: '4000.00000000', _sr: 2 },
-    // One source, two delegated keys - both carry the source aggregate.
-    { pubkey: 'cc33', source: 'src3', weight: '3000.00000000', _sr: 3 },
-    { pubkey: 'dd44', source: 'src3', weight: '3000.00000000', _sr: 3 },
-];
-
-// A capability_snapshots row as the hub serves it.
-function snapshotRow(over) {
-    return Object.assign({
-        id:             77,
-        snapshot_block: SNAP_BLOCK,
-        capability:     'cross_chain',
-        signing_pubkey: 'aa11',
-        amount:         '5000.00000000',
-        source:         'src1'
-    }, over || {});
-}
-
-// A Database wired for `coin`, whose local stake re-derivation answers LOCAL_STAKES
-// and whose parsed tip is `tip`. doQuery is dispatched on the statement so the REAL
-// getStakeWeightsByCapability / getLatestBlockIndex bodies run: the point of the check
-// is which rows those produce, so stubbing them out would test nothing.
-function dbFor(coin, opts) {
-    const o        = opts || {};
-    const config   = getTestConfig();
-    config.COIN    = coin;
-    config.NETWORK = o.network || 'regtest';
-    // Faithful to coins/DOGE.js and coins/LTC.js: no capabilities at all off BTC.
-    if (coin !== 'BTC') config.STAKING = Object.assign({}, config.STAKING, { CAPABILITIES: {} });
-
-    const util = new Utility();
-    sinon.stub(util, 'logError');
-
-    const db = new Database('127.0.0.1', 3306, 'xchain_test', 'u', 'p', { config, util });
-    sinon.stub(db, 'getStatusId').resolves(1);
-    const seen = { stakeQueries: [] };
-    sinon.stub(db, 'doQuery').callsFake(async (sql, args) => {
-        if (/MAX\(block_index\)/.test(sql)) return [{ max_block: ('tip' in o) ? o.tip : SNAP_BLOCK }];
-        seen.stakeQueries.push({ sql, args });
-        return ('stakes' in o) ? o.stakes : LOCAL_STAKES;
-    });
-    return { db, seen, config };
-}
-
-// A HubDbSync over a fake mirror table, with `authoritativeDb` wired to `db`. Applied
-// rows land in `inserted`, so "was this row mirrored" is read off the statements the
-// applier actually issued rather than asserted from a return value alone.
-function syncFor(db) {
-    const inserted = [];
-    const hubDb = {
-        doQuery: sinon.stub().callsFake(async (sql, args) => {
-            if (/^INSERT/.test(sql)) inserted.push({ sql, args });
-            return [];
-        })
-    };
-    const sync = new HubDbSync(hubDb, { hubUrl: 'http://hub.test', network: 'regtest',
-                                        authoritativeDb: db || null });
-    sinon.stub(sync, 'localColumns').resolves(
-        new Set(['id', 'snapshot_block', 'capability', 'signing_pubkey', 'amount', 'source']));
-    return { sync, inserted, hubDb };
-}
+const srb    = require('../../../../src/consensus/snapshot_reorg_buffer.js');
+const {
+    SNAP_BLOCK, snapshotRow, dbFor, syncFor, historyDb, DEACTIVATED, PRE_TOPUP,
+} = require('./hub_db_sync_capability_snapshot_btc_rederive.test/helpers/fixtures.js');
 
 afterEach(function () { sinon.restore(); });
 
@@ -206,8 +136,9 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
 
         it('applies a row for a block this node has not parsed yet', async function () {
             // Below our own tip the stake history at that block is simply absent, so a
-            // refusal there would reject every honest row served ahead of our sync.
-            const { db }             = dbFor('BTC', { tip: SNAP_BLOCK - 1 });
+            // refusal there would reject every honest row served ahead of our sync. Unreached
+            // means below the BURIED height the set resolves at, not the declared one.
+            const { db }             = dbFor('BTC', { tip: SNAP_BLOCK - srb.CANONICAL_REORG_BUFFER - 1 });
             const { sync, inserted } = syncFor(db);
 
             await sync.applyRow('capability_snapshots',
@@ -314,5 +245,67 @@ describe('capability_snapshots BTC re-derivation fence @regression @tier2', func
             const v = await db.verifyCapabilitySnapshotRow(
                 snapshotRow({ signing_pubkey: 'AA11', source: 'SRC1' }));
             assert.strictEqual(v.verdict, 'verified');
+        });
+}); });
+
+describe('capability_snapshots BTC re-derivation fence @regression @tier2', function () { describe('the set is resolved at the buried height', function () {
+
+        it('verifies and mirrors a row whose source deactivated inside the buffer', async function () {
+            const { db, asked }      = historyDb(SNAP_BLOCK);
+            const { sync, inserted } = syncFor(db);
+
+            const v = await db.verifyCapabilitySnapshotRow(snapshotRow(DEACTIVATED));
+            assert.strictEqual(v.verdict, 'verified', 'N-6 still carries the stake: ' + v.reason);
+            assert.strictEqual(asked[0], SNAP_BLOCK - srb.CANONICAL_REORG_BUFFER);
+
+            await sync.applyRow('capability_snapshots', snapshotRow(DEACTIVATED));
+            assert.strictEqual(inserted.length, 1, 'an honest transition row must reach the mirror');
+        });
+
+        it('verifies a row carrying the pre-top-up weight when the top-up activates inside the buffer', async function () {
+            const { db, asked } = historyDb(SNAP_BLOCK);
+
+            const v = await db.verifyCapabilitySnapshotRow(snapshotRow(PRE_TOPUP));
+
+            assert.strictEqual(v.verdict, 'verified', 'the hub resolved the pre-top-up weight: ' + v.reason);
+            assert.deepStrictEqual(asked, [SNAP_BLOCK - srb.CANONICAL_REORG_BUFFER]);
+        });
+
+        it('refuses the same rows declared a full buffer later, judged from the buried tip', async function () {
+            // Declared at N+6 they resolve at N, after both changes, so both contradict the
+            // chain. The tip sits between the buried and declared heights: the availability
+            // gate must use the buried height too, or these read unknown and mirror.
+            const later = SNAP_BLOCK + srb.CANONICAL_REORG_BUFFER;
+            const { db, asked } = historyDb(later - 1);
+
+            for (const over of [DEACTIVATED, PRE_TOPUP]) {
+                const v = await db.verifyCapabilitySnapshotRow(snapshotRow(Object.assign({ snapshot_block: later }, over)));
+                assert.strictEqual(v.verdict, 'refused', over.signing_pubkey + ': ' + v.reason);
+                assert.match(v.reason, new RegExp('block ' + later + ' \\(resolved at ' + SNAP_BLOCK + '\\)'));
+            }
+            assert.deepStrictEqual(asked, [SNAP_BLOCK, SNAP_BLOCK]);
+        });
+}); });
+
+describe('capability_snapshots BTC re-derivation fence @regression @tier2', function () { describe('the burial flag-day boundary', function () {
+
+        it('resolves at the declared height below SNAPSHOT_BURIAL_ACTIVATION and buries from it on', async function () {
+            // Every shipped network is armed at genesis, so the pre-flag-day era is reached
+            // by arming the fixture network (regtest) at a nonzero height for this call,
+            // as slash.test/snapshot_burial.test.js does.
+            const map   = srb.SNAPSHOT_BURIAL_ACTIVATION;
+            const saved = map.regtest;
+            map.regtest = SNAP_BLOCK;
+            const { db, asked } = historyDb(SNAP_BLOCK);
+            let below, atGate;
+            try {
+                below  = await db.verifyCapabilitySnapshotRow(
+                    snapshotRow(Object.assign({ snapshot_block: SNAP_BLOCK - 1 }, DEACTIVATED)));
+                atGate = await db.verifyCapabilitySnapshotRow(snapshotRow(DEACTIVATED));
+            } finally { map.regtest = saved; }
+
+            assert.strictEqual(below.verdict, 'refused', 'below the gate the declared height is used verbatim');
+            assert.strictEqual(atGate.verdict, 'verified', 'at the gate the declared height is buried: ' + atGate.reason);
+            assert.deepStrictEqual(asked, [SNAP_BLOCK - 1, SNAP_BLOCK - srb.CANONICAL_REORG_BUFFER]);
         });
 }); });

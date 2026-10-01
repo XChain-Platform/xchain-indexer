@@ -80,7 +80,7 @@ async function validateCallbackTarget(data, error){
     if(!error && String(data['CALLBACK_METHOD']).length > callbackProbeVm.CALLBACK_METHOD_MAX_CHARS)
         error = 'invalid: CALLBACK_METHOD (length)';
     // Once the admission rule is active, refuse a callback already guaranteed to fail.
-    if(!error && gateRegistry.activeAt(USABLE_CALLBACK_GATE, this.config['NETWORK'], null, data['BLOCK_INDEX'], null)){
+    if(!error && gateRegistry.activeAt(USABLE_CALLBACK_GATE, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null)){
         let contractStatus = await this.indexerDb.getStatusString(contract.status_id);
         if(contractStatus !== 'valid')
             error = 'invalid: CALLBACK_CONTRACT (not active)';

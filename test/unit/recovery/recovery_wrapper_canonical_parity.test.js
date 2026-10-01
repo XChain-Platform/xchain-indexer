@@ -66,6 +66,11 @@ describe('recovery._wrapperCanonical: independent byte-parity (ITEM 2729)', func
         let actual = AnchorRecovery.wrapperCanonicalForTest(v1);
         assert.strictEqual(actual, EXPECTED_FROZEN);
     });
+
+    it('embeds an upper-case batch CRC as lower-case', function(){
+        let actual = AnchorRecovery.wrapperCanonicalForTest(Object.assign({}, v1, { batch_crc32: 'DEADBEEF' }));
+        assert.strictEqual(actual, EXPECTED_FROZEN);
+    });
 });
 
 describe('recovery._wrapperCanonical: independent byte-parity (ITEM 2729)', function(){

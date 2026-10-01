@@ -11,7 +11,7 @@
  *
  **********************************************************************
  *
- * The five numbers that say whether this build still applies the same rules and
+ * The six numbers that say whether this build still applies the same rules and
  * still produces the same state as the one before it.
  *
  *   coin_registry_consensus_hash   sha256 over the consensus-critical subset of
@@ -38,8 +38,13 @@
  *   consensus_rules_digest        sha256 over the DECIDED HEIGHTS of the gates
  *                                  the hub also evaluates. Comparable across
  *                                  repos, and it answers "same rules?".
+ *   gates_field_hash               sha256 of the GATES field the hub signs into a
+ *   and gates_field                ROLLCALL v1 epoch, knownGateKeys().join(',').
+ *                                  Built from the key list alone, so it reads the
+ *                                  same bare or armed; comparable across repos,
+ *                                  and the repo guard holds it to the hub pin.
  *   state_hash                     the stored hash at the regtest tip, or at a
- *                                  named height. The only one of the five that
+ *                                  named height. The only one of the six that
  *                                  needs a database, and the only one that
  *                                  speaks for the LEDGER rather than the code.
  *
@@ -47,19 +52,20 @@
  * and the digest, but only from a RUNNING server against a reachable database,
  * and there is no RPC at all for the coin hash or the state hash. A restructure
  * has to take the same reading from a checkout, before and after, with nothing
- * deployed. So the four code-derived values are computed here exactly as the
+ * deployed. So the five code-derived values are computed here exactly as the
  * server computes them, from the same modules, with no process to start.
  *
- * THE FIFTH NUMBER IS OPT-IN for that reason: without --state-hash this script
+ * THE STATE HASH IS OPT-IN for that reason: without --state-hash this script
  * opens no socket and reads no configuration beyond the source tree.
  *
- * TWO OF THE FOUR ARE NOT PURE, AND IT MATTERS FOR ANY PIN. The rules digest
+ * TWO OF THE FIVE ARE NOT PURE, AND IT MATTERS FOR ANY PIN. The rules digest
  * hashes gate VALUES, and a regtest venue arms some gates from its own
  * environment rather than from a committed height, so the same build reports one
  * digest in a bare checkout and another inside a configured container. The
  * armed-map fingerprint moves with it too, because like the digest it hashes
  * resolved values; the carrier logic digest does not, because it reads a
- * committed pin. Two readings of the two that move
+ * committed pin, and neither does the gates field hash, which hashes key names
+ * rather than values. Two readings of the two that move
  * therefore have to be taken with the same environment to be comparable, and
  * `consensus_rules_gates` in the JSON output is what turns a mismatch into a
  * named gate instead of two opaque hashes.
@@ -78,7 +84,7 @@
  *
  * USAGE
  *   node bin/consensus-identity.js                    human summary, no database
- *   node bin/consensus-identity.js --json             the four code values
+ *   node bin/consensus-identity.js --json             the five code values
  *   node bin/consensus-identity.js --state-hash       adds the tip read
  *   node bin/consensus-identity.js --at-block 4210    the same read at a height,
  *                                                     which is how a reindex is
@@ -90,7 +96,11 @@
  *                                                     an exit-2 refusal naming
  *                                                     the key, flag or no flag
  *   node bin/consensus-identity.js --compare <pin>    compare the selected pin
- *                                                     block field by field
+ *                                                     block, or a flat file
+ *                                                     --out wrote, field by
+ *                                                     field; a flat reading is
+ *                                                     comparable only under the
+ *                                                     same armed environment
  *   node bin/consensus-identity.js --out <file>       write the identity as JSON
  *
  *   XC_ROLLCALL_REGTEST_ACTIVATION=armed XC_ROLLCALL_GATES_REGTEST_ACTIVATION=armed \
@@ -126,13 +136,12 @@ function projectGates(gates) {
 }
 
 /**
- * The four numbers that come from the source tree alone, with the shape fields
+ * The five numbers that come from the source tree alone, with the shape fields
  * that make a mismatch diagnosable beside them.
  * @returns {{network: string, coin_registry_consensus_hash: string, coin_registry_consensus_hashes: object,
  *            armed_map_fingerprint: string, armed_map_fingerprint_unreadable_reason: ?string,
  *            armed_map_fingerprint_version: number, armed_map_rows: ?object, armed_map_row_count: ?number,
- *            consensus_rules_digest: string, consensus_rules_gates_resolved: number,
- *            consensus_rules_gates_absent: number, consensus_rules_gates_absent_keys: string[],
+ *            consensus_rules_digest: string, gate_key_count: number, absent_gates: string[],
  *            consensus_rules_gates: object, gates_field: string, gates_field_hash: string,
  *            carrier_logic_digest: string}}
  */
@@ -169,9 +178,9 @@ function codeIdentity(network) {
         armed_map_rows: armedMapV2.rows || null,
         armed_map_row_count: armedMapV2.count === undefined ? null : armedMapV2.count,
         consensus_rules_digest: rules.digest,
-        consensus_rules_gates_resolved: Object.keys(gates).length - absent.length,
-        consensus_rules_gates_absent: absent.length,
-        consensus_rules_gates_absent_keys: absent,
+        // Spelt as the hub spells them, so one concept keys the same in both readouts.
+        gate_key_count: Object.keys(gates).length,
+        absent_gates: absent,
         // The gate-by-gate preimage, kept beside the digest because two
         // mismatched hashes say nothing about what to fix. It is also what makes
         // an environment-shifted digest diagnosable in one read: see the header.
@@ -182,28 +191,52 @@ function codeIdentity(network) {
     };
 }
 
-function selectedPinBlock(pin) {
-    const armed = pin.armed_regtest_venue;
-    const env = armed && armed.env ? armed.env : {};
-    const armedNow = Object.keys(env).length > 0
-        && Object.keys(env).every((key) => process.env[key] === String(env[key]));
-    return armedNow ? armed : pin.bare_checkout;
+function isPlainObject(value) {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+// Pick the two-block pin's venue block, or take a flat --out reading whole; refuse anything else by name.
+function selectedPinBlock(pin, pinPath = 'pin') {
+    if (!isPlainObject(pin)) throw new CliUsageError(`${pinPath}: a pin must be a JSON object`);
+    if ('bare_checkout' in pin || 'armed_regtest_venue' in pin) {
+        const armed = pin.armed_regtest_venue;
+        const env = armed && armed.env ? armed.env : {};
+        const armedNow = Object.keys(env).length > 0
+            && Object.keys(env).every((key) => process.env[key] === String(env[key]));
+        const name = armedNow ? 'armed_regtest_venue' : 'bare_checkout';
+        if (!isPlainObject(pin[name])) throw new CliUsageError(`${pinPath}: the pin has no ${name} block`);
+        return pin[name];
+    }
+    if ('hub_schema_version' in pin) {
+        throw new CliUsageError(`${pinPath}: a hub identity; compare it with the hub's bin/consensus-identity.js`);
+    }
+    if (typeof pin.network !== 'string' || typeof pin.consensus_rules_digest !== 'string') {
+        throw new CliUsageError(`${pinPath}: neither a bare_checkout/armed_regtest_venue pin nor an --out identity`);
+    }
+    return pin;
+}
+
+// Compare by value, since an array or object read back from JSON is never === the fresh one.
+function sameValue(before, after) {
+    if (before !== null && typeof before === 'object') return JSON.stringify(before) === JSON.stringify(after);
+    return before === after;
 }
 
 function compareIdentity(pinBlock, fresh) {
     const results = [];
     for (const field of Object.keys(pinBlock)) {
-        if (field === 'env') continue;
+        // Skip the venue env and the tip, which --compare never reads (it opens no database).
+        if (field === 'env' || field === 'tip') continue;
         const before = pinBlock[field];
         const after = fresh[field];
-        if (before && typeof before === 'object' && !Array.isArray(before)) {
+        if (isPlainObject(before)) {
             const keys = Array.from(new Set(Object.keys(before).concat(Object.keys(after || {})))).sort();
             for (const key of keys) {
                 results.push({ field: field + '.' + key, before: before[key], after: (after || {})[key],
-                    same: before[key] === (after || {})[key] });
+                    same: sameValue(before[key], (after || {})[key]) });
             }
         } else {
-            results.push({ field, before, after, same: before === after });
+            results.push({ field, before, after, same: sameValue(before, after) });
         }
     }
     return results;
@@ -215,7 +248,9 @@ function printable(value) {
 
 function runComparison(pinPath, identity) {
     const pin = JSON.parse(fs.readFileSync(pinPath, 'utf8'));
-    const results = compareIdentity(selectedPinBlock(pin), identity);
+    const block = selectedPinBlock(pin, pinPath);
+    if ('tip' in block) console.log('skip tip: --compare reads no database');
+    const results = compareIdentity(block, identity);
     for (const result of results) {
         if (result.same) console.log('ok ' + result.field);
         else console.log('MISMATCH ' + result.field + ': ' + printable(result.before)
@@ -330,10 +365,10 @@ async function main() {
     // carry the same exit code: matching the hub's --assert-no-absent, the check
     // a restructure that moves a gate carrier out from under this build has to
     // survive, not just the ability to print a lower resolved count.
-    if (opts.assertNoAbsent && identity.consensus_rules_gates_absent_keys.length) {
-        console.error(`ABSENT GATES (${identity.consensus_rules_gates_absent}): the digest is over a rules set `
+    if (opts.assertNoAbsent && identity.absent_gates.length) {
+        console.error(`ABSENT GATES (${identity.absent_gates.length}): the digest is over a rules set `
             + 'this build has lost:');
-        for (const key of identity.consensus_rules_gates_absent_keys) console.error(`  ${key}`);
+        for (const key of identity.absent_gates) console.error(`  ${key}`);
         process.exitCode = 1;
     }
     // Fail an unresolvable armed map like an unread tip, so a sentinel pin never reads as a pass.
@@ -365,11 +400,11 @@ async function main() {
     console.log(`consensus_rules_digest:        ${identity.consensus_rules_digest}`);
     console.log(`gates_field:                   ${identity.gates_field}`);
     console.log(`gates_field_hash:              ${identity.gates_field_hash}`);
-    console.log(`  shared gates:                ${identity.consensus_rules_gates_resolved} resolved, `
-                + `${identity.consensus_rules_gates_absent} absent`);
+    console.log(`  shared gates:                ${identity.gate_key_count - identity.absent_gates.length} resolved, `
+                + `${identity.absent_gates.length} absent`);
     // Named, not just counted: an absent gate is a legitimate reading of a build that
     // lacks the carrier, so the reader has to be able to tell that from a wrong one.
-    for (const key of identity.consensus_rules_gates_absent_keys) {
+    for (const key of identity.absent_gates) {
         console.log(`    absent:                    ${key}`);
     }
     if (!opts.stateHash) {

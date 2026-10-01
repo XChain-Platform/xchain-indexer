@@ -106,8 +106,9 @@ module.exports = {
         // write time (createLedgerChangeRecord -> bcadd(amount,0,decimals)), so accepting
         // finer precision here would store an unrounded action amount that diverges from the
         // rounded ledger row (a supply-reconciliation desync). Contract-EMITTED amounts are
-        // pre-truncated to the tick decimals in execute.js processEmission before they reach
-        // this validator, so this rejects only over-precise user/wire input. Mirrored in
+        // rounded HALF-UP (not truncated) to the tick decimals in execute/emission.js
+        // roundEmissionAmounts before they reach this validator, so this rejects only
+        // over-precise user/wire input. Mirrored in
         // xchain-sdk/src/utils/utility.js (parity test in test/unit/utility/utility.test.js).
         if(divisible && this.isNumeric(int) && (this.isNull(sats) || this.isNumeric(sats))){
             if(!this.isNull(sats) && String(sats).length > parseInt(decimals))

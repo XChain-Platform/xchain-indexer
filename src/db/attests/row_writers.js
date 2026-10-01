@@ -164,8 +164,8 @@ module.exports = {
     // Create the audit row for an ATTEST v5/v6 batch action in the consolidated `attests`
     // table. Keyed on action_index like every other row there.
     //
-    // A batch action carries no request, no provider and no response body, so this writes
-    // only the four columns that mean something for it:
+    // A batch action carries no request, no provider and no response body, so of the
+    // request/response columns it writes only these (plus block_index, common to every row):
     //   version      5 (head) or 6 (continuation)
     //   request_id   THE BATCH KEY. The column's role is "correlation key across versions",
     //                and for the batch pair that is exactly what this is: a continuation
@@ -175,11 +175,12 @@ module.exports = {
     //                ATTEST v4 with no matching request stores the empty string.
     //   status_id    the batch verdict, which is what a replay re-derives.
     //
-    // The wire BODY is deliberately not stored: absorption happens at parse time from the
-    // action's own params, so persisting the compressed bytes would duplicate chain data
-    // this table has no reader for. A cross-action chunk store, which head-side reassembly
-    // of a MULTI-chunk batch needs, is separate work: it wants its own columns on this
-    // table rather than a reinterpretation of these.
+    // The row is also a CHUNK TABLE entry in its own batch_* columns (see src/sql/attests.sql):
+    // the head stores slot 0 plus the window header its quorum signed over, each continuation
+    // stores one later slot, and batch_chunk_b64 is this action's slice of the deflated body.
+    // getAttestBatchChunks (db/attests/batch_chunks.js) reads them back for forward reassembly
+    // (actions/attest/batch.js), and the reorg rollback reads them through its own queries
+    // (db/rollback/read_phase.js, batch_heads.js); keep every reader in step with this writer.
     async createAttestationBatchAction(data){
         data             = this.normalizeDataValues(data);
         let status_id    = await this.createStatus(data['STATUS']);

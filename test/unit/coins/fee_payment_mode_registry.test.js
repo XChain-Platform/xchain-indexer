@@ -14,17 +14,15 @@
  *
  * Which chains are native-fee-only is decided in two places, and neither
  * reads the registry field named for the property:
- *   - src/config.js  - the startup guard that makes FEE_DESTINATION
- *     mandatory, written as `coin === 'LTC' || coin === 'DOGE'`.
- *   - src/utility.js - detectFeePaymentMode, written as
+ *   - src/config/fee_destination.js - the startup guard that makes
+ *     FEE_DESTINATION mandatory, written as `coin !== 'BTC'`.
+ *   - src/utility/fees.js - detectFeePaymentMode, written as
  *     `coin === 'BTC' ? 'xchain' : 'rejected'`.
  * Adding a chain is documented as "drop a <COIN>.js data file and add it to
- * COIN_FILES" (src/coins/index.js), which touches neither list. A chain
- * onboarded that way is classified native-only by utility.js while config.js
- * does NOT require its FEE_DESTINATION; if that address is then absent or the
- * placeholder, detectFeePaymentMode short-circuits to 'xchain' for every
- * action on that node while a correctly-configured peer returns 'rejected'
- * - the acceptance divergence the config.js guard exists to prevent.
+ * COIN_FILES" (src/coins/index.js), which touches neither rule. Both rules
+ * treat every chain but BTC as native-fee, so a chain onboarded that way is
+ * native-only in both; if its registry entry declares 'xchain' instead, both
+ * tests below go red until the literal is taught about it.
  *
  * These tests do not move the classification into the registry (that is a
  * consensus-pin question: FEE_PAYMENT_MODE is deliberately outside
@@ -65,7 +63,7 @@ describe('native-fee classification tracks the coin registry', () => {
         }
     });
 
-    // Binds src/utility.js's `coin === 'BTC'` literal to the registry. A chain
+    // Binds src/utility/fees.js's `coin === 'BTC'` literal to the registry. A chain
     // declaring 'xchain' that the literal does not name reddens here.
     it('detectFeePaymentMode returns the mode the registry declares, on every coin', () => {
         for(const tick of coins.ALLOWED_COINS){
@@ -79,9 +77,9 @@ describe('native-fee classification tracks the coin registry', () => {
         }
     });
 
-    // Binds src/config.js's `coin === 'LTC' || coin === 'DOGE'` literal to the
-    // registry. A chain declaring 'native' that the literal does not name
-    // reddens here, because its config resolves instead of failing closed.
+    // Binds src/config/fee_destination.js's `coin !== 'BTC'` literal to the
+    // registry. A chain whose declared mode disagrees with the literal reddens
+    // here, because its config resolves or fails closed the wrong way.
     it('the startup FEE_DESTINATION guard fires on exactly the registry-declared native chains', () => {
         for(const tick of coins.ALLOWED_COINS){
             const key   = 'XCHAIN_FEE_DESTINATION_' + tick + '_REGTEST';

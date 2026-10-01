@@ -58,15 +58,18 @@ function hubConfigCoinKey(coinTicker){
 // it, which happens at different wall-clock times (hence different block heights)
 // across the federation. Live-polling a consensus param would let two nodes process
 // the same on-chain transaction with different values and produce divergent
-// block-hashed rows (a soft fork). Such values come solely from the per-chain local
-// defaults (configs/BTC.js, LTC.js, DOGE.js) and may change only via a coordinated
-// node upgrade; any future governance path must gate the switch on a protocol-agreed
-// activation block height, not a live poll.
+// block-hashed rows (a soft fork). Such values come solely from the bundled coin files
+// (src/coins/BTC.js, LTC.js, DOGE.js, copied in by src/coins/to_indexer_config.js) and
+// may change only via a coordinated node upgrade; any future governance path must gate
+// the switch on a protocol-agreed activation block height, not a live poll.
 //
 // Deliberately EXCLUDED for this reason:
 //   - GAS_SCHEDULE / GAS_PRICE: feed contract_executions fee math and block hashes.
-//   - ACTIVATION_DELAY_BLOCKS: stake/delegation activation_block (actions/stake.js,
-//                              delegate.js, unstake.js) is BLOCK_INDEX + this value.
+//   - ACTIVATION_DELAY_BLOCKS: stake/delegation activation_block and unstake
+//                              deactivation_block (actions/stake/
+//                              capability_stake.js and contract_stake.js,
+//                              actions/delegate/, actions/unstake/) is
+//                              BLOCK_INDEX + STAKING.ACTIVATION_DELAY_BLOCKS.
 //   - EXPIRATION_FEE_PER_DAY: ORDER/SWAP/DISPENSER expiration fee debited from
 //                             balance rows (utility.js getExpirationFee).
 //   - STAKING: carries ACTIVATION_DELAY_BLOCKS, COOLDOWN_BLOCKS, and

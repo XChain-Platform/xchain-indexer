@@ -30,6 +30,11 @@ describe('ANCHOR v3 wrapper section canonical', function () {
         assert.strictEqual(archiveCanonicalSuffix(archive), expected);
     });
 
+    it('embeds an upper-case batch CRC as lower-case', function () {
+        const upper = Object.assign({}, archive, { BATCH_CRC32: 'ABCDEF01' });
+        assert.strictEqual(archiveCanonicalSuffix(upper), SEP + '42' + SEP + '17' + SEP + 'abcdef01' + SEP + '1');
+    });
+
     it('extends only the named wrapper section', function () {
         assert.strictEqual(signsExtendedCanonical(0, archive), true);
         assert.strictEqual(signsExtendedCanonical(1, archive), false);

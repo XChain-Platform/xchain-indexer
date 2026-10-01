@@ -28,8 +28,8 @@
  * contract_stakes and the contract_unstakes cooldown alike, and nothing
  * upstream defends it: xchain-vm gateway contract.slash validates the amount's
  * SHAPE only (<=8 or <=18 fractional digits), never the token's DECIMALS, and
- * SLASH is the one emission execute.js does not run through
- * _truncateEmissionAmounts.
+ * SLASH is the one emission execute/emission.js does not run through
+ * roundEmissionAmounts.
  *
  * THE RULE. When active, the requested amount is floored to the tick's grid
  * ONCE at entry (floored, never rounded: a punishment may not grow on the way

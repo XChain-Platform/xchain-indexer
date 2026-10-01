@@ -172,7 +172,7 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(res.ok, true, res.reason);
         assert.deepStrictEqual(res.rows.map((r) => r[0]), manifest.ENTRIES.map((e) => e[0]));
         for (const [, value] of res.rows) canonicalValue(value);
-        assert.strictEqual(res.rows.length, 334);
+        assert.strictEqual(res.rows.length, 348);
     });
 
     it('carries the three row families the design names', function () {
@@ -183,6 +183,18 @@ describe('armed_map/manifest: collectRows', function () {
         assert.ok(keys.has('protocol_changes.changes.SEND'), 'a ProtocolChanges row');
         assert.ok(keys.has('protocol_changes.CONSENSUS_VERSION'), 'the registry\'s own constant');
         assert.ok(keys.has('mirror_admission_activation.CHAIN_CODE_RE'), 'a RegExp row');
+    });
+
+    it('carries the per-chain LIST owner testnet heights', function () {
+        const byKey = new Map(manifest.collectRows().rows);
+        assert.deepStrictEqual(byKey.get('list_owner_activation.LIST_OWNER_ACTIVATION'), {
+            mainnet: 9999999999,
+            'BTC:testnet': 9999999999,
+            'LTC:testnet': 9999999999,
+            'DOGE:testnet': 9999999999,
+            testnet: 9999999999,
+            regtest: 0,
+        });
     });
 
     it('appends the twelve VM mirror rows with the VM values', function () {

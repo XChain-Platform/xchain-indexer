@@ -21,6 +21,9 @@
 // The handler's phases, grouped by concern and installed onto Swap_Match.prototype below
 const matchPart  = require('./match.js');
 const settlePart = require('./settle.js');
+const gateRegistry = require('../../consensus/gate_registry');
+
+const SWAP_EDIT_REMATCH_KEY = 'swap_edit_rematch_activation.SWAP_EDIT_REMATCH_ACTIVATION';
 
 class Swap_Match {
 
@@ -50,7 +53,9 @@ class Swap_Match {
             return;
 
         // Get a list of any matching open swaps
-        let matches = await this.indexerDb.findSwapMatches(data);
+        let matchSwap = gateRegistry.activeAt(SWAP_EDIT_REMATCH_KEY, this.config['NETWORK'],
+            this.config['COIN'], data['BLOCK_INDEX'], null) ? swapInfo : data;
+        let matches = await this.indexerDb.findSwapMatches(matchSwap);
 
         // Filter for ownership compatibility: an ownership-side and a balance-side
         // never match; both sides' GIVE_OWNERSHIP / GET_OWNERSHIP must mirror.

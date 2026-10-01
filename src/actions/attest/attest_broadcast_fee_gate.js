@@ -42,11 +42,12 @@
  *      node agrees on, not a local condition.
  *
  *   2. BROADCASTER. The lowest-hash member of the request's own responsible set
- *      (element 0 of actions/attest.js _computeResponsibleSet, which is already
- *      sorted by SHA256(request_id || pubkey)). Pure derivation from data the
- *      request row already pins, with no dependence on which peer's transaction
- *      actually landed. It pays the ELECTED leader even when a failover peer
- *      broadcast; that is the accepted cost of being re-derivable. The
+ *      (element 0 of computeResponsibleSet in actions/attest/responsible_set.js,
+ *      which is already sorted by SHA256(request_id || pubkey)). Pure derivation
+ *      from data the request row already pins, with no dependence on which
+ *      peer's transaction actually landed. It pays the ELECTED leader even when
+ *      a failover peer broadcast; that is the accepted cost of being
+ *      re-derivable. The
  *      alternative (mapping the v1 SOURCE back through a staking source) is
  *      only correct if SOURCE is guaranteed to be the leader's staking source,
  *      which nothing enforces.
@@ -65,10 +66,10 @@
  * ACTIVATION PLANE: LOCAL BLOCK HEIGHT of the SETTLING action, and unlike the
  * ATTEST_ADMISSION gate that is safe here without qualification. The
  * reimbursement can only ever fire where the responsible set is non-empty, and
- * _computeResponsibleSet returns [] on every chain but BTC by construction
- * (capability staking is BTC-only). So the only chain that can reach this
- * predicate is the one whose local height IS the BTC height the threshold is
- * denominated in.
+ * computeResponsibleSet (actions/attest/responsible_set.js) returns [] on every
+ * chain but BTC by construction (capability staking is BTC-only). So the only
+ * chain that can reach this predicate is the one whose local height IS the BTC
+ * height the threshold is denominated in.
  *
  * EVERY NETWORK IS ARMED AT GENESIS. The four sub-decisions this gate encodes
  * were pinned by the operator on 2026-08-11 and the height was named by the

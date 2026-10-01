@@ -45,12 +45,12 @@
  * and the author's remedy is to retry in a later block.
  *
  * WHAT THE REFUSAL COSTS THE AUTHOR, measured on a live chain rather than read
- * off this handler. attest.js sets the over-cap request's STATUS, which makes
- * REQUEST_STATUS 'rejected' - but a v0 exists ONLY as a VM emission, and
- * execute.js processEmission throws on any emission whose handler returns a
- * non-'valid' STATUS. That throw rolls back the emitting EXECUTE's savepoint,
- * so what a chain actually records is a REVERTED EXECUTE, not a rejected
- * request row:
+ * off this handler. actions/attest/request.js (stampRequestStatus) sets the
+ * over-cap request's STATUS, which makes REQUEST_STATUS 'rejected' - but a v0
+ * exists ONLY as a VM emission, and processEmission in actions/execute/emission.js
+ * throws on any emission whose handler returns a non-'valid' STATUS. That throw
+ * rolls back the emitting EXECUTE's savepoint, so what a chain actually records
+ * is a REVERTED EXECUTE, not a rejected request row:
  *
  *   - the over-cap request row is rolled back, so NO ATTEST v0 is ever stored
  *     'rejected'; that request_status is unreachable for v0 by construction

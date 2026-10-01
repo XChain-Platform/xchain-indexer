@@ -119,7 +119,9 @@ module.exports = {
         }
         // Try to lookup id using tick passed
         if(this.util.isNull(id)){
-            let query   = "SELECT id FROM index_tickers WHERE LOWER(tick)=? LIMIT 1";
+            // Case variants may coexist once exact-case interning is armed, so the lowest
+            // matching id is the deterministic answer every node returns.
+            let query   = "SELECT id FROM index_tickers WHERE LOWER(tick)=? ORDER BY id ASC LIMIT 1";
             let args    = [lc];
             let results = await this.doQuery(query, args);
             if(results.length > 0)
@@ -198,6 +200,50 @@ module.exports = {
         // Convert id to a number
         if(id !== null)
             id = Number(id);
+        return id;
+    },
+
+    // Case-exact twin of createTicker: index_tickers.tick is utf8mb4_bin with a binary unique
+    // index, so case variants may coexist and each resolves to its own row. The lookup matches
+    // the stored bytes (tick=?) and never reads or writes the case-folded genesis _internCache.
+    // Returns null when the rollback refresh phase suppresses creation or when the insert is
+    // ignored and no exact row exists.
+    // @param {tick}        string  Ticker name, matched byte for byte
+    // @param {blockIndex}  integer Block at which the id is first assigned (defaults to
+    //                              this.blockIndex)
+    async createTickerExact(tick, blockIndex){
+        if(this.util.isNull(tick))
+            return null;
+        let str = String(tick);
+        let pid = str.substring(1);
+        if(str.substring(0,1) === '^'){
+            if(!CANONICAL_CARET_ID.test(pid))
+                return null;
+            let caretRows = await this.doQuery(
+                "SELECT id FROM index_tickers WHERE id=? AND block_index IS NOT NULL LIMIT 1", [pid]);
+            return (caretRows.length > 0) ? Number(caretRows[0].id) : null;
+        }
+        const lookup = "SELECT id FROM index_tickers WHERE tick=? LIMIT 1";
+        let results = await this.doQuery(lookup, [tick]);
+        let id      = (results.length > 0) ? Number(results[0].id) : null;
+        if(id === null){
+            if(this.suppressIndexIdCreation)
+                return null;
+            if(this.transactionConnection != null){
+                let bi = (blockIndex !== undefined && blockIndex !== null) ? blockIndex : this.blockIndex;
+                id = await this.getNextTickerId();
+                let query = "INSERT IGNORE INTO index_tickers (`id`, `tick`, `block_index`) values (?, ?, ?)";
+                await this.doQuery(query, [id, tick, (this.util.isNull(bi) ? null : bi)]);
+            } else {
+                if(this.deterministicIndexingStarted)
+                    getLogger().warn('Index id invariant: out-of-band index_tickers insert ("' + tick +
+                        '") after deterministic indexing began; this offsets the id counter.');
+                let query = "INSERT IGNORE INTO index_tickers (tick) values (?)";
+                await this.doQuery(query, [tick]);
+            }
+            results = await this.doQuery(lookup, [tick]);
+            id      = (results.length > 0) ? Number(results[0].id) : null;
+        }
         return id;
     },
 

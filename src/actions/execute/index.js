@@ -230,10 +230,10 @@ class Execute {
         }
     }
 
-    // Normalize every amount-bearing field of an emitted action to its tick's
+    // Round every amount-bearing field of an emitted action half-up to its tick's
     // decimals before the handler sees it (./emission.js).
-    async truncateEmissionAmounts(action, params){
-        return emissionRouter.truncateEmissionAmounts.call(this, action, params);
+    async roundEmissionAmounts(action, params){
+        return emissionRouter.roundEmissionAmounts.call(this, action, params);
     }
 
     // The writer lives in ./slash_emission.js because a DEPLOY constructor emits SLASH

@@ -144,6 +144,15 @@ function parseAlterTableIndexes(sql, file){
     return added;
 }
 
+// Every standalone CREATE [UNIQUE|FULLTEXT] INDEX <name> ON <table> in one SQL text, as
+// {table, index, unique, fulltext}. Pure, so the FULLTEXT spelling is pinned on made-up SQL.
+function parseStandaloneCreateIndexes(sql){
+    const found = [];
+    for(const m of String(sql).matchAll(/CREATE\s+(UNIQUE\s+|FULLTEXT\s+)?INDEX\s+`?(\w+)`?\s+on\s+`?(\w+)`?/gi))
+        found.push(Object.assign({ table: m[3], index: m[2].toLowerCase() }, indexKind(m[1])));
+    return found;
+}
+
 // Every index a dated migration adds: {file, table, index, unique, fulltext, columns}.
 function collectMigrationIndexes(){
     const added = [];
@@ -166,5 +175,5 @@ function collectMigrationIndexes(){
 module.exports = {
     SQL_DIR, MIG_DIR, INDEX_BASELINE, PRIMARY_INDEX,
     collectLedgerCreatedTables, collectDeclaredIndexes, collectMigrationIndexes,
-    parseAlterTableIndexes,
+    parseAlterTableIndexes, parseStandaloneCreateIndexes,
 };

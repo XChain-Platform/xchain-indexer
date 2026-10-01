@@ -30,6 +30,7 @@ const gateRegistry = require('../../consensus/gate_registry');
 const ZERO_CONF_KEY = 'attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION';
 const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
 const { getLogger } = require('../../observability/index.js');
+const { maxPriceAgeSecondsAt } = require('../../utility/oracle_price_age.js');
 
 module.exports = {
     // Settle the request fee escrowed at v0 (paid attestations). Runs at the
@@ -301,7 +302,8 @@ module.exports = {
     // Returns the prices, or null when there is nothing usable to convert with, which
     // the caller reimburses zero on.
     async broadcastFeePrices(request, data){
-        let maxPriceAgeSeconds = parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800;
+        let maxPriceAgeSeconds = maxPriceAgeSecondsAt(
+            this.config, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX']);
         let prices;
         try {
             prices = await this.util.getFeeOraclePrices(

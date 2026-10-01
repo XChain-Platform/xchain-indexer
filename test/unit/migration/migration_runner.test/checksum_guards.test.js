@@ -105,6 +105,21 @@ describe('Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1', function 
     });
 });
 
+// admission-height: a06f8873 edited two comment lines of a file the rail DOGE and LTC DBs
+// had already applied at its first revision (8c50c9d4). Pin the recorded predecessor and
+// the executable residue the heal was verified against.
+const ADMISSION_HEIGHT_FILE = '2026-09-16-admission-height.sql';
+const ADMISSION_HEIGHT_FIRST = 'a2ebe4379b888e86c79a40f8e9648fd37516bd616f30844f432e104258bc1dba';
+
+describe('Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1', function () {
+    it(ADMISSION_HEIGHT_FILE + ': heals from its first, pre-comment-edit revision', function () {
+        const r = Database.MIGRATION_CHECKSUM_REBASELINES[ADMISSION_HEIGHT_FILE];
+        assert.ok(r, ADMISSION_HEIGHT_FILE + ' must have a rebaseline entry');
+        assert.ok([].concat(r.from).includes(ADMISSION_HEIGHT_FIRST),
+            ADMISSION_HEIGHT_FILE + ': recorded revision ' + ADMISSION_HEIGHT_FIRST.slice(0, 12) + ' is not covered.');
+    });
+});
+
 describe('Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1', function () {
     Object.entries(EXECUTABLE_RESIDUE).forEach(function ([file, residue]) {
         it(file + ': executable SQL is unchanged from what the rebaseline was verified against', function () {
@@ -226,6 +241,19 @@ describe('runMigrations() checksum heal branch @regression @tier1', function () 
             assert.strictEqual(checksum, sha256(fs.readFileSync(path.join(MIG_DIR, file), 'utf8')),
                 file + ': healed to something other than the current file checksum');
         }
+    });
+});
+
+describe('runMigrations() checksum heal branch @regression @tier1', function () {
+    it('a ledger holding the first admission-height revision heals to the current checksum with no manual SQL', async function () {
+        const ledger = fileChecksums();
+        ledger.set(ADMISSION_HEIGHT_FILE, ADMISSION_HEIGHT_FIRST);
+        const { updates, logged } = await runAgainst(ledger);
+        assert.ok(!logged.some(l => /content CHANGED/.test(l)), 'divergence still logged: ' + logged.join(' | '));
+        const healed = updates.filter(u => /SET checksum/i.test(u.sql));
+        assert.strictEqual(healed.length, 1, 'exactly the one row should be re-keyed: ' + JSON.stringify(healed));
+        assert.strictEqual(healed[0].params[1], ADMISSION_HEIGHT_FILE);
+        assert.strictEqual(healed[0].params[0], sha256(fs.readFileSync(path.join(MIG_DIR, ADMISSION_HEIGHT_FILE), 'utf8')));
     });
 });
 

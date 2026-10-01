@@ -34,6 +34,7 @@ const { getLogger } = require('../../../observability/index.js');
 // carries them only once the bridge tables have been created in it.
 const BRIDGE_TABLE = 'bridge_transfers';
 const POLICY_TABLE = 'policy_snapshots';
+const LIST_SHARE_TABLE = 'list_snapshots';
 
 // How long a NEGATIVE table probe is trusted. A positive answer is kept for the life
 // of the process (a mirror table cannot vanish from under a running client), a
@@ -293,6 +294,59 @@ module.exports = {
                                      ? this.heightTail('policy_snapshots', blockHeight) : '')));
             }, ms);
             this._policyWaiters.push(waiter);
+        });
+    },
+
+    async refreshListShareSyncState(armBootstrap = this._bootstrapDrained) {
+        if (!await mirrorTablePresent(this, LIST_SHARE_TABLE)) return;
+        try {
+            let rows = await this.hubDb.doQuery("SELECT 1 FROM list_snapshots LIMIT 1");
+            this.listShareMirrorEmpty = rows.length === 0;
+        } catch (e) {
+            noteWatermarkReadFailure(this, LIST_SHARE_TABLE, e);
+            return;
+        }
+        if (armBootstrap) this.listShareBootstrapped = true;
+        this.releaseListShareWaiters();
+    },
+
+    listShareSyncSatisfied(blockHeight) {
+        if (this.listShareBootstrapped && this.listShareMirrorEmpty) return true;
+        return this.listShareBootstrapped && this.heightSatisfied(LIST_SHARE_TABLE, blockHeight);
+    },
+
+    releaseListShareWaiters() {
+        if (this._listShareWaiters.length === 0) return;
+        let stillWaiting = [];
+        for (let w of this._listShareWaiters) {
+            if (this.listShareSyncSatisfied(w.height)) {
+                clearTimeout(w.timer);
+                w.resolve(true);
+            } else {
+                stillWaiting.push(w);
+            }
+        }
+        this._listShareWaiters = stillWaiting;
+    },
+
+    waitForListShareSync(timeoutMs, blockHeight) {
+        blockHeight = Number(blockHeight);
+        if (!this.enabled || !Number.isFinite(blockHeight)) return Promise.resolve(true);
+        if (this.listShareSyncSatisfied(blockHeight)) return Promise.resolve(true);
+
+        let ms = parseInt(timeoutMs);
+        if (!Number.isFinite(ms) || ms <= 0) ms = 60000;
+        return new Promise((resolve, reject) => {
+            let waiter = { height: blockHeight, resolve: resolve, timer: null };
+            waiter.timer = setTimeout(async () => {
+                try { await this.refreshListShareSyncState(); } catch (e) { /* fall through to reject */ }
+                if (this.listShareSyncSatisfied(blockHeight)) return;
+                this._listShareWaiters = this._listShareWaiters.filter(w => w !== waiter);
+                reject(new Error('list share sync barrier timed out after ' + ms +
+                                 'ms waiting for block_height ' + blockHeight +
+                                 this.heightTail(LIST_SHARE_TABLE, blockHeight)));
+            }, ms);
+            this._listShareWaiters.push(waiter);
         });
     },
 

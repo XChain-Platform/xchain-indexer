@@ -25,6 +25,7 @@ const protocolChanges = require('../protocol_changes.js');
 const { getLogger } = require('../observability/index.js');
 const { CONFIG_ENV } = require('../config.js');
 const { findFeeOutput } = require('./fee_output.js');
+const { maxPriceAgeSecondsAt } = require('./oracle_price_age.js');
 
 // Batch-cumulative native-fee accounting (BATCH_ISSUANCE_LIMITS).
 //
@@ -218,7 +219,8 @@ module.exports = {
         // reject silently stale prices against the block's own timestamp (deterministic during
         // consensus replay); see db.getLatestPrice and getFeeOraclePrices.
         let coin = this.config['COIN'] || data['COIN'];
-        let maxPriceAgeSeconds = parseInt(this.config['ORACLE_MAX_PRICE_AGE_SECONDS']) || 1800;
+        let maxPriceAgeSeconds = maxPriceAgeSecondsAt(
+            this.config, this.config['NETWORK'], coin, data['BLOCK_INDEX']);
         let prices = await this.getFeeOraclePrices(db, coin, data['BLOCK_INDEX'], data['BLOCK_TIME'], maxPriceAgeSeconds);
         if(prices.error){
             return { valid: false, error: prices.error };

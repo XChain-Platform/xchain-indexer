@@ -109,6 +109,7 @@ const EXPECTED = [
     ['call_sync_barrier',               'callWatermarkGraceS',         'height-aware'],
     ['bridge_sync_barrier',             'bridgeWatermarkGraceS',       'height-aware'],
     ['policy_sync_barrier',             'policyWatermarkGraceS',       'height-aware'],
+    ['list_share_sync_barrier',         null,                          'null'],
     // Direct-hub-DB twin of call_sync_barrier. A null here (no watermark to key on)
     // is what makes such a barrier wedge forever: it leaves no time-keyed escape at
     // all. This one has one, resolved onto the indexer from the SAME frozen call
@@ -122,7 +123,9 @@ const EXPECTED = [
     ['vm_executor_unavailable',         null,                          'null'],
     ['anchor_reward_proof_unavailable', null,                          'null'],
     ['bridge_proof_barrier',            null,                          'null'],
-    ['rollcall_proof_unavailable',      null,                          'null']
+    ['rollcall_proof_unavailable',      null,                          'null'],
+    ['list_share_snapshot_barrier',     null,                          'null'],
+    ['list_share_halt',                 null,                          'null']
 ];
 describe('barrier stallClearsAt grace-field mapping @regression', function () {
 

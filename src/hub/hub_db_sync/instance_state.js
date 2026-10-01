@@ -128,6 +128,10 @@ function initContentBarrierState(sync) {
     sync.policySyncTimestamp = null;
     sync.policyBootstrapped  = false;
     sync._policyWaiters      = [];
+
+    sync.listShareBootstrapped = false;
+    sync.listShareMirrorEmpty  = false;
+    sync._listShareWaiters     = [];
 }
 
 // What the consumer told this client about itself and the hooks it wired.

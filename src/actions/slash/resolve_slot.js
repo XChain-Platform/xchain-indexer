@@ -26,8 +26,10 @@
  ********************************************************************/
 
 const eq = require('../../consensus/equivocation_header.js');
+const gateRegistry = require('../../consensus/gate_registry');
 const { parseOracleContent, parseBatchContent } = require('./content_parsers.js');
 
+const LIST_SHARE_PRODUCER_GATE = 'list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION';
 
 // In-content snapshot_block field index per engine (raw canonical layout).
 const FIELD = {
@@ -43,8 +45,17 @@ const FIELD = {
     // the CHECKPOINT and ATTEST legs below carry.
     [eq.ENGINE_TAGS.BRIDGE]:     2,   // XBRIDGE|transfer_id|snapshot_block|tick|...
     [eq.ENGINE_TAGS.POLICY]:     2,   // XPOLICY|snapshot_id|snapshot_block|origin_chain|...
+    [eq.ENGINE_TAGS.LIST_SHARE]: 2,   // XLISTSHARE|snapshot_id|snapshot_block|...
     [eq.ENGINE_TAGS.CONFIG]:     0,   // XCONFIG content = snapshot_block|config_digest (block carried in-content so config equivocation is slashable)
 };
+
+function listShareSlashable(msgA, prefix, network){
+    if(typeof msgA !== 'string' || typeof prefix !== 'string' || !msgA.startsWith(prefix))
+        return false;
+    const field = msgA.slice(prefix.length).split('|')[2];
+    return typeof field === 'string' && /^[0-9]+$/.test(field) &&
+        gateRegistry.activeAt(LIST_SHARE_PRODUCER_GATE, network, null, Number(field), null);
+}
 
 // The field-indexed engines: the height rides the signed content itself, so the
 // pair is judged on one field of each canonical. Returns null when this engine
@@ -209,4 +220,5 @@ async function resolveSlot(deps, engineTag, roundId, contentA, contentB, oracleR
         || { error: 'invalid: ENGINE_TAG (no snapshot_block rule)' };
 }
 
-module.exports = { resolveSlot, resolveFieldSlot, resolveOracleSlot, resolveBatchSlot, resolveAttestSlot };
+module.exports = { resolveSlot, resolveFieldSlot, resolveOracleSlot, resolveBatchSlot, resolveAttestSlot,
+    listShareSlashable };

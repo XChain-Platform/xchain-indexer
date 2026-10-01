@@ -49,7 +49,7 @@ const fs     = require('fs');
 const path   = require('path');
 const {
     SQL_DIR, INDEX_BASELINE, PRIMARY_INDEX, collectLedgerCreatedTables, collectDeclaredIndexes, collectMigrationIndexes,
-    parseAlterTableIndexes,
+    parseAlterTableIndexes, parseStandaloneCreateIndexes,
 } = require('./sql_schema_index_parity.test/helpers/index_ledger.js');
 
 describe('SQL schema index parity (definition path vs ledger path) @regression', function(){
@@ -134,6 +134,16 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
                            'ALTER TABLE t ADD COLUMN c INT;',
                            'ALTER TABLE t DROP INDEX IF EXISTS x;',
                            '-- ALTER TABLE t ADD INDEX x (a)'])
+            assert.deepStrictEqual(read(none), [], none);
+    });
+
+    it('sanity: the standalone CREATE INDEX parser reads every qualifier, FULLTEXT included', function(){
+        const read = sql => parseStandaloneCreateIndexes(sql).map(a => [a.table, a.index, a.unique, a.fulltext]);
+        assert.deepStrictEqual(read('CREATE INDEX i1 ON t (a);'), [['t', 'i1', false, false]]);
+        assert.deepStrictEqual(read('CREATE UNIQUE INDEX U1 ON t (a, b);'), [['t', 'u1', true, false]]);
+        assert.deepStrictEqual(read('CREATE FULLTEXT INDEX f1 ON t (a, b);'), [['t', 'f1', false, true]]);
+        assert.deepStrictEqual(read('CREATE INDEX `i2` ON `t` (a);'), [['t', 'i2', false, false]]);
+        for(const none of ['ALTER TABLE t ADD INDEX x (a);', 'CREATE TABLE t (a INT, KEY k (a));'])
             assert.deepStrictEqual(read(none), [], none);
     });
 });
@@ -251,8 +261,7 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
         const missing = [];
         for(const file of fs.readdirSync(SQL_DIR).filter(f => f.endsWith('.sql'))){
             const raw = fs.readFileSync(path.join(SQL_DIR, file), 'utf8');
-            for(const m of raw.matchAll(/CREATE\s+(UNIQUE\s+)?INDEX\s+`?(\w+)`?\s+on\s+`?(\w+)`?/gi)){
-                const table = m[3], index = m[2].toLowerCase();
+            for(const { table, index } of parseStandaloneCreateIndexes(raw)){
                 if(!ledgerCreated.has(table)) continue;                 // covered by the inverse guard above
                 if(migrationAdded.has(table + '.' + index)) continue;
                 missing.push(`  ${table}.${index}  <- src/sql/${file}`);
@@ -265,7 +274,7 @@ describe('SQL schema index parity (definition path vs ledger path) @regression',
             'sql_schema_column_parity.test.js cannot see (it stops at the ENGINE tail) and the inverse ' +
             'guard above skips. No parity check covers them, so the two schema paths can diverge on them ' +
             'unobserved. Restate each one in a dated migration with CREATE INDEX IF NOT EXISTS, matching ' +
-            'the definition\'s name, column list and UNIQUE flag (the shape case above then enforces the ' +
+            'the definition\'s name, column list and UNIQUE/FULLTEXT flag (the shape case above then enforces the ' +
             'match). Do NOT edit the migration that already created the table: an applied migration is ' +
             'immutable and its checksum is the ledger - ship a new dated file:\n' + missing.join('\n'));
     });

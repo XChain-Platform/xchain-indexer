@@ -3,6 +3,7 @@ const { tokenPolicyRejects } = require('../../consensus/order_swap_payout_policy
 
 const EMPTY_ALLOW_LIST_KEY = 'empty_allow_list_denies_activation.EMPTY_ALLOW_LIST_DENIES';
 const PAYOUT_POLICY_KEY = 'order_swap_payout_policy_activation.ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN';
+const MARKET_LIST_SOURCE_KEY = 'market_list_source_activation.MARKET_LIST_SOURCE_ACTIVATION';
 
 /*********************************************************************
  *
@@ -56,6 +57,7 @@ module.exports = {
         let { getTokenInfo, giveTokenInfo, getTokenAllowList, getTokenBlockList, giveTokenAllowList, giveTokenBlockList,
               swapInfoAllowList, swapInfoBlockList } = await this.loadSwapLists(data, swap, swapInfo);
         let perTokenPolicy = gateRegistry.activeAt(PAYOUT_POLICY_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
+        let checkCounterpartySource = gateRegistry.activeAt(MARKET_LIST_SOURCE_KEY, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
 
         // Loop through matches and determine if we have a valid match
         let matchInfo = false;
@@ -101,7 +103,11 @@ module.exports = {
                (swapInfoAllowList && swapInfoAllowList.length  && !swapInfoAllowList.includes(match['GET_ADDRESS']))     ||
                (swapInfoBlockList && swapInfoBlockList.length  &&  swapInfoBlockList.includes(match['GET_ADDRESS']))     ||
                (matchInfoAllowList && matchInfoAllowList.length && !matchInfoAllowList.includes(swapInfo['GET_ADDRESS'])) ||
-               (matchInfoBlockList && matchInfoBlockList.length &&  matchInfoBlockList.includes(swapInfo['GET_ADDRESS']))){
+               (matchInfoBlockList && matchInfoBlockList.length &&  matchInfoBlockList.includes(swapInfo['GET_ADDRESS'])) ||
+               (checkCounterpartySource && swapInfoAllowList && swapInfoAllowList.length && !swapInfoAllowList.includes(match['SOURCE'])) ||
+               (checkCounterpartySource && swapInfoBlockList && swapInfoBlockList.length &&  swapInfoBlockList.includes(match['SOURCE'])) ||
+               (checkCounterpartySource && matchInfoAllowList && matchInfoAllowList.length && !matchInfoAllowList.includes(swapInfo['SOURCE'])) ||
+               (checkCounterpartySource && matchInfoBlockList && matchInfoBlockList.length &&  matchInfoBlockList.includes(swapInfo['SOURCE']))){
                 valid = false;
             }
 

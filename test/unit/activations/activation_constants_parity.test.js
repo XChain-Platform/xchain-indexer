@@ -158,6 +158,13 @@ const GATES = [
     // and list_items is a hashed DERIVED table, so a one-sided edit forks the chain at the
     // boundary in the most ordinary traffic there is.
     ['list_owner_activation',              'LIST_OWNER_ACTIVATION'],
+    ['list_share_producer_activation',     'LIST_SHARE_PRODUCER_ACTIVATION'],
+    ['list_share_consumer_activation',     'LIST_SHARE_CONSUMER_ACTIVATION'],
+    ['list_share_activation',              'LIST_SHARE_ACTIVATION'],
+    ['list_union_activation',              'LIST_UNION_ACTIVATION'],
+    ['list_transfer_activation',           'LIST_TRANSFER_ACTIVATION'],
+    ['list_address_ref_activation',        'LIST_ADDRESS_REF_ACTIVATION'],
+    ['list_tick_coin_activation',          'LIST_TICK_COIN_ACTIVATION'],
     // Not activation MAPS but the consensus constants the bridge and policy passes read: the
     // per-block caps decide WHICH rows land in WHICH block (an action-index change, so a hash
     // change), and XPOLICY_MAX_MEMBERS decides which opt-in is refused. A one-sided edit to any
@@ -165,6 +172,9 @@ const GATES = [
     ['protocol/constants.js',              'XBRIDGE_MAX_PER_BLOCK'],
     ['protocol/constants.js',              'XPOLICY_MAX_PER_BLOCK'],
     ['protocol/constants.js',              'XPOLICY_MAX_MEMBERS'],
+    // The shared-list and union caps decide whether the same LIST action is admitted.
+    ['protocol/constants.js',              'LIST_SHARE_MAX_MEMBERS'],
+    ['protocol/constants.js',              'LIST_UNION_MAX_MEMBERS'],
     // The tick-namespace flag day. It re-verdicts nothing below itself, but at
     // the boundary it decides whether an ISSUE of a short or listed name is 'invalid: TICK
     // (length)' / 'invalid: TICK (reserved)' or a live token row, so a one-sided height edit
@@ -206,6 +216,8 @@ const GATES = [
     // certify completeness at different heights for the identical mirror.
     ['anchor_reward_activation.js',        'ANCHOR_ATTEST_ARRIVAL_MARGIN_S'],
     ['anchor_reward_activation.js',        'ANCHOR_ATTEST_BARRIER_ACTIVATION'],
+    ['oracle_price_age_hourly_activation',  'ORACLE_PRICE_AGE_HOURLY_ACTIVATION'],
+    ['oracle_hourly_window_activation',     'ORACLE_HOURLY_WINDOW_FIRST_ROUND'],
 ];
 
 // The canonical map, loaded by each block's before-all hook.
@@ -240,7 +252,7 @@ describe('activation-gate constant parity to canonical constants.js @regression'
     // one resolves its constant by string, so a renamed module or export would otherwise
     // surface only as a green run. This case runs either way and fails on both.
     it('resolves every gated constant from its local module, whatever the checkout state', function () {
-        assert.ok(GATES.length >= 47, 'the gate list has shrunk; a dropped entry is an unpinned flag day');
+        assert.ok(GATES.length >= 49, 'the gate list has shrunk; a dropped entry is an unpinned flag day');
         for (const [file, exportName] of GATES) {
             const local = localExport(file, exportName);
             assert.ok(local !== undefined,

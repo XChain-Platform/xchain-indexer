@@ -34,6 +34,7 @@ const { SETTLE_REASON, POLICY_LEG_ORDINAL, POLICY_TX_PREFIX,
 const gateRegistry = require('../gate_registry');
 const { recordSettlement } = require('./settlements.js');
 const { planListLeg } = require('./policy_list_plan.js');
+const { bindPolicyRef, refNeedsPointer } = require('./policy_ref_bind.js');
 
 /**
  * The injectors for one snapshot's legs, closed over the action indexes they mint.
@@ -129,24 +130,68 @@ async function legFailure(deps, ctx, f, actionIndexes, which){
     return { applied: false, reason: SETTLE_REASON.POLICY_LEG, terminal: true, actionIndexes: actionIndexes };
 }
 
+function refParts(ref){
+    const colon = ref.indexOf(':');
+    return { chain: ref.slice(0, colon), index: ref.slice(colon + 1) };
+}
+
+async function resolvePolicyRefs(ctx, member){
+    const bind = async (ref) => ref ? await bindPolicyRef(ctx.indexerDb, {
+        ref: refParts(ref), coin: ctx.coin, blockIndex: ctx.blockIndex
+    }) : null;
+    const [allow, block] = await Promise.all([bind(member.allowRef), bind(member.blockRef)]);
+    if((allow && allow.pending) || (block && block.pending)) return { pending: true };
+    return { allow: allow && allow.index, block: block && block.index };
+}
+
+async function ownedListIndex(ctx, target, index){
+    if(index === null || index === undefined || index === '') return index;
+    if(typeof ctx.indexerDb.getListShareMirrorByIndex === 'function' &&
+       await ctx.indexerDb.getListShareMirrorByIndex(index)) return null;
+    if(typeof ctx.indexerDb.getListSource !== 'function') return index;
+    const owner = await ctx.indexerDb.getListSource(index);
+    return String(owner) === String(target.owner) ? index : null;
+}
+
+async function fullCopyIndex(ctx, target, index){
+    const active = gateRegistry.activeAt('list_share_consumer_activation.LIST_SHARE_CONSUMER_ACTIVATION',
+                                         ctx.network, ctx.coin, ctx.blockIndex, null);
+    return active ? await ownedListIndex(ctx, target, index) : index;
+}
+
+async function fullCopyMemberIndex(ctx, target, index, hasField, list, ref){
+    if(ref || !hasField || list === null) return index;
+    return await fullCopyIndex(ctx, target, index);
+}
+
 /**
  * Inject the membership, pointer and sleep legs in their pinned ordinal order.
  *
- * @returns {Promise<{failed: string}|null>} the leg name that refused, or null when every
- *          leg that had something to do applied
+ * @returns {Promise<{failed: string}|{pending: boolean}|null>} the leg name that refused,
+ *          pending when a ref cannot bind, or null when every leg applied
  */
 async function injectPolicyLegs(row, ctx, f, target, member, actionIndexes){
+    const refs = await resolvePolicyRefs(ctx, member);
+    if(refs.pending) return { pending: true };
     const { inject, applyList } = legInjectors(row, ctx, f, target, actionIndexes);
     const detachActive = gateRegistry.activeAt('bridge_policy_detach_activation.BRIDGE_POLICY_DETACH',
                                                 ctx.network, ctx.coin, ctx.blockIndex, null);
     const hasAllowField = Object.prototype.hasOwnProperty.call(row, 'allow_list');
     const hasBlockField = Object.prototype.hasOwnProperty.call(row, 'block_list');
 
-    const allowRes = await applyList(member.allow, hasAllowField, detachActive, target.info['ALLOW_LIST'],
-                                     POLICY_LEG_ORDINAL.ALLOW_CREATE_OR_REMOVE, POLICY_LEG_ORDINAL.ALLOW_ADD);
+    const allowIndex = await fullCopyMemberIndex(ctx, target, target.info['ALLOW_LIST'],
+                                                 hasAllowField, member.allow, member.allowRef);
+    const blockIndex = await fullCopyMemberIndex(ctx, target, target.info['BLOCK_LIST'],
+                                                 hasBlockField, member.block, member.blockRef);
+    const allowRes = member.allowRef ?
+        { created: refNeedsPointer(allowIndex, refs.allow) ? refs.allow : null } :
+        await applyList(member.allow, hasAllowField, detachActive, allowIndex,
+                        POLICY_LEG_ORDINAL.ALLOW_CREATE_OR_REMOVE, POLICY_LEG_ORDINAL.ALLOW_ADD);
     if(allowRes.created === false) return { failed: 'allow list' };
-    const blockRes = await applyList(member.block, hasBlockField, detachActive, target.info['BLOCK_LIST'],
-                                     POLICY_LEG_ORDINAL.BLOCK_CREATE_OR_REMOVE, POLICY_LEG_ORDINAL.BLOCK_ADD);
+    const blockRes = member.blockRef ?
+        { created: refNeedsPointer(blockIndex, refs.block) ? refs.block : null } :
+        await applyList(member.block, hasBlockField, detachActive, blockIndex,
+                        POLICY_LEG_ORDINAL.BLOCK_CREATE_OR_REMOVE, POLICY_LEG_ORDINAL.BLOCK_ADD);
     if(blockRes.created === false) return { failed: 'block list' };
 
     // Point the copy only when a list was created or detached. Edits retain their pointer;

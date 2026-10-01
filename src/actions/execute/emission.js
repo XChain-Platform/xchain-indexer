@@ -17,7 +17,7 @@
  * Routes an action a contract emitted through the same handler a wallet-
  * broadcast one would reach, after re-validating host-side everything the VM
  * was supposed to have enforced. Called with the EXECUTE handler as `this`
- * (see ./index.js), which is also what keeps this.truncateEmissionAmounts,
+ * (see ./index.js), which is also what keeps this.roundEmissionAmounts,
  * this.buildActionParams and this.getActionHandler the handler's own methods.
  *
  ********************************************************************/
@@ -32,11 +32,12 @@ const { resolveRootDiscriminator } = require('../../consensus/batch_root_discrim
 
 // Amount-bearing fields of every emittable action, mapping each amount param to the param
 // that names the tick it is denominated in. processEmission normalizes each to
-// that tick's decimals before dispatch, so a contract that computes an over-precise amount
-// (e.g. an AMM's 64-digit bignum payout) emits a tick-precise amount that passes
-// isValidAmountFormat and matches what the ledger stores. ISSUE declares the new tick's
-// decimals inline (`declared`) because the tick is not in the issues table yet. Emittable
-// actions with no tick-denominated amount are absent (CALLBACK/XCALL/EXECUTE/BROADCAST/
+// that tick's decimals before dispatch, rounding HALF-UP (bcadd), never truncating, so a
+// contract that computes an over-precise amount (e.g. an AMM's 64-digit bignum payout) emits
+// a tick-precise amount that passes isValidAmountFormat. A contract that must never pay out
+// more than it computed floors to the tick's decimals itself before emitting. ISSUE declares
+// the new tick's decimals inline (`declared`) because the tick is not in the issues table
+// yet. Emittable actions with no tick-denominated amount are absent (CALLBACK/XCALL/EXECUTE/BROADCAST/
 // COINPAY/FILE/LINK/LIST/MESSAGE/SWEEP); COINPAY's amount is a native-coin value, not a tick.
 // SLASH is handled inline, not here. KEEP IN SYNC with buildActionParams: the emission-map
 // coverage test (test/unit/contracts/execute_emission_truncation.test.js) fails if a new amount-bearing
@@ -165,10 +166,9 @@ async function prepareEmissionParams(action, params, executionData){
     // Normalize emitted amounts to their tick's decimals BEFORE building params and
     // dispatching. Contracts compute with 64-digit bignum precision, so an
     // emitted amount can carry more fractional digits than the tick; left unnormalized it
-    // would be rejected by isValidAmountFormat (reverting e.g. every AMM swap) or stored
-    // unrounded while the ledger rounds it (supply desync). This applies the SAME
-    // normalization the ledger uses, so the two agree.
-    await this.truncateEmissionAmounts(action, params);
+    // would be rejected by isValidAmountFormat (reverting e.g. every AMM swap). The
+    // rounding is half-up (see roundEmissionAmounts), not truncation.
+    await this.roundEmissionAmounts(action, params);
 
     // Build positional params array for the handler
     let actionParams = this.buildActionParams(action, params);
@@ -292,17 +292,17 @@ async function processEmission(emission, executionData, position, limits){
     await dispatchEmission.call(this, emission, action, prepared.actionParams, emissionData);
 }
 
-// Normalize every amount-bearing field of an emitted action to its tick's decimals,
-// using the SAME normalization the ledger applies at write time
-// (createLedgerChangeRecord -> util.bcadd(amount, 0, decimals)). This makes a contract's
-// over-precise computed amount tick-precise before it reaches the action handler, so it
-// passes isValidAmountFormat and the stored action amount matches the ledger row. Mutates
+// Round every amount-bearing field of an emitted action HALF-UP to its tick's decimals
+// (util.bcadd(amount, 0, decimals); away from zero, so 1.999999995 at 8 dp becomes 2).
+// This makes a contract's over-precise computed amount tick-precise before it reaches the
+// action handler, so it passes isValidAmountFormat; the debit and the credit share the one
+// rounded value, and the ledger row stores it unchanged (it is already on the grid). Mutates
 // and returns `params`. Fields that are null/empty are left as-is; a tick unknown locally
 // (e.g. an ORDER/SWAP get-leg on a foreign chain) is left untouched because that leg is
 // validated on the far chain. ISSUE uses its inline declared decimals (the tick is not in
 // the issues table yet). Driven by EMISSION_AMOUNT_FIELDS; keep that map in sync with
 // buildActionParams (enforced by the emission-map coverage test).
-async function truncateEmissionAmounts(action, params){
+async function roundEmissionAmounts(action, params){
     let fields = EMISSION_AMOUNT_FIELDS[action];
     if(!fields || !params) return params;
     for(let f of fields){
@@ -321,11 +321,11 @@ async function truncateEmissionAmounts(action, params){
             if(tickId === null) continue;
             decimals = await this.indexerDb.getTokenDecimalPrecision(tickId);
         }
-        // bcstr, not String(): a truncated dust amount below 1e-7 would render
+        // bcstr, not String(): a rounded dust amount below 1e-7 would render
         // exponentially ("3e-8") and fail the handler's format validation.
         params[f.amount] = this.util.bcstr(this.util.bcadd(value, 0, decimals));
     }
     return params;
 }
 
-module.exports = { EMISSION_AMOUNT_FIELDS, processEmission, truncateEmissionAmounts };
+module.exports = { EMISSION_AMOUNT_FIELDS, processEmission, roundEmissionAmounts };

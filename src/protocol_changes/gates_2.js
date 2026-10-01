@@ -76,19 +76,15 @@ addGate('ledger_amount_precision_activation.LEDGER_AMOUNT_PRECISION_ACTIVATION',
 // 'invalid: LIST_ACTION_INDEX (not owner)'. Keyed on the chain's OWN block_index: the
 // action being judged is the edit mined here.
 //
-// Mainnet and testnet park at the house sentinel 9999999999 and the operator sizes the
-// dated instant at the v0.18.0 cut, because arming a re-verdicting rule at a height the
-// fleet has already passed would have a replaying node apply it where a long-running
-// node never did, and the two diverge at the first hash comparison. Regtest is 0 so the
-// e2e rail exercises the armed rule from genesis.
-//
-// A network map rather than the per-chain 'COIN:network' shape
-// list_edit_resolution_activation.js uses: that gate had to be pinned against three live
-// mainnet tips because it was arming into indexed history, while this one arms nowhere
-// off regtest until the operator names an instant, and a per-chain map would be three
-// sentinels to keep equal instead of one.
+// Mainnet and every testnet chain park at the house sentinel 9999999999 until the
+// operator assigns each chain its own safe activation height. The shared testnet key
+// remains as the fallback for callers without a coin. Regtest is 0 so the e2e rail
+// exercises the armed rule from genesis.
 addGate('list_owner_activation.LIST_OWNER_ACTIVATION', 'height', {
     mainnet: 9999999999,
+    'BTC:testnet': 9999999999,
+    'LTC:testnet': 9999999999,
+    'DOGE:testnet': 9999999999,
     testnet: 9999999999,
     regtest: 0,
 });

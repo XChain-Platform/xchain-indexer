@@ -14,10 +14,10 @@
  *
  * A hub NEVER resolves a validator set at the height it was handed. Every
  * CapabilitySnapshot lookup subtracts CANONICAL_REORG_BUFFER first
- * (xchain-hub/src/CapabilitySnapshot.js `_buriedBlockIndex`), because stake state
- * at the tip is not reorg-safe: a shallow BTC reorg can rewrite the stake set of
- * the last few blocks, so a set locked AT the tip can serve a pre-reorg validator
- * set for up to the snapshot cache TTL.
+ * (xchain-hub/src/validators/capability_snapshot.js `buriedBlockIndex`), because
+ * stake state at the tip is not reorg-safe: a shallow BTC reorg can rewrite the
+ * stake set of the last few blocks, so a set locked AT the tip can serve a
+ * pre-reorg validator set for up to the snapshot cache TTL.
  *
  * The wire, however, carries the RAW height. The checkpoint a hub signs declares
  * `snapshot_block: <raw>` (StateCheckpointEngine), the mirrored
@@ -81,7 +81,7 @@ const { get, copy, activeAt } = require('./gate_registry');
 // snapshots at. 6 = the BTC confirmation depth the platform already treats as
 // buried (XCHAIN_CONFIRMATIONS_BTC). CONSENSUS-CRITICAL: the hub subtracts this
 // before every snapshot lookup and refuses to boot on mainnet/testnet when a local
-// override diverges (CapabilitySnapshot._resolveReorgBuffer), so a verifier that
+// override diverges (CapabilitySnapshot.resolveReorgBuffer), so a verifier that
 // buries by a different depth resolves a different set than the signer.
 const CANONICAL_REORG_BUFFER = copy('snapshot_reorg_buffer.CANONICAL_REORG_BUFFER');
 

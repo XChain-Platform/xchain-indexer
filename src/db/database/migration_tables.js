@@ -213,6 +213,16 @@ const MIGRATION_CHECKSUM_REBASELINES = {
         from: '069f0e73f1cb6179d0dcab361832204c96aa1cb4072454ddcd7e6a8acd2d31ab', // a0dd6d08, pre-tag
         to:   '37ff284b7f11f248e9f52979f70e5fe8f13c9cad7a7e719b4633866e8c81dc1a',
     },
+    // a06f8873 (2026-09-17) rewrote two comment lines of this already-applied file (the
+    // header cited an internal spec path). Comment lines only; the executable SQL is
+    // byte-identical, verified by diff against the first revision, 8c50c9d4. That revision
+    // lived on develop for about 15.5 h and no release tag carried it, but a regtest DB
+    // that migrated inside the window recorded its hash and logged `content CHANGED` on
+    // every start. One `from` covers it; where no DB applied it, the entry is inert.
+    '2026-09-16-admission-height.sql': {
+        from: 'a2ebe4379b888e86c79a40f8e9648fd37516bd616f30844f432e104258bc1dba', // 8c50c9d4, pre-comment-edit
+        to:   'd9c0dd3e0e35a698684d5740fd0e2937ea375b034a5977c50405befe2a579dc7',
+    },
 };
 
 // Applicability preconditions the runner evaluates against the LIVE schema before it
@@ -363,6 +373,12 @@ const MIGRATION_PRECONDITIONS = {
                    'no table left to create.';
         }
     },
+    '2026-09-30-list-share-tables.sql': {
+        sql: "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = ? AND table_name IN ('list_snapshots', 'list_share_mirrors')",
+        skipWhen: (rows) => { const live = new Set((Array.isArray(rows) ? rows : []).map(r => String((r && r.name) || '').toLowerCase()));
+            return ['list_snapshots', 'list_share_mirrors'].every(t => live.has(t))
+                ? 'list_snapshots and list_share_mirrors are both present, so this migration has no table left to create.' : null;
+        } },
     // Widens oracle_prices.tick to 250. mode=manual, so a database created from the current
     // src/sql/oracle_prices.sql (already 250) would sit PENDING forever; baseline only while the
     // live column is already 250 or wider. An absent or unreadable length never baselines.

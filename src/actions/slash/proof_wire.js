@@ -55,6 +55,9 @@ const ENGINE_CAPABILITY = {
     // same round can never collide on an equivocation key.
     [eq.ENGINE_TAGS.BRIDGE]:     'cross_chain',
     [eq.ENGINE_TAGS.POLICY]:     'cross_chain',
+    // A forged shared-list version rewrites the block list of every bound token on every
+    // chain, so it directs value and burns the cross_chain bond.
+    [eq.ENGINE_TAGS.LIST_SHARE]: 'cross_chain',
     [eq.ENGINE_TAGS.CONFIG]:     CONFIG_CAPABILITY,
 };
 

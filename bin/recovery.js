@@ -86,8 +86,11 @@ const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
 // ARCHIVE_HEAD_VERSIONS cannot reach one path and silently skip the other.
 const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../src/consensus/state_hash.js');
 const { foldArchiveHeadFloor } = require('../src/db/anchors/archive_head_pick.js');
+const { canonicalBatchCrc } = require('../src/actions/anchor/v3_canonical.js');
 const bridgePolicy = require('./recovery/bridge_policy.js');
+const listShareRecovery = require('./recovery/list_share.js');
 const checkpointPrice = require('./recovery/checkpoint_price.js');
+const listShare = require('../src/consensus/list_share_settle.js');
 const lifecycle = require('../src/hub/table_lifecycle.js');
 const CHECKPOINT_COMMITMENT_KEY = 'checkpoint_commitment_activation.CHECKPOINT_COMMITMENT_ACTIVATION';
 
@@ -98,6 +101,7 @@ const RECOVERY_TABLE_FIELDS = Object.freeze({
     cross_chain_calls:    { archive: 'calls',                report: 'calls' },
     bridge_transfers:     { archive: 'bridge_transfers',     report: 'bridges' },
     policy_snapshots:     { archive: 'policy_snapshots',     report: 'policies' },
+    list_snapshots:       { archive: 'list_snapshots',       report: 'lists' },
     state_checkpoints:    { archive: 'state_checkpoints',    report: 'checkpoints' },
     price_snapshots:      { archive: 'price_snapshots',      report: 'prices' },
 });
@@ -156,7 +160,7 @@ class AnchorRecovery {
 
     async run(){
         let report = { batches: 0, verified: 0, failed: [], matches: 0, snapshots: 0,
-                       calls: 0, rewards: 0, bridges: 0, policies: 0,
+                       calls: 0, rewards: 0, bridges: 0, policies: 0, lists: 0,
                        checkpoints: 0, prices: 0, tombstones: 0 };
 
         this.log('recovery: archive-backed hub mirrors: ' + ANCHOR_RECOVERY_TABLES.join(', '));
@@ -218,6 +222,7 @@ class AnchorRecovery {
                     report.rewards   += (archive.rewards || []).length;
                     report.bridges  += (archive.bridge_transfers || []).length;
                     report.policies += (archive.policy_snapshots || []).length;
+                    report.lists    += (archive.list_snapshots || []).length;
                     report.checkpoints += (archive.state_checkpoints || []).length;
                     report.prices      += (archive.price_snapshots || []).length;
                     report.tombstones  += (archive.price_tombstones || []).length;
@@ -371,6 +376,14 @@ class AnchorRecovery {
             network: v1.network,
             setFor,
             parseSigs: raw => this.parseSigs(raw),
+            quorumVerified: (canonical, sigs, set, weighted) =>
+                this.quorumVerified(canonical, sigs, set, weighted)
+        });
+        listShareRecovery.verifyArchive(archive, {
+            network: v1.network,
+            setFor,
+            parseSigs: raw => this.parseSigs(raw),
+            listShareCanonical: row => listShare.listShareCanonical(row),
             quorumVerified: (canonical, sigs, set, weighted) =>
                 this.quorumVerified(canonical, sigs, set, weighted)
         });
@@ -898,6 +911,7 @@ class AnchorRecovery {
         // Counters stay local until both commits land, so a rolled-back batch never
         // inflates the run report with rows that are not in the DB.
         let delta  = { matches: 0, snapshots: 0, calls: 0, rewards: 0, bridges: 0, policies: 0,
+                       lists: 0,
                        checkpoints: 0, prices: 0, tombstones: 0 };
         // Both begins sit INSIDE the try: if the second one fails, the first transaction is
         // still open and holding Database's transaction mutex, and the next batch's
@@ -920,6 +934,7 @@ class AnchorRecovery {
         report.rewards   += delta.rewards;
         report.bridges   += delta.bridges;
         report.policies  += delta.policies;
+        report.lists     += delta.lists;
         report.checkpoints += delta.checkpoints;
         report.prices      += delta.prices;
         report.tombstones  += delta.tombstones;
@@ -939,6 +954,7 @@ class AnchorRecovery {
             report.snapshots++;
         }
         await bridgePolicy.writeArchive(this.db, archive, report);
+        await listShareRecovery.writeArchive(this.db, archive, report);
         await checkpointPrice.writeArchive(this.db, archive, report);
         for(let m of archive.matches){
             let existing = await this.db.doQuery(
@@ -1190,7 +1206,7 @@ class AnchorRecovery {
 
     wrapperCanonical(v1){
         let raw = this.rawCheckpointCanonical(v1) + '|' +
-                [String(v1.match_batch_seq), String(v1.match_count), v1.batch_crc32,
+                [String(v1.match_batch_seq), String(v1.match_count), canonicalBatchCrc(v1.batch_crc32),
                  String(v1.total_chunks)].join('|');
         if(eq.isEquivHeaderActive(v1.snapshot_block, v1.network))
             return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT,

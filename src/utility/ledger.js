@@ -22,6 +22,23 @@
 
 'use strict';
 
+function hasOwn(object, key){
+    return Object.prototype.hasOwnProperty.call(object, key);
+}
+
+function setOwn(object, key, value){
+    if(hasOwn(object, key)){
+        object[key] = value;
+        return;
+    }
+    Object.defineProperty(object, key, {
+        value: value,
+        writable: true,
+        enumerable: true,
+        configurable: true
+    });
+}
+
 // Installed onto Utility.prototype by ../utility.js, non-enumerable; each method runs with
 // `this` bound to the Utility instance, exactly as the class method it was.
 module.exports = {
@@ -75,7 +92,7 @@ module.exports = {
     // Handle adding a ticker to the addreses
     addAddressTicker(address, tick){
         let type = typeof tick;
-        let list = (!this.isNull(this.addresses[address])) ? this.addresses[address] : [];
+        let list = (hasOwn(this.addresses, address) && !this.isNull(this.addresses[address])) ? this.addresses[address] : [];
         // If tick is not null and type is an object, loop through tickers
         if(type=="object" && !this.isNull(tick)){
             for(let t of tick){
@@ -95,12 +112,12 @@ module.exports = {
                 this.tickers.push(tick);
         }
         // Update address list with updated list of tickers
-        this.addresses[address] = list;
+        setOwn(this.addresses, address, list);
     },
 
     // Validate if a balances array holds a certain amount of a tick token
     hasBalance(balances, tick_id, amount){
-        let balance = (!this.isNull(balances[tick_id])) ? balances[tick_id] : 0;
+        let balance = (hasOwn(balances, tick_id) && !this.isNull(balances[tick_id])) ? balances[tick_id] : 0;
         if(this.bcgte(balance, amount))
             return true;
         return false;
@@ -108,20 +125,21 @@ module.exports = {
 
     // Handle deducting TICK AMOUNT from balances and return updated balances array
     debitBalances(balances, tick_id, amount){
-        let balance = (!this.isNull(balances[tick_id])) ? balances[tick_id] : 0;
-        balances[tick_id] = this.bcsub(balance, amount, 18);
+        let balance = (hasOwn(balances, tick_id) && !this.isNull(balances[tick_id])) ? balances[tick_id] : 0;
+        setOwn(balances, tick_id, this.bcsub(balance, amount, 18));
         return balances;
     },
 
     // Consolidate ledger records (credits / debits / escrows)
     consolidateLedgerRecords(records){
-        let arr  = [],
+        let arr  = Object.create(null),
             data = [];
         // Consolidate amount using TICK\0ADDRESS as key (\0 cannot appear in tick names or addresses)
         for(let idx in records){
             let [tick, amount, address] = records[idx];
             let key = tick + '\0' + address;
-            arr[key] = (arr[key]) ? this.bcadd(arr[key], amount, 18) : amount;
+            let previous = hasOwn(arr, key) ? arr[key] : undefined;
+            setOwn(arr, key, (previous) ? this.bcadd(previous, amount, 18) : amount);
         }
         // Build out array of consolidated records
         for(let key in arr){
@@ -251,7 +269,7 @@ module.exports = {
                 let tickId = await db.getTickerId(tick);
                 if(this.isNull(tickId)) continue;
                 let eff = await db.getEffectiveTokenControllerForGuard(tickId, 'transfer', data['BLOCK_INDEX'], data['ACTION_INDEX']);
-                if(eff && !guarded[String(tick)]){
+                if(eff && !(hasOwn(guarded, String(tick)) && guarded[String(tick)])){
                     let source = (address === data['SOURCE']) ? 'SOURCE' : address;
                     throw new Error('controller completeness: unguarded transfer-controlled debit of ' + tick + ' from ' + source + ' (action ' + data['ACTION_INDEX'] + ')');
                 }
