@@ -17,6 +17,7 @@
 const { listMembershipHash } = require('../../consensus/list_share_hash.js');
 const { getSharedLists, getListOwner } = require('../../db/lists/sharing.js');
 const { getLogger } = require('../../observability/index.js');
+const { qualifyTickMembers } = require('./list_share_tick_members.js');
 
 const CANONICAL_NON_NEGATIVE_INTEGER = /^(0|[1-9][0-9]*)$/;
 
@@ -51,6 +52,9 @@ function buildListShareRpc({ indexer }){
                 let members = await db.getListAtBlock(listIndex, block);
                 if(members === null)
                     return { error: 'list reference rejected' };
+                if(type === 1)
+                    members = await qualifyTickMembers(db, members,
+                        indexer.config['COIN'], indexer.config['COINS']);
                 return { type, members, hash: listMembershipHash(members) };
             } catch (err) {
                 getLogger().error('getlistat error:', err);

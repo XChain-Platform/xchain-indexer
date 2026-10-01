@@ -77,8 +77,8 @@ describe('JSON-RPC list share reads @regression @tier1', function(){
         });
         assert.deepStrictEqual(await rpc.getlistat({ list_index: 2, block: 8 }), {
             type: 1,
-            members: ['DOGE', 'PEPE'],
-            hash: sha256('MEMBERS|2|DOGE|PEPE')
+            members: ['BTC:DOGE', 'BTC:PEPE'],
+            hash: sha256('MEMBERS|2|BTC:DOGE|BTC:PEPE')
         });
     });
 
