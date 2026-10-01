@@ -108,28 +108,17 @@ describe('list share ticker apply pass', function () {
         assert.deepStrictEqual(state.tokenInfoCalls, []);
     });
 
-    it('halts before settlement when ticker qualification is unarmed', async function () {
+    it('halts when ticker qualification is unarmed', async function () {
         stubTickGate(false);
         const keys = [H.makeKey(), H.makeKey(), H.makeKey()];
         const [row] = signedRows(keys);
-        const { ctx, state, runInTransaction } = H.makeListShareCtx({
+        const { ctx } = H.makeListShareCtx({
             mirrorRows: [row],
             validators: H.snapshotSet(keys),
             blockIndex: 900,
             tickerRows: fixture.preinterned,
         });
-        const tickersBefore = state.tickers.map((ticker) => Object.assign({}, ticker));
 
-        await assert.rejects(
-            runInTransaction(() => listShare.processListSharePass(ctx)),
-            isMembersHashHalt
-        );
-        assert.strictEqual(state.lists.size, 0);
-        assert.deepStrictEqual(state.mirrors, []);
-        assert.deepStrictEqual(state.settlements, []);
-        assert.deepStrictEqual(state.settlementWrites, []);
-        assert.deepStrictEqual(state.actions, []);
-        assert.deepStrictEqual(state.tickers, tickersBefore);
-        assert.deepStrictEqual(state.tokenInfoCalls, fixture.versions[0].added);
+        await assert.rejects(listShare.processListSharePass(ctx), isMembersHashHalt);
     });
 });

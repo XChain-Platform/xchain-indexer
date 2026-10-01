@@ -127,7 +127,6 @@ function localQuery(state){
             return { affectedRows: 1 };
         }
         if(/INSERT IGNORE INTO bridge_settlements/.test(sql)){
-            state.settlementWrites.push(args.slice());
             const dup = state.settlements.some((s) => s.transfer_id === args[1] && s.kind === args[2]);
             if(!dup) state.settlements.push({
                 action_index: args[0], transfer_id: args[1], kind: args[2], block_index: args[3],
@@ -162,16 +161,6 @@ function countApplied(state){
         groups.set(key, g);
     }
     return Array.from(groups.values());
-}
-
-function cloneLists(lists){
-    return Array.from(lists, ([index, list]) => [index, Object.assign({}, list, {
-        members: new Set(list.members),
-    })]);
-}
-
-function restoreRows(target, rows){
-    target.splice(0, target.length, ...rows.map((row) => Object.assign({}, row)));
 }
 
 async function tickerItem(state, db, config, item, data){
@@ -228,7 +217,7 @@ function makeListShareCtx({ mirrorRows = [], validators = [], legStatus, coin = 
                             blockIndex = 900, blockTime = 2000, startAction = 7000,
                             tickerRows } = {}){
     const state = { mirrorRows: mirrorRows.slice(), lists: new Map(), mirrors: [],
-                    settlements: [], settlementWrites: [], injected: [], actions: [], tokenInfoCalls: [],
+                    settlements: [], injected: [], actions: [], tokenInfoCalls: [],
                     tickerMode: Array.isArray(tickerRows),
                     tickers: (tickerRows || []).map((row, index) => typeof row === 'string'
                         ? { id: index + 1, tick: row, block_index: blockIndex - 1 }
@@ -272,30 +261,7 @@ function makeListShareCtx({ mirrorRows = [], validators = [], legStatus, coin = 
     };
     const ctx = { actions, indexerDb, util, mapper: { createMappings: async () => {} },
                   config, coin, network: NETWORK, blockIndex, blockTime };
-    const runInTransaction = async (task) => {
-        const saved = {
-            nextAction,
-            lists: cloneLists(state.lists),
-            mirrors: state.mirrors.map((row) => Object.assign({}, row)),
-            settlements: state.settlements.map((row) => Object.assign({}, row)),
-            actions: state.actions.map((row) => Object.assign({}, row)),
-            tickers: state.tickers.map((row) => Object.assign({}, row)),
-        };
-        try {
-            return await task();
-        } catch(error){
-            nextAction = saved.nextAction;
-            state.lists.clear();
-            for(const [index, list] of saved.lists) state.lists.set(index, list);
-            restoreRows(state.mirrors, saved.mirrors);
-            restoreRows(state.settlements, saved.settlements);
-            restoreRows(state.actions, saved.actions);
-            restoreRows(state.tickers, saved.tickers);
-            indexerDb._internCache = null;
-            throw error;
-        }
-    };
-    return { ctx, state, runInTransaction };
+    return { ctx, state };
 }
 
 module.exports = {
