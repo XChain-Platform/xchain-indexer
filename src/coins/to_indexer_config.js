@@ -43,6 +43,7 @@ function toIndexerConfig(tick, network){
     config['FEE_TOLERANCE_MIN']                = c.FEE_TOLERANCE_MIN;
     config['FEE_TOLERANCE_MAX']                = c.FEE_TOLERANCE_MAX;
     config['ORACLE_MAX_PRICE_AGE_SECONDS']     = c.ORACLE_MAX_PRICE_AGE_SECONDS;
+    config['ORACLE_MAX_PRICE_AGE_HOURLY_SECONDS'] = c.ORACLE_MAX_PRICE_AGE_HOURLY_SECONDS;
     config['VALIDATOR_QUERY_LIMIT']            = c.VALIDATOR_QUERY_LIMIT;
 
     config['STAKING']      = c.STAKING;
