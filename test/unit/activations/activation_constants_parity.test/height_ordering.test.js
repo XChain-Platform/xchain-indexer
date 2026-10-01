@@ -158,6 +158,29 @@ describe('activation-gate constant parity to canonical constants.js @regression'
             'LIST_UNION_ACTIVATION', canon.LIST_UNION_ACTIVATION,
             'LIST_SHARE_CONSUMER_ACTIVATION', canon.LIST_SHARE_CONSUMER_ACTIVATION);
     });
+
+    it('holds LIST_SHARE_CONSUMER_ACTIVATION >= LIST_TICK_COIN_ACTIVATION for every chain key', function () {
+        const synthetic = assertGateOrdering(
+            'LIST_SHARE_CONSUMER_ACTIVATION', { 'BTC:mainnet': 200 },
+            'LIST_TICK_COIN_ACTIVATION', { 'BTC:mainnet': 100 });
+        assert.deepStrictEqual(synthetic.compared, ['BTC:mainnet'],
+            'not vacuous: the synthetic armed chain key must be compared');
+        assert.throws(() => assertGateOrdering(
+            'LIST_SHARE_CONSUMER_ACTIVATION', { 'BTC:mainnet': 99 },
+            'LIST_TICK_COIN_ACTIVATION', { 'BTC:mainnet': 100 }),
+        /LIST_SHARE_CONSUMER_ACTIVATION for BTC:mainnet \(99\) is below LIST_TICK_COIN_ACTIVATION/);
+        assert.throws(() => assertGateOrdering(
+            'LIST_SHARE_CONSUMER_ACTIVATION', { 'BTC:mainnet': 100 },
+            'LIST_TICK_COIN_ACTIVATION', {}),
+        /LIST_SHARE_CONSUMER_ACTIVATION for BTC:mainnet \(100\) is armed but LIST_TICK_COIN_ACTIVATION is not/);
+
+        if (!canonExists) { this.skip(); return; }
+        const checked = assertGateOrdering(
+            'LIST_SHARE_CONSUMER_ACTIVATION', canon.LIST_SHARE_CONSUMER_ACTIVATION,
+            'LIST_TICK_COIN_ACTIVATION', canon.LIST_TICK_COIN_ACTIVATION);
+        assert.ok(checked.compared.length > 0,
+            'not vacuous: at least one canonical armed chain key must be compared');
+    });
 });
 
 describe('activation-gate constant parity to canonical constants.js @regression', function () {
