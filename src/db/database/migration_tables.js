@@ -373,6 +373,12 @@ const MIGRATION_PRECONDITIONS = {
                    'no table left to create.';
         }
     },
+    '2026-09-30-list-share-tables.sql': {
+        sql: "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = ? AND table_name IN ('list_snapshots', 'list_share_mirrors')",
+        skipWhen: (rows) => { const live = new Set((Array.isArray(rows) ? rows : []).map(r => String((r && r.name) || '').toLowerCase()));
+            return ['list_snapshots', 'list_share_mirrors'].every(t => live.has(t))
+                ? 'list_snapshots and list_share_mirrors are both present, so this migration has no table left to create.' : null;
+        } },
     // Widens oracle_prices.tick to 250. mode=manual, so a database created from the current
     // src/sql/oracle_prices.sql (already 250) would sit PENDING forever; baseline only while the
     // live column is already 250 or wider. An absent or unreadable length never baselines.
