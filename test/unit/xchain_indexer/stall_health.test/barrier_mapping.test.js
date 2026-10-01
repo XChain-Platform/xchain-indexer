@@ -109,6 +109,7 @@ const EXPECTED = [
     ['call_sync_barrier',               'callWatermarkGraceS',         'height-aware'],
     ['bridge_sync_barrier',             'bridgeWatermarkGraceS',       'height-aware'],
     ['policy_sync_barrier',             'policyWatermarkGraceS',       'height-aware'],
+    ['list_share_sync_barrier',         null,                          'null'],
     // Direct-hub-DB twin of call_sync_barrier. A null here (no watermark to key on)
     // is what makes such a barrier wedge forever: it leaves no time-keyed escape at
     // all. This one has one, resolved onto the indexer from the SAME frozen call
