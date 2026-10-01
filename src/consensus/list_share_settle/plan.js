@@ -45,6 +45,8 @@ function compareBig(a, b){
     return 0;
 }
 
+// Walks one list from its next unapplied seq. A later due seq makes a missing
+// or heightless next seq a halt; with nothing later due the list just waits.
 function walkList(entry, column, blockIndex){
     const applied = toInt(entry.applied, 'applied');
     const bySeq = new Map();
