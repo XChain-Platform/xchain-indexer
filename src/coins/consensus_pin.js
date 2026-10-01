@@ -89,16 +89,21 @@ module.exports = {
         // below it), so no pre-activation block hash moves; the pin moves because the
         // BUNDLE changed, which is exactly what the pin is for.
         // CONSENSUS_CONFIG_PIN.mainnet above stays null (Phase 6 arms that pin).
+        // REGENERATED 2026-09-30: GAS_SCHEDULE gains LIST_SHARE,
+        // LIST_SHARED_EDIT_BASE and LIST_SHARED_EDIT_PER_ITEM. The schedule is
+        // hashed whole, so every coin and network hash moves even though nothing
+        // charges these keys below LIST_SHARE_ACTIVATION. Every vendoring service
+        // must ship the new pins in one wave. Mainnet remains null.
         testnet: {
-            BTC:  'fcff7c1f46a8f7a75ddb7e1e4fb30f9e0c72d72f307a75a9d9357ffad29452c0',
-            LTC:  '57373962a5c562f8ceb98fceb482c586741ecf8dd6335965c76f9b8e61a4eb87',
-            DOGE: '5276c0a0fb161bbfd4e8b0acaabf38751dded4370ecce86455c57eb5de0e9bb2',
+            BTC:  '5d076adf982dc81c21c6e6855325265e0320f58f0dd61b938adaf42544895535',
+            LTC:  '2083cb4b90fa59172bc46a65eecff29a4f803e8d913a1c8d269ec7f17e4d4062',
+            DOGE: '3eebc68bca5024a757fae7170a98b9e2b8307ca0f2f037c4c6025dfd94e45128',
         },
 
         regtest: {
-            BTC:  '63ee757834f6f815045321090fd89b446e784f442e3e7abf84b8c0fb3b479324',
-            LTC:  'ab30c1d1fd444ca3dca1a9ec855bd587422e87d5e5e5e6b6f9ddadd1d2fb587d',
-            DOGE: '34f8dafeff36f7c8ca3b327c3c915251e78e64448742860620522a92a69368a0',
+            BTC:  '603b402538620934ad2b81fd3013b5c1651c32cf62cc56bea8dc53ddc247ec9a',
+            LTC:  '68a3751176e9a2b3857d5ea34cacfc1f0b2d88c17d46b8ccaf477c2a3baa7ffc',
+            DOGE: 'ab3c2ce46d3ac6eff3f12d6dca037b05dd27e456369124f48928598fcdb72173',
         },
     },
 };

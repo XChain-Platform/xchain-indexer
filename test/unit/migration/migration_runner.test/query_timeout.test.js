@@ -25,13 +25,19 @@ function shippedMigrations(){
     return fs.readdirSync(MIG_DIR).filter(file => file.endsWith('.sql')).sort();
 }
 
+const PENDING_MIGRATION = '2026-09-27-datetime-state-tree-roots.sql';
+
 function ledgerMissingLast(){
     const files = shippedMigrations();
     const ledger = new Map(files.map(file => [
         file,
         crypto.createHash('sha256').update(fs.readFileSync(path.join(MIG_DIR, file), 'utf8')).digest('hex'),
     ]));
-    ledger.delete(files[files.length - 1]);
+    // The pending migration these cases drive is named, not taken as the newest file:
+    // its SET time_zone opener and ALTER TABLE state_tree_roots body are what the
+    // assertions locate, so a later migration landing must not change which one runs.
+    assert.ok(ledger.has(PENDING_MIGRATION), PENDING_MIGRATION + ' is not a shipped migration');
+    ledger.delete(PENDING_MIGRATION);
     return ledger;
 }
 
