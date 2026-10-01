@@ -70,6 +70,10 @@ const XPOLICY_MAX_PER_BLOCK = copy('protocol/constants.XPOLICY_MAX_PER_BLOCK');
 
 const XPOLICY_MAX_MEMBERS = copy('protocol/constants.XPOLICY_MAX_MEMBERS');
 
+const LIST_SHARE_MAX_MEMBERS = copy('protocol/constants.LIST_SHARE_MAX_MEMBERS');
+
+const LIST_UNION_MAX_MEMBERS = copy('protocol/constants.LIST_UNION_MAX_MEMBERS');
+
 const THRESHOLD_SCALE = copy('protocol/constants.THRESHOLD_SCALE');
 
 // ── Chunked DEPLOY (DEPLOY v4 carriers + DEPLOY v2/v3 assemble) ─────────────
@@ -142,6 +146,8 @@ module.exports = {
     XBRIDGE_MAX_PER_BLOCK,
     XPOLICY_MAX_PER_BLOCK,
     XPOLICY_MAX_MEMBERS,
+    LIST_SHARE_MAX_MEMBERS,
+    LIST_UNION_MAX_MEMBERS,
     THRESHOLD_SCALE,
     STAKE_WEIGHTED_QUORUM_ACTIVATION,
     EQUIV_HEADER_ACTIVATION,
