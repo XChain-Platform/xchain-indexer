@@ -26,8 +26,18 @@
  ********************************************************************/
 
 const eq = require('../../consensus/equivocation_header.js');
+const gateRegistry = require('../../consensus/gate_registry');
 const { parseOracleContent, parseBatchContent } = require('./content_parsers.js');
 
+
+function listShareSlashable(msgA, prefix, network){
+    if(typeof msgA !== 'string' || typeof prefix !== 'string' || !msgA.startsWith(prefix))
+        return false;
+    const field = msgA.slice(prefix.length).split('|')[2];
+    return typeof field === 'string' && /^[0-9]+$/.test(field) &&
+        gateRegistry.activeAt('list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION',
+            network, null, Number(field), null);
+}
 
 // In-content snapshot_block field index per engine (raw canonical layout).
 const FIELD = {
@@ -209,4 +219,4 @@ async function resolveSlot(deps, engineTag, roundId, contentA, contentB, oracleR
         || { error: 'invalid: ENGINE_TAG (no snapshot_block rule)' };
 }
 
-module.exports = { resolveSlot, resolveFieldSlot, resolveOracleSlot, resolveBatchSlot, resolveAttestSlot };
+module.exports = { resolveSlot, resolveFieldSlot, resolveOracleSlot, resolveBatchSlot, resolveAttestSlot, listShareSlashable };
