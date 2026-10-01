@@ -1,5 +1,7 @@
 'use strict';
 
+const tickCoin = require('./tick_coin.js');
+
 module.exports = {
     async loadListMembers(data){
         if(data['TYPE']==3)
@@ -15,10 +17,8 @@ module.exports = {
             let item = await this.resolveAddressItem(params[idx], data);
             if(data['TYPE']==3)
                 ({ item, status } = await this.checkUnionItem(item, data));
-            if(data['TYPE']==1){
-                let tokenInfo = await this.indexerDb.getTokenInfo(item);
-                if(!tokenInfo) status = 'invalid: TICK (unknown)';
-            }
+            if(data['TYPE']==1)
+                ({ item, status } = await tickCoin.checkTickItem.call(this, item, data));
             if(data['TYPE']==2 && !this.indexerDb.isAnyCoinAddress(item, data['BLOCK_INDEX']))
                 status = 'invalid: ADDRESS (format)';
             edit[item] = status;
