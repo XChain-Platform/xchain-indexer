@@ -18,6 +18,9 @@ const { makeKey, sign, snapshotSet, bindSettlementReads } =
     require('../../bridge/policy_apply.test/helpers/setup.js');
 const Utility = require('../../../../src/utility.js');
 const listShareMirrorsMixin = require('../../../../src/db/list_share_mirrors/index.js');
+const tickerQueries = require('../../../../src/db/index_tables/tickers.js');
+const tickCoin = require('../../../../src/actions/list/tick_coin.js');
+const { listItemId } = require('../../../../src/db/lists/membership.js');
 const { deriveListSnapshotId } = require('../../../../src/consensus/list_share_settle/canonical.js');
 const { listMembershipHash } = require('../../../../src/consensus/list_share_hash.js');
 
@@ -104,6 +107,25 @@ function mirrorQuery(state, network){
 
 function localQuery(state){
     return async (sql, args) => {
+        if(sql === 'SELECT id FROM index_tickers WHERE tick=? LIMIT 1'){
+            const row = state.tickers.find((candidate) => candidate.tick === args[0]);
+            return row ? [{ id: row.id }] : [];
+        }
+        if(sql === 'SELECT id FROM index_tickers WHERE LOWER(tick)=? ORDER BY id ASC LIMIT 1'){
+            const rows = state.tickers
+                .filter((candidate) => candidate.tick.toLowerCase() === args[0])
+                .sort((left, right) => left.id - right.id);
+            return rows.length ? [{ id: rows[0].id }] : [];
+        }
+        if(sql === 'SELECT id FROM index_tickers ORDER BY id DESC LIMIT 1 FOR UPDATE'){
+            const rows = state.tickers.slice().sort((left, right) => right.id - left.id);
+            return rows.length ? [{ id: rows[0].id }] : [];
+        }
+        if(sql === 'INSERT IGNORE INTO index_tickers (`id`, `tick`, `block_index`) values (?, ?, ?)'){
+            if(!state.tickers.some((candidate) => candidate.tick === args[1]))
+                state.tickers.push({ id: args[0], tick: args[1], block_index: args[2] });
+            return { affectedRows: 1 };
+        }
         if(/INSERT IGNORE INTO bridge_settlements/.test(sql)){
             const dup = state.settlements.some((s) => s.transfer_id === args[1] && s.kind === args[2]);
             if(!dup) state.settlements.push({
@@ -141,18 +163,41 @@ function countApplied(state){
     return Array.from(groups.values());
 }
 
-function applyLeg(state, tx, nextAction){
+async function tickerItem(state, db, config, item, data){
+    const checked = await tickCoin.checkTickItem.call({ indexerDb: db, config }, item, data);
+    if(checked.status !== 'valid') return null;
+    return listItemId(db, 1, checked.item);
+}
+
+async function applyLeg(state, db, config, tx, nextAction, isGenesis){
     const f = tx.data.split('|');
     if(f[0] !== 'LIST') return { ACTION_INDEX: nextAction, STATUS: 'valid' };
+    const data = {
+        BLOCK_INDEX: tx.block_index,
+        IS_GENESIS: isGenesis,
+        SOURCE: tx.source,
+    };
     if(f[1] === '0'){
-        state.lists.set(nextAction, { type: Number(f[2]), owner: tx.source, members: new Set(f.slice(4)) });
+        const type = Number(f[2]);
+        const members = new Set();
+        for(const item of f.slice(4)){
+            const stored = state.tickerMode && type === 1
+                ? await tickerItem(state, db, config, item, data)
+                : item;
+            if(stored !== null) members.add(stored);
+        }
+        state.lists.set(nextAction, { type, owner: tx.source, members });
         return { ACTION_INDEX: nextAction, STATUS: 'valid' };
     }
     const list = state.lists.get(Number(f[3]));
     if(!list) return { ACTION_INDEX: nextAction, STATUS: 'invalid: LIST_ACTION_INDEX (unknown)' };
     for(const item of f.slice(5)){
-        if(f[2] === '1') list.members.add(item);
-        else list.members.delete(item);
+        const stored = state.tickerMode && list.type === 1
+            ? await tickerItem(state, db, config, item, data)
+            : item;
+        if(stored === null) continue;
+        if(f[2] === '1') list.members.add(stored);
+        else list.members.delete(stored);
     }
     return { ACTION_INDEX: nextAction, STATUS: 'valid' };
 }
@@ -161,37 +206,60 @@ function makeListShareConfig(coin){
     return {
         COIN: coin, NETWORK: NETWORK, COINS: ['BTC', 'LTC', 'DOGE'],
         ADDRESS: { BRIDGE_DOGE: BRIDGE_DOGE_ON_BTC, BRIDGE_LTC: BRIDGE_LTC_ON_BTC },
+        MIN_TICK_LENGTH: 1,
+        MAX_TICK_LENGTH: 20,
+        TICK_CHARACTERS: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
         BTC_CHAIN_ID: null,
     };
 }
 
 function makeListShareCtx({ mirrorRows = [], validators = [], legStatus, coin = COIN,
-                            blockIndex = 900, blockTime = 2000, startAction = 7000 } = {}){
+                            blockIndex = 900, blockTime = 2000, startAction = 7000,
+                            tickerRows } = {}){
     const state = { mirrorRows: mirrorRows.slice(), lists: new Map(), mirrors: [],
-                    settlements: [], injected: [], actions: [] };
+                    settlements: [], injected: [], actions: [], tokenInfoCalls: [],
+                    tickerMode: Array.isArray(tickerRows),
+                    tickers: (tickerRows || []).map((row, index) => typeof row === 'string'
+                        ? { id: index + 1, tick: row, block_index: blockIndex - 1 }
+                        : Object.assign({}, row)) };
     let nextAction = startAction;
     const config = makeListShareConfig(coin);
+    const util = new Utility(config);
     const indexerDb = bindMixins({
         config: config,
+        util,
         mirrorDb: () => bindMixins({ doQuery: mirrorQuery(state, NETWORK) }),
         doQuery: localQuery(state),
         getList: async (index) => {
             const list = state.lists.get(Number(index));
-            return list ? Array.from(list.members).sort(byBytes) : [];
+            if(!list) return [];
+            const members = Array.from(list.members);
+            if(state.tickerMode && list.type === 1)
+                return members.map((id) => state.tickers.find((row) => row.id === id).tick).sort(byBytes);
+            return members.sort(byBytes);
         },
+        getTokenInfo: async (item) => { state.tokenInfoCalls.push(item); return null; },
         getValidatorsByCapability:   async () => validators,
         getStakeWeightsByCapability: async () => validators,
         createActionIndex: async (d) => { state.actions.push(d); return nextAction++; },
     });
+    if(state.tickerMode){
+        Object.assign(indexerDb, tickerQueries);
+        indexerDb.blockIndex = blockIndex;
+        indexerDb.transactionConnection = { id: 1 };
+        indexerDb.suppressIndexIdCreation = false;
+        indexerDb.deterministicIndexingStarted = true;
+        indexerDb._internCache = null;
+    }
     const actions = {
         processTransaction: async (tx, isGenesis) => {
             state.injected.push({ tx, isGenesis });
             if(legStatus) return { ACTION_INDEX: null, STATUS: legStatus };
-            return applyLeg(state, tx, nextAction++);
+            return applyLeg(state, indexerDb, config, tx, nextAction++, isGenesis);
         },
         mapper: { createMappings: async () => {} },
     };
-    const ctx = { actions, indexerDb, util: new Utility(config), mapper: { createMappings: async () => {} },
+    const ctx = { actions, indexerDb, util, mapper: { createMappings: async () => {} },
                   config, coin, network: NETWORK, blockIndex, blockTime };
     return { ctx, state };
 }
