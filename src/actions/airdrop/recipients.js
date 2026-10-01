@@ -19,6 +19,11 @@
  *
  ********************************************************************/
 
+const gateRegistry = require('../../consensus/gate_registry');
+const { collectTickHolders } = require('../../utility/list_tick/airdrop_holders.js');
+
+const LIST_TICK_COIN_GATE = 'list_tick_coin_activation.LIST_TICK_COIN_ACTIVATION';
+
 // Installed onto Airdrop.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
 module.exports = {
@@ -35,13 +40,14 @@ module.exports = {
 
         // TICK LIST: expand to all current holders of each listed tick.
         if(!error && this.listTypes.indexOf(type)!=-1){
-            let holders = {};
-            for(let tick of list){
-                if(type==1)
-                    holders = await this.indexerDb.getHolders(tick, data['BLOCK_INDEX'], data['ACTION_INDEX']);
-                for(let address in holders)
-                    recipients.add(address);   // Set.add is already idempotent, so no membership test
-            }
+            if(type==1)
+                recipients = await collectTickHolders(list, {
+                    active: gateRegistry.activeAt(LIST_TICK_COIN_GATE, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null),
+                    coin: this.config['COIN'],
+                    coins: this.config['COINS'],
+                    getTickerId: tick => this.indexerDb.getTickerId(tick),
+                    getHolders: tick => this.indexerDb.getHolders(tick, data['BLOCK_INDEX'], data['ACTION_INDEX']),
+                });
         }
 
         // ADDRESS LIST: recipients are exactly the listed addresses.

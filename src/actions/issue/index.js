@@ -87,6 +87,7 @@ const wire              = require('./wire.js');
 const fees              = require('./fees.js');
 const tickRules         = require('./tick_rules.js');
 const issuanceLimits    = require('./issuance_limits.js');
+const tickCoinPrefix    = require('./tick_coin_prefix.js');
 const tokenState        = require('./token_state.js');
 const supplyRules       = require('./supply_rules.js');
 const editRules         = require('./edit_rules.js');
@@ -257,6 +258,7 @@ class Issue {
         tickRules.validateReservedTick.call(this, ctx);
         tickRules.validateGasTick.call(this, ctx);
         await issuanceLimits.validateTickNamespace.call(this, ctx);
+        await tickCoinPrefix.validateTickCoinPrefix.call(this, ctx);
         await issuanceLimits.countTopLevelIssuance.call(this, ctx);
 
         // The existing token row, then the FORMAT and General validations against it
