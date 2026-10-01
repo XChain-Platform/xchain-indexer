@@ -144,8 +144,11 @@ describe('market list SOURCE activation @regression @tier2', function () {
     it('is armed from genesis on regtest and unarmed on public networks', function () {
         assert.strictEqual(gateRegistry.activeAt(KEY, 'regtest', 'BTC', 0, null), true);
         assert.strictEqual(gateRegistry.activeAt(KEY, 'mainnet', 'BTC', 1_000_000_000, null), false);
-        for (const coin of [null, 'BTC', 'LTC', 'DOGE'])
-            assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', coin, 1_000_000_000, null), false);
+        assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', null, 1_000_000_000, null), false);
+        for (const [coin, armedAt] of Object.entries({ BTC: 154750, LTC: 4904879, DOGE: 67956200 })) {
+            assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', coin, armedAt - 1, null), false);
+            assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', coin, armedAt, null), true);
+        }
     });
 
     for (const [market, drive] of [['ORDER', driveOrder], ['SWAP', driveSwap]]) {

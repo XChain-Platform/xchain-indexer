@@ -30,8 +30,11 @@ describe('list sharing activation registry rows', function () {
             assert.strictEqual(ProtocolChanges.registry.unitOf(key), 'height', key);
             assert.strictEqual(ProtocolChanges.activeAt(key, 'mainnet', 'BTC', 9999999998, null), false, key);
             for (const coin of ['BTC', 'LTC', 'DOGE']) {
-                assert.strictEqual(ProtocolChanges.activeAt(key, 'testnet', coin, 9999999998, null), false,
-                    key + ' ' + coin + ':testnet');
+                const armedAt = key === PRODUCER_KEY ? 154750 : { BTC: 154750, LTC: 4904879, DOGE: 67956200 }[coin];
+                assert.strictEqual(ProtocolChanges.activeAt(key, 'testnet', coin, armedAt - 1, null), false,
+                    key + ' ' + coin + ':testnet below its cut height');
+                assert.strictEqual(ProtocolChanges.activeAt(key, 'testnet', coin, armedAt, null), true,
+                    key + ' ' + coin + ':testnet at its cut height');
             }
             assert.strictEqual(ProtocolChanges.activeAt(key, 'regtest', 'BTC', 0, null), true, key);
         }

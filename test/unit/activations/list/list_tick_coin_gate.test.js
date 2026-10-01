@@ -20,7 +20,9 @@ describe('list tick coin activation registry row', function () {
         assert.strictEqual(ProtocolChanges.registry.unitOf(KEY), 'height');
         assert.strictEqual(ProtocolChanges.activeAt(KEY, 'mainnet', 'BTC', 9999999998, null), false);
         for (const coin of ['BTC', 'LTC', 'DOGE']) {
-            assert.strictEqual(ProtocolChanges.activeAt(KEY, 'testnet', coin, 9999999998, null), false);
+            const armedAt = { BTC: 154750, LTC: 4904879, DOGE: 67956200 }[coin];
+            assert.strictEqual(ProtocolChanges.activeAt(KEY, 'testnet', coin, armedAt - 1, null), false);
+            assert.strictEqual(ProtocolChanges.activeAt(KEY, 'testnet', coin, armedAt, null), true);
         }
         assert.strictEqual(ProtocolChanges.activeAt(KEY, 'regtest', 'BTC', 0, null), true);
     });

@@ -29,7 +29,7 @@ let indexer, handler, offender;
 const bind = (h) => { ({ indexer, handler, offender } = h); };
 
 const SNAPSHOT_ID = 'ab'.repeat(32);
-const BELOW_TESTNET_GATE = 9999999998;
+const BELOW_TESTNET_GATE = 154749;
 
 function listShareContent(snapshotBlock, membersHash, network){
     return ['XLISTSHARE', SNAPSHOT_ID, String(snapshotBlock), 'DOGE', '880001', '2', '1',

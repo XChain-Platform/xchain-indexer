@@ -111,8 +111,11 @@ describe('LIST change rematch activation @regression @tier2', function () {
     it('is armed from genesis on regtest and unarmed on mainnet and every testnet', function () {
         assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'regtest', 'BTC', 0, null), true);
         assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'mainnet', 'BTC', 1_000_000_000, null), false);
-        for(const coin of [null, 'BTC', 'LTC', 'DOGE'])
-            assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'testnet', coin, 1_000_000_000, null), false);
+        assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'testnet', null, 1_000_000_000, null), false);
+        for (const [coin, armedAt] of Object.entries({ BTC: 154750, LTC: 4904879, DOGE: 67956200 })) {
+            assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'testnet', coin, armedAt - 1, null), false);
+            assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'testnet', coin, armedAt, null), true);
+        }
     });
 
     it('matches crossed ORDERs and SWAPs at the LIST edit when the owner admits the counterparty', async function () {
