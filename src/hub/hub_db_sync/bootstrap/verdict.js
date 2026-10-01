@@ -252,6 +252,7 @@ module.exports = {
         if (table === 'cross_chain_calls')   await this.refreshCallSyncTimestamp(true);
         if (table === 'bridge_transfers')    await this.refreshBridgeSyncTimestamp(true);
         if (table === 'policy_snapshots')    await this.refreshPolicySyncTimestamp(true);
+        if (table === 'list_snapshots')      await this.refreshListShareSyncState(true);
         // A new match/call (new required snapshot_block) or an arriving snapshot can change
         // snapshot-presence: re-evaluate the snapshot barrier on any cross-chain table.
         if (CROSS_CHAIN_TABLES.indexOf(table) !== -1) await this.releaseSnapshotWaiters();
