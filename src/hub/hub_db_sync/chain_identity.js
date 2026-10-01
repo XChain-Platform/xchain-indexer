@@ -102,7 +102,8 @@ module.exports = {
     async purgeForeignChainIdRows(previous) {
         let expected = this._expectedBtcChainId;
         if (!expected) return 0;
-        let total = 0, refreshMatches = false, refreshCalls = false, refreshBridge = false, refreshPolicy = false;
+        let total = 0, refreshMatches = false, refreshCalls = false, refreshBridge = false,
+            refreshPolicy = false, refreshListShare = false;
         for (let table of CROSS_CHAIN_TABLES) {
             let result;
             try {
@@ -130,15 +131,17 @@ module.exports = {
             if (table === 'cross_chain_calls')   refreshCalls   = true;
             if (table === 'bridge_transfers')    refreshBridge  = true;
             if (table === 'policy_snapshots')    refreshPolicy  = true;
+            if (table === 'list_snapshots')      refreshListShare = true;
         }
-        // Every one of these barriers caches MAX(effective_time) over its table, so a
-        // purge that removed the row holding the maximum must re-read it exactly as a
-        // retraction does; a cached scalar left high opens a barrier over rows that are gone.
+        // Re-read every affected barrier after the purge. The clock-keyed barriers may
+        // have cached a removed maximum; the height-keyed list barrier must re-probe the
+        // table and re-evaluate its waiters over the cleaned mirror.
         try {
             if (refreshMatches) await this.refreshMatchSyncTimestamp();
             if (refreshCalls)   await this.refreshCallSyncTimestamp();
             if (refreshBridge)  await this.refreshBridgeSyncTimestamp();
             if (refreshPolicy)  await this.refreshPolicySyncTimestamp();
+            if (refreshListShare) await this.refreshListShareSyncState();
             if (refreshMatches || refreshCalls) await this.releaseSnapshotWaiters();
         } catch (e) {
             getLogger().warn('HubDbSync: could not refresh the sync barriers after a foreign-chain purge:', e);

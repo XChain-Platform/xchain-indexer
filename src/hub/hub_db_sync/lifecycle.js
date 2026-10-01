@@ -224,6 +224,7 @@ module.exports = {
         tables.price_snapshots      = this.priceSyncMaxTimestamp;
         tables.bridge_transfers     = this.bridgeSyncTimestamp;
         tables.policy_snapshots     = this.policySyncTimestamp;
+        tables.list_snapshots       = null;
         return {
             configured: true,
             connected: !!this.ws,
