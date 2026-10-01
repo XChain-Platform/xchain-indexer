@@ -178,16 +178,16 @@ addGate('archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_A
 // list_share_producer_activation: the hub snapshot plane begins producing shared-list versions.
 addGate('list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION', 'height', {
     mainnet: 9999999999,
-    testnet: 154750,
+    testnet: 154777,
     regtest: 0,
 });
 // list_share_consumer_activation: each chain begins applying shared-list versions and references.
 addGate('list_share_consumer_activation.LIST_SHARE_CONSUMER_ACTIVATION', 'height', {
     mainnet: 9999999999,
     testnet: 9999999999,
-    'BTC:testnet': 154750,
-    'LTC:testnet': 4904879,
-    'DOGE:testnet': 67956200,
+    'BTC:testnet': 154777,
+    'LTC:testnet': 4905004,
+    'DOGE:testnet': 67956922,
     regtest: 0,
 });
 // oracle_price_age_hourly_activation: gates the hourly price-snapshot age limit
@@ -195,16 +195,16 @@ addGate('list_share_consumer_activation.LIST_SHARE_CONSUMER_ACTIVATION', 'height
 addGate('oracle_price_age_hourly_activation.ORACLE_PRICE_AGE_HOURLY_ACTIVATION', 'height', {
     mainnet: UNARMED,
     testnet: UNARMED,
-    'BTC:testnet': 154751,
-    'LTC:testnet': 4904963,
-    'DOGE:testnet': 67956461,
+    'BTC:testnet': 154778,
+    'LTC:testnet': 4905005,
+    'DOGE:testnet': 67956923,
     regtest: 0,
 });
 // oracle_hourly_window_activation: gates the first oracle round from which hubs
 // group rounds into hourly windows.
 addGate('oracle_hourly_window_activation.ORACLE_HOURLY_WINDOW_FIRST_ROUND', 'constant', {
     mainnet: UNARMED,
-    testnet: 5064,
+    testnet: 5082,
     regtest: 0,
 });
 // SHARED-GATES END

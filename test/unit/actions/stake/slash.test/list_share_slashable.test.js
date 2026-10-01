@@ -20,9 +20,9 @@ describe('SLASH list-share producer gate @regression', function () {
     });
 
     it('rejects list-shares below the testnet producer height and while mainnet is unarmed', function () {
-        // v0.21.1 arms the testnet producer at 154750; mainnet stays on the sentinel.
-        assert.strictEqual(listShareSlashable(message('154749'), prefix, 'testnet'), false);
-        assert.strictEqual(listShareSlashable(message('154750'), prefix, 'testnet'), true);
+        // v0.21.1 arms the testnet producer at 154777; mainnet stays on the sentinel.
+        assert.strictEqual(listShareSlashable(message('154776'), prefix, 'testnet'), false);
+        assert.strictEqual(listShareSlashable(message('154777'), prefix, 'testnet'), true);
         assert.strictEqual(listShareSlashable(message('9999999998'), prefix, 'mainnet'), false);
     });
 

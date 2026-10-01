@@ -112,7 +112,7 @@ describe('LIST change rematch activation @regression @tier2', function () {
         assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'regtest', 'BTC', 0, null), true);
         assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'mainnet', 'BTC', 1_000_000_000, null), false);
         assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'testnet', null, 1_000_000_000, null), false);
-        for (const [coin, armedAt] of Object.entries({ BTC: 154750, LTC: 4904879, DOGE: 67956200 })) {
+        for (const [coin, armedAt] of Object.entries({ BTC: 154777, LTC: 4905004, DOGE: 67956922 })) {
             assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'testnet', coin, armedAt - 1, null), false);
             assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'testnet', coin, armedAt, null), true);
         }
