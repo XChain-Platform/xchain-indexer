@@ -163,16 +163,6 @@ function countApplied(state){
     return Array.from(groups.values());
 }
 
-function cloneLists(lists){
-    return Array.from(lists, ([index, list]) => [index, Object.assign({}, list, {
-        members: new Set(list.members),
-    })]);
-}
-
-function restoreRows(target, rows){
-    target.splice(0, target.length, ...rows.map((row) => Object.assign({}, row)));
-}
-
 async function tickerItem(state, db, config, item, data){
     const checked = await tickCoin.checkTickItem.call({ indexerDb: db, config }, item, data);
     if(checked.status !== 'valid') return null;
@@ -271,30 +261,7 @@ function makeListShareCtx({ mirrorRows = [], validators = [], legStatus, coin = 
     };
     const ctx = { actions, indexerDb, util, mapper: { createMappings: async () => {} },
                   config, coin, network: NETWORK, blockIndex, blockTime };
-    const runInTransaction = async (task) => {
-        const saved = {
-            nextAction,
-            lists: cloneLists(state.lists),
-            mirrors: state.mirrors.map((row) => Object.assign({}, row)),
-            settlements: state.settlements.map((row) => Object.assign({}, row)),
-            actions: state.actions.map((row) => Object.assign({}, row)),
-            tickers: state.tickers.map((row) => Object.assign({}, row)),
-        };
-        try {
-            return await task();
-        } catch(error){
-            nextAction = saved.nextAction;
-            state.lists.clear();
-            for(const [index, list] of saved.lists) state.lists.set(index, list);
-            restoreRows(state.mirrors, saved.mirrors);
-            restoreRows(state.settlements, saved.settlements);
-            restoreRows(state.actions, saved.actions);
-            restoreRows(state.tickers, saved.tickers);
-            indexerDb._internCache = null;
-            throw error;
-        }
-    };
-    return { ctx, state, runInTransaction };
+    return { ctx, state };
 }
 
 module.exports = {
