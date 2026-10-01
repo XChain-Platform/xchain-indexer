@@ -11,6 +11,7 @@
 'use strict';
 
 const assert = require('assert');
+const sinon = require('sinon');
 const Utility = require('../../src/utility.js');
 const gateRegistry = require('../../src/consensus/gate_registry.js');
 const { getCoinConfig } = require('../../src/coins/index.js');
@@ -26,6 +27,7 @@ const GATE = 'oracle_price_age_hourly_activation.ORACLE_PRICE_AGE_HOURLY_ACTIVAT
 const NETWORK = 'testnet';
 const CHAINS = ['BTC', 'LTC', 'DOGE'];
 const FEE_DESTINATION = 'feeDestinationAddr111111111111111';
+const ACTIVATION = 700_000;
 const BLOCK_TIME = 10_000;
 const SNAPSHOT_TIME = BLOCK_TIME - 3_000;
 
@@ -43,7 +45,31 @@ function activationFor(chainKey){
     return gateRegistry.get(GATE)[chainKey + ':' + NETWORK];
 }
 
+function armHourlyGate(){
+    return sinon.stub(gateRegistry, 'activeAt').callsFake((gate, network, chainKey, blockIndex) => {
+        return gate === GATE && network === NETWORK && chainKey === 'BTC' && blockIndex >= ACTIVATION;
+    });
+}
+
+function feeOracleResult(maxPriceAgeSeconds){
+    if(BLOCK_TIME - SNAPSHOT_TIME > maxPriceAgeSeconds)
+        return { error: 'stale beyond ' + maxPriceAgeSeconds + 's' };
+    return {
+        xchainUsdPrice: '1.00000000',
+        coinUsdPrice: '0.10000000',
+        oracleRound: 7
+    };
+}
+
+function oracleDataResult(maxPriceAgeSeconds){
+    return BLOCK_TIME - SNAPSHOT_TIME <= maxPriceAgeSeconds ? { BTC: 'fresh' } : null;
+}
+
 describe('hourly price age', function(){
+    afterEach(function(){
+        sinon.restore();
+    });
+
     it('selects 1800 below and the pinned 4500 at the gate for every chain key', function(){
         let gates = gateRegistry.get(GATE);
         for(let chainKey of CHAINS){
@@ -61,8 +87,8 @@ describe('hourly price age', function(){
         assert.strictEqual(maxPriceAgeSecondsAt({}, NETWORK, 'BTC', activation), 1800);
     });
 
-    it('refuses a fee-bearing action with a 3000 second old snapshot below the gate and accepts it at the gate', async function(){
-        let activation = activationFor('BTC');
+    it('refuses a native fee with a 3000 second old snapshot below the gate and accepts it at the gate', async function(){
+        let activeAt = armHourlyGate();
         let config = {
             COIN: 'BTC',
             NETWORK: NETWORK,
@@ -81,95 +107,107 @@ describe('hourly price age', function(){
             }
         };
         let feeOutput = [{ address: FEE_DESTINATION, value: '10.00000000' }];
-        let data = { BLOCK_INDEX: activation - 1, BLOCK_TIME: BLOCK_TIME, COIN: 'BTC' };
+        let data = { BLOCK_INDEX: ACTIVATION - 1, BLOCK_TIME: BLOCK_TIME, COIN: 'BTC' };
 
         let below = await util.validateNativeCoinFee(data, { AMOUNT: '1.0' }, db, feeOutput);
         assert.strictEqual(below.valid, false);
         assert.match(below.error, /stale beyond 1800s/);
 
-        data.BLOCK_INDEX = activation;
+        data.BLOCK_INDEX = ACTIVATION;
         let at = await util.validateNativeCoinFee(data, { AMOUNT: '1.0' }, db, feeOutput);
         assert.strictEqual(at.valid, true, at.error);
         assert.strictEqual(at.oracleRound, 7);
+        assert.deepStrictEqual(activeAt.firstCall.args, [GATE, NETWORK, 'BTC', ACTIVATION - 1, null]);
+        assert.deepStrictEqual(activeAt.secondCall.args, [GATE, NETWORK, 'BTC', ACTIVATION, null]);
     });
 
-    it('passes the hourly age to fee pricing at the quoted block', async function(){
-        let activation = activationFor('BTC');
-        let calls = [];
+    it('flips fee pricing from stale to valid at the quoted block gate', async function(){
+        armHourlyGate();
+        let config = hourlyConfig({ FEE_TOLERANCE_MIN: '0.95', FEE_TOLERANCE_MAX: '1.10' });
+        let util = new Utility(config);
+        let priceRead = sinon.stub(util, 'getFeeOraclePrices').callsFake(
+            (db, coin, blockIndex, blockTime, maxPriceAgeSeconds) => feeOracleResult(maxPriceAgeSeconds));
         let indexerDb = {};
         let context = {
-            config: hourlyConfig(),
+            config: config,
             indexerDb: indexerDb,
-            util: {
-                bcnum: value => Number(value),
-                bcformat: value => String(value),
-                bclte: (left, right) => left <= right,
-                getFeeOraclePrices: async (...args) => {
-                    calls.push(args);
-                    return { error: 'sentinel price stop' };
-                }
-            }
+            util: util
         };
 
-        let result = await feePricing.priceFeeQuote.call(
-            context, { blockIndex: activation, blockTime: BLOCK_TIME }, '1', null);
+        let below = await feePricing.priceFeeQuote.call(
+            context, { blockIndex: ACTIVATION - 1, blockTime: BLOCK_TIME }, '1', null);
+        let at = await feePricing.priceFeeQuote.call(
+            context, { blockIndex: ACTIVATION, blockTime: BLOCK_TIME }, '1', null);
 
-        assert.strictEqual(result.error, 'sentinel price stop');
-        assert.deepStrictEqual(calls, [[indexerDb, 'BTC', activation, BLOCK_TIME, 4500]]);
+        assert.strictEqual(below.valid, false);
+        assert.strictEqual(below.error, 'stale beyond 1800s');
+        assert.strictEqual(at.valid, true, at.error);
+        assert.strictEqual(at.oracleRound, 7);
+        assert.deepStrictEqual(priceRead.firstCall.args,
+            [indexerDb, 'BTC', ACTIVATION - 1, BLOCK_TIME, 1800]);
+        assert.deepStrictEqual(priceRead.secondCall.args,
+            [indexerDb, 'BTC', ACTIVATION, BLOCK_TIME, 4500]);
     });
 
-    it('passes the hourly age to the fee schedule price read at the tip block', async function(){
-        let activation = activationFor('BTC');
-        let calls = [];
+    it('flips the fee schedule price verdict at the tip block gate', async function(){
+        armHourlyGate();
+        let blockIndex = ACTIVATION - 1;
+        let config = hourlyConfig();
+        let util = new Utility(config);
+        let priceRead = sinon.stub(util, 'getFeeOraclePrices').callsFake(
+            (db, coin, readBlockIndex, blockTime, maxPriceAgeSeconds) => feeOracleResult(maxPriceAgeSeconds));
         let indexerDb = {
-            getLatestBlockIndex: async () => activation,
+            getLatestBlockIndex: async () => blockIndex,
             getBlockTime: async () => BLOCK_TIME
         };
         let context = {
-            config: hourlyConfig(),
+            config: config,
             indexerDb: indexerDb,
-            util: {
-                getFeeOraclePrices: async (...args) => {
-                    calls.push(args);
-                    return { error: 'sentinel price stop' };
-                }
-            }
+            util: util
         };
 
-        let result = await feeViews.getFeeSchedule.call(context);
+        let below = await feeViews.getFeeSchedule.call(context);
+        blockIndex = ACTIVATION;
+        let at = await feeViews.getFeeSchedule.call(context);
 
-        assert.strictEqual(result.maxPriceAgeSeconds, 4500);
-        assert.deepStrictEqual(calls, [[indexerDb, 'BTC', activation, BLOCK_TIME, 4500]]);
+        assert.strictEqual(below.prices.available, false);
+        assert.strictEqual(below.prices.error, 'stale beyond 1800s');
+        assert.strictEqual(at.prices.available, true);
+        assert.strictEqual(at.prices.oracleRound, 7);
+        assert.deepStrictEqual(priceRead.firstCall.args,
+            [indexerDb, 'BTC', ACTIVATION - 1, BLOCK_TIME, 1800]);
+        assert.deepStrictEqual(priceRead.secondCall.args,
+            [indexerDb, 'BTC', ACTIVATION, BLOCK_TIME, 4500]);
     });
 
-    it('passes the hourly age to attestation settlement at its action block', async function(){
-        let activation = activationFor('BTC');
-        let calls = [];
+    it('flips attestation settlement pricing at its action block gate', async function(){
+        armHourlyGate();
+        let priceRead = sinon.stub().callsFake(
+            (db, coin, blockIndex, blockTime, maxPriceAgeSeconds) => feeOracleResult(maxPriceAgeSeconds));
         let indexerDb = {};
-        let expected = { xchainUsdPrice: '1', coinUsdPrice: '2' };
         let context = {
             config: hourlyConfig(),
             indexerDb: indexerDb,
-            util: {
-                getFeeOraclePrices: async (...args) => {
-                    calls.push(args);
-                    return expected;
-                }
-            }
+            util: { getFeeOraclePrices: priceRead }
         };
 
-        let result = await attestSettle.broadcastFeePrices.call(
-            context, {}, { BLOCK_INDEX: activation, BLOCK_TIME: BLOCK_TIME });
+        let below = await attestSettle.broadcastFeePrices.call(
+            context, {}, { BLOCK_INDEX: ACTIVATION - 1, BLOCK_TIME: BLOCK_TIME });
+        let at = await attestSettle.broadcastFeePrices.call(
+            context, {}, { BLOCK_INDEX: ACTIVATION, BLOCK_TIME: BLOCK_TIME });
 
-        assert.strictEqual(result, expected);
-        assert.deepStrictEqual(calls, [[indexerDb, 'BTC', activation, BLOCK_TIME, 4500]]);
+        assert.strictEqual(below, null);
+        assert.strictEqual(at.oracleRound, 7);
+        assert.deepStrictEqual(priceRead.firstCall.args,
+            [indexerDb, 'BTC', ACTIVATION - 1, BLOCK_TIME, 1800]);
+        assert.deepStrictEqual(priceRead.secondCall.args,
+            [indexerDb, 'BTC', ACTIVATION, BLOCK_TIME, 4500]);
     });
 
-    it('passes the hourly age to a deployment constructor at its action block', async function(){
-        let activation = activationFor('BTC');
-        let oracleCalls = [];
-        let vmOptions;
-        let oracleData = { BTC: 'hourly' };
+    it('flips deployment constructor execution at its action block gate', async function(){
+        armHourlyGate();
+        let oracleRead = sinon.stub().callsFake(
+            (blockIndex, blockTime, maxPriceAgeSeconds) => oracleDataResult(maxPriceAgeSeconds));
         let deploy = {
             config: hourlyConfig(),
             providerDeadlineWindows: {},
@@ -177,54 +215,68 @@ describe('hourly price age', function(){
                 protocolChanges: { isEnabled: async () => false },
                 vm: {
                     execute: async options => {
-                        vmOptions = options;
-                        return { success: true, gasUsed: 0 };
+                        let fresh = options.oracleData !== null;
+                        return { success: fresh, error: fresh ? null : 'stale oracle', gasUsed: 1 };
                     }
                 }
             },
             indexerDb: {
-                getOracleDataForVM: async (...args) => {
-                    oracleCalls.push(args);
-                    return oracleData;
-                },
+                getOracleDataForVM: oracleRead,
                 getCrossChainDataForVM: async () => ({}),
                 getPollResultsForVM: async () => ({})
             }
         };
-        let run = {
-            data: {
-                BLOCK_INDEX: activation,
-                BLOCK_TIME: BLOCK_TIME,
-                SOURCE: 'source',
-                ACTION_INDEX: 11,
-                TX_HASH: 'tx'
-            },
-            runConstructor: true,
-            rootDiscrim: 0,
-            code: 'code',
-            contractAddress: 'C:BTC:11',
-            constructorParams: '',
-            totalGas: 1
-        };
+        function buildRun(blockIndex){
+            return {
+                data: {
+                    BLOCK_INDEX: blockIndex,
+                    BLOCK_TIME: BLOCK_TIME,
+                    SOURCE: 'source',
+                    ACTION_INDEX: 11,
+                    TX_HASH: 'tx'
+                },
+                runConstructor: true,
+                rootDiscrim: 0,
+                code: 'code',
+                contractAddress: 'C:BTC:11',
+                constructorParams: '',
+                totalGas: 1
+            };
+        }
 
-        await constructorRun.executeConstructor(deploy, run);
+        let below = buildRun(ACTIVATION - 1);
+        let at = buildRun(ACTIVATION);
+        await constructorRun.executeConstructor(deploy, below);
+        await constructorRun.executeConstructor(deploy, at);
 
-        assert.deepStrictEqual(oracleCalls, [[activation, BLOCK_TIME, 4500]]);
-        assert.strictEqual(vmOptions.oracleData, oracleData);
+        assert.strictEqual(below.error, 'invalid: constructor failed: stale oracle');
+        assert.strictEqual(at.error, undefined);
+        assert.strictEqual(at.constructorResult.success, true);
+        assert.deepStrictEqual(oracleRead.firstCall.args, [ACTIVATION - 1, BLOCK_TIME, 1800]);
+        assert.deepStrictEqual(oracleRead.secondCall.args, [ACTIVATION, BLOCK_TIME, 4500]);
     });
 
-    it('passes the hourly age to a controller guard at its host action block', async function(){
-        let activation = activationFor('BTC');
-        let oracleCalls = [];
-        let vmOptions;
+    it('flips a controller guard verdict at its host action block gate', async function(){
+        armHourlyGate();
+        let oracleRead = sinon.stub().callsFake(
+            (blockIndex, blockTime, maxPriceAgeSeconds) => oracleDataResult(maxPriceAgeSeconds));
         let context = {
             config: hourlyConfig(),
+            guardSavepointCounter: 0,
             actions: {
                 protocolChanges: { isEnabled: async () => false },
                 vm: {
                     execute: async options => {
-                        vmOptions = options;
-                        return { success: false, error: 'stopped', gasUsed: 0 };
+                        let fresh = options.oracleData !== null;
+                        return {
+                            success: fresh,
+                            error: fresh ? null : 'stale oracle',
+                            gasUsed: 1,
+                            returnValue: null,
+                            stateChanges: [],
+                            stateDeletes: [],
+                            emittedActions: []
+                        };
                     }
                 }
             },
@@ -237,37 +289,45 @@ describe('hourly price age', function(){
                 getContract: async () => ({ code: 'code' }),
                 getStatusString: async () => 'valid',
                 getContractState: async () => ({}),
-                getOracleDataForVM: async (...args) => {
-                    oracleCalls.push(args);
-                    return { BTC: 'hourly' };
-                },
+                getOracleDataForVM: oracleRead,
                 getCrossChainDataForVM: async () => ({}),
                 getPollResultsForVM: async () => ({}),
-                getContractStakeDataForVM: async () => ({})
+                getContractStakeDataForVM: async () => ({}),
+                createSavepoint: async () => 'guard-savepoint',
+                countContractEmissionsForExecution: async () => 0,
+                createContractExecution: async () => {},
+                releaseSavepoint: async () => {}
             }
         };
-        let hostData = {
-            BLOCK_INDEX: activation,
-            BLOCK_TIME: BLOCK_TIME,
-            SOURCE: 'source',
-            ACTION_INDEX: 12,
-            TX_HASH: 'tx',
-            TX_VOUT: 0
-        };
+        function hostData(blockIndex){
+            return {
+                BLOCK_INDEX: blockIndex,
+                BLOCK_TIME: BLOCK_TIME,
+                SOURCE: 'source',
+                ACTION_INDEX: 12,
+                TX_HASH: 'tx',
+                TX_VOUT: 0
+            };
+        }
 
-        let verdict = await controllerGuard.runControllerGuard.call(
-            context, { controllerIndex: 7, actionType: 'SEND', hostData: hostData },
+        let below = await controllerGuard.runControllerGuard.call(
+            context, { controllerIndex: 7, actionType: 'SEND', hostData: hostData(ACTIVATION - 1) },
+            { MAX_CALL_DEPTH: 5 });
+        let at = await controllerGuard.runControllerGuard.call(
+            context, { controllerIndex: 7, actionType: 'SEND', hostData: hostData(ACTIVATION) },
             { MAX_CALL_DEPTH: 5 });
 
-        assert.strictEqual(verdict.allow, false);
-        assert.deepStrictEqual(oracleCalls, [[activation, BLOCK_TIME, 4500]]);
-        assert.deepStrictEqual(vmOptions.oracleData, { BTC: 'hourly' });
+        assert.strictEqual(below.allow, false);
+        assert.match(below.reason, /stale oracle/);
+        assert.strictEqual(at.allow, true);
+        assert.deepStrictEqual(oracleRead.firstCall.args, [ACTIVATION - 1, BLOCK_TIME, 1800]);
+        assert.deepStrictEqual(oracleRead.secondCall.args, [ACTIVATION, BLOCK_TIME, 4500]);
     });
 
-    it('passes the hourly age to VM execution at its action block', async function(){
-        let activation = activationFor('BTC');
-        let oracleCalls = [];
-        let vmOptions;
+    it('flips VM execution at its action block gate', async function(){
+        armHourlyGate();
+        let oracleRead = sinon.stub().callsFake(
+            (blockIndex, blockTime, maxPriceAgeSeconds) => oracleDataResult(maxPriceAgeSeconds));
         let context = {
             config: hourlyConfig(),
             providerDeadlineWindows: {},
@@ -275,11 +335,14 @@ describe('hourly price age', function(){
                 protocolChanges: { isEnabled: async () => false },
                 vm: {
                     execute: async options => {
-                        vmOptions = options;
+                        let fresh = options.oracleData !== null;
                         return {
-                            success: false,
-                            error: 'stopped',
+                            success: fresh,
+                            error: fresh ? null : 'stale oracle',
                             gasUsed: 1,
+                            returnValue: fresh ? 'fresh verdict' : null,
+                            stateChanges: [],
+                            stateDeletes: [],
                             emittedActions: []
                         };
                     }
@@ -287,31 +350,42 @@ describe('hourly price age', function(){
             },
             indexerDb: {
                 getContractState: async () => ({}),
-                getOracleDataForVM: async (...args) => {
-                    oracleCalls.push(args);
-                    return { BTC: 'hourly' };
-                },
+                getOracleDataForVM: oracleRead,
                 getCrossChainDataForVM: async () => ({}),
                 getPollResultsForVM: async () => ({}),
-                getContractStakeDataForVM: async () => ({})
+                getContractStakeDataForVM: async () => ({}),
+                createSavepoint: async () => 'vm-savepoint',
+                releaseSavepoint: async () => {}
             }
         };
-        let data = {
-            BLOCK_INDEX: activation,
-            BLOCK_TIME: BLOCK_TIME,
-            CONTRACT_ACTION_INDEX: 7,
-            ACTION_INDEX: 13,
-            SOURCE: 'source',
-            METHOD: 'run',
-            TX_HASH: 'tx',
-            TX_VOUT: 0,
-            ROOT_ACTION_INDEX: 0
-        };
-        let run = { data: data, gasCost: 1, contractInfo: { code: 'code' } };
+        function buildRun(blockIndex){
+            return {
+                data: {
+                    BLOCK_INDEX: blockIndex,
+                    BLOCK_TIME: BLOCK_TIME,
+                    CONTRACT_ACTION_INDEX: 7,
+                    ACTION_INDEX: 13,
+                    SOURCE: 'source',
+                    METHOD: 'run',
+                    TX_HASH: 'tx',
+                    TX_VOUT: 0,
+                    ROOT_ACTION_INDEX: 0
+                },
+                gasCost: 1,
+                contractInfo: { code: 'code' }
+            };
+        }
 
-        await runVm.runVmExecution.call(context, run, { GAS_CEILING: 100 });
+        let below = buildRun(ACTIVATION - 1);
+        let at = buildRun(ACTIVATION);
+        await runVm.runVmExecution.call(context, below, { GAS_CEILING: 100 });
+        await runVm.runVmExecution.call(context, at, { GAS_CEILING: 100 });
 
-        assert.deepStrictEqual(oracleCalls, [[activation, BLOCK_TIME, 4500]]);
-        assert.deepStrictEqual(vmOptions.oracleData, { BTC: 'hourly' });
+        assert.strictEqual(below.vmError, 'stale oracle');
+        assert.strictEqual(below.vmReturnValue, null);
+        assert.strictEqual(at.vmError, null);
+        assert.strictEqual(at.vmReturnValue, 'fresh verdict');
+        assert.deepStrictEqual(oracleRead.firstCall.args, [ACTIVATION - 1, BLOCK_TIME, 1800]);
+        assert.deepStrictEqual(oracleRead.secondCall.args, [ACTIVATION, BLOCK_TIME, 4500]);
     });
 });
