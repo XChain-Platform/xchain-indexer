@@ -81,6 +81,15 @@ describe('shared-list due planning and membership steps @regression @tier1', fun
         assert.deepStrictEqual(result.due, [d1, d2, l1]);
     });
 
+    it('does not let a filled cap hide a halt in a later list', function(){
+        assert.deepStrictEqual(plan([
+            list('DOGE', 1, 0, [row(1, 1)]),
+            list('LTC', 1, 0, [row(2, 1)])
+        ], { blockIndex: 10, cap: 1 }), {
+            halt: { reason: 'SEQ_GAP', home_chain: 'LTC', home_list_index: 1, seq: 1 }
+        });
+    });
+
     it('builds version 1 only when no mirror membership exists', function(){
         const full = vectors.canonicals.find(vector => vector.seq === 1);
         const transport = {
