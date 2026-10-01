@@ -261,6 +261,13 @@ module.exports = {
         // 7 (bridgeability opt-in) adds no key: it is an owner edit of an existing row
         // and the issuance fee is first-issuance only.
         XBRIDGE_BASE:          5000,
+        // Sharing a list has one flat fee. Editing a shared list has a base fee
+        // plus a per-item fee for each item added or removed. The base matches
+        // SWEEP_BASE so even the smallest shared edit buys an above-dust native
+        // fee output on LTC and DOGE. Local lists remain free.
+        LIST_SHARE:            100000,
+        LIST_SHARED_EDIT_BASE: 5000,
+        LIST_SHARED_EDIT_PER_ITEM: 100,
         // BET (parimutuel betting, spec decision F): feed creation is duration-
         // metered like ORDER/SWAP/DISPENSER expiration (same free window via
         // UNIFIED_EXPIRATION_FEE_FREE_DAYS) but under its OWN per-day key so the
