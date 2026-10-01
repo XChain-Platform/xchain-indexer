@@ -11,7 +11,7 @@
 // contact legal@dankest.llc.
 
 const assert = require('assert');
-const ProtocolChanges = require('../../../src/protocol_changes.js');
+const ProtocolChanges = require('../../../../src/protocol_changes.js');
 
 const KEY = 'list_tick_coin_activation.LIST_TICK_COIN_ACTIVATION';
 
