@@ -124,6 +124,15 @@ describe('shared-list due planning and membership steps @regression @tier1', fun
         }), { halt: 'DELTA' });
     });
 
+    it('checks the resulting membership hash for version 1', function(){
+        assert.deepStrictEqual(nextMembership(null, {
+            seq: 1,
+            added: ['bc1qmemberalpha'],
+            removed: [],
+            members_hash: listMembershipHash([])
+        }), { halt: 'MEMBERS_HASH' });
+    });
+
     it('removes and adds members in canonical byte order', function(){
         const vector = vectors.deltas.find(item => item.name === 'remove and add in one version');
         const result = nextMembership(vector.prev, {
@@ -144,6 +153,25 @@ describe('shared-list due planning and membership steps @regression @tier1', fun
                 members_hash: listMembershipHash(vector.prev)
             });
             assert.deepStrictEqual(result, { halt: 'DELTA' }, vector.name);
+        }
+    });
+
+    it('refuses every remaining non-strict delta shape', function(){
+        const cases = [
+            { current: ['a', 'b'], added: [], removed: ['b', 'a'] },
+            { current: [], added: ['a', 'a'], removed: [] },
+            { current: ['a'], added: [], removed: ['a', 'a'] },
+            { current: [], added: 'a', removed: [] },
+            { current: [], added: [], removed: 'a' },
+            { current: null, added: ['a'], removed: [] }
+        ];
+        for(const delta of cases){
+            assert.deepStrictEqual(nextMembership(delta.current, {
+                seq: 2,
+                added: delta.added,
+                removed: delta.removed,
+                members_hash: listMembershipHash([])
+            }), { halt: 'DELTA' });
         }
     });
 
