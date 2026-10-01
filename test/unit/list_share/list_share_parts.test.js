@@ -125,11 +125,11 @@ describe('list share pure settle parts', function () {
         assert.deepStrictEqual(screenedDelta.fields.removed, ['a']);
     });
 
-    it('requires sequence 1 to carry an empty removed array', function () {
+    it('requires sequence 1 to carry no removed members', function () {
         const ctx = { coin: 'BTC', network: 'regtest', config: {} };
-        const result = screenListSnapshot(fixture({ removed: null }), ctx);
+        const result = screenListSnapshot(fixture({ removed: JSON.stringify(['a']) }), ctx);
         assert.strictEqual(result.halt, LIST_SHARE_HALT_REASON.SCREEN);
-        assert.strictEqual(result.detail, 'removed for full snapshot');
+        assert.strictEqual(result.detail, 'removed_seq_1');
     });
 
     it('names every screen failure with the shared SCREEN halt reason', function () {
