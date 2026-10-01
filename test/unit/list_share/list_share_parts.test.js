@@ -21,7 +21,7 @@ const path = require('path');
 const ah = require('../../../src/consensus/gates/mirror_admission_gate.js');
 const eq = require('../../../src/consensus/equivocation_header.js');
 const { createCanonical, deriveListSnapshotId } = require('../../../src/consensus/list_share_settle/canonical.js');
-const { createScreen } = require('../../../src/consensus/list_share_settle/screen.js');
+const { createScreen, screenListSnapshot } = require('../../../src/consensus/list_share_settle/screen.js');
 const { LIST_SHARE_HALT_REASON } = require('../../../src/consensus/list_share_settle/halt.js');
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
@@ -103,7 +103,7 @@ describe('list share pure settle parts', function () {
     });
 
     it('returns normalized fields for a full snapshot and a delta', function () {
-        const screen = createScreen({ ah }).screenListSnapshot;
+        const screen = screenListSnapshot;
         assert.strictEqual(screen.name, 'screenListSnapshot');
         assert.strictEqual(screen.length, 2);
         const ctx = { coin: 'BTC', network: 'regtest', config: { BTC_CHAIN_ID: 'chain-a' } };
@@ -123,6 +123,13 @@ describe('list share pure settle parts', function () {
         assert.strictEqual(screenedDelta.fields.seq, 2);
         assert.deepStrictEqual(screenedDelta.fields.added, ['c']);
         assert.deepStrictEqual(screenedDelta.fields.removed, ['a']);
+    });
+
+    it('requires sequence 1 to carry an empty removed array', function () {
+        const ctx = { coin: 'BTC', network: 'regtest', config: {} };
+        const result = screenListSnapshot(fixture({ removed: null }), ctx);
+        assert.strictEqual(result.halt, LIST_SHARE_HALT_REASON.SCREEN);
+        assert.strictEqual(result.detail, 'removed for full snapshot');
     });
 
     it('names every screen failure with the shared SCREEN halt reason', function () {

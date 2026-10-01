@@ -39,6 +39,19 @@ function present(value) {
     return value !== null && value !== undefined && value !== '';
 }
 
+function rowAdmissionBlocks(row) {
+    const admitBlocks = {};
+    for (const coin of HOME_CHAINS) {
+        const value = row['admit_block_' + coin.toLowerCase()];
+        if (value === null || value === undefined) continue;
+        const height = Number(value);
+        if (!Number.isSafeInteger(height) || height < 0)
+            throw new Error('invalid admission height');
+        admitBlocks[coin] = height;
+    }
+    return Object.keys(admitBlocks).length ? admitBlocks : null;
+}
+
 function screenIdentity(row, ctx) {
     const snapshotBlock = integer(row && row.snapshot_block);
     if (snapshotBlock === null) return screenHalt('snapshot_block');
@@ -76,7 +89,7 @@ function screenContent(row, ctx, identity) {
     if (added === false || !verifyMembershipOrder(added)) return screenHalt('added');
     const removed = parseMembership(row.removed);
     if (removed === false || !verifyMembershipOrder(removed)) return screenHalt('removed');
-    if (identity.seq === 1 && removed !== null && removed.length !== 0)
+    if (identity.seq === 1 && (!Array.isArray(removed) || removed.length !== 0))
         return screenHalt('removed for full snapshot');
 
     return { listType, added, removed };
@@ -108,6 +121,10 @@ function screenListSnapshotWithDeps(deps, row, ctx) {
     } };
 }
 
+function screenListSnapshot(row, ctx) {
+    return screenListSnapshotWithDeps({ ah: { columnsAdmitBlocks: rowAdmissionBlocks } }, row, ctx);
+}
+
 function createScreen(deps) {
     function screenListSnapshot(row, ctx) {
         return screenListSnapshotWithDeps(deps, row, ctx);
@@ -116,4 +133,4 @@ function createScreen(deps) {
     return { screenListSnapshot };
 }
 
-module.exports = { createScreen };
+module.exports = { createScreen, screenListSnapshot };
