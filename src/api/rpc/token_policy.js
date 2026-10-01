@@ -22,6 +22,11 @@
 
 const crypto = require('crypto');
 const { getLogger } = require('../../observability/index.js');
+const gateRegistry = require('../../consensus/gate_registry');
+const { policyHash } = require('../../consensus/bridge_settle/policy_membership.js');
+const { resolvePolicyRefs } = require('./token_policy/resolve_refs.js');
+
+const LIST_SHARE_PRODUCER_GATE = 'list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION';
 
 // The XPOLICY canonical membership hash for a bridged token's allow and block
 // lists: sha256 over ALLOW|<n or ->|<addr>|...|BLOCK|<m or ->|<addr>|...|SLEEP|<0 or 1>.
@@ -29,15 +34,19 @@ const { getLogger } = require('../../observability/index.js');
 // empty one. Addresses arrive from db.getListAtBlock already in utf8_bin ascending
 // order; this function never re-sorts them, so a caller that changed that ordering
 // would move the hash here, not silently mask it.
-function bridgePolicyHash(allowList, blockList, sleeping){
-    function section(tag, list){
-        let parts = [tag, (list === null) ? '-' : String(list.length)];
-        if(list !== null)
-            for(let addr of list) parts.push(addr);
-        return parts.join('|');
-    }
-    let canonical = section('ALLOW', allowList) + '|' + section('BLOCK', blockList) +
-                    '|SLEEP|' + (sleeping ? '1' : '0');
+function bridgePolicyHash(allowList, blockList, sleeping, refs){
+    if(typeof policyHash === 'function')
+        return policyHash(allowList, blockList, sleeping, refs);
+
+    const part = (label, list, ref) => {
+        if(ref !== null && ref !== undefined) return [label, 'REF', String(ref)];
+        if(list === null || list === undefined) return [label, '-'];
+        return [label, String(list.length)].concat(list.map(String));
+    };
+    const canonical = part('ALLOW', allowList, refs && refs.allow)
+        .concat(part('BLOCK', blockList, refs && refs.block))
+        .concat(['SLEEP', sleeping ? '1' : '0'])
+        .join('|');
     return crypto.createHash('sha256').update(canonical).digest('hex');
 }
 
@@ -52,7 +61,7 @@ function buildTokenPolicyRpc(ctx){
 // Body: { tick, origin_block }
 function tokenPolicyRpc({ indexer }){
     return {
-        async gettokenpolicy({tick, origin_block}){
+        async gettokenpolicy({tick, origin_block, snapshot_block}){
             if(!indexer.indexerDb)
                 return { error: 'indexer database not ready' };
             if(!tick)
@@ -71,7 +80,7 @@ function tokenPolicyRpc({ indexer }){
                     (info.BLOCK_LIST != null) ? db.getListAtBlock(info.BLOCK_LIST, block) : Promise.resolve(null),
                     db.isTickSleepingAtBlock(t, block)
                 ]);
-                return {
+                let response = {
                     allow_list:   allowList,
                     block_list:   blockList,
                     sleeping:     !!sleeping,
@@ -79,6 +88,27 @@ function tokenPolicyRpc({ indexer }){
                     bridged:      Number(info.BRIDGED) === 1,
                     origin_block: block
                 };
+                if(Number.isInteger(snapshot_block) && snapshot_block >= 0 &&
+                   gateRegistry.activeAt(LIST_SHARE_PRODUCER_GATE,
+                       indexer.config['NETWORK'], 'BTC', snapshot_block, null)){
+                    let { allowRef, blockRef } = await resolvePolicyRefs(db, {
+                        coin: 'BTC',
+                        allowIndex: info.ALLOW_LIST,
+                        blockIndex: info.BLOCK_LIST,
+                        originBlock: block
+                    });
+                    if(allowRef !== null){
+                        response.allow_list = allowRef;
+                        response.allow_list_ref = allowRef;
+                    }
+                    if(blockRef !== null){
+                        response.block_list = blockRef;
+                        response.block_list_ref = blockRef;
+                    }
+                    response.policy_hash = bridgePolicyHash(allowList, blockList, !!sleeping,
+                        { allow: allowRef, block: blockRef });
+                }
+                return response;
             } catch (err) {
                 getLogger().error('gettokenpolicy error:', err);
                 return { error: 'failed to look up token policy' };

@@ -85,6 +85,7 @@ describe('list share target', function () {
 
     for(const [label, missingOwnerConfig] of [
         ['bridge address', { ADDRESS: {} }],
+        ['empty bridge address', { ADDRESS: { BRIDGE_DOGE: '' } }],
         ['address map', {}],
     ]){
         it(`halts before any read when the ${label} is missing`, async function () {

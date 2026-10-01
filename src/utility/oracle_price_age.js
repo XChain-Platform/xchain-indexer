@@ -1,7 +1,7 @@
 /*********************************************************************
  *
- * Copyright © 2025-2026 Dankest, LLC
- * Based on XChain Platform by Dankest, LLC - https://dankest.llc
+ * Copyright © 2025–2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC – https://dankest.llc
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
@@ -14,7 +14,7 @@
 
 'use strict';
 
-const gateRegistry = require('../consensus/gate_registry.js');
+const gateRegistry = require('../consensus/gate_registry');
 const { pickMaxPriceAgeSeconds } = require('./price_age/pick.js');
 
 const HOURLY_PRICE_AGE_GATE =
