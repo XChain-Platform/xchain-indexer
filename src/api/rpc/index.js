@@ -38,10 +38,12 @@ const { buildAnchorRpc } = require('./anchor');
 const { buildRollcallRpc } = require('./rollcall');
 const { buildReorgHistoryRpc } = require('./reorg_history');
 
+const getsharedlistFamily = buildListShareMirrorRpc;
+
 const FAMILIES = [
     buildSystemRpc, buildFeesRpc, buildStakesRpc, buildCapabilitiesRpc, buildAttestationRpc,
     buildOrdersRpc, buildBetsRpc, buildBridgeRpc, buildTokenPolicyRpc, buildListShareRpc,
-    buildListShareMirrorRpc, buildCrossChainCallsRpc, buildPriceBatchesRpc, buildAnchorRpc,
+    getsharedlistFamily, buildCrossChainCallsRpc, buildPriceBatchesRpc, buildAnchorRpc,
     buildRollcallRpc, buildReorgHistoryRpc,
 ];
 

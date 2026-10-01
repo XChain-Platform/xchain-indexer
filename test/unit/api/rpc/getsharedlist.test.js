@@ -17,6 +17,7 @@
 const assert = require('assert');
 const sinon = require('sinon');
 
+const { buildRpcController } = require('../../../../src/api/rpc/index.js');
 const { buildListShareMirrorRpc } = require('../../../../src/api/rpc/list_share_mirror.js');
 const { recordingView, fakeIndexer } = require('./helpers/fake_indexer.js');
 const { readApiSource } = require('../../../helpers/api_source.js');
@@ -29,6 +30,16 @@ function parseApiSet(source, name){
 
 describe('getsharedlist JSON-RPC read', function(){
     afterEach(function(){ sinon.restore(); });
+
+    it('is registered in the shared RPC method table and dispatches to this family', async function(){
+        const view = recordingView({ getListShareMirror: null });
+        const controller = buildRpcController({ indexer: fakeIndexer({ view }) });
+
+        assert.strictEqual(typeof controller.getsharedlist, 'function');
+        assert.deepStrictEqual(await controller.getsharedlist({ home_chain: 'LTC', list_index: 23 }),
+            { error: 'no mirror of LTC list 23 on this chain' });
+        assert.deepStrictEqual(view.calls, [['getListShareMirror', 'LTC', 23]]);
+    });
 
     it('returns a foreign mirror at its applied sequence and latest local membership', async function(){
         const mirrorView = recordingView({
