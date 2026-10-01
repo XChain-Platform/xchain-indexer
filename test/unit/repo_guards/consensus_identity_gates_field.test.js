@@ -24,7 +24,28 @@ const BIN = path.join(REPO, 'bin', 'consensus-identity.js');
 const PIN = path.join(REPO, 'bin', 'pins', 'at1-consensus-identity.json');
 
 function run(args) {
-    return spawnSync(process.execPath, [BIN, ...args], { cwd: REPO, encoding: 'utf8', env: childEnv() });
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'consensus-identity-stdout-'));
+    const stdoutPath = path.join(dir, 'stdout');
+    let stdoutFd;
+    try {
+        stdoutFd = fs.openSync(stdoutPath, 'w');
+        // The CLI calls process.exit after logging, so pipe-backed stdout can lose its tail on a loaded host.
+        const result = spawnSync(process.execPath, [BIN, ...args], {
+            cwd: REPO,
+            encoding: 'utf8',
+            env: childEnv(),
+            stdio: ['ignore', stdoutFd, 'pipe'],
+            // A cold comparison measured 1.2s; 10s leaves CI headroom while bounding a wedged child.
+            timeout: 10000,
+        });
+        fs.closeSync(stdoutFd);
+        stdoutFd = undefined;
+        result.stdout = fs.readFileSync(stdoutPath, 'utf8');
+        return result;
+    } finally {
+        if (stdoutFd !== undefined) fs.closeSync(stdoutFd);
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
 }
 
 // The variables the child is allowed to see. A regtest venue arms gate rows from
@@ -63,6 +84,8 @@ describe('consensus identity GATES field and pin comparison', function () {
     });
 
     it('exits zero with an arming lever left set in this process', function () {
+        // A cold comparison measured 1.2s; 10s allows for a loaded CI host while keeping the case bounded.
+        this.timeout(10000);
         // One lever of the pair, which is what a hook that throws between arming and
         // restoring leaves behind. The child must not see it.
         const key = 'XC_ROLLCALL_REGTEST_ACTIVATION';
