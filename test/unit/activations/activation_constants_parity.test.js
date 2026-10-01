@@ -56,10 +56,6 @@ const { CONSTANTS_PATH, canonExists, resolveCanonSource, loadCanon } =
 const registry = require('../../../src/protocol_changes.js');
 const { modulePathFor } = require('../../helpers/gate_modules.js');
 const NOT_A_ROW = new Set(['consensus/reserved_roots.js']);
-const DIRECT_REGISTRY_ROWS = new Set([
-    'oracle_price_age_hourly_activation.ORACLE_PRICE_AGE_HOURLY_ACTIVATION',
-    'oracle_hourly_window_activation.ORACLE_HOURLY_WINDOW_FIRST_ROUND',
-]);
 function registryKey(file, exportName) { return file.replace(/\.js$/, '') + '.' + exportName; }
 // The local value of one GATES entry. W4 (activation registry, row 18) moved
 // the logic-bearing modules to their feature directories and retired the
@@ -68,7 +64,6 @@ function registryKey(file, exportName) { return file.replace(/\.js$/, '') + '.' 
 // no module and its local value IS the registry row the callers read by key.
 function localExport(file, exportName) {
     if (NOT_A_ROW.has(file)) return require('../../../src/' + file)[exportName];
-    if (DIRECT_REGISTRY_ROWS.has(registryKey(file, exportName))) return registry.get(registryKey(file, exportName));
     const modulePath = modulePathFor(file.replace(/\.js$/, ''));
     if (modulePath === null) return registry.get(registryKey(file, exportName));
     return require(modulePath)[exportName];

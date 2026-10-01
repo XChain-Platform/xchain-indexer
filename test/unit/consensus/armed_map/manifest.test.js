@@ -38,10 +38,6 @@ const manifest = require('../../../../src/consensus/armed_map/manifest.js');
 const { canonicalValue } = require('../../../../src/consensus/armed_map/canonical.js');
 const ProtocolChanges = require('../../../../src/protocol_changes.js');
 const { GATE_MODULE_PATHS, REPLACED_STEMS, REGISTRY_ONLY_STEMS } = require('../../../helpers/gate_modules.js');
-const SHARED_REGISTRY_ROWS = new Set([
-    'oracle_price_age_hourly_activation.ORACLE_PRICE_AGE_HOURLY_ACTIVATION',
-    'oracle_hourly_window_activation.ORACLE_HOURLY_WINDOW_FIRST_ROUND',
-]);
 
 // The two declaration shapes that made a file a carrier. ACTIVATION_MAP is the
 // activation-map rule the platform's code-structure gate grades with, and
@@ -129,8 +125,7 @@ describe('armed_map/manifest: completeness guard', function () {
         // key: that is exactly the W4 census plus the registry-only rows, one row
         // per stem, and a new row that no module and no list names still reds here.
         const stems = REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS);
-        const unexported = [...keys].filter((k) => !k.startsWith('protocol_changes.') && !k.startsWith('xchain-vm.')
-            && !exported.has(k) && !SHARED_REGISTRY_ROWS.has(k));
+        const unexported = [...keys].filter((k) => !k.startsWith('protocol_changes.') && !k.startsWith('xchain-vm.') && !exported.has(k));
         const replaced = [...keys].filter((k) => stems.includes(k.slice(0, k.lastIndexOf('.'))));
         assert.strictEqual(replaced.length, stems.length, 'one registry row per replaced shim or registry-only stem');
         assert.deepStrictEqual(unexported, replaced, 'rows no shim exports, beyond the W4-replaced set: ' +
