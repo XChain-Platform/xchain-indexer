@@ -198,10 +198,14 @@ describe('LIST union activation @regression @tier2', function () {
         const db = {
             createTicker: sinon.stub(),
             createAddress: sinon.stub(),
+            getListRootIndex: sinon.stub().callsFake(async (index) => String(index)),
             getListStoredType: sinon.stub().withArgs('10').resolves(2),
             doQuery: sinon.stub().callsFake(async (query) => {
                 if(query.includes('FROM lists l')) return [{ valid: 1 }];
-                return [{ action_index: 10 }, { action_index: 20 }];
+                return [
+                    { action_index: 10, wire_data: 'LIST|0|3||10|20' },
+                    { action_index: 20, wire_data: 'LIST|0|3||10|20' },
+                ];
             }),
         };
 
@@ -215,19 +219,23 @@ describe('LIST union activation @regression @tier2', function () {
     });
 
     it('derives edit member type from the root create wire order, not root index order', async function () {
-        const wireRows = [{ action_index: 20 }, { action_index: 10 }];
+        const wireRows = [
+            { action_index: 10, wire_data: 'LIST|0|3||21|10' },
+            { action_index: 20, wire_data: 'LIST|0|3||21|10' },
+        ];
         const db = {
+            getListRootIndex: sinon.stub().callsFake(async (index) =>
+                String(index)==='21' ? '20' : String(index)
+            ),
             getListStoredType: sinon.stub().callsFake(async (index) =>
                 String(index)==='20' ? 1 : 2
             ),
-            doQuery: sinon.stub().callsFake(async (query) =>
-                query.includes('ORDER BY item_id ASC')
-                    ? wireRows.slice().sort((a, b) => a.action_index-b.action_index)
-                    : wireRows
-            ),
+            doQuery: sinon.stub().resolves(wireRows),
         };
 
         assert.strictEqual(await getUnionMemberType(db, 100), 1);
+        assert.match(db.doQuery.firstCall.args[0], /ORDER BY li\.item_id ASC/);
+        assert.deepStrictEqual(db.getListRootIndex.getCalls().map((call) => call.args[0]), ['21', '10']);
         sinon.assert.calledOnceWithExactly(db.getListStoredType, '20');
     });
 });
