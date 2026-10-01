@@ -16,10 +16,10 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 const assert = require('assert');
 const sinon = require('sinon');
 
-const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
-const { stubActiveAt } = require('../../helpers/gate_modules.js');
-const Airdrop = require('../../../src/actions/airdrop/index.js');
-const Issue = require('../../../src/actions/issue/index.js');
+const { createMockIndexer, createBaseData } = require('../../../fixtures/mocks');
+const { stubActiveAt } = require('../../../helpers/gate_modules.js');
+const Airdrop = require('../../../../src/actions/airdrop/index.js');
+const Issue = require('../../../../src/actions/issue/index.js');
 
 const GATE = 'list_tick_coin_activation.LIST_TICK_COIN_ACTIVATION';
 const OWNER = 'mr9be3iRkfcWj9onyGFzyDSpfRwga2WtxH';
