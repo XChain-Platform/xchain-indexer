@@ -20,6 +20,8 @@ const LIST_SHARE_MAX_MEMBERS = protocolConstants.LIST_SHARE_MAX_MEMBERS || 10000
 
 module.exports = {
     unionTypeActive(data){
+        if(typeof this.indexerDb.getListStoredType !== 'function')
+            return false;
         try {
             return gateRegistry.activeAt(
                 UNION_GATE,

@@ -97,6 +97,19 @@ describe('LIST union activation @regression @tier2', function () {
         sinon.assert.notCalled(indexer.indexerDb.createListItemInvalid);
     });
 
+    it('keeps TYPE 3 unknown without stored-type reads', async function () {
+        const { indexer, handler } = setup();
+        delete indexer.indexerDb.getListStoredType;
+        const data = actionData();
+
+        await handler.parse(['0', '3', '', '10'], data, null);
+
+        assert.strictEqual(data['STATUS'], 'invalid: TYPE (unknown)');
+        sinon.assert.calledOnceWithExactly(indexer.indexerDb.createList, data);
+        sinon.assert.notCalled(indexer.indexerDb.createListItem);
+        sinon.assert.notCalled(indexer.indexerDb.createListItemInvalid);
+    });
+
     it('accepts local and mirror members, normalizes roots, and records bad items', async function () {
         const ctx = setup();
         ctx.addList(11, 2, [ADDR1], 10);
