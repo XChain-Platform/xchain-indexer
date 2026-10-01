@@ -15,6 +15,8 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const HubDbSync = require('../../../../../src/hub/hub_db_sync.js');
+const { CROSS_CHAIN_TABLES, HUB_STATE_TABLES } =
+    require('../../../../../src/hub/hub_db_sync/mirror_tables.js');
 
 // Build a HubDbSync whose enabled flag is true (needs both a hub URL and a hub DB),
 // backed by a stubbed doQuery we drive per-test to simulate the local price mirror.
@@ -175,7 +177,9 @@ function registerBootstrapPaginationGroup9(PAGE, makeBootstrapSync, fullPage) { 
             const bootstrapTable = sinon.stub(sync, 'bootstrapTable').resolves(null);
             await sync.bootstrapAll();
             await clock.tickAsync(sync.pollIntervalMs * 3);
-            assert.strictEqual(bootstrapTable.callCount, 10, 'one pass over the 10 mirrored tables, no retries');
+            const mirroredTableCount = 2 + CROSS_CHAIN_TABLES.length + HUB_STATE_TABLES.length;
+            assert.strictEqual(bootstrapTable.callCount, mirroredTableCount,
+                `one pass over the ${mirroredTableCount} mirrored tables, no retries`);
         } finally {
             clock.restore();
         }
