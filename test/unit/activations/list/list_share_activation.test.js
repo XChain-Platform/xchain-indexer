@@ -48,6 +48,7 @@ function setup(armed, list = [ADDR1], type = 2){
     indexer.indexerDb.getList.resolves(list);
     indexer.indexerDb.getListRootIndex.resolves(LIST_ROOT);
     indexer.indexerDb.getListSource.withArgs(LIST_ROOT).resolves(SOURCE);
+    indexer.indexerDb.getAddressBalances.resolves({ 1: '1' });
     return { indexer, handler, shareGate };
 }
 

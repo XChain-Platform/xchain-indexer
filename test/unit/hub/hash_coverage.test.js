@@ -209,9 +209,10 @@ describe('Hash coverage guard @regression', function () {
 
 describe('Hash coverage guard @regression', function () {
     it('quorum class declarations are pinned to the hub-mirrored federation-signed tables', function () {
+        // The hub signs each list round and the mirror verifies it like policy_snapshots.
         assert.deepStrictEqual(lifecycle.hashClassTables('quorum').sort(),
             ['bridge_transfers', 'capability_snapshots', 'cross_chain_calls', 'cross_chain_matches',
-             'policy_snapshots', 'price_snapshots', 'state_checkpoints'],
+             'list_snapshots', 'policy_snapshots', 'price_snapshots', 'state_checkpoints'],
             'quorum-covered table set changed; verify the new/removed table\'s signature-verification story before updating this pin');
     });
 

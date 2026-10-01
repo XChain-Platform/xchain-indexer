@@ -40,12 +40,11 @@ const { spawnSync } = require('child_process');
 
 const BIN     = path.resolve(__dirname, '../../../bin/consensus-identity.js');
 const REPO    = path.resolve(__dirname, '../../..');
-// A real shared-gate carrier, temporarily renamed out from under the tool: the
-// value it once carried is a registry row, so the digest must not notice. The
-// price-pair gate is the victim since W5 (the royalty shim the case used before
-// is gone: its row is read by key and there is no file left to hide).
+// A real shared-gate carrier hidden from the child process: the value it once
+// carried is a registry row, so the digest must not notice. The price-pair gate
+// is the victim since W5 (the royalty shim the case used before is gone: its row
+// is read by key and there is no file left to hide).
 const VICTIM  = path.resolve(REPO, 'src/consensus/gates/price_pair_gate.js');
-const HIDDEN  = VICTIM + '.hidden-for-test';
 const KEY     = 'price_pair_activation.PRICE_PAIR_WIDEN_ACTIVATION';
 const REGISTRY = path.resolve(REPO, 'src/consensus/gate_registry.js');
 
@@ -69,6 +68,24 @@ function missingRowPreload() {
     return file;
 }
 
+function hiddenCarrierPreload() {
+    const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'identity-hide-'));
+    const file = path.join(dir, 'hidden_carrier.js');
+    fs.writeFileSync(file,
+        'const Module = require(\'module\');\n'
+        + 'const realResolveFilename = Module._resolveFilename;\n'
+        + 'Module._resolveFilename = function (request, parent, isMain, options) {\n'
+        + '    const resolved = realResolveFilename.call(this, request, parent, isMain, options);\n'
+        + '    if (resolved === ' + JSON.stringify(VICTIM) + ') {\n'
+        + '        const error = new Error("Cannot find module \'" + request + "\'");\n'
+        + '        error.code = \'MODULE_NOT_FOUND\';\n'
+        + '        throw error;\n'
+        + '    }\n'
+        + '    return resolved;\n'
+        + '};\n');
+    return file;
+}
+
 describe('bin/consensus-identity.js --assert-no-absent', function () {
 
     it('exits 0 and prints no ABSENT line when every shared gate resolves', function () {
@@ -82,18 +99,7 @@ describe('bin/consensus-identity.js --assert-no-absent', function () {
 
     it('reads every gate with a carrier hidden: the value is the registry row, never the file', function () {
         assert.ok(fs.existsSync(VICTIM), 'fixture assumes this carrier is present at HEAD');
-        const before = fs.readFileSync(VICTIM);
-        fs.renameSync(VICTIM, HIDDEN);
-        let res;
-        try {
-            res = run(['--assert-no-absent', '--json']);
-        } finally {
-            fs.renameSync(HIDDEN, VICTIM);
-        }
-        // Byte-exact restore, not just "the file exists again": a test that leaves the
-        // fixture in a mutated state corrupts every case run after it in the same file.
-        assert.ok(before.equals(fs.readFileSync(VICTIM)), 'fixture carrier must be restored byte-exact');
-
+        const res = run(['--assert-no-absent', '--json'], hiddenCarrierPreload());
         assert.strictEqual(res.status, 0, res.stdout + res.stderr);
         const identity = JSON.parse(res.stdout);
         assert.deepStrictEqual(identity.absent_gates, []);
