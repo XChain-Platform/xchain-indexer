@@ -159,6 +159,11 @@ async function fullCopyIndex(ctx, target, index){
     return active ? await ownedListIndex(ctx, target, index) : index;
 }
 
+async function fullCopyMemberIndex(ctx, target, index, hasField, list, ref){
+    if(ref || !hasField || list === null) return index;
+    return await fullCopyIndex(ctx, target, index);
+}
+
 /**
  * Inject the membership, pointer and sleep legs in their pinned ordinal order.
  *
@@ -174,10 +179,10 @@ async function injectPolicyLegs(row, ctx, f, target, member, actionIndexes){
     const hasAllowField = Object.prototype.hasOwnProperty.call(row, 'allow_list');
     const hasBlockField = Object.prototype.hasOwnProperty.call(row, 'block_list');
 
-    const allowIndex = member.allowRef ? target.info['ALLOW_LIST'] :
-        await fullCopyIndex(ctx, target, target.info['ALLOW_LIST']);
-    const blockIndex = member.blockRef ? target.info['BLOCK_LIST'] :
-        await fullCopyIndex(ctx, target, target.info['BLOCK_LIST']);
+    const allowIndex = await fullCopyMemberIndex(ctx, target, target.info['ALLOW_LIST'],
+                                                 hasAllowField, member.allow, member.allowRef);
+    const blockIndex = await fullCopyMemberIndex(ctx, target, target.info['BLOCK_LIST'],
+                                                 hasBlockField, member.block, member.blockRef);
     const allowRes = member.allowRef ?
         { created: refNeedsPointer(allowIndex, refs.allow) ? refs.allow : null } :
         await applyList(member.allow, hasAllowField, detachActive, allowIndex,
