@@ -203,8 +203,8 @@ describe('LIST union activation @regression @tier2', function () {
             doQuery: sinon.stub().callsFake(async (query) => {
                 if(query.includes('FROM lists l')) return [{ valid: 1 }];
                 return [
-                    { action_index: 10, wire_data: 'LIST|0|3||10|20' },
-                    { action_index: 20, wire_data: 'LIST|0|3||10|20' },
+                    { action_index: 10, wire_data: 'LIST|0|3||10|20', list_position: 1 },
+                    { action_index: 20, wire_data: 'LIST|0|3||10|20', list_position: 1 },
                 ];
             }),
         };
@@ -220,8 +220,8 @@ describe('LIST union activation @regression @tier2', function () {
 
     it('derives edit member type from the root create wire order, not root index order', async function () {
         const wireRows = [
-            { action_index: 10, wire_data: 'LIST|0|3||21|10' },
-            { action_index: 20, wire_data: 'LIST|0|3||21|10' },
+            { action_index: 10, wire_data: 'LIST|0|3||21|10', list_position: 1 },
+            { action_index: 20, wire_data: 'LIST|0|3||21|10', list_position: 1 },
         ];
         const db = {
             getListRootIndex: sinon.stub().callsFake(async (index) =>
@@ -237,5 +237,31 @@ describe('LIST union activation @regression @tier2', function () {
         assert.match(db.doQuery.firstCall.args[0], /ORDER BY li\.item_id ASC/);
         assert.deepStrictEqual(db.getListRootIndex.getCalls().map((call) => call.args[0]), ['21', '10']);
         sinon.assert.calledOnceWithExactly(db.getListStoredType, '20');
+    });
+
+    it('selects the requested root create when a batch has matching union creates', async function () {
+        const wireData = 'BATCH|0|LIST|0|3||21|10;LIST|0|3||10|21';
+        const db = {
+            getListRootIndex: sinon.stub().callsFake(async (index) =>
+                String(index)==='21' ? '20' : String(index)
+            ),
+            getListStoredType: sinon.stub().callsFake(async (index) =>
+                String(index)==='20' ? 1 : 2
+            ),
+            doQuery: sinon.stub().callsFake(async (query, args) => [
+                { action_index: 10, wire_data: wireData, list_position: Number(args[0])-99 },
+                { action_index: 20, wire_data: wireData, list_position: Number(args[0])-99 },
+            ]),
+        };
+
+        assert.strictEqual(await getUnionMemberType(db, 100), 1);
+        assert.strictEqual(await getUnionMemberType(db, 101), 2);
+        assert.deepStrictEqual(db.getListStoredType.getCalls().map((call) => call.args[0]), ['20', '10']);
+        assert.deepStrictEqual(db.getListRootIndex.getCalls().map((call) => call.args[0]), [
+            '21', '10',
+            '10', '21',
+        ]);
+        assert.deepStrictEqual(db.doQuery.getCalls().map((call) => call.args[1]), [[100], [101]]);
+        assert.match(db.doQuery.firstCall.args[0], /prior\.source_id<=>t\.source_id/);
     });
 });

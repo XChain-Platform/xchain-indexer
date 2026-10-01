@@ -39,37 +39,44 @@ async function getUnionMemberRoots(db, headIndex){
     return rows.map((row) => String(row['action_index']));
 }
 
-function unionCreateItems(wireData){
+function unionCreateItems(wireData, listPosition){
     let commands = String(wireData || '').split(';');
     let first = commands[0].split('|');
     if(String(first[0]).trim().toUpperCase()==='BATCH')
         commands[0] = first.slice(2).join('|');
-    return commands
+    let listCommands = commands
         .map((command) => command.split('|').map((part) => part.trim()))
-        .filter((parts) => parts[0].toUpperCase()==='LIST' && parts[1]==='0' && parts[2]==='3')
-        .map((parts) => parts.slice(4));
+        .filter((parts) => parts[0].toUpperCase()==='LIST');
+    let command = listCommands[Number(listPosition)-1];
+    if(!command || command[1]!=='0' || command[2]!=='3')
+        return [];
+    return command.slice(4);
 }
 
-async function orderUnionMemberRoots(db, roots, wireData){
+async function orderUnionMemberRoots(db, roots, wireData, listPosition){
     let stored = new Set(roots);
-    for(let items of unionCreateItems(wireData)){
-        let ordered = [];
-        for(let item of items){
-            if(canonicalListIndex(item) === null)
-                continue;
-            let memberRoot = String(await db.getListRootIndex(item));
-            if(stored.has(memberRoot) && !ordered.includes(memberRoot))
-                ordered.push(memberRoot);
-        }
-        if(ordered.length === roots.length)
-            return ordered;
+    let ordered = [];
+    for(let item of unionCreateItems(wireData, listPosition)){
+        if(canonicalListIndex(item) === null)
+            continue;
+        let memberRoot = String(await db.getListRootIndex(item));
+        if(stored.has(memberRoot) && !ordered.includes(memberRoot))
+            ordered.push(memberRoot);
     }
-    return roots;
+    return ordered.length === roots.length ? ordered : roots;
 }
 
 async function getUnionMemberType(db, root){
     let rows = await db.doQuery(
-        `SELECT li.item_id AS action_index, t.data AS wire_data
+        `SELECT li.item_id AS action_index,
+                t.data AS wire_data,
+                (SELECT COUNT(*)
+                 FROM actions prior
+                 INNER JOIN index_actions prior_type ON (prior_type.id=prior.action_id)
+                 WHERE prior.tx_index=a.tx_index
+                   AND prior.action_index<=a.action_index
+                   AND prior.source_id<=>t.source_id
+                   AND prior_type.action='LIST') AS list_position
          FROM list_items li
          LEFT JOIN actions a ON (a.action_index=li.action_index)
          LEFT JOIN transactions t ON (t.tx_index=a.tx_index)
@@ -80,7 +87,12 @@ async function getUnionMemberType(db, root){
     if(rows.length === 0)
         return false;
     let roots = rows.map((row) => String(row['action_index']));
-    roots = await orderUnionMemberRoots(db, roots, rows[0]['wire_data']);
+    roots = await orderUnionMemberRoots(
+        db,
+        roots,
+        rows[0]['wire_data'],
+        rows[0]['list_position']
+    );
     let getStoredType = db.getListStoredType || db.getListType;
     return getStoredType.call(db, roots[0]);
 }
