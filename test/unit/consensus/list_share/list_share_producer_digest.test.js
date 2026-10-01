@@ -2,7 +2,6 @@
  *
  * Copyright © 2025-2026 Dankest, LLC
  * Based on XChain Platform by Dankest, LLC - https://dankest.llc
- * GENERATED
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  *
@@ -17,8 +16,8 @@
 
 const assert = require('assert');
 
-const consensusRules = require('../../../src/consensus_rules_digest.js');
-const gateRegistry = require('../../../src/consensus/gate_registry.js');
+const consensusRules = require('../../../../src/consensus_rules_digest.js');
+const gateRegistry = require('../../../../src/consensus/gate_registry.js');
 
 const KEY = 'list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION';
 

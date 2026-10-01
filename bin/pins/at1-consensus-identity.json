@@ -19,6 +19,7 @@
     "gates_field_hash": "99348c56ad1c1e38485cd6ba58a25a50b43bbe36ab250bcd4bccccf8baac1931",
     "carrier_logic_digest": "6c6c9da9227986995d7df81c7c11287f27651fac95289d91f064223b3d5693ca",
     "consensus_rules_digest": "a987aaee46fdd826e131bd9216e8c765068294cc86ec5e43ad07d6e996709188",
+    "gate_key_count": 39,
     "consensus_rules_gates": {
       "anchor_reward_activation.ANCHOR_REWARD_ACTIVATION": "{\"mainnet\":961000,\"regtest\":0,\"testnet\":0}",
       "anchor_reward_activation.ARCHIVE_REWARD_ACTIVATION": "{\"mainnet\":963000,\"regtest\":0,\"testnet\":0}",
@@ -80,6 +81,7 @@
     "gates_field_hash": "99348c56ad1c1e38485cd6ba58a25a50b43bbe36ab250bcd4bccccf8baac1931",
     "carrier_logic_digest": "6c6c9da9227986995d7df81c7c11287f27651fac95289d91f064223b3d5693ca",
     "consensus_rules_digest": "b59f966305c62709eac2e2c6da9e000a9c29d09351b4e223e5f70192559a2afc",
+    "gate_key_count": 39,
     "consensus_rules_gates": {
       "anchor_reward_activation.ANCHOR_REWARD_ACTIVATION": "{\"mainnet\":961000,\"regtest\":0,\"testnet\":0}",
       "anchor_reward_activation.ARCHIVE_REWARD_ACTIVATION": "{\"mainnet\":963000,\"regtest\":0,\"testnet\":0}",
