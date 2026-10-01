@@ -175,4 +175,19 @@ addGate('xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION', 'height', {
 addGate('anchor_fold_activation.ANCHOR_FOLD_ACTIVATION', 'height', { mainnet: UNARMED, testnet: UNARMED, regtest: UNPINNED });
 // archive_section_verdict_activation
 addGate('archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION', 'height', { mainnet: UNARMED, testnet: UNARMED, regtest: UNPINNED });
+// list_share_producer_activation: the hub snapshot plane begins producing shared-list versions.
+addGate('list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION', 'height', {
+    mainnet: 9999999999,
+    testnet: 9999999999,
+    regtest: 0,
+});
+// list_share_consumer_activation: each chain begins applying shared-list versions and references.
+addGate('list_share_consumer_activation.LIST_SHARE_CONSUMER_ACTIVATION', 'height', {
+    mainnet: 9999999999,
+    testnet: 9999999999,
+    'BTC:testnet': 9999999999,
+    'LTC:testnet': 9999999999,
+    'DOGE:testnet': 9999999999,
+    regtest: 0,
+});
 // SHARED-GATES END

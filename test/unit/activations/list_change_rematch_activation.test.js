@@ -63,6 +63,8 @@ function setup(armed){
     indexer.indexerDb.getSwapEdits.resolves({ allow_list: false, block_list: false });
     indexer.indexerDb.doQuery.callsFake(async (sql) => {
         if(sql.includes('FROM lists')) return [];
+        // The transfer-aware owner lookup (LS-14): no transfer, so ownership falls back to the source.
+        if(sql.includes('FROM list_transfers')) return [];
         if(sql.includes('FROM\n                    orders o'))
             return [{ action_index: 10, allow_list: LIST_ROOT, block_list: null }];
         if(sql.includes('FROM\n                    swaps s'))
@@ -94,6 +96,13 @@ async function addCounterparty(handler){
 function assertCrossed(book, first, second){
     assert.strictEqual(book[first].status, 'open');
     assert.strictEqual(book[second].status, 'open');
+}
+
+// Before the rematch gate no ORDER or SWAP rematch read may run. The list handler's own
+// reads (the transfer-aware owner, the shared-list check) are not rematch queries.
+function assertNoRematchQuery(db){
+    const rematch = db.doQuery.getCalls().filter(call => /FROM\s+(orders|swaps)\s/.test(String(call.args[0])));
+    assert.strictEqual(rematch.length, 0, 'a rematch query ran before activation');
 }
 
 describe('LIST change rematch activation @regression @tier2', function () {
@@ -148,7 +157,7 @@ describe('LIST change rematch activation @regression @tier2', function () {
         assertCrossed(orderBook, 10, 20);
         assertCrossed(swapBook, 5, 25);
         sinon.assert.notCalled(actionsCtx.processAction);
-        sinon.assert.notCalled(indexer.indexerDb.doQuery);
+        assertNoRematchQuery(indexer.indexerDb);
         sinon.assert.notCalled(indexer.indexerDb.getOrderEdits);
         sinon.assert.notCalled(indexer.indexerDb.getSwapEdits);
     });
@@ -165,12 +174,12 @@ describe('LIST change rematch activation @regression @tier2', function () {
         indexer.indexerDb.doQuery.resetHistory();
         const tokenList = createBaseData({ ACTION: 'LIST', ACTION_INDEX: LIST_ROOT + 1, BLOCK_INDEX: 200, FORMAT: 0, SOURCE });
         await handler.parse(['0', '1', '', 'UNKNOWN'], tokenList, null);
-        sinon.assert.notCalled(indexer.indexerDb.doQuery);
+        assertNoRematchQuery(indexer.indexerDb);
 
         const invalid = createBaseData({ ACTION: 'LIST', ACTION_INDEX: LIST_EDIT + 1, BLOCK_INDEX: 200, FORMAT: 1, SOURCE });
         indexer.indexerDb.getListType.resolves(false);
         await handler.parse(['1', '1', '9999', '', ADDR2], invalid, null);
-        sinon.assert.notCalled(indexer.indexerDb.doQuery);
+        assertNoRematchQuery(indexer.indexerDb);
         sinon.assert.notCalled(actionsCtx.processAction);
     });
 });
