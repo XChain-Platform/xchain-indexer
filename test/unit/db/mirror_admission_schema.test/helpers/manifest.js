@@ -76,6 +76,10 @@ const HUB_ONLY_ADMISSION_COLUMNS = Object.freeze({
     // own snapshot_block plus ANCHOR_REWARD_MIRROR_MATURITY (144), never on this column
     // (family section 5.7: "its admission height already exists").
     anchor_reward_attestations: Object.freeze(['admit_block_btc']),
+    // The hub shared-list snapshot table (LS-40) carries the three admission columns, but
+    // no indexer mirror reads it yet; LS-20 adds the indexer mirror and moves this entry
+    // into the manifest above.
+    list_snapshots: Object.freeze(['admit_block_btc', 'admit_block_ltc', 'admit_block_doge']),
 });
 
 // Every table name the manifest carries, in the order the migration and the compat gate

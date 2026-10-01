@@ -64,6 +64,15 @@ const GOLDEN_GAS_SCHEDULE = {
     // above-dust one on its own. GAS_SCHEDULE is hashed whole by the coins registry,
     // so adding this key regenerated consensus_pin in the same change.
     XBRIDGE_BASE:       5000,
+    // Shared lists: the share fee, and a shared edit priced as a base plus a per-item
+    // charge for each member added or removed. The base is sized at SWEEP_BASE for the
+    // SWEEP_BASE reason, so the smallest shared edit buys an above-dust native fee
+    // output on LTC and DOGE; local lists stay free and nothing charges these keys below
+    // LIST_SHARE_ACTIVATION. GAS_SCHEDULE is hashed whole by the coins registry, so
+    // adding them regenerated consensus_pin in the same change.
+    LIST_SHARE:         100000,
+    LIST_SHARED_EDIT_BASE: 5000,
+    LIST_SHARED_EDIT_PER_ITEM: 100,
     VM_EXECUTE_BASE:    1000,
     VM_GUARD_GAS_CEILING: 200000,
     VM_DEPLOY_BASE:     100000,
