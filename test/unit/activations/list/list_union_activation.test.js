@@ -156,13 +156,23 @@ describe('LIST union activation @regression @tier2', function () {
         sinon.assert.notCalled(ctx.indexer.indexerDb.createListItem);
     });
 
-    it('does not cap a genesis-injected union action', async function () {
+    it('skips only the merged-membership cap for genesis-injected union actions', async function () {
         const ctx = setup();
         const data = actionData({ TYPE: 3, IS_GENESIS: true });
 
-        const error = await ctx.handler.validateUnionResult(data, 2, ['10'], 0, null);
+        const valid = await ctx.handler.validateUnionResult(data, 2, ['10'], 0, null);
+        const noMembers = await ctx.handler.validateUnionResult(data, 0, [], 0, null);
+        const tooManyMembers = await ctx.handler.validateUnionResult(
+            data,
+            2,
+            Array.from({ length: 17 }, (_, index) => String(index+1)),
+            0,
+            null
+        );
 
-        assert.strictEqual(error, null);
+        assert.strictEqual(valid, null);
+        assert.strictEqual(noMembers, 'invalid: ITEM (no member list)');
+        assert.strictEqual(tooManyMembers, 'invalid: ITEM (union exceeds LIST_UNION_MAX_MEMBERS)');
         sinon.assert.notCalled(ctx.indexer.indexerDb.getList);
     });
 

@@ -86,14 +86,16 @@ module.exports = {
     },
 
     async validateUnionResult(data, format, list, changes, error){
-        if(error || data['TYPE']!=3 || data['IS_GENESIS'])
+        if(error || data['TYPE']!=3)
             return error;
 
         let merged = new Set();
-        for(let member of list){
-            let items = await this.indexerDb.getList(member, data['BLOCK_INDEX']);
-            for(let item of items)
-                merged.add(item);
+        if(!data['IS_GENESIS']){
+            for(let member of list){
+                let items = await this.indexerDb.getList(member, data['BLOCK_INDEX']);
+                for(let item of items)
+                    merged.add(item);
+            }
         }
 
         return unionResultVerdict({
