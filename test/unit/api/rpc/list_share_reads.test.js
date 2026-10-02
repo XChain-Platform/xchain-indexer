@@ -43,19 +43,26 @@ describe('JSON-RPC list share reads @regression @tier1', function(){
         ];
         const afterEdit = beforeEdit.concat('n4SYP6TJyNMuY7xKx4L6B9J7jMRNQ6jGxL');
         const view = recordingView({
+            getListRootIndex: listIndex => listIndex,
             getListType: 2,
-            getListAtBlock: (listIndex, block) => block <= 40 ? beforeEdit : afterEdit
+            getListAtBlock: (listIndex, block) => block <= 40 ? beforeEdit : afterEdit,
+            getListMeta: null
         });
         const rpc = buildListShareRpc({ indexer: fakeIndexer({ view }) });
 
         assert.deepStrictEqual(await rpc.getlistat({ list_index: 17, block: 40 }), {
             type: 2,
             members: beforeEdit,
-            hash: sha256('MEMBERS|2|' + beforeEdit.join('|'))
+            hash: sha256('MEMBERS|2|' + beforeEdit.join('|')),
+            name: null,
+            description: null,
+            meta_hash: ''
         });
         assert.deepStrictEqual(view.calls, [
+            ['getListRootIndex', 17, null, 40],
             ['getListType', 17, 40],
-            ['getListAtBlock', 17, 40]
+            ['getListAtBlock', 17, 40],
+            ['getListMeta', 17, 40]
         ]);
 
         const current = await rpc.getlistat({ list_index: 17, block: 41 });
@@ -63,29 +70,76 @@ describe('JSON-RPC list share reads @regression @tier1', function(){
         assert.notStrictEqual(current.hash, sha256('MEMBERS|2|' + beforeEdit.join('|')));
     });
 
+    it('changes metadata without changing root membership after a later rename', async function(){
+        const members = ['bc1q-list-member', '1LegacyListMember'];
+        const membershipHash = sha256('MEMBERS|2|' + members.join('|'));
+        const view = recordingView({
+            getListRootIndex: listIndex => listIndex === 117 ? 100 : listIndex,
+            getListType: 2,
+            getListAtBlock: members,
+            getListMeta: (rootIndex, block) => block < 60
+                ? { name: 'Initial name', description: null }
+                : { name: 'Renamed list', description: 'New label only' }
+        });
+        const rpc = buildListShareRpc({ indexer: fakeIndexer({ view }) });
+
+        const before = await rpc.getlistat({ list_index: 117, block: 59 });
+        const after = await rpc.getlistat({ list_index: 117, block: 60 });
+
+        assert.strictEqual(before.name, 'Initial name');
+        assert.strictEqual(before.description, null);
+        assert.strictEqual(after.name, 'Renamed list');
+        assert.strictEqual(after.description, 'New label only');
+        assert.strictEqual(before.meta_hash, sha256('LISTMETA|Initial name|'));
+        assert.strictEqual(after.meta_hash, sha256('LISTMETA|Renamed list|New label only'));
+        assert.deepStrictEqual(after.members, before.members);
+        assert.strictEqual(before.hash, membershipHash);
+        assert.strictEqual(after.hash, membershipHash);
+        assert.deepStrictEqual(view.calls, [
+            ['getListRootIndex', 117, null, 59],
+            ['getListType', 100, 59],
+            ['getListAtBlock', 100, 59],
+            ['getListMeta', 100, 59],
+            ['getListRootIndex', 117, null, 60],
+            ['getListType', 100, 60],
+            ['getListAtBlock', 100, 60],
+            ['getListMeta', 100, 60]
+        ]);
+    });
+
     it('hashes an empty membership as MEMBERS|0 and reports tick-list type 1', async function(){
         const view = recordingView({
+            getListRootIndex: listIndex => listIndex,
             getListType: listIndex => listIndex === 2 ? 1 : 2,
-            getListAtBlock: listIndex => listIndex === 2 ? ['DOGE', 'PEPE'] : []
+            getListAtBlock: listIndex => listIndex === 2 ? ['DOGE', 'PEPE'] : [],
+            getListMeta: null
         });
         const rpc = buildListShareRpc({ indexer: fakeIndexer({ view }) });
 
         assert.deepStrictEqual(await rpc.getlistat({ list_index: 1, block: 0 }), {
             type: 2,
             members: [],
-            hash: sha256('MEMBERS|0')
+            hash: sha256('MEMBERS|0'),
+            name: null,
+            description: null,
+            meta_hash: ''
         });
         assert.deepStrictEqual(await rpc.getlistat({ list_index: 2, block: 8 }), {
             type: 1,
             members: ['BTC:DOGE', 'BTC:PEPE'],
-            hash: sha256('MEMBERS|2|BTC:DOGE|BTC:PEPE')
+            hash: sha256('MEMBERS|2|BTC:DOGE|BTC:PEPE'),
+            name: null,
+            description: null,
+            meta_hash: ''
         });
     });
 
     it('returns distinct errors for unknown, rejected, and malformed list reads', async function(){
         const view = recordingView({
+            getListRootIndex: listIndex => listIndex,
             getListType: listIndex => listIndex === 404 ? false : 2,
-            getListAtBlock: listIndex => listIndex === 9 ? null : []
+            getListAtBlock: listIndex => listIndex === 9 ? null : [],
+            getListMeta: null
         });
         const rpc = buildListShareRpc({ indexer: fakeIndexer({ view }) });
 
@@ -111,6 +165,7 @@ describe('JSON-RPC list share reads @regression @tier1', function(){
                 assert.deepStrictEqual(args, [100]);
                 return [{ address: 'transferred-owner' }];
             }),
+            getListMeta: sinon.stub().resolves({ name: 'Shared watchlist', description: null }),
             getListSource: sinon.stub().rejects(new Error('transfer owner must win'))
         };
         const indexerDb = { apiView: sinon.stub().returns(view) };
@@ -118,11 +173,13 @@ describe('JSON-RPC list share reads @regression @tier1', function(){
 
         assert.deepStrictEqual(await rpc.getsharedlists({ network: 'regtest' }), [{
             root_index: 100,
+            name: 'Shared watchlist',
             owner: 'transferred-owner',
             share_block: 20,
             share_action_index: 200
         }]);
         assert.strictEqual(view.doQuery.callCount, 2);
+        assert.ok(view.getListMeta.calledOnceWithExactly(100, null));
         assert.ok(indexerDb.apiView.calledOnceWithExactly());
     });
 
