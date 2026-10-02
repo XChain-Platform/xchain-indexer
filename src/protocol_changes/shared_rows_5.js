@@ -190,6 +190,15 @@ addGate('list_share_consumer_activation.LIST_SHARE_CONSUMER_ACTIVATION', 'height
     'DOGE:testnet': 67956922,
     regtest: 0,
 });
+// list_meta_activation: the hub reads it with coin BTC at snapshot_block.
+addGate('list_meta_activation.LIST_META_ACTIVATION', 'height', {
+    mainnet: 9999999999,
+    testnet: 9999999999,
+    'BTC:testnet': 9999999999,
+    'LTC:testnet': 9999999999,
+    'DOGE:testnet': 9999999999,
+    regtest: 0,
+});
 // oracle_price_age_hourly_activation: gates the hourly price-snapshot age limit
 // for fee pricing, fee views, attest settlement and VM oracle data.
 addGate('oracle_price_age_hourly_activation.ORACLE_PRICE_AGE_HOURLY_ACTIVATION', 'height', {

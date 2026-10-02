@@ -140,6 +140,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'list_change_rematch_activation',
     'list_share_producer_activation',
     'list_share_consumer_activation',
+    'list_meta_activation',
     'list_share_activation',
     'list_union_activation',
     'list_transfer_activation',
