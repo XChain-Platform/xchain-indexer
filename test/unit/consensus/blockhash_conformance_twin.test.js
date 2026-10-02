@@ -40,6 +40,10 @@
  *      comment included, unlike the normalized checks). The indexer keeps it in
  *      src/state_commitment/persistent_smt.js, the follower in its whole-file
  *      src/stateCommitment.js
+ *   7. the state_key collation flag-day gate (the STATE_KEY_COLLATION_KEY
+ *      value, the activeAt call shape, the ' COLLATE utf8_bin' splice value and
+ *      where it is spliced), which item 2 cannot see; checked in
+ *      blockhash_conformance_twin.test/01_state_key_collation_gate.test.js
  *
  * A one-sided edit to any of these forks every sync validator's recomputed
  * hash on the next real block (durable divergence halt fleet-wide). The
@@ -52,102 +56,37 @@
 
 const assert  = require('assert');
 const fs      = require('fs');
-const path    = require('path');
-const { concatSrcTreeFiles } = require('../../helpers/src_tree_files');
-const { makeLoadPair } = require('./blockhash_conformance_twin.test/helpers/pair_loader.js');
 
-// Sibling resolution + hard-fail policy: same conventions as the reciprocal
-// twin guard in rollback_coverage.test.js. Skip when the sibling checkout is
-// absent, throw where XCHAIN_REQUIRE_SIBLINGS=1 makes green-by-skip
-// impossible (bin/ci-all.sh and the sibling-checkout CI job).
-const INDEXER_ROOT = path.resolve(__dirname, '..', '..', '..');
-const SYNC_ROOT    = process.env.XCHAIN_SYNC_PATH
-    ? path.resolve(process.env.XCHAIN_SYNC_PATH)
-    : path.resolve(__dirname, '..', '..', '..', '..', 'xchain-sync');
-const SIBLING_REQUIRED = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
-// Presence is the shared sibling verdict, so a lane symlink into a live main
-// checkout is refused exactly like an absent sync tree, and the error names why.
-const { siblingCheckout } = require('../../helpers/sibling_checkout.js');
-function requireSibling(ctx, absPath){
-    const verdict = siblingCheckout(__dirname, absPath);
-    if(verdict.usable) return true;
-    if(SIBLING_REQUIRED)
-        throw new Error('consensus drift guard cannot run: ' + verdict.reason +
-            ' (check out xchain-sync or set XCHAIN_SYNC_PATH)');
-    ctx.skip();
-    return false;
-}
-
-// ---- extraction helpers -----------------------------------------------------
-
-// Cut unquoted // comments (tracking ' " ` quote state per line) so the two
-// sides compare on code, not on their independently-worded comments.
-function stripComments(src){
-    return src.split('\n').map(line => {
-        let q = null;
-        for(let i = 0; i < line.length; i++){
-            const ch = line[i];
-            if(q){ if(ch === q && line[i-1] !== '\\') q = null; continue; }
-            if(ch === "'" || ch === '"' || ch === '`'){ q = ch; continue; }
-            if(ch === '/' && line[i+1] === '/') return line.slice(0, i);
-        }
-        return line;
-    }).join('\n');
-}
-
-// Comment-stripped, string-concat-joined, whitespace-collapsed form. The `+`
-// collapse keeps a template literal split by concatenation (the flag-day
-// stateKeyCollate splice) comparable across formatting choices.
-function normalize(src){
-    return stripComments(src).replace(/\s+\+\s+/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-// Slice a balanced-brace function/method starting at the first match of sigRe.
-// Tracks quote state so braces inside string/template literals don't count.
-function extractFunction(src, sigRe, from){
-    const m = src.match(sigRe);
-    assert.ok(m, 'signature not found in ' + from + ': ' + sigRe);
-    let depth = 0, q = null;
-    for(let j = src.indexOf('{', m.index); j < src.length; j++){
-        const ch = src[j];
-        if(q){
-            if(ch === '\\'){ j++; continue; }
-            if(ch === q) q = null;
-            continue;
-        }
-        if(ch === "'" || ch === '"' || ch === '`'){ q = ch; continue; }
-        if(ch === '/' && src[j+1] === '/'){ j = src.indexOf('\n', j); continue; }
-        if(ch === '{') depth++;
-        if(ch === '}'){ depth--; if(depth === 0) return src.slice(m.index, j + 1); }
-    }
-    assert.fail('unbalanced braces extracting ' + sigRe + ' from ' + from);
-}
-
-// Ordered whitespace-collapsed template-literal list inside a function slice.
-// A query spliced by concatenation yields one fragment per literal piece; both
-// sides splice identically, so the fragment lists still compare pairwise.
-function sqlLiterals(fnSrc){
-    const out = [];
-    const re = /`([^`]*)`/g;
-    let m;
-    while((m = re.exec(fnSrc)) !== null) out.push(m[1].replace(/\s+/g, ' ').trim());
-    return out;
-}
+// Sibling policy, source loading and extraction live in one helper so every
+// twin suite under blockhash_conformance_twin.test/ reads the sources the same way.
+const { stripComments, normalize, extractFunction, sqlLiterals, syncFile, loadPair } =
+    require('./blockhash_conformance_twin.test/helpers/twin_sources.js');
 
 const indexerGatheringSource = require('./blockhash_conformance_twin.test/helpers/indexer_gathering.js').make({ assert, stripComments, extractFunction, sqlLiterals });
 
-function syncFile(rel){ return path.join(SYNC_ROOT, rel); }
-function indexerFile(rel){ return path.join(INDEXER_ROOT, rel); }
-
-// The indexer half of a twin may be a directory (the Database class is one file per
-// table family), in which case the scan reads every file in a fixed order.
-function indexerSource(rel){
-    const full = indexerFile(rel);
-    if(!fs.statSync(full).isDirectory()) return fs.readFileSync(full, 'utf8');
-    return concatSrcTreeFiles(full);
+// Assert the three canonicalization loops run INSIDE fnSrc, after the escrows
+// gather (afterText) and before hashing (beforeText), with nothing reassigning or
+// reordering a ledger row set between the last loop and the hash.
+function assertCanonicalizedBeforeHash(fnSrc, from, afterText, beforeText){
+    const body  = stripComments(fnSrc);
+    const start = body.indexOf(afterText);
+    const end   = body.indexOf(beforeText, start);
+    assert.ok(start !== -1 && end > start, from + ' no longer has `' + afterText + '` followed by `' + beforeText + '`');
+    const loopRe = /for \(const row of ledger\.(credits|debits|escrows)\)\s+row\.address = canonicalizeHashAddress\(row\.address\);/g;
+    const seen = new Set();
+    let m, lastEnd = -1;
+    while((m = loopRe.exec(body)) !== null){
+        assert.ok(m.index > start && m.index < end, 'the ' + m[1] + ' canonicalization loop in ' + from +
+            ' runs outside the window between the escrows gather and the hash');
+        seen.add(m[1]);
+        lastEnd = m.index + m[0].length;
+    }
+    assert.deepStrictEqual([...seen].sort(), ['credits', 'debits', 'escrows'],
+        from + ' must canonicalize BURN/GAS/DONATE/REWARD addresses on all three ledger row sets ' +
+        'before hashing; a missing loop leaks the per-chain address encoding into the hash on one side only');
+    assert.doesNotMatch(body.slice(lastEnd, end), /ledger\.(credits|debits|escrows)\s*(=(?!=)|\.(sort|reverse|splice|map|filter)\()/,
+        from + ' reassigns or reorders a canonicalized ledger row set before hashing it');
 }
-
-const loadPair = makeLoadPair({ fs, requireSibling, syncFile, indexerSource });
 
 describe('consensus block-hash conformance twins (static drift-lock) @regression', function(){
 
@@ -185,18 +124,21 @@ describe('consensus block-hash conformance twins (static drift-lock) @regression
     });
 
     it('special-address canonicalization covers credits, debits and escrows on both sides', function(){
-        const pair = loadPair(this, 'src/client/block_hasher.js', 'src/db');
+        const pair = loadPair(this, 'src/client/block_hasher.js', 'src/db/actions.js');
         if(!pair) return;
-        const loopRe = /for \(const row of ledger\.(credits|debits|escrows)\)\s+row\.address = canonicalizeHashAddress\(row\.address\);/g;
-        for(const [name, src] of [['db.js', pair.indexer], ['block_hasher.js', pair.sync]]){
-            const seen = new Set();
-            let m;
-            loopRe.lastIndex = 0;
-            while((m = loopRe.exec(src)) !== null) seen.add(m[1]);
-            assert.deepStrictEqual([...seen].sort(), ['credits', 'debits', 'escrows'],
-                name + ' must canonicalize BURN/GAS/DONATE/REWARD addresses on all three ledger row sets ' +
-                'before hashing; a missing loop leaks the per-chain address encoding into the hash on one side only');
-        }
+        // Scoped to the hashing functions, so a loop moved into an uncalled helper fails here.
+        assertCanonicalizedBeforeHash(
+            extractFunction(pair.indexer, /async getBlockHashLedgerRows\(block_index\)\{/, 'db/actions.js'),
+            'db.getBlockHashLedgerRows', 'this.getBlockHashEscrowRows(', 'return ledger;');
+        assertCanonicalizedBeforeHash(
+            extractFunction(pair.sync, /async computeBlockHashes\(block_index, network, coin\)\{/, 'block_hasher.js'),
+            'BlockHasher.computeBlockHashes', 'ledger.escrows = await this.db.doQueryStrict(', 'let tables = [');
+        // The indexer canonicalizes in a helper, so its hash path must actually take the helper's rows.
+        const getHashes = stripComments(extractFunction(pair.indexer, /async getBlockHashes\(block_index\)\{/, 'db/actions.js')).replace(/\s+/g, ' ');
+        assert.strictEqual(getHashes.split('const ledger = await this.getBlockHashLedgerRows(block_index);').length - 1, 1,
+            'db.getBlockHashes must take its ledger rows from getBlockHashLedgerRows exactly once');
+        assert.doesNotMatch(getHashes, /ledger\.(credits|debits|escrows)\s*(=(?!=)|\.(sort|reverse|splice|map|filter)\()/,
+            'db.getBlockHashes reassigns or reorders a canonicalized ledger row set before hashing it');
     });
 });
 

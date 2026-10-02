@@ -109,3 +109,27 @@ describe('getBlockTime() fail-loud fault handling (#898)', function () {
         assert.strictEqual(stub.callCount, 1);
     });
 });
+
+describe('getRawBlockTime() missing decoder row (#9597)', function () {
+
+    afterEach(() => sinon.restore());
+
+    it('does not cache a missing decoder row: the re-parse after a re-insert reads the real time', async function () {
+        const db = makeDb();
+        const stub = sinon.stub(db, 'doQueryStrict');
+        stub.onFirstCall().resolves([]);
+        stub.onSecondCall().resolves([{ block_time: 1700000300 }]);
+        stub.onThirdCall().resolves([{ block_time: 1700000300 }]);
+
+        assert.strictEqual(await db.getRawBlockTime(500), false);
+        assert.strictEqual(await db.getRawBlockTime(500), 1700000300);
+        assert.strictEqual(stub.callCount, 2);
+        // The protocol-time wrapper re-queries too, rather than reading the raw memo's false.
+        db.clearBlockTimeCache();
+        stub.resetHistory();
+        stub.onFirstCall().resolves([]);
+        stub.onSecondCall().resolves([{ block_time: 1700000300 }]);
+        assert.strictEqual(await db.getBlockTime(501), false);
+        assert.strictEqual(await db.getBlockTime(501), 1700000300);
+    });
+});

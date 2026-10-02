@@ -78,7 +78,12 @@ describe('hub-mirrored consensus reads fail loudly on a DB fault @regression @ti
         ['getCapabilitySnapshotValidators', db => db.getCapabilitySnapshotValidators('cross_chain', 961000)],
         ['getCapabilitySnapshotCount',      db => db.getCapabilitySnapshotCount('cross_chain', 961000)],
         ['isPubkeyInCapabilitySnapshot',    db => db.isPubkeyInCapabilitySnapshot('aa'.repeat(32), 'cross_chain', 961000)],
-        ['getMirroredAttestationResponses', db => db.getMirroredAttestationResponses('regtest', ['ab'.repeat(16)], 1700000000)]
+        ['getMirroredAttestationResponses', db => db.getMirroredAttestationResponses('regtest', ['ab'.repeat(16)], 1700000000)],
+        ['getEarlierFinalizedPolicySnapshots',  db => db.getEarlierFinalizedPolicySnapshots('regtest', 'DOGE', 'FUFU', 3)],
+        ['getFinalizedBridgeTransfersForChain', db => db.getFinalizedBridgeTransfersForChain('regtest', 'BTC', { sql: 'effective_time <= ?', args: [1700000000] })],
+        ['getFinalizedPolicySnapshots',     db => db.getFinalizedPolicySnapshots('regtest', { sql: 'effective_time <= ?', args: [1700000000] })],
+        ['getListSnapshotHeads',            db => db.getListSnapshotHeads('regtest', 'BTC')],
+        ['getListSnapshotsAfter',           db => db.getListSnapshotsAfter('regtest', 'DOGE', 41, 1)]
     ];
 
     for (const [name, call] of READS) {
@@ -91,6 +96,19 @@ describe('hub-mirrored consensus reads fail loudly on a DB fault @regression @ti
             assert.ok(db._released.count > 0, 'the connection is still released on the error path');
         });
     }
+
+    it('getAppliedPolicySnapshot rejects on a mirror fault rather than resolving no policy', async function () {
+        // The local ledger read answers; only the hub mirror faults. A null here would read
+        // as "no policy applied" and defer the bridge in-leg on this node alone.
+        const db = faultingDb();
+        sinon.stub(db, 'doQuery').resolves([{ transfer_id: 'c'.repeat(64) }]);
+        const mirror = faultingDb();
+        db.indexer = { hubDb: mirror };
+        const err = await rejects(() => db.getAppliedPolicySnapshot('DOGE', 'FUFU', 18203));
+        assert.ok(err, 'getAppliedPolicySnapshot must not resolve on a mirror fault');
+        assert.strictEqual(err.errno, 1205);
+        assert.ok(mirror._released.count > 0, 'the mirror connection is still released');
+    });
 
     it('getMirroredAttestationResponses still short-circuits an empty id list without a query', async function () {
         // The guard above the read returns before any connection is taken, so the

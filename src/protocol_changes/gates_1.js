@@ -45,8 +45,9 @@ addGate('amount_representability_activation.AMOUNT_MAX_INTEGER_DIGITS', 'constan
 // ANCHOR_ACTIVATION: the DOGE height (per network) at/above which the ANCHOR wire set restarts at
 // version 0 (v0 = the per-network checkpoint bundle, v1 = the archive head with its publisher tail,
 // v2 = the archive continuation chunk). Every ANCHOR mined BELOW this height, of any version, is
-// invalid ('invalid: ANCHOR before activation'); at/above it only versions 0/1/2 parse and every
-// other version byte is 'invalid: VERSION (unknown)'. Keyed on the action's OWN DOGE block_index
+// invalid ('invalid: ANCHOR before activation'); at/above it versions 0/1/2 parse, version 3 (the
+// archive fold) parses only once ANCHOR_FOLD_ACTIVATION is also active, and every other version
+// byte is 'invalid: VERSION (unknown)'. Keyed on the action's OWN DOGE block_index
 // (data['BLOCK_INDEX'] at parse time, anchor_actions.block_index_doge), never on SNAPSHOT_BLOCK or
 // the checkpointed height: the row being judged is the anchor itself. Mainnet 6360000 sits ABOVE
 // the chain tip on purpose: the restarted wire set has NOT activated on mainnet yet, and the height

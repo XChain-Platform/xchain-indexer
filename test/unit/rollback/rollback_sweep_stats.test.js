@@ -40,21 +40,21 @@ function fakeDoQuery(rows, withActions) {
     };
 }
 
-// The single 'Rollback complete' line the stubbed logger received.
-function summaryLine(info) {
-    const lines = info.getCalls().map(c => String(c.args[0])).filter(l => l.startsWith('Rollback complete'));
+// The single 'Rollback complete' line the stubbed logger received at warn.
+function summaryLine(warn) {
+    const lines = warn.getCalls().map(c => String(c.args[0])).filter(l => l.startsWith('Rollback complete'));
     assert.strictEqual(lines.length, 1, 'expected exactly one completion summary');
     return lines[0];
 }
 
 describe('Rollback sweep stats @regression @tier3', function () {
-    let indexer, rollback, info;
+    let indexer, rollback, warn;
 
     beforeEach(function () {
         indexer = createMockIndexer();
         rollback = new Rollback(indexer);
         indexer.util.resetLists();
-        info = sinon.stub(getLogger(), 'info');
+        warn = sinon.stub(getLogger(), 'warn');
     });
 
     afterEach(function () {
@@ -73,7 +73,7 @@ describe('Rollback sweep stats @regression @tier3', function () {
     it('names every orphan sweep with its rows removed on the completion line', async function () {
         indexer.indexerDb.doQuery.callsFake(fakeDoQuery(SWEEP_ROWS, true));
         await rollback.rollback(100);
-        const line = summaryLine(info);
+        const line = summaryLine(warn);
         for (const [table, n] of Object.entries(SWEEP_ROWS)) {
             assert.match(line, new RegExp('\\b' + table + ' \\d+ms ' + n + ' rows\\b'), table + ' in: ' + line);
         }
@@ -82,10 +82,10 @@ describe('Rollback sweep stats @regression @tier3', function () {
     it('reports only the current rollback sweeps, not an earlier one', async function () {
         indexer.indexerDb.doQuery.callsFake(fakeDoQuery(SWEEP_ROWS, true));
         await rollback.rollback(100);
-        info.resetHistory();
+        warn.resetHistory();
         indexer.indexerDb.doQuery.callsFake(fakeDoQuery({ balances: 4, markets: 0, pubkeys: 0 }, false));
         await rollback.rollback(100);
-        const line = summaryLine(info);
+        const line = summaryLine(warn);
         assert.match(line, /\bbalances \d+ms 4 rows\b/);
         assert.doesNotMatch(line, /\bicons\b/, 'icons sweep runs only with an orphaned action range');
         assert.doesNotMatch(line, /\b7 rows\b/, 'the earlier rollback leaked into this summary');

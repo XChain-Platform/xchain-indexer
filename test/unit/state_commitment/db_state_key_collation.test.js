@@ -22,8 +22,9 @@
  *   - the GATE: folding SQL below activation / unarmed chains, utf8_bin at/after;
  *   - regtest armed from genesis, mainnet/testnet armed at the 2026-07-10 heights;
  *   - getContractState only gates when the caller supplies the block context.
- * The byte-identical xchain-sync twin (BlockHasher/getBlockLeafRows) is locked
- * by the sync repo's cross-repo twin guard (rollback_coverage.test.js).
+ * The xchain-sync twin (BlockHasher/getBlockLeafRows) is locked against this
+ * gate by test/unit/consensus/blockhash_conformance_twin.test/01_state_key_collation_gate.test.js
+ * here and xchain-sync's test/unit/blockhash_conformance_twin.test/ copy.
  */
 
 'use strict';

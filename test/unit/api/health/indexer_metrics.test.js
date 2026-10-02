@@ -121,3 +121,45 @@ describe('indexer poll-freshness heartbeat metric (item 9bee49e8)', function () 
         assert.strictEqual(installIndexerMetrics({ registry: null }, { lastBlockCommittedAt: Date.now() }), false);
     });
 });
+
+describe('indexer reorg metrics on the scrape surface', function () {
+    afterEach(function () { require('../../../../src/observability')._resetObservability(); });
+
+    it('renders the processed-reorg counter from 0 and follows the live field', function () {
+        const observability = realObservability();
+        const indexer = { reorgsProcessedSinceStart: 0, stallReason: null };
+        installIndexerMetrics(observability, indexer);
+        assert.match(observability.registry.render(), /^xchain_indexer_reorgs_processed_total 0$/m);
+
+        indexer.reorgsProcessedSinceStart = 3;
+        assert.match(observability.registry.render(), /^xchain_indexer_reorgs_processed_total 3$/m);
+    });
+
+    it('never steps the counter backwards, and reads a missing field as 0', function () {
+        const observability = realObservability();
+        const indexer = { reorgsProcessedSinceStart: 5, stallReason: null };
+        installIndexerMetrics(observability, indexer);
+        observability.registry.render();
+
+        indexer.reorgsProcessedSinceStart = 2;
+        assert.match(observability.registry.render(), /^xchain_indexer_reorgs_processed_total 5$/m);
+
+        require('../../../../src/observability')._resetObservability();
+        const fresh = realObservability();
+        installIndexerMetrics(fresh, { stallReason: null });
+        assert.match(fresh.registry.render(), /^xchain_indexer_reorgs_processed_total 0$/m);
+    });
+
+    it('raises the rollback gauge only while stallReason names a reorg rollback', function () {
+        const observability = realObservability();
+        const indexer = { reorgsProcessedSinceStart: 0, stallReason: 'reorg_rollback' };
+        installIndexerMetrics(observability, indexer);
+        assert.match(observability.registry.render(), /^xchain_indexer_rollback_in_progress 1$/m);
+
+        indexer.stallReason = 'price_sync_barrier';
+        assert.match(observability.registry.render(), /^xchain_indexer_rollback_in_progress 0$/m);
+
+        indexer.stallReason = null;
+        assert.match(observability.registry.render(), /^xchain_indexer_rollback_in_progress 0$/m);
+    });
+});

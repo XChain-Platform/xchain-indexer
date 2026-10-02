@@ -228,7 +228,7 @@ function makeListShareCtx({ mirrorRows = [], validators = [], legStatus, coin = 
     const indexerDb = bindMixins({
         config: config,
         util,
-        mirrorDb: () => bindMixins({ doQuery: mirrorQuery(state, NETWORK) }),
+        mirrorDb: () => bindMixins({ doQuery: mirrorQuery(state, NETWORK), doQueryStrict: mirrorQuery(state, NETWORK) }),
         doQuery: localQuery(state),
         getList: async (index) => {
             const list = state.lists.get(Number(index));

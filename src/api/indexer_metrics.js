@@ -26,7 +26,7 @@
 'use strict';
 
 /**
- * Register the indexer's poll-freshness heartbeat on an installed registry.
+ * Register the indexer's poll-freshness heartbeat and reorg metrics on an installed registry.
  *
  * Commit recency is exposed today only through the /status JSON, so a wedged
  * block poller leaves no trace on the metrics scrape and is undetectable if
@@ -37,8 +37,9 @@
  * @param {{registry: ?object}} observability  installObservability() handle; registry is
  *                                            null unless METRICS_ENABLED, and a null
  *                                            registry registers nothing.
- * @param {{lastBlockCommittedAt: ?number}} indexer  live indexer, read at scrape time.
- * @returns {boolean} true when the metric was registered.
+ * @param {{lastBlockCommittedAt: ?number, lastPollAt: number, reorgsProcessedSinceStart: number,
+ *          stallReason: ?string}} indexer  live indexer, read at scrape time.
+ * @returns {boolean} true when the metrics were registered.
  */
 function installIndexerMetrics(observability, indexer){
     const registry = observability && observability.registry;
@@ -68,7 +69,29 @@ function installIndexerMetrics(observability, indexer){
         if(indexer.lastPollAt) lastPollTs.set({}, indexer.lastPollAt / 1000);
     });
 
+    registerReorgMetrics(registry, indexer);
     return true;
+}
+
+// Register the indexer half of the reorg handshake, which only the health payload carried.
+// The decoder exports its reorg counter; without these a Prometheus-only deployment sees
+// decoder reorgs and nothing from the stage that unwinds the ledger.
+function registerReorgMetrics(registry, indexer){
+    const reorgsProcessed = registry.counter({
+        name: 'xchain_indexer_reorgs_processed_total',
+        help: 'Decoder reorgs this indexer process has recorded as processed since it started'
+    });
+    const rollbackInProgress = registry.gauge({
+        name: 'xchain_indexer_rollback_in_progress',
+        help: '1 while a reorg rollback is unwinding the ledger; stays 1 through a hung or retrying rollback'
+    });
+
+    // Render both from the first scrape: 0 is a real reading for each, unlike a timestamp.
+    registry.addCollector(() => {
+        const processed = Number(indexer.reorgsProcessedSinceStart);
+        reorgsProcessed.setMonotonic({}, Number.isFinite(processed) ? processed : 0);
+        rollbackInProgress.set({}, indexer.stallReason === 'reorg_rollback' ? 1 : 0);
+    });
 }
 
 module.exports = { installIndexerMetrics };

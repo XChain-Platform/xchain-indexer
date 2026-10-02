@@ -77,8 +77,9 @@ const price              = require('../price/index.js');
 const attest             = require('../attest/index.js');
 
 // ANCHOR: DOGE-only on-chain state commitments (v0=checkpoint bundle, v1=archive head,
-// v2=archive continuation chunk; the pre-restart v3-v7 set no longer parses).
-// Authoritative list: anchor.js FORMATS.
+// v2=archive continuation chunk, v3=folded bundle once ANCHOR_FOLD_ACTIVATION is active;
+// bytes mined below ANCHOR_ACTIVATION are the retired pre-restart wire and always invalid).
+// Authoritative list: this.formats in the constructor of anchor/index.js.
 const anchor             = require('../anchor/index.js');
 
 // Cross-chain contract calls: XCALL (source-chain request/expiry) + XEXEC
@@ -151,7 +152,7 @@ function wireProtocolHandlers(actions){
     // Attestation framework action instance (single handler dispatches v0/v1/v2 internally)
     actions.actionAttest           = new attest(actions);
 
-    // ANCHOR action instance (single handler dispatches v0/v1/v2 internally)
+    // ANCHOR action instance (single handler dispatches v0/v1/v2, plus v3 once the fold gate is active)
     actions.actionAnchor           = new anchor(actions);
 
     // NODEPROOF: full-node possession-proof verdict handler
