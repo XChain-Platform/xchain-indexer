@@ -18,6 +18,18 @@ const base = {
 };
 
 describe('list share edit leg metadata', function () {
+    it('does not append a metadata leg to seq 1', function () {
+        assert.deepStrictEqual(planListShareLegs({
+            ...base,
+            seq: 1,
+            listType: 2,
+            mirrorIndex: null,
+        }), [{
+            fields: ['LIST', '4', '2', 'Friends', 'People I know', ''],
+            ordinal: 0,
+        }]);
+    });
+
     it('plans one metadata leg for a rename-only version', function () {
         assert.deepStrictEqual(planListShareLegs(base), [{
             fields: ['LIST', '5', '77', 'Friends', 'People I know', ''],

@@ -52,7 +52,7 @@ function planListShareLegs(options){
             ordinal: LIST_SHARE_LEG_ORDINAL.ADD,
         });
     }
-    if(hasCurrentMeta && metaActive && meta !== null){
+    if(seq > 1 && hasCurrentMeta && metaActive && meta !== null){
         const name = metaField(meta.name);
         const description = metaField(meta.description);
         const currentName = metaField(currentMeta && currentMeta.name);
