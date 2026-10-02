@@ -3,15 +3,22 @@
 const { LIST_SHARE_TX_PREFIX, LIST_SHARE_LEG_ORDINAL } = require('./halt.js');
 const { LIST_EDIT_ADD, LIST_EDIT_REMOVE } = require('../bridge_settle/reasons.js');
 
-function planListShareLegs({
-    seq,
-    listType,
-    added,
-    removed,
-    mirrorIndex,
-    metaActive = false,
-    meta = null,
-}){
+function metaField(value){
+    return typeof value === 'string' && value.length ? value : null;
+}
+
+function planListShareLegs(options){
+    const {
+        seq,
+        listType,
+        added,
+        removed,
+        mirrorIndex,
+        metaActive = false,
+        meta = null,
+        currentMeta = null,
+    } = options;
+    const hasCurrentMeta = Object.prototype.hasOwnProperty.call(options, 'currentMeta');
     if(!Number.isSafeInteger(seq) || seq <= 0)
         throw new TypeError('seq must be a positive safe integer');
     if(!Array.isArray(added)) throw new TypeError('added must be an array');
@@ -44,6 +51,25 @@ function planListShareLegs({
             fields: ['LIST', '1', LIST_EDIT_ADD, String(mirrorIndex), ''].concat(added),
             ordinal: LIST_SHARE_LEG_ORDINAL.ADD,
         });
+    }
+    if(hasCurrentMeta && metaActive && meta !== null){
+        const name = metaField(meta.name);
+        const description = metaField(meta.description);
+        const currentName = metaField(currentMeta && currentMeta.name);
+        const currentDescription = metaField(currentMeta && currentMeta.description);
+        if(name !== currentName || description !== currentDescription){
+            legs.push({
+                fields: [
+                    'LIST',
+                    '5',
+                    String(mirrorIndex),
+                    name || '-',
+                    description || '-',
+                    '',
+                ],
+                ordinal: LIST_SHARE_LEG_ORDINAL.META,
+            });
+        }
     }
     return legs;
 }
