@@ -27,7 +27,7 @@ const SNAPSHOT_BLOCK = 500;
 const ALLOW_MEMBERS = ['allowA', 'allowB'];
 const BLOCK_MEMBERS = ['blockA'];
 
-function buildRpc({ tokenInfo, sharedLists = [], mirrors = {}, roots = {} }){
+function buildRpc({ tokenInfo, sharedLists = [], mirrors = {}, roots = {}, coin = 'BTC' }){
     const db = {
         getTokenInfo: sinon.stub().resolves(tokenInfo),
         getListAtBlock: sinon.stub().callsFake(async index =>
@@ -38,7 +38,7 @@ function buildRpc({ tokenInfo, sharedLists = [], mirrors = {}, roots = {} }){
         getListShareMirrorByIndex: sinon.stub().callsFake(async root => mirrors[root] || null)
     };
     const indexer = {
-        config: { NETWORK: 'regtest', COIN: 'BTC' },
+        config: { NETWORK: 'regtest', COIN: coin },
         indexerDb: { apiView: sinon.stub().returns(db) }
     };
     return { db, rpc: buildTokenPolicyRpc({ indexer }) };
@@ -80,6 +80,25 @@ describe('gettokenpolicy shared-list references', function () {
             PRODUCER_GATE, 'regtest', 'BTC', SNAPSHOT_BLOCK, null);
         sinon.assert.calledWithExactly(db.getListRootIndex.firstCall, 15, 16, ORIGIN_BLOCK);
         sinon.assert.calledWithExactly(db.getListRootIndex.secondCall, 40, 16, ORIGIN_BLOCK);
+    });
+
+    it('labels a list shared on a DOGE indexer with DOGE, not BTC', async function () {
+        sinon.stub(gateRegistry, 'activeAt').returns(true);
+        const { rpc } = buildRpc({
+            coin: 'DOGE',
+            tokenInfo: { ALLOW_LIST: null, BLOCK_LIST: 15, BRIDGED: 1 },
+            roots: { 15: 12 },
+            sharedLists: [{ root_index: 12, share_action_index: 20, share_block: 80 }]
+        });
+
+        const result = await rpc.gettokenpolicy({
+            tick: 'FUFU', origin_block: ORIGIN_BLOCK, snapshot_block: SNAPSHOT_BLOCK
+        });
+
+        assert.strictEqual(result.block_list, 'DOGE:12');
+        assert.strictEqual(result.block_list_ref, 'DOGE:12');
+        sinon.assert.calledOnceWithExactly(gateRegistry.activeAt,
+            PRODUCER_GATE, 'regtest', 'BTC', SNAPSHOT_BLOCK, null);
     });
 
     it('keeps an after-origin share and an unshared local list as full membership', async function () {

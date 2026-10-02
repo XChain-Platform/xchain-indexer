@@ -91,8 +91,10 @@ function tokenPolicyRpc({ indexer }){
                 if(Number.isInteger(snapshot_block) && snapshot_block >= 0 &&
                    gateRegistry.activeAt(LIST_SHARE_PRODUCER_GATE,
                        indexer.config['NETWORK'], 'BTC', snapshot_block, null)){
+                    // A shared list is labelled with the chain serving this read, so a DOGE or
+                    // LTC home list is never mistaken for a BTC-local one.
                     let { allowRef, blockRef } = await resolvePolicyRefs(db, {
-                        coin: 'BTC',
+                        coin: indexer.config['COIN'],
                         allowIndex: info.ALLOW_LIST,
                         blockIndex: info.BLOCK_LIST,
                         originBlock: block
