@@ -68,7 +68,7 @@ module.exports = {
             return { item: String(root), status };
 
         let unionMemberType;
-        if(data['FORMAT']==0){
+        if(this.isCreateFormat(data['FORMAT'])){
             if(data['UNION_MEMBER_TYPE'] === undefined)
                 data['UNION_MEMBER_TYPE'] = storedType;
             unionMemberType = data['UNION_MEMBER_TYPE'];
@@ -99,7 +99,7 @@ module.exports = {
         }
 
         return unionResultVerdict({
-            isCreate: format==0,
+            isCreate: this.isCreateFormat(format),
             memberCount: list.length,
             mergedCount: merged.size,
         }, {
