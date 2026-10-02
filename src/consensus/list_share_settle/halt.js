@@ -38,6 +38,7 @@ const LIST_SHARE_HALT_REASON = Object.freeze({
     DELTA:           'DELTA',
     LEG:             'LEG',
     NO_OWNER:        'NO_OWNER',
+    META_HASH:       'META_HASH',
 });
 
 // 11 prefix characters plus 48 snapshot-id characters fit within the 64-character
@@ -48,6 +49,7 @@ const LIST_SHARE_TX_PREFIX = 'LIST_SHARE-';
 const LIST_SHARE_LEG_ORDINAL = Object.freeze({
     CREATE_OR_REMOVE: 0,
     ADD:              1,
+    META:             2,
 });
 
 module.exports = {
