@@ -28,9 +28,6 @@ CREATE TABLE list_snapshots (
     added                MEDIUMTEXT NOT NULL,
     removed              MEDIUMTEXT NOT NULL,
     members_hash         CHAR(64),
-    name                 VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
-    description          VARCHAR(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
-    meta_hash            CHAR(64) NULL,
     origin_block         BIGINT UNSIGNED,
     admit_block_btc      BIGINT UNSIGNED DEFAULT NULL,
     admit_block_ltc      BIGINT UNSIGNED DEFAULT NULL,
@@ -44,3 +41,8 @@ CREATE TABLE list_snapshots (
     UNIQUE KEY snapshot_id (snapshot_id),
     KEY home_list (home_chain, home_list_index)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_general_ci;
+
+ALTER TABLE list_snapshots
+  ADD COLUMN IF NOT EXISTS name VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL AFTER members_hash,
+  ADD COLUMN IF NOT EXISTS description VARCHAR(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL AFTER name,
+  ADD COLUMN IF NOT EXISTS meta_hash CHAR(64) NULL AFTER description;
