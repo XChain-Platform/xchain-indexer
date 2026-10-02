@@ -244,14 +244,14 @@ describe('HubDbSync bootstrap fail-closed on partial drain / holes @regression @
         doQuery.withArgs(sinon.match(/MAX\(id\)/)).resolves([{ max_id: 5 }]);
         doQuery.resolves([{ max_id: 5 }]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
-        sync._readyMaxIds = { oracle_prices: 100 };            // hub advertises rows past our local max
+        sync._readyMaxIds = { policy_snapshots: 100 };          // hub advertises rows past our local max
         const httpGet = sinon.stub(sync, 'httpGet');
         httpGet.onFirstCall().resolves({ rows: [], watermark: 10 });          // main page: clean short drain
         httpGet.onSecondCall().resolves({ rows: [{ id: 6 }], schema_version: 999999 });  // catch-up: mismatch
         sinon.stub(sync, 'applyRow').resolves();
-        const refresh = sinon.stub(sync, 'refreshOracleSyncTimestamp').resolves();
+        const refresh = sinon.stub(sync, 'refreshPolicySyncTimestamp').resolves();
 
-        const result = await sync.bootstrapTable('oracle_prices');
+        const result = await sync.bootstrapTable('policy_snapshots');
 
         assert.strictEqual(result, null, 'a schema-mismatched catch-up must mark the table not-drained');
         assert.ok(refresh.notCalled, 'and must not arm the barrier');
