@@ -198,7 +198,7 @@ class List {
     }
 
     async rematchMarkets(data, format, status){
-        if((format!=0 && !this.isEditFormat(format)) ||
+        if((!this.isCreateFormat(format) && !this.isEditFormat(format)) ||
            status!='valid' || data['TYPE']!=2 ||
            !gateRegistry.activeAt('list_change_rematch_activation.LIST_CHANGE_REMATCH_ACTIVATION', this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null))
             return;

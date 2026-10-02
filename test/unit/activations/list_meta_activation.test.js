@@ -22,6 +22,7 @@ const {
 } = require('../actions/contract/list.test/helpers/list_context.js');
 
 const META_GATE = 'list_meta_activation.LIST_META_ACTIVATION';
+const REMATCH_GATE = 'list_change_rematch_activation.LIST_CHANGE_REMATCH_ACTIVATION';
 
 function listData(format, overrides={}){
     return createBaseData({
@@ -178,6 +179,36 @@ describe('LIST metadata activation @regression @tier2', function () {
             'Named union',
             'Description'
         );
+    });
+
+    it('rematches a metadata address-list create by its root and excludes metadata edits', async function () {
+        const context = setup();
+        const db = context.indexer.indexerDb;
+        const roots = [];
+        stubGate(sinon, REMATCH_GATE, true);
+        db.doQuery.callsFake(async (query, args) => {
+            if(/FROM\s+lists\s+WHERE list_action_index/.test(query))
+                roots.push(args[0]);
+            return [];
+        });
+
+        const create = listData(4, { ACTION_INDEX: 57 });
+        await context.handler.parse(
+            ['4', '2', 'Named addresses', 'Description', '', ADDR1], create, null
+        );
+
+        assert.strictEqual(create.STATUS, 'valid');
+        assert.deepStrictEqual(roots, [57, 57]);
+
+        roots.length = 0;
+        db.doQuery.resetHistory();
+        const edit = await rename(context, ['5', '57', 'Renamed', '', '']);
+
+        assert.strictEqual(edit.STATUS, 'valid');
+        assert.deepStrictEqual(roots, []);
+        assert.strictEqual(db.doQuery.getCalls().some((call) =>
+            /FROM\s+(orders|swaps)\s/.test(String(call.args[0]))
+        ), false);
     });
 
     it('prices a shared-list rename at the base with zero items', async function () {
