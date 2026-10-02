@@ -78,6 +78,14 @@ const REGTEST_ARMING = {
           keys: ['BTC:regtest', 'LTC:regtest', 'DOGE:regtest'] },
     'anchor_reward_activation.ANCHOR_ATTEST_BARRIER_ACTIVATION':
         { env: 'XC_MIRROR_ADMISSION_ACTIVATION', label: 'MIRROR ADMISSION', armedHeight: 0, keys: ['regtest'] },
+    'dispenser_send_amount_compare_activation.DISPENSER_SEND_AMOUNT_COMPARE_ACTIVATION':
+        { env: 'XC_AMOUNTS_PRICE_REGTEST_ACTIVATION', label: 'AMOUNTS PRICE', armedHeight: 0, keys: ['regtest'] },
+    'price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION':
+        { env: 'XC_AMOUNTS_PRICE_REGTEST_ACTIVATION', label: 'AMOUNTS PRICE', armedHeight: 0, keys: ['regtest'] },
+    'amount_representability_activation.AMOUNT_REPRESENTABILITY_ACTIVATION':
+        { env: 'XC_AMOUNTS_PRICE_REGTEST_TIME', label: 'AMOUNTS PRICE TIME', armedHeight: 0, keys: ['regtest'] },
+    'vote_callback_binding_activation.VOTE_CALLBACK_BINDING_REQUIRES_USABLE_METHOD':
+        { env: 'XC_CONTRACTS_REGTEST_ACTIVATION', label: 'CONTRACTS', armedHeight: 0, keys: ['regtest'] },
 };
 
 // env name -> its reader. Each variable is read BY NAME, once, here: the
@@ -92,6 +100,9 @@ const ENV_READERS = {
     XC_ROLLCALL_REGTEST_ACTIVATION:       (env) => env.XC_ROLLCALL_REGTEST_ACTIVATION,
     XC_ROLLCALL_GATES_REGTEST_ACTIVATION: (env) => env.XC_ROLLCALL_GATES_REGTEST_ACTIVATION,
     XC_MIRROR_ADMISSION_ACTIVATION:       (env) => env.XC_MIRROR_ADMISSION_ACTIVATION,
+    XC_AMOUNTS_PRICE_REGTEST_ACTIVATION:  (env) => env.XC_AMOUNTS_PRICE_REGTEST_ACTIVATION,
+    XC_AMOUNTS_PRICE_REGTEST_TIME:        (env) => env.XC_AMOUNTS_PRICE_REGTEST_TIME,
+    XC_CONTRACTS_REGTEST_ACTIVATION:      (env) => env.XC_CONTRACTS_REGTEST_ACTIVATION,
 };
 
 // The raw value of the rule's env variable, through its named reader.
