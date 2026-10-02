@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.2] - 2026-10-02
+
+### Fixed
+
+- A token policy read on a DOGE or LTC indexer now labels a shared list with that chain, so a bridged token whose list lives off BTC binds its policy on BTC.
+
 ## [0.21.1] - 2026-10-01
 
 ### Added
