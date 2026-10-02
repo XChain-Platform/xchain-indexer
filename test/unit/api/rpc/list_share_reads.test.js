@@ -20,6 +20,7 @@ const sinon = require('sinon');
 
 const observability = require('../../../../src/observability/index.js');
 const { buildListShareRpc } = require('../../../../src/api/rpc/list_share.js');
+const Database = require('../../../../src/db/index.js');
 const { recordingView, fakeIndexer } = require('./helpers/fake_indexer.js');
 const { readApiSource } = require('../../../helpers/api_source.js');
 
@@ -105,6 +106,48 @@ describe('JSON-RPC list share reads @regression @tier1', function(){
             ['getListAtBlock', 100, 60],
             ['getListMeta', 100, 60]
         ]);
+    });
+
+    it('uses the registered metadata reader through the Database API view', async function(){
+        const members = ['bc1q-live-view-member'];
+        const db = Object.create(Database.prototype);
+        Object.assign(db, {
+            _blockTimeCache: {},
+            _protocolTimeCache: {},
+            getListRootIndex: sinon.stub().resolves(100),
+            getListType: sinon.stub().resolves(2),
+            getListAtBlock: sinon.stub().resolves(members),
+            poolQuery: sinon.stub().callsFake(async (sql, args) => {
+                if(/FROM list_metas lm/.test(sql)){
+                    assert.deepStrictEqual(args, args.length === 2 ? [100, 77] : [100]);
+                    return [{ name: 'Database-backed name', description: 'Database-backed description' }];
+                }
+                if(/FROM lists l/.test(sql))
+                    return [{ root_index: 100, share_block: 70, share_action_index: 700 }];
+                if(/FROM list_transfers lt/.test(sql))
+                    return [{ address: 'database-backed-owner' }];
+                throw new Error('unexpected query: ' + sql);
+            })
+        });
+        const rpc = buildListShareRpc({ indexer: fakeIndexer({ indexerDb: db }) });
+
+        assert.strictEqual(typeof db.apiView().getListMeta, 'function');
+        assert.deepStrictEqual(await rpc.getlistat({ list_index: 117, block: 77 }), {
+            type: 2,
+            members,
+            hash: sha256('MEMBERS|1|bc1q-live-view-member'),
+            name: 'Database-backed name',
+            description: 'Database-backed description',
+            meta_hash: sha256('LISTMETA|Database-backed name|Database-backed description')
+        });
+        assert.deepStrictEqual(await rpc.getsharedlists({ network: 'regtest' }), [{
+            root_index: 100,
+            name: 'Database-backed name',
+            owner: 'database-backed-owner',
+            share_block: 70,
+            share_action_index: 700
+        }]);
+        assert.strictEqual(db.poolQuery.callCount, 4);
     });
 
     it('hashes an empty membership as MEMBERS|0 and reports tick-list type 1', async function(){
