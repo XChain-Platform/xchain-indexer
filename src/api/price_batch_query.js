@@ -37,6 +37,22 @@ function isRound(v) {
     return Number.isSafeInteger(v) && v >= 0;
 }
 
+function validateInclusiveBounds(body, firstName, lastName) {
+    body = body || {};
+    let first = Number(body[firstName]);
+    let last  = Number(body[lastName]);
+    if (!isRound(first)) return { ok: false, error: firstName + ' must be a non-negative integer' };
+    if (!isRound(last))  return { ok: false, error: lastName + ' must be a non-negative integer' };
+    if (first > last)    return { ok: false, error: firstName + ' must not exceed ' + lastName };
+    return { ok: true, first, last };
+}
+
+function validatedLimit(body) {
+    let limit = body.limit === undefined || body.limit === null ? PRICE_BATCHES_DEFAULT_LIMIT : Number(body.limit);
+    if (!Number.isInteger(limit) || limit < 1) return { ok: false, error: 'limit must be a positive integer' };
+    return { ok: true, limit: Math.min(limit, PRICE_BATCHES_MAX_LIMIT) };
+}
+
 /**
  * Validate the request body. Rounds are non-negative safe integers with
  * first_round <= last_round; `limit` is optional and clamped to the ceiling
@@ -48,15 +64,25 @@ function isRound(v) {
  */
 function validatePriceBatchParams(body) {
     body = body || {};
-    let first = Number(body.first_round);
-    let last  = Number(body.last_round);
-    if (!isRound(first)) return { ok: false, error: 'first_round must be a non-negative integer' };
-    if (!isRound(last))  return { ok: false, error: 'last_round must be a non-negative integer' };
-    if (first > last)    return { ok: false, error: 'first_round must not exceed last_round' };
-    let limit = body.limit === undefined || body.limit === null ? PRICE_BATCHES_DEFAULT_LIMIT : Number(body.limit);
-    if (!Number.isInteger(limit) || limit < 1) return { ok: false, error: 'limit must be a positive integer' };
-    if (limit > PRICE_BATCHES_MAX_LIMIT) limit = PRICE_BATCHES_MAX_LIMIT;
-    return { ok: true, first_round: first, last_round: last, limit };
+    let bounds = validateInclusiveBounds(body, 'first_round', 'last_round');
+    if (!bounds.ok) return bounds;
+    let page = validatedLimit(body);
+    if (!page.ok) return page;
+    return { ok: true, first_round: bounds.first, last_round: bounds.last, limit: page.limit };
+}
+
+function validateAttestBatchParams(body) {
+    body = body || {};
+    let bounds = validateInclusiveBounds(body, 'window_start_from', 'window_start_to');
+    if (!bounds.ok) return bounds;
+    let page = validatedLimit(body);
+    if (!page.ok) return page;
+    return {
+        ok: true,
+        window_start_from: bounds.first,
+        window_start_to: bounds.last,
+        limit: page.limit
+    };
 }
 
 /**
@@ -86,9 +112,24 @@ function buildPriceBatchesResponse(latestBlockIndex, rows, v) {
     };
 }
 
+function buildAttestBatchesResponse(rows, v) {
+    let list = Array.isArray(rows) ? rows : [];
+    let batches = list.map(r => ({
+        window_start: Number(r.batch_window_start),
+        window_end:   Number(r.batch_window_end),
+        row_count:    Number(r.batch_row_count),
+        action_index: Number(r.action_index),
+        block_index:  Number(r.block_index),
+        tx_hash:      r.tx_hash === null || r.tx_hash === undefined ? null : String(r.tx_hash)
+    }));
+    return { batches, truncated: batches.length >= v.limit };
+}
+
 module.exports = {
     PRICE_BATCHES_DEFAULT_LIMIT,
     PRICE_BATCHES_MAX_LIMIT,
     validatePriceBatchParams,
-    buildPriceBatchesResponse
+    buildPriceBatchesResponse,
+    validateAttestBatchParams,
+    buildAttestBatchesResponse
 };
