@@ -243,6 +243,8 @@ function makeListShareCtx({ mirrorRows = [], validators = [], legStatus, coin = 
         getStakeWeightsByCapability: async () => validators,
         createActionIndex: async (d) => { state.actions.push(d); return nextAction++; },
     });
+    // No list carries metadata unless a test says so; the apply path reads it per list.
+    indexerDb.getListMeta = async () => null;
     if(state.tickerMode){
         Object.assign(indexerDb, tickerQueries);
         indexerDb.blockIndex = blockIndex;

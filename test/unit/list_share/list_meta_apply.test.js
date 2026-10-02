@@ -29,20 +29,6 @@ const { verifyMirrorMembers } = require('../../../src/consensus/list_share_settl
 const { createScreen } = require('../../../src/consensus/list_share_settle/screen.js');
 const H = require('./helpers/apply_harness.js');
 
-const makeListSnapshotRow = H.makeListSnapshotRow;
-H.makeListSnapshotRow = options => Object.assign({
-    name: null,
-    description: null,
-    meta_hash: '',
-}, makeListSnapshotRow(options));
-
-const makeListShareCtx = H.makeListShareCtx;
-H.makeListShareCtx = options => {
-    const made = makeListShareCtx(options);
-    made.ctx.indexerDb.getListMeta = async () => null;
-    return made;
-};
-
 require('./parts/list_share_screen_meta.test.js');
 require('./parts/list_share_screen_meta_wiring.test.js');
 require('./parts/list_share_legs_meta.test.js');
