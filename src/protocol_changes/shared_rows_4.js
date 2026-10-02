@@ -305,22 +305,9 @@ addGate('state_subtree_activation.ESCROW_LOCKED_LEAF_ACTIVATION', 'height', {
 // shadow journal is CORRECTED rather than inherited (the replay is
 // change-logged; a wrong shadow value gets a correction row, vectored).
 //
-// *** OPEN ON BTC:testnet FROM BLOCK 148000 (2026-08-11, operator-approved),
-// *** and nowhere else. Chosen at tip 147969, so the window starts ~31 blocks
-// *** of lead ahead of the deploy, per §4's deploy-before-the-height rule.
-//
-// WHY THIS CHAIN AND WHY NOW. BTC:testnet is being re-seeded after the
-// 2026-08-10 re-genesis, and the escrow seed (xchain-e2e-test
-// bin/seed-escrow-state.js) posts its locking ORDERs after this height. That
-// ordering is the whole point: with the window already open, those locks are
-// journaled by the ORDINARY PER-BLOCK INCREMENTAL PATH - the one that runs on
-// every block forever - rather than by the window-start replay. Both produce
-// the same rows, and the harness already proves they agree on BTC:regtest
-// (97 live keys, incremental against arming replay, measured 2026-08-11), but
-// only the incremental path is the one no public chain has ever exercised.
-//
-// Nothing here is committed. balances_root stays byte-identical to v1 while a
-// chain is only shadowing, and its locked-balance proofs stay refused, because
+// Nothing a shadow window computes is committed. balances_root stays
+// byte-identical to v1 while a chain is only shadowing, and its locked-balance
+// proofs stay refused, because
 // ESCROW_LOCKED_LEAF_ACTIVATION above is what the explorer and the SDK verifier
 // gate on.
 //
