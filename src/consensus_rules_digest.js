@@ -24,21 +24,21 @@
  * the 2026-09-02 TDOGE replica halt was found.
  *
  * WHAT IT IS. A digest over the VALUES of every activation map that BOTH the
- * hub and the indexer evaluate. Value-based, not file-based, and that
- * distinction is the whole design:
+ * hub and the indexer evaluate. The armed-map fingerprint hashes resolved
+ * values too, so what sets the two apart is SCOPE, not method:
  *
- *   - armedMapFingerprint.js (indexer, xchain-sync) hashes FILE BYTES of that
- *     repo's own src/. It answers "is this process running the build I think
- *     it is", and two different repos can never share an answer, because they
- *     do not share files. It is the right tool for comparing two indexers.
- *   - This digest hashes the DECIDED HEIGHTS. It answers "do you and I apply
- *     the same rules to the same chain", which is the question that actually
- *     predicts divergence, and it is comparable ACROSS repos: a hub and an
- *     indexer running the same flag days produce the same digest even though
- *     they share no source file.
+ *   - src/consensus/armed_map/fingerprint.js (indexer, xchain-sync; the hub
+ *     carries none) hashes every armed row its repo's registry carries, a far
+ *     wider set than SHARED_GATES. It compares processes that share that
+ *     registry, two indexers or an indexer and its sync replica, never a hub.
+ *   - This digest hashes the DECIDED HEIGHTS of SHARED_GATES alone. It answers
+ *     "do you and I apply the same rules to the same chain", which is the
+ *     question that actually predicts divergence, and it is comparable ACROSS
+ *     repos: a hub and an indexer running the same flag days produce the same
+ *     digest even though they share no source file.
  *
- * A comment reformat therefore changes the fingerprint and not the digest,
- * which is correct: prose cannot fork a chain, a height can.
+ * Neither moves on a comment reformat (prose cannot fork a chain, a height
+ * can), and both move when a regtest venue arms a gate from its environment.
  *
  * SHARED_GATES is deliberately a hardcoded intersection rather than a
  * directory scan. Each repo carries activation maps the other does not (the
