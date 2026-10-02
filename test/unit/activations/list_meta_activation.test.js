@@ -1,5 +1,7 @@
 'use strict';
 
+// GENERATED
+
 process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 

@@ -93,9 +93,10 @@ class List {
         for(const spec of [this.shareFormat(), this.transferFormat(),
                            this.createMetaFormat(), this.setMetaFormat()]){
             if(!spec) continue;
-            this.formats[spec.format] = spec.fields;
-            this.formatGates[spec.format] = spec.gate;
-            this.itemStartIndex[spec.format] = spec.fields.split('|').indexOf('ITEM');
+            if(spec.format==4 || spec.format==5)
+                this.deferFormat(spec);
+            else
+                this.installFormat(spec);
         }
 
         // Define array of list types (1=Tick, 2=Address)
@@ -211,7 +212,17 @@ class List {
     }
 
     isFormatActive(format, data){
-        if(format===null || this.formats[format] === undefined)
+        if(format===null)
+            return false;
+        let fields = this.formats[format];
+        if(fields === undefined && (format==4 || format==5)){
+            let spec = format==4 ? this.createMetaFormat() : this.setMetaFormat();
+            if(gateRegistry.activeAt(spec.gate, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null)){
+                this.installFormat(spec);
+                fields = spec.fields;
+            }
+        }
+        if(fields === undefined)
             return false;
         let gate = this.formatGates[format];
         return !gate || gateRegistry.activeAt(gate, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
