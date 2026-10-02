@@ -28,6 +28,8 @@ const { NETWORK } = require('./arms.js');
 // the literal-string assertions below a check on the shipped statements rather than on
 // statements this file wrote.
 function bindSettlementReads(db){
+    // The MIRROR reads run through doQueryStrict; route it to the double's doQuery.
+    if(!db.doQueryStrict) db.doQueryStrict = (sql, args) => db.doQuery(sql, args);
     for(const m of Reflect.ownKeys(bridgeSettlementsMixin))
         db[m] = bridgeSettlementsMixin[m].bind(db);
     return db;

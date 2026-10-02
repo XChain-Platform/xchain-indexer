@@ -58,6 +58,8 @@ const bridgeSettlementsMixin = require('../../../../../src/db/bridge_settlements
 // methods, so binding them here is what keeps every SQL matcher below reading the exact
 // statements that ship instead of statements the test invented.
 function bindSettlementReads(db){
+    // The MIRROR reads run through doQueryStrict; route it to the double's doQuery.
+    if(!db.doQueryStrict) db.doQueryStrict = (sql, args) => db.doQuery(sql, args);
     for(const m of Reflect.ownKeys(bridgeSettlementsMixin))
         db[m] = bridgeSettlementsMixin[m].bind(db);
     return db;
