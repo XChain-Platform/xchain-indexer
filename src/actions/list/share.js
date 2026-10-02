@@ -32,7 +32,7 @@ module.exports = {
     },
 
     async validateSharedEdit(data, format, list, changes, error){
-        if(error || format!=1 || data['IS_GENESIS'] ||
+        if(error || !this.isEditFormat(format) || data['IS_GENESIS'] ||
            !gateRegistry.activeAt(LIST_SHARE_GATE, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null))
             return error;
 
