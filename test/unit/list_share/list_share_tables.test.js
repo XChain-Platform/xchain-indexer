@@ -26,6 +26,7 @@ const admissionManifest = require('../db/mirror_admission_schema.test/helpers/ma
 
 const ROOT = path.resolve(__dirname, '../../..');
 const MIGRATION_FILE = '2026-09-30-list-share-tables.sql';
+const META_MIGRATION_FILE = '2026-10-02-list-snapshots-meta.sql';
 
 function read(relative){
     return fs.readFileSync(path.join(ROOT, relative), 'utf8').replace(/\r\n/g, '\n');
@@ -67,6 +68,26 @@ describe('shared-list table contracts @regression @tier1', function () {
             const fresh = createBlock(read('src/sql/' + table + '.sql'), table);
             assert.strictEqual(createBlock(migration, table), fresh, table + ' migration DDL drifted');
         }
+    });
+
+    it('migrates all list metadata columns idempotently in auto mode', function () {
+        const migration = read('src/sql/migrations/' + META_MIGRATION_FILE);
+        assert.strictEqual(migration.split('\n')[0], '-- xchain:migration mode=auto');
+
+        const sql = migration
+            .split('\n')
+            .filter(line => !line.trimStart().startsWith('--'))
+            .join('\n')
+            .trim();
+        const columns = [...sql.matchAll(/ADD COLUMN IF NOT EXISTS\s+(\w+)/g)]
+            .map(match => match[1]);
+        assert.deepStrictEqual(columns, ['name', 'description', 'meta_hash']);
+        assert.strictEqual(sql, [
+            'ALTER TABLE list_snapshots',
+            '  ADD COLUMN IF NOT EXISTS name VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL AFTER members_hash,',
+            '  ADD COLUMN IF NOT EXISTS description VARCHAR(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL AFTER name,',
+            '  ADD COLUMN IF NOT EXISTS meta_hash CHAR(64) NULL AFTER description;',
+        ].join('\n'));
     });
 
     it('baselines only when both shared-list tables are present', function () {
