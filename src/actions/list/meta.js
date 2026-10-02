@@ -1,6 +1,6 @@
 'use strict';
 
-const { metaFieldVerdict, isNoChange } = require('./meta_rules.js');
+const { metaFieldVerdict, resolveMeta, isNoChange } = require('./meta_rules.js');
 
 const LIST_META_NAME_MAX_BYTES = 64;
 const LIST_META_DESCRIPTION_MAX_BYTES = 512;
@@ -23,21 +23,48 @@ module.exports = {
         };
     },
 
+    metaOwnerVerdict(){
+        return 'invalid: LIST_ACTION_INDEX (not owner)';
+    },
+
     validateMeta(data, format, error){
         if(error || (format!=4 && format!=5))
             return error;
 
         let isCreate = format==4;
-        error = metaFieldVerdict('NAME', data['NAME'], LIST_META_NAME_MAX_BYTES, isCreate);
+        let name = data['NAME'] ?? '';
+        let description = data['DESCRIPTION'] ?? '';
+        error = metaFieldVerdict('NAME', name, LIST_META_NAME_MAX_BYTES, isCreate);
         if(!error)
             error = metaFieldVerdict(
                 'DESCRIPTION',
-                data['DESCRIPTION'],
+                description,
                 LIST_META_DESCRIPTION_MAX_BYTES,
                 isCreate
             );
-        if(!error && format==5 && isNoChange(data['NAME'], data['DESCRIPTION']))
+        if(!error && format==5 && isNoChange(name, description))
             error = 'invalid: NAME (no change)';
         return error;
+    },
+
+    async storeMeta(data, status){
+        let storedData = data;
+        let name = null;
+        let description = null;
+
+        if(status=='valid' && data['FORMAT']==4){
+            storedData = { ...data, LIST_ACTION_INDEX: data['ACTION_INDEX'] };
+            name = data['NAME'] || null;
+            description = data['DESCRIPTION'] || null;
+        } else if(status=='valid' && data['FORMAT']==5){
+            let current = await this.indexerDb.getListMeta(
+                data['LIST_ACTION_INDEX'], data['BLOCK_INDEX']
+            );
+            ({ name, description } = resolveMeta(
+                current, data['NAME'] ?? '', data['DESCRIPTION'] ?? ''
+            ));
+        }
+
+        await this.indexerDb.createListMeta(storedData, name, description);
     },
 };

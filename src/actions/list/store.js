@@ -2,6 +2,14 @@
 
 module.exports = {
     async storeList(data, status, edit, list, invalid, fee){
+        if(data['FORMAT']==5 && this.isFormatActive(5, data)){
+            await this.storeMeta(data, status);
+            if(status=='valid')
+                await this.settleFee(data, fee);
+            await this.mapper.createMappings(data);
+            return;
+        }
+
         await this.indexerDb.createList(data);
         this.util.addAddressTicker(data['SOURCE']);
         if(status=='valid'){
@@ -16,5 +24,7 @@ module.exports = {
             await this.settleFee(data, fee);
         }
         await this.mapper.createMappings(data);
+        if(status=='valid' && data['FORMAT']==4)
+            await this.storeMeta(data, status);
     },
 };
