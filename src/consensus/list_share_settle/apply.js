@@ -54,6 +54,31 @@ function plannedMembership(row, current, fields){
     return next.membership;
 }
 
+async function plannedLegs(deps, fields, mirrorIndex, ctx){
+    const options = {
+        seq: fields.seq,
+        listType: fields.list_type,
+        added: fields.added,
+        removed: fields.removed,
+        mirrorIndex,
+    };
+    if(typeof deps.isListMetaApplyActive !== 'function' ||
+       deps.isListMetaApplyActive(ctx.coin, ctx.network, ctx.blockIndex) !== true)
+        return planListShareLegs(options);
+
+    const meta = typeof fields.meta_hash === 'string'
+        ? { name: fields.name, description: fields.description }
+        : null;
+    const currentMeta = mirrorIndex === null
+        ? null
+        : await ctx.indexerDb.getListMeta(mirrorIndex, ctx.blockIndex);
+    return planListShareLegs(Object.assign(options, {
+        metaActive: true,
+        meta,
+        currentMeta,
+    }));
+}
+
 async function applyListShareSnapshot(deps, row, ctx){
     const fields = screenedFields(deps, row, ctx);
     await verifySnapshotQuorum(deps, row, ctx, fields);
@@ -64,13 +89,7 @@ async function applyListShareSnapshot(deps, row, ctx){
     });
     const membership = plannedMembership(row, target.current, fields);
     const mirrorIndex = target.mirror ? Number(target.mirror.action_index) : null;
-    const legs = planListShareLegs({
-        seq: fields.seq,
-        listType: fields.list_type,
-        added: fields.added,
-        removed: fields.removed,
-        mirrorIndex,
-    });
+    const legs = await plannedLegs(deps, fields, mirrorIndex, ctx);
 
     ctx.util.resetLists();
     const injected = await injectListShareLegs(ctx, {
