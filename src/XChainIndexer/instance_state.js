@@ -65,6 +65,8 @@ function initChainState(indexer){
     // outer poll loop and the inner catch-up loop, since an initial sync legitimately stays
     // inside the inner one for hours. Read by isPollSilent().
     indexer.lastPollAt = 0;
+    // Decoder reorgs this process has recorded as processed, for the metrics scrape.
+    indexer.reorgsProcessedSinceStart = 0;
 }
 
 // The platform-train verdict and the decoder REORG_HALT bookkeeping, each empty until

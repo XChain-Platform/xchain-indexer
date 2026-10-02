@@ -26,6 +26,8 @@ const bridgeSettlementsMixin = require('../../../../../src/db/bridge_settlements
 // db/bridge_settlements methods, so the doubles below carry the REAL ones bound over their
 // own doQuery: the SQL predicates this file matches on are the statements that ship.
 function bindSettlementReads(db){
+    // The MIRROR reads run through doQueryStrict; route it to the double's doQuery.
+    if(!db.doQueryStrict) db.doQueryStrict = (sql, args) => db.doQuery(sql, args);
     for(const m of Reflect.ownKeys(bridgeSettlementsMixin))
         db[m] = bridgeSettlementsMixin[m].bind(db);
     return db;

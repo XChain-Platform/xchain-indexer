@@ -115,9 +115,12 @@ class XBridge {
      *
      * DB READ ORDER IS CONSENSUS. getTokenInfo() interns its argument in index_tickers
      * (createTicker), and index ids feed the ledger hash, so a read that happens on one
-     * node and not another forks the id counter. Every read below therefore sits behind
-     * a guard that depends only on wire bytes and node-uniform config: the pure-string
-     * tick guards run FIRST and a refused shape never reaches a read, on every node.
+     * node and not another forks the id counter. Every state read in applyAndCharge
+     * therefore sits behind a guard that depends only on wire bytes and node-uniform
+     * config: the pure-string tick guards run FIRST and a refused shape never reaches
+     * one. A refused row is still recorded, and createXbridge interns its tick,
+     * destination, memo and status ids whatever the verdict, at the same point on every
+     * node, so that call's position is part of the interning order too.
      *
      * @param {Array<string>}       params - the raw `|`-split wire fields, VERSION first
      * @param {Object}              data   - the action row under construction. Reads FORMAT,
@@ -169,8 +172,8 @@ class XBridge {
         if(format === 3 || format === 4)
             ctx.tick = data['TICK'];
 
-        // Pure-string tick guards (row kind, GAS, dot, length). No database read, so the
-        // refused shapes above never intern a junk ticker id.
+        // Pure-string tick guards (row kind, GAS, dot, length). No database read, so a refused
+        // shape never reaches the state reads; recordAndSettle still interns the row's tick.
         if(!error){
             let shape = validate.validateTickShape.call(this, format, ctx);
             if(!shape.valid)

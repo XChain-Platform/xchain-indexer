@@ -124,8 +124,10 @@ module.exports = {
             localArgs);
         if(applied.length === 0) return null;
 
+        // Strict: this read gates bridge in-legs, and a swallowed hub fault would defer them
+        // on this node alone.
         let ids  = applied.map(row => row.transfer_id);
-        let rows = await this.mirrorDb().doQuery(
+        let rows = await this.mirrorDb().doQueryStrict(
             `SELECT policy_seq, origin_block, policy_hash
              FROM policy_snapshots
              WHERE network = ? AND origin_chain = ? AND tick = ?

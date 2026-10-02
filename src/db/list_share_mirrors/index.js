@@ -17,6 +17,8 @@
  * The shared-list apply pass reads quorum-finalized versions from the mirror and
  * records its local mirror list and contiguous application count. Installed onto
  * Database.prototype by db/index.js, so call sites stay this.db.<method>().
+ * The two MIRROR reads the apply pass consumes use doQueryStrict, so a hub-DB fault rolls
+ * the block back instead of reading as no versions on this node alone.
  *
  ********************************************************************/
 
@@ -25,7 +27,7 @@ module.exports = {
     // MIRROR (db.mirrorDb()). Latest finalized sequence for every foreign shared list in
     // this network. The grouped content key is quorum-agreed; the per-hub id is not read.
     async getListSnapshotHeads(network, coin){
-        return await this.doQuery(
+        return await this.doQueryStrict(
             `SELECT home_chain, home_list_index, MAX(seq) AS max_seq
              FROM list_snapshots
              WHERE status = 'finalized' AND network = ? AND home_chain <> ?
@@ -36,7 +38,7 @@ module.exports = {
     // MIRROR (db.mirrorDb()). Finalized versions after a contiguous local prefix. The
     // unique (network, home_chain, home_list_index, seq) key makes seq a total order.
     async getListSnapshotsAfter(network, homeChain, homeIndex, afterSeq){
-        return await this.doQuery(
+        return await this.doQueryStrict(
             `SELECT * FROM list_snapshots
              WHERE status = 'finalized' AND network = ? AND home_chain = ?
                AND home_list_index = ? AND seq > ?

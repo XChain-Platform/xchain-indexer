@@ -382,10 +382,12 @@ addGate('swq_source_cap_activation.SWQ_SOURCE_CAP_ACTIVATION', 'height', {
 // Keyed '<COIN>:<network>' (bare network as fallback) on the chain's OWN block_index, as
 // XCHAIN_BRIDGE_ACTIVATION.
 //
-// Mainnet and testnet sit at the house sentinel 9999999999. Testnet is NOT armed with the
-// XCHAIN bridge: no third-party token can be offered on a hub-trusted mint, so this gate
-// waits on the base spec's D2 checkpoint cross-check being built and armed on that
-// network. Regtest is 0 so the e2e rail exercises the armed rule from genesis.
+// Mainnet and the bare testnet fallback sit at the house sentinel 9999999999. BTC, LTC and
+// DOGE testnet are armed at the v0.21.0 freeze heights, each at or above that chain's
+// XCHAIN_BRIDGE_ACTIVATION, and the indexer proves every mint against the origin's anchored
+// checkpoint (bridge_checkpoint_check.js) before any effect. The hub reads this map at BTC's
+// slot because snapshot_block is a BTC height, so an arming cut must size BTC to arm LAST in
+// wall clock. Regtest is 0 so the e2e rail exercises the armed rule from genesis.
 addGate('token_bridge_activation.TOKEN_BRIDGE_ACTIVATION', 'height', {
     mainnet: 9999999999,
     'BTC:testnet': 154567, // set by the v0.21.0 freeze height plan
