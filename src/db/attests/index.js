@@ -32,6 +32,7 @@ const ar = require('../../consensus/gates/anchor_reward_gate.js');
 // back into the one method set db/index.js installs, at the position those methods held here.
 const rowWriters       = require('./row_writers.js');
 const batchChunks      = require('./batch_chunks.js');
+const batchHeads       = require('./batch_heads.js');
 const validatorStats   = require('./validator_stats.js');
 const requestLookups   = require('./request_lookups.js');
 const requestQueues    = require('./request_queues.js');
@@ -122,6 +123,8 @@ module.exports = {
     ...rowWriters,
 
     ...batchChunks,
+
+    ...batchHeads,
 
     ...validatorStats,
 
