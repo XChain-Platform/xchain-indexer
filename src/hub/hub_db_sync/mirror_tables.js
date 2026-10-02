@@ -135,10 +135,10 @@ const FULL_REPAGE_TABLES = ['capability_snapshots', 'price_snapshots', 'cross_ch
 // transaction; the BTC indexer binds it to a block from its own signed effective_time and
 // synthesizes the v1 action locally. Insert-only in every SIGNED column; the one exception is
 // batch_action_index, the display link to the ATTEST v5/v6 batch that later carries the body
-// on chain, which the hub stamps after that batch lands and re-broadcasts, so the apply is a
-// first-stamp-wins upsert of that single column (see applyRow). No re-page is needed for
-// content convergence: the link is not a consensus input, and the stamp arrives as a
-// broadcast rather than as something a cursor has to re-fetch.
+// on chain, which the hub stamps after that batch lands and re-broadcasts, so the apply is an
+// upsert of that single column that follows the hub, a reorg clear included (see applyRow).
+// No re-page is needed for content convergence: the link is not a consensus input, and the
+// stamp arrives as a broadcast rather than as something a cursor has to re-fetch.
 // Never retracted either: the mirror row is inert without a pending local request, so a reorg
 // that removes the request simply leaves nothing for it to bind to (spec §4.5). It is a
 // NATURAL-KEY mirror on (network, request_id) rather than an id-parity one, unlike the two

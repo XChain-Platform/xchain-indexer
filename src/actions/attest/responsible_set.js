@@ -197,5 +197,17 @@ module.exports = {
             return [];
         }
         return validators.filter(v => pmsh.meetsProviderFloor(v && v.weight, floor));
+    },
+
+    // The ASSIGNED set pinned on a v0 row (attests.responsible_set_json) as lowercase
+    // pubkeys, or null when the row carries no readable pin (a legacy NULL, bad JSON, a
+    // non-array). `[]` is a real pin that charges nobody. Pure, so the v2 expiry charge and
+    // the reorg missed_count recompute both read the pin through this one rule.
+    parsePinnedResponsibleSet(json){
+        if(!json) return null;
+        try {
+            let parsed = JSON.parse(json);
+            return Array.isArray(parsed) ? parsed.map(p => String(p).toLowerCase()) : null;
+        } catch(_) { return null; }
     }
 };

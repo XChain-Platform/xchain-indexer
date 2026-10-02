@@ -230,7 +230,7 @@ addGate('protocol/constants.ORACLE_VM_MAX_ROWS', 'constant', 50000);
 
 // slash_grid_activation
 // Scale the per-row deduction runs at once the rule is live. 18 is
-// MAX_TOKEN_DECIMALS (src/config.js), the finest precision any tick can be
+// MAX_TOKEN_DECIMALS (src/config/token_limits.js), the finest precision any tick can be
 // issued with, so a subtraction at this scale is exact for every stored amount
 // and the derived delta is the reduction written rather than a re-rounding of it.
 addGate('slash_grid_activation.SLASH_DEDUCTION_PRECISION', 'constant', 18);

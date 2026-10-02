@@ -151,7 +151,7 @@ const ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME = 1787961600;
 // there is no history the rule reinterprets and a from-genesis replay is unaffected.
 const DEPLOY_DEFERRED_ASSEMBLY_MAINNET_TIME = 0;
 
-// Testnet: house UNARMED sentinel (9999999999, year 2286) at this build rung. Bitcoin
+// Testnet: ARMED at 1788868800 (pins below); it held the house UNARMED sentinel until then. Bitcoin
 // testnet4 already holds a group of exactly the shape this rule reinterprets (action 70
 // assembler, carriers 71 and 75, blocks 150679-150681): an instant at or below block
 // 150679's time would turn action 70 into a pending assembler on a fresh replay and fork

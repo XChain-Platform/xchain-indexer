@@ -351,8 +351,8 @@ module.exports = [
     // of invalid and unpaid, the fee and sleeping checks now precede the chunk
     // verdict, and the pending contracts row enters that block's contract_hash.
     // Keyed on block_TIME like the sibling multi-chain gates. MAINNET at genesis (no
-    // chunked-DEPLOY history on any mainnet chain), TESTNET UNARMED until the shipping
-    // release pins the instant (the constants above carry the reasoning and the
+    // chunked-DEPLOY history on any mainnet chain), TESTNET ARMED at 1788868800
+    // (2026-09-08T12:00:00Z; the constants above carry the reasoning and the
     // testnet4 history that forbids a past instant), regtest at genesis (0).
     ['DEPLOY_DEFERRED_ASSEMBLY', '0.2.0',DEPLOY_DEFERRED_ASSEMBLY_MAINNET_TIME,DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME,0,0,0,0],
 
@@ -372,8 +372,8 @@ module.exports = [
     // extracted values are written into the new contracts.meta_* columns. Keyed on
     // block_TIME like the rest of the contract-era cohort (DEPLOY_INIT_STRICT,
     // CONTROLLER_GUARD, VM_BANNED_ASYNC): one indexer-side verdict, no per-coin axis.
-    // MAINNET at genesis (no mainnet contracts), TESTNET UNARMED until the shipping
-    // release pins the instant (the constants above carry the reasoning and the TBTC
+    // MAINNET at genesis (no mainnet contracts), TESTNET ARMED at 1789257600
+    // (2026-09-13T00:00:00Z; the constants above carry the reasoning and the TBTC
     // history that forbids a past instant), regtest at genesis (0).
     ['CONTRACT_META_REQUIRED', '0.2.0',CONTRACT_META_REQUIRED_MAINNET_TIME,CONTRACT_META_REQUIRED_TESTNET_TIME,0,0,0,0],
 

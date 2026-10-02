@@ -55,6 +55,33 @@ const TABLE_FORMS = [
 const DROP_TABLE_HEAD = new RegExp('^DROP\\s+(?:TEMPORARY\\s+)?TABLE\\s+(?:IF\\s+EXISTS\\s+)?', 'i');
 const REFERENCES_RE   = new RegExp('\\bREFERENCES\\s+' + QUAL, 'gi');
 
+// Second-table clauses after a recognized head: a table rename target (TO/AS optional;
+// RENAME COLUMN/INDEX/KEY stays on the same table), a CREATE ... LIKE source, and the
+// partition forms that name a table (WITH TABLE, TO TABLE, CONVERT TABLE). The keyword
+// test finds the clause and the name test reads it; a clause whose name cannot be read
+// makes the statement opaque rather than single-table.
+const SECOND_TABLE_CLAUSES = [
+    { keyword: /\bRENAME\b(?!\s+(?:COLUMN|INDEX|KEY)\b)/i,
+      name: new RegExp('\\bRENAME\\s+(?:TO\\s+|AS\\s+)?(?!(?:COLUMN|INDEX|KEY)\\b)' + QUAL, 'gi') },
+    { keyword: /\bLIKE\b/i, name: new RegExp('\\bLIKE\\s+' + QUAL, 'gi') },
+    { keyword: /\bTABLE\b/i, name: new RegExp('\\bTABLE\\s+' + QUAL, 'gi') },
+];
+
+// The second tables named in what follows a recognized head, or null when a clause is
+// present but its table cannot be read.
+function secondTables(rest){
+    const found = [];
+    for(const clause of SECOND_TABLE_CLAUSES){
+        if(!clause.keyword.test(rest)) continue;
+        clause.name.lastIndex = 0;
+        const before = found.length;
+        let m;
+        while((m = clause.name.exec(rest)) !== null) found.push(normalizeTable(m[1]));
+        if(found.length === before) return null;
+    }
+    return found;
+}
+
 // One table name as the comparison sees it. MariaDB table names are case-insensitive on
 // the platform's installs and backticks are decoration, so both are normalized away.
 const normalizeTable = (name) => String(name).replace(/`/g, '').trim().toLowerCase();
@@ -84,7 +111,14 @@ function statementTables(rawStmt){
     let recognized = false;
     for(const form of TABLE_FORMS){
         const m = form.exec(stmt);
-        if(m){ tables.push(normalizeTable(m[1])); recognized = true; break; }
+        if(!m) continue;
+        tables.push(normalizeTable(m[1]));
+        recognized = true;
+        // Read only what follows the head, so the head's own TABLE keyword is not re-read.
+        const more = secondTables(stmt.slice(m.index + m[0].length));
+        if(more === null) return { tables: [], opaque: stmt.slice(0, 120) };
+        tables.push(...more);
+        break;
     }
     // DROP TABLE takes a comma-separated list, so it is read apart from the single-target
     // forms above rather than folded into them.

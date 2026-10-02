@@ -34,7 +34,7 @@
  *   4. The frozen watermark grace and its regtest-only env seam.
  *   5. The one-column batch-link upsert. Every signed column is fixed by the first
  *      insert, and only batch_action_index (the display link to the on-chain
- *      v5/v6 batch) can be filled later, from NULL, once.
+ *      v5/v6 batch) follows the hub, set later and cleared again by a reorg.
  *
  * These are driven against the real methods, not asserted against the
  * declarations: every test below reads the SQL the mirror would actually issue
@@ -124,7 +124,7 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
 
     // ── the one-column batch-link upsert ──
 
-    it('generates an upsert whose ONLY assignment is a first-stamp-wins batch_action_index', async function () {
+    it('generates an upsert whose ONLY assignment is a hub-following batch_action_index', async function () {
         const { sync, queries } = makeSync();
         await sync.applyRow('attestation_responses', responseRow());
         const sql = insertFor(queries, 'attestation_responses')[0].sql;
@@ -136,8 +136,8 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
         const odku = /ON DUPLICATE KEY UPDATE (.+)$/.exec(sql);
         assert.ok(odku, 'the upgrade clause must be present. Generated SQL was: ' + sql);
         assert.deepStrictEqual(splitAssignments(odku[1]),
-            ['batch_action_index = COALESCE(batch_action_index, VALUES(batch_action_index))'],
-            'EXACTLY one assignment, and it fills from NULL only. Every other column is content a ' +
+            ['batch_action_index = VALUES(batch_action_index)'],
+            'EXACTLY one assignment, and it copies the hub, NULL included. Every other column is content a ' +
             'responsible set signed and this node has already verified; making one of them assignable ' +
             'would let a re-delivery rewrite a verified response under an unchanged natural key');
     });
@@ -185,7 +185,7 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
         assert.deepStrictEqual(setter.firstCall.args, ['a'.repeat(64), 4242]);
     });
 
-    it('a SECOND batch claiming the same response moves neither copy', async function () {
+    it('a re-delivery carrying a different link moves BOTH copies to the hub value', async function () {
         const { sync, stored, setter } = makeStoredSync();
         const first = responseRow();
         first.batch_action_index = 4242;
@@ -195,11 +195,12 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
         second.batch_action_index = 9999;
         await sync.applyRow('attestation_responses', second);
 
-        assert.strictEqual(stored().batch_action_index, 4242, 'first stamp wins, as COALESCE says');
+        assert.strictEqual(stored().batch_action_index, 9999,
+            'the hub sets a link only while it is NULL, so a different link on the wire is the ' +
+            'hub after a retraction and re-landing, and a streamed mirror must equal a fresh bootstrap');
         assert.strictEqual(setter.callCount, 2, 'the link is re-asserted, never recomputed');
-        assert.deepStrictEqual(setter.secondCall.args, ['a'.repeat(64), 4242],
-            'the setter must write the value now STORED in the mirror, not the one that just arrived, ' +
-            'or the two copies of a display link disagree after a duplicate batch');
+        assert.deepStrictEqual(setter.secondCall.args, ['a'.repeat(64), 9999],
+            'the setter must write the value now STORED in the mirror, so the two copies never disagree');
     });
 
     it('skips the link entirely when there is no local indexer connection to stamp', async function () {
@@ -210,5 +211,50 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
         assert.strictEqual(queries.filter(q => /^SELECT batch_action_index/.test(q.sql)).length, 0,
             'the explorer vendors this same client against a pool with no indexer and no attests table; ' +
             'the mirrored row still applies there, only the local stamp is skipped');
+    });
+});
+
+describe('HubDbSync attestation_responses mirror registration @regression @tier1', function () {
+    afterEach(function () {
+        delete process.env[GRACE_ENV];
+        sinon.restore();
+    });
+
+    const deliver = async (sync, link, effectiveTime) => {
+        const row = responseRow();
+        row.batch_action_index = link;
+        if (effectiveTime !== undefined) row.effective_time = effectiveTime;
+        await sync.applyRow('attestation_responses', row);
+    };
+
+    // A DOGE reorg un-lands the batch: the hub clears the link and re-broadcasts the row,
+    // and the batch may land again under a new head action index.
+    it('a reorg clear reaches both copies, and a re-landing links them again', async function () {
+        const { sync, stored, setter } = makeStoredSync();
+        await deliver(sync, 4242);
+        await deliver(sync, null);
+        assert.strictEqual(stored().batch_action_index, null, 'the retraction clears the mirrored link');
+        assert.deepStrictEqual(setter.lastCall.args, ['a'.repeat(64), null], 'and the v1 copy with it');
+        await deliver(sync, 5555);
+        assert.strictEqual(stored().batch_action_index, 5555);
+        assert.deepStrictEqual(setter.lastCall.args, ['a'.repeat(64), 5555]);
+    });
+
+    it('a clear never unlinks v1 while a sibling row of the same request holds a link', async function () {
+        const { sync, setter } = makeStoredSync();
+        await deliver(sync, 4242, 1767225600);
+        await deliver(sync, null, 1767225601);
+        assert.ok(setter.getCalls().every(c => c.args[1] === 4242), 'an unlinked sibling leaves v1 at 4242');
+        await deliver(sync, 7777, 1767225601);
+        await deliver(sync, null, 1767225600);
+        assert.deepStrictEqual(setter.lastCall.args, ['a'.repeat(64), 7777],
+            'clearing the 4242 row falls back to the sibling link, never to NULL');
+    });
+
+    it('a NULL that changed nothing carries nothing to v1', async function () {
+        const { sync, setter } = makeStoredSync();
+        await deliver(sync, null);
+        await deliver(sync, null);
+        assert.strictEqual(setter.callCount, 0, 'a fresh or unchanged NULL row has no link to move');
     });
 });

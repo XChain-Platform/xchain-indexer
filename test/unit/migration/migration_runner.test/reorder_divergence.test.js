@@ -120,6 +120,26 @@ describe('migration reorder attribution @regression @tier1', function () {
     it('lets a session-variable SET through as touching nothing', function () {
         assert.deepStrictEqual(migrationTouchedTables(['SET NAMES utf8mb4']), { tables: [], opaque: null });
     });
+
+    // A statement that names a second table must count both, or a reorder against that
+    // second table reads as disjoint and the guard goes quiet.
+    it('counts the second table a rename, a LIKE copy or a partition swap names', function () {
+        const cases = [
+            ['ALTER TABLE foo RENAME TO foo_v2', ['foo', 'foo_v2']],
+            ['ALTER TABLE foo RENAME AS foo_v2', ['foo', 'foo_v2']],
+            ['ALTER TABLE foo RENAME foo_v2', ['foo', 'foo_v2']],
+            ['ALTER TABLE `XChain_Indexer`.`foo` RENAME TO `XChain_Indexer`.`foo_v2`', ['foo', 'foo_v2']],
+            ['ALTER TABLE foo RENAME COLUMN a TO b', ['foo']],
+            ['ALTER TABLE foo RENAME INDEX i1 TO i2', ['foo']],
+            ['CREATE TABLE IF NOT EXISTS b LIKE a', ['a', 'b']],
+            ['CREATE TABLE b (LIKE a)', ['a', 'b']],
+            ['ALTER TABLE t EXCHANGE PARTITION p WITH TABLE t2', ['t', 't2']],
+        ];
+        for (const [stmt, tables] of cases)
+            assert.deepStrictEqual(migrationTouchedTables([stmt]), { tables, opaque: null }, stmt);
+        assert.ok(migrationTouchedTables(["CREATE TABLE b (c VARCHAR(9) CHECK (c LIKE 'x%'))"]).opaque,
+            'a second-table keyword whose name cannot be read must be opaque, never single-table');
+    });
 });
 
 
@@ -156,6 +176,18 @@ describe('migration reorder verdict @regression @tier1', function () {
         assert.strictEqual(reorderVerdict(pending, [{ file: 'b.sql', statements: backfill }]).divergent, true);
         assert.strictEqual(reorderVerdict({ file: 'a.sql', statements: backfill },
             [{ file: 'b.sql', statements: ['ALTER TABLE tokens ADD COLUMN x INT'] }]).divergent, true);
+    });
+
+    it('calls a reorder against an applied rename or a LIKE source divergent', function () {
+        const renamed = reorderVerdict(
+            { file: '2026-11-01-foo-v2-add-col.sql', statements: ['ALTER TABLE foo_v2 ADD COLUMN IF NOT EXISTS x INT NULL'] },
+            [{ file: '2026-11-05-foo-rename.sql', statements: ['ALTER TABLE foo RENAME TO foo_v2'] }]);
+        assert.strictEqual(renamed.divergent, true);
+        assert.deepStrictEqual(renamed.shared, [{ file: '2026-11-05-foo-rename.sql', tables: ['foo_v2'] }]);
+        const copied = reorderVerdict({ file: 'p.sql', statements: ['CREATE TABLE IF NOT EXISTS b LIKE a'] },
+            [{ file: 'x.sql', statements: ['ALTER TABLE a ADD COLUMN y INT'] }]);
+        assert.strictEqual(copied.divergent, true);
+        assert.deepStrictEqual(copied.shared, [{ file: 'x.sql', tables: ['a'] }]);
     });
 });
 

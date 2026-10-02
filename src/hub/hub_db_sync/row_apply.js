@@ -155,10 +155,12 @@ module.exports = {
         if (cols.length === 0) return;
         let placeholders = cols.map(() => '?').join(', ');
         let args = cols.map(c => coerceMirrorValue(row[c], this.cachedColumnType(table, c)));
-        await applyMirrorWrite(this.hubDb, mirrorUpsertSql(table, cols, placeholders), args);
-        // The batch link is carried onto the local ATTEST v1 row only once the mirror row
-        // holds it (see linkAppliedResponseToBatch for why the STORED value is the one used).
-        if (table === 'attestation_responses' && cols.includes('batch_action_index') && row.batch_action_index != null)
+        let written = await applyMirrorWrite(this.hubDb, mirrorUpsertSql(table, cols, placeholders), args);
+        // The batch link is carried onto the local ATTEST v1 row when the row arrives linked,
+        // or when a NULL changed a stored row (affectedRows 2: a reorg retraction's clear).
+        // A NULL that inserted or changed nothing has nothing to carry.
+        let moved = !written || typeof written.affectedRows !== 'number' || written.affectedRows === 2;
+        if (table === 'attestation_responses' && cols.includes('batch_action_index') && (row.batch_action_index != null || moved))
             await this.linkAppliedResponseToBatch(row);
     },
 
@@ -168,8 +170,9 @@ module.exports = {
     // the v1 row was minted locally on BTC at whatever block the mirror row bound at.
     //
     // The value written is the one now STORED in the mirror rather than the one that just
-    // arrived, so the first-stamp-wins rule above decides both copies at once and a second
-    // batch claiming the same response cannot move them apart.
+    // arrived, so the upsert rule decides both copies at once, a clear included. A cleared
+    // row falls back to a sibling row of the same request that still holds a link, because
+    // v1 is keyed on the request alone and one row's clear must not unlink the other's.
     //
     // Best effort by design. Both columns are display links, never consensus inputs, so a
     // failure here must not fail the drain (which would defer blocks); and a response whose
@@ -187,12 +190,17 @@ module.exports = {
             // The request may hold two honest rows (a round finalized under two leader
             // slots differs only in the signed effective_time), so read the one this
             // delivery just stamped rather than whichever the planner returns first.
+            let key = [String(row.network == null ? '' : row.network), String(row.request_id == null ? '' : row.request_id)];
             let stored = await this.hubDb.doQuery(
                 'SELECT batch_action_index FROM attestation_responses WHERE network = ? AND request_id = ? AND effective_time = ? LIMIT 1',
-                [String(row.network == null ? '' : row.network), String(row.request_id == null ? '' : row.request_id),
-                 Number(row.effective_time)]);
-            let linked = (stored && stored[0]) ? stored[0].batch_action_index : null;
-            if (linked == null) return;
+                key.concat([Number(row.effective_time)]));
+            if (!stored || !stored[0]) return;
+            let linked = stored[0].batch_action_index;
+            if (linked == null) {
+                let sibling = await this.hubDb.doQuery(
+                    'SELECT batch_action_index FROM attestation_responses WHERE network = ? AND request_id = ? AND batch_action_index IS NOT NULL LIMIT 1', key);
+                linked = (sibling && sibling[0]) ? sibling[0].batch_action_index : null;
+            }
             await db.setAttestationResponseBatchIndex(row.request_id, linked);
         } catch (e) {
             getLogger().warn('HubDbSync: could not link attestation response ' +

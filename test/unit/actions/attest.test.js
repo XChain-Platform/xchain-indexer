@@ -285,3 +285,32 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
     });
 });
+
+describe('Attest (ATTEST) @regression @tier3', function () {
+    beforeEach(setUpHandler);
+    afterEach(() => sinon.restore());
+
+    describe('v2: expire', function () {
+        const DATA = { BLOCK_INDEX: 201 };
+        const chargedFor = async (pin) => {
+            const derive = sinon.stub(handler, 'computeResponsibleSet').resolves(['derivedpk']);
+            await handler.chargeExpiryMisses(makeRequestRow({ responsible_set_json: pin }), REQ_ID, DATA);
+            const charged = indexer.indexerDb.incrementAttestationValidatorStat.getCalls().map(c => c.args[0]);
+            indexer.indexerDb.incrementAttestationValidatorStat.resetHistory();
+            derive.restore();
+            return { charged, derived: derive.called };
+        };
+
+        // A slash between request and expiry zeroes stakes.amount in place, so a re-derive
+        // here returns a different set than the one the reorg recompute charges.
+        it('charges missed_count to the pinned assigned set, never a re-derive', async function () {
+            assert.deepStrictEqual(await chargedFor('["PinnedPK"]'), { charged: ['pinnedpk'], derived: false });
+            assert.deepStrictEqual(await chargedFor('[]'), { charged: [], derived: false });
+        });
+
+        it('re-derives only for a row with no readable pin', async function () {
+            for (const pin of [null, '{not-json', '{}'])
+                assert.deepStrictEqual(await chargedFor(pin), { charged: ['derivedpk'], derived: true }, String(pin));
+        });
+    });
+});

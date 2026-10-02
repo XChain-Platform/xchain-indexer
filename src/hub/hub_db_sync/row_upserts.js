@@ -203,14 +203,18 @@ function crossChainMatchUpsertSql(cols, placeholders) {
 // streamed mirror forever while a fresh bootstrap served it, the divergent-mirror shape
 // the cross_chain_matches anchor_txid path above closes.
 //
-// COALESCE, so the FIRST stamp wins and no other column is assignable at all. Row
-// identity here is the natural key, not the payload, so an assignable signed column
-// would let a re-delivery of one hub's copy silently replace a body this node already
-// verified and applied. The link is safe to move because nothing consensus reads it:
-// no state-hash preimage carries it and the applier never reads it.
+// The link FOLLOWS the serving hub, NULL included: when a DOGE reorg un-lands the batch
+// the hub clears the link and re-broadcasts the row, and the batch may then re-land under
+// a new action index. First-stamp-wins is the hub's own rule (it sets the link only WHERE
+// it IS NULL and re-broadcasts only a change), so it is not repeated here, where it would
+// keep a retracted link forever; copying the hub is also what makes a full repage converge
+// to the fresh-bootstrap value. No other column is assignable at all: row identity is the
+// natural key, not the payload, so an assignable signed column would let a re-delivery
+// replace a body this node already verified and applied. The link is safe to move because
+// nothing consensus reads it: no state-hash preimage carries it and the applier never does.
 function attestationResponseUpsertSql(cols, placeholders) {
     return 'INSERT INTO attestation_responses (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
-        + ' ON DUPLICATE KEY UPDATE batch_action_index = COALESCE(batch_action_index, VALUES(batch_action_index))';
+        + ' ON DUPLICATE KEY UPDATE batch_action_index = VALUES(batch_action_index)';
 }
 // The statement for one mirrored row of `table` over the columns the local schema
 // accepts. The five upgrade paths above are keyed on the table AND on the presence of

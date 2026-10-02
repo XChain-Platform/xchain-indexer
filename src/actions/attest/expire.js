@@ -85,11 +85,14 @@ module.exports = {
         await this.mapper.createMappings(data);
     },
 
-    // Fault the ASSIGNED responsible set for a request nobody answered.
+    // Fault the ASSIGNED responsible set for a request nobody answered: the set pinned on
+    // the v0 row, which the reorg recompute also charges. A re-derive here would read the
+    // CURRENT stakes.amount, which a slash between request and expiry has already zeroed.
+    // Only a legacy row with no readable pin re-derives.
     async chargeExpiryMisses(request, requestId, data){
-        // Mark missed_count on each responsible validator (deterministic by SHA256(request_id || pubkey))
         try {
-            let responsible = await this.computeResponsibleSet(
+            let responsible = this.parsePinnedResponsibleSet(request.responsible_set_json);
+            if(responsible === null) responsible = await this.computeResponsibleSet(
                 requestId, request.redundancy, Number(request.block_index), request.provider_id
             );
             for(let pk of responsible){

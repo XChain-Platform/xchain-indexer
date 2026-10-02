@@ -82,8 +82,8 @@ function responseRow() {
 
 // ── a MariaDB stand-in that OBEYS the generated statement ────────────────────
 //
-// The behaviour cases below (a signed column cannot be rewritten, a link can be
-// filled once) are properties of the SQL this module emits, so the store executes
+// The behaviour cases below (a signed column cannot be rewritten, a link follows
+// the hub) are properties of the SQL this module emits, so the store executes
 // that SQL rather than re-stating the rule: it reads the column list and the ON
 // DUPLICATE KEY UPDATE clause out of the statement itself and applies them. Widen
 // the ODKU clause and these cases change behaviour, which is what makes them
@@ -105,12 +105,15 @@ function applyStatement(store, sql, args) {
     let cols = /\(([^)]*)\) VALUES/.exec(sql)[1].split(',').map(s => s.trim().replace(/`/g, ''));
     let incoming = {};
     cols.forEach((c, i) => { incoming[c] = args[i]; });
-    let key      = String(incoming.network) + '|' + String(incoming.request_id);
+    // The table's unique key, and MariaDB's affectedRows: 1 inserted, 2 changed, 1 unchanged
+    // (the CLIENT_FOUND_ROWS reading, the one that cannot tell unchanged from inserted).
+    let key      = [incoming.network, incoming.request_id, incoming.effective_time].map(String).join('|');
     let existing = store.get(key);
-    if (!existing) { store.set(key, Object.assign({}, incoming)); return; }
+    if (!existing) { store.set(key, Object.assign({}, incoming)); return { affectedRows: 1 }; }
 
     let odku = /ON DUPLICATE KEY UPDATE (.+)$/.exec(sql);
-    if (!odku) return;                                   // INSERT IGNORE: the duplicate is a no-op
+    if (!odku) return { affectedRows: 0 };               // INSERT IGNORE: the duplicate is a no-op
+    let before = JSON.stringify(existing);
     for (let assignment of splitAssignments(odku[1])) {
         let cut    = assignment.indexOf('=');
         let target = assignment.slice(0, cut).trim().replace(/`/g, '');
@@ -122,6 +125,7 @@ function applyStatement(store, sql, args) {
         else throw new Error('the test store cannot execute the assignment `' + assignment.trim() +
                              '`; teach it that form before relying on this case');
     }
+    return { affectedRows: JSON.stringify(existing) === before ? 1 : 2 };
 }
 
 // A HubDbSync whose hub DB is the store above and whose Database back-reference
@@ -136,15 +140,18 @@ function makeStoredSync() {
             let show = /^SHOW COLUMNS FROM (\S+)/.exec(sql);
             if (show) return showColumns(show[1] === 'attestation_responses' ? RESPONSE_COLUMNS : []);
             if (/^SELECT batch_action_index FROM attestation_responses/.test(sql)) {
-                let row = store.get(String(args[0]) + '|' + String(args[1]));
-                return row ? [{ batch_action_index: row.batch_action_index }] : [];
+                // The delivered row by its full key, or (IS NOT NULL) any linked row of the request.
+                let rows = [...store.values()].filter(r => String(r.network) === String(args[0]) &&
+                    String(r.request_id) === String(args[1]) &&
+                    (/IS NOT NULL/.test(sql) ? r.batch_action_index != null : Number(r.effective_time) === args[2]));
+                return rows.slice(0, 1).map(r => ({ batch_action_index: r.batch_action_index }));
             }
-            if (/^INSERT/.test(sql)) { applyStatement(store, sql, args); return {}; }
+            if (/^INSERT/.test(sql)) return applyStatement(store, sql, args);
             return [];
         }
     };
     const sync = new HubDbSync(hubDb, { hubUrl: 'http://hub.test', network: 'regtest' });
-    const stored = () => store.get('regtest|' + 'a'.repeat(64));
+    const stored = (effectiveTime = 1767225600) => store.get('regtest|' + 'a'.repeat(64) + '|' + effectiveTime);
     return { sync, store, stored, setter };
 }
 
