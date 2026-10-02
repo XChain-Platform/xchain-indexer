@@ -16,9 +16,9 @@
  * re-comment a carrier without moving the pin while any change to what the
  * code DOES moves it.
  *
- * WHY A TOKEN HASH AND NOT A BYTE HASH. The armed-map fingerprint hashes bytes,
- * so a comment restoration or a rename reads as a consensus change and the
- * fleet has to be re-verified for nothing. Hashing the acorn TOKEN stream drops
+ * WHY A TOKEN HASH AND NOT A BYTE HASH. A hash over file bytes would read a
+ * comment restoration, a reformat or a rename as a logic change and send the
+ * fleet to be re-verified for nothing. Hashing the acorn TOKEN stream drops
  * comments and whitespace for free, and replacing the string argument of every
  * `require(...)` with a placeholder lets a module be re-pointed at a moved
  * sibling without a re-pin. Function bodies, helpers, operators, constants and
