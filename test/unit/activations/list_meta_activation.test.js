@@ -10,6 +10,11 @@ const sinon = require('sinon');
 const { createBaseData } = require('../../fixtures/mocks');
 const { stubGate } = require('../../helpers/gate_modules.js');
 const {
+    makeFormat0Params,
+    makeData: makeIssueData,
+    buildIssue,
+} = require('../actions/token/issue.test/helpers/fixture.js');
+const {
     SOURCE,
     ADDR1,
     ADDR2,
@@ -221,20 +226,37 @@ describe('LIST metadata activation @regression @tier2', function () {
         assertNoListRows(db);
     });
 
-    it('treats a rename index as unknown to a later LIST edit and union item', async function () {
+    it('treats a rename index as unknown to LIST and token consumers', async function () {
         const context = setup();
         const db = context.indexer.indexerDb;
-        db.getListType.callsFake(async (index) => String(index)==='10' ? 2 : false);
+        const listRows = new Map([['10', 2]]);
+        db.createList.callsFake(async (row) => {
+            listRows.set(String(row.ACTION_INDEX), Number(row.TYPE));
+        });
+        db.getListType.callsFake(async (index) => listRows.get(String(index)) || false);
 
         const renamed = await rename(context, ['5', '10', 'New name', '', '']);
         const edit = listData(1, { ACTION_INDEX: 51 });
         await context.handler.parse(['1', '1', '50', '', ADDR1], edit, null);
 
         const item = await context.handler.checkUnionItem('50', listData(0));
+        const issueContext = buildIssue();
+        issueContext.indexer.indexerDb.isValidList.callsFake(async (index, type) =>
+            listRows.get(String(index))===Number(type)
+        );
+        const issue = makeIssueData({ BLOCK_INDEX: 100 });
+        await issueContext.handler.parse(
+            makeFormat0Params({ TICK: 'RENAMED', ALLOW_LIST: '50' }), issue, null
+        );
 
         assert.strictEqual(renamed.STATUS, 'valid');
+        assert.strictEqual(listRows.has('50'), false);
         assert.strictEqual(edit.STATUS, 'invalid: LIST_ACTION_INDEX (unknown)');
         assert.deepStrictEqual(item, { item: '50', status: 'invalid: LIST (unknown)' });
+        assert.strictEqual(issue.STATUS, 'invalid: ALLOW_LIST (bad list)');
+        sinon.assert.calledWithExactly(
+            issueContext.indexer.indexerDb.isValidList, '50', 2, 100
+        );
     });
 
     for(const format of [4, 5]){
