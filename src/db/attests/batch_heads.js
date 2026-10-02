@@ -13,7 +13,7 @@
 'use strict';
 
 module.exports = {
-    async getCompleteAttestBatchesByWindowStart(status, windowStartFrom, windowStartTo, limit) {
+    async getCompleteAttestBatchesByWindowStart(windowStartFrom, windowStartTo, limit) {
         let query = `SELECT h.batch_window_start, h.batch_window_end, h.batch_row_count,
                             h.action_index, h.block_index, it.hash AS tx_hash
                      FROM attests h
@@ -22,7 +22,7 @@ module.exports = {
                      LEFT JOIN transactions ht ON ht.tx_index = ha.tx_index
                      LEFT JOIN index_transactions it ON it.id = ht.tx_hash_id
                      WHERE h.version = 5
-                       AND hs.status = ?
+                       AND hs.status = 'valid'
                        AND h.batch_window_start BETWEEN ? AND ?
                        AND h.batch_total_chunks IS NOT NULL
                        AND h.batch_total_chunks >= 1
@@ -37,7 +37,7 @@ module.exports = {
                                    LEFT JOIN actions ca ON ca.action_index = c.action_index
                                    WHERE c.request_id = h.request_id
                                      AND c.version IN (5, 6)
-                                     AND cs.status = ?
+                                     AND cs.status = 'valid'
                                      AND ca.source_id = ha.source_id
                                      AND c.batch_total_chunks = h.batch_total_chunks
                                      AND c.batch_crc32 = h.batch_crc32
@@ -48,6 +48,6 @@ module.exports = {
                        )
                      ORDER BY h.batch_window_start ASC, h.action_index ASC
                      LIMIT ?`;
-        return await this.doQuery(query, [status, windowStartFrom, windowStartTo, status, limit]);
+        return await this.doQuery(query, [windowStartFrom, windowStartTo, limit]);
     },
 };

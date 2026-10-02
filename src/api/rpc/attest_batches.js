@@ -25,7 +25,7 @@ function attestBatchesRpc({ indexer }) {
             let db = indexer.indexerDb.apiView();
             try {
                 let rows = await db.getCompleteAttestBatchesByWindowStart(
-                    'valid', v.window_start_from, v.window_start_to, v.limit);
+                    v.window_start_from, v.window_start_to, v.limit);
                 return batchQuery.buildAttestBatchesResponse(rows, v);
             } catch (err) {
                 getLogger().error('getattestbatches error:', err);
