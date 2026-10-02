@@ -54,7 +54,7 @@
     },
     "consensus_rules_digest": {
       "path": "src/consensus_rules_digest.js",
-      "hash": "beda7a4249de7e5c90fe61f6919c6cedf0c6f22440b090d8b4eb0db742265540",
+      "hash": "5fc76089117b4b42869d6bf11f2a14fa0c1842f99837bf8aaa73e6e64541efac",
       "twins": [
         "xchain-hub"
       ]
@@ -120,7 +120,7 @@
     },
     "protocol/constants": {
       "path": "src/protocol/constants.js",
-      "hash": "bbc15d2d47cebe6e7e77868eb90de683849de91902fb1649700a8e5756ddebbe",
+      "hash": "d6aa3dfd9859b8bb9f7197eaab17f0a23d54947f99108045b61e0c45b947b1b9",
       "twins": []
     },
     "protocol_changes": {
@@ -1885,6 +1885,20 @@
       "to": "beda7a4249de7e5c90fe61f6919c6cedf0c6f22440b090d8b4eb0db742265540",
       "reason": "append list share producer activation to shared rules digest",
       "date": "2026-10-01"
+    },
+    {
+      "id": "protocol/constants",
+      "from": "bbc15d2d47cebe6e7e77868eb90de683849de91902fb1649700a8e5756ddebbe",
+      "to": "d6aa3dfd9859b8bb9f7197eaab17f0a23d54947f99108045b61e0c45b947b1b9",
+      "reason": "LM-2 adds the list meta limits",
+      "date": "2026-10-02"
+    },
+    {
+      "id": "consensus_rules_digest",
+      "from": "beda7a4249de7e5c90fe61f6919c6cedf0c6f22440b090d8b4eb0db742265540",
+      "to": "5fc76089117b4b42869d6bf11f2a14fa0c1842f99837bf8aaa73e6e64541efac",
+      "reason": "Register the list meta digest gate",
+      "date": "2026-10-02"
     }
   ]
 }

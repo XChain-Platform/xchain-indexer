@@ -132,7 +132,10 @@ const SHARED_GATES = [
     // The hub signs shared-list snapshots under this gate and the indexer's by-reference
     // gettokenpolicy path reads them under it, so a train that sizes only one side must
     // report a rules mismatch. Appended at the END to preserve every earlier preimage row.
-    ['list_share_producer_activation',          ['LIST_SHARE_PRODUCER_ACTIVATION']]
+    ['list_share_producer_activation',          ['LIST_SHARE_PRODUCER_ACTIVATION']],
+    // The hub signs list snapshots in two shapes either side of this gate, so a build that
+    // sizes it differently must report a rules mismatch.
+    ['list_meta_activation',                    ['LIST_META_ACTIVATION']]
 ];
 
 // A per-network height at or above this value is a far-future placeholder, not an

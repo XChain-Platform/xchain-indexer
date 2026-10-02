@@ -288,6 +288,8 @@ addGate('list_address_ref_activation.LIST_ADDRESS_REF_ACTIVATION', 'height', {
 });
 
 addGate('protocol/constants.LIST_SHARE_MAX_MEMBERS', 'constant', 10000);
+addGate('protocol/constants.LIST_META_NAME_MAX_BYTES', 'constant', 64);
+addGate('protocol/constants.LIST_META_DESCRIPTION_MAX_BYTES', 'constant', 512);
 addGate('protocol/constants.LIST_UNION_MAX_MEMBERS', 'constant', 16);
 
 // list_tick_coin_activation
