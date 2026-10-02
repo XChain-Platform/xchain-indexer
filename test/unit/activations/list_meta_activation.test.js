@@ -9,6 +9,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { createBaseData } = require('../../fixtures/mocks');
 const { stubGate } = require('../../helpers/gate_modules.js');
+const { readUnionMembers } = require('../../../src/db/lists/union.js');
 const {
     makeFormat0Params,
     makeData: makeIssueData,
@@ -239,9 +240,54 @@ describe('LIST metadata activation @regression @tier2', function () {
         sinon.assert.notCalled(db.getAddressBalances);
     });
 
-    it('stores valid and invalid renames only in list_metas and does not load members', async function () {
+    it('stores renames only in list_metas and keeps them invisible to a containing union', async function () {
         const context = setup();
         const db = context.indexer.indexerDb;
+        const listRows = new Map([
+            ['10', { root: '10', status: 'valid' }],
+            ['20', { root: '20', status: 'valid' }],
+        ]);
+        const listItems = new Map([
+            ['10', [ADDR1]],
+            ['20', ['10']],
+        ]);
+        db.createList.callsFake(async (row) => {
+            const index = String(row.ACTION_INDEX);
+            listRows.set(index, {
+                root: row.LIST_ACTION_INDEX===null
+                    ? index
+                    : String(row.LIST_ACTION_INDEX),
+                status: row.STATUS,
+            });
+            listItems.set(index, []);
+        });
+        db.createListItem.callsFake(async (row, item) => {
+            listItems.get(String(row.ACTION_INDEX)).push(item);
+        });
+        db.getListHeadIndex.callsFake(async (index) => {
+            const stored = listRows.get(String(index));
+            const root = stored ? stored.root : String(index);
+            const heads = [...listRows.entries()]
+                .filter(([, row]) => row.root===root && row.status==='valid')
+                .sort((left, right) => Number(right[0])-Number(left[0]));
+            return heads.length ? heads[0][0] : root;
+        });
+        db.getList.callsFake(async (index) => {
+            const head = await db.getListHeadIndex(index);
+            return (listItems.get(String(head)) || []).slice();
+        });
+        db.doQuery.callsFake(async (query, args) => {
+            if(query.includes('FROM list_items'))
+                return (listItems.get(String(args[0])) || [])
+                    .map((action_index) => ({ action_index }));
+            return [];
+        });
+
+        const unionBefore = await readUnionMembers(db, 20, 500, false);
+        const headBefore = await db.getListHeadIndex(10);
+        const itemCountBefore = [...listItems.values()]
+            .reduce((count, items) => count+items.length, 0);
+        db.getList.resetHistory();
 
         const valid = await rename(context);
         const invalid = await rename(
@@ -254,6 +300,13 @@ describe('LIST metadata activation @regression @tier2', function () {
         sinon.assert.calledWithExactly(db.createListMeta, valid, 'New name', 'New description');
         sinon.assert.calledWithExactly(db.createListMeta, invalid, null, null);
         sinon.assert.notCalled(db.getList);
+        assert.strictEqual(
+            [...listItems.values()].reduce((count, items) => count+items.length, 0),
+            itemCountBefore
+        );
+        assert.deepStrictEqual(listItems.get('20'), ['10']);
+        assert.deepStrictEqual(await readUnionMembers(db, 20, 500, false), unionBefore);
+        assert.strictEqual(await db.getListHeadIndex(10), headBefore);
         assertNoListRows(db);
     });
 
