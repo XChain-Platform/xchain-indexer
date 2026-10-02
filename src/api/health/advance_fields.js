@@ -38,7 +38,7 @@ function advanceFields(indexer, now){
         // lastBlockCommittedAt is legitimately old on a quiet chain in the healthy case too.
         // Reported, and deliberately NOT folded into `status` or the /status 503 gate: a single
         // iteration can hold across several sequential barrier waits, and restarting the
-        // container is the wrong answer to a slow block. The monitor crits on it instead.
+        // container is the wrong answer to a slow block. /status carries it; the fleet watcher crits on it.
         pollSilent:       (typeof indexer.isPollSilent === 'function') ? indexer.isPollSilent() : false,
         lastPollAt:       indexer.lastPollAt || null,
         // NOTE degraded stays true during the healthy future-stamped-block wait as well,

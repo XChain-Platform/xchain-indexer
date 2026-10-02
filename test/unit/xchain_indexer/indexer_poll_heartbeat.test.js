@@ -157,3 +157,33 @@ describe('health payload carries loop liveness as its own axis', function () {
         assert.strictEqual(res.degraded, false);
     });
 });
+
+describe('GET /status reports loop liveness for the fleet watcher, without gating on it', function () {
+    const { statusVerdict, statusBody } = require('../../../src/api/status_route.js');
+
+    function body(indexer){
+        return statusBody(XChainIndexer, indexer, { indexerBlock: 200, inFlightBlock: null, decoderBlock: 200,
+            verdict: statusVerdict(XChainIndexer, indexer), hubMirror: { configured: false } });
+    }
+
+    it('carries pollSilent and lastPollAt as the last keys, after every key monitors already read', function () {
+        const indexer = new XChainIndexer();
+        indexer.lastPollAt = Date.now() - (indexer.pollSilentMs + 1000);
+        const res = body(indexer);
+        assert.strictEqual(res.pollSilent, true);
+        assert.strictEqual(res.lastPollAt, indexer.lastPollAt);
+        assert.deepStrictEqual(Object.keys(res).slice(-3), ['hubMirror', 'pollSilent', 'lastPollAt']);
+    });
+
+    it('reads a booting indexer as not silent, with no stamp yet', function () {
+        const res = body(new XChainIndexer());
+        assert.strictEqual(res.pollSilent, false);
+        assert.strictEqual(res.lastPollAt, null);
+    });
+
+    it('leaves the 503 inputs untouched: a silent loop alone is not wedged', function () {
+        const indexer = new XChainIndexer();
+        indexer.lastPollAt = Date.now() - (indexer.pollSilentMs + 1000);
+        assert.strictEqual(statusVerdict(XChainIndexer, indexer).wedged, false);
+    });
+});
