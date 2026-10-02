@@ -104,13 +104,14 @@ function crossChainCallUpsertSql(cols, placeholders) {
 // convergence price_snapshots and cross_chain_calls get via their status upgrade).
 // >= (not >) keeps re-delivery of the same generation idempotent.
 function oraclePriceUpsertSql(cols, placeholders) {
+    let wins      = 'VALUES(`push_generation`) >= `push_generation`';
     let updatable = cols.filter(c => c !== 'id' && c !== 'source_chain' && c !== 'action_index' && c !== 'push_generation');
-    let sets = updatable.map(c => '`' + c + '` = IF(VALUES(`push_generation`) >= `push_generation`, VALUES(`' + c + '`), `' + c + '`)');
+    let sets = updatable.map(c => '`' + c + '` = IF(' + wins + ', VALUES(`' + c + '`), `' + c + '`)');
     // push_generation is BOTH the gate and an assignment target, and MariaDB reads the
     // already-updated value in a later ODKU assignment, so it must stay LAST: lifting
     // it earlier would make every following column compare the incoming generation
     // against itself (the cross_chain_matches ordering trap, #3211).
-    sets.push('push_generation = IF(VALUES(`push_generation`) >= `push_generation`, VALUES(`push_generation`), `push_generation`)');
+    sets.push('push_generation = IF(' + wins + ', VALUES(`push_generation`), `push_generation`)');
     return 'INSERT INTO oracle_prices (' + cols.map(c => '`' + c + '`').join(', ') + ') VALUES (' + placeholders + ')'
         + ' ON DUPLICATE KEY UPDATE ' + sets.join(', ');
 }
