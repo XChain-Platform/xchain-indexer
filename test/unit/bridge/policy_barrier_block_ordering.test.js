@@ -74,7 +74,7 @@ describe('bridge policy barrier block ordering @regression @tier1', function(){
                 return [{ transfer_id: 'd'.repeat(64) }];
             },
             mirrorDb: () => ({
-                doQuery: async () => [{ policy_seq: 2, origin_block: 18203, policy_hash: 'e'.repeat(64) }]
+                doQueryStrict: async () => [{ policy_seq: 2, origin_block: 18203, policy_hash: 'e'.repeat(64) }]
             })
         };
 
@@ -93,7 +93,7 @@ describe('bridge policy barrier block ordering @regression @tier1', function(){
                 return [{ transfer_id: 'f'.repeat(64) }];
             },
             mirrorDb: () => ({
-                doQuery: async () => [{ policy_seq: 3, origin_block: 18203, policy_hash: '1'.repeat(64) }]
+                doQueryStrict: async () => [{ policy_seq: 3, origin_block: 18203, policy_hash: '1'.repeat(64) }]
             })
         };
 

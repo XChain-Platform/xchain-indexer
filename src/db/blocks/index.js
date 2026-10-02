@@ -79,7 +79,10 @@ module.exports = {
             // Benign older-schema gap only: treat as an unresolvable block_time, uncached.
             return false;
         }
-        let block_time = (results.length > 0) ? results[0]['block_time'] : false;
+        // A missing decoder row is unresolvable too, so it stays unmemoized: a retry after
+        // the decoder re-inserts the height must read the real stamp, not a cached `false`.
+        if(results.length === 0) return false;
+        let block_time = results[0]['block_time'];
         this._blockTimeCache.block_index = key;
         this._blockTimeCache.block_time  = block_time;
         return block_time;

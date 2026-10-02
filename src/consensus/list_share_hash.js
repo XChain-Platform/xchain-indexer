@@ -21,4 +21,14 @@ function listMembershipHash(members){
     return crypto.createHash('sha256').update(canonical, 'utf8').digest('hex');
 }
 
-module.exports = { listMembershipHash };
+function listMetaHash(name, description){
+    const noName = name === null || name === undefined;
+    const noDescription = description === null || description === undefined;
+    if(noName && noDescription)
+        return '';
+
+    const canonical = ['LISTMETA', name ?? '', description ?? ''].join('|');
+    return crypto.createHash('sha256').update(canonical, 'utf8').digest('hex');
+}
+
+module.exports = { listMembershipHash, listMetaHash };

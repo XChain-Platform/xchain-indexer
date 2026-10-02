@@ -63,7 +63,9 @@ async function recordAndSettle(data, xbridge, ctx, fees, format, error){
     // Record the xbridges row (Database.createXbridge, src/db/xbridges/index.js). The
     // call is unconditional on purpose, because a handler that
     // silently skips its own record is worse than one that fails loudly, and because
-    // the hub's poll and the pending read are both built on this row.
+    // the hub's poll and the pending read are both built on this row. It interns the
+    // tick, destination, memo and status ids for refused rows too, so moving or skipping
+    // it for some verdicts changes index ids and is a consensus change.
     await this.indexerDb.createXbridge(xbridge);
 
     // Register the SOURCE so the action is findable by address even when it was

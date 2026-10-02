@@ -117,7 +117,7 @@ module.exports = {
             if(minReorgBlock === null || reorg.block_index < minReorgBlock)
                 minReorgBlock = reorg.block_index;
         }
-        getLogger().info("Detected " + unprocessedReorgs.length + " block reorganization(s); deepest at block #", minReorgBlock);
+        getLogger().warn("Detected " + unprocessedReorgs.length + " block reorganization(s); deepest at block #" + minReorgBlock);
         if(!this.util.isNull(lastIndexerBlock) && lastIndexerBlock >= minReorgBlock){
             await this.rollback.rollback(minReorgBlock);
             // Re-read the resume cursor: rollback() deleted every block >=
@@ -147,6 +147,7 @@ module.exports = {
             let witness = await this.decoderDb.getReorgEventWitness(reorg.id);
             await indexerReorgView.createReorg(reorg.block_index, reorg.id,
                 witness ? witness.time : null, witness ? witness.hash : null);
+            this.reorgsProcessedSinceStart = (this.reorgsProcessedSinceStart || 0) + 1;
         }
 
         // Refresh the local cursor to the durable value just advanced by createReorg.

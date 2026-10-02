@@ -247,7 +247,7 @@ describe('db.getAppliedPolicySnapshot (policy spec D25) @regression @tier1', fun
             return ids.map(transfer_id => ({ transfer_id }));
         });
         const mirror = {
-            doQuery: sinon.stub().callsFake(async (query, args) => {
+            doQueryStrict: sinon.stub().callsFake(async (query, args) => {
                 assert.match(query, /FROM\s+policy_snapshots/i);
                 assert.doesNotMatch(query, /bridge_settlements/i,
                     'the mirror query cannot join a table held by the local ledger connection');
@@ -265,7 +265,7 @@ describe('db.getAppliedPolicySnapshot (policy spec D25) @regression @tier1', fun
         const applied = await db.getAppliedPolicySnapshot('DOGE', 'FUFU');
         assert.strictEqual(applied.policy_seq, 3);
         assert.strictEqual(db.doQuery.callCount, 1);
-        assert.strictEqual(mirror.doQuery.callCount, 1);
+        assert.strictEqual(mirror.doQueryStrict.callCount, 1);
     });
 });
 
@@ -275,7 +275,7 @@ describe('db.getAppliedPolicySnapshot isolation @regression @tier1', function(){
         const localId = 'c'.repeat(64);
         sinon.stub(db, 'doQuery').resolves([{ transfer_id: localId }]);
         const mirror = {
-            doQuery: sinon.stub().callsFake(async (query, args) => {
+            doQueryStrict: sinon.stub().callsFake(async (query, args) => {
                 assert.match(query, /network\s*=\s*\?\s+AND\s+origin_chain\s*=\s*\?\s+AND\s+tick\s*=\s*\?/i);
                 assert.deepStrictEqual(args, ['regtest', 'DOGE', 'FUFU', localId]);
                 // The database applies the query predicates before ordering. This row is
@@ -292,10 +292,10 @@ describe('db.getAppliedPolicySnapshot isolation @regression @tier1', function(){
     it('returns null without consulting the mirror when nothing has applied here yet', async function(){
         const db = newDb();
         sinon.stub(db, 'doQuery').resolves([]);
-        const mirror = { doQuery: sinon.stub().rejects(new Error('mirror must not be read')) };
+        const mirror = { doQueryStrict: sinon.stub().rejects(new Error('mirror must not be read')) };
         db.indexer.hubDb = mirror;
         const applied = await db.getAppliedPolicySnapshot('DOGE', 'FUFU');
         assert.strictEqual(applied, null);
-        assert.strictEqual(mirror.doQuery.callCount, 0);
+        assert.strictEqual(mirror.doQueryStrict.callCount, 0);
     });
 });

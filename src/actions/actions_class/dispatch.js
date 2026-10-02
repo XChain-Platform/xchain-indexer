@@ -83,8 +83,9 @@ async function dispatchProtocolAction(action, params, data, error){
     if(action=='ATTEST')             await this.actionAttest.parse(params, data, error);
 
     // ANCHOR: DOGE-only on-chain state commitments (handler dispatches on VERSION:
-    // v0=checkpoint bundle, v1=archive head, v2=archive continuation chunk; the
-    // pre-restart v3-v7 set no longer parses)
+    // v0=checkpoint bundle, v1=archive head, v2=archive continuation chunk, v3=folded
+    // bundle once ANCHOR_FOLD_ACTIVATION is active; every byte mined below
+    // ANCHOR_ACTIVATION belongs to the retired pre-restart wire and is always invalid)
     if(action=='ANCHOR')             await this.actionAnchor.parse(params, data, error);
 
     // Cross-chain contract calls: XCALL (VM-emitted request / synthetic expiry),
