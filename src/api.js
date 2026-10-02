@@ -171,6 +171,7 @@ const FEDERATION_READ_METHODS = new Set([
     'getactionconfirmations',
     'getanchoraction',
     'getpricebatches',
+    'getattestbatches',
     'getanchorconfirmations',
     'getrollcallsigners',
     'getarchiveanchor',
