@@ -77,6 +77,14 @@ function screenListMeta(row, metaActive){
     return { fields: { name, description, meta_hash: metaHash } };
 }
 
+function screenListMetaWithDeps(deps, row, snapshotBlock, network, fields){
+    if(typeof deps.isListMetaActive !== 'function')
+        return { fields };
+    const screened = screenListMeta(row, deps.isListMetaActive(snapshotBlock, network) === true);
+    if(screened.halt) return screened;
+    return { fields: Object.assign(fields, screened.fields) };
+}
+
 function screenListSnapshotWithDeps(deps, row, ctx){
     row = row && typeof row === 'object' ? row : {};
     ctx = ctx && typeof ctx === 'object' ? ctx : {};
@@ -136,28 +144,26 @@ function screenListSnapshotWithDeps(deps, row, ctx){
     if(!admitBlocks || !Object.prototype.hasOwnProperty.call(admitBlocks, ctx.coin))
         return halt('admit_block_' + String(ctx.coin || '').toLowerCase());
 
-    return {
-        fields: {
-            snapshot_id: snapshotId,
-            snapshot_block: snapshotBlock,
-            home_chain: homeChain,
-            home_list_index: homeListIndex,
-            list_type: listType,
-            seq,
-            kind,
-            origin_block: originBlock,
-            added,
-            removed,
-        }
-    };
+    return screenListMetaWithDeps(deps, row, snapshotBlock, network, {
+        snapshot_id: snapshotId,
+        snapshot_block: snapshotBlock,
+        home_chain: homeChain,
+        home_list_index: homeListIndex,
+        list_type: listType,
+        seq,
+        kind,
+        origin_block: originBlock,
+        added,
+        removed,
+    });
 }
 
 function screenListSnapshot(row, ctx){
     return screenListSnapshotWithDeps({ ah: { columnsAdmitBlocks: admissionColumns } }, row, ctx);
 }
 
-function createScreen({ ah }){
-    const deps = { ah };
+function createScreen({ ah, isListMetaActive }){
+    const deps = { ah, isListMetaActive };
     return {
         screenListSnapshot: screenListSnapshotWithDeps.bind(null, deps),
     };
