@@ -3,15 +3,28 @@
 const { LIST_SHARE_TX_PREFIX, LIST_SHARE_LEG_ORDINAL } = require('./halt.js');
 const { LIST_EDIT_ADD, LIST_EDIT_REMOVE } = require('../bridge_settle/reasons.js');
 
-function planListShareLegs({ seq, listType, added, removed, mirrorIndex }){
+function planListShareLegs({
+    seq,
+    listType,
+    added,
+    removed,
+    mirrorIndex,
+    metaActive = false,
+    meta = null,
+}){
     if(!Number.isSafeInteger(seq) || seq <= 0)
         throw new TypeError('seq must be a positive safe integer');
     if(!Array.isArray(added)) throw new TypeError('added must be an array');
     if(!Array.isArray(removed)) throw new TypeError('removed must be an array');
 
     if(seq === 1){
+        const name = meta && typeof meta.name === 'string' ? meta.name : '';
+        const description = meta && typeof meta.description === 'string' ? meta.description : '';
+        const fields = metaActive && (name.length || description.length)
+            ? ['LIST', '4', String(listType), name, description, ''].concat(added)
+            : ['LIST', '0', String(listType), ''].concat(added);
         return [{
-            fields: ['LIST', '0', String(listType), ''].concat(added),
+            fields,
             ordinal: LIST_SHARE_LEG_ORDINAL.CREATE_OR_REMOVE,
         }];
     }
