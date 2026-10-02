@@ -1,7 +1,7 @@
 'use strict';
 
 const gateRegistry = require('../../consensus/gate_registry');
-const { metaFieldVerdict, resolveMeta, isNoChange } = require('./meta_rules.js');
+const { metaFieldVerdict, isNoChange } = require('./meta_rules.js');
 
 const LIST_META_NAME_MAX_BYTES = 64;
 const LIST_META_DESCRIPTION_MAX_BYTES = 512;
@@ -72,26 +72,5 @@ module.exports = {
         if(!error && format==5 && isNoChange(name, description))
             error = 'invalid: NAME (no change)';
         return error;
-    },
-
-    async storeMeta(data, status){
-        let storedData = data;
-        let name = null;
-        let description = null;
-
-        if(status=='valid' && data['FORMAT']==4){
-            storedData = { ...data, LIST_ACTION_INDEX: data['ACTION_INDEX'] };
-            name = data['NAME'] || null;
-            description = data['DESCRIPTION'] || null;
-        } else if(status=='valid' && data['FORMAT']==5){
-            let current = await this.indexerDb.getListMeta(
-                data['LIST_ACTION_INDEX'], data['BLOCK_INDEX']
-            );
-            ({ name, description } = resolveMeta(
-                current, data['NAME'] ?? '', data['DESCRIPTION'] ?? ''
-            ));
-        }
-
-        await this.indexerDb.createListMeta(storedData, name, description);
     },
 };
