@@ -34,6 +34,7 @@ const { buildListShareRpc } = require('./list_share');
 const { buildListShareMirrorRpc } = require('./list_share_mirror');
 const { buildCrossChainCallsRpc } = require('./cross_chain_calls');
 const { buildPriceBatchesRpc } = require('./price_batches');
+const { buildAttestBatchesRpc } = require('./attest_batches');
 const { buildAnchorRpc } = require('./anchor');
 const { buildRollcallRpc } = require('./rollcall');
 const { buildReorgHistoryRpc } = require('./reorg_history');
@@ -43,7 +44,7 @@ const getsharedlistFamily = buildListShareMirrorRpc;
 const FAMILIES = [
     buildSystemRpc, buildFeesRpc, buildStakesRpc, buildCapabilitiesRpc, buildAttestationRpc,
     buildOrdersRpc, buildBetsRpc, buildBridgeRpc, buildTokenPolicyRpc, buildListShareRpc,
-    getsharedlistFamily, buildCrossChainCallsRpc, buildPriceBatchesRpc, buildAnchorRpc,
+    getsharedlistFamily, buildCrossChainCallsRpc, buildPriceBatchesRpc, buildAttestBatchesRpc, buildAnchorRpc,
     buildRollcallRpc, buildReorgHistoryRpc,
 ];
 
