@@ -56,7 +56,7 @@ async function injectListShareLegs(ctx, {
         const actionIndex = Number(answer.ACTION_INDEX);
         actionIndexes.push(actionIndex);
 
-        if(leg.fields[1] === '0'){
+        if(leg.fields[1] === '0' || leg.fields[1] === '4'){
             mirrorIndex = actionIndex;
             await ctx.indexerDb.createListShareMirror({
                 action_index: actionIndex,
