@@ -69,12 +69,12 @@ describe('hub-schema-version', function () {
     });
 });
 
-// The value itself is part of the contract: v8 adds the list_snapshots mirror
-// table on top of the v7 admission-height shape. A reader or hub on v7 cannot
-// safely interpret the complete mirror set and is refused by strict equality.
-describe('hub-schema-version: the v8 shared-list mirror shape', function () {
-    it('is v8, so a v7 hub stream is refused and a v7 reader refuses this one', function () {
-        assert.strictEqual(mod.HUB_SCHEMA_VERSION, 8);
-        assert.notStrictEqual(7, mod.HUB_SCHEMA_VERSION);
+// The value itself is part of the contract: v9 adds the list_snapshots metadata
+// columns on top of the v8 shared-list mirror table. A reader or hub on v8 cannot
+// safely interpret the expanded row and is refused by strict equality.
+describe('hub-schema-version: the v9 list metadata mirror shape', function () {
+    it('is v9, so a v8 hub stream is refused and a v8 reader refuses this one', function () {
+        assert.strictEqual(mod.HUB_SCHEMA_VERSION, 9);
+        assert.notStrictEqual(8, mod.HUB_SCHEMA_VERSION);
     });
 });
