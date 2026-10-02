@@ -13,7 +13,7 @@ module.exports = {
         let gasCost = null;
         if(format==2){
             gasCost = this.util.resolveGasScheduleCost('LIST_SHARE');
-        } else if(format==1 && await isListShared(this.indexerDb, data['LIST_ACTION_INDEX'])){
+        } else if(this.isEditFormat(format) && await isListShared(this.indexerDb, data['LIST_ACTION_INDEX'])){
             gasCost = this.util.getUnifiedBaseItemFee(
                 changes,
                 'LIST_SHARED_EDIT_BASE',
