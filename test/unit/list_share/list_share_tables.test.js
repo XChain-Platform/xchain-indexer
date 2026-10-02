@@ -41,6 +41,17 @@ function createBlock(sql, table){
     return match[0].replace('CREATE TABLE IF NOT EXISTS', 'CREATE TABLE');
 }
 
+function laterAddedColumns(table){
+    const dir = path.join(ROOT, 'src/sql/migrations');
+    const names = [];
+    for(const file of fs.readdirSync(dir).filter(f => f.endsWith('.sql') && f > MIGRATION_FILE).sort()){
+        const sql = read('src/sql/migrations/' + file);
+        if(!new RegExp('ALTER TABLE ' + table + '\\b').test(sql)) continue;
+        for(const m of sql.matchAll(/ADD COLUMN IF NOT EXISTS (\w+)/g)) names.push(m[1]);
+    }
+    return names;
+}
+
 describe('shared-list table contracts @regression @tier1', function () {
     it('pins the append-only list_snapshots lifecycle row', function () {
         const row = lifecycle.entry('list_snapshots');
@@ -64,7 +75,11 @@ describe('shared-list table contracts @regression @tier1', function () {
     it('keeps both migration CREATE blocks byte-consistent with fresh-build SQL', function () {
         const migration = read('src/sql/migrations/' + MIGRATION_FILE);
         for(const table of ['list_snapshots', 'list_share_mirrors']){
-            const fresh = createBlock(read('src/sql/' + table + '.sql'), table);
+            // Columns a later dated migration adds are in the fresh build but not in this
+            // frozen CREATE, so they are set aside before the byte compare.
+            const later = laterAddedColumns(table);
+            const fresh = createBlock(read('src/sql/' + table + '.sql'), table)
+                .split('\n').filter(line => !later.includes(line.trim().split(/\s+/)[0])).join('\n');
             assert.strictEqual(createBlock(migration, table), fresh, table + ' migration DDL drifted');
         }
     });
