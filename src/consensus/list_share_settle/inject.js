@@ -19,7 +19,17 @@
 'use strict';
 
 const { listShareLegTx } = require('./legs.js');
-const { ListShareHaltError, LIST_SHARE_HALT_REASON } = require('./halt.js');
+const {
+    ListShareHaltError,
+    LIST_SHARE_HALT_REASON,
+    LIST_SHARE_LEG_FORMAT,
+} = require('./halt.js');
+
+function isMirrorCreateLeg(leg){
+    const format = leg.fields[1];
+    return format === LIST_SHARE_LEG_FORMAT.CREATE ||
+        format === LIST_SHARE_LEG_FORMAT.CREATE_WITH_META;
+}
 
 async function injectListShareLegs(ctx, {
     legs,
@@ -56,7 +66,7 @@ async function injectListShareLegs(ctx, {
         const actionIndex = Number(answer.ACTION_INDEX);
         actionIndexes.push(actionIndex);
 
-        if(leg.fields[1] === '0' || leg.fields[1] === '4'){
+        if(isMirrorCreateLeg(leg)){
             mirrorIndex = actionIndex;
             await ctx.indexerDb.createListShareMirror({
                 action_index: actionIndex,

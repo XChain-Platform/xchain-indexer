@@ -74,6 +74,10 @@ function listShareCanonical(deps, row) {
 function createCanonical(deps) {
     return {
         listShareCanonical: row => listShareCanonical(deps, row),
+        wireListMetaGate(reader) {
+            if (typeof deps.isListMetaActive !== 'function')
+                deps.isListMetaActive = reader;
+        },
     };
 }
 

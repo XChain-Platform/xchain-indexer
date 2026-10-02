@@ -166,6 +166,10 @@ function createScreen({ ah, isListMetaActive }){
     const deps = { ah, isListMetaActive };
     return {
         screenListSnapshot: screenListSnapshotWithDeps.bind(null, deps),
+        wireListMetaGate(reader){
+            if(typeof deps.isListMetaActive !== 'function')
+                deps.isListMetaActive = reader;
+        },
     };
 }
 

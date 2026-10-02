@@ -1,6 +1,10 @@
 'use strict';
 
-const { LIST_SHARE_TX_PREFIX, LIST_SHARE_LEG_ORDINAL } = require('./halt.js');
+const {
+    LIST_SHARE_TX_PREFIX,
+    LIST_SHARE_LEG_FORMAT,
+    LIST_SHARE_LEG_ORDINAL,
+} = require('./halt.js');
 const { LIST_EDIT_ADD, LIST_EDIT_REMOVE } = require('../bridge_settle/reasons.js');
 
 function metaField(value){
@@ -28,8 +32,9 @@ function planListShareLegs(options){
         const name = meta && typeof meta.name === 'string' ? meta.name : '';
         const description = meta && typeof meta.description === 'string' ? meta.description : '';
         const fields = metaActive && (name.length || description.length)
-            ? ['LIST', '4', String(listType), name, description, ''].concat(added)
-            : ['LIST', '0', String(listType), ''].concat(added);
+            ? ['LIST', LIST_SHARE_LEG_FORMAT.CREATE_WITH_META,
+                String(listType), name, description, ''].concat(added)
+            : ['LIST', LIST_SHARE_LEG_FORMAT.CREATE, String(listType), ''].concat(added);
         return [{
             fields,
             ordinal: LIST_SHARE_LEG_ORDINAL.CREATE_OR_REMOVE,
@@ -42,13 +47,15 @@ function planListShareLegs(options){
     const legs = [];
     if(removed.length){
         legs.push({
-            fields: ['LIST', '1', LIST_EDIT_REMOVE, String(mirrorIndex), ''].concat(removed),
+            fields: ['LIST', LIST_SHARE_LEG_FORMAT.EDIT,
+                LIST_EDIT_REMOVE, String(mirrorIndex), ''].concat(removed),
             ordinal: LIST_SHARE_LEG_ORDINAL.CREATE_OR_REMOVE,
         });
     }
     if(added.length){
         legs.push({
-            fields: ['LIST', '1', LIST_EDIT_ADD, String(mirrorIndex), ''].concat(added),
+            fields: ['LIST', LIST_SHARE_LEG_FORMAT.EDIT,
+                LIST_EDIT_ADD, String(mirrorIndex), ''].concat(added),
             ordinal: LIST_SHARE_LEG_ORDINAL.ADD,
         });
     }
@@ -61,7 +68,7 @@ function planListShareLegs(options){
             legs.push({
                 fields: [
                     'LIST',
-                    '5',
+                    LIST_SHARE_LEG_FORMAT.META,
                     String(mirrorIndex),
                     name || '-',
                     description || '-',

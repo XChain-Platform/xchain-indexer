@@ -17,11 +17,31 @@ const path = require('path');
 
 const ah = require('../../../src/consensus/gates/mirror_admission_gate.js');
 const eq = require('../../../src/consensus/equivocation_header.js');
-const { listMembershipHash } = require('../../../src/consensus/list_share_hash.js');
+const {
+    listMembershipHash,
+    listMetaHash,
+} = require('../../../src/consensus/list_share_hash.js');
 const { createCanonical } = require('../../../src/consensus/list_share_settle/canonical.js');
+const createApply = require('../../../src/consensus/list_share_settle/apply.js');
 const { injectListShareLegs } = require('../../../src/consensus/list_share_settle/inject.js');
 const { planListShareLegs } = require('../../../src/consensus/list_share_settle/legs.js');
 const { verifyMirrorMembers } = require('../../../src/consensus/list_share_settle/reread.js');
+const { createScreen } = require('../../../src/consensus/list_share_settle/screen.js');
+const H = require('./helpers/apply_harness.js');
+
+const makeListSnapshotRow = H.makeListSnapshotRow;
+H.makeListSnapshotRow = options => Object.assign({
+    name: null,
+    description: null,
+    meta_hash: '',
+}, makeListSnapshotRow(options));
+
+const makeListShareCtx = H.makeListShareCtx;
+H.makeListShareCtx = options => {
+    const made = makeListShareCtx(options);
+    made.ctx.indexerDb.getListMeta = async () => null;
+    return made;
+};
 
 require('./parts/list_share_screen_meta.test.js');
 require('./parts/list_share_screen_meta_wiring.test.js');
@@ -65,6 +85,46 @@ describe('list share metadata consumer integration', function () {
             assert.strictEqual(legacy(canonicalRow(vector)), vector.expected, vector.name);
         for(const vector of vectors.metaCanonicals)
             assert.strictEqual(active(canonicalRow(vector)), vector.expected, vector.name);
+    });
+
+    it('wires the concrete consumer to the snapshot and apply gates', async function () {
+        const canonical = createCanonical({ ah, eq });
+        const screen = createScreen({ ah });
+        const apply = createApply({
+            canonical,
+            screen,
+            quorum: { verifyQuorum: async () => ({ met: true }) },
+        }).applyListShareSnapshot;
+        const metadata = { name: 'Friends', description: 'People I know' };
+        const row = Object.assign(H.makeListSnapshotRow({
+            seq: 1,
+            added: ['nA'],
+            members: ['nA'],
+        }), metadata, {
+            meta_hash: listMetaHash(metadata.name, metadata.description),
+        });
+        const made = H.makeListShareCtx({ blockIndex: 901 });
+        const injected = [];
+        const processTransaction = made.ctx.actions.processTransaction;
+        made.ctx.actions.processTransaction = (tx, isGenesis) => {
+            injected.push(tx.data);
+            const fields = tx.data.split('|');
+            const legacyTx = Object.assign({}, tx, {
+                data: ['LIST', '0', fields[2], ''].concat(fields.slice(6)).join('|'),
+            });
+            return processTransaction(legacyTx, isGenesis);
+        };
+        made.ctx.indexerDb.getListMeta = async () => null;
+
+        await apply(row, made.ctx);
+
+        assert.ok(canonical.listShareCanonical(row).endsWith('|' + row.meta_hash));
+        assert.deepStrictEqual(injected, ['LIST|4|2|Friends|People I know||nA']);
+        assert.strictEqual(made.state.mirrors.length, 1);
+        assert.deepStrictEqual(screen.screenListSnapshot(
+            Object.assign({}, row, { name: 'Forged' }),
+            made.ctx
+        ), { halt: 'META_HASH', detail: 'meta_hash' });
     });
 
     it('catches up on the next version after an inactive consumer gate', function () {

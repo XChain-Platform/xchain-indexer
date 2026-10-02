@@ -24,7 +24,41 @@ const { injectListShareLegs } = require('./inject.js');
 const { listShareTarget } = require('./target.js');
 const { verifyMirrorMembers } = require('./reread.js');
 const { recordListShareApplied } = require('./record.js');
-const { ListShareHaltError, LIST_SHARE_HALT_REASON } = require('./halt.js');
+const gateRegistry = require('../gate_registry.js');
+const {
+    ListShareHaltError,
+    LIST_SHARE_HALT_REASON,
+    LIST_META_GATE_KEY,
+} = require('./halt.js');
+
+function isListMetaActive(snapshotBlock, network){
+    return gateRegistry.activeAt(
+        LIST_META_GATE_KEY,
+        network,
+        'BTC',
+        snapshotBlock,
+        null
+    );
+}
+
+function isListMetaApplyActive(coin, network, blockIndex){
+    return gateRegistry.activeAt(
+        LIST_META_GATE_KEY,
+        network,
+        coin,
+        blockIndex,
+        null
+    );
+}
+
+function wireListMetaConsumer(deps){
+    if(typeof deps.isListMetaApplyActive === 'function') return;
+    if(!deps.canonical || typeof deps.canonical.wireListMetaGate !== 'function') return;
+    if(!deps.screen || typeof deps.screen.wireListMetaGate !== 'function') return;
+    deps.canonical.wireListMetaGate(isListMetaActive);
+    deps.screen.wireListMetaGate(isListMetaActive);
+    deps.isListMetaApplyActive = isListMetaApplyActive;
+}
 
 function halt(reason, row, detail){
     throw new ListShareHaltError(reason, row.snapshot_id, detail);
@@ -118,6 +152,7 @@ async function applyListShareSnapshot(deps, row, ctx){
 }
 
 module.exports = function createApply(deps){
+    wireListMetaConsumer(deps);
     return {
         applyListShareSnapshot: (row, ctx) => applyListShareSnapshot(deps, row, ctx),
     };
