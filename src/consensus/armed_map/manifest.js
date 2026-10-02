@@ -63,7 +63,7 @@ const VM_EXPORT_NAMES = [
     'REST_PATTERN_METER_GATE_BLOCK_TIME',
     'STATE_KEY_TYPE_GATE_BLOCK_TIME',
     'VM_LINT_HARDENING_GATE_BLOCK_TIME',
-    'JSON_STRINGIFY_HOOK_GATE_BLOCK_TIME',
+    'JSON_STRINGIFY_HOOK_ACTIVATION',
 ];
 
 // Reads one own property, refusing a missing one outright: an absent export

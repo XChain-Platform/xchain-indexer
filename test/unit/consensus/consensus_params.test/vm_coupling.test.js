@@ -228,7 +228,7 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
         }
     });
 
-    it('the bundled VM JSON_STRINGIFY_HOOK_GATE_BLOCK_TIME matches the indexer JSON_STRINGIFY_HOOK row', function(){
+    it('the bundled VM JSON_STRINGIFY_HOOK_ACTIVATION matches the indexer JSON_STRINGIFY_HOOK row per network', function(){
         // Epoch-5 coupling: unlike the epoch-4 gates above, this one carries no shared
         // 2.0.0 timestamp, so it is checked against the indexer's own row instead of
         // VM_BANNED_ASYNC_MAINNET_TIME.
@@ -238,13 +238,16 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
                 assert.fail('XCHAIN_REQUIRE_SIBLINGS=1 but xchain-vm did not resolve to its full package surface (stale/absent vendored VM): ' + (pkgErr ? String(pkgErr.message) : 'package not present') + (refused ? '; sibling fallback refused: ' + refused.reason : ''));
             this.skip(); return;
         }
-        assert.notStrictEqual(vm.JSON_STRINGIFY_HOOK_GATE_BLOCK_TIME, undefined,
-            'xchain-vm did not export JSON_STRINGIFY_HOOK_GATE_BLOCK_TIME (stale vendored copy? run npm run vendor:vm)');
+        // The VM keys the gate per network (JSON_STRINGIFY_HOOK_ACTIVATION), so each
+        // network's time must match the indexer row's time for that network.
+        const gate = vm.JSON_STRINGIFY_HOOK_ACTIVATION;
+        assert.notStrictEqual(gate, undefined,
+            'xchain-vm did not export JSON_STRINGIFY_HOOK_ACTIVATION (stale vendored copy? run npm run vendor:vm)');
         const pc = require('../../../../src/protocol_changes.js');
         const row = pc.get('protocol_changes.changes.JSON_STRINGIFY_HOOK');
-        assert.strictEqual(vm.JSON_STRINGIFY_HOOK_GATE_BLOCK_TIME, row.mainnet_time, 'mainnet_time');
-        assert.strictEqual(vm.JSON_STRINGIFY_HOOK_GATE_BLOCK_TIME, row.testnet_time, 'testnet_time');
-        assert.strictEqual(vm.JSON_STRINGIFY_HOOK_GATE_BLOCK_TIME, row.regtest_time, 'regtest_time');
+        assert.strictEqual(gate.mainnet, row.mainnet_time, 'mainnet_time');
+        assert.strictEqual(gate.testnet, row.testnet_time, 'testnet_time');
+        assert.strictEqual(gate.regtest, row.regtest_time, 'regtest_time');
     });
 
     it('the indexer NATIVE_FEE_PRICE_TIME_GATE flag-day matches the coordinated 2.0.0 timestamp', function(){

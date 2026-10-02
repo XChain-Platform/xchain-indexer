@@ -390,8 +390,8 @@ module.exports = [
     // (isStakeWeightedQuorumActive / meetsStakeThreshold). Canonical activation
     // height: xchain-documentation/protocol/constants.js.
 
-    // JSON_STRINGIFY_HOOK: mirrors xchain-vm's JSON_STRINGIFY_HOOK_GATE_BLOCK_TIME
-    // (VM CONSENSUS_VERSION 5, the value-hook depth-bypass fix). All three network
-    // slots carry the VM's own instant; the release cut moves both literals together.
-    ['JSON_STRINGIFY_HOOK', '0.2.0',9999999999,9999999999,9999999999,0,0,0],
+    // JSON_STRINGIFY_HOOK: mirrors xchain-vm's JSON_STRINGIFY_HOOK_ACTIVATION map
+    // (VM CONSENSUS_VERSION 5, the value-hook depth-bypass fix). Mainnet and testnet
+    // stay inert until the release cut arms testnet; regtest activates at genesis.
+    ['JSON_STRINGIFY_HOOK', '0.2.0',9999999999,9999999999,0,0,0,0],
 ];
