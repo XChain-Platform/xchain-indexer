@@ -27,11 +27,11 @@
  * past the readability limit, and column-zero bytes are what the consumers
  * can twin without a shared receiver name.
  *
- * REGTEST ARMING. Seven rows let a regtest venue arm their regtest entry from
+ * REGTEST ARMING. Selected rows let a regtest venue arm their regtest entry from
  * an environment variable (the modules' own resolvers document the grammar;
- * regtest_env.js carries it for the registry). The block writes those entries
- * UNPINNED, the inert default, so it stays data that every consumer can copy;
- * the registry stores that committed table and this wrapper arms the entry
+ * regtest_env.js carries it for the registry). The part files keep the committed
+ * defaults as literal data that every consumer can copy; the registry stores
+ * those committed tables and this wrapper replaces the regtest entry
  * WHEN THE ROW IS READ, from the environment as it stands at that moment. A
  * module reading its table at require time therefore sees what its own
  * literal saw (a test that sets the variable and re-requires the module sees
@@ -56,6 +56,16 @@ const REGTEST_ARMING = {
         { env: 'XC_ANCHOR_FOLD_REGTEST_ACTIVATION', label: 'ANCHOR FOLD', armedHeight: 0, keys: ['regtest'] },
     'archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION':
         { env: 'XC_ANCHOR_FOLD_REGTEST_ACTIVATION', label: 'ANCHOR FOLD', armedHeight: 0, keys: ['regtest'] },
+    'anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION':
+        { env: 'XC_ANCHOR_STAKE_REGTEST_ACTIVATION', label: 'ANCHOR STAKE', armedHeight: 0, keys: ['regtest'] },
+    'archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION':
+        { env: 'XC_ANCHOR_STAKE_REGTEST_ACTIVATION', label: 'ANCHOR STAKE', armedHeight: 0, keys: ['regtest'] },
+    'stake_weight_collation_activation.STAKE_WEIGHT_COLLATION_ACTIVATION':
+        { env: 'XC_ANCHOR_STAKE_REGTEST_ACTIVATION', label: 'ANCHOR STAKE', armedHeight: 0, keys: ['regtest'] },
+    'slash_grid_activation.SLASH_GRID_ACTIVATION':
+        { env: 'XC_ANCHOR_SLASH_REGTEST_ACTIVATION', label: 'ANCHOR SLASH', armedHeight: 0, keys: ['regtest'] },
+    'slash_ledger_consolidation_activation.SLASH_LEDGER_CONSOLIDATION_ACTIVATION':
+        { env: 'XC_ANCHOR_SLASH_REGTEST_ACTIVATION', label: 'ANCHOR SLASH', armedHeight: 0, keys: ['regtest'] },
     'rollcall_activation.ROLLCALL_ACTIVATION':
         { env: 'XC_ROLLCALL_REGTEST_ACTIVATION', label: 'ROLLCALL', armedHeight: 0, keys: ['regtest'] },
     'rollcall_gates_activation.ROLLCALL_GATES_ACTIVATION':
@@ -77,6 +87,8 @@ const REGTEST_ARMING = {
 // A rule naming a variable with no reader here is a defect, not an inert row.
 const ENV_READERS = {
     XC_ANCHOR_FOLD_REGTEST_ACTIVATION:    (env) => env.XC_ANCHOR_FOLD_REGTEST_ACTIVATION,
+    XC_ANCHOR_STAKE_REGTEST_ACTIVATION:   (env) => env.XC_ANCHOR_STAKE_REGTEST_ACTIVATION,
+    XC_ANCHOR_SLASH_REGTEST_ACTIVATION:   (env) => env.XC_ANCHOR_SLASH_REGTEST_ACTIVATION,
     XC_ROLLCALL_REGTEST_ACTIVATION:       (env) => env.XC_ROLLCALL_REGTEST_ACTIVATION,
     XC_ROLLCALL_GATES_REGTEST_ACTIVATION: (env) => env.XC_ROLLCALL_GATES_REGTEST_ACTIVATION,
     XC_MIRROR_ADMISSION_ACTIVATION:       (env) => env.XC_MIRROR_ADMISSION_ACTIVATION,
@@ -91,7 +103,7 @@ function readRuleEnv(rule, env) {
 
 // The table with its regtest entries armed from `raw`, one env variable's
 // value, or the table itself when the venue named nothing (an unset or refused
-// value leaves UNPINNED in place). Frozen like the committed row it stands for.
+// value leaves the committed entry in place). Frozen like the committed row it stands for.
 function armed(rule, table, raw) {
     const height = regtestHeight(raw, rule.armedHeight, rule.label, rule.env);
     if (height === null) return table;
