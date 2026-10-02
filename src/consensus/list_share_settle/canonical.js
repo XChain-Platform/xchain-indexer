@@ -32,7 +32,7 @@ function deriveListSnapshotId(network, homeChain, homeListIndex, seq, snapshotBl
 }
 
 function listShareCanonical(deps, row) {
-    const { ah, eq } = deps;
+    const { ah, eq, isListMetaActive } = deps;
     const text = [
         'XLISTSHARE',
         row.snapshot_id,
@@ -50,12 +50,16 @@ function listShareCanonical(deps, row) {
     if (admitBlocks === null || admitBlocks === undefined)
         throw new Error('List share canonical requires an admission map');
 
-    const admitted = text + ah.admissionCanonicalField(
+    let admitted = text + ah.admissionCanonicalField(
         'CrossChainListShare',
         row.network,
         row.snapshot_block,
         admitBlocks,
     );
+    if (typeof isListMetaActive === 'function'
+        && isListMetaActive(row.snapshot_block, row.network)) {
+        admitted += '|' + canonicalField(row.meta_hash);
+    }
     if (eq.isEquivHeaderActive(row.snapshot_block, row.network)) {
         return eq.buildEquivCanonical(
             eq.ENGINE_TAGS.LIST_SHARE,
