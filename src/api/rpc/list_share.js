@@ -52,16 +52,18 @@ function buildListShareRpc({ indexer }){
 
             try {
                 let db = indexer.indexerDb.apiView();
-                let type = await db.getListType(listIndex, block);
+                let rootIndex = await db.getListRootIndex(listIndex, null, block);
+                let type = await db.getListType(rootIndex, block);
                 if(type === false)
                     return { error: 'list not found' };
-                let members = await db.getListAtBlock(listIndex, block);
+                let members = await db.getListAtBlock(rootIndex, block);
                 if(members === null)
                     return { error: 'list reference rejected' };
                 if(type === 1)
                     members = await qualifyTickMembers(db, members,
                         indexer.config['COIN'], indexer.config['COINS']);
-                return { type, members, hash: listMembershipHash(members) };
+                let meta = listMetaAnswer(await db.getListMeta(rootIndex, block));
+                return { type, members, hash: listMembershipHash(members), ...meta };
             } catch (err) {
                 getLogger().error('getlistat error:', err);
                 return { error: 'failed to look up list' };
@@ -78,12 +80,16 @@ function buildListShareRpc({ indexer }){
             try {
                 let db = indexer.indexerDb.apiView();
                 let rows = await getSharedLists(db);
-                return await Promise.all(rows.map(async row => ({
-                    root_index:        row.root_index,
-                    owner:             await getListOwner(db, row.root_index),
-                    share_block:       row.share_block,
-                    share_action_index: row.share_action_index
-                })));
+                return await Promise.all(rows.map(async row => {
+                    let meta = await db.getListMeta(row.root_index, null);
+                    return {
+                        root_index:        row.root_index,
+                        name:              meta?.name ?? null,
+                        owner:             await getListOwner(db, row.root_index),
+                        share_block:       row.share_block,
+                        share_action_index: row.share_action_index
+                    };
+                }));
             } catch (err) {
                 getLogger().error('getsharedlists error:', err);
                 return { error: 'failed to look up shared lists' };

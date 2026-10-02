@@ -95,54 +95,79 @@ describe('shared list tick member qualification', function () {
 
     it('qualifies, deduplicates, and byte-sorts getlistat members before hashing', async function(){
         const view = recordingView({
+            getListRootIndex: listIndex => listIndex,
             getListType: 1,
             getListAtBlock: ['PEPE', 'BTC:^5', 'PEPE'],
+            getListMeta: null,
             getTickerId: sinon.stub().rejects(new Error('short names must not use ids'))
         });
 
         assert.deepStrictEqual(await dogeRpc(view).getlistat({ list_index: 7, block: 90 }), {
             type: 1,
             members: ['BTC:^5', 'DOGE:PEPE'],
-            hash: sha256('MEMBERS|2|BTC:^5|DOGE:PEPE')
+            hash: sha256('MEMBERS|2|BTC:^5|DOGE:PEPE'),
+            name: null,
+            description: null,
+            meta_hash: ''
         });
         assert.deepStrictEqual(view.calls, [
+            ['getListRootIndex', 7, null, 90],
             ['getListType', 7, 90],
-            ['getListAtBlock', 7, 90]
+            ['getListAtBlock', 7, 90],
+            ['getListMeta', 7, 90]
         ]);
     });
 
     it('uses a ticker id in getlistat when the qualified name exceeds 200 characters', async function(){
         const longName = 'P'.repeat(196);
         const view = recordingView({
+            getListRootIndex: listIndex => listIndex,
             getListType: 1,
             getListAtBlock: [longName],
+            getListMeta: null,
             getTickerId: item => item === longName ? 41 : null
         });
 
         assert.deepStrictEqual(await dogeRpc(view).getlistat({ list_index: 8, block: 91 }), {
             type: 1,
             members: ['DOGE:^41'],
-            hash: sha256('MEMBERS|1|DOGE:^41')
+            hash: sha256('MEMBERS|1|DOGE:^41'),
+            name: null,
+            description: null,
+            meta_hash: ''
         });
-        assert.deepStrictEqual(view.calls[2], ['getTickerId', longName]);
+        assert.deepStrictEqual(view.calls, [
+            ['getListRootIndex', 8, null, 91],
+            ['getListType', 8, 91],
+            ['getListAtBlock', 8, 91],
+            ['getTickerId', longName],
+            ['getListMeta', 8, 91]
+        ]);
     });
 
     it('leaves address-list membership and order unchanged', async function(){
         const addresses = ['z-address', 'A-address', 'z-address'];
         const view = recordingView({
+            getListRootIndex: listIndex => listIndex,
             getListType: 2,
             getListAtBlock: addresses,
+            getListMeta: null,
             getTickerId: sinon.stub().rejects(new Error('address lists must not qualify'))
         });
 
         assert.deepStrictEqual(await dogeRpc(view).getlistat({ list_index: 9, block: 92 }), {
             type: 2,
             members: addresses,
-            hash: sha256('MEMBERS|3|z-address|A-address|z-address')
+            hash: sha256('MEMBERS|3|z-address|A-address|z-address'),
+            name: null,
+            description: null,
+            meta_hash: ''
         });
         assert.deepStrictEqual(view.calls, [
+            ['getListRootIndex', 9, null, 92],
             ['getListType', 9, 92],
-            ['getListAtBlock', 9, 92]
+            ['getListAtBlock', 9, 92],
+            ['getListMeta', 9, 92]
         ]);
     });
 });
