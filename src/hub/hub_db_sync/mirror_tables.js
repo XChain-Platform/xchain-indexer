@@ -83,16 +83,18 @@ const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'cross_chain_calls', 'capabil
 
 // Tables that must re-page from since_id=0 on EVERY bootstrap. A cursor of
 // since_id = MAX(local id) is INSERT-shaped: it can only deliver rows with a NEW id,
-// so it can never re-fetch an in-place UPGRADE that kept the same hub id. Three
+// so it can never re-fetch an in-place UPGRADE that kept the same hub id. Four
 // mirrored tables are upgraded in place on the hub (price_snapshots skipped->
-// finalized, cross_chain_calls re-finalized, cross_chain_matches anchor_txid
-// stamping AND retract->revive content); if the upgrade broadcast is missed while
+// finalized, oracle_prices at a higher push_generation, cross_chain_calls
+// re-finalized, cross_chain_matches anchor_txid stamping AND retract->revive content);
+// if the upgrade broadcast is missed while
 // this mirror is disconnected, only a full re-page re-delivers the row so the
-// idempotent applyRow ODKUs converge it (#2491, #3211). capability_snapshots is here
-// for a related reason (locally-assigned ids, #2270). The three keep hub-id parity
-// (only capability_snapshots strips id in applyRow); the re-page cost is O(table)
-// per reconnect, accepted. cross_chain_matches additionally runs a reconciliation
-// pass over the completed re-page (reconcileRetractedMatches), because the one
+// idempotent applyRow ODKUs converge it (#2491, #3211). capability_snapshots and
+// attestation_responses are here for a related reason (locally-assigned ids, #2270).
+// The four upgraded tables keep hub-id parity; the other two strip id in applyRow.
+// The re-page cost is O(table) per reconnect, accepted. cross_chain_matches
+// additionally runs a reconciliation pass over the completed re-page
+// (reconcileRetractedMatches), because the one
 // mutation the hub CANNOT re-serve is a retraction: the snapshot endpoint filters
 // retracted rows out entirely, so there is no row to converge against.
 // attestation_responses is here for capability_snapshots' SECOND reason alone, and it is
@@ -118,8 +120,8 @@ const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'cross_chain_calls', 'capabil
 // quorum-class fence in applyRetraction rather than a re-page, while policy_snapshots and
 // list_snapshots are never retracted at all. All three tables keep hub-id parity, so the
 // cost was not the deciding argument in either direction.
-const FULL_REPAGE_TABLES = ['capability_snapshots', 'price_snapshots', 'cross_chain_calls', 'cross_chain_matches',
-                            'attestation_responses'];
+const FULL_REPAGE_TABLES = ['capability_snapshots', 'price_snapshots', 'oracle_prices', 'cross_chain_calls',
+                            'cross_chain_matches', 'attestation_responses'];
 
 // Hub federation state tables. state_checkpoints carries quorum-signed per-chain
 // state-hash commitments (the explorer/SDK verification source). Append-only,
