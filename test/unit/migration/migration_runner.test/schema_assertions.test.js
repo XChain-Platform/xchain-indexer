@@ -22,7 +22,8 @@
  *
  ********************************************************************/
 
-const { assert, path, Database, BRIDGE_TABLES_PROBE, BRIDGE_TABLE_ROWS, bridgeTablesPresent } = require('./helpers/migration_fixtures.js');
+const { assert, path, Database, BRIDGE_TABLES_PROBE, BRIDGE_TABLE_ROWS, bridgeTablesPresent,
+        LIST_SHARE_TABLES_PROBE, LIST_SHARE_TABLE_ROWS, listShareTablesPresent } = require('./helpers/migration_fixtures.js');
 
 
 // Post-run schema contract. 2026-07-24-pubkeys-widen-uncompressed.sql is
@@ -42,6 +43,7 @@ describe('runMigrations() pubkey-width assertion @regression @tier1', function (
                     return (pubkeyLen === null) ? [] : [{ len: pubkeyLen }];
                 // Bare-ledger harness, live-schema question: see BRIDGE_TABLES_PROBE above.
                 if (BRIDGE_TABLES_PROBE.test(sql)) return bridgeTablesPresent();
+                if (LIST_SHARE_TABLES_PROBE.test(sql)) return listShareTablesPresent();
                 return [];
             },
             async release() {},
@@ -84,21 +86,23 @@ describe('runMigrations() pubkey-width assertion @regression @tier1', function (
     });
 });
 
-// `present` is the list of bridge tables information_schema reports. null answers the
-// probe with a non-array (the unreadable case), which must pass through rather than halt.
+// `present` is the list of bridge tables information_schema reports, `listShare` the
+// list-share tables (all present unless a case says otherwise). null answers the probe
+// with a non-array (the unreadable case), which must pass through rather than halt.
 // Only names the probe's IN-list asks for are returned, as the server would.
-function makeDb(present) {
+function makeDb(present, listShare = [...LIST_SHARE_TABLE_ROWS]) {
+    const answer = (names, sql) => {
+        if (names === null) return null;
+        const asked = sql.toLowerCase();
+        return names.filter((name) => asked.includes("'" + name.toLowerCase() + "'")).map((name) => ({ name }));
+    };
     const conn = {
         async query(sql) {
             if (/GET_LOCK/i.test(sql))                                     return [{ l: '1' }];
             if (/RELEASE_LOCK/i.test(sql))                                 return [];
             if (/SELECT name, checksum FROM schema_migrations/i.test(sql)) return [];
-            if (BRIDGE_TABLES_PROBE.test(sql)) {
-                if (present === null) return null;
-                const asked = sql.toLowerCase();
-                return present.filter((name) => asked.includes("'" + name.toLowerCase() + "'"))
-                    .map((name) => ({ name }));
-            }
+            if (BRIDGE_TABLES_PROBE.test(sql))     return answer(present, sql);
+            if (LIST_SHARE_TABLES_PROBE.test(sql)) return answer(listShare, sql);
             return [];
         },
         async release() {},
@@ -179,5 +183,58 @@ describe('runMigrations() bridge-tables assertion @regression @tier1', function 
     // the pubkey and reward assertions follow.
     it('passes through on an unreadable answer', async function () {
         await quietly(() => makeDb(null).runMigrations({}));
+    });
+});
+
+// Post-run schema contract for the shared-list tables (2026-09-30-list-share-tables.sql,
+// mode=manual deploy-precondition=required), the same shape as the bridge guard above.
+describe('runMigrations() list-share-tables assertion @regression @tier1', function () {
+    const ALL_BRIDGE = [...BRIDGE_TABLE_ROWS];
+
+    it('halts naming the migration file when both list-share tables are absent', async function () {
+        await assert.rejects(
+            () => quietly(() => makeDb(ALL_BRIDGE, []).runMigrations({})),
+            /list_snapshots, list_share_mirrors are absent[\s\S]*node src\/db\/migration\/migrate\.js --file 2026-09-30-list-share-tables\.sql/);
+    });
+
+    it('halts naming ONLY the missing table when one is absent', async function () {
+        await assert.rejects(
+            () => quietly(() => makeDb(ALL_BRIDGE, ['list_snapshots']).runMigrations({})),
+            /the shared-list tables list_share_mirrors are absent/);
+        await assert.rejects(
+            () => quietly(() => makeDb(ALL_BRIDGE, ['list_share_mirrors']).runMigrations({})),
+            /the shared-list tables list_snapshots are absent/);
+    });
+
+    it('passes when both are present, case-folded, or unreadable', async function () {
+        await quietly(() => makeDb(ALL_BRIDGE).runMigrations({}));
+        await quietly(() => makeDb(ALL_BRIDGE, ['LIST_SNAPSHOTS', 'List_Share_Mirrors']).runMigrations({}));
+        await quietly(() => makeDb(ALL_BRIDGE, null).runMigrations({}));
+    });
+});
+
+// A registered startup assertion that runMigrations never calls is a deploy precondition
+// that xchain-node enforces and this build does not; spy on the prototype, since several
+// are invoked as Database.prototype.X.call(this).
+describe('runMigrations() calls every registered startup assertion @regression @tier1', function () {
+    it('invokes each Database.STARTUP_ASSERTED_MIGRATIONS assertion exactly once', async function () {
+        const names = Database.STARTUP_ASSERTED_MIGRATIONS.map((m) => m.assertion)
+            .concat(['assertPubkeyColumnIsUncompressedWide', 'assertStakeWeightOrderingCollation']);
+        const calls = {};
+        const saved = {};
+        for (const n of names) {
+            saved[n] = Database.prototype[n];
+            calls[n] = 0;
+            Database.prototype[n] = async function () { calls[n]++; };
+        }
+        try {
+            const db = Object.create(Database.prototype);
+            db.runMigrationsInner = async () => ({ applied: [], pending: [], lockSkipped: true });
+            await db.runMigrations({});
+        } finally {
+            for (const n of names) Database.prototype[n] = saved[n];
+        }
+        const uncalled = names.filter((n) => calls[n] !== 1);
+        assert.deepStrictEqual(uncalled, [], 'runMigrations() did not call exactly once: ' + uncalled.join(', '));
     });
 });

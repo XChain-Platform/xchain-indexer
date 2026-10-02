@@ -1,0 +1,370 @@
+{
+  "2026-05-30-balances-composite-index.sql": {
+    "residue": "ea1e2538c8d62028b43945634b1900670a26f215c49ce8c709376976f7b0e9a9",
+    "sha256": "00a65585358be3b6ff04500e0b991b1e92d8a795f780647e2a3295797cae1785"
+  },
+  "2026-06-03-unique-full-column-index-addresses.sql": {
+    "residue": "2cd89b3d913db7cdb56ec602207ff8dd14740c7c0b157f01475934bfda2d7ee6",
+    "sha256": "a5ffca0798dc5e58c15f2dce7d678452666fef4814d7b560bc4b39c89c1f7dc5"
+  },
+  "2026-06-09-cross-chain-matches-partial-fill-columns.sql": {
+    "residue": "81988463f131489f51fa6385b509bfc591b14911255b8e53f4439c7fa74e6b4a",
+    "sha256": "5adb9505a4986bd5a0d0c82bf1fff46a39621c7a2d17b4846d5d51eb224bc20e"
+  },
+  "2026-06-10-mirror-id-autoincrement-repair.sql": {
+    "residue": "9ddf7f0d53d0d5deaea6cec0048994c90719ace75ce5f253de3aa0738a58eb25",
+    "sha256": "3cebb472028c3f735b22a23cd567eddbc9317e371896228c49a2facf53c6d0a9"
+  },
+  "2026-06-13-attests-request-status-add-rejected.sql": {
+    "residue": "77bd02a0aabbd786dd3a0b9e20496f1f64d3366fa29af3e01f971f0b8a1998ed",
+    "sha256": "c4f06d060af7e0cb98096a600edb8db0ce23f9fc94906cf0aa36e6e306a011a3"
+  },
+  "2026-06-14-capability-snapshots-add-source.sql": {
+    "residue": "d08c4677caa90a1e7598be4c614d0d06318f75fb081e51f5a2ec31042601c8af",
+    "sha256": "4dbe36fd02562941aefaff486996f059f37e624c0cbbf6eb05f59c4dd3769410"
+  },
+  "2026-06-16-drop-orphaned-contract-balances.sql": {
+    "residue": "3fb21008eb54987d06bf6fd735620d4129f8efc657686cef8d8e1fdc7e29231a",
+    "sha256": "70de5f0ee1146c569b62c75cddb77be8eba72b9963a066b5059f05de15ccdef2"
+  },
+  "2026-06-17-attests-drop-unique-request-id-version.sql": {
+    "residue": "32f838fbf200b72917e6652108e95a60d47e18f372618c3749384989e209805f",
+    "sha256": "a7dc260ebe7353f0172c312a841ec2dae09c1a55e6a91718ff9adad891a70dea"
+  },
+  "2026-06-19-index-tables-add-block-index.sql": {
+    "residue": "3ed4ba117a76ee4229206782eb5975f9c9db180463fa300bdd04e79e56a9752e",
+    "sha256": "8e1fd39e6de308799ffb4d0bd06231c1bedb30140404bfeb086baa96ecd36fde"
+  },
+  "2026-06-21-index-tables-block-index-secondary-idx.sql": {
+    "residue": "5a717e50e63113cfe0c384f53d071fa7d128b1c75feeb0cc6ce4fe7e04c3a52b",
+    "sha256": "47e05044db68aa7f5779014c299a8c7a448a588b6e32b8289833d046cb6a2a10"
+  },
+  "2026-06-23-tokens-action-index-idx.sql": {
+    "residue": "80f48c7087c42b8e9e41a00c1a154726b72e625318b37540dac45f04b2ad6602",
+    "sha256": "acae7aa40639e6e56a8242283b6ebc27d92cffb61c62b7d383964fbdac10470a"
+  },
+  "2026-06-23-validator-rewards-block-index-idx.sql": {
+    "residue": "75e1359f9fbcaf4e5a1629e42c947b8abd4567b66bd247522e4703552b9e9275",
+    "sha256": "d7b0aa241c1190f8c3a29fe2b937e4fade007c81cfa493e8f91c7f08cfed331c"
+  },
+  "2026-06-26-cross-chain-settlements-block-index-idx.sql": {
+    "residue": "f8fb7d6a06cc6a96e35a4821d40fec098875307705f5dfbb8804758430a7e12d",
+    "sha256": "3d42fe2d97b55bad59d11fa8aec0a144d468448e9285ddb1492856efcb6f72aa"
+  },
+  "2026-06-26-price-snapshots-status-block-round-idx.sql": {
+    "residue": "2f59a881a2fca9079cda947b02d5a137567ff957e201d84b32af8769165518e1",
+    "sha256": "231ff4ed28e70e56e949688ec802d885ed54be687e5ad3ff2b4613bb7aca894a"
+  },
+  "2026-06-26-unstakes-cooldown-status-composite-idx.sql": {
+    "residue": "d27c6180ffc6f11969243dd1b8b5473f7755d86c5a26674054c3b5dbecba9ed7",
+    "sha256": "66b483dbb73eb026565931ffbc0dc1d8519095a1149271225870ef73ca485248"
+  },
+  "2026-06-27-polls-weight-mode-add-quadratic-time-weighted.sql": {
+    "residue": "e53d6ee74d85d92080bfe18c9810aed32fb396923109e7ab7efa73e4baa72038",
+    "sha256": "562b87be89c24b52604399804ec2a3a83ef9add7071a9542afea6b74a9b49496"
+  },
+  "2026-07-03-votes-append-only-unique-idx.sql": {
+    "residue": "cd2e4054de04711c8d2e23266849d993ca3254898cfb36ad37e931f599b5b919",
+    "sha256": "feef7b27425113613511b6c275d479892b4839941392a7e41e8b92527da85311"
+  },
+  "2026-07-05-contract-index-columns-nullable.sql": {
+    "residue": "9980dccf199b5bb9863555131034a32da1036bc084b87d930d0605c3bf07ed2b",
+    "sha256": "c09a98d403613a01cf174f176c914bbb9a863ba3ca646819db9750d35f23605c"
+  },
+  "2026-07-05-polls-binding-callback-columns.sql": {
+    "residue": "01d93aedc57dae017d85f87971488a2590a3d6a4df8383bfa976098084add9a8",
+    "sha256": "abcd714f3fbf1e42919b09240329165cc1a811b5615d7c993e9534ed97dcfa73"
+  },
+  "2026-07-07-cross-chain-matches-payout-legs.sql": {
+    "residue": "277a1a79a0f45499d24a28ebff619674a0f6982cd8a15ef88b7ef34bc53bf5e6",
+    "sha256": "5c4037ceb85c33dc9954a199418c2bee6bc2f9a3a1d57511a236a78e8280d1cd"
+  },
+  "2026-07-07-tick-id-columns-nullable.sql": {
+    "residue": "7ff9112fcd08d6a9588e3a44f1ffb99a1e123152a7652f76315ea9ea1f3e21e1",
+    "sha256": "d5ca37ebc8a5dff0d84dc80aca7d92530de65aed09ef11deea3d3a9e0202767e"
+  },
+  "2026-07-10-contract-state-bin-key-index.sql": {
+    "residue": "7860b9344ce1f9400bafc9b576d32187827231e7f5d08803da1e9006fc31dca4",
+    "sha256": "15599a2f13a372767468cd72ec05b7dff50d03e095e77cd40ee16bcba52754c6"
+  },
+  "2026-07-13-balances-drop-redundant-address-id-index.sql": {
+    "residue": "a263d0b96029f7b7e32054114a0efa51977c5303b2502950a2a4a039cfb18e9c",
+    "sha256": "0cb5ebe0022220b64386109450124733a340959d58a91914afe80d4aff2746b8"
+  },
+  "2026-07-15-markets-dedup-unique-pair.sql": {
+    "residue": "9c173a68cb2fce1d0c7a92f17150cf560c1ff30ca366dbe8ee55c89df01ab75d",
+    "sha256": "8da1979095520fc6a8b8c8e449b0dd5f2142630ac5bc68340f0be774dab64293"
+  },
+  "2026-07-15-sweeps-drop-legacy-escrows-column.sql": {
+    "residue": "2a36c2c4269a0dfa848f778d8ab236801c1032dd0aa2ecd924585aa45fdbdf93",
+    "sha256": "e4ae822a145d7b9ee6e2dfa6cdac6b4f8025572196a90d34457270fed367fd5b"
+  },
+  "2026-07-16-mirror-id-unsigned-align.sql": {
+    "residue": "ac179b1641af1ec74deb1bcbf82bb43b860403b91e6677cc45adee1710921d81",
+    "sha256": "59fa518e404d94638b802c2a1db7ec2cc67df5ce4575148eca265048a794b92a"
+  },
+  "2026-07-16-mirror-twin-bigint-unsigned-align.sql": {
+    "residue": "f704908ec8c87fe8faa43e991df277e8a0c303a628add80c7a809a723f04da34",
+    "sha256": "fac090271fd2cebaea9b914d344f94483d97d0ec5b7854bf42263df0153c1d48"
+  },
+  "2026-07-16-reposition-state-key-bin.sql": {
+    "residue": "f62f4a68dc745a53752458c5b84e381de9533f8419744d559bec8f5e31f71174",
+    "sha256": "78eb006a4ef35f1239b3418ab5df658986ede083e019d33278aff9a0f8d6b7c1"
+  },
+  "2026-07-17-attests-add-responsible-set-json.sql": {
+    "residue": "a32b7044a06cafa553a9b5bd419005a4b47c5def49c72c496960420dd49dd0c9",
+    "sha256": "ae108e5b77ef3ea55c4935110ba7129ad42e88e55034f9f66ee40aee674cb6ec"
+  },
+  "2026-07-17-cross-chain-matches-reorg-fence-columns.sql": {
+    "residue": "ca296b188f3f713a656fe46a49bd0323c0bf675f6d7d1369639b96da5123dd15",
+    "sha256": "8d8ef7feba1291153ea93c39e6f5b842643cb0ca74120d59478ac6664a8f3ed0"
+  },
+  "2026-07-17-oracle-prices-add-push-generation.sql": {
+    "residue": "20e110b03ce85d23119e37758330207bb69dab6b488deb4c0b55317b1b275ad6",
+    "sha256": "3690eb643162fa851103bc803103bb22a6427344002c2607ad1ef9680f764ff8"
+  },
+  "2026-07-17-polls-callback-delay-columns.sql": {
+    "residue": "6ae1556c7a524df3d552ba186018b57fefff1034198f699d5e4f346537eb113d",
+    "sha256": "b5b44450ad2aa7caf7c138e1a3f20475ae5f0f6d2f3d33a1a1e7a286198931aa"
+  },
+  "2026-07-18-reward-tables-source-block-composite-idx.sql": {
+    "residue": "370d39649b466a896f9f9b9653904dc840aad684a18d4299c300af1871368126",
+    "sha256": "404e60a6bc0dcf6936d5ab616d12f9a3c975ee87617b2f9c7cf6811248b651ff"
+  },
+  "2026-07-18-status-tables-status-action-composite-idx.sql": {
+    "residue": "b00623aeab02334507fc65c797088a814cdd58814f87e82004bc73f27a1b4f5c",
+    "sha256": "4cf53571267b133ca276dc5dd83b12e3ca94befd009757d6c2c1c9fe213459ae"
+  },
+  "2026-07-19-anchor-actions-publisher-attestation-columns.sql": {
+    "residue": "169eac548173e2716cf2e67e6f8dee9c38225cfccaa93efe0704c85545a557c9",
+    "sha256": "3b2f0d8006636ca4eba89df49de1495cddce6089fb71bc697b0a04d554864758"
+  },
+  "2026-07-19-events-reorg-marker-witness-columns.sql": {
+    "residue": "4ae944f0eb1f7731e914a5332f1df1ab1d6608b0853a24fa2fbef05457a15e22",
+    "sha256": "ae463e1e4433f96d3579a5bca21080a02fb4395091115c1bd90cc05491454e52"
+  },
+  "2026-07-19-price-snapshots-cross-chain-calls-reorg-fence-columns.sql": {
+    "residue": "38a3634c7c7bb9e03845e1fe295d30e393f390aeb75d313d1b58f846ee0dd15b",
+    "sha256": "d430d49922b47419001197b799e377db889612ef570ed3642fb292647ab3e1bf"
+  },
+  "2026-07-20-capability-snapshots-source-in-unique-key.sql": {
+    "residue": "1aa306adf7a4a12c39eadea6fc3111d8841ff5883fc7070a35a6c3ddeb3c15fe",
+    "sha256": "76eaea74f0f08b4bcd38bfe27ba0e63f7f9350634c0ab69ec920abec4e3adc3c"
+  },
+  "2026-07-21-anchor-reward-attestations-table.sql": {
+    "residue": "215786a9fa1603b9758ce80b092cbc4c65ccee18301c4b2d580d58aa3bd61ce1",
+    "sha256": "5574ccc85e4a11dc24956fc2ea2efac4846c4768b03a24bba442cd7c1f2efe00"
+  },
+  "2026-07-24-pubkeys-widen-uncompressed.sql": {
+    "residue": "7da72df46a6af78cb4ede312db2ec2947d16c79b6c2692627ce9df029060981c",
+    "sha256": "45a8fd3f4ce71360a1777bd1b86f14eb534259cffa651f76be5c15afafd50657"
+  },
+  "2026-07-26-bet-cancel-resolve-status-tables.sql": {
+    "residue": "07fbf8b80595fc8b2cf01bcd2823432c55df98368f9c39cbfea58718890980fb",
+    "sha256": "d24b3fe5395e7d77a8640822efaa6239779d538cc705d67fec48999276cded85"
+  },
+  "2026-07-26-tokens-backfill-lock-mint-supply.sql": {
+    "residue": "554ee749cb1836ced104797186ff4ae5e048d07ac528898be25def30b3bcf273",
+    "sha256": "f2e53e5a3de9f08b162528323b6cb78bbbddf9591859bf555313801929689c84"
+  },
+  "2026-07-28-escrow-leaf-journal-table.sql": {
+    "residue": "99e9f3beb4f185ef9f2b01b74786e45a6dcf4fb06a211a583f50c0661f87f111",
+    "sha256": "7bc8813dee9e63245b65f4ec91a377ff47ecbad031286ce5d04a69ccad21fe2e"
+  },
+  "2026-07-28-state-tree-roots-contract-state-root.sql": {
+    "residue": "5a01327d4e53f175461e3245337412c068e30665c103060f67d1c4eb51af2b27",
+    "sha256": "c3d1c8e4ef77a026de76b4fc17024cb043315e42f059f15b70727212e83aa7d5"
+  },
+  "2026-07-28-state-tree-roots-escrow-shadow.sql": {
+    "residue": "4f8415ab852fd33dbd7b34000bf0b50359c256eb1ade84c7b8635332c1c36409",
+    "sha256": "3240968ff925d609b9a5d699f16f7226f05bda884cc4b367d29923352a5c3c64"
+  },
+  "2026-07-29-gated-files-threshold-and-publisher.sql": {
+    "residue": "46b6aa371e6d281e6bed1658b356414d707ac7af3dd8d1991ce6b81dd16d2c0b",
+    "sha256": "6d900aac43b92e41c6fac1ee3ea1fb27785803751ec1e94b9440919a64621b36"
+  },
+  "2026-07-29-state-checkpoints-uq-chain-seq.sql": {
+    "residue": "dd0a8cf50b0c0f03ebb4f517003275e11a8843ded0e144a5041ef138a91b94cc",
+    "sha256": "0796c26842434c39b056e9875ba5ee7dbbcfd92d340e2899f7921e03147c5458"
+  },
+  "2026-07-30-attests-add-relay-origin-columns.sql": {
+    "residue": "a07ae999b376c55777432860c0a0edfe824ba0308c9706185ce8ae4722618036",
+    "sha256": "e8c3645589499c3d5331bb1a7d4e2d4afd8cf52230f2db149508a35db16e554b"
+  },
+  "2026-08-10-bet-cancel-resolve-standalone-indexes.sql": {
+    "residue": "e0eafc3bbe97971945bf6017a29015a9c93ac1421da3e1880ccc203946ef6921",
+    "sha256": "5db0e51d051c1bfc345b4561d5383f067e8c819beda1c817e56d69a1b3fd8b05"
+  },
+  "2026-08-11-attests-relay-identity-index.sql": {
+    "residue": "e27886afce440635e6b4a6973cbf5ba9589c3a3fc217727cb6b75674c435e9d4",
+    "sha256": "c9253e74550cc0764aa1c2f4dd94cc3ef82d206bbb5952a61a71bb5eedf270df"
+  },
+  "2026-08-12-validator-rewards-derive-block-index.sql": {
+    "residue": "babc8155515b1ed7a4613605e0c5e67cfdc4defa29dfae5b6c51d31273cc61ea",
+    "sha256": "a911c38ca928743bb65c763c8143a5a3ad63de18da72b32da83a4971c1735ed8"
+  },
+  "2026-08-13-anchor-reward-attestations-doge-anchor-txid.sql": {
+    "residue": "f4a81464164fd2f991e6da95ff89fffe61031e1f668c96174ef6c7aca05c15fa",
+    "sha256": "34a40b22b3cd0e2d98a37bf073279bbcad2948945e9429e90a6958894dfae308"
+  },
+  "2026-08-13-contract-delegation-rotations-table.sql": {
+    "residue": "918c0890eba9efdf02c40c4dae33b422fee33b2354a865ad856d128bef5e20bc",
+    "sha256": "2c680daaa52161e38b8164b757b595881ad7a54eced9b9dea74286f9a749a78b"
+  },
+  "2026-08-15-destroys-drop-unique-action-index.sql": {
+    "residue": "beee538c2c5eb443b7fcce147428ecd36122f21a8c9ab93ee4599d55f1f87050",
+    "sha256": "36116b1738f5ede233c3351e827e6851c97e71b1a3ed8cdb0e5bec569a8ae6be"
+  },
+  "2026-08-15-lists-add-memo.sql": {
+    "residue": "de2da7b03ac234de3e157ff129bcbe8f6568258f0545f30ab9cbc2de42ed97b9",
+    "sha256": "cc6b50da832e7c68c2cfd2e838be66956cd40856d54b6bbe2cb98261e323573c"
+  },
+  "2026-08-19-attest-validator-stats-surrogate-id.sql": {
+    "residue": "3852e354415d779b1759b11f4a0060eb96f7aded360c84ddeafff9053dd01d3e",
+    "sha256": "ecb9c206ebda43ba932603d60d6d470ab47704db428ff81f42d16c36b983acbb"
+  },
+  "2026-08-19-files-name-index.sql": {
+    "residue": "9c8ea08fb6f3e8941117feec3616c562164461d00d30a1f90afde85313a2e5e1",
+    "sha256": "762bedd85de4e43048b1c11748decb74de15dfdd9f0c36645e4bf88744658668"
+  },
+  "2026-08-19-utf8mb4-index-memos-memo.sql": {
+    "residue": "b35b403662f84c352baad5df8e710af1e93a8604f439f657319a07e6be950746",
+    "sha256": "50f4766f77bed8b3ded25d22eab8cc883360c03b97ed5f3f32b168686b9a00a9"
+  },
+  "2026-08-19-utf8mb4-user-text-columns.sql": {
+    "residue": "cc74e12369407dfe39cb5c0dbd533d3b4e0333488cd1696e32888240886d41ce",
+    "sha256": "69148dce80d3f5a99a5ab75775b1ac95df8a561579aff66a15418dec309bdfa1"
+  },
+  "2026-08-24-validator-rewards-round-qualifier.sql": {
+    "residue": "eda6043c4ebbf38f9840c65260fd65f4a79ee3f1b09f41be654b030c401b195e",
+    "sha256": "37ff284b7f11f248e9f52979f70e5fe8f13c9cad7a7e719b4633866e8c81dc1a"
+  },
+  "2026-08-26-prices-add-v2-batch-columns.sql": {
+    "residue": "5fd8456a40b845e7b0a37cadbe1c5f040e10467137e15ffa069a27c2a5c0cd09",
+    "sha256": "05cd38073ffe7e98b4957712f540deb9fe4d030d8ad99fbaff533c87410494d1"
+  },
+  "2026-08-28-anchor-actions-section-index-pk.sql": {
+    "residue": "2231b1661483c7b8efd654035b793727f78121745087786c06fe955b99fb3e00",
+    "sha256": "e2336d8d9d10030213103c5c7b39386d5459ba6be4f0300eb631414d3d53cdf8"
+  },
+  "2026-08-30-rollcall-tables.sql": {
+    "residue": "5d3a4f85fa82ea3ee09fb7a06941d814848d393ca9dd265b339f05dfd08f08b4",
+    "sha256": "7d28dbe184f9a1cf5d9676882d6b8e17043ddd187383c56a7b461f773e637bb1"
+  },
+  "2026-09-02-issues-backfill-transfer-supply-id.sql": {
+    "residue": "c34d7e4987aab2762ca83849f8403d1dcee09687f4b0487dd79fdf9e7247579f",
+    "sha256": "a25dbea2cad017ced8bc62925701d2e5ee6edaff752e830945781346b4f8d126"
+  },
+  "2026-09-02-utf8mb4-raw-wire-fields-not-null.sql": {
+    "residue": "dfe2c4a04db3055763183a21f0c443a2a84d6536fb916e36326c9bee4b8cbb5d",
+    "sha256": "08f543fd5439280e9ffd4d7396b05b33880b6b9b07240a43d273e7110267d4e6"
+  },
+  "2026-09-02-utf8mb4-raw-wire-fields.sql": {
+    "residue": "9d8a6dddcb8ceb87276cdb33e24c3fa1f502c598d2785a1932e73d7e1465c808",
+    "sha256": "6a3ade86f4e0ec307aafe2a60b8cff8d16eb817f3bcae13f9a79b8b1c3e4fd0d"
+  },
+  "2026-09-03-attestation-responses.sql": {
+    "residue": "bd6bebcce8287d420e35a54d1094c79cc7de0945be410f54216214e953f07cdc",
+    "sha256": "3ce329fb2d98b14d7b61aa892fed9ef483957eba6da77e708912efaf24318d09"
+  },
+  "2026-09-03-attests-batch-action-index.sql": {
+    "residue": "673eeae888ab8e14b64f5b2fe16f685affd9b4e9d1cfd02f138a63c2faca8fef",
+    "sha256": "755dcb61fb94a534f44f7ece590fbdc009ad1a85d100d4e8bae9144f10b95e5a"
+  },
+  "2026-09-03-attests-batch-chunk-columns.sql": {
+    "residue": "609b4375bff53b2051e2f5612d8f6b0993a827586d075de6566fb81df6fcc00b",
+    "sha256": "f93c63938130a3e2953ac2e9b57bd70946072667198d8c97a0c9326f16bfe8a7"
+  },
+  "2026-09-06-attestation-responses-identity-effective-time.sql": {
+    "residue": "bd63fbad0dc5513e18b7126497ae4882a5630c8cc0c52b932ee83cebc922c92c",
+    "sha256": "a83ba0a9a30b57ddd9de440f185f94bd965163bfb1a38cf65c7621e0c75d7f93"
+  },
+  "2026-09-06-price-snapshots-status-timestamp-round-idx.sql": {
+    "residue": "b53b5af76229d4f258b0c1f8e92c6ca416b23e36c6a5e45692868a9c58ee703f",
+    "sha256": "90e04f0765f02fd658196fe42a5fc7c040988a081a7caf3263871937fb310a92"
+  },
+  "2026-09-06-utf8mb4-attestation-response-provider-fields.sql": {
+    "residue": "10fb2b00153f874248f2d83e75ba3531f6e09a15b94d211d7fb71ac08e29fc9d",
+    "sha256": "75d4b710488323ce32cbd7ffcd547e10c2b14cafe45b71afc1308706d9197d62"
+  },
+  "2026-09-07-rollcall-gates.sql": {
+    "residue": "f06222c133799bfd5a947c174f6a0c98214013932bd14193b516f641c80245f4",
+    "sha256": "9a3a0a426648d45d630c2fe0246ec0e282e379f2626fcb912a94dcfdc7828911"
+  },
+  "2026-09-08-deploy-deferred-assembly.sql": {
+    "residue": "7b9690a1c1baaeffec9290053444ffcbde3b3c776eddd8cdd2bd8564154eddc7",
+    "sha256": "30829e92b052772848b7e29af87b17e26e702e070b0bc8d2cc303594192b6bac"
+  },
+  "2026-09-10-markets-native-coin-side.sql": {
+    "residue": "e7e87be033c7dd072cbe0858d1b6d94103b8a59e002e32a8d027b683e868285e",
+    "sha256": "9ffb6c006513c5ac9f7bd2ba42792f41e1dda8f323ce8bd60246f0e8664e3575"
+  },
+  "2026-09-11-contract-meta-columns.sql": {
+    "residue": "85535a4bb564370823afe93b07a051837eec7eef95fbc6f4f99cd33d18c3205c",
+    "sha256": "343ab1093913a9538e56d48715dbc4f12f75dc9d0e3a7784f4a7ad19977f00b3"
+  },
+  "2026-09-11-cross-chain-btc-chain-id.sql": {
+    "residue": "38689ad54e05df0643b9b668dbd4dab0e858bff8309922037d3c2d98373b215d",
+    "sha256": "8a2df457f37927d8a0611fb021585ce0bccff3899245f5acd23ca64a8d746653"
+  },
+  "2026-09-11-price-snapshots-batch-block-time.sql": {
+    "residue": "2e9397f8b4550d911749d5de6c1ee680ee9c50896628fa66ae51a0360073c447",
+    "sha256": "30b35165a97bcdf1e7977724165183402f23f859203f7a51b97b117faf8c167e"
+  },
+  "2026-09-12-bridge-tables.sql": {
+    "residue": "0123a996d8f66783b15aa7f8cfc2b0545844d3d8579cc50df66c79a6334a6a2e",
+    "sha256": "e4ef50910ca9ebc4582b1fbf1e3c6a151cb0b342c76a3949c7d0704729d8a6a7"
+  },
+  "2026-09-12-state-tree-roots-block-index-idx.sql": {
+    "residue": "cb5c930ccfc59040a01db825833db29ab447943a03911246da9e21b376a8cfac",
+    "sha256": "12823f2f2c80bc6a864ab931367a615f9abf308bf2e0cfd6da0085f28c8fe22c"
+  },
+  "2026-09-12-token-bridge-fields.sql": {
+    "residue": "54620667c5ff1aa2276a60683d248023cb8427ec9bb577b7616bcd874e32f1f8",
+    "sha256": "64127c01e9b417496f324fa8c54393b811679b0550e16e5b9d4b5f44e428692b"
+  },
+  "2026-09-13-destroys-sends-leg-ordinal.sql": {
+    "residue": "007ae93c02c0dd960e92d898d95215cba7e7fa10c40a97667e0d7704d990d61e",
+    "sha256": "40f12736a5444a9efc328e49dbf360e38ff76c3320ac59e541d51a05c58dc4a4"
+  },
+  "2026-09-16-admission-height.sql": {
+    "residue": "b38996a86a1e89745cd8895c859d8ae6bb1954a5c4938acc4222e5b4b1da4bbb",
+    "sha256": "d9c0dd3e0e35a698684d5740fd0e2937ea375b034a5977c50405befe2a579dc7"
+  },
+  "2026-09-22-oracle-prices-widen-tick.sql": {
+    "residue": "263181f50e634268ac0ab44927968c0b5038e219bf6314bda34ee5f9a46370e3",
+    "sha256": "ab299d98ebb1684377a441e9cb0c0dfe9dd579367c3490ea2b210a3603e21cec"
+  },
+  "2026-09-27-datetime-anchor-reward-attestations.sql": {
+    "residue": "3bd92e416ed9abc98c36c495cd709f8ba6a173b216dbeb1024091947f2e1f7a8",
+    "sha256": "76b9fb339636489b54c9beca816ac98e08fb6adb317840a1046d93f4a6ab3890"
+  },
+  "2026-09-27-datetime-bridge-policy.sql": {
+    "residue": "1583281ec8e7e759d6a99172da43893e7f6db8f133621faa92f22995ef518a8d",
+    "sha256": "2d2c280685ddf90531a2c2d7849b9a2e0ddc9c325523ec9511df10fb86577a23"
+  },
+  "2026-09-27-datetime-hub-mirrors.sql": {
+    "residue": "0328eff1634993b7eda1845ddb889d24d2d98547e3a780aa99dc72310c87c377",
+    "sha256": "7fce56c971a3a6b29245bdc264d6d3876adfb81dac253aef537ff2e6229552e1"
+  },
+  "2026-09-27-datetime-not-null-columns.sql": {
+    "residue": "6a3bd17259b0a8c824c4ece44c1341d0f8dd43a621d67010310777f8fd18da85",
+    "sha256": "21ff95c2d3228f648b1d25e594634aac1913e96a0ae95755d9964187c033fa31"
+  },
+  "2026-09-27-datetime-state-tree-roots.sql": {
+    "residue": "409c2665fbc79d40e30fff21f9504b63cea346d349ce8d833097093b6aac5c57",
+    "sha256": "114b676e7b4713a35b574e72cc700e4f9a1708847f42d991b635de68cf91cd1a"
+  },
+  "2026-09-30-list-share-tables.sql": {
+    "residue": "ce04a8f00583ac7570b28b02dad5ce18cdafb3dbbe441e7a3291858246e29fdf",
+    "sha256": "c9cf3cba2d21d96f3e3bb0dde812d11a09c17e1d68e82bae945d068c0e2a7745"
+  },
+  "2026-10-01-list-transfers.sql": {
+    "residue": "ff7ac0e317c9ffae0a414cea196ad7741249a0a6a9ee3b08a9613a26054718d9",
+    "sha256": "6707570b7a88c2a4f8e4a4d220d37cb6da00af5b4cbd2cb42d280c7905f8aafa"
+  },
+  "2026-10-01-response-mirror-batch-action-index.sql": {
+    "residue": "e7294acae1967cfd1253530e335c238970b4edd1095f30158face7ff74d6f4d9",
+    "sha256": "e39bdb420f27d1bdc4016195d6caea0c4e6e16abdd10491d0cb255c4dc98c6a8"
+  }
+}

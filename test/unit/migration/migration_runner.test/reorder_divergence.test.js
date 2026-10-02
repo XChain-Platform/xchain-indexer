@@ -24,7 +24,8 @@
  ********************************************************************/
 
 const { assert, fs, path, Database, requireWithFreshConfig, DB_PATH,
-        BRIDGE_TABLES_PROBE, bridgeTablesPresent } = require('./helpers/migration_fixtures.js');
+        BRIDGE_TABLES_PROBE, bridgeTablesPresent,
+        LIST_SHARE_TABLES_PROBE, listShareTablesPresent } = require('./helpers/migration_fixtures.js');
 const { migrationTouchedTables, reorderVerdict } = require('../../../../src/db/database/migration_reorder.js');
 
 const crypto  = require('crypto');
@@ -51,6 +52,7 @@ async function runAgainst(ledger, opts, DatabaseClass = Database) {
                 return Array.from(ledger, ([name, checksum]) => ({ name, checksum }));
             }
             if (BRIDGE_TABLES_PROBE.test(sql)) return bridgeTablesPresent();
+            if (LIST_SHARE_TABLES_PROBE.test(sql)) return listShareTablesPresent();
             if (/^INSERT INTO schema_migrations/i.test(sql.trim())) { applied.push(params[0]); return {}; }
             if (/^(UPDATE|INSERT|CREATE|ALTER|DROP)/i.test(sql.trim())) return {};
             return [];

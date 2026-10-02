@@ -166,10 +166,10 @@ async function insertAgedRow(conn, entry) {
     await conn.query(sql, params);
 }
 
-// Neither table carries a retyped column, but runMigrations() fail-closes on every
-// return when either is absent (assertBridgeTablesPresent), so the aged fixture
-// needs them just to let a scoped --file run complete.
-const BRIDGE_ASSERTION_TABLES = ['bridge_settlements', 'xbridges'];
+// None of these carries a retyped column, but runMigrations() fail-closes on every
+// return when any is absent (assertBridgeTablesPresent, assertListShareTablesPresent),
+// so the aged fixture needs them just to let a scoped --file run complete.
+const BRIDGE_ASSERTION_TABLES = ['bridge_settlements', 'xbridges', 'list_snapshots', 'list_share_mirrors'];
 
 // Aged pre-migration fixture: every table in its TIMESTAMP shape, one seeded row
 // each, all inserted on a connection pinned to UTC (see AGED_LITERAL above).

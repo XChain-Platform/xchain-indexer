@@ -22,7 +22,8 @@
  *
  ********************************************************************/
 
-const { assert, fs, path, Database, BRIDGE_TABLES_PROBE, bridgeTablesPresent } = require('./helpers/migration_fixtures.js');
+const { assert, fs, path, Database, BRIDGE_TABLES_PROBE, bridgeTablesPresent,
+        LIST_SHARE_TABLES_PROBE, listShareTablesPresent } = require('./helpers/migration_fixtures.js');
 
 
 const crypto  = require('crypto');
@@ -180,6 +181,7 @@ describe('Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1', function 
                 }
                 // Bare-ledger harness, live-schema question: see BRIDGE_TABLES_PROBE above.
                 if (BRIDGE_TABLES_PROBE.test(sql)) return bridgeTablesPresent();
+                if (LIST_SHARE_TABLES_PROBE.test(sql)) return listShareTablesPresent();
                 // The ledger's own CREATE TABLE IF NOT EXISTS runs on every call; it is
                 // setup, not a write the runner decided to make, so it is not recorded.
                 if (/CREATE TABLE IF NOT EXISTS schema_migrations/i.test(sql)) return {};
@@ -288,5 +290,52 @@ describe('runMigrations() checksum heal branch @regression @tier1', function () 
             'an unrecognized hash must never be healed away');
         assert.ok(logged.some(l => /content CHANGED/.test(l) && /unique-full-column-index-addresses/.test(l)),
             'a genuine migration edit must still be reported');
+    });
+});
+
+// 2026-09-03-attestation-responses.sql: the executable rebaseline. Pin every recorded
+// predecessor, the residue the heal was verified against, and the two dated migrations
+// that carry the convergence the entry itself never performs.
+const ATTEST_RESPONSES_FILE = '2026-09-03-attestation-responses.sql';
+const ATTEST_RESPONSES_PREDECESSORS = [
+    'c028fdb826fcb203f64817bbe957bd59d24efee940985ed610d475eaa9eb12ad',
+    'd5444bd9f34f2b5199ecce88a72213f4ab72ab1ea607a498b0788a846f2602c2',
+    '20e1d3acfc44d0c8e98cdb65bbcdf84fde4a8d94523643932d36fdf3024d424c',
+    '181e9f2736dfde667e10d25cae17d06f65f03c2e22b7ad2b5e2efdd6c40bc02d',
+    'f1b068d32e4eedafb969e5e6eb0c74526ef45ab30043b770d2498a313b3a23b0',
+    '59fcbbb1b7c93acde903d1aff9dbd2c0a350f1ad09f83ec020fc91cce01888e3',
+];
+const ATTEST_RESPONSES_RESIDUE = 'bd6bebcce8287d420e35a54d1094c79cc7de0945be410f54216214e953f07cdc';
+
+describe('Database.MIGRATION_CHECKSUM_REBASELINES @regression @tier1', function () {
+    it(ATTEST_RESPONSES_FILE + ': covers every pre-current revision and pins its residue', function () {
+        const r = Database.MIGRATION_CHECKSUM_REBASELINES[ATTEST_RESPONSES_FILE];
+        assert.ok(r, ATTEST_RESPONSES_FILE + ' must have a rebaseline entry');
+        assert.deepStrictEqual([].concat(r.from).slice().sort(), ATTEST_RESPONSES_PREDECESSORS.slice().sort());
+        const raw = fs.readFileSync(path.join(MIG_DIR, ATTEST_RESPONSES_FILE), 'utf8');
+        const stripped = raw.split('\n').filter((l) => !/^\s*--/.test(l) && l.trim() !== '').join('\n');
+        assert.strictEqual(crypto.createHash('sha256').update(stripped).digest('hex'), ATTEST_RESPONSES_RESIDUE,
+            ATTEST_RESPONSES_FILE + ': the executable statements moved again; a further edit needs its own dated migration.');
+    });
+
+    it(ATTEST_RESPONSES_FILE + ': its convergence migrations exist and carry the key and the column', function () {
+        const read = (f) => fs.readFileSync(path.join(MIG_DIR, f), 'utf8');
+        assert.match(read('2026-09-06-attestation-responses-identity-effective-time.sql'),
+            /CREATE UNIQUE INDEX IF NOT EXISTS uq_attest_response ON attestation_responses \(network, request_id, effective_time\)/);
+        assert.match(read('2026-10-01-response-mirror-batch-action-index.sql'),
+            /ALTER TABLE attestation_responses\s+ADD COLUMN IF NOT EXISTS batch_action_index BIGINT UNSIGNED DEFAULT NULL AFTER widen;/);
+    });
+});
+
+describe('runMigrations() checksum heal branch @regression @tier1', function () {
+    it('a ledger holding any older ' + ATTEST_RESPONSES_FILE + ' revision heals with no content CHANGED', async function () {
+        for (const recorded of ATTEST_RESPONSES_PREDECESSORS) {
+            const ledger = fileChecksums();
+            ledger.set(ATTEST_RESPONSES_FILE, recorded);
+            const { updates, logged } = await runAgainst(ledger);
+            assert.ok(!logged.some(l => /content CHANGED/.test(l)), recorded.slice(0, 12) + ': ' + logged.join(' | '));
+            const healed = updates.filter(u => /SET checksum/i.test(u.sql));
+            assert.deepStrictEqual(healed.map(u => u.params), [[sha256(fs.readFileSync(path.join(MIG_DIR, ATTEST_RESPONSES_FILE), 'utf8')), ATTEST_RESPONSES_FILE]]);
+        }
     });
 });

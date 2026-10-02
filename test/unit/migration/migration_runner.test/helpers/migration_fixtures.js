@@ -40,7 +40,7 @@ const stripComments = Database.prototype.stripSqlLineComments.bind({});
 const destructiveOf = Database.prototype.destructiveAutoStatement.bind(Database.prototype);
 const statementsOf  = (raw) => Database.prototype.splitSqlStatements.call(Database.prototype, raw);
 
-// runMigrations() makes four fail-closed schema assertions on every normal return, and each
+// runMigrations() makes five fail-closed schema assertions on every normal return, and each
 // one asks the live schema a question the fake connections below have to answer. The pubkey
 // width, the stake-weight collation and the reward-key assertions all read
 // information_schema.columns/statistics and pass through on an empty answer, because an
@@ -57,5 +57,11 @@ const statementsOf  = (raw) => Database.prototype.splitSqlStatements.call(Databa
 const BRIDGE_TABLES_PROBE = /information_schema\.tables[\s\S]*bridge_transfers/i;
 const BRIDGE_TABLE_ROWS   = Object.freeze(['bridge_transfers', 'bridge_settlements', 'policy_snapshots', 'xbridges']);
 const bridgeTablesPresent = () => BRIDGE_TABLE_ROWS.map((name) => ({ name }));
+// assertListShareTablesPresent asks the same information_schema.TABLES question, so the
+// harnesses seed it the same way; its halt is pinned in schema_assertions.test.js.
+const LIST_SHARE_TABLES_PROBE = /information_schema\.tables[\s\S]*list_snapshots/i;
+const LIST_SHARE_TABLE_ROWS   = Object.freeze(['list_snapshots', 'list_share_mirrors']);
+const listShareTablesPresent  = () => LIST_SHARE_TABLE_ROWS.map((name) => ({ name }));
 
-module.exports = { assert, fs, path, Database, requireWithFreshConfig, DB_PATH, modeOf, stripComments, destructiveOf, statementsOf, BRIDGE_TABLES_PROBE, BRIDGE_TABLE_ROWS, bridgeTablesPresent };
+module.exports = { assert, fs, path, Database, requireWithFreshConfig, DB_PATH, modeOf, stripComments, destructiveOf, statementsOf, BRIDGE_TABLES_PROBE, BRIDGE_TABLE_ROWS, bridgeTablesPresent,
+    LIST_SHARE_TABLES_PROBE, LIST_SHARE_TABLE_ROWS, listShareTablesPresent };

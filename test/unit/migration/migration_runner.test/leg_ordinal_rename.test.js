@@ -22,7 +22,8 @@
  *
  ********************************************************************/
 
-const { assert, fs, path, Database, BRIDGE_TABLES_PROBE, bridgeTablesPresent } = require('./helpers/migration_fixtures.js');
+const { assert, fs, path, Database, BRIDGE_TABLES_PROBE, bridgeTablesPresent,
+        LIST_SHARE_TABLES_PROBE, listShareTablesPresent } = require('./helpers/migration_fixtures.js');
 
 
 // The leg-ordinal migration was authored in the same commit as the two v0.17.0
@@ -54,6 +55,7 @@ async function runAgainst(ledger) {
                 return Array.from(ledger, ([name, checksum]) => ({ name, checksum }));
             }
             if (BRIDGE_TABLES_PROBE.test(sql)) return bridgeTablesPresent();
+            if (LIST_SHARE_TABLES_PROBE.test(sql)) return listShareTablesPresent();
             if (/CREATE TABLE IF NOT EXISTS schema_migrations/i.test(sql)) return {};
             if (/^(UPDATE|INSERT|CREATE|ALTER|DROP)/i.test(sql.trim())) { updates.push({ sql, params }); return {}; }
             return [];

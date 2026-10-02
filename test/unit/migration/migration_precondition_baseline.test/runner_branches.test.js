@@ -26,6 +26,8 @@ const QUALIFIER_FILE = '2026-08-24-validator-rewards-round-qualifier.sql';
 const BRIDGE_TABLES_PROBE = /information_schema\.tables[\s\S]*bridge_transfers/i;
 const BRIDGE_TABLE_ROWS   = Object.freeze(['bridge_transfers', 'bridge_settlements', 'policy_snapshots', 'xbridges']);
 const bridgeTablesPresent = () => BRIDGE_TABLE_ROWS.map((name) => ({ name }));
+const LIST_SHARE_TABLES_PROBE = /information_schema\.tables[\s\S]*list_snapshots/i;
+const listShareTablesPresent  = () => ['list_snapshots', 'list_share_mirrors'].map((name) => ({ name }));
 
 const MIG_DIR = path.join(__dirname, '..', '..', '..', '..', 'src', 'sql', 'migrations');
 const sha256  = (s) => crypto.createHash('sha256').update(s).digest('hex');
@@ -112,6 +114,7 @@ async function runAgainst(pubkeyLen) {
             }
             // Bare-schema harness, live-schema question: see BRIDGE_TABLES_PROBE above.
             if (BRIDGE_TABLES_PROBE.test(sql)) return bridgeTablesPresent();
+            if (LIST_SHARE_TABLES_PROBE.test(sql)) return listShareTablesPresent();
             if (/CREATE TABLE IF NOT EXISTS schema_migrations/i.test(sql)) return {};
             if (/CHARACTER_MAXIMUM_LENGTH/i.test(sql)) return [{ len: pubkeyLen }];
             if (/^INSERT INTO schema_migrations/i.test(sql.trim())) { inserts.push(params); return {}; }
@@ -206,6 +209,7 @@ async function runAgainstShape(shape, assertRows = []) {
             }
             // Bare-schema harness, live-schema question: see BRIDGE_TABLES_PROBE above.
             if (BRIDGE_TABLES_PROBE.test(sql)) return bridgeTablesPresent();
+            if (LIST_SHARE_TABLES_PROBE.test(sql)) return listShareTablesPresent();
             if (/CREATE TABLE IF NOT EXISTS schema_migrations/i.test(sql)) return {};
             // Ordered BEFORE the precondition matcher: both queries mention
             // round_qualifier and information_schema, and only this one asks for the

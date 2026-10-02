@@ -22,7 +22,8 @@
  *
  ********************************************************************/
 
-const { assert, fs, path, Database, BRIDGE_TABLES_PROBE, bridgeTablesPresent } = require('./helpers/migration_fixtures.js');
+const { assert, fs, path, Database, BRIDGE_TABLES_PROBE, bridgeTablesPresent,
+        LIST_SHARE_TABLES_PROBE, listShareTablesPresent } = require('./helpers/migration_fixtures.js');
 
 
 // the v0.17.0 regtest-first rehearsal found two more migrations that sorted
@@ -63,6 +64,7 @@ async function runAgainst(ledger) {
             }
             // Bare-ledger harness, live-schema question: see BRIDGE_TABLES_PROBE above.
             if (BRIDGE_TABLES_PROBE.test(sql)) return bridgeTablesPresent();
+            if (LIST_SHARE_TABLES_PROBE.test(sql)) return listShareTablesPresent();
             if (/CREATE TABLE IF NOT EXISTS schema_migrations/i.test(sql)) return {};
             if (/^(UPDATE|INSERT|CREATE|ALTER|DROP)/i.test(sql.trim())) { updates.push({ sql, params }); return {}; }
             return [];

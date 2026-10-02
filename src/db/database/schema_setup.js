@@ -237,6 +237,8 @@ module.exports = {
         // Same fail-closed rule as the reward assertion above: invoked through the prototype
         // so a partial object cannot silently drop the bridge-table check.
         await Database.prototype.assertBridgeTablesPresent.call(this);
+        // The shared-list tables are a registered deploy precondition too, so the same rule.
+        await Database.prototype.assertListShareTablesPresent.call(this);
         return result;
     },
 

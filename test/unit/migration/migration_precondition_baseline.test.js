@@ -35,7 +35,7 @@ const Database = require('../../../src/db');
 
 const FILE = '2026-07-24-pubkeys-widen-uncompressed.sql';
 
-// runMigrations() makes four fail-closed schema assertions on every normal return, and each
+// runMigrations() makes five fail-closed schema assertions on every normal return, and each
 // asks the live schema a question the fake connections below have to answer. The pubkey
 // width, the stake-weight collation and the reward-key assertions all read
 // information_schema.columns/statistics and pass through on an empty answer, because an
