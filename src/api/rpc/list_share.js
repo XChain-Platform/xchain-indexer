@@ -14,7 +14,7 @@
 
 'use strict';
 
-const { listMembershipHash } = require('../../consensus/list_share_hash.js');
+const { listMembershipHash, listMetaHash } = require('../../consensus/list_share_hash.js');
 const { getSharedLists, getListOwner } = require('../../db/lists/sharing.js');
 const { getLogger } = require('../../observability/index.js');
 const { qualifyTickMembers } = require('./list_share_tick_members.js');
@@ -28,6 +28,12 @@ function integerParam(value, positive){
     }
     if(!Number.isSafeInteger(value) || value < 0 || (positive && value === 0)) return null;
     return value;
+}
+
+function listMetaAnswer(meta){
+    const name = meta?.name ?? null;
+    const description = meta?.description ?? null;
+    return { name, description, meta_hash: listMetaHash(name, description) };
 }
 
 function buildListShareRpc({ indexer }){
@@ -86,4 +92,4 @@ function buildListShareRpc({ indexer }){
     };
 }
 
-module.exports = { buildListShareRpc };
+module.exports = { buildListShareRpc, listMetaAnswer };

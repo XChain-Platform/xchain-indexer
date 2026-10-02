@@ -33,11 +33,12 @@ module.exports = {
                 invalid[item] = status;
                 continue;
             }
-            if((format==0 || (format==1 && data['EDIT']==1)) && !list.includes(item)){
+            if((this.isCreateFormat(format) ||
+                (this.isEditFormat(format) && data['EDIT']==1)) && !list.includes(item)){
                 list.push(item);
                 changes++;
             }
-            if(format==1 && data['EDIT']==2 && list.includes(item)){
+            if(this.isEditFormat(format) && data['EDIT']==2 && list.includes(item)){
                 list.splice(list.indexOf(item), 1);
                 changes++;
             }

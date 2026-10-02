@@ -16,7 +16,9 @@
 
 const { LIST_SHARE_HALT_REASON } = require('./halt.js');
 const { deriveListSnapshotId } = require('./canonical.js');
+const { listMetaHash } = require('../list_share_hash.js');
 const { parseMembership, verifyMembershipOrder } = require('../bridge_settle/policy_membership.js');
+const { metaFieldVerdict } = require('../../actions/list/meta_rules.js');
 
 const HOME_CHAINS = new Set(['BTC', 'LTC', 'DOGE']);
 
@@ -50,6 +52,29 @@ function admissionColumns(row){
         map[coin] = height;
     }
     return Object.keys(map).length ? map : null;
+}
+
+function screenListMeta(row, metaActive){
+    row = row && typeof row === 'object' ? row : {};
+    const name = row.name ?? null;
+    const description = row.description ?? null;
+    const metaHash = row.meta_hash ?? null;
+
+    if(!metaActive){
+        if(name !== null || description !== null || metaHash !== null)
+            return { halt: LIST_SHARE_HALT_REASON.META_HASH, detail: 'meta_below_gate' };
+        return { fields: { name: null, description: null, meta_hash: null } };
+    }
+
+    if(name !== null && (name === '' || metaFieldVerdict('name', name, 64, true)))
+        return { halt: LIST_SHARE_HALT_REASON.META_HASH, detail: 'name' };
+    if(description !== null &&
+       (description === '' || metaFieldVerdict('description', description, 512, true)))
+        return { halt: LIST_SHARE_HALT_REASON.META_HASH, detail: 'description' };
+    if(typeof metaHash !== 'string' || metaHash !== listMetaHash(name, description))
+        return { halt: LIST_SHARE_HALT_REASON.META_HASH, detail: 'meta_hash' };
+
+    return { fields: { name, description, meta_hash: metaHash } };
 }
 
 function screenListSnapshotWithDeps(deps, row, ctx){
@@ -138,4 +163,4 @@ function createScreen({ ah }){
     };
 }
 
-module.exports = { createScreen, screenListSnapshot };
+module.exports = { createScreen, screenListSnapshot, screenListMeta };

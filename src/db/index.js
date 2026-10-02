@@ -198,6 +198,7 @@ const MIXIN_FILES = [
     './issues/index.js',
     './links/index.js',
     './lists/index.js',
+    './lists/meta.js',
     './mappings/index.js',
     './markets/index.js',
     './messages/index.js',

@@ -155,7 +155,7 @@ class List {
         let changes = 0;
 
         // Handle building out some data arrays using list items
-        if(!error && (format==0 || format==1)){
+        if(!error && (this.isCreateFormat(format) || this.isEditFormat(format))){
 
             await this.collectEditItems(data, format, params, edit);
 
@@ -183,11 +183,12 @@ class List {
     }
 
     async rematchMarkets(data, format, status){
-        if(format>1 || status!='valid' || data['TYPE']!=2 ||
+        if((!this.isCreateFormat(format) && !this.isEditFormat(format)) ||
+           status!='valid' || data['TYPE']!=2 ||
            !gateRegistry.activeAt('list_change_rematch_activation.LIST_CHANGE_REMATCH_ACTIVATION', this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null))
             return;
 
-        let listRoot = (format==0) ? data['ACTION_INDEX'] : data['LIST_ACTION_INDEX'];
+        let listRoot = this.isCreateFormat(format) ? data['ACTION_INDEX'] : data['LIST_ACTION_INDEX'];
         let orderIndexes = await getOpenOrdersByList(this.indexerDb, listRoot);
         let swapIndexes = await getOpenSwapsByList(this.indexerDb, listRoot);
         let plan = planListRematch(data, orderIndexes, swapIndexes);
@@ -200,6 +201,14 @@ class List {
             return false;
         let gate = this.formatGates[format];
         return !gate || gateRegistry.activeAt(gate, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
+    }
+
+    isCreateFormat(format){
+        return [0, 4].includes(Number(format));
+    }
+
+    isEditFormat(format){
+        return Number(format) === 1;
     }
 
     isTypeActive(type, data){
@@ -225,7 +234,7 @@ class List {
         let list = [];
 
         // Validate TYPE
-        if(!error && format==0 && !this.isTypeActive(data['TYPE'], data))
+        if(!error && this.isCreateFormat(format) && !this.isTypeActive(data['TYPE'], data))
             error = 'invalid: TYPE (unknown)';
 
         // Validate EDIT
@@ -233,19 +242,19 @@ class List {
             error = 'invalid: EDIT (unknown)';
 
         // Parse in the list type (if any)
-        if(!error && format>0){
+        if(!error && !this.isCreateFormat(format)){
             let getStoredType = this.indexerDb.getListStoredType || this.indexerDb.getListType;
             type = await getStoredType.call(this.indexerDb, data['LIST_ACTION_INDEX'], data['BLOCK_INDEX']);
         }
 
         // Validate LIST_ACTION_INDEX
-        if(!error && format>0 && type===false){
+        if(!error && !this.isCreateFormat(format) && type===false){
             error = 'invalid: LIST_ACTION_INDEX (unknown)';
             data['LIST_ACTION_INDEX'] = null;
         }
 
         // Lookup list information
-        if(!error && format>0){
+        if(!error && !this.isCreateFormat(format)){
             data['TYPE'] = type;
             // Normalize LIST_ACTION_INDEX to the CREATE that roots the edit chain,
             // so every edit of a list hangs off the same parent and the "newest
