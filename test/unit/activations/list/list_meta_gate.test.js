@@ -11,8 +11,8 @@
 // contact legal@dankest.llc.
 
 const assert = require('assert');
-const ProtocolChanges = require('../../../src/protocol_changes.js');
-const constants = require('../../../src/protocol/constants.js');
+const ProtocolChanges = require('../../../../src/protocol_changes.js');
+const constants = require('../../../../src/protocol/constants.js');
 
 const KEY = 'list_meta_activation.LIST_META_ACTIVATION';
 
