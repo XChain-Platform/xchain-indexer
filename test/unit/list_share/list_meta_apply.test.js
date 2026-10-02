@@ -87,6 +87,27 @@ describe('list share metadata consumer integration', function () {
             assert.strictEqual(active(canonicalRow(vector)), vector.expected, vector.name);
     });
 
+    it('normalizes absent metadata to the empty hash above the gate', function () {
+        const row = H.makeListSnapshotRow({
+            seq: 1,
+            added: ['nA'],
+            members: ['nA'],
+        });
+        delete row.name;
+        delete row.description;
+        delete row.meta_hash;
+        const made = H.makeListShareCtx({});
+        const screened = createScreen({
+            ah,
+            isListMetaActive: () => true,
+        }).screenListSnapshot(row, made.ctx);
+
+        assert.ok(screened.fields);
+        assert.strictEqual(screened.fields.name, null);
+        assert.strictEqual(screened.fields.description, null);
+        assert.strictEqual(screened.fields.meta_hash, '');
+    });
+
     it('wires the concrete consumer to the snapshot and apply gates', async function () {
         const canonical = createCanonical({ ah, eq });
         const screen = createScreen({ ah });
