@@ -144,6 +144,6 @@ describe('ANCHOR archive section verdict integration', function () {
             ACTION_INDEX, 'invalid_archive');
         sinon.assert.notCalled(result.armed.indexer.indexerDb.setAnchorArchiveRowStatus);
         assert.ok(gateRegistry.activeAt.calledWith(
-            VERDICT_GATE, 'regtest', null, 100, null));
+            VERDICT_GATE, 'regtest', 'DOGE', 100, null));
     });
 });

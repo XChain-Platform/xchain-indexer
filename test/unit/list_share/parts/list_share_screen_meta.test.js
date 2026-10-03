@@ -67,6 +67,14 @@ describe('list share metadata screen', function () {
         });
     });
 
+    // The spec requires an explicit string hash at the gate, '' for an unnamed list,
+    // so a dropped mirror column or a NULL halts at once instead of passing as empty.
+    it('halts on an absent or null hash for an unnamed list at the gate', function () {
+        assertHalt({}, true, 'meta_hash');
+        assertHalt({ meta_hash: null }, true, 'meta_hash');
+        assertHalt({ name: null, description: null, meta_hash: undefined }, true, 'meta_hash');
+    });
+
     it('halts on forged metadata and malformed hashes', function () {
         const vector = vectors.metaHashes.find(({ label }) => label === 'name only');
         assertHalt({

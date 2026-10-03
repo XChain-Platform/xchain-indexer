@@ -58,7 +58,7 @@ function screenListMeta(row, metaActive){
     row = row && typeof row === 'object' ? row : {};
     const name = row.name ?? null;
     const description = row.description ?? null;
-    const metaHash = row.meta_hash ?? (metaActive ? '' : null);
+    const metaHash = row.meta_hash ?? null;
 
     if(!metaActive){
         if(name !== null || description !== null || metaHash !== null)

@@ -120,13 +120,19 @@ function isPriceScaleCanonicalActive(blockTime, network){
     return t >= threshold;
 }
 
-function isPriceV1CanonicalActive(blockTime, network){
+// `coin` is optional so existing network-only consumers retain the bare-key fallback.
+function isPriceV1CanonicalActive(blockTime, network, coin){
     if(blockTime === null || blockTime === undefined || blockTime === '' || typeof blockTime === 'boolean')
         return false;
     let t = Number(blockTime);
     if(!Number.isFinite(t)) return false;
-    let threshold = PRICE_V1_CANONICAL_ACTIVATION[network];
-    if(threshold === undefined) return false;
+    let coinKey = coin + ':' + network;
+    let threshold = coin !== null && coin !== undefined &&
+        Object.prototype.hasOwnProperty.call(PRICE_V1_CANONICAL_ACTIVATION, coinKey)
+        ? PRICE_V1_CANONICAL_ACTIVATION[coinKey]
+        : Object.prototype.hasOwnProperty.call(PRICE_V1_CANONICAL_ACTIVATION, network)
+            ? PRICE_V1_CANONICAL_ACTIVATION[network] : undefined;
+    if(typeof threshold !== 'number' || !Number.isFinite(threshold)) return false;
     return t >= threshold;
 }
 

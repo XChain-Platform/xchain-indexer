@@ -73,7 +73,10 @@ describe('list share metadata consumer integration', function () {
             assert.strictEqual(active(canonicalRow(vector)), vector.expected, vector.name);
     });
 
-    it('normalizes absent metadata to the empty hash above the gate', function () {
+    // The spec requires every row at the gate to carry a string hash, '' for an
+    // unnamed list, so a row whose hash column went missing halts instead of
+    // passing as unnamed until the first named list arrives.
+    it('halts on absent metadata above the gate', function () {
         const row = H.makeListSnapshotRow({
             seq: 1,
             added: ['nA'],
@@ -88,10 +91,7 @@ describe('list share metadata consumer integration', function () {
             isListMetaActive: () => true,
         }).screenListSnapshot(row, made.ctx);
 
-        assert.ok(screened.fields);
-        assert.strictEqual(screened.fields.name, null);
-        assert.strictEqual(screened.fields.description, null);
-        assert.strictEqual(screened.fields.meta_hash, '');
+        assert.deepStrictEqual(screened, { halt: 'META_HASH', detail: 'meta_hash' });
     });
 
     it('wires the concrete consumer to the snapshot and apply gates', async function () {

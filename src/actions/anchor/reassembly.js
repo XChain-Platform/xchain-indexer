@@ -27,10 +27,12 @@ const { reportArchiveFailure } = require('./archive_verdict.js');
 const FOLD_GATE = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
 const VERDICT_GATE = 'archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION';
 
-function archiveFailureIsSectionScoped(handler, version, height){
+function archiveFailureIsSectionScoped(handler, version, height, coin){
     return Number(version) === 3 &&
-        gateRegistry.activeAt(VERDICT_GATE, handler.config['NETWORK'], null, Number(height), null) &&
-        gateRegistry.activeAt(FOLD_GATE, handler.config['NETWORK'], null, Number(height), null);
+        gateRegistry.activeAt(
+            VERDICT_GATE, handler.config['NETWORK'], coin, Number(height), null) &&
+        gateRegistry.activeAt(
+            FOLD_GATE, handler.config['NETWORK'], coin, Number(height), null);
 }
 
 // Head-side archive reassembly gate: the chunk-side gate in parseContinuation only
@@ -75,7 +77,8 @@ async function reassembleAtHead(handler, data, error, format){
             for(let c of ordered) b64 += c.archive_b64;
             let crc = handler.archiveCrc(b64);
             if(crc === null || crc !== String(data['BATCH_CRC32'])){
-                let sectionScoped = archiveFailureIsSectionScoped(handler, format, data['BLOCK_INDEX']);
+                let sectionScoped = archiveFailureIsSectionScoped(
+                    handler, format, data['BLOCK_INDEX'], handler.config['COIN']);
                 await reportArchiveFailure(handler, {
                     logLine: "\t ANCHOR v" + format + " : batch " + data['MATCH_BATCH_SEQ'] + ' head-side reassembly CRC mismatch, flagging invalid_archive',
                     event: {
@@ -88,9 +91,13 @@ async function reassembleAtHead(handler, data, error, format){
                     },
                     actionIndex: Number(data['ACTION_INDEX'])
                 }, sectionScoped);
-            } else if(gateRegistry.activeAt('archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION', handler.config['NETWORK'], null, Number(data['BLOCK_INDEX']), null) &&
+            } else if(gateRegistry.activeAt(
+                      'archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION',
+                      handler.config['NETWORK'], handler.config['COIN'],
+                      Number(data['BLOCK_INDEX']), null) &&
                       handler.archiveMatchCount(b64) !== Number(data['MATCH_COUNT'])){
-                let sectionScoped = archiveFailureIsSectionScoped(handler, format, data['BLOCK_INDEX']);
+                let sectionScoped = archiveFailureIsSectionScoped(
+                    handler, format, data['BLOCK_INDEX'], handler.config['COIN']);
                 await reportArchiveFailure(handler, {
                     logLine: "\t ANCHOR v" + format + " : batch " + data['MATCH_BATCH_SEQ'] + ' head-side reassembly MATCH_COUNT mismatch, flagging invalid_archive',
                     event: {
@@ -128,7 +135,8 @@ async function reassembleAtChunk(handler, data, parent, scope, error){
             for(let c of ordered) b64 += c.archive_b64;
             let crc = handler.archiveCrc(b64);
             if(crc === null || crc !== String(parent.batch_crc32)){
-                let sectionScoped = archiveFailureIsSectionScoped(handler, parent.version, parent.block_index_doge);
+                let sectionScoped = archiveFailureIsSectionScoped(
+                    handler, parent.version, parent.block_index_doge, 'DOGE');
                 await reportArchiveFailure(handler, {
                     logLine: "\t ANCHOR v2 : batch " + data['MATCH_BATCH_SEQ'] + ' reassembly CRC mismatch, flagging invalid_archive',
                     event: {
@@ -142,9 +150,13 @@ async function reassembleAtChunk(handler, data, parent, scope, error){
                     actionIndex: Number(parent.action_index)
                 }, sectionScoped);
             } else if(parent.match_count != null &&
-                      gateRegistry.activeAt('archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION', handler.config['NETWORK'], null, Number(parent.block_index_doge), null) &&
+                      gateRegistry.activeAt(
+                          'archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION',
+                          handler.config['NETWORK'], 'DOGE',
+                          Number(parent.block_index_doge), null) &&
                       handler.archiveMatchCount(b64) !== Number(parent.match_count)){
-                let sectionScoped = archiveFailureIsSectionScoped(handler, parent.version, parent.block_index_doge);
+                let sectionScoped = archiveFailureIsSectionScoped(
+                    handler, parent.version, parent.block_index_doge, 'DOGE');
                 await reportArchiveFailure(handler, {
                     logLine: "\t ANCHOR v2 : batch " + data['MATCH_BATCH_SEQ'] + ' reassembly MATCH_COUNT mismatch, flagging invalid_archive',
                     event: {
