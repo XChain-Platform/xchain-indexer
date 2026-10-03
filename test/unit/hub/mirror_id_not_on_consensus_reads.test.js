@@ -59,7 +59,40 @@ function isFunction(node) {
         || node.type === 'ArrowFunctionExpression');
 }
 
-function staticText(node, values = new Map()) {
+function functionBindings(ast) {
+    const functions = new Map();
+    walk(ast, node => {
+        if(node.type === 'FunctionDeclaration' && node.id) {
+            functions.set(node.id.name, node);
+        } else if(node.type === 'VariableDeclarator' && node.id.type === 'Identifier'
+            && isFunction(node.init)) {
+            functions.set(node.id.name, node.init);
+        }
+    });
+    return functions;
+}
+
+function functionReturnText(fn, call, values, functions, resolving) {
+    const localValues = new Map(values);
+    for(let i = 0; i < fn.params.length; i++) {
+        if(fn.params[i].type !== 'Identifier') continue;
+        const argument = staticText(call.arguments[i], values, functions, resolving);
+        if(argument != null) localValues.set(fn.params[i].name, argument);
+    }
+
+    if(fn.body.type !== 'BlockStatement') {
+        return staticText(fn.body, localValues, functions, resolving);
+    }
+    const returns = [];
+    walk(fn.body, node => {
+        if(node.type !== 'ReturnStatement') return;
+        const text = staticText(node.argument, localValues, functions, resolving);
+        if(text != null) returns.push(text);
+    }, true, fn.body);
+    return returns.length ? returns.join(' ') : null;
+}
+
+function staticText(node, values = new Map(), functions = new Map(), resolving = new Set()) {
     if(!node) return null;
     if(node.type === 'Literal') return typeof node.value === 'string' ? node.value : null;
     if(node.type === 'Identifier') return values.get(node.name) || null;
@@ -67,31 +100,43 @@ function staticText(node, values = new Map()) {
         return node.quasis.map((quasi, i) => {
             const value = quasi.value.cooked == null ? quasi.value.raw : quasi.value.cooked;
             if(i >= node.expressions.length) return value;
-            return value + (staticText(node.expressions[i], values) || ' __EXPR__ ');
+            return value + (staticText(node.expressions[i], values, functions, resolving) || ' __EXPR__ ');
         }).join('');
     }
     if(node.type === 'BinaryExpression' && node.operator === '+') {
-        const left  = staticText(node.left, values);
-        const right = staticText(node.right, values);
+        const left  = staticText(node.left, values, functions, resolving);
+        const right = staticText(node.right, values, functions, resolving);
         if(left == null && right == null) return null;
         return (left == null ? ' __EXPR__ ' : left) + (right == null ? ' __EXPR__ ' : right);
     }
     if(node.type === 'ConditionalExpression') {
-        const yes = staticText(node.consequent, values);
-        const no  = staticText(node.alternate, values);
+        const yes = staticText(node.consequent, values, functions, resolving);
+        const no  = staticText(node.alternate, values, functions, resolving);
         if(yes == null && no == null) return null;
         return (yes || '') + ' ' + (no || '');
+    }
+    if(node.type === 'CallExpression') {
+        if(node.callee.type === 'Identifier' && functions.has(node.callee.name)
+            && !resolving.has(node.callee.name)) {
+            const nextResolving = new Set(resolving).add(node.callee.name);
+            const returned = functionReturnText(
+                functions.get(node.callee.name), node, values, functions, nextResolving);
+            if(returned != null) return returned;
+        }
+        const argumentsText = node.arguments.map(argument =>
+            staticText(argument, values, functions, resolving)).filter(text => text != null);
+        return argumentsText.length ? argumentsText.join(' ') : null;
     }
     return null;
 }
 
-function topLevelBindings(ast) {
+function topLevelBindings(ast, functions) {
     const values = new Map();
     for(const statement of ast.body) {
         if(statement.type !== 'VariableDeclaration') continue;
         for(const declaration of statement.declarations) {
             if(declaration.id.type !== 'Identifier') continue;
-            const text = staticText(declaration.init, values);
+            const text = staticText(declaration.init, values, functions);
             if(text != null) values.set(declaration.id.name, text);
         }
     }
@@ -101,7 +146,8 @@ function topLevelBindings(ast) {
 function candidateSql(ast) {
     const candidates = [];
     const scopes = [ast];
-    const inherited = topLevelBindings(ast);
+    const functions = functionBindings(ast);
+    const inherited = topLevelBindings(ast, functions);
     walk(ast, node => { if(isFunction(node)) scopes.push(node); });
 
     for(const scope of scopes) {
@@ -124,12 +170,12 @@ function candidateSql(ast) {
         for(const event of events) {
             if(event.expressions) {
                 for(const expression of event.expressions) {
-                    const text = staticText(expression, values);
+                    const text = staticText(expression, values, functions);
                     if(text != null) candidates.push({ line: event.line, text });
                 }
                 continue;
             }
-            const text = staticText(event.expression, values);
+            const text = staticText(event.expression, values, functions);
             if(text == null) {
                 if(event.operator === '=') values.delete(event.name);
                 continue;
@@ -245,6 +291,27 @@ describe('consensus mirror reads never consume local mirror ids @regression @tie
         const clauses = candidateSql(ast).flatMap(candidate =>
             scanSql(candidate.text).map(hit => hit.clause));
         assert.deepStrictEqual(clauses.slice(-2), ['WHERE', 'ORDER BY']);
+    });
+
+    it('preserves mirrored table names introduced through calls', function () {
+        const ast = acorn.parse(`
+            const tableName = table => table;
+            function fixedTable() {
+                return 'anchor_reward_attestations';
+            }
+            async function read(db) {
+                const filtered = 'SELECT * FROM ' + tableName('oracle_prices') + ' WHERE id = ?';
+                const ordered = \`SELECT * FROM \${fixedTable()} ORDER BY id DESC\`;
+                const joined = 'SELECT * FROM ' + externalTable('cross_chain_calls')
+                    + ' c JOIN local_rows l ON c.id = l.call_id';
+                await db.doQuery(filtered);
+                await db.doQuery(ordered);
+                return db.doQuery(joined);
+            }
+        `, { ecmaVersion: 'latest', locations: true });
+        const clauses = candidateSql(ast).flatMap(candidate =>
+            scanSql(candidate.text).map(hit => hit.clause));
+        assert.deepStrictEqual([...new Set(clauses)], ['WHERE', 'ORDER BY', 'ON']);
     });
 
     it('does not confuse projection or local-table ids with a mirrored id', function () {
