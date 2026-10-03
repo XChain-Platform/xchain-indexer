@@ -32,16 +32,16 @@ describe('protocol_changes/CONTROLLER_CUSTODY_GUARD row @regression @tier1', fun
         else process.env[ENV] = saved;
     });
 
-    it('is the first row in part 5 with both public networks unarmed', function () {
+    it('is the first row in part 5 with mainnet unarmed and testnet armed at the v0.21.3 instant', function () {
         const rows = require('../../../src/protocol_changes/changes_5.js');
         assert.strictEqual(rows.length, 2);
         assert.strictEqual(rows[0][0], 'CONTROLLER_CUSTODY_GUARD');
         assert.strictEqual(ProtocolChanges.CONTROLLER_CUSTODY_GUARD_MAINNET_TIME, ProtocolChanges.UNARMED);
-        assert.strictEqual(ProtocolChanges.CONTROLLER_CUSTODY_GUARD_TESTNET_TIME, ProtocolChanges.UNARMED);
+        assert.strictEqual(ProtocolChanges.CONTROLLER_CUSTODY_GUARD_TESTNET_TIME, 1791019443);
         assert.deepStrictEqual(build(), {
             version_major: 0, version_minor: 2, version_revision: 0,
             mainnet_time: ProtocolChanges.UNARMED,
-            testnet_time: ProtocolChanges.UNARMED,
+            testnet_time: 1791019443,
             regtest_time: 0,
             mainnet_block: 0, testnet_block: 0, regtest_block: 0,
         });
@@ -52,7 +52,7 @@ describe('protocol_changes/CONTROLLER_CUSTODY_GUARD row @regression @tier1', fun
         assert.strictEqual(ProtocolChanges.get('protocol_changes.CONTROLLER_CUSTODY_GUARD_MAINNET_TIME'),
             ProtocolChanges.UNARMED);
         assert.strictEqual(ProtocolChanges.get('protocol_changes.CONTROLLER_CUSTODY_GUARD_TESTNET_TIME'),
-            ProtocolChanges.UNARMED);
+            1791019443);
     });
 
     it('reads the regtest-only drill override when a fresh table is built', function () {

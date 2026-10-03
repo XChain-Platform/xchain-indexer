@@ -17,11 +17,13 @@ const constants = require('../../../../src/protocol/constants.js');
 const KEY = 'list_meta_activation.LIST_META_ACTIVATION';
 
 describe('list meta activation registry row', function () {
-    it('is a height gate left inert outside regtest', function () {
+    it('is a height gate inert on mainnet and armed on testnet at the v0.21.3 heights', function () {
         assert.strictEqual(ProtocolChanges.registry.unitOf(KEY), 'height');
         assert.strictEqual(ProtocolChanges.activeAt(KEY, 'mainnet', 'BTC', 9999999998, null), false);
-        for (const coin of ['BTC', 'LTC', 'DOGE']) {
-            assert.strictEqual(ProtocolChanges.activeAt(KEY, 'testnet', coin, 9999999998, null), false,
+        for (const [coin, height] of [['BTC', 154939], ['LTC', 4905307], ['DOGE', 67960786]]) {
+            assert.strictEqual(ProtocolChanges.activeAt(KEY, 'testnet', coin, height - 1, null), false,
+                coin + ':testnet');
+            assert.strictEqual(ProtocolChanges.activeAt(KEY, 'testnet', coin, height, null), true,
                 coin + ':testnet');
         }
         assert.strictEqual(ProtocolChanges.activeAt(KEY, 'regtest', 'BTC', 0, null), true);

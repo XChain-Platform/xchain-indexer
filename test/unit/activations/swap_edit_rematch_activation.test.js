@@ -69,12 +69,14 @@ function setup() {
 describe('SWAP edit rematch activation @regression @tier2', function () {
     afterEach(function () { sinon.restore(); });
 
-    it('is armed from genesis on regtest and unarmed on mainnet and every testnet', function () {
+    it('is armed from genesis on regtest, unarmed on mainnet and armed on every testnet chain at the v0.21.3 heights', function () {
         assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'regtest', 'BTC', 0, null), true);
         assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'mainnet', 'BTC', 1_000_000_000, null), false);
-        for (const coin of [null, 'BTC', 'LTC', 'DOGE']) {
-            assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'testnet', coin, 1_000_000_000, null), false);
+        assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'testnet', null, 1_000_000_000, null), false);
+        for (const coin of ['BTC', 'LTC', 'DOGE']) {
+            assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'testnet', coin, 1_000_000_000, null), true);
         }
+        assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'testnet', 'BTC', 154938, null), false);
     });
 
     for (const [armed, expectedActionIndex] of [[true, RESTING_ACTION_INDEX], [false, EDIT_ACTION_INDEX]]) {

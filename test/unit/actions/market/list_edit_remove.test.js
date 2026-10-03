@@ -142,9 +142,10 @@ describe('list remove sentinel scope @regression @tier2', function () {
         assert.strictEqual(data['STATUS'], 'invalid: ALLOW_LIST (unknown)');
     });
 
-    it('the registry row is unarmed on mainnet and testnet and genesis-active on regtest', function () {
+    it('the registry row is unarmed on mainnet, armed on testnet at the v0.21.3 instant and genesis-active on regtest', function () {
         assert.strictEqual(gateRegistry.activeAt(REMOVE_KEY, 'mainnet', 'BTC', null, 4102444800), false);
-        assert.strictEqual(gateRegistry.activeAt(REMOVE_KEY, 'testnet', 'LTC', null, 4102444800), false);
+        assert.strictEqual(gateRegistry.activeAt(REMOVE_KEY, 'testnet', 'LTC', null, 1791019442), false);
+        assert.strictEqual(gateRegistry.activeAt(REMOVE_KEY, 'testnet', 'LTC', null, 1791019443), true);
         assert.strictEqual(gateRegistry.activeAt(REMOVE_KEY, 'regtest', 'BTC', null, 0), true);
     });
 });

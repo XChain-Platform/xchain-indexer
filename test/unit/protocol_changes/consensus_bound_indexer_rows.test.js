@@ -20,19 +20,19 @@ describe('protocol_changes consensus-bound indexer rows @regression @tier1', fun
     it('pins the archive MATCH_COUNT activation map', function () {
         assert.deepStrictEqual(
             ProtocolChanges.get('archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION'),
-            { mainnet: 9999999999, testnet: 9999999999, regtest: 0 },
+            { mainnet: 9999999999, 'BTC:testnet': 154939, 'LTC:testnet': 4905307, 'DOGE:testnet': 67960786, testnet: 9999999999, regtest: 0 },
         );
     });
 
     it('pins the BROADCAST FEE length flag day', function () {
         assert.strictEqual(ProtocolChanges.BROADCAST_FEE_LENGTH_MAINNET_TIME, 9999999999);
-        assert.strictEqual(ProtocolChanges.BROADCAST_FEE_LENGTH_TESTNET_TIME, 9999999999);
+        assert.strictEqual(ProtocolChanges.BROADCAST_FEE_LENGTH_TESTNET_TIME, 1791019443);
         assert.deepStrictEqual(ProtocolChanges.get('protocol_changes.changes.BROADCAST_FEE_LENGTH'), {
             version_major: 0,
             version_minor: 2,
             version_revision: 0,
             mainnet_time: 9999999999,
-            testnet_time: 9999999999,
+            testnet_time: 1791019443,
             regtest_time: 0,
             mainnet_block: 0,
             testnet_block: 0,

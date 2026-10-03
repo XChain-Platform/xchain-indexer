@@ -189,9 +189,9 @@ describe('armed_map/manifest: collectRows', function () {
         const byKey = new Map(manifest.collectRows().rows);
         assert.deepStrictEqual(byKey.get('list_owner_activation.LIST_OWNER_ACTIVATION'), {
             mainnet: 9999999999,
-            'BTC:testnet': 9999999999,
-            'LTC:testnet': 9999999999,
-            'DOGE:testnet': 9999999999,
+            'BTC:testnet': 154939,
+            'LTC:testnet': 4905307,
+            'DOGE:testnet': 67960786,
             testnet: 9999999999,
             regtest: 0,
         });

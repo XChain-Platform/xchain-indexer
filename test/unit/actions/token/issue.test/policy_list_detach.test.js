@@ -117,14 +117,15 @@ describe('ISSUE_POLICY_LIST_DETACH @regression @tier1', function () {
 describe('ISSUE_POLICY_LIST_DETACH registry and replay @regression @tier1', function () {
     afterEach(function () { sinon.restore(); });
 
-    it('registers sentinel heights on mainnet and testnet and genesis on regtest', function () {
+    it('registers the sentinel on mainnet, the v0.21.3 heights on testnet and genesis on regtest', function () {
         assert.deepStrictEqual(gateRegistry.get(GATE_KEY), {
             mainnet: 9999999999,
-            'BTC:testnet': 9999999999, 'LTC:testnet': 9999999999, 'DOGE:testnet': 9999999999,
+            'BTC:testnet': 154939, 'LTC:testnet': 4905307, 'DOGE:testnet': 67960786,
             testnet: 9999999999, regtest: 0,
         });
         assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'mainnet', 'BTC', 9999999998, null), false);
-        assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'testnet', 'BTC', 9999999998, null), false);
+        assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'testnet', 'BTC', 154938, null), false);
+        assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'testnet', 'BTC', 154939, null), true);
         assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'regtest', 'BTC', 0, null), true);
     });
 

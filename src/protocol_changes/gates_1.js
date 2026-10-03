@@ -33,6 +33,9 @@ const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
 // (data['BLOCK_TIME']).
 addGate('amount_representability_activation.AMOUNT_REPRESENTABILITY_ACTIVATION', 'time', {
     mainnet: 9999999999,    // UNARMED (house sentinel, year 2286): mainnet writes are held
+    'BTC:testnet': 1791019443,
+    'LTC:testnet': 1791019443,
+    'DOGE:testnet': 1791019443,
     testnet: 9999999999,    // UNARMED (house sentinel): live launched history, arm needs a measured replay witness
     regtest: 0,
 });
@@ -91,14 +94,6 @@ addGate('archive_head_unverified_gate_activation.ARCHIVE_HEAD_UNVERIFIED_GATE_AC
     // That rebuild is a precondition of this height, not a consequence of it.
     testnet: 0,
     regtest: 0,           // armed from genesis: fresh regtest stacks exercise the widened gate end to end
-});
-
-// archive_match_count_activation
-// Mainnet and testnet stay inert until the operator arms the archive count check.
-addGate('archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION', 'height', {
-    mainnet: UNARMED,
-    testnet: UNARMED,
-    regtest: 0,
 });
 
 // attest_admission_activation
@@ -393,8 +388,8 @@ addGate('dispenser_send_amount_compare_activation.DISPENSER_SEND_AMOUNT_COMPARE_
     // passed opens a retroactive window: a node that reindexes across it derives
     // different state than one that did not, and testnet does carry the history
     // that makes that real.
-    'BTC:testnet':  null,
-    'LTC:testnet':  null,
-    'DOGE:testnet': null,
+    'BTC:testnet':  154939,
+    'LTC:testnet':  4905307,
+    'DOGE:testnet': 67960786,
     regtest: 0,
 });

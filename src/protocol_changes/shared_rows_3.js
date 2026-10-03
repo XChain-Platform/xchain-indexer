@@ -170,9 +170,9 @@ addGate('stake_weight_collation_activation.STAKE_WEIGHT_COLLATION_ACTIVATION', '
     'BTC:mainnet':  0,      // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet history (0 stakes, measured 2026-09-09)
     'LTC:mainnet':  0,
     'DOGE:mainnet': 0,
-    'BTC:testnet':  null,
-    'LTC:testnet':  null,
-    'DOGE:testnet': null,
+    'BTC:testnet':  154939,
+    'LTC:testnet':  4905307,
+    'DOGE:testnet': 67960786,
     regtest: 0,
 });
 

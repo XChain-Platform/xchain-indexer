@@ -43,9 +43,9 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
             assert.strictEqual(opts.enforceLintOptionalChain, true);
         });
 
-        it('stays OFF for BTC testnet at height 10000000', async function () {
-            const opts = await optsFor('testnet', 'BTC', 10000000);
-            assert.strictEqual(opts.enforceLintOptionalChain, false);
+        it('stays OFF for BTC testnet below its v0.21.3 height and turns ON at it', async function () {
+            assert.strictEqual((await optsFor('testnet', 'BTC', 154938)).enforceLintOptionalChain, false);
+            assert.strictEqual((await optsFor('testnet', 'BTC', 154939)).enforceLintOptionalChain, true);
         });
 
         it('stays OFF for BTC mainnet at height 10000000', async function () {

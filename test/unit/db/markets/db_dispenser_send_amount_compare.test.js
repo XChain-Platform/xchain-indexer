@@ -79,23 +79,26 @@ afterEach(function () { sinon.restore(); });
 
 describe('token-SEND dispense affordability compare gate @regression @tier1', function () {
     describe('gate: which predicate is emitted', function () {
-        it('BTC testnet is unpinned, so the legacy predicate is emitted byte-identically', async function () {
+        it('BTC testnet below its v0.21.3 height emits the legacy predicate byte-identically', async function () {
             const db = dbFor('testnet');
-            await db.findDispenserSends(1, 5000000);
+            await db.findDispenserSends(1, 154938);
             const q = sendsQuery(db);
             assert.ok(q.includes(LEGACY_PREDICATE_BYTES),
-                'the unpinned chain must emit the pre-gate predicate byte-for-byte');
-            assert.doesNotMatch(q, /CAST\(/, 'no CAST may leak onto an unpinned chain');
+                'a testnet block below the arm height must emit the pre-gate predicate byte-for-byte');
+            assert.doesNotMatch(q, /CAST\(/, 'no CAST may leak below the arm height');
         });
 
-        it('every testnet chain is still unpinned (it carries dispenser history)', async function () {
-            for (const coin of ['BTC', 'LTC', 'DOGE']) {
-                const db = dbFor('testnet', coin);
-                await db.findDispenserSends(1, 999999999);
-                assert.doesNotMatch(sendsQuery(db), /CAST\(/,
-                    coin + ':testnet emitted the corrected predicate; testnet has been a live ' +
-                    'public ledger since 2026-09-01, so arming it is a coordinated release step ' +
-                    'with replay evidence, not a code change');
+        it('every testnet chain keeps the legacy predicate below its v0.21.3 height and casts at it', async function () {
+            for (const [coin, height] of [['BTC', 154939], ['LTC', 4905307], ['DOGE', 67960786]]) {
+                const below = dbFor('testnet', coin);
+                await below.findDispenserSends(1, height - 1);
+                assert.doesNotMatch(sendsQuery(below), /CAST\(/,
+                    coin + ':testnet emitted the corrected predicate below its arm height; testnet carries ' +
+                    'dispenser history, so the rule must not reach back past the v0.21.3 height');
+                sinon.restore();
+                const at = dbFor('testnet', coin);
+                await at.findDispenserSends(1, height);
+                assert.match(sendsQuery(at), /CAST\(/, coin + ':testnet must cast at its v0.21.3 height');
                 sinon.restore();
             }
         });
@@ -145,7 +148,7 @@ describe('token-SEND dispense affordability compare gate @regression @tier1', fu
 
         it('the rest of the query is untouched on both sides of the gate', async function () {
             const legacy = dbFor('testnet');
-            await legacy.findDispenserSends(7, 5000000);
+            await legacy.findDispenserSends(7, 154938);
             const legacyQ = sendsQuery(legacy);
             sinon.restore();
             const armed = dbFor('regtest');
@@ -169,11 +172,15 @@ describe('token-SEND dispense affordability compare gate @regression @tier1', fu
             assert.strictEqual(dsc.isDispenserSendAmountCompareActive(1, 'regtest', null), true);
         });
 
-        it('a null (unpinned) height is inert at every block index', function () {
-            for (const height of [0, 1, 963000, Number.MAX_SAFE_INTEGER]) {
+        it('a testnet chain is inert below its v0.21.3 height and active from it', function () {
+            for (const height of [0, 1, 154938]) {
                 assert.strictEqual(dsc.isDispenserSendAmountCompareActive(height, 'testnet', 'BTC'), false);
-                assert.strictEqual(dsc.isDispenserSendAmountCompareActive(height, 'testnet', 'DOGE'), false);
             }
+            for (const height of [154939, Number.MAX_SAFE_INTEGER]) {
+                assert.strictEqual(dsc.isDispenserSendAmountCompareActive(height, 'testnet', 'BTC'), true);
+            }
+            assert.strictEqual(dsc.isDispenserSendAmountCompareActive(67960785, 'testnet', 'DOGE'), false);
+            assert.strictEqual(dsc.isDispenserSendAmountCompareActive(67960786, 'testnet', 'DOGE'), true);
         });
 
         it('mainnet is armed at genesis on every chain, so it is active at any height', function () {
@@ -199,7 +206,7 @@ describe('token-SEND dispense affordability compare gate @regression @tier1', fu
 
         it('the coin-qualified key wins over the bare network key', function () {
             // regtest is armed by its bare key; a coin-qualified testnet key is
-            // pinned null and must not fall through to it.
+            // pinned at its v0.21.3 height and must not fall through to it.
             assert.strictEqual(dsc.isDispenserSendAmountCompareActive(0, 'testnet', 'BTC'), false);
             assert.strictEqual(dsc.isDispenserSendAmountCompareActive(0, 'regtest', 'BTC'), true);
         });
@@ -217,7 +224,7 @@ describe('token-SEND dispense affordability compare gate @regression @tier1', fu
 
 describe('token-SEND dispense affordability compare gate @regression @tier1', function () {
     describe('activation-module predicate', function () {
-        it('mainnet is pinned at genesis and testnet is still unpinned, in the shipped map', function () {
+        it('mainnet is pinned at genesis and testnet at the v0.21.3 heights, in the shipped map', function () {
             for (const [key, height] of Object.entries(dsc.DISPENSER_SEND_AMOUNT_COMPARE_ACTIVATION)) {
                 if (key === 'regtest') { assert.strictEqual(height, 0); continue; }
                 if (key.endsWith(':mainnet')) {
@@ -226,8 +233,9 @@ describe('token-SEND dispense affordability compare gate @regression @tier1', fu
                         'identity on a mainnet history holding 0 dispensers and 0 dispenses');
                     continue;
                 }
-                assert.strictEqual(height, null,
-                    key + ' carries a pinned height; arming testnet is a coordinated ' +
+                const armed = { 'BTC:testnet': 154939, 'LTC:testnet': 4905307, 'DOGE:testnet': 67960786 };
+                assert.strictEqual(height, armed[key],
+                    key + ' must carry the v0.21.3 cut height; moving it is a coordinated ' +
                     'release step with replay evidence, not a code change');
             }
         });

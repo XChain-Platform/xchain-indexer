@@ -37,11 +37,14 @@ function withEnv(value, fn) {
 }
 
 describe('protocol_changes anchor fold rows', function () {
-    it('ships both activation maps inert on every network', function () {
+    it('ships both activation maps inert on mainnet and armed at the v0.21.3 testnet heights', function () {
         withEnv(undefined, () => {
             for (const key of KEYS) {
                 assert.deepStrictEqual(ProtocolChanges.get(key), {
                     mainnet: 9999999999,
+                    'BTC:testnet': 154939,
+                    'LTC:testnet': 4905307,
+                    'DOGE:testnet': 67960786,
                     testnet: 9999999999,
                     regtest: null,
                 });
@@ -58,11 +61,12 @@ describe('protocol_changes anchor fold rows', function () {
         }
     });
 
-    it('stays inactive below the sentinel on mainnet and testnet', function () {
+    it('stays inactive below the sentinel on mainnet and below the v0.21.3 height on testnet', function () {
         withEnv(undefined, () => {
             for (const key of KEYS) {
                 assert.strictEqual(ProtocolChanges.activeAt(key, 'mainnet', 'DOGE', 99999999, 0), false);
-                assert.strictEqual(ProtocolChanges.activeAt(key, 'testnet', 'DOGE', 99999999, 0), false);
+                assert.strictEqual(ProtocolChanges.activeAt(key, 'testnet', 'DOGE', 67960785, 0), false);
+                assert.strictEqual(ProtocolChanges.activeAt(key, 'testnet', 'DOGE', 67960786, 0), true);
             }
         });
     });

@@ -331,6 +331,9 @@ addGate('price_scale_activation.PRICE_VALUE_RE_CANONICAL', 'constant', /^(0|[1-9
 
 addGate('price_scale_activation.PRICE_V1_CANONICAL_ACTIVATION', 'time', {
     mainnet: UNARMED,
+    'BTC:testnet': 1791019443,
+    'LTC:testnet': 1791019443,
+    'DOGE:testnet': 1791019443,
     testnet: UNARMED,
     regtest: 0,
 });
