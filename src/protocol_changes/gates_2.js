@@ -82,9 +82,9 @@ addGate('ledger_amount_precision_activation.LEDGER_AMOUNT_PRECISION_ACTIVATION',
 // exercises the armed rule from genesis.
 addGate('list_owner_activation.LIST_OWNER_ACTIVATION', 'height', {
     mainnet: 9999999999,
-    'BTC:testnet': 9999999999,
-    'LTC:testnet': 9999999999,
-    'DOGE:testnet': 9999999999,
+    'BTC:testnet': 155001,
+    'LTC:testnet': 4906040,
+    'DOGE:testnet': 67962387,
     testnet: 9999999999,
     regtest: 0,
 });
@@ -136,6 +136,9 @@ addGate('oracle_stale_round_visibility_activation.ORACLE_STALE_ROUND_VISIBILITY_
 // the same reason.
 addGate('price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION', 'height', {
     mainnet: null,
+    'BTC:testnet': 155001,
+    'LTC:testnet': 4906040,
+    'DOGE:testnet': 67962387,
     testnet: null,
     regtest: null,
 });

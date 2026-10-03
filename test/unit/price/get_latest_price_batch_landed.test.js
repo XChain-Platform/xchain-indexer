@@ -197,10 +197,13 @@ describe('PRICE_FEE_BATCH_LANDED_ACTIVATION sizing @regression @tier1', function
         assert.strictEqual(at(Number.MAX_SAFE_INTEGER, 'mainnet', 'DOGE'), false);
     });
 
-    it('every network the row declares is unarmed, and an undeclared one is inert', function () {
-        for (const net of Object.keys(gateRegistry.get(LANDED_ROW))) {
+    it('every network key the row declares is unarmed, testnet chains arm at the v0.21.3 heights, and an undeclared one is inert', function () {
+        for (const net of Object.keys(gateRegistry.get(LANDED_ROW)).filter((key) => !key.includes(':'))) {
+            if (net === 'testnet') continue;
             assert.strictEqual(at(9e9, net, 'DOGE'), false, net);
         }
+        assert.strictEqual(at(67962386, 'testnet', 'DOGE'), false);
+        assert.strictEqual(at(67962387, 'testnet', 'DOGE'), true);
         assert.strictEqual(at(9e9, 'someothernet', 'DOGE'), false);
         assert.strictEqual(at(9e9, undefined, undefined), false);
     });

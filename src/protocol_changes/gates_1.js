@@ -33,6 +33,9 @@ const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
 // (data['BLOCK_TIME']).
 addGate('amount_representability_activation.AMOUNT_REPRESENTABILITY_ACTIVATION', 'time', {
     mainnet: 9999999999,    // UNARMED (house sentinel, year 2286): mainnet writes are held
+    'BTC:testnet': 1791061097,
+    'LTC:testnet': 1791061097,
+    'DOGE:testnet': 1791061097,
     testnet: 9999999999,    // UNARMED (house sentinel): live launched history, arm needs a measured replay witness
     regtest: 0,
 });
@@ -385,8 +388,8 @@ addGate('dispenser_send_amount_compare_activation.DISPENSER_SEND_AMOUNT_COMPARE_
     // passed opens a retroactive window: a node that reindexes across it derives
     // different state than one that did not, and testnet does carry the history
     // that makes that real.
-    'BTC:testnet':  null,
-    'LTC:testnet':  null,
-    'DOGE:testnet': null,
+    'BTC:testnet':  155001,
+    'LTC:testnet':  4906040,
+    'DOGE:testnet': 67962387,
     regtest: 0,
 });

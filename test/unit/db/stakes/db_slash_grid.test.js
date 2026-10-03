@@ -63,10 +63,11 @@ function makeDb(network) {
 afterEach(function () { sinon.restore(); });
 
 describe('Database.slashContractStake() off-grid conservation guard @regression @tier1', function () {
-    it('gate is armed on regtest and on mainnet at genesis by the 2026-09-09 ruling, inert on testnet', function () {
+    it('gate is armed on regtest and on mainnet at genesis by the 2026-09-09 ruling, and on testnet at the v0.21.3 heights', function () {
         assert.strictEqual(slashGrid.isSlashGridActive(0, 'regtest', 'BTC'), true);
         assert.strictEqual(slashGrid.isSlashGridActive(9e9, 'mainnet', 'BTC'), true);
-        assert.strictEqual(slashGrid.isSlashGridActive(9e9, 'testnet', 'BTC'), false);
+        assert.strictEqual(slashGrid.isSlashGridActive(155000, 'testnet', 'BTC'), false);
+        assert.strictEqual(slashGrid.isSlashGridActive(155001, 'testnet', 'BTC'), true);
     });
 
     // The defect itself, pinned pre-activation. If this case ever goes green with a '0'

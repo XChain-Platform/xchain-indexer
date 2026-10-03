@@ -109,14 +109,15 @@ describe('SWQ source-cap gate + truncation (SWQ-TRUNC-1 liveness) @regression @t
 
         // The control that keeps the helper above honest, built through the SAME helper:
         // an always-empty helper fails the mainnet cases, an always-suffix one fails here.
-        // testnet caps from genesis but is not collation-pinned, so it is that venue.
+        // testnet caps from genesis and pins collation only at its v0.21.3 height, so a
+        // testnet block below that height is that venue.
         it('an un-collated venue keeps the bare window: the cap and the collation are separate gates', async function () {
-            assert.strictEqual(swc.STAKE_WEIGHT_COLLATION_ACTIVATION['BTC:testnet'], null,
-                'this control needs a capped-but-uncollated venue; re-point it if testnet is ever pinned');
-            const c = collateSuffix(900000, 'BTC', 'testnet');
+            assert.ok(155000 < swc.STAKE_WEIGHT_COLLATION_ACTIVATION['BTC:testnet'],
+                'this control needs a capped-but-uncollated testnet block below the collation height');
+            const c = collateSuffix(155000, 'BTC', 'testnet');
             assert.strictEqual(c, '', 'the collation gate must be off on an unpinned chain');
             const db = dbFor('testnet', []);
-            await db.getStakeWeightsByCapability('price', 900000, '0');
+            await db.getStakeWeightsByCapability('price', 155000, '0');
             const { query } = db._calls[0];
             assert.match(query, new RegExp('DENSE_RANK\\(\\) OVER \\(ORDER BY b\\.source' + escapeRe(c) + '\\)'),
                 'testnet caps from genesis');

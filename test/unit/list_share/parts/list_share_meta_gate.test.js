@@ -31,15 +31,15 @@ describe('list share metadata gate readers', function () {
             assert.strictEqual(isListMetaApplyActive(coin, 'regtest', 0), true, coin);
     });
 
-    it('stays inactive on mainnet and every testnet chain below the sentinel', function () {
+    it('stays inactive on mainnet below the sentinel and applies on every testnet chain armed by v0.21.3', function () {
         const height = 9999999998;
         assert.strictEqual(isListMetaActive(height, 'mainnet'), false);
         for(const coin of ['BTC', 'LTC', 'DOGE']){
             assert.strictEqual(isListMetaApplyActive(coin, 'mainnet', height), false,
                 coin + ':mainnet');
-            assert.strictEqual(isListMetaActive(height, 'testnet'), false,
+            assert.strictEqual(isListMetaActive(height, 'testnet'), true,
                 coin + ':testnet hub');
-            assert.strictEqual(isListMetaApplyActive(coin, 'testnet', height), false,
+            assert.strictEqual(isListMetaApplyActive(coin, 'testnet', height), true,
                 coin + ':testnet apply');
         }
     });

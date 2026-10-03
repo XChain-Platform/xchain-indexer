@@ -24,7 +24,7 @@ const NETWORKS = ['mainnet', 'testnet', 'regtest'];
 const LEGACY_ORDER_NETWORKS = ['mainnet', 'testnet'];
 const BUNDLE_ORDER_KEY =
     'anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION';
-const TESTNET_HEIGHT = 67960786;
+const TESTNET_HEIGHT = 67962387;
 
 let indexer, handler, verifyStub, swqStub, deriveGateStub;
 
@@ -73,7 +73,9 @@ describe('Anchor bundle order gate', function () {
     describe('Anchor bundle legacy wire order', function () {
     for (const network of LEGACY_ORDER_NETWORKS) {
         it(`accepts DOGE before BTC on ${network}`, async function () {
+            // testnet arms bundle order at its v0.21.3 DOGE height, so its legacy case sits just below it.
             const data = await parseBundle(network, {
+                blockIndex: network === 'testnet' ? TESTNET_HEIGHT - 1 : undefined,
                 sections: [{ chain: 'DOGE' }, { chain: 'BTC' }]
             });
             assert.strictEqual(data['STATUS'], 'valid');
@@ -81,6 +83,7 @@ describe('Anchor bundle order gate', function () {
 
         it(`accepts PUBKEY_B before PUBKEY_A on ${network}`, async function () {
             const data = await parseBundle(network, {
+                blockIndex: network === 'testnet' ? TESTNET_HEIGHT - 1 : undefined,
                 sections: [{ chain: 'BTC', sigs: [[PUBKEY_B, SIG], [PUBKEY_A, SIG]] }]
             });
             assert.strictEqual(data['STATUS'], 'valid');

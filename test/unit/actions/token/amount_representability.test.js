@@ -108,7 +108,7 @@ describe('Amount representability @regression @tier1', function () {
 });
 
 describe('Amount representability post-arm coin thresholds', function () {
-    const instant = 1791019443;
+    const instant = 1791061097;
     const unarmed = 9999999999;
     const saved = {};
 

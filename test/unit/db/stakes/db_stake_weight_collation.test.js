@@ -59,14 +59,14 @@ afterEach(function () { sinon.restore(); });
 
 describe('stake-weight ordering collation gate @regression @tier1', function () {
     describe('emitted SQL', function () {
-        it('an unpinned chain emits no COLLATE in either regime', async function () {
-            // testnet is the unpinned network now that mainnet arms at genesis. Pick block
-            // heights on both sides of the source cap so BOTH the capped branch and the
-            // legacy LIMIT branch are exercised on an unpinned chain.
+        it('a chain below its collation height emits no COLLATE in either regime', async function () {
+            // testnet arms at the v0.21.3 heights, above its genesis source cap. Pick block
+            // heights on both sides of the source cap, both below the collation height, so
+            // BOTH the capped branch and the legacy LIMIT branch are exercised un-collated.
             const capHeight = swqCap.SWQ_SOURCE_CAP_ACTIVATION['BTC:testnet'];
             assert.ok(Number.isFinite(capHeight), 'expected a pinned source-cap height to straddle');
-            assert.strictEqual(swc.STAKE_WEIGHT_COLLATION_ACTIVATION['BTC:testnet'], null,
-                'this test needs an unpinned chain; re-point it if testnet is ever armed');
+            assert.ok(capHeight + 1 < swc.STAKE_WEIGHT_COLLATION_ACTIVATION['BTC:testnet'],
+                'this test needs both straddle heights below the BTC:testnet collation height');
             for (const height of [capHeight - 1, capHeight + 1]) {
                 const db = dbFor('testnet');
                 await db.stakeWeightsWithCap(1, height, '0', 'test');
@@ -111,7 +111,7 @@ describe('stake-weight ordering collation gate @regression @tier1', function () 
     describe('emitted SQL', function () {
         it('only the ordering changed: the gate adds COLLATE and nothing else', async function () {
             const off = dbFor('testnet');
-            await off.stakeWeightsWithCap(1, 5000000, '0', 'test');
+            await off.stakeWeightsWithCap(1, 155000, '0', 'test');
             const offQ = off._calls[0].query;
             sinon.restore();
             const on = dbFor('regtest');
@@ -127,14 +127,14 @@ describe('stake-weight ordering collation gate @regression @tier1', function () 
 describe('stake-weight ordering collation gate @regression @tier1', function () {
     describe('activation map', function () {
 
-        it('is armed at genesis on mainnet by the 2026-09-09 ruling, and still unpinned on testnet', function () {
+        it('is armed at genesis on mainnet by the 2026-09-09 ruling, and at the v0.21.3 heights on testnet', function () {
             assert.deepStrictEqual(swc.STAKE_WEIGHT_COLLATION_ACTIVATION, {
                 'BTC:mainnet':  0,
                 'LTC:mainnet':  0,
                 'DOGE:mainnet': 0,
-                'BTC:testnet':  null,
-                'LTC:testnet':  null,
-                'DOGE:testnet': null,
+                'BTC:testnet':  155001,
+                'LTC:testnet':  4906040,
+                'DOGE:testnet': 67962387,
                 regtest: 0,
             });
             // Mainnet holds 0 stakes (measured 2026-09-09), so binary and folding order pick
@@ -144,10 +144,10 @@ describe('stake-weight ordering collation gate @regression @tier1', function () 
                     coin + ':mainnet must order under utf8_bin from genesis');
                 assert.strictEqual(swc.isStakeWeightBinCollationActive(1e9, 'mainnet', coin), true,
                     coin + ':mainnet must stay armed above genesis');
-                // Testnet carries live stakes, so its pin still needs BOTH fleets deployed
-                // first: a one-sided pin re-orders the cap survivors and forks stakes_root.
-                assert.strictEqual(swc.isStakeWeightBinCollationActive(1e9, 'testnet', coin), false,
-                    coin + ':testnet must stay unpinned until a coordinated height is chosen');
+                // Testnet carries live stakes, so its v0.21.3 pin rides one coordinated deploy
+                // of both fleets: a one-sided pin re-orders the cap survivors and forks stakes_root.
+                assert.strictEqual(swc.isStakeWeightBinCollationActive(1e9, 'testnet', coin), true,
+                    coin + ':testnet must order under utf8_bin above its v0.21.3 height');
             }
         });
 
