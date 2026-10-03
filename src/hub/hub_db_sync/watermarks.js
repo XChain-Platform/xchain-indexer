@@ -158,6 +158,14 @@ module.exports = {
         return (typeof h === 'number' && Number.isSafeInteger(h) && h >= 0) ? h : null;
     },
 
+    admissionStreamSatisfied(table, streamSatisfied) {
+        if (!streamSatisfied) return false;
+        const chain = this.admissionChain();
+        if (chain === null || this.publishedHeight(table, chain) === null) return false;
+        delete this._heightShortfalls[table + '|' + chain];
+        return true;
+    },
+
     // The family's barrier comparison, identical for every member: heights[table][C] >= B -
     // ADMIT_MARGIN_BLOCKS[table]. Nothing here reads t(B), which is the point of the whole
     // design: heights do not move with a miner's stamp, so a block stamped 7200 s ahead is
