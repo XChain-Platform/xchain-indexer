@@ -55,22 +55,25 @@ module.exports = {
     //   1. The mirror has been read and holds no oracle prices at all; nothing to gate on.
     //   2. The mirror holds prices whose newest effective_at is at or past this block's time,
     //      so every price effective at or before blockTime is already local.
-    //   3. ADMISSION ERA: the oracle_prices height watermark for this chain has reached
-    //      B - 1 (this rail's margin is one block: effective_at stays the ECONOMIC filter,
-    //      including the 24 h lock window, and admission is what the barrier certifies).
-    //      The empty-mirror case above survives unchanged, because it is a content escape
-    //      and not a clock: a mirror holding no row at all holds none whatever arrives next.
+    //   3. ADMISSION ERA: either the oracle_prices height watermark has reached B - 1, or
+    //      a hub that has published admission evidence has streamed through blockTime plus
+    //      grace without producing another row. The latter keeps a quiet table from making
+    //      its last content timestamp an indefinite barrier.
     oracleSyncSatisfied(blockTime, blockHeight = null) {
         if (this.oracleBootstrapped && this.oracleSyncTimestamp === null) return true;
-        if (this.admissionActiveAt(blockHeight))
+        const streamSatisfied = this.oracleBootstrapped &&
+            this.streamWatermark >= blockTime + this.oracleWatermarkGraceS;
+        if (this.admissionActiveAt(blockHeight)) {
+            if (this.admissionStreamSatisfied('oracle_prices', streamSatisfied)) return true;
             return this.oracleBootstrapped && this.heightSatisfied('oracle_prices', blockHeight);
+        }
         if (this.oracleSyncTimestamp !== null && this.oracleSyncTimestamp >= blockTime) return true;
         // Stream watermark: the hub has sent us every row it produced through
         // blockTime + grace, so the set of prices effective at or before this
         // block is final, so quiet oracles must not stall the chain (#1984). PRICE
         // v1 rows are stamped 24 hours forward, so the grace only needs to cover
         // ordinary hub-to-mirror stream lag, like the match and call barriers.
-        if (this.oracleBootstrapped && this.streamWatermark >= blockTime + this.oracleWatermarkGraceS) return true;
+        if (streamSatisfied) return true;
         return false;
     },
 
@@ -161,14 +164,16 @@ module.exports = {
     },
 
     // ADMISSION ERA: the cross_chain_matches height watermark for this chain has reached
-    // B - 4 (the default margin, which is the producers' existing DEFAULT_RELAY_MARGIN_BLOCKS
-    // carried onto the admission axis with the seconds conversion deleted). It replaces BOTH
-    // clock cases: a match's effective_time is a time, and the row's admission height is what
-    // binds it above the flag day. The empty-mirror escape survives: it is content, not clock.
+    // B - 4, or a hub that has published admission evidence has streamed through blockTime
+    // plus grace without producing another row. The empty-mirror escape survives unchanged.
     matchSyncSatisfied(blockTime, blockHeight = null) {
         if (this.matchBootstrapped && this.matchSyncTimestamp === null) return true;
-        if (this.admissionActiveAt(blockHeight))
+        const streamSatisfied = this.matchBootstrapped &&
+            this.streamWatermark >= blockTime + this.matchWatermarkGraceS;
+        if (this.admissionActiveAt(blockHeight)) {
+            if (this.admissionStreamSatisfied('cross_chain_matches', streamSatisfied)) return true;
             return this.matchBootstrapped && this.heightSatisfied('cross_chain_matches', blockHeight);
+        }
         if (this.matchSyncTimestamp !== null && this.matchSyncTimestamp >= blockTime) return true;
         // Stream watermark: matches are stamped with the hub's wall clock at
         // finalization and broadcast immediately, so a watermark past this
@@ -177,7 +182,7 @@ module.exports = {
         // cross-chain match anywhere froze every distributed replica on every
         // chain until the next match arrived (#1984, live-repro'd: an LTC⇄DOGE
         // match stalled the BTC replica for 6+ cycles).
-        if (this.matchBootstrapped && this.streamWatermark >= blockTime + this.matchWatermarkGraceS) return true;
+        if (streamSatisfied) return true;
         return false;
     },
 
