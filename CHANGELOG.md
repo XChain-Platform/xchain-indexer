@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.3] - 2026-10-03
+
+### Added
+- Added recovery for archived checkpoints, price batches, bridge transfers, and policy snapshots.
+- Registered the controller custody guard and other consensus-bound flag days.
+- Added shared lists, union lists, list transfer and coin-qualified list tickers.
+- Enforced the hourly oracle price age at every fee consumer.
+
+### Changed
+- Indexed list names and descriptions for list reads and renames.
+- Indexed hourly attestation batches only when responses are present.
+- Armed testnet mirror admission producers at BTC 154234, LTC 4903068 and DOGE 67936053.
+- Armed testnet mirror admission consumers at BTC 154291, LTC 4903291 and DOGE 67936888.
+- Armed the testnet anchor attestation barrier at BTC 154291.
+- Armed testnet token bridges at BTC 154567, LTC 4903068 and DOGE 67951140.
+- Armed testnet token policy inheritance at BTC 154567, LTC 4903068 and DOGE 67951140.
+
+### Fixed
+- Verified archived price proofs and used a measured instant for PRICE v1 reads.
+- Corrected gated list, dispenser, callback, vote, payout, and mirror-drain behavior.
+- Let the list share mirror barrier pass on a drained empty mirror.
+
 ## [0.21.2] - 2026-10-02
 
 ### Fixed
