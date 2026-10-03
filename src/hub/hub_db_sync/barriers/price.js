@@ -205,22 +205,21 @@ module.exports = {
     //      chain proceed deterministically when no rounds exist yet, while a
     //      genuinely-behind mirror (hub unreachable → watermark frozen) defers.
     //   3. ADMISSION ERA: the price_snapshots height watermark for this chain has reached
-    //      B - margin. This member has NO height case below the activation at all (that is
-    //      what makes it the one that runs on every chain while member 1 is BTC-gated), so
-    //      above it BOTH clock cases are replaced: a round's block_timestamp is a time, and
-    //      comparing one against t(B) is exactly the question the binding-rule change retires.
+    //      B - margin, or a hub that has published admission evidence has streamed through
+    //      blockTime plus grace without producing another round.
     priceTimeSyncSatisfied(blockTime, blockHeight = null) {
-        // Evaluated BEFORE the blockTime guard below, deliberately: above the activation an
-        // unreadable t(B) is not a reason to certify anything, and falling through to that
-        // `return true` would be a fail-OPEN on the one axis that may never have one.
-        if (this.admissionActiveAt(blockHeight))
+        const streamSatisfied = this.priceBootstrapped && Number.isFinite(blockTime) &&
+            this.streamWatermark >= blockTime + this.priceWatermarkGraceS;
+        if (this.admissionActiveAt(blockHeight)) {
+            if (!this._priceMirrorRefloor &&
+                this.admissionStreamSatisfied('price_snapshots', streamSatisfied)) return true;
             return !this._priceMirrorRefloor && this.priceBootstrapped &&
                    this.heightSatisfied('price_snapshots', blockHeight);
+        }
         if (!Number.isFinite(blockTime)) return true;       // nothing to gate on
         if (this._priceMirrorRefloor)    return false;      // see priceSyncSatisfied
         if (this.priceBootstrapped && this.priceSyncMaxTimestamp >= blockTime) return true;
-        if (this.priceBootstrapped &&
-            this.streamWatermark >= blockTime + this.priceWatermarkGraceS) return true;
+        if (streamSatisfied) return true;
         return false;
     },
 
