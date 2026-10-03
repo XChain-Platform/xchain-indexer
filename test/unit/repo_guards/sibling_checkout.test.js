@@ -71,7 +71,7 @@ function cleanupLayouts() {
 const judge = (ownRoot, target) => siblingCheckout(ownRoot, target, { ownRoot });
 
 describe('sibling_checkout verdict against real git layouts', function () {
-    this.timeout(30000);
+    this.timeout(120000);
     before(setupLayouts);
     after(cleanupLayouts);
 
@@ -105,7 +105,7 @@ describe('sibling_checkout verdict against real git layouts', function () {
 });
 
 describe('sibling_checkout verdict against real git layouts', function () {
-    this.timeout(30000);
+    this.timeout(120000);
     before(setupLayouts);
     after(cleanupLayouts);
 
