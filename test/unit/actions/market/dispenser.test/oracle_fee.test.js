@@ -83,6 +83,55 @@ describe('Dispenser action handler @regression @tier2', function () {
 
 describe('Dispenser action handler @regression @tier2', function () {
     useDispenserHarness(bind);
+
+    describe('Format 0 - separate hub-copy oracle prices', function () {
+        it('validates Mode 2 from the hub copy when the local database has no price rows', async function () {
+            const localDb = indexer.indexerDb;
+            localDb.getOraclePrice = sinon.stub().resolves(null);
+            localDb.getOraclePricesInTimeRange = sinon.stub().rejects(
+                new Error("Table 'oracle_prices' doesn't exist"));
+            localDb.getPricesInTimeRange = sinon.stub().rejects(
+                new Error("Table 'price_snapshots' doesn't exist"));
+
+            const fields = {
+                ORACLE_ADDRESS: ORACLE_ADDR, GIVE_COIN: 'BTC', GIVE_TICK: 'JDOG', FIAT_CODE: 'USD'
+            };
+            const oldWiring = await indexer.util.requireEffectiveOraclePrice(
+                BLOCK_TIME, fields, localDb);
+            assert.strictEqual(oldWiring.valid, false);
+            assert.strictEqual(oldWiring.error,
+                'invalid: ORACLE_ADDRESS (no effective oracle price)');
+            localDb.getOraclePrice.resetHistory();
+
+            const hubDb = {
+                getOraclePrice: sinon.stub().resolves({ value: '0.05', fee: '0.01' }),
+                getOraclePricesInTimeRange: sinon.stub().resolves([
+                    { price: '0.05', effectiveAt: BLOCK_TIME - 3600 }
+                ]),
+                getPricesInTimeRange: sinon.stub().resolves([
+                    { price: '50000', timestamp: BLOCK_TIME - 7200 }
+                ]),
+            };
+            localDb.indexer = { hubDb };
+            actionsCtx.hubDb = hubDb;
+
+            const data = modeBData();
+            data['TX_OUTPUTS'] = [{ address: ORACLE_ADDR, value: '0.00001' }];
+            await dispenser.parse(modeBParams(), data, false);
+
+            assert.strictEqual(data['STATUS'], 'valid', data['STATUS']);
+            sinon.assert.notCalled(localDb.getOraclePrice);
+            sinon.assert.notCalled(localDb.getOraclePricesInTimeRange);
+            sinon.assert.notCalled(localDb.getPricesInTimeRange);
+            sinon.assert.calledTwice(hubDb.getOraclePrice);
+            sinon.assert.calledOnce(hubDb.getOraclePricesInTimeRange);
+            assert.ok(hubDb.getPricesInTimeRange.callCount >= 2);
+        });
+    });
+});
+
+describe('Dispenser action handler @regression @tier2', function () {
+    useDispenserHarness(bind);
     beforeEach(settleablePrices);
 
     describe('Format 0 - oracle usage fee', function () {

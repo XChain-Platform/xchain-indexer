@@ -275,7 +275,7 @@ module.exports = {
         const retractionIds = stagedRetractions.map(r => r.pushType + '#' + r.id);
         const sweeps        = (this.sweepStats || []).map(s =>
             s.table + ' ' + s.ms + 'ms ' + (s.rows === null ? '?' : s.rows) + ' rows');
-        getLogger().info('Rollback complete: to block ' + block_index +
+        getLogger().warn('Rollback complete: to block ' + block_index +
             ', action range [' + firstActionIndex + ', ' + lastActionIndex + ']' +
             ', staged retractions ' + (retractionIds.length ? retractionIds.join(', ') : 'none') +
             ', sweeps [' + (sweeps.length ? sweeps.join('; ') : 'none') + ']' +

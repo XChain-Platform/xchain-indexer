@@ -19,14 +19,21 @@
  * PARAMS:
  * - VERSION            -  Format Version
  * - TYPE               -  List type (1=TICK, 2=ADDRESS)
+ * - NAME               -  An optional list name
+ * - DESCRIPTION        -  An optional list description
  * - MEMO               -  An optional memo to include
  * - ITEM               -  Any valid `TICK` or `ADDRESS`
  * - EDIT               -  Edit action (1=ADD, 2=REMOVE)
  * - LIST_ACTION_INDEX  -  `ACTION_INDEX` of existing `LIST`
+ * - DESTINATION        -  New owner address for a transferred list
  *
  * FORMATS:
  * - 0 = Create LIST
  * - 1 = Edit LIST
+ * - 2 = Share LIST
+ * - 3 = Transfer LIST
+ * - 4 = Create LIST with metadata
+ * - 5 = Set LIST metadata
  *
  * MEMO sits BEFORE the ITEM tail rather than last, where every other action
  * puts it. That placement is forced, not a style choice: ITEM is variadic, so a
@@ -47,6 +54,7 @@ const { planListRematch } = require('../consensus/list_rematch/plan.js');
 const addressRefPart = require('./list/address_ref.js');
 const feesPart       = require('./list/fees.js');
 const itemsPart      = require('./list/items.js');
+const metaPart       = require('./list/meta.js');
 const ownerPart      = require('./list/owner.js');
 const sharePart      = require('./list/share.js');
 const storePart      = require('./list/store.js');
@@ -82,11 +90,13 @@ class List {
         this.itemStartIndex[0] = 3;   // VERSION|TYPE|MEMO|...
         this.itemStartIndex[1] = 4;   // VERSION|EDIT|LIST_ACTION_INDEX|MEMO|...
 
-        for(const spec of [this.shareFormat(), this.transferFormat()]){
+        for(const spec of [this.shareFormat(), this.transferFormat(),
+                           this.createMetaFormat(), this.setMetaFormat()]){
             if(!spec) continue;
-            this.formats[spec.format] = spec.fields;
-            this.formatGates[spec.format] = spec.gate;
-            this.itemStartIndex[spec.format] = spec.fields.split('|').indexOf('ITEM');
+            if(spec.format==4 || spec.format==5)
+                this.deferFormat(spec);
+            else
+                this.installFormat(spec);
         }
 
         // Define array of list types (1=Tick, 2=Address)
@@ -132,6 +142,11 @@ class List {
         if(!error)
             data = this.util.setActionParams(data, params, this.formats, format);
 
+        if(format!=4 && format!=5){
+            delete data['NAME'];
+            delete data['DESCRIPTION'];
+        }
+
         // Convert NUMBER fields from string value to number value so comparisons are mathematical
         if(!error)
             data = this.util.setNumberFormats(data);
@@ -155,7 +170,7 @@ class List {
         let changes = 0;
 
         // Handle building out some data arrays using list items
-        if(!error && (format==0 || format==1)){
+        if(!error && (this.isCreateFormat(format) || this.isEditFormat(format))){
 
             await this.collectEditItems(data, format, params, edit);
 
@@ -183,11 +198,12 @@ class List {
     }
 
     async rematchMarkets(data, format, status){
-        if(format>1 || status!='valid' || data['TYPE']!=2 ||
+        if((!this.isCreateFormat(format) && !this.isEditFormat(format)) ||
+           status!='valid' || data['TYPE']!=2 ||
            !gateRegistry.activeAt('list_change_rematch_activation.LIST_CHANGE_REMATCH_ACTIVATION', this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null))
             return;
 
-        let listRoot = (format==0) ? data['ACTION_INDEX'] : data['LIST_ACTION_INDEX'];
+        let listRoot = this.isCreateFormat(format) ? data['ACTION_INDEX'] : data['LIST_ACTION_INDEX'];
         let orderIndexes = await getOpenOrdersByList(this.indexerDb, listRoot);
         let swapIndexes = await getOpenSwapsByList(this.indexerDb, listRoot);
         let plan = planListRematch(data, orderIndexes, swapIndexes);
@@ -196,10 +212,28 @@ class List {
     }
 
     isFormatActive(format, data){
-        if(format===null || this.formats[format] === undefined)
+        if(format===null)
+            return false;
+        let fields = this.formats[format];
+        if(fields === undefined && (format==4 || format==5)){
+            let spec = format==4 ? this.createMetaFormat() : this.setMetaFormat();
+            if(gateRegistry.activeAt(spec.gate, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null)){
+                this.installFormat(spec);
+                fields = spec.fields;
+            }
+        }
+        if(fields === undefined)
             return false;
         let gate = this.formatGates[format];
         return !gate || gateRegistry.activeAt(gate, this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null);
+    }
+
+    isCreateFormat(format){
+        return [0, 4].includes(Number(format));
+    }
+
+    isEditFormat(format){
+        return Number(format) === 1;
     }
 
     isTypeActive(type, data){
@@ -209,10 +243,13 @@ class List {
 
     async validateFormatRules(data, format, list, error){
         error = await this.validateShare(data, format, list, error);
-        return this.validateTransfer(data, format, list, error);
+        error = await this.validateTransfer(data, format, list, error);
+        return this.validateMeta(data, format, error);
     }
 
     async validateResult(data, format, list, changes, error){
+        if(format==5)
+            return error;
         error = await this.validateSharedEdit(data, format, list, changes, error);
         return this.validateUnionResult(data, format, list, changes, error);
     }
@@ -225,7 +262,7 @@ class List {
         let list = [];
 
         // Validate TYPE
-        if(!error && format==0 && !this.isTypeActive(data['TYPE'], data))
+        if(!error && this.isCreateFormat(format) && !this.isTypeActive(data['TYPE'], data))
             error = 'invalid: TYPE (unknown)';
 
         // Validate EDIT
@@ -233,19 +270,19 @@ class List {
             error = 'invalid: EDIT (unknown)';
 
         // Parse in the list type (if any)
-        if(!error && format>0){
+        if(!error && !this.isCreateFormat(format)){
             let getStoredType = this.indexerDb.getListStoredType || this.indexerDb.getListType;
             type = await getStoredType.call(this.indexerDb, data['LIST_ACTION_INDEX'], data['BLOCK_INDEX']);
         }
 
         // Validate LIST_ACTION_INDEX
-        if(!error && format>0 && type===false){
+        if(!error && !this.isCreateFormat(format) && type===false){
             error = 'invalid: LIST_ACTION_INDEX (unknown)';
             data['LIST_ACTION_INDEX'] = null;
         }
 
         // Lookup list information
-        if(!error && format>0){
+        if(!error && !this.isCreateFormat(format)){
             data['TYPE'] = type;
             // Normalize LIST_ACTION_INDEX to the CREATE that roots the edit chain,
             // so every edit of a list hangs off the same parent and the "newest
@@ -254,12 +291,13 @@ class List {
             // never sees, and the change would be silently lost. Flag-day gated with
             // the resolution change itself: below the height the wire value is
             // stored verbatim, as it always was.
-            if(this.indexerDb.isListEditResolutionActive(data['BLOCK_INDEX']))
+            if(format==5 || this.indexerDb.isListEditResolutionActive(data['BLOCK_INDEX']))
                 data['LIST_ACTION_INDEX'] = await this.indexerDb.getListRootIndex(data['LIST_ACTION_INDEX']);
             // Reads the CURRENT membership (the head of the edit chain), so edits
             // compose: an ADD after a REMOVE builds on the removal, not on the
             // create-time item set.
-            list = await this.loadListMembers(data);
+            if(format!=5)
+                list = await this.loadListMembers(data);
         }
 
         return { error, list };
@@ -312,6 +350,15 @@ class List {
             }
         }
 
+        if(!error && format==5 && !data['IS_GENESIS']){
+            let rootIndex = await this.indexerDb.getListRootIndex(data['LIST_ACTION_INDEX']);
+            let listSource = await this.listOwner(rootIndex, data);
+            if(listSource && this.bridgeRoleAddresses().indexOf(listSource) !== -1)
+                error = 'invalid: LIST_ACTION_INDEX (bridge-owned)';
+            if(!error && listSource && listSource != data['SOURCE'])
+                error = this.metaOwnerVerdict();
+        }
+
         return error;
     }
 
@@ -339,7 +386,7 @@ class List {
 
 }
 
-for(const part of [addressRefPart, feesPart, itemsPart, ownerPart, sharePart,
+for(const part of [addressRefPart, feesPart, itemsPart, metaPart, ownerPart, sharePart,
                    storePart, transferPart, unionPart]){
     const descriptors = Object.getOwnPropertyDescriptors(part);
     for(const key of Reflect.ownKeys(descriptors)) descriptors[key].enumerable = false;

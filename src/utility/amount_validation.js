@@ -76,7 +76,8 @@ module.exports = {
         // accept more. NOT yet mirrored in xchain-sdk/src/utils/utility.js, on purpose: a client
         // stricter than consensus forks the acceptance set. See the module header.
         if(!this.isNull(blockTime) &&
-           amountRepresentability.isAmountRepresentabilityActive(blockTime, this.config['NETWORK']) &&
+           amountRepresentability.isAmountRepresentabilityActive(
+               blockTime, this.config['NETWORK'], this.config['COIN']) &&
            !amountRepresentability.isRepresentableAmount(decimals, this.safeToString(amount)))
             return false;
         //</AMOUNT-REPRESENTABILITY>

@@ -63,10 +63,11 @@ function makeDb(network) {
 afterEach(function () { sinon.restore(); });
 
 describe('Database.slashContractStake() off-grid conservation guard @regression @tier1', function () {
-    it('gate is armed on regtest and on mainnet at genesis by the 2026-09-09 ruling, inert on testnet', function () {
+    it('gate is armed on regtest and on mainnet at genesis by the 2026-09-09 ruling, and on testnet at the v0.21.3 heights', function () {
         assert.strictEqual(slashGrid.isSlashGridActive(0, 'regtest', 'BTC'), true);
         assert.strictEqual(slashGrid.isSlashGridActive(9e9, 'mainnet', 'BTC'), true);
-        assert.strictEqual(slashGrid.isSlashGridActive(9e9, 'testnet', 'BTC'), false);
+        assert.strictEqual(slashGrid.isSlashGridActive(155000, 'testnet', 'BTC'), false);
+        assert.strictEqual(slashGrid.isSlashGridActive(155001, 'testnet', 'BTC'), true);
     });
 
     // The defect itself, pinned pre-activation. If this case ever goes green with a '0'
@@ -216,5 +217,14 @@ describe('Database.slashContractStake() off-grid conservation guard @regression 
             return out;
         };
         assert.deepStrictEqual(await run('regtest'), await run('testnet'));
+    });
+
+    it('deduction precision is at least the finest precision a tick can be issued with', function () {
+        const limits = {};
+        require('../../../../src/config/token_limits.js').applyTokenSupplyLimits(limits);
+        assert.ok(Number.isInteger(slashGrid.SLASH_DEDUCTION_PRECISION));
+        assert.ok(slashGrid.SLASH_DEDUCTION_PRECISION >= limits.MAX_TOKEN_DECIMALS,
+            'a tick issued finer than the deduction scale is re-rounded by the slash, so take ' +
+            'no longer equals the reduction written');
     });
 });

@@ -1,17 +1,42 @@
 'use strict';
 
-const { LIST_SHARE_TX_PREFIX, LIST_SHARE_LEG_ORDINAL } = require('./halt.js');
+const {
+    LIST_SHARE_TX_PREFIX,
+    LIST_SHARE_LEG_FORMAT,
+    LIST_SHARE_LEG_ORDINAL,
+} = require('./halt.js');
 const { LIST_EDIT_ADD, LIST_EDIT_REMOVE } = require('../bridge_settle/reasons.js');
 
-function planListShareLegs({ seq, listType, added, removed, mirrorIndex }){
+function metaField(value){
+    return typeof value === 'string' && value.length ? value : null;
+}
+
+function planListShareLegs(options){
+    const {
+        seq,
+        listType,
+        added,
+        removed,
+        mirrorIndex,
+        metaActive = false,
+        meta = null,
+        currentMeta = null,
+    } = options;
+    const hasCurrentMeta = Object.prototype.hasOwnProperty.call(options, 'currentMeta');
     if(!Number.isSafeInteger(seq) || seq <= 0)
         throw new TypeError('seq must be a positive safe integer');
     if(!Array.isArray(added)) throw new TypeError('added must be an array');
     if(!Array.isArray(removed)) throw new TypeError('removed must be an array');
 
     if(seq === 1){
+        const name = meta && typeof meta.name === 'string' ? meta.name : '';
+        const description = meta && typeof meta.description === 'string' ? meta.description : '';
+        const fields = metaActive && (name.length || description.length)
+            ? ['LIST', LIST_SHARE_LEG_FORMAT.CREATE_WITH_META,
+                String(listType), name, description, ''].concat(added)
+            : ['LIST', LIST_SHARE_LEG_FORMAT.CREATE, String(listType), ''].concat(added);
         return [{
-            fields: ['LIST', '0', String(listType), ''].concat(added),
+            fields,
             ordinal: LIST_SHARE_LEG_ORDINAL.CREATE_OR_REMOVE,
         }];
     }
@@ -22,15 +47,36 @@ function planListShareLegs({ seq, listType, added, removed, mirrorIndex }){
     const legs = [];
     if(removed.length){
         legs.push({
-            fields: ['LIST', '1', LIST_EDIT_REMOVE, String(mirrorIndex), ''].concat(removed),
+            fields: ['LIST', LIST_SHARE_LEG_FORMAT.EDIT,
+                LIST_EDIT_REMOVE, String(mirrorIndex), ''].concat(removed),
             ordinal: LIST_SHARE_LEG_ORDINAL.CREATE_OR_REMOVE,
         });
     }
     if(added.length){
         legs.push({
-            fields: ['LIST', '1', LIST_EDIT_ADD, String(mirrorIndex), ''].concat(added),
+            fields: ['LIST', LIST_SHARE_LEG_FORMAT.EDIT,
+                LIST_EDIT_ADD, String(mirrorIndex), ''].concat(added),
             ordinal: LIST_SHARE_LEG_ORDINAL.ADD,
         });
+    }
+    if(seq > 1 && hasCurrentMeta && metaActive && meta !== null){
+        const name = metaField(meta.name);
+        const description = metaField(meta.description);
+        const currentName = metaField(currentMeta && currentMeta.name);
+        const currentDescription = metaField(currentMeta && currentMeta.description);
+        if(name !== currentName || description !== currentDescription){
+            legs.push({
+                fields: [
+                    'LIST',
+                    LIST_SHARE_LEG_FORMAT.META,
+                    String(mirrorIndex),
+                    name || '-',
+                    description || '-',
+                    '',
+                ],
+                ordinal: LIST_SHARE_LEG_ORDINAL.META,
+            });
+        }
     }
     return legs;
 }

@@ -151,7 +151,7 @@ const ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME = 1787961600;
 // there is no history the rule reinterprets and a from-genesis replay is unaffected.
 const DEPLOY_DEFERRED_ASSEMBLY_MAINNET_TIME = 0;
 
-// Testnet: house UNARMED sentinel (9999999999, year 2286) at this build rung. Bitcoin
+// Testnet: ARMED at 1788868800 (pins below); it held the house UNARMED sentinel until then. Bitcoin
 // testnet4 already holds a group of exactly the shape this rule reinterprets (action 70
 // assembler, carriers 71 and 75, blocks 150679-150681): an instant at or below block
 // 150679's time would turn action 70 into a pending assembler on a fresh replay and fork
@@ -206,13 +206,13 @@ const CONTRACT_META_REQUIRED_TESTNET_TIME = 1789257600;
 // BROADCAST_FEE_LENGTH mainnet stays inert until the operator arms it.
 const BROADCAST_FEE_LENGTH_MAINNET_TIME = UNARMED;
 // BROADCAST_FEE_LENGTH testnet stays inert until the operator arms it.
-const BROADCAST_FEE_LENGTH_TESTNET_TIME = UNARMED;
+const BROADCAST_FEE_LENGTH_TESTNET_TIME = 1791061097;
 
 // D1: mainnet ships inert under the write hold and joins the genesis-arm set
 // only when that hold lifts after a fresh history count.
 const CONTROLLER_CUSTODY_GUARD_MAINNET_TIME = UNARMED;
 // D2: testnet ships inert until a release cut pins a future fleet-wide instant.
-const CONTROLLER_CUSTODY_GUARD_TESTNET_TIME = UNARMED;
+const CONTROLLER_CUSTODY_GUARD_TESTNET_TIME = 1791061097;
 
 // Arms for OWNER_WITHDRAW_OPT_IN, the rule that makes owner WITHDRAW something a
 // contract must ask for. A contract deployed at/above the flag day refuses its

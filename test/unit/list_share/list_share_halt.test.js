@@ -33,7 +33,7 @@ describe('list share halt vocabulary', function () {
         assert.match(error.message, /not met/);
     });
 
-    it('pins exactly the nine identity-valued halt reasons', function () {
+    it('pins exactly the ten identity-valued halt reasons', function () {
         const names = [
             'SCREEN',
             'SEQ_GAP',
@@ -44,6 +44,7 @@ describe('list share halt vocabulary', function () {
             'DELTA',
             'LEG',
             'NO_OWNER',
+            'META_HASH',
         ];
 
         assert.deepStrictEqual(Object.keys(LIST_SHARE_HALT_REASON), names);
@@ -61,6 +62,7 @@ describe('list share halt vocabulary', function () {
         assert.deepStrictEqual(LIST_SHARE_LEG_ORDINAL, {
             CREATE_OR_REMOVE: 0,
             ADD:              1,
+            META:             2,
         });
         assert(Object.isFrozen(LIST_SHARE_LEG_ORDINAL));
     });

@@ -253,7 +253,7 @@ class AnchorRecovery {
     // replayable row already carries the network the live gate resolved against.
     async archiveAuthorScope(v1){
         let gate = await this.db.doQuery(ARCHIVE_HEAD_GATE_SQL,
-            [foldArchiveHeadFloor(v1.network), Number(v1.match_batch_seq)]);
+            [foldArchiveHeadFloor(v1.network, 'DOGE'), Number(v1.match_batch_seq)]);
         let head = (gate && gate.length > 0) ? gate[0] : null;
         if(!head) return null;
         if(!gateRegistry.activeAt('archive_batch_author_activation.ARCHIVE_BATCH_AUTHOR_ACTIVATION', v1.network, null, Number(head.block_index_doge), null)) return null;
@@ -287,7 +287,7 @@ class AnchorRecovery {
             let rows = (scope !== null)
                 ? await this.db.doQuery(ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL, [Number(v1.match_batch_seq), scope])
                 : await this.db.doQuery(ARCHIVE_CHUNK_SET_SQL,
-                    [Number(v1.match_batch_seq), foldArchiveHeadFloor(v1.network),
+                    [Number(v1.match_batch_seq), foldArchiveHeadFloor(v1.network, 'DOGE'),
                      Number(v1.match_batch_seq)]);
             // Completeness is exact index coverage of {1..totalChunks-1}, NOT a bare chunk
             // count — byte-identical to the live head/chunk gates via archiveChunkCoverage,

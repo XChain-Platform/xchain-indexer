@@ -3,7 +3,7 @@
   "entries": {
     "amount_representability_activation": {
       "path": "src/utility/amount_representability_gate.js",
-      "hash": "0d4f17a80235e5e8ce6d5069cf87ff438d291f021f2e10ef8f4e17b7bbb8121a",
+      "hash": "8d0a7e4fbd7acbccde550e424dd4bdd5d04619992678e87f44e79eb849747e62",
       "twins": []
     },
     "anchor_reward_activation": {
@@ -52,9 +52,14 @@
       "hash": "e42336cc0b14b9f8477fb0bd61111f6bde8de31a3239b3c1915f2aefeabcbb0d",
       "twins": []
     },
+    "consensus/gates/list_meta_gate": {
+      "path": "src/consensus/gates/list_meta_gate.js",
+      "hash": "632a196da8f5e02efd9c66129b84085e3875832b0ac84a16b40475fd2d1ce813",
+      "twins": []
+    },
     "consensus_rules_digest": {
       "path": "src/consensus_rules_digest.js",
-      "hash": "beda7a4249de7e5c90fe61f6919c6cedf0c6f22440b090d8b4eb0db742265540",
+      "hash": "5fc76089117b4b42869d6bf11f2a14fa0c1842f99837bf8aaa73e6e64541efac",
       "twins": [
         "xchain-hub"
       ]
@@ -108,7 +113,7 @@
     },
     "price_scale_activation": {
       "path": "src/consensus/gates/price_scale_gate.js",
-      "hash": "18529a5b69afe0cb728caa9c05154bf8393517fdbf87fd94c3b6bbad0d27a7c1",
+      "hash": "49dd656650002b1570d1e1733f140f37f4ffd334ebeeae9daf6d9ff6f2cbf2ef",
       "twins": [
         "xchain-hub"
       ]
@@ -120,7 +125,7 @@
     },
     "protocol/constants": {
       "path": "src/protocol/constants.js",
-      "hash": "bbc15d2d47cebe6e7e77868eb90de683849de91902fb1649700a8e5756ddebbe",
+      "hash": "d6aa3dfd9859b8bb9f7197eaab17f0a23d54947f99108045b61e0c45b947b1b9",
       "twins": []
     },
     "protocol_changes": {
@@ -1885,6 +1890,41 @@
       "to": "beda7a4249de7e5c90fe61f6919c6cedf0c6f22440b090d8b4eb0db742265540",
       "reason": "append list share producer activation to shared rules digest",
       "date": "2026-10-01"
+    },
+    {
+      "id": "protocol/constants",
+      "from": "bbc15d2d47cebe6e7e77868eb90de683849de91902fb1649700a8e5756ddebbe",
+      "to": "d6aa3dfd9859b8bb9f7197eaab17f0a23d54947f99108045b61e0c45b947b1b9",
+      "reason": "LM-2 adds the list meta limits",
+      "date": "2026-10-02"
+    },
+    {
+      "id": "consensus_rules_digest",
+      "from": "beda7a4249de7e5c90fe61f6919c6cedf0c6f22440b090d8b4eb0db742265540",
+      "to": "5fc76089117b4b42869d6bf11f2a14fa0c1842f99837bf8aaa73e6e64541efac",
+      "reason": "Register the list meta digest gate",
+      "date": "2026-10-02"
+    },
+    {
+      "id": "consensus/gates/list_meta_gate",
+      "from": null,
+      "to": "632a196da8f5e02efd9c66129b84085e3875832b0ac84a16b40475fd2d1ce813",
+      "reason": "LM-8-p9 adds the list meta apply gate",
+      "date": "2026-10-02"
+    },
+    {
+      "id": "price_scale_activation",
+      "from": "18529a5b69afe0cb728caa9c05154bf8393517fdbf87fd94c3b6bbad0d27a7c1",
+      "to": "49dd656650002b1570d1e1733f140f37f4ffd334ebeeae9daf6d9ff6f2cbf2ef",
+      "reason": "v0213 cross-arming review: resolve the per-chain testnet key the cut writer inserts (X-arm-2, X-arm-3)",
+      "date": "2026-10-03"
+    },
+    {
+      "id": "amount_representability_activation",
+      "from": "0d4f17a80235e5e8ce6d5069cf87ff438d291f021f2e10ef8f4e17b7bbb8121a",
+      "to": "8d0a7e4fbd7acbccde550e424dd4bdd5d04619992678e87f44e79eb849747e62",
+      "reason": "v0213 cross-arming review: resolve the per-chain testnet key the cut writer inserts (X-arm-2, X-arm-3)",
+      "date": "2026-10-03"
     }
   ]
 }

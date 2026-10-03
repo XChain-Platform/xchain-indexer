@@ -90,7 +90,7 @@ function formatFieldValue(value) {
     if (typeof value === 'string') {
         return value !== '' && !/[\s"'=]/.test(value) ? value : JSON.stringify(value);
     }
-    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value);
     let json;
     try { json = JSON.stringify(value); } catch { json = '"[unserializable]"'; }
     if (json === undefined) json = 'null';
@@ -133,6 +133,8 @@ function formatTextLine(record) {
 // Depth-limited so a cyclic or huge object cannot stall the hot path; anything
 // past the limit becomes a type marker rather than being walked.
 function redactFields(value, depth = 0, seen = new Set()) {
+    // A decimal string keeps a BigInt amount exact; JSON.stringify throws on the raw value.
+    if (typeof value === 'bigint') return value.toString();
     if (value === null || typeof value !== 'object') return value;
     if (depth >= 4) return '[truncated]';
     if (seen.has(value)) return '[circular]';
@@ -146,6 +148,18 @@ function redactFields(value, depth = 0, seen = new Set()) {
         out[k] = SECRET_KEY_RE.test(k) ? REDACTED : redactFields(v, depth + 1, seen);
     }
     return out;
+}
+
+// One NDJSON line per record that never throws: a field that still defeats
+// JSON.stringify (a throwing toJSON) degrades to the envelope plus a marker.
+function safeStringify(record) {
+    try {
+        return JSON.stringify(record, (k, v) => (typeof v === 'bigint' ? v.toString() : v));
+    } catch {
+        const env = { serialize_error: '[unserializable]' };
+        for (const k of ENVELOPE_KEYS) if (record && record[k] !== undefined) env[k] = String(record[k]);
+        return JSON.stringify(env);
+    }
 }
 
 function toBool(v, fallback = false) {
@@ -282,7 +296,7 @@ class LogShipper {
         // Both modes carry the same record. Printing only the scrubbed message
         // here would discard every field, and the fleet runs text mode, so the
         // fields would exist nowhere an operator can reach.
-        if (this.config.format === 'json') fn.call(this.console, JSON.stringify(record));
+        if (this.config.format === 'json') fn.call(this.console, safeStringify(record));
         else fn.call(this.console, formatTextLine(record));
     }
 
@@ -304,7 +318,7 @@ class LogShipper {
         if (this.inFlight) return this.pending || Promise.resolve();
         if (this.buffer.length === 0 || !this.config.shipEnabled) return Promise.resolve();
         const batch = this.buffer.splice(0, this.config.batchSize);
-        const body  = batch.map((r) => JSON.stringify(r)).join('\n') + '\n';
+        const body  = batch.map(safeStringify).join('\n') + '\n';
         this.inFlight = true;
         this.pending = Promise.resolve()
             .then(() => this.transport(body))
@@ -357,6 +371,6 @@ function createLogShipper(opts = {}) { return new LogShipper(opts); }
 
 module.exports = {
     LogShipper, createLogShipper, readLogEnv, redactFields, scrubMessage,
-    formatTextLine, formatFieldValue, LEVELS, REDACTED,
+    formatTextLine, formatFieldValue, safeStringify, LEVELS, REDACTED,
     SECRET_KEY_RE, SECRET_INLINE_RE
 };

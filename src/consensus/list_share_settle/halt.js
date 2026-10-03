@@ -38,6 +38,16 @@ const LIST_SHARE_HALT_REASON = Object.freeze({
     DELTA:           'DELTA',
     LEG:             'LEG',
     NO_OWNER:        'NO_OWNER',
+    META_HASH:       'META_HASH',
+});
+
+const LIST_META_GATE_KEY = 'list_meta_activation.LIST_META_ACTIVATION';
+
+const LIST_SHARE_LEG_FORMAT = Object.freeze({
+    CREATE:          '0',
+    EDIT:            '1',
+    CREATE_WITH_META:'4',
+    META:            '5',
 });
 
 // 11 prefix characters plus 48 snapshot-id characters fit within the 64-character
@@ -48,11 +58,14 @@ const LIST_SHARE_TX_PREFIX = 'LIST_SHARE-';
 const LIST_SHARE_LEG_ORDINAL = Object.freeze({
     CREATE_OR_REMOVE: 0,
     ADD:              1,
+    META:             2,
 });
 
 module.exports = {
     ListShareHaltError,
     LIST_SHARE_HALT_REASON,
+    LIST_META_GATE_KEY,
+    LIST_SHARE_LEG_FORMAT,
     LIST_SHARE_TX_PREFIX,
     LIST_SHARE_LEG_ORDINAL,
 };

@@ -230,7 +230,7 @@ addGate('protocol/constants.ORACLE_VM_MAX_ROWS', 'constant', 50000);
 
 // slash_grid_activation
 // Scale the per-row deduction runs at once the rule is live. 18 is
-// MAX_TOKEN_DECIMALS (src/config.js), the finest precision any tick can be
+// MAX_TOKEN_DECIMALS (src/config/token_limits.js), the finest precision any tick can be
 // issued with, so a subtraction at this scale is exact for every stored amount
 // and the derived delta is the reduction written rather than a re-rounding of it.
 addGate('slash_grid_activation.SLASH_DEDUCTION_PRECISION', 'constant', 18);
@@ -245,9 +245,9 @@ addGate('slash_grid_activation.SLASH_GRID_ACTIVATION', 'height', {
     'DOGE:mainnet': 0,
     // Unpinned: testnet carries stake history, so its heights are pinned at
     // flag-day assembly with the replay evidence that step requires.
-    'BTC:testnet':  null,
-    'LTC:testnet':  null,
-    'DOGE:testnet': null,
+    'BTC:testnet':  155001,
+    'LTC:testnet':  4906040,
+    'DOGE:testnet': 67962387,
     regtest: 0,
 });
 
@@ -263,9 +263,9 @@ addGate('slash_ledger_consolidation_activation.SLASH_LEDGER_CONSOLIDATION_ACTIVA
     'DOGE:mainnet': 0,
     // Unpinned: testnet carries stake history, so its heights are pinned at
     // flag-day assembly with the replay evidence that step requires.
-    'BTC:testnet':  null,
-    'LTC:testnet':  null,
-    'DOGE:testnet': null,
+    'BTC:testnet':  155001,
+    'LTC:testnet':  4906040,
+    'DOGE:testnet': 67962387,
     regtest: 0,
 });
 

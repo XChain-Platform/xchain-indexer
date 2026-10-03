@@ -29,6 +29,7 @@ process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
+const { createMockIndexer } = require('../../../fixtures/mocks');
 const {
     activation, GATE_OFF_NETWORK, BLOCK_TIME, withRegtestThreshold,
 } = require('./amount_representability.test/helpers/amount_representability_suite.js');
@@ -104,4 +105,33 @@ function rejectedRepresentableAmountCases() {
 describe('Amount representability @regression @tier1', function () {
     describe('activation module', activationModuleCases);
     describe('isRepresentableAmount() rule', rejectedRepresentableAmountCases);
+});
+
+describe('Amount representability post-arm coin thresholds', function () {
+    const instant = 1791061097;
+    const unarmed = 9999999999;
+    const saved = {};
+
+    beforeEach(function () {
+        const table = activation.AMOUNT_REPRESENTABILITY_ACTIVATION;
+        for(const key of Object.keys(table)) saved[key] = table[key];
+        table.testnet = unarmed;
+        for(const coin of ['BTC', 'LTC', 'DOGE']) table[coin + ':testnet'] = instant;
+    });
+
+    afterEach(function () {
+        const table = activation.AMOUNT_REPRESENTABILITY_ACTIVATION;
+        for(const key of Object.keys(table)) delete table[key];
+        Object.assign(table, saved);
+        for(const key of Object.keys(saved)) delete saved[key];
+    });
+
+    for(const coin of ['BTC', 'LTC', 'DOGE']){
+        it('activates ' + coin + ' exactly at its armed testnet instant', function () {
+            const indexer = createMockIndexer();
+            Object.assign(indexer.util.config, { COIN: coin, NETWORK: 'testnet' });
+            assert.strictEqual(indexer.util.isValidAmountFormat(8, '1e2', instant - 1), true);
+            assert.strictEqual(indexer.util.isValidAmountFormat(8, '1e2', instant), false);
+        });
+    }
 });

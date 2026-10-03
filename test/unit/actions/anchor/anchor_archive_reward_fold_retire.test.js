@@ -31,7 +31,7 @@ function makeContext() {
         reconcileAnchorRewardWinner: sinon.stub().resolves(1),
     };
     return {
-        handler: { config: { NETWORK: 'regtest' }, indexerDb },
+        handler: { config: { COIN: 'DOGE', NETWORK: 'regtest' }, indexerDb },
         indexerDb,
         data: {
             NETWORK: 'regtest', BLOCK_INDEX: '8400', ACTION_INDEX: '9',
@@ -54,7 +54,7 @@ describe('ANCHOR archive reward fold retirement', function () {
 
         await settle.creditArchiveReward(handler, data, true, snapPubkeys, 1);
 
-        assert.ok(foldGate.calledOnceWith(FOLD_GATE_KEY, 'regtest', null, 8400, null));
+        assert.ok(foldGate.calledOnceWith(FOLD_GATE_KEY, 'regtest', 'DOGE', 8400, null));
         assert.strictEqual(indexerDb.createValidatorReward.called, false);
         assert.strictEqual(indexerDb.reconcileAnchorRewardWinner.called, false);
         assert.ok(warn.calledOnceWith('\t ANCHOR v1 : archive reward is retired at the fold; reward skipped'));
@@ -67,7 +67,7 @@ describe('ANCHOR archive reward fold retirement', function () {
 
         await settle.creditArchiveReward(handler, data, true, snapPubkeys, 1);
 
-        assert.ok(foldGate.calledOnceWith(FOLD_GATE_KEY, 'regtest', null, 8400, null));
+        assert.ok(foldGate.calledOnceWith(FOLD_GATE_KEY, 'regtest', 'DOGE', 8400, null));
         assert.deepStrictEqual(indexerDb.createValidatorReward.firstCall.args,
             [PUBLISHER, 3, 'anchor_archive', ar.ARCHIVE_REWARD_AMOUNT, 8100, true, null, 8100]);
         assert.deepStrictEqual(indexerDb.reconcileAnchorRewardWinner.firstCall.args,

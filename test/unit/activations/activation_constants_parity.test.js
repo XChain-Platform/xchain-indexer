@@ -154,31 +154,31 @@ const GATES = [
     // on a bridged copy while another still admits the transfer, from the same signed row.
     // Both ordering invariants it owes are asserted separately below.
     ['token_policy_activation.js',         'TOKEN_POLICY_INHERITANCE_ACTIVATION'],
-    // The LIST owner check. It re-verdicts every historical third-party LIST edit,
-    // and list_items is a hashed DERIVED table, so a one-sided edit forks the chain at the
-    // boundary in the most ordinary traffic there is.
+    // The LIST owner check re-verdicts every historical third-party LIST edit; list_items is
+    // hashed DERIVED, so a one-sided edit forks ordinary traffic at the boundary.
     ['list_owner_activation',              'LIST_OWNER_ACTIVATION'],
     ['list_share_producer_activation',     'LIST_SHARE_PRODUCER_ACTIVATION'],
     ['list_share_consumer_activation',     'LIST_SHARE_CONSUMER_ACTIVATION'],
+    ['list_meta_activation',               'LIST_META_ACTIVATION'],
     ['list_share_activation',              'LIST_SHARE_ACTIVATION'],
     ['list_union_activation',              'LIST_UNION_ACTIVATION'],
     ['list_transfer_activation',           'LIST_TRANSFER_ACTIVATION'],
     ['list_address_ref_activation',        'LIST_ADDRESS_REF_ACTIVATION'],
     ['list_tick_coin_activation',          'LIST_TICK_COIN_ACTIVATION'],
-    // Not activation MAPS but the consensus constants the bridge and policy passes read: the
-    // per-block caps decide WHICH rows land in WHICH block (an action-index change, so a hash
-    // change), and XPOLICY_MAX_MEMBERS decides which opt-in is refused. A one-sided edit to any
-    // of the three diverges two nodes running the same flag day.
+    // Consensus constants the bridge and policy passes read: the caps decide WHICH rows land
+    // in WHICH block and which opt-in is refused, so a one-sided edit diverges two nodes on
+    // the same flag day.
     ['protocol/constants.js',              'XBRIDGE_MAX_PER_BLOCK'],
     ['protocol/constants.js',              'XPOLICY_MAX_PER_BLOCK'],
     ['protocol/constants.js',              'XPOLICY_MAX_MEMBERS'],
     // The shared-list and union caps decide whether the same LIST action is admitted.
     ['protocol/constants.js',              'LIST_SHARE_MAX_MEMBERS'],
+    ['protocol/constants.js',              'LIST_META_NAME_MAX_BYTES'],
+    ['protocol/constants.js',              'LIST_META_DESCRIPTION_MAX_BYTES'],
     ['protocol/constants.js',              'LIST_UNION_MAX_MEMBERS'],
-    // The tick-namespace flag day. It re-verdicts nothing below itself, but at
-    // the boundary it decides whether an ISSUE of a short or listed name is 'invalid: TICK
-    // (length)' / 'invalid: TICK (reserved)' or a live token row, so a one-sided height edit
-    // has one node holding a root the next node just sold.
+    // The tick-namespace flag day re-verdicts nothing below itself, but at the boundary it
+    // decides whether an ISSUE is invalid or a live token row, so a one-sided height edit has
+    // one node holding a root the next node just sold.
     ['tick_namespace_activation',          'TICK_NAMESPACE_ACTIVATION'],
     // Not an activation MAP but the reserved SET that gate reads, and the list equality is the
     // point: membership decides a verdict, so a name present on one side and absent on the

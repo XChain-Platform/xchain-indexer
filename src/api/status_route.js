@@ -137,7 +137,11 @@ function statusBody(XChainIndexer, indexer, { indexerBlock, inFlightBlock, decod
         lastHubConfigFetchAt: lastHubConfigFetchAt,
         hubConfigAgeSeconds:  hubConfigAgeSeconds,
         hubConfigStale:       hubConfigStale,
-        hubMirror:            hubMirror
+        hubMirror:            hubMirror,
+        // Block-poll loop liveness, appended last so no key a monitor reads moves. Reported for the fleet
+        // watcher to page on, never folded into the 503 above (see health/advance_fields.js).
+        pollSilent:           (typeof indexer.isPollSilent === 'function') ? indexer.isPollSilent() : false,
+        lastPollAt:           indexer.lastPollAt || null
     };
 }
 

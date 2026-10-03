@@ -22,7 +22,8 @@
  *
  ********************************************************************/
 
-const { assert, fs, path, Database, requireWithFreshConfig, DB_PATH, modeOf, BRIDGE_TABLES_PROBE, bridgeTablesPresent } = require('./helpers/migration_fixtures.js');
+const { assert, fs, path, Database, requireWithFreshConfig, DB_PATH, modeOf, BRIDGE_TABLES_PROBE, bridgeTablesPresent,
+        LIST_SHARE_TABLES_PROBE, listShareTablesPresent } = require('./helpers/migration_fixtures.js');
 
 
 const crypto  = require('crypto');
@@ -195,6 +196,7 @@ describe('runMigrations() backdated-migration guard @regression @tier1', functio
                 }
                 // Bare-ledger harness, live-schema question: see BRIDGE_TABLES_PROBE above.
                 if (BRIDGE_TABLES_PROBE.test(sql)) return bridgeTablesPresent();
+                if (LIST_SHARE_TABLES_PROBE.test(sql)) return listShareTablesPresent();
                 if (/^INSERT INTO schema_migrations/i.test(sql.trim())) { applied.push(params[0]); return []; }
                 if (/^UPDATE schema_migrations/i.test(sql.trim()))                 return [];
                 executed.push(sql);

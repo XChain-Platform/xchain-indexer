@@ -30,7 +30,7 @@ const VERDICT_GATE = 'archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT
 
 function makeHandler(crc = '87654321', matchCount = 1) {
     return {
-        config: { NETWORK: 'regtest' },
+        config: { COIN: 'DOGE', NETWORK: 'regtest' },
         indexerDb: {
             getAnchorChunks: sinon.stub().resolves([
                 { chunk_index: 1, archive_b64: 'continuation' },
@@ -42,6 +42,18 @@ function makeHandler(crc = '87654321', matchCount = 1) {
         archiveMatchCount: sinon.stub().returns(matchCount),
         archiveAuthorScope: sinon.stub().resolves(null),
     };
+}
+
+function armCoinThresholds(keys, threshold) {
+    const original = gateRegistry.registry.read.bind(gateRegistry.registry);
+    const tables = new Map(keys.map(key => [key, Object.assign({}, gateRegistry.get(key), {
+        testnet: 9999999999,
+        'BTC:testnet': threshold,
+        'LTC:testnet': threshold,
+        'DOGE:testnet': threshold,
+    })]));
+    sinon.stub(gateRegistry.registry, 'read').callsFake(
+        key => tables.has(key) ? tables.get(key) : original(key));
 }
 
 function headData() {
@@ -96,9 +108,9 @@ describe('ANCHOR folded archive verdict scope', function () {
             await reassemble(handler, side === 'chunk' ? '3' : 3);
             assertStamp(handler, true);
             assert.ok(gateRegistry.activeAt.calledWith(
-                VERDICT_GATE, 'regtest', null, 100, null));
+                VERDICT_GATE, 'regtest', 'DOGE', 100, null));
             assert.ok(gateRegistry.activeAt.calledWith(
-                FOLD_GATE, 'regtest', null, 100, null));
+                FOLD_GATE, 'regtest', 'DOGE', 100, null));
         });
 
         it(side + ' scopes a v3 MATCH_COUNT failure with both gates active', async function () {
@@ -128,4 +140,29 @@ describe('ANCHOR folded archive verdict scope', function () {
             assertStamp(handler, false);
         });
     }
+});
+
+describe('ANCHOR folded archive verdict post-arm coin thresholds', function () {
+    const height = 67962387;
+
+    afterEach(function () { sinon.restore(); });
+
+    it('activates both DOGE testnet gates exactly at the armed height', async function () {
+        armCoinThresholds([VERDICT_GATE, FOLD_GATE], height);
+        const below = makeHandler();
+        below.config.NETWORK = 'testnet';
+        const belowData = headData();
+        belowData.NETWORK = 'testnet';
+        belowData.BLOCK_INDEX = height - 1;
+        await reassembly.reassembleAtHead(below, belowData, null, 3);
+        assertStamp(below, false);
+
+        const active = makeHandler();
+        active.config.NETWORK = 'testnet';
+        const activeData = headData();
+        activeData.NETWORK = 'testnet';
+        activeData.BLOCK_INDEX = height;
+        await reassembly.reassembleAtHead(active, activeData, null, 3);
+        assertStamp(active, true);
+    });
 });

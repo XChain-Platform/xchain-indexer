@@ -334,16 +334,16 @@ module.exports.BATCH_ROOT_SUB_INDEX_MAINNET_TIME = BATCH_ROOT_SUB_INDEX_MAINNET_
 // (2026-08-29T00:00:00Z) instant rather than a retroactive or drifted value.
 module.exports.ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME = ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME;
 module.exports.ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME = ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME;
-// Genesis-active mainnet arm + UNARMED testnet sentinel for deferred chunked-DEPLOY
-// assembly, exported so the suite can assert mainnet is at 0 (no chunked-DEPLOY history on
-// any mainnet chain) and that testnet still waits on the shipping release to pin an instant
-// above Bitcoin testnet4's recorded out-of-order group at blocks 150679-150681.
+// Genesis-active mainnet arm + ARMED testnet instant for deferred chunked-DEPLOY assembly,
+// exported for the suite: mainnet is at 0 (no chunked-DEPLOY history on any mainnet chain)
+// and testnet is armed at 1788868800 (2026-09-08T12:00:00Z), above Bitcoin testnet4's
+// recorded out-of-order group at blocks 150679-150681 (pin history in flag_times.js).
 module.exports.DEPLOY_DEFERRED_ASSEMBLY_MAINNET_TIME = DEPLOY_DEFERRED_ASSEMBLY_MAINNET_TIME;
 module.exports.DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME = DEPLOY_DEFERRED_ASSEMBLY_TESTNET_TIME;
-// Genesis-active mainnet arm + UNARMED testnet sentinel for the required contract meta
-// export, exported so the suite can assert mainnet is at 0 (no mainnet contracts) and that
-// testnet still waits on the shipping release to pin an instant above the 9 recorded TBTC
-// contracts, none of which exports a meta-shaped object.
+// Genesis-active mainnet arm + ARMED testnet instant for the required contract meta export,
+// exported so the suite can assert mainnet is at 0 (no mainnet contracts) and that testnet
+// is armed at 1789257600 (2026-09-13T00:00:00Z), above the 9 recorded TBTC contracts, none
+// of which exports a meta-shaped object (arming record in flag_times.js).
 module.exports.CONTRACT_META_REQUIRED_MAINNET_TIME = CONTRACT_META_REQUIRED_MAINNET_TIME;
 module.exports.CONTRACT_META_REQUIRED_TESTNET_TIME = CONTRACT_META_REQUIRED_TESTNET_TIME;
 module.exports.BROADCAST_FEE_LENGTH_MAINNET_TIME = BROADCAST_FEE_LENGTH_MAINNET_TIME;
@@ -358,10 +358,10 @@ Object.assign(module.exports, { OWNER_WITHDRAW_OPT_IN_MAINNET_TIME, OWNER_WITHDR
 module.exports.BATCH_ISSUANCE_LIMITS_MAINNET_TIME = BATCH_ISSUANCE_LIMITS_MAINNET_TIME;
 module.exports.BATCH_COST_WEIGHTING_MAINNET_TIME = BATCH_COST_WEIGHTING_MAINNET_TIME;
 module.exports.EMISSION_ISSUANCE_LIMITS_MAINNET_TIME = EMISSION_ISSUANCE_LIMITS_MAINNET_TIME;
-// UNARMED mainnet AND testnet sentinels for UNIFIED_FEES_SWEEP_CALLBACK, exported so the
-// suite can assert both stay unarmed until an operator arms them, and that neither is ever
-// backdated. Testnet carries its own sentinel because testnet is a live public ledger; see
-// the constants' comment.
+// Genesis-active mainnet arm (0) + ARMED testnet instant (1790812800, 2026-10-01T00:00:00Z)
+// for UNIFIED_FEES_SWEEP_CALLBACK, exported so the suite can assert neither slot holds the
+// UNARMED sentinel and the testnet arm is never backdated. Testnet carries its own instant
+// because testnet is a live public ledger; see the constants' comment.
 module.exports.UNIFIED_FEES_SWEEP_CALLBACK_MAINNET_TIME = UNIFIED_FEES_SWEEP_CALLBACK_MAINNET_TIME;
 module.exports.UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME = UNIFIED_FEES_SWEEP_CALLBACK_TESTNET_TIME;
 // The registry API. get() throws RegistryMissError on a miss, never null, and

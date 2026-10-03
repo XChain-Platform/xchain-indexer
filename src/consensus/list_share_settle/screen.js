@@ -16,7 +16,9 @@
 
 const { LIST_SHARE_HALT_REASON } = require('./halt.js');
 const { deriveListSnapshotId } = require('./canonical.js');
+const { listMetaHash } = require('../list_share_hash.js');
 const { parseMembership, verifyMembershipOrder } = require('../bridge_settle/policy_membership.js');
+const { metaFieldVerdict } = require('../../actions/list/meta_rules.js');
 
 const HOME_CHAINS = new Set(['BTC', 'LTC', 'DOGE']);
 
@@ -50,6 +52,37 @@ function admissionColumns(row){
         map[coin] = height;
     }
     return Object.keys(map).length ? map : null;
+}
+
+function screenListMeta(row, metaActive){
+    row = row && typeof row === 'object' ? row : {};
+    const name = row.name ?? null;
+    const description = row.description ?? null;
+    const metaHash = row.meta_hash ?? null;
+
+    if(!metaActive){
+        if(name !== null || description !== null || metaHash !== null)
+            return { halt: LIST_SHARE_HALT_REASON.META_HASH, detail: 'meta_below_gate' };
+        return { fields: { name: null, description: null, meta_hash: null } };
+    }
+
+    if(name !== null && (name === '' || metaFieldVerdict('name', name, 64, true)))
+        return { halt: LIST_SHARE_HALT_REASON.META_HASH, detail: 'name' };
+    if(description !== null &&
+       (description === '' || metaFieldVerdict('description', description, 512, true)))
+        return { halt: LIST_SHARE_HALT_REASON.META_HASH, detail: 'description' };
+    if(typeof metaHash !== 'string' || metaHash !== listMetaHash(name, description))
+        return { halt: LIST_SHARE_HALT_REASON.META_HASH, detail: 'meta_hash' };
+
+    return { fields: { name, description, meta_hash: metaHash } };
+}
+
+function screenListMetaWithDeps(deps, row, snapshotBlock, network, fields){
+    if(typeof deps.isListMetaActive !== 'function')
+        return { fields };
+    const screened = screenListMeta(row, deps.isListMetaActive(snapshotBlock, network) === true);
+    if(screened.halt) return screened;
+    return { fields: Object.assign(fields, screened.fields) };
 }
 
 function screenListSnapshotWithDeps(deps, row, ctx){
@@ -111,31 +144,33 @@ function screenListSnapshotWithDeps(deps, row, ctx){
     if(!admitBlocks || !Object.prototype.hasOwnProperty.call(admitBlocks, ctx.coin))
         return halt('admit_block_' + String(ctx.coin || '').toLowerCase());
 
-    return {
-        fields: {
-            snapshot_id: snapshotId,
-            snapshot_block: snapshotBlock,
-            home_chain: homeChain,
-            home_list_index: homeListIndex,
-            list_type: listType,
-            seq,
-            kind,
-            origin_block: originBlock,
-            added,
-            removed,
-        }
-    };
+    return screenListMetaWithDeps(deps, row, snapshotBlock, network, {
+        snapshot_id: snapshotId,
+        snapshot_block: snapshotBlock,
+        home_chain: homeChain,
+        home_list_index: homeListIndex,
+        list_type: listType,
+        seq,
+        kind,
+        origin_block: originBlock,
+        added,
+        removed,
+    });
 }
 
 function screenListSnapshot(row, ctx){
     return screenListSnapshotWithDeps({ ah: { columnsAdmitBlocks: admissionColumns } }, row, ctx);
 }
 
-function createScreen({ ah }){
-    const deps = { ah };
+function createScreen({ ah, isListMetaActive }){
+    const deps = { ah, isListMetaActive };
     return {
         screenListSnapshot: screenListSnapshotWithDeps.bind(null, deps),
+        wireListMetaGate(reader){
+            if(typeof deps.isListMetaActive !== 'function')
+                deps.isListMetaActive = reader;
+        },
     };
 }
 
-module.exports = { createScreen, screenListSnapshot };
+module.exports = { createScreen, screenListSnapshot, screenListMeta };

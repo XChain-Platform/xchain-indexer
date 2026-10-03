@@ -24,7 +24,41 @@ const { injectListShareLegs } = require('./inject.js');
 const { listShareTarget } = require('./target.js');
 const { verifyMirrorMembers } = require('./reread.js');
 const { recordListShareApplied } = require('./record.js');
-const { ListShareHaltError, LIST_SHARE_HALT_REASON } = require('./halt.js');
+const gateRegistry = require('../gate_registry.js');
+const {
+    ListShareHaltError,
+    LIST_SHARE_HALT_REASON,
+    LIST_META_GATE_KEY,
+} = require('./halt.js');
+
+function isListMetaActive(snapshotBlock, network){
+    return gateRegistry.activeAt(
+        LIST_META_GATE_KEY,
+        network,
+        'BTC',
+        snapshotBlock,
+        null
+    );
+}
+
+function isListMetaApplyActive(coin, network, blockIndex){
+    return gateRegistry.activeAt(
+        LIST_META_GATE_KEY,
+        network,
+        coin,
+        blockIndex,
+        null
+    );
+}
+
+function wireListMetaConsumer(deps){
+    if(typeof deps.isListMetaApplyActive === 'function') return;
+    if(!deps.canonical || typeof deps.canonical.wireListMetaGate !== 'function') return;
+    if(!deps.screen || typeof deps.screen.wireListMetaGate !== 'function') return;
+    deps.canonical.wireListMetaGate(isListMetaActive);
+    deps.screen.wireListMetaGate(isListMetaActive);
+    deps.isListMetaApplyActive = isListMetaApplyActive;
+}
 
 function halt(reason, row, detail){
     throw new ListShareHaltError(reason, row.snapshot_id, detail);
@@ -54,6 +88,31 @@ function plannedMembership(row, current, fields){
     return next.membership;
 }
 
+async function plannedLegs(deps, fields, mirrorIndex, ctx){
+    const options = {
+        seq: fields.seq,
+        listType: fields.list_type,
+        added: fields.added,
+        removed: fields.removed,
+        mirrorIndex,
+    };
+    if(typeof deps.isListMetaApplyActive !== 'function' ||
+       deps.isListMetaApplyActive(ctx.coin, ctx.network, ctx.blockIndex) !== true)
+        return planListShareLegs(options);
+
+    const meta = typeof fields.meta_hash === 'string'
+        ? { name: fields.name, description: fields.description }
+        : null;
+    const currentMeta = mirrorIndex === null
+        ? null
+        : await ctx.indexerDb.getListMeta(mirrorIndex, ctx.blockIndex);
+    return planListShareLegs(Object.assign(options, {
+        metaActive: true,
+        meta,
+        currentMeta,
+    }));
+}
+
 async function applyListShareSnapshot(deps, row, ctx){
     const fields = screenedFields(deps, row, ctx);
     await verifySnapshotQuorum(deps, row, ctx, fields);
@@ -64,13 +123,7 @@ async function applyListShareSnapshot(deps, row, ctx){
     });
     const membership = plannedMembership(row, target.current, fields);
     const mirrorIndex = target.mirror ? Number(target.mirror.action_index) : null;
-    const legs = planListShareLegs({
-        seq: fields.seq,
-        listType: fields.list_type,
-        added: fields.added,
-        removed: fields.removed,
-        mirrorIndex,
-    });
+    const legs = await plannedLegs(deps, fields, mirrorIndex, ctx);
 
     ctx.util.resetLists();
     const injected = await injectListShareLegs(ctx, {
@@ -99,6 +152,7 @@ async function applyListShareSnapshot(deps, row, ctx){
 }
 
 module.exports = function createApply(deps){
+    wireListMetaConsumer(deps);
     return {
         applyListShareSnapshot: (row, ctx) => applyListShareSnapshot(deps, row, ctx),
     };

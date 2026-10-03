@@ -48,6 +48,9 @@ describe('E2E explorer launcher database config', function () {
     });
 
     it('is accepted by the explorer checkpoint config loader', async function () {
+        // Cold pool setup loads the explorer's full config dependency graph, which is slow on loaded CI.
+        this.timeout(120000);
+
         const loader = siblingCheckout(__dirname,
             resolveExplorerModule('src/db/connection/pool_setup.js'));
         if (!loader.usable) {

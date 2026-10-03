@@ -23,7 +23,9 @@
  * comment. The bridge_settlements methods run on the LOCAL indexer db, because a
  * mirrored row can be retracted later and so cannot answer "did this chain already
  * apply it?". The bridge_transfers and policy_snapshots methods are called on the
- * MIRROR instance (db.mirrorDb()), which is where those rows live.
+ * MIRROR instance (db.mirrorDb()), which is where those rows live. The MIRROR reads use
+ * doQueryStrict: the hub mirror never holds a transaction, so doQuery would turn a DB fault
+ * into an empty set on this node alone and settle nothing while peers settle.
  *
  ********************************************************************/
 
@@ -94,7 +96,7 @@ module.exports = {
     // seq order. effective_time is not monotonic across seq, so an earlier seq can come due at
     // a later block; this read is what carries a row forward until its predecessors are in.
     async getEarlierFinalizedPolicySnapshots(network, originChain, tick, seq){
-        return await this.doQuery(
+        return await this.doQueryStrict(
             `SELECT snapshot_id FROM policy_snapshots
          WHERE status = 'finalized' AND network = ? AND origin_chain = ? AND tick = ? AND policy_seq < ?
          ORDER BY policy_seq ASC`,
@@ -113,7 +115,7 @@ module.exports = {
     // which is per-hub: two indexers mirroring different hubs must settle the same prefix, and
     // an id-ordered query would give them different ones.
     async getFinalizedBridgeTransfersForChain(network, destChain, bind){
-        return await this.doQuery(
+        return await this.doQueryStrict(
             `SELECT * FROM bridge_transfers
          WHERE status = 'finalized' AND network = ? AND ${bind.sql} AND dest_chain = ?
          ORDER BY snapshot_block ASC, transfer_id ASC`,
@@ -127,7 +129,7 @@ module.exports = {
     // NULL and binds by the clock, which is the fail-closed direction for a chain added later.
     // The caller sorts; see duePolicySnapshots for why the total order cannot be expressed here.
     async getFinalizedPolicySnapshots(network, bind){
-        return await this.doQuery(
+        return await this.doQueryStrict(
             `SELECT * FROM policy_snapshots
          WHERE status = 'finalized' AND network = ? AND ${bind.sql}`,
             [String(network)].concat(bind.args));

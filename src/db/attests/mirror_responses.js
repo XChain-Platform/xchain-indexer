@@ -149,8 +149,8 @@ module.exports = {
     // batch describes the response, not the request.
     //
     // Idempotent and unordered: a re-delivered or replayed batch restamps the same
-    // value, and a batch that lands before the mirror row was applied simply matches no
-    // row yet. That is why the column is nullable and why the coverage watermark, not
+    // value, a NULL clears the link after a reorg un-lands the batch, and a batch that
+    // lands before the mirror row was applied simply matches no row yet. That is why the column is nullable and why the coverage watermark, not
     // this write, is what proves a window reached the chain.
     async setAttestationResponseBatchIndex(requestId, batchActionIndex){
         let query = `UPDATE attests

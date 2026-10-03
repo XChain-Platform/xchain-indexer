@@ -172,9 +172,9 @@ addGate('xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION', 'height', {
 });
 // Part 5 holds these earlier rows because parts 1 to 4 are near their line limit and have concurrent additions.
 // anchor_fold_activation
-addGate('anchor_fold_activation.ANCHOR_FOLD_ACTIVATION', 'height', { mainnet: UNARMED, testnet: UNARMED, regtest: UNPINNED });
+addGate('anchor_fold_activation.ANCHOR_FOLD_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': 155001, 'LTC:testnet': 4906040, 'DOGE:testnet': 67962387, testnet: UNARMED, regtest: UNPINNED });
 // archive_section_verdict_activation
-addGate('archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION', 'height', { mainnet: UNARMED, testnet: UNARMED, regtest: UNPINNED });
+addGate('archive_section_verdict_activation.ARCHIVE_SECTION_VERDICT_STATE_HASH_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': 155001, 'LTC:testnet': 4906040, 'DOGE:testnet': 67962387, testnet: UNARMED, regtest: UNPINNED });
 // list_share_producer_activation: the hub snapshot plane begins producing shared-list versions.
 addGate('list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION', 'height', {
     mainnet: 9999999999,
@@ -188,6 +188,15 @@ addGate('list_share_consumer_activation.LIST_SHARE_CONSUMER_ACTIVATION', 'height
     'BTC:testnet': 154777,
     'LTC:testnet': 4905004,
     'DOGE:testnet': 67956922,
+    regtest: 0,
+});
+// list_meta_activation: the hub reads it with coin BTC at snapshot_block.
+addGate('list_meta_activation.LIST_META_ACTIVATION', 'height', {
+    mainnet: 9999999999,
+    testnet: 9999999999,
+    'BTC:testnet': 155001,
+    'LTC:testnet': 4906040,
+    'DOGE:testnet': 67962387,
     regtest: 0,
 });
 // oracle_price_age_hourly_activation: gates the hourly price-snapshot age limit

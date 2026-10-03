@@ -24,12 +24,11 @@ function normalized(sql){
 function bindMixin(responses){
     const calls = [];
     const queue = (responses || []).slice();
-    const db = {
-        doQuery: async (sql, args) => {
-            calls.push({ sql: normalized(sql), args });
-            return queue.length > 0 ? queue.shift() : [];
-        }
+    const query = async (sql, args) => {
+        calls.push({ sql: normalized(sql), args });
+        return queue.length > 0 ? queue.shift() : [];
     };
+    const db = { doQuery: query, doQueryStrict: query };
     for(const method of Reflect.ownKeys(mixin)) db[method] = mixin[method].bind(db);
     return { db, calls };
 }

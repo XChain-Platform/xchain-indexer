@@ -12,7 +12,9 @@ process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
+const sinon = require('sinon');
 const { createBaseData } = require('../../../fixtures/mocks');
+const gateRegistry = require('../../../../src/consensus/gate_registry');
 const {
     PUBKEY_A, PUBKEY_B, SIG, v0Params, THREE_CHAINS, armAnchor, disarmAnchor
 } = require('./anchor.test/helpers/anchor_fixtures.js');
@@ -20,6 +22,9 @@ const GOLDEN = require('../../../fixtures/anchor_canonical_vectors.json');
 
 const NETWORKS = ['mainnet', 'testnet', 'regtest'];
 const LEGACY_ORDER_NETWORKS = ['mainnet', 'testnet'];
+const BUNDLE_ORDER_KEY =
+    'anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION';
+const TESTNET_HEIGHT = 67962387;
 
 let indexer, handler, verifyStub, swqStub, deriveGateStub;
 
@@ -30,9 +35,24 @@ function setNetwork(network) {
 
 async function parseBundle(network, overrides = {}) {
     setNetwork(network);
-    const data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE', BLOCK_INDEX: 70000000 });
+    const blockIndex = overrides.blockIndex || 70000000;
+    const data = createBaseData({
+        ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE', BLOCK_INDEX: blockIndex
+    });
     await handler.parse(v0Params(Object.assign({}, overrides, { network })), data, null);
     return data;
+}
+
+function armCoinThreshold(key, threshold) {
+    const original = gateRegistry.registry.read.bind(gateRegistry.registry);
+    const table = Object.assign({}, gateRegistry.get(key), {
+        testnet: 9999999999,
+        'BTC:testnet': threshold,
+        'LTC:testnet': threshold,
+        'DOGE:testnet': threshold,
+    });
+    sinon.stub(gateRegistry.registry, 'read').callsFake(
+        readKey => readKey === key ? table : original(readKey));
 }
 
 function goldenParams() {
@@ -53,7 +73,9 @@ describe('Anchor bundle order gate', function () {
     describe('Anchor bundle legacy wire order', function () {
     for (const network of LEGACY_ORDER_NETWORKS) {
         it(`accepts DOGE before BTC on ${network}`, async function () {
+            // testnet arms bundle order at its v0.21.3 DOGE height, so its legacy case sits just below it.
             const data = await parseBundle(network, {
+                blockIndex: network === 'testnet' ? TESTNET_HEIGHT - 1 : undefined,
                 sections: [{ chain: 'DOGE' }, { chain: 'BTC' }]
             });
             assert.strictEqual(data['STATUS'], 'valid');
@@ -61,6 +83,7 @@ describe('Anchor bundle order gate', function () {
 
         it(`accepts PUBKEY_B before PUBKEY_A on ${network}`, async function () {
             const data = await parseBundle(network, {
+                blockIndex: network === 'testnet' ? TESTNET_HEIGHT - 1 : undefined,
                 sections: [{ chain: 'BTC', sigs: [[PUBKEY_B, SIG], [PUBKEY_A, SIG]] }]
             });
             assert.strictEqual(data['STATUS'], 'valid');
@@ -69,6 +92,19 @@ describe('Anchor bundle order gate', function () {
 });
 
     describe('Anchor bundle enforced wire order', function () {
+        it('activates at the armed DOGE testnet height', async function () {
+            armCoinThreshold(BUNDLE_ORDER_KEY, TESTNET_HEIGHT);
+            const sections = [{ chain: 'DOGE' }, { chain: 'BTC' }];
+            const below = await parseBundle('testnet', {
+                sections, blockIndex: TESTNET_HEIGHT - 1
+            });
+            const active = await parseBundle('testnet', {
+                sections, blockIndex: TESTNET_HEIGHT
+            });
+            assert.strictEqual(below['STATUS'], 'valid');
+            assert.strictEqual(active['STATUS'], 'invalid: SECTION 1 CHAIN (order)');
+        });
+
         it('refuses DOGE before BTC on regtest', async function () {
             const data = await parseBundle('regtest', {
                 sections: [{ chain: 'DOGE' }, { chain: 'BTC' }]

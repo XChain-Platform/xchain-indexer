@@ -54,7 +54,7 @@ describe('archive-head database readers', function(){
     it('uses the gated canonical pick for an unscoped batch lookup', async function(){
         const { sql, params } = await capture('getAnchorV1ByBatchSeq', [42]);
         assertPickPredicate(sql);
-        assert.deepStrictEqual(params, [foldArchiveHeadFloor('testnet'), 42]);
+        assert.deepStrictEqual(params, [foldArchiveHeadFloor('testnet', 'DOGE'), 42]);
         assert.match(sql, /ORDER BY a\.action_index ASC LIMIT 1/i);
     });
 
@@ -62,7 +62,7 @@ describe('archive-head database readers', function(){
         const author = 'DPublisher';
         const { sql, params } = await capture('getAnchorV1ByBatchSeq', [42, author]);
         assertPickPredicate(sql);
-        assert.deepStrictEqual(params, [foldArchiveHeadFloor('testnet'), 42, author]);
+        assert.deepStrictEqual(params, [foldArchiveHeadFloor('testnet', 'DOGE'), 42, author]);
         assert.match(sql, /ORDER BY a\.action_index ASC LIMIT 1/i);
     });
 });

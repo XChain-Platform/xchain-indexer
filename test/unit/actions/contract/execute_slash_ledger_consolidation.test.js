@@ -110,11 +110,12 @@ async function mixedCaseSlashes(network) {
 describe('Execute._processSlashEmission multi-slash ledger conservation @regression @tier1', function () {
     afterEach(function () { sinon.restore(); });
 
-    it('gate is armed on regtest and on mainnet at genesis by the 2026-09-09 ruling, inert on testnet', function () {
+    it('gate is armed on regtest and on mainnet at genesis by the 2026-09-09 ruling, and on testnet at the v0.21.3 heights', function () {
         const at = (height, network, coin) => gateRegistry.activeAt(SLASH_ROW, network, coin, height, null);
         assert.strictEqual(at(0, 'regtest', 'BTC'), true);
         assert.strictEqual(at(9e9, 'mainnet', 'BTC'), true);
-        assert.strictEqual(at(9e9, 'testnet', 'BTC'), false);
+        assert.strictEqual(at(155000, 'testnet', 'BTC'), false);
+        assert.strictEqual(at(155001, 'testnet', 'BTC'), true);
     });
 });
 

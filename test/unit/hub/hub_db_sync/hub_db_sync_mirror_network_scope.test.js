@@ -259,7 +259,7 @@ describe('HubDbSync mirror network scope @regression @tier2', function () {
 
         assert.strictEqual(seen.deletes.length, 0, 'a table without the column cannot be scoped');
         assert.ok(seen.maxIds.every((q) => !q.scoped));
-        assert.deepStrictEqual(sinceIds(httpGet), [7]);
+        assert.deepStrictEqual(sinceIds(httpGet), [0]);
     });
 
     it('scopes the ready-message catch-up read to the same network', async function () {

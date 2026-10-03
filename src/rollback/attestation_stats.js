@@ -31,6 +31,7 @@ const pmsh      = require('../attestation/providerMinStakeHistory.js');
 // recompute must subtract the SAME keys or it charges missed_count to validators
 // the live expiry never held responsible.
 const rgf       = require('../actions/attest/rollcall_gates_filter.js');
+const { parsePinnedResponsibleSet } = require('../actions/attest/responsible_set.js');
 const statsSql  = require('../db/rollback/attestation_stats.js');
 
 module.exports = {
@@ -118,7 +119,7 @@ module.exports = {
 
     // missed_count: one per responsible-set validator each time a request
     // expired. There is no per-validator expiry row to count, as the live path
-    // recomputes the responsible set deterministically and bumps each member.
+    // charges each member of the pinned responsible set (re-derived for a legacy row).
     // We reproduce that over the surviving requests that WOULD have expired in
     // a replay to block_index-1: a request expires at deadline_block+1 (the
     // first sweep past its deadline), so it counts iff deadline_block+1 <=
@@ -142,21 +143,12 @@ module.exports = {
     async countExpiredMisses(expiredReqs, ensure){
         let validatorsByBlock = new Map();
         for(let req of expiredReqs){
-            // ATT-RECOMP-1: prefer the responsible set pinned as-of the request block at v0
-            // creation (attests.responsible_set_json). It captures the historical stake amounts
-            // BEFORE any later surviving slash, so the recompute reproduces the true responsible
-            // set instead of re-deriving it against the CURRENT mutable stakes.amount (which a
-            // surviving slash has already reduced → a divergent set → wrong missed_count). Legacy
-            // rows created before the column existed carry NULL and fall back to the live
-            // re-derive below (the pre-fix behaviour, with the known as-of-amount caveat).
-            let responsible = null;
-            if(req.responsible_set_json){
-                try {
-                    let parsed = JSON.parse(req.responsible_set_json);
-                    if(Array.isArray(parsed))
-                        responsible = parsed.map(p => String(p).toLowerCase());
-                } catch(_) { responsible = null; }
-            }
+            // ATT-RECOMP-1: charge the responsible set pinned as-of the request block at v0
+            // creation (attests.responsible_set_json), read by the same rule the live expiry
+            // charge uses. It captures the stake amounts BEFORE any later surviving slash, which
+            // a re-derive against the CURRENT mutable stakes.amount would miss. Rows with no
+            // readable pin fall back to the re-derive below, as the live path does.
+            let responsible = parsePinnedResponsibleSet(req.responsible_set_json);
             if(responsible === null){
                 let reqBlock = Number(req.block_index);
                 let cached   = validatorsByBlock.get(reqBlock);

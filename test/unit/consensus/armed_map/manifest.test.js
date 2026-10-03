@@ -172,7 +172,7 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(res.ok, true, res.reason);
         assert.deepStrictEqual(res.rows.map((r) => r[0]), manifest.ENTRIES.map((e) => e[0]));
         for (const [, value] of res.rows) canonicalValue(value);
-        assert.strictEqual(res.rows.length, 348);
+        assert.strictEqual(res.rows.length, 351);
     });
 
     it('carries the three row families the design names', function () {
@@ -189,9 +189,9 @@ describe('armed_map/manifest: collectRows', function () {
         const byKey = new Map(manifest.collectRows().rows);
         assert.deepStrictEqual(byKey.get('list_owner_activation.LIST_OWNER_ACTIVATION'), {
             mainnet: 9999999999,
-            'BTC:testnet': 9999999999,
-            'LTC:testnet': 9999999999,
-            'DOGE:testnet': 9999999999,
+            'BTC:testnet': 155001,
+            'LTC:testnet': 4906040,
+            'DOGE:testnet': 67962387,
             testnet: 9999999999,
             regtest: 0,
         });
@@ -205,6 +205,74 @@ describe('armed_map/manifest: collectRows', function () {
         for (const name of manifest.VM_EXPORT_NAMES) {
             assert.ok(byKey.has('xchain-vm.' + name), name);
             assert.strictEqual(canonicalValue(byKey.get('xchain-vm.' + name)), canonicalValue(vm[name]), name);
+        }
+    });
+
+    it('passes regtest through the indexer execution path and activates the JSON.stringify value-hook fix', async function () {
+        const XChainVM = require('xchain-vm');
+        const { runVmExecution } = require('../../../../src/actions/execute/run_vm.js');
+        assert.strictEqual(XChainVM.JSON_STRINGIFY_HOOK_ACTIVATION.regtest, 0);
+        const timestamp = XChainVM.BINARY_ALLOC_GATE_BLOCK_TIME + 1;
+        assert.ok(timestamp < XChainVM.JSON_STRINGIFY_HOOK_ACTIVATION.mainnet);
+        const vm = new XChainVM({
+            execution: 'in-process',
+            gasSchedule: {
+                VM_COMPUTATION: 1,
+                VM_STATE_READ: 100,
+                VM_STATE_WRITE: 200,
+                VM_STATE_DELETE: 100,
+                VM_ORACLE_READ: 100,
+                VM_CROSSCHAIN_READ: 100,
+                VM_ATTEST_REQUEST: 5000,
+                VM_EMISSION: 500,
+                VM_XCALL_REQUEST: 2000,
+                VM_XCALL_CALLBACK: 20000,
+            },
+            gasCeiling: 1000000,
+        });
+        const indexerDb = {
+            getContractState: async () => ({}),
+            getOracleDataForVM: async () => ({}),
+            getCrossChainDataForVM: async () => ({}),
+            getPollResultsForVM: async () => ({}),
+            getContractStakeDataForVM: async () => ({}),
+            createSavepoint: async (name) => name,
+            releaseSavepoint: async () => {},
+        };
+        const handler = {
+            config: { NETWORK: 'regtest', CHAIN: 'BTC', COIN: 'BTC' },
+            actions: {
+                vm,
+                protocolChanges: { isEnabled: async () => false },
+            },
+            indexerDb,
+            providerDeadlineWindows: null,
+        };
+        const ctx = {
+            error: null,
+            gasCost: 0,
+            contractInfo: {
+                code: 'module.exports=function(){var reads=0;var value={get x(){reads++;return reads===1?{armed:true}:{armed:false};}};return JSON.stringify(value);};',
+            },
+            data: {
+                METHOD: 'default',
+                SOURCE: 'regtest-probe',
+                CONTRACT_ACTION_INDEX: 1,
+                ACTION_INDEX: 1,
+                TX_HASH: 'regtest-hook-probe-tx',
+                TX_VOUT: 0,
+                BLOCK_INDEX: 1,
+                BLOCK_TIME: timestamp,
+            },
+        };
+        vm.beginBlock();
+        try {
+            await runVmExecution.call(handler, ctx, { GAS_CEILING: 1000000 });
+            assert.strictEqual(ctx.vmError, null);
+            assert.strictEqual(JSON.parse(ctx.vmReturnValue), '{"x":{"armed":true}}');
+        } finally {
+            vm.endBlock();
+            await vm.shutdown();
         }
     });
 

@@ -23,21 +23,23 @@ describe('protocol_changes VM lint optional-chain row', function () {
             'BTC:mainnet': UNARMED,
             'LTC:mainnet': UNARMED,
             'DOGE:mainnet': UNARMED,
-            'BTC:testnet': UNARMED,
-            'LTC:testnet': UNARMED,
-            'DOGE:testnet': UNARMED,
+            'BTC:testnet': 155001,
+            'LTC:testnet': 4906040,
+            'DOGE:testnet': 67962387,
             testnet: UNARMED,
             regtest: 0,
         });
     });
 
-    it('is active on regtest at genesis and unarmed on public networks', function () {
+    it('is active on regtest at genesis, unarmed on mainnet and armed at the v0.21.3 testnet heights', function () {
         assert.strictEqual(registry.activeAt(KEY, 'regtest', 'BTC', 0, null), true);
-        for (const network of ['testnet', 'mainnet']) {
-            for (const coin of ['BTC', 'LTC', 'DOGE']) {
-                assert.strictEqual(registry.activeAt(KEY, network, coin, 10000000, null), false,
-                    coin + ':' + network);
-            }
+        for (const coin of ['BTC', 'LTC', 'DOGE']) {
+            assert.strictEqual(registry.activeAt(KEY, 'mainnet', coin, 10000000, null), false,
+                coin + ':mainnet');
+        }
+        for (const [coin, height] of [['BTC', 155001], ['LTC', 4906040], ['DOGE', 67962387]]) {
+            assert.strictEqual(registry.activeAt(KEY, 'testnet', coin, height - 1, null), false, coin + ':testnet');
+            assert.strictEqual(registry.activeAt(KEY, 'testnet', coin, height, null), true, coin + ':testnet');
         }
     });
 });
