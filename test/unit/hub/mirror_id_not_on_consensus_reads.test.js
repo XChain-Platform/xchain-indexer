@@ -171,8 +171,10 @@ function candidateSql(ast) {
             } else if(node.type === 'AssignmentExpression' && node.left.type === 'Identifier') {
                 events.push({ start: node.start, line: node.loc.start.line, name: node.left.name,
                     operator: node.operator, expression: node.right });
-            } else if(node.type === 'CallExpression' || node.type === 'ReturnStatement') {
-                const expressions = node.type === 'CallExpression' ? node.arguments : [node.argument];
+            } else if(node.type === 'CallExpression' || node.type === 'ReturnStatement'
+                || node.type === 'Property') {
+                const expressions = node.type === 'CallExpression' ? node.arguments :
+                    [node.type === 'Property' ? node.value : node.argument];
                 events.push({ start: node.start, line: node.loc.start.line, expressions });
             }
         }, true, scope);
@@ -312,20 +314,20 @@ describe('consensus mirror reads never consume local mirror ids @regression @tie
         ]);
     });
 
-    it('reconstructs SQL assembled through identifier-based fragments', function () {
+    it('reconstructs SQL assembled through bindings and object properties', function () {
         const ast = acorn.parse(`
             const table = 'oracle_prices';
             const predicate = ' WHERE id = ?';
             const order = ' ORDER BY id DESC';
+            const reads = { sql: 'SELECT * FROM oracle_prices p JOIN x ON p.id=x.id WHERE p.id=? ORDER BY p.id' };
             async function read(db) {
                 let query = 'SELECT * FROM ' + table;
                 query += predicate;
                 return db.doQuery(query + order);
             }
         `, { ecmaVersion: 'latest', locations: true });
-        const clauses = candidateSql(ast).flatMap(candidate =>
-            scanSql(candidate.text).map(hit => hit.clause));
-        assert.deepStrictEqual(clauses.slice(-2), ['WHERE', 'ORDER BY']);
+        const clauses = candidateSql(ast).flatMap(candidate => scanSql(candidate.text).map(hit => hit.clause));
+        assert.deepStrictEqual([...new Set(clauses)].sort(), ['ON', 'ORDER BY', 'WHERE']);
     });
 
     it('preserves mirrored table names introduced through calls', function () {
