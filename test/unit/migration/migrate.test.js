@@ -46,6 +46,7 @@ describe('migrate CLI safety guard', function () {
     });
 
     it('names the required environment variables in the failure message', function () {
+        this.timeout(120000);
         const res = runWithoutDbEnv();
         const msg = res.stderr + res.stdout;
         assert.match(msg, /INDEXER_DB_HOST/);

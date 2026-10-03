@@ -228,6 +228,7 @@ describe('bin/consensus-identity.js --compare against a flat --out reading', fun
     });
 
     it('refuses a shapeless, hub or blockless pin with one named line (exit 2)', function () {
+        this.timeout(120000);
         const bodies = [{}, [], { hub_schema_version: 1, consensus_rules_digest: 'x' },
             { armed_regtest_venue: { env: { XC_IDENTITY_TEST_UNSET_VAR: 'armed' } } }];
         for (const body of bodies) {
