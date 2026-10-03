@@ -31,6 +31,18 @@ const MIRRORED_TABLES = [
     'capability_snapshots',
     'attestation_responses',
 ];
+const INDIRECT_SITES = [
+    'contracts/delegation_rotation.js',
+    'escrow_journal/index.js',
+    'index_tables/expired_items.js',
+    'index_tables/index.js',
+    'lists/rematch.js',
+    'markets/market_pairs.js',
+    'misc/index.js',
+    'misc/table_dump.js',
+    'rollback/read_phase.js',
+    'tokens/sanity_check.js',
+];
 const ALLOW_LIST = new Set([]);
 const SQL_ALIAS_STOP_WORDS = new Set([
     'where', 'join', 'left', 'right', 'inner', 'outer', 'full', 'cross',
@@ -197,6 +209,30 @@ function candidateSql(ast) {
     });
 }
 
+function hasIndirectReadTable(sql) {
+    return /\bSELECT\b[\s\S]*?\b(?:FROM|JOIN)\s+`?\s*__EXPR__\s*`?/i.test(sql);
+}
+
+function indirectSites(sources) {
+    const sites = new Set();
+    for(const { relative, source } of sources) {
+        const ast = acorn.parse(source, {
+            ecmaVersion: 'latest', sourceType: 'script', locations: true,
+        });
+        if(candidateSql(ast).some(candidate => hasIndirectReadTable(candidate.text))) {
+            sites.add(relative);
+        }
+    }
+    return [...sites].sort();
+}
+
+function dbSources() {
+    return listSrcTreeFiles(DB_ROOT).map(relative => ({
+        relative,
+        source: fs.readFileSync(path.join(DB_ROOT, relative), 'utf8'),
+    }));
+}
+
 function aliasesFor(sql, table) {
     const escaped = table.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const re = new RegExp('\\b(?:FROM|JOIN)\\s+`?' + escaped
@@ -249,8 +285,7 @@ function scanSql(sql) {
 
 function sourceViolations() {
     const violations = [];
-    for(const relative of listSrcTreeFiles(DB_ROOT)) {
-        const source = fs.readFileSync(path.join(DB_ROOT, relative), 'utf8');
+    for(const { relative, source } of dbSources()) {
         const ast = acorn.parse(source, {
             ecmaVersion: 'latest', sourceType: 'script', locations: true,
         });
@@ -314,6 +349,29 @@ describe('consensus mirror reads never consume local mirror ids @regression @tie
         assert.deepStrictEqual([...new Set(clauses)], ['WHERE', 'ORDER BY', 'ON']);
     });
 
+    it('finds opaque table names returned by inline and member calls', function () {
+        const sources = [
+            {
+                relative: 'inline.js',
+                source: `const sql = 'SELECT * FROM ' + (() => 'oracle_prices')()
+                    + ' WHERE id = ?';`,
+            },
+            {
+                relative: 'member.js',
+                source: `const tables = {
+                    mirrored() { return 'policy_snapshots'; },
+                };
+                const sql = \`SELECT * FROM \${tables.mirrored()} ORDER BY id\`;`,
+            },
+        ];
+        const directViolations = sources.flatMap(({ source }) => {
+            const ast = acorn.parse(source, { ecmaVersion: 'latest', locations: true });
+            return candidateSql(ast).flatMap(candidate => scanSql(candidate.text));
+        });
+        assert.deepStrictEqual(directViolations, []);
+        assert.deepStrictEqual(indirectSites(sources), ['inline.js', 'member.js']);
+    });
+
     it('does not confuse projection or local-table ids with a mirrored id', function () {
         const sql = `SELECT op.id, local.id
                      FROM oracle_prices op
@@ -325,6 +383,11 @@ describe('consensus mirror reads never consume local mirror ids @regression @tie
 
     it('keeps the exception list empty', function () {
         assert.strictEqual(ALLOW_LIST.size, 0);
+    });
+
+    it('keeps every runtime-computed read table site under review', function () {
+        assert.deepStrictEqual(indirectSites(dbSources()), INDIRECT_SITES,
+            'review a new computed table site before it can hide a mirrored-table id read');
     });
 
     it('finds no mirrored id in a consensus read under src/db', function () {
