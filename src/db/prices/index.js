@@ -74,6 +74,15 @@ function selectLatestPriceQuery(coinPair, blockHeight, opts, landedBound, landed
 
 module.exports = Object.assign({
 
+    async getMaxBatchBlockTime(){
+        const rows = await this.doQueryStrict(
+            `SELECT MAX(batch_block_time) AS max_batch_block_time
+             FROM price_snapshots
+             WHERE status = 'finalized' AND batch_block_time > 0`, []);
+        if(!rows.length || rows[0].max_batch_block_time == null) return 0;
+        return Number(rows[0].max_batch_block_time);
+    },
+
     // Get the latest finalized price for a coin pair at or before a given block height
     // blockHeight gates the query so two nodes processing the same block always see the same price
     //
