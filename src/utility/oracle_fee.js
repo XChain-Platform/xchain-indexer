@@ -195,7 +195,8 @@ module.exports = {
     //
     // Returns { valid, error? }.
     async requireEffectiveOraclePrice(blockTime, dispenser, db){
-        let oracleRow = await db.getOraclePrice(
+        let priceDb = (db.indexer && db.indexer.hubDb) ? db.indexer.hubDb : db;
+        let oracleRow = await priceDb.getOraclePrice(
             dispenser['ORACLE_ADDRESS'], dispenser['GIVE_COIN'], dispenser['GIVE_TICK'],
             dispenser['FIAT_CODE'], Number(blockTime));
         if(!oracleRow)

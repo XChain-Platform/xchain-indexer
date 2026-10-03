@@ -83,6 +83,21 @@ describe('Utility.validateOracleFee() - @regression @tier1', function () {
             assert.strictEqual(r.valid, false);
             assert.match(r.error, /no validator price/);
         });
+
+        it('uses the hub copy behind a local database handle for every price read', async function () {
+            let localReads = 0;
+            const hubDb = fakeDb();
+            const localDb = {
+                indexer: { hubDb },
+                async getOraclePrice() { localReads++; return null; },
+                async getPricesInTimeRange() { localReads++; return []; },
+            };
+            const r = await util.validateOracleFee(
+                withOutputs([{ address: ORACLE_ADDR, value: '0.00001' }]),
+                dispenserFields(), localDb);
+            assert.strictEqual(r.valid, true, r.error);
+            assert.strictEqual(localReads, 0);
+        });
     });
 });
 describe('Utility.validateOracleFee() - @regression @tier1', function () {

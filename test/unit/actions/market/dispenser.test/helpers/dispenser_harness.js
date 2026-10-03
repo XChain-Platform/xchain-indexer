@@ -29,6 +29,7 @@ function makeActionsCtx(indexer) {
         mapper:          indexer.mapper,
         decoderDb:       indexer.decoderDb,
         indexerDb:       indexer.indexerDb,
+        hubDb:           indexer.hubDb || null,
         protocolChanges: {
             isDefined:  sinon.stub().returns(true),
             isEnabled:  sinon.stub().resolves(true),

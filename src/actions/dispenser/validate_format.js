@@ -173,12 +173,13 @@ module.exports = {
         if(!error && format==0 && !this.util.isNull(data['ORACLE_ADDRESS']) &&
            gateRegistry.activeAt('dispenser_oracle_price_activation.DISPENSER_ORACLE_PRICE_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']) &&
            await this.actions.protocolChanges.isEnabled('FIAT_DISPENSER_PRICING', data['BLOCK_INDEX'])){
+            let priceDb = (this.actions && this.actions.hubDb) || this.indexerDb;
             let priceCheck = await this.util.requireEffectiveOraclePrice(data['BLOCK_TIME'], {
                 ORACLE_ADDRESS: data['ORACLE_ADDRESS'],
                 GIVE_COIN:      data['GIVE_COIN'],
                 GIVE_TICK:      data['GIVE_TICK'],
                 FIAT_CODE:      data['FIAT_CODE'],
-            }, this.indexerDb);
+            }, priceDb);
             if(!priceCheck.valid)
                 error = priceCheck.error;
         }
@@ -267,9 +268,10 @@ module.exports = {
                 // native-coin fee check gets a probe OUTPUT for the same reason
                 // (actions/index.js _dryRunAction); this one cannot, because ORACLE_ADDRESS may be
                 // a ^id reference that is only resolved above.
+                let priceDb = (this.actions && this.actions.hubDb) || this.indexerDb;
                 let feeCheck = data['FEE_PROBE']
-                    ? await this.util.quoteOracleFee(data['BLOCK_TIME'], feeDispenser, this.indexerDb)
-                    : await this.util.validateOracleFee(data, feeDispenser, this.indexerDb);
+                    ? await this.util.quoteOracleFee(data['BLOCK_TIME'], feeDispenser, priceDb)
+                    : await this.util.validateOracleFee(data, feeDispenser, priceDb);
                 if(!feeCheck.valid)
                     error = feeCheck.error;
 
@@ -296,4 +298,3 @@ module.exports = {
     return error;
     },
 };
-
