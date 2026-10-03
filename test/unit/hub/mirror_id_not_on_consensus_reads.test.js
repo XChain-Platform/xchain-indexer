@@ -59,33 +59,49 @@ function isFunction(node) {
         || node.type === 'ArrowFunctionExpression');
 }
 
-function staticText(node) {
+function staticText(node, values = new Map()) {
     if(!node) return null;
     if(node.type === 'Literal') return typeof node.value === 'string' ? node.value : null;
+    if(node.type === 'Identifier') return values.get(node.name) || null;
     if(node.type === 'TemplateLiteral') {
         return node.quasis.map((quasi, i) => {
             const value = quasi.value.cooked == null ? quasi.value.raw : quasi.value.cooked;
-            return value + (i < node.expressions.length ? ' __EXPR__ ' : '');
+            if(i >= node.expressions.length) return value;
+            return value + (staticText(node.expressions[i], values) || ' __EXPR__ ');
         }).join('');
     }
     if(node.type === 'BinaryExpression' && node.operator === '+') {
-        const left  = staticText(node.left);
-        const right = staticText(node.right);
+        const left  = staticText(node.left, values);
+        const right = staticText(node.right, values);
         if(left == null && right == null) return null;
         return (left == null ? ' __EXPR__ ' : left) + (right == null ? ' __EXPR__ ' : right);
     }
     if(node.type === 'ConditionalExpression') {
-        const yes = staticText(node.consequent);
-        const no  = staticText(node.alternate);
+        const yes = staticText(node.consequent, values);
+        const no  = staticText(node.alternate, values);
         if(yes == null && no == null) return null;
         return (yes || '') + ' ' + (no || '');
     }
     return null;
 }
 
+function topLevelBindings(ast) {
+    const values = new Map();
+    for(const statement of ast.body) {
+        if(statement.type !== 'VariableDeclaration') continue;
+        for(const declaration of statement.declarations) {
+            if(declaration.id.type !== 'Identifier') continue;
+            const text = staticText(declaration.init, values);
+            if(text != null) values.set(declaration.id.name, text);
+        }
+    }
+    return values;
+}
+
 function candidateSql(ast) {
     const candidates = [];
     const scopes = [ast];
+    const inherited = topLevelBindings(ast);
     walk(ast, node => { if(isFunction(node)) scopes.push(node); });
 
     for(const scope of scopes) {
@@ -93,31 +109,36 @@ function candidateSql(ast) {
         walk(scope, node => {
             if(node.type === 'VariableDeclarator' && node.id.type === 'Identifier') {
                 events.push({ start: node.start, line: node.loc.start.line, name: node.id.name,
-                    operator: '=', text: staticText(node.init) });
+                    operator: '=', expression: node.init });
             } else if(node.type === 'AssignmentExpression' && node.left.type === 'Identifier') {
                 events.push({ start: node.start, line: node.loc.start.line, name: node.left.name,
-                    operator: node.operator, text: staticText(node.right) });
+                    operator: node.operator, expression: node.right });
             } else if(node.type === 'CallExpression' || node.type === 'ReturnStatement') {
                 const expressions = node.type === 'CallExpression' ? node.arguments : [node.argument];
-                for(const expression of expressions) {
-                    const text = staticText(expression);
-                    if(text != null) candidates.push({ line: node.loc.start.line, text });
-                }
+                events.push({ start: node.start, line: node.loc.start.line, expressions });
             }
         }, true, scope);
         events.sort((a, b) => a.start - b.start);
 
-        const values = new Map();
+        const values = scope === ast ? new Map() : new Map(inherited);
         for(const event of events) {
-            if(event.text == null) {
+            if(event.expressions) {
+                for(const expression of event.expressions) {
+                    const text = staticText(expression, values);
+                    if(text != null) candidates.push({ line: event.line, text });
+                }
+                continue;
+            }
+            const text = staticText(event.expression, values);
+            if(text == null) {
                 if(event.operator === '=') values.delete(event.name);
                 continue;
             }
-            const text = event.operator === '+=' && values.has(event.name)
-                ? values.get(event.name) + event.text
-                : event.text;
-            values.set(event.name, text);
-            candidates.push({ line: event.line, text });
+            const combined = event.operator === '+=' && values.has(event.name)
+                ? values.get(event.name) + text
+                : text;
+            values.set(event.name, combined);
+            candidates.push({ line: event.line, text: combined });
         }
     }
 
@@ -208,6 +229,22 @@ describe('consensus mirror reads never consume local mirror ids @regression @tie
         assert.deepStrictEqual(samples.map(sql => scanSql(sql).map(hit => hit.clause)), [
             ['WHERE'], ['ORDER BY'], ['ON'], ['ORDER BY'],
         ]);
+    });
+
+    it('reconstructs SQL assembled through identifier-based fragments', function () {
+        const ast = acorn.parse(`
+            const table = 'oracle_prices';
+            const predicate = ' WHERE id = ?';
+            const order = ' ORDER BY id DESC';
+            async function read(db) {
+                let query = 'SELECT * FROM ' + table;
+                query += predicate;
+                return db.doQuery(query + order);
+            }
+        `, { ecmaVersion: 'latest', locations: true });
+        const clauses = candidateSql(ast).flatMap(candidate =>
+            scanSql(candidate.text).map(hit => hit.clause));
+        assert.deepStrictEqual(clauses.slice(-2), ['WHERE', 'ORDER BY']);
     });
 
     it('does not confuse projection or local-table ids with a mirrored id', function () {
