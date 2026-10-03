@@ -3,7 +3,7 @@
   "entries": {
     "amount_representability_activation": {
       "path": "src/utility/amount_representability_gate.js",
-      "hash": "0d4f17a80235e5e8ce6d5069cf87ff438d291f021f2e10ef8f4e17b7bbb8121a",
+      "hash": "8d0a7e4fbd7acbccde550e424dd4bdd5d04619992678e87f44e79eb849747e62",
       "twins": []
     },
     "anchor_reward_activation": {
@@ -113,7 +113,7 @@
     },
     "price_scale_activation": {
       "path": "src/consensus/gates/price_scale_gate.js",
-      "hash": "18529a5b69afe0cb728caa9c05154bf8393517fdbf87fd94c3b6bbad0d27a7c1",
+      "hash": "49dd656650002b1570d1e1733f140f37f4ffd334ebeeae9daf6d9ff6f2cbf2ef",
       "twins": [
         "xchain-hub"
       ]
@@ -1911,6 +1911,20 @@
       "to": "632a196da8f5e02efd9c66129b84085e3875832b0ac84a16b40475fd2d1ce813",
       "reason": "LM-8-p9 adds the list meta apply gate",
       "date": "2026-10-02"
+    },
+    {
+      "id": "price_scale_activation",
+      "from": "18529a5b69afe0cb728caa9c05154bf8393517fdbf87fd94c3b6bbad0d27a7c1",
+      "to": "49dd656650002b1570d1e1733f140f37f4ffd334ebeeae9daf6d9ff6f2cbf2ef",
+      "reason": "v0213 cross-arming review: resolve the per-chain testnet key the cut writer inserts (X-arm-2, X-arm-3)",
+      "date": "2026-10-03"
+    },
+    {
+      "id": "amount_representability_activation",
+      "from": "0d4f17a80235e5e8ce6d5069cf87ff438d291f021f2e10ef8f4e17b7bbb8121a",
+      "to": "8d0a7e4fbd7acbccde550e424dd4bdd5d04619992678e87f44e79eb849747e62",
+      "reason": "v0213 cross-arming review: resolve the per-chain testnet key the cut writer inserts (X-arm-2, X-arm-3)",
+      "date": "2026-10-03"
     }
   ]
 }
