@@ -132,7 +132,7 @@ module.exports = {
              FROM policy_snapshots
              WHERE network = ? AND origin_chain = ? AND tick = ?
                AND snapshot_id IN (${ids.map(() => '?').join(',')})
-             ORDER BY policy_seq DESC, id DESC
+             ORDER BY policy_seq DESC
              LIMIT 1`,
             [this.config['NETWORK'], String(origin), String(tick)].concat(ids));
         return (rows.length > 0) ? rows[0] : null;
