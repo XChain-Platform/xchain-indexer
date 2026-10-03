@@ -23,6 +23,8 @@ const tickCoin = require('../../../../src/actions/list/tick_coin.js');
 const { listItemId } = require('../../../../src/db/lists/membership.js');
 const { deriveListSnapshotId } = require('../../../../src/consensus/list_share_settle/canonical.js');
 const { listMembershipHash } = require('../../../../src/consensus/list_share_hash.js');
+const gateRegistry = require('../../../../src/consensus/gate_registry.js');
+const { LIST_META_GATE_KEY } = require('../../../../src/consensus/list_share_settle/halt.js');
 
 const NETWORK             = 'regtest';
 const COIN                = 'BTC';
@@ -44,8 +46,11 @@ function bindMixins(db){
 function makeListSnapshotRow({
     seq, added = [], removed = [], members, listType = 2, homeChain = HOME,
     homeListIndex = HOME_LIST_INDEX, snapshotBlock = SNAPSHOT_BLOCK, network = NETWORK,
-    admit = { btc: 800, ltc: 800, doge: 800 }, status = 'finalized', membersHash,
+    admit = { btc: 800, ltc: 800, doge: 800 }, status = 'finalized', membersHash, metaHash,
 }){
+    // A hub row carries the explicit empty hash for an unnamed list at the gate and
+    // NULL below it, exactly what the consumer screen requires.
+    const metaActive = gateRegistry.activeAt(LIST_META_GATE_KEY, network, 'BTC', snapshotBlock, null);
     const sorted = (members || added).slice().sort(byBytes);
     const height = (key) => (admit[key] === undefined ? null : admit[key]);
     return {
@@ -61,6 +66,7 @@ function makeListSnapshotRow({
         added:                JSON.stringify(added),
         removed:              JSON.stringify(removed),
         members_hash:         membersHash || listMembershipHash(sorted),
+        meta_hash:            metaHash !== undefined ? metaHash : (metaActive ? '' : null),
         origin_block:         500,
         admit_block_btc:      height('btc'),
         admit_block_ltc:      height('ltc'),
