@@ -37,11 +37,11 @@ describe('protocol_changes/CONTROLLER_CUSTODY_GUARD row @regression @tier1', fun
         assert.strictEqual(rows.length, 2);
         assert.strictEqual(rows[0][0], 'CONTROLLER_CUSTODY_GUARD');
         assert.strictEqual(ProtocolChanges.CONTROLLER_CUSTODY_GUARD_MAINNET_TIME, ProtocolChanges.UNARMED);
-        assert.strictEqual(ProtocolChanges.CONTROLLER_CUSTODY_GUARD_TESTNET_TIME, 1791019443);
+        assert.strictEqual(ProtocolChanges.CONTROLLER_CUSTODY_GUARD_TESTNET_TIME, 1791039938);
         assert.deepStrictEqual(build(), {
             version_major: 0, version_minor: 2, version_revision: 0,
             mainnet_time: ProtocolChanges.UNARMED,
-            testnet_time: 1791019443,
+            testnet_time: 1791039938,
             regtest_time: 0,
             mainnet_block: 0, testnet_block: 0, regtest_block: 0,
         });
@@ -52,7 +52,7 @@ describe('protocol_changes/CONTROLLER_CUSTODY_GUARD row @regression @tier1', fun
         assert.strictEqual(ProtocolChanges.get('protocol_changes.CONTROLLER_CUSTODY_GUARD_MAINNET_TIME'),
             ProtocolChanges.UNARMED);
         assert.strictEqual(ProtocolChanges.get('protocol_changes.CONTROLLER_CUSTODY_GUARD_TESTNET_TIME'),
-            1791019443);
+            1791039938);
     });
 
     it('reads the regtest-only drill override when a fresh table is built', function () {

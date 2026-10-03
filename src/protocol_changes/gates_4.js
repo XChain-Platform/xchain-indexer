@@ -32,9 +32,9 @@ const { addGate, UNARMED } = require('./shared_rows.js');
 // dispenser-family rows. Unarmed on mainnet and testnet until a release names the instant.
 addGate('dispenser_freshness_proven_use_activation.DISPENSER_FRESHNESS_PROVEN_USE_ACTIVATION', 'time', {
     mainnet: UNARMED,
-    'BTC:testnet': 1791019443,
-    'LTC:testnet': 1791019443,
-    'DOGE:testnet': 1791019443,
+    'BTC:testnet': 1791039938,
+    'LTC:testnet': 1791039938,
+    'DOGE:testnet': 1791039938,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -43,9 +43,9 @@ addGate('dispenser_freshness_proven_use_activation.DISPENSER_FRESHNESS_PROVEN_US
 // needs the price a DISPENSE at that block would settle against (Mode A snapshot, Mode B pair).
 addGate('dispenser_settlement_price_activation.DISPENSER_SETTLEMENT_PRICE_ACTIVATION', 'time', {
     mainnet: UNARMED,       // UNARMED (house sentinel) until a release names the instant
-    'BTC:testnet': 1791019443,
-    'LTC:testnet': 1791019443,
-    'DOGE:testnet': 1791019443,
+    'BTC:testnet': 1791039938,
+    'LTC:testnet': 1791039938,
+    'DOGE:testnet': 1791039938,
     testnet: UNARMED,       // UNARMED: testnet carries live FIAT creates this would re-judge
     regtest: 0,
 });
@@ -56,9 +56,9 @@ addGate('dispenser_settlement_price_activation.DISPENSER_SETTLEMENT_PRICE_ACTIVA
 // consumers retain their legacy empty-list fail-open behavior.
 addGate('empty_allow_list_denies_activation.EMPTY_ALLOW_LIST_DENIES', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': 154939,
-    'LTC:testnet': 4905307,
-    'DOGE:testnet': 67960786,
+    'BTC:testnet': 154971,
+    'LTC:testnet': 4905844,
+    'DOGE:testnet': 67961578,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -71,9 +71,9 @@ addGate('empty_allow_list_denies_activation.EMPTY_ALLOW_LIST_DENIES', 'height', 
 // names the instant.
 addGate('list_edit_remove_activation.LIST_EDIT_REMOVE_ACTIVATION', 'time', {
     mainnet: UNARMED,
-    'BTC:testnet': 1791019443,
-    'LTC:testnet': 1791019443,
-    'DOGE:testnet': 1791019443,
+    'BTC:testnet': 1791039938,
+    'LTC:testnet': 1791039938,
+    'DOGE:testnet': 1791039938,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -84,9 +84,9 @@ addGate('list_edit_remove_activation.LIST_EDIT_REMOVE_ACTIVATION', 'time', {
 // legacy lookup so historical replay remains byte-identical.
 addGate('token_gate_list_at_block.TOKEN_GATE_LIST_AT_BLOCK', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': 154939,
-    'LTC:testnet': 4905307,
-    'DOGE:testnet': 67960786,
+    'BTC:testnet': 154971,
+    'LTC:testnet': 4905844,
+    'DOGE:testnet': 67961578,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -96,9 +96,9 @@ addGate('token_gate_list_at_block.TOKEN_GATE_LIST_AT_BLOCK', 'height', {
 // both token policies before the GIVE side enters escrow.
 addGate('order_swap_maker_policy_admission.ORDER_SWAP_MAKER_POLICY_ADMISSION', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': 154939,
-    'LTC:testnet': 4905307,
-    'DOGE:testnet': 67960786,
+    'BTC:testnet': 154971,
+    'LTC:testnet': 4905844,
+    'DOGE:testnet': 67961578,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -109,9 +109,9 @@ addGate('order_swap_maker_policy_admission.ORDER_SWAP_MAKER_POLICY_ADMISSION', '
 // stored reference counts as no list for policy consumers after activation.
 addGate('list_reference_validity_activation.LIST_REFERENCE_REQUIRES_VALID_LIST', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': 154939,
-    'LTC:testnet': 4905307,
-    'DOGE:testnet': 67960786,
+    'BTC:testnet': 154971,
+    'LTC:testnet': 4905844,
+    'DOGE:testnet': 67961578,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -121,9 +121,9 @@ addGate('list_reference_validity_activation.LIST_REFERENCE_REQUIRES_VALID_LIST',
 // reference another edit instead of only considering direct children of CREATE.
 addGate('list_head_follows_edit_chain.LIST_HEAD_FOLLOWS_EDIT_CHAIN', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': 154939,
-    'LTC:testnet': 4905307,
-    'DOGE:testnet': 67960786,
+    'BTC:testnet': 154971,
+    'LTC:testnet': 4905844,
+    'DOGE:testnet': 67961578,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -133,9 +133,9 @@ addGate('list_head_follows_edit_chain.LIST_HEAD_FOLLOWS_EDIT_CHAIN', 'height', {
 // CALLBACK_TICK compensation. Below this height legacy settlement is retained.
 addGate('callback_compensation_activation.CALLBACK_COMPENSATES_EVERY_DEBITED_HOLDER', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': 154939,
-    'LTC:testnet': 4905307,
-    'DOGE:testnet': 67960786,
+    'BTC:testnet': 154971,
+    'LTC:testnet': 4905844,
+    'DOGE:testnet': 67961578,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -145,9 +145,9 @@ addGate('callback_compensation_activation.CALLBACK_COMPENSATES_EVERY_DEBITED_HOL
 // callable export. Below this height creation checks only contract existence.
 addGate('vote_callback_binding_activation.VOTE_CALLBACK_BINDING_REQUIRES_USABLE_METHOD', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': 154939,
-    'LTC:testnet': 4905307,
-    'DOGE:testnet': 67960786,
+    'BTC:testnet': 154971,
+    'LTC:testnet': 4905844,
+    'DOGE:testnet': 67961578,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -157,9 +157,9 @@ addGate('vote_callback_binding_activation.VOTE_CALLBACK_BINDING_REQUIRES_USABLE_
 // against the generic policy of the token delivered to it.
 addGate('order_swap_payout_policy_activation.ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': 154939,
-    'LTC:testnet': 4905307,
-    'DOGE:testnet': 67960786,
+    'BTC:testnet': 154971,
+    'LTC:testnet': 4905844,
+    'DOGE:testnet': 67961578,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -169,9 +169,9 @@ addGate('order_swap_payout_policy_activation.ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN'
 // BLOCK_LIST to detach that policy list. Empty fields inherit current ids.
 addGate('issue_policy_list_detach.ISSUE_POLICY_LIST_DETACH', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': 154939,
-    'LTC:testnet': 4905307,
-    'DOGE:testnet': 67960786,
+    'BTC:testnet': 154971,
+    'LTC:testnet': 4905844,
+    'DOGE:testnet': 67961578,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -182,9 +182,9 @@ addGate('issue_policy_list_detach.ISSUE_POLICY_LIST_DETACH', 'height', {
 // It must never arm ahead of issue_policy_list_detach.ISSUE_POLICY_LIST_DETACH, whose `0` sentinel it injects.
 addGate('bridge_policy_detach_activation.BRIDGE_POLICY_DETACH', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': 154939,
-    'LTC:testnet': 4905307,
-    'DOGE:testnet': 67960786,
+    'BTC:testnet': 154971,
+    'LTC:testnet': 4905844,
+    'DOGE:testnet': 67961578,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -199,9 +199,9 @@ addGate('vm_lint_optional_chain_heights.VM_LINT_OPTIONAL_CHAIN_ACTIVATION', 'hei
     'BTC:mainnet': UNARMED,
     'LTC:mainnet': UNARMED,
     'DOGE:mainnet': UNARMED,
-    'BTC:testnet': 154939,
-    'LTC:testnet': 4905307,
-    'DOGE:testnet': 67960786,
+    'BTC:testnet': 154971,
+    'LTC:testnet': 4905844,
+    'DOGE:testnet': 67961578,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -211,9 +211,9 @@ addGate('vm_lint_optional_chain_heights.VM_LINT_OPTIONAL_CHAIN_ACTIVATION', 'hei
 // swap it updates. Below it the lookup retains the edit action index.
 addGate('swap_edit_rematch_activation.SWAP_EDIT_REMATCH_ACTIVATION', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': 154939,
-    'LTC:testnet': 4905307,
-    'DOGE:testnet': 67960786,
+    'BTC:testnet': 154971,
+    'LTC:testnet': 4905844,
+    'DOGE:testnet': 67961578,
     testnet: UNARMED,
     regtest: 0,
 });
@@ -307,9 +307,9 @@ addGate('list_tick_coin_activation.LIST_TICK_COIN_ACTIVATION', 'height', {
 // gates_1.js when the testnet keys took that part file past its 400-line limit.
 addGate('archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': 154939,
-    'LTC:testnet': 4905307,
-    'DOGE:testnet': 67960786,
+    'BTC:testnet': 154971,
+    'LTC:testnet': 4905844,
+    'DOGE:testnet': 67961578,
     testnet: UNARMED,
     regtest: 0,
 });

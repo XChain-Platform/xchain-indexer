@@ -23,7 +23,7 @@ describe('protocol_changes anchor bundle order row', function () {
     it('pins the activation map', function () {
         assert.deepStrictEqual(
             ProtocolChanges.get('anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION'),
-            { mainnet: 9999999999, 'BTC:testnet': 154939, 'LTC:testnet': 4905307, 'DOGE:testnet': 67960786, testnet: 9999999999, regtest: 0 },
+            { mainnet: 9999999999, 'BTC:testnet': 154971, 'LTC:testnet': 4905844, 'DOGE:testnet': 67961578, testnet: 9999999999, regtest: 0 },
         );
     });
 

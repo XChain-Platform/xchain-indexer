@@ -76,7 +76,7 @@ describe('SWAP edit rematch activation @regression @tier2', function () {
         for (const coin of ['BTC', 'LTC', 'DOGE']) {
             assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'testnet', coin, 1_000_000_000, null), true);
         }
-        assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'testnet', 'BTC', 154938, null), false);
+        assert.strictEqual(gateRegistry.activeAt(GATE_KEY, 'testnet', 'BTC', 154970, null), false);
     });
 
     for (const [armed, expectedActionIndex] of [[true, RESTING_ACTION_INDEX], [false, EDIT_ACTION_INDEX]]) {

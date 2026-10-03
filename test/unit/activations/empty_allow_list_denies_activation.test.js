@@ -23,9 +23,9 @@ describe('empty allow list denial activation @regression @tier1', function () {
     it('parks mainnet at the sentinel, arms testnet at the v0.21.3 heights and activates regtest at genesis', function () {
         assert.deepStrictEqual(gateRegistry.get(KEY), {
             mainnet: 9999999999,
-            'BTC:testnet': 154939,
-            'LTC:testnet': 4905307,
-            'DOGE:testnet': 67960786,
+            'BTC:testnet': 154971,
+            'LTC:testnet': 4905844,
+            'DOGE:testnet': 67961578,
             testnet: 9999999999,
             regtest: 0,
         });
@@ -33,7 +33,7 @@ describe('empty allow list denial activation @regression @tier1', function () {
         for (const coin of ['BTC', 'LTC', 'DOGE']) {
             assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', coin, 9999999998, null), true);
         }
-        assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', 'BTC', 154938, null), false);
+        assert.strictEqual(gateRegistry.activeAt(KEY, 'testnet', 'BTC', 154970, null), false);
         assert.strictEqual(gateRegistry.activeAt(KEY, 'regtest', 'BTC', 0, null), true);
     });
 });

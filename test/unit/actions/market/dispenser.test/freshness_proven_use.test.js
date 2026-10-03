@@ -98,8 +98,8 @@ describe('Dispenser fresh-address proven use @regression @tier2', function () {
     describe('the registry row', function () {
         it('is unarmed on mainnet, armed on testnet at the v0.21.3 instant and genesis-active on regtest', function () {
             assert.strictEqual(gateRegistry.activeAt(PROVEN_USE_KEY, 'mainnet', 'BTC', null, 4102444800), false);
-            assert.strictEqual(gateRegistry.activeAt(PROVEN_USE_KEY, 'testnet', 'DOGE', null, 1791019442), false);
-            assert.strictEqual(gateRegistry.activeAt(PROVEN_USE_KEY, 'testnet', 'DOGE', null, 1791019443), true);
+            assert.strictEqual(gateRegistry.activeAt(PROVEN_USE_KEY, 'testnet', 'DOGE', null, 1791039937), false);
+            assert.strictEqual(gateRegistry.activeAt(PROVEN_USE_KEY, 'testnet', 'DOGE', null, 1791039938), true);
             assert.strictEqual(gateRegistry.activeAt(PROVEN_USE_KEY, 'regtest', 'BTC', null, 0), true);
         });
     });

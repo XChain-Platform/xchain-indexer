@@ -111,7 +111,7 @@ describe('stake-weight ordering collation gate @regression @tier1', function () 
     describe('emitted SQL', function () {
         it('only the ordering changed: the gate adds COLLATE and nothing else', async function () {
             const off = dbFor('testnet');
-            await off.stakeWeightsWithCap(1, 154938, '0', 'test');
+            await off.stakeWeightsWithCap(1, 154970, '0', 'test');
             const offQ = off._calls[0].query;
             sinon.restore();
             const on = dbFor('regtest');
@@ -132,9 +132,9 @@ describe('stake-weight ordering collation gate @regression @tier1', function () 
                 'BTC:mainnet':  0,
                 'LTC:mainnet':  0,
                 'DOGE:mainnet': 0,
-                'BTC:testnet':  154939,
-                'LTC:testnet':  4905307,
-                'DOGE:testnet': 67960786,
+                'BTC:testnet':  154971,
+                'LTC:testnet':  4905844,
+                'DOGE:testnet': 67961578,
                 regtest: 0,
             });
             // Mainnet holds 0 stakes (measured 2026-09-09), so binary and folding order pick

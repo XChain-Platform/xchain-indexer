@@ -114,8 +114,8 @@ describe('Execute._processSlashEmission multi-slash ledger conservation @regress
         const at = (height, network, coin) => gateRegistry.activeAt(SLASH_ROW, network, coin, height, null);
         assert.strictEqual(at(0, 'regtest', 'BTC'), true);
         assert.strictEqual(at(9e9, 'mainnet', 'BTC'), true);
-        assert.strictEqual(at(154938, 'testnet', 'BTC'), false);
-        assert.strictEqual(at(154939, 'testnet', 'BTC'), true);
+        assert.strictEqual(at(154970, 'testnet', 'BTC'), false);
+        assert.strictEqual(at(154971, 'testnet', 'BTC'), true);
     });
 });
 

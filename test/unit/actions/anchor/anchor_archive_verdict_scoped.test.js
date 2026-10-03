@@ -143,7 +143,7 @@ describe('ANCHOR folded archive verdict scope', function () {
 });
 
 describe('ANCHOR folded archive verdict post-arm coin thresholds', function () {
-    const height = 67960786;
+    const height = 67961578;
 
     afterEach(function () { sinon.restore(); });
 

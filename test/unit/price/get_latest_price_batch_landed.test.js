@@ -202,8 +202,8 @@ describe('PRICE_FEE_BATCH_LANDED_ACTIVATION sizing @regression @tier1', function
             if (net === 'testnet') continue;
             assert.strictEqual(at(9e9, net, 'DOGE'), false, net);
         }
-        assert.strictEqual(at(67960785, 'testnet', 'DOGE'), false);
-        assert.strictEqual(at(67960786, 'testnet', 'DOGE'), true);
+        assert.strictEqual(at(67961577, 'testnet', 'DOGE'), false);
+        assert.strictEqual(at(67961578, 'testnet', 'DOGE'), true);
         assert.strictEqual(at(9e9, 'someothernet', 'DOGE'), false);
         assert.strictEqual(at(9e9, undefined, undefined), false);
     });

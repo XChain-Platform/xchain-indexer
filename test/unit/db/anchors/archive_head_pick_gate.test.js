@@ -91,7 +91,7 @@ describe('archive-head canonical pick fold gate', function () {
     });
 
     it('resolves the DOGE floor from the post-arm testnet row', function () {
-        const height = 67960786;
+        const height = 67961578;
         stubPostArmFoldFloor(height);
         assert.strictEqual(foldArchiveHeadFloor('testnet', 'DOGE'), height);
         assert.strictEqual(gateRegistry.activeAt(

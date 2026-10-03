@@ -206,13 +206,13 @@ const CONTRACT_META_REQUIRED_TESTNET_TIME = 1789257600;
 // BROADCAST_FEE_LENGTH mainnet stays inert until the operator arms it.
 const BROADCAST_FEE_LENGTH_MAINNET_TIME = UNARMED;
 // BROADCAST_FEE_LENGTH testnet stays inert until the operator arms it.
-const BROADCAST_FEE_LENGTH_TESTNET_TIME = 1791019443;
+const BROADCAST_FEE_LENGTH_TESTNET_TIME = 1791039938;
 
 // D1: mainnet ships inert under the write hold and joins the genesis-arm set
 // only when that hold lifts after a fresh history count.
 const CONTROLLER_CUSTODY_GUARD_MAINNET_TIME = UNARMED;
 // D2: testnet ships inert until a release cut pins a future fleet-wide instant.
-const CONTROLLER_CUSTODY_GUARD_TESTNET_TIME = 1791019443;
+const CONTROLLER_CUSTODY_GUARD_TESTNET_TIME = 1791039938;
 
 // Arms for OWNER_WITHDRAW_OPT_IN, the rule that makes owner WITHDRAW something a
 // contract must ask for. A contract deployed at/above the flag day refuses its

@@ -42,9 +42,9 @@ describe('protocol_changes anchor fold rows', function () {
             for (const key of KEYS) {
                 assert.deepStrictEqual(ProtocolChanges.get(key), {
                     mainnet: 9999999999,
-                    'BTC:testnet': 154939,
-                    'LTC:testnet': 4905307,
-                    'DOGE:testnet': 67960786,
+                    'BTC:testnet': 154971,
+                    'LTC:testnet': 4905844,
+                    'DOGE:testnet': 67961578,
                     testnet: 9999999999,
                     regtest: null,
                 });
@@ -65,8 +65,8 @@ describe('protocol_changes anchor fold rows', function () {
         withEnv(undefined, () => {
             for (const key of KEYS) {
                 assert.strictEqual(ProtocolChanges.activeAt(key, 'mainnet', 'DOGE', 99999999, 0), false);
-                assert.strictEqual(ProtocolChanges.activeAt(key, 'testnet', 'DOGE', 67960785, 0), false);
-                assert.strictEqual(ProtocolChanges.activeAt(key, 'testnet', 'DOGE', 67960786, 0), true);
+                assert.strictEqual(ProtocolChanges.activeAt(key, 'testnet', 'DOGE', 67961577, 0), false);
+                assert.strictEqual(ProtocolChanges.activeAt(key, 'testnet', 'DOGE', 67961578, 0), true);
             }
         });
     });
