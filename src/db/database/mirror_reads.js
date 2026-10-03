@@ -117,7 +117,7 @@ module.exports = {
         let rows = (author !== undefined && author !== null)
             ? await this.doQuery(ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL, [batchSeq, String(author)])
             : await this.doQuery(ARCHIVE_CHUNK_SET_SQL,
-                [batchSeq, foldArchiveHeadFloor(this.config['NETWORK']), batchSeq]);
+                [batchSeq, foldArchiveHeadFloor(this.config['NETWORK'], 'DOGE'), batchSeq]);
         return dedupeArchiveChunks(rows);
     },
 
@@ -165,7 +165,7 @@ module.exports = {
     async getMaxArchiveBatchSeqByAuthor(author){
         let network = this.config && this.config['NETWORK'];
         let headPredicate = archiveHeadPickPredicate('a')
-            .replace('?', String(foldArchiveHeadFloor(network)));
+            .replace('?', String(foldArchiveHeadFloor(network, 'DOGE')));
         let rows = await this.doQuery(
             `SELECT MAX(a.match_batch_seq) AS max_batch_seq
              FROM anchor_actions a

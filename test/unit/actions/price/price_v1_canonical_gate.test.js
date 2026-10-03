@@ -9,8 +9,9 @@ const priceScale = require('../../../../src/consensus/gates/price_scale_gate.js'
 
 const handler = new Price(createMockIndexer());
 
-function validate(network, value, fee, data = { BLOCK_TIME: 1790000000 }){
+function validate(network, value, fee, data = { BLOCK_TIME: 1790000000 }, indexerCoin){
     const config = { ...handler.config, NETWORK: network };
+    if(indexerCoin) config.COIN = indexerCoin;
     const coin   = config.COINS[0];
     const fiat   = Object.keys(config.FIATS)[0];
     const params = ['1', coin, 'GOLD', fiat, value, fee, ''];
@@ -70,4 +71,35 @@ describe('PRICE v1 canonical gate fail-closed time', function () {
         const fee   = '0'.repeat(297) + '0.5';
         assert.strictEqual(validate('regtest', value, fee, {}), null);
     });
+});
+
+describe('PRICE v1 canonical gate post-arm coin thresholds', function () {
+    const instant = 1791019443;
+    const unarmed = 9999999999;
+    const saved = {};
+
+    beforeEach(function () {
+        const table = priceScale.PRICE_V1_CANONICAL_ACTIVATION;
+        for(const key of Object.keys(table)) saved[key] = table[key];
+        table.testnet = unarmed;
+        for(const coin of ['BTC', 'LTC', 'DOGE']) table[coin + ':testnet'] = instant;
+    });
+
+    afterEach(function () {
+        const table = priceScale.PRICE_V1_CANONICAL_ACTIVATION;
+        for(const key of Object.keys(table)) delete table[key];
+        Object.assign(table, saved);
+        for(const key of Object.keys(saved)) delete saved[key];
+    });
+
+    for(const coin of ['BTC', 'LTC', 'DOGE']){
+        it('activates ' + coin + ' exactly at its armed testnet instant', function () {
+            const value = '0'.repeat(297) + '1.5';
+            const fee = '0'.repeat(297) + '0.5';
+            assert.strictEqual(validate('testnet', value, fee,
+                { BLOCK_TIME: instant - 1 }, coin), null);
+            assert.strictEqual(validate('testnet', value, fee,
+                { BLOCK_TIME: instant }, coin), 'invalid: VALUE (format)');
+        });
+    }
 });

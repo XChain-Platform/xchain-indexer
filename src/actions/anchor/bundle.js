@@ -37,7 +37,8 @@ function walkSections(handler, params, data, error){
     let prevChain = null;
     let enforceOrder = gateRegistry.activeAt(
         'anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION',
-        handler.config['NETWORK'], null, Number(data['BLOCK_INDEX']), null);
+        handler.config['NETWORK'], handler.config['COIN'],
+        Number(data['BLOCK_INDEX']), null);
     // Chains already claimed by an earlier section of THIS bundle, for the one-section-per-chain
     // duplicate guard below. Scoped to the walk so it cannot leak across actions.
     let seenChains = new Set();

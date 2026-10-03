@@ -74,7 +74,7 @@ async function checkReplayGuards(handler, data, error){
 async function checkFoldArchiveReissue(handler, data, archive, error){
     if(error || archive === null) return error;
     let active = gateRegistry.activeAt('anchor_fold_activation.ANCHOR_FOLD_ACTIVATION',
-        handler.config['NETWORK'], null, Number(data['BLOCK_INDEX']), null);
+        handler.config['NETWORK'], handler.config['COIN'], Number(data['BLOCK_INDEX']), null);
     if(!active || typeof handler.indexerDb.getArchiveHeadsByAuthorAndSeq !== 'function')
         return error;
     return await archiveReissueRefusal(handler.indexerDb, {
@@ -147,7 +147,9 @@ async function parseArchiveHead(handler, params, data, error, format){
         let crc = handler.archiveCrc(data['ARCHIVE_B64']);
         if(crc === null)                          error = 'invalid: ARCHIVE_B64 (not gzip)';
         else if(crc !== data['BATCH_CRC32'])      error = 'invalid: BATCH_CRC32 (archive mismatch)';
-        else if(gateRegistry.activeAt('archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION', handler.config['NETWORK'], null, Number(data['BLOCK_INDEX']), null) &&
+        else if(gateRegistry.activeAt('archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION',
+                handler.config['NETWORK'], handler.config['COIN'],
+                Number(data['BLOCK_INDEX']), null) &&
                 handler.archiveMatchCount(data['ARCHIVE_B64']) !== Number(data['MATCH_COUNT']))
             error = 'invalid: MATCH_COUNT (archive mismatch)';
     }

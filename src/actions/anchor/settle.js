@@ -39,7 +39,7 @@ async function creditArchiveReward(handler, data, attQuorumMet, snapPubkeys, for
     } else if(attQuorumMet && snapPubkeys.has(String(data['PUBLISHER']))){
         let foldActive = gateRegistry.activeAt(
             'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION',
-            handler.config.NETWORK, null, Number(data.BLOCK_INDEX), null);
+            handler.config.NETWORK, handler.config.COIN, Number(data.BLOCK_INDEX), null);
         let rewardType = rewardTypeFor(format, foldActive);
         if(rewardType === null){
             getLogger().warn('\t ANCHOR v' + format + ' : archive reward is retired at the fold; reward skipped');

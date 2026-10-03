@@ -103,7 +103,7 @@ async function checkFoldSeqs(handler, sections, archive, error){
 }
 function foldOrderReason(handler, data, sections, error){
     let active = gateRegistry.activeAt('anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION',
-        handler.config['NETWORK'], null, Number(data['BLOCK_INDEX']), null);
+        handler.config['NETWORK'], handler.config['COIN'], Number(data['BLOCK_INDEX']), null);
     if(error || !active) return error;
     for(let i = 0; i < sections.length; i++){
         let previous = i === 0 ? null : sections[i - 1].CHAIN;
@@ -261,7 +261,7 @@ class Anchor {
 
         let foldActive = format === 3 && gateRegistry.activeAt(
             'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION', this.config['NETWORK'],
-            null, Number(data['BLOCK_INDEX']), null);
+            this.config['COIN'], Number(data['BLOCK_INDEX']), null);
 
         // Verify VERSION is one this parser knows (the table in the constructor is the whole wire set)
         if(!error && (format === null || this.formats[format] === undefined ||

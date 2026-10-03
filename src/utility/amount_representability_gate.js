@@ -168,12 +168,17 @@ function isRepresentableAmount(decimals, text){
 // is `blockTime` on `network`. Below the threshold -> off (legacy acceptance,
 // byte-identical historical replay). Unknown network -> off (safe: keeps
 // deployed behavior; boot rejects invalid networks before any block is
-// processed).
-function isAmountRepresentabilityActive(blockTime, network){
+// processed). `coin` is optional for callers that intentionally use the bare row.
+function isAmountRepresentabilityActive(blockTime, network, coin){
     let t = parseInt(blockTime);
     if(!Number.isFinite(t)) return false;
-    let threshold = AMOUNT_REPRESENTABILITY_ACTIVATION[network];
-    if(threshold === undefined) return false;
+    let coinKey = coin + ':' + network;
+    let threshold = coin !== null && coin !== undefined &&
+        Object.prototype.hasOwnProperty.call(AMOUNT_REPRESENTABILITY_ACTIVATION, coinKey)
+        ? AMOUNT_REPRESENTABILITY_ACTIVATION[coinKey]
+        : Object.prototype.hasOwnProperty.call(AMOUNT_REPRESENTABILITY_ACTIVATION, network)
+            ? AMOUNT_REPRESENTABILITY_ACTIVATION[network] : undefined;
+    if(typeof threshold !== 'number' || !Number.isFinite(threshold)) return false;
     return t >= threshold;
 }
 
