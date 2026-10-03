@@ -182,9 +182,9 @@ describe('db.getList() chained edit resolution @regression @tier1', function () 
     it('registers LIST_HEAD_FOLLOWS_EDIT_CHAIN with the deployment heights', function () {
         assert.deepStrictEqual(gateRegistry.get(LIST_HEAD_FOLLOWS_EDIT_CHAIN_KEY), {
             mainnet: 9999999999,
-            'BTC:testnet': 154971,
-            'LTC:testnet': 4905844,
-            'DOGE:testnet': 67961578,
+            'BTC:testnet': 155001,
+            'LTC:testnet': 4906040,
+            'DOGE:testnet': 67962387,
             testnet: 9999999999,
             regtest: 0,
         });

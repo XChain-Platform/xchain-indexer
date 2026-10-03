@@ -38,9 +38,9 @@ const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
 // anchor_bundle_order_activation
 addGate('anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION', 'height', {
     mainnet: UNARMED,
-    'BTC:testnet': 154971,
-    'LTC:testnet': 4905844,
-    'DOGE:testnet': 67961578,
+    'BTC:testnet': 155001,
+    'LTC:testnet': 4906040,
+    'DOGE:testnet': 67962387,
     testnet: UNARMED,
     regtest: 0,
 });

@@ -25,9 +25,9 @@ describe('protocol_changes bridge policy detach row', function () {
     it('registers the destination-side height map', function () {
         assert.deepStrictEqual(ProtocolChanges.get(KEY), {
             mainnet: 9999999999,
-            'BTC:testnet': 154971,
-            'LTC:testnet': 4905844,
-            'DOGE:testnet': 67961578,
+            'BTC:testnet': 155001,
+            'LTC:testnet': 4906040,
+            'DOGE:testnet': 67962387,
             testnet: 9999999999,
             regtest: 0,
         });
@@ -35,8 +35,8 @@ describe('protocol_changes bridge policy detach row', function () {
 
     it('is inert below the sentinel on mainnet, armed at the v0.21.3 height on testnet and active on regtest at genesis', function () {
         assert.strictEqual(ProtocolChanges.activeAt(KEY, 'mainnet', 'DOGE', 9999999998, null), false);
-        assert.strictEqual(ProtocolChanges.activeAt(KEY, 'testnet', 'DOGE', 67961577, null), false);
-        assert.strictEqual(ProtocolChanges.activeAt(KEY, 'testnet', 'DOGE', 67961578, null), true);
+        assert.strictEqual(ProtocolChanges.activeAt(KEY, 'testnet', 'DOGE', 67962386, null), false);
+        assert.strictEqual(ProtocolChanges.activeAt(KEY, 'testnet', 'DOGE', 67962387, null), true);
         assert.strictEqual(ProtocolChanges.activeAt(KEY, 'regtest', 'DOGE', 0, null), true);
     });
 

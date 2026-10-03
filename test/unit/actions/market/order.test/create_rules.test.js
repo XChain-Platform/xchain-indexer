@@ -48,9 +48,9 @@ describe('Order action handler @regression @tier2', function () {
         it('registers maker policy admission at the required network heights', function () {
             assert.deepStrictEqual(gateRegistry.get(MAKER_POLICY_ADMISSION_KEY), {
                 mainnet: 9999999999,
-                'BTC:testnet': 154971,
-                'LTC:testnet': 4905844,
-                'DOGE:testnet': 67961578,
+                'BTC:testnet': 155001,
+                'LTC:testnet': 4906040,
+                'DOGE:testnet': 67962387,
                 testnet: 9999999999,
                 regtest: 0,
             });

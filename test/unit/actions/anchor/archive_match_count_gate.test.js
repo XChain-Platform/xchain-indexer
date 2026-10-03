@@ -17,7 +17,7 @@ const {
 
 const ANCHOR_KEY = 'anchor_activation.ANCHOR_ACTIVATION';
 const MATCH_COUNT_KEY = 'archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION';
-const TESTNET_HEIGHT = 67961578;
+const TESTNET_HEIGHT = 67962387;
 
 function armCoinThreshold(key, threshold) {
     const original = gateRegistry.registry.read.bind(gateRegistry.registry);

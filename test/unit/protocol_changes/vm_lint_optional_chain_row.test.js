@@ -23,9 +23,9 @@ describe('protocol_changes VM lint optional-chain row', function () {
             'BTC:mainnet': UNARMED,
             'LTC:mainnet': UNARMED,
             'DOGE:mainnet': UNARMED,
-            'BTC:testnet': 154971,
-            'LTC:testnet': 4905844,
-            'DOGE:testnet': 67961578,
+            'BTC:testnet': 155001,
+            'LTC:testnet': 4906040,
+            'DOGE:testnet': 67962387,
             testnet: UNARMED,
             regtest: 0,
         });
@@ -37,7 +37,7 @@ describe('protocol_changes VM lint optional-chain row', function () {
             assert.strictEqual(registry.activeAt(KEY, 'mainnet', coin, 10000000, null), false,
                 coin + ':mainnet');
         }
-        for (const [coin, height] of [['BTC', 154971], ['LTC', 4905844], ['DOGE', 67961578]]) {
+        for (const [coin, height] of [['BTC', 155001], ['LTC', 4906040], ['DOGE', 67962387]]) {
             assert.strictEqual(registry.activeAt(KEY, 'testnet', coin, height - 1, null), false, coin + ':testnet');
             assert.strictEqual(registry.activeAt(KEY, 'testnet', coin, height, null), true, coin + ':testnet');
         }

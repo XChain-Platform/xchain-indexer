@@ -245,9 +245,9 @@ addGate('slash_grid_activation.SLASH_GRID_ACTIVATION', 'height', {
     'DOGE:mainnet': 0,
     // Unpinned: testnet carries stake history, so its heights are pinned at
     // flag-day assembly with the replay evidence that step requires.
-    'BTC:testnet':  154971,
-    'LTC:testnet':  4905844,
-    'DOGE:testnet': 67961578,
+    'BTC:testnet':  155001,
+    'LTC:testnet':  4906040,
+    'DOGE:testnet': 67962387,
     regtest: 0,
 });
 
@@ -263,9 +263,9 @@ addGate('slash_ledger_consolidation_activation.SLASH_LEDGER_CONSOLIDATION_ACTIVA
     'DOGE:mainnet': 0,
     // Unpinned: testnet carries stake history, so its heights are pinned at
     // flag-day assembly with the replay evidence that step requires.
-    'BTC:testnet':  154971,
-    'LTC:testnet':  4905844,
-    'DOGE:testnet': 67961578,
+    'BTC:testnet':  155001,
+    'LTC:testnet':  4906040,
+    'DOGE:testnet': 67962387,
     regtest: 0,
 });
 

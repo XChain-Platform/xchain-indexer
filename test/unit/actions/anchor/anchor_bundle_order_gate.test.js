@@ -24,7 +24,7 @@ const NETWORKS = ['mainnet', 'testnet', 'regtest'];
 const LEGACY_ORDER_NETWORKS = ['mainnet', 'testnet'];
 const BUNDLE_ORDER_KEY =
     'anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION';
-const TESTNET_HEIGHT = 67961578;
+const TESTNET_HEIGHT = 67962387;
 
 let indexer, handler, verifyStub, swqStub, deriveGateStub;
 

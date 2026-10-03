@@ -20,7 +20,7 @@ const { v3Params } = require('./helpers/anchor_v3_fixtures.js');
 
 const ANCHOR_GATE = 'anchor_activation.ANCHOR_ACTIVATION';
 const FOLD_GATE = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
-const TESTNET_HEIGHT = 67961578;
+const TESTNET_HEIGHT = 67962387;
 
 function armCoinThreshold(key, threshold){
     const original = gateRegistry.registry.read.bind(gateRegistry.registry);

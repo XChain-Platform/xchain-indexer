@@ -42,7 +42,7 @@ describe('armed_map/fingerprint: the running process', function () {
         assert.strictEqual(out.count, manifest.ENTRIES.length);
         assert.deepStrictEqual(out.rows, expected.rows);
         assert.strictEqual(out.rows['list_owner_activation.LIST_OWNER_ACTIVATION'],
-            'b01f3f2f00a6fb3a1af33aae0fee04190c61eef1445de8332bc43286ab5c25e2');
+            'de491f1800ecbafef8565ee3faa8b87707092505a441c8a970593c9025d9923d');
     });
 
     it('is memoized per process', function () {
@@ -262,7 +262,7 @@ describe('armed_map/fingerprint: temp-tree falsification of armed values (design
     it('a pinned testnet height reverting to null (not yet pinned) moves v2', function () {
         const dir = makeTree();
         editFile(dir, partDeclaring('slash_ledger_consolidation_activation.SLASH_LEDGER_CONSOLIDATION_ACTIVATION'),
-            "'BTC:testnet':  154971,", "'BTC:testnet':  null,");
+            "'BTC:testnet':  155001,", "'BTC:testnet':  null,");
         const r = readTree(dir);
         assert.strictEqual(r.status, 0, r.stderr);
         assert.match(r.out.hex, HEX64, r.out.reason);

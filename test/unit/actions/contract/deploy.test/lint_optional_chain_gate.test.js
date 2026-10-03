@@ -44,8 +44,8 @@ describe('Deploy (DEPLOY) @regression @tier2', function () {
         });
 
         it('stays OFF for BTC testnet below its v0.21.3 height and turns ON at it', async function () {
-            assert.strictEqual((await optsFor('testnet', 'BTC', 154970)).enforceLintOptionalChain, false);
-            assert.strictEqual((await optsFor('testnet', 'BTC', 154971)).enforceLintOptionalChain, true);
+            assert.strictEqual((await optsFor('testnet', 'BTC', 155000)).enforceLintOptionalChain, false);
+            assert.strictEqual((await optsFor('testnet', 'BTC', 155001)).enforceLintOptionalChain, true);
         });
 
         it('stays OFF for BTC mainnet at height 10000000', async function () {

@@ -44,7 +44,7 @@ function expectedPriceV1Rows(caps) {
     return {
         'price_scale_activation.PRICE_V1_CANONICAL_ACTIVATION': {
             kind: 'time',
-            value: { mainnet: UNARMED, 'BTC:testnet': 1791039938, 'LTC:testnet': 1791039938, 'DOGE:testnet': 1791039938, testnet: UNARMED, regtest: 0 },
+            value: { mainnet: UNARMED, 'BTC:testnet': 1791061097, 'LTC:testnet': 1791061097, 'DOGE:testnet': 1791061097, testnet: UNARMED, regtest: 0 },
         },
         'price_scale_activation.PRICE_V1_FEE_RE_CANONICAL': {
             kind: 'constant',
