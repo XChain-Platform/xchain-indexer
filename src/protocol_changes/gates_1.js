@@ -93,14 +93,6 @@ addGate('archive_head_unverified_gate_activation.ARCHIVE_HEAD_UNVERIFIED_GATE_AC
     regtest: 0,           // armed from genesis: fresh regtest stacks exercise the widened gate end to end
 });
 
-// archive_match_count_activation
-// Mainnet and testnet stay inert until the operator arms the archive count check.
-addGate('archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION', 'height', {
-    mainnet: UNARMED,
-    testnet: UNARMED,
-    regtest: 0,
-});
-
 // attest_admission_activation
 // Per-network activation height (LOCAL COPY of the canonical map in
 // xchain-documentation/protocol/constants.js). Compared against the request's own

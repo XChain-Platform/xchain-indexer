@@ -301,3 +301,11 @@ addGate('list_tick_coin_activation.LIST_TICK_COIN_ACTIVATION', 'height', {
     'DOGE:testnet': 67956922,
     regtest: 0,
 });
+
+// archive_match_count_activation
+// Mainnet and testnet stay inert until the operator arms the archive count check.
+addGate('archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
