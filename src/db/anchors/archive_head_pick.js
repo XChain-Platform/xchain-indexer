@@ -11,11 +11,17 @@ function archiveHeadPickPredicate(alias) {
         alias + '.chain IS NULL AND ' + alias + '.block_index_doge >= ?))';
 }
 
-function foldArchiveHeadFloor(network) {
+// `coin` is optional for network-only callers; DOGE-height readers supply DOGE.
+function foldArchiveHeadFloor(network, coin) {
     const table = gateRegistry.get(FOLD_GATE);
-    if(typeof network !== 'string' || !Object.prototype.hasOwnProperty.call(table, network))
+    if(typeof network !== 'string')
         return UNARMED;
-    const floor = table[network];
+    const coinKey = coin + ':' + network;
+    const floor = coin !== null && coin !== undefined &&
+        Object.prototype.hasOwnProperty.call(table, coinKey)
+        ? table[coinKey]
+        : Object.prototype.hasOwnProperty.call(table, network)
+            ? table[network] : undefined;
     return (typeof floor === 'number' && Number.isFinite(floor)) ? floor : UNARMED;
 }
 

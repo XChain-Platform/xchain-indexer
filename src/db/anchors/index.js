@@ -286,8 +286,8 @@ module.exports = {
             (scoped ? ` AND adr.address = ?` : ``) +
             ` ORDER BY a.action_index ASC LIMIT 1`,
             scoped
-                ? [foldArchiveHeadFloor(this.config['NETWORK']), batchSeq, String(author)]
-                : [foldArchiveHeadFloor(this.config['NETWORK']), batchSeq]);
+                ? [foldArchiveHeadFloor(this.config['NETWORK'], 'DOGE'), batchSeq, String(author)]
+                : [foldArchiveHeadFloor(this.config['NETWORK'], 'DOGE'), batchSeq]);
         return rows.length > 0 ? rows[0] : null;
     },
 

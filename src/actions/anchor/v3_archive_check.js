@@ -46,7 +46,7 @@ function foldArchiveReason(handler, archive, data){
 
     const countCheckActive = gateRegistry.activeAt(
         'archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION',
-        handler.config.NETWORK, null, Number(data.BLOCK_INDEX), null
+        handler.config.NETWORK, handler.config.COIN, Number(data.BLOCK_INDEX), null
     );
     if(countCheckActive && handler.archiveMatchCount(archive.ARCHIVE_B64) !== Number(archive.MATCH_COUNT))
         return 'invalid: MATCH_COUNT (archive mismatch)';

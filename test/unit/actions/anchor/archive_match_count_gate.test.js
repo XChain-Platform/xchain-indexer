@@ -17,6 +17,19 @@ const {
 
 const ANCHOR_KEY = 'anchor_activation.ANCHOR_ACTIVATION';
 const MATCH_COUNT_KEY = 'archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION';
+const TESTNET_HEIGHT = 67960786;
+
+function armCoinThreshold(key, threshold) {
+    const original = gateRegistry.registry.read.bind(gateRegistry.registry);
+    const table = Object.assign({}, gateRegistry.get(key), {
+        testnet: 9999999999,
+        'BTC:testnet': threshold,
+        'LTC:testnet': threshold,
+        'DOGE:testnet': threshold,
+    });
+    sinon.stub(gateRegistry.registry, 'read').callsFake(
+        readKey => readKey === key ? table : original(readKey));
+}
 
 function keys(){ return [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()]; }
 
@@ -64,10 +77,10 @@ function reassemblyHandler(network, built){
     return { indexer, handler: new Anchor(indexer) };
 }
 
-function headData(network, built){
+function headData(network, built, height = headHeight(network)){
     return {
         STATUS: 'valid', ACTION_INDEX: 71, CHAIN: 'BTC', NETWORK: network,
-        BLOCK_INDEX: headHeight(network), MATCH_BATCH_SEQ: built.v1.match_batch_seq,
+        BLOCK_INDEX: height, MATCH_BATCH_SEQ: built.v1.match_batch_seq,
         MATCH_COUNT: built.v1.match_count, BATCH_CRC32: built.v1.batch_crc32,
         TOTAL_CHUNKS: built.v1.total_chunks, ARCHIVE_B64: built.v1.archive_b64,
         SOURCE: 'publisher',
@@ -84,6 +97,8 @@ function parentRow(network, built){
 }
 
 describe('ANCHOR archive MATCH_COUNT gate', function () {
+    afterEach(function () { sinon.restore(); });
+
     it('returns null for non-gzip, non-JSON, and archives without a matches array', function () {
         const { handler } = reassemblyHandler('regtest', { v2s: [] });
         const zlib = require('zlib');
@@ -108,6 +123,24 @@ describe('ANCHOR archive MATCH_COUNT gate', function () {
         assert.strictEqual(await singleChunkStatus('regtest', 2), 'invalid: MATCH_COUNT (archive mismatch)');
         assert.strictEqual(await singleChunkStatus('testnet', 1), 'valid');
         assert.strictEqual(await singleChunkStatus('regtest', 1), 'valid');
+    });
+
+    it('activates at the armed DOGE testnet height', async function () {
+        armCoinThreshold(MATCH_COUNT_KEY, TESTNET_HEIGHT);
+        const { mismatch } = batches();
+
+        const below = reassemblyHandler('testnet', mismatch);
+        await reassembly.reassembleAtHead(below.handler,
+            headData('testnet', mismatch, TESTNET_HEIGHT - 1), null, 1);
+        assert.ok(below.indexer.indexerDb.setAnchorArchiveStatus.notCalled);
+        sinon.restore();
+
+        const active = reassemblyHandler('testnet', mismatch);
+        armCoinThreshold(MATCH_COUNT_KEY, TESTNET_HEIGHT);
+        await reassembly.reassembleAtHead(active.handler,
+            headData('testnet', mismatch, TESTNET_HEIGHT), null, 1);
+        assert.ok(active.indexer.indexerDb.setAnchorArchiveStatus.calledWith(
+            71, 'invalid_archive'));
     });
 
     for(const side of ['head-last', 'chunk-last']){

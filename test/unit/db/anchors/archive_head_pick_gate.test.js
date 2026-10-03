@@ -24,6 +24,17 @@ function stubFoldFloor(height) {
     });
 }
 
+function stubPostArmFoldFloor(height) {
+    const read = gateRegistry.registry.read.bind(gateRegistry.registry);
+    sinon.stub(gateRegistry.registry, 'read').callsFake((key) => {
+        if(key !== FOLD_KEY) return read(key);
+        return Object.freeze({
+            mainnet: UNARMED, testnet: UNARMED, regtest: 0,
+            'BTC:testnet': height, 'LTC:testnet': height, 'DOGE:testnet': height,
+        });
+    });
+}
+
 function assertPick(sql, alias) {
     const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const pick = new RegExp(
@@ -77,6 +88,16 @@ describe('archive-head canonical pick fold gate', function () {
         assert.strictEqual(foldArchiveHeadFloor('regtest'), height);
         assert.strictEqual(gateRegistry.activeAt(FOLD_KEY, 'regtest', null, height - 1, null), false);
         assert.strictEqual(gateRegistry.activeAt(FOLD_KEY, 'regtest', null, height, null), true);
+    });
+
+    it('resolves the DOGE floor from the post-arm testnet row', function () {
+        const height = 67960786;
+        stubPostArmFoldFloor(height);
+        assert.strictEqual(foldArchiveHeadFloor('testnet', 'DOGE'), height);
+        assert.strictEqual(gateRegistry.activeAt(
+            FOLD_KEY, 'testnet', 'DOGE', height - 1, null), false);
+        assert.strictEqual(gateRegistry.activeAt(
+            FOLD_KEY, 'testnet', 'DOGE', height, null), true);
     });
 
     it('builds only the version-1 or gated folded-head predicate', function () {

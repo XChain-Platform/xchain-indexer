@@ -36,7 +36,7 @@ const ProtocolChanges = require(path.join(SRC, 'protocol_changes.js'));
 // them as REPLACED instead. The 13 W5 rows compared EQUAL here at the W4 tip
 // (c5f9ba85) before their modules went.
 const TABLE = [
-    ['amount_representability_activation.AMOUNT_REPRESENTABILITY_ACTIVATION', 'isAmountRepresentabilityActive', ['time', 'network']],
+    ['amount_representability_activation.AMOUNT_REPRESENTABILITY_ACTIVATION', 'isAmountRepresentabilityActive', ['time', 'network', 'coin']],
     ['anchor_reward_activation.ANCHOR_ATTEST_BARRIER_ACTIVATION', 'isAnchorAttestBarrierHorizonActive', ['network', 'height']],
     ['anchor_reward_activation.ANCHOR_REWARD_ACTIVATION', 'isAnchorRewardActive', ['height', 'network']],
     ['anchor_reward_activation.ANCHOR_REWARD_DERIVE_ACTIVATION', 'isAnchorRewardDeriveActive', ['height', 'network']],
@@ -55,7 +55,7 @@ const TABLE = [
     ['price_batching_floor_activation.PRICE_BATCHING_FLOOR_ACTIVATION', 'isPriceBarrierRequired', ['time', 'network', 'coin']],
     ['price_pair_activation.PRICE_PAIR_WIDEN_ACTIVATION', 'isPricePairWideningActive', ['time', 'network']],
     ['price_scale_activation.PRICE_SCALE_ACTIVATION', 'isPriceScaleCanonicalActive', ['time', 'network']],
-    ['price_scale_activation.PRICE_V1_CANONICAL_ACTIVATION', 'isPriceV1CanonicalActive', ['time', 'network']],
+    ['price_scale_activation.PRICE_V1_CANONICAL_ACTIVATION', 'isPriceV1CanonicalActive', ['time', 'network', 'coin']],
     ['price_zero_validity_activation.PRICE_ZERO_VALIDITY_ACTIVATION', 'isPriceZeroValidityActive', ['time', 'network']],
     ['rollcall_activation.ROLLCALL_ACTIVATION', 'isRollcallActive', ['height', 'network']],
     ['rollcall_gates_activation.ROLLCALL_GATES_ACTIVATION', 'isRollcallGatesActive', ['height', 'network']],

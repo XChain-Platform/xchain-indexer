@@ -49,7 +49,9 @@ function validatePriceV1(config, util, params, data, error){
     // Validate VALUE (positive 8-decimal string)
     if(!error && (!data['V1_VALUE'] || !/^[0-9]+(\.[0-9]{1,8})?$/.test(data['V1_VALUE']) || util.bclte(data['V1_VALUE'], '0')))
         error = 'invalid: VALUE (format)';
-    if(!error && priceScale.isPriceV1CanonicalActive(data['BLOCK_TIME'], config['NETWORK']) && !priceScale.isCanonicalPriceV1Value(data['V1_VALUE']))
+    if(!error && priceScale.isPriceV1CanonicalActive(
+        data['BLOCK_TIME'], config['NETWORK'], config['COIN']) &&
+       !priceScale.isCanonicalPriceV1Value(data['V1_VALUE']))
         error = 'invalid: VALUE (format)';
 
     // VALUE ceiling, behind the same flag day the v0 pair prices ride. The hub's v1 ingest
@@ -68,7 +70,9 @@ function validatePriceV1(config, util, params, data, error){
     // divergence on a money path.
     if(!error && data['V1_FEE'] && (!/^[0-9]+(\.[0-9]{1,18})?$/.test(data['V1_FEE']) || util.bclt(data['V1_FEE'], '0') || util.bcgt(data['V1_FEE'], '1')))
         error = 'invalid: FEE (format)';
-    if(!error && data['V1_FEE'] && priceScale.isPriceV1CanonicalActive(data['BLOCK_TIME'], config['NETWORK']) && !priceScale.isCanonicalPriceV1Fee(data['V1_FEE']))
+    if(!error && data['V1_FEE'] && priceScale.isPriceV1CanonicalActive(
+        data['BLOCK_TIME'], config['NETWORK'], config['COIN']) &&
+       !priceScale.isCanonicalPriceV1Fee(data['V1_FEE']))
         error = 'invalid: FEE (format)';
     return error;
 }
