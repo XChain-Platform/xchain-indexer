@@ -21,9 +21,22 @@
 
 const assert = require('assert');
 const sinon = require('sinon');
-process.env.INDEXER_COIN = process.env.INDEXER_COIN || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 const Utility = require('../../../../src/utility.js');
+
+function useBtcCoin(){
+    let priorCoin;
+
+    before(function () {
+        priorCoin = process.env.INDEXER_COIN;
+        process.env.INDEXER_COIN = 'BTC';
+    });
+
+    after(function () {
+        if(priorCoin === undefined) delete process.env.INDEXER_COIN;
+        else process.env.INDEXER_COIN = priorCoin;
+    });
+}
 
 const BASE = { BLOCK_INDEX: 100, ACTION_INDEX: 5, SOURCE: 'owner' };
 const OPTS = {
@@ -61,6 +74,8 @@ function custodyOpts(extra){
 }
 
 describe('Programmable policy layer : custody guard routing @regression', function () {
+    useBtcCoin();
+
     it('routes DEPOSIT and WITHDRAW to the transfer class', function () {
         const util = new Utility();
         assert.strictEqual(util.controllerActionClass('DEPOSIT'), 'transfer');
@@ -117,6 +132,8 @@ describe('Programmable policy layer : custody guard routing @regression', functi
 });
 
 describe('Programmable policy layer : custody guard ordering @regression', function () {
+    useBtcCoin();
+
     it('does not run the address guard after a token denial', async function () {
         const util = new Utility();
         sinon.stub(util, 'maybeRunControllerGuard').resolves({ error: 'token denied', guardFee: 0 });
