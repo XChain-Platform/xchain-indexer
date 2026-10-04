@@ -28,11 +28,33 @@ const { readEnvNow } = require('./env.js');
 
 // Connection settings and the poll-mode flag.
 function initConnection(sync, hubDb, options) {
+    options = options || {};
     sync.hubDb     = hubDb;                            // Database instance pointing at the local hub DB
-    sync.hubUrl    = options.hubUrl   || readEnvNow('HUB_API_URL') || '';
+    sync.selector  = options.selector || null;
+    let selectedAddress = sync.selector && typeof sync.selector.current === 'function'
+        ? sync.selector.current() : null;
+    sync.hubUrl    = sync.selector ? '' : (options.hubUrl || readEnvNow('HUB_API_URL') || '');
     sync.apiKey    = options.apiKey   || readEnvNow('HUB_API_KEY') || '';
     sync.feedApiKey = options.feedApiKey || readEnvNow('HUB_FEED_API_KEY') || '';
-    sync.enabled   = !!sync.hubUrl && !!sync.hubDb;
+    sync.enabled   = !!(selectedAddress || sync.hubUrl) && !!sync.hubDb;
+    sync._selectorRevision = 0;
+    sync._hubUrlEpoch = null;
+    sync.captureConnectionAddress = () => {
+        if(sync._hubUrlEpoch === sync._wsEpoch) return sync.hubUrl;
+        if(sync.selector && typeof sync.selector.current === 'function'){
+            let address = sync.selector.current();
+            sync.hubUrl = typeof address === 'string' ? address : '';
+            sync.enabled = !!sync.hubUrl && !!sync.hubDb;
+        }
+        sync._hubUrlEpoch = sync._wsEpoch;
+        return sync.hubUrl;
+    };
+    if(sync.selector && typeof sync.selector.onChange === 'function'){
+        sync._selectorUnsubscribe = sync.selector.onChange(() => {
+            sync._selectorRevision++;
+            sync._bootstrapDrained = false;
+        });
+    } else sync._selectorUnsubscribe = null;
     sync.pollIntervalMs = parseInt(options.pollInterval || readEnvNow('HUB_DB_SYNC_POLL_INTERVAL') || '30000');
     // Total wall-clock budget for one snapshot GET. The `timeout: 30000` request
     // option in httpGet is an IDLE-socket timer that resets on every byte received,

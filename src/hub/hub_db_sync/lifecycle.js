@@ -62,6 +62,7 @@ module.exports = {
             }
         } else {
             getLogger().warn('HubDbSync: ws package not available, falling back to periodic polling');
+            this.captureConnectionAddress();
             // Select the poll fallback BEFORE the first bootstrap so even that initial
             // drain fails closed (does not certify the watermark); see bootstrapAll (#2476).
             this._pollMode = true;
@@ -106,13 +107,15 @@ module.exports = {
         this._bootstrapping = true;
         this._bootstrapLastProgressAt = Date.now();
         const drainEpoch = this._wsEpoch;
+        const selectorRevision = this._selectorRevision;
         try {
             this._pendingBootstrapHeights = null;
             let drained = await this.drainEveryTable();
             // A disconnect leaves a delivery gap that only the replacement
             // connection's own drain can close. Results started on the prior
             // connection cannot certify its replacement.
-            const sameConnection = this._wsEpoch === drainEpoch;
+            const sameConnection = this._wsEpoch === drainEpoch &&
+                this._selectorRevision === selectorRevision;
             if (drained.allDrained && drained.marks.length > 0 && sameConnection)
                 this.certifyFullDrain(drained.marks, drainEpoch);
             else if (this.running) this.scheduleBootstrapRetry();
@@ -143,10 +146,19 @@ module.exports = {
     async drainEveryTable() {
         let marks = [];
         let allDrained = true;
+        let connectionEpoch = this._wsEpoch;
+        let selectorRevision = this._selectorRevision;
         for (let table of ['oracle_prices'].concat(CROSS_CHAIN_TABLES, HUB_STATE_TABLES, ['price_snapshots'])) {
+            if(connectionEpoch !== this._wsEpoch || selectorRevision !== this._selectorRevision){
+                allDrained = false;
+                break;
+            }
             try {
                 let mark = await this.bootstrapTable(table);
-                if (mark === null) allDrained = false;
+                if (mark === null) {
+                    allDrained = false;
+                    if(connectionEpoch !== this._wsEpoch || selectorRevision !== this._selectorRevision) break;
+                }
                 else {
                     marks.push(mark);
                     this._bootstrapLastProgressAt = Date.now();
@@ -221,9 +233,14 @@ module.exports = {
     // "is the mirror connected, and how far behind". Disabled reports configured:false
     // rather than a zeroed shape that would read as a live mirror stalled at genesis.
     mirrorStatus() {
+        let selectorStatus = this.selector && typeof this.selector.status === 'function'
+            ? this.selector.status() : null;
+        let followedAddress = this.hubUrl || (selectorStatus ? selectorStatus.current : null);
+        let candidates = selectorStatus && Array.isArray(selectorStatus.candidates)
+            ? selectorStatus.candidates.slice() : (followedAddress ? [followedAddress] : []);
         if (!this.enabled) {
             return { configured: false, connected: false, bootstrapped: false, streamWatermark: null,
-                     tables: {}, heights: {} };
+                     followedAddress: followedAddress, candidates: candidates, tables: {}, heights: {} };
         }
         let tables = {};
         // HUB_STATE_TABLES rides the global streamWatermark, not a per-table
@@ -244,6 +261,8 @@ module.exports = {
             connected: !!this.ws,
             bootstrapped: this._bootstrapDrained,
             streamWatermark: this.streamWatermark,
+            followedAddress: followedAddress,
+            candidates: candidates,
             // The stall detector's two inputs, surfaced so an operator can read the
             // "hub ahead, mirror frozen" gap off /status instead of inferring it from
             // deferral logs. null age means the mirror has not certified anything yet.

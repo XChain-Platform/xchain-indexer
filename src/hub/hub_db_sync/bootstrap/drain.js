@@ -44,9 +44,15 @@ module.exports = {
     // drained (page not full, every row applied), or null otherwise; the caller
     // (bootstrapAll) only advances the global watermark once every table drains.
     async bootstrapTable(table) {
+        let connectionEpoch = this._wsEpoch;
+        let selectorRevision = this._selectorRevision;
         let drain = await this.openTableDrain(table);
         if (drain === null) return null;
+        if (connectionEpoch !== this._wsEpoch ||
+            selectorRevision !== this._selectorRevision) return null;
         if (!(await this.pageTableDrain(drain))) return null;
+        if (drain.connectionEpoch !== this._wsEpoch ||
+            drain.selectorRevision !== this._selectorRevision) return null;
         getLogger().info('HubDbSync: bootstrapped ' + drain.applied + ' rows into ' + table +
             (drain.priceSkipped > 0 ? ' (' + drain.priceSkipped + ' row(s) below the ' + drain.priceFloor +
                 ' mirror floor left unapplied)' : ''));
@@ -55,6 +61,8 @@ module.exports = {
         this.reportRefusedChainRows(table);
         this.reportRefusedNetworkRows(table);
         await this.catchUpToReadyCeiling(drain);
+        if (drain.connectionEpoch !== this._wsEpoch ||
+            drain.selectorRevision !== this._selectorRevision) return null;
 
         // Fully drained only if the final page wasn't full and everything applied.
         let fullyDrained = drain.lastPageCount < PAGE_LIMIT && drain.applyErrors === 0;
@@ -62,7 +70,11 @@ module.exports = {
         if (!this.acceptPriceMirrorBound(drain, fullyDrained)) return null;
         this.notePriceFloorAfterDrain(drain, fullyDrained);
         await this.reconcileAfterDrain(drain, fullyDrained);
+        if (drain.connectionEpoch !== this._wsEpoch ||
+            drain.selectorRevision !== this._selectorRevision) return null;
         if (fullyDrained && !(await this.armBarriersAfterDrain(drain))) return null;
+        if (drain.connectionEpoch !== this._wsEpoch ||
+            drain.selectorRevision !== this._selectorRevision) return null;
 
         if (!fullyDrained) return null;
         return drain.watermark !== null ? drain.watermark : 0;
@@ -139,6 +151,8 @@ module.exports = {
         let drain = {
             table: table, scope: scope,
             lastId: cursor.lastId, readyCeiling: cursor.readyCeiling,
+            connectionEpoch: this._wsEpoch,
+            selectorRevision: this._selectorRevision,
             fullTable: cursor.lastId === 0,
             // Page until a SHORT page. The previous single-fetch version treated any
             // full page as "not drained" and never fetched the rest. On a hub table
@@ -265,8 +279,12 @@ module.exports = {
                 ' (the hub reports ' + announcedCeiling + ' as its highest id)');
 
         for (let page = 0; page < MAX_PAGES; page++) {
+            if (drain.connectionEpoch !== this._wsEpoch ||
+                drain.selectorRevision !== this._selectorRevision) return false;
             let path = '/hub-db/snapshot/' + table + '?since_id=' + drain.lastId + '&limit=' + PAGE_LIMIT;
             let result = await this.httpGet(path);
+            if (drain.connectionEpoch !== this._wsEpoch ||
+                drain.selectorRevision !== this._selectorRevision) return false;
             if (!result || !Array.isArray(result.rows)) return false;
             if (!(await this.acceptSnapshotPage(table, result))) return false;
 
