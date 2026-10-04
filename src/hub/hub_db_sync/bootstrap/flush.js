@@ -118,12 +118,10 @@ module.exports = {
     },
 
     // What the hub SERVED, for the reconciliation passes: the natural keys and the
-    // ceilings of the three tables whose pages are the only proof of what the hub holds.
+    // ceilings needed by the tables whose pages are the only proof of what the hub holds.
     recordServedRow(drain, row) {
         if (drain.servedMatchIds) {
             drain.servedMatchIds.add(String(row.match_id));
-            let sid = Number(row.id);
-            if (Number.isFinite(sid) && sid > drain.maxServedId) drain.maxServedId = sid;
         }
         if (drain.servedPriceKeys) {
             let rn = Number(row.round_number);
