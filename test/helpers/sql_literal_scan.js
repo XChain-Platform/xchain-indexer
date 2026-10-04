@@ -79,6 +79,34 @@ function extractSqlLiterals(source, file) {
     return literals;
 }
 
+function findIndirectTableSites(source, file, tables) {
+    const ast = parseJavascript(source, file);
+    const passed = new Map(tables.map(table => [table.toLowerCase(), table]));
+    const sites = [];
+    walk(ast, (node) => {
+        if (node.type === 'TemplateLiteral') {
+            const tokens = tokenizeSql(templateValue(node));
+            const hasTableExpression = tokens.some((token, index) => {
+                const word = keyword(token);
+                return (word === 'FROM' || word === 'JOIN' || word === 'INTO' || word === 'UPDATE')
+                    && tokens[index + 1] && tokens[index + 1].value === '?';
+            });
+            if (hasTableExpression) {
+                sites.push({ line: node.loc.start.line, kind: 'template', table: null });
+            }
+        } else if (node.type === 'Literal' && typeof node.value === 'string') {
+            const table = passed.get(node.value.toLowerCase());
+            if (table) sites.push({ line: node.loc.start.line, kind: 'bare-name', table });
+        } else if (node.type === 'BinaryExpression' && node.operator === '+'
+            && node.left.type === 'Literal' && typeof node.left.value === 'string'
+            && /\b(?:FROM|JOIN|INTO|UPDATE)\s*$/i.test(node.left.value)
+            && node.right.type !== 'Literal') {
+            sites.push({ line: node.loc.start.line, kind: 'concat', table: null });
+        }
+    });
+    return sites;
+}
+
 function tokenizeSql(sql) {
     const tokens = [];
     let depth = 0;
@@ -246,4 +274,4 @@ function findMirrorIdUses(literal, tables) {
     return uses;
 }
 
-module.exports = { extractSqlLiterals, findMirrorIdUses };
+module.exports = { extractSqlLiterals, findIndirectTableSites, findMirrorIdUses };
