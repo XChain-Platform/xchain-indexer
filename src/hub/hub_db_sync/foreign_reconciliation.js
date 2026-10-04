@@ -92,9 +92,7 @@ module.exports = {
     // re-genesised testnet - leaves every round the previous hub served sitting in the
     // mirror. price_snapshots is the one mirrored table with NO defence against that.
     // It carries no `network` column, so mirrorNetworkScope returns null and both
-    // purgeForeignNetworkRows and purgeRebuiltSourceRows are unreachable for it; and
-    // being a FULL_REPAGE table its cursor is forced to 0, so the id-ceiling fence that
-    // detects a retired id space never runs. The re-page then converges only the keys the
+    // purgeForeignNetworkRows is unreachable for it. A full re-page converges only the keys the
     // two hubs SHARE, because applyRow's upsert is keyed on (round_number, coin_pair):
     // a foreign round the new hub has never reached is simply never addressed.
     //
@@ -201,8 +199,7 @@ module.exports = {
     //
     // capability_snapshots is defenceless against a repoint for exactly the reasons
     // price_snapshots is: no `network` column (so mirrorNetworkScope returns null and
-    // both purges are unreachable), and a FULL_REPAGE cursor forced to 0 (so the
-    // id-ceiling fence never runs). The re-page then converges only the uq_cap_snap keys
+    // the network purge is unreachable). A full re-page converges only the uq_cap_snap keys
     // the two hubs SHARE, and a row from the previous hub at a block boundary the new one
     // has never reached is simply never addressed. MEASURED 2026-08-28: both testnet
     // indexer mirrors still held 43 rows at snapshot_block 957439 - a BTC MAINNET height -

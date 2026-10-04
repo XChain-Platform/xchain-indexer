@@ -145,10 +145,8 @@ function initPriceDrainState(sync, options) {
     // MAX()-based refresh would then overstate the mirror (priceSyncHeight
     // jumps to the fresh round while earlier rounds are still absent) and
     // the height barrier would open over a HOLED mirror: a per-operator
-    // divergent native-fee price read. The same out-of-order row would
-    // also contaminate the re-bootstrap cursor (since_id = local MAX(id)
-    // silently skips the gap under it). Deferring the apply keeps the
-    // local mirror a CONTIGUOUS prefix of the hub's table at all times,
+    // divergent native-fee price read. Deferring the apply keeps the
+    // local mirror complete through the drain position,
     // which is what makes the reconnect self-heal
     // (refreshAllSyncHeights) and the timeout self-heal safe to read
     // from it unguarded. _priceDrained is per-connection (reset on close,
@@ -202,6 +200,11 @@ function initTransportState(sync, options) {
     // apply is still awaiting its DB write. The chain is reset on reconnect
     // (the old connection's in-flight work is abandoned on close anyway).
     sync._msgChain = Promise.resolve();
+
+    // Snapshot pagination positions belong to the current hub database instance.
+    // They are wire positions only and are never derived from locally assigned ids.
+    sync._drainPositions = Object.create(null);
+    sync._lastHubInstanceId = null;
 
     // Heartbeat-timeout watchdog: the hub broadcasts a {type:'watermark'} frame
     // every WS_WATERMARK_INTERVAL_MS (10s server-side default; see HubDbBroadcaster). A

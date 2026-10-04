@@ -22,15 +22,12 @@
  *
  *   1. HUB_STATE_TABLES membership, which is also what puts the table in the
  *      bootstrap drain loop (the loop concatenates the class arrays).
- *   2. The natural-key id strip in applyRow. Every hub that holds the
+ *   2. The content-key id strip shared by every mirror table. Every hub that holds the
  *      finalized artifact writes its OWN row and gossips it, so two hubs carry
  *      different ids for one logical row; identity is UNIQUE (network,
- *      request_id) and a wire id kept here can land on a locally-assigned PK
+ *      request_id, effective_time) and a wire id kept here can land on a locally-assigned PK
  *      where INSERT IGNORE drops a real response with no error.
- *   3. FULL_REPAGE_TABLES membership, which FOLLOWS FROM (2) rather than from
- *      any in-place upgrade: once the ids are locally assigned, a
- *      since_id = MAX(local id) cursor is not a position in the followed hub's
- *      id space at all.
+ *   3. The connection drain position, which is the only value used as since_id.
  *   4. The frozen watermark grace and its regtest-only env seam.
  *   5. The one-column batch-link upsert. Every signed column is fixed by the first
  *      insert, and only batch_action_index (the display link to the on-chain
@@ -111,15 +108,13 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
         sinon.restore();
     });
 
-    it('_applyRow KEEPS the id for state_checkpoints, the id-parity control in the same class', async function () {
+    it('_applyRow strips the wire id for state_checkpoints too', async function () {
         const { sync, queries } = makeSync();
         await sync.applyRow('state_checkpoints', { id: 77, network: 'regtest', chain: 'BTC',
                                                    block_index: 5, state_hash: 'e'.repeat(64), checkpoint_seq: 3 });
         const cols = /\(([^)]*)\) VALUES/.exec(insertFor(queries, 'state_checkpoints')[0].sql)[1]
             .split(',').map(s => s.trim());
-        assert.ok(cols.indexOf('id') !== -1,
-            'state_checkpoints is an id-parity mirror; if the strip reaches it, the strip condition is ' +
-            'too broad and this suite would pass for the wrong reason');
+        assert.strictEqual(cols.indexOf('id'), -1, 'state_checkpoints allocates its own local surrogate id');
     });
 
     // ── the one-column batch-link upsert ──
