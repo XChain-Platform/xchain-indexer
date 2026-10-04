@@ -29,7 +29,7 @@
 // shim is installed. The explorer's vendored copy reaches the same path because it
 // carries the hub-canonical observability shim at src/observability/.
 const { getLogger } = require('../../observability/index.js');
-const { CROSS_CHAIN_TABLES, HUB_STATE_TABLES } = require('./mirror_tables.js');
+const { CROSS_CHAIN_TABLES, HUB_STATE_TABLES, AUTO_INCREMENT_ID_TABLES } = require('./mirror_tables.js');
 const { WebSocket } = require('./transport.js');
 
 module.exports = {
@@ -44,6 +44,7 @@ module.exports = {
             getLogger().info('HubDbSync: disabled (no hub URL or no local hub DB connection)');
             return;
         }
+        await this.assertAutoIncrementMirrorIds();
         this.running = true;
         // Armed from the start, but inert until the watermark has advanced at least once:
         // a cold start that never drains is the block loop's hold ceiling to bound, not
@@ -72,6 +73,19 @@ module.exports = {
         if (!WebSocket) {
             this.startPolling();
         }
+    },
+
+    // Id-less content-keyed writes require the local surrogate key to allocate itself.
+    // Refuse startup before opening the stream if any legacy mirror schema cannot do so.
+    async assertAutoIncrementMirrorIds() {
+        let invalid = [];
+        for (let table of AUTO_INCREMENT_ID_TABLES) {
+            let rows = await this.hubDb.doQuery("SHOW COLUMNS FROM " + table + " WHERE Field = 'id'");
+            let id = Array.isArray(rows) ? rows[0] : null;
+            if (!id || !/auto_increment/i.test(String(id.Extra || ''))) invalid.push(table);
+        }
+        if (invalid.length > 0)
+            throw new Error('HubDbSync: mirror startup refused: id must be AUTO_INCREMENT on ' + invalid.join(', '));
     },
 
     // Bootstrap every mirrored table. When ALL of them fully drain (each REST
@@ -268,7 +282,7 @@ module.exports = {
     // ensures the wait is bounded by a re-drive rather than by nothing at all.
     //
     // Leave an active bootstrap on its current connection while it is making progress.
-    // Full-repage tables restart at id 0, so replacing that connection discards the work.
+    // Replacing a connection can discard its in-memory drain progress.
     // A drain with no progress for a full ceiling window still resyncs.
     //
     // Rate-limited to one resync per ceiling window, and a no-op on a disabled or
@@ -336,9 +350,8 @@ module.exports = {
             // re-bootstrap to redeliver rows or fall through to the 60s timeout.
             await this.refreshAllSyncHeights();
 
-            // Re-bootstrap to fill in rows missed while disconnected. bootstrapTable
-            // uses the local max-ID as since_id, so it fetches only genuinely-missing
-            // rows; re-receives are harmless thanks to INSERT IGNORE in applyRow.
+            // Re-bootstrap to fill in rows missed while disconnected. The ready frame
+            // decides whether this connection may resume its previous wire positions.
             // A full drain re-opens the heartbeat gate and advances the watermark.
             await this.bootstrapAll();
         }, 5000);
