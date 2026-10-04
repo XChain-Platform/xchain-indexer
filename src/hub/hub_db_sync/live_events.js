@@ -137,7 +137,7 @@ module.exports = {
     // (re-receives of rows the final drain pages already fetched are harmless:
     // the price upsert is idempotent). On a failure it stops AT the failed
     // event, keeping it and the tail buffered, and returns false so the caller
-    // reports the table not-drained: local MAX(id) stays at the contiguous
+    // reports the table not-drained: the wire position stays at the contiguous
     // drain frontier, the retry re-fetches the failed row over REST, and a
     // persistently bad row wedges the barrier (defer) rather than silently
     // forking, the module's fail-closed contract (BOOTSTRAP-HOLE-1).
