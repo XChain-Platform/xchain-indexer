@@ -265,14 +265,15 @@ describe('HubDbSync _applyRow column filtering @regression @tier2', function () 
         const insert = doQuery.getCalls().find(c => /^INSERT IGNORE/.test(c.args[0]));
         assert.ok(insert, 'INSERT must still run');
         assert.ok(!insert.args[0].includes('anchor_txid'), 'hub-only column must be filtered out');
-        assert.deepStrictEqual(insert.args[1], [1, 'LTC', 5]);
+        assert.deepStrictEqual(insert.args[1], ['LTC', 5]);
     });
 
     it('passes through rows whose columns all exist locally', async function () {
         const { sync, doQuery } = makeApplySync(['id', 'chain']);
         await sync.applyRow('state_checkpoints', { id: 2, chain: 'BTC' });
         const insert = doQuery.getCalls().find(c => /^INSERT IGNORE/.test(c.args[0]));
-        assert.ok(insert.args[0].includes('(id, chain)'));
+        assert.ok(insert.args[0].includes('(chain)'));
+        assert.ok(!/\bid\b/.test(insert.args[0]));
     });
 
     it('no-ops when nothing intersects the local schema', async function () {

@@ -128,6 +128,11 @@ class HubClient {
         // Wall-clock ceiling for a single call; see HUB_CALL_DEADLINE_MS.
         let deadline = Number(CONFIG_ENV.HUB_CALL_DEADLINE_MS);
         this.callDeadlineMs = Number.isFinite(deadline) && deadline > 0 ? deadline : HUB_CALL_DEADLINE_MS;
+        this.addressSource = null;
+    }
+
+    setAddressSource(fn){
+        this.addressSource = (typeof fn === 'function') ? fn : null;
     }
 
     // Read the hub's operational params. The one method here that is NOT on the hub's
@@ -364,7 +369,13 @@ class HubClient {
     // hub method names; this wrapper supplies the client's own URL, key and deadline.
     call(method, params, apiKeyOverride, urlOverride){
         let key = apiKeyOverride || this.apiKey;
-        return sendHubRequest(urlOverride || this.hubUrl, method, params, key, this.callDeadlineMs);
+        let address = this.hubUrl;
+        if(!urlOverride && this.addressSource){
+            let sourcedAddress = this.addressSource();
+            if(typeof sourcedAddress === 'string' && sourcedAddress.length > 0)
+                address = sourcedAddress;
+        }
+        return sendHubRequest(urlOverride || address, method, params, key, this.callDeadlineMs);
     }
 }
 

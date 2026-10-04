@@ -135,7 +135,7 @@ function oraclePriceUpsertSql(cols, placeholders) {
 //      the deletion, or the receive-side guards legitimately refused
 //      an unfenced/unsigned retraction - kept the pre-reorg row, and an anchor_txid-
 //      only ODKU could NEVER converge it: neither the live re-broadcast nor the
-//      FULL_REPAGE bootstrap (which re-delivers the row through this same path)
+//      full-table bootstrap (which re-delivers the row through this same path)
 //      moved the stale effective_time, which GATES the settlement block
 //      (db.getEffectiveUnsettledMatches), or the stale signature set. That is a
 //      permanent money-bearing divergence from a mirror-fed peer, the same class
@@ -222,6 +222,8 @@ function attestationResponseUpsertSql(cols, placeholders) {
 // the column their gate reads, so an older hub (or a mirror whose local table lacks
 // that column) falls through to the plain INSERT IGNORE rather than guessing.
 function mirrorUpsertSql(table, cols, placeholders) {
+    cols = cols.filter(c => c !== 'id');
+    placeholders = cols.map(() => '?').join(', ');
     // price_snapshots needs an in-place upgrade path, not plain INSERT IGNORE.
     // It carries UNIQUE (round_number, coin_pair). The hub writes a 'skipped'
     // placeholder when a BTC round had no local submissions, and the bootstrap
