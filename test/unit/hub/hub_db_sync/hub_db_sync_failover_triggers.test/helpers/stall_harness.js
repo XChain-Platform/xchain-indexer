@@ -16,13 +16,13 @@ const HubDbSync = require('../../../../../../src/hub/hub_db_sync.js');
 
 const STREAM_WATERMARK = 1000;
 
-function makeStallHarness({ stallMs, exitMs }) {
+function makeStallHarness({ stallMs, exitMs, hubOptions = {} }) {
     const fatalReasons = [];
     const hubDb = { doQuery: sinon.stub().resolves([]) };
-    const sync = new HubDbSync(hubDb, {
+    const sync = new HubDbSync(hubDb, Object.assign({
         hubUrl: 'http://127.0.0.1',
         onFatalStall: reason => fatalReasons.push(reason)
-    });
+    }, hubOptions));
 
     sync.running = true;
     sync._bootstrapDrained = true;

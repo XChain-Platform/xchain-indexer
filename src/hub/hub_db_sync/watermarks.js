@@ -265,8 +265,10 @@ module.exports = {
                        Math.round(this.watermarkStallExitMs / 1000) + 's after a forced resync ' +
                        '(HUB_SYNC_WATERMARK_STALL_S / HUB_SYNC_WATERMARK_STALL_EXIT_S)';
         getLogger().error('HubDbSync: ' + reason);
+        const failoverAction = this.stallFailoverAction();
         this.driveResync(shape + ' after a forced resync');
-        if (this._onFatalStall) this._onFatalStall(reason);
+        if (failoverAction === 'exit' && this._onFatalStall) this._onFatalStall(reason);
+        else if (failoverAction !== 'exit') return verdict;
         else getLogger().error('HubDbSync: no onFatalStall handler wired, so this mirror stays up and ' +
             'keeps re-driving; a consumer that wants a supervisor restart must wire one.');
         return verdict;

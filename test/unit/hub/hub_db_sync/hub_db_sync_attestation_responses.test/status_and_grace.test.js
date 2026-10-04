@@ -60,7 +60,8 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
         const sync = new HubDbSync(null, {});
         assert.deepStrictEqual(sync.mirrorStatus(),
             { configured: false, connected: false, bootstrapped: false, streamWatermark: null,
-              followedAddress: null, candidates: [], tables: {}, heights: {} });
+              followedAddress: null, candidates: [], lastMoveAt: null, moveReason: null,
+              moveCount: 0, tables: {}, heights: {} });
     });
 
     it('mirrorStatus reports disconnected while enabled and no socket has opened', function () {

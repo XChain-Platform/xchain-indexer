@@ -25,6 +25,7 @@
  ********************************************************************/
 
 const { readEnvNow } = require('./env.js');
+const { createMovePolicy } = require('./failover/move_policy.js');
 
 // Connection settings and the poll-mode flag.
 function initConnection(sync, hubDb, options) {
@@ -55,6 +56,12 @@ function initConnection(sync, hubDb, options) {
             sync._bootstrapDrained = false;
         });
     } else sync._selectorUnsubscribe = null;
+    const reconnectAttempts = Object.prototype.hasOwnProperty.call(options, 'failoverReconnectAttempts')
+        ? options.failoverReconnectAttempts : Number(readEnvNow('HUB_FAILOVER_RECONNECT_ATTEMPTS'));
+    const minDwellMs = Object.prototype.hasOwnProperty.call(options, 'failoverMinDwellMs')
+        ? options.failoverMinDwellMs : Number(readEnvNow('HUB_FAILOVER_MIN_DWELL_MS'));
+    sync._movePolicy = createMovePolicy({ reconnectAttempts, minDwellMs, now: options.now });
+    sync._failoverPendingDrain = false;
     sync.pollIntervalMs = parseInt(options.pollInterval || readEnvNow('HUB_DB_SYNC_POLL_INTERVAL') || '30000');
     // Total wall-clock budget for one snapshot GET. The `timeout: 30000` request
     // option in httpGet is an IDLE-socket timer that resets on every byte received,
