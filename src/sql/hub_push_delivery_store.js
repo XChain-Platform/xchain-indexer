@@ -48,98 +48,64 @@ class HubPushDeliveryStore {
         return client;
     }
 
-    async ensure(rowId, addresses){
-        let values = addresses.map(() => "(?, ?, 'pending', 0, NOW(), NOW())").join(', ');
-        let params = [];
-        for(let address of addresses) params.push(rowId, address);
-        await this.indexerDb.poolQuery(
-            `INSERT IGNORE INTO hub_push_deliveries
-                (push_id, hub_address, status, attempts, created_at, updated_at)
-             VALUES ${values}`,
-            params
-        );
+    parseDeliveredTo(value){
+        if(value == null) return new Set();
+        if(Buffer.isBuffer(value)) value = value.toString('utf8');
+        if(typeof value === 'string'){
+            try { value = JSON.parse(value); }
+            catch (err) { return new Set(); }
+        }
+        if(!Array.isArray(value)) return new Set();
+        return new Set(value.filter(address => typeof address === 'string'));
     }
 
-    async get(rowId){
-        return await this.indexerDb.poolQuery(
-            `SELECT push_id, hub_address, status, attempts, last_attempted_at, last_error
-               FROM hub_push_deliveries WHERE push_id = ?`,
-            [rowId]
-        );
+    async getDeliveredTo(rowId){
+        let rows = await this.indexerDb.poolQuery(
+            'SELECT delivered_to FROM pending_hub_pushes WHERE id = ?', [rowId]);
+        return this.parseDeliveredTo(rows && rows[0] && rows[0].delivered_to);
     }
 
     async markDelivered(rowId, address){
         await this.indexerDb.poolQuery(
-            `UPDATE hub_push_deliveries
-                SET status = 'delivered', last_attempted_at = NOW(), last_error = NULL,
-                    updated_at = NOW()
-              WHERE push_id = ? AND hub_address = ?`,
-            [rowId, address]
+            `UPDATE pending_hub_pushes
+                SET delivered_to = JSON_ARRAY_APPEND(
+                    COALESCE(delivered_to, JSON_ARRAY()), '$', ?)
+              WHERE id = ?
+                AND NOT JSON_CONTAINS(
+                    COALESCE(delivered_to, JSON_ARRAY()), JSON_QUOTE(?), '$')`,
+            [address, rowId, address]
         );
-    }
-
-    async recordFailure(rowId, address, err){
-        let msg = String((err && err.message) || err).slice(0, 480);
-        if(err && err.rateLimited){
-            let waitMs = Number.isFinite(err.retryAfterMs) && err.retryAfterMs > 0 ? err.retryAfterMs : 60000;
-            this.queue._throttledUntilMs = Date.now() + waitMs;
-            getLogger().warn('HubPushQueue: hub rate-limited delivery to ' + address +
-                '; holding the queue ' + Math.round(waitMs / 1000) + 's (' + msg + ')');
-            return;
-        }
-        await this.indexerDb.poolQuery(
-            `UPDATE hub_push_deliveries
-                SET attempts = attempts + 1, last_attempted_at = NOW(), last_error = ?,
-                    updated_at = NOW()
-              WHERE push_id = ? AND hub_address = ?`,
-            [msg, rowId, address]
-        );
-        getLogger().warn('HubPushQueue: delivery failed for row ' + rowId + ' to ' + address + ': ' + msg);
-    }
-
-    async remove(rowId){
-        await this.indexerDb.poolQuery('DELETE FROM hub_push_deliveries WHERE push_id = ?', [rowId]);
     }
 
     async attempt(row, candidates){
         let parsed = await this.queue.parseHubPushPayload(row);
         if(parsed === null) return;
 
-        await this.ensure(row.id, candidates);
-        let deliveries = await this.get(row.id);
-        let byAddress = new Map((deliveries || []).map(delivery => [delivery.hub_address, delivery]));
-        let now = Date.now();
-
+        let deliveredTo = await this.getDeliveredTo(row.id);
+        let firstError = null;
         for(let address of candidates){
-            let delivery = byAddress.get(address) || {
-                hub_address: address,
-                status: 'pending',
-                attempts: 0,
-                last_attempted_at: null
-            };
-            if(delivery.status === 'delivered' || !this.queue.isDue(delivery, now)) continue;
+            if(deliveredTo.has(address)) continue;
             try {
-                let delivered = await this.queue.deliverHubPush(row, parsed.payload, this.clientForAddress(address));
-                if(!delivered){
-                    await this.remove(row.id);
-                    return;
-                }
+                let delivered = await this.queue.deliverHubPush(
+                    row, parsed.payload, this.clientForAddress(address));
+                if(!delivered) return;
                 await this.markDelivered(row.id, address);
-                delivery.status = 'delivered';
-                byAddress.set(address, delivery);
+                deliveredTo.add(address);
                 getLogger().info('HubPushQueue: delivered ' + row.push_type + ' row ' + row.id +
                     ' to ' + address);
             } catch (err){
-                await this.recordFailure(row.id, address, err);
+                if(!firstError) firstError = err;
+                if(err && err.rateLimited) break;
             }
         }
 
-        if(candidates.every(address => {
-            let delivery = byAddress.get(address);
-            return delivery && delivery.status === 'delivered';
-        })){
-            await this.remove(row.id);
+        if(candidates.every(address => deliveredTo.has(address))){
             await this.indexerDb.markHubPushDelivered(row.id);
+            return;
+        }
+        if(firstError){
+            let attemptNo = (Number(row.attempts) || 0) + 1;
+            await this.queue.recordHubPushFailure(row, firstError, attemptNo);
         }
     }
 }

@@ -21,7 +21,7 @@ const { makeRow } = require('./helpers/fixtures.js');
 function makeFanoutIndexer(initialCandidates, downAddresses){
     let candidates = initialCandidates.slice();
     let calls = [];
-    let deliveries = new Map();
+    let deliveredTo = new Map();
     let down = new Set(downAddresses || []);
 
     let hubClient = {
@@ -46,38 +46,18 @@ function makeFanoutIndexer(initialCandidates, downAddresses){
     };
 
     let indexerDb = {
-        markHubPushDelivered: sinon.stub().resolves(),
+        markHubPushDelivered: sinon.stub().callsFake(async id => deliveredTo.delete(id)),
         recordHubPushAttempt: sinon.stub().resolves(),
         poolQuery: sinon.stub().callsFake(async function(sql, params){
-            if(/INSERT IGNORE INTO hub_push_deliveries/.test(sql)){
-                for(let i = 0; i < params.length; i += 2){
-                    let key = params[i] + '|' + params[i + 1];
-                    if(!deliveries.has(key)) deliveries.set(key, {
-                        push_id: params[i], hub_address: params[i + 1], status: 'pending',
-                        attempts: 0, last_attempted_at: null, last_error: null
-                    });
-                }
-                return { affectedRows: params.length / 2 };
+            if(/SELECT delivered_to FROM pending_hub_pushes/.test(sql)){
+                return [{ delivered_to: JSON.stringify(deliveredTo.get(params[0]) || []) }];
             }
-            if(/SELECT push_id, hub_address/.test(sql))
-                return [...deliveries.values()].filter(row => row.push_id === params[0]);
-            if(/SET status = 'delivered'/.test(sql)){
-                let row = deliveries.get(params[0] + '|' + params[1]);
-                row.status = 'delivered';
-                row.last_attempted_at = new Date();
-                row.last_error = null;
-                return { affectedRows: 1 };
-            }
-            if(/SET attempts = attempts \+ 1/.test(sql)){
-                let row = deliveries.get(params[1] + '|' + params[2]);
-                row.attempts++;
-                row.last_attempted_at = new Date();
-                row.last_error = params[0];
-                return { affectedRows: 1 };
-            }
-            if(/DELETE FROM hub_push_deliveries/.test(sql)){
-                for(let key of [...deliveries.keys()])
-                    if(key.startsWith(params[0] + '|')) deliveries.delete(key);
+            if(/SET delivered_to = JSON_ARRAY_APPEND/.test(sql)){
+                let address = params[0];
+                let rowId = params[1];
+                let addresses = deliveredTo.get(rowId) || [];
+                if(!addresses.includes(address)) addresses.push(address);
+                deliveredTo.set(rowId, addresses);
                 return { affectedRows: 1 };
             }
             throw new Error('unexpected SQL: ' + sql);
@@ -91,7 +71,7 @@ function makeFanoutIndexer(initialCandidates, downAddresses){
             hubSelector: { status: () => ({ candidates: candidates.slice() }) }
         },
         calls,
-        deliveries,
+        deliveredTo,
         setCandidates(next){ candidates = next.slice(); }
     };
 }
@@ -108,7 +88,7 @@ describe('HubPushQueue per-hub fan-out', function(){
         assert.deepStrictEqual(fixture.calls.map(call => call.address),
             ['http://hub-a', 'http://hub-b']);
         assert.strictEqual(fixture.indexer.indexerDb.markHubPushDelivered.calledWith(101), true);
-        assert.strictEqual(fixture.deliveries.size, 0);
+        assert.strictEqual(fixture.deliveredTo.has(101), false);
     });
 
     it('keeps only the down hub delivery pending after the other hub acknowledges', async function(){
@@ -117,9 +97,8 @@ describe('HubPushQueue per-hub fan-out', function(){
 
         await queue.attempt(makeRow({ id: 102 }));
 
-        assert.strictEqual(fixture.deliveries.get('102|http://hub-a').status, 'delivered');
-        assert.strictEqual(fixture.deliveries.get('102|http://hub-b').status, 'pending');
-        assert.strictEqual(fixture.deliveries.get('102|http://hub-b').attempts, 1);
+        assert.deepStrictEqual(fixture.deliveredTo.get(102), ['http://hub-a']);
+        assert.strictEqual(fixture.indexer.indexerDb.recordHubPushAttempt.calledOnce, true);
         assert.strictEqual(fixture.indexer.indexerDb.markHubPushDelivered.callCount, 0);
     });
 
@@ -133,7 +112,7 @@ describe('HubPushQueue per-hub fan-out', function(){
         await queue.attempt(row);
 
         assert.strictEqual(fixture.indexer.indexerDb.markHubPushDelivered.calledWith(103), true);
-        assert.strictEqual(fixture.deliveries.size, 0);
+        assert.strictEqual(fixture.deliveredTo.has(103), false);
     });
 
     it('uses the reorg key for every reorg fan-out delivery', async function(){
