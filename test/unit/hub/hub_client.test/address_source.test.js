@@ -67,9 +67,13 @@ describe('HubClient', function(){
             let stub = stubSuccessfulRequest();
 
             await c.retractPriceRange('BTC', 10, 20, 3);
+            await c.retractXcallRange('LTC', 30, 40, 5);
 
             assert.strictEqual(stub.firstCall.args[0].hostname, 'current.example.com');
+            assert.strictEqual(stub.secondCall.args[0].hostname, 'current.example.com');
             assert.strictEqual(stub.firstCall.args[0].headers['x-api-key'], 'reorg-key');
+            assert.strictEqual(stub.secondCall.args[0].headers['x-api-key'], 'reorg-key');
+            assert.strictEqual(c.hubUrl, 'http://constructor.example.com');
         });
 
         it('lets a URL override take precedence over the source', async function(){
