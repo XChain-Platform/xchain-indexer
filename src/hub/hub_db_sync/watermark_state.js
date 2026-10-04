@@ -89,6 +89,8 @@ function initWatermarkState(sync) {
     // the connection beneath a healthy long drain. Null means no drain is active.
     sync._bootstrapLastProgressAt = null;
     sync._readyWatermark   = null;
+    sync._readyCaughtUp    = null;
+    sync._readyCaughtUpHandled = false;
 }
 
 function initHeightWatermarkState(sync) {

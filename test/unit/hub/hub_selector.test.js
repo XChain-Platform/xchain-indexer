@@ -9,9 +9,12 @@ const assert = require('assert');
 const crypto = require('crypto');
 const http = require('http');
 const ws = require('ws');
+const sinon = require('sinon');
+const observability = require('../../../src/observability/index.js');
 const createHubSelector = require('../../../src/hub/hub_db_sync/hub_selector.js');
 const HubClient = require('../../../src/hub/hub_client.js');
 const HubDbSync = require('../../../src/hub/hub_db_sync.js');
+const { makeDynamicSync, certify, openListHub } = require('./hub_selector_helpers.test.js');
 
 const WebSocketServer = ws.WebSocketServer || ws.Server;
 
@@ -331,5 +334,67 @@ describe('hub selector', function () {
             await closeHub(first);
             await closeHub(second);
         }
+    });
+
+    it('learns hubs after a certified drain without replacing seeds', async function () {
+        let hub = await openListHub({ hubs: [{ api_url: 'http://learned.test:10002' }] });
+        try {
+            let { selector, sync } = makeDynamicSync(hub.url, { feedApiKey: 'feed-key' });
+            await certify(sync, 0);
+            assert.strictEqual(hub.requests[0].body.method, 'gethubs');
+            assert.deepStrictEqual(hub.requests[0].body.params, {});
+            assert.strictEqual(hub.requests[0].headers['x-api-key'], 'feed-key');
+            assert.strictEqual(selector.current(), hub.url);
+            assert.deepStrictEqual(new Set(selector.status().candidates),
+                new Set([hub.url, 'http://learned.test:10002']));
+        } finally {
+            await hub.close();
+        }
+    });
+
+    it('refreshes once per connection and never from repeated certification', async function () {
+        let { sync } = makeDynamicSync();
+        let fetchHubList = sinon.stub(sync, 'fetchHubList').resolves({ hubs: [
+            { api_url: 'http://learned.test:10002' }
+        ] });
+        await certify(sync, 0);
+        sync.certifyFullDrain([101], sync._wsEpoch);
+        await sync._hubListRefreshPromise;
+        assert.strictEqual(fetchHubList.callCount, 1);
+        await certify(sync, 1, 102);
+        assert.strictEqual(fetchHubList.callCount, 2);
+    });
+
+    it('keeps candidates unchanged and logs once for empty and unsupported lists', async function () {
+        let { selector, sync } = makeDynamicSync();
+        let initial = selector.status().candidates;
+        let fetchHubList = sinon.stub(sync, 'fetchHubList');
+        fetchHubList.onCall(0).resolves({ hubs: [] });
+        fetchHubList.onCall(1).resolves({ hubs: [] });
+        fetchHubList.onCall(2).rejects(Object.assign(new Error('unsupported'), { rpcCode: -32601 }));
+        fetchHubList.onCall(3).rejects(Object.assign(new Error('unsupported'), { rpcCode: -32601 }));
+        let warn = sinon.stub(observability.getLogger(), 'warn');
+
+        try {
+            for(let epoch = 0; epoch < 4; epoch++) await certify(sync, epoch, 100 + epoch);
+            assert.deepStrictEqual(selector.status().candidates, initial);
+            assert.strictEqual(warn.callCount, 2);
+            assert.match(warn.firstCall.args[0], /no usable addresses/);
+            assert.match(warn.secondCall.args[0], /does not support/);
+        } finally {
+            warn.restore();
+        }
+    });
+
+    it('does not learn hub lists in pinned mode', function () {
+        let selector = createHubSelector('testnet', {
+            hubSeedUrls: '',
+            hubApiUrl: 'http://pinned.test:10002'
+        });
+        let sync = new HubDbSync({ doQuery: async () => [] }, { selector });
+        let fetchHubList = sinon.stub(sync, 'fetchHubList');
+        assert.strictEqual(sync.certifyFullDrain([100], sync._wsEpoch), true);
+        assert.strictEqual(fetchHubList.called, false);
+        assert.strictEqual(sync._hubListRefreshPromise, null);
     });
 });

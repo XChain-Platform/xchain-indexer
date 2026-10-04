@@ -6,6 +6,10 @@ const sinon = require('sinon');
 const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
 const createHubSelector = require('../../../../src/hub/hub_db_sync/hub_selector.js');
 const { makeReconnectHarness } = require('./hub_db_sync_failover_triggers.test/helpers/reconnect_harness.js');
+const { makeReadyFrameHarness } = require('./hub_db_sync_failover_triggers.test/helpers/ready_frame_harness.js');
+const {
+    makeSelectorReadyFrameHarness
+} = require('./hub_db_sync_failover_triggers.test/helpers/selector_ready_frame_harness.js');
 const { makeStallHarness } = require('./hub_db_sync_failover_triggers.test/helpers/stall_harness.js');
 
 const STALL_MS = 100;
@@ -92,6 +96,60 @@ describe('HubDbSync failover triggers', function () {
         assert.strictEqual(harness.stage1(STALL_MS), 'resync');
         assert.strictEqual(harness.stage2(STALL_MS + EXIT_MS), 'exit');
         assert.strictEqual(harness.fatalReasons.length, 1);
+    });
+
+    it('moves from a ready hub that reports it is not caught up', async function () {
+        harness = makeSelectorReadyFrameHarness({
+            drainOutcomes: [{ allDrained: true, marks: [81, 89] }]
+        });
+        const previous = harness.selector.current();
+        const advance = sinon.spy(harness.selector, 'advance');
+
+        const result = await harness.deliver({ type: 'ready', watermark: 90, caught_up: false });
+        await harness.sync.bootstrapAll();
+
+        assert.strictEqual(result.certified, false);
+        assert.strictEqual(harness.sync.drainEveryTable.callCount, 0);
+        assert.ok(advance.calledOnceWithExactly('hub not caught up'));
+        assert.notStrictEqual(result.followed, previous);
+        assert.deepStrictEqual(harness.moves, [{
+            next: result.followed,
+            previous,
+            reason: 'hub not caught up'
+        }]);
+        assert.strictEqual(harness.sync.mirrorStatus().moveReason, 'hub not caught up');
+    });
+
+    it('waits on one not-caught-up candidate and accepts a later caught-up frame', async function () {
+        harness = makeSelectorReadyFrameHarness({
+            seeds: ['http://hub-a.test'],
+            drainOutcomes: [{ allDrained: true, marks: [81, 89] }]
+        });
+        const followed = harness.selector.current();
+        const advance = sinon.spy(harness.selector, 'advance');
+
+        const waiting = await harness.deliver({ type: 'ready', watermark: 90, caught_up: false });
+        assert.strictEqual(harness.sync.certifyFullDrain([90], harness.sync._wsEpoch), false);
+        await harness.sync.bootstrapAll();
+        const caughtUp = await harness.deliver({ type: 'ready', watermark: 90, caught_up: true });
+
+        assert.deepStrictEqual(waiting, { certified: false, followed });
+        assert.deepStrictEqual(caughtUp, { certified: true, followed });
+        assert.strictEqual(harness.sync.drainEveryTable.callCount, 1);
+        assert.strictEqual(harness.retryCalls, 1);
+        assert.strictEqual(advance.callCount, 0);
+        assert.deepStrictEqual(harness.moves, []);
+    });
+
+    it('treats an older ready frame without caught_up as caught up', async function () {
+        harness = makeReadyFrameHarness({
+            drainOutcomes: [{ allDrained: true, marks: [81, 89] }]
+        });
+
+        const result = await harness.deliver({ type: 'ready', watermark: 90 });
+
+        assert.deepStrictEqual(result, { certified: true });
+        assert.strictEqual(harness.retryCalls, 0);
     });
 
     it('keeps new-hub data and heartbeat evidence behind the first certified drain', async function () {
