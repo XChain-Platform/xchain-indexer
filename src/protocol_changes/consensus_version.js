@@ -105,6 +105,6 @@
 // heights and the TRAIN_ACTIVATION 0.21.0 row, not on this ordinal.
 // 0.21.1 -> 0.21.2 is an indexer-only patch train that registers nothing new on
 // this ordinal; the pin advances only because it must track the package version.
-const CONSENSUS_VERSION = '0.21.3';
+const CONSENSUS_VERSION = '0.22.0';
 
 module.exports = { CONSENSUS_VERSION };

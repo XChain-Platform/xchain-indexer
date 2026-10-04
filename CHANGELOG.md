@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-10-04
+
+### Added
+- Added HUB_SEED_URLS failover with shuffled network seeds, learned hubs, and pinned-mode compatibility.
+- Added reconnect and stall move policies with dwell protection and fresh state after each move.
+- Added per-hub delivery tracking so durable pushes reach every known hub.
+- Added HUB_FEED_API_KEY authentication for read-only mirror requests.
+
+### Changed
+- Keyed mirrored rows by content and tracked drain positions independently for each connection.
+- Removed local mirror identifiers from consensus reads and deterministic ordering.
+- Reconciled match retractions by content after a complete certified drain.
+- Released quiet mirror barriers on stream progress and exposed price batch freshness.
+- Armed ORACLE_ROUND_TIME_ACTIVATION on BTC:testnet at 155158.
+- Armed ORACLE_ROUND_TIME_ACTIVATION on LTC:testnet at 4907593.
+- Armed ORACLE_ROUND_TIME_ACTIVATION on DOGE:testnet at 67966647.
+
+### Fixed
+- Kept configuration reads pinned while hub feeds move between candidates.
+
 ## [0.21.3] - 2026-10-03
 
 ### Added

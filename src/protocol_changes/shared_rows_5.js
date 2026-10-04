@@ -221,9 +221,9 @@ addGate('oracle_hourly_window_activation.ORACLE_HOURLY_WINDOW_FIRST_ROUND', 'con
 addGate('oracle_round_time_activation.ORACLE_ROUND_TIME_ACTIVATION', 'height', {
     mainnet: UNARMED,
     testnet: UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
+    'BTC:testnet': 155158,
+    'LTC:testnet': 4907593,
+    'DOGE:testnet': 67966647,
     regtest: 0,
 });
 // SHARED-GATES END
