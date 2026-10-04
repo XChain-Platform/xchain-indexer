@@ -83,6 +83,22 @@ const TIEBREAKERS = [
 // entry here is a deliberate, reviewed act.
 const ALLOWLIST = [
     {
+        clause: 'ara.reward_type, ara.round_reference, ara.publisher, ara.snapshot_block, ara.chain',
+        reason: 'getPendingAnchorRewardAttestations: the query pins network, and ' +
+                'anchor_reward_attestations carries UNIQUE KEY uq_reward_tuple (chain, ' +
+                'network, reward_type, round_reference, snapshot_block, publisher) ' +
+                '(src/sql/anchor_reward_attestations.sql), so the five ordered columns ' +
+                'complete that key within the filtered set and impose a total order.'
+    },
+    {
+        clause: 'policy_seq DESC',
+        reason: 'getAppliedPolicySnapshot: the query pins network, origin_chain and tick, ' +
+                'and policy_snapshots carries UNIQUE KEY uq_policy_seq (network, ' +
+                'origin_chain, tick, policy_seq) (src/sql/policy_snapshots.sql), so within ' +
+                'the filtered set policy_seq is unique per row and the single term is ' +
+                'already a total order.'
+    },
+    {
         clause: 'policy_seq ASC',
         reason: 'getEarlierFinalizedPolicySnapshots: the query pins network, origin_chain and ' +
                 'tick, and policy_snapshots carries UNIQUE KEY uq_policy_seq (network, ' +
