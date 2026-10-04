@@ -1,6 +1,6 @@
 const { getLogger } = require('../observability/index.js');
 const { CONFIG_ENV } = require('../config.js');
-const HubPushDeliveryStore = require('../sql/hub_push_delivery_store.js');
+const AddressRetry = require('./hub_push_queue/address_retry.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -53,7 +53,7 @@ class HubPushQueue {
         this.indexer   = indexer;
         this.indexerDb = indexer.indexerDb;
         this.hubClient = indexer.hubClient;
-        this.hubPushDeliveries = new HubPushDeliveryStore(this, opts.selector);
+        this.hubPushDeliveries = new AddressRetry(this, opts.selector);
 
         // How often the poller wakes to drain due rows.
         this.intervalMs    = opts.intervalMs    || parseInt(CONFIG_ENV.HUB_PUSH_RETRY_INTERVAL_MS) || 30000;
@@ -160,14 +160,14 @@ class HubPushQueue {
             // parked-in-backoff rows no longer occupy the LIMIT batch slots, which is what
             // caused head-of-line blocking. Pass the SAME backoff params used below by
             // isDue, which stays as a cheap belt-and-braces re-check.
-            let rows = await this.indexerDb.getPendingHubPushes(this.batchSize, {
+            let rows = await this.hubPushDeliveries.getPendingHubPushes(this.batchSize, {
                 baseBackoffMs: this.baseBackoffMs,
                 maxBackoffMs:  this.maxBackoffMs
             });
             if(!rows || rows.length === 0) return;
             let now = Date.now();
             for(let row of rows){
-                if(!this.isDue(row, now)) continue;
+                if(!await this.hubPushDeliveries.isDueAfterMove(row, rows, now)) continue;
                 await this.attempt(row);
                 // A 429 stops the batch where it stands. The remaining rows are still
                 // pending and still due, so the next tick past the hold picks them up
@@ -377,7 +377,7 @@ class HubPushQueue {
     }
 
     async attempt(row){
-        let candidates = this.hubPushDeliveries.candidateAddresses();
+        let candidates = await this.hubPushDeliveries.candidateAddressesAfterMove(row);
         if(candidates.length > 0) return await this.hubPushDeliveries.attempt(row, candidates);
 
         let parsed = await this.parseHubPushPayload(row);
