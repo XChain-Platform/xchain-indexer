@@ -91,8 +91,6 @@ class File {
          * DEBUGGING - Force params
          ****************************************************************/
         // Example payloads by FORMAT version:
-        // let str = "0|test.txt|text/plain|Test File|This is a test upload";
-        // let str = "0|xchain.jpg|image/jpeg|XChain Logo|This is the official XChain Logo";
         // params = String(str).split('|');
         // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 
