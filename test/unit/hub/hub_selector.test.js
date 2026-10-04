@@ -14,7 +14,7 @@ const observability = require('../../../src/observability/index.js');
 const createHubSelector = require('../../../src/hub/hub_db_sync/hub_selector.js');
 const HubClient = require('../../../src/hub/hub_client.js');
 const HubDbSync = require('../../../src/hub/hub_db_sync.js');
-const { makeDynamicSync, certify, openListHub } = require('./hub_selector_helpers.js');
+const { makeDynamicSync, certify, openListHub } = require('./hub_selector_helpers.test.js');
 
 const WebSocketServer = ws.WebSocketServer || ws.Server;
 
