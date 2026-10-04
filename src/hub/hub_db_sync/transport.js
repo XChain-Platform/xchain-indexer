@@ -28,6 +28,7 @@ const https  = require('https');
 const url    = require('url');
 const { getLogger } = require('../../observability/index.js');
 const { sanitizeHeights } = require('./watermark_config.js');
+const { sendHubRequest } = require('../hub_client/request.js');
 
 let WebSocket = null;
 try {
@@ -37,6 +38,11 @@ try {
 }
 
 const transportMethods = {
+
+    fetchHubList() {
+        let apiKey = this.feedApiKey || this.apiKey;
+        return sendHubRequest(this.hubUrl, 'gethubs', {}, apiKey, this.httpDeadlineMs);
+    },
 
     // Open the WebSocket subscription for live row updates. Returns a Promise that
     // resolves once the hub sends a 'ready' acknowledgement confirming the subscription

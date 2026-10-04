@@ -211,6 +211,10 @@ module.exports = {
             this.noteHeights(this._pendingBootstrapHeights || this._readyHeights);
             this.advanceWatermark(Math.min.apply(null, marks));
         }
+        if (this._hubListRefresher && this._hubListRefreshEpoch !== drainEpoch) {
+            this._hubListRefreshEpoch = drainEpoch;
+            this._hubListRefreshPromise = this._hubListRefresher.refresh();
+        }
         return true;
     },
 
