@@ -14,8 +14,8 @@
  *
  * XChain Indexer - Hub DB Sync Client: table bootstrap, the verdict
  *
- * What runs after a table's last page: the rebuilt-source content probe, the
- * ready-ceiling catch-up, the price mirror bound's held predecessors and its
+ * What runs after a table's last page: the ready-ceiling catch-up, the price
+ * mirror bound's held predecessors and its
  * acceptance check, the floor the barriers police, the reconciliation passes,
  * and the arming of the table's barrier once it has provably drained in full.
  * The price bound's own horizon and floor policing live here too.
@@ -28,57 +28,11 @@
 
 const { getLogger } = require('../../../observability/index.js');
 const { HUB_SCHEMA_VERSION } = require('../../hub_schema_version');
-const { CROSS_CHAIN_TABLES, FULL_REPAGE_TABLES } = require('../mirror_tables.js');
+const { CROSS_CHAIN_TABLES } = require('../mirror_tables.js');
 const { PRICE_MIRROR_MIN_PRE_HORIZON_ROUNDS, PRICE_MIRROR_LOOKBACK_GROWTH,
         PRICE_MIRROR_LOOKBACK_MAX_S } = require('../mirror_bounds.js');
 
 module.exports = {
-
-    // THE HALF A COMPARISON OF IDS ALONE CANNOT SEE.
-    //
-    // The ceiling fence above catches a replaced id space only while the local cursor
-    // sits ABOVE what the hub advertises. Once a rebuilt source has re-grown onto the
-    // retired ids, both sides agree on every id and disagree only on what those ids
-    // MEAN, and no comparison of ids can reach that. Nothing purges, the id-parity
-    // INSERT IGNORE apply drops each incoming row against the stale one holding its id,
-    // and the mirror serves the retired rows forever while every service reports healthy
-    // (state_checkpoints readers take MAX(checkpoint_seq), which a retired row wins).
-    //
-    // Content is the signal that does reach it, on the tables named in
-    // REBUILT_SOURCE_IDENTITY_COLUMNS: they are append-only and id-parity, so a hub row
-    // at id N whose natural key differs from local id N is a CONTRADICTION, not an
-    // absence. That distinction is the whole warrant for the delete, and it is the one
-    // purgeForeignNetworkRows draws: a filtered endpoint, a paging hole or a partial
-    // drain can each make a valid row look UNSERVED, and none of them can fabricate a
-    // conflicting row at an id the source itself served.
-    //
-    // WHY HERE, AFTER A DRAIN THAT FETCHED NOTHING, rather than before the drain. A
-    // zero-row drain is the mirror claiming to be level with its source, which is both
-    // the cheapest moment to ask the question (one small page-1 request per bootstrap
-    // of two small tables, and none at all while a mirror is still catching up) and the
-    // exact symptom this defect presents: a stranded mirror draining zero rows on every
-    // attempt with no other signal. A mirror still behind its source defers the check to
-    // the bootstrap that finds it level, which is the next reconnect at the latest.
-    //
-    // Returns true when a purge actually removed rows, which is the one outcome that
-    // changes what a re-page would find and so the one that sends the caller around again.
-    async probeRebuiltSource(drain) {
-        let table = drain.table;
-        if (!(drain.fetched === 0 && drain.applyErrors === 0 && drain.lastId > 0 && !drain.afterRebuiltPurge)) return false;
-        let clash = await this.detectRebuiltSourceByContent(table, drain.scope, drain.lastId);
-        if (!clash) return false;
-        getLogger().warn('HubDbSync: ' + table + ' id ' + clash.id + ' holds ' + clash.column + '=' +
-            clash.local + ' locally while the hub serves ' + clash.hub + ' at that id. This table is ' +
-            'append-only and id-parity, so one id cannot mean two rows: the source id space has been ' +
-            'replaced and re-grown onto the retired ids (a rebuilt hub database). Clearing the mirror ' +
-            'for this scope and re-paging from 0.');
-        let removed = await this.purgeRebuiltSourceRows(table, drain.scope, drain.lastId, drain.readyCeiling,
-            'id ' + clash.id + ' carries ' + clash.column + '=' + clash.local + ' locally while the hub ' +
-            'serves ' + clash.hub + ' at that id');
-        // Only a purge that actually removed rows changes what a re-page would find;
-        // without one the retry would drain the same zero rows and probe again.
-        return removed > 0;
-    },
 
     // Defense-in-depth: if the hub told us its max_id at subscription time and our
     // local copy is still behind that ceiling, the REST snapshot window may have
@@ -86,23 +40,15 @@ module.exports = {
     // catch-up for that narrow gap. Rows already local are ignored (INSERT IGNORE).
     // Skip the catch-up when the page loop already hit a hole (applyErrors>0): the table is
     // not drained regardless, and fetching past the hole would only widen it.
-    // The FULL_REPAGE_TABLES are exempt: they always re-page from 0 (which already
-    // covers the window this catch-up exists for), and their since_id=MAX(id) compare
-    // is either meaningless (capability_snapshots' locally-assigned ids) or blind to the
-    // in-place upgrades this catch-up would otherwise try to chase (#2491).
     async catchUpToReadyCeiling(drain) {
         let table = drain.table;
-        let hubReadyMaxId = this._readyMaxIds && this._readyMaxIds[table];
-        if (!(hubReadyMaxId && drain.applyErrors === 0 && !FULL_REPAGE_TABLES.includes(table))) return;
-        // Same network scope as the cursor read: an unscoped MAX(id) here compares a
-        // foreign hub's id against this hub's ceiling and reaches the opposite verdict
-        // about whether a gap exists.
-        let localMax = await this.localMaxId(table, drain.scope);
-        if (!(localMax < hubReadyMaxId)) return;
-        getLogger().info('HubDbSync: gap detected in ' + table + ' (local=' + localMax +
+        let hubReadyMaxId = Number(this._readyMaxIds && this._readyMaxIds[table]);
+        let position = Number(this._drainPositions[table]) || 0;
+        if (!(Number.isFinite(hubReadyMaxId) && position < hubReadyMaxId && drain.applyErrors === 0)) return;
+        getLogger().info('HubDbSync: gap detected in ' + table + ' (position=' + position +
                     ' hub_ready=' + hubReadyMaxId + '), fetching catch-up rows');
         try {
-            let catchUpPath = '/hub-db/snapshot/' + table + '?since_id=' + localMax + '&limit=10000';
+            let catchUpPath = '/hub-db/snapshot/' + table + '?since_id=' + position + '&limit=10000';
             let catchUp = await this.httpGet(catchUpPath);
             if (catchUp && Array.isArray(catchUp.rows)) await this.applyCatchUpPage(drain, catchUp);
         } catch (err) {
@@ -122,15 +68,8 @@ module.exports = {
             drain.applyErrors++;
             return;
         }
-        for (let row of catchUp.rows) {
-            // Count a swallowed catch-up apply error: leaving it silent left a
-            // hole while the gate still opened (CATCHUP-SCHEMA-BYPASS-1).
-            try { await this.applyRow(table, row); }
-            catch (e) {
-                drain.applyErrors++;
-                getLogger().warn('HubDbSync: catch-up apply failed for ' + table + ':', e);
-            }
-        }
+        for (let row of catchUp.rows)
+            if (!(await this.applyPendingRow(drain, row, false))) break;
     },
 
     // Apply the per-pair predecessors the bound declined, for the pairs this drain kept
@@ -139,8 +78,7 @@ module.exports = {
     // mirror does, and applying more than the gap needs would give the bound away. Only
     // on a complete re-page, because only then has every row the hub holds been weighed,
     // and a failure here fails the drain closed the same way a page apply does. Applying
-    // out of page order leaves no cursor hole: price_snapshots is a FULL_REPAGE table,
-    // so the cursor restarts at 0 on the next drain and carries nothing forward.
+    // out of page order leaves no cursor hole because the held row came from this drain.
     // priceSkipped is deliberately NOT decremented - it is the count of rows the bound
     // declined at decision time, and it drives the floor the barriers police, which must
     // keep claiming the mirror may lack rounds below priceFloor.
@@ -208,12 +146,20 @@ module.exports = {
         // Reconcile the retractions the bootstrap can never re-deliver (#3211). Only after a
         // COMPLETE re-page: a partial drain has not seen every row the hub holds, so a
         // "missing" match may simply be on a page we never fetched.
-        if (fullyDrained && drain.servedMatchIds) await this.reconcileRetractedMatches(drain.servedMatchIds, drain.maxServedId);
+        if (fullyDrained && drain.fullTable && drain.servedMatchIds) {
+            let watermark = Number(drain.watermark);
+            let certified = drain.watermark !== null && Number.isFinite(watermark);
+            let sameHub = certified && this._lastCertifiedMatchDrainHubUrl === drain.matchDrainHubUrl;
+            if (sameHub)
+                await this.reconcileRetractedMatches(
+                    drain.servedMatchIds, drain.matchPreDrainRows, watermark);
+            if (certified) this._lastCertifiedMatchDrainHubUrl = drain.matchDrainHubUrl;
+        }
 
         // Clear the capability snapshots this hub does not hold (#1837). Same COMPLETE-re-page
         // precondition as the two passes above, and ordered BEFORE the barrier re-evaluation
         // in the block below so releaseSnapshotWaiters judges the cleaned table.
-        if (fullyDrained && drain.servedSnapshotKeys)
+        if (fullyDrained && drain.fullTable && drain.servedSnapshotKeys)
             await this.reconcileForeignCapabilitySnapshots(drain.servedSnapshotKeys, drain.snapshotKeysComplete,
                                                             drain.maxServedSnapshotBlock, drain.snapshotPreDrainMaxId);
     },
@@ -243,7 +189,8 @@ module.exports = {
             // applied), so the pass cannot mistake one for a foreign row; and the
             // refresh below must read the cleaned table, or the barrier arms off a
             // height the mirror is about to lose.
-            await this.reconcileForeignPriceRounds(drain.servedPriceKeys, drain.priceKeysComplete, drain.maxServedRound);
+            if (drain.fullTable)
+                await this.reconcileForeignPriceRounds(drain.servedPriceKeys, drain.priceKeysComplete, drain.maxServedRound);
             if (!(await this.replayDrainedPriceEvents())) return false;
             await this.refreshPriceSyncHeight();
         }
@@ -267,7 +214,7 @@ module.exports = {
     // resumes exactly at the replay boundary with no ordering gap.
     // A failed or disconnect-raced flush reports the table
     // not-drained (return null) so bootstrapAll retries from the
-    // still-contiguous local max, the same fail-closed contract as
+    // still-contiguous drain position, the same fail-closed contract as
     // the page loop (BOOTSTRAP-HOLE-1).
     async replayDrainedPriceEvents() {
         let flushed = false;

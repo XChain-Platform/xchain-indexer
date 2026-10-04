@@ -28,7 +28,7 @@
 
 const { getLogger } = require('../../../observability/index.js');
 const { HUB_SCHEMA_VERSION } = require('../../hub_schema_version');
-const { CROSS_CHAIN_TABLES, FULL_REPAGE_TABLES } = require('../mirror_tables.js');
+const { CROSS_CHAIN_TABLES } = require('../mirror_tables.js');
 const { sanitizeHeights } = require('../watermark_config.js');
 
 const PAGE_LIMIT = 10000;
@@ -43,13 +43,16 @@ module.exports = {
     // Returns the snapshot response's stream watermark when this table fully
     // drained (page not full, every row applied), or null otherwise; the caller
     // (bootstrapAll) only advances the global watermark once every table drains.
-    // `afterRebuiltPurge` is set only on the re-drain this method schedules for itself after
-    // the content probe below cleared a retired id space. It suppresses a second probe, so
-    // the detect -> purge -> re-page sequence can run exactly once per bootstrap.
-    async bootstrapTable(table, afterRebuiltPurge) {
-        let drain = await this.openTableDrain(table, afterRebuiltPurge);
+    async bootstrapTable(table) {
+        let connectionEpoch = this._wsEpoch;
+        let selectorRevision = this._selectorRevision;
+        let drain = await this.openTableDrain(table);
         if (drain === null) return null;
+        if (connectionEpoch !== this._wsEpoch ||
+            selectorRevision !== this._selectorRevision) return null;
         if (!(await this.pageTableDrain(drain))) return null;
+        if (drain.connectionEpoch !== this._wsEpoch ||
+            drain.selectorRevision !== this._selectorRevision) return null;
         getLogger().info('HubDbSync: bootstrapped ' + drain.applied + ' rows into ' + table +
             (drain.priceSkipped > 0 ? ' (' + drain.priceSkipped + ' row(s) below the ' + drain.priceFloor +
                 ' mirror floor left unapplied)' : ''));
@@ -57,8 +60,9 @@ module.exports = {
         // a hub database that outlived a venue re-genesis serves its whole relic table.
         this.reportRefusedChainRows(table);
         this.reportRefusedNetworkRows(table);
-        if (await this.probeRebuiltSource(drain)) return await this.bootstrapTable(table, true);
         await this.catchUpToReadyCeiling(drain);
+        if (drain.connectionEpoch !== this._wsEpoch ||
+            drain.selectorRevision !== this._selectorRevision) return null;
 
         // Fully drained only if the final page wasn't full and everything applied.
         let fullyDrained = drain.lastPageCount < PAGE_LIMIT && drain.applyErrors === 0;
@@ -66,7 +70,11 @@ module.exports = {
         if (!this.acceptPriceMirrorBound(drain, fullyDrained)) return null;
         this.notePriceFloorAfterDrain(drain, fullyDrained);
         await this.reconcileAfterDrain(drain, fullyDrained);
+        if (drain.connectionEpoch !== this._wsEpoch ||
+            drain.selectorRevision !== this._selectorRevision) return null;
         if (fullyDrained && !(await this.armBarriersAfterDrain(drain))) return null;
+        if (drain.connectionEpoch !== this._wsEpoch ||
+            drain.selectorRevision !== this._selectorRevision) return null;
 
         if (!fullyDrained) return null;
         return drain.watermark !== null ? drain.watermark : 0;
@@ -76,7 +84,7 @@ module.exports = {
     // what falls outside it, resolve the cursor, and build the accounting the page loop
     // and every pass after it share. Null when the table is not ready, which the caller
     // reports as "not drained" so bootstrapAll retries.
-    async openTableDrain(table, afterRebuiltPurge) {
+    async openTableDrain(table) {
         // Prime (and validate) the local column cache once, up front. If the mirror
         // table does not exist yet, localColumns throws (it refuses to cache an empty
         // column set); bail as "not drained" so bootstrapAll schedules a retry once
@@ -99,27 +107,22 @@ module.exports = {
         if (scope) await this.purgeForeignNetworkRows(table, scope);
 
         let cursor = await this.resolveDrainCursor(table, scope);
-        let drain = await this.newDrainAccounting(table, afterRebuiltPurge, scope, cursor);
+        let drain = await this.newDrainAccounting(table, scope, cursor);
         await this.newPriceBoundState(drain);
         return drain;
     },
 
-    // Where the page loop starts reading. Returns the cursor and the hub's advertised
-    // ceiling, which the rebuilt-source probe compares against again after the drain.
+    // Where the page loop starts reading. The position is the highest wire id read from
+    // this connection, never a local mirror id.
     async resolveDrainCursor(table, scope) {
-        // Determine the highest existing ID in the local copy so we only fetch newer rows.
-        // EXCEPT the FULL_REPAGE_TABLES (see above): a since_id = MAX(local id) cursor is
-        // INSERT-shaped and can never re-fetch an in-place upgrade (and capability_snapshots
-        // also has locally-assigned ids). Re-page those from 0; the natural-key UNIQUE +
-        // idempotent applyRow (INSERT IGNORE / ODKU) dedupe, and the in-loop cursor still
-        // advances off the hub's wire ids.
-        //
-        // The read is network-scoped where the table supports it: an id is the CURRENT
-        // hub's auto-increment value, so a row from any other hub's id space is not a
-        // position in this hub's stream and must not seed a cursor into it.
-        let lastId = 0;
-        if (!FULL_REPAGE_TABLES.includes(table)) {
-            lastId = await this.localMaxId(table, scope);
+        let lastId = Number(this._drainPositions[table]);
+        if (!Number.isFinite(lastId) || lastId < 0) lastId = 0;
+        // Retractions are absent from this endpoint, so only a re-page from zero can prove
+        // which matches the hub currently serves. An incremental page cannot distinguish a
+        // retracted old match from one below its cursor.
+        if (table === 'cross_chain_matches') {
+            lastId = 0;
+            this._drainPositions[table] = 0;
         }
         let readyCeiling = (this._readyMaxIds && this._readyMaxIds[table] != null)
             ? Number(this._readyMaxIds[table]) : NaN;
@@ -127,52 +130,14 @@ module.exports = {
         return { lastId: lastId, readyCeiling: readyCeiling };
     },
 
-    // Second fence on the same class, for the id spaces no local column can separate
-    // (two hubs on the SAME network, so every row scopes in; or the SAME hub after its
-    // database was rebuilt, which restarts the auto-increment at 1). A cursor above
-    // every id the hub holds cannot be a position in its stream: since_id asks for rows
-    // past the end of its table and the drain reports zero rows on every attempt with
-    // no other signal. The hub states its own MAX(id) per table in the subscription
-    // ready message, so compare against that and start the cursor over when the local
-    // one sits above it.
-    //
-    // ABSENT IS NOT ZERO, and conflating them is what let a rebuilt hub strand this
-    // mirror forever. An older hub that advertises nothing leaves the key ABSENT and
-    // must stay on the fail-open path (the field is additive). A hub that advertises
-    // 0 has SUCCESSFULLY read its own empty table: HubDbBroadcaster only assigns a
-    // number when the query returns, and leaves the key absent when it throws. So 0 is
-    // a measurement, and it is the single strongest signal a rebuild produces, because
-    // a freshly rebuilt hub advertises exactly 0 until its first row lands. Gating this
-    // fence on `readyCeiling > 0` discarded precisely that measurement, so the one
-    // state the fence exists for was the one state it could not see.
-    //
-    // THE CURSOR IS ONLY HALF OF IT. Re-paging from 0 fixes where we READ but not what
-    // we HOLD, and for these tables that is not enough in two compounding ways. Readers
-    // take the newest row (state_checkpoints readers take MAX(checkpoint_seq)), so rows
-    // from the old id space keep winning over everything the re-page delivers. And the
-    // apply is id-parity INSERT IGNORE, so a stale row SITTING ON an id the rebuilt hub
-    // now reuses silently drops the real row - the same mechanism purgeForeignNetworkRows
-    // documents below. Both are fixed only by clearing the table for this scope first.
-    //
-    // Deletion clears the bar that method sets ("provable from the row and this mirror's
-    // own configuration, with no dependence on what one snapshot response happened to
-    // contain"). The ceiling is the SOURCE's authoritative statement about its own id
-    // space, not the contents of a page: a paging hole, a filtered endpoint or a partial
-    // drain cannot move it. It is unfiltered for exactly the tables this fence governs -
-    // FULL_REPAGE_TABLES never reach here (their cursor is already 0), which is what
-    // keeps the two status-filtered ceilings the broadcaster computes, cross_chain_matches
-    // and cross_chain_calls, out of this comparison; they would understate.
-    //
-    // Fail-safe direction: a false trip costs one full re-page of a small append-only
-    // table and converges to an exact copy of the source, which is what the mirror is
-    // for. Not tripping strands the mirror silently and permanently.
+    // A position above the source's advertised ceiling cannot belong to its current id
+    // space. Reset the position only. Content-keyed local rows remain valid and no id-space
+    // observation authorizes deleting them.
     async restartCursorAboveHubCeiling(table, scope, lastId, readyCeiling) {
         if (lastId > 0 && Number.isFinite(readyCeiling) && lastId > readyCeiling) {
-            getLogger().warn('HubDbSync: local ' + table + ' cursor ' + lastId + ' sits above the hub ceiling ' +
-                readyCeiling + ', so the local rows are not from this hub id space' +
-                (readyCeiling === 0 ? ' (the hub reports an EMPTY table, the signature of a rebuilt hub database)' : '') +
-                '; clearing the mirror for this scope and re-paging from 0');
-            await this.purgeRebuiltSourceRows(table, scope, lastId, readyCeiling);
+            getLogger().warn('HubDbSync: ' + table + ' drain position ' + lastId +
+                ' sits above the hub ceiling ' + readyCeiling + '; re-paging from 0');
+            this._drainPositions[table] = 0;
             return 0;
         }
         return lastId;
@@ -182,10 +147,13 @@ module.exports = {
     // reconciliation passes read, and the progress reporter's clock. One object, so the
     // flush and every pass after the last page read and advance the same state the loop
     // does, exactly as the closures they replaced did.
-    async newDrainAccounting(table, afterRebuiltPurge, scope, cursor) {
+    async newDrainAccounting(table, scope, cursor) {
         let drain = {
-            table: table, afterRebuiltPurge: afterRebuiltPurge, scope: scope,
+            table: table, scope: scope,
             lastId: cursor.lastId, readyCeiling: cursor.readyCeiling,
+            connectionEpoch: this._wsEpoch,
+            selectorRevision: this._selectorRevision,
+            fullTable: cursor.lastId === 0,
             // Page until a SHORT page. The previous single-fetch version treated any
             // full page as "not drained" and never fetched the rest. On a hub table
             // larger than one page (prod price_snapshots: 13k+ rounds) the drain was
@@ -199,14 +167,13 @@ module.exports = {
             // forever. Collect what the full re-page did serve so the reconciliation pass below
             // can close that half of #3211.
             servedMatchIds: (table === 'cross_chain_matches') ? new Set() : null,
-            maxServedId:    0,
+            matchDrainHubUrl: (table === 'cross_chain_matches') ? this.hubUrl : null,
             // price_snapshots only: the same problem with the opposite cause. Its snapshot
             // endpoint is UNFILTERED (hub api.js: SELECT * ... WHERE id > ?), so a complete
             // re-page is the hub's whole table, which makes "the hub does not hold this round
             // as finalized" provable from the drain alone. Nothing else can prove it here: the
             // table carries no `network` column, so mirrorNetworkScope returns null and BOTH
-            // purges above are structurally unreachable for it (and the id-ceiling fence never
-            // even runs, because FULL_REPAGE forces the cursor to 0). Collect the finalized
+            // purges above are structurally unreachable for it. Collect the finalized
             // (round_number, coin_pair) keys the hub actually served so the pass below can
             // clear what it did not. See reconcileForeignPriceRounds.
             servedPriceKeys:   (table === 'price_snapshots') ? new Set() : null,
@@ -216,8 +183,7 @@ module.exports = {
             // same route. Its snapshot endpoint is UNFILTERED too (hub api.js: SELECT * ...
             // WHERE id > ?), so a complete re-page is the hub's whole table; it carries no
             // `network` column, so mirrorNetworkScope returns null and BOTH purges above are
-            // structurally unreachable for it; and being a FULL_REPAGE table its cursor is forced
-            // to 0, so the id-ceiling fence never runs either. Collect the natural keys the hub
+            // structurally unreachable for it. Collect the natural keys the hub
             // actually served so the pass after the drain can clear what it did not, and record
             // where the local id space stood BEFORE this drain so that pass can only ever judge
             // rows that predate it. See reconcileForeignCapabilitySnapshots.
@@ -225,6 +191,8 @@ module.exports = {
             snapshotKeysComplete:  true,
             maxServedSnapshotBlock: 0,
         };
+        drain.matchPreDrainRows = (table === 'cross_chain_matches')
+            ? await this.snapshotFinalizedMatches() : null;
         // The local ids are AUTO_INCREMENT and locally assigned (applyRow strips the wire
         // id), so a row inserted while this drain runs - a live WS event, or this drain's own
         // apply - necessarily carries an id above this mark. Reading it here, before the first
@@ -311,8 +279,12 @@ module.exports = {
                 ' (the hub reports ' + announcedCeiling + ' as its highest id)');
 
         for (let page = 0; page < MAX_PAGES; page++) {
+            if (drain.connectionEpoch !== this._wsEpoch ||
+                drain.selectorRevision !== this._selectorRevision) return false;
             let path = '/hub-db/snapshot/' + table + '?since_id=' + drain.lastId + '&limit=' + PAGE_LIMIT;
             let result = await this.httpGet(path);
+            if (drain.connectionEpoch !== this._wsEpoch ||
+                drain.selectorRevision !== this._selectorRevision) return false;
             if (!result || !Array.isArray(result.rows)) return false;
             if (!(await this.acceptSnapshotPage(table, result))) return false;
 

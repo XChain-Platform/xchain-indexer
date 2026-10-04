@@ -86,6 +86,34 @@ const REGTEST_ARMING = {
         { env: 'XC_AMOUNTS_PRICE_REGTEST_TIME', label: 'AMOUNTS PRICE TIME', armedHeight: 0, keys: ['regtest'] },
     'vote_callback_binding_activation.VOTE_CALLBACK_BINDING_REQUIRES_USABLE_METHOD':
         { env: 'XC_CONTRACTS_REGTEST_ACTIVATION', label: 'CONTRACTS', armedHeight: 0, keys: ['regtest'] },
+    'list_owner_activation.LIST_OWNER_ACTIVATION':
+        { env: 'XC_LISTS_MARKET_REGTEST_ACTIVATION', label: 'LISTS MARKET', armedHeight: 0, keys: ['regtest'] },
+    'empty_allow_list_denies_activation.EMPTY_ALLOW_LIST_DENIES':
+        { env: 'XC_LISTS_MARKET_REGTEST_ACTIVATION', label: 'LISTS MARKET', armedHeight: 0, keys: ['regtest'] },
+    'swap_edit_rematch_activation.SWAP_EDIT_REMATCH_ACTIVATION':
+        { env: 'XC_LISTS_MARKET_REGTEST_ACTIVATION', label: 'LISTS MARKET', armedHeight: 0, keys: ['regtest'] },
+    'token_gate_list_at_block.TOKEN_GATE_LIST_AT_BLOCK':
+        { env: 'XC_LISTS_MARKET_REGTEST_ACTIVATION', label: 'LISTS MARKET', armedHeight: 0, keys: ['regtest'] },
+    'list_reference_validity_activation.LIST_REFERENCE_REQUIRES_VALID_LIST':
+        { env: 'XC_LISTS_MARKET_REGTEST_ACTIVATION', label: 'LISTS MARKET', armedHeight: 0, keys: ['regtest'] },
+    'list_head_follows_edit_chain.LIST_HEAD_FOLLOWS_EDIT_CHAIN':
+        { env: 'XC_LISTS_MARKET_REGTEST_ACTIVATION', label: 'LISTS MARKET', armedHeight: 0, keys: ['regtest'] },
+    'order_swap_maker_policy_admission.ORDER_SWAP_MAKER_POLICY_ADMISSION':
+        { env: 'XC_LISTS_MARKET_REGTEST_ACTIVATION', label: 'LISTS MARKET', armedHeight: 0, keys: ['regtest'] },
+    'order_swap_payout_policy_activation.ORDER_SWAP_PAYOUT_POLICY_PER_TOKEN':
+        { env: 'XC_LISTS_MARKET_REGTEST_ACTIVATION', label: 'LISTS MARKET', armedHeight: 0, keys: ['regtest'] },
+    'issue_policy_list_detach.ISSUE_POLICY_LIST_DETACH':
+        { env: 'XC_LISTS_MARKET_REGTEST_ACTIVATION', label: 'LISTS MARKET', armedHeight: 0, keys: ['regtest'] },
+    'bridge_policy_detach_activation.BRIDGE_POLICY_DETACH':
+        { env: 'XC_LISTS_MARKET_REGTEST_ACTIVATION', label: 'LISTS MARKET', armedHeight: 0, keys: ['regtest'] },
+    'callback_compensation_activation.CALLBACK_COMPENSATES_EVERY_DEBITED_HOLDER':
+        { env: 'XC_LISTS_MARKET_REGTEST_ACTIVATION', label: 'LISTS MARKET', armedHeight: 0, keys: ['regtest'] },
+    'dispenser_settlement_price_activation.DISPENSER_SETTLEMENT_PRICE_ACTIVATION':
+        { env: 'XC_LISTS_MARKET_REGTEST_TIME', label: 'LISTS MARKET TIME', armedHeight: 0, keys: ['regtest'] },
+    'dispenser_freshness_proven_use_activation.DISPENSER_FRESHNESS_PROVEN_USE_ACTIVATION':
+        { env: 'XC_LISTS_MARKET_REGTEST_TIME', label: 'LISTS MARKET TIME', armedHeight: 0, keys: ['regtest'] },
+    'list_edit_remove_activation.LIST_EDIT_REMOVE_ACTIVATION':
+        { env: 'XC_LISTS_MARKET_REGTEST_TIME', label: 'LISTS MARKET TIME', armedHeight: 0, keys: ['regtest'] },
 };
 
 // env name -> its reader. Each variable is read BY NAME, once, here: the
@@ -103,6 +131,8 @@ const ENV_READERS = {
     XC_AMOUNTS_PRICE_REGTEST_ACTIVATION:  (env) => env.XC_AMOUNTS_PRICE_REGTEST_ACTIVATION,
     XC_AMOUNTS_PRICE_REGTEST_TIME:        (env) => env.XC_AMOUNTS_PRICE_REGTEST_TIME,
     XC_CONTRACTS_REGTEST_ACTIVATION:      (env) => env.XC_CONTRACTS_REGTEST_ACTIVATION,
+    XC_LISTS_MARKET_REGTEST_ACTIVATION:   (env) => env.XC_LISTS_MARKET_REGTEST_ACTIVATION,
+    XC_LISTS_MARKET_REGTEST_TIME:         (env) => env.XC_LISTS_MARKET_REGTEST_TIME,
 };
 
 // The raw value of the rule's env variable, through its named reader.

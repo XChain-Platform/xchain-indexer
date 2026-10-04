@@ -148,6 +148,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'list_tick_coin_activation',
     'oracle_price_age_hourly_activation',
     'oracle_hourly_window_activation',
+    'oracle_round_time_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));

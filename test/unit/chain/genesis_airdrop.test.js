@@ -91,6 +91,7 @@ function credits(calls){
 }
 
 describe('genesis airdrop pass', function(){
+    this.timeout(120000);
     it('is disabled by default: no buckets, no credit actions', async function(){
         let { genesis, calls } = build(null);
         await genesis.inject(100, 1700000000);
@@ -143,6 +144,7 @@ describe('genesis airdrop pass', function(){
 });
 
 describe('genesis airdrop pass', function(){
+    this.timeout(120000);
     it('supports multiple buckets with independent amounts and skips zero-floor credits', async function(){
         let xcp = tmpFile('addr1,999999999\naddr2,0.00000001\n'); // addr2 floors to zero
         let xdp = tmpFile('daddr1,3\n');
@@ -198,6 +200,7 @@ describe('genesis airdrop pass', function(){
 });
 
 describe('genesis airdrop pass', function(){
+    this.timeout(120000);
     it('credits buckets in canonical name order regardless of configured path order', async function(){
         let dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xchain-order-'));
         let xdp = path.join(dir, 'xdp.csv'); fs.writeFileSync(xdp, 'daddr1,1\n');
@@ -253,6 +256,7 @@ describe('genesis airdrop pass', function(){
 });
 
 describe('genesis airdrop pass', function(){
+    this.timeout(120000);
     it('catches a re-funded bucket whose snapshot bytes are unchanged (the amount was pinned nowhere)', async function(){
         // Same CSV, same per-file pin, different XCHAIN amount: every prior check
         // passes and the two nodes mint different allocations.

@@ -69,13 +69,13 @@ module.exports = {
             return false;                                    // not ready: the per-row path reports it
         }
 
-        let cols = Object.keys(rows[0]).filter(c => allowed.has(c));
+        let cols = Object.keys(rows[0]).filter(c => c !== 'id' && allowed.has(c));
         if (cols.length === 0 || !cols.includes('status')) return false;
         let signature = cols.join('');
 
         let args = [];
         for (let row of rows) {
-            let rowCols = Object.keys(row).filter(c => allowed.has(c));
+            let rowCols = Object.keys(row).filter(c => c !== 'id' && allowed.has(c));
             if (rowCols.join('') !== signature) return false;
             for (let c of cols) args.push(coerceMirrorValue(row[c], this.cachedColumnType(table, c)));
         }
@@ -127,31 +127,9 @@ module.exports = {
         // against its own stakes; every other verdict applies the row unchanged.
         if (table === 'capability_snapshots' && await this.refuseUnprovenCapabilitySnapshot(row)) return false;
         let allowed = await this.localColumns(table);
-        let cols = Object.keys(row).filter(c => allowed.has(c));
-        // capability_snapshots is a NATURAL-KEY mirror (uq_cap_snap: snapshot_block,
-        // capability, signing_pubkey, source; no reader keys on id). `source` is the
-        // fourth key column on purpose: a key delegated by two sources yields
-        // one row per source, and a 3-column key collapses them on INSERT IGNORE and
-        // drops the second source. Hub ids are hub-LOCAL
-        // (every hub persists these rows independently via an id-less INSERT IGNORE)
-        // and AnchorRecovery rebuilds the table id-less too, so a wire id can collide
-        // with a locally-assigned PK and INSERT IGNORE would silently drop the row -
-        // a permanent mirror hole (#2270). Drop the id and let local AUTO_INCREMENT
-        // assign; bootstrapTable pages this table from since_id=0 for the same reason.
-        // cross_chain_matches/calls keep hub id parity deliberately (settlement-order key).
-        //
-        // attestation_responses strips id for the same reason arrived at by a different route.
-        // Its ids are hub-LOCAL because the artifact is written more than once: the responsible
-        // set reaches quorum on one hub, the result is gossiped to the rest of the federation
-        // (ATTEST_RESULT), and every hub that verifies it inserts its OWN row, so two hubs carry
-        // different ids for one logical row and a hub failover would re-deliver the same response
-        // under a new id. Row identity is the natural key UNIQUE (network, request_id) - which is
-        // also what makes the re-delivery a harmless INSERT IGNORE no-op - and no reader keys on
-        // id. Keeping a wire id would let it collide with a locally-assigned PK and have INSERT
-        // IGNORE silently drop a real response, and a dropped response here is not a stale read:
-        // the applier never binds it, the callback never fires on this node alone, and the node
-        // forks. FULL_REPAGE_TABLES membership follows directly from this strip.
-        if (table === 'capability_snapshots' || table === 'attestation_responses') cols = cols.filter(c => c !== 'id');
+        // A wire id is a position in one hub's stream, never mirror row identity. Every
+        // table lands on its declared content UNIQUE key and receives a local surrogate id.
+        let cols = Object.keys(row).filter(c => c !== 'id' && allowed.has(c));
         if (cols.length === 0) return;
         let placeholders = cols.map(() => '?').join(', ');
         let args = cols.map(c => coerceMirrorValue(row[c], this.cachedColumnType(table, c)));

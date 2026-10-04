@@ -283,6 +283,17 @@ describe('Config @regression @tier3', function () {
     });
 
     describe('getConfig() - invalid coin', function () {
+        let priorCoin;
+
+        beforeEach(function () {
+            priorCoin = process.env.INDEXER_COIN;
+        });
+
+        afterEach(function () {
+            if(priorCoin === undefined) delete process.env.INDEXER_COIN;
+            else process.env.INDEXER_COIN = priorCoin;
+        });
+
         it('should throw for missing coin config file', function () {
             process.env.INDEXER_COIN = 'ETH';
             process.env.INDEXER_NETWORK = 'regtest';

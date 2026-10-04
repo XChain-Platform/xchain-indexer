@@ -23,6 +23,8 @@
 const { getLogger } = require('../observability/index.js');
 const { CONFIG_ENV } = require('../config.js');
 const { sendHubRequest, HUB_RATE_LIMIT_RPC_CODE, readRateLimitHeaders } = require('./hub_client/request.js');
+const { resolveConfigEndpoint } = require('./hub_client/config_endpoint.js');
+const { readEnvNow } = require('./hub_db_sync/env.js');
 // Name the hub rejections a REPLAY can never turn into an acceptance.
 // A push can fail INSIDE a successful JSON-RPC envelope: PriceAggregator returns
 // { accepted:false, reason } and api.js returns { error:'...' } as an ordinary method
@@ -113,21 +115,35 @@ class HubClient {
         // validator's feed port pushes and mirrors correctly and then fails its config poll
         // once a minute forever, silently freezing the hub-supplied params at their startup
         // values. Point HUB_CONFIG_URL at a private hub API port to separate the two roles.
-        // Unset, both fall back to the feed values, so a single-hub deployment is unchanged.
-        this.configUrl    = configUrl    || CONFIG_ENV.HUB_CONFIG_URL     || this.hubUrl;
-        this.configApiKey = configApiKey || CONFIG_ENV.HUB_CONFIG_API_KEY || this.apiKey;
+        // Unset, both fall back to the explicitly configured API endpoint, so a
+        // single-hub deployment is unchanged while selector seeds remain feed-only.
+        let configEndpoint = resolveConfigEndpoint({
+            configUrl: configUrl || CONFIG_ENV.HUB_CONFIG_URL,
+            apiUrl: this.hubUrl,
+            seedUrls: readEnvNow('HUB_SEED_URLS'),
+            configApiKey: configApiKey || CONFIG_ENV.HUB_CONFIG_API_KEY,
+            apiKey: this.apiKey
+        });
+        this.configUrl     = configEndpoint.url;
+        this.configApiKey  = configEndpoint.apiKey;
+        this.configEnabled = configEndpoint.enabled;
+        if(configEndpoint.notice) getLogger().warn(configEndpoint.notice);
         // Interim credential scoping: when the hub gates its retraction rails
         // (push*reorg) behind a dedicated HUB_REORG_API_KEY, the reorg pushes
         // must carry that key; everything else keeps the bulk key.
         // Unset = legacy single-key behavior.
         this.reorgApiKey = CONFIG_ENV.HUB_REORG_API_KEY || this.apiKey;
         this.enabled = !!this.hubUrl;
-        // Tracked separately from `enabled`: a deployment may carry a config oracle
-        // without a push endpoint, and the config poll must not be gated on the feed.
-        this.configEnabled = !!this.configUrl;
         // Wall-clock ceiling for a single call; see HUB_CALL_DEADLINE_MS.
         let deadline = Number(CONFIG_ENV.HUB_CALL_DEADLINE_MS);
         this.callDeadlineMs = Number.isFinite(deadline) && deadline > 0 ? deadline : HUB_CALL_DEADLINE_MS;
+        this.selectorAddressSource = null;
+    }
+
+    setAddressSource(fn){
+        this.selectorAddressSource = (typeof fn === 'function') ? fn : null;
+        let selected = this.selectorAddressSource && this.selectorAddressSource();
+        this.enabled = !!this.hubUrl || (typeof selected === 'string' && selected.length > 0);
     }
 
     // Read the hub's operational params. The one method here that is NOT on the hub's
@@ -364,7 +380,13 @@ class HubClient {
     // hub method names; this wrapper supplies the client's own URL, key and deadline.
     call(method, params, apiKeyOverride, urlOverride){
         let key = apiKeyOverride || this.apiKey;
-        return sendHubRequest(urlOverride || this.hubUrl, method, params, key, this.callDeadlineMs);
+        let address = this.hubUrl;
+        if(!urlOverride && this.selectorAddressSource){
+            let sourcedAddress = this.selectorAddressSource();
+            if(typeof sourcedAddress === 'string' && sourcedAddress.length > 0)
+                address = sourcedAddress;
+        }
+        return sendHubRequest(urlOverride || address, method, params, key, this.callDeadlineMs);
     }
 }
 

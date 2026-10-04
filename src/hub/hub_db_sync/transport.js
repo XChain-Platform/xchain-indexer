@@ -28,6 +28,7 @@ const https  = require('https');
 const url    = require('url');
 const { getLogger } = require('../../observability/index.js');
 const { sanitizeHeights } = require('./watermark_config.js');
+const { sendHubRequest } = require('../hub_client/request.js');
 
 let WebSocket = null;
 try {
@@ -37,6 +38,11 @@ try {
 }
 
 const transportMethods = {
+
+    fetchHubList() {
+        let apiKey = this.feedApiKey || this.apiKey;
+        return sendHubRequest(this.hubUrl, 'gethubs', {}, apiKey, this.httpDeadlineMs);
+    },
 
     // Open the WebSocket subscription for live row updates. Returns a Promise that
     // resolves once the hub sends a 'ready' acknowledgement confirming the subscription
@@ -49,12 +55,14 @@ const transportMethods = {
             if (!WebSocket || !this.running) {
                 return reject(new Error('WebSocket unavailable or sync stopped'));
             }
+            this.captureConnectionAddress();
             let parsed = url.parse(this.hubUrl);
             let wsScheme = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
             let wsUrl = wsScheme + '//' + parsed.host + '/hub-db/subscribe';
 
             let headers = {};
-            if (this.apiKey) headers['Authorization'] = 'Bearer ' + this.apiKey;
+            let apiKey = this.feedApiKey || this.apiKey;
+            if (apiKey) headers['Authorization'] = 'Bearer ' + apiKey;
 
             let ws;
             try {
@@ -81,7 +89,10 @@ const transportMethods = {
 
             ws.on('message', (data) => this.onSocketFrame(ws, data, (event) => settle(resolve, event)));
 
-            ws.on('close', () => {
+            ws.on('close', (code) => {
+                // Every resync close requires a full re-page so in-place updates below
+                // the stored cursor are redelivered, including price landing's batch_block_time stamp.
+                if (code === 1012) this._lastHubInstanceId = null;
                 this.resetOnSocketClose();
                 settle(reject, new Error('WebSocket closed before ready'));
                 this.scheduleReconnect();
@@ -129,11 +140,22 @@ const transportMethods = {
 
     // The hub has registered our subscription: take what the ready frame carries.
     adoptReadyFrame(ws, event) {
+        this._readyCaughtUp = event.caught_up !== false;
+        this._readyCaughtUpHandled = false;
+        // A position may cross a connection boundary only when the hub explicitly
+        // identifies the same database instance. Older hubs omit the field and therefore
+        // re-page from zero on every reconnect.
+        let instanceId = (typeof event.hub_instance_id === 'string' && event.hub_instance_id !== '')
+            ? event.hub_instance_id : null;
+        if (instanceId === null || instanceId !== this._lastHubInstanceId)
+            this._drainPositions = Object.create(null);
+        this._lastHubInstanceId = instanceId;
+
         // Hub has registered our subscription. Capture hub-side max IDs
         // (included by HubDbBroadcaster for gap detection after bootstrap).
         if (event.max_ids && typeof event.max_ids === 'object') {
             this._readyMaxIds = event.max_ids;
-        }
+        } else this._readyMaxIds = undefined;
         // Self-size the heartbeat watchdog from the hub's ACTUAL cadence when
         // advertised (watermark_interval_ms), so the client timeout > hub
         // interval invariant holds without a matching env knob on every
@@ -209,6 +231,8 @@ const transportMethods = {
         // close the heartbeat gate (and freeze the watermark) until the
         // reconnect re-bootstrap has drained the gap.
         this._bootstrapDrained = false;
+        this._readyCaughtUp = null;
+        this._readyCaughtUpHandled = false;
         // The height watermark dies with the socket for the same reason the heartbeat
         // gate does: it certifies delivery on THIS connection, and rows produced while
         // disconnected have not arrived. A stale map left standing would let a
@@ -252,7 +276,8 @@ const transportMethods = {
                 headers:  {},
                 timeout:  30000
             };
-            if (this.apiKey) opts.headers['x-api-key'] = this.apiKey;
+            let apiKey = this.feedApiKey || this.apiKey;
+            if (apiKey) opts.headers['x-api-key'] = apiKey;
 
             let req = lib.request(opts, (res) => {
                 let body = '';

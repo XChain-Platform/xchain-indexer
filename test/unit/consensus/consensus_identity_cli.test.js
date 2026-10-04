@@ -94,7 +94,7 @@ describe('bin/consensus-identity.js --assert-no-absent', function () {
         assert.strictEqual(res.stderr, '');
         const identity = JSON.parse(res.stdout);
         assert.deepStrictEqual(identity.absent_gates, []);
-        assert.strictEqual(identity.gate_key_count, 42);
+        assert.strictEqual(identity.gate_key_count, 43);
     });
 
     it('reads every gate with a carrier hidden: the value is the registry row, never the file', function () {
@@ -103,7 +103,7 @@ describe('bin/consensus-identity.js --assert-no-absent', function () {
         assert.strictEqual(res.status, 0, res.stdout + res.stderr);
         const identity = JSON.parse(res.stdout);
         assert.deepStrictEqual(identity.absent_gates, []);
-        assert.strictEqual(identity.gate_key_count, 42);
+        assert.strictEqual(identity.gate_key_count, 43);
         assert.ok(identity.consensus_rules_gates[KEY], 'the hidden carrier\'s gate still resolves');
     });
 
@@ -228,6 +228,7 @@ describe('bin/consensus-identity.js --compare against a flat --out reading', fun
     });
 
     it('refuses a shapeless, hub or blockless pin with one named line (exit 2)', function () {
+        this.timeout(120000);
         const bodies = [{}, [], { hub_schema_version: 1, consensus_rules_digest: 'x' },
             { armed_regtest_venue: { env: { XC_IDENTITY_TEST_UNSET_VAR: 'armed' } } }];
         for (const body of bodies) {

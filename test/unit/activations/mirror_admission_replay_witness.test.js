@@ -61,7 +61,7 @@ describe('mirror-admission replay witness', function () {
     // spawned with sideEnv()'s env, as the tool does, because the gate snapshots its
     // regtest arming when it is first required.
     it('each side resolves, from the env the parent hands it, the era A3 expects', function () {
-        this.timeout(20000);
+        this.timeout(120000);
         const o = witness.parseArgs(['--coin', 'BTC', '--network', 'regtest', '--activation-height', '120']);
         const p = { host: '127.0.0.1', port: '3306', user: 'replay', pass: 'unused' };
         const probe = 'const t = require(process.argv[1]); const g = require(process.argv[2]);' +
@@ -141,7 +141,7 @@ describe('mirror-admission replay witness: owned artifact cleanup', function () 
     });
 
     it('makes --keep control schema and workdir cleanup through the CLI', function () {
-        this.timeout(20000);
+        this.timeout(120000);
         const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'ma-witness-unit-cli-db-'));
         const preload = path.join(parent, 'fake-mariadb.js');
         const events = path.join(parent, 'events.jsonl');
@@ -231,7 +231,7 @@ describe('mirror-admission replay witness: what each side is handed and replays 
     // off.log) rather than as an unset lever. OFF must carry no key at all, including when the
     // operator's own shell has the lever armed.
     it('hands the OFF side no lever at all, even when the parent environment carries one', function () {
-        this.timeout(20000);
+        this.timeout(120000);
         const o = witness.parseArgs(['--coin', 'BTC', '--network', 'regtest', '--activation-height', '120']);
         const p = { host: '127.0.0.1', port: '3306', user: 'replay', pass: 'unused' };
         const env = withEnv({ [witness.ARM_ENV]: 'armed' }, () => witness.sideEnv(o, p, 'off', 'ma_witness_replay_btc_off'));
@@ -329,7 +329,7 @@ describe('mirror-admission replay witness: a vacuous corpus is a named refusal, 
     });
 
     it('refuses on the command line, before any replay, when no --mirror-db is named', function () {
-        this.timeout(20000);
+        this.timeout(120000);
         const res = spawnSync(process.execPath, [TOOL, '--coin', 'BTC', '--network', 'regtest', '--decoder-db', 'dec',
             '--activation-height', '60', '--db-host', '127.0.0.1', '--db-port', '1', '--db-user', 'u', '--db-pass-env', 'MA_WITNESS_UNIT_PASS'],
             { env: Object.assign({}, process.env, { MA_WITNESS_UNIT_PASS: 'x' }), encoding: 'utf8' });

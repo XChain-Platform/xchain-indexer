@@ -29,6 +29,7 @@ const rollback  = require('../rollback/index.js');
 const mapper    = require('../chain/mapper.js');
 const HubClient    = require('../hub/hub_client.js');
 const HubDbSync    = require('../hub/hub_db_sync.js');
+const createHubSelector = require('../hub/hub_db_sync/hub_selector.js');
 const AnchorProofClient  = require('../consensus/doge_peer_clients/anchor_proof_client.js');
 const { RollcallProofClient } = require('../consensus/doge_peer_clients/rollcall_proof_client.js');
 const HubPushQueue = require('../hub/hub_push_queue.js');
@@ -42,8 +43,10 @@ module.exports = {
     // The hub, DOGE-anchor and DOGE roll-call clients. Created before the hub config
     // overlay, which fetches through the hub client.
     createHubClients(){
+        this.hubSelector = createHubSelector(CONFIG_ENV.INDEXER_NETWORK);
         // Create hub client (for pushing chain tip and other cross-chain data to xchain-hub)
         this.hubClient = new HubClient();
+        this.hubClient.setAddressSource(() => this.hubSelector.current());
 
         // DOGE anchor visibility for the BTC-side anchor/archive reward derivation. ANCHOR
         // lives on DOGE while the reward is minted here, so before paying, the derive pass
@@ -89,6 +92,7 @@ module.exports = {
         // Enable by setting HUB_DB_SYNC_ENABLED=true (default off).
         if(CONFIG_ENV.HUB_DB_SYNC_ENABLED === 'true'){
             this.hubDbSync = new HubDbSync(this.hubDb, {
+                selector: this.hubSelector,
                 coin: this.config['COIN'],
                 // Signed retractions: keys the RETRACTION_SIGNING flag-day
                 // and SWQ activation for quorum-class retraction verification.

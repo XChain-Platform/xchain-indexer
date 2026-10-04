@@ -29,8 +29,9 @@
 // shim is installed. The explorer's vendored copy reaches the same path because it
 // carries the hub-canonical observability shim at src/observability/.
 const { getLogger } = require('../../observability/index.js');
-const { CROSS_CHAIN_TABLES, HUB_STATE_TABLES } = require('./mirror_tables.js');
+const { CROSS_CHAIN_TABLES, HUB_STATE_TABLES, AUTO_INCREMENT_ID_TABLES } = require('./mirror_tables.js');
 const { WebSocket } = require('./transport.js');
+const failover = require('./failover/triggers.js');
 
 module.exports = {
 
@@ -44,6 +45,7 @@ module.exports = {
             getLogger().info('HubDbSync: disabled (no hub URL or no local hub DB connection)');
             return;
         }
+        await this.assertAutoIncrementMirrorIds();
         this.running = true;
         // Armed from the start, but inert until the watermark has advanced at least once:
         // a cold start that never drains is the block loop's hold ceiling to bound, not
@@ -61,6 +63,7 @@ module.exports = {
             }
         } else {
             getLogger().warn('HubDbSync: ws package not available, falling back to periodic polling');
+            this.captureConnectionAddress();
             // Select the poll fallback BEFORE the first bootstrap so even that initial
             // drain fails closed (does not certify the watermark); see bootstrapAll (#2476).
             this._pollMode = true;
@@ -72,6 +75,19 @@ module.exports = {
         if (!WebSocket) {
             this.startPolling();
         }
+    },
+
+    // Id-less content-keyed writes require the local surrogate key to allocate itself.
+    // Refuse startup before opening the stream if any legacy mirror schema cannot do so.
+    async assertAutoIncrementMirrorIds() {
+        let invalid = [];
+        for (let table of AUTO_INCREMENT_ID_TABLES) {
+            let rows = await this.hubDb.doQuery("SHOW COLUMNS FROM " + table + " WHERE Field = 'id'");
+            let id = Array.isArray(rows) ? rows[0] : null;
+            if (!id || !/auto_increment/i.test(String(id.Extra || ''))) invalid.push(table);
+        }
+        if (invalid.length > 0)
+            throw new Error('HubDbSync: mirror startup refused: id must be AUTO_INCREMENT on ' + invalid.join(', '));
     },
 
     // Bootstrap every mirrored table. When ALL of them fully drain (each REST
@@ -89,16 +105,19 @@ module.exports = {
     // nothing ever re-attempted it).
     async bootstrapAll() {
         if (this._bootstrapping) return;                     // reconnect + retry timer may overlap
+        if (failover.uncaughtUpBlocks(this)) return failover.rejectUncaughtUpReadyFrame(this);
         this._bootstrapping = true;
         this._bootstrapLastProgressAt = Date.now();
         const drainEpoch = this._wsEpoch;
+        const selectorRevision = this._selectorRevision;
         try {
             this._pendingBootstrapHeights = null;
             let drained = await this.drainEveryTable();
             // A disconnect leaves a delivery gap that only the replacement
             // connection's own drain can close. Results started on the prior
             // connection cannot certify its replacement.
-            const sameConnection = this._wsEpoch === drainEpoch;
+            const sameConnection = this._wsEpoch === drainEpoch &&
+                this._selectorRevision === selectorRevision;
             if (drained.allDrained && drained.marks.length > 0 && sameConnection)
                 this.certifyFullDrain(drained.marks, drainEpoch);
             else if (this.running) this.scheduleBootstrapRetry();
@@ -129,10 +148,19 @@ module.exports = {
     async drainEveryTable() {
         let marks = [];
         let allDrained = true;
+        let connectionEpoch = this._wsEpoch;
+        let selectorRevision = this._selectorRevision;
         for (let table of ['oracle_prices'].concat(CROSS_CHAIN_TABLES, HUB_STATE_TABLES, ['price_snapshots'])) {
+            if(connectionEpoch !== this._wsEpoch || selectorRevision !== this._selectorRevision){
+                allDrained = false;
+                break;
+            }
             try {
                 let mark = await this.bootstrapTable(table);
-                if (mark === null) allDrained = false;
+                if (mark === null) {
+                    allDrained = false;
+                    if(connectionEpoch !== this._wsEpoch || selectorRevision !== this._selectorRevision) break;
+                }
                 else {
                     marks.push(mark);
                     this._bootstrapLastProgressAt = Date.now();
@@ -151,8 +179,9 @@ module.exports = {
         // Keep the epoch check at the certification boundary as well as at the
         // bootstrap caller. No alternate caller may open the gate with a drain
         // whose socket closed before certification.
-        if (this._wsEpoch !== drainEpoch) return false;
+        if (this._wsEpoch !== drainEpoch || failover.uncaughtUpBlocks(this)) return false;
         this._bootstrapDrained = true;
+        this._failoverPendingDrain = false;
         // A clean full drain proves the hub's schema_version matched (a
         // mismatch parks the bootstrap), so any earlier live mismatch is
         // resolved: re-open the watermark gate.
@@ -182,6 +211,10 @@ module.exports = {
             this.noteHeights(this._pendingBootstrapHeights || this._readyHeights);
             this.advanceWatermark(Math.min.apply(null, marks));
         }
+        if (this._hubListRefresher && this._hubListRefreshEpoch !== drainEpoch) {
+            this._hubListRefreshEpoch = drainEpoch;
+            this._hubListRefreshPromise = this._hubListRefresher.refresh();
+        }
         return true;
     },
 
@@ -201,15 +234,18 @@ module.exports = {
             this.ws = null;
         }
     },
-
-    // Read-only status snapshot for /status: composed from state already tracked
-    // on the instance, so a caller never reaches into private fields to answer
-    // "is the mirror connected, and how far behind". Disabled reports configured:false
-    // rather than a zeroed shape that would read as a live mirror stalled at genesis.
+    // Read-only status snapshot for /status. Disabled reports configured:false.
     mirrorStatus() {
+        let selectorStatus = this.selector && typeof this.selector.status === 'function'
+            ? this.selector.status() : null;
+        let followedAddress = this.hubUrl || (selectorStatus ? selectorStatus.current : null);
+        let candidates = selectorStatus && Array.isArray(selectorStatus.candidates)
+            ? selectorStatus.candidates.slice() : (followedAddress ? [followedAddress] : []);
+        let moveStatus = this._movePolicy.status();
         if (!this.enabled) {
-            return { configured: false, connected: false, bootstrapped: false, streamWatermark: null,
-                     tables: {}, heights: {} };
+            return { configured: false, connected: false, bootstrapped: false, streamWatermark: null, followedAddress: followedAddress,
+                     candidates: candidates, lastMoveAt: moveStatus.lastMoveAt,
+                     moveReason: moveStatus.moveReason, moveCount: moveStatus.moveCount, tables: {}, heights: {} };
         }
         let tables = {};
         // HUB_STATE_TABLES rides the global streamWatermark, not a per-table
@@ -230,6 +266,9 @@ module.exports = {
             connected: !!this.ws,
             bootstrapped: this._bootstrapDrained,
             streamWatermark: this.streamWatermark,
+            followedAddress: followedAddress,
+            candidates: candidates,
+            lastMoveAt: moveStatus.lastMoveAt, moveReason: moveStatus.moveReason, moveCount: moveStatus.moveCount,
             // The stall detector's two inputs, surfaced so an operator can read the
             // "hub ahead, mirror frozen" gap off /status instead of inferring it from
             // deferral logs. null age means the mirror has not certified anything yet.
@@ -250,30 +289,7 @@ module.exports = {
                 ? null : (Date.now() - this._heightsLastAdvanceAt)
         };
     },
-
-    // Force a fresh subscribe-then-bootstrap cycle on this mirror.
-    //
-    // Called by the block loop when one block has been held at a mirror-completeness
-    // barrier for longer than the named hold ceiling. Every one of those barriers opens
-    // on the stream watermark, the watermark only advances while _bootstrapDrained is
-    // set, and nothing else in this module ever re-arms that flag once a drain has
-    // stalled: the socket can stay open and heartbeating (so the watchdog is satisfied)
-    // while the mirror certifies nothing, indefinitely. Tearing the socket down puts the
-    // mirror back through the ONE path that does re-arm it, which the close handler
-    // already implements and exercises on every ordinary disconnect
-    // (scheduleReconnect -> connectWebSocket -> refreshAllSyncHeights -> bootstrapAll).
-    //
-    // This opens NO barrier and commits NO block: a mirror that is genuinely missing
-    // rows keeps deferring after the resync, which is the fail-closed outcome. It only
-    // ensures the wait is bounded by a re-drive rather than by nothing at all.
-    //
-    // Leave an active bootstrap on its current connection while it is making progress.
-    // Full-repage tables restart at id 0, so replacing that connection discards the work.
-    // A drain with no progress for a full ceiling window still resyncs.
-    //
-    // Rate-limited to one resync per ceiling window, and a no-op on a disabled or
-    // stopped mirror, so the block loop can call it on every deferring poll tick.
-    // Returns true when a resync was actually kicked.
+    // Force a rate-limited subscribe-then-bootstrap cycle without opening a barrier.
     requestResync(reason) {
         if (!this.enabled || !this.running) return false;
         if (!Number.isFinite(this.barrierHoldCeilingMs) || this.barrierHoldCeilingMs <= 0) return false;
@@ -312,6 +328,14 @@ module.exports = {
         return true;
     },
 
+    moveHub(reason) { return failover.moveHub(this, reason); },
+
+    noteConnectFailure() { return failover.noteConnectFailure(this); },
+
+    noteConnected() { failover.noteConnected(this); },
+
+    stallFailoverAction() { return failover.stallFailoverAction(this); },
+
     scheduleReconnect() {
         if (!this.running) return;
         setTimeout(async () => {
@@ -323,11 +347,12 @@ module.exports = {
             try {
                 await this.connectWebSocket();
             } catch (err) {
+                this.noteConnectFailure();
                 // connectWebSocket already queued another scheduleReconnect via the
                 // close handler; nothing more to do here.
                 return;
             }
-
+            this.noteConnected();
             // Proactively re-sync the barrier heights from the LOCAL mirror the
             // instant the socket is back (before re-bootstrap). The disconnect may
             // have frozen the in-memory heights behind a mirror that is already
@@ -336,9 +361,8 @@ module.exports = {
             // re-bootstrap to redeliver rows or fall through to the 60s timeout.
             await this.refreshAllSyncHeights();
 
-            // Re-bootstrap to fill in rows missed while disconnected. bootstrapTable
-            // uses the local max-ID as since_id, so it fetches only genuinely-missing
-            // rows; re-receives are harmless thanks to INSERT IGNORE in applyRow.
+            // Re-bootstrap to fill in rows missed while disconnected. The ready frame
+            // decides whether this connection may resume its previous wire positions.
             // A full drain re-opens the heartbeat gate and advances the watermark.
             await this.bootstrapAll();
         }, 5000);

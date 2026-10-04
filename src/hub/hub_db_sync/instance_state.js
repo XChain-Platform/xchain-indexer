@@ -25,13 +25,49 @@
  ********************************************************************/
 
 const { readEnvNow } = require('./env.js');
+const { createMovePolicy } = require('./failover/move_policy.js');
+const { createHubListRefresher } = require('../hub_client/hub_list_refresh.js');
+const { getLogger } = require('../../observability/index.js');
 
 // Connection settings and the poll-mode flag.
 function initConnection(sync, hubDb, options) {
+    options = options || {};
     sync.hubDb     = hubDb;                            // Database instance pointing at the local hub DB
-    sync.hubUrl    = options.hubUrl   || readEnvNow('HUB_API_URL') || '';
+    sync.selector  = options.selector || null;
+    let selectedAddress = sync.selector && typeof sync.selector.current === 'function'
+        ? sync.selector.current() : null;
+    sync.hubUrl    = sync.selector ? '' : (options.hubUrl || readEnvNow('HUB_API_URL') || '');
     sync.apiKey    = options.apiKey   || readEnvNow('HUB_API_KEY') || '';
-    sync.enabled   = !!sync.hubUrl && !!sync.hubDb;
+    sync.feedApiKey = options.feedApiKey || readEnvNow('HUB_FEED_API_KEY') || '';
+    sync.enabled   = !!(selectedAddress || sync.hubUrl) && !!sync.hubDb;
+    sync._selectorRevision = 0;
+    sync._hubUrlEpoch = null;
+    sync.captureConnectionAddress = () => {
+        if(sync._hubUrlEpoch === sync._wsEpoch) return sync.hubUrl;
+        if(sync.selector && typeof sync.selector.current === 'function'){
+            let address = sync.selector.current();
+            sync.hubUrl = typeof address === 'string' ? address : '';
+            sync.enabled = !!sync.hubUrl && !!sync.hubDb;
+        }
+        sync._hubUrlEpoch = sync._wsEpoch;
+        return sync.hubUrl;
+    };
+    if(sync.selector && typeof sync.selector.onChange === 'function'){
+        sync._selectorUnsubscribe = sync.selector.onChange(() => {
+            sync._selectorRevision++;
+            sync._bootstrapDrained = false;
+        });
+    } else sync._selectorUnsubscribe = null;
+    const reconnectAttempts = Object.prototype.hasOwnProperty.call(options, 'failoverReconnectAttempts')
+        ? options.failoverReconnectAttempts : Number(readEnvNow('HUB_FAILOVER_RECONNECT_ATTEMPTS'));
+    const minDwellMs = Object.prototype.hasOwnProperty.call(options, 'failoverMinDwellMs')
+        ? options.failoverMinDwellMs : Number(readEnvNow('HUB_FAILOVER_MIN_DWELL_MS'));
+    const configuredNotCaughtUpGraceMs = Object.prototype.hasOwnProperty.call(options, 'notCaughtUpGraceMs')
+        ? options.notCaughtUpGraceMs : Number(readEnvNow('HUB_NOT_CAUGHT_UP_GRACE_MS'));
+    sync._notCaughtUpGraceMs = Number.isFinite(configuredNotCaughtUpGraceMs) && configuredNotCaughtUpGraceMs >= 0
+        ? configuredNotCaughtUpGraceMs : 30000;
+    sync._movePolicy = createMovePolicy({ reconnectAttempts, minDwellMs, now: options.now });
+    sync._failoverPendingDrain = false;
     sync.pollIntervalMs = parseInt(options.pollInterval || readEnvNow('HUB_DB_SYNC_POLL_INTERVAL') || '30000');
     // Total wall-clock budget for one snapshot GET. The `timeout: 30000` request
     // option in httpGet is an IDLE-socket timer that resets on every byte received,
@@ -40,6 +76,17 @@ function initConnection(sync, hubDb, options) {
     // idle timer, so a 10k-row snapshot page has room to stream and only a wedged
     // request can reach the ceiling.
     sync.httpDeadlineMs = parseInt(options.httpDeadline || readEnvNow('HUB_DB_SYNC_HTTP_DEADLINE') || '120000');
+    let selectorStatus = sync.selector && typeof sync.selector.status === 'function'
+        ? sync.selector.status() : null;
+    sync._hubListRefreshEpoch = null;
+    sync._hubListRefreshPromise = null;
+    sync._hubListRefresher = sync.selector && !(selectorStatus && selectorStatus.pinned)
+        ? createHubListRefresher({
+            fetchList: () => sync.fetchHubList(),
+            merge: (addresses) => sync.selector.merge(addresses),
+            warn: (message, err) => getLogger().warn('HubDbSync: ' + message, err)
+        })
+        : null;
     sync.ws        = null;
     sync.running   = false;
     // True when the WebSocket path is unavailable and this mirror falls back to

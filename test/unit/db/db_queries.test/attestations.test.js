@@ -367,18 +367,20 @@ describe('Database.getPendingAnchorRewardAttestations() @regression @tier1', fun
         await db.getPendingAnchorRewardAttestations('mainnet', 961000);
         const sql = String(db.doQuery.firstCall.args[0]);
         assert.match(sql, /ara\.snapshot_block\s*<=\s*\?/i);
-        assert.match(sql, /ORDER BY ara\.reward_type, ara\.round_reference, ara\.publisher, ara\.snapshot_block, ara\.id/i);
+        assert.match(sql, /ORDER BY ara\.reward_type, ara\.round_reference, ara\.publisher, ara\.snapshot_block, ara\.chain/i);
     });
 
     // The upsert in deriveAnchorRewards is last-writer-wins on block_index and
     // validator_rewards' UNIQUE key omits snapshot_block, so whichever of two rows sharing
     // (reward_type, round_reference, publisher) is processed LAST sets the reward's earn-block.
-    // ara.id is a per-node AUTO_INCREMENT, so it must never be the deciding term.
+    // The network filter plus these five columns form the mirrored row's unique tuple.
     it('decides that order on consensus data, never on the local AUTO_INCREMENT id', async function () {
         const db = dbWithDoQuery([]);
         await db.getPendingAnchorRewardAttestations('mainnet', 961000);
         const order = String(db.doQuery.firstCall.args[0]).split(/ORDER BY/i)[1];
-        assert.ok(order.indexOf('ara.snapshot_block') < order.indexOf('ara.id'),
-            'snapshot_block must break the tie ahead of the local mirror surrogate id');
+        assert.strictEqual(order.trim(),
+            'ara.reward_type, ara.round_reference, ara.publisher, ara.snapshot_block, ara.chain');
+        assert.doesNotMatch(order, /\bara\.id\b/i,
+            'the local mirror surrogate id must not participate in consensus ordering');
     });
 });

@@ -255,7 +255,8 @@ describe('db.getAppliedPolicySnapshot (policy spec D25) @regression @tier1', fun
                 assert.match(query, /origin_chain\s*=\s*\?/i);
                 assert.match(query, /tick\s*=\s*\?/i);
                 assert.match(query, /snapshot_id\s+IN\s*\(\?,\?\)/i);
-                assert.match(query, /ORDER BY\s+policy_seq DESC,\s*id DESC/i);
+                assert.match(query, /ORDER BY\s+policy_seq DESC/i);
+                assert.doesNotMatch(query, /\bid\s+DESC\b/i);
                 assert.deepStrictEqual(args, ['regtest', 'DOGE', 'FUFU'].concat(ids));
                 return [{ policy_seq: 3, origin_block: 900, policy_hash: 'h'.repeat(64) }];
             })

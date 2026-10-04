@@ -70,62 +70,6 @@ function registerBootstrapPaginationGroup4(PAGE, makeBootstrapSync, fullPage) { 
         });
     }); }
 
-function registerBootstrapPaginationGroup5(PAGE, makeBootstrapSync, fullPage) { describe('cross_chain_matches missed-retraction reconciliation (#3211)', function () {
-
-        // hubDb stub: local finalized rows for the reconciliation read, capturing UPDATEs.
-        function makeReconcileSync(localRows) {
-            const sync = makeBootstrapSync();
-            const updates = [];
-            sync.hubDb.doQuery = sinon.stub().callsFake(async (sql, args) => {
-                if (/^SELECT id, match_id FROM cross_chain_matches/.test(sql)) {
-                    return localRows.filter(r => Number(r.id) <= Number(args[0]));
-                }
-                if (/^UPDATE cross_chain_matches SET status = 'retracted'/.test(sql)) { updates.push(args); return []; }
-                return [{ max_id: null }];
-            });
-            return { sync, updates };
-        }
-
-        it('marks a local finalized row the hub no longer serves as retracted', async function () {
-            const { sync, updates } = makeReconcileSync([{ id: 1, match_id: 'M1' }, { id: 2, match_id: 'GONE' }, { id: 3, match_id: 'M3' }]);
-            sinon.stub(sync, 'httpGet').resolves({ rows: [{ id: 1, match_id: 'M1' }, { id: 3, match_id: 'M3' }], watermark: 7 });
-            await sync.bootstrapTable('cross_chain_matches');
-            assert.deepStrictEqual(updates, [[2]], 'only the unserved row converges');
-        });
-
-        it('never touches a row ABOVE the highest served id (it may just be newer than the snapshot)', async function () {
-            const { sync, updates } = makeReconcileSync([{ id: 3, match_id: 'M3' }, { id: 9, match_id: 'NEWER' }]);
-            sinon.stub(sync, 'httpGet').resolves({ rows: [{ id: 3, match_id: 'M3' }], watermark: 7 });
-            await sync.bootstrapTable('cross_chain_matches');
-            assert.deepStrictEqual(updates, [], 'a row past the served ceiling is exempt');
-        });
-
-        it('does NOT reconcile on a partial drain (an unfetched page is not evidence of a retraction)', async function () {
-            const { sync, updates } = makeReconcileSync([{ id: 1, match_id: 'M1' }, { id: 2, match_id: 'UNSEEN' }]);
-            // A full page means more rows remain; the loop stops on the apply hole below.
-            sync.applyRow.onSecondCall().rejects(new Error('ER_SOMETHING'));
-            sinon.stub(sync, 'httpGet').resolves({ rows: [{ id: 1, match_id: 'M1' }, { id: 2, match_id: 'X' }], watermark: 7 });
-            await sync.bootstrapTable('cross_chain_matches');
-            assert.deepStrictEqual(updates, [], 'a holed/partial drain must never reconcile');
-        });
-
-        it('is a no-op when the hub served nothing at all (empty mirror, no ceiling to judge against)', async function () {
-            const { sync, updates } = makeReconcileSync([{ id: 1, match_id: 'M1' }]);
-            sinon.stub(sync, 'httpGet').resolves({ rows: [], watermark: 7 });
-            await sync.bootstrapTable('cross_chain_matches');
-            assert.deepStrictEqual(updates, []);
-        });
-
-        it('runs for cross_chain_matches only, never for a sibling mirror table', async function () {
-            for (const table of ['cross_chain_calls', 'price_snapshots', 'capability_snapshots']) {
-                const { sync, updates } = makeReconcileSync([{ id: 2, match_id: 'GONE' }]);
-                sinon.stub(sync, 'httpGet').resolves({ rows: [{ id: 1 }, { id: 3 }], watermark: 7 });
-                await sync.bootstrapTable(table);
-                assert.deepStrictEqual(updates, [], table + ' must not run the match reconciliation');
-            }
-        });
-    }); }
-
 function registerBootstrapPaginationGroup6(PAGE, makeBootstrapSync, fullPage) { it('_applyRow strips the wire id for capability_snapshots so a local PK can never collide (#2270)', async function () {
         const doQuery = sinon.stub().resolves([]);
         const sync = new HubDbSync({ doQuery }, { hubUrl: 'http://hub.test' });
@@ -228,13 +172,6 @@ describe('HubDbSync bootstrap pagination + retry @regression @tier2', function (
     // since_id=MAX(local id) cursor is INSERT-shaped and would strand the pre-upgrade row.
     registerBootstrapPaginationGroup4(PAGE, makeBootstrapSync, fullPage);
 
-    // The missed-retraction half no ODKU can reach: the hub's snapshot endpoint filters
-    // `status <> 'retracted'`, so a match retracted while this mirror was disconnected is
-    // ABSENT from every bootstrap page. There is no row to converge against, and the stale
-    // local copy keeps settling a match the hub retracted. After a COMPLETE re-page, a local
-    // finalized row at or below the highest served id whose match_id was never served can
-    // only be such a retraction (hub-parity ascending ids; the hub never deletes a match).
-    registerBootstrapPaginationGroup5(PAGE, makeBootstrapSync, fullPage);
     registerBootstrapPaginationGroup6(PAGE, makeBootstrapSync, fullPage);
 
     registerBootstrapPaginationGroup7(PAGE, makeBootstrapSync, fullPage);
@@ -265,14 +202,15 @@ describe('HubDbSync _applyRow column filtering @regression @tier2', function () 
         const insert = doQuery.getCalls().find(c => /^INSERT IGNORE/.test(c.args[0]));
         assert.ok(insert, 'INSERT must still run');
         assert.ok(!insert.args[0].includes('anchor_txid'), 'hub-only column must be filtered out');
-        assert.deepStrictEqual(insert.args[1], [1, 'LTC', 5]);
+        assert.deepStrictEqual(insert.args[1], ['LTC', 5]);
     });
 
     it('passes through rows whose columns all exist locally', async function () {
         const { sync, doQuery } = makeApplySync(['id', 'chain']);
         await sync.applyRow('state_checkpoints', { id: 2, chain: 'BTC' });
         const insert = doQuery.getCalls().find(c => /^INSERT IGNORE/.test(c.args[0]));
-        assert.ok(insert.args[0].includes('(id, chain)'));
+        assert.ok(insert.args[0].includes('(chain)'));
+        assert.ok(!/\bid\b/.test(insert.args[0]));
     });
 
     it('no-ops when nothing intersects the local schema', async function () {

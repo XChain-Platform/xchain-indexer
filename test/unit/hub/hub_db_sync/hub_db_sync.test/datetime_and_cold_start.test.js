@@ -44,7 +44,9 @@ function makeApplySync(localCols) {
 
 function argFor(doQuery, table, col, cols) {
     const insert = doQuery.getCalls().find(c => /INSERT/.test(c.args[0]) && c.args[0].includes(table));
-    return insert.args[1][cols.indexOf(col)];
+    const written = /\(([^)]*)\) VALUES/.exec(insert.args[0])[1]
+        .split(',').map(c => c.replace(/`/g, '').trim());
+    return insert.args[1][written.indexOf(col)];
 }
 
 // A real SHOW COLUMNS result carries Type beside Field. When it does, the

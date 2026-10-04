@@ -67,27 +67,20 @@ module.exports = {
         } catch (err) {
             drain.applyErrors++;
             getLogger().warn('HubDbSync: failed to apply row in ' + drain.table + ':', err);
-            // Stop the page at the FIRST unappliable row. Advancing the cursor past it
-            // (here, or by applying a later row in this page and raising the local
-            // MAX(id)) would make the next retry's since_id = SELECT MAX(id) skip it
-            // forever, and once the retry drains cleanly the heartbeat gate opens over a
-            // PERMANENT mirror hole (BOOTSTRAP-HOLE-1). Leaving it (and everything after
-            // it) unapplied keeps local MAX(id) below the hole, so the retry re-fetches
-            // from it and fails closed until it applies. A persistent bad row wedges this
-            // table's barrier (defer) rather than silently forking - the module's
-            // fail-closed contract, same as the schema-mismatch path.
+            // Stop the page at the first unappliable row. Its wire position is not
+            // advanced, so the next retry starts before the hole and fails closed.
             //
             // A batch cannot hide such a row: applyRowsBatched only reports success on a
             // statement the driver accepted, and any other outcome sends every row in the
             // chunk back through this loop one at a time, where the bad one still stops it.
             return false;
         }
-        // Advance the cursor only for a row that actually applied - or that the
-        // mirror bound deliberately declined, which is equally "handled" and can
-        // leave no hole: price_snapshots is a FULL_REPAGE table, so its cursor
-        // restarts at 0 on every drain and never carries this position forward.
+        // Advance the connection's wire position only after this row was handled.
         let rowId = Number(row.id);
-        if (Number.isFinite(rowId) && rowId > drain.lastId) drain.lastId = rowId;
+        if (Number.isFinite(rowId) && rowId > drain.lastId) {
+            drain.lastId = rowId;
+            this._drainPositions[drain.table] = rowId;
+        }
         if (this._bootstrapping) this._bootstrapLastProgressAt = Date.now();
         return true;
     },
@@ -125,12 +118,10 @@ module.exports = {
     },
 
     // What the hub SERVED, for the reconciliation passes: the natural keys and the
-    // ceilings of the three tables whose pages are the only proof of what the hub holds.
+    // ceilings needed by the tables whose pages are the only proof of what the hub holds.
     recordServedRow(drain, row) {
         if (drain.servedMatchIds) {
             drain.servedMatchIds.add(String(row.match_id));
-            let sid = Number(row.id);
-            if (Number.isFinite(sid) && sid > drain.maxServedId) drain.maxServedId = sid;
         }
         if (drain.servedPriceKeys) {
             let rn = Number(row.round_number);

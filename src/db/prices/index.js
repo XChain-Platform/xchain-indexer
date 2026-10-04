@@ -74,6 +74,15 @@ function selectLatestPriceQuery(coinPair, blockHeight, opts, landedBound, landed
 
 module.exports = Object.assign({
 
+    async getMaxBatchBlockTime(){
+        const rows = await this.doQueryStrict(
+            `SELECT MAX(batch_block_time) AS max_batch_block_time
+             FROM price_snapshots
+             WHERE status = 'finalized' AND batch_block_time > 0`, []);
+        if(!rows.length || rows[0].max_batch_block_time == null) return 0;
+        return Number(rows[0].max_batch_block_time);
+    },
+
     // Get the latest finalized price for a coin pair at or before a given block height
     // blockHeight gates the query so two nodes processing the same block always see the same price
     //
@@ -144,7 +153,7 @@ module.exports = Object.assign({
     // The 24-hour lock window is enforced by `effective_at` - only prices whose effective_at <= blockTime are returned.
     async getOraclePrice(sourceAddress, coin, tick, fiat, blockTime){
         this.assertPriceBarrierNotSkipped('getOraclePrice');
-        let query = `SELECT id, source_address, source_chain, coin, tick, fiat, value, fee, memo,
+        let query = `SELECT source_address, source_chain, coin, tick, fiat, value, fee, memo,
                             block_time, effective_at, action_index
                      FROM oracle_prices
                      WHERE source_address = ? AND coin = ? AND tick = ? AND fiat = ?`;
