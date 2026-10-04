@@ -134,6 +134,8 @@ const transportMethods = {
 
     // The hub has registered our subscription: take what the ready frame carries.
     adoptReadyFrame(ws, event) {
+        this._readyCaughtUp = event.caught_up !== false;
+        this._readyCaughtUpHandled = false;
         // A position may cross a connection boundary only when the hub explicitly
         // identifies the same database instance. Older hubs omit the field and therefore
         // re-page from zero on every reconnect.
@@ -223,6 +225,8 @@ const transportMethods = {
         // close the heartbeat gate (and freeze the watermark) until the
         // reconnect re-bootstrap has drained the gap.
         this._bootstrapDrained = false;
+        this._readyCaughtUp = null;
+        this._readyCaughtUpHandled = false;
         // The height watermark dies with the socket for the same reason the heartbeat
         // gate does: it certifies delivery on THIS connection, and rows produced while
         // disconnected have not arrived. A stale map left standing would let a
