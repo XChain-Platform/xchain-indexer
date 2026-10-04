@@ -79,24 +79,32 @@ module.exports = {
             await this.applyRow(event.table, event.row);
             this.reportRefusedChainRows(event.table);
             this.reportRefusedNetworkRows(event.table);
-            if (event.table === 'price_snapshots')     await this.refreshPriceSyncHeight();
-            if (event.table === 'oracle_prices')       await this.refreshOracleSyncTimestamp();
-            if (event.table === 'cross_chain_matches') await this.refreshMatchSyncTimestamp();
-            if (event.table === 'cross_chain_calls')   await this.refreshCallSyncTimestamp();
-            if (event.table === 'bridge_transfers')    await this.refreshBridgeSyncTimestamp();
-            if (event.table === 'policy_snapshots')    await this.refreshPolicySyncTimestamp();
-            if (event.table === 'list_snapshots')      await this.refreshListShareSyncState();
-            if (CROSS_CHAIN_TABLES.indexOf(event.table) !== -1) await this.releaseSnapshotWaiters();
+            if (!this._failoverPendingDrain) {
+                if (event.table === 'price_snapshots')     await this.refreshPriceSyncHeight();
+                if (event.table === 'oracle_prices')       await this.refreshOracleSyncTimestamp();
+                if (event.table === 'cross_chain_matches') await this.refreshMatchSyncTimestamp();
+                if (event.table === 'cross_chain_calls')   await this.refreshCallSyncTimestamp();
+                if (event.table === 'bridge_transfers')    await this.refreshBridgeSyncTimestamp();
+                if (event.table === 'policy_snapshots')    await this.refreshPolicySyncTimestamp();
+                if (event.table === 'list_snapshots')      await this.refreshListShareSyncState();
+                if (CROSS_CHAIN_TABLES.indexOf(event.table) !== -1) await this.releaseSnapshotWaiters();
+            }
         } else if (event.type === 'row:deleted' && event.table) {
             await this.applyRetraction(event);
-            if (event.table === 'price_snapshots')     await this.refreshPriceSyncHeight();
-            if (event.table === 'oracle_prices')       await this.refreshOracleSyncTimestamp();
-            if (event.table === 'cross_chain_matches') await this.refreshMatchSyncTimestamp();
-            if (event.table === 'cross_chain_calls')   await this.refreshCallSyncTimestamp();
+            if (!this._failoverPendingDrain && event.table === 'price_snapshots')
+                await this.refreshPriceSyncHeight();
+            if (!this._failoverPendingDrain && event.table === 'oracle_prices')
+                await this.refreshOracleSyncTimestamp();
+            if (!this._failoverPendingDrain && event.table === 'cross_chain_matches')
+                await this.refreshMatchSyncTimestamp();
+            if (!this._failoverPendingDrain && event.table === 'cross_chain_calls')
+                await this.refreshCallSyncTimestamp();
             // bridge_transfers refreshes inside applyRetraction (the only path that can
             // delete one), so it is deliberately not repeated here; policy_snapshots is
             // never retracted at all.
-            if (event.table === 'cross_chain_matches' || event.table === 'cross_chain_calls') await this.releaseSnapshotWaiters();
+            if (!this._failoverPendingDrain &&
+                (event.table === 'cross_chain_matches' || event.table === 'cross_chain_calls'))
+                await this.releaseSnapshotWaiters();
         }
     },
 

@@ -14,15 +14,16 @@ const sinon = require('sinon');
 
 const HubDbSync = require('../../../../../../src/hub/hub_db_sync.js');
 
-function makeReconnectHarness({ connectOutcomes }) {
+function makeReconnectHarness({ connectOutcomes, hubOptions = {} }) {
     const outcomes = connectOutcomes.slice();
     const hubDb = { doQuery: sinon.stub().resolves([]) };
-    const sync = new HubDbSync(hubDb, { hubUrl: 'http://hub-a.test' });
     const clock = sinon.useFakeTimers();
+    const sync = new HubDbSync(hubDb, Object.assign({ hubUrl: 'http://hub-a.test' }, hubOptions));
 
     sync.running = true;
 
     const connectCalls = sinon.stub(sync, 'connectWebSocket').callsFake(async () => {
+        sync.captureConnectionAddress();
         if (outcomes.length === 0) throw new Error('No scripted connect outcome remains');
         const outcome = outcomes.shift();
         try {
@@ -41,6 +42,7 @@ function makeReconnectHarness({ connectOutcomes }) {
         sync,
         clock,
         connectCalls,
+        refreshCalls,
         bootstrapCalls,
         tickAsync(ms) {
             return clock.tickAsync(ms);
