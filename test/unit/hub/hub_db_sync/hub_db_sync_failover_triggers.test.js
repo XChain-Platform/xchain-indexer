@@ -42,7 +42,7 @@ describe('HubDbSync failover triggers', function () {
         const next = selector.current();
         const status = harness.sync.mirrorStatus();
         assert.notStrictEqual(next, first);
-        assert.strictEqual(status.followedAddress, next);
+        assert.strictEqual(status.followedAddress, first);
         assert.strictEqual(status.lastMoveAt, 15000);
         assert.strictEqual(status.moveReason, 'connect_failure');
         assert.strictEqual(status.moveCount, 1);

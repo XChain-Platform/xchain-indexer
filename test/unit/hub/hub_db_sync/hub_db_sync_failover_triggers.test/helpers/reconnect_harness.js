@@ -23,6 +23,7 @@ function makeReconnectHarness({ connectOutcomes, hubOptions = {} }) {
     sync.running = true;
 
     const connectCalls = sinon.stub(sync, 'connectWebSocket').callsFake(async () => {
+        sync.captureConnectionAddress();
         if (outcomes.length === 0) throw new Error('No scripted connect outcome remains');
         const outcome = outcomes.shift();
         try {

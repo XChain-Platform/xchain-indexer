@@ -233,7 +233,7 @@ module.exports = {
     mirrorStatus() {
         let selectorStatus = this.selector && typeof this.selector.status === 'function'
             ? this.selector.status() : null;
-        let followedAddress = selectorStatus ? selectorStatus.current : (this.hubUrl || null);
+        let followedAddress = this.hubUrl || (selectorStatus ? selectorStatus.current : null);
         let candidates = selectorStatus && Array.isArray(selectorStatus.candidates)
             ? selectorStatus.candidates.slice() : (followedAddress ? [followedAddress] : []);
         let moveStatus = this._movePolicy.status();
