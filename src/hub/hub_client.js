@@ -137,12 +137,12 @@ class HubClient {
         // Wall-clock ceiling for a single call; see HUB_CALL_DEADLINE_MS.
         let deadline = Number(CONFIG_ENV.HUB_CALL_DEADLINE_MS);
         this.callDeadlineMs = Number.isFinite(deadline) && deadline > 0 ? deadline : HUB_CALL_DEADLINE_MS;
-        this.addressSource = null;
+        this.selectorAddressSource = null;
     }
 
     setAddressSource(fn){
-        this.addressSource = (typeof fn === 'function') ? fn : null;
-        let selected = this.addressSource && this.addressSource();
+        this.selectorAddressSource = (typeof fn === 'function') ? fn : null;
+        let selected = this.selectorAddressSource && this.selectorAddressSource();
         this.enabled = !!this.hubUrl || (typeof selected === 'string' && selected.length > 0);
     }
 
@@ -381,8 +381,8 @@ class HubClient {
     call(method, params, apiKeyOverride, urlOverride){
         let key = apiKeyOverride || this.apiKey;
         let address = this.hubUrl;
-        if(!urlOverride && this.addressSource){
-            let sourcedAddress = this.addressSource();
+        if(!urlOverride && this.selectorAddressSource){
+            let sourcedAddress = this.selectorAddressSource();
             if(typeof sourcedAddress === 'string' && sourcedAddress.length > 0)
                 address = sourcedAddress;
         }
