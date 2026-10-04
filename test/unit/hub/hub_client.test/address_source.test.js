@@ -104,5 +104,17 @@ describe('HubClient', function(){
 
             assert.strictEqual(stub.firstCall.args[0].hostname, 'constructor.example.com');
         });
+
+        it('logs one startup warning when seeds are set without a config or API address', function(){
+            process.env.HUB_SEED_URLS = 'http://seed.example.com:10002';
+            let warn = sinon.stub(console, 'warn');
+
+            let c = new HubClient('', '');
+
+            assert.strictEqual(c.enabled, false);
+            assert.strictEqual(c.configEnabled, false);
+            assert.strictEqual(warn.callCount, 1);
+            assert.match(warn.firstCall.args[0], /config poll is off.*no config or API address/i);
+        });
     });
 });

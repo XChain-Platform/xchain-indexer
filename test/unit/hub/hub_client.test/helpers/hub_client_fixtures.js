@@ -57,6 +57,7 @@ function restoreStubsAndHubEnv(){
     delete process.env.HUB_API_KEY;
     delete process.env.HUB_CONFIG_URL;
     delete process.env.HUB_CONFIG_API_KEY;
+    delete process.env.HUB_SEED_URLS;
 }
 
 module.exports = { buildHttpStub, restoreStubsAndHubEnv };

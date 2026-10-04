@@ -7,7 +7,13 @@
 
 const assert = require('assert');
 const crypto = require('crypto');
+const http = require('http');
+const ws = require('ws');
 const createHubSelector = require('../../../src/hub/hub_db_sync/hub_selector.js');
+const HubClient = require('../../../src/hub/hub_client.js');
+const HubDbSync = require('../../../src/hub/hub_db_sync.js');
+
+const WebSocketServer = ws.WebSocketServer || ws.Server;
 
 const MAINNET_DEFAULTS = Array.from({ length: 5 }, (_, i) =>
     'http://validator' + String(i + 1).padStart(2, '0') + '.xchain.io:10001');
@@ -175,5 +181,155 @@ describe('hub selector', function () {
         });
 
         assert.strictEqual(selector.current(), 'http://argument.test:10002');
+    });
+
+    it('enables a hub client from a selector candidate when only seeds are configured', function () {
+        let selector = createHubSelector('testnet', {
+            hubSeedUrls: 'http://seed.test:10002',
+            hubApiUrl: '',
+            randomInt: (max) => max - 1
+        });
+        let client = new HubClient('', 'key', '', '');
+
+        client.setAddressSource(() => selector.current());
+
+        assert.strictEqual(client.hubUrl, '');
+        assert.strictEqual(client.enabled, true);
+        assert.strictEqual(client.configEnabled, false);
+    });
+
+    it('keeps the config address fixed while the selected feed address moves', function () {
+        let selector = createHubSelector('testnet', {
+            hubSeedUrls: 'http://feed-a.test:10002,http://feed-b.test:10002',
+            hubApiUrl: '',
+            randomInt: (max) => max - 1
+        });
+        let client = new HubClient('', 'feed-key', 'http://config.test:10000', 'config-key');
+        client.setAddressSource(() => selector.current());
+
+        selector.advance('test move');
+
+        assert.strictEqual(client.configUrl, 'http://config.test:10000');
+        assert.notStrictEqual(selector.current(), client.configUrl);
+    });
+
+    it('aborts an in-flight mirror drain when the selector changes', async function () {
+        let selector = createHubSelector('testnet', {
+            hubSeedUrls: 'http://hub-a.test:10002,http://hub-b.test:10002',
+            hubApiUrl: '',
+            randomInt: (max) => max - 1
+        });
+        let sync = new HubDbSync({ doQuery: async () => [] }, { selector });
+        assert.strictEqual(sync.enabled, true);
+        sync.captureConnectionAddress();
+        let originalAddress = sync.hubUrl;
+        let retryScheduled = false;
+        sync.running = true;
+        sync.scheduleBootstrapRetry = () => { retryScheduled = true; };
+        sync.drainEveryTable = async () => {
+            selector.advance('test move');
+            return { allDrained: true, marks: [100] };
+        };
+
+        await sync.bootstrapAll();
+
+        assert.notStrictEqual(selector.current(), originalAddress);
+        assert.strictEqual(sync.hubUrl, originalAddress);
+        assert.strictEqual(sync._bootstrapDrained, false);
+        assert.strictEqual(retryScheduled, true);
+        assert.deepStrictEqual(sync.mirrorStatus().candidates, selector.status().candidates);
+        assert.strictEqual(sync.mirrorStatus().followedAddress, originalAddress);
+    });
+
+    it('stops paging a table when the selector changes during a request', async function () {
+        let selector = createHubSelector('testnet', {
+            hubSeedUrls: 'http://hub-a.test:10002,http://hub-b.test:10002',
+            hubApiUrl: '',
+            randomInt: (max) => max - 1
+        });
+        let sync = new HubDbSync({ doQuery: async () => [] }, { selector });
+        let applied = 0;
+        sync.httpGet = async () => {
+            selector.advance('request moved');
+            return { rows: [{ id: 1 }], watermark: 100 };
+        };
+        sync.applyRow = async () => { applied++; };
+        let drain = {
+            table: 'oracle_prices', lastId: 0, connectionEpoch: sync._wsEpoch,
+            selectorRevision: sync._selectorRevision,
+            applied: 0, applyErrors: 0, pending: [], pagesFetched: 0,
+            fetched: 0, lastPageCount: 0, watermark: null
+        };
+
+        assert.strictEqual(await sync.pageTableDrain(drain), false);
+        assert.strictEqual(applied, 0);
+        assert.strictEqual(drain.pagesFetched, 0);
+    });
+
+    it('keeps requests on the captured address until the next connection epoch', async function () {
+        this.timeout(10000);
+        async function openHub(label, holdResponse) {
+            let release;
+            let arrived;
+            let responseGate = holdResponse ? new Promise((resolve) => { release = resolve; }) : Promise.resolve();
+            let requestArrived = new Promise((resolve) => { arrived = resolve; });
+            let server = http.createServer(async (req, res) => {
+                arrived();
+                await responseGate;
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ source: label }));
+            });
+            let socketServer = new WebSocketServer({ server });
+            socketServer.on('connection', (socket) => socket.send(JSON.stringify({ type: 'ready' })));
+            await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+            return {
+                url: 'http://127.0.0.1:' + server.address().port,
+                server, socketServer, requestArrived,
+                release: release || (() => {})
+            };
+        }
+        async function closeHub(hub) {
+            for(let socket of hub.socketServer.clients) socket.terminate();
+            await new Promise((resolve) => hub.socketServer.close(resolve));
+            await new Promise((resolve) => hub.server.close(resolve));
+        }
+
+        let first = await openHub('first', true);
+        let second = await openHub('second', false);
+        let sync;
+        try {
+            let selector = createHubSelector('testnet', {
+                hubSeedUrls: first.url + ',' + second.url,
+                hubApiUrl: '',
+                randomInt: (max) => max - 1
+            });
+            sync = new HubDbSync({ doQuery: async () => [] }, { selector });
+            sync.running = true;
+
+            await sync.connectWebSocket();
+            assert.strictEqual(sync.hubUrl, first.url);
+            let oldEpochRequest = sync.httpGet('/hub-db/snapshot/oracle_prices');
+            await first.requestArrived;
+
+            selector.advance('move during request');
+            assert.strictEqual(sync.hubUrl, first.url);
+            first.release();
+            assert.deepStrictEqual(await oldEpochRequest, { source: 'first' });
+
+            let closed = new Promise((resolve) => sync.ws.once('close', resolve));
+            sync.running = false;
+            sync.ws.close();
+            await closed;
+            sync.running = true;
+
+            await sync.connectWebSocket();
+            assert.strictEqual(sync.hubUrl, second.url);
+            assert.deepStrictEqual(await sync.httpGet('/hub-db/snapshot/oracle_prices'), { source: 'second' });
+        } finally {
+            if(sync) sync.stop();
+            first.release();
+            await closeHub(first);
+            await closeHub(second);
+        }
     });
 });

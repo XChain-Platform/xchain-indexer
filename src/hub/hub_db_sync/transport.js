@@ -49,6 +49,7 @@ const transportMethods = {
             if (!WebSocket || !this.running) {
                 return reject(new Error('WebSocket unavailable or sync stopped'));
             }
+            this.captureConnectionAddress();
             let parsed = url.parse(this.hubUrl);
             let wsScheme = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
             let wsUrl = wsScheme + '//' + parsed.host + '/hub-db/subscribe';
