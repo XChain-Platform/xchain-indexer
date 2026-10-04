@@ -19,14 +19,30 @@ const HubPushDeliveryStore = require('../sql/hub_push_delivery_store.js');
  *
  * Durable retry queue for best-effort pushes to xchain-hub.
  *
- * The PRICE handlers push validated rounds (PRICE v0), oracle prices (PRICE v1), and batches of rounds (PRICE v0) to the hub. Those pushes are network calls and can fail when the hub is restarting, overloaded, or partitioned.
- * The raw on-chain action is always retained locally in the `prices` table, but the hub never reads that table, so a dropped push used to permanently remove the row from the hub's oracle_prices / price_snapshots and from every indexer that mirrors the hub.
+ * The PRICE handlers push validated rounds (PRICE v0), oracle prices
+ * (PRICE v1), and batches of rounds (PRICE v0) to the hub. Those pushes are
+ * network calls and can fail when the hub is restarting, overloaded, or
+ * partitioned. The raw on-chain action is always retained locally in the
+ * `prices` table, but the hub never reads that table, so a dropped push used
+ * to permanently remove the row from the hub's oracle_prices / price_snapshots
+ * and from every indexer that mirrors the hub.
  *
- * To make those pushes durable, EVERY push is persisted to the `pending_hub_pushes` table up front (write-ahead), inside the same block transaction that writes the `prices` row, and the row is dropped only once the hub has accepted it.
- * Delivery is attempted live post-commit; a row that was not delivered live (push failure, hub outage, or a crash in that window) survives for this poller. It drains that table on a fixed interval, re-sending each row with exponential backoff until the hub accepts it.
- * The hub's pushpriceround / pushoracleprice / pushpricebatch / pushattestbatch handlers dedupe, so a replay the hub already has returns cleanly. A `price_round` row that keeps failing past the attempt cap is marked `failed`, which stops the retries.
- * The same drain tick sweeps terminal rows once they pass the retention window so the table stays bounded. `oracle_price`, `price_batch`, `attest_batch` and the `*_retraction` rows carry NO cap: none is re-derivable from a later block.
- * Each batch type is the SOLE carrier of its whole window for a chain-only node, so these rows stay `pending` and retry at the max backoff until the hub takes them (see attempt).
+ * To make those pushes durable, EVERY push is persisted to the
+ * `pending_hub_pushes` table up front (write-ahead), inside the same block
+ * transaction that writes the `prices` row, and the row is dropped only once the
+ * hub has accepted it. Delivery is attempted live post-commit; a row that was not
+ * delivered live (push failure, hub outage, or a crash in that window) survives
+ * for this poller. It drains that table on a fixed interval,
+ * re-sending each row with exponential backoff until the hub accepts it (the
+ * hub's pushpriceround / pushoracleprice / pushpricebatch / pushattestbatch
+ * handlers dedupe, so a replay the hub already has returns cleanly). A
+ * `price_round` row that keeps failing past the attempt cap is marked `failed`,
+ * which stops the retries, and the same drain tick sweeps terminal rows once they
+ * pass the retention window so the table stays bounded. `oracle_price`,
+ * `price_batch`, `attest_batch` and the `*_retraction` rows carry NO cap: none is
+ * re-derivable from a later block (each batch type is the SOLE carrier of its whole
+ * window for a chain-only node), so they stay `pending` and retry at the max backoff
+ * until the hub takes them (see attempt).
  *
  ********************************************************************/
 
@@ -34,9 +50,7 @@ class HubPushQueue {
 
     constructor(indexer, opts){
         opts = opts || {};
-        this.indexer   = indexer;
-        this.indexerDb = indexer.indexerDb;
-        this.hubClient = indexer.hubClient;
+        this.indexer = indexer; this.indexerDb = indexer.indexerDb; this.hubClient = indexer.hubClient;
         this.hubPushDeliveries = new HubPushDeliveryStore(this, opts.selector); this._retryHubAddress = this.currentSelectorAddress();
 
         // How often the poller wakes to drain due rows.
@@ -60,8 +74,7 @@ class HubPushQueue {
         this.pruneIntervalMs = opts.pruneIntervalMs || parseInt(CONFIG_ENV.HUB_PUSH_PRUNE_INTERVAL_MS) || 3600000;
         this._lastPruneMs = 0;
 
-        this.timer    = null;
-        this.draining = false;
+        this.timer = null; this.draining = false;
         // Wall clock before which no drain runs, set when the hub answers 429.
         // A throttled push is the ONE failure the hub never judged: it did not see the
         // payload, so the row is neither delivered nor rejected and retrying it inside the
@@ -85,15 +98,14 @@ class HubPushQueue {
     // an orphaned hub row the fence can no longer delete. Awaiting `_drainDone` closes that race: by
     // the time pause() resolves, no drain is running and none can start. Returns a promise so callers
     // do `await queue.pause()`. Safe to call when idle (resolves immediately).
-    async pause(){
-        this.paused = true;
+    async pause(){ this.paused = true;
         // A drain that already passed its paused-check and set draining=true has a live _drainDone;
         // await it. A drain starting after this line sees paused=true and returns before draining.
-        if(this._drainDone) await this._drainDone;
-    }
+        if(this._drainDone) await this._drainDone; }
     resume(){ this.paused = false; }
     currentSelectorAddress(){
-        let selector = this.hubPushDeliveries.hubSelector; let status = selector && (typeof selector.status === 'function' ? selector.status() : selector);
+        let selector = this.hubPushDeliveries.hubSelector;
+        let status = selector && (typeof selector.status === 'function' ? selector.status() : selector);
         return selector && typeof selector.current === 'function' ? selector.current() : (status && typeof status.current === 'string' ? status.current : null);
     }
     async resetPendingAttemptsAfterMove(rows){
@@ -101,12 +113,9 @@ class HubPushQueue {
         if(!address || address === this._retryHubAddress) return false;
         if(!this._retryHubAddress){ this._retryHubAddress = address; return false; }
         if(typeof this.indexerDb.poolQuery === 'function') await this.indexerDb.poolQuery(`UPDATE pending_hub_pushes SET attempts = 0, last_attempted_at = NULL, last_error = NULL WHERE status = 'pending'`);
-        this._retryHubAddress = address;
-        for(let row of (rows || [])) Object.assign(row, { attempts: 0, last_attempted_at: null, last_error: null });
-        getLogger().info('HubPushQueue: reset pending attempts for hub ' + address);
-        return true;
+        this._retryHubAddress = address; for(let row of (rows || [])) Object.assign(row, { attempts: 0, last_attempted_at: null, last_error: null });
+        getLogger().info('HubPushQueue: reset pending attempts for hub ' + address); return true;
     }
-
     // Begin draining on an interval. No-op when no hub is configured; in that
     // case the PRICE handlers never enqueue, so there is nothing to drain.
     start(){
@@ -131,26 +140,21 @@ class HubPushQueue {
     // per the exponential-backoff schedule. Rows never tried are immediately due.
     isDue(row, now){
         if(!row.last_attempted_at) return true;
-        let last    = new Date(row.last_attempted_at).getTime();
-        let attempts = Number(row.attempts) || 0;
-        let backoff = Math.min(this.baseBackoffMs * Math.pow(2, Math.max(0, attempts - 1)), this.maxBackoffMs);
+        let last = new Date(row.last_attempted_at).getTime(); let attempts = Number(row.attempts) || 0; let backoff = Math.min(this.baseBackoffMs * Math.pow(2, Math.max(0, attempts - 1)), this.maxBackoffMs);
         return now >= last + backoff;
     }
 
     // Drain one batch of due rows. Guarded against overlapping runs so a slow
     // hub can't pile up concurrent drains on top of each other.
     async drain(){
-        if(this.draining) return;
-        if(this.paused) return;
+        if(this.draining || this.paused) return;
         // Hub-imposed hold from a previous 429. Checked before the prune/fetch so a
         // throttled queue costs one clock read per tick, not a DB round trip.
         if(this._throttledUntilMs && Date.now() < this._throttledUntilMs) return;
         this.draining = true;
         // Publish a completion promise so pause() can await this in-flight drain.
-        let resolveDone;
-        this._drainDone = new Promise(resolve => { resolveDone = resolve; });
-        try {
-            await this.resetPendingAttemptsAfterMove();
+        let resolveDone; this._drainDone = new Promise(resolve => { resolveDone = resolve; });
+        try { await this.resetPendingAttemptsAfterMove();
             // Sweep aged terminal rows before fetching. It rides the existing drain
             // timer rather than owning one, so it inherits start/stop/pause and adds
             // no lifecycle: the throttle below is what keeps it off every 30s tick.
@@ -165,8 +169,7 @@ class HubPushQueue {
             });
             if(!rows || rows.length === 0) return;
             let now = Date.now();
-            for(let row of rows){
-                await this.resetPendingAttemptsAfterMove(rows);
+            for(let row of rows){ await this.resetPendingAttemptsAfterMove(rows);
                 if(!this.isDue(row, now)) continue;
                 await this.attempt(row);
                 // A 429 stops the batch where it stands. The remaining rows are still
@@ -175,9 +178,7 @@ class HubPushQueue {
                 if(this._throttledUntilMs && Date.now() < this._throttledUntilMs) break;
             }
         } finally {
-            this.draining = false;
-            this._drainDone = null;
-            resolveDone();
+            this.draining = false; this._drainDone = null; resolveDone();
         }
     }
 
@@ -376,8 +377,7 @@ class HubPushQueue {
             ' (attempt ' + attemptNo + (isDurable ? '' : '/' + this.maxAttempts) + '): ' + msg);
     }
 
-    async attempt(row){
-        await this.resetPendingAttemptsAfterMove([row]);
+    async attempt(row){ await this.resetPendingAttemptsAfterMove([row]);
         let candidates = this.hubPushDeliveries.candidateAddresses();
         if(candidates.length > 0) return await this.hubPushDeliveries.attempt(row, candidates);
 
