@@ -31,10 +31,37 @@ function noteConnected(sync) {
     sync._movePolicy.noteConnected();
 }
 
+function noteHubNotCaughtUp(sync) {
+    if (candidateCount(sync) < 2) return false;
+    return moveHub(sync, 'hub not caught up');
+}
+
+function rejectUncaughtUpReadyFrame(sync) {
+    if (sync._readyCaughtUpHandled) return false;
+    sync._readyCaughtUpHandled = true;
+    noteHubNotCaughtUp(sync);
+    if (sync.ws) {
+        try {
+            if (typeof sync.ws.terminate === 'function') sync.ws.terminate();
+            else if (typeof sync.ws.close === 'function') sync.ws.close();
+        } catch (err) {
+            getLogger().warn('HubDbSync: not-caught-up hub reconnect failed: ' + (err && err.message));
+            if (sync.running) sync.scheduleBootstrapRetry();
+        }
+    } else if (sync.running) sync.scheduleBootstrapRetry();
+    return false;
+}
+
 function stallFailoverAction(sync) {
     const action = sync._movePolicy.onStall(candidateCount(sync));
     if (action !== 'move') return action;
     return moveHub(sync, 'stall') ? 'move' : 'exit';
 }
 
-module.exports = { moveHub, noteConnectFailure, noteConnected, stallFailoverAction };
+module.exports = {
+    moveHub,
+    noteConnectFailure,
+    noteConnected,
+    rejectUncaughtUpReadyFrame,
+    stallFailoverAction
+};
