@@ -256,7 +256,7 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
 
     // ── The purge on an expectation change ───────────────────────────────────────
 
-    it('purges the previous chain\'s rows from all six tables and reports the counts', async function () {
+    it('purges the previous chain rows, including state and reward quorum tables', async function () {
         const warn = sinon.stub(console, 'warn');
         sinon.stub(console, 'log');
         const { sync, seen } = makeSync({ deleted: 3 });
@@ -275,6 +275,11 @@ describe('HubDbSync btc_chain_id chain fence @regression @tier2', function () {
             'DELETE FROM list_snapshots WHERE btc_chain_id IS NOT NULL AND btc_chain_id <> ?'
         ]);
         assert.ok(dels.every((q) => q.args[0] === CHAIN_NEW), 'the predicate keeps THIS chain, and NULLs stay');
+        assert.deepStrictEqual(seen.sql.filter(q =>
+            /^DELETE FROM (state_checkpoints|anchor_reward_attestations)/.test(q.sql)).map(q => q.sql), [
+            'DELETE FROM state_checkpoints WHERE network = ?',
+            'DELETE FROM anchor_reward_attestations WHERE network = ?'
+        ]);
         for (const table of ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots',
                              'bridge_transfers', 'policy_snapshots', 'list_snapshots'])
             assert.ok(lines(warn).includes('HubDbSync: purged 3 ' + table + ' row(s) from chain ' + CHAIN_OLD),

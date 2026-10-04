@@ -15,10 +15,9 @@
  * XChain Indexer - Hub DB Sync Client: mirrored-table registries
  *
  * Which hub tables the mirror carries and what each one needs: the retraction
- * column maps, the cross-chain and federation-state table sets, the tables that
- * re-page from id 0 on every bootstrap, and the natural keys the rebuilt-source
- * probe compares. Every list is local to this module so no table or column name
- * is ever taken from the wire.
+ * column maps, the cross-chain and federation-state table sets, and the local
+ * schema requirements. Every list is local to this module so no table or column
+ * name is ever taken from the wire.
  *
  * Part of the hub-mirror client (src/hub/hub_db_sync.js), which installs the
  * methods here onto HubDbSync.prototype. Vendored byte-identical into
@@ -81,47 +80,16 @@ const RETRACTION_CHAIN_COLUMNS = {
 const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots',
                             'bridge_transfers', 'policy_snapshots', 'list_snapshots'];
 
-// Tables that must re-page from since_id=0 on EVERY bootstrap. A cursor of
-// since_id = MAX(local id) is INSERT-shaped: it can only deliver rows with a NEW id,
-// so it can never re-fetch an in-place UPGRADE that kept the same hub id. Four
-// mirrored tables are upgraded in place on the hub (price_snapshots skipped->
-// finalized, oracle_prices at a higher push_generation, cross_chain_calls
-// re-finalized, cross_chain_matches anchor_txid stamping AND retract->revive content);
-// if the upgrade broadcast is missed while
-// this mirror is disconnected, only a full re-page re-delivers the row so the
-// idempotent applyRow ODKUs converge it (#2491, #3211). capability_snapshots and
-// attestation_responses are here for a related reason (locally-assigned ids, #2270).
-// The four upgraded tables keep hub-id parity; the other two strip id in applyRow.
-// The re-page cost is O(table) per reconnect, accepted. cross_chain_matches
-// additionally runs a reconciliation pass over the completed re-page
-// (reconcileRetractedMatches), because the one
-// mutation the hub CANNOT re-serve is a retraction: the snapshot endpoint filters
-// retracted rows out entirely, so there is no row to converge against.
-// attestation_responses is here for capability_snapshots' SECOND reason alone, and it is
-// REQUIRED rather than a precaution: nothing in that table is ever updated in place, but
-// applyRow strips its hub id (every hub that holds the finalized artifact writes its own
-// row and gossips it, so the ids differ for one logical row), which makes the local ids
-// LOCALLY assigned. A since_id = MAX(local id) cursor is then not a position in the
-// followed hub's id space at all: it can ask for rows past the end of that hub's table and
-// strand the mirror, and a wire id can land on a locally-assigned PK where the INSERT
-// IGNORE drops a real row without an error, leaving a permanent mirror hole (#2270). The
-// natural key (network, request_id) dedupes the re-page, and a missed response here is a
-// permanent fork rather than a lag, so the O(table) re-page per bootstrap is cheap.
-//
-// bridge_transfers, policy_snapshots and list_snapshots are deliberately NOT here, and the
-// omission rests on the two properties this list actually tests for. None is upgraded in
-// place on the hub:
-// a bridge transfer's terms are fixed by the signed canonical the round closed on, and a
-// changed policy or shared list is a NEW row at the next sequence rather than an edit of the old one, so
-// there is no in-place upgrade a since_id cursor could miss. And none strips its wire id
-// in applyRow (they keep hub-id parity like cross_chain_matches/calls, which is what makes
-// since_id = MAX(local id) a real position in the followed hub's id space). What a re-page
-// could not re-serve for any is a RETRACTION, and that is why bridge_transfers rides the
-// quorum-class fence in applyRetraction rather than a re-page, while policy_snapshots and
-// list_snapshots are never retracted at all. All three tables keep hub-id parity, so the
-// cost was not the deciding argument in either direction.
-const FULL_REPAGE_TABLES = ['capability_snapshots', 'price_snapshots', 'oracle_prices', 'cross_chain_calls',
-                            'cross_chain_matches', 'attestation_responses'];
+const MIRRORED_TABLES = ['price_snapshots', 'oracle_prices', 'cross_chain_matches', 'cross_chain_calls',
+                         'capability_snapshots', 'bridge_transfers', 'policy_snapshots', 'list_snapshots',
+                         'state_checkpoints', 'anchor_reward_attestations', 'attestation_responses'];
+
+// These tables historically copied the serving hub's id. Their existing local tables must
+// have AUTO_INCREMENT before id-less writes are enabled, or a deployment with an older
+// hand-built schema would fail every insert after startup.
+const AUTO_INCREMENT_ID_TABLES = ['price_snapshots', 'oracle_prices', 'cross_chain_matches', 'cross_chain_calls',
+                                  'bridge_transfers', 'policy_snapshots', 'list_snapshots',
+                                  'state_checkpoints', 'anchor_reward_attestations'];
 
 // Hub federation state tables. state_checkpoints carries quorum-signed per-chain
 // state-hash commitments (the explorer/SDK verification source). Append-only,
@@ -130,7 +98,7 @@ const FULL_REPAGE_TABLES = ['capability_snapshots', 'price_snapshots', 'oracle_p
 // anchor_reward_attestations carries the hub's XANCPUB publisher-attestation
 // quorum per attested reward tuple; the BTC indexer derives the COLLECT-spendable
 // anchor/archive reward from it (mirror is transport, not trust: it re-verifies the
-// sigs against its own local oracle_publish set). Append-only, id-parity INSERT IGNORE,
+// sigs against its own local oracle_publish set). Append-only, content-keyed INSERT IGNORE,
 // never retracted (rows are written only post-quorum for a finalized checkpoint).
 // attestation_responses carries the FINALIZED ATTEST response (one row per terminal round,
 // status 'ok' or 'expired'). The legacy route for it is a validator-paid ATTEST v1
@@ -143,8 +111,8 @@ const FULL_REPAGE_TABLES = ['capability_snapshots', 'price_snapshots', 'oracle_p
 // stamp arrives as a broadcast rather than as something a cursor has to re-fetch.
 // Never retracted either: the mirror row is inert without a pending local request, so a reorg
 // that removes the request simply leaves nothing for it to bind to (spec §4.5). It is a
-// NATURAL-KEY mirror on (network, request_id) rather than an id-parity one, unlike the two
-// above; see the id strip in applyRow and the FULL_REPAGE_TABLES entry that follows from it.
+// NATURAL-KEY mirror on (network, request_id, effective_time). Every mirrored table uses
+// its content key; its local id is only a local surrogate.
 //
 // bridge_transfers, policy_snapshots and list_snapshots are deliberately NOT here either,
 // even though policy_snapshots is otherwise shaped like state_checkpoints. Membership of
@@ -154,29 +122,6 @@ const FULL_REPAGE_TABLES = ['capability_snapshots', 'price_snapshots', 'oracle_p
 // on. Each gates one: waitForBridgeSync and waitForPolicySync cache their own
 // MAX(effective_time), while waitForListShareSync uses the per-chain height watermark.
 const HUB_STATE_TABLES = ['state_checkpoints', 'anchor_reward_attestations', 'attestation_responses'];
-
-// Tables whose local id N and hub id N are THE SAME ROW, and whose rows are never updated
-// in place. Both properties are needed before a difference in content at a shared id can
-// mean anything: id parity makes the two rows comparable at all (the FULL_REPAGE tables
-// that strip the wire id have locally-assigned ids, where id N names nothing on the hub),
-// and append-only makes a difference a CONTRADICTION rather than a version skew.
-//
-// The columns are each table's UNIQUE natural key - the tuple that says WHICH logical row
-// this is, which is exactly the question "did the source's id space get replaced" asks.
-// They are signed/consensus inputs and immutable once written, so a legitimate mirror can
-// never hold a different one at the hub's id. See detectRebuiltSourceByContent.
-const REBUILT_SOURCE_IDENTITY_COLUMNS = Object.freeze({
-    state_checkpoints:          Object.freeze(['chain', 'network', 'checkpoint_seq']),
-    anchor_reward_attestations: Object.freeze(['chain', 'network', 'reward_type', 'round_reference',
-                                               'snapshot_block', 'publisher'])
-});
-
-// How many rows of the hub's FIRST page the content probe compares. A rebuilt source
-// restarts its ids at 1, so the retired ids a re-grown source now reuses are the LOWEST
-// ones it holds, and the contradiction (if there is one) is in this window. Sized to stay
-// one small request while covering more than the "handful of rows" exposure that made the
-// overlap case reachable in the first place.
-const REBUILT_SOURCE_PROBE_ROWS = 200;
 
 // The column that names a mirrored row to an operator when a mirror fence refuses or purges
 // it, and the settlement family tag its refusal carries. A fence runs BEFORE the settlement
@@ -203,7 +148,6 @@ const REFUSED_ROW_NAMED_CAP = 10000;
 
 module.exports = {
     RETRACTION_COLUMNS, RETRACTION_CHAIN_COLUMNS,
-    CROSS_CHAIN_TABLES, FULL_REPAGE_TABLES, HUB_STATE_TABLES,
-    REBUILT_SOURCE_IDENTITY_COLUMNS, REBUILT_SOURCE_PROBE_ROWS,
+    CROSS_CHAIN_TABLES, HUB_STATE_TABLES, MIRRORED_TABLES, AUTO_INCREMENT_ID_TABLES,
     REFUSED_ROW_NAMES, REFUSED_ROW_NAME_LIMIT, REFUSED_ROW_NAMED_CAP,
 };

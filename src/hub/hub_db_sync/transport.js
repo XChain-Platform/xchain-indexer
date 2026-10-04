@@ -130,11 +130,20 @@ const transportMethods = {
 
     // The hub has registered our subscription: take what the ready frame carries.
     adoptReadyFrame(ws, event) {
+        // A position may cross a connection boundary only when the hub explicitly
+        // identifies the same database instance. Older hubs omit the field and therefore
+        // re-page from zero on every reconnect.
+        let instanceId = (typeof event.hub_instance_id === 'string' && event.hub_instance_id !== '')
+            ? event.hub_instance_id : null;
+        if (instanceId === null || instanceId !== this._lastHubInstanceId)
+            this._drainPositions = Object.create(null);
+        this._lastHubInstanceId = instanceId;
+
         // Hub has registered our subscription. Capture hub-side max IDs
         // (included by HubDbBroadcaster for gap detection after bootstrap).
         if (event.max_ids && typeof event.max_ids === 'object') {
             this._readyMaxIds = event.max_ids;
-        }
+        } else this._readyMaxIds = undefined;
         // Self-size the heartbeat watchdog from the hub's ACTUAL cadence when
         // advertised (watermark_interval_ms), so the client timeout > hub
         // interval invariant holds without a matching env knob on every

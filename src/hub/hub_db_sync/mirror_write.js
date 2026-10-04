@@ -65,6 +65,7 @@ function coerceMirrorValue(v, columnType) {
 // would be two chances to diverge. At rowCount 1 it emits exactly the statement
 // applyRow emitted before this batching existed.
 function priceUpsertSql(cols, rowCount) {
+    cols = cols.filter(c => c !== 'id');
     let updatable = cols.filter(c => c !== 'id' && c !== 'round_number' && c !== 'coin_pair' && c !== 'status');
     let sets = updatable.map(c => '`' + c + "` = IF(VALUES(status) = 'finalized', VALUES(`" + c + '`), `' + c + '`)');
     sets.push("status = IF(VALUES(status) = 'finalized', 'finalized', status)");

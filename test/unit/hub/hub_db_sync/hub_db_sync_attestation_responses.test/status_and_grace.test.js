@@ -110,7 +110,7 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
             'capability_snapshots satisfaction is a live per-block query, never a cached scalar');
     });
 
-    // ── the cursor that follows from the id strip ──
+    // ── the wire position that accompanies the id strip ──
 
     it('bootstraps attestation_responses from since_id 0 even when the local table holds high ids', async function () {
         const { sync } = makeSync({ localMaxId: 987654 });
@@ -121,9 +121,7 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
 
         assert.strictEqual(paths.length, 1, 'one page fetched (an empty page is a short page)');
         assert.ok(/since_id=0&/.test(paths[0]),
-            'the cursor must re-page from 0: the local ids are LOCALLY assigned (the strip above), so ' +
-            'MAX(local id) is not a position in the followed hub id space and since_id=987654 would ask ' +
-            'for rows past the end of that hub table and drain zero rows forever. Path was: ' + paths[0]);
+            'the process starts at wire position 0 regardless of locally assigned ids. Path was: ' + paths[0]);
     });
 });
 
@@ -133,16 +131,16 @@ describe('HubDbSync attestation_responses mirror registration @regression @tier1
         sinon.restore();
     });
 
-    it('bootstraps state_checkpoints from MAX(local id), the id-parity cursor control', async function () {
+    it('bootstraps state_checkpoints from the connection drain position', async function () {
         const { sync } = makeSync({ localMaxId: 987654 });
+        sync._drainPositions.state_checkpoints = 321;
         const paths = [];
         sinon.stub(sync, 'httpGet').callsFake(async (path) => { paths.push(path); return { rows: [], watermark: 1 }; });
 
         await sync.bootstrapTable('state_checkpoints');
 
-        assert.ok(/since_id=987654&/.test(paths[0]),
-            'state_checkpoints keeps hub-id parity and must page incrementally; if this also re-pages, ' +
-            'the FULL_REPAGE assertion above proves nothing. Path was: ' + paths[0]);
+        assert.ok(/since_id=321&/.test(paths[0]),
+            'the local MAX(id) must not seed the wire cursor. Path was: ' + paths[0]);
     });
 
     it('purges foreign-network rows before reading the cursor, which needs the network column', async function () {

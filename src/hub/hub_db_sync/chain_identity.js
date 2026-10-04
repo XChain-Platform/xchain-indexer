@@ -133,6 +133,27 @@ module.exports = {
             if (table === 'policy_snapshots')    refreshPolicy  = true;
             if (table === 'list_snapshots')      refreshListShare = true;
         }
+        // These quorum-signed tables predate btc_chain_id on their row shape. A change
+        // in the followed Bitcoin identity invalidates the whole local network slice.
+        if (previous) {
+            for (let table of ['state_checkpoints', 'anchor_reward_attestations']) {
+                let result;
+                try {
+                    let scoped = typeof this.network === 'string' && this.network !== '';
+                    result = await this.hubDb.doQuery('DELETE FROM ' + table + (scoped ? ' WHERE network = ?' : ''),
+                                                      scoped ? [this.network] : undefined);
+                } catch (e) {
+                    getLogger().warn('HubDbSync: could not clear rows from ' + table + ' after btc_chain_id changed:', e);
+                    continue;
+                }
+                let removed = Number(result && result.affectedRows);
+                if (!Number.isFinite(removed)) {
+                    getLogger().warn('HubDbSync: btc_chain_id change purge of ' + table + ' reported no result');
+                    continue;
+                }
+                if (removed > 0) total += removed;
+            }
+        }
         // Re-read every affected barrier after the purge. The clock-keyed barriers may
         // have cached a removed maximum; the height-keyed list barrier must re-probe the
         // table and re-evaluate its waiters over the cleaned mirror.

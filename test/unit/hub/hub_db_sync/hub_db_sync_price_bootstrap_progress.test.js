@@ -211,7 +211,9 @@ describe('HubDbSync price bootstrap throughput and progress @regression @tier2',
         assert.strictEqual(await sync.bootstrapTable('price_snapshots'), null,
             'a holed drain must not be certified');
         assert.strictEqual(rows.length, 16, 'nothing at or after the bad row may be applied');
-        assert.ok(rows.every(r => Number(r.id) < 17));
+        assert.deepStrictEqual(rows.map(r => Number(r.round_number)),
+            Array.from({ length: 16 }, (_, i) => i + 1),
+            'only rows before the bad row may be applied');
     });
 });
 
