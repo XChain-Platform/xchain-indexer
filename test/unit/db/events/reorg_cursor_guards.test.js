@@ -9,8 +9,10 @@ const {
 
 function makeDb(rows) {
     const calls = [];
+    const hashInputs = [];
     return {
         calls,
+        hashInputs,
         async doQueryStrict(sql, params) {
             calls.push({ sql, params });
             return rows;
@@ -18,7 +20,9 @@ function makeDb(rows) {
         reorgCursorIncoherentError(msg) {
             return new Error(msg);
         },
-        hashReorgData() {
+        hashReorgData(data) {
+            assert.strictEqual(data, 'd');
+            hashInputs.push(data);
             return 'H';
         }
     };
@@ -45,6 +49,7 @@ describe('assertCursorWitness', function () {
         await assertCursorWitness(db, 7, null);
         await assertCursorWitness(db, 7, { time: 5, hash: 'H' });
         await assertCursorWitness(db, 7, { time: '5', hash: 'H' });
+        assert.deepStrictEqual(db.hashInputs, ['d', 'd']);
     });
 
     it('throws on a time mismatch or a hash mismatch', async function () {
