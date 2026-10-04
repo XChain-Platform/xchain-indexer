@@ -60,6 +60,19 @@ describe('HubClient', function(){
             assert.strictEqual(stub.firstCall.args[0].hostname, 'current.example.com');
         });
 
+        it('routes reorg pushes through the current address with the reorg key', async function(){
+            process.env.HUB_REORG_API_KEY = 'reorg-key';
+            let c = new HubClient('http://constructor.example.com', 'push-key');
+            c.reorgApiKey = 'reorg-key';
+            c.setAddressSource(() => 'http://current.example.com');
+            let stub = stubSuccessfulRequest();
+
+            await c.retractPriceRange('BTC', 10, 20, 3);
+
+            assert.strictEqual(stub.firstCall.args[0].hostname, 'current.example.com');
+            assert.strictEqual(stub.firstCall.args[0].headers['x-api-key'], 'reorg-key');
+        });
+
         it('lets a URL override take precedence over the source', async function(){
             let c = new HubClient('http://constructor.example.com', 'key');
             c.setAddressSource(() => 'http://current.example.com');
