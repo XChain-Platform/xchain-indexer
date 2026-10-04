@@ -29,15 +29,15 @@ describe('HubClient', function(){
             return stub;
         }
 
-        it('reads the source again for each call', async function(){
+        it('routes reads through the current source address', async function(){
             let c = new HubClient('http://constructor.example.com', 'key');
             let address = 'http://first.example.com';
             c.setAddressSource(() => address);
             let stub = stubSuccessfulRequest();
 
-            await c.call('ping', {});
+            await c.call('getprices', {});
             address = 'http://second.example.com';
-            await c.call('ping', {});
+            await c.call('getprices', {});
 
             assert.strictEqual(stub.firstCall.args[0].hostname, 'first.example.com');
             assert.strictEqual(stub.secondCall.args[0].hostname, 'second.example.com');
@@ -60,6 +60,22 @@ describe('HubClient', function(){
             assert.strictEqual(stub.firstCall.args[0].hostname, 'current.example.com');
         });
 
+        it('routes reorg pushes through the current address with the reorg key', async function(){
+            let c = new HubClient('http://constructor.example.com', 'push-key');
+            c.reorgApiKey = 'reorg-key';
+            c.setAddressSource(() => 'http://current.example.com');
+            let stub = stubSuccessfulRequest();
+
+            await c.retractPriceRange('BTC', 10, 20, 3);
+            await c.retractXcallRange('LTC', 30, 40, 5);
+
+            assert.strictEqual(stub.firstCall.args[0].hostname, 'current.example.com');
+            assert.strictEqual(stub.secondCall.args[0].hostname, 'current.example.com');
+            assert.strictEqual(stub.firstCall.args[0].headers['x-api-key'], 'reorg-key');
+            assert.strictEqual(stub.secondCall.args[0].headers['x-api-key'], 'reorg-key');
+            assert.strictEqual(c.hubUrl, 'http://constructor.example.com');
+        });
+
         it('lets a URL override take precedence over the source', async function(){
             let c = new HubClient('http://constructor.example.com', 'key');
             c.setAddressSource(() => 'http://current.example.com');
@@ -73,9 +89,11 @@ describe('HubClient', function(){
         it('keeps getAllConfigs on the config address', async function(){
             let c = new HubClient('http://constructor.example.com', 'feed-key',
                                   'http://config.example.com', 'config-key');
-            c.setAddressSource(() => 'http://current.example.com');
+            let address = 'http://current.example.com';
+            c.setAddressSource(() => address);
             let stub = stubSuccessfulRequest();
 
+            address = 'http://moved.example.com';
             await c.getAllConfigs();
 
             assert.strictEqual(stub.firstCall.args[0].hostname, 'config.example.com');
