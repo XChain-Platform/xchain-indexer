@@ -62,6 +62,10 @@ function initConnection(sync, hubDb, options) {
         ? options.failoverReconnectAttempts : Number(readEnvNow('HUB_FAILOVER_RECONNECT_ATTEMPTS'));
     const minDwellMs = Object.prototype.hasOwnProperty.call(options, 'failoverMinDwellMs')
         ? options.failoverMinDwellMs : Number(readEnvNow('HUB_FAILOVER_MIN_DWELL_MS'));
+    const configuredNotCaughtUpGraceMs = Object.prototype.hasOwnProperty.call(options, 'notCaughtUpGraceMs')
+        ? options.notCaughtUpGraceMs : Number(readEnvNow('HUB_NOT_CAUGHT_UP_GRACE_MS'));
+    sync._notCaughtUpGraceMs = Number.isFinite(configuredNotCaughtUpGraceMs) && configuredNotCaughtUpGraceMs >= 0
+        ? configuredNotCaughtUpGraceMs : 30000;
     sync._movePolicy = createMovePolicy({ reconnectAttempts, minDwellMs, now: options.now });
     sync._failoverPendingDrain = false;
     sync.pollIntervalMs = parseInt(options.pollInterval || readEnvNow('HUB_DB_SYNC_POLL_INTERVAL') || '30000');
