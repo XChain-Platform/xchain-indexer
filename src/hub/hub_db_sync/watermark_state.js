@@ -91,6 +91,8 @@ function initWatermarkState(sync) {
     sync._readyWatermark   = null;
     sync._readyCaughtUp    = null;
     sync._readyCaughtUpHandled = false;
+    sync._notCaughtUpSince = null;
+    sync._notCaughtUpWarned = false;
 }
 
 function initHeightWatermarkState(sync) {

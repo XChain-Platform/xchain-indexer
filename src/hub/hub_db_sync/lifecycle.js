@@ -105,7 +105,7 @@ module.exports = {
     // nothing ever re-attempted it).
     async bootstrapAll() {
         if (this._bootstrapping) return;                     // reconnect + retry timer may overlap
-        if (this._readyCaughtUp === false) return failover.rejectUncaughtUpReadyFrame(this);
+        if (failover.uncaughtUpBlocks(this)) return failover.rejectUncaughtUpReadyFrame(this);
         this._bootstrapping = true;
         this._bootstrapLastProgressAt = Date.now();
         const drainEpoch = this._wsEpoch;
@@ -179,7 +179,7 @@ module.exports = {
         // Keep the epoch check at the certification boundary as well as at the
         // bootstrap caller. No alternate caller may open the gate with a drain
         // whose socket closed before certification.
-        if (this._wsEpoch !== drainEpoch || this._readyCaughtUp === false) return false;
+        if (this._wsEpoch !== drainEpoch || failover.uncaughtUpBlocks(this)) return false;
         this._bootstrapDrained = true;
         this._failoverPendingDrain = false;
         // A clean full drain proves the hub's schema_version matched (a

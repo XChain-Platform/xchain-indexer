@@ -104,6 +104,8 @@ describe('HubDbSync failover triggers', function () {
         });
         const previous = harness.selector.current();
         const advance = sinon.spy(harness.selector, 'advance');
+        harness.sync._notCaughtUpSince = 1;
+        harness.sync._notCaughtUpWarned = true;
 
         const result = await harness.deliver({ type: 'ready', watermark: 90, caught_up: false });
         await harness.sync.bootstrapAll();
@@ -118,6 +120,30 @@ describe('HubDbSync failover triggers', function () {
             reason: 'hub not caught up'
         }]);
         assert.strictEqual(harness.sync.mirrorStatus().moveReason, 'hub not caught up');
+        assert.strictEqual(harness.sync._notCaughtUpSince, null);
+        assert.strictEqual(harness.sync._notCaughtUpWarned, false);
+    });
+
+    it('drains one not-caught-up candidate after its grace and warns once', async function () {
+        harness = makeSelectorReadyFrameHarness({
+            seeds: ['http://hub-a.test'],
+            drainOutcomes: [{ allDrained: true, marks: [81, 89] }]
+        });
+        harness.sync._notCaughtUpGraceMs = 0;
+        const followed = harness.selector.current();
+        const advance = sinon.spy(harness.selector, 'advance');
+        const warn = sinon.stub(console, 'warn');
+
+        const result = await harness.deliver({ type: 'ready', watermark: 90, caught_up: false });
+        assert.strictEqual(harness.sync.certifyFullDrain([90], harness.sync._wsEpoch), true);
+
+        assert.deepStrictEqual(result, { certified: true, followed });
+        assert.strictEqual(harness.sync.drainEveryTable.callCount, 1);
+        assert.strictEqual(harness.retryCalls, 0);
+        assert.strictEqual(advance.callCount, 0);
+        assert.deepStrictEqual(harness.moves, []);
+        assert.strictEqual(warn.args.filter(args => args.join(' ') ===
+            'HubDbSync: serving from the only hub although it reports not caught up').length, 1);
     });
 
     it('waits on one not-caught-up candidate and accepts a later caught-up frame', async function () {
@@ -129,6 +155,7 @@ describe('HubDbSync failover triggers', function () {
         const advance = sinon.spy(harness.selector, 'advance');
 
         const waiting = await harness.deliver({ type: 'ready', watermark: 90, caught_up: false });
+        assert.notStrictEqual(harness.sync._notCaughtUpSince, null);
         assert.strictEqual(harness.sync.certifyFullDrain([90], harness.sync._wsEpoch), false);
         await harness.sync.bootstrapAll();
         const caughtUp = await harness.deliver({ type: 'ready', watermark: 90, caught_up: true });
@@ -139,6 +166,18 @@ describe('HubDbSync failover triggers', function () {
         assert.strictEqual(harness.retryCalls, 1);
         assert.strictEqual(advance.callCount, 0);
         assert.deepStrictEqual(harness.moves, []);
+        assert.strictEqual(harness.sync._notCaughtUpSince, null);
+    });
+
+    it('keeps the not-caught-up grace start across a socket close', function () {
+        const sync = new HubDbSync({ doQuery: async () => [] }, { hubUrl: 'http://hub-a.test' });
+        sync._notCaughtUpSince = 123;
+        sync._readyCaughtUp = false;
+
+        sync.resetOnSocketClose();
+
+        assert.strictEqual(sync._notCaughtUpSince, 123);
+        assert.strictEqual(sync._readyCaughtUp, null);
     });
 
     it('treats an older ready frame without caught_up as caught up', async function () {
@@ -219,6 +258,28 @@ describe('HubDbSync failover triggers', function () {
             else process.env.HUB_FAILOVER_RECONNECT_ATTEMPTS = previousAttempts;
             if (previousDwell === undefined) delete process.env.HUB_FAILOVER_MIN_DWELL_MS;
             else process.env.HUB_FAILOVER_MIN_DWELL_MS = previousDwell;
+        }
+    });
+
+    it('reads the not-caught-up grace through the hub sync environment reader', function () {
+        const previousGrace = process.env.HUB_NOT_CAUGHT_UP_GRACE_MS;
+        process.env.HUB_NOT_CAUGHT_UP_GRACE_MS = '1234';
+        try {
+            const sync = new HubDbSync({ doQuery: async () => [] }, { hubUrl: 'http://hub-a.test' });
+
+            assert.strictEqual(sync._notCaughtUpGraceMs, 1234);
+            assert.strictEqual(new HubDbSync({}, {
+                hubUrl: 'http://hub-a.test', notCaughtUpGraceMs: 0
+            })._notCaughtUpGraceMs, 0);
+            assert.strictEqual(new HubDbSync({}, {
+                hubUrl: 'http://hub-a.test', notCaughtUpGraceMs: -1
+            })._notCaughtUpGraceMs, 30000);
+            assert.strictEqual(new HubDbSync({}, {
+                hubUrl: 'http://hub-a.test', notCaughtUpGraceMs: Infinity
+            })._notCaughtUpGraceMs, 30000);
+        } finally {
+            if (previousGrace === undefined) delete process.env.HUB_NOT_CAUGHT_UP_GRACE_MS;
+            else process.env.HUB_NOT_CAUGHT_UP_GRACE_MS = previousGrace;
         }
     });
 });
