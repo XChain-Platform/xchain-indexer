@@ -37,10 +37,11 @@ describe('protocol_changes consensus-bound shared rows', function () {
         ]);
     });
 
-    it('keeps the hourly oracle entries before the PRICE v1 canonical bounds at the shared digest tail', function () {
-        assert.deepStrictEqual(SHARED_GATES.slice(-5), [
+    it('keeps the oracle entries before the PRICE v1 canonical bounds at the shared digest tail', function () {
+        assert.deepStrictEqual(SHARED_GATES.slice(-6), [
             ['oracle_price_age_hourly_activation', ['ORACLE_PRICE_AGE_HOURLY_ACTIVATION']],
             ['oracle_hourly_window_activation', ['ORACLE_HOURLY_WINDOW_FIRST_ROUND']],
+            ['oracle_round_time_activation', ['ORACLE_ROUND_TIME_ACTIVATION']],
             [
                 'price_scale_activation',
                 ['PRICE_V1_CANONICAL_ACTIVATION', 'PRICE_V1_VALUE_MAX_LENGTH', 'PRICE_V1_FEE_MAX_LENGTH'],

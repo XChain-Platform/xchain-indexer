@@ -59,7 +59,7 @@
     },
     "consensus_rules_digest": {
       "path": "src/consensus_rules_digest.js",
-      "hash": "5fc76089117b4b42869d6bf11f2a14fa0c1842f99837bf8aaa73e6e64541efac",
+      "hash": "260da1c6f73a0778d12d7c29c2922067be53559d28bd019e754a6fa2ee601080",
       "twins": [
         "xchain-hub"
       ]
@@ -1925,6 +1925,13 @@
       "to": "8d0a7e4fbd7acbccde550e424dd4bdd5d04619992678e87f44e79eb849747e62",
       "reason": "v0213 cross-arming review: resolve the per-chain testnet key the cut writer inserts (X-arm-2, X-arm-3)",
       "date": "2026-10-03"
+    },
+    {
+      "id": "consensus_rules_digest",
+      "from": "5fc76089117b4b42869d6bf11f2a14fa0c1842f99837bf8aaa73e6e64541efac",
+      "to": "260da1c6f73a0778d12d7c29c2922067be53559d28bd019e754a6fa2ee601080",
+      "reason": "XC-3083 oracle round time gate",
+      "date": "2026-10-04"
     }
   ]
 }

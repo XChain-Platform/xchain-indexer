@@ -128,6 +128,7 @@ const SHARED_GATES = [
     // while hubs select hourly batch windows from this network's first round.
     ['oracle_price_age_hourly_activation',       ['ORACLE_PRICE_AGE_HOURLY_ACTIVATION']],
     ['oracle_hourly_window_activation',          ['ORACLE_HOURLY_WINDOW_FIRST_ROUND']],
+    ['oracle_round_time_activation',             ['ORACLE_ROUND_TIME_ACTIVATION']],
     ['price_scale_activation',                  ['PRICE_V1_CANONICAL_ACTIVATION', 'PRICE_V1_VALUE_MAX_LENGTH', 'PRICE_V1_FEE_MAX_LENGTH']],
     // The hub signs shared-list snapshots under this gate and the indexer's by-reference
     // gettokenpolicy path reads them under it, so a train that sizes only one side must
