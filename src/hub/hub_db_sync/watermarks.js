@@ -32,8 +32,13 @@ const { getLogger } = require('../../observability/index.js');
 const { admitMarginBlocks, isMirrorAdmissionConsumerActive } = require('../../consensus/gates/mirror_admission_gate.js');
 const { WATERMARK_STALL_CHECK_MS, watermarkStallVerdict, sanitizeHeights,
         heightsAdvanced } = require('./watermark_config.js');
+const priceLandingMethods = require('./barriers/price_landing.js');
 
 module.exports = {
+
+    // The price landing barrier's methods ride this part so the landed map and its
+    // waiters install with the watermark methods.
+    ...priceLandingMethods,
 
     // Advance the stream watermark (monotonic) and re-evaluate every pending
     // barrier waiter; a watermark advance can satisfy any of them.
@@ -103,6 +108,7 @@ module.exports = {
         // Heights first, so waiters released by the seconds advance below already see the
         // fresh map rather than the previous frame's.
         this.noteHeights((event || {}).heights);
+        this.noteLanded((event || {}).landed);
         this.advanceWatermark((event || {}).ts);
     },
 

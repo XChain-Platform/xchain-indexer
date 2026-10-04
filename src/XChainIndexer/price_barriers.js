@@ -42,6 +42,7 @@ module.exports = {
         // only whether this node paused first.
         let mayReadPrice = this.evaluatePriceBarrier(blockToParse, blockTransactions);
         return await this.deferOnPriceSync(blockToParse, blockTime, mayReadPrice)
+            || await this.deferOnPriceLandingSync(blockToParse, blockTime, mayReadPrice)
             || await this.deferOnOracleSync(blockToParse, blockTime, mayReadPrice)
             || await this.deferOnMatchSync(blockToParse, blockTime)
             || await this.deferOnCallSync(blockToParse, blockTime)
@@ -149,6 +150,26 @@ module.exports = {
                 // that instant so a future-stamped block is not reported as a wedge
                 // while the wait is expected and self-clearing.
                 this.stallClearsAt = this.barrierClearsAtHeightAware(blockTime, 'priceWatermarkGraceS', blockToParse);
+                return true;
+            }
+        }
+        return false;
+    },
+
+    // Price-landing barrier: once price_fee_batch_landed_activation is armed, getLatestPrice
+    // selects only rounds whose batch landed at or before this block's time, and the stamp
+    // that says so arrives from the hub after the round. Wait until every landing chain other
+    // than this one has published a landed time past this block's time, so every round the
+    // block can read already carries its stamp. Opens on the landed map alone; below the
+    // gate, or with sync disabled, it is a no-op.
+    async deferOnPriceLandingSync(blockToParse, blockTime, mayReadPrice){
+        if(this.hubDbSync && mayReadPrice){
+            try {
+                await this.hubDbSync.waitForPriceLandingSync(blockToParse, blockTime, this.priceSyncTimeoutMs);
+            } catch(err){
+                getLogger().warn('Deferring block ' + blockToParse + ' (price landing): ', err);
+                this.stallReason = 'price_landing_barrier';
+                this.stallClearsAt = null;
                 return true;
             }
         }
