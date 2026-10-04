@@ -17,6 +17,17 @@ const HubPushDeliveryStore = require('../sql/hub_push_delivery_store.js');
  *
  * XChain Indexer - Hub Push Queue
  *
+ * Durable retry queue for best-effort pushes to xchain-hub.
+ *
+ * The PRICE handlers push validated rounds (PRICE v0), oracle prices (PRICE v1), and batches of rounds (PRICE v0) to the hub. Those pushes are network calls and can fail when the hub is restarting, overloaded, or partitioned.
+ * The raw on-chain action is always retained locally in the `prices` table, but the hub never reads that table, so a dropped push used to permanently remove the row from the hub's oracle_prices / price_snapshots and from every indexer that mirrors the hub.
+ *
+ * To make those pushes durable, EVERY push is persisted to the `pending_hub_pushes` table up front (write-ahead), inside the same block transaction that writes the `prices` row, and the row is dropped only once the hub has accepted it.
+ * Delivery is attempted live post-commit; a row that was not delivered live (push failure, hub outage, or a crash in that window) survives for this poller. It drains that table on a fixed interval, re-sending each row with exponential backoff until the hub accepts it.
+ * The hub's pushpriceround / pushoracleprice / pushpricebatch / pushattestbatch handlers dedupe, so a replay the hub already has returns cleanly. A `price_round` row that keeps failing past the attempt cap is marked `failed`, which stops the retries.
+ * The same drain tick sweeps terminal rows once they pass the retention window so the table stays bounded. `oracle_price`, `price_batch`, `attest_batch` and the `*_retraction` rows carry NO cap: none is re-derivable from a later block.
+ * Each batch type is the SOLE carrier of its whole window for a chain-only node, so these rows stay `pending` and retry at the max backoff until the hub takes them (see attempt).
+ *
  ********************************************************************/
 
 class HubPushQueue {
@@ -26,10 +37,7 @@ class HubPushQueue {
         this.indexer   = indexer;
         this.indexerDb = indexer.indexerDb;
         this.hubClient = indexer.hubClient;
-        this.selector = opts.selector || indexer.hubSelector || indexer.selector ||
-            (this.hubClient && (this.hubClient.selector || this.hubClient.hubSelector)) || null;
-        this._retryHubAddress = this.currentSelectorAddress();
-        this.hubPushDeliveries = new HubPushDeliveryStore(this, this.selector);
+        this.hubPushDeliveries = new HubPushDeliveryStore(this, opts.selector); this._retryHubAddress = this.currentSelectorAddress();
 
         // How often the poller wakes to drain due rows.
         this.intervalMs    = opts.intervalMs    || parseInt(CONFIG_ENV.HUB_PUSH_RETRY_INTERVAL_MS) || 30000;
@@ -84,25 +92,17 @@ class HubPushQueue {
         if(this._drainDone) await this._drainDone;
     }
     resume(){ this.paused = false; }
-
     currentSelectorAddress(){
-        if(!this.selector) return null;
-        if(typeof this.selector.current === 'function') return this.selector.current();
-        let status = typeof this.selector.status === 'function' ? this.selector.status() : this.selector;
-        return status && typeof status.current === 'string' ? status.current : null;
+        let selector = this.hubPushDeliveries.hubSelector; let status = selector && (typeof selector.status === 'function' ? selector.status() : selector);
+        return selector && typeof selector.current === 'function' ? selector.current() : (status && typeof status.current === 'string' ? status.current : null);
     }
     async resetPendingAttemptsAfterMove(rows){
         let address = this.currentSelectorAddress();
-        if(!address || !this._retryHubAddress || address === this._retryHubAddress){
-            if(address && !this._retryHubAddress) this._retryHubAddress = address;
-            return false;
-        }
-        if(typeof this.indexerDb.poolQuery === 'function') await this.indexerDb.poolQuery(
-            `UPDATE pending_hub_pushes SET attempts = 0, last_attempted_at = NULL,
-                    last_error = NULL WHERE status = 'pending'`);
+        if(!address || address === this._retryHubAddress) return false;
+        if(!this._retryHubAddress){ this._retryHubAddress = address; return false; }
+        if(typeof this.indexerDb.poolQuery === 'function') await this.indexerDb.poolQuery(`UPDATE pending_hub_pushes SET attempts = 0, last_attempted_at = NULL, last_error = NULL WHERE status = 'pending'`);
         this._retryHubAddress = address;
-        for(let row of (rows || [])) Object.assign(row,
-            { attempts: 0, last_attempted_at: null, last_error: null });
+        for(let row of (rows || [])) Object.assign(row, { attempts: 0, last_attempted_at: null, last_error: null });
         getLogger().info('HubPushQueue: reset pending attempts for hub ' + address);
         return true;
     }

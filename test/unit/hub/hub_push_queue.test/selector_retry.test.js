@@ -15,6 +15,9 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon = require('sinon');
+const http = require('http');
+const EventEmitter = require('events');
+const HubClient = require('../../../../src/hub/hub_client.js');
 const HubPushQueue = require('../../../../src/hub/hub_push_queue.js');
 const { makeRow } = require('./helpers/fixtures.js');
 
@@ -31,17 +34,45 @@ function makeFixture(){
             return address;
         }
     };
-    let hubClient = {
-        enabled: true,
-        pushPriceRound: sinon.stub().callsFake(async function(){
-            deliveries.push(selector.current());
-            if(selector.current() === 'http://hub-a.test'){
+    let hubClient = new HubClient('http://hub-a.test', 'push-key');
+    hubClient.setAddressSource(() => selector.current());
+    sinon.stub(http, 'request').callsFake(function(options, onResponse){
+        deliveries.push('http://' + options.hostname);
+        let request = new EventEmitter();
+        request.write = sinon.stub();
+        request.destroy = sinon.stub().callsFake(function(error){
+            setImmediate(() => {
+                if(error) request.emit('error', error);
+                request.emit('close');
+            });
+        });
+        request.end = sinon.stub().callsFake(function(){
+            if(options.hostname === 'hub-a.test'){
                 let error = new Error('connect ECONNREFUSED');
                 error.code = 'ECONNREFUSED';
-                throw error;
+                setImmediate(() => {
+                    request.emit('error', error);
+                    request.emit('close');
+                });
+                return;
             }
-        })
-    };
+            setImmediate(() => {
+                let response = new EventEmitter();
+                response.statusCode = 200;
+                response.headers = {};
+                response.complete = true;
+                onResponse(response);
+                setImmediate(() => {
+                    response.emit('data', JSON.stringify({
+                        jsonrpc: '2.0', id: 1, result: { accepted: true }
+                    }));
+                    response.emit('end');
+                    request.emit('close');
+                });
+            });
+        });
+        return request;
+    });
     let indexerDb = {
         poolQuery: sinon.stub().resolves(),
         getPendingHubPushes: sinon.stub().resolves([]),
@@ -66,6 +97,7 @@ describe('HubPushQueue selector retries', function(){
         await queue.attempt(makeRow({ id: 201, attempts: 3 }));
 
         assert.strictEqual(fixture.selector.current(), 'http://hub-a.test');
+        assert.deepStrictEqual(fixture.deliveries, ['http://hub-a.test']);
         assert.strictEqual(fixture.advanceCalls(), 0);
         assert.strictEqual(fixture.indexer.indexerDb.poolQuery.callCount, 0);
         assert.strictEqual(fixture.indexer.indexerDb.recordHubPushAttempt.calledOnce, true);
