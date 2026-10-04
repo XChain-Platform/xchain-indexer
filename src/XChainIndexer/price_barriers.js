@@ -25,6 +25,11 @@ const { getLogger } = require('../observability/index.js');
 
 module.exports = {
 
+    markPriceSyncHold(){
+        this.stallReason = 'price_sync_barrier';
+        this.stallClearsAt = null;
+    },
+
     // The mirror sync barriers in block-loop order. Each returns true when it DEFERRED the
     // block (stallReason set, no transaction open); the first defer ends the chain and the
     // loop retries the block on its next pass.
@@ -132,8 +137,7 @@ module.exports = {
                 // retries this same block after the sleep interval rather than processing
                 // it against a stale price copy. No transaction is open yet.
                 getLogger().warn('Deferring block ' + blockToParse + ' (price sync): ', err);
-                this.stallReason = 'price_sync_barrier';
-                this.stallClearsAt = null;          // the height case can clear early
+                this.markPriceSyncHold();
                 return true;
             }
         }
@@ -168,8 +172,7 @@ module.exports = {
                 await this.hubDbSync.waitForPriceLandingSync(blockToParse, blockTime, this.priceSyncTimeoutMs);
             } catch(err){
                 getLogger().warn('Deferring block ' + blockToParse + ' (price landing): ', err);
-                this.stallReason = 'price_landing_barrier';
-                this.stallClearsAt = null;
+                this.markPriceSyncHold();
                 return true;
             }
         }
