@@ -105,6 +105,13 @@ module.exports = {
     async resolveDrainCursor(table, scope) {
         let lastId = Number(this._drainPositions[table]);
         if (!Number.isFinite(lastId) || lastId < 0) lastId = 0;
+        // Retractions are absent from this endpoint, so only a re-page from zero can prove
+        // which matches the hub currently serves. An incremental page cannot distinguish a
+        // retracted old match from one below its cursor.
+        if (table === 'cross_chain_matches') {
+            lastId = 0;
+            this._drainPositions[table] = 0;
+        }
         let readyCeiling = (this._readyMaxIds && this._readyMaxIds[table] != null)
             ? Number(this._readyMaxIds[table]) : NaN;
         lastId = await this.restartCursorAboveHubCeiling(table, scope, lastId, readyCeiling);
@@ -146,7 +153,7 @@ module.exports = {
             // forever. Collect what the full re-page did serve so the reconciliation pass below
             // can close that half of #3211.
             servedMatchIds: (table === 'cross_chain_matches') ? new Set() : null,
-            maxServedId:    0,
+            matchDrainHubUrl: (table === 'cross_chain_matches') ? this.hubUrl : null,
             // price_snapshots only: the same problem with the opposite cause. Its snapshot
             // endpoint is UNFILTERED (hub api.js: SELECT * ... WHERE id > ?), so a complete
             // re-page is the hub's whole table, which makes "the hub does not hold this round
@@ -170,6 +177,8 @@ module.exports = {
             snapshotKeysComplete:  true,
             maxServedSnapshotBlock: 0,
         };
+        drain.matchPreDrainRows = (table === 'cross_chain_matches')
+            ? await this.snapshotFinalizedMatches() : null;
         // The local ids are AUTO_INCREMENT and locally assigned (applyRow strips the wire
         // id), so a row inserted while this drain runs - a live WS event, or this drain's own
         // apply - necessarily carries an id above this mark. Reading it here, before the first

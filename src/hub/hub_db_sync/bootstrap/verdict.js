@@ -146,8 +146,15 @@ module.exports = {
         // Reconcile the retractions the bootstrap can never re-deliver (#3211). Only after a
         // COMPLETE re-page: a partial drain has not seen every row the hub holds, so a
         // "missing" match may simply be on a page we never fetched.
-        if (fullyDrained && drain.fullTable && drain.servedMatchIds)
-            await this.reconcileRetractedMatches(drain.servedMatchIds, drain.maxServedId);
+        if (fullyDrained && drain.fullTable && drain.servedMatchIds) {
+            let watermark = Number(drain.watermark);
+            let certified = drain.watermark !== null && Number.isFinite(watermark);
+            let sameHub = certified && this._lastCertifiedMatchDrainHubUrl === drain.matchDrainHubUrl;
+            if (sameHub)
+                await this.reconcileRetractedMatches(
+                    drain.servedMatchIds, drain.matchPreDrainRows, watermark);
+            if (certified) this._lastCertifiedMatchDrainHubUrl = drain.matchDrainHubUrl;
+        }
 
         // Clear the capability snapshots this hub does not hold (#1837). Same COMPLETE-re-page
         // precondition as the two passes above, and ordered BEFORE the barrier re-evaluation

@@ -42,11 +42,11 @@ module.exports = {
     // convergence ODKU never gets a version to compare against. The mirror keeps settling a
     // match the hub retracted, which is a money-bearing fork from a streamed peer.
     //
-    // After a COMPLETE re-page, a local finalized row whose id is at or below the highest id
-    // the hub served, and whose match_id the hub did not serve at all, can only be such a
-    // retraction: ids are hub-parity and ascending, the hub never deletes, and the pages
-    // covered every non-retracted row up to that ceiling. Rows ABOVE the ceiling are exempt -
-    // they are newer than this snapshot and may simply have arrived after it.
+    // After a COMPLETE re-page, a finalized row that was local when the drain began, whose
+    // match_id the hub did not serve, and whose effective_time is covered by the drain's
+    // certified watermark can only be such a retraction. Local ids are deliberately absent
+    // from that proof: they belong to this mirror and have no ordering relationship to a
+    // different hub's ids.
     //
     // Converge by marking status='retracted', NOT by deleting:
     //   - consensus reads filter status='finalized' (db.getEffectiveUnsettledMatches), so the
@@ -57,25 +57,36 @@ module.exports = {
     //     documented retracted-row carve-out);
     //   - a mistaken mark is fail-CLOSED (a match stops settling), where a mistaken delete
     //     would also lose the signed row itself.
-    async reconcileRetractedMatches(servedMatchIds, maxServedId) {
-        if (!Number.isFinite(maxServedId) || maxServedId <= 0) return;   // nothing served, nothing to judge
-        let locals;
+    async snapshotFinalizedMatches() {
         try {
-            locals = await this.hubDb.doQuery(
-                "SELECT id, match_id FROM cross_chain_matches WHERE id <= ? AND status = 'finalized'", [maxServedId]);
+            let rows = await this.hubDb.doQuery(
+                "SELECT match_id, effective_time FROM cross_chain_matches WHERE status = 'finalized'");
+            return (rows || []).map(r => ({
+                matchId: String(r.match_id),
+                effectiveTime: Number(r.effective_time)
+            })).filter(r => r.matchId !== '' && Number.isFinite(r.effectiveTime));
         } catch (e) {
-            getLogger().warn('HubDbSync: match retraction reconciliation skipped (read failed):', e);
-            return;
+            getLogger().warn('HubDbSync: match retraction snapshot skipped (read failed):', e);
+            return null;
         }
-        let stale = (locals || []).filter(r => !servedMatchIds.has(String(r.match_id))).map(r => Number(r.id));
+    },
+
+    async reconcileRetractedMatches(servedMatchIds, preDrainMatches, certifiedWatermark) {
+        certifiedWatermark = Number(certifiedWatermark);
+        if (!servedMatchIds || !Array.isArray(preDrainMatches) || !Number.isFinite(certifiedWatermark)) return;
+        let stale = preDrainMatches.filter(r =>
+            r.effectiveTime <= certifiedWatermark && !servedMatchIds.has(r.matchId));
         if (stale.length === 0) return;
-        // Chunked so one oversized IN list can never blow the statement limit.
-        for (let i = 0; i < stale.length; i += 500) {
-            let chunk = stale.slice(i, i + 500);
+        // Keep the snapshot's content in the UPDATE predicate. A live revive that changes
+        // effective_time while the drain runs must not be overwritten by an older verdict.
+        for (let i = 0; i < stale.length; i += 250) {
+            let chunk = stale.slice(i, i + 250);
+            let args = [];
+            for (let row of chunk) args.push(row.matchId, row.effectiveTime);
             try {
                 await this.hubDb.doQuery(
-                    "UPDATE cross_chain_matches SET status = 'retracted' WHERE id IN (" +
-                    chunk.map(() => '?').join(',') + ") AND status = 'finalized'", chunk);
+                    "UPDATE cross_chain_matches SET status = 'retracted' WHERE status = 'finalized' AND (" +
+                    chunk.map(() => '(match_id = ? AND effective_time = ?)').join(' OR ') + ')', args);
             } catch (e) {
                 getLogger().warn('HubDbSync: match retraction reconciliation failed for a chunk:', e);
                 return;
