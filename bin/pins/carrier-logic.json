@@ -1930,7 +1930,7 @@
       "id": "consensus_rules_digest",
       "from": "5fc76089117b4b42869d6bf11f2a14fa0c1842f99837bf8aaa73e6e64541efac",
       "to": "260da1c6f73a0778d12d7c29c2922067be53559d28bd019e754a6fa2ee601080",
-      "reason": "XC-3083 oracle round time gate",
+      "reason": "oracle round time gate",
       "date": "2026-10-04"
     }
   ]
