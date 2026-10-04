@@ -83,7 +83,10 @@ const transportMethods = {
 
             ws.on('message', (data) => this.onSocketFrame(ws, data, (event) => settle(resolve, event)));
 
-            ws.on('close', () => {
+            ws.on('close', (code) => {
+                // Every resync close requires a full re-page so in-place updates below
+                // the stored cursor are redelivered, including price landing's batch_block_time stamp.
+                if (code === 1012) this._lastHubInstanceId = null;
                 this.resetOnSocketClose();
                 settle(reject, new Error('WebSocket closed before ready'));
                 this.scheduleReconnect();
