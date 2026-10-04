@@ -25,16 +25,18 @@ const hubPushes = require('../../../../src/db/hub_pushes/index.js');
 const { buildSystemRpc } = require('../../../../src/api/rpc/system.js');
 const { recordingView, fakeIndexer } = require('./helpers/fake_indexer.js');
 
-// A view whose frontier is computed by the real query method over canned outbox rows
-// [{ action_index, block }]; a null block is a push whose action no longer exists.
+// A view whose frontier is computed by the real query method over canned push rows.
+// Acknowledged rows model the outbox's delete-on-delivery lifecycle; a null block is
+// an undelivered push whose action no longer exists.
 function outboxView(rows, tip) {
     const db = Object.create(hubPushes);
     db.poolQuery = async () => {
-        const blocks = rows.map(r => r.block).filter(b => b != null);
+        const pending = rows.filter(r => !r.acknowledged);
+        const blocks = pending.map(r => r.block).filter(b => b != null);
         return [{
-            undelivered: rows.length,
+            undelivered: pending.length,
             min_block:   blocks.length ? Math.min(...blocks) : null,
-            unresolved:  rows.filter(r => r.block == null).length,
+            unresolved:  pending.filter(r => r.block == null).length,
         }];
     };
     return recordingView({
@@ -52,7 +54,12 @@ describe('getlatestblock hub_push_delivered @regression @tier1', function () {
     afterEach(function () { sinon.restore(); });
 
     it('an undelivered push at 100 holds delivery at 99 even with delivered pushes at 101', async function () {
-        const res = await rpcFor(outboxView([{ action_index: 7, block: 100 }], 105)).getlatestblock();
+        const rows = [
+            { action_index: 7, block: 100 },
+            { action_index: 8, block: 101, acknowledged: true },
+            { action_index: 9, block: 101, acknowledged: true },
+        ];
+        const res = await rpcFor(outboxView(rows, 105)).getlatestblock();
         assert.deepStrictEqual(res.hub_push_delivered, { block: 99, protocol_time: 1099 });
     });
 
