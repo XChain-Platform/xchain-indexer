@@ -153,7 +153,7 @@ module.exports = Object.assign({
     // The 24-hour lock window is enforced by `effective_at` - only prices whose effective_at <= blockTime are returned.
     async getOraclePrice(sourceAddress, coin, tick, fiat, blockTime){
         this.assertPriceBarrierNotSkipped('getOraclePrice');
-        let query = `SELECT id, source_address, source_chain, coin, tick, fiat, value, fee, memo,
+        let query = `SELECT source_address, source_chain, coin, tick, fiat, value, fee, memo,
                             block_time, effective_at, action_index
                      FROM oracle_prices
                      WHERE source_address = ? AND coin = ? AND tick = ? AND fiat = ?`;
