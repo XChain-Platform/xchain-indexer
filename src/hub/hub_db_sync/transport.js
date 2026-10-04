@@ -54,7 +54,8 @@ const transportMethods = {
             let wsUrl = wsScheme + '//' + parsed.host + '/hub-db/subscribe';
 
             let headers = {};
-            if (this.apiKey) headers['Authorization'] = 'Bearer ' + this.apiKey;
+            let apiKey = this.feedApiKey || this.apiKey;
+            if (apiKey) headers['Authorization'] = 'Bearer ' + apiKey;
 
             let ws;
             try {
@@ -261,7 +262,8 @@ const transportMethods = {
                 headers:  {},
                 timeout:  30000
             };
-            if (this.apiKey) opts.headers['x-api-key'] = this.apiKey;
+            let apiKey = this.feedApiKey || this.apiKey;
+            if (apiKey) opts.headers['x-api-key'] = apiKey;
 
             let req = lib.request(opts, (res) => {
                 let body = '';
