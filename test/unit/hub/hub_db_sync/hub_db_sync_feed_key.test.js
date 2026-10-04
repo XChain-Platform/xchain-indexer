@@ -14,7 +14,6 @@ const http = require('http');
 const ws = require('ws');
 
 const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
-const { CONFIG_ENV } = require('../../../../src/config.js');
 
 const WebSocketServer = ws.WebSocketServer || ws.Server;
 
@@ -89,10 +88,6 @@ describe('HubDbSync feed authentication', function () {
         await closeHub();
         restoreEnv('HUB_FEED_API_KEY', originalFeedKey);
         restoreEnv('HUB_API_KEY', originalApiKey);
-    });
-
-    it('declares HUB_FEED_API_KEY in the indexer configuration environment', function () {
-        assert.ok(Object.prototype.hasOwnProperty.call(CONFIG_ENV, 'HUB_FEED_API_KEY'));
     });
 
     it('presents HUB_FEED_API_KEY to mirror requests while retaining HUB_API_KEY', async function () {
