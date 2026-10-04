@@ -6,8 +6,8 @@
 'use strict';
 
 const http = require('http');
-const createHubSelector = require('../../../../src/hub/hub_db_sync/hub_selector.js');
-const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
+const createHubSelector = require('../../../src/hub/hub_db_sync/hub_selector.js');
+const HubDbSync = require('../../../src/hub/hub_db_sync.js');
 
 function makeDynamicSync(seed, options) {
     let selector = createHubSelector('testnet', {
