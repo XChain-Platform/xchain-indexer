@@ -28,14 +28,11 @@ function makeSync(admissionActive) {
 }
 
 async function timeoutMessage(sync) {
-    const clock = sinon.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
-        const pending = sync.waitForBridgeSync(5000, 50, 800);
-        const outcome = pending.then(() => null, (e) => e.message);
-        await clock.tickAsync(100);
-        return await outcome;
-    } finally {
-        clock.restore();
+        await sync.waitForBridgeSync(5000, 1, 800);
+        return null;
+    } catch (e) {
+        return e.message;
     }
 }
 
