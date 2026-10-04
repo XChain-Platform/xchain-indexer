@@ -216,4 +216,14 @@ addGate('oracle_hourly_window_activation.ORACLE_HOURLY_WINDOW_FIRST_ROUND', 'con
     testnet: 5082,
     regtest: 0,
 });
+// oracle_round_time_activation: gates that the signed PRICE v0 timestamp is
+// the nominal round start and that followers refuse any other timestamp.
+addGate('oracle_round_time_activation.ORACLE_ROUND_TIME_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    regtest: 0,
+});
 // SHARED-GATES END
