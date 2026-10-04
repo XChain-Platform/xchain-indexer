@@ -140,7 +140,7 @@ describe('price landing barrier @regression @tier1', function () {
         const sync = makeSync('LTC');
         const ix = indexerFor(sync);
         assert.strictEqual(await ix.deferOnPriceLandingSync(BLOCK_HEIGHT, T, true), true);
-        assert.strictEqual(ix.stallReason, 'price_landing_barrier');
+        assert.strictEqual(ix.stallReason, 'price_sync_barrier');
         assert.strictEqual(await ix.deferOnPriceLandingSync(BLOCK_HEIGHT, T, false), false);
         sync.noteLanded(frame(1791144200).landed);
         assert.strictEqual(await ix.deferOnPriceLandingSync(BLOCK_HEIGHT, T, true), false);
