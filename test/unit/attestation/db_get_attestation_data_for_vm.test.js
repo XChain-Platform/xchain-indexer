@@ -16,7 +16,7 @@
  * getAttestationDataForVM builds the read-only snapshot the VM exposes
  * through xchain.attestation.getResponse(requestId). This suite pins the shaping,
  * the retry-then-ok dedup, the as-of visibility gate, and the serializable shape
- * the forked-worker accessor (xchain-vm/src/readonly_accessors.js) rebuilds from.
+ * the forked-worker accessor (xchain-vm/src/readonly-accessors.js) rebuilds from.
  */
 
 'use strict';
@@ -33,14 +33,12 @@ const { getTestConfig } = require('../../fixtures/config');
 const Utility           = require('../../../src/utility');
 const Database          = require('../../../src/db');
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
-// Two spellings, post-rename first. The VM's layout pass renamed
-// src/readonly-accessors.js to src/readonly_accessors.js and left NOTHING at the
-// old spelling, so a single post-rename spelling makes this whole suite file
-// crash on load against a VM sibling that has not landed the rename yet.
+// Two spellings, current canonical name first, preserve compatibility with
+// sibling branches that still carry the legacy underscore spelling.
 const { buildAttestationAccessor, accessorRefusal } = (() => {
     let refusal = null;
-    for (const spelling of ['../../../../xchain-vm/src/readonly_accessors.js',
-                            '../../../../xchain-vm/src/readonly-accessors.js']) {
+    for (const spelling of ['../../../../xchain-vm/src/readonly-accessors.js',
+                            '../../../../xchain-vm/src/readonly_accessors.js']) {
         const verdict = siblingCheckout(__dirname, spelling);
         if (verdict.usable) return require(spelling);
         if (fs.existsSync(path.join(__dirname, spelling))) refusal = verdict;
@@ -51,7 +49,7 @@ const { buildAttestationAccessor, accessorRefusal } = (() => {
     // A sibling that carries neither spelling is a broken VM checkout, not an
     // absent one, so say which spellings were tried rather than dying on ENOENT.
     throw new Error('xchain-vm readonly accessors resolve at neither '
-        + 'src/readonly_accessors.js nor src/readonly-accessors.js');
+        + 'src/readonly-accessors.js nor src/readonly_accessors.js');
 })();
 
 const VALID_ID = 7;
