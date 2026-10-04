@@ -14,11 +14,11 @@ const sinon = require('sinon');
 
 const HubDbSync = require('../../../../../../src/hub/hub_db_sync.js');
 
-function makeReconnectHarness({ connectOutcomes }) {
+function makeReconnectHarness({ connectOutcomes, hubOptions = {} }) {
     const outcomes = connectOutcomes.slice();
     const hubDb = { doQuery: sinon.stub().resolves([]) };
-    const sync = new HubDbSync(hubDb, { hubUrl: 'http://hub-a.test' });
     const clock = sinon.useFakeTimers();
+    const sync = new HubDbSync(hubDb, Object.assign({ hubUrl: 'http://hub-a.test' }, hubOptions));
 
     sync.running = true;
 
@@ -41,6 +41,7 @@ function makeReconnectHarness({ connectOutcomes }) {
         sync,
         clock,
         connectCalls,
+        refreshCalls,
         bootstrapCalls,
         tickAsync(ms) {
             return clock.tickAsync(ms);
