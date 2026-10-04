@@ -9,10 +9,10 @@
 # sibling repos, so each bundles a byte-identical copy; this script keeps them
 # in sync (same pattern as xchain-hub/bin/sync-coins.sh for the coin registry).
 #
-# Vendored set: the client entry (hub_db_sync.js) and its parts directory
-# (hub_db_sync/, every .js under it, subdirectories included: the entry installs
-# them onto its prototype and resolves nothing outside the set), the
-# schema-version lockstep constant (hub_schema_version.js), the two activation
+# Vendored set: the client entry (hub_db_sync.js), its parts directory
+# (hub_db_sync/, every .js under it, subdirectories included), the hub-list
+# modules it requires (hub_client/hub_list.js and hub_client/hub_list_refresh.js),
+# the schema-version lockstep constant (hub_schema_version.js), the two activation
 # gate modules the client requires by relative path (DEP_FILES below, under
 # src/consensus/gates/ since W5; a consumer without them fails at require on
 # boot), and the mirror-table SQL twins the
@@ -55,7 +55,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="$HERE/../src"
 ROOT="$(cd "$HERE/../.." && pwd)"
 
-HUB_FILES="hub_db_sync.js hub_schema_version.js"
+HUB_FILES="hub_db_sync.js hub_schema_version.js hub_client/hub_list.js hub_client/hub_list_refresh.js"
 HUB_DIRS="hub_db_sync"
 DEP_FILES="consensus/gates/price_batching_floor_gate.js consensus/gates/mirror_admission_gate.js"
 # What DEP_FILES require, relative to the consumer's src/: present or the pair
@@ -79,7 +79,7 @@ for svc in $SERVICES; do
                 drift=1
             fi
         else
-            mkdir -p "$hubdest"
+            mkdir -p "$hubdest/$(dirname "$f")"
             cp "$SRC/hub/$f" "$hubdest/$f"
         fi
     done
