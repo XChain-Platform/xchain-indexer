@@ -109,7 +109,30 @@ class HubPushQueue {
         if(this._drainDone) await this._drainDone;
     }
     resume(){ this.paused = false; }
-    currentSelectorAddress(){ let selector = this.hubPushDeliveries.hubSelector; let status = selector && (typeof selector.status === 'function' ? selector.status() : selector); return selector && typeof selector.current === 'function' ? selector.current() : (status && typeof status.current === 'string' ? status.current : null); } async resetPendingAttemptsAfterMove(rows){ let address = this.currentSelectorAddress(); if(!address || address === this._retryHubAddress) return false; if(!this._retryHubAddress){ this._retryHubAddress = address; return false; } if(typeof this.indexerDb.poolQuery === 'function') await this.indexerDb.poolQuery(`UPDATE pending_hub_pushes SET attempts = 0, last_attempted_at = NULL, last_error = NULL WHERE status = 'pending'`); this._retryHubAddress = address; for(let row of (rows || [])) Object.assign(row, { attempts: 0, last_attempted_at: null, last_error: null }); getLogger().info('HubPushQueue: reset pending attempts for hub ' + address); return true; }
+
+    currentSelectorAddress(){
+        let selector = this.hubPushDeliveries.hubSelector;
+        let status = selector && (typeof selector.status === 'function' ? selector.status() : selector);
+        if(selector && typeof selector.current === 'function') return selector.current();
+        return status && typeof status.current === 'string' ? status.current : null;
+    }
+
+    async resetPendingAttemptsAfterMove(rows){
+        let address = this.currentSelectorAddress();
+        if(!address || address === this._retryHubAddress) return false;
+        if(!this._retryHubAddress){
+            this._retryHubAddress = address;
+            return false;
+        }
+        if(typeof this.indexerDb.poolQuery === 'function'){
+            await this.indexerDb.poolQuery(`UPDATE pending_hub_pushes SET attempts = 0, last_attempted_at = NULL, last_error = NULL WHERE status = 'pending'`);
+        }
+        this._retryHubAddress = address;
+        for(let row of (rows || [])) Object.assign(row, { attempts: 0, last_attempted_at: null, last_error: null });
+        getLogger().info('HubPushQueue: reset pending attempts for hub ' + address);
+        return true;
+    }
+
     // Begin draining on an interval. No-op when no hub is configured; in that
     // case the PRICE handlers never enqueue, so there is nothing to drain.
     start(){
@@ -152,7 +175,8 @@ class HubPushQueue {
         // Publish a completion promise so pause() can await this in-flight drain.
         let resolveDone;
         this._drainDone = new Promise(resolve => { resolveDone = resolve; });
-        try { await this.resetPendingAttemptsAfterMove();
+        try {
+            await this.resetPendingAttemptsAfterMove();
             // Sweep aged terminal rows before fetching. It rides the existing drain
             // timer rather than owning one, so it inherits start/stop/pause and adds
             // no lifecycle: the throttle below is what keeps it off every 30s tick.
@@ -167,7 +191,8 @@ class HubPushQueue {
             });
             if(!rows || rows.length === 0) return;
             let now = Date.now();
-            for(let row of rows){ await this.resetPendingAttemptsAfterMove(rows);
+            for(let row of rows){
+                await this.resetPendingAttemptsAfterMove(rows);
                 if(!this.isDue(row, now)) continue;
                 await this.attempt(row);
                 // A 429 stops the batch where it stands. The remaining rows are still
@@ -377,7 +402,8 @@ class HubPushQueue {
             ' (attempt ' + attemptNo + (isDurable ? '' : '/' + this.maxAttempts) + '): ' + msg);
     }
 
-    async attempt(row){ await this.resetPendingAttemptsAfterMove([row]);
+    async attempt(row){
+        await this.resetPendingAttemptsAfterMove([row]);
         let candidates = this.hubPushDeliveries.candidateAddresses();
         if(candidates.length > 0) return await this.hubPushDeliveries.attempt(row, candidates);
 
