@@ -26,6 +26,8 @@
 
 const { readEnvNow } = require('./env.js');
 const { createMovePolicy } = require('./failover/move_policy.js');
+const { createHubListRefresher } = require('../hub_client/hub_list_refresh.js');
+const { getLogger } = require('../../observability/index.js');
 
 // Connection settings and the poll-mode flag.
 function initConnection(sync, hubDb, options) {
@@ -70,6 +72,17 @@ function initConnection(sync, hubDb, options) {
     // idle timer, so a 10k-row snapshot page has room to stream and only a wedged
     // request can reach the ceiling.
     sync.httpDeadlineMs = parseInt(options.httpDeadline || readEnvNow('HUB_DB_SYNC_HTTP_DEADLINE') || '120000');
+    let selectorStatus = sync.selector && typeof sync.selector.status === 'function'
+        ? sync.selector.status() : null;
+    sync._hubListRefreshEpoch = null;
+    sync._hubListRefreshPromise = null;
+    sync._hubListRefresher = sync.selector && !(selectorStatus && selectorStatus.pinned)
+        ? createHubListRefresher({
+            fetchList: () => sync.fetchHubList(),
+            merge: (addresses) => sync.selector.merge(addresses),
+            warn: (message, err) => getLogger().warn('HubDbSync: ' + message, err)
+        })
+        : null;
     sync.ws        = null;
     sync.running   = false;
     // True when the WebSocket path is unavailable and this mirror falls back to
