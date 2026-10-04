@@ -1,5 +1,6 @@
 const { getLogger } = require('../observability/index.js');
 const { CONFIG_ENV } = require('../config.js');
+const HubPushDeliveryStore = require('../sql/hub_push_delivery_store.js');
 /*********************************************************************
  *
  * Copyright © 2025–2026 Dankest, LLC
@@ -52,6 +53,7 @@ class HubPushQueue {
         this.indexer   = indexer;
         this.indexerDb = indexer.indexerDb;
         this.hubClient = indexer.hubClient;
+        this.hubPushDeliveries = new HubPushDeliveryStore(this, opts.selector);
 
         // How often the poller wakes to drain due rows.
         this.intervalMs    = opts.intervalMs    || parseInt(CONFIG_ENV.HUB_PUSH_RETRY_INTERVAL_MS) || 30000;
@@ -247,18 +249,19 @@ class HubPushQueue {
     // bookkeeping stays in one place. Returns false when the row was already
     // terminally recorded here (unknown push_type, never sent to the hub); errors
     // from hubClient propagate to the caller's try/catch unchanged.
-    async deliverHubPush(row, payload){
+    async deliverHubPush(row, payload, client){
+        client = client || this.hubClient;
         if(row.push_type === 'price_round'){
-            await this.hubClient.pushPriceRound(payload);
+            await client.pushPriceRound(payload);
         } else if(row.push_type === 'oracle_price'){
-            await this.hubClient.pushOraclePrice(payload);
+            await client.pushOraclePrice(payload);
         } else if(row.push_type === 'price_batch'){
             // PRICE v0: a signed window of rounds, delivered to pushpricebatch.
-            await this.hubClient.pushPriceBatch(payload);
+            await client.pushPriceBatch(payload);
         } else if(row.push_type === 'attest_batch'){
             // ATTEST v5: a signed window of finalized attestation responses parsed off
             // the DOGE rail, delivered to pushattestbatch.
-            await this.hubClient.pushAttestBatch(payload);
+            await client.pushAttestBatch(payload);
         } else if(row.push_type === 'price_retraction'){
             // Reorg retraction parked by rollback.js when the live RPC failed.
             // pushpricereorg is idempotent over a replayed range. A deferred drain bounds the
@@ -266,25 +269,25 @@ class HubPushQueue {
             // at A' inside the original open-ended range is not wiped. Old queued rows (no
             // last_action_index) fall back to open-ended via undefined. retraction_generation
             // fences the delete to push_generation <= it; absent on old queued rows.
-            await this.hubClient.retractPriceRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
+            await client.retractPriceRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
         } else if(row.push_type === 'xcall_retraction'){
             // Reorg XCALL relay retraction parked by rollback.js when the live RPC
             // failed. retractXcallRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
-            await this.hubClient.retractXcallRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
+            await client.retractXcallRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
         } else if(row.push_type === 'attest_batch_retraction'){
             // Reorg ATTEST batch-link retraction parked by rollback.js when the live RPC
             // failed. Keyed on ONE batch rather than on an action range (the hub clears a
             // link column, never a row), and idempotent: the hub answers a retraction that
             // matches no link with an accepted no-op, so a replayed drain is free.
-            await this.hubClient.retractAttestBatch(payload.coin, payload);
+            await client.retractAttestBatch(payload.coin, payload);
         } else if(row.push_type === 'match_retraction'){
             // Reorg DEX cross-chain match retraction parked by rollback.js when the
             // live RPC failed. retractMatchRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
-            await this.hubClient.retractMatchRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
+            await client.retractMatchRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
         } else if(row.push_type === 'bridge_retraction'){
             // Reorg bridge transfer retraction parked by rollback.js when the live RPC
             // failed. retractBridgeRange is idempotent over a replayed range; closed-range bounded + gen-fenced.
-            await this.hubClient.retractBridgeRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
+            await client.retractBridgeRange(payload.coin, payload.action_index, payload.last_action_index, payload.retraction_generation);
         } else {
             getLogger().warn('HubPushQueue: row ' + row.id + ' has unknown push_type "' + row.push_type + '", marking failed');
             await this.indexerDb.recordHubPushAttempt(row.id, 'unknown push_type', 1);
@@ -374,6 +377,9 @@ class HubPushQueue {
     }
 
     async attempt(row){
+        let candidates = this.hubPushDeliveries.candidateAddresses();
+        if(candidates.length > 0) return await this.hubPushDeliveries.attempt(row, candidates);
+
         let parsed = await this.parseHubPushPayload(row);
         if(parsed === null) return;
 
