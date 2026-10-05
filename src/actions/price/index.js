@@ -114,30 +114,8 @@ class Price {
         let batch    = v0.parseBatchBody(this.config, data, inflated.fields, inflated.error);
         error        = batch.error;
 
-        // STRICT PARAMETER LENGTH. Nothing downstream checks whether the field list was
-        // consumed to its end, so a wire with junk appended after the last signature would
-        // otherwise parse identically to the same batch without it and land the same row
-        // under the same EQUIV key: two byte-distinct spellings of one batch under one
-        // equiv key is exactly the shape equivocation reasoning depends on being
-        // impossible. Computed from the counts parseBatchBody already resolved (rounds,
-        // pairs per round, admit-block presence, sig count), so this stays byte-exact with
-        // what was actually consumed and needs no second parse of the wire.
-        //
-        // HEIGHT-GATED. Every node through v0.20.0 accepted such a wire, so applying the
-        // refusal to a batch already on chain would turn a valid prices row and its hub
-        // push invalid on replay. It binds only a batch whose signed BTC anchor is in the
-        // mirror admission era (the BTC producer activation for this network), the flag day
-        // this train already carries; below it the leftover fields stay unread, as before.
-        if(!error && isAdmissionEra(this.config['NETWORK'], batch.btcBlockHeight)){
-            let expectedFields = 5;
-            for(let round of batch.rounds){
-                expectedFields += 4 + (2 * round.pairs.length);
-                if(round.admitBlocks !== undefined) expectedFields += 1;
-            }
-            expectedFields += 1 + (2 * batch.sigCount);
-            if(inflated.fields.length !== expectedFields)
-                error = 'invalid: trailing data after batch signatures';
-        }
+        // Strict parameter length (height-gated): see validateBatchFieldCount.
+        if(!error) error = this.validateBatchFieldCount(batch, inflated.fields) || error;
 
         if(!error){
             let straddle = v0.checkBatchStraddle(this.config, batch.rounds);
@@ -152,20 +130,7 @@ class Price {
             if(quorum) error = quorum;
         }
 
-        // 5. STORAGE. round_number carries FIRST_ROUND (because the column is indexed and every
-        // existing read treats it as "the round this action is about"), sigs_json carries the
-        // batch signature set, and pair_count/pairs_json/sig_count are left unset so they
-        // store NULL: on a v2 row those three would describe only one round out of the window.
-        data['ROUND']             = batch.firstRound;
-        data['BTC_BLOCK_HEIGHT']  = batch.btcBlockHeight;
-        data['BATCH_FIRST_ROUND'] = batch.firstRound;
-        data['BATCH_LAST_ROUND']  = batch.lastRound;
-        data['ROUND_COUNT']       = batch.roundCount;
-        data['ROUNDS_JSON']       = roundsWire.length > 0 ? JSON.stringify(roundsWire) : null;
-        data['SIGS_JSON']         = (batch.bodyParsed && batch.sigs.length > 0) ? JSON.stringify(batch.sigs) : null;
-        let validation = error ? 'invalid' : 'valid';
-        data['VALIDATION_STATUS'] = validation;
-        data['STATUS'] = error || 'valid';
+        this.storePriceBatchFields(data, batch, roundsWire, error);
 
         getLogger().info("\t PRICE v0 : rounds=" + batch.firstRound + '-' + batch.lastRound + ' count=' + batch.roundCount + ' sigs=' + batch.sigCount + ' : ' + data['STATUS']);
 
@@ -174,6 +139,47 @@ class Price {
         await this.pushBatch(data, batch, roundsWire, error);
 
         await this.mapper.createMappings(data);
+    }
+
+    // STRICT PARAMETER LENGTH. Nothing downstream checks whether the field list was
+    // consumed to its end, so a wire with junk appended after the last signature would
+    // otherwise parse identically to the same batch without it and land the same row
+    // under the same EQUIV key: two byte-distinct spellings of one batch under one
+    // equiv key is exactly the shape equivocation reasoning depends on being
+    // impossible. Computed from the counts parseBatchBody already resolved (rounds,
+    // pairs per round, admit-block presence, sig count), so this stays byte-exact with
+    // what was actually consumed and needs no second parse of the wire.
+    //
+    // HEIGHT-GATED. Every node through v0.20.0 accepted such a wire, so applying the
+    // refusal to a batch already on chain would turn a valid prices row and its hub
+    // push invalid on replay. It binds only a batch whose signed BTC anchor is in the
+    // mirror admission era (the BTC producer activation for this network), the flag day
+    // this train already carries; below it the leftover fields stay unread, as before.
+    validateBatchFieldCount(batch, fields){
+        if(!isAdmissionEra(this.config['NETWORK'], batch.btcBlockHeight)) return null;
+        let expectedFields = 5;
+        for(let round of batch.rounds){
+            expectedFields += 4 + (2 * round.pairs.length);
+            if(round.admitBlocks !== undefined) expectedFields += 1;
+        }
+        expectedFields += 1 + (2 * batch.sigCount);
+        return fields.length !== expectedFields ? 'invalid: trailing data after batch signatures' : null;
+    }
+
+    // 5. STORAGE. round_number carries FIRST_ROUND (because the column is indexed and every
+    // existing read treats it as "the round this action is about"), sigs_json carries the
+    // batch signature set, and pair_count/pairs_json/sig_count are left unset so they
+    // store NULL: on a v2 row those three would describe only one round out of the window.
+    storePriceBatchFields(data, batch, roundsWire, error){
+        data['ROUND']             = batch.firstRound;
+        data['BTC_BLOCK_HEIGHT']  = batch.btcBlockHeight;
+        data['BATCH_FIRST_ROUND'] = batch.firstRound;
+        data['BATCH_LAST_ROUND']  = batch.lastRound;
+        data['ROUND_COUNT']       = batch.roundCount;
+        data['ROUNDS_JSON']       = roundsWire.length > 0 ? JSON.stringify(roundsWire) : null;
+        data['SIGS_JSON']         = (batch.bodyParsed && batch.sigs.length > 0) ? JSON.stringify(batch.sigs) : null;
+        data['VALIDATION_STATUS'] = error ? 'invalid' : 'valid';
+        data['STATUS']            = error || 'valid';
     }
 
     // 6. HUB PUSH through the same durable transactional outbox v0 and v1 use. The
