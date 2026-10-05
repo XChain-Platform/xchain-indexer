@@ -36,6 +36,12 @@ function maxId(rows){
     return rows && rows[0] && rows[0].max_id != null ? rows[0].max_id : 0;
 }
 
+function idLiteral(id){
+    let value = BigInt(id);
+    if(value < 0n) throw new Error(`Invalid rollback sweep id bound: ${id}`);
+    return value.toString();
+}
+
 async function readDanglingIndexReferenceBounds(db){
     let addressRows = await db.doQuery(`SELECT MAX(id) AS max_id FROM index_addresses`, []);
     let tickerRows  = await db.doQuery(`SELECT MAX(id) AS max_id FROM index_tickers`, []);
@@ -50,6 +56,7 @@ module.exports = {
     // balances, markets and pubkeys rows whose index id no longer resolves, timed per table.
     async sweepDanglingIndexReferences(db, nativeTickId, bounds){
         bounds = bounds || await readDanglingIndexReferenceBounds(db);
+        let tickerIdBound = idLiteral(bounds.tickerId);
         let stats = [];
         stats.push(await timedSweep(db, 'balances',
             `DELETE FROM balances
@@ -79,9 +86,9 @@ module.exports = {
         // and matching it here deleted every token/native market on the first reorg.
         stats.push(await timedSweep(db, 'markets',
             `DELETE FROM markets
-             WHERE (tick1_id > ? AND tick1_id <> ? AND tick1_id NOT IN (SELECT id FROM index_tickers))
-                OR (tick2_id > ? AND tick2_id <> ? AND tick2_id NOT IN (SELECT id FROM index_tickers))`,
-            [bounds.tickerId, nativeTickId, bounds.tickerId, nativeTickId]));
+             WHERE (tick1_id <> ? AND tick1_id > ${tickerIdBound} AND tick1_id NOT IN (SELECT id FROM index_tickers))
+                OR (tick2_id <> ? AND tick2_id > ${tickerIdBound} AND tick2_id NOT IN (SELECT id FROM index_tickers))`,
+            [nativeTickId, nativeTickId]));
         stats.push(await timedSweep(db, 'pubkeys',
             `DELETE FROM pubkeys
              WHERE address_id > ? AND address_id NOT IN (SELECT id FROM index_addresses)`,
