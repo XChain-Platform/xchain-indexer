@@ -33,7 +33,7 @@ function assertReadsBeforeDeletes(log, readTables){
         }
     }
     for(let deletion of deletes){
-        assert.match(deletion.sql, /> (?:\?|\d+)/, `${deletion.sql} must be maximum-id bounded`);
+        assert.match(deletion.sql, /> \?/, `${deletion.sql} must be maximum-id bounded`);
     }
 }
 
@@ -77,11 +77,11 @@ describe('Scoped rollback orphan sweeps', function () {
         let deletes = dangling.filter(entry => /^DELETE FROM/.test(entry.sql));
         assert.deepStrictEqual(deletes.map(entry => entry.args), [
             [41, 19],
-            [0, 0],
+            [0, 19, 0, 19],
             [41],
         ]);
-        assert.match(deletes[1].sql, /tick1_id > 19/);
-        assert.match(deletes[1].sql, /tick2_id > 19/);
+        assert.match(deletes[1].sql, /tick1_id <> \? AND tick1_id > \?/);
+        assert.match(deletes[1].sql, /tick2_id <> \? AND tick2_id > \?/);
 
         let icons = await runIconSweep([{ max_id: 7 }]);
         assertReadsBeforeDeletes(icons, ['tokens']);
@@ -96,11 +96,11 @@ describe('Scoped rollback orphan sweeps', function () {
         let deletes = dangling.filter(entry => /^DELETE FROM/.test(entry.sql));
         assert.deepStrictEqual(deletes.map(entry => entry.args), [
             [0, 0],
-            [0, 0],
+            [0, 0, 0, 0],
             [0],
         ]);
-        assert.match(deletes[1].sql, /tick1_id > 0/);
-        assert.match(deletes[1].sql, /tick2_id > 0/);
+        assert.match(deletes[1].sql, /tick1_id <> \? AND tick1_id > \?/);
+        assert.match(deletes[1].sql, /tick2_id <> \? AND tick2_id > \?/);
 
         let icons = await runIconSweep([{ max_id: null }]);
         assert.deepStrictEqual(icons.find(entry => /^DELETE FROM/.test(entry.sql)).args, [0]);
