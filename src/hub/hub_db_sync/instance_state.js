@@ -29,9 +29,8 @@ const { createMovePolicy } = require('./failover/move_policy.js');
 const { createHubListRefresher } = require('../hub_client/hub_list_refresh.js');
 const { getLogger } = require('../../observability/index.js');
 
-// Connection settings and the poll-mode flag.
-function initConnection(sync, hubDb, options) {
-    options = options || {};
+// Selector wiring, hub URL and keys, the enabled flag, and the address capture hook.
+function configureSelectorConnection(sync, hubDb, options) {
     sync.hubDb     = hubDb;                            // Database instance pointing at the local hub DB
     sync.selector  = options.selector || null;
     let selectedAddress = sync.selector && typeof sync.selector.current === 'function'
@@ -58,6 +57,10 @@ function initConnection(sync, hubDb, options) {
             sync._bootstrapDrained = false;
         });
     } else sync._selectorUnsubscribe = null;
+}
+
+// Failover reconnect policy and the not-caught-up grace window.
+function configureFailoverPolicy(sync, options) {
     const reconnectAttempts = Object.prototype.hasOwnProperty.call(options, 'failoverReconnectAttempts')
         ? options.failoverReconnectAttempts : Number(readEnvNow('HUB_FAILOVER_RECONNECT_ATTEMPTS'));
     const minDwellMs = Object.prototype.hasOwnProperty.call(options, 'failoverMinDwellMs')
@@ -68,14 +71,10 @@ function initConnection(sync, hubDb, options) {
         ? configuredNotCaughtUpGraceMs : 30000;
     sync._movePolicy = createMovePolicy({ reconnectAttempts, minDwellMs, now: options.now });
     sync._failoverPendingDrain = false;
-    sync.pollIntervalMs = parseInt(options.pollInterval || readEnvNow('HUB_DB_SYNC_POLL_INTERVAL') || '30000');
-    // Total wall-clock budget for one snapshot GET. The `timeout: 30000` request
-    // option in httpGet is an IDLE-socket timer that resets on every byte received,
-    // so a hub drip-feeding a body holds the request (and, through bootstrapAll's
-    // guard, the whole mirror bootstrap) open indefinitely inside it. Four times the
-    // idle timer, so a 10k-row snapshot page has room to stream and only a wedged
-    // request can reach the ceiling.
-    sync.httpDeadlineMs = parseInt(options.httpDeadline || readEnvNow('HUB_DB_SYNC_HTTP_DEADLINE') || '120000');
+}
+
+// Hub list refresher, created only for an unpinned selector.
+function configureHubListRefresh(sync) {
     let selectorStatus = sync.selector && typeof sync.selector.status === 'function'
         ? sync.selector.status() : null;
     sync._hubListRefreshEpoch = null;
@@ -87,6 +86,22 @@ function initConnection(sync, hubDb, options) {
             warn: (message, err) => getLogger().warn('HubDbSync: ' + message, err)
         })
         : null;
+}
+
+// Connection settings and the poll-mode flag.
+function initConnection(sync, hubDb, options) {
+    options = options || {};
+    configureSelectorConnection(sync, hubDb, options);
+    configureFailoverPolicy(sync, options);
+    sync.pollIntervalMs = parseInt(options.pollInterval || readEnvNow('HUB_DB_SYNC_POLL_INTERVAL') || '30000');
+    // Total wall-clock budget for one snapshot GET. The `timeout: 30000` request
+    // option in httpGet is an IDLE-socket timer that resets on every byte received,
+    // so a hub drip-feeding a body holds the request (and, through bootstrapAll's
+    // guard, the whole mirror bootstrap) open indefinitely inside it. Four times the
+    // idle timer, so a 10k-row snapshot page has room to stream and only a wedged
+    // request can reach the ceiling.
+    sync.httpDeadlineMs = parseInt(options.httpDeadline || readEnvNow('HUB_DB_SYNC_HTTP_DEADLINE') || '120000');
+    configureHubListRefresh(sync);
     sync.ws        = null;
     sync.running   = false;
     // True when the WebSocket path is unavailable and this mirror falls back to
