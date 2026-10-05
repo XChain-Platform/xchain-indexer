@@ -109,6 +109,7 @@ function latestBlockRpc({ indexer }){
                     lag: indexer.lastDecoderBlock != null
                         ? indexer.lastDecoderBlock - block_index
                         : null,
+                    hub_push_delivered: await hubPushDelivered(indexer, block_index),
                 };
             } catch (err) {
                 getLogger().error('getlatestblock error:', err);
@@ -116,6 +117,29 @@ function latestBlockRpc({ indexer }){
             }
         },
     };
+}
+
+// The highest committed block B such that every hub push enqueued at or below B has been
+// acknowledged, with B's protocol time. An empty outbox is delivered through the committed
+// tip. Any failed read, or an undelivered push whose block cannot be resolved, answers null
+// rather than a guess, so a consumer never treats unknown as delivered.
+async function hubPushDelivered(indexer, tip){
+    try {
+        let db       = committedView(indexer.indexerDb);
+        let frontier = await db.getHubPushDeliveryFrontier();
+        let block;
+        if(frontier.undelivered === 0)       block = tip;
+        else if(frontier.unresolved > 0)     return null;
+        else if(frontier.min_block == null)  return null;
+        else                                 block = Math.min(frontier.min_block - 1, tip);
+        if(!Number.isFinite(block) || block < 0) return null;
+        let time = await db.getBlockTime(block);
+        if(time === false || time == null) return null;
+        return { block, protocol_time: Number(time) };
+    } catch (err) {
+        getLogger().error('hub_push_delivered read failed:', err);
+        return null;
+    }
 }
 
 // The stored per-block state-hash triple (+ the chain block hash from the
