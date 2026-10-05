@@ -216,25 +216,36 @@ describe('runControllerGuard: leg-scoped guard savepoints @regression @tier1', f
 describe('CONTROLLER_GUARD_LEG_SAVEPOINTS: consensus metadata @regression @tier1', function () {
     const protocolChanges = require('../../../src/protocol_changes.js');
     const changes = require('../../../src/protocol_changes/changes_5.js');
+    const manifest = require('../../../src/consensus/armed_map/manifest.js');
+    const armedFingerprint = require('../../../src/consensus/armed_map/fingerprint.js');
+    const { fingerprint } = require('../../../src/consensus/armed_map/canonical.js');
     const digest = require('../../../src/consensus_rules_digest.js');
+    const key = 'protocol_changes.changes.CONTROLLER_GUARD_LEG_SAVEPOINTS';
+    const value = {
+        version_major: 0, version_minor: 2, version_revision: 0,
+        mainnet_time: 9999999999, testnet_time: 9999999999, regtest_time: 0,
+        mainnet_block: 0, testnet_block: 0, regtest_block: 0,
+    };
 
     it('installs an unarmed public-network change with genesis-active regtest', function () {
-        assert.deepStrictEqual(changes.CONTROLLER_GUARD_LEG_SAVEPOINTS, [
+        assert.deepStrictEqual(changes[changes.length - 1], [
             'CONTROLLER_GUARD_LEG_SAVEPOINTS', '0.2.0', 9999999999, 9999999999, 0, 0, 0, 0,
         ]);
         const table = new protocolChanges({ config: {}, util: {} }).changes;
-        assert.deepStrictEqual(table.CONTROLLER_GUARD_LEG_SAVEPOINTS, {
-            version_major: 0, version_minor: 2, version_revision: 0,
-            mainnet_time: 9999999999, testnet_time: 9999999999, regtest_time: 0,
-            mainnet_block: 0, testnet_block: 0, regtest_block: 0,
-        });
-        assert.strictEqual(Object.keys(table).includes('CONTROLLER_GUARD_LEG_SAVEPOINTS'), false);
+        assert.deepStrictEqual(table.CONTROLLER_GUARD_LEG_SAVEPOINTS, value);
+        assert.strictEqual(Object.keys(table).includes('CONTROLLER_GUARD_LEG_SAVEPOINTS'), true);
     });
 
-    it('preserves the frozen registered-row and armed-map cardinalities', function () {
-        assert.strictEqual(changes.length, 2);
-        assert.strictEqual(protocolChanges.rows().filter(([key]) =>
-            key.startsWith('protocol_changes.changes.')).length, 101);
+    it('declares the activation in the registry and armed-map fingerprint', function () {
+        assert.strictEqual(changes.length, 3);
+        const rows = protocolChanges.rows();
+        assert.strictEqual(rows.filter(([rowKey]) => rowKey.startsWith('protocol_changes.changes.')).length, 102);
+        assert.deepStrictEqual(rows.find(([rowKey]) => rowKey === key)[1], value);
+        assert.ok(manifest.ENTRIES.some(([rowKey]) => rowKey === key));
+        assert.deepStrictEqual(new Map(manifest.collectRows().rows).get(key), value);
+        const armed = armedFingerprint.computeArmedMapFingerprintV2();
+        assert.match(armed.hex, /^[0-9a-f]{64}$/);
+        assert.strictEqual(armed.rows[key], fingerprint([[key, value]]).rows[key]);
     });
 
     it('activates by block time on regtest while public networks remain inert', async function () {

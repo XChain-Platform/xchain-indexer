@@ -163,11 +163,8 @@ class ProtocolChanges {
     }
 
     parseChanges(){
-        // The 101 registered rows live in src/protocol_changes/changes_*.js; see CHANGE_PARTS.
+        // The 102 registered rows live in src/protocol_changes/changes_*.js; see CHANGE_PARTS.
         applyChanges(this, CHANGE_PARTS);
-        const row = CHANGES_5.CONTROLLER_GUARD_LEG_SAVEPOINTS;
-        this.addChange(...row);
-        Object.defineProperty(this.changes, row[0], { value: this.changes[row[0]], enumerable: false });
     }
 
     // Add protocol changes to protocol changes data object
