@@ -356,9 +356,6 @@ module.exports = {
             this._reconnectTimer = null;
             if (!this.running) return;
 
-            // Await the hub's ready acknowledgement before re-bootstrapping, for the
-            // same reason as start(): no row must fall in the gap between the REST
-            // snapshot and the subscription becoming active on the hub side.
             try {
                 await this.connectWebSocket();
             } catch (err) {
@@ -366,22 +363,10 @@ module.exports = {
                     this._hubUrlEpoch = null;
                     this.scheduleReconnect(true);
                 }
-                // Unless failover replaced it above, connectWebSocket already queued
-                // another delayed reconnect through the close handler.
                 return;
             }
             this.noteConnected();
-            // Proactively re-sync the barrier heights from the LOCAL mirror the
-            // instant the socket is back (before re-bootstrap). The disconnect may
-            // have frozen the in-memory heights behind a mirror that is already
-            // current (or close to it); refreshing here clears any block deferred
-            // only on that staleness immediately, instead of making each wait for
-            // re-bootstrap to redeliver rows or fall through to the 60s timeout.
             await this.refreshAllSyncHeights();
-
-            // Re-bootstrap to fill in rows missed while disconnected. The ready frame
-            // decides whether this connection may resume its previous wire positions.
-            // A full drain re-opens the heartbeat gate and advances the watermark.
             await this.bootstrapAll();
         }, delayMs);
         this._reconnectTimer = reconnectTimer;
