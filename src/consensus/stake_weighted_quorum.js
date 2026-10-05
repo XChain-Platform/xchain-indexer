@@ -98,6 +98,55 @@ function totalStake(validators){
     return S;
 }
 
+// Dedupe maps for the snapshot, or null (fail CLOSED) on a blank/missing source or a
+// missing/nonnumeric weight. Coercing a bad weight to 0 would shrink S and lower the
+// 2/3 bar, so a sub-quorum could finalize.
+function indexStakeSources(validators){
+    let weightBySource = new Map();   // source -> weight (first wins; all equal per source)
+    let pubkeyToSource = new Map();   // pubkey(lower) -> source
+    for(let v of (validators || [])){
+        if(!v || v.source === null || v.source === undefined || String(v.source).trim() === '') return null;
+        let src = String(v.source);
+        pubkeyToSource.set(String(v.pubkey).toLowerCase(), src);
+        if(weightBySource.has(src)) continue;
+        if(v.weight === null || v.weight === undefined) return null;
+        let ws = String(v.weight).trim();
+        if(ws === '' || !/^[+-]?(\d+\.?\d*|\.\d+)$/.test(ws)) return null;
+        weightBySource.set(src, ws);
+    }
+    return { weightBySource, pubkeyToSource };
+}
+
+// S = sum of weight over distinct sources, or null (fail CLOSED) on any negative
+// weight or a non-positive total, where 3*tally > 2*S would finalize on zero signatures.
+function sumStakeWeights(weightBySource){
+    let S = mathjs.bignumber(0);
+    for(let w of weightBySource.values()){
+        let bw = bcnum(w);
+        if(bw.lt(0)) return null;
+        S = mathjs.add(S, bw);
+    }
+    return S.lte(0) ? null : S;
+}
+
+// Tally = sum of weight over the DISTINCT sources represented by valid signers.
+function sumSignerStake(index, signerPubkeys){
+    let countedSources = new Set();
+    let seenPubkeys    = new Set();
+    let tally          = mathjs.bignumber(0);
+    for(let pk of (signerPubkeys || [])){
+        let lpk = String(pk).toLowerCase();
+        if(seenPubkeys.has(lpk)) continue;
+        seenPubkeys.add(lpk);
+        let src = index.pubkeyToSource.get(lpk);
+        if(src === undefined) continue;          // signer not in snapshot
+        if(countedSources.has(src)) continue;    // source already counted
+        countedSources.add(src);
+        tally = mathjs.add(tally, bcnum(index.weightBySource.get(src)));
+    }
+    return tally;
+}
+
 // Source-deduped stake-weighted quorum test.
 //   validators      full snapshot: [{ pubkey, source, weight }]  (every key of a
 //                   source carries the SAME source + weight)
@@ -115,66 +164,19 @@ function totalStake(validators){
 // EMPTY signer set (0 > negative). A snapshot that cannot express a meaningful
 // two-thirds threshold must never finalize.
 function meetsStakeThreshold(validators, signerPubkeys){
-    // Fail CLOSED on a TRUNCATED snapshot. The set-building query
-    // (getStakeWeightsByCapability) caps its result and marks `truncated` on the
-    // returned array when the qualifying set overflowed the cap. A truncated snapshot
-    // has silently-dropped sources, so S is under-counted and the strict 2/3 bar could
-    // finalize a round a full snapshot would reject - a stake-eviction forge (one source
-    // spamming keys to evict honest sources), or organic silent drift once the federation
-    // outgrows the cap. A snapshot that cannot be fully materialised must never finalize;
-    // the operators raise the cap (coordinated) instead. Plain-array callers (no property)
-    // are unaffected. CONSENSUS-CRITICAL: keep byte-identical across all vendored copies.
+    // A truncated snapshot has silently-dropped sources, so S is under-counted and
+    // the 2/3 bar could finalize a round a full snapshot would reject. Plain-array
+    // callers (no property) are unaffected. CONSENSUS-CRITICAL: keep byte-identical
+    // across all vendored copies.
     if(validators && validators.truncated === true) return false;
-    let weightBySource = new Map();   // source -> weight (first wins; all equal per source)
-    let pubkeyToSource = new Map();   // pubkey(lower) -> source
-    for(let v of (validators || [])){
-        // Fail CLOSED on a blank/missing source: an empty-string (snapshot schema NOT NULL
-        // DEFAULT '') or undefined source collapses every row into ONE dedupe bucket, dropping
-        // the threshold to 1-of-N (a single signature would finalize). A malformed snapshot
-        // must never finalize; reject the whole tally.
-        if(!v || v.source === null || v.source === undefined || String(v.source).trim() === '') return false;
-        let src = String(v.source);
-        let pk  = String(v.pubkey).toLowerCase();
-        pubkeyToSource.set(pk, src);
-        if(!weightBySource.has(src)){
-            // Fail CLOSED on a missing/nonnumeric weight. Coercing it to 0 leaves the
-            // source in the dedupe map with no stake, shrinking S and LOWERING the 2/3 bar, so
-            // a sub-quorum finalizes (70/20/missing-100 -> S=90, a lone 70 signer passes
-            // 210>180). Same posture as the blank-source, negative-weight and truncated guards.
-            if(v.weight === null || v.weight === undefined) return false;
-            let ws = String(v.weight).trim();
-            if(ws === '' || !/^[+-]?(\d+\.?\d*|\.\d+)$/.test(ws)) return false;
-            weightBySource.set(src, ws);
-        }
-    }
-    // S = sum of weight over distinct sources in the snapshot. Fail CLOSED on any
-    // negative weight, then on S <= 0 (see the contract comment above): with S
-    // driven to or below zero, 3*tally > 2*S would finalize on zero signatures.
-    let S = mathjs.bignumber(0);
-    for(let w of weightBySource.values()){
-        let bw = bcnum(w);
-        if(bw.lt(0)) return false;
-        S = mathjs.add(S, bw);
-    }
-    if(S.lte(0)) return false;
-    // Tally = sum of weight over the DISTINCT sources represented by valid signers.
-    let countedSources = new Set();
-    let seenPubkeys    = new Set();
-    let tally          = mathjs.bignumber(0);
-    for(let pk of (signerPubkeys || [])){
-        let lpk = String(pk).toLowerCase();
-        if(seenPubkeys.has(lpk)) continue;
-        seenPubkeys.add(lpk);
-        let src = pubkeyToSource.get(lpk);
-        if(src === undefined) continue;          // signer not in snapshot
-        if(countedSources.has(src)) continue;    // source already counted
-        countedSources.add(src);
-        tally = mathjs.add(tally, bcnum(weightBySource.get(src)));
-    }
+    let index = indexStakeSources(validators);
+    if(index === null) return false;
+    let S = sumStakeWeights(index.weightBySource);
+    if(S === null) return false;
+    let tally = sumSignerStake(index, signerPubkeys);
     // Strictly greater than two-thirds of stake, integer-free: 3*tally > 2*S.
     // Use the bignumber's exact `.gt` (decimal.js), NOT mathjs.larger, which
-    // applies a ~1e-12 relative epsilon and would treat large near-equal stake
-    // totals as equal, flipping the verdict at the boundary.
+    // applies a ~1e-12 relative epsilon and would flip the verdict at the boundary.
     return mathjs.multiply(tally, 3).gt(mathjs.multiply(S, 2));
 }
 
