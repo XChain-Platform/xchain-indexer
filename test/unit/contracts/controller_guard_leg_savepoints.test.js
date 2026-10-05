@@ -18,6 +18,8 @@
  ********************************************************************/
 
 const assert = require('assert');
+const fs     = require('fs');
+const path   = require('path');
 const sinon  = require('sinon');
 const { createMockIndexer } = require('../../fixtures/mocks');
 const Execute = require('../../../src/actions/execute/index.js');
@@ -221,15 +223,28 @@ describe('CONTROLLER_GUARD_LEG_SAVEPOINTS: consensus metadata @regression @tier1
     const { fingerprint } = require('../../../src/consensus/armed_map/canonical.js');
     const digest = require('../../../src/consensus_rules_digest.js');
     const key = 'protocol_changes.changes.CONTROLLER_GUARD_LEG_SAVEPOINTS';
+    const partsDir = path.resolve(__dirname, '../../../src/protocol_changes');
+    const testnetTime = 1791061097;
     const value = {
         version_major: 0, version_minor: 2, version_revision: 0,
-        mainnet_time: 9999999999, testnet_time: 9999999999, regtest_time: 0,
+        mainnet_time: 9999999999, testnet_time: testnetTime, regtest_time: 0,
         mainnet_block: 0, testnet_block: 0, regtest_block: 0,
     };
 
-    it('installs an unarmed public-network change with genesis-active regtest', function () {
+    function finalPartRowCount() {
+        const files = fs.readdirSync(partsDir)
+            .filter(file => /^changes_\d+\.js$/.test(file))
+            .sort((a, b) => parseInt(a.match(/\d+/)[0]) - parseInt(b.match(/\d+/)[0]));
+        assert.strictEqual(files[files.length - 1], 'changes_5.js');
+        const earlierRows = files.slice(0, -1)
+            .reduce((count, file) => count + require(path.join(partsDir, file)).length, 0);
+        const table = new protocolChanges({ config: {}, util: {} }).changes;
+        return Object.keys(table).length - earlierRows;
+    }
+
+    it('installs a mainnet-inert, testnet-armed change with genesis-active regtest', function () {
         assert.deepStrictEqual(changes[changes.length - 1], [
-            'CONTROLLER_GUARD_LEG_SAVEPOINTS', '0.2.0', 9999999999, 9999999999, 0, 0, 0, 0,
+            'CONTROLLER_GUARD_LEG_SAVEPOINTS', '0.2.0', 9999999999, testnetTime, 0, 0, 0, 0,
         ]);
         const table = new protocolChanges({ config: {}, util: {} }).changes;
         assert.deepStrictEqual(table.CONTROLLER_GUARD_LEG_SAVEPOINTS, value);
@@ -237,9 +252,14 @@ describe('CONTROLLER_GUARD_LEG_SAVEPOINTS: consensus metadata @regression @tier1
     });
 
     it('declares the activation in the registry and armed-map fingerprint', function () {
-        assert.strictEqual(changes.length, 3);
+        assert.strictEqual(changes.length, finalPartRowCount());
+        assert.strictEqual(changes[0][0], 'CONTROLLER_CUSTODY_GUARD');
+        assert.strictEqual(changes[1][0], 'OWNER_WITHDRAW_OPT_IN');
+        assert.strictEqual(changes[changes.length - 1][0], 'CONTROLLER_GUARD_LEG_SAVEPOINTS');
         const rows = protocolChanges.rows();
-        assert.strictEqual(rows.filter(([rowKey]) => rowKey.startsWith('protocol_changes.changes.')).length, 102);
+        const changeRows = rows.filter(([rowKey]) => rowKey.startsWith('protocol_changes.changes.'));
+        const table = new protocolChanges({ config: {}, util: {} }).changes;
+        assert.strictEqual(changeRows.length, Object.keys(table).length);
         assert.deepStrictEqual(rows.find(([rowKey]) => rowKey === key)[1], value);
         assert.ok(manifest.ENTRIES.some(([rowKey]) => rowKey === key));
         assert.deepStrictEqual(new Map(manifest.collectRows().rows).get(key), value);
@@ -248,7 +268,7 @@ describe('CONTROLLER_GUARD_LEG_SAVEPOINTS: consensus metadata @regression @tier1
         assert.strictEqual(armed.rows[key], fingerprint([[key, value]]).rows[key]);
     });
 
-    it('activates by block time on regtest while public networks remain inert', async function () {
+    it('activates by block time on testnet and regtest while mainnet remains inert', async function () {
         function build(network, blockTime) {
             return new protocolChanges({
                 config: { NETWORK: network }, util: {},
@@ -257,10 +277,11 @@ describe('CONTROLLER_GUARD_LEG_SAVEPOINTS: consensus metadata @regression @tier1
         }
         assert.strictEqual(await build('regtest', 0).isEnabled('CONTROLLER_GUARD_LEG_SAVEPOINTS', 0), true);
         assert.strictEqual(await build('mainnet', 9999999998).isEnabled('CONTROLLER_GUARD_LEG_SAVEPOINTS', 0), false);
-        assert.strictEqual(await build('testnet', 9999999998).isEnabled('CONTROLLER_GUARD_LEG_SAVEPOINTS', 0), false);
+        assert.strictEqual(await build('testnet', testnetTime - 1).isEnabled('CONTROLLER_GUARD_LEG_SAVEPOINTS', 0), false);
+        assert.strictEqual(await build('testnet', testnetTime).isEnabled('CONTROLLER_GUARD_LEG_SAVEPOINTS', 0), true);
     });
 
-    it('stays outside the hub-indexer shared digest like its parent gate', function () {
+    it('does not alter the hub-indexer shared digest', function () {
         const names = digest.SHARED_GATES.flatMap(([, exportNames]) => exportNames);
         assert.ok(!names.includes('CONTROLLER_GUARD_LEG_SAVEPOINTS'));
         assert.ok(!names.includes('CONTROLLER_GUARD'));

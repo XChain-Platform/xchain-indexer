@@ -45,9 +45,10 @@ const CHANGES = [
         regtestTimeOverride('OWNER_WITHDRAW_OPT_IN_REGTEST_TIME'), 0, 0, 0],
 
     // Groups sibling guards on one native-action leg under an outer savepoint.
-    // Public networks remain unarmed until their guarded-leg history is measured;
-    // regtest activates at genesis so fresh test chains exercise the corrected rule.
-    ['CONTROLLER_GUARD_LEG_SAVEPOINTS', '0.2.0', 9999999999, 9999999999, 0, 0, 0, 0],
+    // It follows the custody guard on testnet, stays inert on mainnet, and is
+    // genesis-active on regtest so fresh test chains exercise the corrected rule.
+    ['CONTROLLER_GUARD_LEG_SAVEPOINTS', '0.2.0', 9999999999,
+        CONTROLLER_CUSTODY_GUARD_TESTNET_TIME, 0, 0, 0, 0],
 ];
 
 module.exports = CHANGES;

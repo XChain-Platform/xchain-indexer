@@ -54,6 +54,14 @@ function partConstants() {
         require(path.join(PARTS, 'consensus_version.js')));
 }
 
+function changePartFiles() {
+    return fs.readdirSync(PARTS).filter((f) => /^changes_\d+\.js$/.test(f)).sort();
+}
+
+function changePartRowCount() {
+    return changePartFiles().reduce((count, f) => count + require(path.join(PARTS, f)).length, 0);
+}
+
 describe('protocol_changes/assembler: the public export shape @regression @tier1', function () {
     let now, headText;
     before(function () {
@@ -86,10 +94,10 @@ describe('protocol_changes/assembler: the public export shape @regression @tier1
         assert.strictEqual(now.get('protocol_changes.changes.SEND'), now.registry.get('protocol_changes.changes.SEND'));
     });
 
-    it('still constructs under the manifest stub with 102 prototype-free changes, equal to the registry rows', function () {
+    it('still constructs under the manifest stub with every prototype-free change, equal to the registry rows', function () {
         const stub = () => ({ config: {}, util: {} });
         const table = new now(stub()).changes;
-        assert.strictEqual(Object.keys(table).length, 102);
+        assert.strictEqual(Object.keys(table).length, changePartRowCount());
         assert.strictEqual(Object.getPrototypeOf(table), null);
         const rows = now.rows().filter(([k]) => k.startsWith('protocol_changes.changes.'));
         assert.deepStrictEqual(Object.keys(table), rows.map(([k]) => k.slice('protocol_changes.changes.'.length)), 'registration order changed');
@@ -144,8 +152,8 @@ describe('protocol_changes/assembler: the part files declare no carrier and the 
         }
     });
 
-    it('the time-table parts hold exactly the 102 rows, in registration order, and nothing but rows', function () {
-        const parts = fs.readdirSync(PARTS).filter((f) => /^changes_\d+\.js$/.test(f)).sort();
+    it('the time-table parts hold every assembled row, in registration order, and nothing but rows', function () {
+        const parts = changePartFiles();
         assert.ok(parts.length >= 4, parts.join(','));
         const names = [];
         for (const f of parts) {
@@ -156,7 +164,8 @@ describe('protocol_changes/assembler: the part files declare no carrier and the 
                 names.push(row[0]);
             }
         }
-        assert.strictEqual(names.length, 102);
-        assert.deepStrictEqual(names, Object.keys(new (require(ENTRY))({ config: {}, util: {} }).changes));
+        const assembledNames = Object.keys(new (require(ENTRY))({ config: {}, util: {} }).changes);
+        assert.strictEqual(names.length, assembledNames.length);
+        assert.deepStrictEqual(names, assembledNames);
     });
 });

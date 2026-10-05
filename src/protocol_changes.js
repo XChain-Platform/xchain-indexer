@@ -163,7 +163,7 @@ class ProtocolChanges {
     }
 
     parseChanges(){
-        // The 102 registered rows live in src/protocol_changes/changes_*.js; see CHANGE_PARTS.
+        // The registered rows live in src/protocol_changes/changes_*.js; see CHANGE_PARTS.
         applyChanges(this, CHANGE_PARTS);
     }
 
