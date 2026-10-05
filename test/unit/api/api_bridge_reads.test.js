@@ -196,7 +196,7 @@ const ESCROW_ADDR = 'mfbtcbridgedogeXXXXXXXXXXXXXUXTr4m'; // coins/BTC.js regtes
 const BALANCE = '12.5';
 
 function selectCheckpointRows(query, rows){
-    if(!/ORDER BY\s+checkpoint_seq DESC/i.test(query)) return rows;
+    if(!/ORDER BY\s+checkpoint_seq DESC, id DESC/i.test(query)) return rows;
     return rows.slice().sort((a, b) => b.checkpoint_seq - a.checkpoint_seq).slice(0, 1);
 }
 
@@ -265,7 +265,7 @@ describe('db.getBridgeEscrowProof, driven through CHK.verifyEscrowAgainstCheckpo
         assert.deepStrictEqual(envelopes.map((item) => item.checkpoint.checkpoint_seq), [9, 9, 9, 9, 9]);
         assert.strictEqual(fixture.mirror.doQueryStrict.callCount, 5);
         for(const call of fixture.mirror.doQueryStrict.getCalls()){
-            assert.match(call.args[0], /block_index=\? ORDER BY checkpoint_seq DESC LIMIT 1/i);
+            assert.match(call.args[0], /block_index=\? ORDER BY checkpoint_seq DESC, id DESC LIMIT 1/i);
             assert.deepStrictEqual(call.args[1], [CHAIN, NETWORK, HEIGHT]);
         }
     });
