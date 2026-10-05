@@ -127,7 +127,8 @@ describe('armed_map/manifest: completeness guard', function () {
         const stems = REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS);
         const unexported = [...keys].filter((k) => !k.startsWith('protocol_changes.') && !k.startsWith('xchain-vm.') && !exported.has(k));
         const replaced = [...keys].filter((k) => stems.includes(k.slice(0, k.lastIndexOf('.'))));
-        assert.strictEqual(replaced.length, stems.length, 'one registry row per replaced shim or registry-only stem');
+        assert.strictEqual(replaced.length, stems.length + 1,
+            'the 70 predicate rows plus the PRICE_LANDING_CHAINS constant are registry-only');
         assert.deepStrictEqual(unexported, replaced, 'rows no shim exports, beyond the W4-replaced set: ' +
             unexported.filter((k) => !replaced.includes(k)).join(', '));
     });
@@ -172,7 +173,7 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(res.ok, true, res.reason);
         assert.deepStrictEqual(res.rows.map((r) => r[0]), manifest.ENTRIES.map((e) => e[0]));
         for (const [, value] of res.rows) canonicalValue(value);
-        assert.strictEqual(res.rows.length, 352);
+        assert.strictEqual(res.rows.length, 353);
     });
 
     it('carries the three row families the design names', function () {
