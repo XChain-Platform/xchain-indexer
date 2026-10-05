@@ -52,7 +52,8 @@ const PARTS = walkJs(path.join(SRC_HUB, 'hub_db_sync'));
 // or the other, so a new part is classified here before it can be forgotten.
 const METHOD_PARTS = [
     'barriers/attest.js', 'barriers/bridge_policy.js', 'barriers/oracle_match_call.js', 'barriers/price.js',
-    'barriers/snapshot.js', 'bootstrap/drain.js', 'bootstrap/flush.js', 'bootstrap/verdict.js',
+    'barriers/price_landing.js', 'barriers/snapshot.js', 'bootstrap/drain.js', 'bootstrap/flush.js',
+    'bootstrap/verdict.js',
     'chain_identity.js', 'foreign_reconciliation.js', 'lifecycle.js', 'live_events.js', 'mirror_scope.js',
     'retractions.js', 'row_apply.js', 'transport.js', 'watermarks.js',
 ];
@@ -78,15 +79,18 @@ describe('HubDbSync parts: the split keeps one class, one export shape and one e
             'suite does not know is a part whose duplicates and underscore names go ungraded');
     });
 
-    it('installs every method of every method part onto the prototype, and no name twice', function () {
+    it('installs every method of every method part onto the prototype, and no conflicting name twice', function () {
         const seen = new Map();
         for (const [p, methods] of methodParts()) {
             for (const name of Object.keys(methods)) {
                 if (seen.has(name)) {
-                    assert.fail(name + ' is defined by both ' + path.relative(SRC_HUB, seen.get(name)) + ' and ' +
+                    const first = seen.get(name);
+                    assert.strictEqual(methods[name], first.method,
+                        name + ' is defined differently by both ' + path.relative(SRC_HUB, first.path) + ' and ' +
                         path.relative(SRC_HUB, p) + '; the later install would silently replace the earlier');
+                } else {
+                    seen.set(name, { path: p, method: methods[name] });
                 }
-                seen.set(name, p);
                 assert.strictEqual(HubDbSync.prototype[name], methods[name],
                     name + ' from ' + path.relative(SRC_HUB, p) + ' is not the method installed on HubDbSync.prototype');
             }

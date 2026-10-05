@@ -28,11 +28,7 @@
 const gateRegistry = require('../../../consensus/gate_registry.js');
 
 const LANDED_GATE = 'price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION';
-const LANDING_CHAINS = Object.freeze({
-    mainnet: Object.freeze(['DOGE']),
-    testnet: Object.freeze(['DOGE']),
-    regtest: Object.freeze(['DOGE']),
-});
+const LANDING_CHAINS = 'price_fee_batch_landed_activation.PRICE_LANDING_CHAINS';
 
 // Keeps only entries shaped { block, protocol_time } with safe non-negative integers.
 // Null (no usable object) is distinct from an empty map.
@@ -85,7 +81,8 @@ module.exports = {
 
     // The landing chains this block must wait on: the per-network set minus this coin.
     landingChainsFor(){
-        const set = Object.prototype.hasOwnProperty.call(LANDING_CHAINS, this.network) ? LANDING_CHAINS[this.network] : [];
+        const table = gateRegistry.get(LANDING_CHAINS) || {};
+        const set = Object.prototype.hasOwnProperty.call(table, this.network) ? table[this.network] : [];
         const own = (this.coin === null || this.coin === undefined) ? null : String(this.coin).trim().toUpperCase();
         return set.filter((c) => c !== own);
     },
