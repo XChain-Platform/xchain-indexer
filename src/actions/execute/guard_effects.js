@@ -162,6 +162,8 @@ async function applyGuardEmissions(ctx, guardCtxData, basePosition){
 // duplicate-named savepoint, so two guards that share a contractIndex on
 // one leg (or any future re-entrant guard path) must never derive the
 // same name or an inner release would orphan the outer's rollback target.
+// The activated leg frame uses a `controller_guard_leg_` prefix, so it
+// cannot collide with this savepoint's `controller_guard_` plus digit prefix.
 // Returns a DENY verdict when the commit failed, null when it stuck.
 async function commitGuardEffects(ctx){
     let hostData = ctx.hostData;
