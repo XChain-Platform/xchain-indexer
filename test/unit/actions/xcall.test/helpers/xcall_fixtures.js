@@ -24,7 +24,7 @@ const PUBKEY_A = 'a'.repeat(64);
 const SIG_A    = '1'.repeat(128);
 
 // Mirror the handler's deterministic call_id derivation (MUST byte-match)
-// xchain-vm/src/gateway_emit.js (crossExecute). emitterPath is the emitting
+// xchain-vm/src/gateway-emit.js (crossExecute). emitterPath is the emitting
 // execution's '>'-joined call-path (root = ''); it disambiguates two nested runs
 // of the same contract and is content-derived (stable across nodes/reorgs).
 // ROOT_ACTION_INDEX (the per-root discriminator = the deterministic root on-chain
