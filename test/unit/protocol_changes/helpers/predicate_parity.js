@@ -53,6 +53,8 @@ const TABLE = [
     ['mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION', 'isMirrorAdmissionConsumerActive', ['coin', 'network', 'height']],
     ['oracle_preload_causality_activation.ORACLE_PRELOAD_CAUSALITY_ACTIVATION', 'isOraclePreloadCausalityActive', ['height', 'network', 'coin']],
     ['price_batching_floor_activation.PRICE_BATCHING_FLOOR_ACTIVATION', 'isPriceBarrierRequired', ['time', 'network', 'coin']],
+    ['price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION', 'landingActiveAt', ['height']],
+    ['price_landed_strict_activation.PRICE_LANDED_STRICT_ACTIVATION', 'strictLandingActiveAt', ['height']],
     ['price_pair_activation.PRICE_PAIR_WIDEN_ACTIVATION', 'isPricePairWideningActive', ['time', 'network']],
     ['price_scale_activation.PRICE_SCALE_ACTIVATION', 'isPriceScaleCanonicalActive', ['time', 'network']],
     ['price_scale_activation.PRICE_V1_CANONICAL_ACTIVATION', 'isPriceV1CanonicalActive', ['time', 'network', 'coin']],
@@ -110,7 +112,11 @@ function unitOf(key) { return ProtocolChanges.registry.unitOf(key); }
  */
 function compareRow([key, predicate, args]) {
     const stem = key.slice(0, key.lastIndexOf('.'));
-    const mod = require(modulePathFor(stem));
+    const priceLanding = key === 'price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION' ||
+        key === 'price_landed_strict_activation.PRICE_LANDED_STRICT_ACTIVATION';
+    const mod = priceLanding
+        ? require(path.join(SRC, 'hub/hub_db_sync/barriers/price_landing.js'))
+        : require(modulePathFor(stem));
     const fn = mod[predicate];
     if (typeof fn !== 'function') throw new Error(stem + ' does not export ' + predicate);
     const unit = unitOf(key);
@@ -129,7 +135,9 @@ function compareRow([key, predicate, args]) {
                 } catch (e) {
                     return { key, predicate, verdict: 'THROWS', first: { network, coin, clock, activeAt: e.message }, inputs };
                 }
-                actual = callPredicate(fn, args, clock, network, coin);
+                actual = priceLanding
+                    ? callPredicate(fn.bind({ network, coin, landingChainSet: mod.landingChainSet }), args, clock, network, coin)
+                    : callPredicate(fn, args, clock, network, coin);
                 if (actual !== expected) {
                     return { key, predicate, verdict: 'DIFFERS', first: { network, coin, clock, predicate: actual, activeAt: expected }, inputs };
                 }

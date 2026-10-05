@@ -124,10 +124,11 @@ describe('armed_map/manifest: completeness guard', function () {
         // A row nobody exports is read only through activeAt() by its literal
         // key: that is exactly the W4 census plus the registry-only rows, one row
         // per stem, and a new row that no module and no list names still reds here.
-        const stems = REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS);
+        const stems = REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS, ['price_landed_strict_activation']);
         const unexported = [...keys].filter((k) => !k.startsWith('protocol_changes.') && !k.startsWith('xchain-vm.') && !exported.has(k));
         const replaced = [...keys].filter((k) => stems.includes(k.slice(0, k.lastIndexOf('.'))));
-        assert.strictEqual(replaced.length, stems.length, 'one registry row per replaced shim or registry-only stem');
+        assert.strictEqual(replaced.length, stems.length + 1,
+            'the predicate rows plus the PRICE_LANDING_CHAINS constant are registry-only');
         assert.deepStrictEqual(unexported, replaced, 'rows no shim exports, beyond the W4-replaced set: ' +
             unexported.filter((k) => !replaced.includes(k)).join(', '));
     });
@@ -172,7 +173,7 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(res.ok, true, res.reason);
         assert.deepStrictEqual(res.rows.map((r) => r[0]), manifest.ENTRIES.map((e) => e[0]));
         for (const [, value] of res.rows) canonicalValue(value);
-        assert.strictEqual(res.rows.length, 352);
+        assert.strictEqual(res.rows.length, 354);
     });
 
     it('carries the three row families the design names', function () {

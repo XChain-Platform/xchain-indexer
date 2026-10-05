@@ -126,6 +126,13 @@ const ALLOWLIST = [
                 'checkpoint_seq is unique per row and the two terms are already a total order.'
     },
     {
+        clause: 'checkpoint_seq DESC',
+        reason: 'readVerifiedCheckpoint: the query pins chain and network, and state_checkpoints ' +
+                'carries UNIQUE KEY uq_chain_seq (chain, network, checkpoint_seq) ' +
+                '(src/sql/state_checkpoints.sql), so within the filtered set checkpoint_seq is ' +
+                'unique per row and the single term is already a total order.'
+    },
+    {
         clause: 'a.block_index ASC, a.checkpoint_seq DESC',
         reason: 'getEarliestValidAnchorCheckpoint: anchor_actions has no unique key over ' +
                 '(chain, network, checkpoint_seq), so a tie IS reachable here, but only ' +
