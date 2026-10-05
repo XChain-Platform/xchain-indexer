@@ -103,6 +103,7 @@ module.exports = {
         // Heights first, so waiters released by the seconds advance below already see the
         // fresh map rather than the previous frame's.
         this.noteHeights((event || {}).heights);
+        this.noteLanded((event || {}).landed);
         this.advanceWatermark((event || {}).ts);
     },
 

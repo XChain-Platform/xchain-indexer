@@ -33,6 +33,9 @@ const { CROSS_CHAIN_TABLES, HUB_STATE_TABLES, AUTO_INCREMENT_ID_TABLES } = requi
 const { WebSocket } = require('./transport.js');
 const failover = require('./failover/triggers.js');
 
+const SAME_HUB_RECONNECT_DELAY_MS = 5000;
+const FAILOVER_RECONNECT_DELAY_MS = 0;
+
 module.exports = {
 
     // Start: open WebSocket and await the hub's ready acknowledgement (confirming
@@ -229,6 +232,10 @@ module.exports = {
     stop() {
         this.running = false;
         this.stopStallDetector();
+        if (this._reconnectTimer != null) {
+            clearTimeout(this._reconnectTimer);
+            this._reconnectTimer = null;
+        }
         if (this.ws) {
             try { this.ws.close(); } catch (e) { /* ignore */ }
             this.ws = null;
@@ -336,36 +343,33 @@ module.exports = {
 
     stallFailoverAction() { return failover.stallFailoverAction(this); },
 
-    scheduleReconnect() {
+    scheduleReconnect(afterFailover) {
         if (!this.running) return;
-        setTimeout(async () => {
+        if (this._reconnectTimer != null) {
+            if (afterFailover !== true) return;
+            clearTimeout(this._reconnectTimer);
+        }
+        const delayMs = afterFailover === true
+            ? FAILOVER_RECONNECT_DELAY_MS : SAME_HUB_RECONNECT_DELAY_MS;
+        const reconnectTimer = setTimeout(async () => {
+            if (this._reconnectTimer !== reconnectTimer) return;
+            this._reconnectTimer = null;
             if (!this.running) return;
 
-            // Await the hub's ready acknowledgement before re-bootstrapping, for the
-            // same reason as start(): no row must fall in the gap between the REST
-            // snapshot and the subscription becoming active on the hub side.
             try {
                 await this.connectWebSocket();
             } catch (err) {
-                this.noteConnectFailure();
-                // connectWebSocket already queued another scheduleReconnect via the
-                // close handler; nothing more to do here.
+                if (this.noteConnectFailure()) {
+                    this._hubUrlEpoch = null;
+                    this.scheduleReconnect(true);
+                }
                 return;
             }
             this.noteConnected();
-            // Proactively re-sync the barrier heights from the LOCAL mirror the
-            // instant the socket is back (before re-bootstrap). The disconnect may
-            // have frozen the in-memory heights behind a mirror that is already
-            // current (or close to it); refreshing here clears any block deferred
-            // only on that staleness immediately, instead of making each wait for
-            // re-bootstrap to redeliver rows or fall through to the 60s timeout.
             await this.refreshAllSyncHeights();
-
-            // Re-bootstrap to fill in rows missed while disconnected. The ready frame
-            // decides whether this connection may resume its previous wire positions.
-            // A full drain re-opens the heartbeat gate and advances the watermark.
             await this.bootstrapAll();
-        }, 5000);
+        }, delayMs);
+        this._reconnectTimer = reconnectTimer;
     },
 
     // Polling fallback when ws is not available. Poll-mode mirrors do NOT get the
