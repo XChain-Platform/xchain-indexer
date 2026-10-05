@@ -33,6 +33,9 @@ const { CROSS_CHAIN_TABLES, HUB_STATE_TABLES, AUTO_INCREMENT_ID_TABLES } = requi
 const { WebSocket } = require('./transport.js');
 const failover = require('./failover/triggers.js');
 
+const SAME_HUB_RECONNECT_DELAY_MS = 5000;
+const FAILOVER_RECONNECT_DELAY_MS = 0;
+
 module.exports = {
 
     // Start: open WebSocket and await the hub's ready acknowledgement (confirming
@@ -340,13 +343,14 @@ module.exports = {
 
     stallFailoverAction() { return failover.stallFailoverAction(this); },
 
-    scheduleReconnect(immediate) {
+    scheduleReconnect(afterFailover) {
         if (!this.running) return;
         if (this._reconnectTimer != null) {
-            if (immediate !== true) return;
+            if (afterFailover !== true) return;
             clearTimeout(this._reconnectTimer);
         }
-        const delayMs = immediate === true ? 0 : 5000;
+        const delayMs = afterFailover === true
+            ? FAILOVER_RECONNECT_DELAY_MS : SAME_HUB_RECONNECT_DELAY_MS;
         const reconnectTimer = setTimeout(async () => {
             if (this._reconnectTimer !== reconnectTimer) return;
             this._reconnectTimer = null;
