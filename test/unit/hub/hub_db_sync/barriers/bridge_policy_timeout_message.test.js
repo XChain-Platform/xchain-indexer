@@ -39,16 +39,15 @@ async function timeoutMessage(sync) {
 describe('bridge barrier timeout message', function () {
     it('above the activation names the admission height and drops the mirror time', async function () {
         const message = await timeoutMessage(makeSync(true));
-        assert.ok(message, 'the waiter must time out');
-        assert.ok(!message.includes('bridge mirror at'), message);
-        assert.ok(message.includes('admission height bridge_transfers.BTC'), message);
-        assert.ok(message.includes('needs'), message);
+        assert.strictEqual(message,
+            'bridge sync barrier timed out after 1ms' +
+            ' (admission height bridge_transfers.BTC at none, needs 796)');
     });
 
     it('below the activation keeps the mirror time text', async function () {
         const message = await timeoutMessage(makeSync(false));
-        assert.ok(message, 'the waiter must time out');
-        assert.ok(message.includes('(bridge mirror at 1234)'), message);
-        assert.ok(!message.includes('admission height'), message);
+        assert.strictEqual(message,
+            'bridge sync barrier timed out after 1ms waiting for block_time 5000' +
+            ' (bridge mirror at 1234)');
     });
 });

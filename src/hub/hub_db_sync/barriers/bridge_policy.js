@@ -198,10 +198,11 @@ module.exports = {
                 this._bridgeWaiters = this._bridgeWaiters.filter(w => w !== waiter);
                 // Above the activation only the admission height gates the barrier, so the
                 // clock watermark would read as a frozen mirror and is left out.
-                const waiting = 'bridge sync barrier timed out after ' + ms + 'ms waiting for block_time ' + blockTime;
+                const waiting = 'bridge sync barrier timed out after ' + ms + 'ms';
                 reject(new Error(this.admissionActiveAt(blockHeight)
                     ? waiting + this.heightTail('bridge_transfers', blockHeight)
-                    : waiting + ' (bridge mirror at ' + this.bridgeSyncTimestamp + ')'));
+                    : waiting + ' waiting for block_time ' + blockTime +
+                      ' (bridge mirror at ' + this.bridgeSyncTimestamp + ')'));
             }, ms);
             this._bridgeWaiters.push(waiter);
         });
