@@ -28,6 +28,7 @@
 const gateRegistry = require('../../../consensus/gate_registry.js');
 
 const LANDED_GATE = 'price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION';
+const STRICT_GATE = 'price_landed_strict_activation.PRICE_LANDED_STRICT_ACTIVATION';
 const LANDING_CHAINS = 'price_fee_batch_landed_activation.PRICE_LANDING_CHAINS';
 
 // Keeps only entries shaped { block, protocol_time } with safe non-negative integers.
@@ -62,12 +63,17 @@ module.exports = {
         let advanced = false;
         for(const chain of Object.keys(next)){
             const old = prev[chain];
-            if(old && old.protocol_time >= next[chain].protocol_time){
-                merged[chain] = old;
-                continue;
+            if(old){
+                merged[chain] = {
+                    block: Math.max(old.block, next[chain].block),
+                    protocol_time: Math.max(old.protocol_time, next[chain].protocol_time),
+                };
+                if(merged[chain].block > old.block || merged[chain].protocol_time > old.protocol_time)
+                    advanced = true;
+            } else {
+                merged[chain] = next[chain];
+                advanced = true;
             }
-            merged[chain] = next[chain];
-            advanced = true;
         }
         this.landedWatermarks = merged;
         if(advanced) this.releaseLandingWaiters();
@@ -79,23 +85,42 @@ module.exports = {
         return gateRegistry.activeAt(LANDED_GATE, this.network, this.coin, blockHeight, null) === true;
     },
 
-    // The landing chains this block must wait on: the per-network set minus this coin.
-    landingChainsFor(){
+    landingChainSet(){
         const table = gateRegistry.get(LANDING_CHAINS) || {};
-        const set = Object.prototype.hasOwnProperty.call(table, this.network) ? table[this.network] : [];
+        return Object.prototype.hasOwnProperty.call(table, this.network) ? table[this.network] : [];
+    },
+
+    // The landing chains this block must wait on by time: the per-network set minus this coin.
+    landingChainsFor(){
+        const set = this.landingChainSet();
         const own = (this.coin === null || this.coin === undefined) ? null : String(this.coin).trim().toUpperCase();
         return set.filter((c) => c !== own);
     },
 
-    // First landing chain whose published protocol time does not exceed blockTime, as
-    // { chain, have, need }; null when every one does. A chain with no entry reads as short.
-    landingShortfall(blockTime){
+    strictLandingActiveAt(blockHeight){
+        const own = (this.coin === null || this.coin === undefined) ? null : String(this.coin).trim().toUpperCase();
+        if(!this.landingChainSet().includes(own)) return false;
+        return gateRegistry.activeAt(STRICT_GATE, this.network, this.coin, blockHeight, null) === true;
+    },
+
+    // First landing chain shortfall. Under the strict same-chain rule the own landing
+    // member uses its preceding block; every other landing chain keeps the time bound.
+    landingShortfall(blockHeight, blockTime){
         const t = Number(blockTime);
         const landed = this.landedWatermarks || {};
+        if(this.strictLandingActiveAt(blockHeight)){
+            const own = String(this.coin).trim().toUpperCase();
+            const e = landed[own];
+            const have = e ? e.block : null;
+            const need = Number(blockHeight) - 1;
+            if(have === null || !Number.isFinite(need) || have < need)
+                return { chain: own, have: have, need: need, unit: 'block' };
+        }
         for(const chain of this.landingChainsFor()){
             const e = landed[chain];
             const have = e ? e.protocol_time : null;
-            if(!Number.isFinite(t) || have === null || !(have > t)) return { chain: chain, have: have, need: t + 1 };
+            if(!Number.isFinite(t) || have === null || !(have > t))
+                return { chain: chain, have: have, need: t + 1, unit: 'time' };
         }
         return null;
     },
@@ -103,7 +128,7 @@ module.exports = {
     landingSyncSatisfied(blockHeight, blockTime){
         if(!this.enabled) return true;
         if(!this.landingActiveAt(blockHeight)) return true;
-        return this.landingShortfall(blockTime) === null;
+        return this.landingShortfall(blockHeight, blockTime) === null;
     },
 
     releaseLandingWaiters(){
@@ -132,11 +157,13 @@ module.exports = {
             waiter.timer = setTimeout(() => {
                 if(this.landingSyncSatisfied(blockHeight, blockTime)) return resolve();
                 this._landingWaiters = (this._landingWaiters || []).filter((w) => w !== waiter);
-                const s = this.landingShortfall(blockTime) || { chain: 'unknown', have: null, need: blockTime + 1 };
+                const s = this.landingShortfall(blockHeight, blockTime) ||
+                    { chain: 'unknown', have: null, need: blockTime + 1, unit: 'time' };
                 reject(new Error('price landing barrier timed out after ' + ms + 'ms waiting for block ' +
-                                 blockHeight + ': landing chain ' + s.chain + ' landed time ' +
+                                 blockHeight + ': landing chain ' + s.chain + ' landed ' + s.unit + ' ' +
                                  (s.have === null ? 'none' : s.have) + ', needs ' + s.need +
-                                 (s.have === null ? '' : ' (short by ' + (s.need - s.have) + 's)')));
+                                 (s.have === null ? '' : ' (short by ' + (s.need - s.have) +
+                                  (s.unit === 'time' ? 's' : ' blocks') + ')')));
             }, ms);
             this._landingWaiters = (this._landingWaiters || []).concat([waiter]);
         });
