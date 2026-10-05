@@ -32,7 +32,7 @@ const { getLogger } = require('../../observability/index.js');
 const { admitMarginBlocks, isMirrorAdmissionConsumerActive } = require('../../consensus/gates/mirror_admission_gate.js');
 const { WATERMARK_STALL_CHECK_MS, watermarkStallVerdict, sanitizeHeights,
         heightsAdvanced } = require('./watermark_config.js');
-const priceLandingMethods = require('./barriers/price_landing.js')();
+const priceLandingMethods = require('./barriers/price_landing.js');
 
 module.exports = {
 

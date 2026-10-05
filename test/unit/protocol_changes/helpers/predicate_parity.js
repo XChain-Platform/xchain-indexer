@@ -113,7 +113,7 @@ function compareRow([key, predicate, args]) {
     const stem = key.slice(0, key.lastIndexOf('.'));
     const landing = key === 'price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION';
     const mod = landing
-        ? require(path.join(SRC, 'hub/hub_db_sync/barriers/price_landing.js'))()
+        ? require(path.join(SRC, 'hub/hub_db_sync/barriers/price_landing.js'))
         : require(modulePathFor(stem));
     const fn = mod[predicate];
     if (typeof fn !== 'function') throw new Error(stem + ' does not export ' + predicate);
