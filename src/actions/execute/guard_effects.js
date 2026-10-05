@@ -155,9 +155,8 @@ async function applyGuardEmissions(ctx, guardCtxData, basePosition){
     }
 }
 
-// Apply this guard's state and emissions atomically. The invocation counter
-// prevents inner-frame name reuse, while the activated outer leg frame uses
-// a distinct `controller_guard_leg_` prefix.
+// The invocation counter prevents inner-frame reuse; the activated outer frame
+// uses the disjoint `controller_guard_leg_` prefix.
 // Returns a DENY verdict when the commit failed, null when it stuck.
 async function commitGuardEffects(ctx){
     let hostData = ctx.hostData;
