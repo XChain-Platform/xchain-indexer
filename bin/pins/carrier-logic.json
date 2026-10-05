@@ -130,7 +130,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "620591ddfdc77d2bef26bab8efe5293db8ea6a4299c190bdff50b6778da827ac",
+      "hash": "b3202d580497fa273f3d18b617ba1b706bb45cf2a6b72f889b96cf1e8c5cbff1",
       "twins": []
     },
     "rollcall_activation": {
@@ -1932,6 +1932,13 @@
       "to": "260da1c6f73a0778d12d7c29c2922067be53559d28bd019e754a6fa2ee601080",
       "reason": "oracle round time gate",
       "date": "2026-10-04"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "620591ddfdc77d2bef26bab8efe5293db8ea6a4299c190bdff50b6778da827ac",
+      "to": "b3202d580497fa273f3d18b617ba1b706bb45cf2a6b72f889b96cf1e8c5cbff1",
+      "reason": "route the protocol error log through the one logger, text unchanged",
+      "date": "2026-10-05"
     }
   ]
 }
