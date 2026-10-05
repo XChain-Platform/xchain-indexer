@@ -10,9 +10,6 @@
 
 'use strict';
 
-process.env.INDEXER_COIN = 'DOGE';
-process.env.INDEXER_NETWORK = 'testnet';
-
 const assert = require('assert');
 const sinon = require('sinon');
 
@@ -20,7 +17,6 @@ const Database = require('../../../../src/db');
 const HubDbSync = require('../../../../src/hub/hub_db_sync.js');
 const Utility = require('../../../../src/utility');
 const gateRegistry = require('../../../../src/consensus/gate_registry.js');
-const { getTestConfig } = require('../../../fixtures/config');
 const { stubActiveAt } = require('../../../helpers/gate_modules.js');
 
 const LANDED_ROW = 'price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION';
@@ -29,10 +25,8 @@ const BLOCK_HEIGHT = 67970000;
 const BLOCK_TIME = 1791144199;
 
 function makeDb(coin){
-    const config = getTestConfig();
-    config['NETWORK'] = 'testnet';
-    config['COIN'] = coin;
-    const util = new Utility();
+    const config = { NETWORK: 'testnet', COIN: coin };
+    const util = new Utility(config);
     sinon.stub(util, 'logError');
     const db = new Database('127.0.0.1', 3306, 'xchain_test', 'u', 'p', { config, util });
     db.lastQuery = null;
