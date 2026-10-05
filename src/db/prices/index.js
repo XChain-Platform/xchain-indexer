@@ -122,7 +122,14 @@ module.exports = Object.assign({
         // Empty below the height, so every query string and argument list stays
         // byte-identical to the pre-gate one and historical replay is unchanged. The
         // clause goes LAST in each WHERE so its argument appends last.
-        let landedBound = landedBoundClause(landedActive, false);
+        let landingSets = gateRegistry.get('price_fee_batch_landed_activation.PRICE_LANDING_CHAINS');
+        let landingSet  = Object.prototype.hasOwnProperty.call(landingSets, this.config['NETWORK'])
+            ? landingSets[this.config['NETWORK']] : [];
+        let ownCoin     = String(this.config['COIN'] || '').trim().toUpperCase();
+        let landedStrict = landedActive && landingSet.includes(ownCoin) &&
+            gateRegistry.activeAt('price_landed_strict_activation.PRICE_LANDED_STRICT_ACTIVATION',
+                this.config['NETWORK'], this.config['COIN'], blockHeight, null);
+        let landedBound = landedBoundClause(landedActive, landedStrict);
         let { query, args } = selectLatestPriceQuery(coinPair, blockHeight, opts, landedBound, landedActive, landedTime);
         // Strict read (M-17): this is a consensus input. doQuery would swallow a
         // non-transactional query error into [] - indistinguishable from "no
