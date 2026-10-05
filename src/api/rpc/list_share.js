@@ -36,65 +36,68 @@ function listMetaAnswer(meta){
     return { name, description, meta_hash: listMetaHash(name, description) };
 }
 
+async function getListAtRpc(indexer, params){
+    if(!indexer.indexerDb)
+        return { error: 'indexer database not ready' };
+    if(params === null || typeof params !== 'object')
+        return { error: 'list_index must be a positive integer' };
+    let listIndex = integerParam(params.list_index, true);
+    if(listIndex === null)
+        return { error: 'list_index must be a positive integer' };
+    let block = integerParam(params.block, false);
+    if(block === null)
+        return { error: 'block must be a non-negative integer' };
+
+    try {
+        let db = indexer.indexerDb.apiView();
+        let rootIndex = await db.getListRootIndex(listIndex, null, block);
+        let type = await db.getListType(rootIndex, block);
+        if(type === false)
+            return { error: 'list not found' };
+        let members = await db.getListAtBlock(rootIndex, block);
+        if(members === null)
+            return { error: 'list reference rejected' };
+        if(type === 1)
+            members = await qualifyTickMembers(db, members,
+                indexer.config['COIN'], indexer.config['COINS']);
+        let meta = listMetaAnswer(await db.getListMeta(rootIndex, block));
+        return { type, members, hash: listMembershipHash(members), ...meta };
+    } catch (err) {
+        getLogger().error('getlistat error:', err);
+        return { error: 'failed to look up list' };
+    }
+}
+
+async function getSharedListsRpc(indexer, params){
+    if(!indexer.indexerDb)
+        return { error: 'indexer database not ready' };
+    if(params === null || typeof params !== 'object' ||
+       params.network !== indexer.config['NETWORK'])
+        return { error: 'network does not match this indexer' };
+
+    try {
+        let db = indexer.indexerDb.apiView();
+        let rows = await getSharedLists(db);
+        return await Promise.all(rows.map(async row => {
+            let meta = await db.getListMeta(row.root_index, null);
+            return {
+                root_index:        row.root_index,
+                name:              meta?.name ?? null,
+                owner:             await getListOwner(db, row.root_index),
+                share_block:       row.share_block,
+                share_action_index: row.share_action_index
+            };
+        }));
+    } catch (err) {
+        getLogger().error('getsharedlists error:', err);
+        return { error: 'failed to look up shared lists' };
+    }
+}
+
 function buildListShareRpc({ indexer }){
     return {
-        async getlistat(params = {}){
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            if(params === null || typeof params !== 'object')
-                return { error: 'list_index must be a positive integer' };
-            let listIndex = integerParam(params.list_index, true);
-            if(listIndex === null)
-                return { error: 'list_index must be a positive integer' };
-            let block = integerParam(params.block, false);
-            if(block === null)
-                return { error: 'block must be a non-negative integer' };
-
-            try {
-                let db = indexer.indexerDb.apiView();
-                let rootIndex = await db.getListRootIndex(listIndex, null, block);
-                let type = await db.getListType(rootIndex, block);
-                if(type === false)
-                    return { error: 'list not found' };
-                let members = await db.getListAtBlock(rootIndex, block);
-                if(members === null)
-                    return { error: 'list reference rejected' };
-                if(type === 1)
-                    members = await qualifyTickMembers(db, members,
-                        indexer.config['COIN'], indexer.config['COINS']);
-                let meta = listMetaAnswer(await db.getListMeta(rootIndex, block));
-                return { type, members, hash: listMembershipHash(members), ...meta };
-            } catch (err) {
-                getLogger().error('getlistat error:', err);
-                return { error: 'failed to look up list' };
-            }
-        },
-
-        async getsharedlists(params = {}){
-            if(!indexer.indexerDb)
-                return { error: 'indexer database not ready' };
-            if(params === null || typeof params !== 'object' ||
-               params.network !== indexer.config['NETWORK'])
-                return { error: 'network does not match this indexer' };
-
-            try {
-                let db = indexer.indexerDb.apiView();
-                let rows = await getSharedLists(db);
-                return await Promise.all(rows.map(async row => {
-                    let meta = await db.getListMeta(row.root_index, null);
-                    return {
-                        root_index:        row.root_index,
-                        name:              meta?.name ?? null,
-                        owner:             await getListOwner(db, row.root_index),
-                        share_block:       row.share_block,
-                        share_action_index: row.share_action_index
-                    };
-                }));
-            } catch (err) {
-                getLogger().error('getsharedlists error:', err);
-                return { error: 'failed to look up shared lists' };
-            }
-        },
+        getlistat: (params = {}) => getListAtRpc(indexer, params),
+        getsharedlists: (params = {}) => getSharedListsRpc(indexer, params),
     };
 }
 
