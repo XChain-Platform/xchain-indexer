@@ -229,6 +229,10 @@ module.exports = {
     stop() {
         this.running = false;
         this.stopStallDetector();
+        if (this._reconnectTimer != null) {
+            clearTimeout(this._reconnectTimer);
+            this._reconnectTimer = null;
+        }
         if (this.ws) {
             try { this.ws.close(); } catch (e) { /* ignore */ }
             this.ws = null;
@@ -336,9 +340,16 @@ module.exports = {
 
     stallFailoverAction() { return failover.stallFailoverAction(this); },
 
-    scheduleReconnect() {
+    scheduleReconnect(immediate) {
         if (!this.running) return;
-        setTimeout(async () => {
+        if (this._reconnectTimer != null) {
+            if (immediate !== true) return;
+            clearTimeout(this._reconnectTimer);
+        }
+        const delayMs = immediate === true ? 0 : 5000;
+        const reconnectTimer = setTimeout(async () => {
+            if (this._reconnectTimer !== reconnectTimer) return;
+            this._reconnectTimer = null;
             if (!this.running) return;
 
             // Await the hub's ready acknowledgement before re-bootstrapping, for the
@@ -347,9 +358,12 @@ module.exports = {
             try {
                 await this.connectWebSocket();
             } catch (err) {
-                this.noteConnectFailure();
-                // connectWebSocket already queued another scheduleReconnect via the
-                // close handler; nothing more to do here.
+                if (this.noteConnectFailure()) {
+                    this._hubUrlEpoch = null;
+                    this.scheduleReconnect(true);
+                }
+                // Unless failover replaced it above, connectWebSocket already queued
+                // another delayed reconnect through the close handler.
                 return;
             }
             this.noteConnected();
@@ -365,7 +379,8 @@ module.exports = {
             // decides whether this connection may resume its previous wire positions.
             // A full drain re-opens the heartbeat gate and advances the watermark.
             await this.bootstrapAll();
-        }, 5000);
+        }, delayMs);
+        this._reconnectTimer = reconnectTimer;
     },
 
     // Polling fallback when ws is not available. Poll-mode mirrors do NOT get the
