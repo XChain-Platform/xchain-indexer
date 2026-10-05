@@ -79,18 +79,15 @@ describe('HubDbSync parts: the split keeps one class, one export shape and one e
             'suite does not know is a part whose duplicates and underscore names go ungraded');
     });
 
-    it('installs every method of every method part onto the prototype, and no conflicting name twice', function () {
+    it('installs every method of every method part onto the prototype, and no name twice', function () {
         const seen = new Map();
         for (const [p, methods] of methodParts()) {
             for (const name of Object.keys(methods)) {
                 if (seen.has(name)) {
-                    const first = seen.get(name);
-                    assert.strictEqual(methods[name], first.method,
-                        name + ' is defined differently by both ' + path.relative(SRC_HUB, first.path) + ' and ' +
+                    assert.fail(name + ' is defined by both ' + path.relative(SRC_HUB, seen.get(name)) + ' and ' +
                         path.relative(SRC_HUB, p) + '; the later install would silently replace the earlier');
-                } else {
-                    seen.set(name, { path: p, method: methods[name] });
                 }
+                seen.set(name, p);
                 assert.strictEqual(HubDbSync.prototype[name], methods[name],
                     name + ' from ' + path.relative(SRC_HUB, p) + ' is not the method installed on HubDbSync.prototype');
             }
