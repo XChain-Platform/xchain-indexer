@@ -152,6 +152,12 @@ module.exports = {
         return await this.poolQuery(query, [baseSec, maxSec, max]);
     },
 
+    async resetPendingHubPushAttempts(){
+        await this.poolQuery(
+            `UPDATE pending_hub_pushes SET attempts = 0, last_attempted_at = NULL, last_error = NULL WHERE status = 'pending'`
+        );
+    },
+
     // Drop a row once the hub has accepted it (delivered rows aren't retained).
     async markHubPushDelivered(id){
         await this.poolQuery('DELETE FROM pending_hub_pushes WHERE id=?', [id]);
