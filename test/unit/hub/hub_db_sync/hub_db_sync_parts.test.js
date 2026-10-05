@@ -47,21 +47,17 @@ function walkJs(dir) {
 const PARTS = walkJs(path.join(SRC_HUB, 'hub_db_sync'));
 
 // The parts the entry installs (each exports an object of methods; transport.js wraps
-// its methods beside the optional WebSocket binding), method fragments composed by an
-// installed part, and the parts it only reads (constants, initializers and pure helpers).
-// Every part on disk must be in one list, so a new part is classified here before it can
-// be forgotten.
+// its methods beside the optional WebSocket binding), and the parts it only reads
+// (constants, initializers, factories and pure helpers). Every part on disk must be in
+// one list or the other, so a new part is classified here before it can be forgotten.
 const METHOD_PARTS = [
     'barriers/attest.js', 'barriers/bridge_policy.js', 'barriers/oracle_match_call.js', 'barriers/price.js',
     'barriers/snapshot.js', 'bootstrap/drain.js', 'bootstrap/flush.js', 'bootstrap/verdict.js',
     'chain_identity.js', 'foreign_reconciliation.js', 'lifecycle.js', 'live_events.js', 'mirror_scope.js',
     'retractions.js', 'row_apply.js', 'transport.js', 'watermarks.js',
 ];
-const COMPOSED_METHOD_PARTS = [
-    'barriers/price_landing.js',
-];
 const HELPER_PARTS = [
-    'ensure_tables.js', 'env.js', 'failover/move_policy.js', 'failover/move_reset.js', 'failover/triggers.js', 'hub_selector.js', 'instance_state.js',
+    'barriers/price_landing.js', 'ensure_tables.js', 'env.js', 'failover/move_policy.js', 'failover/move_reset.js', 'failover/triggers.js', 'hub_selector.js', 'instance_state.js',
     'mirror_bounds.js', 'mirror_tables.js', 'mirror_write.js', 'row_upserts.js', 'watermark_config.js',
     'watermark_state.js',
 ];
@@ -75,10 +71,10 @@ function methodParts() {
 
 describe('HubDbSync parts: the split keeps one class, one export shape and one env read', function () {
 
-    it('classifies every part on disk as installed, composed or read-only, and names none that is absent', function () {
+    it('classifies every part on disk as installed or read-only, and names none that is absent', function () {
         const onDisk = PARTS.map((p) => path.relative(path.join(SRC_HUB, 'hub_db_sync'), p)).sort();
-        assert.deepStrictEqual(onDisk, METHOD_PARTS.concat(COMPOSED_METHOD_PARTS, HELPER_PARTS).sort(),
-            'the parts on disk and the three lists above disagree; a part the entry installs that this ' +
+        assert.deepStrictEqual(onDisk, METHOD_PARTS.concat(HELPER_PARTS).sort(),
+            'the parts on disk and the two lists above disagree; a part the entry installs that this ' +
             'suite does not know is a part whose duplicates and underscore names go ungraded');
     });
 
@@ -98,17 +94,14 @@ describe('HubDbSync parts: the split keeps one class, one export shape and one e
         assert.ok(seen.size > 100, 'expected the parts to define well over 100 methods, found ' + seen.size);
     });
 
-    it('installs every composed method fragment through its owning method part', function () {
-        const watermarkMethods = require(path.join(SRC_HUB, 'hub_db_sync/watermarks.js'));
-        for (const rel of COMPOSED_METHOD_PARTS) {
-            const p = path.join(SRC_HUB, 'hub_db_sync', rel);
-            const methods = require(p);
-            for (const name of Object.keys(methods)) {
-                assert.strictEqual(watermarkMethods[name], methods[name],
-                    name + ' from ' + path.relative(SRC_HUB, p) + ' is not composed into watermarks.js');
-                assert.strictEqual(HubDbSync.prototype[name], methods[name],
-                    name + ' from ' + path.relative(SRC_HUB, p) + ' is not installed on HubDbSync.prototype');
-            }
+    it('exports landing methods only through the installed watermarks part', function () {
+        const factory = require(path.join(SRC_HUB, 'hub_db_sync/barriers/price_landing.js'));
+        const methods = factory();
+        const installed = require(path.join(SRC_HUB, 'hub_db_sync/watermarks.js'));
+        assert.strictEqual(typeof factory, 'function');
+        assert.ok(Object.keys(methods).length > 0);
+        for (const name of Object.keys(methods)) {
+            assert.strictEqual(installed[name], methods[name], name + ' is not exported by watermarks.js');
         }
     });
 
