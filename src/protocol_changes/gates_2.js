@@ -143,6 +143,10 @@ addGate('price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION', '
     regtest: null,
 });
 
+// price_landed_strict_activation: own-chain height; the release cut arms DOGE:testnet.
+addGate('price_landed_strict_activation.PRICE_LANDED_STRICT_ACTIVATION', 'height', {
+    mainnet: null, 'DOGE:testnet': null, testnet: null, regtest: null,
+});
 // price_zero_validity_activation
 // Per-network activation TIME, keyed on the action's own block time.
 addGate('price_zero_validity_activation.PRICE_ZERO_VALIDITY_ACTIVATION', 'time', {
