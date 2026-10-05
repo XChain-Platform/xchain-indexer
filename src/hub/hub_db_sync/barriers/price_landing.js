@@ -46,7 +46,7 @@ function sanitizeLanded(raw){
     return out;
 }
 
-const priceLandingMethods = {
+module.exports = {
 
     // Install the landed map off a watermark frame. No usable object clears the map, so a
     // hub that stops publishing it makes the barrier defer. A chain's entry never moves
@@ -141,8 +141,4 @@ const priceLandingMethods = {
             this._landingWaiters = (this._landingWaiters || []).concat([waiter]);
         });
     },
-};
-
-module.exports = function buildPriceLandingMethods() {
-    return priceLandingMethods;
 };
