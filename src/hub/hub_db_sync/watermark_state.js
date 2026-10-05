@@ -149,7 +149,7 @@ function initHeightWatermarkState(sync) {
     sync._applyFailureSeen = false;
 }
 
-function initPriceDrainState(sync, options) {
+function initPriceBufferState(sync) {
     // Live price_snapshots events are BUFFERED, not applied, until the
     // current connection's price_snapshots bootstrap has fully drained
     // (#2422). The WS subscription opens BEFORE the REST bootstrap and
@@ -172,7 +172,9 @@ function initPriceDrainState(sync, options) {
     sync._pendingPriceEvents   = [];
     sync._pendingPriceOverflow = false;
     sync._wsEpoch              = 0;
+}
 
+function initPriceMirrorBound(sync, options) {
     // price_snapshots bootstrap bound. Optional async hook returning the
     // unix-second HORIZON below which no block this consumer will ever process can
     // read a price round; the drain then applies rounds at/after it plus a margin of
@@ -196,6 +198,11 @@ function initPriceDrainState(sync, options) {
     // bound is abandoned and the table re-mirrored in full rather than settled against
     // (see notePriceMirrorFloor).
     sync._priceMirrorFloorTs   = 0;
+}
+
+function initPriceDrainState(sync, options) {
+    initPriceBufferState(sync);
+    initPriceMirrorBound(sync, options);
 
     // Pre-batch era floor: the instant this network's price rail began. Blocks below
     // it hold no eligible price round on ANY node, so both price barriers resolve
