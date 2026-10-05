@@ -99,10 +99,10 @@ describe('BTC price barrier covers time as well as height @regression @tier1', f
     // flag-day term here would silently un-barrier a real reader.
     it('the only thing that may skip a barrier is the price-read predicate', function () {
         const block = priceBarrierBlock();
-        // Height, time, and the oracle barrier that closes the slice.
+        // Height, time, landing, and the oracle barrier that closes the slice.
         const guards = block.match(/if\(this\.hubDbSync[^)]*\)\{/g) || [];
-        assert.strictEqual(guards.length, 3,
-            'all three mirror barriers in this slice must still be guarded on hub-db sync');
+        assert.strictEqual(guards.length, 4,
+            'all four mirror barriers in this slice must still be guarded on hub-db sync');
         for (const guard of guards)
             assert.ok(/mayReadPrice/.test(guard),
                 'a barrier that skips on anything other than mayReadPrice would drop the ' +
@@ -113,10 +113,11 @@ describe('BTC price barrier covers time as well as height @regression @tier1', f
             'across the fleet at exactly the heights that matter');
     });
 
-    it('both barriers defer the block rather than processing it', function () {
+    it('all price barriers defer the block rather than processing it', function () {
         const block = priceBarrierBlock();
-        const stalls = block.match(/this\.stallReason = 'price_sync_barrier'/g) || [];
-        assert.strictEqual(stalls.length, 2,
+        const stalls = block.match(
+            /this\.(?:stallReason = 'price_sync_barrier'|markPriceSyncHold\(\))/g) || [];
+        assert.strictEqual(stalls.length, 3,
             'each barrier must break out of the loop without advancing lastIndexerBlock, ' +
             'so the block is retried rather than settled against a stale mirror');
     });
