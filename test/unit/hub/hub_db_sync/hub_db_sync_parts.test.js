@@ -48,11 +48,12 @@ const PARTS = walkJs(path.join(SRC_HUB, 'hub_db_sync'));
 
 // The parts the entry installs (each exports an object of methods; transport.js wraps
 // its methods beside the optional WebSocket binding), and the parts it only reads
-// (constants, initializers and pure helpers). Every part on disk must be in one list
-// or the other, so a new part is classified here before it can be forgotten.
+// (constants, initializers, factories and pure helpers). Every part on disk must be in
+// one list or the other, so a new part is classified here before it can be forgotten.
 const METHOD_PARTS = [
     'barriers/attest.js', 'barriers/bridge_policy.js', 'barriers/oracle_match_call.js', 'barriers/price.js',
-    'barriers/snapshot.js', 'bootstrap/drain.js', 'bootstrap/flush.js', 'bootstrap/verdict.js',
+    'barriers/price_landing.js', 'barriers/snapshot.js', 'bootstrap/drain.js', 'bootstrap/flush.js',
+    'bootstrap/verdict.js',
     'chain_identity.js', 'foreign_reconciliation.js', 'lifecycle.js', 'live_events.js', 'mirror_scope.js',
     'retractions.js', 'row_apply.js', 'transport.js', 'watermarks.js',
 ];

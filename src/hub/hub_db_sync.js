@@ -82,6 +82,7 @@ const mirrorScopeMethods     = require('./hub_db_sync/mirror_scope.js');
 const chainIdentityMethods   = require('./hub_db_sync/chain_identity.js');
 const reconciliationMethods  = require('./hub_db_sync/foreign_reconciliation.js');
 const priceBarrierMethods    = require('./hub_db_sync/barriers/price.js');
+const priceLandingBarrierMethods = require('./hub_db_sync/barriers/price_landing.js');
 const contentBarrierMethods  = require('./hub_db_sync/barriers/oracle_match_call.js');
 const bridgePolicyBarrierMethods = require('./hub_db_sync/barriers/bridge_policy.js');
 const attestBarrierMethods   = require('./hub_db_sync/barriers/attest.js');
@@ -119,7 +120,7 @@ class HubDbSync {
 Object.assign(HubDbSync.prototype, watermarkMethods, lifecycleMethods,
               bootstrapDrainMethods, bootstrapFlushMethods, bootstrapVerdictMethods,
               mirrorScopeMethods, chainIdentityMethods, reconciliationMethods,
-              priceBarrierMethods, contentBarrierMethods, bridgePolicyBarrierMethods,
+              priceBarrierMethods, priceLandingBarrierMethods, contentBarrierMethods, bridgePolicyBarrierMethods,
               attestBarrierMethods, snapshotBarrierMethods,
               rowApplyMethods, retractionMethods, liveEventMethods, transportMethods);
 
