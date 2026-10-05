@@ -14,7 +14,7 @@
       "LTC": "16dd43ca2299880704e076e5f7c262eae6b5e32823ad49c9748c33f014f44c36",
       "DOGE": "d7bd53f527d961f1cf0cfc7de725d61e625975f7086532976c777a04c08988f6"
     },
-    "armed_map_fingerprint": "b79eca3756279003962e1bbe0d498dd17980437cd7726ef6fd3559139870c280",
+    "armed_map_fingerprint": "8540b559db2414684ae306571fb2f489757fc1ccfbae396769e815582d82e6ea",
     "armed_map_fingerprint_version": 2,
     "armed_map_rows": {
       "amount_representability_activation.AMOUNT_MAX_INTEGER_DIGITS": "73475cb40a568e8da8a045ced110137e159f890ac4da883b6b17dc651b3a8049",
@@ -178,7 +178,7 @@
       "protocol_changes.BATCH_ROOT_SUB_INDEX_MAINNET_TIME": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
       "protocol_changes.BROADCAST_FEE_LENGTH_MAINNET_TIME": "ce3a598687c8d2e5aa6bedad20e059b4a78cca0adad7e563b07998d5cd226b8c",
       "protocol_changes.BROADCAST_FEE_LENGTH_TESTNET_TIME": "e4f0db5e86683f97e69579e1e7a88e8fc6ff2a34f95c72b630be3998073fca96",
-      "protocol_changes.CONSENSUS_VERSION": "a0da544d2b0b1d001c256a38b39250d37a5b8e6e62608c693d51f421a17a8e95",
+      "protocol_changes.CONSENSUS_VERSION": "1e6612470776ac77994a66e594a28f5f3f46976f6731937f764842bbe62b0429",
       "protocol_changes.CONTRACT_META_REQUIRED_MAINNET_TIME": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
       "protocol_changes.CONTRACT_META_REQUIRED_TESTNET_TIME": "0458b8fba52a7fa63784a2bb3defd8fbeb52c35bd12365001cb27697fad12645",
       "protocol_changes.CONTROLLER_CUSTODY_GUARD_MAINNET_TIME": "ce3a598687c8d2e5aa6bedad20e059b4a78cca0adad7e563b07998d5cd226b8c",
@@ -435,7 +435,7 @@
       "LTC": "16dd43ca2299880704e076e5f7c262eae6b5e32823ad49c9748c33f014f44c36",
       "DOGE": "d7bd53f527d961f1cf0cfc7de725d61e625975f7086532976c777a04c08988f6"
     },
-    "armed_map_fingerprint": "60a363d169bcc0615fc4d4aeaa229cd99614e4ba4d1005ddd051b15436b0569d",
+    "armed_map_fingerprint": "48502a96054c3ac77c0b7b1f675f2fba7926f1e5fc759348e579c5a5a35e44d1",
     "armed_map_fingerprint_version": 2,
     "armed_map_rows": {
       "amount_representability_activation.AMOUNT_MAX_INTEGER_DIGITS": "73475cb40a568e8da8a045ced110137e159f890ac4da883b6b17dc651b3a8049",
@@ -599,7 +599,7 @@
       "protocol_changes.BATCH_ROOT_SUB_INDEX_MAINNET_TIME": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
       "protocol_changes.BROADCAST_FEE_LENGTH_MAINNET_TIME": "ce3a598687c8d2e5aa6bedad20e059b4a78cca0adad7e563b07998d5cd226b8c",
       "protocol_changes.BROADCAST_FEE_LENGTH_TESTNET_TIME": "e4f0db5e86683f97e69579e1e7a88e8fc6ff2a34f95c72b630be3998073fca96",
-      "protocol_changes.CONSENSUS_VERSION": "a0da544d2b0b1d001c256a38b39250d37a5b8e6e62608c693d51f421a17a8e95",
+      "protocol_changes.CONSENSUS_VERSION": "1e6612470776ac77994a66e594a28f5f3f46976f6731937f764842bbe62b0429",
       "protocol_changes.CONTRACT_META_REQUIRED_MAINNET_TIME": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
       "protocol_changes.CONTRACT_META_REQUIRED_TESTNET_TIME": "0458b8fba52a7fa63784a2bb3defd8fbeb52c35bd12365001cb27697fad12645",
       "protocol_changes.CONTROLLER_CUSTODY_GUARD_MAINNET_TIME": "ce3a598687c8d2e5aa6bedad20e059b4a78cca0adad7e563b07998d5cd226b8c",
@@ -863,5 +863,6 @@
   "v0211_cut_note": "v0.21.1 cut sitting 2026-10-01: both readings regenerated with bin/consensus-identity.js on the release tree after the five restored heights and the four armed hourly-oracle gates (ORACLE_PRICE_AGE_HOURLY_ACTIVATION BTC 154751, LTC 4904963, DOGE 67956461; ORACLE_HOURLY_WINDOW_FIRST_ROUND testnet 5064). Re-pinned again the same day after the nine list gates were armed on testnet (BTC 154750, LTC 4904879, DOGE 67956200; LIST_SHARE_PRODUCER testnet 154750). Re-pinned a third time the same day after the testnet list and hourly heights were re-slid to a 12 h margin (list gates BTC 154777, LTC 4905004, DOGE 67956922; LIST_SHARE_PRODUCER testnet 154777; ORACLE_PRICE_AGE_HOURLY_ACTIVATION BTC 154778, LTC 4905005, DOGE 67956923; ORACLE_HOURLY_WINDOW_FIRST_ROUND testnet 5082); only those rows, the armed-map fingerprints and the rules digests moved.",
   "v0212_hotfix_note": "v0.21.2 indexer-only patch train 2026-10-02: both readings regenerated with bin/consensus-identity.js --json (bare, and with the armed env above) on the hotfix tree after CONSENSUS_VERSION moved to 0.21.2; only the protocol_changes.CONSENSUS_VERSION row hash and the armed-map fingerprints moved.",
   "v0213_cut_note": "v0.21.3 cut 2026-10-03: re-pinned after arming the 31 v0.21.3 gates on testnet (heights BTC 155001, LTC 4906040, DOGE 67962387; time and change instant 1791061097) and the consensus version bump to 0.21.3; bare and armed readings taken by bin/consensus-identity.js and composed so the armed_regtest_venue env selector is kept.",
-  "v0220_cut_note": "v0.22.0 cut 2026-10-04: re-pinned after arming the oracle round time activation on testnet (BTC 155158, LTC 4907593, DOGE 67966647) and the consensus version bump to 0.22.0; bare and armed readings taken by bin/consensus-identity.js and composed so the armed_regtest_venue env selector is kept."
+  "v0220_cut_note": "v0.22.0 cut 2026-10-04: re-pinned after arming the oracle round time activation on testnet (BTC 155158, LTC 4907593, DOGE 67966647) and the consensus version bump to 0.22.0; bare and armed readings taken by bin/consensus-identity.js and composed so the armed_regtest_venue env selector is kept.",
+  "v0224_hotfix_note": "v0.22.4 patch train 2026-10-05: both readings regenerated with bin/consensus-identity.js --json (bare, and with the armed env above) on the hotfix tree after CONSENSUS_VERSION moved to 0.22.4; only the protocol_changes.CONSENSUS_VERSION row hash and the armed-map fingerprints moved."
 }
