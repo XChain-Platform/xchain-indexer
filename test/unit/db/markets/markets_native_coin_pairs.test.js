@@ -234,7 +234,7 @@ describe('markets: the rollback collector agrees with the block path @regression
         assert.ok(/tick1_id <> \? AND/.test(sweep.args[0]) && /tick2_id <> \? AND/.test(sweep.args[0]),
             'the sweep must skip the native-coin sentinel, which is not a dangling ticker id');
         assert.deepStrictEqual(sweep.args[1],
-            [Database.MARKET_NATIVE_TICK_ID, Database.MARKET_NATIVE_TICK_ID]);
+            [Database.MARKET_NATIVE_TICK_ID, 0, Database.MARKET_NATIVE_TICK_ID, 0]);
     });
 });
 
