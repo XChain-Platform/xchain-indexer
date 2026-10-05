@@ -70,42 +70,48 @@ module.exports = {
             return;
         }
         if (event.type === 'row:inserted' && event.table && event.row) {
-            // A live cross-chain row naming another chain is the one case where the mirror
-            // may be the stale side: a consumer that learned its expectation FROM the hub
-            // re-asks the hub once before refusing, so a venue re-genesis the hub has
-            // adopted cannot strand a running DOGE/LTC mirror. A locally-measured
-            // expectation is never adopted away from (see maybeAdoptHubChainId).
-            await this.maybeAdoptHubChainId(event.table, event.row);
-            await this.applyRow(event.table, event.row);
-            this.reportRefusedChainRows(event.table);
-            this.reportRefusedNetworkRows(event.table);
-            if (!this._failoverPendingDrain) {
-                if (event.table === 'price_snapshots')     await this.refreshPriceSyncHeight();
-                if (event.table === 'oracle_prices')       await this.refreshOracleSyncTimestamp();
-                if (event.table === 'cross_chain_matches') await this.refreshMatchSyncTimestamp();
-                if (event.table === 'cross_chain_calls')   await this.refreshCallSyncTimestamp();
-                if (event.table === 'bridge_transfers')    await this.refreshBridgeSyncTimestamp();
-                if (event.table === 'policy_snapshots')    await this.refreshPolicySyncTimestamp();
-                if (event.table === 'list_snapshots')      await this.refreshListShareSyncState();
-                if (CROSS_CHAIN_TABLES.indexOf(event.table) !== -1) await this.releaseSnapshotWaiters();
-            }
+            await this.handleInsertedRowEvent(event);
         } else if (event.type === 'row:deleted' && event.table) {
-            await this.applyRetraction(event);
-            if (!this._failoverPendingDrain && event.table === 'price_snapshots')
-                await this.refreshPriceSyncHeight();
-            if (!this._failoverPendingDrain && event.table === 'oracle_prices')
-                await this.refreshOracleSyncTimestamp();
-            if (!this._failoverPendingDrain && event.table === 'cross_chain_matches')
-                await this.refreshMatchSyncTimestamp();
-            if (!this._failoverPendingDrain && event.table === 'cross_chain_calls')
-                await this.refreshCallSyncTimestamp();
-            // bridge_transfers refreshes inside applyRetraction (the only path that can
-            // delete one), so it is deliberately not repeated here; policy_snapshots is
-            // never retracted at all.
-            if (!this._failoverPendingDrain &&
-                (event.table === 'cross_chain_matches' || event.table === 'cross_chain_calls'))
-                await this.releaseSnapshotWaiters();
+            await this.handleDeletedRowEvent(event);
         }
+    },
+
+    async handleInsertedRowEvent(event) {
+        // A live cross-chain row naming another chain is the one case where the mirror
+        // may be the stale side: a consumer that learned its expectation FROM the hub
+        // re-asks the hub once before refusing, so a venue re-genesis the hub has
+        // adopted cannot strand a running DOGE/LTC mirror. A locally-measured
+        // expectation is never adopted away from (see maybeAdoptHubChainId).
+        await this.maybeAdoptHubChainId(event.table, event.row);
+        await this.applyRow(event.table, event.row);
+        this.reportRefusedChainRows(event.table);
+        this.reportRefusedNetworkRows(event.table);
+        if (!this._failoverPendingDrain) await this.refreshInsertedTable(event.table);
+    },
+
+    async refreshInsertedTable(table) {
+        if (table === 'price_snapshots')     await this.refreshPriceSyncHeight();
+        if (table === 'oracle_prices')       await this.refreshOracleSyncTimestamp();
+        if (table === 'cross_chain_matches') await this.refreshMatchSyncTimestamp();
+        if (table === 'cross_chain_calls')   await this.refreshCallSyncTimestamp();
+        if (table === 'bridge_transfers')    await this.refreshBridgeSyncTimestamp();
+        if (table === 'policy_snapshots')    await this.refreshPolicySyncTimestamp();
+        if (table === 'list_snapshots')      await this.refreshListShareSyncState();
+        if (CROSS_CHAIN_TABLES.indexOf(table) !== -1) await this.releaseSnapshotWaiters();
+    },
+
+    async handleDeletedRowEvent(event) {
+        await this.applyRetraction(event);
+        if (this._failoverPendingDrain) return;
+        if (event.table === 'price_snapshots')     await this.refreshPriceSyncHeight();
+        if (event.table === 'oracle_prices')       await this.refreshOracleSyncTimestamp();
+        if (event.table === 'cross_chain_matches') await this.refreshMatchSyncTimestamp();
+        if (event.table === 'cross_chain_calls')   await this.refreshCallSyncTimestamp();
+        // bridge_transfers refreshes inside applyRetraction (the only path that can
+        // delete one), so it is deliberately not repeated here; policy_snapshots is
+        // never retracted at all.
+        if (event.table === 'cross_chain_matches' || event.table === 'cross_chain_calls')
+            await this.releaseSnapshotWaiters();
     },
 
     // Apply only the post-archive metadata to a match the mirror already admitted.

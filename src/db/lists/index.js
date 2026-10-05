@@ -41,6 +41,61 @@ async function isRejectedListReference(db, action_index, block_index){
     return rows.length > 0;
 }
 
+// a LIST edit writes its resulting items under the EDIT's own
+// action_index and never touches the parent's rows, so reading the
+// pinned (create) index returned create-time membership forever and
+// on-chain lists were immutable. Resolve the edit chain's head
+// instead. Flag-day gated per chain (list_edit_resolution_activation.js)
+// because it changes which actions the allow/block gates accept, hence
+// historical replay; below the height (or with no block context) the
+// legacy create-index read runs unchanged.
+async function resolveListReadIndex(db, action_index, block_index){
+    if(gateRegistry.activeAt(LIST_EDIT_RESOLUTION_KEY, db.config['NETWORK'], db.config['COIN'], block_index, null))
+        return db.getListHeadIndex(action_index, block_index);
+    return action_index;
+}
+
+async function queryListMembers(db, type, resolved){
+    let query = '';
+    // CONSENSUS: list_items has no ORDER BY on the AUTO_INCREMENT insert
+    // order, so the row order MariaDB returns is engine/plan-arbitrary. The
+    // consuming AIRDROP recipient loop (airdrop.js) builds credits in this
+    // order, so an unordered list makes the credit-insert order (and any
+    // order-sensitive step) diverge across independently-built nodes. Pin a
+    // deterministic total order on the resolved item string with a BINARY
+    // collation, mirroring the getHolders/getBlockHashes hardening
+    // (index_addresses is utf8_general_ci = case/accent-folding). Duplicate
+    // items resolve to byte-identical strings, so the ordering is total for
+    // consensus purposes (a tie is byte-identical and the consumer dedups).
+    // Left UNGATED, mirroring getHolders' own ungated sort: the ledger hash is
+    // invariant to this order because getBlockHashes re-sorts credits on the
+    // resolved (address, tick, amount) columns and never hashes a surrogate
+    // id, so ordered and unordered produce byte-identical block hashes; this
+    // removes the engine-order dependency at the source (3c05dcb9).
+    if(type==1){
+        query = `SELECT
+                    t.tick as item
+                FROM
+                    list_items l
+                    INNER JOIN index_tickers t ON (l.item_id=t.id)
+                WHERE
+                    l.action_index=?
+                ORDER BY t.tick COLLATE utf8mb4_bin ASC`;
+    }
+    if(type==2){
+        query = `SELECT
+                    a.address as item
+                FROM
+                    list_items l
+                    INNER JOIN index_addresses a ON (l.item_id=a.id)
+                WHERE
+                    l.action_index=?
+                ORDER BY a.address COLLATE utf8_bin ASC`;
+    }
+    let results = await db.doQuery(query, [resolved]);
+    return results.map(row => row['item']);
+}
+
 module.exports = {
 
     getListHeadIndex,
@@ -134,64 +189,12 @@ module.exports = {
         let type = await this.getListType(action_index, block_index, resolution);
         if(!type && await isRejectedListReference(this, action_index, block_index))
             return null;
-        let list = [];
-        if(type){
-            // a LIST edit writes its resulting items under the EDIT's own
-            // action_index and never touches the parent's rows, so reading the
-            // pinned (create) index returned create-time membership forever and
-            // on-chain lists were immutable. Resolve the edit chain's head
-            // instead. Flag-day gated per chain (list_edit_resolution_activation.js)
-            // because it changes which actions the allow/block gates accept, hence
-            // historical replay; below the height (or with no block context) the
-            // legacy create-index read runs unchanged.
-            let resolved = action_index;
-            if(gateRegistry.activeAt(LIST_EDIT_RESOLUTION_KEY, this.config['NETWORK'], this.config['COIN'], block_index, null))
-                resolved = await this.getListHeadIndex(action_index, block_index);
-            if(resolution.union)
-                return readUnionMembers(this, resolved, block_index, false);
-            let query = '';
-            let args  = [resolved];
-            // CONSENSUS: list_items has no ORDER BY on the AUTO_INCREMENT insert
-            // order, so the row order MariaDB returns is engine/plan-arbitrary. The
-            // consuming AIRDROP recipient loop (airdrop.js) builds credits in this
-            // order, so an unordered list makes the credit-insert order (and any
-            // order-sensitive step) diverge across independently-built nodes. Pin a
-            // deterministic total order on the resolved item string with a BINARY
-            // collation, mirroring the getHolders/getBlockHashes hardening
-            // (index_addresses is utf8_general_ci = case/accent-folding). Duplicate
-            // items resolve to byte-identical strings, so the ordering is total for
-            // consensus purposes (a tie is byte-identical and the consumer dedups).
-            // Left UNGATED, mirroring getHolders' own ungated sort: the ledger hash is
-            // invariant to this order because getBlockHashes re-sorts credits on the
-            // resolved (address, tick, amount) columns and never hashes a surrogate
-            // id, so ordered and unordered produce byte-identical block hashes; this
-            // removes the engine-order dependency at the source (3c05dcb9).
-            if(type==1){
-                query = `SELECT
-                            t.tick as item
-                        FROM
-                            list_items l
-                            INNER JOIN index_tickers t ON (l.item_id=t.id)
-                        WHERE
-                            l.action_index=?
-                        ORDER BY t.tick COLLATE utf8mb4_bin ASC`;
-            }
-            if(type==2){
-                query = `SELECT
-                            a.address as item
-                        FROM
-                            list_items l
-                            INNER JOIN index_addresses a ON (l.item_id=a.id)
-                        WHERE
-                            l.action_index=?
-                        ORDER BY a.address COLLATE utf8_bin ASC`;
-            }
-            let results = await this.doQuery(query, args);
-            if(results.length > 0)
-                for(let row of results)
-                    list.push(row['item']);
-        }
-        return list;
+        if(!type)
+            return [];
+        let resolved = await resolveListReadIndex(this, action_index, block_index);
+        if(resolution.union)
+            return readUnionMembers(this, resolved, block_index, false);
+        return queryListMembers(this, type, resolved);
     },
 
     // "As of a block" variant of getList (the token bridge policy spec
