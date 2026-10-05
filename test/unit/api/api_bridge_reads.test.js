@@ -195,6 +195,11 @@ const HEIGHT  = 9999;      // BTC:regtest, below the contract_state_root boundar
 const ESCROW_ADDR = 'mfbtcbridgedogeXXXXXXXXXXXXXUXTr4m'; // coins/BTC.js regtest ADDRESS.BRIDGE_DOGE
 const BALANCE = '12.5';
 
+function selectCheckpointRows(query, rows){
+    if(!/ORDER BY\s+checkpoint_seq DESC/i.test(query)) return rows;
+    return rows.slice().sort((a, b) => b.checkpoint_seq - a.checkpoint_seq).slice(0, 1);
+}
+
 // `distributed: true` models the deployment every standing indexer runs: the hub
 // mirror lives in its own database (indexer.hubDb), so the ledger connection's copy
 // of state_checkpoints is EMPTY and only the mirror handle can answer for it. The
@@ -202,6 +207,7 @@ const BALANCE = '12.5';
 // pass by accident, which is exactly how the original read passed this fixture.
 async function buildEnvelope(opts){
     const distributed = !!(opts && opts.distributed);
+    const checkpointSeqs = (opts && opts.checkpointSeqs) || [7];
     const memStore = new SC.MemoryNodeStore();
     const smt      = new SC.PersistentSMT(memStore);
     const key      = M.balanceKey(CHAIN, NETWORK, ESCROW_ADDR, TICK);
@@ -213,10 +219,11 @@ async function buildEnvelope(opts){
     const SUB = require('../../../src/consensus/gates/state_subtree_gate.js');
     const version = SUB.stateRootVersion(HEIGHT, NETWORK, CHAIN);
     const checkpointRow = { checkpoint_seq: 7, snapshot_block: HEIGHT, state_root: stateRoot, state_root_version: version };
+    const checkpointRows = checkpointSeqs.map((seq) => ({ ...checkpointRow, checkpoint_seq: seq }));
 
     const db = newDb();
     const mirror = { doQueryStrict: sinon.stub().callsFake(async (query) =>
-        /FROM\s+state_checkpoints/i.test(query) ? [checkpointRow] : []) };
+        /FROM\s+state_checkpoints/i.test(query) ? selectCheckpointRows(query, checkpointRows) : []) };
     if(distributed) db.indexer = { hubDb: mirror };
     sinon.stub(db, 'doQueryStrict').callsFake(async (query, args) => {
         if(/FROM\s+state_tree_nodes/i.test(query)){
@@ -234,7 +241,7 @@ async function buildEnvelope(opts){
     });
 
     const envelope = await db.getBridgeEscrowProof(ESCROW_ADDR, TICK, HEIGHT);
-    return distributed ? { envelope, mirror } : envelope;
+    return distributed ? { db, envelope, mirror } : envelope;
 }
 
 // ── db.getBridgeEscrowProof, verified through bridge_checkpoint_check.js ────
@@ -247,6 +254,20 @@ describe('db.getBridgeEscrowProof, driven through CHK.verifyEscrowAgainstCheckpo
         assert.match(mirror.doQueryStrict.firstCall.args[0], /FROM\s+state_checkpoints/i);
         assert.strictEqual(envelope.checkpoint.checkpoint_seq, 7);
         assert.strictEqual(envelope.checkpoint.state_root_version, 1);
+    });
+
+    it('selects the same highest checkpoint sequence when one height has two rows', async function(){
+        const fixture = await buildEnvelope({ distributed: true, checkpointSeqs: [4, 9] });
+        const envelopes = [fixture.envelope];
+        for(let i = 0; i < 4; i++)
+            envelopes.push(await fixture.db.getBridgeEscrowProof(ESCROW_ADDR, TICK, HEIGHT));
+
+        assert.deepStrictEqual(envelopes.map((item) => item.checkpoint.checkpoint_seq), [9, 9, 9, 9, 9]);
+        assert.strictEqual(fixture.mirror.doQueryStrict.callCount, 5);
+        for(const call of fixture.mirror.doQueryStrict.getCalls()){
+            assert.match(call.args[0], /block_index=\? ORDER BY checkpoint_seq DESC LIMIT 1/i);
+            assert.deepStrictEqual(call.args[1], [CHAIN, NETWORK, HEIGHT]);
+        }
     });
 });
 
