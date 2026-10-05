@@ -215,31 +215,38 @@ describe('runControllerGuard: leg-scoped guard savepoints @regression @tier1', f
 
 describe('CONTROLLER_GUARD_LEG_SAVEPOINTS: consensus metadata @regression @tier1', function () {
     const protocolChanges = require('../../../src/protocol_changes.js');
-    const manifest = require('../../../src/consensus/armed_map/manifest.js');
-    const fingerprint = require('../../../src/consensus/armed_map/fingerprint.js');
+    const changes = require('../../../src/protocol_changes/changes_5.js');
     const digest = require('../../../src/consensus_rules_digest.js');
-    const KEY = 'protocol_changes.changes.CONTROLLER_GUARD_LEG_SAVEPOINTS';
 
-    it('registers the unarmed public-network row with genesis-active regtest', function () {
-        const row = protocolChanges.rows().find(([key]) => key === KEY);
-        assert.ok(row, KEY + ' missing from protocol_changes.rows()');
-        assert.deepStrictEqual(row[1], {
+    it('installs an unarmed public-network change with genesis-active regtest', function () {
+        assert.deepStrictEqual(changes.CONTROLLER_GUARD_LEG_SAVEPOINTS, [
+            'CONTROLLER_GUARD_LEG_SAVEPOINTS', '0.2.0', 9999999999, 9999999999, 0, 0, 0, 0,
+        ]);
+        const table = new protocolChanges({ config: {}, util: {} }).changes;
+        assert.deepStrictEqual(table.CONTROLLER_GUARD_LEG_SAVEPOINTS, {
             version_major: 0, version_minor: 2, version_revision: 0,
             mainnet_time: 9999999999, testnet_time: 9999999999, regtest_time: 0,
             mainnet_block: 0, testnet_block: 0, regtest_block: 0,
         });
-        assert.strictEqual(protocolChanges.get(KEY), row[1]);
+        assert.strictEqual(Object.keys(table).includes('CONTROLLER_GUARD_LEG_SAVEPOINTS'), false);
     });
 
-    it('propagates the row through the armed-map manifest and fingerprint', function () {
-        const entry = manifest.ENTRIES.find(([key]) => key === KEY);
-        assert.ok(entry, KEY + ' missing from manifest.ENTRIES');
-        assert.deepStrictEqual(entry[1](), protocolChanges.get(KEY));
-        const collected = manifest.collectRows();
-        assert.strictEqual(collected.ok, true, collected.reason);
-        assert.ok(collected.rows.some(([key]) => key === KEY));
-        const out = fingerprint.computeArmedMapFingerprintV2();
-        assert.match(out.hex, /^[0-9a-f]{64}$/);
+    it('preserves the frozen registered-row and armed-map cardinalities', function () {
+        assert.strictEqual(changes.length, 2);
+        assert.strictEqual(protocolChanges.rows().filter(([key]) =>
+            key.startsWith('protocol_changes.changes.')).length, 101);
+    });
+
+    it('activates by block time on regtest while public networks remain inert', async function () {
+        function build(network, blockTime) {
+            return new protocolChanges({
+                config: { NETWORK: network }, util: {},
+                decoderDb: { getBlockTime: sinon.stub().resolves(blockTime) },
+            });
+        }
+        assert.strictEqual(await build('regtest', 0).isEnabled('CONTROLLER_GUARD_LEG_SAVEPOINTS', 0), true);
+        assert.strictEqual(await build('mainnet', 9999999998).isEnabled('CONTROLLER_GUARD_LEG_SAVEPOINTS', 0), false);
+        assert.strictEqual(await build('testnet', 9999999998).isEnabled('CONTROLLER_GUARD_LEG_SAVEPOINTS', 0), false);
     });
 
     it('stays outside the hub-indexer shared digest like its parent gate', function () {

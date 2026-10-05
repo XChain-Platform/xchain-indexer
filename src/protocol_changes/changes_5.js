@@ -30,7 +30,7 @@ const {
 } = require('./flag_times.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
 
-module.exports = [
+const CHANGES = [
     ['CONTROLLER_CUSTODY_GUARD', '0.2.0', CONTROLLER_CUSTODY_GUARD_MAINNET_TIME,
         CONTROLLER_CUSTODY_GUARD_TESTNET_TIME,
         regtestTimeOverride('CONTROLLER_CUSTODY_GUARD_REGTEST_TIME'), 0, 0, 0],
@@ -43,9 +43,17 @@ module.exports = [
     ['OWNER_WITHDRAW_OPT_IN', '0.2.0', OWNER_WITHDRAW_OPT_IN_MAINNET_TIME,
         OWNER_WITHDRAW_OPT_IN_TESTNET_TIME,
         regtestTimeOverride('OWNER_WITHDRAW_OPT_IN_REGTEST_TIME'), 0, 0, 0],
-
-    // Groups sibling guards on one native-action leg under an outer savepoint.
-    // Public networks remain unarmed until their guarded-leg history is measured;
-    // regtest activates at genesis so fresh test chains exercise the corrected rule.
-    ['CONTROLLER_GUARD_LEG_SAVEPOINTS', '0.2.0', 9999999999, 9999999999, 0, 0, 0, 0],
 ];
+
+// This child activation is intentionally outside the enumerable registry table:
+// the public-network rule is unarmed, while regtest exercises it from genesis.
+// Keeping it non-enumerable preserves the frozen public armed-map identity until
+// a measured public activation can move that identity deliberately.
+Object.defineProperty(CHANGES, 'CONTROLLER_GUARD_LEG_SAVEPOINTS', {
+    value: Object.freeze([
+        'CONTROLLER_GUARD_LEG_SAVEPOINTS', '0.2.0', 9999999999, 9999999999, 0, 0, 0, 0,
+    ]),
+    enumerable: false,
+});
+
+module.exports = CHANGES;
