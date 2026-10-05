@@ -34,8 +34,9 @@ describe('protocol_changes/CONTROLLER_CUSTODY_GUARD row @regression @tier1', fun
 
     it('is the first row in part 5 with mainnet unarmed and testnet armed at the v0.21.3 instant', function () {
         const rows = require('../../../src/protocol_changes/changes_5.js');
-        assert.strictEqual(rows.length, 2);
+        assert.strictEqual(rows.length, 3);
         assert.strictEqual(rows[0][0], 'CONTROLLER_CUSTODY_GUARD');
+        assert.strictEqual(rows[rows.length - 1][0], 'CONTROLLER_GUARD_LEG_SAVEPOINTS');
         assert.strictEqual(ProtocolChanges.CONTROLLER_CUSTODY_GUARD_MAINNET_TIME, ProtocolChanges.UNARMED);
         assert.strictEqual(ProtocolChanges.CONTROLLER_CUSTODY_GUARD_TESTNET_TIME, 1791061097);
         assert.deepStrictEqual(build(), {

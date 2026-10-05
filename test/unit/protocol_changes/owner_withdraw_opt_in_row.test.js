@@ -38,7 +38,9 @@ describe('protocol_changes/OWNER_WITHDRAW_OPT_IN row @regression @tier1', functi
 
     it('sits after CONTROLLER_CUSTODY_GUARD in part 5, mainnet inert and testnet armed', function () {
         const rows = require('../../../src/protocol_changes/changes_5.js');
-        assert.strictEqual(rows[rows.length - 1][0], 'OWNER_WITHDRAW_OPT_IN');
+        assert.strictEqual(rows.length, 3);
+        assert.strictEqual(rows[1][0], 'OWNER_WITHDRAW_OPT_IN');
+        assert.strictEqual(rows[rows.length - 1][0], 'CONTROLLER_GUARD_LEG_SAVEPOINTS');
         assert.strictEqual(ProtocolChanges.OWNER_WITHDRAW_OPT_IN_MAINNET_TIME, ProtocolChanges.UNARMED);
         assert.strictEqual(ProtocolChanges.OWNER_WITHDRAW_OPT_IN_TESTNET_TIME, TESTNET_INSTANT);
         assert.deepStrictEqual(build(), {
