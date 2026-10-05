@@ -33,7 +33,7 @@ const { PRICE_BATCH_APPLY_ROWS, BOOTSTRAP_PROGRESS_INTERVAL_MS,
         PRICE_MIRROR_LOOKBACK_S } = require('./mirror_bounds.js');
 const { priceEraFloorS } = require('../../consensus/gates/price_batching_floor_gate.js');
 
-function initWatermarkState(sync) {
+function initStreamWatermarks(sync) {
     // Stream-position watermark: the hub's "you have received everything I
     // produced up to ts" signal, carried by the WS heartbeat ({type:'watermark'}),
     // the ready message, and REST snapshot responses. This is what lets the
@@ -70,7 +70,9 @@ function initWatermarkState(sync) {
     // be retuned by moving another table's knob (see HUB_SYNC_WATERMARK_GRACE_S).
     sync.bridgeWatermarkGraceS = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.bridge, 'HUB_SYNC_BRIDGE_GRACE_S', sync.network);
     sync.policyWatermarkGraceS = resolveWatermarkGrace(HUB_SYNC_WATERMARK_GRACE_S.policy, 'HUB_SYNC_POLICY_GRACE_S', sync.network);
+}
 
+function initBarrierGraceState(sync) {
     // Named ceiling on a mirror-barrier hold. Held here as well as on the
     // indexer because requestResync() rate-limits itself by the same value: one forced
     // resync per ceiling window, so a mirror that cannot converge is re-driven on a
@@ -78,7 +80,9 @@ function initWatermarkState(sync) {
     sync.barrierHoldCeilingMs = resolveBarrierHoldCeilingMs();
     sync._lastResyncRequestAt = 0;
     sync.forcedResyncCount    = 0;
+}
 
+function initBootstrapWatermarkState(sync) {
     // Watermark advancement is gated on a completed bootstrap: WS heartbeats
     // certify only what was delivered ON THE SOCKET, so until the REST
     // bootstrap has fully drained every mirrored table (rows from before the
@@ -93,6 +97,12 @@ function initWatermarkState(sync) {
     sync._readyCaughtUpHandled = false;
     sync._notCaughtUpSince = null;
     sync._notCaughtUpWarned = false;
+}
+
+function initWatermarkState(sync) {
+    initStreamWatermarks(sync);
+    initBarrierGraceState(sync);
+    initBootstrapWatermarkState(sync);
 }
 
 function initHeightWatermarkState(sync) {
