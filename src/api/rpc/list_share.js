@@ -96,8 +96,8 @@ async function getSharedListsRpc(indexer, params){
 
 function buildListShareRpc({ indexer }){
     return {
-        getlistat: (params = {}) => getListAtRpc(indexer, params),
-        getsharedlists: (params = {}) => getSharedListsRpc(indexer, params),
+        getlistat: async (params = {}) => getListAtRpc(indexer, params),
+        getsharedlists: async (params = {}) => getSharedListsRpc(indexer, params),
     };
 }
 
