@@ -75,6 +75,8 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
         assert.strictEqual(new Set(tabled).size, tabled.length, 'a key is tabled twice');
         assert.ok(tabled.includes('price_fee_batch_landed_activation.PRICE_FEE_BATCH_LANDED_ACTIVATION'),
             'the landed-price barrier predicate has a parity case');
+        assert.ok(tabled.includes('price_landed_strict_activation.PRICE_LANDED_STRICT_ACTIVATION'),
+            'the strict landed-price barrier predicate has a parity case');
         const covered = new Set(tabled.concat(Object.keys(SKIPPED), [...REPLACED], [...REGISTRY_ONLY]));
         assert.deepStrictEqual(gateKeys.filter((k) => !covered.has(k)), [], 'gate rows with no parity case');
         assert.deepStrictEqual(tabled.filter((k) => !gateKeys.includes(k)), [], 'tabled keys that are not gate rows');
