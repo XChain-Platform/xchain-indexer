@@ -10,7 +10,7 @@
 
 'use strict';
 
-const { getLogger } = require('../observability/index.js');
+const { getLogger } = require('../../observability/index.js');
 
 class HubPushDeliveryStore {
 
