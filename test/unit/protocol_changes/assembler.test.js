@@ -44,7 +44,7 @@ const EXPORTS_BEFORE_SPLIT = [
 const API_HIDDEN = ['registry', 'UNARMED', 'UNPINNED'];
 
 function headSource() {
-    return execFileSync('git', ['show', 'HEAD:src/protocol_changes.js'], { cwd: REPO, maxBuffer: 64 * 1034 * 1034 }).toString('utf8');
+    return execFileSync('git', ['show', 'HEAD:src/protocol_changes.js'], { cwd: REPO, maxBuffer: 64 * 1024 * 1024 }).toString('utf8');
 }
 
 // Every constant the entry re-exports, read from the part files that declare it.
