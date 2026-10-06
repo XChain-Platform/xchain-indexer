@@ -15,32 +15,32 @@
 const assert = require('assert');
 const path = require('path');
 
-const ah = require('../../../src/consensus/gates/mirror_admission_gate.js');
-const eq = require('../../../src/consensus/equivocation_header.js');
+const ah = require('../../../../src/consensus/gates/mirror_admission_gate.js');
+const eq = require('../../../../src/consensus/equivocation_header.js');
 const {
     listMembershipHash,
     listMetaHash,
-} = require('../../../src/consensus/list_share_hash.js');
-const { createCanonical } = require('../../../src/consensus/list_share_settle/canonical.js');
-const createApply = require('../../../src/consensus/list_share_settle/apply.js');
-const { injectListShareLegs } = require('../../../src/consensus/list_share_settle/inject.js');
-const { planListShareLegs } = require('../../../src/consensus/list_share_settle/legs.js');
-const { verifyMirrorMembers } = require('../../../src/consensus/list_share_settle/reread.js');
-const { createScreen } = require('../../../src/consensus/list_share_settle/screen.js');
-const H = require('./helpers/apply_harness.js');
+} = require('../../../../src/consensus/list_share_hash.js');
+const { createCanonical } = require('../../../../src/consensus/list_share_settle/canonical.js');
+const createApply = require('../../../../src/consensus/list_share_settle/apply.js');
+const { injectListShareLegs } = require('../../../../src/consensus/list_share_settle/inject.js');
+const { planListShareLegs } = require('../../../../src/consensus/list_share_settle/legs.js');
+const { verifyMirrorMembers } = require('../../../../src/consensus/list_share_settle/reread.js');
+const { createScreen } = require('../../../../src/consensus/list_share_settle/screen.js');
+const H = require('../helpers/apply_harness.js');
 
-require('./parts/list_share_screen_meta.test.js');
-require('./parts/list_share_screen_meta_wiring.test.js');
-require('./parts/list_share_legs_meta.test.js');
-require('./parts/list_share_legs_meta_edit.test.js');
-require('./parts/list_share_apply_meta.test.js');
-require('./parts/list_share_inject_meta.test.js');
-require('../actions/list_wire/list_store_meta.test.js');
-require('../actions/contract/list.test/list_rename_no_head.test.js');
+require('../parts/list_share_screen_meta.test.js');
+require('../parts/list_share_screen_meta_wiring.test.js');
+require('../parts/list_share_legs_meta.test.js');
+require('../parts/list_share_legs_meta_edit.test.js');
+require('../parts/list_share_apply_meta.test.js');
+require('../parts/list_share_inject_meta.test.js');
+require('../../actions/list_wire/list_store_meta.test.js');
+require('../../actions/contract/list.test/list_rename_no_head.test.js');
 
 const vectors = require(path.resolve(
     __dirname,
-    '../../../../xchain-documentation/protocol/test-vectors/list_share.json'
+    '../../../../../xchain-documentation/protocol/test-vectors/list_share.json'
 ));
 
 function canonicalRow(vector){

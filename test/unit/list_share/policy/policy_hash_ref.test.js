@@ -20,7 +20,7 @@ const {
     isListRef,
     parseMembership,
     parseMembershipOrRef,
-} = require('../../../src/consensus/bridge_settle/policy_membership.js');
+} = require('../../../../src/consensus/bridge_settle/policy_membership.js');
 
 const ADDR_A = 'nAaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const ADDR_B = 'nBbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';

@@ -4,23 +4,23 @@ const assert = require('assert');
 const path = require('path');
 const sinon = require('sinon');
 
-const H = require('./helpers/apply_harness.js');
-const gateRegistry = require('../../../src/consensus/gate_registry.js');
-const { listMembershipHash } = require('../../../src/consensus/list_share_hash.js');
+const H = require('../helpers/apply_harness.js');
+const gateRegistry = require('../../../../src/consensus/gate_registry.js');
+const { listMembershipHash } = require('../../../../src/consensus/list_share_hash.js');
 const {
     ListShareHaltError,
     LIST_SHARE_HALT_REASON,
-} = require('../../../src/consensus/list_share_settle/halt.js');
+} = require('../../../../src/consensus/list_share_settle/halt.js');
 
 const fixture = require(path.resolve(
     __dirname,
-    '../../fixtures/list_share_ticker_mirror.json'
+    '../../../fixtures/list_share_ticker_mirror.json'
 ));
 const TICK_GATE = 'list_tick_coin_activation.LIST_TICK_COIN_ACTIVATION';
 
 function requireListShare(){
-    const twin = require.resolve('../../../src/consensus/gates/mirror_admission_gate.js');
-    const entry = require.resolve('../../../src/consensus/list_share_settle.js');
+    const twin = require.resolve('../../../../src/consensus/gates/mirror_admission_gate.js');
+    const entry = require.resolve('../../../../src/consensus/list_share_settle.js');
     const saved = [[twin, require.cache[twin]], [entry, require.cache[entry]]];
     const savedEnv = process.env.XC_MIRROR_ADMISSION_ACTIVATION;
     process.env.XC_MIRROR_ADMISSION_ACTIVATION = 'armed';
