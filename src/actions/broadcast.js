@@ -58,6 +58,9 @@ class Broadcast {
          * DEBUGGING - Force params
          ****************************************************************/
         // Example payloads by FORMAT version:
+        // Each payload is pipe delimited with the version first, for example a
+        // message is VERSION|MESSAGE|VALUE and a feed result names the BROADCAST_ACTION_INDEX
+        // of the feed it settles; the field order per version is in this.formats.
         // params = String(str).split('|');
         // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 
