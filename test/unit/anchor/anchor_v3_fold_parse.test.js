@@ -69,9 +69,7 @@ describe('ANCHOR v3 fold parse', function(){
             ['BTC', 'DOGE', 'LTC']);
         assert.strictEqual(rows(indexer)[3].CHAIN, null);
         assert.strictEqual(rows(indexer)[3].MATCH_BATCH_SEQ, '42');
-        assert.ok(indexer.indexerDb.createValidatorReward.calledOnce);
-        assert.strictEqual(indexer.indexerDb.createValidatorReward.firstCall.args[2],
-            'anchor_bundle');
+        assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
     });
 
     it('extends only the wrapper section canonical with the archive fields', async function(){
