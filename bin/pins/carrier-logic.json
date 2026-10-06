@@ -168,7 +168,7 @@
     },
     "stake_weighted_quorum": {
       "path": "src/consensus/stake_weighted_quorum.js",
-      "hash": "afaee5777e8d909eace7a7106b294797014f74929fc4302c50a2ec31ac77a847",
+      "hash": "667f90202114618e33f1a29788fd51a21e508f207a3143b8c285aef4c079a25d",
       "twins": [
         "xchain-hub",
         "xchain-sync"
@@ -1945,6 +1945,13 @@
       "from": "86edade703c3228672bf43770ec9c2e79d0f933654a0ce6d851b04e970bb7462",
       "to": "1085d2c7e702b6f924bee7d9dd859ebf8638a56815476735e72a72032660d6cc",
       "reason": "null threshold guard on the anchor and archive reward gates",
+      "date": "2026-10-06"
+    },
+    {
+      "id": "stake_weighted_quorum",
+      "from": "afaee5777e8d909eace7a7106b294797014f74929fc4302c50a2ec31ac77a847",
+      "to": "667f90202114618e33f1a29788fd51a21e508f207a3143b8c285aef4c079a25d",
+      "reason": "split meetsStakeThreshold into named helpers, logic unchanged",
       "date": "2026-10-06"
     }
   ]
