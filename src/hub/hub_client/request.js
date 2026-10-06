@@ -26,7 +26,7 @@ const https = require('https');
 const url   = require('url');
 
 // The hub's own JSON-RPC code for "you are being rate limited"
-// (xchain-hub/src/lib/rate_limit_policy.js). Keyed on rather than the HTTP status
+// (xchain-hub/src/api/rate_limit_policy.js). Keyed on rather than the HTTP status
 // because a fronting proxy can rewrite the status while the envelope survives.
 const HUB_RATE_LIMIT_RPC_CODE = -32029;
 
