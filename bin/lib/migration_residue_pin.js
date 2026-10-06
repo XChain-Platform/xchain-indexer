@@ -23,14 +23,17 @@
  *            current one, since that is the only case a deployed DB survives.
  *
  * A file the pin does not hold yet passes in the plain check, so a branch needs no fixture
- * edit mid-flight; `--add` pins it. `--base [ref]` (default develop) also fails every file
- * already committed at the merge-base with that ref and still unpinned, so a migration that
- * reached develop cannot stay uncovered and the gate needs no manual `--add` to notice it. An existing entry moves only through `--accept <file>`, which is
- * legitimate solely for a file no database has applied.
+ * edit mid-flight; `--add` pins it. The check also fails every file already committed at the
+ * merge-base with develop (or `--base <ref>`) and still unpinned, so a migration that reached
+ * develop cannot stay uncovered and the gate needs no manual `--add` to notice it. When no base
+ * ref resolves (a shallow or detached checkout) the compare is skipped with a warning;
+ * `--no-base` skips it on purpose. An existing entry moves only through `--accept <file>`,
+ * which is legitimate solely for a file no database has applied.
  *
  * USAGE (from the repo root)
  *   node bin/lib/migration_residue_pin.js              check; exit 1 on a violation
- *   node bin/lib/migration_residue_pin.js --base [ref]  check, plus unpinned files committed at the merge-base
+ *   node bin/lib/migration_residue_pin.js --base <ref> compare against another base than develop
+ *   node bin/lib/migration_residue_pin.js --no-base    skip the merge-base compare
  *   node bin/lib/migration_residue_pin.js --add        pin every unpinned file
  *   node bin/lib/migration_residue_pin.js --accept <file> [--accept <file>]
  *
@@ -102,8 +105,19 @@ function committedAtBase(ref){
     for(const r of [ref, 'origin/' + ref]){
         try { base = git(['merge-base', 'HEAD', r]); break; } catch(e){ /* try the next ref */ }
     }
-    if(!base) throw new Error('--base ' + ref + ': no merge-base with HEAD');
+    if(!base) throw new Error('base ' + ref + ': no merge-base with HEAD');
     return git(['ls-tree', '--name-only', base, rel + '/']).split('\n').map((n) => path.basename(n)).filter((n) => n.endsWith('.sql'));
+}
+
+function baseCommitted(argv){
+    const bi = argv.indexOf('--base');
+    const explicit = bi >= 0 && argv[bi + 1] && !argv[bi + 1].startsWith('--');
+    try { return committedAtBase(explicit ? argv[bi + 1] : 'develop'); }
+    catch(e){
+        if(explicit) throw e;
+        console.warn('merge-base compare skipped: ' + e.message);
+        return [];
+    }
 }
 
 function writeFixture(fixture){
@@ -130,8 +144,7 @@ function main(argv){
         return 0;
     }
     const { MIGRATION_CHECKSUM_REBASELINES } = require(path.join(ROOT, 'src', 'db', 'database', 'migration_tables.js'));
-    const bi = argv.indexOf('--base');
-    const committed = bi < 0 ? [] : committedAtBase(argv[bi + 1] && !argv[bi + 1].startsWith('--') ? argv[bi + 1] : 'develop');
+    const committed = argv.includes('--no-base') ? [] : baseCommitted(argv);
     const bad = findViolations({ files, fixture, rebaselines: MIGRATION_CHECKSUM_REBASELINES, committed });
     for(const v of bad) console.log(v.kind + ': ' + v.message);
     const unpinned = Object.keys(files).filter((f) => !fixture[f]).length;
@@ -140,6 +153,6 @@ function main(argv){
     return bad.length ? 1 : 0;
 }
 
-module.exports = { executableResidue, pinOf, findViolations, readTree, FIXTURE };
+module.exports = { executableResidue, pinOf, findViolations, readTree, committedAtBase, FIXTURE };
 
 if(require.main === module) process.exitCode = main(process.argv.slice(2));
