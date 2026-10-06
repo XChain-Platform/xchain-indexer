@@ -12,7 +12,9 @@
  *
  **********************************************************************
  *
- * Time table part 5 of 5: controller policy and guard transaction boundaries, and the stake snapshot slash window.
+ * Time table part 5 of 5: controller policy and guard transaction boundaries, owner withdraw
+ * opt-in, the stake snapshot slash window, the multiround XATTEST slash exemption and the
+ * readonly accessor own-key rule.
  *
  * One row per protocol change, in registration order, as the argument list of
  * ProtocolChanges.addChange(name, version, mainnet_time, testnet_time,
@@ -27,6 +29,8 @@ const {
     CONTROLLER_CUSTODY_GUARD_TESTNET_TIME,
     OWNER_WITHDRAW_OPT_IN_MAINNET_TIME,
     OWNER_WITHDRAW_OPT_IN_TESTNET_TIME,
+    READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME,
+    READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME,
 } = require('./flag_times.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
@@ -59,6 +63,12 @@ const CHANGES = [
     // proofs burn a bond is a consensus acceptance rule, so it is gated. Mainnet and
     // testnet are unarmed until a release cut pins an instant; regtest is genesis-active.
     ['SLASH_ATTEST_MULTIROUND_EXEMPT', '0.2.0', UNARMED, UNARMED, 0, 0, 0, 0],
+
+    // READONLY_ACCESSOR_OWN_KEY: mirrors xchain-vm's ACCESSOR_OWN_KEY_ACTIVATION (testnet and regtest
+    // active from genesis, mainnet unarmed); a readonly accessor resolves a snapshot
+    // key that names an inherited member as absent from the flag day on.
+    ['READONLY_ACCESSOR_OWN_KEY', '0.2.0', READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME,
+        READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME, 0, 0, 0, 0],
 
     // Groups sibling guards on one native-action leg under an outer savepoint.
     // It follows the custody guard on testnet, stays inert on mainnet, and is
