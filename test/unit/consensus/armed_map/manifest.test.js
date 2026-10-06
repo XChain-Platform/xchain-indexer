@@ -16,7 +16,7 @@
  *
  * MEMBERSHIP IS THE REGISTRY. Since the carriers became shims, every table
  * the process applies is a registry row, and the manifest is rows() plus the
- * twelve VM mirror rows. What this guard has to catch is the one way a table
+ * thirteen VM mirror rows. What this guard has to catch is the one way a table
  * can escape that: a map literal declared somewhere under src/ instead of in
  * a registry part file. So the scan that used to check "declared, therefore
  * listed" now fails on ANY declaration outside src/protocol_changes/, and the
@@ -137,19 +137,20 @@ describe('armed_map/manifest: completeness guard', function () {
 
 describe('armed_map/manifest: the row list', function () {
 
-    it('carries the registry rows first, in registry order, then the twelve VM mirror rows', function () {
+    it('carries the registry rows first, in registry order, then the thirteen VM mirror rows', function () {
         const registryKeys = ProtocolChanges.rows().map(([k]) => k);
         const keys = manifest.ENTRIES.map((e) => e[0]);
         assert.deepStrictEqual(keys.slice(0, registryKeys.length), registryKeys);
-        assert.deepStrictEqual(keys.slice(registryKeys.length), manifest.VM_EXPORT_NAMES.map((n) => 'xchain-vm.' + n));
+        assert.deepStrictEqual(keys.slice(registryKeys.length), manifest.VM_EXPORT_NAMES.concat(manifest.VM_ACCESSORS_EXPORT_NAMES).map((n) => 'xchain-vm.' + n));
         assert.strictEqual(manifest.VM_EXPORT_NAMES.length, 12);
+        assert.deepStrictEqual(manifest.VM_ACCESSORS_EXPORT_NAMES, ['ACCESSOR_OWN_KEY_ACTIVATION']);
     });
 
     it('carries exactly the ProtocolChanges table as protocol_changes.changes.* rows', function () {
         const table = Object.keys(new ProtocolChanges({ config: {}, util: {} }).changes).sort();
         const rows = [...rowKeys()].filter((k) => k.startsWith('protocol_changes.changes.')).map((k) => k.slice('protocol_changes.changes.'.length)).sort();
         assert.deepStrictEqual(rows, table);
-        assert.strictEqual(table.length, 102);
+        assert.strictEqual(table.length, 107);
     });
 
     it('never lists a key twice and never enumerates the file system', function () {
@@ -173,7 +174,7 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(res.ok, true, res.reason);
         assert.deepStrictEqual(res.rows.map((r) => r[0]), manifest.ENTRIES.map((e) => e[0]));
         for (const [, value] of res.rows) canonicalValue(value);
-        assert.strictEqual(res.rows.length, 355);
+        assert.strictEqual(res.rows.length, 366);
     });
 
     it('carries the three row families the design names', function () {
@@ -198,7 +199,7 @@ describe('armed_map/manifest: collectRows', function () {
         });
     });
 
-    it('appends the twelve VM mirror rows with the VM values', function () {
+    it('appends the thirteen VM mirror rows with the VM values', function () {
         const vm = require('xchain-vm');
         const res = manifest.collectRows();
         assert.strictEqual(res.ok, true, res.reason);
@@ -206,6 +207,10 @@ describe('armed_map/manifest: collectRows', function () {
         for (const name of manifest.VM_EXPORT_NAMES) {
             assert.ok(byKey.has('xchain-vm.' + name), name);
             assert.strictEqual(canonicalValue(byKey.get('xchain-vm.' + name)), canonicalValue(vm[name]), name);
+        }
+        const accessors = require('xchain-vm/src/readonly-accessors.js');
+        for (const name of manifest.VM_ACCESSORS_EXPORT_NAMES) {
+            assert.strictEqual(canonicalValue(byKey.get('xchain-vm.' + name)), canonicalValue(accessors[name]), name);
         }
     });
 
