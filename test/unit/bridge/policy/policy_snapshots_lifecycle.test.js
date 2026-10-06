@@ -44,7 +44,7 @@ const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
 // Decides whether a registry copy may be trusted before it is require()d.
-const { siblingCheckout } = require('../../helpers/sibling_checkout.js');
+const { siblingCheckout } = require('../../../helpers/sibling_checkout.js');
 
 const TABLE = 'policy_snapshots';
 
@@ -54,12 +54,12 @@ const TABLE = 'policy_snapshots';
 // is not allowed to hide a fork-class divergence.
 const SYNC_ROOT = process.env.XCHAIN_SYNC_PATH
     ? path.resolve(process.env.XCHAIN_SYNC_PATH)
-    : path.resolve(__dirname, '..', '..', '..', '..', 'xchain-sync');
+    : path.resolve(__dirname, '..', '..', '..', '..', '..', 'xchain-sync');
 const REQUIRE_SIBLINGS = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 const SYNC_REGISTRY = path.join(SYNC_ROOT, 'src', 'table_lifecycle.js');
 
 const COPIES = [
-    { side: 'xchain-indexer', file: path.resolve(__dirname, '../../../src/hub/table_lifecycle.js') },
+    { side: 'xchain-indexer', file: path.resolve(__dirname, '../../../../src/hub/table_lifecycle.js') },
     { side: 'xchain-sync',    file: SYNC_REGISTRY },
 ];
 
@@ -115,7 +115,7 @@ describe('policy_snapshots rollback classification @regression @tier1', function
     }
 
     it('the exemption is not vacuous: the registry does classify tables as deletable', function () {
-        const lifecycle = require(path.resolve(__dirname, '../../../src/hub/table_lifecycle.js'));
+        const lifecycle = require(path.resolve(__dirname, '../../../../src/hub/table_lifecycle.js'));
         const lists = lifecycle.rollbackTables();
         assert.ok(lists.dataTables.length > 0 && lists.blockTables.length > 0,
             'the generic delete lists are empty, so "policy_snapshots is absent from them" proves nothing');

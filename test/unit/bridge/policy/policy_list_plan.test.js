@@ -2,7 +2,7 @@
 
 const assert = require('assert');
 
-const { planListLeg } = require('../../../src/consensus/bridge_settle/policy_list_plan.js');
+const { planListLeg } = require('../../../../src/consensus/bridge_settle/policy_list_plan.js');
 
 describe('bridged policy list leg planning', function(){
 
