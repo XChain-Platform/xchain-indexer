@@ -90,8 +90,8 @@ describe('equivocation_header (indexer)', function () {
             // verifiers). A drift in ANY copy flips the header on different blocks → fork.
             // Every copy must be a trusted checkout, as the require block below needs all three.
             for (const rel of ['../../../../../xchain-hub/src/consensus/equivocation_header.js',
-                               '../../../../xchain-sdk/src/consensus/equivocation_header.js',
-                               '../../../../xchain-explorer/src/consensus/equivocation_header.js']) {
+                               '../../../../../xchain-sdk/src/consensus/equivocation_header.js',
+                               '../../../../../xchain-explorer/src/consensus/equivocation_header.js']) {
                 const copy = siblingCheckout(__dirname, rel);
                 if (!copy.usable) return skipOrFail(this, copy, 'the five-copy equivocation_header parity');
             }
