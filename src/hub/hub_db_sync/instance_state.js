@@ -29,9 +29,8 @@ const { createMovePolicy } = require('./failover/move_policy.js');
 const { createHubListRefresher } = require('../hub_client/hub_list_refresh.js');
 const { getLogger } = require('../../observability/index.js');
 
-// Connection settings and the poll-mode flag.
-function initConnection(sync, hubDb, options) {
-    options = options || {};
+// Selector wiring, hub URL and keys, the enabled flag, and the address capture hook.
+function configureSelectorConnection(sync, hubDb, options) {
     sync.hubDb     = hubDb;                            // Database instance pointing at the local hub DB
     sync.selector  = options.selector || null;
     let selectedAddress = sync.selector && typeof sync.selector.current === 'function'
@@ -58,6 +57,10 @@ function initConnection(sync, hubDb, options) {
             sync._bootstrapDrained = false;
         });
     } else sync._selectorUnsubscribe = null;
+}
+
+// Failover reconnect policy and the not-caught-up grace window.
+function configureFailoverPolicy(sync, options) {
     const reconnectAttempts = Object.prototype.hasOwnProperty.call(options, 'failoverReconnectAttempts')
         ? options.failoverReconnectAttempts : Number(readEnvNow('HUB_FAILOVER_RECONNECT_ATTEMPTS'));
     const minDwellMs = Object.prototype.hasOwnProperty.call(options, 'failoverMinDwellMs')
@@ -68,14 +71,10 @@ function initConnection(sync, hubDb, options) {
         ? configuredNotCaughtUpGraceMs : 30000;
     sync._movePolicy = createMovePolicy({ reconnectAttempts, minDwellMs, now: options.now });
     sync._failoverPendingDrain = false;
-    sync.pollIntervalMs = parseInt(options.pollInterval || readEnvNow('HUB_DB_SYNC_POLL_INTERVAL') || '30000');
-    // Total wall-clock budget for one snapshot GET. The `timeout: 30000` request
-    // option in httpGet is an IDLE-socket timer that resets on every byte received,
-    // so a hub drip-feeding a body holds the request (and, through bootstrapAll's
-    // guard, the whole mirror bootstrap) open indefinitely inside it. Four times the
-    // idle timer, so a 10k-row snapshot page has room to stream and only a wedged
-    // request can reach the ceiling.
-    sync.httpDeadlineMs = parseInt(options.httpDeadline || readEnvNow('HUB_DB_SYNC_HTTP_DEADLINE') || '120000');
+}
+
+// Hub list refresher, created only for an unpinned selector.
+function configureHubListRefresh(sync) {
     let selectorStatus = sync.selector && typeof sync.selector.status === 'function'
         ? sync.selector.status() : null;
     sync._hubListRefreshEpoch = null;
@@ -87,6 +86,22 @@ function initConnection(sync, hubDb, options) {
             warn: (message, err) => getLogger().warn('HubDbSync: ' + message, err)
         })
         : null;
+}
+
+// Connection settings and the poll-mode flag.
+function initConnection(sync, hubDb, options) {
+    options = options || {};
+    configureSelectorConnection(sync, hubDb, options);
+    configureFailoverPolicy(sync, options);
+    sync.pollIntervalMs = parseInt(options.pollInterval || readEnvNow('HUB_DB_SYNC_POLL_INTERVAL') || '30000');
+    // Total wall-clock budget for one snapshot GET. The `timeout: 30000` request
+    // option in httpGet is an IDLE-socket timer that resets on every byte received,
+    // so a hub drip-feeding a body holds the request (and, through bootstrapAll's
+    // guard, the whole mirror bootstrap) open indefinitely inside it. Four times the
+    // idle timer, so a 10k-row snapshot page has room to stream and only a wedged
+    // request can reach the ceiling.
+    sync.httpDeadlineMs = parseInt(options.httpDeadline || readEnvNow('HUB_DB_SYNC_HTTP_DEADLINE') || '120000');
+    configureHubListRefresh(sync);
     sync.ws        = null;
     sync.running   = false;
     // True when the WebSocket path is unavailable and this mirror falls back to
@@ -121,8 +136,8 @@ function initPriceBarrierState(sync) {
     sync._priceTimeWaiters     = [];                   // pending waitForPriceSyncTime() resolvers
 }
 
-// The content-watermark barriers over the other mirrored tables.
-function initContentBarrierState(sync) {
+// The oracle_prices watermark barrier.
+function initOracleBarrier(sync) {
     // Highest effective_at present in the local oracle_prices copy. Used by the
     // block-processing sync barrier (waitForOracleSyncTimestamp) so an indexer does not
     // settle FIAT dispensers for a block until its local oracle mirror has caught up to
@@ -136,7 +151,10 @@ function initContentBarrierState(sync) {
     sync.oracleSyncTimestamp = null;                   // null = mirror's max effective_at not yet known
     sync.oracleBootstrapped  = false;                  // true once the mirror has been read at least once
     sync._oracleWaiters      = [];                     // pending waitForOracleSyncTimestamp() resolvers
+}
 
+// The cross_chain_matches watermark barrier.
+function initMatchBarrier(sync) {
     // Highest effective_time present in the local cross_chain_matches copy. The
     // cross-chain settlement pass uses waitForMatchSync(block_time) so an indexer does
     // not settle a block until its match mirror has caught up to that block's time;
@@ -146,7 +164,10 @@ function initContentBarrierState(sync) {
     sync.matchSyncTimestamp = null;
     sync.matchBootstrapped  = false;
     sync._matchWaiters      = [];
+}
 
+// The cross_chain_calls watermark barrier.
+function initCallBarrier(sync) {
     // Highest effective_time present in the local cross_chain_calls copy (the
     // XCALL relay's equivalent of the match barrier. The injection/callback
     // passes use waitForCallSync(block_time) so an indexer never applies a
@@ -156,7 +177,10 @@ function initContentBarrierState(sync) {
     sync.callSyncTimestamp = null;
     sync.callBootstrapped  = false;
     sync._callWaiters      = [];
+}
 
+// The bridge_transfers watermark barrier.
+function initBridgeBarrier(sync) {
     // Highest effective_time present in the local bridge_transfers copy, scoped to the
     // transfers THIS chain can act on (source or destination leg). The XBRIDGE settle
     // pass uses waitForBridgeSync(block_time) so an indexer never mints a bridged credit
@@ -167,7 +191,10 @@ function initContentBarrierState(sync) {
     sync.bridgeSyncTimestamp = null;
     sync.bridgeBootstrapped  = false;
     sync._bridgeWaiters      = [];
+}
 
+// The policy_snapshots watermark barrier.
+function initPolicyBarrier(sync) {
     // Highest effective_time present in the local policy_snapshots copy, scoped to the
     // snapshots this chain can act on. Keyed on origin_chain alone, NOT on a
     // source/destination pair: a policy row targets every chain holding a copy of the
@@ -175,10 +202,23 @@ function initContentBarrierState(sync) {
     sync.policySyncTimestamp = null;
     sync.policyBootstrapped  = false;
     sync._policyWaiters      = [];
+}
 
+// The list-share mirror barrier.
+function initListShareBarrier(sync) {
     sync.listShareBootstrapped = false;
     sync.listShareMirrorEmpty  = false;
     sync._listShareWaiters     = [];
+}
+
+// The content-watermark barriers over the other mirrored tables.
+function initContentBarrierState(sync) {
+    initOracleBarrier(sync);
+    initMatchBarrier(sync);
+    initCallBarrier(sync);
+    initBridgeBarrier(sync);
+    initPolicyBarrier(sync);
+    initListShareBarrier(sync);
 }
 
 // What the consumer told this client about itself and the hooks it wired.
