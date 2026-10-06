@@ -53,6 +53,13 @@ const CHANGES = [
     ['STAKE_SNAPSHOT_SLASH_WINDOW', '0.2.0', UNARMED, UNARMED,
         () => regtestTimeOverride('STAKE_SNAPSHOT_SLASH_WINDOW_REGTEST_TIME')() || UNARMED, 0, 0, 0],
 
+    // SLASH_ATTEST_MULTIROUND_EXEMPT: an XATTEST base-leg pair is no longer slashable,
+    // because honest retry rounds sign one EQUIV key with differing content
+    // (slash/resolve_slot.js). Relay-leg equivocation stays slashable. Narrowing which
+    // proofs burn a bond is a consensus acceptance rule, so it is gated. Mainnet and
+    // testnet are unarmed until a release cut pins an instant; regtest is genesis-active.
+    ['SLASH_ATTEST_MULTIROUND_EXEMPT', '0.2.0', UNARMED, UNARMED, 0, 0, 0, 0],
+
     // Groups sibling guards on one native-action leg under an outer savepoint.
     // It follows the custody guard on testnet, stays inert on mainnet, and is
     // genesis-active on regtest so fresh test chains exercise the corrected rule.
