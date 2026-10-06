@@ -32,7 +32,7 @@
  * whenever a validator's stake activated or deactivated inside the buried window
  * (H - CANONICAL_REORG_BUFFER, H]:
  *
- *   - xchain-indexer/src/actions/attest.js  (ATTEST v1 responsible-set + capability gate)
+ *   - xchain-indexer/src/actions/attest/responsible_set.js  (ATTEST v1 responsible-set + capability gate)
  *   - xchain-indexer/src/recovery.js        (archive `_verifyStakes` / `_verifyCompleteness`)
  *   - xchain-sdk/src/light.js               (SPV `followForward` signer-set proof)
  *
@@ -56,7 +56,7 @@
  *
  * PLANE. The gate is keyed on the BTC-anchored declared snapshot_block, the same
  * plane (and the same call site) as `equivocation_header.isEquivHeaderActive`, NOT
- * on a local chain height. attest.js evaluates it against the request's own
+ * on a local chain height. actions/attest/responsible_set.js evaluates it against the request's own
  * block_index exactly as it already evaluates the EQUIV gate there; see
  * attest_admission_activation.js for why the two planes differ and why the
  * difference must not be "corrected" without its own flag-day.
