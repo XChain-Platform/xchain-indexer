@@ -50,7 +50,7 @@ class Rollback {
         // Parse in indexer configuration
         this.config    = indexer.config;
 
-        // Same effective provider map actions/attest.js builds (DEFAULTS overlaid with
+        // Same effective provider map actions/attest/index.js builds (DEFAULTS overlaid with
         // config.ATTESTATION.PROVIDERS), so the reorg recompute of missed_count resolves
         // the identical provider stake floor the live expiry path did.
         this.providerRegistry = new ProviderRegistry(this.config);
