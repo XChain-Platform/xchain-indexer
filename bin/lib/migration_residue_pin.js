@@ -22,12 +22,15 @@
  *            passes only when a reviewed rebaseline heals the pinned hash to the
  *            current one, since that is the only case a deployed DB survives.
  *
- * A file the pin does not hold yet passes, so a new migration needs no fixture edit;
- * `--add` pins it. An existing entry moves only through `--accept <file>`, which is
+ * A file the pin does not hold yet passes in the plain check, so a branch needs no fixture
+ * edit mid-flight; `--add` pins it. `--base [ref]` (default develop) also fails every file
+ * already committed at the merge-base with that ref and still unpinned, so a migration that
+ * reached develop cannot stay uncovered and the gate needs no manual `--add` to notice it. An existing entry moves only through `--accept <file>`, which is
  * legitimate solely for a file no database has applied.
  *
  * USAGE (from the repo root)
  *   node bin/lib/migration_residue_pin.js              check; exit 1 on a violation
+ *   node bin/lib/migration_residue_pin.js --base [ref]  check, plus unpinned files committed at the merge-base
  *   node bin/lib/migration_residue_pin.js --add        pin every unpinned file
  *   node bin/lib/migration_residue_pin.js --accept <file> [--accept <file>]
  *
@@ -37,6 +40,7 @@
 
 const crypto = require('crypto');
 const fs     = require('fs');
+const { execFileSync } = require('child_process');
 const path   = require('path');
 
 const ROOT    = path.join(__dirname, '..', '..');
@@ -54,8 +58,12 @@ function pinOf(raw){
 }
 
 // Every violation of the pin over `files` (name -> raw text), as { file, kind, message }.
-function findViolations({ files, fixture, rebaselines }){
+function findViolations({ files, fixture, rebaselines, committed }){
     const out = [];
+    for(const file of [].concat(committed || []).filter((f) => !Object.hasOwn(fixture, f)).sort()){
+        out.push({ file, kind: 'unpinned', message: file + ' is committed at the base but not pinned: run ' +
+            'node bin/lib/migration_residue_pin.js --add and commit the fixture.' });
+    }
     for(const file of Object.keys(fixture).sort()){
         const pinned = fixture[file];
         if(!Object.hasOwn(files, file)){
@@ -86,6 +94,18 @@ function readTree(){
     return files;
 }
 
+// Migration file names present at the merge-base of HEAD and `ref`.
+function committedAtBase(ref){
+    const git = (args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    const rel = path.relative(git(['rev-parse', '--show-toplevel']), MIG_DIR).split(path.sep).join('/');
+    let base = null;
+    for(const r of [ref, 'origin/' + ref]){
+        try { base = git(['merge-base', 'HEAD', r]); break; } catch(e){ /* try the next ref */ }
+    }
+    if(!base) throw new Error('--base ' + ref + ': no merge-base with HEAD');
+    return git(['ls-tree', '--name-only', base, rel + '/']).split('\n').map((n) => path.basename(n)).filter((n) => n.endsWith('.sql'));
+}
+
 function writeFixture(fixture){
     const sorted = {};
     for(const k of Object.keys(fixture).sort()) sorted[k] = fixture[k];
@@ -110,7 +130,9 @@ function main(argv){
         return 0;
     }
     const { MIGRATION_CHECKSUM_REBASELINES } = require(path.join(ROOT, 'src', 'db', 'database', 'migration_tables.js'));
-    const bad = findViolations({ files, fixture, rebaselines: MIGRATION_CHECKSUM_REBASELINES });
+    const bi = argv.indexOf('--base');
+    const committed = bi < 0 ? [] : committedAtBase(argv[bi + 1] && !argv[bi + 1].startsWith('--') ? argv[bi + 1] : 'develop');
+    const bad = findViolations({ files, fixture, rebaselines: MIGRATION_CHECKSUM_REBASELINES, committed });
     for(const v of bad) console.log(v.kind + ': ' + v.message);
     const unpinned = Object.keys(files).filter((f) => !fixture[f]).length;
     console.log(bad.length + ' violation(s), ' + unpinned + ' unpinned file(s).' +
