@@ -24,6 +24,7 @@ const {
     UNARMED, UNPINNED, RegistryMissError, createRegistry, applyChanges,
 } = require('./protocol_changes/core.js');
 const { registerRows } = require('./protocol_changes/shared_rows.js');
+const { getLogger } = require('./observability/index.js');
 // Gate rows load in registration order. Each part queues addGate() calls into
 // shared_rows.js; registerRows() below replays them into the registry.
 require('./protocol_changes/shared_rows_1.js');
@@ -288,7 +289,7 @@ class ProtocolChanges {
             // disabled on this node only, invalidating actions that healthy peers process
             // normally and silently forking the ledger. Propagate instead so block
             // processing rolls back and retries the block with correct activation state.
-            console.log('protocol error e=',e);
+            getLogger().error('ProtocolChanges: protocol error', { err: e && e.message });
             throw e;
         }
         return enabled;
