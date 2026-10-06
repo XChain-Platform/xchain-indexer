@@ -181,7 +181,7 @@ async function resolveAttestSlot(util, indexerDb, engineTag, roundId, contentA, 
     if(engineTag === eq.ENGINE_TAGS.ATTEST){
         // XATTEST carries TWO families (base v1 and relay). The relay legs are shaped
         // like XCALL: pipe-delimited, snapshot_block at index 3, hashed ROUND_ID, and
-        // locked under `cross_chain` (attest.js verifyRelayQuorum). The base v1
+        // locked under `cross_chain` (attest/relay.js verifyRelayQuorum). The base v1
         // canonical is delimiter-less and starts with the request_id, so its first
         // '|' segment can never be the literal 'ATTEST'. Both messages must agree on
         // the family: a matched field across DIFFERENT layouts proves nothing about a
