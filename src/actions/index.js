@@ -59,7 +59,7 @@ const FEE_QUOTE_STATIC = new Set(['DEPLOY', 'EXECUTE']);
 // Used only by the BATCH sub-command pre-flight (isBatchProbeForbiddenSubAction): the batch probe
 // dispatches REAL sub-handlers, so "denied at top level" is not a wide enough net - an action the
 // top-level gate lets through for its own reasons still enters the VM when a batch runs it.
-//   ATTEST - v1 response injects a callback EXECUTE (attest.js injectCallbackExecute).
+//   ATTEST - v1 response injects a callback EXECUTE (attest/callbacks.js injectCallbackExecute).
 //   VOTE   - a v0 binding create at or above VOTE_CALLBACK_BINDING_REQUIRES_USABLE_METHOD
 //            reaches contract code in the callback probe VM through readManifest
 //            (binding_callback.js isCallbackMethodUsable) wherever that gate is active. A v2
@@ -92,7 +92,7 @@ const PROBE_VM_REACHING_ACTIONS = new Set(['ATTEST', 'VOTE', 'XCALL']);
 // what the quote reports, not what a handler charges on-chain.
 // ATTEST is exempt (not denylisted) because it stages no wallet-priceable fee AND must never
 // dry-run on the public path: ATTEST v0 is VM-emission-only, and ATTEST v1 (validator response)
-// injects a contract callback EXECUTE (attest.js injectCallbackExecute) that enters the VM while
+// injects a contract callback EXECUTE (attest/callbacks.js injectCallbackExecute) that enters the VM while
 // the dry-run holds the block-loop mutex. Its protocol fee is charged at the v0 request origin and
 // settled by settleRequestFee, so there is nothing for feequote to price; exempting it short-
 // circuits classifyFeeQuoteAction before dryRunAction, closing the unauthenticated VM-compute-

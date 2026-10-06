@@ -52,6 +52,7 @@ const M      = require('../../../../../src/consensus/merkle.js');
 const SUB    = require('../../../../../src/consensus/gates/state_subtree_gate.js');
 const Utility = require('../../../../../src/utility.js');
 const bridgeSettlementsMixin = require('../../../../../src/db/bridge_settlements/index.js');
+const anchorsMixin = require('../../../../../src/db/anchors');
 
 // Give a connection double the REAL db/bridge_settlements methods, bound over its own
 // doQuery. The settle pass reaches both the local ledger and the mirror through those
@@ -214,7 +215,7 @@ function ledgerQuery(state){
 // The local ledger double the settle pass writes through: the bridge_settlements reads and
 // insert (ledgerQuery), the validator snapshot, token lookups, and credit/debit capture.
 function makeLedgerDouble(config, state, o, counter, mirror){
-    return bindSettlementReads({
+    const db = bindSettlementReads({
         config: config,
         mirrorDb: () => mirror,
         doQuery: ledgerQuery(state),
@@ -232,6 +233,11 @@ function makeLedgerDouble(config, state, o, counter, mirror){
         getList:        async () => [],
         isTickSleeping: async () => false
     });
+    // Bind the real checkpoint-source reads over this double, so an IN leg's proof fetch issues
+    // the shipped SQL; a missing method would throw a TypeError that now propagates as a fault.
+    db.getEarliestValidAnchorCheckpoint = anchorsMixin.getEarliestValidAnchorCheckpoint.bind(db);
+    db.getMirroredStateCheckpointCandidates = anchorsMixin.getMirroredStateCheckpointCandidates.bind(db);
+    return db;
 }
 
 // A settle-pass ctx over an in-memory ledger. Every method the apply reaches is here; nothing
@@ -299,7 +305,6 @@ function selectorCtx(anchorRows, mirrorRows){
     // The two reads are the real db mixin methods over those stubs, not stubs of their
     // own, so the anchor leg still has to issue SQL naming anchor_actions to see a row
     // and the mirrored leg still has to route through mirrorDb() to see one.
-    const anchorsMixin = require('../../../../../src/db/anchors');
     ctx.indexerDb.getEarliestValidAnchorCheckpoint =
         anchorsMixin.getEarliestValidAnchorCheckpoint.bind(ctx.indexerDb);
     ctx.indexerDb.getMirroredStateCheckpointCandidates =
