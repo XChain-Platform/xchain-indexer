@@ -11,7 +11,8 @@
 'use strict';
 
 const { getLogger } = require('../../observability/index.js');
-const HubPushDeliveryStore = require('../../sql/hub_push_delivery_store.js');
+const hubPushDb = require('../../db/hub_pushes/index.js');
+const HubPushDeliveryStore = require('../../db/hub_pushes/hub_push_delivery_store.js');
 
 class AddressRetry {
 
@@ -37,8 +38,10 @@ class AddressRetry {
             this.retryHubAddress = address;
             return false;
         }
-        if(typeof this.indexerDb.poolQuery === 'function'){
-            await this.indexerDb.poolQuery(`UPDATE pending_hub_pushes SET attempts = 0, last_attempted_at = NULL, last_error = NULL WHERE status = 'pending'`);
+        if(typeof this.indexerDb.resetPendingHubPushAttempts === 'function'){
+            await this.indexerDb.resetPendingHubPushAttempts();
+        } else if(typeof this.indexerDb.poolQuery === 'function'){
+            await hubPushDb.resetPendingHubPushAttempts.call(this.indexerDb);
         }
         this.retryHubAddress = address;
         for(let row of (rows || [])) Object.assign(row, { attempts: 0, last_attempted_at: null, last_error: null });

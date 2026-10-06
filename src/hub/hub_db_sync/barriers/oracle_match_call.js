@@ -139,7 +139,7 @@ module.exports = {
         let ts = null;
         try {
             // Scope the watermark to matches that touch THIS coin (either leg), matching
-            // the settlement query (src/db/cross_chain.js: WHERE ... AND (a_chain = ? OR b_chain = ?)) and
+            // the settlement query (src/db/cross_chain/index.js: WHERE ... AND (a_chain = ? OR b_chain = ?)) and
             // the snapshot-presence barrier. A global MAX(effective_time) could be bumped
             // past this block's time by an unrelated other-chain match (both legs on other
             // chains, still mirrored here because the hub broadcasts every match), letting

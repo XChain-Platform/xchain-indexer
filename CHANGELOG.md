@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.4] - 2026-10-05
+
+### Added
+- Reported the hub push delivery frontier on getlatestblock.
+- Held price-reading blocks until the hub publishes the landed batch time for that block.
+- Added strict same-chain price landings behind an activation that stays unarmed.
+
+### Fixed
+- Led the bridge barrier timeout message with the admission height above activation.
+- Reconnected to the next hub immediately after a hub failover.
+
 ## [0.22.0] - 2026-10-04
 
 ### Added
