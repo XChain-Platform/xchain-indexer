@@ -36,8 +36,8 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 
-const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
-const Issue = require('../../../src/actions/issue/index.js');
+const { createMockIndexer, createBaseData } = require('../../../fixtures/mocks');
+const Issue = require('../../../../src/actions/issue/index.js');
 
 // Per-chain GAS (issuer) addresses, matching configs/<COIN>.js mainnet shapes.
 const GAS = {

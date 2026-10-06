@@ -42,10 +42,10 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 
-const { createMockIndexer, createBaseData } = require('../../fixtures/mocks');
-const List                  = require('../../../src/actions/list.js');
-const Database              = require('../../../src/db');
-const { stubActiveAt }      = require('../../helpers/gate_modules.js');
+const { createMockIndexer, createBaseData } = require('../../../fixtures/mocks');
+const List                  = require('../../../../src/actions/list.js');
+const Database              = require('../../../../src/db');
+const { stubActiveAt }      = require('../../../helpers/gate_modules.js');
 const LIST_OWNER_ROW        = 'list_owner_activation.LIST_OWNER_ACTIVATION';
 const TOKEN_POLICY_INHERITANCE_KEY = 'token_policy_activation.TOKEN_POLICY_INHERITANCE_ACTIVATION';
 

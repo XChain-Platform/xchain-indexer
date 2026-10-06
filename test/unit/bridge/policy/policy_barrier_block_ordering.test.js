@@ -17,10 +17,10 @@
 'use strict';
 
 const assert = require('assert');
-const bridgesMixin = require('../../../src/db/bridges');
+const bridgesMixin = require('../../../../src/db/bridges');
 const {
     BS, makeKey, buildProof, makeTransfer, snapshotSet, makeCtx, ESCROW_BTC_ON_DOGE
-} = require('./bridge_settle.test/helpers/settle_fixtures.js');
+} = require('../bridge_settle.test/helpers/settle_fixtures.js');
 
 describe('bridge policy barrier block ordering @regression @tier1', function(){
     it('does not expose a policy settlement from a later block to an earlier in-leg', async function(){
