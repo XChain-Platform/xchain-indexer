@@ -225,7 +225,13 @@ module.exports = {
     scheduleBootstrapRetry() {
         getLogger().warn('HubDbSync: bootstrap partial, retrying in ' + this.pollIntervalMs + 'ms (heartbeat gate stays closed)');
         setTimeout(() => {
-            if (this.running && !this._bootstrapDrained) this.bootstrapAll();
+            if (!this.running || this._bootstrapDrained) return;
+            // A throw inside bootstrapAll never reaches its own retry, so re-arm here on
+            // the error path only (a finally would double-arm after a normal partial drain).
+            this.bootstrapAll().catch(err => {
+                getLogger().warn('HubDbSync: bootstrap retry failed: ' + (err && err.message));
+                if (this.running && !this._bootstrapDrained) this.scheduleBootstrapRetry();
+            });
         }, this.pollIntervalMs);
     },
 
@@ -365,9 +371,16 @@ module.exports = {
                 }
                 return;
             }
-            this.noteConnected();
-            await this.refreshAllSyncHeights();
-            await this.bootstrapAll();
+            // The socket is up, so a failure here re-arms the bootstrap retry, never a
+            // reconnect; unguarded, it escaped as an unhandled rejection and ended the chain.
+            try {
+                this.noteConnected();
+                await this.refreshAllSyncHeights();
+                await this.bootstrapAll();
+            } catch (err) {
+                getLogger().warn('HubDbSync: post-reconnect bootstrap failed: ' + (err && err.message));
+                if (this.running && !this._bootstrapDrained) this.scheduleBootstrapRetry();
+            }
         }, delayMs);
         this._reconnectTimer = reconnectTimer;
     },
