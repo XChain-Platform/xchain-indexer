@@ -297,6 +297,10 @@ jobs:
           ssh-key: ${{ secrets.XCHAIN_SDK_DEPLOY_KEY }}
           path: xchain-sdk
 
+      - name: Install xchain-sdk dependencies
+        working-directory: xchain-sdk
+        run: npm ci --ignore-scripts
+
       - name: Pre-flight <-> handler drift gate
         env:
           XCHAIN_INDEXER_PATH: ${{ github.workspace }}/xchain-indexer
