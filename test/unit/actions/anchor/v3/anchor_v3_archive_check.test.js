@@ -3,8 +3,8 @@
 const assert = require('assert');
 const zlib = require('zlib');
 
-const Anchor = require('../../../../src/actions/anchor/index.js');
-const { foldArchiveReason } = require('../../../../src/actions/anchor/v3_archive_check.js');
+const Anchor = require('../../../../../src/actions/anchor/index.js');
+const { foldArchiveReason } = require('../../../../../src/actions/anchor/v3_archive_check.js');
 
 function fixtures(){
     const handler = new Anchor({ config: { NETWORK: 'regtest' } });

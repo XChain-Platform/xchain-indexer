@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('assert');
-const gateRegistry = require('../../../../src/consensus/gate_registry');
+const gateRegistry = require('../../../../../src/consensus/gate_registry');
 
 const BUNDLE_ORDER_KEY = 'anchor_bundle_order_activation.ANCHOR_BUNDLE_ORDER_ACTIVATION';
 const ANCHOR_KEY = 'anchor_activation.ANCHOR_ACTIVATION';

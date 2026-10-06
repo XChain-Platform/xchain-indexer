@@ -12,11 +12,11 @@ process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
-const { createBaseData } = require('../../../fixtures/mocks');
+const { createBaseData } = require('../../../../fixtures/mocks');
 const {
     PUBKEY_A, PUBKEY_B, v0Params, armAnchor, disarmAnchor
-} = require('./anchor.test/helpers/anchor_fixtures.js');
-const { ORDER_REFUSAL_CASES } = require('./anchor.test/helpers/bundle_order_cases.js');
+} = require('../anchor.test/helpers/anchor_fixtures.js');
+const { ORDER_REFUSAL_CASES } = require('../anchor.test/helpers/bundle_order_cases.js');
 
 let indexer, handler, verifyStub, swqStub, deriveGateStub;
 

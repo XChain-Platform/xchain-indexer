@@ -6,14 +6,14 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 const assert = require('assert');
 const sinon = require('sinon');
 
-const Anchor = require('../../../../src/actions/anchor/index.js');
-const reassembly = require('../../../../src/actions/anchor/reassembly.js');
-const gateRegistry = require('../../../../src/consensus/gate_registry');
-const { createMockIndexer, createBaseData } = require('../../../fixtures/mocks');
-const { buildBatch, makeKeypair, rawMatch } = require('../../../fixtures/anchor-archive.js');
+const Anchor = require('../../../../../src/actions/anchor/index.js');
+const reassembly = require('../../../../../src/actions/anchor/reassembly.js');
+const gateRegistry = require('../../../../../src/consensus/gate_registry');
+const { createMockIndexer, createBaseData } = require('../../../../fixtures/mocks');
+const { buildBatch, makeKeypair, rawMatch } = require('../../../../fixtures/anchor-archive.js');
 const {
     v1Params, armAnchor, disarmAnchor,
-} = require('./anchor.test/helpers/anchor_fixtures.js');
+} = require('../anchor.test/helpers/anchor_fixtures.js');
 
 const ANCHOR_KEY = 'anchor_activation.ANCHOR_ACTIVATION';
 const MATCH_COUNT_KEY = 'archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION';
