@@ -181,8 +181,9 @@ class Slash {
             // must agree on the oracle round carried in-content. Gated, not unconditional,
             // because narrowing which proofs burn a bond is a consensus acceptance rule.
             let oracleRoundGate = await this.actions.protocolChanges.isEnabled('SLASH_ORACLE_ROUND_DISCRIMINATED', data['BLOCK_INDEX']);
+            let publisherPairGate = await this.actions.protocolChanges.isEnabled('SLASH_XANCPUB_PUBLISHER_PAIR', data['BLOCK_INDEX']);
             let slot = await this.resolveSlot(key.engineTag, key.roundId, wire.msgA.substring(key.prefix.length),
-                wire.msgB.substring(key.prefix.length), oracleRoundGate);
+                wire.msgB.substring(key.prefix.length), oracleRoundGate, publisherPairGate);
             if(slot.error) error = slot.error;
             else {
                 snapshotBlock = slot.snapshotBlock;
@@ -324,8 +325,8 @@ class Slash {
     // Recover the slot's snapshot_block from the proof. The per-engine layouts live
     // in slash/resolve_slot.js; this handler only needs the answer, and hands those
     // readers the state they need (util for isNull, indexerDb for the XATTEST read).
-    async resolveSlot(engineTag, roundId, contentA, contentB, oracleRoundGate){
-        return await resolveProofSlot(this, engineTag, roundId, contentA, contentB, oracleRoundGate);
+    async resolveSlot(engineTag, roundId, contentA, contentB, oracleRoundGate, publisherPairGate){
+        return await resolveProofSlot(this, engineTag, roundId, contentA, contentB, oracleRoundGate, publisherPairGate);
     }
 
     // The payout policy lives in slash/bounty.js. The method stays because it is the
