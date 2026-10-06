@@ -26,9 +26,9 @@
 'use strict';
 
 const assert = require('assert');
-const eq     = require('../../../src/consensus/equivocation_header.js');
+const eq     = require('../../../../src/consensus/equivocation_header.js');
 // Decides whether each sibling path may be trusted before the parity guards require it.
-const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
+const { siblingCheckout, skipOrFail } = require('../../../helpers/sibling_checkout.js');
 
 describe('equivocation_header (indexer)', function () {
     describe('isEquivHeaderActive', function () {
@@ -74,11 +74,11 @@ describe('equivocation_header (indexer)', function () {
         it('indexer activation map == canonical constants.js', function () {
             // Judged before the require: a lane symlink into a live main checkout would
             // load uncommitted constants and pass against them.
-            const docs = siblingCheckout(__dirname, '../../../../xchain-documentation/protocol/constants.js');
+            const docs = siblingCheckout(__dirname, '../../../../../xchain-documentation/protocol/constants.js');
             if (!docs.usable) return skipOrFail(this, docs, 'the canonical constants.js equivocation activation parity');
             let canonical;
             // A trusted file that fails to load is a broken sibling: fail it under XCHAIN_REQUIRE_SIBLINGS=1.
-            try { canonical = require('../../../../xchain-documentation/protocol/constants.js').EQUIV_HEADER_ACTIVATION; }
+            try { canonical = require('../../../../../xchain-documentation/protocol/constants.js').EQUIV_HEADER_ACTIVATION; }
             catch (e) {
                 return skipOrFail(this, { usable: false, reason: 'canonical constants.js is present but failed to load: ' + e.message },
                     'the canonical constants.js equivocation activation parity');
@@ -89,9 +89,9 @@ describe('equivocation_header (indexer)', function () {
             // hub + indexer (server consensus) + sdk + explorer (client checkpoint
             // verifiers). A drift in ANY copy flips the header on different blocks → fork.
             // Every copy must be a trusted checkout, as the require block below needs all three.
-            for (const rel of ['../../../../xchain-hub/src/consensus/equivocation_header.js',
-                               '../../../../xchain-sdk/src/consensus/equivocation_header.js',
-                               '../../../../xchain-explorer/src/consensus/equivocation_header.js']) {
+            for (const rel of ['../../../../../xchain-hub/src/consensus/equivocation_header.js',
+                               '../../../../../xchain-sdk/src/consensus/equivocation_header.js',
+                               '../../../../../xchain-explorer/src/consensus/equivocation_header.js']) {
                 const copy = siblingCheckout(__dirname, rel);
                 if (!copy.usable) return skipOrFail(this, copy, 'the five-copy equivocation_header parity');
             }
@@ -99,9 +99,9 @@ describe('equivocation_header (indexer)', function () {
             // Every copy passed the precheck, so a load failure here is a broken sibling, never an absent one.
             try {
                 copies = {
-                    hub:      require('../../../../xchain-hub/src/consensus/equivocation_header.js'),
-                    sdk:      require('../../../../xchain-sdk/src/consensus/equivocation_header.js'),
-                    explorer: require('../../../../xchain-explorer/src/consensus/equivocation_header.js'),
+                    hub:      require('../../../../../xchain-hub/src/consensus/equivocation_header.js'),
+                    sdk:      require('../../../../../xchain-sdk/src/consensus/equivocation_header.js'),
+                    explorer: require('../../../../../xchain-explorer/src/consensus/equivocation_header.js'),
                 };
             } catch (e) {
                 return skipOrFail(this, { usable: false, reason: 'a sibling equivocation_header.js is present but failed to load: ' + e.message },

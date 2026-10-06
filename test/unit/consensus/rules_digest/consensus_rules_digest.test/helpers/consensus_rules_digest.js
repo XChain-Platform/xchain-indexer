@@ -21,8 +21,8 @@
 const assert = require('assert');
 const fs     = require('fs');
 const path   = require('path');
-const crd    = require('../../../../../src/consensus_rules_digest.js');
-const { siblingCheckout, skipOrFail } = require('../../../../helpers/sibling_checkout.js');
+const crd    = require('../../../../../../src/consensus_rules_digest.js');
+const { siblingCheckout, skipOrFail } = require('../../../../../helpers/sibling_checkout.js');
 
 // The digest reads every gate VALUE from the registry (through the
 // src/consensus/gate_registry alias), so a case that needs one map to read
@@ -31,7 +31,7 @@ const { siblingCheckout, skipOrFail } = require('../../../../helpers/sibling_che
 // restorer. The caller still drops the digest's own cache entry and re-requires
 // it, since the digest memoizes the values it read at load.
 function stubRegistryRow(key, table) {
-    const REG  = require.resolve('../../../../../src/consensus/gate_registry.js');
+    const REG  = require.resolve('../../../../../../src/consensus/gate_registry.js');
     const real = require.cache[REG];
     const stub = Object.create(Object.getPrototypeOf(real));
     Object.assign(stub, real);

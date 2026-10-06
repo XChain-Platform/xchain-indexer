@@ -17,7 +17,7 @@
 // equivocation keys: a validator legitimately signing both is NOT slashable.
 const assert = require('assert');
 const crypto = require('crypto');
-const eq = require('../../../src/consensus/equivocation_header.js');
+const eq = require('../../../../src/consensus/equivocation_header.js');
 
 // THE LEGACY ARM, EXPLICITLY. The rows below carry no admission columns, which is a legacy
 // row only while the mirror-admission activation is inert; a process launched armed
@@ -26,7 +26,7 @@ const eq = require('../../../src/consensus/equivocation_header.js');
 // file drives the legacy bytes; admission_binding.test.js drives the armed arm of the same
 // twins against the hub's builders. Same purge/re-require idiom as the price suites (row 25).
 function requireDisarmed(mods){
-    const paths = ['../../../src/consensus/gates/mirror_admission_gate.js'].concat(mods).map(m => require.resolve(m));
+    const paths = ['../../../../src/consensus/gates/mirror_admission_gate.js'].concat(mods).map(m => require.resolve(m));
     const saved = paths.map(p => [p, require.cache[p]]);
     const savedEnv = process.env.XC_MIRROR_ADMISSION_ACTIVATION;
     delete process.env.XC_MIRROR_ADMISSION_ACTIVATION;
@@ -40,7 +40,7 @@ function requireDisarmed(mods){
     }
 }
 // xexec requires xcall, so xcall is purged first and both are re-required in one pass.
-const [Xcall, Xexec] = requireDisarmed(['../../../src/actions/xcall/index.js', '../../../src/actions/xexec/index.js']);
+const [Xcall, Xexec] = requireDisarmed(['../../../../src/actions/xcall/index.js', '../../../../src/actions/xexec/index.js']);
 
 const mkAction = () => ({ config:{}, decoderDb:null, indexerDb:null, util:null, mapper:null });
 const xexec = new Xexec(mkAction());
