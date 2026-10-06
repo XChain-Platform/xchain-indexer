@@ -149,7 +149,7 @@ module.exports = {
         // absorbs exactly once whichever order the wires arrive in.
         let batch = null;
         if(!error){
-            let stored = (head.totalChunks === 1) ? [] : mine;
+            let stored = (head.totalChunks === 1) ? [] : this.continuationsOfHead(head, mine);
             let assembled = abw.reassembleAttestBatch(head, stored, isAdmissionEra);
             if(assembled.ok) batch = assembled.batch;
             // Incomplete coverage is the ONE failure that is not a verdict: the missing
@@ -217,7 +217,10 @@ module.exports = {
 
         // Duplicate-slot guard, the ANCHOR continuation's: a filled slot cannot be refilled,
         // which is what makes a replayed chunk inert instead of a second absorption.
-        if(!error && stored.some(r => Number(r.version) === abw.ATTEST_BATCH_CONTINUATION_VERSION &&
+        // With a head on chain the slots that count are the head's own: a chunk of another
+        // encoding filed under the key is not this batch's, so it must not fill the slot.
+        const taken = headRow ? this.continuationsOfHead(this.headFromRow(headRow), stored) : stored;
+        if(!error && taken.some(r => Number(r.version) === abw.ATTEST_BATCH_CONTINUATION_VERSION &&
                                       Number(r.chunk_index) === chunk.chunkIndex))
             error = 'invalid: CHUNK_INDEX (duplicate)';
 
@@ -292,6 +295,18 @@ module.exports = {
                                              Number(r.chunk_index) === 0);
         if(heads.length === 0) return null;
         return heads.reduce((best, r) => (Number(r.action_index) < Number(best.action_index)) ? r : best);
+    },
+
+    // The stored continuations that belong to THIS head's batch: slot 1 and up, declaring the
+    // head's chunk count and body CRC. The key and the author scope them to a window and a
+    // publisher, but one publisher can file two encodings of one window, and a chunk of the
+    // other encoding is not a slice of this body. Both reassembly entry points read through
+    // this, so a head landing last and a continuation landing last judge the same set.
+    continuationsOfHead(head, rows){
+        return (rows || []).filter(r => Number(r.version) === abw.ATTEST_BATCH_CONTINUATION_VERSION &&
+                                        Number(r.chunk_index) >= 1 &&
+                                        Number(r.total_chunks) === head.totalChunks &&
+                                        String(r.batch_crc32) === head.batchCrc32);
     },
 
     // Rebuild the parsed head a stored v5 row came from, so a continuation reassembles

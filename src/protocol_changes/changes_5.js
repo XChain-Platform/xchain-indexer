@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Time table part 5 of 5: CONTROLLER_CUSTODY_GUARD, OWNER_WITHDRAW_OPT_IN and STAKE_SNAPSHOT_SLASH_WINDOW.
+ * Time table part 5 of 5: controller policy and guard transaction boundaries, and the stake snapshot slash window.
  *
  * One row per protocol change, in registration order, as the argument list of
  * ProtocolChanges.addChange(name, version, mainnet_time, testnet_time,
@@ -31,7 +31,7 @@ const {
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
 
-module.exports = [
+const CHANGES = [
     ['CONTROLLER_CUSTODY_GUARD', '0.2.0', CONTROLLER_CUSTODY_GUARD_MAINNET_TIME,
         CONTROLLER_CUSTODY_GUARD_TESTNET_TIME,
         regtestTimeOverride('CONTROLLER_CUSTODY_GUARD_REGTEST_TIME'), 0, 0, 0],
@@ -52,4 +52,12 @@ module.exports = [
     // STAKE_SNAPSHOT_SLASH_WINDOW_REGTEST_TIME.
     ['STAKE_SNAPSHOT_SLASH_WINDOW', '0.2.0', UNARMED, UNARMED,
         () => regtestTimeOverride('STAKE_SNAPSHOT_SLASH_WINDOW_REGTEST_TIME')() || UNARMED, 0, 0, 0],
+
+    // Groups sibling guards on one native-action leg under an outer savepoint.
+    // It follows the custody guard on testnet, stays inert on mainnet, and is
+    // genesis-active on regtest so fresh test chains exercise the corrected rule.
+    ['CONTROLLER_GUARD_LEG_SAVEPOINTS', '0.2.0', 9999999999,
+        CONTROLLER_CUSTODY_GUARD_TESTNET_TIME, 0, 0, 0, 0],
 ];
+
+module.exports = CHANGES;
