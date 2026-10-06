@@ -46,13 +46,13 @@ const ANCHOR_REWARD_AMOUNT = copy('anchor_reward_activation.ANCHOR_REWARD_AMOUNT
 
 // Whether anchor rewards are DERIVED from chain (vs pushed) for an ANCHOR whose
 // BTC-anchored snapshot is at `snapshotBlock` on `network`. Below the threshold ->
-// off (legacy push path; a publisher-bearing bundle rejected). Unknown network
-// -> off (safe).
+// off (legacy push path; a publisher-bearing bundle rejected). An unpinned (null) or unknown
+// network -> off (safe); `sb >= null` would otherwise arm at height 0.
 function isAnchorRewardActive(snapshotBlock, network){
     let sb = parseInt(snapshotBlock);
     if(!Number.isFinite(sb)) return false;
     let threshold = ANCHOR_REWARD_ACTIVATION[network];
-    if(threshold === undefined) return false;
+    if(!Number.isFinite(threshold)) return false;
     return sb >= threshold;
 }
 
@@ -63,12 +63,12 @@ const ARCHIVE_REWARD_AMOUNT = copy('anchor_reward_activation.ARCHIVE_REWARD_AMOU
 // Whether the anchor_archive reward is DERIVED from chain (vs pushed) for an archive
 // anchor whose BTC-anchored snapshot is at `snapshotBlock` on `network`. Below the
 // threshold -> off (legacy push path; a publisher-bearing archive head rejected).
-// Unknown network -> off (safe).
+// An unpinned (null) or unknown network -> off (safe).
 function isArchiveRewardActive(snapshotBlock, network){
     let sb = parseInt(snapshotBlock);
     if(!Number.isFinite(sb)) return false;
     let threshold = ARCHIVE_REWARD_ACTIVATION[network];
-    if(threshold === undefined) return false;
+    if(!Number.isFinite(threshold)) return false;
     return sb >= threshold;
 }
 
