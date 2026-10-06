@@ -49,6 +49,8 @@ const path   = require('path');
 const ROOT    = path.join(__dirname, '..', '..');
 const MIG_DIR = path.join(ROOT, 'src', 'sql', 'migrations');
 const FIXTURE = path.join(ROOT, 'test', 'fixtures', 'migration-executable-residue.json');
+const REBASELINE_SOURCE = path.join(ROOT, 'src', 'db', 'migration', 'checksum_rebaselines.js');
+const REBASELINE_NAME   = 'MIGRATION_CHECKSUM_REBASELINES';
 
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
@@ -89,6 +91,52 @@ function findViolations({ files, fixture, rebaselines, committed }){
         }
     }
     return out;
+}
+
+// Drops `//` and `/* */` comments outside string literals; the rebaseline table holds only
+// quoted hex and file names, so a quote always closes on its own line.
+function stripComments(src){
+    let out = '';
+    for(let i = 0; i < src.length;){
+        const c = src[i], n = src[i + 1];
+        if(c === "'" || c === '"'){
+            let j = i + 1;
+            while(j < src.length && src[j] !== c && src[j] !== '\n'){ j += src[j] === '\\' ? 2 : 1; }
+            if(src[j] !== c) throw new Error('unterminated string in the rebaseline source');
+            out += src.slice(i, j + 1); i = j + 1;
+        } else if(c === '/' && n === '/'){
+            while(i < src.length && src[i] !== '\n') i++;
+        } else if(c === '/' && n === '*'){
+            const end = src.indexOf('*/', i + 2);
+            if(end < 0) throw new Error('unterminated comment in the rebaseline source');
+            i = end + 2;
+        } else { out += c; i++; }
+    }
+    return out;
+}
+
+// Reads the rebaseline table as data: the object literal is cut out of the source text,
+// rewritten to JSON and parsed, so nothing in the checked-out file is ever evaluated.
+// Any construct beyond quoted strings, arrays and nested objects fails the parse.
+function readRebaselines(sourcePath){
+    const src = fs.readFileSync(sourcePath || REBASELINE_SOURCE, 'utf8');
+    const decl = src.indexOf('const ' + REBASELINE_NAME + ' = {');
+    if(decl < 0) throw new Error(REBASELINE_NAME + ' declaration not found in ' + (sourcePath || REBASELINE_SOURCE));
+    const body = stripComments(src.slice(src.indexOf('{', decl)));
+    let depth = 0, end = -1, quote = null;
+    for(let i = 0; i < body.length && end < 0; i++){
+        const c = body[i];
+        if(quote){ if(c === '\\') i++; else if(c === quote) quote = null; continue; }
+        if(c === "'" || c === '"') quote = c;
+        else if(c === '{') depth++;
+        else if(c === '}' && --depth === 0) end = i;
+    }
+    if(end < 0) throw new Error('unbalanced ' + REBASELINE_NAME + ' literal');
+    const json = body.slice(0, end + 1)
+        .replace(/'((?:[^'\\\n]|\\.)*)'/g, (_m, t) => JSON.stringify(t.replace(/\\'/g, "'")))
+        .replace(/([{,]\s*)([A-Za-z_$][\w$]*)(\s*:)/g, '$1"$2"$3')
+        .replace(/,(\s*[}\]])/g, '$1');
+    return JSON.parse(json);
 }
 
 function readTree(){
@@ -143,9 +191,8 @@ function main(argv){
             '. Next: node bin/lib/migration_residue_pin.js');
         return 0;
     }
-    const { MIGRATION_CHECKSUM_REBASELINES } = require(path.join(ROOT, 'src', 'db', 'database', 'migration_tables.js'));
     const committed = argv.includes('--no-base') ? [] : baseCommitted(argv);
-    const bad = findViolations({ files, fixture, rebaselines: MIGRATION_CHECKSUM_REBASELINES, committed });
+    const bad = findViolations({ files, fixture, rebaselines: readRebaselines(), committed });
     for(const v of bad) console.log(v.kind + ': ' + v.message);
     const unpinned = Object.keys(files).filter((f) => !fixture[f]).length;
     console.log(bad.length + ' violation(s), ' + unpinned + ' unpinned file(s).' +
@@ -153,6 +200,6 @@ function main(argv){
     return bad.length ? 1 : 0;
 }
 
-module.exports = { executableResidue, pinOf, findViolations, readTree, committedAtBase, FIXTURE };
+module.exports = { executableResidue, pinOf, findViolations, readTree, readRebaselines, stripComments, committedAtBase, FIXTURE };
 
 if(require.main === module) process.exitCode = main(process.argv.slice(2));
