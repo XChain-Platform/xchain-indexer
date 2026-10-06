@@ -20,9 +20,9 @@ function build() {
 }
 
 describe('protocol_changes/READONLY_ACCESSOR_OWN_KEY row @regression @tier1', function () {
-    it('is the last row in part 5, mainnet inert and testnet and regtest active from genesis', function () {
+    it('is a row in part 5, mainnet inert and testnet and regtest active from genesis', function () {
         const rows = require('../../../src/protocol_changes/changes_5.js');
-        assert.strictEqual(rows[rows.length - 1][0], 'READONLY_ACCESSOR_OWN_KEY');
+        assert.ok(rows.some((r) => r[0] === 'READONLY_ACCESSOR_OWN_KEY'));
         assert.strictEqual(ProtocolChanges.READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME, ProtocolChanges.UNARMED);
         assert.strictEqual(ProtocolChanges.READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME, 0);
         assert.deepStrictEqual(build(), {

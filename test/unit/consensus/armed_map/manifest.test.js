@@ -150,7 +150,7 @@ describe('armed_map/manifest: the row list', function () {
         const table = Object.keys(new ProtocolChanges({ config: {}, util: {} }).changes).sort();
         const rows = [...rowKeys()].filter((k) => k.startsWith('protocol_changes.changes.')).map((k) => k.slice('protocol_changes.changes.'.length)).sort();
         assert.deepStrictEqual(rows, table);
-        assert.strictEqual(table.length, 102);
+        assert.strictEqual(table.length, 103);
     });
 
     it('never lists a key twice and never enumerates the file system', function () {
