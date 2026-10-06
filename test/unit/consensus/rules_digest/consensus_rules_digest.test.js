@@ -26,7 +26,7 @@ const {
     assert, fs, path, crd, siblingCheckout, skipOrFail
 } = require('./consensus_rules_digest.test/helpers/consensus_rules_digest.js');
 
-const HUB_COPY = path.resolve(__dirname, '../../../../xchain-hub/src/consensus_rules_digest.js');
+const HUB_COPY = path.resolve(__dirname, '../../../../../xchain-hub/src/consensus_rules_digest.js');
 
 describe('consensus_rules_digest (indexer copy)', function () {
 
@@ -63,7 +63,7 @@ describe('consensus_rules_digest (indexer copy)', function () {
     });
 
     it('publishes the digest on the health payload beside the file fingerprint', function () {
-        const src = fs.readFileSync(path.resolve(__dirname, '../../../src/api/health.js'), 'utf8');
+        const src = fs.readFileSync(path.resolve(__dirname, '../../../../src/api/health.js'), 'utf8');
         assert.ok(/consensus_rules_digest:\s*computeConsensusRulesDigest\(\)\.digest/.test(src),
             'health.js must publish consensus_rules_digest');
         assert.ok(/armed_map_fingerprint:/.test(src),
@@ -93,8 +93,8 @@ describe('consensus_rules_digest (indexer copy)', function () {
 // is what the loader resolves against: the cases have to be able to drop a row and break
 // a carrier, which no real checkout may do. The hub copy carries the same cases.
 const os = require('os');
-const MODULE_SRC   = path.resolve(__dirname, '../../../src/consensus_rules_digest.js');
-const REGISTRY_SRC = path.resolve(__dirname, '../../../src/consensus/gate_registry.js');
+const MODULE_SRC   = path.resolve(__dirname, '../../../../src/consensus_rules_digest.js');
+const REGISTRY_SRC = path.resolve(__dirname, '../../../../src/consensus/gate_registry.js');
 
 // A standalone tree: the module under test, a registry that answers from the real one
 // except for `missingKey` (a RegistryMissError, exactly what a dropped row raises), and a
@@ -121,7 +121,7 @@ function scratchTree(mutate, missingKey) {
         byModule.get(mod).push(...names);
     }
     for (const [mod, names] of byModule) {
-        const realPath = path.resolve(__dirname, '../../../src', carrierPath(mod));
+        const realPath = path.resolve(__dirname, '../../../../src', carrierPath(mod));
         const real = fs.existsSync(realPath) ? require(realPath) : {};
         const body = names.map(n => 'exports.' + n + ' = '
             + (typeof real[n] === 'function' ? 'function () {};' : '{ regtest: 0 };')).join('\n');

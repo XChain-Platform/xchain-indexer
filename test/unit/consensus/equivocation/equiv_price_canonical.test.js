@@ -15,8 +15,8 @@
 // HEIGHT (carried in the signed content AND the on-chain wire), so the hub + every
 // indexer flip on the identical anchor every other engine uses.
 const assert = require('assert');
-const eq = require('../../../src/consensus/equivocation_header.js');
-const ed = require('../../../src/consensus/ed25519.js');
+const eq = require('../../../../src/consensus/equivocation_header.js');
+const ed = require('../../../../src/consensus/ed25519.js');
 
 // Deliberately unsorted input: the canonical sorts by pair, so output is deterministic.
 const PAIRS = [{ pair:'LTC/USD', price:'10' }, { pair:'BTC/USD', price:'100' }];

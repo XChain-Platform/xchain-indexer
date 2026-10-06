@@ -19,7 +19,7 @@
 const { assert, crd, stubRegistryRow } = require('./helpers/consensus_rules_digest.js');
 
 const KEY = 'xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION';
-const CRD = require.resolve('../../../../src/consensus_rules_digest.js');
+const CRD = require.resolve('../../../../../src/consensus_rules_digest.js');
 
 // Re-require the digest over a stubbed registry row for the bridge map. The digest
 // memoizes gate values, so its module cache entry must be dropped for the stub to be seen.
@@ -28,7 +28,7 @@ function withMap(map, body) {
     const restore = stubRegistryRow(KEY, map);
     try {
         delete require.cache[CRD];
-        body(require('../../../../src/consensus_rules_digest.js'));
+        body(require('../../../../../src/consensus_rules_digest.js'));
     } finally {
         restore();
         require.cache[CRD] = realCrd;

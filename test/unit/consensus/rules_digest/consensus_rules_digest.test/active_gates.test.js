@@ -84,8 +84,8 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
         // cached copy of it would keep a drill's heights in the digest after the variable
         // was cleared. A SHARED_GATES stem whose shim W5 deleted has no module to purge
         // (its row is read from the registry), so the helper answers null for it.
-        const { modulePathFor } = require('../../../helpers/gate_modules.js');
-        const paths = [require.resolve('../../../../src/consensus_rules_digest.js')].concat(
+        const { modulePathFor } = require('../../../../helpers/gate_modules.js');
+        const paths = [require.resolve('../../../../../src/consensus_rules_digest.js')].concat(
             [...new Set(crd.SHARED_GATES.map(g => g[0]))]
                 .filter(m => m !== 'anchor_bundle_order_activation')
                 .map(m => modulePathFor(m)).filter(p => p !== null)
@@ -95,7 +95,7 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
         try {
             delete process.env.XC_MIRROR_ADMISSION_ACTIVATION;
             for (const [p] of saved) delete require.cache[p];
-            const fresh = require('../../../../src/consensus_rules_digest.js');
+            const fresh = require('../../../../../src/consensus_rules_digest.js');
             assert.strictEqual(fresh.computeConsensusRulesDigest().digest,
                 '227f96529070d083038a3695fb863c4ab08611864b9dfcc1b619f75ec67c91d8',
                 'the consensus rules digest moved; a gate was added, removed, reordered or re-armed');
@@ -142,13 +142,13 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
     // whichever map happened to be unarmed. PRICE_PAIR_WIDEN_ACTIVATION, the last live
     // example before the arm, is the row stubbed here.
     it('excludes a far-future sentinel height, however high the chain climbs', function () {
-        const CRD     = require.resolve('../../../../src/consensus_rules_digest.js');
+        const CRD     = require.resolve('../../../../../src/consensus_rules_digest.js');
         const realCrd = require.cache[CRD];
         const restore = stubRegistryRow('price_pair_activation.PRICE_PAIR_WIDEN_ACTIVATION',
             { mainnet: crd.FAR_FUTURE_HEIGHT_SENTINEL, testnet: 0, regtest: 0 });
         try {
             delete require.cache[CRD];                       // clears the module-level value cache
-            const fresh = require('../../../../src/consensus_rules_digest.js');
+            const fresh = require('../../../../../src/consensus_rules_digest.js');
             const at = fresh.activeGatesAt(fresh.FAR_FUTURE_HEIGHT_SENTINEL, 'mainnet');
             assert.ok(!at.includes('price_pair_activation.PRICE_PAIR_WIDEN_ACTIVATION'),
                 'a sentinel height must read as inactive even at the sentinel itself');
@@ -191,7 +191,7 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
     });
 
     it('resolves both admission maps by coin while a sibling slot stays on the sentinel', function () {
-        const CRD     = require.resolve('../../../../src/consensus_rules_digest.js');
+        const CRD     = require.resolve('../../../../../src/consensus_rules_digest.js');
         const realCrd = require.cache[CRD];
         const keys = [
             'mirror_admission_activation.MIRROR_ADMISSION_ACTIVATION',
@@ -205,7 +205,7 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
             });
             try {
                 delete require.cache[CRD];
-                const fresh = require('../../../../src/consensus_rules_digest.js');
+                const fresh = require('../../../../../src/consensus_rules_digest.js');
                 assert.ok(fresh.activeGatesAt(100, 'testnet', 'BTC').includes(key),
                     key + ' must be active at its own coin\'s armed height');
                 assert.ok(!fresh.activeGatesAt(100, 'testnet', 'LTC').includes(key),
