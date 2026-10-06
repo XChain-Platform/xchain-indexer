@@ -28,8 +28,8 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon  = require('sinon');
-const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../fixtures/mocks');
-const Send = require('../../../../src/actions/send/index.js');
+const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../../fixtures/mocks');
+const Send = require('../../../../../src/actions/send/index.js');
 const {
     GATE_OFF_NETWORK, SOURCE, DEST, makeActionsCtx,
 } = require('./consolidation_leg_amount.test/helpers/consolidation_leg_amount_suite.js');

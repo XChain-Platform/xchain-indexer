@@ -26,9 +26,9 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 
-const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../fixtures/mocks');
+const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../../fixtures/mocks');
 
-const Send = require('../../../../src/actions/send/index.js');
+const Send = require('../../../../../src/actions/send/index.js');
 
 function makeActionsCtx(indexer) {
     return {
