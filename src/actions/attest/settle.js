@@ -223,8 +223,14 @@ module.exports = {
             return responsible;
         }
 
-        keys.sort((a, b) => (a < b) ? -1 : (a > b ? 1 : 0));
-        return keys;
+        let canonical = this.canonicalSignerSet(keys.map(pubkey => ({ pubkey, sig: '' })), responsible, request.redundancy);
+        if(canonical.length === 0){
+            getLogger().warn('Attestation fee settle: no stored signer is in the responsible set for request ' +
+                         String(request.request_id).substring(0,16) +
+                         '..., splitting among the recomputed responsible set instead');
+            return responsible;
+        }
+        return canonical.map(s => s.pubkey);
     },
 
     // The XCHAIN-denominated broadcast-fee reimbursement owed to the leader for this
