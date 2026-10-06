@@ -26,7 +26,7 @@
  *     writes `bridged`, which only an applied XBRIDGE v3 lock may set;
  *   - getTokenInfo replays BRIDGE_CHAINS / MIN_DEPTH / LOCK_BRIDGE out of `issues`
  *     with the empty-means-unchanged and cannot-unset rules the other fields get,
- *     and reads BRIDGED as current state rather than replaying it;
+ *     and derives BRIDGED from the applied xbridges rows;
  *   - isAddressSleeping judges a foreign-format address instead of skipping it once
  *     TOKEN_POLICY_INHERITANCE_ACTIVATION is armed.
  ********************************************************************/
@@ -198,13 +198,16 @@ describe('token-bridge opt-in storage @regression @consensus', function(){
             assert.strictEqual(info['LOCK_BRIDGE'], 1);
         });
 
-        it('reads BRIDGED as current state, normalized to 0/1', async function(){
+        it('derives BRIDGED from an applied lock, normalized to 0/1; a rolled-back lock reads 0', async function(){
             const db = makeDb();
-            db.doQuery.resolves([issueRow({ bridged: 1 })]);
+            db.doQuery.onFirstCall().resolves([issueRow({ bridged: 0 })]);
+            db.doQuery.onSecondCall().resolves([{ 1: 1 }]);
             let info = await db.getTokenInfo('FUFU', 100, 999);
             assert.strictEqual(info['BRIDGED'], 1);
 
-            db.doQuery.resolves([issueRow({ bridged: null })]);
+            db.doQuery.reset();
+            db.doQuery.onFirstCall().resolves([issueRow({ bridged: 1 })]);
+            db.doQuery.onSecondCall().resolves([]);
             info = await db.getTokenInfo('FUFU', 100, 999);
             assert.strictEqual(info['BRIDGED'], 0);
         });
@@ -220,7 +223,7 @@ describe('token-bridge opt-in storage @regression @consensus', function(){
             db.doQuery.resolves([issueRow()]);
             await db.getTokenInfo('FUFU', 100, 999);
             const sql = db.doQuery.firstCall.args[0];
-            for(const col of ['i.bridge_chains', 'i.min_depth', 'i.lock_bridge', 'tk.bridged'])
+            for(const col of ['i.bridge_chains', 'i.min_depth', 'i.lock_bridge'])
                 assert.ok(sql.includes(col), 'projection must select ' + col);
         });
     });
