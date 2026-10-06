@@ -137,7 +137,8 @@ module.exports = {
         // window left the cursor advanced and the rollback was never retried, stranding
         // orphaned old-chain rows below minReorgBlock (silent consensus divergence). Writing
         // strictly after the commit keeps the cursor un-advanced on failure, so the same
-        // reorg is re-detected and retried on the next pass; the retry is idempotent because
+        // reorg is re-detected and retried on the next pass (a throw ends the process, so that
+        // pass runs after the supervisor restart); the retry is idempotent because
         // the rollback is skipped once lastIndexerBlock has dropped below minReorgBlock.
         // Oldest-first so a partial-write crash only advances the cursor as far as is durable.
         for(let reorg of unprocessedReorgs){

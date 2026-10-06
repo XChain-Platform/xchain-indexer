@@ -42,7 +42,7 @@ module.exports = {
     // `source` is the broadcaster address off actions.source_id, which is the only
     // authenticated identity a chain wire carries and is what binds a slot to a publisher.
     // The key is derived from the window a head declares, so anyone can mint a wire under
-    // it and the unscoped set this returns is every publisher's; attest.js partitions it
+    // it and the unscoped set this returns is every publisher's; actions/attest/batch.js partitions it
     // by author (the ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL rule, applied there because that is
     // where the rest of the batch's rules live and are driven).
     //

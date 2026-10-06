@@ -59,12 +59,13 @@
  * height 0 derives the same state as one that did not. The proof is a
  * per-chain OLD-vs-ON replay witness, not this comment.
  *
- * TESTNET STAYS UNPINNED. Testnet has been a live public ledger since
- * 2026-09-01 and carries dispenser history, so the empty-chain argument does
- * not reach it; its heights are pinned at flag-day assembly on the standing
- * 21-day rule, as a separate coordinated release step, with the replay evidence
- * that step requires. regtest runs from genesis, so fresh regtest stacks
- * exercise the corrected path end to end.
+ * TESTNET IS ARMED AT HEIGHTS, NOT AT GENESIS. Testnet has been a live public
+ * ledger since 2026-09-01 and carries dispenser history, so the empty-chain
+ * argument does not reach it; the v0.21.3 cut pinned BTC 155001, LTC 4906040
+ * and DOGE 67962387 (the DISPENSER_SEND_AMOUNT_COMPARE_ACTIVATION row in
+ * src/protocol_changes/gates_1.js), and testnet blocks below those heights keep
+ * the legacy lexicographic compare. regtest runs from genesis, so fresh regtest
+ * stacks exercise the corrected path end to end.
  *
  ********************************************************************/
 

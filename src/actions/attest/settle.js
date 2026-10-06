@@ -158,8 +158,8 @@ module.exports = {
             splitPool = this.util.bcsub(feeAmount, broadcastFee, feeCap);
             // The broadcaster is a responsible-set member, so it collects this row
             // ON TOP of its equal share below ("additionally receives").
-            // A distinct reward_type keeps the two rows apart under the
-            // (source, pubkey, type, round_reference) unique key.
+            // A distinct reward_type keeps the two rows apart under the reward_unique key
+            // (source, pubkey, type, round_reference, round_qualifier); both rows use qualifier 0.
             await this.indexerDb.createValidatorReward(
                 responsible[0], Number(request.action_index), 'attest_bcast', broadcastFee, data['BLOCK_INDEX'], true
             );
