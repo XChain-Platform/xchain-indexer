@@ -43,6 +43,7 @@ const { maxPriceAgeSecondsAt } = require('../../utility/price_age/oracle_price_a
 // on the token settles; the contract returns normally to ALLOW or reverts to
 // DENY. Canonical: xchain-documentation/protocol/controller-bound-tokens.md.
 const GUARD_METHOD = 'guard';
+const LEG_SAVEPOINT_ACTIVATION = 'CONTROLLER_GUARD_LEG_SAVEPOINTS';
 
 // Returns a DENY verdict when the controller cannot run, null when it can.
 async function loadGuardContract(ctx){
@@ -205,20 +206,7 @@ async function parseGuardPayoutLegs(ctx){
     return { payoutLegs };
 }
 
-async function runControllerGuard(opts, limits){
-    let chain         = this.config['CHAIN'];
-    let contractIndex = parseInt(opts.controllerIndex);
-    let hostData      = opts.hostData;
-    let callDepth     = Number(opts.callDepth) || 0;
-    let derived       = 'C:' + chain + ':' + contractIndex;
-
-    // Depth cap (defense in depth; the emit path checks too). A guard whose
-    // emit.send moves another controlled token recurses through this method.
-    if(callDepth > limits.MAX_CALL_DEPTH)
-        return { allow:false, reason:'controller (max call depth)', gasBilled:0 };
-
-    let ctx = { opts, hostData, contractIndex, derived, callDepth, guardMethod: GUARD_METHOD };
-
+async function evaluateGuard(ctx){
     let unavailable = await loadGuardContract.call(this, ctx);
     if(unavailable) return unavailable;
 
@@ -232,9 +220,10 @@ async function runControllerGuard(opts, limits){
     // Per-root discriminator for this guard subtree (see src/consensus/batch_root_discriminator.js).
     // Resolved ONCE and used by both the guard's vm.execute and its emission context,
     // which must hand the VM and the host re-derivation the identical value.
-    ctx.guardRootDiscrim = await resolveRootDiscriminator(this.actions.protocolChanges, hostData['BLOCK_INDEX'], hostData['TX_VOUT'], hostData['BATCH_POSITION']);
+    ctx.guardRootDiscrim = await resolveRootDiscriminator(this.actions.protocolChanges,
+        ctx.hostData['BLOCK_INDEX'], ctx.hostData['TX_VOUT'], ctx.hostData['BATCH_POSITION']);
 
-    ctx.guardParams = buildGuardParams.call(this, opts);
+    ctx.guardParams = buildGuardParams.call(this, ctx.opts);
     ctx.vmResult = await runGuardVm.call(this, ctx, snapshot);
 
     // The VM already clamps a resource-termination gasUsed to the ceiling;
@@ -254,6 +243,58 @@ async function runControllerGuard(opts, limits){
     if(denied) return denied;
 
     return { allow:true, reason:null, gasBilled: ctx.gasBilled, payoutLegs: legs.payoutLegs };
+}
+
+function legSavepointKey(ctx){
+    return parseInt(ctx.hostData['ACTION_INDEX']) + ':' +
+        (parseInt(ctx.opts.seq) || 0) + ':' + ctx.callDepth;
+}
+
+// Savepoint entries live for one database transaction epoch. The epoch fence
+// prevents an allowed leg's entry from being reused after a retry or reorg.
+async function openLegSavepoint(ctx){
+    let epoch = typeof this.indexerDb.currentTxEpoch === 'function'
+        ? this.indexerDb.currentTxEpoch() : null;
+    if(this.legSavepoints === undefined || this.legSavepointEpoch !== epoch){
+        this.legSavepoints = new Map();
+        this.legSavepointEpoch = epoch;
+    }
+
+    let key = legSavepointKey(ctx);
+    let existing = this.legSavepoints.get(key);
+    if(existing) return { name: existing, justCreated: false };
+
+    this.legSavepointCounter = (this.legSavepointCounter || 0) + 1;
+    let name = 'controller_guard_leg_' + parseInt(ctx.hostData['ACTION_INDEX']) + '_' +
+        (parseInt(ctx.opts.seq) || 0) + '_' + ctx.callDepth + '_' + this.legSavepointCounter;
+    await this.indexerDb.createSavepoint(name);
+    this.legSavepoints.set(key, name);
+    return { name, justCreated: true };
+}
+
+async function runControllerGuard(opts, limits){
+    let chain         = this.config['CHAIN'];
+    let contractIndex = parseInt(opts.controllerIndex);
+    let hostData      = opts.hostData;
+    let callDepth     = Number(opts.callDepth) || 0;
+    let derived       = 'C:' + chain + ':' + contractIndex;
+
+    if(callDepth > limits.MAX_CALL_DEPTH)
+        return { allow:false, reason:'controller (max call depth)', gasBilled:0 };
+
+    let ctx = { opts, hostData, contractIndex, derived, callDepth, guardMethod: GUARD_METHOD };
+    let legScoped = await this.actions.protocolChanges.isEnabled(
+        LEG_SAVEPOINT_ACTIVATION, hostData['BLOCK_INDEX']);
+    let leg = legScoped ? await openLegSavepoint.call(this, ctx) : null;
+    let verdict = await evaluateGuard.call(this, ctx);
+
+    // An earlier sibling may have released its inner savepoint, so a later denial
+    // must return to the frame opened before the first guard on this leg.
+    if(legScoped && !verdict.allow){
+        if(!leg.justCreated) await this.indexerDb.rollbackToSavepoint(leg.name);
+        this.legSavepoints.delete(legSavepointKey(ctx));
+    }
+    return verdict;
 }
 
 module.exports = { runControllerGuard };
