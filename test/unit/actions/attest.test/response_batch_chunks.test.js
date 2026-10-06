@@ -316,3 +316,46 @@ describe('Attest (ATTEST) @regression @tier3', function () {
         });
     });
 });
+
+describe('Attest (ATTEST) @regression @tier3', function () {
+    beforeEach(setUpHandler);
+    afterEach(() => sinon.restore());
+    describe('ATTEST v5/v6 response batch', function () {
+        beforeEach(function () {
+            sinon.stub(ed25519, 'verify').returns(true);
+        });
+
+        // A continuation of another encoding of the window can be stored before any head
+        // exists, so the head-last reassembly meets it in the chunk table.
+        async function landOtherEncoding(h, enc, actionIndex) {
+            const wire = enc.wires[1].split('|');
+            wire[4] = '3';
+            const data = batchData({ FORMAT: 6, ACTION_INDEX: actionIndex, BLOCK_INDEX: 6300001 });
+            await h.parse(wire.slice(1), data, null);
+            return data;
+        }
+
+        it('head-last reassembly ignores a stored continuation of another encoding that fills slot 1 alone', async function () {
+            const { handler: h, db } = batchHandler('DOGE');
+            chunkStore(db);
+            const { enc } = chunkedBatch(2);
+
+            await landOtherEncoding(h, enc, 70);
+            await land(h, enc, 0, 73);
+            assert.strictEqual(db.enqueueHubPushTx.called, false, 'slot 1 of this encoding is still missing');
+            assert.strictEqual(db.setAttestBatchStatus.called, false, 'incomplete coverage is not a verdict');
+        });
+
+        it('a stored continuation of another encoding does not make the honest chunk a duplicate', async function () {
+            const { handler: h, db } = batchHandler('DOGE');
+            chunkStore(db);
+            const { enc } = chunkedBatch(2);
+
+            await landOtherEncoding(h, enc, 70);
+            await land(h, enc, 0, 71);
+            const honest = await land(h, enc, 1, 72);
+            assert.strictEqual(honest['STATUS'], 'valid');
+            assert.strictEqual(db.enqueueHubPushTx.callCount, 1);
+        });
+    });
+});

@@ -12,8 +12,8 @@
  *
  **********************************************************************
  *
- * Time table part 5 of 5: CONTROLLER_CUSTODY_GUARD, OWNER_WITHDRAW_OPT_IN and
- * SLASH_XANCPUB_PUBLISHER_PAIR.
+ * Time table part 5 of 5: controller policy and guard transaction boundaries,
+ * and the XANCPUB publisher-pair slash rule.
  *
  * One row per protocol change, in registration order, as the argument list of
  * ProtocolChanges.addChange(name, version, mainnet_time, testnet_time,
@@ -32,7 +32,7 @@ const {
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
 
-module.exports = [
+const CHANGES = [
     ['CONTROLLER_CUSTODY_GUARD', '0.2.0', CONTROLLER_CUSTODY_GUARD_MAINNET_TIME,
         CONTROLLER_CUSTODY_GUARD_TESTNET_TIME,
         regtestTimeOverride('CONTROLLER_CUSTODY_GUARD_REGTEST_TIME'), 0, 0, 0],
@@ -52,4 +52,12 @@ module.exports = [
     // block that carries the SLASH. Mainnet and testnet are unarmed; regtest is
     // genesis-active.
     ['SLASH_XANCPUB_PUBLISHER_PAIR', '0.2.0', UNARMED, UNARMED, 0, 0, 0, 0],
+
+    // Groups sibling guards on one native-action leg under an outer savepoint.
+    // It follows the custody guard on testnet, stays inert on mainnet, and is
+    // genesis-active on regtest so fresh test chains exercise the corrected rule.
+    ['CONTROLLER_GUARD_LEG_SAVEPOINTS', '0.2.0', 9999999999,
+        CONTROLLER_CUSTODY_GUARD_TESTNET_TIME, 0, 0, 0, 0],
 ];
+
+module.exports = CHANGES;
