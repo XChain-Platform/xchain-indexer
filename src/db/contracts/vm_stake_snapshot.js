@@ -21,15 +21,7 @@
  *
  ********************************************************************/
 
-const { UNARMED } = require('../../protocol_changes/core.js');
-
-// Per-chain arming of the slash-window rule below: each chain arms on its own and a chain left at
-// UNARMED keeps the legacy snapshot. Regtest arms from its config key and is inert when unset.
-const SLASH_WINDOW_ARMING = {
-    mainnet: () => UNARMED,
-    testnet: () => UNARMED,
-    regtest: (config) => parseInt(config['STAKE_SNAPSHOT_SLASH_WINDOW_REGTEST_TIME']) || UNARMED,
-};
+const protocolChanges = require('../../protocol_changes.js');
 
 module.exports = {
 
@@ -112,10 +104,10 @@ module.exports = {
 const slashWindow = {
 
     async isActive(db, blockIndex){
-        let arming = SLASH_WINDOW_ARMING[db.config['NETWORK']];
-        if(!arming) return false;
-        let threshold = arming(db.config);
-        if(threshold === UNARMED) return false;
+        let network = db.config['NETWORK'];
+        if(network !== 'mainnet' && network !== 'testnet' && network !== 'regtest') return false;
+        let threshold = protocolChanges.get('protocol_changes.changes.STAKE_SNAPSHOT_SLASH_WINDOW')[network + '_time'];
+        if(threshold >= protocolChanges.UNARMED) return false;
         let blockTime = await db.getBlockTime(blockIndex);
         return Number(blockTime) >= threshold;
     },

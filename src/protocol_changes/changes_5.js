@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Time table part 5 of 5: CONTROLLER_CUSTODY_GUARD and OWNER_WITHDRAW_OPT_IN.
+ * Time table part 5 of 5: CONTROLLER_CUSTODY_GUARD, OWNER_WITHDRAW_OPT_IN and STAKE_SNAPSHOT_SLASH_WINDOW.
  *
  * One row per protocol change, in registration order, as the argument list of
  * ProtocolChanges.addChange(name, version, mainnet_time, testnet_time,
@@ -29,6 +29,7 @@ const {
     OWNER_WITHDRAW_OPT_IN_TESTNET_TIME,
 } = require('./flag_times.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
+const { UNARMED } = require('./core.js');
 
 module.exports = [
     ['CONTROLLER_CUSTODY_GUARD', '0.2.0', CONTROLLER_CUSTODY_GUARD_MAINNET_TIME,
@@ -43,4 +44,12 @@ module.exports = [
     ['OWNER_WITHDRAW_OPT_IN', '0.2.0', OWNER_WITHDRAW_OPT_IN_MAINNET_TIME,
         OWNER_WITHDRAW_OPT_IN_TESTNET_TIME,
         regtestTimeOverride('OWNER_WITHDRAW_OPT_IN_REGTEST_TIME'), 0, 0, 0],
+
+    // STAKE_SNAPSHOT_SLASH_WINDOW: from the flag day the VM stake snapshot caps a (pubkey, tick)'s
+    // mid-UNSTAKE contract_stakes rows at what its open contract_unstakes rows still hold, the
+    // place SLASH debits during the activation delay (db/contracts/vm_stake_snapshot.js).
+    // Every chain ships UNARMED and arms on its own; regtest is inert unless a venue sets
+    // STAKE_SNAPSHOT_SLASH_WINDOW_REGTEST_TIME.
+    ['STAKE_SNAPSHOT_SLASH_WINDOW', '0.2.0', UNARMED, UNARMED,
+        () => regtestTimeOverride('STAKE_SNAPSHOT_SLASH_WINDOW_REGTEST_TIME')() || UNARMED, 0, 0, 0],
 ];
