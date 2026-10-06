@@ -111,8 +111,8 @@ module.exports = {
 
         // Loop through matches and take the first valid one
         for(let match of matches){
-            let reciprocal = this.swapCandidateIsReciprocal(swapInfo, match);
-            let allowed = await this.swapCandidateAllowed(data, swapInfo, match, ctx);
+            let reciprocal = module.exports.swapCandidateIsReciprocal.call(this, swapInfo, match);
+            let allowed = await module.exports.swapCandidateAllowed.call(this, data, swapInfo, match, ctx);
             if(reciprocal && allowed){
                 return match;
             }
