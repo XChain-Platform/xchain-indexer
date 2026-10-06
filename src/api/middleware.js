@@ -45,12 +45,23 @@ function installMiddleware(app, ctx){
     app.use(apiKeyGate(ctx));
 }
 
+// A client-supplied body that fails to parse (or is oversized) is the caller's
+// fault, not a server fault: answer with the parser's own 4xx and log one warn
+// line without the stack, instead of letting Express print it at error level.
+function jsonBodyErrorHandler(err, req, res, next){
+    const status = err && err.status;
+    if(!err || !(status >= 400 && status < 500) || res.headersSent) return next(err);
+    console.warn('[api] rejected request body: ' + (err.type || 'body_error') + ' (' + status + ')');
+    res.status(status).json({ error: 'Invalid request body' });
+}
+
 function installSecurityLayers(app, { CONFIG_ENV }){
     // Use Helmet to increase security
     app.use(helmet());
 
     // Allow JSON requests
     app.use(bodyParser.json());
+    app.use(jsonBodyErrorHandler);
 
     // Allow CORS (restricted to the configured allowlist, defaults to localhost).
     // CORS_ORIGIN is comma-separated, not a single origin: handing `cors` the raw
@@ -96,4 +107,4 @@ function installObservabilityLayers(app, { indexer, CONFIG_ENV, INDEXER_NETWORK 
     installIndexerMetrics(observability, indexer);
 }
 
-module.exports = { installMiddleware };
+module.exports = { installMiddleware, jsonBodyErrorHandler };
