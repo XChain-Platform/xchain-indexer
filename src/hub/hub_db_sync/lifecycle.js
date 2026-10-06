@@ -101,11 +101,8 @@ module.exports = {
     //
     // A partial drain leaves the gate closed and SCHEDULES A RETRY. The retry is
     // load-bearing in WS mode: there is no poll loop while the socket is healthy,
-    // so without it one failed table would freeze the watermark at 0 until the
-    // next reconnect (which on a stable connection is never the case; prod incident
-    // 2026-06-11: BTC mainnet deferred every tip block in 60s loops because the
-    // single-page bootstrap could not drain a >10k-row price_snapshots table and
-    // nothing ever re-attempted it).
+    // so without it one failed table freezes the watermark at 0 until a reconnect,
+    // which a stable connection never makes.
     async bootstrapAll() {
         if (this._bootstrapping) return;                     // reconnect + retry timer may overlap
         if (failover.uncaughtUpBlocks(this)) return failover.rejectUncaughtUpReadyFrame(this);
@@ -134,20 +131,13 @@ module.exports = {
     // watermarks of the ones that drained in full.
     // price_snapshots bootstraps LAST so EVERY per-block barrier that gates block
     // processing (oracle, cross-chain match, cross-chain call, capability snapshot)
-    // arms its empty-mirror fast path before the one heavy table drains. Each of those
-    // barriers' "no-op on an empty mirror" path requires its OWN <x>Bootstrapped flag,
-    // which only flips after that table's bootstrap completes; serialized behind a
-    // multi-minute price_snapshots drain they all stay false, so a cold-start indexer at
-    // chain tip with empty hub mirrors defers every block 60s on the FIRST unarmed
-    // barrier (LTC-testnet 2026-06-16: a 37,032-row price_snapshots drain held the oracle
-    // barrier at 'oracle mirror at null' for 3.5 min). Ordering price_snapshots first
-    // only relocated that stall to the next barrier in sequence; draining it last lets
-    // the small barrier tables (typically empty on non-BTC chains) arm in ~1s. The
-    // price_snapshots barrier (waitForPriceSyncHeight) is BTC-only and runs FIRST in the
-    // block loop, so BTC waits for price_snapshots there regardless of bootstrap order;
-    // draining it last means BTC waits ONCE (its price barrier) instead of twice (price
-    // then match). Consensus-neutral: the global stream watermark still advances only
-    // after ALL tables drain, independent of order.
+    // arms its empty-mirror fast path before the one heavy table drains. Each needs its
+    // OWN <x>Bootstrapped flag, so behind a multi-minute price_snapshots drain a
+    // cold-start indexer at tip defers every block 60s on the FIRST unarmed barrier.
+    // The BTC-only price barrier (waitForPriceSyncHeight) runs first in the block loop,
+    // so draining price_snapshots last makes BTC wait ONCE rather than twice.
+    // Consensus-neutral: the global stream watermark still advances only after ALL
+    // tables drain, independent of order.
     async drainEveryTable() {
         let marks = [];
         let allDrained = true;
