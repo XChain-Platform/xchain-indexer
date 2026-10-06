@@ -37,11 +37,11 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 
-const Database              = require('../../../src/db');
-const Utility               = require('../../../src/utility.js');
-const { getTestConfig }     = require('../../fixtures/config');
+const Database              = require('../../../../src/db');
+const Utility               = require('../../../../src/utility.js');
+const { getTestConfig }     = require('../../../fixtures/config');
 // The policy-inheritance flag day is a registry row (W5), stubbed through activeAt().
-const { stubActiveAt }      = require('../../helpers/gate_modules.js');
+const { stubActiveAt }      = require('../../../helpers/gate_modules.js');
 const TOKEN_POLICY_INHERITANCE_KEY = 'token_policy_activation.TOKEN_POLICY_INHERITANCE_ACTIVATION';
 
 const BTC_MAINNET  = '1XChain3M4uRwcHqt4XuhVBUQ8cL4qQsA';

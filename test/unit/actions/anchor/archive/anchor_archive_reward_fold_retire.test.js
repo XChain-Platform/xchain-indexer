@@ -17,10 +17,10 @@
 const assert = require('assert');
 const sinon = require('sinon');
 
-const settle = require('../../../../src/actions/anchor/settle.js');
-const ar = require('../../../../src/consensus/gates/anchor_reward_gate.js');
-const observability = require('../../../../src/observability/index.js');
-const { stubActiveAt } = require('../../../helpers/gate_modules.js');
+const settle = require('../../../../../src/actions/anchor/settle.js');
+const ar = require('../../../../../src/consensus/gates/anchor_reward_gate.js');
+const observability = require('../../../../../src/observability/index.js');
+const { stubActiveAt } = require('../../../../helpers/gate_modules.js');
 
 const FOLD_GATE_KEY = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
 const PUBLISHER = '02'.repeat(33);

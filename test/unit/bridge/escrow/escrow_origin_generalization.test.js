@@ -11,15 +11,15 @@
 
 const assert = require('assert');
 const sinon = require('sinon');
-const CHK = require('../../../src/consensus/bridge_checkpoint_check.js');
-const M = require('../../../src/consensus/merkle.js');
-const SUB = require('../../../src/consensus/gates/state_subtree_gate.js');
-const proofClient = require('../../../src/consensus/bridge_proof_client.js');
-const { resolveTransferOrigin } = require('../../../src/consensus/bridge_checkpoint_check/origin.js');
+const CHK = require('../../../../src/consensus/bridge_checkpoint_check.js');
+const M = require('../../../../src/consensus/merkle.js');
+const SUB = require('../../../../src/consensus/gates/state_subtree_gate.js');
+const proofClient = require('../../../../src/consensus/bridge_proof_client.js');
+const { resolveTransferOrigin } = require('../../../../src/consensus/bridge_checkpoint_check/origin.js');
 const {
     BS, makeKey, NETWORK, SNAPSHOT, DEST_ADDR, ESCROW_DOGE_ON_BTC, ESCROW_BTC_ON_DOGE,
     makeTransfer, snapshotSet, makeCtx
-} = require('./bridge_settle.test/helpers/settle_fixtures.js');
+} = require('../bridge_settle.test/helpers/settle_fixtures.js');
 
 const CP_HEIGHT = SNAPSHOT + 5;
 
