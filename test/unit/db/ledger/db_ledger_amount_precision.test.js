@@ -189,6 +189,33 @@ describe('createLedgerChangeRecord amount quantization @money @regression @tier1
         await db.createLedgerChangeRecord('credits', 900, 'DEEP', '0.00000003', 'bcrt1qholder');
         assert.strictEqual(inserted(), '0.00000003');
     });
+
+    it('LIVE: no round-trip is spent on the tick decimals the exact scale ignores', async function () {
+        const db = makeDb('regtest', 'BTC');
+        const inserted = stubLedgerWrite(db, 0);
+        db.blockIndex = 500;
+        await db.createLedgerChangeRecord('debits', 900, 'XCHAIN', '0.5', 'bcrt1qpayer');
+        assert.strictEqual(inserted(), '0.5');
+        assert.strictEqual(db.getTokenDecimalPrecision.callCount, 0);
+    });
+
+    it('LEGACY: below the flag the tick decimals are still read once per row', async function () {
+        const db = makeDb('mainnet', 'BTC');
+        const inserted = stubLedgerWrite(db, 0);
+        db.blockIndex = 963000;
+        await db.createLedgerChangeRecord('debits', 900, 'XCHAIN', '0.5', 'bc1qpayer');
+        assert.strictEqual(inserted(), '1');
+        assert.strictEqual(db.getTokenDecimalPrecision.callCount, 1);
+    });
+
+    it('LEGACY: with no block context the tick decimals are still read once per row', async function () {
+        const db = makeDb('regtest', 'BTC');
+        const inserted = stubLedgerWrite(db, 0);
+        db.blockIndex = null;
+        await db.createLedgerChangeRecord('debits', 900, 'XCHAIN', '0.5', 'bcrt1qpayer');
+        assert.strictEqual(inserted(), '1');
+        assert.strictEqual(db.getTokenDecimalPrecision.callCount, 1);
+    });
 });
 
 describe('Ledger projections: sum exactly, round once @money @regression @tier1', function () {

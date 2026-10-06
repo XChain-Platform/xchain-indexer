@@ -77,8 +77,12 @@ describe('equivocation_header (indexer)', function () {
             const docs = siblingCheckout(__dirname, '../../../../xchain-documentation/protocol/constants.js');
             if (!docs.usable) return skipOrFail(this, docs, 'the canonical constants.js equivocation activation parity');
             let canonical;
+            // A trusted file that fails to load is a broken sibling: fail it under XCHAIN_REQUIRE_SIBLINGS=1.
             try { canonical = require('../../../../xchain-documentation/protocol/constants.js').EQUIV_HEADER_ACTIVATION; }
-            catch (e) { return this.skip(); }
+            catch (e) {
+                return skipOrFail(this, { usable: false, reason: 'canonical constants.js is present but failed to load: ' + e.message },
+                    'the canonical constants.js equivocation activation parity');
+            }
             assert.deepStrictEqual(eq.EQUIV_HEADER_ACTIVATION, canonical);
         });
         it('all 5 copies == indexer (map + tags + builder bytes)', function () {
@@ -92,13 +96,17 @@ describe('equivocation_header (indexer)', function () {
                 if (!copy.usable) return skipOrFail(this, copy, 'the five-copy equivocation_header parity');
             }
             let copies;
+            // Every copy passed the precheck, so a load failure here is a broken sibling, never an absent one.
             try {
                 copies = {
                     hub:      require('../../../../xchain-hub/src/consensus/equivocation_header.js'),
                     sdk:      require('../../../../xchain-sdk/src/consensus/equivocation_header.js'),
                     explorer: require('../../../../xchain-explorer/src/consensus/equivocation_header.js'),
                 };
-            } catch (e) { return this.skip(); }
+            } catch (e) {
+                return skipOrFail(this, { usable: false, reason: 'a sibling equivocation_header.js is present but failed to load: ' + e.message },
+                    'the five-copy equivocation_header parity');
+            }
             const ref = eq.buildEquivCanonical('XDEX', 'mid', 2, 'XMATCH|mid|x');
             for(const name of Object.keys(copies)){
                 const copy = copies[name];

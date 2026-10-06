@@ -28,12 +28,14 @@
  * filled order, which is why the parent spec makes delete-on-zero normative.
  *
  * TWIN PAIR: this ENTRY file is kept BYTE-IDENTICAL with
- * xchain-sync/test/unit/escrowLeafSubtree.test.js, apart from the src/<feature>/
+ * xchain-sync/test/unit/escrow_leaf_subtree.test.js, apart from the src/<feature>/
  * depth of its own requires, and locked equal by the cross-repo loop in
- * rollback-coverage.test.js. The suite outgrew the file-length limit, so the
+ * rollback_coverage.test.js. The suite outgrew the file-length limit, so the
  * shadow-thread and strict-read blocks now sit beside it in
- * escrow_leaf_subtree.test/. That parts directory is NOT in the twin registry,
- * so a change there reaches the sync half only by hand or reconcile-twins.sh.
+ * escrow_leaf_subtree.test/. Every part file there is in the twin registry too,
+ * and the same rollback_coverage.test.js walks the whole directory on both sides,
+ * so a part added, dropped or edited in one repo alone fails there;
+ * reconcile-twins.sh copies the indexer half across.
  *
  ********************************************************************/
 

@@ -148,10 +148,14 @@ describe('NodeProof (NODEPROOF) @regression @tier3', function () {
         if (!hubVerdict.usable)
             return skipOrFail(this, hubVerdict, 'the cross-repo PASS sort pin on the hub producer');
         let hubSrc;
+        // The precheck found the producer, so a read failure fails under XCHAIN_REQUIRE_SIBLINGS=1.
         try {
             hubSrc = fs.readFileSync(
                 path.join(__dirname, '../../../../xchain-hub/src/consensus/full_node_challenge_round.js'), 'utf8');
-        } catch (e) { return this.skip(); }
+        } catch (e) {
+            return skipOrFail(this, { usable: false, reason: 'hub full_node_challenge_round.js is present but could not be read: ' + e.message },
+                'the cross-repo PASS sort pin on the hub producer');
+        }
         assert.match(hubSrc, /const PASS_CMP = \(a, b\) => Buffer\.compare\(/,
             'the hub producer must define the same byte comparator');
         assert.strictEqual(/\bpass\.sort\(\)|passList\.slice\(\)\.sort\(\)|pass\.slice\(\)\.sort\(\)/.test(hubSrc), false,
