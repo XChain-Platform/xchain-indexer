@@ -3,13 +3,13 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
-const witness = require('../../../bin/verify-list-owner-replay-equivalence.js');
+const witness = require('../../../../bin/verify-list-owner-replay-equivalence.js');
 
 describe('LIST owner replay witness: coin argument compatibility', function () {
     const gatePrefix = "gateRegistry.activeAt('" + witness.GATE + "', this.config['NETWORK'], ";
     const nullForm = gatePrefix + 'null,';
     const coinForm = gatePrefix + "this.config['COIN'],";
-    const source = fs.readFileSync(path.join(__dirname, '../../../src/actions/list.js'), 'utf8');
+    const source = fs.readFileSync(path.join(__dirname, '../../../../src/actions/list.js'), 'utf8');
 
     function assertRollback(input) {
         const legacy = witness.rollBackListOwner(input);

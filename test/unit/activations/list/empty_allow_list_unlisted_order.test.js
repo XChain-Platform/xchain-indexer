@@ -17,11 +17,11 @@ process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 const sinon = require("sinon");
 const assert = require('assert');
-const { createBaseData, createMockIndexer } = require("../../fixtures/mocks");
-const { stubGate } = require("../../helpers/gate_modules.js");
-const H = require("../../unit/actions/market/order_match.test/helpers/order_match_harness.js");
-const orderInfoDb = require("../../../src/db/orders/order_info.js");
-const swapInfoDb = require("../../../src/db/swaps/swap_info.js");
+const { createBaseData, createMockIndexer } = require("../../../fixtures/mocks");
+const { stubGate } = require("../../../helpers/gate_modules.js");
+const H = require("../../../unit/actions/market/order_match.test/helpers/order_match_harness.js");
+const orderInfoDb = require("../../../../src/db/orders/order_info.js");
+const swapInfoDb = require("../../../../src/db/swaps/swap_info.js");
 const KEY = 'empty_allow_list_denies_activation.EMPTY_ALLOW_LIST_DENIES';
 
 let indexer, orderMatch;
