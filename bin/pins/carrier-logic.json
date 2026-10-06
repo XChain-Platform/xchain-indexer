@@ -130,7 +130,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "b3202d580497fa273f3d18b617ba1b706bb45cf2a6b72f889b96cf1e8c5cbff1",
+      "hash": "ebb3851ccbf61b5b3571fe83a95b191eb7ecdfa4ea6f1dfb3bc68c07699dde07",
       "twins": []
     },
     "rollcall_activation": {
@@ -1941,6 +1941,13 @@
       "date": "2026-10-05"
     },
     {
+      "id": "protocol_changes",
+      "from": "b3202d580497fa273f3d18b617ba1b706bb45cf2a6b72f889b96cf1e8c5cbff1",
+      "to": "91eecda92a5961138e245106b2ecd67c5014d7dc1048d1c495bdd71c36f6d69f",
+      "reason": "readonly accessor own key time-table row",
+      "date": "2026-10-06"
+    },
+    {
       "id": "stake_weighted_quorum",
       "from": "afaee5777e8d909eace7a7106b294797014f74929fc4302c50a2ec31ac77a847",
       "to": "667f90202114618e33f1a29788fd51a21e508f207a3143b8c285aef4c079a25d",
@@ -1952,6 +1959,20 @@
       "from": "7ec32753dd425897a23dd2bc471324c75576a1b14738353db0024aca36b690e5",
       "to": "b7db67ba116bc4ec6649bf24c23c2affcfe4eccd8cf447480fe4f683d13ae12f",
       "reason": "bind the LTC and DOGE preload and price barrier on the signed admission height once the mirror admission consumer gate is armed",
+      "date": "2026-10-06"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "b3202d580497fa273f3d18b617ba1b706bb45cf2a6b72f889b96cf1e8c5cbff1",
+      "to": "51c6cc00bb5242a160f933af173977fca6a49f2a7d8b0ee3d5e6d16d4c63e9b2",
+      "reason": "DISPENSER_REFILL registry row, unarmed on mainnet and testnet",
+      "date": "2026-10-06"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "91eecda92a5961138e245106b2ecd67c5014d7dc1048d1c495bdd71c36f6d69f",
+      "to": "ebb3851ccbf61b5b3571fe83a95b191eb7ecdfa4ea6f1dfb3bc68c07699dde07",
+      "reason": "DISPENSER_REFILL registry row, unarmed on mainnet and testnet, joined with the readonly accessor and slash rows",
       "date": "2026-10-06"
     }
   ]
