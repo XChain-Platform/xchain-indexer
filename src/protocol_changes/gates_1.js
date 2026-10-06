@@ -375,7 +375,8 @@ addGate('dispenser_send_amount_compare_activation.DISPENSER_SEND_COMPARE_SCALE',
 
 // Per-chain activation heights, interpreted against the chain's own block_index.
 // `null` = NOT YET PINNED = inert (legacy lexicographic compare, byte-identical
-// replay). Mainnet and regtest are armed; testnet is still unpinned.
+// replay). All three networks are armed; testnet at heights, with the legacy
+// lexicographic compare below them.
 addGate('dispenser_send_amount_compare_activation.DISPENSER_SEND_AMOUNT_COMPARE_ACTIVATION', 'height', {
     // ARMED at genesis by the 2026-09-09 ruling: identity on the indexed mainnet
     // history (0 dispensers, 0 dispenses on every chain, measured 2026-09-09), so
@@ -383,8 +384,8 @@ addGate('dispenser_send_amount_compare_activation.DISPENSER_SEND_AMOUNT_COMPARE_
     'BTC:mainnet':  0,
     'LTC:mainnet':  0,
     'DOGE:mainnet': 0,
-    // Unpinned. Testnet arms at flag-day assembly, above the tip recorded at that
-    // time, in one coordinated fleet deploy. A height a carrying fleet has already
+    // ARMED by the v0.21.3 cut at these heights rather than at genesis, with the
+    // legacy lexicographic compare below them. A height a carrying fleet has already
     // passed opens a retroactive window: a node that reindexes across it derives
     // different state than one that did not, and testnet does carry the history
     // that makes that real.
