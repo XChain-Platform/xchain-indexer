@@ -243,8 +243,8 @@ addGate('slash_grid_activation.SLASH_GRID_ACTIVATION', 'height', {
     'BTC:mainnet':  0,
     'LTC:mainnet':  0,
     'DOGE:mainnet': 0,
-    // Unpinned: testnet carries stake history, so its heights are pinned at
-    // flag-day assembly with the replay evidence that step requires.
+    // ARMED by the v0.21.3 cut at these heights rather than at genesis, because testnet
+    // carries stake history; testnet blocks below them keep the legacy arithmetic.
     'BTC:testnet':  155001,
     'LTC:testnet':  4906040,
     'DOGE:testnet': 67962387,
@@ -261,8 +261,9 @@ addGate('slash_ledger_consolidation_activation.SLASH_LEDGER_CONSOLIDATION_ACTIVA
     'BTC:mainnet':  0,
     'LTC:mainnet':  0,
     'DOGE:mainnet': 0,
-    // Unpinned: testnet carries stake history, so its heights are pinned at
-    // flag-day assembly with the replay evidence that step requires.
+    // ARMED by the v0.21.3 cut at these heights rather than at genesis, because testnet
+    // carries stake history; testnet blocks below them keep the legacy per-emission
+    // overwrite.
     'BTC:testnet':  155001,
     'LTC:testnet':  4906040,
     'DOGE:testnet': 67962387,
@@ -314,8 +315,8 @@ addGate('sweep_zero_leg_activation.SWEEP_ZERO_LEG_ACTIVATION', 'height', {
 // exists there (XCP appears only in unit-test mocks, and every scenario ticker is four
 // characters or longer).
 //
-// Testnet holds at the house sentinel until the train that arms it sizes a dated instant
-// above the fleet's deploy tip. Mainnet is a genesis-arm candidate under the genesis-arm
+// Testnet BTC, LTC and DOGE are pinned at the heights the v0.21.0 freeze height plan set;
+// only the bare `testnet` fallback, for a coin with no entry, stays at the sentinel. Mainnet is a genesis-arm candidate under the genesis-arm
 // method and stays at the sentinel until the mainnet replicas measure zero mined
 // ISSUEs of a short or listed name, valid OR invalid: an armed height below a real one
 // would re-verdict it and move that chain's hashes.

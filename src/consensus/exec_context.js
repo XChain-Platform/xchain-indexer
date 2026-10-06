@@ -15,8 +15,8 @@
  * Shared builder for system-injected EXECUTE contexts.
  *
  * Four injector sites synthesize an EXECUTE that runs a contract callback
- * (attest.js response + expiry callbacks, vote.js poll-finalize callback,
- * xcall.js result callback). Each used to hand-roll the identity tuple, and
+ * (actions/attest response + expiry callbacks, actions/vote poll-finalize callback,
+ * actions/xcall result callback). Each used to hand-roll the identity tuple, and
  * two of them omitted TX_HASH: a contract that emitted ATTEST/XCALL from
  * inside such a callback got a request_id from the VM (which tolerates a
  * missing txHash), was charged gas, and then had the emission hard-rejected

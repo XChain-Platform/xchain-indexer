@@ -142,9 +142,10 @@ class AnchorProofClient {
 
     // Prove (or disprove) that `expect` names a mined DOGE anchor.
     //   expect.txid            - the doge_anchor_txid on the mirrored attestation row
-    //   expect.rewardType      - 'anchor_<CHAIN>', 'anchor_archive' or 'anchor_bundle'
-    //   expect.roundReference  - checkpoint_seq (per-chain), match_batch_seq (archive) or
-    //                            the bundle's SNAPSHOT_BLOCK (bundle)
+    //   expect.rewardType      - 'anchor_archive' or 'anchor_bundle'; a retired pre-restart
+    //                            'anchor_<CHAIN>' names no live family and judges 'rejected'
+    //   expect.roundReference  - match_batch_seq (archive) or the bundle's SNAPSHOT_BLOCK
+    //                            (bundle)
     //   expect.snapshotBlock   - the reward's BTC snapshot_block
     //   expect.publisher       - the elected publisher pubkey being paid
     //   expect.network         - the reward's network

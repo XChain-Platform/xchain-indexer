@@ -32,7 +32,7 @@ const ProviderRegistry = require('../../attestation/provider_registry.js');
 // Per-provider deadline windows are built per instance in the constructor
 // (this.providerDeadlineWindows) from the CONFIGURED registry. A module-scoped
 // snapshot cannot see config.ATTESTATION.PROVIDERS, so the VM enforced DEFAULTS
-// while attest.js validated against the overlay, letting the VM accept a request
+// while actions/attest/ validated against the overlay, letting the VM accept a request
 // the indexer then rejects.
 
 // Gas ceiling for a top-level EXECUTE. Must match the gasCeiling the VM is
@@ -97,7 +97,7 @@ class Execute {
         // Per-provider deadline windows injected into the VM gateway so a contract's
         // attestation.request() rejects an over-limit deadlineBlocks at call time rather
         // than landing on-chain and being silently rejected here by the DEADLINE check.
-        // Built from the CONFIGURED registry, the same construction attest.js uses, so the
+        // Built from the CONFIGURED registry, the same construction actions/attest/index.js uses, so the
         // VM cap and the host cap cannot drift under a config.ATTESTATION.PROVIDERS overlay.
         this.providerDeadlineWindows = new ProviderRegistry(this.config).getDeadlineWindows();
 
