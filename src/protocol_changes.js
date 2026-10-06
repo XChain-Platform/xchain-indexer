@@ -18,15 +18,18 @@
  *
  ********************************************************************/
 
-// ASSEMBLER. Flag-day constants, time-table rows and the registry API live in
-// src/protocol_changes/. This entry builds the table and re-exports constants.
+// ASSEMBLER. The flag-day constants, the 100 time-table rows and registry API live
+// in the part files under src/protocol_changes/. This entry builds its table from
+// the registry rows and re-exports every constant under the name it always had.
 const {
     UNARMED, UNPINNED, RegistryMissError, createRegistry, applyChanges,
 } = require('./protocol_changes/core.js');
 const { registerRows } = require('./protocol_changes/shared_rows.js');
 const { getLogger } = require('./observability/index.js');
-// Gate rows load in registration order. Each part queues addGate() calls into
-// shared_rows.js; registerRows() below replays them into the registry.
+// The gate rows, in registration order: the SHARED block parts (twinned into
+// hub, sync, explorer and sdk), the indexer-only parts, and the registry's own
+// constants. Each part queues its addGate() calls into shared_rows.js as it
+// loads; registerRows() below replays them into the registry.
 require('./protocol_changes/shared_rows_1.js');
 require('./protocol_changes/shared_rows_2.js');
 require('./protocol_changes/shared_rows_3.js');
@@ -164,7 +167,7 @@ class ProtocolChanges {
     }
 
     parseChanges(){
-        // The registered rows live in src/protocol_changes/changes_*.js; see CHANGE_PARTS.
+        // The 100 rows live in src/protocol_changes/changes_*.js; see CHANGE_PARTS.
         applyChanges(this, CHANGE_PARTS);
     }
 

@@ -155,8 +155,13 @@ async function applyGuardEmissions(ctx, guardCtxData, basePosition){
     }
 }
 
-// The invocation counter prevents inner-frame reuse; the activated outer frame
-// uses the disjoint `controller_guard_leg_` prefix.
+// Guard allowed. Commit its state changes + emissions atomically; any
+// failure rolls them back and DENIES. The savepoint name carries the
+// (native action, controller, seq) for readability but is made unique by
+// a trailing per-invocation ordinal: MariaDB silently destroys a
+// duplicate-named savepoint, so two guards that share a contractIndex on
+// one leg (or any future re-entrant guard path) must never derive the
+// same name or an inner release would orphan the outer's rollback target.
 // Returns a DENY verdict when the commit failed, null when it stuck.
 async function commitGuardEffects(ctx){
     let hostData = ctx.hostData;

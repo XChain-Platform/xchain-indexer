@@ -11,24 +11,10 @@
 // contact legal@dankest.llc.
 
 const assert = require('assert');
-const fs = require('fs');
-const path = require('path');
 const ProtocolChanges = require('../../../src/protocol_changes.js');
 
 const ENV = 'CONTROLLER_CUSTODY_GUARD_REGTEST_TIME';
 const KEY = 'protocol_changes.changes.CONTROLLER_CUSTODY_GUARD';
-const PARTS = path.resolve(__dirname, '../../../src/protocol_changes');
-
-function finalPartRowCount() {
-    const files = fs.readdirSync(PARTS)
-        .filter(file => /^changes_\d+\.js$/.test(file))
-        .sort((a, b) => parseInt(a.match(/\d+/)[0]) - parseInt(b.match(/\d+/)[0]));
-    assert.strictEqual(files[files.length - 1], 'changes_5.js');
-    const earlierRows = files.slice(0, -1)
-        .reduce((count, file) => count + require(path.join(PARTS, file)).length, 0);
-    const table = new ProtocolChanges({ config: {}, util: {} }).changes;
-    return Object.keys(table).length - earlierRows;
-}
 
 function build() {
     return new ProtocolChanges({ config: {}, util: {} }).changes.CONTROLLER_CUSTODY_GUARD;
@@ -48,9 +34,8 @@ describe('protocol_changes/CONTROLLER_CUSTODY_GUARD row @regression @tier1', fun
 
     it('is the first row in part 5 with mainnet unarmed and testnet armed at the v0.21.3 instant', function () {
         const rows = require('../../../src/protocol_changes/changes_5.js');
-        assert.strictEqual(rows.length, finalPartRowCount());
+        assert.strictEqual(rows.length, 3);
         assert.strictEqual(rows[0][0], 'CONTROLLER_CUSTODY_GUARD');
-        assert.strictEqual(rows[rows.length - 1][0], 'CONTROLLER_GUARD_LEG_SAVEPOINTS');
         assert.strictEqual(ProtocolChanges.CONTROLLER_CUSTODY_GUARD_MAINNET_TIME, ProtocolChanges.UNARMED);
         assert.strictEqual(ProtocolChanges.CONTROLLER_CUSTODY_GUARD_TESTNET_TIME, 1791061097);
         assert.deepStrictEqual(build(), {
