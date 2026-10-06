@@ -22,7 +22,7 @@
     },
     "attest_broadcast_fee_activation": {
       "path": "src/actions/attest/attest_broadcast_fee_gate.js",
-      "hash": "e904e6dafb4783b370a46837e75338dfc389d9825c82d14a7f8b7bc308b07d60",
+      "hash": "8a8265180a17ec18b607b1a397f3f64787878f07b81231ddafa9d4619ae2d111",
       "twins": []
     },
     "attest_request_cap_activation": {
@@ -1939,6 +1939,13 @@
       "to": "b3202d580497fa273f3d18b617ba1b706bb45cf2a6b72f889b96cf1e8c5cbff1",
       "reason": "route the protocol error log through the one logger, text unchanged",
       "date": "2026-10-05"
+    },
+    {
+      "id": "attest_broadcast_fee_activation",
+      "from": "e904e6dafb4783b370a46837e75338dfc389d9825c82d14a7f8b7bc308b07d60",
+      "to": "8a8265180a17ec18b607b1a397f3f64787878f07b81231ddafa9d4619ae2d111",
+      "reason": "rename two private helpers, logic unchanged",
+      "date": "2026-10-06"
     }
   ]
 }
