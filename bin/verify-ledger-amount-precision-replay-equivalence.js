@@ -340,7 +340,7 @@ const SITES = [
         label: 'createLedgerChangeRecord: the WRITE-side quantization scale',
         restores: true,
         head: '        let decimals = ledgerPrecision.ledgerWriteScale(\n' +
-              '            await this.getTokenDecimalPrecision(tick_id),\n' +
+              "            ledgerPrecision.isLedgerAmountPrecisionActive(this.blockIndex, this.config['NETWORK'], this.config['COIN']) ? null : await this.getTokenDecimalPrecision(tick_id),\n" +
               "            this.blockIndex, this.config['NETWORK'], this.config['COIN']);",
         legacy: '        let decimals = await this.getTokenDecimalPrecision(tick_id);',
     },

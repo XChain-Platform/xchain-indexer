@@ -122,7 +122,7 @@ module.exports = {
 
     // Validate a fiat amount format. Now equivalent to isValidAmountFormat (the precision
     // cap lives there now); kept as a named alias so existing callers and the
-    // attest.js FEE_AMOUNT comment remain valid.
+    // actions/attest/fees.js FEE_AMOUNT comment remain valid.
     isValidFiatFormat(decimals, amount, blockTime){
         let valid = this.isValidAmountFormat(decimals, amount, blockTime);
         if(valid){
