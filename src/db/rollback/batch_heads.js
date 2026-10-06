@@ -28,7 +28,7 @@ const { archiveAuthorScopeJoin } = require('../../consensus/gates/archive_rollba
 // continuation are what make an `attests` row part of a batch, and naming them from the
 // wire module keeps the reorg query and the parser reading the same two numbers.
 const abw       = require('../../actions/attest/attest_batch_wire.js');
-// Byte-identical copy of actions/attest.js's ATTEST_BATCH_COMPLETION_STAMP, the marker a
+// Byte-identical copy of actions/attest/constants.js's ATTEST_BATCH_COMPLETION_STAMP, the marker a
 // completing v6 continuation appends to the verdict it stamps on a surviving v5 head. The
 // reorg reset below restores ONLY marked stamps; the constant is duplicated rather than
 // required (the rollback requires no action handler) and a test pins the two copies equal.

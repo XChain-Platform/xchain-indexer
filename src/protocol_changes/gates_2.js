@@ -45,9 +45,9 @@ addGate('ledger_amount_precision_activation.LEDGER_AMOUNT_PRECISION', 'constant'
 
 // Per-chain activation heights, interpreted against the chain's own block_index.
 // `null` = NOT YET PINNED = inert (legacy per-row quantization, byte-identical
-// replay). Only regtest is armed, so fresh regtest stacks exercise the exact-fee
-// path end to end; mainnet/testnet heights are pinned at flag-day assembly with
-// the replay evidence this item requires.
+// replay). Mainnet is pinned at the heights below; testnet and regtest are armed
+// at genesis, so fresh regtest stacks exercise the exact-fee path end to end. Each
+// network's reason sits beside its entries.
 addGate('ledger_amount_precision_activation.LEDGER_AMOUNT_PRECISION_ACTIVATION', 'height', {
     // Pinned on the standing 21-day rule, to the same boundary the oracle
     // stale-round gate uses, so both consensus changes arm in one fleet deploy
