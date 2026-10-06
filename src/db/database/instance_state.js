@@ -24,23 +24,24 @@
 'use strict';
 
 const { CONFIG_ENV } = require('../../config.js');
+const { withPinnedSqlMode } = require('../shared.js');
 
 // The direct-connection parameters (verifyDatabase and createDatabase build their own,
 // without the database name, because the database may not exist yet).
 function connectionParams(self){
-    return {
+    return withPinnedSqlMode({
         host:     self.host,
         user:     self.user,
         password: self.pass,
         database: self.dbName,
         port:     self.port,
         timezone: 'Z'
-    };
+    });
 }
 
 // The pool parameters: the same credentials plus the pool's own connection options.
 function connectionPoolParams(self){
-    return {
+    return withPinnedSqlMode({
         host:     self.host,
         user:     self.user,
         password: self.pass,
@@ -66,7 +67,7 @@ function connectionPoolParams(self){
         bigIntAsNumber:       true,
         minDelayValidation:   3000,
         queryTimeout:         parseInt(CONFIG_ENV.DB_QUERY_TIMEOUT) || 30000
-    };
+    });
 }
 
 // The block context and the dense index-id guards that ride on it.
