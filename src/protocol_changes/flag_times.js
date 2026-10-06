@@ -232,6 +232,17 @@ const OWNER_WITHDRAW_OPT_IN_MAINNET_TIME = UNARMED;
 // replay than on a node that indexed it live.
 const OWNER_WITHDRAW_OPT_IN_TESTNET_TIME = 1790492400;
 
+// Arms for READONLY_ACCESSOR_OWN_KEY, the rule that makes a readonly accessor
+// lookup resolve a snapshot key that names an inherited member ('constructor',
+// '__proto__') as absent. xchain-vm's ACCESSOR_OWN_KEY_ACTIVATION is the source
+// and these mirror it per network, so both repos judge a block alike.
+//
+// Mainnet ships inert so history replays unchanged.
+const READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME = UNARMED;
+
+// Testnet is active from genesis in the VM table, so the mirror is 0.
+const READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME = 0;
+
 module.exports = {
     VM_BANNED_ASYNC_MAINNET_TIME,
     NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME,
@@ -250,4 +261,6 @@ module.exports = {
     CONTROLLER_CUSTODY_GUARD_TESTNET_TIME,
     OWNER_WITHDRAW_OPT_IN_MAINNET_TIME,
     OWNER_WITHDRAW_OPT_IN_TESTNET_TIME,
+    READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME,
+    READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME,
 };

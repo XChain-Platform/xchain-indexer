@@ -12,7 +12,8 @@
  *
  **********************************************************************
  *
- * Time table part 5 of 5: CONTROLLER_CUSTODY_GUARD and OWNER_WITHDRAW_OPT_IN.
+ * Time table part 5 of 5: CONTROLLER_CUSTODY_GUARD, OWNER_WITHDRAW_OPT_IN and
+ * READONLY_ACCESSOR_OWN_KEY.
  *
  * One row per protocol change, in registration order, as the argument list of
  * ProtocolChanges.addChange(name, version, mainnet_time, testnet_time,
@@ -27,6 +28,8 @@ const {
     CONTROLLER_CUSTODY_GUARD_TESTNET_TIME,
     OWNER_WITHDRAW_OPT_IN_MAINNET_TIME,
     OWNER_WITHDRAW_OPT_IN_TESTNET_TIME,
+    READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME,
+    READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME,
 } = require('./flag_times.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
 
@@ -43,4 +46,10 @@ module.exports = [
     ['OWNER_WITHDRAW_OPT_IN', '0.2.0', OWNER_WITHDRAW_OPT_IN_MAINNET_TIME,
         OWNER_WITHDRAW_OPT_IN_TESTNET_TIME,
         regtestTimeOverride('OWNER_WITHDRAW_OPT_IN_REGTEST_TIME'), 0, 0, 0],
+
+    // READONLY_ACCESSOR_OWN_KEY: mirrors xchain-vm's ACCESSOR_OWN_KEY_ACTIVATION (testnet and regtest
+    // active from genesis, mainnet unarmed); a readonly accessor resolves a snapshot
+    // key that names an inherited member as absent from the flag day on.
+    ['READONLY_ACCESSOR_OWN_KEY', '0.2.0', READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME,
+        READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME, 0, 0, 0, 0],
 ];

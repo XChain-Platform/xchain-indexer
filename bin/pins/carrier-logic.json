@@ -130,7 +130,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "b3202d580497fa273f3d18b617ba1b706bb45cf2a6b72f889b96cf1e8c5cbff1",
+      "hash": "91eecda92a5961138e245106b2ecd67c5014d7dc1048d1c495bdd71c36f6d69f",
       "twins": []
     },
     "rollcall_activation": {
@@ -1939,6 +1939,13 @@
       "to": "b3202d580497fa273f3d18b617ba1b706bb45cf2a6b72f889b96cf1e8c5cbff1",
       "reason": "route the protocol error log through the one logger, text unchanged",
       "date": "2026-10-05"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "b3202d580497fa273f3d18b617ba1b706bb45cf2a6b72f889b96cf1e8c5cbff1",
+      "to": "91eecda92a5961138e245106b2ecd67c5014d7dc1048d1c495bdd71c36f6d69f",
+      "reason": "readonly accessor own key time-table row",
+      "date": "2026-10-06"
     }
   ]
 }
