@@ -39,21 +39,21 @@ const { isMirrorAdmissionConsumerActive, isRowReadableAt } = require('./consensu
 
 // The behaviour parts, installed onto Utility.prototype at the foot of this file.
 const generalPart          = require('./utility/general.js');
-const valueChecksPart      = require('./utility/value_checks.js');
+const valueChecksPart      = require('./utility/validation/value_checks.js');
 const actionFormatPart     = require('./utility/action_format.js');
 const bcmathPart           = require('./utility/bcmath.js');
-const amountValidationPart = require('./utility/amount_validation.js');
+const amountValidationPart = require('./utility/validation/amount_validation.js');
 const addressCodecPart     = require('./utility/address_codec.js');
 const ledgerPart           = require('./utility/ledger.js');
 const feesPart             = require('./utility/fees.js');
-const oracleFeePart        = require('./utility/oracle_fee.js');
+const oracleFeePart        = require('./utility/price_age/oracle_fee.js');
 const nativeFeePart        = require('./utility/native_fee.js');
 const controllerGuardPart  = require('./utility/controller_guard.js');
-const createAttestMirror   = require('./utility/attest_mirror.js');
+const createAttestMirror   = require('./utility/attest_mirror/attest_mirror.js');
 const votePassesPart       = require('./utility/vote_passes.js');
 const blockPassesPart      = require('./utility/block_passes.js');
 const crossChainCallsPart  = require('./utility/cross_chain_calls.js');
-const dispenserPricesPart  = require('./utility/dispenser_prices.js');
+const dispenserPricesPart  = require('./utility/price_age/dispenser_prices.js');
 
 // Address encoding constants and per-coin network parameters
 // Base58 version bytes and bech32 HRPs mirror the network definitions used by

@@ -30,7 +30,7 @@
 // row. Change C of that height is this file's: above it the applier falls through an
 // inert candidate row to the next one instead of stranding the request until its
 // deadline. The mirror-admission map is the one a suite purges, and it comes from the entry.
-const gateRegistry = require('../consensus/gate_registry');
+const gateRegistry = require('../../consensus/gate_registry');
 const RESPONSE_MIRROR_KEY = 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
 const ZERO_CONF_KEY = 'attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION';
 //
@@ -41,7 +41,7 @@ const ZERO_CONF_KEY = 'attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION';
 // the Utility class, and requiring the handler would pull that layer into this part, while
 // actions/attest/constants.js requires nothing. The XCALL pass reads its own per-block cap
 // the same way.
-const { ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK } = require('../actions/attest/constants.js');
+const { ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK } = require('../../actions/attest/constants.js');
 
 // The ATTEST response-mirror binding rule, as a pure function: which mirrored
 // responses BIND at block B, and in what order.
