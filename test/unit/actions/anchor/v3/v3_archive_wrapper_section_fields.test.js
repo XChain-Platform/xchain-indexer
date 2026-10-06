@@ -53,6 +53,13 @@ describe('ANCHOR v3 archive wrapper section fields', function () {
         assert.strictEqual(rows[1].MATCH_BATCH_SEQ, '5');
     });
 
+    it('matches a numeric wrapper index as well as a string one', function () {
+        let numeric = Object.assign(archive(0), { WRAPPER_SECTION_INDEX: 1 });
+        let rows = foldActionRows(data, [section('BTC'), section('LTC')], numeric, []);
+        for(let field of FIELDS) assert.strictEqual(rows[0][field], null);
+        assert.strictEqual(rows[1].BATCH_CRC32, '8665563e');
+    });
+
     it('keeps every chain section archive-free when there is no archive', function () {
         let rows = foldActionRows(data, [section('BTC')], null, []);
         assert.strictEqual(rows.length, 1);
