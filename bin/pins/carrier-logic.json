@@ -8,7 +8,7 @@
     },
     "anchor_reward_activation": {
       "path": "src/consensus/gates/anchor_reward_gate.js",
-      "hash": "86edade703c3228672bf43770ec9c2e79d0f933654a0ce6d851b04e970bb7462",
+      "hash": "1085d2c7e702b6f924bee7d9dd859ebf8638a56815476735e72a72032660d6cc",
       "twins": [
         "xchain-hub"
       ]
@@ -1980,6 +1980,13 @@
       "from": "91eecda92a5961138e245106b2ecd67c5014d7dc1048d1c495bdd71c36f6d69f",
       "to": "ebb3851ccbf61b5b3571fe83a95b191eb7ecdfa4ea6f1dfb3bc68c07699dde07",
       "reason": "DISPENSER_REFILL registry row, unarmed on mainnet and testnet, joined with the readonly accessor and slash rows",
+      "date": "2026-10-06"
+    },
+    {
+      "id": "anchor_reward_activation",
+      "from": "86edade703c3228672bf43770ec9c2e79d0f933654a0ce6d851b04e970bb7462",
+      "to": "1085d2c7e702b6f924bee7d9dd859ebf8638a56815476735e72a72032660d6cc",
+      "reason": "null threshold guard on the anchor and archive reward gates",
       "date": "2026-10-06"
     }
   ]
