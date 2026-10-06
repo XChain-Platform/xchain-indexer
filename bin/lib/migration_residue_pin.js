@@ -191,13 +191,8 @@ function main(argv){
             '. Next: node bin/lib/migration_residue_pin.js');
         return 0;
     }
-<<<<<<< HEAD
-    const bad = findViolations({ files, fixture, rebaselines: readRebaselines() });
-=======
-    const { MIGRATION_CHECKSUM_REBASELINES } = require(path.join(ROOT, 'src', 'db', 'database', 'migration_tables.js'));
     const committed = argv.includes('--no-base') ? [] : baseCommitted(argv);
-    const bad = findViolations({ files, fixture, rebaselines: MIGRATION_CHECKSUM_REBASELINES, committed });
->>>>>>> develop
+    const bad = findViolations({ files, fixture, rebaselines: readRebaselines(), committed });
     for(const v of bad) console.log(v.kind + ': ' + v.message);
     const unpinned = Object.keys(files).filter((f) => !fixture[f]).length;
     console.log(bad.length + ' violation(s), ' + unpinned + ' unpinned file(s).' +
@@ -205,10 +200,6 @@ function main(argv){
     return bad.length ? 1 : 0;
 }
 
-<<<<<<< HEAD
-module.exports = { executableResidue, pinOf, findViolations, readTree, readRebaselines, stripComments, FIXTURE };
-=======
-module.exports = { executableResidue, pinOf, findViolations, readTree, committedAtBase, FIXTURE };
->>>>>>> develop
+module.exports = { executableResidue, pinOf, findViolations, readTree, readRebaselines, stripComments, committedAtBase, FIXTURE };
 
 if(require.main === module) process.exitCode = main(process.argv.slice(2));
