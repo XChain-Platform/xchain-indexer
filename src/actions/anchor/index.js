@@ -68,15 +68,15 @@ const gateRegistry = require('../../consensus/gate_registry');
 
 // The wire families and their shared steps, one part file each.
 const validate     = require('./validate.js');
-const archiveHead  = require('./archive_head.js');
+const archiveHead  = require('./archive/archive_head.js');
 const bundle       = require('./bundle.js');
-const archiveChunk = require('./archive_chunk.js');
+const archiveChunk = require('./archive/archive_chunk.js');
 const quorum       = require('./quorum.js');
 const settle       = require('./settle.js');
 const reassembly   = require('./reassembly.js');
-const { splitV3Wire } = require('./v3_wire.js');
-const { walkFoldSections } = require('./v3_sections.js');
-const { foldArchiveReason } = require('./v3_archive_check.js');
+const { splitV3Wire } = require('./v3/v3_wire.js');
+const { walkFoldSections } = require('./v3/v3_sections.js');
+const { foldArchiveReason } = require('./v3/v3_archive_check.js');
 const { canonicalBatchCrc, signsExtendedCanonical, extendSectionCanonicalBase } = require('./v3_canonical.js');
 const { recordFoldAction } = require('./v3/v3_record.js');
 function foldHeaderReason(config, data, error){

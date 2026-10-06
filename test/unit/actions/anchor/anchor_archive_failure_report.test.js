@@ -10,7 +10,7 @@ const sinon = require('sinon');
 
 const observability = require('../../../../src/observability/index.js');
 const diag = require('../../../../src/actions/anchor/diagnostic_events.js');
-const { reportArchiveFailure } = require('../../../../src/actions/anchor/archive_verdict.js');
+const { reportArchiveFailure } = require('../../../../src/actions/anchor/archive/archive_verdict.js');
 
 function stubHandler(withRowStatus = true) {
     const calls = { action: [], row: [] };

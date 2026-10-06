@@ -10,8 +10,8 @@
 
 const assert = require('assert');
 const validate = require('../../../../src/actions/anchor/validate.js');
-const { walkFoldSections } = require('../../../../src/actions/anchor/v3_sections.js');
-const { splitV3Wire } = require('../../../../src/actions/anchor/v3_wire.js');
+const { walkFoldSections } = require('../../../../src/actions/anchor/v3/v3_sections.js');
+const { splitV3Wire } = require('../../../../src/actions/anchor/v3/v3_wire.js');
 const {
     vectors,
     v3Params
