@@ -156,13 +156,16 @@ function installFanOutWeights(){
 //    ProcessExecutor forks one worker and dispatches sequentially and beginBlock/endBlock
 //    scope the compile cache per block. So a per-sub-command constant is the right shape
 //    and there is no unamortized setup a weight would have to absorb;
-//  - WALL TIME IS NOT BOUNDED BY GAS (xchain-vm/src/index.js ~304-306 records a shape
-//    burning ~13.5s at ~540k gas), so the architectural worst case is well above the
-//    measured one. It IS bounded, identically on every node, by the consensus constant
-//    CONSENSUS_MAX_WALL_MS (xchain-vm, 30000 ms), which is the ceiling this weight is
-//    measured against: 30 s is ~40x the measured worst case, so any future widening of
-//    VM metering coverage still moves this number's grounding and it must be
-//    re-derived, never inherited.
+//  - WALL TIME IS NOT BOUNDED BY GAS (the F3-globals note in xchain-vm/src/index.js
+//    records a shape burning ~13.5s at ~540k gas), so the architectural worst case is
+//    well above the measured one. Every execution IS hard-capped, identically on every
+//    node, by the consensus constant CONSENSUS_MAX_WALL_MS (xchain-vm
+//    src/consensus-wall-clock.js, 30000 ms), but that cap is an upper bound and NOT this
+//    weight's grounding: 30 comes from the measured cost ratios above, and a worst-case
+//    metered EXECUTE burns the gas ceiling in ~750 ms, so 30 s is ~40x the measured
+//    worst case. Any future widening of VM metering coverage moves this number's
+//    grounding, so it must be re-derived from a fresh measurement, never inherited
+//    and never derived from the 30 s cap.
 //
 // XEXEC RIDES WITH EXECUTE HERE, which is the OPPOSITE of its treatment in
 // vmBaseFeeActions (fees.js), and the difference is not an inconsistency - the two tables
