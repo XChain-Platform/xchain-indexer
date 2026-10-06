@@ -56,7 +56,7 @@ module.exports = {
     // on time needs.
     async absorbCompletedBatch(headRow, stored, chunk, data){
         let head   = this.headFromRow(headRow);
-        let chunks = stored.concat([{
+        let chunks = this.continuationsOfHead(head, stored).concat([{
             chunk_index:  chunk.chunkIndex,
             chunk_b64:    chunk.chunkB64,
             action_index: data['ACTION_INDEX']
