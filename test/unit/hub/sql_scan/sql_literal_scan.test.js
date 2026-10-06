@@ -11,7 +11,7 @@
 // contact legal@dankest.llc.
 
 const assert = require('assert');
-const { extractSqlLiterals, findMirrorIdUses } = require('../../helpers/sql_literal_scan');
+const { extractSqlLiterals, findMirrorIdUses } = require('../../../helpers/sql_literal_scan');
 
 const TABLES = ['price_snapshots'];
 

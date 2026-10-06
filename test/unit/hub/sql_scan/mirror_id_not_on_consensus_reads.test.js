@@ -17,9 +17,9 @@ const {
     extractSqlLiterals,
     findIndirectTableSites,
     findMirrorIdUses,
-} = require('../../helpers/sql_literal_scan');
+} = require('../../../helpers/sql_literal_scan');
 
-const DB_ROOT = path.resolve(__dirname, '../../../src/db');
+const DB_ROOT = path.resolve(__dirname, '../../../../src/db');
 const MIRRORED_TABLES = [
     'price_snapshots',
     'oracle_prices',
