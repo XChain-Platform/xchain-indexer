@@ -80,7 +80,7 @@ describe('Collect (COLLECT) @regression @tier3', function () {
     it('rejects a non-BTC chain (COLLECT is BTC-only)', async function () {
         const data = collectData({ COIN: 'LTC' });
         await handler.parse(['0'], data, null);
-        assert.ok(String(data['STATUS']).includes('BTC only'));
+        assert.strictEqual(data['STATUS'], 'invalid: ACTION (BTC only)');
     });
 
     it('rejects when SOURCE has no active stake', async function () {
