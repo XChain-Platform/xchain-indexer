@@ -44,9 +44,9 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 
-const { getTestConfig } = require('../../fixtures/config');
-const Utility           = require('../../../src/utility');
-const Database          = require('../../../src/db');
+const { getTestConfig } = require('../../../fixtures/config');
+const Utility           = require('../../../../src/utility');
+const Database          = require('../../../../src/db');
 
 const ADDR = 'bcrt1qyp0jdh8c8f6f25nlut0wwu02pva4lpaskx9vx0';
 const TICK = 'FEE0652489';

@@ -53,10 +53,10 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 
-const { getTestConfig } = require('../../fixtures/config');
-const Utility           = require('../../../src/utility');
-const Database          = require('../../../src/db');
-const Actions           = require('../../../src/actions/index');
+const { getTestConfig } = require('../../../fixtures/config');
+const Utility           = require('../../../../src/utility');
+const Database          = require('../../../../src/db');
+const Actions           = require('../../../../src/actions/index');
 
 // The LTC regtest venue's own shape: a watcher address, the tick it quoted and
 // abandoned, and the tick it actually broadcast onto the freed id.
