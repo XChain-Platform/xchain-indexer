@@ -17,7 +17,7 @@
 const assert = require('assert');
 const sinon = require('sinon');
 
-const { resolvePolicyRefs } = require('../../../../src/api/rpc/token_policy/resolve_refs.js');
+const { resolvePolicyRefs } = require('../../../../../src/api/rpc/token_policy/resolve_refs.js');
 
 const SHARED_ROWS = [{ root_index: 12, share_action_index: 13, share_block: 100 }];
 const MIRROR = {

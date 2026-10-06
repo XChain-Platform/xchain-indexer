@@ -16,7 +16,7 @@
 
 const assert = require('assert');
 
-const { listRefFor } = require('../../../../src/api/rpc/token_policy/list_ref.js');
+const { listRefFor } = require('../../../../../src/api/rpc/token_policy/list_ref.js');
 
 const SHARED_LISTS = [{ root_index: '12', share_block: '100', share_action_index: 13 }];
 const MIRROR = {
