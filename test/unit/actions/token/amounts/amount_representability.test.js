@@ -29,7 +29,7 @@ process.env.INDEXER_COIN    = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
-const { createMockIndexer } = require('../../../fixtures/mocks');
+const { createMockIndexer } = require('../../../../fixtures/mocks');
 const {
     activation, GATE_OFF_NETWORK, BLOCK_TIME, withRegtestThreshold,
 } = require('./amount_representability.test/helpers/amount_representability_suite.js');
