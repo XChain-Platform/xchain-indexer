@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('assert');
-const { planDueVersions } = require('../../../src/consensus/list_share_settle/plan.js');
+const { planDueVersions } = require('../../../../src/consensus/list_share_settle/plan.js');
 
 const L = (home_chain, home_list_index, applied, rows) => ({ home_chain, home_list_index, applied, rows });
 const r = (seq, height) => ({ seq, admit_block_btc: height });

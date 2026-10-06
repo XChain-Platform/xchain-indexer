@@ -31,12 +31,12 @@ process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const assert  = require('assert');
-const Utility = require('../../../src/utility');
+const Utility = require('../../../../src/utility');
 const {
     buildStateHashData, isPollFinalizeStateHashActive, POLL_FINALIZE_STATE_HASH_ACTIVATION,
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION, INDEX_MAP_STATE_HASH_ACTIVATION,
     BET_STATUS_STATE_HASH_ACTIVATION,
-} = require('../../../src/consensus/state_hash');
+} = require('../../../../src/consensus/state_hash');
 
 const util = new Utility();
 const PREFEATURE_KEYS = ['deactivations', 'slashes', 'request_status', 'cooldown', 'credits', 'anchor_invalid', 'block_index', 'state_hash_version'];

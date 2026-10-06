@@ -17,13 +17,13 @@
 const assert = require('assert');
 const path = require('path');
 
-const { listMembershipHash } = require('../../../src/consensus/list_share_hash.js');
-const { planDueVersions } = require('../../../src/consensus/list_share_settle/plan.js');
-const { nextMembership } = require('../../../src/consensus/list_share_settle/delta.js');
+const { listMembershipHash } = require('../../../../src/consensus/list_share_hash.js');
+const { planDueVersions } = require('../../../../src/consensus/list_share_settle/plan.js');
+const { nextMembership } = require('../../../../src/consensus/list_share_settle/delta.js');
 
 const vectors = require(path.resolve(
     __dirname,
-    '../../../../xchain-documentation/protocol/test-vectors/list_share.json'
+    '../../../../../xchain-documentation/protocol/test-vectors/list_share.json'
 ));
 
 const list = (home_chain, home_list_index, applied, rows) => ({

@@ -13,11 +13,11 @@
 'use strict';
 
 const sinon = require('sinon');
-const { stubActiveAt } = require('../../helpers/gate_modules.js');
+const { stubActiveAt } = require('../../../helpers/gate_modules.js');
 const {
     assert, BS, XPOLICY_MAX_PER_BLOCK, makeKey, snapshotSet, makeSnapshot, makeCtx,
     ORIGIN, COPY, BRIDGE_BTC_ON_DOGE, ADDR_A, ADDR_B,
-} = require('../bridge/policy_apply.test/helpers/setup.js');
+} = require('../../bridge/policy_apply.test/helpers/setup.js');
 
 const CONSUMER_GATE = 'list_share_consumer_activation.LIST_SHARE_CONSUMER_ACTIVATION';
 
