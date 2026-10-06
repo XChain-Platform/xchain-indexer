@@ -7,6 +7,7 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const Actions = require('../../../src/actions/index.js');
 const Utility = require('../../../src/utility.js');
+const probeVm = require('../../../src/actions/vote/callback_probe_vm.js');
 
 function makeCtx(){
     let calls = { latest: 0, begin: 0 };
@@ -58,7 +59,15 @@ describe('public VOTE binding dry-run refusal', () => {
         it('falls through to the real engine for ' + label, async () => {
             let ctx = makeCtx();
             await Actions.prototype.dryRunAction.call(ctx, Object.assign({ source: 'src' }, request)).catch(() => {});
-            assert.ok(ctx.calls.begin > 0 || ctx.calls.latest > 0, 'engine was not entered');
+            assert.ok(ctx.calls.begin > 0, 'engine was not entered');
         });
     }
+
+    it('builds the listing probe from the code alone so every callback method shares one probe text', () => {
+        let a = probeVm.buildListingProbeCode('module.exports={a(){},b(){}};');
+        assert.strictEqual(a, probeVm.buildListingProbeCode('module.exports={a(){},b(){}};'));
+        assert.ok(!a.includes('"a"') && !a.includes('"b"'));
+        assert.strictEqual(probeVm.listingVerdict({ metaJson: JSON.stringify({ callbackFns: ['a'] }) }, 'a'), true);
+        assert.strictEqual(probeVm.listingVerdict({ metaJson: JSON.stringify({ callbackFns: ['a'] }) }, 'b'), false);
+    });
 });
