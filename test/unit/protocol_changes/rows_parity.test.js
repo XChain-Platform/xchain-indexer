@@ -12,7 +12,7 @@
 
 // The registry's time-table rows against the rows the transitional manifest
 // produces today. The manifest constructs the class with the { config: {},
-// util: {} } stub and reads .changes; rows() must carry the same 101 keys with
+// util: {} } stub and reads .changes; rows() must carry the same 106 keys with
 // the same canonical value for each, or the fingerprint would move when the
 // manifest's resolvers are replaced by rows() at W3.
 
@@ -28,9 +28,9 @@ function registryChangeRows() {
 }
 
 describe('protocol_changes/rows_parity: rows() equals the transitional manifest @regression @tier1', function () {
-    it('carries exactly the 102 time-table keys the manifest lists', function () {
+    it('carries exactly the 106 time-table keys the manifest lists', function () {
         const keys = [...registryChangeRows().keys()].sort();
-        assert.strictEqual(keys.length, 102);
+        assert.strictEqual(keys.length, 106);
         const table = Object.keys(new ProtocolChanges({ config: {}, util: {} }).changes);
         assert.deepStrictEqual(keys, table.map((n) => PREFIX + n).sort());
     });
@@ -40,7 +40,7 @@ describe('protocol_changes/rows_parity: rows() equals the transitional manifest 
         assert.strictEqual(collected.ok, true, collected.reason);
         const fromManifest = new Map(collected.rows.filter(([k]) => k.startsWith(PREFIX)).map(([k, v]) => [k, canonicalValue(v)]));
         const fromRegistry = registryChangeRows();
-        assert.strictEqual(fromManifest.size, 102);
+        assert.strictEqual(fromManifest.size, 106);
         const differing = [...fromManifest].filter(([k, vcs]) => fromRegistry.get(k) !== vcs).map(([k]) => k);
         assert.deepStrictEqual(differing, [], 'rows whose registry value differs from the manifest value');
     });

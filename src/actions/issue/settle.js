@@ -71,6 +71,10 @@ async function settleValidIssue(ctx){
     // Support token ownership transfers
     data['OWNER']  = (!this.util.isNull(data['TRANSFER'])) ? data['TRANSFER'] : data['SOURCE'];
 
+    // A named owner is party to the ISSUE, so it joins the addresses list its History is read from
+    if(data['OWNER'] !== data['SOURCE'])
+        this.util.addAddressTicker(data['OWNER'], data['TICK']);
+
     // Create/update record in tokens table
     await this.indexerDb.createToken(data);
 
