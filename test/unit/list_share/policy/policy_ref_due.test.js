@@ -18,8 +18,8 @@
 'use strict';
 
 const assert = require('assert');
-const { dropRefRowsFromFirst } = require('../../../src/consensus/bridge_settle/policy_ref_due.js');
-const { SETTLE_REASON } = require('../../../src/consensus/bridge_settle/reasons.js');
+const { dropRefRowsFromFirst } = require('../../../../src/consensus/bridge_settle/policy_ref_due.js');
+const { SETTLE_REASON } = require('../../../../src/consensus/bridge_settle/reasons.js');
 
 const row = (origin_chain, tick, policy_seq, ref) => ({ origin_chain, tick, policy_seq, ref });
 const id = (r) => r.origin_chain + r.tick + r.policy_seq;

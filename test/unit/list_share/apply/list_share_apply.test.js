@@ -2,22 +2,22 @@
 
 const assert = require('assert');
 const path = require('path');
-const H = require('./helpers/apply_harness.js');
+const H = require('../helpers/apply_harness.js');
 const {
     ListShareHaltError,
     LIST_SHARE_HALT_REASON,
-} = require('../../../src/consensus/list_share_settle/halt.js');
+} = require('../../../../src/consensus/list_share_settle/halt.js');
 
 const vectors = require(path.resolve(
     __dirname,
-    '../../../../xchain-documentation/protocol/test-vectors/list_share.json'
+    '../../../../../xchain-documentation/protocol/test-vectors/list_share.json'
 ));
 const versions = vectors.canonicals;
 const byBytes = (a, b) => Buffer.compare(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'));
 
 function requireListShare(armed){
-    const twin = require.resolve('../../../src/consensus/gates/mirror_admission_gate.js');
-    const entry = require.resolve('../../../src/consensus/list_share_settle.js');
+    const twin = require.resolve('../../../../src/consensus/gates/mirror_admission_gate.js');
+    const entry = require.resolve('../../../../src/consensus/list_share_settle.js');
     const saved = [[twin, require.cache[twin]], [entry, require.cache[entry]]];
     const savedEnv = process.env.XC_MIRROR_ADMISSION_ACTIVATION;
     if(armed) process.env.XC_MIRROR_ADMISSION_ACTIVATION = 'armed';
