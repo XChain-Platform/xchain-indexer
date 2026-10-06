@@ -50,7 +50,7 @@ class Rollback {
         // Parse in indexer configuration
         this.config    = indexer.config;
 
-        // Same effective provider map actions/attest.js builds (DEFAULTS overlaid with
+        // Same effective provider map actions/attest/index.js builds (DEFAULTS overlaid with
         // config.ATTESTATION.PROVIDERS), so the reorg recompute of missed_count resolves
         // the identical provider stake floor the live expiry path did.
         this.providerRegistry = new ProviderRegistry(this.config);
@@ -179,7 +179,8 @@ class Rollback {
 
     // The atomic part of the reorg: every delete, reset and re-derive, plus the hub
     // retractions written ahead of the commit so they survive a crash. A throw anywhere
-    // inside leaves the database untouched, and the caller re-detects the reorg and retries.
+    // inside leaves the database untouched; it ends the poll pass and the process (runBlockLoop
+    // has no catch), and the restarted indexer re-detects the reorg and retries.
     async runRollbackTransaction(block_index, scope, markets, addresses, tickers){
         let { firstActionIndex, lastActionIndex, unlandedAttestBatches } = scope;
         let staged = null;
@@ -226,8 +227,8 @@ class Rollback {
         } catch(e) {
             // Roll back so the DB is left untouched rather than in a partial rollback state
             await this.indexerDb.rollbackTransaction();
-            // Clear the reorg marker on failure too so it can't stick; the caller re-detects
-            // the reorg and retries, re-arming it on the next attempt (#1812).
+            // Clear the reorg marker on failure too so it can't stick; the next pass (after the
+            // restart this throw causes) re-detects the reorg and retries, re-arming it (#1812).
             if(this.indexer) this.indexer.stallReason = null;
             throw e;
         }

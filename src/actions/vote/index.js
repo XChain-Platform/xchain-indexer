@@ -146,7 +146,7 @@ class Vote {
     async parseFinalize(data, error){
         // System-synthesized only. The decoder accepts VOTE in VALID_ACTION_NAMES,
         // but a user-broadcast VOTE|2 cannot legitimately finalize a poll; reject it
-        // (mirrors attest.js:454).
+        // (mirrors the IS_SYNTHETIC check in actions/attest/expire.js parseExpire).
         if(!data['IS_SYNTHETIC']){
             getLogger().warn('\t VOTE v2 : rejected (user-broadcast not allowed for synthetic finalize)');
             data['STATUS'] = 'invalid: VOTE v2 must be system-synthesized';
@@ -161,7 +161,7 @@ class Vote {
             return;
 
         // Synthesized actions arrive without an ACTION_INDEX; allocate one now so
-        // poll_results rows and the mappings have a real source (mirrors attest.js).
+        // poll_results rows and the mappings have a real source (mirrors actions/attest/expire.js).
         data['ACTION_INDEX'] = await this.indexerDb.createActionIndex({
             ACTION:      'VOTE',
             BLOCK_INDEX: data['BLOCK_INDEX'],

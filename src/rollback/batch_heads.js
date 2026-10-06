@@ -67,7 +67,7 @@ module.exports = {
     // A chunked batch spans blocks: the v5 head in an early block, v6 continuations
     // after it. The chunk that COMPLETES the coverage reassembles the window and,
     // when the body or the quorum fails, stamps the verdict on the head
-    // (attest.js absorbCompletedBatch) - a direct UPDATE on a row created in an
+    // (actions/attest/batch_absorb.js absorbCompletedBatch) - a direct UPDATE on a row created in an
     // earlier block, which therefore survives the bulk delete below. If that
     // completing chunk is in the orphaned range, the delete removes the chunk and
     // cannot undo the stamp, and the damage is worse than a stale verdict: the head
@@ -86,14 +86,14 @@ module.exports = {
     // that failed its own quorum), every one of which can sit below the orphaned
     // range with a valid same-author continuation above it, and restoring one
     // REVIVES a head that was never valid - two live heads for one window. So the
-    // stamp writes ATTEST_BATCH_COMPLETION_STAMP (attest.js; keep the two copies
+    // stamp writes ATTEST_BATCH_COMPLETION_STAMP (actions/attest/constants.js; keep the two copies
     // byte-identical, a test pins the pair) and only rows carrying it are matched.
     // 'valid' is then not a guess either: a head reaches the stamp only by coming
     // back from the status='valid' chunk read, so 'valid' is the one value the
     // flip could have overwritten.
     //
     // Publisher scope, UNCONDITIONAL and with no flag day, unlike the archive twin:
-    // a batch's identity has been (key, author) since the rail shipped (attest.js
+    // a batch's identity has been (key, author) since the rail shipped (actions/attest/batch.js
     // authoredBy), so the scope here has never been wider than the live path's and
     // narrowing it suppresses no reset that was ever owed. Scoped on actions
     // .source_id rather than the resolved address: both rows are local, the ids are

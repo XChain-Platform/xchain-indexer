@@ -117,7 +117,7 @@ function constructorEmissionContext(run){
     return {
         CONTRACT_ACTION_INDEX: data['ACTION_INDEX'],
         ACTION_INDEX:          data['ACTION_INDEX'],
-        // Root discriminator for constructor emissions (key attest.js/xcall.js read).
+        // Root discriminator for constructor emissions (key actions/attest and actions/xcall read).
         // MUST be the identical value the constructor's vm.execute was handed above.
         ROOT_ACTION_INDEX:     run.rootDiscrim,
         SOURCE:                data['SOURCE'],

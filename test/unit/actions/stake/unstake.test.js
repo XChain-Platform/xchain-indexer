@@ -86,7 +86,7 @@ describe('Unstake handler @regression @tier2', function () {
 
             await handler.parse(params, data, null);
 
-            assert.ok(data.STATUS.includes('BTC only'));
+            assert.strictEqual(data.STATUS, 'invalid: ACTION (BTC only)');
         });
 
         it('LTC chain with v0 → invalid', async function () {
@@ -95,7 +95,7 @@ describe('Unstake handler @regression @tier2', function () {
 
             await handler.parse(params, data, null);
 
-            assert.ok(data.STATUS.includes('BTC only'));
+            assert.strictEqual(data.STATUS, 'invalid: ACTION (BTC only)');
         });
     });
 });
