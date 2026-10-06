@@ -25,8 +25,8 @@
 // same module, so an artifact cannot be judged differently by delivery route.
 const avr     = require('./attest_response_verify.js');
 // The response-mirror flag day, keyed on the REQUEST's own block: a registry row
-// read by literal key (W5). utility.js reads the same row for the applier pass's
-// selection.
+// read by literal key (W5). utility/attest_mirror_select.js reads the same row for the
+// applier pass's selection.
 const gateRegistry = require('../../consensus/gate_registry');
 const RESPONSE_MIRROR_KEY = 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
 const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
@@ -309,10 +309,13 @@ module.exports = {
     // ATTEST v1? Keyed on the REQUEST's own block, read from the LOCAL v0 row
     // and never from anything a hub states.
     //
-    // NAMED SEAM, three callers by design: this file's mirror applier (its own gate),
-    // the chain-handler gate that makes an on-chain v1 for such a request `invalid`,
-    // and the broadcast-fee retirement above the height. All three must agree about
-    // which era a request is in, and the only way to guarantee that is one predicate.
+    // NAMED SEAM, three callers by design: the mirror applier's own gate (mirror_apply.js),
+    // the chain-handler gate above in this file that makes an on-chain v1 for such a request
+    // `invalid`, and the broadcast-fee retirement above the height (settle.js). All three must
+    // agree about which era a request is in, and the only way to guarantee that is one predicate.
+    // The applier pass's selection (utility/attest_mirror_select.js) reads the same row inline
+    // with the same arguments; test/unit/attestation/attest_mirror_era_parity.test.js holds
+    // the two to one verdict.
     // For a relayed request the local row IS the BTC v3 materialization, so
     // request.block_index is already the BTC block the flag day keys on.
     isMirrorEraRequest(request){

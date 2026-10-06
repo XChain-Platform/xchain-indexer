@@ -239,3 +239,69 @@ describe('bin/consensus-identity.js --compare against a flat --out reading', fun
         }
     });
 });
+
+// A requested tip read that fails is a failed run in every output mode: a script
+// reading --json must never take a missing ledger read for a pass. The child gets
+// no database variables, which is one of the ways the read comes back unread.
+describe('bin/consensus-identity.js an unread tip', function () {
+    const DB_KEYS = ['INDEXER_DB_HOST', 'INDEXER_DB_PORT', 'INDEXER_DB_USER', 'INDEXER_DB_PASS', 'INDEXER_DB_NAME'];
+
+    function runWithoutDb(args) {
+        const env = Object.assign({}, process.env);
+        for (const key of DB_KEYS) delete env[key];
+        return spawnSync(process.execPath, [BIN, ...args], { cwd: REPO, encoding: 'utf8', env });
+    }
+
+    it('exits 1 under --json, printing the payload with tip.error and one stderr line', function () {
+        for (const args of [['--state-hash', '--json'], ['--at-block', '4210', '--json']]) {
+            const res = runWithoutDb(args);
+            assert.strictEqual(res.status, 1, args.join(' ') + ': ' + res.stderr);
+            assert.ok(JSON.parse(res.stdout).tip.error.length > 0, args.join(' '));
+            assert.match(res.stderr, /^tip state_hash UNREAD: /m);
+        }
+    });
+
+    it('exits 1 with --out and still writes the reading', function () {
+        const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'identity-tip-'));
+        const output = path.join(dir, 'identity.json');
+        const res = runWithoutDb(['--state-hash', '--json', '--out', output]);
+        assert.strictEqual(res.status, 1, res.stderr);
+        assert.ok(JSON.parse(fs.readFileSync(output, 'utf8')).tip.error.length > 0);
+    });
+
+    it('exits 1 in the human summary, and 0 with no tip read asked for', function () {
+        const human = runWithoutDb(['--state-hash']);
+        assert.strictEqual(human.status, 1, human.stderr);
+        assert.ok(human.stdout.includes('UNREAD'), human.stdout);
+        const plain = runWithoutDb(['--json']);
+        assert.strictEqual(plain.status, 0, plain.stderr);
+        assert.strictEqual('tip' in JSON.parse(plain.stdout), false);
+    });
+});
+
+// A malformed height is a usage error, refused before any database work. Number()
+// alone would read '' as 0, '0x10' as 16 and '1e3' as 1000: another block that exists.
+describe('bin/consensus-identity.js --at-block height', function () {
+
+    it('refuses anything but a decimal non-negative integer with one stderr line (exit 2)', function () {
+        this.timeout(120000);
+        for (const raw of ['42l0', '4210.5', 'abc', '', '0x10', '1e3', '99999999999999999999']) {
+            for (const extra of [[], ['--json']]) {
+                const res = run(['--at-block', raw, ...extra]);
+                assert.strictEqual(res.status, 2, JSON.stringify(raw) + ' ' + extra.join(' '));
+                assert.strictEqual(res.stdout, '');
+                assert.strictEqual(res.stderr,
+                    `--at-block requires a non-negative integer height, got ${JSON.stringify(raw)}\n`);
+            }
+        }
+    });
+
+    it('accepts a decimal height, zero included, and turns on the tip read', function () {
+        const { parseArgs } = require(BIN);
+        for (const [raw, height] of [['4210', 4210], ['0', 0], ['0042', 42]]) {
+            const opts = parseArgs(['--at-block', raw]);
+            assert.strictEqual(opts.atBlock, height, raw);
+            assert.strictEqual(opts.stateHash, true, raw);
+        }
+    });
+});

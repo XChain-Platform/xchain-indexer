@@ -49,7 +49,7 @@
  * effective_time non-canonically spelled.
  *
  * ERA SELECTION IS THE CALLER'S JOB, and it is keyed on the REQUEST's own block
- * through attest_response_mirror_activation.js. Passing a null effectiveTime
+ * through the attest_response_mirror_activation registry row. Passing a null effectiveTime
  * yields the legacy string byte for byte, so a from-genesis replay of historical
  * blocks is unchanged. The two eras can never share a signature, because the
  * canonical they sign differs.
