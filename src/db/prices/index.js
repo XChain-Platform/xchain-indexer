@@ -24,6 +24,7 @@
 const path    = require('path');
 const priceLog = require('./price_log.js');
 const oracleVmSnapshot = require('./oracle_vm_snapshot.js');
+const { isOraclePreloadAdmissionActive, oraclePreloadBound } = require('./oracle_preload_causality_gate.js');
 const { landedBoundClause } = require('./landed_bound.js');
 const gateRegistry = require('../../consensus/gate_registry');
 const { getLogger } = require('../../observability/index.js');
@@ -37,7 +38,9 @@ const { ATTEST_MAX_EXPIRIES_PER_BLOCK,
 
 // getLatestPrice's selection: the query and its arguments for the one branch the call
 // takes, with the landed-batch clause (empty when unarmed) and its argument appended last.
-function selectLatestPriceQuery(coinPair, blockHeight, opts, landedBound, landedActive, landedTime){
+// In the admission era the time branch binds on the round's signed admission height
+// (admitBound, from the preload gate module) instead of block_timestamp <= ?.
+function selectLatestPriceQuery(coinPair, blockHeight, opts, landedBound, landedActive, landedTime, admitBound){
     let query, args;
     if(opts && opts.selectByTime && Number.isFinite(Number(opts.blockTime))){
         // H-3 (NATIVE_FEE_PRICE_TIME_GATE): on non-reference chains the
@@ -50,9 +53,9 @@ function selectLatestPriceQuery(coinPair, blockHeight, opts, landedBound, landed
         query = `SELECT price, round_number, block_timestamp
                      FROM price_snapshots
                      WHERE coin_pair = ? AND status = 'finalized' AND price IS NOT NULL
-                       AND block_timestamp <= ?${landedBound}
+                       ${admitBound ? admitBound.sql.trimStart() : 'AND block_timestamp <= ?'}${landedBound}
                      ORDER BY round_number DESC LIMIT 1`;
-        args = [coinPair, Number(opts.blockTime)];
+        args = admitBound ? [coinPair, ...admitBound.args] : [coinPair, Number(opts.blockTime)];
         if(landedActive) args.push(landedTime);
     } else if(blockHeight !== undefined && blockHeight !== null){
         query = `SELECT price, round_number, block_timestamp
@@ -71,6 +74,15 @@ function selectLatestPriceQuery(coinPair, blockHeight, opts, landedBound, landed
         if(landedActive) args.push(landedTime);
     }
     return { query, args };
+}
+
+// The admission-era time bound for a selectByTime read, or null below it (and on the
+// reference chain), where the plain block_timestamp bound stands.
+function admitBoundFor(config, blockHeight, opts){
+    if(!(opts && opts.selectByTime && Number.isFinite(Number(opts.blockTime)))) return null;
+    if(!isOraclePreloadAdmissionActive(blockHeight, config['NETWORK'], config['COIN'])) return null;
+    let b = oraclePreloadBound(blockHeight, Number(opts.blockTime), config['NETWORK'], config['COIN']);
+    return b.sql === '' ? null : b;
 }
 
 module.exports = Object.assign({
@@ -130,7 +142,8 @@ module.exports = Object.assign({
             gateRegistry.activeAt('price_landed_strict_activation.PRICE_LANDED_STRICT_ACTIVATION',
                 this.config['NETWORK'], this.config['COIN'], blockHeight, null);
         let landedBound = landedBoundClause(landedActive, landedStrict);
-        let { query, args } = selectLatestPriceQuery(coinPair, blockHeight, opts, landedBound, landedActive, landedTime);
+        let { query, args } = selectLatestPriceQuery(coinPair, blockHeight, opts, landedBound, landedActive, landedTime,
+            admitBoundFor(this.config, blockHeight, opts));
         // Strict read (M-17): this is a consensus input. doQuery would swallow a
         // non-transactional query error into [] - indistinguishable from "no
         // price", so one node with a transient hub-DB fault fails the fee closed
