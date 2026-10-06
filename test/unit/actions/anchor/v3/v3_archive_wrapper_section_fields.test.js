@@ -34,7 +34,7 @@ describe('ANCHOR v3 archive wrapper section fields', function () {
         let rows = foldActionRows(data, [section('BTC'), section('LTC')], archive(0), []);
         assert.strictEqual(rows.length, 3);
         assert.strictEqual(rows[0].CHAIN, 'BTC');
-        assert.strictEqual(rows[0].MATCH_BATCH_SEQ, '5');
+        assert.strictEqual(rows[0].MATCH_BATCH_SEQ, null);
         assert.strictEqual(rows[0].MATCH_COUNT, '1');
         assert.strictEqual(rows[0].BATCH_CRC32, '8665563e');
         assert.strictEqual(rows[0].TOTAL_CHUNKS, '1');
@@ -50,7 +50,8 @@ describe('ANCHOR v3 archive wrapper section fields', function () {
     it('follows the wrapper index when it is not the first section', function () {
         let rows = foldActionRows(data, [section('BTC'), section('LTC')], archive(1), []);
         for(let field of FIELDS) assert.strictEqual(rows[0][field], null);
-        assert.strictEqual(rows[1].MATCH_BATCH_SEQ, '5');
+        assert.strictEqual(rows[1].MATCH_COUNT, '1');
+        assert.strictEqual(rows[1].MATCH_BATCH_SEQ, null);
     });
 
     it('matches a numeric wrapper index as well as a string one', function () {
