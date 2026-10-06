@@ -242,6 +242,11 @@ const READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME = UNARMED;
 
 // Testnet is active from genesis in the VM table, so the mirror is 0.
 const READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME = 0;
+// DISPENSER_REFILL: a refill that adds escrow to a dispenser consults the token's trade
+// controller (actions/dispenser/controller_guard.js). Inert on every network until a
+// release cut arms it; mainnet in particular stays null until the operator arms it.
+const DISPENSER_REFILL_MAINNET_TIME = UNARMED;
+const DISPENSER_REFILL_TESTNET_TIME = UNARMED;
 
 module.exports = {
     VM_BANNED_ASYNC_MAINNET_TIME,
@@ -263,4 +268,6 @@ module.exports = {
     OWNER_WITHDRAW_OPT_IN_TESTNET_TIME,
     READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME,
     READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME,
+    DISPENSER_REFILL_MAINNET_TIME,
+    DISPENSER_REFILL_TESTNET_TIME,
 };

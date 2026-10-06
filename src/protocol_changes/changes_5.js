@@ -14,7 +14,7 @@
  *
  * Time table part 5 of 5: controller policy and guard transaction boundaries, owner withdraw
  * opt-in, the stake snapshot slash window, the multiround XATTEST slash exemption and the
- * readonly accessor own-key rule.
+ * readonly accessor own-key rule, and DISPENSER_REFILL.
  *
  * One row per protocol change, in registration order, as the argument list of
  * ProtocolChanges.addChange(name, version, mainnet_time, testnet_time,
@@ -31,6 +31,8 @@ const {
     OWNER_WITHDRAW_OPT_IN_TESTNET_TIME,
     READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME,
     READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME,
+    DISPENSER_REFILL_MAINNET_TIME,
+    DISPENSER_REFILL_TESTNET_TIME,
 } = require('./flag_times.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
 const { UNARMED } = require('./core.js');
@@ -69,6 +71,12 @@ const CHANGES = [
     // key that names an inherited member as absent from the flag day on.
     ['READONLY_ACCESSOR_OWN_KEY', '0.2.0', READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME,
         READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME, 0, 0, 0, 0],
+    // DISPENSER_REFILL: a refill that adds escrow consults the token's trade controller.
+    // Unarmed on mainnet and testnet; regtest is genesis-active unless a venue sets
+    // DISPENSER_REFILL_REGTEST_TIME.
+    ['DISPENSER_REFILL', '0.2.0', DISPENSER_REFILL_MAINNET_TIME,
+        DISPENSER_REFILL_TESTNET_TIME,
+        regtestTimeOverride('DISPENSER_REFILL_REGTEST_TIME'), 0, 0, 0],
 
     // Groups sibling guards on one native-action leg under an outer savepoint.
     // It follows the custody guard on testnet, stays inert on mainnet, and is
