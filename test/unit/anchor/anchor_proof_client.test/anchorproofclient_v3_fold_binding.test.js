@@ -24,6 +24,7 @@ const AnchorProofClient = require('../../../../src/consensus/doge_peer_clients/a
 const binding = require('../../../../src/consensus/doge_peer_clients/anchor_proof_client/binding.js');
 const { CHECKPOINT_VERSIONS } = require('../../../../src/db/anchor_sql.js');
 const { rewardTypeFor } = require('../../../../src/actions/anchor/reward_family.js');
+const Anchor = require('../../../../src/actions/anchor/index.js');
 
 const TXID = 'c'.repeat(64);
 const SNAP = 150208;
@@ -177,6 +178,27 @@ describe('AnchorProofClient v3 fold binding @regression @tier2', () => {
                         assert.ok(binding.ATTESTED_VERSIONS.includes(v), 'attested set lacks v' + v);
                     }
                 }
+            }
+        });
+
+        // Walk the parser's own wire table, not CHECKPOINT_VERSIONS: a version added to the
+        // DOGE parse but to no hand-kept list must still fail here, not defer a block forever.
+        it('gives every publisher-carrying wire in the parse table an attested family', function () {
+            const formats = new Anchor({}).formats;
+            const versions = Object.keys(formats).map(Number);
+            assert.ok(versions.length > 0, 'the parse table is empty');
+            for (const v of versions) {
+                for (const foldActive of [false, true]) {
+                    const type = rewardTypeFor(v, foldActive);
+                    if (type === 'anchor_bundle')
+                        assert.ok(binding.REWARD_FAMILY_VERSIONS.bundle.includes(v), 'bundle family lacks v' + v);
+                    if (type === 'anchor_archive')
+                        assert.ok(binding.REWARD_FAMILY_VERSIONS.archive.includes(v), 'archive family lacks v' + v);
+                    if (type !== null)
+                        assert.ok(binding.ATTESTED_VERSIONS.includes(v), 'attested set lacks rewarded v' + v);
+                }
+                if (String(formats[v]).split('|').includes('PUBLISHER'))
+                    assert.ok(binding.ATTESTED_VERSIONS.includes(v), 'attested set lacks publisher-carrying v' + v);
             }
         });
 
