@@ -30,6 +30,11 @@ const LIST_EDIT_RESOLUTION_KEY = 'list_edit_resolution_activation.LIST_EDIT_RESO
 const LIST_REFERENCE_VALIDITY_KEY = 'list_reference_validity_activation.LIST_REFERENCE_REQUIRES_VALID_LIST';
 // Rows per multi-row INSERT, so a large membership never builds an unbounded statement.
 const LIST_BULK_INSERT_CHUNK = 500;
+const LIST_BULK_TABLES = {
+    list_edits: { withStatus: true, select: 'SELECT item_id FROM list_edits WHERE action_index=? AND status_id=?', insert: 'INSERT INTO list_edits (action_index, item_id, status_id) values ' },
+    list_items: { withStatus: false, select: 'SELECT item_id FROM list_items WHERE action_index=?', insert: 'INSERT INTO list_items (action_index, item_id) values ' },
+    list_items_invalid: { withStatus: true, select: 'SELECT item_id FROM list_items_invalid WHERE action_index=? AND status_id=?', insert: 'INSERT INTO list_items_invalid (action_index, item_id, status_id) values ' },
+};
 
 // Resolve an item => status map to [item_id, status_id] tuples in input order.
 async function statusRows(db, data, byItem){
@@ -43,16 +48,14 @@ async function statusRows(db, data, byItem){
 
 // Insert row tuples with one statement per chunk. A null item_id never matches an
 // existing row, mirroring the per-row lookup it replaces, so those rows always insert.
-async function bulkInsertListRows(db, table, columns, action_index, rows){
+async function bulkInsertListRows(db, table, action_index, rows){
+    let spec = LIST_BULK_TABLES[table];
     if(rows.length === 0)
         return;
     let seen = new Set();
-    let statuses = columns.length > 1 ? [...new Set(rows.map((row) => row[1]))] : [null];
+    let statuses = spec.withStatus ? [...new Set(rows.map((row) => row[1]))] : [null];
     for(let status of statuses){
-        let existing = await db.doQuery(
-            `SELECT item_id FROM ${table} WHERE action_index=?${status === null ? '' : ' AND status_id=?'}`,
-            status === null ? [action_index] : [action_index, status]
-        );
+        let existing = await db.doQuery(spec.select, status === null ? [action_index] : [action_index, status]);
         for(let row of existing)
             seen.add(`${row['item_id']}|${status}`);
     }
@@ -62,14 +65,11 @@ async function bulkInsertListRows(db, table, columns, action_index, rows){
             return true;
         return !seen.has(key) && seen.add(key);
     });
-    let marks = '(' + new Array(columns.length + 1).fill('?').join(', ') + ')';
+    let marks = '(' + new Array(spec.withStatus ? 3 : 2).fill('?').join(', ') + ')';
     for(let i = 0; i < fresh.length; i += LIST_BULK_INSERT_CHUNK){
         let chunk = fresh.slice(i, i + LIST_BULK_INSERT_CHUNK);
         let args = chunk.flatMap((row) => [action_index, ...row]);
-        await db.doQuery(
-            `INSERT INTO ${table} (action_index, ${columns.join(', ')}) values ${chunk.map(() => marks).join(', ')}`,
-            args
-        );
+        await db.doQuery(spec.insert + chunk.map(() => marks).join(', '), args);
     }
 }
 
@@ -374,7 +374,7 @@ module.exports = {
 
     // Bulk writers: ids resolve in input order, then rows insert in bounded chunks.
     async createListEdits(data, edit){
-        await bulkInsertListRows(this, 'list_edits', ['item_id', 'status_id'], data['ACTION_INDEX'],
+        await bulkInsertListRows(this, 'list_edits', data['ACTION_INDEX'],
             await statusRows(this, data, edit));
     },
 
@@ -382,11 +382,11 @@ module.exports = {
         let rows = [];
         for(let item of items)
             rows.push([await listItemId(this, data['TYPE'], item)]);
-        await bulkInsertListRows(this, 'list_items', ['item_id'], data['ACTION_INDEX'], rows);
+        await bulkInsertListRows(this, 'list_items', data['ACTION_INDEX'], rows);
     },
 
     async createListItemsInvalid(data, invalid){
-        await bulkInsertListRows(this, 'list_items_invalid', ['item_id', 'status_id'], data['ACTION_INDEX'],
+        await bulkInsertListRows(this, 'list_items_invalid', data['ACTION_INDEX'],
             await statusRows(this, data, invalid));
     },
 
