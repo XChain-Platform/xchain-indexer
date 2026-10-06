@@ -251,6 +251,9 @@ class XChainIndexer {
             if(this.stopFlag)
                 break;
 
+            // No catch here: a throw out of the pass rejects start(), api.js exits 1, and the
+            // supervisor restart resumes from the committed cursor. Block faults inside the
+            // block transaction are retried in-loop instead (processBlock / abandonBlock).
             await this.pollDecoderOnce(indexerReorgView, REORG_RECHECK_BLOCKS);
 
             // Sleep for BLOCK_CHECK_INTERVAL before checking for new transaction data

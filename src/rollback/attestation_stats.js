@@ -27,7 +27,7 @@ const crypto    = require('crypto');
 const swq       = require('../consensus/stake_weighted_quorum.js');
 const srb       = require('../consensus/snapshot_reorg_buffer.js');
 const pmsh      = require('../attestation/providerMinStakeHistory.js');
-// The rules-aware capability filter the live attest.js path applies. The reorg
+// The rules-aware capability filter the live actions/attest/ path applies. The reorg
 // recompute must subtract the SAME keys or it charges missed_count to validators
 // the live expiry never held responsible.
 const rgf       = require('../actions/attest/rollcall_gates_filter.js');
@@ -173,17 +173,17 @@ module.exports = {
         }
     },
 
-    // Mirroring actions/attest.js computeResponsibleSet (#3233): the SWQ
+    // Mirroring actions/attest/responsible_set.js computeResponsibleSet (#3233): the SWQ
     // gate is BTC-anchored, and `reqBlock` is the request's LOCAL height, so
     // off BTC it is already past the 961000 anchor and would resolve
     // `weighted` TRUE out of band. This function's header requires
-    // byte-for-byte agreement with attest.js "or reorg-recomputed
+    // byte-for-byte agreement with responsible_set.js "or reorg-recomputed
     // missed_count diverges from the live expiry path", so the two must
     // short-circuit on the SAME condition, not just reach the same empty
     // answer by different routes. Capability staking is BTC-only, so a
     // non-BTC indexer has no responsible set to recompute.
     //
-    // Two DIFFERENT heights come off `reqBlock`, exactly as in attest.js
+    // Two DIFFERENT heights come off `reqBlock`, exactly as in responsible_set.js
     // computeResponsibleSet: the SWQ flag-day is evaluated on the DECLARED
     // height verbatim (moving a cutover block by the reorg buffer is its own
     // fork), while the capability SET is resolved at the declared height
@@ -212,7 +212,7 @@ module.exports = {
             // function of (reqBlock, network), never of the provider, so it
             // rides this per-block cache exactly as the snapshot read does,
             // and responsibleSet stays the byte-for-byte ranking twin of
-            // attest.js.computeResponsibleSet with no filter of its own.
+            // responsible_set.js computeResponsibleSet with no filter of its own.
             vs = await rgf.filterByRolledGates({
                 db: this.indexerDb, validators: vs || [], requestBlock: reqBlock,
                 network: this.config['NETWORK']
@@ -234,7 +234,7 @@ module.exports = {
         }
     },
 
-    // Deterministic responsible validator set. MUST mirror attest.js
+    // Deterministic responsible validator set. MUST mirror actions/attest/responsible_set.js
     // computeResponsibleSet byte-for-byte (sort by SHA256(request_id || pubkey),
     // when stake-weighted dedup to one slot per source keeping the lowest hash,
     // then take the top REDUNDANCY) or reorg-recomputed missed_count diverges from
@@ -242,7 +242,7 @@ module.exports = {
     // plus `weight` when weighted); `weighted` is swq.isStakeWeightedQuorumActive for
     // the request block. `minStake` is the request provider's block-anchored
     // min_stake_xchain floor at the request block, applied on the weighted path
-    // only and BEFORE the ranking, exactly as attest.js.providerFloorFilter does; null
+    // only and BEFORE the ranking, exactly as responsible_set.js providerFloorFilter does; null
     // fails the recompute closed to an empty set the same way the live path does, so a
     // reorg cannot charge missed_count to validators the live expiry never held
     // responsible.
