@@ -57,7 +57,9 @@ class Broadcast {
         /*****************************************************************
          * DEBUGGING - Force params
          ****************************************************************/
-        // Example payloads by FORMAT version:
+        // Lists VERSION formats 0 to 3 in this.formats, each keyed by its leading VERSION field.
+        // Expects params already split on the pipe delimiter and FORMAT already resolved, so the
+        // lines below only matter when forcing a sample string by hand.
         // params = String(str).split('|');
         // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 
