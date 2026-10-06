@@ -48,7 +48,8 @@ module.exports = {
     // the NOT IN subqueries never short-circuit on a NULL.) Mirrors the icons orphan
     // sweep above.
     async sweepDanglingIndexReferences(){
-        this.recordSweepStats(await sweepSql.sweepDanglingIndexReferences(this.indexerDb, Database.MARKET_NATIVE_TICK_ID));
+        let bounds = await sweepSql.readDanglingIndexReferenceBounds(this.indexerDb);
+        this.recordSweepStats(await sweepSql.sweepDanglingIndexReferences(this.indexerDb, Database.MARKET_NATIVE_TICK_ID, bounds));
     },
 
     // Keep each sweep's { table, ms, rows } for logRollbackSummary; runRollbackTransaction resets the list.

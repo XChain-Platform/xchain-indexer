@@ -86,16 +86,14 @@ function resolveVmConsensus(){
     // degraded to the fallback, so a dropped export reddens rather than skips.
     try { return { vm: require('xchain-vm'), full: true, pkgErr: null }; }
     catch(e){
-        // Two spellings, post-rename first: the VM renamed src/consensus-runtime.js
-        // to src/consensus_runtime.js with nothing left behind, and a sibling can
-        // sit on either side of that rename. Pinning one would send this guard to
-        // the vm:null branch, which SKIPS, against the other.
+        // Prefer the current canonical name while preserving compatibility with
+        // sibling branches that still carry the legacy underscore spelling.
         // A spelling counts only when its sibling may be trusted. The refusal carried out
         // names why nothing loaded, preferring a present-but-refused spelling (a lane
         // symlink into a live main checkout) over one that is simply absent.
         let refused = null;
-        for (const spelling of ['../../../../../xchain-vm/src/consensus_runtime.js',
-                                '../../../../../xchain-vm/src/consensus-runtime.js']) {
+        for (const spelling of ['../../../../../xchain-vm/src/consensus-runtime.js',
+                                '../../../../../xchain-vm/src/consensus_runtime.js']) {
             const verdict = siblingCheckout(__dirname, spelling);
             if (!verdict.usable){
                 if (!refused || fs.existsSync(verdict.path)) refused = verdict;

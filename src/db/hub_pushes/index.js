@@ -35,6 +35,28 @@ module.exports = {
         );
     },
 
+    // The outbox position the status RPC turns into hub_push_delivered. Delivered rows are
+    // deleted, so every row still present is unacknowledged (pending or terminally failed).
+    // Each row's block is the block of the action it is keyed on. `undelivered` is the row
+    // count, `min_block` the lowest block among them, and `unresolved` the rows whose
+    // action is gone (a retraction staged for an orphaned action), whose block is unknown.
+    // Pooled, so the status RPC can read it while a block transaction is open.
+    async getHubPushDeliveryFrontier(){
+        let rows = await this.poolQuery(
+            `SELECT COUNT(*) AS undelivered,
+                    MIN(a.block_index) AS min_block,
+                    SUM(a.action_index IS NULL) AS unresolved
+               FROM pending_hub_pushes p
+               LEFT JOIN actions a ON a.action_index = p.action_index`
+        );
+        let row = (rows && rows[0]) ? rows[0] : {};
+        return {
+            undelivered: Number(row.undelivered || 0),
+            min_block:   (row.min_block != null) ? Number(row.min_block) : null,
+            unresolved:  Number(row.unresolved || 0),
+        };
+    },
+
     // Source-chain reorg fence (item 5308). The current monotonic push generation for `coin`,
     // 0 when no rollback has ever bumped it (matches the DEFAULT 0 hub rows stamp before the
     // first reorg, all of which are then always deletable). Read fresh on every push + rollback;
@@ -128,6 +150,12 @@ module.exports = {
                      ORDER BY id ASC
                      LIMIT ?`;
         return await this.poolQuery(query, [baseSec, maxSec, max]);
+    },
+
+    async resetPendingHubPushAttempts(){
+        await this.poolQuery(
+            `UPDATE pending_hub_pushes SET attempts = 0, last_attempted_at = NULL, last_error = NULL WHERE status = 'pending'`
+        );
     },
 
     // Drop a row once the hub has accepted it (delivered rows aren't retained).
