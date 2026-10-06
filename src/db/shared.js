@@ -218,13 +218,13 @@ function usesCapabilitySnapshot(config, capability){
 // the guard on those (see the comment at that closure).
 //
 // Holds only while sql_mode omits NO_BACKSLASH_ESCAPES. SESSION_SQL_MODE below is the
-// mode a connection is pinned to and it never carries that flag; sqlModeAllowsBackslashEscapes
+// mode withPinnedSqlMode requests and it never carries that flag; sqlModeAllowsBackslashEscapes
 // is the probe to run against what the server actually reports.
 function opensBackslashEscape(str, i, quote){
     return str[i] === '\\' && quote !== '`' && i + 1 < str.length;
 }
 
-// The sql_mode every connection runs under, spelled out so the outcome of an oversized or
+// The sql_mode a pool is asked to pin through withPinnedSqlMode, spelled out so the outcome of an oversized or
 // out-of-range write (errno 1406 and a retried block, rather than a silent clamp) and the
 // backslash handling of opensBackslashEscape never depend on the server's own default.
 const SESSION_SQL_MODE = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION';
