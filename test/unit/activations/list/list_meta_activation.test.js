@@ -7,20 +7,20 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon = require('sinon');
-const { createBaseData } = require('../../fixtures/mocks');
-const { stubGate } = require('../../helpers/gate_modules.js');
-const { readUnionMembers } = require('../../../src/db/lists/union.js');
+const { createBaseData } = require('../../../fixtures/mocks');
+const { stubGate } = require('../../../helpers/gate_modules.js');
+const { readUnionMembers } = require('../../../../src/db/lists/union.js');
 const {
     makeFormat0Params,
     makeData: makeIssueData,
     buildIssue,
-} = require('../actions/token/issue.test/helpers/fixture.js');
+} = require('../../actions/token/issue.test/helpers/fixture.js');
 const {
     SOURCE,
     ADDR1,
     ADDR2,
     makeListContext,
-} = require('../actions/contract/list.test/helpers/list_context.js');
+} = require('../../actions/contract/list.test/helpers/list_context.js');
 
 const META_GATE = 'list_meta_activation.LIST_META_ACTIVATION';
 const REMATCH_GATE = 'list_change_rematch_activation.LIST_CHANGE_REMATCH_ACTIVATION';

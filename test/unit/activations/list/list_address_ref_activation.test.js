@@ -20,11 +20,11 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon = require('sinon');
 
-const { createBaseData } = require('../../fixtures/mocks');
-const { stubGate } = require('../../helpers/gate_modules.js');
+const { createBaseData } = require('../../../fixtures/mocks');
+const { stubGate } = require('../../../helpers/gate_modules.js');
 const {
     SOURCE, ADDR1, ADDR2, makeListContext,
-} = require('../actions/contract/list.test/helpers/list_context.js');
+} = require('../../actions/contract/list.test/helpers/list_context.js');
 
 const GATE_KEY = 'list_address_ref_activation.LIST_ADDRESS_REF_ACTIVATION';
 

@@ -15,7 +15,7 @@
 'use strict';
 
 const assert = require('assert');
-const gateRegistry = require('../../../src/consensus/gate_registry');
+const gateRegistry = require('../../../../src/consensus/gate_registry');
 
 const KEY = 'empty_allow_list_denies_activation.EMPTY_ALLOW_LIST_DENIES';
 

@@ -14,9 +14,9 @@
 process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
 const sinon = require("sinon");
-const { createMockIndexer, createBaseData, createTokenInfo } = require("../../fixtures/mocks");
-const { stubGate } = require("../../helpers/gate_modules.js");
-const Swap_Match = require("../../../src/actions/swap_match/index.js");
+const { createMockIndexer, createBaseData, createTokenInfo } = require("../../../fixtures/mocks");
+const { stubGate } = require("../../../helpers/gate_modules.js");
+const Swap_Match = require("../../../../src/actions/swap_match/index.js");
 const KEY = 'empty_allow_list_denies_activation.EMPTY_ALLOW_LIST_DENIES';
 let indexer, handler;
 // ALLOW_LIST / BLOCK_LIST 0 is what the real getSwapInfo returns for a NULL column.

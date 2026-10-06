@@ -11,8 +11,8 @@
 // contact legal@dankest.llc.
 
 const assert = require('assert');
-const ProtocolChanges = require('../../../src/protocol_changes.js');
-const constants = require('../../../src/protocol/constants.js');
+const ProtocolChanges = require('../../../../src/protocol_changes.js');
+const constants = require('../../../../src/protocol/constants.js');
 
 const PRODUCER_KEY = 'list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION';
 const KEYS = [
