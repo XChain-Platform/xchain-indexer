@@ -6,12 +6,12 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 const assert = require('assert');
 const sinon = require('sinon');
 
-const Anchor = require('../../../../src/actions/anchor/index.js');
-const reassembly = require('../../../../src/actions/anchor/reassembly.js');
-const { buildStateHashData, ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION } = require('../../../../src/consensus/state_hash');
-const { createMockIndexer } = require('../../../fixtures/mocks');
-const { buildBatch, makeKeypair, rawMatch } = require('../../../fixtures/anchor-archive.js');
-const { makeAnchorDb } = require('../../../helpers/sqlAnchorDb');
+const Anchor = require('../../../../../src/actions/anchor/index.js');
+const reassembly = require('../../../../../src/actions/anchor/reassembly.js');
+const { buildStateHashData, ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION } = require('../../../../../src/consensus/state_hash');
+const { createMockIndexer } = require('../../../../fixtures/mocks');
+const { buildBatch, makeKeypair, rawMatch } = require('../../../../fixtures/anchor-archive.js');
+const { makeAnchorDb } = require('../../../../helpers/sqlAnchorDb');
 
 function keys(){ return [makeKeypair(), makeKeypair(), makeKeypair(), makeKeypair()]; }
 

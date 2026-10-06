@@ -38,9 +38,9 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 
-const { getTestConfig } = require('../../fixtures/config');
-const Utility           = require('../../../src/utility');
-const Database          = require('../../../src/db');
+const { getTestConfig } = require('../../../fixtures/config');
+const Utility           = require('../../../../src/utility');
+const Database          = require('../../../../src/db');
 
 function makeDb(){
     const config = getTestConfig();

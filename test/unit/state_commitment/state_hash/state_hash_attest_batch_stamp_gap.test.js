@@ -5,7 +5,7 @@
 'use strict';
 
 const assert = require('assert');
-const { buildStateHashData } = require('../../../src/consensus/state_hash');
+const { buildStateHashData } = require('../../../../src/consensus/state_hash');
 
 function recordingDb(sqlReads){
     async function record(sql){
