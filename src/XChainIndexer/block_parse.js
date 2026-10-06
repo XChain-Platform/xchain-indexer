@@ -69,7 +69,8 @@ module.exports = {
         // output row (duplicate credits/debits). COINPAY payment settlement and empty-data
         // DISPENSE triggers keep their per-output fan-out. Consensus-gated on
         // FIX_OUTPUT_FANOUT; below activation a multi-output data-bearing tx aborts the
-        // block loudly (via the watchdog/rollback path) instead of double-executing.
+        // block loudly instead of double-executing. This runs before the block transaction
+        // opens, so the throw ends the pass and the process (runBlockLoop has no catch).
         let fanoutFixActive = await this.protocolChanges.isEnabled('FIX_OUTPUT_FANOUT', blockToParse);
         blockTransactions = collapseOutputFanout(blockTransactions, fanoutFixActive, (m) => this.util.logError(m));
 

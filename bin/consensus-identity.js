@@ -68,7 +68,9 @@
  * rather than values. Two readings of the two that move
  * therefore have to be taken with the same environment to be comparable, and
  * `consensus_rules_gates` in the JSON output is what turns a mismatch into a
- * named gate instead of two opaque hashes.
+ * named gate instead of two opaque hashes. A reading records that environment as
+ * `env` (a flat reading with none was taken bare), and --compare refuses (exit
+ * 2) a pin block or reading taken under another, so exit 1 only means drift.
  *
  * READING THE TIP AGAINST A REGTEST RAIL, READ-ONLY. Run it on the host that
  * runs the regtest stack, as a user whose grants are SELECT only, with the
@@ -85,10 +87,15 @@
  * USAGE
  *   node bin/consensus-identity.js                    human summary, no database
  *   node bin/consensus-identity.js --json             the five code values
- *   node bin/consensus-identity.js --state-hash       adds the tip read
+ *   node bin/consensus-identity.js --state-hash       adds the tip read; an
+ *                                                     unread tip exits 1 in
+ *                                                     every output mode
  *   node bin/consensus-identity.js --at-block 4210    the same read at a height,
  *                                                     which is how a reindex is
- *                                                     compared against its pin
+ *                                                     compared against its pin;
+ *                                                     a height that is not a
+ *                                                     non-negative integer is
+ *                                                     refused (exit 2)
  *   node bin/consensus-identity.js --network testnet  default regtest
  *   node bin/consensus-identity.js --assert-no-absent exit 1 if any shared gate
  *                                                     reads the absent sentinel;
@@ -98,9 +105,11 @@
  *   node bin/consensus-identity.js --compare <pin>    compare the selected pin
  *                                                     block, or a flat file
  *                                                     --out wrote, field by
- *                                                     field; a flat reading is
- *                                                     comparable only under the
- *                                                     same armed environment
+ *                                                     field; a pin block or
+ *                                                     flat reading taken under
+ *                                                     another regtest arming
+ *                                                     environment is refused
+ *                                                     (exit 2)
  *   node bin/consensus-identity.js --out <file>       write the identity as JSON
  *
  *   XC_ROLLCALL_REGTEST_ACTIVATION=armed XC_ROLLCALL_GATES_REGTEST_ACTIVATION=armed \
@@ -143,7 +152,7 @@ function projectGates(gates) {
  *            armed_map_fingerprint_version: number, armed_map_rows: ?object, armed_map_row_count: ?number,
  *            consensus_rules_digest: string, gate_key_count: number, absent_gates: string[],
  *            consensus_rules_gates: object, gates_field: string, gates_field_hash: string,
- *            carrier_logic_digest: string}}
+ *            carrier_logic_digest: string, env: Object<string, ?string>}}
  */
 function codeIdentity(network) {
     const coins = require('../src/coins/index.js');
@@ -188,31 +197,97 @@ function codeIdentity(network) {
         gates_field: gatesField,
         gates_field_hash: crypto.createHash('sha256').update(gatesField, 'utf8').digest('hex'),
         carrier_logic_digest: logicPin.digest(logicPin.readPin(REPO_ROOT)),
+        // The regtest arming this reading was taken under; --compare refuses a pin taken under another.
+        env: armingEnv(process.env),
     };
+}
+
+// Each arming variable read BY NAME, for the reason ENV_READERS in shared_rows.js gives.
+const ARMING_READERS = {
+    XC_ANCHOR_FOLD_REGTEST_ACTIVATION:    (env) => env.XC_ANCHOR_FOLD_REGTEST_ACTIVATION,
+    XC_ANCHOR_STAKE_REGTEST_ACTIVATION:   (env) => env.XC_ANCHOR_STAKE_REGTEST_ACTIVATION,
+    XC_ANCHOR_SLASH_REGTEST_ACTIVATION:   (env) => env.XC_ANCHOR_SLASH_REGTEST_ACTIVATION,
+    XC_ROLLCALL_REGTEST_ACTIVATION:       (env) => env.XC_ROLLCALL_REGTEST_ACTIVATION,
+    XC_ROLLCALL_GATES_REGTEST_ACTIVATION: (env) => env.XC_ROLLCALL_GATES_REGTEST_ACTIVATION,
+    XC_MIRROR_ADMISSION_ACTIVATION:       (env) => env.XC_MIRROR_ADMISSION_ACTIVATION,
+    XC_AMOUNTS_PRICE_REGTEST_ACTIVATION:  (env) => env.XC_AMOUNTS_PRICE_REGTEST_ACTIVATION,
+    XC_AMOUNTS_PRICE_REGTEST_TIME:        (env) => env.XC_AMOUNTS_PRICE_REGTEST_TIME,
+    XC_CONTRACTS_REGTEST_ACTIVATION:      (env) => env.XC_CONTRACTS_REGTEST_ACTIVATION,
+    XC_LISTS_MARKET_REGTEST_ACTIVATION:   (env) => env.XC_LISTS_MARKET_REGTEST_ACTIVATION,
+    XC_LISTS_MARKET_REGTEST_TIME:         (env) => env.XC_LISTS_MARKET_REGTEST_TIME,
+};
+
+/**
+ * Every variable REGTEST_ARMING names, mapped to its raw value, null when unset.
+ * @param {object} env the environment to read
+ * @returns {Object<string, string|null>}
+ */
+function armingEnv(env) {
+    const { REGTEST_ARMING } = require('../src/protocol_changes/shared_rows.js');
+    const out = {};
+    for (const name of Array.from(new Set(Object.values(REGTEST_ARMING).map((rule) => rule.env))).sort()) {
+        // A variable with no reader would arm the digest unrecorded, so it is a refusal.
+        if (!ARMING_READERS[name]) throw new Error(`REGTEST_ARMING names ${name}, which armingEnv has no reader for`);
+        const raw = ARMING_READERS[name](env);
+        out[name] = raw === undefined ? null : String(raw);
+    }
+    return out;
 }
 
 function isPlainObject(value) {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-// Pick the two-block pin's venue block, or take a flat --out reading whole; refuse anything else by name.
-function selectedPinBlock(pin, pinPath = 'pin') {
-    if (!isPlainObject(pin)) throw new CliUsageError(`${pinPath}: a pin must be a JSON object`);
-    if ('bare_checkout' in pin || 'armed_regtest_venue' in pin) {
-        const armed = pin.armed_regtest_venue;
-        const env = armed && armed.env ? armed.env : {};
-        const armedNow = Object.keys(env).length > 0
-            && Object.keys(env).every((key) => process.env[key] === String(env[key]));
-        const name = armedNow ? 'armed_regtest_venue' : 'bare_checkout';
-        if (!isPlainObject(pin[name])) throw new CliUsageError(`${pinPath}: the pin has no ${name} block`);
-        return pin[name];
+// One "NAME: pin X, now Y" line per variable the two arming environments disagree on; missing and null both read unset.
+function armingDifferences(pinEnv, nowEnv) {
+    const shown = (v) => (v === null || v === undefined ? 'unset' : JSON.stringify(String(v)));
+    return Array.from(new Set(Object.keys(pinEnv).concat(Object.keys(nowEnv)))).sort()
+        .filter((name) => shown(pinEnv[name]) !== shown(nowEnv[name]))
+        .map((name) => `${name}: pin ${shown(pinEnv[name])}, now ${shown(nowEnv[name])}`);
+}
+
+// The exit-2 line for a reading taken under another arming environment, which is a venue effect and never drift.
+function armingRefusal(where, moved) {
+    return new CliUsageError(`${where} taken under a different regtest arming environment (${moved.join('; ')}); `
+        + 'take both readings under the same environment');
+}
+
+// The block of a two-block pin whose whole arming env equals this run's (a block with no env was taken bare).
+function venueBlock(pin, pinPath, nowEnv) {
+    const blockEnv = (name) => (isPlainObject(pin[name]) && isPlainObject(pin[name].env) ? pin[name].env : {});
+    const candidates = ['bare_checkout', 'armed_regtest_venue']
+        .map((name) => ({ name, moved: armingDifferences(blockEnv(name), nowEnv) }));
+    const match = candidates.find((candidate) => candidate.moved.length === 0);
+    if (match) {
+        if (!isPlainObject(pin[match.name])) throw new CliUsageError(`${pinPath}: the pin has no ${match.name} block`);
+        return pin[match.name];
     }
+    // Name the differences against the nearer block, the one the operator most likely meant.
+    const nearest = candidates.slice().sort((a, b) => a.moved.length - b.moved.length)[0];
+    throw armingRefusal(`${pinPath}: its ${nearest.name} block was`, nearest.moved);
+}
+
+/**
+ * Pick the two-block pin's venue block, or take a flat --out reading whole, and
+ * refuse by name (exit 2) anything else or anything taken under another arming.
+ * @param {*} pin the parsed pin file
+ * @param {string} pinPath named in every refusal
+ * @param {object} nowEnv armingEnv() of this run
+ * @returns {object} the block to compare field by field
+ */
+function selectedPinBlock(pin, pinPath = 'pin', nowEnv = armingEnv(process.env)) {
+    if (!isPlainObject(pin)) throw new CliUsageError(`${pinPath}: a pin must be a JSON object`);
+    if ('bare_checkout' in pin || 'armed_regtest_venue' in pin) return venueBlock(pin, pinPath, nowEnv);
     if ('hub_schema_version' in pin) {
         throw new CliUsageError(`${pinPath}: a hub identity; compare it with the hub's bin/consensus-identity.js`);
     }
     if (typeof pin.network !== 'string' || typeof pin.consensus_rules_digest !== 'string') {
         throw new CliUsageError(`${pinPath}: neither a bare_checkout/armed_regtest_venue pin nor an --out identity`);
     }
+    // Verify the flat reading's env is an object; a reading with none was taken bare.
+    if ('env' in pin && !isPlainObject(pin.env)) throw new CliUsageError(`${pinPath}: env must be a JSON object`);
+    const moved = armingDifferences(pin.env || {}, nowEnv);
+    if (moved.length) throw armingRefusal(`${pinPath}: was`, moved);
     return pin;
 }
 
@@ -248,7 +323,7 @@ function printable(value) {
 
 function runComparison(pinPath, identity) {
     const pin = JSON.parse(fs.readFileSync(pinPath, 'utf8'));
-    const block = selectedPinBlock(pin, pinPath);
+    const block = selectedPinBlock(pin, pinPath, identity.env);
     if ('tip' in block) console.log('skip tip: --compare reads no database');
     const results = compareIdentity(block, identity);
     for (const result of results) {
@@ -320,6 +395,20 @@ async function readStateHash(opts) {
     }
 }
 
+/**
+ * The --at-block value as a height, or a usage refusal (exit 2) before any database work.
+ * @param {string} raw the argument as typed
+ * @returns {number}
+ */
+function blockHeight(raw) {
+    const height = Number(raw);
+    // Verify decimal digits only: Number() reads '' as 0, '0x10' as 16 and '1e3' as 1000, so a typo would read another block.
+    if (!/^\d+$/.test(raw) || !Number.isSafeInteger(height)) {
+        throw new CliUsageError(`--at-block requires a non-negative integer height, got ${JSON.stringify(raw)}`);
+    }
+    return height;
+}
+
 function parseArgs(argv) {
     const opts = { json: false, stateHash: false, network: 'regtest', chain: 'BTC', assertNoAbsent: false };
     for (let i = 0; i < argv.length; i += 1) {
@@ -338,7 +427,7 @@ function parseArgs(argv) {
         else if (arg === '--network') opts.network = takeValue();
         else if (arg === '--chain') opts.chain = takeValue();
         else if (arg === '--db') opts.db = takeValue();
-        else if (arg === '--at-block') { opts.atBlock = Number(takeValue()); opts.stateHash = true; }
+        else if (arg === '--at-block') { opts.atBlock = blockHeight(takeValue()); opts.stateHash = true; }
         else if (arg === '--assert-no-absent') opts.assertNoAbsent = true;
         else if (arg === '--compare') opts.compare = path.resolve(takeValue());
         else if (arg === '--out') opts.out = path.resolve(takeValue());
@@ -361,8 +450,8 @@ async function main() {
     // never be mistaken for a tip that read back empty.
     if (opts.stateHash) identity.tip = await readStateHash(opts);
 
-    // Checked before either output branch, so --json and the human summary both
-    // carry the same exit code: matching the hub's --assert-no-absent, the check
+    // Checked before either output branch, so --json, --out and the human summary
+    // all carry the same exit code: matching the hub's --assert-no-absent, the check
     // a restructure that moves a gate carrier out from under this build has to
     // survive, not just the ability to print a lower resolved count.
     if (opts.assertNoAbsent && identity.absent_gates.length) {
@@ -374,6 +463,11 @@ async function main() {
     // Fail an unresolvable armed map like an unread tip, so a sentinel pin never reads as a pass.
     if (identity.armed_map_fingerprint_unreadable_reason !== null) {
         console.error(`armed_map_fingerprint UNREADABLE: ${identity.armed_map_fingerprint_unreadable_reason}`);
+        process.exitCode = 1;
+    }
+    // Fail an unread tip in every output mode, so a scripted --json reading never takes a missing ledger read for a pass.
+    if (identity.tip && identity.tip.error) {
+        console.error(`tip state_hash UNREAD: ${identity.tip.error}`);
         process.exitCode = 1;
     }
 
@@ -433,5 +527,6 @@ module.exports = {
     readStateHash,
     compareIdentity,
     selectedPinBlock,
+    armingEnv,
     REPO_ROOT,
 };
