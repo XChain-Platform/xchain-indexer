@@ -198,7 +198,7 @@ describe('token-bridge opt-in storage @regression @consensus', function(){
             assert.strictEqual(info['LOCK_BRIDGE'], 1);
         });
 
-        it('derives BRIDGED from an applied lock, normalized to 0/1', async function(){
+        it('derives BRIDGED from an applied lock, normalized to 0/1; a rolled-back lock reads 0', async function(){
             const db = makeDb();
             db.doQuery.onFirstCall().resolves([issueRow({ bridged: 0 })]);
             db.doQuery.onSecondCall().resolves([{ 1: 1 }]);
