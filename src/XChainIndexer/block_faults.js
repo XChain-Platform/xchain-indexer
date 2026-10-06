@@ -19,20 +19,52 @@
  * epoch) sets its stall reason and halts or defers loudly; anything else is logged as a
  * block error. Installed onto XChainIndexer.prototype by ../XChainIndexer.js.
  *
+ * A mirrored row (one a hub mirror delivered, not one this node derived) that cannot be
+ * decoded is not a fault of the block: it is rejected per row, by a verdict computed
+ * from the row's own identity alone, so every follower rejects it identically and the
+ * block loop continues. Only a MirroredRowError is rejected this way; a host or proof
+ * fault, and any other error, still ends the block through noteBlockFault.
+ *
  ********************************************************************/
 
 const { getLogger } = require('../observability/index.js');
 
+// A mirrored row whose content cannot be decoded. `source` names the mirror table,
+// `row` its stable key and `code` a short fixed reason; none carries node-local state.
+class MirroredRowError extends Error {
+    constructor(source, row, code){
+        super('malformed mirrored row ' + source + '#' + row + ': ' + code);
+        this.name   = 'MirroredRowError';
+        this.source = source;
+        this.row    = row;
+        this.code   = code;
+    }
+}
+
 module.exports = {
+
+    MirroredRowError: MirroredRowError,
 
     // Name the fault that ended a block: a host or proof fault sets its stall reason and
     // is logged loudly; anything else is logged as a block error.
     noteBlockFault(error, lastIndexerBlock){
+        if(error && error.name === 'MirroredRowError'){
+            this.rejectMirroredRow(lastIndexerBlock, error);
+            return;
+        }
         if(this.noteExecutorOrAnchorFault(error, lastIndexerBlock)) return;
         if(this.noteBridgeOrRollcallFault(error, lastIndexerBlock)) return;
         if(this.noteListShareFault(error, lastIndexerBlock)) return;
         // Log the error
         this.util.logError(`Error while parsing block data at block ${lastIndexerBlock}:`, error);
+    },
+
+    // Reject one malformed mirrored row. The verdict is a pure function of the error's
+    // source, row and code, so two followers reading the same row return the same value.
+    rejectMirroredRow(blockIndex, error){
+        getLogger().warn('MIRRORED ROW REJECTED at block ' + blockIndex + ': ' + error.source +
+            '#' + error.row + ' (' + error.code + '). Skipping the row; block processing continues.');
+        return { rejected: true, source: error.source, row: error.row, code: error.code };
     },
 
     // The VM executor or a DOGE anchor proof is unavailable from HERE. Returns true when

@@ -57,6 +57,19 @@ module.exports = {
                                        lastIndexerBlock, lastDecoderBlock, debugTimer);
     },
 
+    // Run one mirrored row's decode-and-apply step. A MirroredRowError rejects that row
+    // alone and returns the rejection verdict; every other error propagates so the block
+    // still ends on a host or proof fault.
+    async guardMirroredRow(blockToParse, step){
+        try {
+            return await step();
+        } catch(error){
+            if(error && error.name === 'MirroredRowError')
+                return this.rejectMirroredRow(blockToParse, error);
+            throw error;
+        }
+    },
+
     // The block's transactions and its two clocks, read before any barrier or transaction.
     async readBlockInputs(blockToParse){
         // Get a list of any transactions in this block from the decoder database
