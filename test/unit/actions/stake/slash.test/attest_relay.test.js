@@ -22,8 +22,8 @@ const { buried, params, data, useSlashHarness } = require('./helpers/slash_harne
 
 // Each test gets a fresh harness from useSlashHarness; bind() hands it to the
 // names the test bodies use.
-let indexer, handler, offender;
-const bind = (h) => { ({ indexer, handler, offender } = h); };
+let indexer, ctx, handler, offender;
+const bind = (h) => { ({ indexer, ctx, handler, offender } = h); };
 
 // XATTEST hosts TWO content families (Phase 5). The base v1 canonical is
 // delimiter-less and carries no block, so the slot resolver reads it from the mirrored
@@ -117,7 +117,12 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
     });
 
-    it('still resolves a BASE v1 ATTEST double-sign from the mirrored request row', async function () {
+    function gateOff(name) {
+        ctx.protocolChanges.isEnabled.callsFake(async (n) => n !== name);
+    }
+
+    it('below SLASH_ATTEST_MULTIROUND_EXEMPT still resolves a BASE v1 ATTEST double-sign from the mirrored request row', async function () {
+        gateOff('SLASH_ATTEST_MULTIROUND_EXEMPT');
         indexer.indexerDb.getAttestationRequestById.resolves({ block_index: 90 });
         const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ATTEST, 'req_1', 0, baseAttestContent('e1'.repeat(32)));
         const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ATTEST, 'req_1', 0, baseAttestContent('e2'.repeat(32)));
@@ -127,5 +132,26 @@ describe('SLASH action handler: equivocation verifier @regression', function () 
         assert.strictEqual(d['STATUS'], 'valid');
         assert.ok(indexer.indexerDb.getAttestationRequestById.calledWith('req_1'));
         assert.deepStrictEqual(indexer.indexerDb.getValidatorsByCapability.firstCall.args, ['attestation', buried(90)]);
+    });
+
+    it('once SLASH_ATTEST_MULTIROUND_EXEMPT is active, honest multi-round BASE ATTEST pairs are not slashed', async function () {
+        indexer.indexerDb.getAttestationRequestById.resolves({ block_index: 90 });
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ATTEST, 'req_1', 0, baseAttestContent('e1'.repeat(32)));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ATTEST, 'req_1', 0, baseAttestContent('e2'.repeat(32)));
+        const d = data();
+        await handler.parse(params('attestation', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.ok(/ATTEST multi-round/.test(d['STATUS']), 'got ' + d['STATUS']);
+        assert.ok(indexer.indexerDb.slashCapabilityStake.notCalled);
+    });
+
+    it('once SLASH_ATTEST_MULTIROUND_EXEMPT is active, relay-leg equivocation is still slashed', async function () {
+        const msgA = eq.buildEquivCanonical(eq.ENGINE_TAGS.ATTEST, RELAY_ROUND, 0, relayRequestContent(100, 'provider_x'));
+        const msgB = eq.buildEquivCanonical(eq.ENGINE_TAGS.ATTEST, RELAY_ROUND, 0, relayRequestContent(100, 'provider_y'));
+        const d = data();
+        await handler.parse(params('cross_chain', offender.pubHex, msgA, offender.privateKey, msgB, offender.privateKey), d, null);
+
+        assert.strictEqual(d['STATUS'], 'valid');
+        assert.ok(indexer.indexerDb.slashCapabilityStake.calledOnce);
     });
 });

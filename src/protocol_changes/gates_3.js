@@ -228,6 +228,17 @@ addGate('protocol/constants.ORACLE_VM_ROUND_WINDOW', 'constant', 1200);
 // payload does not have.
 addGate('protocol/constants.ORACLE_VM_MAX_ROWS', 'constant', 50000);
 
+// send_caret_pack_key_activation
+// Per-network activation, interpreted against the block's consensus timestamp
+// (data['BLOCK_TIME']). At/after it a caret-id SEND looks up the gated packs of the tick
+// the id resolves to, so it needs the key handoff like a named-tick SEND. Mainnet stays
+// unarmed until the replay is measured.
+addGate('send_caret_pack_key_activation.SEND_CARET_PACK_KEY_ACTIVATION', 'time', {
+    mainnet: null,
+    testnet: 0,
+    regtest: 0,
+});
+
 // slash_grid_activation
 // Scale the per-row deduction runs at once the rule is live. 18 is
 // MAX_TOKEN_DECIMALS (src/config/token_limits.js), the finest precision any tick can be

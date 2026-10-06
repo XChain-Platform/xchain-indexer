@@ -79,7 +79,8 @@ module.exports = {
             case 'SWEEP_OWNERSHIP':  return 'ownership';
             case 'ORDER_CREATE':
             case 'SWAP_CREATE':
-            case 'DISPENSER_CREATE': return 'trade';
+            case 'DISPENSER_CREATE':
+            case 'DISPENSER_REFILL': return 'trade';
             case 'DESTROY':          return 'burn';
             // Both are wired and gating today: mint.js runs the guard on supply creation, stake.js
             // on the v3 contract-targeted path only (v1/v2 capability stakes are never gated).
