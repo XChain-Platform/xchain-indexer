@@ -33,10 +33,21 @@ const cpCheck     = require('../bridge_checkpoint_check.js');
 const proofClient = require('../bridge_proof_client.js');
 const { resolveTransferOrigin } = require('../bridge_checkpoint_check/origin.js');
 const { XBRIDGE_MAX_PER_BLOCK, XPOLICY_MAX_PER_BLOCK } = require('../../protocol/constants.js');
-const { int } = require('./reasons.js');
+const { int, SETTLE_REASON } = require('./reasons.js');
 const { parseMembershipOrRef } = require('./policy_membership.js');
 const { dropRefRowsFromFirst } = require('./policy_ref_due.js');
 const gateRegistry = require('../gate_registry');
+
+// Refusals that name a fact about the row no later block changes and that write no settlement
+// record. Such a row stays in the due set forever, so it must not count against the per-block
+// cap or XBRIDGE_MAX_PER_BLOCK of them would stop every settle to the chain.
+const TERMINAL_REFUSALS = new Set([
+    SETTLE_REASON.QUORUM,
+    SETTLE_REASON.ESCROW_PROOF,
+    SETTLE_REASON.ESCROW_MISSING,
+    SETTLE_REASON.ESCROW_SHORT,
+    SETTLE_REASON.TOKEN_ROW,
+]);
 
 /**
  * Build a proof for one transfer, or STALL the whole pass.
@@ -109,11 +120,15 @@ async function processBridgeSettlePass(deps, ctx){
         const res = await applyPolicySnapshot(row, ctx);
         if(res.applied) applied.policies.push(row.snapshot_id);
     }
-    for(const row of await dueBridgeTransfers(deps, ctx)){
+    const cap = XBRIDGE_MAX_PER_BLOCK || 25;
+    let slots = 0;
+    for(const row of await unsettledBridgeTransfers(deps, ctx)){
+        if(slots >= cap) break;
         ctx.fetchProof = () => fetchProofForTransfer(row, ctx);
         try {
             const res = await applyBridgeTransfer(row, ctx);
             if(res.applied) applied.transfers.push(row.transfer_id);
+            if(res.applied || !TERMINAL_REFUSALS.has(res.reason)) slots++;
         } finally {
             delete ctx.proof;
             delete ctx.fetchProof;
@@ -132,7 +147,11 @@ async function processBridgeSettlePass(deps, ctx){
  * follows, for the same reason.
  */
 async function dueBridgeTransfers(deps, ctx){
-    const db   = ctx.indexerDb;
+    return (await unsettledBridgeTransfers(deps, ctx)).slice(0, XBRIDGE_MAX_PER_BLOCK || 25);
+}
+
+async function unsettledBridgeTransfers(deps, ctx){
+    const db  = ctx.indexerDb;
     // Bound by height in the admission era and by the clock below it (mirrorBindClause).
     const bind = deps.canonicals.mirrorBindClause(ctx);
     const rows = await db.mirrorDb().getFinalizedBridgeTransfersForChain(ctx.network, ctx.coin, bind);
@@ -166,8 +185,7 @@ async function dueBridgeTransfers(deps, ctx){
                        // refusal is the one place that judges it.
                        if(!r.src_chain || idx === null) return true;
                        return !settledLegs.has(String(r.src_chain) + ':' + idx);
-                   })
-                   .slice(0, XBRIDGE_MAX_PER_BLOCK || 25);
+                   });
 }
 
 /**

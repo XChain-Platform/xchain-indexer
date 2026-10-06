@@ -96,7 +96,7 @@
     },
     "oracle_preload_causality_activation": {
       "path": "src/db/prices/oracle_preload_causality_gate.js",
-      "hash": "7ec32753dd425897a23dd2bc471324c75576a1b14738353db0024aca36b690e5",
+      "hash": "b7db67ba116bc4ec6649bf24c23c2affcfe4eccd8cf447480fe4f683d13ae12f",
       "twins": []
     },
     "price_batching_floor_activation": {
@@ -1952,6 +1952,13 @@
       "from": "ab592efeee1c1791a7c684db0fc0e53c640cda600433adcfcc8386d189759776",
       "to": "3b5cb6a37f58cb40b0020e2c0440d34e21810b9b316c3e71a5b0c2861a18eb21",
       "reason": "split the state hash into section collectors, logic unchanged",
+      "date": "2026-10-06"
+    },
+    {
+      "id": "oracle_preload_causality_activation",
+      "from": "7ec32753dd425897a23dd2bc471324c75576a1b14738353db0024aca36b690e5",
+      "to": "b7db67ba116bc4ec6649bf24c23c2affcfe4eccd8cf447480fe4f683d13ae12f",
+      "reason": "bind the LTC and DOGE preload and price barrier on the signed admission height once the mirror admission consumer gate is armed",
       "date": "2026-10-06"
     }
   ]
