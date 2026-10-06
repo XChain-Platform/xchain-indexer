@@ -219,3 +219,50 @@ describe('bridge_settle: the XBRIDGE settle pass', function(){
         });
     });
 });
+
+describe('bridge_settle: the XBRIDGE settle pass', function(){
+    describe('deterministic checkpoint selection under a read fault', function(){
+        const ANCHOR_ROW = { chain: 'BTC', network: NETWORK, block_index: 1500, checkpoint_seq: 9,
+                             snapshot_block: 1500, state_root: 'a'.repeat(64), state_root_version: 1 };
+        const isFault = (err) => { assert.strictEqual(err.message, 'injected read fault'); return true; };
+        const fault = async () => { throw new Error('injected read fault'); };
+
+        // A quorum-verified mirrored row BELOW the anchored one, so a healthy node picks it.
+        function verifiedMirrorRow(keys){
+            const cp = { chain: 'BTC', network: NETWORK, block_index: 1210, checkpoint_seq: 2,
+                         snapshot_block: 1210, state_root: 'b'.repeat(64), state_root_version: 1,
+                         block_hash: 'hash', ledger_hash: 'ledger', actions_hash: 'actions',
+                         contract_hash: 'contract', block_merkle_root: 'merkle', block_merkle_version: 1 };
+            cp.validator_signatures = JSON.stringify(
+                keys.map(k => ({ pubkey: k.pubkey, sig: sign(k.privateKey, PC.checkpointCanonical(cp)) })));
+            return cp;
+        }
+
+        it('rejects rather than picking the anchored row when the mirror read faults', async function(){
+            // A healthy peer holding the same rows might pick a lower mirrored height, so a
+            // fault on one source must defer the block instead of shrinking the candidate set.
+            const ctx = selectorCtx([ANCHOR_ROW], []);
+            ctx.indexerDb.mirrorDb = () => ({ doQuery: fault, doQueryStrict: fault });
+            await assert.rejects(() => PC.selectCheckpoint(makeTransfer([], {}), ctx), isFault);
+        });
+
+        it('rejects rather than picking the mirrored row when the anchor read faults', async function(){
+            const keys = [makeKey(), makeKey(), makeKey()];
+            const ctx = selectorCtx([], [verifiedMirrorRow(keys)]);
+            ctx.indexerDb.getValidatorsByCapability   = async () => snapshotSet(keys);
+            ctx.indexerDb.getStakeWeightsByCapability = async () => snapshotSet(keys);
+            // Control: with both reads healthy the mirrored row is the pick.
+            assert.strictEqual((await PC.selectCheckpoint(makeTransfer([], {}), ctx)).source, 'state_checkpoints');
+            ctx.indexerDb.doQuery = fault;
+            await assert.rejects(() => PC.selectCheckpoint(makeTransfer([], {}), ctx), isFault);
+        });
+
+        it('reads the mirror strictly, so a fault the lenient read would return as [] still rejects', async function(){
+            // The hub handle sits outside the block transaction, where the lenient read logs a
+            // query error and answers [], which is indistinguishable from "no rows yet".
+            const ctx = selectorCtx([ANCHOR_ROW], []);
+            ctx.indexerDb.mirrorDb = () => ({ doQuery: async () => [], doQueryStrict: fault });
+            await assert.rejects(() => PC.selectCheckpoint(makeTransfer([], {}), ctx), isFault);
+        });
+    });
+});
