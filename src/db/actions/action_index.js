@@ -21,6 +21,30 @@
  *
  ********************************************************************/
 
+// Every table the pluralized action name can reach that carries both action_index and
+// status_id, the two columns isActionIndexValid reads. Many actions keep their rows under
+// another name (a DEPLOY's live in `contracts`), so an unchecked name would send SQL to a
+// table that does not exist, and that error halts the block on every indexer.
+//
+// Needs no activation gate: a name in this set resolves to the same table it always did,
+// and a name outside it can only ever have produced a block no indexer commits. A static list
+// and not a schema probe, so the verdict can never depend on one operator's database.
+// test/unit/db/db_queries.test/action_index_table.test.js holds it equal to src/sql.
+const STATUS_TABLES = new Set([
+    'addresses', 'airdrops', 'anchor_actions', 'attests', 'batches', 'bet_cancels',
+    'bet_feed_statuses', 'bet_feeds', 'bet_resolves', 'bet_statuses', 'bets', 'broadcasts',
+    'callbacks', 'coinpay_expires', 'coinpay_statuses', 'coinpays', 'contract_delegations',
+    'contract_executions', 'contract_stakes', 'contract_unstakes', 'contracts', 'delegations',
+    'deploy_chunks', 'deposits', 'destroys', 'dispenser_cancels', 'dispenser_closes',
+    'dispenser_edits', 'dispenser_expires', 'dispenser_statuses', 'dispensers', 'dispenses',
+    'dividends', 'fees', 'files', 'gated_files', 'issues', 'links', 'list_edits', 'list_metas',
+    'lists', 'messages', 'mints', 'order_cancels', 'order_edits', 'order_expires',
+    'order_matches', 'order_statuses', 'orders', 'poll_results', 'polls', 'prices',
+    'reward_claims', 'sends', 'sleeps', 'stake_key_revocations', 'stakes', 'swap_cancels',
+    'swap_edits', 'swap_expires', 'swap_matches', 'swap_statuses', 'swaps', 'sweeps',
+    'unstakes', 'vote_delegations', 'votes', 'withdrawals', 'xbridges', 'xcalls'
+]);
+
 module.exports = {
 
     // Handles returning the highest action_index from `actions` table
@@ -137,6 +161,10 @@ module.exports = {
             } else {
                 table = action + 's';
             }
+            // An action with no status-bearing table of its own has no table to check, so
+            // the reference resolves to nothing and the caller rules it invalid.
+            if(!STATUS_TABLES.has(table))
+                table = null;
         }
         return table;
     },
