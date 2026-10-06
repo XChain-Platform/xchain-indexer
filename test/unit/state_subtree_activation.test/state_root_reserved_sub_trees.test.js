@@ -258,3 +258,143 @@ describe('state_root reserved sub-trees: gateSubRoots @regression', function(){
             assert.ok(/SUB\.gateSubRoots\(/.test(a), 'extraSubRoots assigned outside the gate: ' + a);
     });
 });
+
+// AST pin of the state_root routing, run over every src file of THIS repo. A regex
+// misses a two-argument call, a shadow mixed into the gate input, and a call-site
+// count the definition alone can satisfy; the syntax tree sees all three.
+const acorn = require('acorn');
+const pathMod = require('path');
+const fsMod = require('fs');
+const PKG_NAME = require('../../../package.json').name;
+// assembleStateRoot call sites per repo: the indexer's storeBlockRoots, and the
+// follower's computeFollowerRoots plus seedSnapshotRoots.
+const ASSEMBLE_SITES = { 'xchain-indexer': 1, 'xchain-sync': 2 };
+const ORCHESTRATOR = 'src/state_commitment/index.js';
+
+// Parse every .js file under src/ into { rel, ast }.
+function parseSrcTree(){
+    const root = pathMod.resolve(__dirname, '../../..');
+    const out = [];
+    (function walk(dir){
+        for(const ent of fsMod.readdirSync(dir, { withFileTypes: true })){
+            const full = pathMod.join(dir, ent.name);
+            if(ent.isDirectory()) walk(full);
+            else if(ent.name.endsWith('.js')){
+                const ast = acorn.parse(fsMod.readFileSync(full, 'utf8'),
+                    { ecmaVersion: 'latest', sourceType: 'script', allowHashBang: true, allowReturnOutsideFunction: true });
+                out.push({ rel: pathMod.relative(root, full).split(pathMod.sep).join('/'), ast });
+            }
+        }
+    })(pathMod.join(root, 'src'));
+    return out;
+}
+
+// Visit every node with its parent chain (nearest parent first).
+function visit(node, fn, parents = []){
+    if(!node || typeof node.type !== 'string') return;
+    fn(node, parents);
+    const next = [node, ...parents];
+    for(const key of Object.keys(node)){
+        const v = node[key];
+        if(Array.isArray(v)) for(const c of v) visit(c, fn, next);
+        else if(v && typeof v.type === 'string') visit(v, fn, next);
+    }
+}
+
+// The name a call targets: foo(...) or obj.foo(...).
+function calleeName(call){
+    const c = call.callee;
+    if(c.type === 'Identifier') return c.name;
+    if(c.type === 'MemberExpression' && !c.computed && c.property.type === 'Identifier') return c.property.name;
+    return null;
+}
+
+// Every Identifier name anywhere under a node.
+function identifiersIn(node){
+    const names = [];
+    visit(node, (n) => { if(n.type === 'Identifier') names.push(n.name); });
+    return names;
+}
+
+// Gather the facts the routing pin asserts, across the whole src tree.
+function collectRouting(files){
+    const r = { assemble: [], gate: [], extraInits: [], shadowCalls: [], shadowRefs: [], aliases: [] };
+    for(const { rel, ast } of files){
+        visit(ast, (n, parents) => {
+            const at = rel + ':' + n.start;
+            if(n.type === 'CallExpression'){
+                const name = calleeName(n);
+                if(name === 'assembleStateRoot') r.assemble.push({ at, rel, call: n });
+                if(name === 'gateSubRoots') r.gate.push({ at, call: n });
+                if(name === 'shadowSubRoots') r.shadowCalls.push({ at, parents });
+            }
+            if(n.type === 'VariableDeclarator' && n.id.type === 'Identifier' && n.id.name === 'extraSubRoots')
+                r.extraInits.push({ at, init: n.init });
+            if(n.type === 'AssignmentExpression' && n.left.type === 'Identifier' && n.left.name === 'extraSubRoots')
+                r.extraInits.push({ at, init: n.right });
+            if(n.type === 'Identifier' && n.name === 'contractStateShadow') r.shadowRefs.push({ at, node: n, parent: parents[0] });
+            if(n.type === 'Identifier' && n.name === 'assembleStateRoot'){
+                const p = parents[0];
+                const ok = (p.type === 'CallExpression' && p.callee === n) || p.type === 'FunctionDeclaration' ||
+                           (p.type === 'MemberExpression' && p.property === n && parents[1].type === 'CallExpression' && parents[1].callee === p) ||
+                           p.type === 'Property';
+                if(!ok) r.aliases.push(at);
+            }
+        });
+    }
+    return r;
+}
+
+describe('state_root routing pin (syntax tree) @regression', function(){
+    let routing;
+    before(function(){ routing = collectRouting(parseSrcTree()); });
+
+    it('knows this repo and finds exactly its assembleStateRoot call sites, all in the orchestrator', function(){
+        assert.ok(Object.prototype.hasOwnProperty.call(ASSEMBLE_SITES, PKG_NAME),
+            'no expected call-site count for package ' + PKG_NAME);
+        assert.strictEqual(routing.assemble.length, ASSEMBLE_SITES[PKG_NAME],
+            'assembleStateRoot call sites: ' + routing.assemble.map(s => s.at).join(', '));
+        for(const s of routing.assemble) assert.strictEqual(s.rel, ORCHESTRATOR, s.at);
+        assert.deepStrictEqual(routing.aliases, [], 'assembleStateRoot referenced outside a call or declaration');
+    });
+
+    it('every assembleStateRoot call takes three arguments, the third the extraSubRoots local', function(){
+        for(const { at, call } of routing.assemble){
+            assert.strictEqual(call.arguments.length, 3, at + ' must pass the gated sub-roots');
+            assert.ok(call.arguments[2].type === 'Identifier' && call.arguments[2].name === 'extraSubRoots', at);
+        }
+    });
+
+    it('extraSubRoots is only ever SUB.gateSubRoots(await reservedSubRootCandidates(...), ...)', function(){
+        assert.strictEqual(routing.extraInits.length, ASSEMBLE_SITES[PKG_NAME]);
+        for(const { at, init } of routing.extraInits){
+            assert.ok(init && init.type === 'CallExpression' && calleeName(init) === 'gateSubRoots' &&
+                init.callee.type === 'MemberExpression' && init.callee.object.name === 'SUB', at + ' is not SUB.gateSubRoots(...)');
+            const first = init.arguments[0];
+            assert.ok(first && first.type === 'AwaitExpression' && first.argument.type === 'CallExpression' &&
+                calleeName(first.argument) === 'reservedSubRootCandidates', at + ' gates something other than the candidates');
+        }
+    });
+
+    it('no shadow value reaches gateSubRoots or assembleStateRoot', function(){
+        for(const { at, call } of routing.gate.concat(routing.assemble)){
+            const leaked = call.arguments.flatMap(identifiersIn).filter(name => /shadow/i.test(name));
+            assert.deepStrictEqual(leaked, [], at + ' passes a shadow value');
+        }
+    });
+
+    it('each shadowSubRoots result feeds only const contractStateShadow and then only the row array', function(){
+        assert.strictEqual(routing.shadowCalls.length, ASSEMBLE_SITES[PKG_NAME]);
+        for(const { at, parents } of routing.shadowCalls){
+            const [aw, col, decl] = parents;
+            assert.ok(aw.type === 'AwaitExpression' && col.type === 'CallExpression' && calleeName(col) === 'extraSubRootColumn' &&
+                col.arguments[0] === aw && col.arguments[1].value === 'contract_state_root', at + ' is not read through its own column');
+            assert.ok(decl.type === 'VariableDeclarator' && decl.id.name === 'contractStateShadow' &&
+                parents[3].kind === 'const', at + ' does not initialise const contractStateShadow');
+        }
+        for(const { at, node, parent } of routing.shadowRefs){
+            if(parent.type === 'VariableDeclarator' && parent.id === node) continue;
+            assert.strictEqual(parent.type, 'ArrayExpression', at + ' uses the shadow outside the row parameters');
+        }
+    });
+});

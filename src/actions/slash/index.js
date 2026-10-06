@@ -173,7 +173,7 @@ class Slash {
         // (declared - 6, declared]. That gap cuts both ways here: it can leave a genuine
         // equivocator out of the set (a real proof that burns nothing) and it can put a key
         // in a set it never signed under. Same fix, same shared constant, same flag day as
-        // the existing consumers (attest.js, recovery.js, sdk light.js); below the gate this
+        // the existing consumers (actions/attest/, recovery.js, sdk light.js); below the gate this
         // is the declared height unchanged, so pre-flag-day acceptance is byte-identical.
         let snapshotBlock = null, resolveBlock = null;
         if(!error){
@@ -189,7 +189,7 @@ class Slash {
                 resolveBlock  = srb.buriedSnapshotBlock(snapshotBlock, this.config['NETWORK']);
                 // One engine tag can host content families locked under DIFFERENT
                 // capabilities: XATTEST's relay legs are verified against `cross_chain`
-                // (attest.js verifyRelayQuorum), not `attestation`. The slot
+                // (attest/relay.js verifyRelayQuorum), not `attestation`. The slot
                 // resolver names the governing one, so the derived-CAPABILITY check runs
                 // HERE, after the family is known, rather than off the tag alone.
                 if(slot.capability) capability = slot.capability;
@@ -208,7 +208,7 @@ class Slash {
             // XCONFIG is authorized by the WHOLE federation (getActiveValidators), every other
             // engine by its capability-scoped snapshot. Both return [{pubkey,...}] at the block.
             // Read at the BURIED height (see above); the message still names the declared one,
-            // matching attest.js, so the reject bytes do not move with the buffer.
+            // matching actions/attest/, so the reject bytes do not move with the buffer.
             let validators = (capability === CONFIG_CAPABILITY)
                 ? await this.indexerDb.getActiveValidators(slot.resolveBlock)
                 : await this.indexerDb.getValidatorsByCapability(capability, slot.resolveBlock);
