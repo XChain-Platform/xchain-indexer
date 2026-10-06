@@ -133,8 +133,8 @@ module.exports = [
     ['VM_ATTESTATION_GETRESPONSE', '0.2.0',1786060800,0,0,0,0,0],
 
     // Synthesized-execution TX_HASH on the injected-callback seam. Four
-    // sites inject a system EXECUTE that runs a contract callback (attest.js v1
-    // response + v2 expiry, vote.js poll-finalize, xcall.js result); two of them
+    // sites inject a system EXECUTE that runs a contract callback (actions/attest v1
+    // response + v2 expiry, actions/vote poll-finalize, actions/xcall result); two of them
     // historically omitted TX_HASH, so a contract emitting ATTEST/XCALL from
     // inside its expiry or poll-finalize callback was charged gas for an id the
     // indexer then hard-rejected ('invalid: TX_HASH'), stranding the contract
