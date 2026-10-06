@@ -45,7 +45,8 @@ describe('Database.isActionIndexValid() @regression @tier1', function () {
     });
 
     it('returns true when action_index found', async function () {
-        const db = dbWithDoQuery([{ action_index: 99, action: 'SEND' }]);
+        // lower case, as the lookup's LCASE(a2.action) returns it
+        const db = dbWithDoQuery([{ action_index: 99, action: 'send' }]);
         assert.strictEqual(await db.isActionIndexValid(99), true);
     });
 });

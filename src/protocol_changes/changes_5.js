@@ -12,8 +12,8 @@
  *
  **********************************************************************
  *
- * Time table part 5 of 5: CONTROLLER_CUSTODY_GUARD, OWNER_WITHDRAW_OPT_IN and
- * READONLY_ACCESSOR_OWN_KEY.
+ * Time table part 5 of 5: controller policy and guard transaction boundaries, owner withdraw
+ * opt-in and the readonly accessor own-key rule.
  *
  * One row per protocol change, in registration order, as the argument list of
  * ProtocolChanges.addChange(name, version, mainnet_time, testnet_time,
@@ -33,7 +33,7 @@ const {
 } = require('./flag_times.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
 
-module.exports = [
+const CHANGES = [
     ['CONTROLLER_CUSTODY_GUARD', '0.2.0', CONTROLLER_CUSTODY_GUARD_MAINNET_TIME,
         CONTROLLER_CUSTODY_GUARD_TESTNET_TIME,
         regtestTimeOverride('CONTROLLER_CUSTODY_GUARD_REGTEST_TIME'), 0, 0, 0],
@@ -52,4 +52,12 @@ module.exports = [
     // key that names an inherited member as absent from the flag day on.
     ['READONLY_ACCESSOR_OWN_KEY', '0.2.0', READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME,
         READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME, 0, 0, 0, 0],
+
+    // Groups sibling guards on one native-action leg under an outer savepoint.
+    // It follows the custody guard on testnet, stays inert on mainnet, and is
+    // genesis-active on regtest so fresh test chains exercise the corrected rule.
+    ['CONTROLLER_GUARD_LEG_SAVEPOINTS', '0.2.0', 9999999999,
+        CONTROLLER_CUSTODY_GUARD_TESTNET_TIME, 0, 0, 0, 0],
 ];
+
+module.exports = CHANGES;
