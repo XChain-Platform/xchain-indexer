@@ -214,6 +214,25 @@ describe('bin/consensus-identity.js --compare against a flat --out reading', fun
         assert.ok(res.stdout.split('\n').includes('ok absent_gates'), res.stdout);
     });
 
+    it('delivers the whole compare output, last line included, through a pipe', function (done) {
+        const { spawn } = require('child_process');
+        const child = spawn(process.execPath, [BIN, '--compare', flatPin()], { cwd: REPO });
+        let out = '';
+        child.stdout.setEncoding('utf8');
+        child.stdout.on('data', (chunk) => { out += chunk; });
+        child.on('close', (code) => {
+            try {
+                assert.strictEqual(code, 0, out);
+                const lines = out.split('\n').filter(Boolean);
+                assert.ok(lines.length > 1, out);
+                assert.ok(lines.every((line) => line.startsWith('ok ') || line.startsWith('skip ')), out);
+                assert.ok(out.endsWith('\n'), 'output truncated mid-line');
+                assert.ok(lines.includes('ok absent_gates'), out);
+                done();
+            } catch (e) { done(e); }
+        });
+    });
+
     it('skips a stored tip visibly rather than reading it as a mismatch', function () {
         const res = run(['--compare', flatPin((id) => { id.tip = { block_index: 1, state_hash: 'x' }; })]);
         assert.strictEqual(res.status, 0, res.stdout + res.stderr);
