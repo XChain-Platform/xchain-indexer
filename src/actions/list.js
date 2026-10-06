@@ -198,13 +198,21 @@ class List {
            status!='valid' || data['TYPE']!=2 ||
            !gateRegistry.activeAt('list_change_rematch_activation.LIST_CHANGE_REMATCH_ACTIVATION', this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null))
             return;
-
         let listRoot = this.isCreateFormat(format) ? data['ACTION_INDEX'] : data['LIST_ACTION_INDEX'];
-        let orderIndexes = await getOpenOrdersByList(this.indexerDb, listRoot);
-        let swapIndexes = await getOpenSwapsByList(this.indexerDb, listRoot);
-        let plan = planListRematch(data, orderIndexes, swapIndexes);
-        for(let step of plan)
+        let orders = [...await getOpenOrdersByList(this.indexerDb, listRoot), ...await this.getOpenMarketsByTokenList('order', listRoot)];
+        let swaps = [...await getOpenSwapsByList(this.indexerDb, listRoot), ...await this.getOpenMarketsByTokenList('swap', listRoot)];
+        for(let step of planListRematch(data, orders, swaps))
             await this.actions.processAction(step.action, null, step.data, null);
+    }
+
+    // Open markets trading a token whose allow or block list is this list or an edit of it
+    async getOpenMarketsByTokenList(kind, root){
+        let ref = '(SELECT ? UNION SELECT action_index FROM lists WHERE list_action_index=?)';
+        let rows = await this.indexerDb.doQuery(`SELECT DISTINCT m.action_index FROM ${kind}s m
+             INNER JOIN ${kind}_statuses ms ON (ms.${kind}_action_index=m.action_index) INNER JOIN index_statuses st ON (st.id=ms.status_id)
+             INNER JOIN tokens tk ON (tk.tick_id IN (m.give_tick_id, m.get_tick_id))
+             WHERE ms.action_index=(SELECT MAX(l.action_index) FROM ${kind}_statuses l WHERE l.${kind}_action_index=m.action_index) AND st.status='open' AND (tk.allow_list IN ${ref} OR tk.block_list IN ${ref})`, [root, root, root, root]);
+        return rows.map(row => Number(row.action_index));
     }
 
     isFormatActive(format, data){
