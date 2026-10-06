@@ -17,9 +17,9 @@
 const assert = require('assert');
 const sinon = require('sinon');
 
-const gateRegistry = require('../../../../../src/consensus/gate_registry');
-const { policyHash } = require('../../../../../src/consensus/bridge_settle/policy_membership.js');
-const { buildTokenPolicyRpc, bridgePolicyHash } = require('../../../../../src/api/rpc/token_policy.js');
+const gateRegistry = require('../../../../src/consensus/gate_registry');
+const { policyHash } = require('../../../../src/consensus/bridge_settle/policy_membership.js');
+const { buildTokenPolicyRpc, bridgePolicyHash } = require('../../../../src/api/rpc/token_policy.js');
 
 const PRODUCER_GATE = 'list_share_producer_activation.LIST_SHARE_PRODUCER_ACTIVATION';
 const ORIGIN_BLOCK = 100;

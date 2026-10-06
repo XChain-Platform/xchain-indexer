@@ -18,7 +18,7 @@ const assert = require('assert');
 const crypto = require('crypto');
 const sinon  = require('sinon');
 
-const { buildTokenPolicyRpc, bridgePolicyHash } = require('../../../../../src/api/rpc/token_policy.js');
+const { buildTokenPolicyRpc, bridgePolicyHash } = require('../../../../src/api/rpc/token_policy.js');
 
 const BLOCK = 123;
 const TICK  = 'FUFU';
