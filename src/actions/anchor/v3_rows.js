@@ -14,6 +14,8 @@
 
 'use strict';
 
+const { canonicalBatchCrc } = require('./v3_canonical.js');
+
 const ARCHIVE_FIELDS = [
     'MATCH_BATCH_SEQ', 'MATCH_COUNT', 'BATCH_CRC32', 'TOTAL_CHUNKS', 'ARCHIVE_B64'
 ];
@@ -40,7 +42,10 @@ function chainRow(data, section, sectionIndex, archive){
         CHUNK_INDEX: null,
         ARCHIVE_B64: null
     });
-    if(wraps) for(let field of WRAPPER_FIELDS) row[field] = archive[field];
+    if(wraps){
+        for(let field of WRAPPER_FIELDS) row[field] = archive[field];
+        row.BATCH_CRC32 = canonicalBatchCrc(archive.BATCH_CRC32);
+    }
     delete row.SIGS;
     return row;
 }

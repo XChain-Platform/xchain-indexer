@@ -60,6 +60,12 @@ describe('ANCHOR v3 archive wrapper section fields', function () {
         assert.strictEqual(rows[1].BATCH_CRC32, '8665563e');
     });
 
+    it('stores the wrapper batch CRC lower-case as the signed canonical embeds it', function () {
+        let upper = Object.assign(archive(0), { BATCH_CRC32: '8665563E' });
+        let rows = foldActionRows(data, [section('BTC'), section('LTC')], upper, []);
+        assert.strictEqual(rows[0].BATCH_CRC32, '8665563e');
+    });
+
     it('keeps every chain section archive-free when there is no archive', function () {
         let rows = foldActionRows(data, [section('BTC')], null, []);
         assert.strictEqual(rows.length, 1);
