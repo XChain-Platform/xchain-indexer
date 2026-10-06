@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Time table part 5 of 5: CONTROLLER_CUSTODY_GUARD and OWNER_WITHDRAW_OPT_IN.
+ * Time table part 5 of 5: CONTROLLER_CUSTODY_GUARD, OWNER_WITHDRAW_OPT_IN and SLASH_ATTEST_MULTIROUND_EXEMPT.
  *
  * One row per protocol change, in registration order, as the argument list of
  * ProtocolChanges.addChange(name, version, mainnet_time, testnet_time,
@@ -28,6 +28,7 @@ const {
     OWNER_WITHDRAW_OPT_IN_MAINNET_TIME,
     OWNER_WITHDRAW_OPT_IN_TESTNET_TIME,
 } = require('./flag_times.js');
+const { UNARMED } = require('./core.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
 
 module.exports = [
@@ -43,4 +44,11 @@ module.exports = [
     ['OWNER_WITHDRAW_OPT_IN', '0.2.0', OWNER_WITHDRAW_OPT_IN_MAINNET_TIME,
         OWNER_WITHDRAW_OPT_IN_TESTNET_TIME,
         regtestTimeOverride('OWNER_WITHDRAW_OPT_IN_REGTEST_TIME'), 0, 0, 0],
+
+    // SLASH_ATTEST_MULTIROUND_EXEMPT: an XATTEST base-leg pair is no longer slashable,
+    // because honest retry rounds sign one EQUIV key with differing content
+    // (slash/resolve_slot.js). Relay-leg equivocation stays slashable. Narrowing which
+    // proofs burn a bond is a consensus acceptance rule, so it is gated. Mainnet and
+    // testnet are unarmed until a release cut pins an instant; regtest is genesis-active.
+    ['SLASH_ATTEST_MULTIROUND_EXEMPT', '0.2.0', UNARMED, UNARMED, 0, 0, 0, 0],
 ];
