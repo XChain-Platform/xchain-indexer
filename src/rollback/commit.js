@@ -257,7 +257,7 @@ module.exports = {
                         // relay rows eligible for re-injection, matches eligible for settlement,
                         // bridge transfers eligible to mint on the destination chain).
                         getLogger().warn('Rollback: live ' + r.pushType + ' failed; durable row ' + r.id +
-                            ' will be retried by HubPushQueue:', err && err.message);
+                            ' will be retried by HubPushQueue: ' + (err && err.message));
                     }
                 }
             } finally {
