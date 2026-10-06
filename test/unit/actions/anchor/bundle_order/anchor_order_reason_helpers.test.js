@@ -12,7 +12,7 @@ const assert = require('assert');
 const {
     sectionOrderReason,
     sigOrderReason
-} = require('../../../../src/actions/anchor/validate.js');
+} = require('../../../../../src/actions/anchor/validate.js');
 
 function sectionWalkReasons(chains){
     let prevChain = null;

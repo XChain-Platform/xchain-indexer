@@ -9,13 +9,13 @@
 // contact legal@dankest.llc.
 
 const assert = require('assert');
-const validate = require('../../../../src/actions/anchor/validate.js');
-const { walkFoldSections } = require('../../../../src/actions/anchor/v3_sections.js');
-const { splitV3Wire } = require('../../../../src/actions/anchor/v3_wire.js');
+const validate = require('../../../../../src/actions/anchor/validate.js');
+const { walkFoldSections } = require('../../../../../src/actions/anchor/v3_sections.js');
+const { splitV3Wire } = require('../../../../../src/actions/anchor/v3_wire.js');
 const {
     vectors,
     v3Params
-} = require('./anchor.test/helpers/anchor_v3_fixtures.js');
+} = require('../anchor.test/helpers/anchor_v3_fixtures.js');
 
 const handler = {
     validateSectionShape(section, seenChains){

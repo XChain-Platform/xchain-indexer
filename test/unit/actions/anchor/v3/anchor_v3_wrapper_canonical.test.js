@@ -2,12 +2,12 @@
 
 const assert = require('assert');
 
-const fixture = require('../../../fixtures/anchor_canonical_vectors.json').fixture;
+const fixture = require('../../../../fixtures/anchor_canonical_vectors.json').fixture;
 const {
     archiveCanonicalSuffix,
     signsExtendedCanonical,
     extendSectionCanonicalBase,
-} = require('../../../../src/actions/anchor/v3_canonical.js');
+} = require('../../../../../src/actions/anchor/v3_canonical.js');
 
 const SEP = String.fromCharCode(124);
 

@@ -20,9 +20,9 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 const assert = require('assert');
 const sinon = require('sinon');
 
-const reassembly = require('../../../../src/actions/anchor/reassembly.js');
-const gateRegistry = require('../../../../src/consensus/gate_registry.js');
-const { stubActiveAt } = require('../../../helpers/gate_modules.js');
+const reassembly = require('../../../../../src/actions/anchor/reassembly.js');
+const gateRegistry = require('../../../../../src/consensus/gate_registry.js');
+const { stubActiveAt } = require('../../../../helpers/gate_modules.js');
 
 const FOLD_GATE = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
 const MATCH_COUNT_GATE = 'archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION';

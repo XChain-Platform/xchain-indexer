@@ -1,8 +1,8 @@
 'use strict';
 
 const assert = require('assert');
-const { foldActionRows } = require('../../../../src/actions/anchor/v3_rows.js');
-const { anchorActionRow } = require('../../../../src/db/anchors/anchor_action_row.js');
+const { foldActionRows } = require('../../../../../src/actions/anchor/v3_rows.js');
+const { anchorActionRow } = require('../../../../../src/db/anchors/anchor_action_row.js');
 
 const ARCHIVE_COLUMNS = [
     'MATCH_BATCH_SEQ', 'MATCH_COUNT', 'BATCH_CRC32', 'TOTAL_CHUNKS',

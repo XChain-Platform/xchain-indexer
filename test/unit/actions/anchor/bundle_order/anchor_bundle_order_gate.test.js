@@ -13,12 +13,12 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon = require('sinon');
-const { createBaseData } = require('../../../fixtures/mocks');
-const gateRegistry = require('../../../../src/consensus/gate_registry');
+const { createBaseData } = require('../../../../fixtures/mocks');
+const gateRegistry = require('../../../../../src/consensus/gate_registry');
 const {
     PUBKEY_A, PUBKEY_B, SIG, v0Params, THREE_CHAINS, armAnchor, disarmAnchor
-} = require('./anchor.test/helpers/anchor_fixtures.js');
-const GOLDEN = require('../../../fixtures/anchor_canonical_vectors.json');
+} = require('../anchor.test/helpers/anchor_fixtures.js');
+const GOLDEN = require('../../../../fixtures/anchor_canonical_vectors.json');
 
 const NETWORKS = ['mainnet', 'testnet', 'regtest'];
 const LEGACY_ORDER_NETWORKS = ['mainnet', 'testnet'];
