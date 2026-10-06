@@ -381,7 +381,7 @@
     },
     "armed_map_row_count": 361,
     "gates_field_hash": "7563e42d72a80c0a9fdf36096f171efd59fa1449a7b443041705bc2d0d1278ed",
-    "carrier_logic_digest": "45d3752b17e18e07b3dbf83ce66f2631d50f419dfe99aac90e43690871bf3357",
+    "carrier_logic_digest": "099d249e54d45991383fc5ac23837cd65496f867b2b299611020e5bf0ae6c6df",
     "consensus_rules_digest": "227f96529070d083038a3695fb863c4ab08611864b9dfcc1b619f75ec67c91d8",
     "gate_key_count": 43,
     "consensus_rules_gates": {
@@ -809,7 +809,7 @@
     },
     "armed_map_row_count": 361,
     "gates_field_hash": "7563e42d72a80c0a9fdf36096f171efd59fa1449a7b443041705bc2d0d1278ed",
-    "carrier_logic_digest": "45d3752b17e18e07b3dbf83ce66f2631d50f419dfe99aac90e43690871bf3357",
+    "carrier_logic_digest": "099d249e54d45991383fc5ac23837cd65496f867b2b299611020e5bf0ae6c6df",
     "consensus_rules_digest": "8568e6221e83de9d7f3a43281368257c78d88caa6ed55b1c3c371aa4d4e6ccae",
     "gate_key_count": 43,
     "consensus_rules_gates": {
@@ -879,5 +879,6 @@
   "v0213_cut_note": "v0.21.3 cut 2026-10-03: re-pinned after arming the 31 v0.21.3 gates on testnet (heights BTC 155001, LTC 4906040, DOGE 67962387; time and change instant 1791061097) and the consensus version bump to 0.21.3; bare and armed readings taken by bin/consensus-identity.js and composed so the armed_regtest_venue env selector is kept.",
   "v0220_cut_note": "v0.22.0 cut 2026-10-04: re-pinned after arming the oracle round time activation on testnet (BTC 155158, LTC 4907593, DOGE 67966647) and the consensus version bump to 0.22.0; bare and armed readings taken by bin/consensus-identity.js and composed so the armed_regtest_venue env selector is kept.",
   "v0224_hotfix_note": "v0.22.4 patch train 2026-10-05: both readings regenerated with bin/consensus-identity.js --json (bare, and with the armed env above) on the hotfix tree after CONSENSUS_VERSION moved to 0.22.4; only the protocol_changes.CONSENSUS_VERSION row hash and the armed-map fingerprints moved.",
-  "combined_activation_rows_note": "2026-10-06 integration of four reviewed lanes that each re-pinned from their own base: both readings regenerated once with bin/consensus-identity.js --json (bare, and with the armed env above) on the combined tree. The armed map gains the STAKE_SNAPSHOT_SLASH_WINDOW, SLASH_ATTEST_MULTIROUND_EXEMPT and READONLY_ACCESSOR_OWN_KEY rows and the xchain-vm ACCESSOR_OWN_KEY_ACTIVATION mirror (355 to 361), the fingerprints move with them, and the carrier logic digest moves with the protocol_changes re-pin; the coin registry, the rules digest and the GATES field did not move."
+  "combined_activation_rows_note": "2026-10-06 integration of four reviewed lanes that each re-pinned from their own base: both readings regenerated once with bin/consensus-identity.js --json (bare, and with the armed env above) on the combined tree. The armed map gains the STAKE_SNAPSHOT_SLASH_WINDOW, SLASH_ATTEST_MULTIROUND_EXEMPT and READONLY_ACCESSOR_OWN_KEY rows and the xchain-vm ACCESSOR_OWN_KEY_ACTIVATION mirror (355 to 361), the fingerprints move with them, and the carrier logic digest moves with the protocol_changes re-pin; the coin registry, the rules digest and the GATES field did not move.",
+  "state_hash_split_note": "Re-pinned after the state hash carrier was split into a facade plus section collectors: only carrier_logic_digest moved, through the stateHash entry of bin/pins/carrier-logic.json; every other field re-read byte-identical."
 }
