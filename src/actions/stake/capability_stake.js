@@ -91,7 +91,9 @@ async function parseCapabilityStake(params, data, error, format){
 
 /**
  * The wire-only checks: chain, AMOUNT shape and sign, SIGNING_PUBKEY presence and shape.
- * No database read, so a refused shape never interns an id.
+ * This function reads no database, but a refused shape still reaches settleCapabilityStake,
+ * whose createStake interns the status and the SIGNING_PUBKEY id, so the id is interned
+ * whatever the verdict.
  *
  * @param {Object}      data  - the action row; reads COIN, AMOUNT, SIGNING_PUBKEY
  * @param {string|null} error - the verdict so far

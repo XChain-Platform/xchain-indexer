@@ -18,6 +18,10 @@
  *
  ********************************************************************/
 
+// Terminal flips issued together per chunk. Each bet's rows are keyed by its own
+// action_index, so flips are independent and their issue order is not observable.
+const BET_WRITE_CHUNK = 50;
+
 // Installed onto Bet.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
 module.exports = {
@@ -87,20 +91,31 @@ module.exports = {
     // conservation breaks.
     async refundOpenBets(data, feedInfo, terminalStatus, credits, escrows){
         let openBets = await this.indexerDb.getOpenBetsByFeed(feedInfo['ACTION_INDEX']);
+        let flips    = [];
         for(let betRow of openBets){
             // Release escrow and credit the stake back to the ORIGINAL bettor
             // (BigNumber-space negation, not JS unary minus)
             escrows.push([feedInfo['TICK'], this.util.bcsub(0, betRow['AMOUNT'], 64), betRow['SOURCE']]);
             credits.push([feedInfo['TICK'], betRow['AMOUNT'], betRow['SOURCE']]);
             this.util.addAddressTicker(betRow['SOURCE'], feedInfo['TICK']);
-            // One terminal flip per bet: current-status column + stamp + history row
-            await this.indexerDb.setBetSettled(betRow['ACTION_INDEX'], 'refunded', data['BLOCK_INDEX']);
-            await this.indexerDb.createBetStatus(data['ACTION_INDEX'], betRow['ACTION_INDEX'], 'refunded');
+            flips.push([betRow['ACTION_INDEX'], 'refunded']);
         }
+        await this.writeBetTerminals(data, flips);
         // Feed terminal flip: current-status column + terminal_block stamp + history row
         await this.indexerDb.setBetFeedTerminal(feedInfo['ACTION_INDEX'], terminalStatus, data['BLOCK_INDEX']);
         await this.indexerDb.createBetFeedStatus(data['ACTION_INDEX'], feedInfo['ACTION_INDEX'], terminalStatus);
         this.util.addAddressTicker(feedInfo['SOURCE'], feedInfo['TICK']);
+    },
+
+    // One terminal flip per bet (current-status column + stamp + history row),
+    // issued BET_WRITE_CHUNK bets at a time instead of one bet per round trip
+    async writeBetTerminals(data, flips){
+        for(let i = 0; i < flips.length; i += BET_WRITE_CHUNK){
+            await Promise.all(flips.slice(i, i + BET_WRITE_CHUNK).map(async ([betActionIndex, status]) => {
+                await this.indexerDb.setBetSettled(betActionIndex, status, data['BLOCK_INDEX']);
+                await this.indexerDb.createBetStatus(data['ACTION_INDEX'], betActionIndex, status);
+            }));
+        }
     },
 
     // Parimutuel settlement (consensus-critical). All arithmetic in
@@ -152,6 +167,7 @@ module.exports = {
         let fee  = this.util.bcmulfloor(T, feeFraction, d);
         let pot  = this.util.bcsub(T, fee, d);
         let paid = 0;
+        let flips = [];
         for(let betRow of openBets){
             // Every open bet leaves escrow here, winner or loser: winners' payouts
             // include their stake share by construction, losers' stakes are
@@ -167,13 +183,12 @@ module.exports = {
                     credits.push([feedInfo['TICK'], payout, betRow['SOURCE']]);
                     paid = this.util.bcadd(paid, payout, d);
                 }
-                await this.indexerDb.setBetSettled(betRow['ACTION_INDEX'], 'won', data['BLOCK_INDEX']);
-                await this.indexerDb.createBetStatus(data['ACTION_INDEX'], betRow['ACTION_INDEX'], 'won');
+                flips.push([betRow['ACTION_INDEX'], 'won']);
             } else {
-                await this.indexerDb.setBetSettled(betRow['ACTION_INDEX'], 'lost', data['BLOCK_INDEX']);
-                await this.indexerDb.createBetStatus(data['ACTION_INDEX'], betRow['ACTION_INDEX'], 'lost');
+                flips.push([betRow['ACTION_INDEX'], 'lost']);
             }
         }
+        await this.writeBetTerminals(data, flips);
         // Oracle credit: fee plus rounding dust, one credit (absorbed by the
         // flat-free resolve; never charged per-credit). Skipped when zero so a
         // zero-fee dust-free market emits no empty ledger row
