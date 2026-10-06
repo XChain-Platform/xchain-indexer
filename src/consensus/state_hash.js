@@ -151,6 +151,13 @@
  * change in the same step, the golden vectors must be regenerated for any active
  * class, and the carrier-logic pin must be re-pinned with a reason.
  *
+ * HOW A BLOCK IS VERIFIED. The source indexer computes and stores the hash while
+ * it indexes block B. A follower replays the same block, recomputes the hash from
+ * its own rows through the identical code and compares the two values, halting on
+ * any mismatch. A class that is missing, gated differently or ordered differently
+ * on one side therefore shows up as a fleet halt rather than as silent drift,
+ * which is why every edit here is a consensus change and not a refactor.
+ *
  ********************************************************************/
 
 const A = require('./state_hash/activation');
