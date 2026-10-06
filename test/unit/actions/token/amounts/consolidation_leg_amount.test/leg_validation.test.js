@@ -20,10 +20,10 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 
-const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../../fixtures/mocks');
+const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../../../fixtures/mocks');
 
-const Send       = require('../../../../../src/actions/send/index.js');
-const Destroy    = require('../../../../../src/actions/destroy/index.js');
+const Send       = require('../../../../../../src/actions/send/index.js');
+const Destroy    = require('../../../../../../src/actions/destroy/index.js');
 const {
     GATE_OFF_NETWORK, SOURCE, DEST, DEST2, makeActionsCtx,
 } = require('./helpers/consolidation_leg_amount_suite.js');
