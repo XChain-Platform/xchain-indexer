@@ -149,7 +149,7 @@ describe('armed_map/manifest: the row list', function () {
         const table = Object.keys(new ProtocolChanges({ config: {}, util: {} }).changes).sort();
         const rows = [...rowKeys()].filter((k) => k.startsWith('protocol_changes.changes.')).map((k) => k.slice('protocol_changes.changes.'.length)).sort();
         assert.deepStrictEqual(rows, table);
-        assert.strictEqual(table.length, 101);
+        assert.strictEqual(table.length, 102);
     });
 
     it('never lists a key twice and never enumerates the file system', function () {
@@ -173,7 +173,7 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(res.ok, true, res.reason);
         assert.deepStrictEqual(res.rows.map((r) => r[0]), manifest.ENTRIES.map((e) => e[0]));
         for (const [, value] of res.rows) canonicalValue(value);
-        assert.strictEqual(res.rows.length, 354);
+        assert.strictEqual(res.rows.length, 355);
     });
 
     it('carries the three row families the design names', function () {

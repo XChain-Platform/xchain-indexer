@@ -70,6 +70,14 @@
  * replay witness, not this comment. testnet and regtest run from genesis, so
  * the bounded path is exercised end to end.
  *
+ * ADMISSION ERA. Where the mirror-admission consumer gate is armed for the processing
+ * chain, the time bound is replaced by the round's signed admission height: a round with
+ * admit_block_<c> binds on admit_block_<c> <= B, and a legacy round with no height for the
+ * chain keeps binding on block_timestamp <= t(B). The signed height is part of the round's
+ * consensus proof and does not move with block stamps, so a block stamped earlier than its
+ * parent selects the same round it would by height. The consumer gate, and with it a null
+ * mainnet, is inherited rather than duplicated.
+ *
  * EXECUTION-PATH gate (a VM read) rather than a change to how a row is hashed,
  * so it is indexer-only with no xchain-sync twin: xchain-sync's BlockHasher
  * reads already-materialized contract rows and never re-runs the VM. Sibling
@@ -81,6 +89,9 @@
 'use strict';
 
 const { get, copy, activeAt } = require('../../consensus/gate_registry');
+const { isMirrorAdmissionConsumerActive } = require('../../consensus/gates/mirror_admission_gate.js');
+
+const ADMISSION_COLUMNS = Object.freeze({ LTC: 'admit_block_ltc', DOGE: 'admit_block_doge' });
 
 const ORACLE_PRELOAD_CAUSALITY_REFERENCE_COIN = copy('oracle_preload_causality_activation.ORACLE_PRELOAD_CAUSALITY_REFERENCE_COIN');
 
@@ -108,7 +119,33 @@ function isOraclePreloadCausalityActive(blockIndex, network, coin){
     return b >= threshold;
 }
 
+// Whether the preload binds on the signed admission height at `blockIndex`. Never on the
+// reference chain, and only for a chain that has an admission column.
+function isOraclePreloadAdmissionActive(blockIndex, network, coin){
+    if(coin === ORACLE_PRELOAD_CAUSALITY_REFERENCE_COIN) return false;
+    if(!Object.prototype.hasOwnProperty.call(ADMISSION_COLUMNS, coin)) return false;
+    return isMirrorAdmissionConsumerActive(coin, network, blockIndex);
+}
+
+// The WHERE fragment and bindings that bound a price_snapshots read at block B. Empty
+// when no bound is armed, which is the pre-gate query byte for byte.
+function oraclePreloadBound(blockIndex, blockTime, network, coin){
+    if(!Number.isFinite(blockTime)) return { sql: '', args: [] };
+    if(isOraclePreloadAdmissionActive(blockIndex, network, coin)){
+        let col = ADMISSION_COLUMNS[coin];
+        return {
+            sql:  ' AND ((' + col + ' IS NULL AND block_timestamp <= ?) OR (' + col + ' IS NOT NULL AND ' + col + ' <= ?))',
+            args: [blockTime, Number(blockIndex)]
+        };
+    }
+    if(isOraclePreloadCausalityActive(blockIndex, network, coin))
+        return { sql: ' AND block_timestamp <= ?', args: [blockTime] };
+    return { sql: '', args: [] };
+}
+
 module.exports = {
+    isOraclePreloadAdmissionActive,
+    oraclePreloadBound,
     ORACLE_PRELOAD_CAUSALITY_ACTIVATION,
     ORACLE_PRELOAD_CAUSALITY_REFERENCE_COIN,
     isOraclePreloadCausalityActive
