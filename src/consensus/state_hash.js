@@ -119,6 +119,38 @@
  * consumer that wants a table list, an activation map or a predicate reads it
  * from here and never from the part that owns it.
  *
+ * PREIMAGE SHAPE. The object returned by buildStateHashData has a fixed key
+ * order, and that order is the hash input, so it is written out in one place
+ * and never derived from iteration:
+ *   1. deactivations, slashes, request_status, cooldown, credits, anchor_invalid,
+ *      always present, always in that order, each an array that is empty when the
+ *      class found nothing or the schema predates it.
+ *   2. index_addresses_new and index_tickers_new, only once the index-map gate is
+ *      active for the block and network.
+ *   3. poll_finalize, then token_supply, then bet_feed_status and bet_status, each
+ *      only once its own gate is active.
+ *   4. block_index and state_hash_version, always last.
+ * A gated key is inserted before block_index only when its gate is active, never
+ * as a null placeholder, because a present-but-null key would serialize
+ * differently from an absent one and break byte identity on every inert block.
+ *
+ * WHY THE PREIMAGE IS NOT CHAINED. The three adjacent consensus hashes already
+ * carry chain continuity. Chaining this one on the previous state_hash would make
+ * a NULL backfill of historical blocks poison every successor, so each block's
+ * state hash depends on that block's mutated rows alone.
+ *
+ * DEGRADING ON OLDER SCHEMAS. A class whose table or column does not exist yet
+ * (errno 1146 or 1054) contributes an empty array instead of failing the block,
+ * so a node that has not run a later migration still computes a hash. Any other
+ * numeric errno is rethrown, and an error with no numeric errno is swallowed,
+ * which is the behaviour the monolithic module had before it was split.
+ *
+ * RULES FOR CHANGING THIS MODULE. A new class needs a gate in activation.js, a
+ * collector in the matching section module, an entry in the composition below and
+ * a hash-class declaration in table_lifecycle.js. The copy in the follower must
+ * change in the same step, the golden vectors must be regenerated for any active
+ * class, and the carrier-logic pin must be re-pinned with a reason.
+ *
  ********************************************************************/
 
 const A = require('./state_hash/activation');
