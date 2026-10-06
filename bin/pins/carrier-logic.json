@@ -176,7 +176,7 @@
     },
     "stateHash": {
       "path": "src/consensus/state_hash.js",
-      "hash": "ab592efeee1c1791a7c684db0fc0e53c640cda600433adcfcc8386d189759776",
+      "hash": "3b5cb6a37f58cb40b0020e2c0440d34e21810b9b316c3e71a5b0c2861a18eb21",
       "twins": [
         "xchain-sync"
       ]
@@ -1945,6 +1945,13 @@
       "from": "afaee5777e8d909eace7a7106b294797014f74929fc4302c50a2ec31ac77a847",
       "to": "667f90202114618e33f1a29788fd51a21e508f207a3143b8c285aef4c079a25d",
       "reason": "split meetsStakeThreshold into named helpers, logic unchanged",
+      "date": "2026-10-06"
+    },
+    {
+      "id": "stateHash",
+      "from": "ab592efeee1c1791a7c684db0fc0e53c640cda600433adcfcc8386d189759776",
+      "to": "3b5cb6a37f58cb40b0020e2c0440d34e21810b9b316c3e71a5b0c2861a18eb21",
+      "reason": "split the state hash into section collectors, logic unchanged",
       "date": "2026-10-06"
     }
   ]
