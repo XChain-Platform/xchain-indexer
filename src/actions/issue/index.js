@@ -238,15 +238,6 @@ class Issue {
 
     // Handle parsing the ISSUE transaction
     async parse(params, data, error){
-        /*****************************************************************
-         * DEBUGGING - Force params
-         ****************************************************************/
-        // Example payloads by FORMAT version:
-        // let str    = "0|JDOG|1000||18";
-        // params = String(str).split('|');
-        // data['SOURCE'] = this.config['ADDRESS']['BURN'];
-        // data['FORMAT'] = this.util.getFormatVersion(params[0]);
-
         // Wire parse, then the balances, preferences and fee object every rule below sees
         let ctx = await wire.parseWire.call(this, params, data, error);
         await wire.resolveRefsAndClone.call(this, ctx);
