@@ -86,7 +86,7 @@ const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
 // ARCHIVE_HEAD_VERSIONS cannot reach one path and silently skip the other.
 const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../src/consensus/state_hash.js');
 const { foldArchiveHeadFloor } = require('../src/db/anchors/archive_head_pick.js');
-const { canonicalBatchCrc } = require('../src/actions/anchor/v3_canonical.js');
+const { canonicalBatchCrc, archiveCanonicalSuffix } = require('../src/actions/anchor/v3_canonical.js');
 const bridgePolicy = require('./recovery/bridge_policy.js');
 const listShareRecovery = require('./recovery/list_share.js');
 const checkpointPrice = require('./recovery/checkpoint_price.js');
@@ -194,7 +194,8 @@ class AnchorRecovery {
              JOIN index_statuses s ON s.id = a.status_id
              LEFT JOIN actions         act ON act.action_index = a.action_index
              LEFT JOIN index_addresses adr ON adr.id           = act.source_id
-             WHERE a.version ${ARCHIVE_HEAD_VERSIONS_SQL} AND s.status IN ('valid', 'unverified')
+             WHERE a.version ${ARCHIVE_HEAD_VERSIONS_SQL} AND a.match_batch_seq IS NOT NULL
+               AND s.status IN ('valid', 'unverified')
              ORDER BY a.match_batch_seq ASC, a.action_index ASC`);
         if(!v1s || v1s.length === 0){
             // Name the versions the query actually scanned, so the operator reading this
@@ -349,10 +350,12 @@ class AnchorRecovery {
             await this.verifyCompleteness(snaps, v1.network);
 
         // 1. Wrapper signatures vs the ARCHIVED oracle_publish set.
-        let wrapperSet = setFor('oracle_publish', v1.snapshot_block);
-        let wrapperCanonical = this.wrapperCanonical(v1);
+        let foldWrapper = Number(v1.version) === 3 ? await this.foldWrapperSection(v1) : null;
+        let wrapperBlock = foldWrapper ? foldWrapper.snapshot_block : v1.snapshot_block;
+        let wrapperSet = setFor('oracle_publish', wrapperBlock);
+        let wrapperCanonical = foldWrapper ? this.foldWrapperCanonical(v1, foldWrapper) : this.wrapperCanonical(v1);
         let wrapperSigs = this.parseSigs(v1.validator_signatures);
-        if(!this.quorumVerified(wrapperCanonical, wrapperSigs, wrapperSet, swq.isStakeWeightedQuorumActive(v1.snapshot_block, v1.network)))
+        if(!this.quorumVerified(wrapperCanonical, wrapperSigs, wrapperSet, swq.isStakeWeightedQuorumActive(wrapperBlock, v1.network)))
             throw new Error('wrapper signatures fail quorum against the archived oracle_publish set');
 
         // 2. Every match's signatures vs the ARCHIVED cross_chain set.
@@ -1214,6 +1217,34 @@ class AnchorRecovery {
         return raw;
     }
 
+    // A folded archive head carries no checkpoint fields: its signatures are the
+    // wrapper section's, stored verbatim, so the section is the sibling chain row of the
+    // same action whose signature list is byte-equal to the head's.
+    async foldWrapperSection(head){
+        let rows = await this.db.doQuery(
+            `SELECT * FROM anchor_actions
+             WHERE action_index = ? AND version = 3 AND chain IS NOT NULL
+             ORDER BY section_index ASC`, [Number(head.action_index)]);
+        let wrapper = (rows || []).find(r => String(r.validator_signatures) === String(head.validator_signatures));
+        if(!wrapper) throw new Error('folded archive head has no wrapper section');
+        return wrapper;
+    }
+
+    // The wrapper section signs its own v0 canonical (roots always appended) extended by
+    // the archive suffix, and its equivocation round id gains the batch seq. Byte-matches
+    // Anchor.canonical for a section whose index is WRAPPER_SECTION_INDEX.
+    foldWrapperCanonical(head, w){
+        let raw = this.rawCheckpointCanonical(w) + '|' +
+                [String(w.state_root || '').toLowerCase(), String(w.state_root_version),
+                 String(w.block_merkle_root || '').toLowerCase(), String(w.block_merkle_version)].join('|') +
+                archiveCanonicalSuffix({ MATCH_BATCH_SEQ: head.match_batch_seq, MATCH_COUNT: head.match_count,
+                                         BATCH_CRC32: head.batch_crc32, TOTAL_CHUNKS: head.total_chunks });
+        if(eq.isEquivHeaderActive(w.snapshot_block, w.network))
+            return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT,
+                w.chain + '|' + w.network + '|' + w.block_index + '|' + w.checkpoint_seq + '|' + head.match_batch_seq, 0, raw);
+        return raw;
+    }
+
     // Hub CrossChainDexEngine.canonicalMatch / indexer cross_settle.canonical.
     matchCanonical(m){
         let raw = [
@@ -1314,6 +1345,10 @@ class AnchorRecovery {
 // Delegates to the real instance method; does not change its output.
 AnchorRecovery.wrapperCanonicalForTest = function(v1){
     return AnchorRecovery.prototype.wrapperCanonical.call(AnchorRecovery.prototype, v1);
+};
+
+AnchorRecovery.foldWrapperCanonicalForTest = function(head, section){
+    return AnchorRecovery.prototype.foldWrapperCanonical.call(AnchorRecovery.prototype, head, section);
 };
 
 module.exports = AnchorRecovery;
