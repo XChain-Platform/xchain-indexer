@@ -28,6 +28,50 @@ const { listItemId } = require('./membership');
 const { getUnionResolution, readUnionMembers } = require('./union');
 const LIST_EDIT_RESOLUTION_KEY = 'list_edit_resolution_activation.LIST_EDIT_RESOLUTION_ACTIVATION';
 const LIST_REFERENCE_VALIDITY_KEY = 'list_reference_validity_activation.LIST_REFERENCE_REQUIRES_VALID_LIST';
+// Rows per multi-row INSERT, so a large membership never builds an unbounded statement.
+const LIST_BULK_INSERT_CHUNK = 500;
+
+// Resolve an item => status map to [item_id, status_id] tuples in input order.
+async function statusRows(db, data, byItem){
+    let rows = [];
+    for(let item in byItem){
+        let status_id = await db.createStatus(byItem[item]);
+        rows.push([await listItemId(db, data['TYPE'], item), status_id]);
+    }
+    return rows;
+}
+
+// Insert row tuples with one statement per chunk. A null item_id never matches an
+// existing row, mirroring the per-row lookup it replaces, so those rows always insert.
+async function bulkInsertListRows(db, table, columns, action_index, rows){
+    if(rows.length === 0)
+        return;
+    let seen = new Set();
+    let statuses = columns.length > 1 ? [...new Set(rows.map((row) => row[1]))] : [null];
+    for(let status of statuses){
+        let existing = await db.doQuery(
+            `SELECT item_id FROM ${table} WHERE action_index=?${status === null ? '' : ' AND status_id=?'}`,
+            status === null ? [action_index] : [action_index, status]
+        );
+        for(let row of existing)
+            seen.add(`${row['item_id']}|${status}`);
+    }
+    let fresh = rows.filter((row) => {
+        let key = `${row[0]}|${row[1] ?? null}`;
+        if(row[0] === null || row[0] === undefined)
+            return true;
+        return !seen.has(key) && seen.add(key);
+    });
+    let marks = '(' + new Array(columns.length + 1).fill('?').join(', ') + ')';
+    for(let i = 0; i < fresh.length; i += LIST_BULK_INSERT_CHUNK){
+        let chunk = fresh.slice(i, i + LIST_BULK_INSERT_CHUNK);
+        let args = chunk.flatMap((row) => [action_index, ...row]);
+        await db.doQuery(
+            `INSERT INTO ${table} (action_index, ${columns.join(', ')}) values ${chunk.map(() => marks).join(', ')}`,
+            args
+        );
+    }
+}
 
 // Distinguish a stored LIST rejected by the validity gate from an unknown id.
 // Policy readers treat the rejected reference as absent, while unknown getList
@@ -316,60 +360,34 @@ module.exports = {
         return (results.length > 0) ? results[0]['address'] : null;
     },
 
-    // Create record in `list_edits` table
     async createListEdit(data, item, status){
-        let action_index = data['ACTION_INDEX'];
-        let status_id = await this.createStatus(status);
-        let item_id   = await listItemId(this, data['TYPE'], item);
-        // Check if record already exists for this list
-        let query  = "SELECT item_id FROM list_edits WHERE action_index=? AND item_id=? AND status_id=? LIMIT 1";
-        let args   = [action_index, item_id, status_id];
-        let exists = false;
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
-        // INSERT record
-        if(!exists){
-            query = "INSERT INTO list_edits (action_index, item_id, status_id) values (?, ?, ?)";
-            results = await this.doQuery(query, args);
-        }
+        await this.createListEdits(data, { [item]: status });
     },
 
-    // Create record in `list_items` table
     async createListItem(data, item){
-        let action_index = data['ACTION_INDEX'];
-        let item_id      = await listItemId(this, data['TYPE'], item);
-        // Check if record already exists for this list
-        let query  = "SELECT item_id FROM list_items WHERE action_index=? AND item_id=? LIMIT 1";
-        let args   = [action_index, item_id];
-        let exists = false;
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
-        // INSERT record
-        if(!exists){
-            query = "INSERT INTO list_items (action_index, item_id) values (?, ?)";
-            results = await this.doQuery(query, args);
-        }
+        await this.createListItems(data, [item]);
     },
 
-    // Create record in `list_items_invalid` table
     async createListItemInvalid(data, item, status){
-        let action_index = data['ACTION_INDEX'];
-        let status_id    = await this.createStatus(status);
-        let item_id      = await listItemId(this, data['TYPE'], item);
-        // Check if record already exists for this list
-        let query  = "SELECT item_id FROM list_items_invalid WHERE action_index=? AND item_id=? AND status_id=? LIMIT 1";
-        let args   = [action_index, item_id, status_id];
-        let exists = false;
-        let results = await this.doQuery(query, args);
-        if(results.length > 0)
-            exists = true;
-        // INSERT record
-        if(!exists){
-            query = "INSERT INTO list_items_invalid (action_index, item_id, status_id) values (?, ?, ?)";
-            results = await this.doQuery(query, args);
-        }
+        await this.createListItemsInvalid(data, { [item]: status });
+    },
+
+    // Bulk writers: ids resolve in input order, then rows insert in bounded chunks.
+    async createListEdits(data, edit){
+        await bulkInsertListRows(this, 'list_edits', ['item_id', 'status_id'], data['ACTION_INDEX'],
+            await statusRows(this, data, edit));
+    },
+
+    async createListItems(data, items){
+        let rows = [];
+        for(let item of items)
+            rows.push([await listItemId(this, data['TYPE'], item)]);
+        await bulkInsertListRows(this, 'list_items', ['item_id'], data['ACTION_INDEX'], rows);
+    },
+
+    async createListItemsInvalid(data, invalid){
+        await bulkInsertListRows(this, 'list_items_invalid', ['item_id', 'status_id'], data['ACTION_INDEX'],
+            await statusRows(this, data, invalid));
     },
 
 };
