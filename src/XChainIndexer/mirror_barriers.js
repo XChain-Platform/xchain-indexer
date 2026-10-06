@@ -175,7 +175,7 @@ module.exports = {
     // injecting the execution/callback a block late, landing the synthetic action in a
     // different block than a node that saw the row on time (a real content divergence /
     // ledger fork). The request_id/call_id preimages no longer bind action_index (see
-    // attest.js/xcall.js EMITTER_PATH), but the block an injection lands in still must
+    // actions/attest and actions/xcall EMITTER_PATH), but the block an injection lands in still must
     // agree. Block until the local hub mirror covers block_time (its highest finalized
     // effective_time >= block_time) before processCrossChainCalls reads the table; a
     // lagging mirror defers-and-retries (the barrier throws on timeout) so this node
