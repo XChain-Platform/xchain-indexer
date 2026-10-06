@@ -515,9 +515,9 @@ async function main() {
 }
 
 if (require.main === module) {
-    main().then(() => process.exit(process.exitCode || 0), (e) => {
+    main().catch((e) => {
         console.error(e instanceof CliUsageError ? e.message : `consensus-identity: ${e.message}`);
-        process.exit(2);
+        process.exitCode = 2;
     });
 }
 
