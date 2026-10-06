@@ -382,4 +382,13 @@ addGate('retraction_signing_activation.RETRACTION_SIGNING_ACTIVATION', 'height',
     regtest: 0,
 });
 
+// price_fee_batch_landed_activation (continued)
+// The chains whose PRICE batches land rounds for a network. A block on any other chain waits
+// for each of these to publish a landed time past its own; a landing chain does not wait on itself.
+addGate('price_fee_batch_landed_activation.PRICE_LANDING_CHAINS', 'constant', {
+    mainnet: ['DOGE'],
+    testnet: ['DOGE'],
+    regtest: ['DOGE'],
+});
+
 // SHARED-GATES END

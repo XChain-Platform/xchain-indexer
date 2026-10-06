@@ -58,9 +58,10 @@ describe('list-share block-loop barrier wiring @regression @tier1', function () 
         const calls = [];
         const ctx = { evaluatePriceBarrier: sinon.stub().returns(false) };
         for (const name of [
-            'deferOnPriceSync', 'deferOnOracleSync', 'deferOnMatchSync', 'deferOnCallSync',
-            'deferOnBridgeSync', 'deferOnPolicySync', 'deferOnDirectCallPresence',
-            'deferOnAnchorAttestSync', 'deferOnAttestResponseSync', 'deferOnSnapshotSync'
+            'deferOnPriceSync', 'deferOnPriceLandingSync', 'deferOnOracleSync', 'deferOnMatchSync',
+            'deferOnCallSync', 'deferOnBridgeSync', 'deferOnPolicySync',
+            'deferOnDirectCallPresence', 'deferOnAnchorAttestSync',
+            'deferOnAttestResponseSync', 'deferOnSnapshotSync'
         ]) {
             ctx[name] = sinon.stub().callsFake(async function () {
                 calls.push(name);

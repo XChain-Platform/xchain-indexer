@@ -18,7 +18,7 @@ function makeQueue(selector){
     return {
         indexer: { hubSelector: selector },
         indexerDb: {
-            poolQuery: sinon.stub().resolves(),
+            resetPendingHubPushAttempts: sinon.stub().resolves(),
             getPendingHubPushes: sinon.stub().resolves([])
         },
         hubClient: {},
@@ -43,7 +43,7 @@ describe('HubPushQueue address retry', function(){
 
         address = 'http://hub-a.test';
         assert.strictEqual(await retry.resetPendingAttemptsAfterMove(), false);
-        assert.strictEqual(queue.indexerDb.poolQuery.callCount, 0);
+        assert.strictEqual(queue.indexerDb.resetPendingHubPushAttempts.callCount, 0);
     });
 
     it('resets persisted and fetched attempts when the address moves', async function(){
@@ -54,7 +54,7 @@ describe('HubPushQueue address retry', function(){
 
         address = 'http://hub-b.test';
         assert.strictEqual(await retry.resetPendingAttemptsAfterMove([row]), true);
-        assert.strictEqual(queue.indexerDb.poolQuery.calledOnce, true);
+        assert.strictEqual(queue.indexerDb.resetPendingHubPushAttempts.calledOnce, true);
         assert.deepStrictEqual(row, { attempts: 0, last_attempted_at: null, last_error: null });
     });
 });
