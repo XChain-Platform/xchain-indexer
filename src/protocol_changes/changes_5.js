@@ -30,6 +30,7 @@ const {
     OWNER_WITHDRAW_OPT_IN_TESTNET_TIME,
 } = require('./flag_times.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
+const { UNARMED } = require('./core.js');
 
 module.exports = [
     ['CONTROLLER_CUSTODY_GUARD', '0.2.0', CONTROLLER_CUSTODY_GUARD_MAINNET_TIME,
@@ -47,8 +48,8 @@ module.exports = [
     // SLASH_XANCPUB_PUBLISHER_PAIR: an XANCPUB equivocation proof is judged as a
     // publisher-only pair (slash/resolve_slot.js): the two contents agree on scope,
     // round reference, snapshot block and amount and differ in the attested publisher.
-    // Below the flag block the legacy rule reads the snapshot block alone. Judged by
-    // the block that carries the SLASH. Mainnet is unarmed until named, regtest is
-    // genesis-active and testnet arms at the tip of the next cut.
-    ['SLASH_XANCPUB_PUBLISHER_PAIR', '0.2.0', 0, 0, 0, 9999999999, 9999999999, 0],
+    // Below the flag the legacy rule reads the snapshot block alone. Judged by the
+    // block that carries the SLASH. Mainnet and testnet are unarmed; regtest is
+    // genesis-active.
+    ['SLASH_XANCPUB_PUBLISHER_PAIR', '0.2.0', UNARMED, UNARMED, 0, 0, 0, 0],
 ];
