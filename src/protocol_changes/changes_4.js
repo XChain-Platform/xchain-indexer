@@ -391,7 +391,8 @@ module.exports = [
     // height: xchain-documentation/protocol/constants.js.
 
     // JSON_STRINGIFY_HOOK: mirrors xchain-vm's JSON_STRINGIFY_HOOK_ACTIVATION map
-    // (VM CONSENSUS_VERSION 5, the value-hook depth-bypass fix). Mainnet and testnet
-    // stay inert until the release cut arms testnet; regtest activates at genesis.
+    // (VM CONSENSUS_VERSION 5, the value-hook depth-bypass fix). Mainnet stays inert;
+    // testnet ARMED by the v0.21.3 cut at 1791061097 = 2026-10-03T20:58:17Z; regtest
+    // activates at genesis.
     ['JSON_STRINGIFY_HOOK', '0.2.0',9999999999,1791061097,0,0,0,0],
 ];
