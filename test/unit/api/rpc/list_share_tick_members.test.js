@@ -18,9 +18,9 @@ const assert = require('assert');
 const crypto = require('crypto');
 const sinon = require('sinon');
 
-const { buildListShareRpc } = require('../../../../../src/api/rpc/list_share.js');
-const { qualifyTickMembers } = require('../../../../../src/api/rpc/list_share_tick_members.js');
-const { recordingView, fakeIndexer } = require('../helpers/fake_indexer.js');
+const { buildListShareRpc } = require('../../../../src/api/rpc/list_share.js');
+const { qualifyTickMembers } = require('../../../../src/api/rpc/list_share_tick_members.js');
+const { recordingView, fakeIndexer } = require('./helpers/fake_indexer.js');
 
 function sha256(value){
     return crypto.createHash('sha256').update(value, 'utf8').digest('hex');

@@ -20,7 +20,7 @@ const crypto = require('crypto');
 const {
     buildListShareRpc,
     listMetaAnswer
-} = require('../../../../../src/api/rpc/list_share.js');
+} = require('../../../../src/api/rpc/list_share.js');
 
 function sha256(value){
     return crypto.createHash('sha256').update(value, 'utf8').digest('hex');
