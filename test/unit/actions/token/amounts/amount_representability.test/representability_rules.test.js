@@ -20,10 +20,10 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 
-const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../../fixtures/mocks');
+const { createMockIndexer, createBaseData, createTokenInfo } = require('../../../../../fixtures/mocks');
 
-const Utility    = require('../../../../../src/utility.js');
-const Send       = require('../../../../../src/actions/send/index.js');
+const Utility    = require('../../../../../../src/utility.js');
+const Send       = require('../../../../../../src/actions/send/index.js');
 const {
     activation, GATE_OFF_NETWORK, BLOCK_TIME, SOURCE, DEST,
     withRegtestThreshold, withRegtestThresholdAsync, makeActionsCtx,

@@ -39,7 +39,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 // The rollback entry, its parts and src/db/rollback/ as one text: the clear and the commit
 // it must follow sit in whichever part holds the post-commit step.
-const { readRollbackSource } = require('../../helpers/rollback_source.js');
+const { readRollbackSource } = require('../../../helpers/rollback_source.js');
 
 describe('rollback drops the SMT resolver caches @regression', function(){
     // The rollback module is large and DB-bound; this suite asserts the one
@@ -87,9 +87,9 @@ describe('rollback drops the SMT resolver caches @regression', function(){
         // rollback frees id 277 and a new ISSUE reuses it, the next lookup must
         // return the new tick, not the one cached before the reorg.
         const sinon = require('sinon');
-        const { getTestConfig } = require('../../fixtures/config');
-        const Utility  = require('../../../src/utility');
-        const Database = require('../../../src/db');
+        const { getTestConfig } = require('../../../fixtures/config');
+        const Utility  = require('../../../../src/utility');
+        const Database = require('../../../../src/db');
         const util = new Utility();
         sinon.stub(util, 'logError');
         const db = new Database('127.0.0.1', 3306, 'x', 'u', 'p', { config: getTestConfig(), util });
