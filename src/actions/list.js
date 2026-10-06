@@ -207,7 +207,7 @@ class List {
 
     // Open markets trading a token whose allow or block list is this list or an edit of it
     async getOpenMarketsByTokenList(kind, root){
-        let ref = '(SELECT ? UNION SELECT action_index FROM lists WHERE list_action_index=?)';
+        let ref = '(SELECT ? UNION SELECT action_index FROM lists ed WHERE ed.list_action_index=?)';
         let rows = await this.indexerDb.doQuery(`SELECT DISTINCT m.action_index FROM ${kind}s m
              INNER JOIN ${kind}_statuses ms ON (ms.${kind}_action_index=m.action_index) INNER JOIN index_statuses st ON (st.id=ms.status_id)
              INNER JOIN tokens tk ON (tk.tick_id IN (m.give_tick_id, m.get_tick_id))
