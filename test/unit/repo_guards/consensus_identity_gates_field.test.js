@@ -49,10 +49,10 @@ function run(args) {
 }
 
 // The variables the child is allowed to see. A regtest venue arms gate rows from
-// the environment (src/protocol_changes/shared_rows.js REGTEST_ARMING), and the
-// pin selects its armed block only when EVERY lever of the pair matches, so a
-// process holding one of them answers to neither block: the fingerprint and the
-// digest read armed while the comparison runs against the bare pin. A suite that
+// the environment (src/protocol_changes/shared_rows.js REGTEST_ARMING), and
+// --compare selects a pin block only when the WHOLE arming environment matches it,
+// refusing (exit 2) otherwise, so a process holding one stray lever answers to
+// neither block. A suite that
 // throws between arming a lever and restoring it leaves exactly that state, and
 // an inherited environment would carry it into this guard and red it for a reason
 // that is not drift. The list is closed rather than a subtraction of known levers,
