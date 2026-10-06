@@ -70,11 +70,6 @@ class Airdrop {
         /*****************************************************************
          * DEBUGGING - Force params
          ****************************************************************/
-        // Example payloads by FORMAT version:
-        // Single Airdrop
-        // Multi-Airdrop (brief)
-        // Multi-Airdrop (Full)
-        // Multi-Airdrop (Full) w multiple memos
         // params = String(str).split('|');
         // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 
