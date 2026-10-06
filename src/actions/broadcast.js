@@ -61,8 +61,6 @@ class Broadcast {
         // params = String(str).split('|');
         // data['FORMAT'] = this.util.getFormatVersion(params[0]);
 
-        // Resolve the format before field assignment because each version gives the
-        // same parameter positions different meanings.
         let format = data['FORMAT'];
 
         // Validate that format is known
