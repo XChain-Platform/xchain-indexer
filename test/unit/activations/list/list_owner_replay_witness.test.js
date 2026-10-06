@@ -5,9 +5,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
-const witness = require('../../../bin/verify-list-owner-replay-equivalence.js');
+const witness = require('../../../../bin/verify-list-owner-replay-equivalence.js');
 
-const TOOL = path.resolve(__dirname, '../../../bin/verify-list-owner-replay-equivalence.js');
+const TOOL = path.resolve(__dirname, '../../../../bin/verify-list-owner-replay-equivalence.js');
 
 function temporaryDirectory(label) {
     return fs.mkdtempSync(path.join(os.tmpdir(), 'list-owner-' + label + '-'));
@@ -130,7 +130,7 @@ describe('LIST owner replay witness: gate and hash comparison', function () {
     });
 
     it('rolls back only the executable general-owner checks in a legacy tree', function () {
-        const source = fs.readFileSync(path.join(__dirname, '../../../src/actions/list.js'), 'utf8');
+        const source = fs.readFileSync(path.join(__dirname, '../../../../src/actions/list.js'), 'utf8');
         assert.ok(source.includes(
             "gateRegistry.activeAt('" + witness.GATE + "', this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null)"
         ));
