@@ -8,7 +8,7 @@
     },
     "anchor_reward_activation": {
       "path": "src/consensus/gates/anchor_reward_gate.js",
-      "hash": "86edade703c3228672bf43770ec9c2e79d0f933654a0ce6d851b04e970bb7462",
+      "hash": "1085d2c7e702b6f924bee7d9dd859ebf8638a56815476735e72a72032660d6cc",
       "twins": [
         "xchain-hub"
       ]
@@ -1939,6 +1939,13 @@
       "to": "b3202d580497fa273f3d18b617ba1b706bb45cf2a6b72f889b96cf1e8c5cbff1",
       "reason": "route the protocol error log through the one logger, text unchanged",
       "date": "2026-10-05"
+    },
+    {
+      "id": "anchor_reward_activation",
+      "from": "86edade703c3228672bf43770ec9c2e79d0f933654a0ce6d851b04e970bb7462",
+      "to": "1085d2c7e702b6f924bee7d9dd859ebf8638a56815476735e72a72032660d6cc",
+      "reason": "null threshold guard on the anchor and archive reward gates",
+      "date": "2026-10-06"
     }
   ]
 }
