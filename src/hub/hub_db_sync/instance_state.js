@@ -136,8 +136,8 @@ function initPriceBarrierState(sync) {
     sync._priceTimeWaiters     = [];                   // pending waitForPriceSyncTime() resolvers
 }
 
-// The content-watermark barriers over the other mirrored tables.
-function initContentBarrierState(sync) {
+// The oracle_prices watermark barrier.
+function initOracleBarrier(sync) {
     // Highest effective_at present in the local oracle_prices copy. Used by the
     // block-processing sync barrier (waitForOracleSyncTimestamp) so an indexer does not
     // settle FIAT dispensers for a block until its local oracle mirror has caught up to
@@ -151,7 +151,10 @@ function initContentBarrierState(sync) {
     sync.oracleSyncTimestamp = null;                   // null = mirror's max effective_at not yet known
     sync.oracleBootstrapped  = false;                  // true once the mirror has been read at least once
     sync._oracleWaiters      = [];                     // pending waitForOracleSyncTimestamp() resolvers
+}
 
+// The cross_chain_matches watermark barrier.
+function initMatchBarrier(sync) {
     // Highest effective_time present in the local cross_chain_matches copy. The
     // cross-chain settlement pass uses waitForMatchSync(block_time) so an indexer does
     // not settle a block until its match mirror has caught up to that block's time;
@@ -161,7 +164,10 @@ function initContentBarrierState(sync) {
     sync.matchSyncTimestamp = null;
     sync.matchBootstrapped  = false;
     sync._matchWaiters      = [];
+}
 
+// The cross_chain_calls watermark barrier.
+function initCallBarrier(sync) {
     // Highest effective_time present in the local cross_chain_calls copy (the
     // XCALL relay's equivalent of the match barrier. The injection/callback
     // passes use waitForCallSync(block_time) so an indexer never applies a
@@ -171,7 +177,10 @@ function initContentBarrierState(sync) {
     sync.callSyncTimestamp = null;
     sync.callBootstrapped  = false;
     sync._callWaiters      = [];
+}
 
+// The bridge_transfers watermark barrier.
+function initBridgeBarrier(sync) {
     // Highest effective_time present in the local bridge_transfers copy, scoped to the
     // transfers THIS chain can act on (source or destination leg). The XBRIDGE settle
     // pass uses waitForBridgeSync(block_time) so an indexer never mints a bridged credit
@@ -182,7 +191,10 @@ function initContentBarrierState(sync) {
     sync.bridgeSyncTimestamp = null;
     sync.bridgeBootstrapped  = false;
     sync._bridgeWaiters      = [];
+}
 
+// The policy_snapshots watermark barrier.
+function initPolicyBarrier(sync) {
     // Highest effective_time present in the local policy_snapshots copy, scoped to the
     // snapshots this chain can act on. Keyed on origin_chain alone, NOT on a
     // source/destination pair: a policy row targets every chain holding a copy of the
@@ -190,10 +202,23 @@ function initContentBarrierState(sync) {
     sync.policySyncTimestamp = null;
     sync.policyBootstrapped  = false;
     sync._policyWaiters      = [];
+}
 
+// The list-share mirror barrier.
+function initListShareBarrier(sync) {
     sync.listShareBootstrapped = false;
     sync.listShareMirrorEmpty  = false;
     sync._listShareWaiters     = [];
+}
+
+// The content-watermark barriers over the other mirrored tables.
+function initContentBarrierState(sync) {
+    initOracleBarrier(sync);
+    initMatchBarrier(sync);
+    initCallBarrier(sync);
+    initBridgeBarrier(sync);
+    initPolicyBarrier(sync);
+    initListShareBarrier(sync);
 }
 
 // What the consumer told this client about itself and the hooks it wired.

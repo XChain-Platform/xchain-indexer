@@ -25,14 +25,15 @@
  * position, and arming a height in a scratch copy of the map must actually let a
  * sub-root through. A gate that can never open would pass every inertness test.
  *
- * TWIN PAIR: this ENTRY file and xchain-sync/test/unit/stateSubtreeActivation.test.js
+ * TWIN PAIR: this ENTRY file and xchain-sync/test/unit/state_subtree_activation.test.js
  * are kept BYTE-IDENTICAL apart from the src/<feature>/ depth of their requires (the
  * gate and assembler they cover are themselves byte-identical twins). Locked equal by
- * the cross-repo twin loop in xchain-sync/test/unit/rollback-coverage.test.js. The
+ * the cross-repo twin loop in xchain-sync/test/unit/rollback_coverage.test.js. The
  * suite outgrew the file-length limit, so the map, gateSubRoots and assembler blocks
- * now sit beside it in state_subtree_activation.test/. That parts directory is NOT in
- * the twin registry, so a change there reaches the sync half only by hand or
- * reconcile-twins.sh.
+ * now sit beside it in state_subtree_activation.test/. Every part file there is in the
+ * twin registry too, and the same rollback_coverage.test.js walks the whole directory
+ * on both sides, so a part added, dropped or edited in one repo alone fails there;
+ * reconcile-twins.sh copies the indexer half across.
  *
  ********************************************************************/
 

@@ -93,9 +93,10 @@ const callbacksPart      = require('./callbacks.js');
 class Attest {
 
     // The action's constants, read off the class by requirers that predate constants.js
-    // (utility.js reads the mirror-apply cap; suites read the stamp and the preimage
-    // fields). constants.js is their home and these are the same bindings, carried as
-    // statics so the module's one export is the class itself.
+    // (unit suites read the mirror-apply cap and the stamp off the class, while the applier
+    // pass in utility/attest_mirror.js and utility/attest_mirror_select.js imports the cap
+    // from constants.js itself). constants.js is their home and these are the same
+    // bindings, carried as statics so the module's one export is the class itself.
     static REQUEST_ID_PREIMAGE_FIELDS          = REQUEST_ID_PREIMAGE_FIELDS;
     static ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK = ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK;
     static ATTEST_BATCH_COMPLETION_STAMP       = ATTEST_BATCH_COMPLETION_STAMP;
