@@ -72,8 +72,6 @@ class Airdrop {
          ****************************************************************/
         // Example payloads by FORMAT version:
         // Single Airdrop
-        // let str = '0|AIRDROPTEST1|1|1257|test'; // ADDRESS LIST
-        // let str = '0|AIRDROPTEST2|1|1191|test'; // TICK LIST
         // Multi-Airdrop (brief)
         // Multi-Airdrop (Full)
         // Multi-Airdrop (Full) w multiple memos
