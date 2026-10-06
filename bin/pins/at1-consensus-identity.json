@@ -386,7 +386,7 @@
     },
     "armed_map_row_count": 366,
     "gates_field_hash": "7563e42d72a80c0a9fdf36096f171efd59fa1449a7b443041705bc2d0d1278ed",
-    "carrier_logic_digest": "61e3b952fa53b052e5f9aa9c85df0ad1c10b2f9dcd9314b807bc44db03ec48f2",
+    "carrier_logic_digest": "1af5bc44c802b201eca0b26485bfb4107685f3442b838bd6936e852c073d55a1",
     "consensus_rules_digest": "227f96529070d083038a3695fb863c4ab08611864b9dfcc1b619f75ec67c91d8",
     "gate_key_count": 43,
     "consensus_rules_gates": {
@@ -819,7 +819,7 @@
     },
     "armed_map_row_count": 366,
     "gates_field_hash": "7563e42d72a80c0a9fdf36096f171efd59fa1449a7b443041705bc2d0d1278ed",
-    "carrier_logic_digest": "61e3b952fa53b052e5f9aa9c85df0ad1c10b2f9dcd9314b807bc44db03ec48f2",
+    "carrier_logic_digest": "1af5bc44c802b201eca0b26485bfb4107685f3442b838bd6936e852c073d55a1",
     "consensus_rules_digest": "8568e6221e83de9d7f3a43281368257c78d88caa6ed55b1c3c371aa4d4e6ccae",
     "gate_key_count": 43,
     "consensus_rules_gates": {
