@@ -66,7 +66,12 @@ function tearDownCase() {
     delete require.cache[DOTENV_PATH];
 }
 
-function makeFakeDb({ queryError } = {}) {
+// The real rename planner, bound to the real rename map before the fake replaces the class.
+const realPlanLedgerRenames = require('../../../src/db').planLedgerRenames;
+const RENAMED_FROM = '2026-09-08-contract-meta-columns.sql';
+const RENAMED_TO = '2026-09-11-contract-meta-columns.sql';
+
+function makeFakeDb({ queryError, ledgerRows, planner = () => [] } = {}) {
     let resolveDone;
     const done = new Promise((resolve) => { resolveDone = resolve; });
     const files = migrationFiles();
@@ -90,6 +95,7 @@ function makeFakeDb({ queryError } = {}) {
                 query: async (sql) => {
                     state.queries.push(sql);
                     if (queryError) throw queryError;
+                    if (ledgerRows) return ledgerRows;
                     return files.slice(0, -2).map((name) => ({
                         name, mode: 'auto', applied_at: '2026-09-27T00:00:00.000Z'
                     }));
@@ -98,6 +104,7 @@ function makeFakeDb({ queryError } = {}) {
             };
         }
         migrationMode() { return 'manual'; }
+        static planLedgerRenames(names) { return planner(names); }
     }
     state.FakeDatabase = FakeDatabase;
     return state;
@@ -202,6 +209,45 @@ describe('migrate CLI status report @regression', function () {
         assert.strictEqual(fake.runMigrations.called, false);
         assert.strictEqual(process.exitCode, undefined);
         assert.strictEqual(fake.poolEnded, true);
+    });
+
+    it('reports a renamed file applied when the ledger still holds its old name', async function () {
+        const files = migrationFiles();
+        assert.ok(files.includes(RENAMED_TO), RENAMED_TO + ' must be on disk');
+        const ledgerRows = files.filter((name) => name !== RENAMED_TO)
+            .map((name) => ({ name, mode: 'auto', applied_at: '2026-09-27T00:00:00.000Z' }))
+            .concat([{ name: RENAMED_FROM, mode: 'auto', applied_at: '2026-09-09T00:00:00.000Z' }]);
+        const fake = makeFakeDb({ ledgerRows, planner: realPlanLedgerRenames });
+        loadMigrate(fake.FakeDatabase, ['--status', '--json']);
+        await fake.done;
+
+        const output = printed(cli.logStub);
+        const report = JSON.parse(output.slice(output.indexOf('{')));
+        assert.deepStrictEqual(report.migrations.find((row) => row.file === RENAMED_TO),
+            { file: RENAMED_TO, applied: true, mode: 'auto', appliedAt: '2026-09-09T00:00:00.000Z' });
+        assert.strictEqual(report.migrations.some((row) => row.file === RENAMED_FROM), false);
+        assert.strictEqual(report.pending, 0);
+        assert.strictEqual(report.applied, files.length);
+        // Status stays read-only: the one ledger SELECT, no UPDATE, no runner.
+        assert.deepStrictEqual(fake.queries,
+            ['SELECT name, mode, applied_at FROM schema_migrations']);
+        assert.strictEqual(fake.runMigrations.called, false);
+        assert.strictEqual(process.exitCode, undefined);
+    });
+
+    it('keeps the new name\'s own row when the ledger holds both old and new names', async function () {
+        const files = migrationFiles();
+        const ledgerRows = files.map((name) => ({ name, mode: 'auto', applied_at: '2026-09-27T00:00:00.000Z' }))
+            .concat([{ name: RENAMED_FROM, mode: 'manual', applied_at: '2026-09-09T00:00:00.000Z' }]);
+        const fake = makeFakeDb({ ledgerRows, planner: realPlanLedgerRenames });
+        loadMigrate(fake.FakeDatabase, ['--status', '--json']);
+        await fake.done;
+
+        const output = printed(cli.logStub);
+        const report = JSON.parse(output.slice(output.indexOf('{')));
+        assert.deepStrictEqual(report.migrations.find((row) => row.file === RENAMED_TO),
+            { file: RENAMED_TO, applied: true, mode: 'auto', appliedAt: '2026-09-27T00:00:00.000Z' });
+        assert.strictEqual(report.pending, 0);
     });
 
     it('refuses unsafe status argument combinations before constructing a Database', function () {

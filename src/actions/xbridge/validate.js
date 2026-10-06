@@ -108,11 +108,11 @@ function validateFormat(data, ctx){
     if(format === 5 && !data['IS_SYNTHETIC'])
         return { valid: false, verdict: VERDICTS.V5_SYSTEM_INJECTED };
 
-    // Chain rules for the two XCHAIN formats. v0 locks into the BTC-side escrow, so it
-    // is BTC-only (the literal the five BTC-only handlers share); v1 burns a foreign
-    // chain's copy, so it is everywhere BUT BTC (the inverse-chain shape anchor.js
-    // uses). v3 and v4 carry no chain literal: their chain rule is the tick's row kind,
-    // which validateTickShape decides.
+    // Chain rules for the two XCHAIN formats. v0 locks into the BTC-side escrow, so it is
+    // BTC-only (VERDICTS.BTC_ONLY, XBRIDGE's own frozen literal, not the stake family's);
+    // v1 burns a foreign chain's copy, so it is everywhere BUT BTC (the inverse-chain shape
+    // anchor.js uses). v3 and v4 carry no chain literal: their chain rule is the tick's row
+    // kind, which validateTickShape decides.
     if(format === 0 && ctx.coin !== 'BTC')
         return { valid: false, verdict: VERDICTS.BTC_ONLY };
     if(format === 1 && ctx.coin === 'BTC')
