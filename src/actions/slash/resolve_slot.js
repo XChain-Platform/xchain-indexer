@@ -57,10 +57,20 @@ function listShareSlashable(msgA, prefix, network){
         gateRegistry.activeAt(LIST_SHARE_PRODUCER_GATE, network, null, Number(field), null);
 }
 
+// XANCPUB|scope|round_reference|snapshot_block|publisher|amount: two attestations
+// are one slot's conflict when every field but the publisher agrees and the
+// publisher differs.
+function isPublisherOnlyPair(contentA, contentB){
+    let a = contentA.split('|'), b = contentB.split('|');
+    if(a.length !== 6 || b.length !== 6 || a[4] === b[4])
+        return false;
+    return [0, 1, 2, 3, 5].every(k => a[k] === b[k]);
+}
+
 // The field-indexed engines: the height rides the signed content itself, so the
 // pair is judged on one field of each canonical. Returns null when this engine
 // does not carry its block that way.
-function resolveFieldSlot(util, engineTag, contentA, contentB){
+function resolveFieldSlot(util, engineTag, contentA, contentB, publisherPairGate){
     if(FIELD[engineTag] !== undefined){
         let i  = FIELD[engineTag];
         // The CHECKPOINT engine tag carries TWO content families: the checkpoint
@@ -80,6 +90,8 @@ function resolveFieldSlot(util, engineTag, contentA, contentB){
         let fb = contentB.split('|')[i];
         if(util.isNull(fa) || fa !== fb || !/^[0-9]+$/.test(String(fa)))
             return { error: 'invalid: snapshot_block (mismatch or format)' };
+        if(publisherPairGate && i === 3 && contentA.startsWith('XANCPUB|') && !isPublisherOnlyPair(contentA, contentB))
+            return { error: 'invalid: XANCPUB pair differs beyond the publisher' };
         return { snapshotBlock: Number(fa) };
     }
     return null;
@@ -222,8 +234,8 @@ async function resolveAttestSlot(util, indexerDb, engineTag, roundId, contentA, 
 // it is carried in-content; for engines that don't carry it, derive from the round.
 // `deps` carries the handler state these layouts need: util for isNull, indexerDb
 // for the XATTEST request read.
-async function resolveSlot(deps, engineTag, roundId, contentA, contentB, oracleRoundGate, multiRoundGate){
-    return resolveFieldSlot(deps.util, engineTag, contentA, contentB)
+async function resolveSlot(deps, engineTag, roundId, contentA, contentB, oracleRoundGate, multiRoundGate, publisherPairGate){
+    return resolveFieldSlot(deps.util, engineTag, contentA, contentB, publisherPairGate)
         || resolveOracleSlot(engineTag, roundId, contentA, contentB, oracleRoundGate)
         || resolveBatchSlot(engineTag, roundId, contentA, contentB)
         || await resolveAttestSlot(deps.util, deps.indexerDb, engineTag, roundId, contentA, contentB, multiRoundGate)
