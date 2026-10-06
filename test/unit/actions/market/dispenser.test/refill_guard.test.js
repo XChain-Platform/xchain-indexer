@@ -10,7 +10,7 @@
 //
 // DISPENSER Format 2 refill: the controller guard runs on a refill of a
 // controller-bound token only once the DISPENSER_REFILL protocol change is
-// active, and is absent from the protocol change table until it is armed.
+// active; the row is unarmed on mainnet and testnet.
 // Part of the Dispenser suite; see ../dispenser.test.js.
 
 process.env.INDEXER_COIN = 'BTC';
@@ -97,11 +97,12 @@ describe('Dispenser refill controller guard @regression @tier2', function () {
         assert.strictEqual(guardUtil.controllerActionClass('DISPENSER_REFILL'), 'trade');
     });
 
-    it('DISPENSER_REFILL has no protocol change row, so it is inactive on every network', async function () {
-        for (const network of ['mainnet', 'testnet', 'regtest']) {
+    it('DISPENSER_REFILL is unarmed on mainnet and testnet, so it is inactive there', async function () {
+        for (const network of ['mainnet', 'testnet']) {
             const pc = new ProtocolChanges({ config: { NETWORK: network }, util: {}, decoderDb: { getBlockTime: async () => 4102444800 }, indexerDb: {} });
-            assert.strictEqual(pc.isDefined('DISPENSER_REFILL'), false, network);
+            assert.strictEqual(pc.isDefined('DISPENSER_REFILL'), true, network);
             assert.strictEqual(await pc.isEnabled('DISPENSER_REFILL', 1), false, network);
         }
+        assert.strictEqual(ProtocolChanges.DISPENSER_REFILL_MAINNET_TIME, ProtocolChanges.UNARMED);
     });
 });

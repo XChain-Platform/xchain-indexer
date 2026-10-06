@@ -232,6 +232,12 @@ const OWNER_WITHDRAW_OPT_IN_MAINNET_TIME = UNARMED;
 // replay than on a node that indexed it live.
 const OWNER_WITHDRAW_OPT_IN_TESTNET_TIME = 1790492400;
 
+// DISPENSER_REFILL: a refill that adds escrow to a dispenser consults the token's trade
+// controller (actions/dispenser/controller_guard.js). Inert on every network until a
+// release cut arms it; mainnet in particular stays null until the operator arms it.
+const DISPENSER_REFILL_MAINNET_TIME = UNARMED;
+const DISPENSER_REFILL_TESTNET_TIME = UNARMED;
+
 module.exports = {
     VM_BANNED_ASYNC_MAINNET_TIME,
     NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME,
@@ -250,4 +256,6 @@ module.exports = {
     CONTROLLER_CUSTODY_GUARD_TESTNET_TIME,
     OWNER_WITHDRAW_OPT_IN_MAINNET_TIME,
     OWNER_WITHDRAW_OPT_IN_TESTNET_TIME,
+    DISPENSER_REFILL_MAINNET_TIME,
+    DISPENSER_REFILL_TESTNET_TIME,
 };

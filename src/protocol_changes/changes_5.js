@@ -12,7 +12,7 @@
  *
  **********************************************************************
  *
- * Time table part 5 of 5: CONTROLLER_CUSTODY_GUARD and OWNER_WITHDRAW_OPT_IN.
+ * Time table part 5 of 5: CONTROLLER_CUSTODY_GUARD, OWNER_WITHDRAW_OPT_IN and DISPENSER_REFILL.
  *
  * One row per protocol change, in registration order, as the argument list of
  * ProtocolChanges.addChange(name, version, mainnet_time, testnet_time,
@@ -27,6 +27,8 @@ const {
     CONTROLLER_CUSTODY_GUARD_TESTNET_TIME,
     OWNER_WITHDRAW_OPT_IN_MAINNET_TIME,
     OWNER_WITHDRAW_OPT_IN_TESTNET_TIME,
+    DISPENSER_REFILL_MAINNET_TIME,
+    DISPENSER_REFILL_TESTNET_TIME,
 } = require('./flag_times.js');
 const { regtestTimeOverride } = require('./regtest_env.js');
 
@@ -43,4 +45,11 @@ module.exports = [
     ['OWNER_WITHDRAW_OPT_IN', '0.2.0', OWNER_WITHDRAW_OPT_IN_MAINNET_TIME,
         OWNER_WITHDRAW_OPT_IN_TESTNET_TIME,
         regtestTimeOverride('OWNER_WITHDRAW_OPT_IN_REGTEST_TIME'), 0, 0, 0],
+
+    // DISPENSER_REFILL: a refill that adds escrow consults the token's trade controller.
+    // Unarmed on mainnet and testnet; regtest is genesis-active unless a venue sets
+    // DISPENSER_REFILL_REGTEST_TIME.
+    ['DISPENSER_REFILL', '0.2.0', DISPENSER_REFILL_MAINNET_TIME,
+        DISPENSER_REFILL_TESTNET_TIME,
+        regtestTimeOverride('DISPENSER_REFILL_REGTEST_TIME'), 0, 0, 0],
 ];
