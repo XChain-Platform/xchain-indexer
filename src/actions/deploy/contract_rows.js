@@ -98,9 +98,9 @@ async function writeContractRows(deploy, run){
     // The meta columns are written ONLY for a valid deploy whose meta conforms; every
     // other deploy stores four NULLs. createContract runs for invalid deploys too, so
     // the write site (not the grammar) is what keeps an oversized or malformed value
-    // out of a VARCHAR(64): sql_mode is not pinned in this tree, so an oversized value
-    // is either errno 1406 and a forever-retried block on a strict node or a silent
-    // truncation on a permissive one. Same gate as createContractPermission below.
+    // out of a VARCHAR(64): connections run under SESSION_SQL_MODE (db/shared.js), which
+    // is strict, so an oversized value is errno 1406 and a retried block rather than a
+    // silent truncation. Same gate as createContractPermission below.
     let storedMeta = (status === 'valid' && run.declaredMeta) ? run.declaredMeta : null;
 
     // Create record in contracts table
