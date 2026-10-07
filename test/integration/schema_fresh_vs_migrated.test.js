@@ -48,8 +48,6 @@ const DB_USER = process.env.TEST_DB_USER || 'root';
 const DB_PASS = process.env.TEST_DB_PASS || '';
 const DB_BASE = process.env.TEST_INDEXER_DB || 'xchain_test_indexer';
 
-assert.ok(DB_PASS, 'TEST_DB_PASS is required for the real MariaDB convergence test');
-
 function scopedDbName(label) {
     const suffix = '_schema_' + label + '_' + crypto.createHash('sha1')
         .update(__filename).digest('hex').slice(0, 6);
@@ -189,6 +187,9 @@ describe('fresh and migrated schema convergence against a real MariaDB @tier3', 
     const ctx = {};
 
     before(async function () {
+        if (process.env.TEST_DB_PASS === undefined) this.skip();
+        assert.ok(DB_PASS, 'TEST_DB_PASS must be non-empty when the DB-backed suite is enabled');
+
         ctx.admin = await mariadb.createConnection({
             host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS,
         });
