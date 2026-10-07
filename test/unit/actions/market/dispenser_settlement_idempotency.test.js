@@ -35,9 +35,9 @@ const Dispenser_Close  = require('../../../../src/actions/dispenser_close/index.
 const Dispenser_Expire = require('../../../../src/actions/dispenser_expire/index.js');
 
 // Statuses a dispenser can legitimately carry when a settlement handler first runs.
-// close is entered at 'cancelling' (utility.processCancellations) and at 'open' (the
-// dispense.js auto-closes, whose dispenser was matched under findMatchingDispensers'
-// own `status IN ('open','cancelling')` filter); expire only ever at 'open'.
+// close is entered at 'cancelling' (utility.processCancellations) and at 'open' or
+// 'cancelling' (the dispense.js auto-closes, whose dispenser was matched under
+// findMatchingDispensers' own `status IN ('open','cancelling')` filter); expire only at 'open'.
 const LIVE_STATUSES = ['open', 'cancelling'];
 
 // Statuses written BY a settlement, i.e. every state that means "already refunded".

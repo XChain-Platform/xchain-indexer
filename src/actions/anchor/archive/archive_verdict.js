@@ -5,8 +5,8 @@
 
 'use strict';
 
-const { getLogger } = require('../../observability/index.js');
-const diag = require('./diagnostic_events.js');
+const { getLogger } = require('../../../observability/index.js');
+const diag = require('../diagnostic_events.js');
 
 async function reportArchiveFailure(handler, failure, sectionScoped) {
     getLogger().warn(failure.logLine);

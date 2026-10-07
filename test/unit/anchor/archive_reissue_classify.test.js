@@ -5,7 +5,7 @@ const assert = require('assert');
 const {
     ARCHIVE_REISSUE_RETRY_REASON,
     classifyArchiveReissue
-} = require('../../../src/actions/anchor/archive_reissue.js');
+} = require('../../../src/actions/anchor/archive/archive_reissue.js');
 
 const INCOMING = { batch_crc32: 'deadbeef', match_count: 4 };
 
