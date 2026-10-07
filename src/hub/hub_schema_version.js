@@ -102,11 +102,13 @@
 // version stream. Strict equality applies in both directions: the hub rolls first,
 // then every indexer and the explorer follow back to back. The roll completes below
 // every LIST_SHARE_CONSUMER_ACTIVATION height, before any consumer can require the
-// new mirror table.
+// new mirror table. A v7 indexer must reject the v8 stream until it has applied the
+// 2026-09-30-list-share-tables migration.
 //
 // v9: list_snapshots gained name, description and meta_hash so every shared-list
 // version can carry metadata bound to the signed record. A stale reader cannot
-// interpret the expanded row and must reject the stream until it has migrated.
+// interpret the expanded row and must reject the stream until it has applied the
+// 2026-10-02-list-snapshots-meta migration.
 //
 // v9 ROLL: the v8 order stands. The hub rolls FIRST and stamps 9, then every
 // indexer and the explorer roll back to back behind it. The whole roll completes
