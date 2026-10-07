@@ -53,7 +53,7 @@ module.exports = {
         // and route the ownership record. If the escrow has already been cleared
         // (because DISPENSE settled and triggered the auto-close), no action.
         //
-        // Ownership routing (DISPENSER.md:122): a cancel or expire returns the
+        // Ownership routing (dispenser.md, Token Ownership Dispensers): a cancel or expire returns the
         // token's issuer rights to SOURCE; ONLY a SWEEP-closure delivers them to
         // a non-SOURCE destination. The legacy path transferred to the computed
         // `destination` (sweep > canceller > SOURCE), and cancel authority

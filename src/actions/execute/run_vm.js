@@ -239,7 +239,7 @@ async function commitVmEffects(ctx, vmResult){
         // Every slash in this frame writes its credit and escrow rows under the same
         // action_index, and createLedgerChangeRecord overwrites a same-key row rather
         // than accumulating, so a second same-token slash would erase the first
-        // (slash_ledger_consolidation_activation.js). Owned by the frame that owns the
+        // (the slash_ledger_consolidation_activation gate row). Owned by the frame that owns the
         // action_index: a nested EXECUTE builds its own and never merges into this one,
         // and a savepoint rollback abandons it with the frame.
         let slashLedger = { credits: new Map(), escrows: new Map() };
