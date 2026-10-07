@@ -36,7 +36,11 @@ const { XBRIDGE_MAX_PER_BLOCK, XPOLICY_MAX_PER_BLOCK } = require('../../protocol
 const { int, SETTLE_REASON } = require('./reasons.js');
 const { parseMembershipOrRef } = require('./policy_membership.js');
 const { dropRefRowsFromFirst } = require('./policy_ref_due.js');
+const { recordSettlement } = require('./settlements.js');
 const gateRegistry = require('../gate_registry');
+
+const POLICY_REFUSAL_RECORD_KEY =
+    'bridge_policy_refusal_record_activation.BRIDGE_POLICY_REFUSAL_RECORD_ACTIVATION';
 
 // Refusals that name a fact about the row no later block changes and that write no settlement
 // record. Such a row stays in the due set forever, so it must not count against the per-block
@@ -48,6 +52,22 @@ const TERMINAL_REFUSALS = new Set([
     SETTLE_REASON.ESCROW_SHORT,
     SETTLE_REASON.TOKEN_ROW,
 ]);
+
+function policyRefusalRecordActive(ctx){
+    return gateRegistry.activeAt(POLICY_REFUSAL_RECORD_KEY,
+                                 ctx.network, ctx.coin, ctx.blockIndex, null);
+}
+
+async function recordPolicyRefusal(row, result, ctx){
+    const db = ctx.indexerDb;
+    const actionIndexes = result.actionIndexes || [];
+    let anchor = actionIndexes.length ? actionIndexes[actionIndexes.length - 1] : null;
+    if(anchor === null || anchor === undefined)
+        anchor = await db.createActionIndex({ ACTION: 'XPOLICY', BLOCK_INDEX: ctx.blockIndex, FORMAT: 0 });
+    await recordSettlement(db, anchor, row.snapshot_id, 'refused', ctx.blockIndex,
+                           { src_chain: row.origin_chain, src_action_index: null,
+                             dest_chain: ctx.coin, dest_address: null, tick: row.tick });
+}
 
 /**
  * Build a proof for one transfer, or STALL the whole pass.
@@ -119,6 +139,8 @@ async function processBridgeSettlePass(deps, ctx){
     for(const row of await duePolicySnapshots(deps, ctx)){
         const res = await applyPolicySnapshot(row, ctx);
         if(res.applied) applied.policies.push(row.snapshot_id);
+        else if(res.terminal && policyRefusalRecordActive(ctx))
+            await recordPolicyRefusal(row, res, ctx);
     }
     const cap = XBRIDGE_MAX_PER_BLOCK || 25;
     let slots = 0;
@@ -245,6 +267,10 @@ async function duePolicySnapshots(deps, ctx){
     const ids = rows.map(r => r.snapshot_id);
     const settled = await db.getRecordedPolicySettlementIds(ids);
     const seen = new Set(settled.map(r => r.transfer_id));
+    if(policyRefusalRecordActive(ctx)){
+        const refused = await db.getRecordedPolicyRefusalIds(ids);
+        for(const r of refused) seen.add(r.transfer_id);
+    }
     return rows.filter(r => !seen.has(r.snapshot_id))
                .slice(0, XPOLICY_MAX_PER_BLOCK || 5);
 }
