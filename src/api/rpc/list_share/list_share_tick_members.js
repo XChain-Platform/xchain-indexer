@@ -18,7 +18,7 @@ const {
     LIST_TICK_COIN_SEPARATOR,
     LIST_TICK_COIN_MAX_ITEM_LENGTH,
     parseTickCoinItem
-} = require('../../consensus/list_tick_coin.js');
+} = require('../../../consensus/list_tick_coin.js');
 
 async function qualifyTickMembers(db, members, coin, coins){
     if(!Array.isArray(members))
