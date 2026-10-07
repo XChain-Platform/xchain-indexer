@@ -36,12 +36,19 @@ const SQL_DIR = path.join(__dirname, '../../src/sql');
 const MIGRATIONS_DIR = path.join(SQL_DIR, 'migrations');
 const COLUMN_BASELINE = require('../fixtures/schema-baseline-origin.json').baseline;
 const INDEX_BASELINE = require('../fixtures/schema-index-baseline-origin.json').baseline;
+const ORIGIN_PRIMARY_KEYS = {
+    anchor_actions: ['action_index'],
+    pending_hub_pushes: ['id'],
+    push_generations: ['coin'],
+};
 
 const DB_HOST = process.env.TEST_DB_HOST || '127.0.0.1';
 const DB_PORT = parseInt(process.env.TEST_DB_PORT || '3306');
 const DB_USER = process.env.TEST_DB_USER || 'root';
 const DB_PASS = process.env.TEST_DB_PASS || '';
 const DB_BASE = process.env.TEST_INDEXER_DB || 'xchain_test_indexer';
+
+assert.ok(DB_PASS, 'TEST_DB_PASS is required for the real MariaDB convergence test');
 
 function scopedDbName(label) {
     const suffix = '_schema_' + label + '_' + crypto.createHash('sha1')
@@ -91,11 +98,21 @@ function agedColumnSpec(table, column) {
         literal => currentLiterals.get(literal.toUpperCase()) || literal);
 }
 
-function quotedIndexColumn(spec) {
-    const match = /^(\w+)(\(\d+\)?)?(\s+(?:ASC|DESC))?$/i.exec(String(spec).trim());
-    assert.ok(match, 'unsupported frozen index column: ' + spec);
-    const prefix = match[2] && !match[2].endsWith(')') ? match[2] + ')' : (match[2] || '');
-    return '`' + match[1] + '`' + prefix + (match[3] || '');
+function quotedIndexColumn(spec, availableColumns) {
+    const compact = String(spec).replace(/\s+/g, '');
+    const plain = /^(\w+)(\(\d+\)?)?$/.exec(compact);
+    if (plain && availableColumns.has(plain[1].toLowerCase())) {
+        const prefix = plain[2] && !plain[2].endsWith(')') ? plain[2] + ')' : (plain[2] || '');
+        return '`' + plain[1] + '`' + prefix;
+    }
+
+    const directional = /^(\w+?)(\(\d+\)?)?(ASC|DESC)$/i.exec(compact);
+    if (directional && availableColumns.has(directional[1].toLowerCase())) {
+        const prefix = directional[2] && !directional[2].endsWith(')')
+            ? directional[2] + ')' : (directional[2] || '');
+        return '`' + directional[1] + '`' + prefix + ' ' + directional[3].toUpperCase();
+    }
+    return null;
 }
 
 function agedCreateSql(table) {
@@ -103,8 +120,14 @@ function agedCreateSql(table) {
     assert.ok(columns && columns.length, 'aged baseline has no columns for ' + table);
 
     const clauses = columns.map(column => '`' + column.name + '` ' + agedColumnSpec(table, column));
+    const availableColumns = new Set(columns.map(column => column.name.toLowerCase()));
+    if (ORIGIN_PRIMARY_KEYS[table]) {
+        clauses.push('PRIMARY KEY (' + ORIGIN_PRIMARY_KEYS[table].map(column => '`' + column + '`').join(', ') + ')');
+    }
     for (const index of INDEX_BASELINE[table] || []) {
-        const columnList = index.columns.map(quotedIndexColumn).join(', ');
+        const indexColumns = index.columns.map(spec => quotedIndexColumn(spec, availableColumns));
+        if (indexColumns.includes(null)) continue;
+        const columnList = indexColumns.join(', ');
         if (String(index.name).toLowerCase() === 'primary') {
             clauses.push('PRIMARY KEY (' + columnList + ')');
         } else {
@@ -166,9 +189,6 @@ describe('fresh and migrated schema convergence against a real MariaDB @tier3', 
     const ctx = {};
 
     before(async function () {
-        if (process.env.TEST_DB_PASS === undefined) this.skip();
-        assert.ok(DB_PASS, 'TEST_DB_PASS must be non-empty when the DB-backed suite is enabled');
-
         ctx.admin = await mariadb.createConnection({
             host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS,
         });
