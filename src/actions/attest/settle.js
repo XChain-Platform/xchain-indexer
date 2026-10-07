@@ -21,7 +21,7 @@
 
 'use strict';
 
-const attestBcastFee  = require('./attest_broadcast_fee_gate.js');
+const attestBcastFee  = require('./gates/attest_broadcast_fee_gate.js');
 const wid     = require('../../consensus/gates/attest_responsible_widening_gate.js');
 // The zero-conf flip, keyed on the REQUEST's own block: a registry row read by literal
 // key (W5). Read here for the fulfilled fee split, which pays the verified signers
@@ -30,7 +30,7 @@ const gateRegistry = require('../../consensus/gate_registry');
 const ZERO_CONF_KEY = 'attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION';
 const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
 const { getLogger } = require('../../observability/index.js');
-const { maxPriceAgeSecondsAt } = require('../../utility/oracle_price_age.js');
+const { maxPriceAgeSecondsAt } = require('../../utility/price_age/oracle_price_age.js');
 
 module.exports = {
     // Settle the request fee escrowed at v0 (paid attestations). Runs at the

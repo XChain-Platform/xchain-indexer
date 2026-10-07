@@ -46,6 +46,8 @@
 const crypto  = require('crypto');
 const eq      = require('../../consensus/equivocation_header.js');
 const ah      = require('../../consensus/gates/mirror_admission_gate.js');
+// The shared builder every system-injected EXECUTE context comes from.
+const { buildInjectedExecContext, SYNTH_TAGS } = require('../../consensus/exec_context.js');
 // Read from the vendored protocol constants, not re-exported through
 // actions/xcall: an action that requires another action makes the two
 // load-order dependent, and the hop ceiling is protocol data rather than
@@ -135,28 +137,29 @@ class Xexec {
     // against real tx hashes AND other injected calls. CROSS_HOPS threads the
     // hop budget; IS_CROSS_CALL makes the VM enforce the target's crossCallable
     // allowlist; VM_GAS_LIMIT applies the caller-funded ceiling.
+    //
+    // Build it with the shared builder, which also grants the fresh issuance budget this
+    // fee-less execution needs. Identity values stay stringified as before, so a
+    // degenerate mirrored row yields the same context rather than a builder throw.
     buildExecutionContext(c, data, coin, executeActionIndex){
-        return {
-            ACTION_INDEX: executeActionIndex,
-            SOURCE:       'C:' + String(c.source_chain) + ':' + String(c.source_contract_index),
-            FEE_PAYER:    'C:' + String(c.source_chain) + ':' + String(c.source_contract_index),
-            BLOCK_INDEX:  data['BLOCK_INDEX'],
-            BLOCK_TIME:   data['BLOCK_TIME'],
-            TX_HASH:      this.sha256('XCALL:' + String(c.network) + ':' + String(coin) + ':' + String(c.call_id)),
-            FORMAT:       0,
-            IS_EMISSION:  true,
-            EMITTER:      data['ACTION_INDEX'],
-            CALL_DEPTH:   0,
-            VM_GAS_LIMIT: Number(c.gas_limit),
-            CROSS_HOPS:   Number(c.cross_hops) || 0,
-            IS_CROSS_CALL: true,
-            // Fresh top-level issuance budget for this injected call's emission subtree
-            // (EMISSION_ISSUANCE_LIMITS), consumed in issue.js. The injected
-            // execution is fee-less on THIS chain, so without a budget it is the cheapest
-            // path in the system to free top-level names; it is a root execution, so it gets
-            // its own budget rather than inheriting the delivering transaction's.
-            ISSUANCE_LIMIT_LEDGER: { topLevel: 0 }
-        };
+        return buildInjectedExecContext({
+            chain:         String(coin),
+            sourceChain:   String(c.source_chain),
+            network:       String(c.network),
+            contractIndex: String(c.source_contract_index),
+            actionIndex:   executeActionIndex,
+            blockIndex:    data['BLOCK_INDEX'],
+            blockTime:     data['BLOCK_TIME'],
+            emitter:       data['ACTION_INDEX'],
+            synthTag:      SYNTH_TAGS.XCALL_EXEC,
+            synthId:       String(c.call_id),
+            extra: {
+                CALL_DEPTH:    0,
+                VM_GAS_LIMIT:  Number(c.gas_limit),
+                CROSS_HOPS:    Number(c.cross_hops) || 0,
+                IS_CROSS_CALL: true
+            }
+        });
     }
 
     async parse(params, data, error){

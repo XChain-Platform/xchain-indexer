@@ -10,7 +10,7 @@
 //
 // THE MIRROR-ERA SEAM, SELECTOR AGAINST HANDLER.
 //
-// The applier pass picks requests in utility/attest_mirror_select.js, and the ATTEST
+// The applier pass picks requests in utility/attest_mirror/attest_mirror_select.js, and the ATTEST
 // handler gates the same requests through isMirrorEraRequest in actions/attest/response.js.
 // Both read the response-mirror row on the request's own block, but each spells the read
 // out itself. If one side ever changes alone, the selector picks requests the applier then

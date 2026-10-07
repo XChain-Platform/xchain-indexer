@@ -30,11 +30,11 @@ const assert = require('assert');
 const crypto = require('crypto');
 const sinon  = require('sinon');
 
-const { getTestConfig } = require('../../fixtures/config');
-const Utility  = require('../../../src/utility');
-const Database = require('../../../src/db');
+const { getTestConfig } = require('../../../fixtures/config');
+const Utility  = require('../../../../src/utility');
+const Database = require('../../../../src/db');
 
-const { readApiSource } = require('../../helpers/api_source');
+const { readApiSource } = require('../../../helpers/api_source');
 const API_SRC = readApiSource();
 
 function newDb(){

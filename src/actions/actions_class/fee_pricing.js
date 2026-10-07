@@ -21,7 +21,7 @@
  ********************************************************************/
 
 const deploy = require('../deploy/index.js');
-const { maxPriceAgeSecondsAt } = require('../../utility/oracle_price_age.js');
+const { maxPriceAgeSecondsAt } = require('../../utility/price_age/oracle_price_age.js');
 
 // The zero-fee answer priceFeeQuote returns when there is no protocol fee to price.
 function zeroFeeQuote(base){

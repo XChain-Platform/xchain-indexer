@@ -30,6 +30,41 @@ const { isAdmissionEra } = require('../../consensus/gates/mirror_admission_gate.
 const { getLogger } = require('../../observability/index.js');
 const { BATCH_CHAIN } = require('./constants.js');
 
+function batchContinuationWire(config, params, error){
+    if(!error && String(config['COIN']) !== BATCH_CHAIN)
+        error = 'invalid: ATTEST v6 (batches ride the ' + BATCH_CHAIN + ' rail)';
+
+    let chunk = null;
+    if(!error){
+        chunk = abw.parseAttestBatchContinuation(params);
+        if(!chunk.ok) error = chunk.status;
+    }
+    return { chunk, error };
+}
+
+// Geometry must agree with the head that owns the batch. Both fields are signed
+// into neither wire, so this is not a security check: it stops two DIFFERENT
+// encodings of one window (a republish at a different chunk size, say) from
+// interleaving into a body no publisher ever produced.
+function batchContinuationGeometryError(headRow, chunk, error){
+    if(!error && headRow && Number(headRow.total_chunks) !== chunk.totalChunks)
+        return 'invalid: TOTAL_CHUNKS (does not match the batch head)';
+    if(!error && headRow && String(headRow.batch_crc32) !== chunk.batchCrc32)
+        return 'invalid: BATCH_CRC32 (does not match the batch head)';
+    return error;
+}
+
+function stampBatchContinuation(context, data, chunk, error){
+    data['REQUEST_ID'] = chunk && chunk.ok ? chunk.batchKey : '';
+    data['VERSION']    = abw.ATTEST_BATCH_CONTINUATION_VERSION;
+    data['STATUS']     = error || 'valid';
+    context.stampBatchColumns(data, chunk, chunk && chunk.ok ? chunk.chunkIndex : null);
+
+    getLogger().info("\t ATTEST v6 : batch=" + String(data['REQUEST_ID']).substring(0,16) + '...' +
+                (chunk && chunk.ok ? ' : chunk=' + chunk.chunkIndex + '/' + chunk.totalChunks : '') +
+                ' : ' + data['STATUS']);
+}
+
 module.exports = {
     // ATTEST v5: the response BATCH head.
     //
@@ -130,7 +165,8 @@ module.exports = {
             // after the author partition, because a batch key is a hash over the window it
             // names, so anyone can derive it and file wires under it ahead of the honest
             // publisher. The JS filter stays as a harmless second pass.
-            mine = this.authoredBy(await this.indexerDb.getAttestBatchChunks(head.batchKey, author), author);
+            mine = this.authoredBy(await this.indexerDb.getAttestBatchChunks(head.batchKey, author,
+                { totalChunks: head.totalChunks, batchCrc32: head.batchCrc32 }), author);
             if(this.canonicalBatchHead(mine))
                 error = 'invalid: BATCH_KEY (this publisher already has a head for the window)';
         }
@@ -184,54 +220,40 @@ module.exports = {
     // owned it, so a junk chunk denied the window and a well-formed one for another
     // encoding forced the honest head `invalid`.
     async parseBatchContinuation(params, data, error){
+        let wire  = batchContinuationWire(this.config, params, error);
+        let chunk = wire.chunk;
+        error     = wire.error;
 
-        if(!error && String(this.config['COIN']) !== BATCH_CHAIN)
-            error = 'invalid: ATTEST v6 (batches ride the ' + BATCH_CHAIN + ' rail)';
-
-        let chunk = null;
-        if(!error){
-            chunk = abw.parseAttestBatchContinuation(params);
-            if(!chunk.ok) error = chunk.status;
-        }
-
-        // One read serves all three things this handler needs from the batch's stored rows:
-        // the head to verify against, the geometry to agree with, and the slots already
-        // taken. Rejected rows never appear in it, so junk neither occupies a slot nor
-        // contributes bytes, and the author partition makes the rest this publisher's own.
+        // One read, scoped to this author and this wire's encoding, serves the head, the
+        // geometry check and (once a head exists) the slots taken; rejected rows never appear,
+        // so junk neither occupies a slot nor contributes bytes.
         let stored = [], headRow = null;
         if(!error){
             let chunkAuthor = String(data['SOURCE'] || '');
-            stored  = this.authoredBy(await this.indexerDb.getAttestBatchChunks(chunk.batchKey, chunkAuthor),
-                                       chunkAuthor);
+            stored  = this.authoredBy(await this.indexerDb.getAttestBatchChunks(chunk.batchKey, chunkAuthor,
+                { totalChunks: chunk.totalChunks, batchCrc32: chunk.batchCrc32 }), chunkAuthor);
             headRow = this.canonicalBatchHead(stored);
         }
 
-        // Geometry must agree with the head that owns the batch. Both fields are signed
-        // into neither wire, so this is not a security check: it stops two DIFFERENT
-        // encodings of one window (a republish at a different chunk size, say) from
-        // interleaving into a body no publisher ever produced.
-        if(!error && headRow && Number(headRow.total_chunks) !== chunk.totalChunks)
-            error = 'invalid: TOTAL_CHUNKS (does not match the batch head)';
-        if(!error && headRow && String(headRow.batch_crc32) !== chunk.batchCrc32)
-            error = 'invalid: BATCH_CRC32 (does not match the batch head)';
+        error = batchContinuationGeometryError(headRow, chunk, error);
 
         // Duplicate-slot guard, the ANCHOR continuation's: a filled slot cannot be refilled,
         // which is what makes a replayed chunk inert instead of a second absorption.
         // With a head on chain the slots that count are the head's own: a chunk of another
         // encoding filed under the key is not this batch's, so it must not fill the slot.
-        const taken = headRow ? this.continuationsOfHead(this.headFromRow(headRow), stored) : stored;
-        if(!error && taken.some(r => Number(r.version) === abw.ATTEST_BATCH_CONTINUATION_VERSION &&
-                                      Number(r.chunk_index) === chunk.chunkIndex))
+        // With none, this publisher's slot in ANY encoding counts, asked directly because the
+        // read above holds only this wire's encoding.
+        if(!error && headRow){
+            const taken = this.continuationsOfHead(this.headFromRow(headRow), stored);
+            if(taken.some(r => Number(r.version) === abw.ATTEST_BATCH_CONTINUATION_VERSION &&
+                               Number(r.chunk_index) === chunk.chunkIndex))
+                error = 'invalid: CHUNK_INDEX (duplicate)';
+        } else if(!error &&
+                  await this.indexerDb.attestBatchSlotTaken(chunk.batchKey, String(data['SOURCE'] || ''), chunk.chunkIndex)){
             error = 'invalid: CHUNK_INDEX (duplicate)';
+        }
 
-        data['REQUEST_ID'] = chunk && chunk.ok ? chunk.batchKey : '';
-        data['VERSION']    = abw.ATTEST_BATCH_CONTINUATION_VERSION;
-        data['STATUS']     = error || 'valid';
-        this.stampBatchColumns(data, chunk, chunk && chunk.ok ? chunk.chunkIndex : null);
-
-        getLogger().info("\t ATTEST v6 : batch=" + String(data['REQUEST_ID']).substring(0,16) + '...' +
-                    (chunk && chunk.ok ? ' : chunk=' + chunk.chunkIndex + '/' + chunk.totalChunks : '') +
-                    ' : ' + data['STATUS']);
+        stampBatchContinuation(this, data, chunk, error);
 
         await this.indexerDb.createAttestationBatchAction(data);
 

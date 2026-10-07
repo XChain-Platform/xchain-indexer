@@ -25,8 +25,8 @@
 
 const assert = require('assert');
 const { MAX_LIMIT, DEFAULT_LIMIT, validateReorgHistoryParams,
-        parseReorgEvent, buildReorgHistoryResponse } = require('../../../src/api/reorg_history_query');
-const eventsMixin = require('../../../src/db/events');
+        parseReorgEvent, buildReorgHistoryResponse } = require('../../../../src/api/reorg_history_query');
+const eventsMixin = require('../../../../src/db/events');
 
 const H1 = 'a'.repeat(64);
 const H2 = 'b'.repeat(64);

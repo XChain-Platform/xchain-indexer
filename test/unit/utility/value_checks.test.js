@@ -12,7 +12,7 @@
  *
  ********************************************************************/
 const assert = require('assert');
-const checks = require('../../../src/utility/value_checks.js');
+const checks = require('../../../src/utility/validation/value_checks.js');
 
 describe('value checks: type predicates', function(){
     it('isNumeric accepts numbers, numeric strings and bigint', function(){

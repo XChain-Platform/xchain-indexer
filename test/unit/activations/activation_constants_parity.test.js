@@ -68,7 +68,6 @@ function localExport(file, exportName) {
     if (modulePath === null) return registry.get(registryKey(file, exportName));
     return require(modulePath)[exportName];
 }
-
 // registry stem (the module filename in src/ for a twin; the bare stem for a
 // module W4 moved or retired) -> the named export it and constants.js share.
 const GATES = [
@@ -222,7 +221,6 @@ const GATES = [
 ];
 // The canonical map, loaded by each block's before-all hook.
 let canon = null;
-
 describe('activation-gate constant parity to canonical constants.js @regression', function () {
     before(function () { canon = loadCanon(); });
 
@@ -280,7 +278,6 @@ describe('activation-gate constant parity to canonical constants.js @regression'
             'RESERVED_FUTURE_ROOTS is not an activation row (it is a reserved-name set, guarded by its own parity case)');
     });
 });
-
 describe('activation-gate constant parity to canonical constants.js @regression', function () {
     before(function () { canon = loadCanon(); });
 
