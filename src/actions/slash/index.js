@@ -183,8 +183,9 @@ class Slash {
             let oracleRoundGate = await this.actions.protocolChanges.isEnabled('SLASH_ORACLE_ROUND_DISCRIMINATED', data['BLOCK_INDEX']);
             // Same reasoning for XATTEST base-leg pairs: honest retry rounds share one key.
             let multiRoundGate = await this.actions.protocolChanges.isEnabled('SLASH_ATTEST_MULTIROUND_EXEMPT', data['BLOCK_INDEX']);
+            let publisherPairGate = await this.actions.protocolChanges.isEnabled('SLASH_XANCPUB_PUBLISHER_PAIR', data['BLOCK_INDEX']);
             let slot = await this.resolveSlot(key.engineTag, key.roundId, wire.msgA.substring(key.prefix.length),
-                wire.msgB.substring(key.prefix.length), oracleRoundGate, multiRoundGate);
+                wire.msgB.substring(key.prefix.length), oracleRoundGate, multiRoundGate, publisherPairGate);
             if(slot.error) error = slot.error;
             else {
                 snapshotBlock = slot.snapshotBlock;
@@ -326,8 +327,8 @@ class Slash {
     // Recover the slot's snapshot_block from the proof. The per-engine layouts live
     // in slash/resolve_slot.js; this handler only needs the answer, and hands those
     // readers the state they need (util for isNull, indexerDb for the XATTEST read).
-    async resolveSlot(engineTag, roundId, contentA, contentB, oracleRoundGate, multiRoundGate){
-        return await resolveProofSlot(this, engineTag, roundId, contentA, contentB, oracleRoundGate, multiRoundGate);
+    async resolveSlot(engineTag, roundId, contentA, contentB, oracleRoundGate, multiRoundGate, publisherPairGate){
+        return await resolveProofSlot(this, engineTag, roundId, contentA, contentB, oracleRoundGate, multiRoundGate, publisherPairGate);
     }
 
     // The payout policy lives in slash/bounty.js. The method stays because it is the
