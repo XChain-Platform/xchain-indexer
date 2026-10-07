@@ -23,3 +23,4 @@ CREATE TABLE escrows (
 CREATE INDEX action_index ON escrows (action_index);
 CREATE INDEX address_id   ON escrows (address_id);
 CREATE INDEX tick_id      ON escrows (tick_id);
+CREATE INDEX escrows_tick_action_amount ON escrows (tick_id, action_index, amount);
