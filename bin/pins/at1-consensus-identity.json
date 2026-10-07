@@ -386,7 +386,7 @@
     },
     "armed_map_row_count": 366,
     "gates_field_hash": "7563e42d72a80c0a9fdf36096f171efd59fa1449a7b443041705bc2d0d1278ed",
-    "carrier_logic_digest": "1af5bc44c802b201eca0b26485bfb4107685f3442b838bd6936e852c073d55a1",
+    "carrier_logic_digest": "7587adc40c3143fa8eb03e5d48a2751913974247cbc227da16f561a9b84a4ca7",
     "consensus_rules_digest": "227f96529070d083038a3695fb863c4ab08611864b9dfcc1b619f75ec67c91d8",
     "gate_key_count": 43,
     "consensus_rules_gates": {
@@ -819,7 +819,7 @@
     },
     "armed_map_row_count": 366,
     "gates_field_hash": "7563e42d72a80c0a9fdf36096f171efd59fa1449a7b443041705bc2d0d1278ed",
-    "carrier_logic_digest": "1af5bc44c802b201eca0b26485bfb4107685f3442b838bd6936e852c073d55a1",
+    "carrier_logic_digest": "7587adc40c3143fa8eb03e5d48a2751913974247cbc227da16f561a9b84a4ca7",
     "consensus_rules_digest": "8568e6221e83de9d7f3a43281368257c78d88caa6ed55b1c3c371aa4d4e6ccae",
     "gate_key_count": 43,
     "consensus_rules_gates": {
@@ -891,5 +891,6 @@
   "v0224_hotfix_note": "v0.22.4 patch train 2026-10-05: both readings regenerated with bin/consensus-identity.js --json (bare, and with the armed env above) on the hotfix tree after CONSENSUS_VERSION moved to 0.22.4; only the protocol_changes.CONSENSUS_VERSION row hash and the armed-map fingerprints moved.",
   "combined_activation_rows_note": "2026-10-06 integration of four reviewed lanes that each re-pinned from their own base: both readings regenerated once with bin/consensus-identity.js --json (bare, and with the armed env above) on the combined tree. The armed map gains the STAKE_SNAPSHOT_SLASH_WINDOW, SLASH_ATTEST_MULTIROUND_EXEMPT and READONLY_ACCESSOR_OWN_KEY rows and the xchain-vm ACCESSOR_OWN_KEY_ACTIVATION mirror (355 to 361), the fingerprints move with them, and the carrier logic digest moves with the protocol_changes re-pin; the coin registry, the rules digest and the GATES field did not move.",
   "send_dispenser_rows_note": "2026-10-06 integration of the caret pack key and dispenser refill activation rows: both readings regenerated once with bin/consensus-identity.js --json (bare, and with the armed env above) on the combined tree. The armed map gains the caret pack key row and the DISPENSER_REFILL change row with its two flag-time constants (361 to 365), the fingerprints and the carrier logic digest move with them, and the coin registry, the rules digest and the GATES field did not move.",
-  "state_hash_split_note": "Re-pinned after the state hash carrier was split into a facade plus section collectors: only carrier_logic_digest moved, through the stateHash entry of bin/pins/carrier-logic.json; every other field re-read byte-identical."
+  "state_hash_split_note": "Re-pinned after the state hash carrier was split into a facade plus section collectors: only carrier_logic_digest moved, through the stateHash entry of bin/pins/carrier-logic.json; every other field re-read byte-identical.",
+  "reward_gate_null_threshold_note": "Re-pinned after the anchor and archive reward gates stopped arming on a null threshold: only carrier_logic_digest moved, through the anchor_reward_activation entry of bin/pins/carrier-logic.json; every other field re-read byte-identical."
 }
