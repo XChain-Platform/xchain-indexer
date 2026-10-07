@@ -26,9 +26,33 @@ const { SOURCE, ADDR1, ADDR2, makeListContext } = require('../actions/contract/l
 
 const GATE_KEY = 'list_change_rematch_activation.LIST_CHANGE_REMATCH_ACTIVATION';
 const TOKEN_LIST = 60;
+const FIRST_EDIT = 61;
+const SECOND_EDIT = 62;
 const LIST_EDIT = 90;
 
-// Orders 10 and swaps 5 carry no list of their own; only their token's block list names TOKEN_LIST.
+function assertTokenListQuery(sql, args){
+    const normalized = sql.replace(/\s+/g, ' ');
+    const kind = normalized.includes('FROM orders m') ? 'order' : 'swap';
+    assert.match(normalized, /WITH RECURSIVE list_refs\(action_index\) AS \( SELECT \?/);
+    assert.match(normalized, /UNION DISTINCT SELECT ed\.action_index FROM lists ed/);
+    assert.match(normalized, /INNER JOIN list_refs parent ON \(ed\.list_action_index=parent\.action_index\)/);
+    const latestStatus = `ms\\.action_index=\\(SELECT MAX\\(l\\.action_index\\) ` +
+        `FROM ${kind}_statuses l WHERE l\\.${kind}_action_index=m\\.action_index\\)`;
+    assert.match(normalized, new RegExp(latestStatus));
+    assert.match(normalized, /st\.status='open'/);
+    assert.match(normalized, /tk\.allow_list IN \(SELECT action_index FROM list_refs\)/);
+    assert.match(normalized, /tk\.block_list IN \(SELECT action_index FROM list_refs\)/);
+    assert.deepStrictEqual(args, [TOKEN_LIST]);
+}
+
+function referencesRoot(value){
+    const parents = new Map([[FIRST_EDIT, TOKEN_LIST], [SECOND_EDIT, FIRST_EDIT]]);
+    while(parents.has(value)) value = parents.get(value);
+    return value === TOKEN_LIST;
+}
+
+// Neither market carries its own list. The order token's allow list names an edit of an
+// edit, while the swap token's block list names the first edit.
 function setup(armed){
     const { indexer, actionsCtx, handler } = makeListContext();
     stubGate(sinon, GATE_KEY, armed);
@@ -39,10 +63,15 @@ function setup(armed){
     indexer.indexerDb.getList.resolves([...members]);
     indexer.indexerDb.getListRootIndex.resolves(TOKEN_LIST);
     indexer.indexerDb.createListItem.callsFake(async (data, item) => members.add(item));
-    indexer.indexerDb.doQuery.callsFake(async (sql) => {
+    indexer.indexerDb.doQuery.callsFake(async (sql, args) => {
         if(!sql.includes('INNER JOIN tokens tk')) return [];
+        assertTokenListQuery(sql, args);
         const kind = sql.includes('FROM orders m') ? 'order' : 'swap';
-        return book[kind].status === 'open' ? [{ action_index: kind === 'order' ? 10 : 5 }] : [];
+        const tokenList = kind === 'order' ? { allow_list: SECOND_EDIT, block_list: null }
+            : { allow_list: null, block_list: FIRST_EDIT };
+        const affected = referencesRoot(tokenList.allow_list) || referencesRoot(tokenList.block_list);
+        if(book[kind].status !== 'open' || !affected) return [];
+        return [{ action_index: kind === 'order' ? 10 : 5 }];
     });
     actionsCtx.processAction.callsFake(async (action) => {
         if(!members.has(ADDR2)) return;
@@ -60,7 +89,7 @@ async function addMember(handler){
 describe('LIST change rematch for token-level lists @regression @tier2', function () {
     afterEach(function () { sinon.restore(); });
 
-    it('re-matches an open ORDER and SWAP blocked by a token list once the gate is active', async function () {
+    it('re-matches open markets whose token allow or block list names any edit generation', async function () {
         const { actionsCtx, handler, book } = setup(true);
 
         const data = await addMember(handler);
