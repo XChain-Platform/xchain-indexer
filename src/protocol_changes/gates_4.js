@@ -340,3 +340,16 @@ addGate('price_wire_trailing_activation.PRICE_WIRE_TRAILING_ACTIVATION', 'height
     testnet: UNARMED,
     regtest: 0,
 });
+
+// bet_feed_list_edit_activation
+// At or above this height BET format 4 may edit an open feed's allow and
+// block list references. Production networks remain inert until a release
+// names per-chain activation heights.
+addGate('bet_feed_list_edit_activation.BET_FEED_LIST_EDIT_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
