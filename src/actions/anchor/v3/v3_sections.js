@@ -14,7 +14,7 @@
 
 'use strict';
 
-const validate = require('./validate.js');
+const validate = require('../validate.js');
 
 function walkFoldSections(handler, split, data, error){
     const sections = [];
