@@ -73,7 +73,7 @@ describe('strict same-chain price landings @regression @tier1', function () {
         const db = makeDb('DOGE');
         assert.strictEqual(await latest(db), null);
         assert.ok(/batch_block_time > 0 AND batch_block_time < \?/.test(db.lastQuery.query));
-        assert.deepStrictEqual(db.lastQuery.args, ['DOGE/USD', BLOCK_TIME, BLOCK_TIME]);
+        assert.deepStrictEqual(db.lastQuery.args, ['DOGE/USD', BLOCK_TIME, BLOCK_HEIGHT, BLOCK_TIME]);
     });
 
     it('keeps the inclusive query byte-for-byte when strict landing is unarmed', async function () {
@@ -82,7 +82,7 @@ describe('strict same-chain price landings @regression @tier1', function () {
         assert.strictEqual((await latest(db)).roundNumber, 7);
         assert.ok(/batch_block_time > 0 AND batch_block_time <= \?/.test(db.lastQuery.query));
         assert.ok(!/batch_block_time > 0 AND batch_block_time < \?/.test(db.lastQuery.query));
-        assert.deepStrictEqual(db.lastQuery.args, ['DOGE/USD', BLOCK_TIME, BLOCK_TIME]);
+        assert.deepStrictEqual(db.lastQuery.args, ['DOGE/USD', BLOCK_TIME, BLOCK_HEIGHT, BLOCK_TIME]);
     });
 
     it('leaves BTC inclusive even when the strict gate seam is forced active', async function () {

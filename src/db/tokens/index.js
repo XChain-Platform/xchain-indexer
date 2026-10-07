@@ -146,10 +146,9 @@ module.exports = {
      * binding while copies are outstanding on another chain. `bridged=0` in the WHERE
      * makes the write a no-op for every later lock of the same tick.
      *
-     * `block_index` is the applying block. It is not stored: the bit carries no height
-     * because nothing in milestone 1 reads "when", and a reorg of the first lock
-     * deliberately leaves the bit set (the conservative direction, since the copies it
-     * refuses policy binding for may still exist on the destination chain).
+     * The column is a write-time cache: getTokenInfo derives BRIDGED from the applied v3
+     * rows in xbridges, so a rollback that orphans the first lock cannot leave a stale
+     * bit behind. `block_index` is logged, not stored.
      *
      * @param {string} tick        - the NATIVE tick being locked (never the rooted form)
      * @param {number} block_index - the block the lock applied at; logged, not stored
