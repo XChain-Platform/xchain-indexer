@@ -174,12 +174,13 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(res.ok, true, res.reason);
         assert.deepStrictEqual(res.rows.map((r) => r[0]), manifest.ENTRIES.map((e) => e[0]));
         for (const [, value] of res.rows) canonicalValue(value);
-        assert.strictEqual(res.rows.length, 373);
+        assert.strictEqual(res.rows.length, 374);
     });
 
     it('carries the three row families the design names', function () {
         const keys = rowKeys();
         assert.ok(keys.has('state_commitment_activation.STATE_COMMITMENT_ACTIVATION'), 'an activation map');
+        assert.ok(keys.has('anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION'), 'the anchor archive fold-term activation map');
         assert.ok(keys.has('protocol/constants.XBRIDGE_MAX_PER_BLOCK'), 'a fixed-carrier constant');
         assert.ok(keys.has('stateHash.DEACTIVATION_TABLES'), 'a fixed-carrier array');
         assert.ok(keys.has('protocol_changes.changes.SEND'), 'a ProtocolChanges row');

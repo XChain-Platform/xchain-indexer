@@ -69,6 +69,9 @@ addGate('anchor_activation.ANCHOR_ACTIVATION', 'height', {
     regtest: 0,
 });
 
+// anchor_archive_fold_term_activation
+addGate('anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': UNARMED, 'LTC:testnet': UNARMED, 'DOGE:testnet': UNARMED, testnet: UNARMED, regtest: 0 });
+
 // archive_batch_author_activation
 // Per-network activation, interpreted against the DOGE block_index of the batch's
 // canonical archive head. Every network is armed from genesis, so all three run the
