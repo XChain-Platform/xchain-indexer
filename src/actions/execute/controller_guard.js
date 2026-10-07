@@ -36,7 +36,7 @@ const crypto = require('crypto');
 const { resolveRootDiscriminator } = require('../../consensus/batch_root_discriminator.js');
 
 const { commitGuardEffects } = require('./guard_effects.js');
-const { maxPriceAgeSecondsAt } = require('../../utility/oracle_price_age.js');
+const { maxPriceAgeSecondsAt } = require('../../utility/price_age/oracle_price_age.js');
 
 // Reserved method name a controller-bound token's contract must export. The
 // indexer invokes it before a guarded native action (SEND/ORDER/SWAP/DISPENSER)

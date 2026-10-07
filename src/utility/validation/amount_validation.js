@@ -70,7 +70,7 @@ module.exports = {
         // the one that was validated - while '1e-1' passes on an indivisible tick and
         // credits 0, and a 43-digit integer passes but overflows the DECIMAL(60,18)
         // aggregation the supply sums cast to. Gated per chain on the block's consensus
-        // timestamp (utility/amount_representability_gate.js): below the threshold this is
+        // timestamp (utility/validation/amount_representability_gate.js): below the threshold this is
         // inert and historical replay is byte-identical. Placed FIRST and as an early
         // return false so the gate can only ever reject more than the legacy body, never
         // accept more. NOT yet mirrored in xchain-sdk/src/utils/utility.js, on purpose: a client
