@@ -18,8 +18,8 @@
 
 const assert = require('assert');
 const { PRICE_BATCHES_DEFAULT_LIMIT, PRICE_BATCHES_MAX_LIMIT,
-        validatePriceBatchParams, buildPriceBatchesResponse } = require('../../../src/api/price_batch_query');
-const pricesMixin = require('../../../src/db/prices');
+        validatePriceBatchParams, buildPriceBatchesResponse } = require('../../../../src/api/price_batch_query');
+const pricesMixin = require('../../../../src/db/prices');
 
 describe('price-batch-query (getpricebatches)', function () {
     describe('validatePriceBatchParams', function () {
