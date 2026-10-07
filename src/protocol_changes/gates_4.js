@@ -313,3 +313,30 @@ addGate('archive_match_count_activation.ARCHIVE_MATCH_COUNT_ACTIVATION', 'height
     testnet: UNARMED,
     regtest: 0,
 });
+
+addGate('dispenser_delay_protocol_time_activation.DISPENSER_DELAY_PROTOCOL_TIME_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+addGate('bridge_policy_refusal_record_activation.BRIDGE_POLICY_REFUSAL_RECORD_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+addGate('price_wire_trailing_activation.PRICE_WIRE_TRAILING_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});

@@ -8,53 +8,41 @@ const { get, copy, activeAt } = require('../gate_registry');
  * BYTE-IDENTICAL TWIN. The canonical copy is xchain-indexer/src/; xchain-hub/src/ and
  * xchain-explorer/src/ carry it byte for byte, so edit the indexer copy and copy it outward.
  * reconcile-twins.sh --check grades both pairs. The explorer pair is also held by
- * xchain-indexer/bin/sync-hub-mirror-client.sh --check (a cmp -s byte compare, not a digest),
- * which never reads the hub copy; the hub pair is also held by the byte compare in the
- * activation-constants parity suite, which skips without a sibling checkout unless
- * XCHAIN_REQUIRE_SIBLINGS=1. That suite also holds the exported constants value-identical to
+ * xchain-indexer/bin/sync-hub-mirror-client.sh --check (cmp -s); the hub pair by the byte
+ * compare in the activation-constants parity suite, which skips without a sibling checkout
+ * unless XCHAIN_REQUIRE_SIBLINGS=1 and also holds the exported constants value-identical to
  * xchain-documentation/protocol/constants.js. A one-sided edit forks consensus at the boundary.
  *
- * ONE REQUIRE, DELIBERATELY. This module is a DEP_FILES entry of sync-hub-mirror-client.sh: it
- * is vendored into the explorer beside hub_db_sync.js, which can carry no dependency the
- * explorer does not have, so it requires only ../gate_registry, which every consumer carries
- * as its own. price_batching_floor_gate.js is the precedent. The alternative considered and
- * rejected was threading an admission bound through eleven predicate signatures, their
- * waiters and every call site.
+ * ONE REQUIRE, DELIBERATELY. This module is a DEP_FILES entry of sync-hub-mirror-client.sh,
+ * vendored into the explorer beside hub_db_sync.js, so it requires only ../gate_registry, which
+ * every consumer carries (price_batching_floor_gate.js is the precedent). Threading an
+ * admission bound through eleven predicate signatures was considered and rejected.
  *
  * WHAT THIS IS FOR
  *
- * Eleven barrier hold points in the indexer block loop key on the block's own protocol
- * timestamp t(B). Bitcoin consensus accepts a block stamped up to 7200 s ahead of
- * network-adjusted time, so a VALID block holds a hub-connected indexer's whole block loop
- * for that distance plus the member's grace, while /status reports the deliberately healthy
- * 'future_block_wait' verdict for the entire stall.
+ * Eleven barrier hold points in the indexer block loop key on the block's protocol timestamp
+ * t(B). Bitcoin accepts a block stamped up to 7200 s ahead of network-adjusted time, so a VALID
+ * block holds a hub-connected indexer's block loop for that distance plus grace, while /status
+ * reports the healthy 'future_block_wait' verdict throughout.
  *
- * No grace can fix this. A mirrored row binds at B when its signed effective_time <= t(B),
- * and a producer may mint such a row at any wall-clock instant up to t(B) - RELAY_MIN_FUTURE_S,
- * so the SET of rows binding at B is not determined until wall clock reaches that instant.
- * Any correct barrier under that binding rule must wait for it, whatever its grace.
+ * No grace fixes this. A mirrored row binds at B when its signed effective_time <= t(B), and a
+ * producer may mint such a row at any wall-clock instant up to t(B) - RELAY_MIN_FUTURE_S, so the
+ * SET of rows binding at B is undetermined until wall clock reaches that instant.
  *
  * So the binding rule changes. Every mirrored row carries a signed ADMISSION HEIGHT per chain
  * that reads it; a row is readable at B on chain C only when admit_blocks[C] <= B; and each
- * barrier certifies completeness by comparing a per-table per-chain HEIGHT watermark against B
- * rather than a clock against t(B). Heights do not move with stamps, so a block stamped 7200 s
- * ahead is height B like any other.
+ * barrier compares a per-table per-chain HEIGHT watermark against B rather than a clock against
+ * t(B). A block stamped 7200 s ahead is height B like any other.
  */
 
-// ---------------------------------------------------------------------------
 // Margins
-// ---------------------------------------------------------------------------
-
 const ADMIT_MARGIN_BLOCKS = get('mirror_admission_activation.ADMIT_MARGIN_BLOCKS');
 
 const ADMIT_MIN_FUTURE_BLOCKS = copy('mirror_admission_activation.ADMIT_MIN_FUTURE_BLOCKS');
 
 const ADMIT_MAX_FUTURE_BLOCKS = get('mirror_admission_activation.ADMIT_MAX_FUTURE_BLOCKS');
 
-// ---------------------------------------------------------------------------
-// The activation maps
-// ---------------------------------------------------------------------------
-
+// Activation maps
 const MIRROR_ADMISSION_REGTEST_ENV = copy('mirror_admission_activation.MIRROR_ADMISSION_REGTEST_ENV');
 const MIRROR_ADMISSION_REGTEST_ARMED_HEIGHT = copy('mirror_admission_activation.MIRROR_ADMISSION_REGTEST_ARMED_HEIGHT');
 
@@ -62,10 +50,8 @@ const MIRROR_ADMISSION_REGTEST_ARMED_HEIGHT = copy('mirror_admission_activation.
  * Resolve the regtest admission activation from the environment.
  *
  * The armed form resolves to 0 so a drill block sits ABOVE an armed node's threshold and BELOW
- * an inert node's null. That is the only per-process arming seam the codebase has, and it is
- * what lets one venue carry an armed and an inert indexer and show them binding the same row at
- * different blocks. Fails closed: anything unrecognised leaves regtest INERT and says so,
- * rather than stamping NaN into a height comparison.
+ * an inert node's null, the only per-process arming seam, which lets one venue carry an armed
+ * and an inert indexer. Fails closed: anything unrecognised leaves regtest INERT and says so.
  *
  * @param {object} env the process environment, or a stand-in
  * @returns {number|null}
@@ -91,10 +77,7 @@ const MIRROR_ADMISSION_ACTIVATION = get('mirror_admission_activation.MIRROR_ADMI
 
 const MIRROR_ADMISSION_CONSUMER_ACTIVATION = get('mirror_admission_activation.MIRROR_ADMISSION_CONSUMER_ACTIVATION');
 
-// ---------------------------------------------------------------------------
-// Predicates. Every one fails CLOSED, and INERT is today's behaviour byte for byte.
-// ---------------------------------------------------------------------------
-
+// Predicates: every one fails CLOSED, and INERT is today's behaviour byte for byte.
 /**
  * Build the map key. Coin codes are upper case, network names lower case, both normalised here
  * so a caller passing 'btc' or 'TESTNET' cannot silently miss a key and read INERT.
@@ -110,16 +93,10 @@ function admissionKey(coin, network){
 /**
  * Read a height STRICTLY, returning null for anything that is not one.
  *
- * `Number()` is the wrong tool here and the reason is a fail-OPEN, which is the one direction
- * this design may never fail. `Number(null)`, `Number('')`, `Number('   ')`, `Number([])` and
- * `Number(false)` are all 0, and `Number(true)` is 1, so every one of them passes a bare
- * `Number.isFinite` check and then compares as a real height. On a venue armed at 0 that made
- * `isMirrorAdmissionProducerActive('BTC','regtest', null)` return TRUE: an unreadable height
- * arming a consensus flag day. `undefined` and `NaN` fail closed, which is exactly why the hole
- * reads as covered until it is driven.
- *
- * So: a number must actually be a finite number, and a string must be all digits. Nothing else
- * is a height, and an empty array is not the number zero.
+ * `Number()` fails OPEN: `Number(null)`, `Number('')`, `Number([])` and `Number(false)` are 0 and
+ * `Number(true)` is 1, so each passes `Number.isFinite` and compares as a real height. On a
+ * venue armed at 0 that made `isMirrorAdmissionProducerActive('BTC','regtest', null)` TRUE.
+ * So a number must be finite and a string must be all digits.
  *
  * @returns {number|null} the height, or null when the input is not one
  */
@@ -137,9 +114,8 @@ function _readHeight(height){
 
 /**
  * Shared by both predicates. `0 >= null` is true in JavaScript, so a bare `height >= MAP[key]`
- * would arm every null key at height 0. The Number.isFinite guard on the THRESHOLD is what
- * stops that, and it is the single most important line in this file; `_readHeight` on the
- * HEIGHT is the second, and it closes the mirror image of the same trap.
+ * would arm every null key at 0. The Number.isFinite guard on the THRESHOLD stops that and is
+ * the most important line here; `_readHeight` on the HEIGHT closes the mirror image.
  */
 function _activeIn(map, coin, network, height){
     let key = admissionKey(coin, network);
@@ -157,8 +133,7 @@ function _activeIn(map, coin, network, height){
  * the signed canonical, and refuse to finalize a row whose map it cannot justify?
  *
  * Evaluated on the ROW's own BTC block (snapshot_block, or the request block for attest
- * responses), never on the consumer's height, so the rule for a given row is fixed the moment
- * it is produced and the two eras never share a signature.
+ * responses), never the consumer's height, so the two eras never share a signature.
  */
 function isMirrorAdmissionProducerActive(coin, network, height){
     return _activeIn(MIRROR_ADMISSION_ACTIVATION, coin, network, height);
@@ -174,8 +149,7 @@ function isMirrorAdmissionConsumerActive(coin, network, height){
 
 /**
  * The admission margin for a mirrored table, in blocks of each chain in the row's map.
- * An unknown table takes the default rather than throwing: a table added later without an
- * override should behave like the four that already use the default.
+ * An unknown table takes the default rather than throwing.
  */
 function admitMarginBlocks(table){
     if(table === null || table === undefined) return ADMIT_MARGIN_BLOCKS.default;
@@ -187,8 +161,7 @@ function admitMarginBlocks(table){
 
 /**
  * The follower's upper bound in blocks for a chain. An unrecognised chain takes BTC's interval,
- * exactly as the seconds-axis blockIntervalS already does, so the two axes cannot disagree
- * about what an unknown chain is.
+ * as the seconds-axis blockIntervalS does, so the two axes agree.
  */
 function admitMaxFutureBlocks(chain){
     if(chain === null || chain === undefined) return ADMIT_MAX_FUTURE_BLOCKS.default;
@@ -200,12 +173,11 @@ function admitMaxFutureBlocks(chain){
 
 /**
  * The follower's admission bound: is `admitBlock` an acceptable admission height for `chain`,
- * given that follower's own tip for that chain?
+ * given that follower's own tip?
  *
- * The window is [ownTip + ADMIT_MIN_FUTURE_BLOCKS, ownTip + admitMaxFutureBlocks(chain)].
- * This does NOT retire the absolute time bounds on effective_time: a follower refuses on BOTH
- * axes, so a hub with a broken clock and a hub with a wrong tip are each caught by the axis
- * that can actually see them.
+ * The window is [ownTip + ADMIT_MIN_FUTURE_BLOCKS, ownTip + admitMaxFutureBlocks(chain)]. The
+ * absolute time bounds on effective_time stay: a follower refuses on BOTH axes, so a broken hub
+ * clock and a wrong hub tip are each caught by the axis that sees them.
  *
  * @returns {boolean} true when the height is inside the window; false for any unreadable input
  */
@@ -222,19 +194,16 @@ function isAdmitBlockInFollowerBound(chain, admitBlock, ownTip){
 /**
  * Is a mirrored row readable at block B on chain C?
  *
- * THE LEGACY-ROW RULE, AND IT HOLDS AT EVERY HEIGHT, not merely below the flag day. A row with
- * no admission height for C, whether because it was finalized below the producer activation or
- * because its map simply does not name C, binds by effective_time <= t(B) exactly as today.
- * That is the fail-closed direction, and it is what makes a chain added to the federation after
- * a row was signed safe by construction rather than silently unbound.
+ * LEGACY-ROW RULE, at every height: a row with no admission height for C (finalized below the
+ * producer activation, or its map does not name C) binds by effective_time <= t(B) as today.
+ * That is the fail-closed direction and makes a chain added after a row was signed safe.
  *
- * The SQL form of this same rule is the shape that matters most in review:
+ * The SQL form is:
  *
  *   (admit_block_<c> IS NULL AND effective_time <= ?) OR (admit_block_<c> IS NOT NULL AND admit_block_<c> <= ?)
  *
- * and NEVER a bare `admit_block_<c> <= ?` on a nullable column, which evaluates to NULL for
- * legacy rows, silently drops them, and is a silent consensus change. The codebase carries both
- * the written case study of that exact failure and the established IS NULL OR remedy.
+ * never a bare `admit_block_<c> <= ?` on a nullable column, which is NULL for legacy rows,
+ * silently drops them, and changes consensus.
  *
  * @param {number|null|undefined} admitBlock the row's admission height for THIS chain, or null
  * @param {number} blockHeight B, this node's block being processed
@@ -252,40 +221,22 @@ function isRowReadableAt(admitBlock, blockHeight, effectiveTime, blockTime){
     return h <= b;
 }
 
-// ---------------------------------------------------------------------------
-// The canonical encoding of an admission map, and why it lives in the TWIN
-// ---------------------------------------------------------------------------
-
+// Canonical admission map encoding, kept in the twin
 /*
- * The hub SIGNS the admission field and every indexer REBUILDS it to verify, so the
- * encoder is a consensus byte-twin exactly like the activation heights above it and
- * belongs beside them. A hub-only encoder plus a second copy in the indexer is the one
- * shape nothing in this tree could hold: every parity suite compares exported
- * CONSTANTS, so two copies of a FUNCTION could drift apart while the whole matrix
- * stayed green. One definition per repo, with the two files held byte-identical, is
- * what makes that drift impossible rather than merely unlikely.
+ * The hub SIGNS the admission field and every indexer REBUILDS it to verify, so the encoder is a
+ * consensus byte-twin like the activation heights above it. Two copies of a function could drift
+ * while every constants parity suite stayed green; one definition per repo, held byte-identical,
+ * rules that out.
  *
- * attest_response_canonical.js states the rule an appended canonical field must
- * satisfy, from the case it was written for: concatenated bare, `meta="X"
- * effective=1234` and `meta="X1" effective=234` produce identical bytes, so one honest
- * quorum's signatures would validate over two different values. Two things together
- * fix it, and neither alone: a '|' separator, and a canonical integer spelling.
+ * As attest_response_canonical.js explains, a bare concatenation is ambiguous, so an appended
+ * field needs a '|' separator and a canonical integer spelling. A map has internal structure
+ * that could be re-split, so three properties make the encoding injective:
  *
- * A MAP is strictly harder than one integer, because the field itself has internal
- * structure that could be re-split. Three properties make this encoding injective, and
- * the suites in both repos drive all three:
- *
- *   1. The chain-code vocabulary is CLOSED upper-case alphanumerics, so neither ':' nor
- *      ',' nor '|' can occur inside a code, and no alternative split of the field can
- *      move a delimiter.
- *   2. Every height is canonically spelled, so 'BTC:1,X:23' and 'BTC:12,X:3' are
- *      different byte strings for different maps, and a map has exactly ONE spelling:
- *      '007' can never appear.
- *   3. Codes are in ASCII order, so {BTC, DOGE} has one encoding rather than two.
- *
- * Without (3) an honest leader and an honest follower could build the same map into
- * different bytes purely from Object key order, which is an insertion-order artefact of
- * how the row was read.
+ *   1. The chain-code vocabulary is CLOSED upper-case alphanumerics, so no ':' ',' or '|' can
+ *      occur in a code and no alternative split moves a delimiter.
+ *   2. Every height is canonically spelled ('007' never appears), so 'BTC:1,X:23' and
+ *      'BTC:12,X:3' differ.
+ *   3. Codes are in ASCII order, so a map has one encoding rather than an insertion-order one.
  */
 
 const CHAIN_CODE_RE = copy('mirror_admission_activation.CHAIN_CODE_RE');
@@ -327,11 +278,9 @@ function encodeAdmitBlocks(map){
  * Decode canonical admission bytes back to a map, or null when the bytes are not the
  * unique canonical encoding of any map.
  *
- * The decoder is strict on purpose: it is the executable statement of what the encoder's
- * injectivity claim means. Round-tripping every encoded map and refusing every
- * non-canonical variant (leading zeros, out-of-order codes, a repeated code, an empty
- * field) is what the suites check, and a decoder that accepted variants would make that
- * check vacuous.
+ * Strict on purpose: it is the executable statement of the encoder's injectivity claim. The
+ * suites round-trip every encoded map and refuse every non-canonical variant (leading zeros,
+ * out-of-order or repeated codes, an empty field).
  */
 function decodeAdmitBlocks(field){
     if(typeof field !== 'string' || field === '') return null;
@@ -354,31 +303,22 @@ function decodeAdmitBlocks(field){
 /**
  * Is this row in the admission era?
  *
- * Keyed on the ROW's own BTC block (snapshot_block for matches, calls, bridge transfers
- * and policy snapshots; the request's block for attest responses; the round's BTC anchor
- * for a price round) and never on a consumer's height, so the rule for a given row is
- * fixed the moment it is produced and the two eras can never share a signature.
- *
- * The activation key's COIN is BTC for every rail, because every one of those era blocks
- * IS a BTC height. The map is keyed by (coin, network) so the CONSUMER side can arm chain
- * by chain; the producer side reads the BTC key.
+ * Keyed on the ROW's own BTC block (snapshot_block, the request block for attest responses, the
+ * round's BTC anchor for a price round), never the consumer's height, so the two eras never
+ * share a signature. The activation key's COIN is BTC for every rail; only the consumer side
+ * arms chain by chain.
  */
 function isAdmissionEra(network, eraBlock){
     return isMirrorAdmissionProducerActive('BTC', network, eraBlock);
 }
 
 /**
- * The canonical tail for a row's admission map: '' unless both the row is at or above the
- * activation and the map is present, and '|' plus the encoded map when both are true.
+ * The canonical tail for a row's admission map: '' unless the row is at or above the activation
+ * and the map is present, else '|' plus the encoded map.
  *
- * A version seam can expose either an admission map to an inert node or a legacy row to an
- * armed node. Both cases take the legacy byte path so mixed versions can bind the row and
- * let quorum verification decide whether its signatures match. Only an armed node with a
- * present map emits admission bytes.
- *
- * No per-rail canonical VERSION field is minted for this, and none exists anywhere in the
- * tree: this height-gated era check IS the versioning, and a version integer would
- * duplicate the gate while giving a Byzantine leader a second field to disagree about.
+ * A version seam can expose an admission map to an inert node or a legacy row to an armed node;
+ * both take the legacy byte path so quorum verification decides. No per-rail canonical version
+ * field exists: this height-gated era check is the versioning.
  *
  * @param {string} label the builder's canonical tag, retained for the stable caller API
  * @param {string} network the row's network, half the activation key
@@ -393,10 +333,9 @@ function admissionCanonicalField(label, network, eraBlock, map){
 
 /**
  * The admission map as a canonical VALUE rather than a pipe-appended tail: null below the
- * activation or when the map is absent, and the encoded map when the era is armed and the
- * map is present. This is the spelling a JSON-shaped canonical (the PRICE batch) carries
- * under its own key, where a '|' tail would be a byte inside a string rather than a
- * delimiter. One era gate for both spellings keeps their boundary semantics identical.
+ * activation or when the map is absent. A JSON-shaped canonical (the PRICE batch) carries it
+ * under its own key, where a '|' tail would be a byte inside a string. One era gate serves both
+ * spellings so their boundary semantics match.
  */
 function admissionCanonicalValue(label, network, eraBlock, map){
     let era = isAdmissionEra(network, eraBlock);
@@ -406,10 +345,7 @@ function admissionCanonicalValue(label, network, eraBlock, map){
     return encodeAdmitBlocks(map);
 }
 
-// ---------------------------------------------------------------------------
-// The mirror columns a stored map is read back from
-// ---------------------------------------------------------------------------
-
+// Mirror columns a stored map is read back from
 const ADMIT_COLUMN_CHAINS = get('mirror_admission_activation.ADMIT_COLUMN_CHAINS');
 
 /**
