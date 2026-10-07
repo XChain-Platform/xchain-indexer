@@ -107,3 +107,5 @@ CREATE        INDEX version_status  ON attests (version, request_status, deadlin
 CREATE        INDEX contract_index  ON attests (contract_index);
 CREATE        INDEX provider_id     ON attests (provider_id);
 CREATE        INDEX block_index     ON attests (block_index);
+-- Per-block state-hash request_status collector and the reorg reset (version = 0 AND resolved_block).
+CREATE        INDEX version_resolved ON attests (version, resolved_block);

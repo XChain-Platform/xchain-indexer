@@ -18,6 +18,11 @@ const { DatabaseSync } = require('node:sqlite');
 
 const observability = require('../../../../src/observability/index.js');
 const batchHeads = require('../../../../src/db/attests/batch_heads.js');
+// Take the head and continuation versions from the codec, as the reader does, so a codec
+// version change moves the fixture and the assertions with it instead of pinning 5 and 6.
+const abw = require('../../../../src/actions/attest/attest_batch_wire.js');
+const HEAD = abw.ATTEST_BATCH_HEAD_VERSION;
+const CONT = abw.ATTEST_BATCH_CONTINUATION_VERSION;
 const { buildAttestBatchesRpc } = require('../../../../src/api/rpc/attest/attest_batches.js');
 const { recordingView, fakeIndexer } = require('./helpers/fake_indexer.js');
 
@@ -51,11 +56,11 @@ function executableBatchReader() {
             (1, 'valid'),
             (2, 'invalid: ATTEST_BATCH (reassembly CRC mismatch) (stamped on batch completion)');
         INSERT INTO attests VALUES
-            (10, 5, 'single',     100, 200, 0, 1, '11111111', 0, 1, 7),
-            (20, 5, 'failed',     110, 210, 2, 1, '22222222', 0, 2, 8),
-            (30, 5, 'incomplete', 120, 220, 2, 2, '33333333', 0, 1, 9),
-            (40, 5, 'complete',   130, 230, 2, 2, '44444444', 0, 1, 10),
-            (41, 6, 'complete',  NULL, NULL, NULL, 2, '44444444', 1, 1, 11);
+            (10, ${HEAD}, 'single',     100, 200, 0, 1, '11111111', 0, 1, 7),
+            (20, ${HEAD}, 'failed',     110, 210, 2, 1, '22222222', 0, 2, 8),
+            (30, ${HEAD}, 'incomplete', 120, 220, 2, 2, '33333333', 0, 1, 9),
+            (40, ${HEAD}, 'complete',   130, 230, 2, 2, '44444444', 0, 1, 10),
+            (41, ${CONT}, 'complete',  NULL, NULL, NULL, 2, '44444444', 1, 1, 11);
         INSERT INTO actions VALUES
             (10, 1, 10), (20, 2, 20), (30, 3, 30), (40, 4, 40), (41, 4, 41);
         INSERT INTO transactions VALUES (10, 10), (20, 20), (30, 30), (40, 40), (41, 41);
@@ -154,7 +159,10 @@ describe('ATTEST batch federation reader @regression @tier1', function () {
 
     it('requires valid heads and complete publisher-scoped multi-wire batches', async function () {
         const { seen } = await captureQuery();
-        assert.match(seen.sql, /h\.version = 5/);
+        assert.match(seen.sql, new RegExp('h\\.version = ' + HEAD + '\\b'),
+            'a head is the codec head version, never a literal');
+        assert.match(seen.sql, new RegExp('c\\.version IN \\(' + HEAD + ', ' + CONT + '\\)'),
+            'a chunk slot is the codec head or continuation version, never a literal');
         assert.match(seen.sql, /hs\.status = 'valid'/);
         assert.match(seen.sql, /h\.batch_total_chunks = 1/,
             'a single-wire head is complete without continuations');

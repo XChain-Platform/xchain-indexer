@@ -74,24 +74,72 @@ const EMPTY_CONSTANTS = (function(){
 //
 //   STATE_ROOT_RETENTION_BLOCKS  keep roots for blocks > (tip - N); 0/unset = OFF
 //   STATE_NODE_RECLAIM           '1' | 'true' to also reclaim orphan nodes
-//   STATE_RETENTION_INTERVAL_MS  sweep cadence (default 6h)
+//   STATE_RETENTION_INTERVAL_MS  sweep cadence (default 6h); a non-positive or
+//                                unparseable value falls back to 6h, and the
+//                                result is held between 60s and setInterval's max
 //   STATE_TREE_METRIC_MAX_NODES  reuse the metric cap: skip the in-memory mark
 //                                (and thus node reclaim) above this node count
+// STATE_ROOT_RETENTION_BLOCKS is raised to the chain's reorg-safe floor at service
+// startup (applyReorgSafeFloor); the parser itself returns the value as configured.
 function parseRetentionConfig(env){
     env = env || CONFIG_ENV;
     const rootKeepBlocks = parseInt(env.STATE_ROOT_RETENTION_BLOCKS, 10);
     const enabled = Number.isFinite(rootKeepBlocks) && rootKeepBlocks > 0;
     const reclaimRaw = String(env.STATE_NODE_RECLAIM == null ? '' : env.STATE_NODE_RECLAIM).toLowerCase();
     const nodeReclaimEnabled = enabled && (reclaimRaw === '1' || reclaimRaw === 'true');
-    const intervalRaw = parseInt(env.STATE_RETENTION_INTERVAL_MS, 10);
+    const interval = resolveSweepIntervalMs(env.STATE_RETENTION_INTERVAL_MS);
     const maxNodesRaw = parseInt(env.STATE_TREE_METRIC_MAX_NODES, 10);
     return {
         enabled,
         rootKeepBlocks: enabled ? rootKeepBlocks : null,
         nodeReclaimEnabled,
-        intervalMs: Number.isFinite(intervalRaw) ? intervalRaw : (6 * 60 * 60 * 1000),
+        intervalMs: interval.intervalMs,
+        intervalAdjusted: interval.adjusted,
         maxNodes: Number.isFinite(maxNodesRaw) && maxNodesRaw > 0 ? maxNodesRaw : 2000000
     };
+}
+
+const DEFAULT_SWEEP_INTERVAL_MS = 6 * 60 * 60 * 1000;
+// Shortest sweep cadence accepted. Node clamps a setInterval delay below 1ms (or
+// above 2^31-1) to 1ms, and with node reclaim on every sweep holds the block-loop lock.
+const MIN_SWEEP_INTERVAL_MS = 60 * 1000;
+const MAX_TIMER_DELAY_MS = 2147483647;
+
+// Resolve the sweep cadence: unset keeps the 6h default silently; a non-positive or
+// unparseable value falls back to it, and a value outside [60s, 2^31-1] is held to the
+// nearer bound. `adjusted` reports any replacement so the caller can warn.
+function resolveSweepIntervalMs(raw){
+    if(raw == null || raw === '') return { intervalMs: DEFAULT_SWEEP_INTERVAL_MS, adjusted: false };
+    const parsed = parseInt(raw, 10);
+    if(!Number.isFinite(parsed) || parsed <= 0) return { intervalMs: DEFAULT_SWEEP_INTERVAL_MS, adjusted: true };
+    if(parsed < MIN_SWEEP_INTERVAL_MS) return { intervalMs: MIN_SWEEP_INTERVAL_MS, adjusted: true };
+    if(parsed > MAX_TIMER_DELAY_MS) return { intervalMs: MAX_TIMER_DELAY_MS, adjusted: true };
+    return { intervalMs: parsed, adjusted: false };
+}
+
+// The shallowest retention window a chain may run with: the decoder's reorg-safe depth
+// (DISPENSER_EXPIRE_SAFE_DEPTH in xchain-decoder's constants.js), the deepest rollback
+// the decoder recovers from. These copies must stay >= the decoder's values.
+const ROOT_RETENTION_REORG_FLOOR = 126;
+const LTC_TESTNET_ROOT_RETENTION_REORG_FLOOR = 5006;
+
+// Pick the floor with the decoder's own rule: Litecoin testnet is the one deep chain.
+function resolveRootRetentionFloor(coin, network){
+    return String(coin).toUpperCase() === 'LTC' && String(network).toLowerCase() === 'testnet'
+        ? LTC_TESTNET_ROOT_RETENTION_REORG_FLOOR
+        : ROOT_RETENTION_REORG_FLOOR;
+}
+
+// Raise an enabled window to the chain's floor, so a reorg never rolls back past the
+// oldest kept root. Returns a new cfg (floorApplied, requestedRootKeepBlocks); a
+// disabled cfg comes back unchanged. Raising only ever keeps more rows.
+function applyReorgSafeFloor(cfg, coin, network){
+    if(!cfg || !cfg.enabled) return cfg;
+    const floor = resolveRootRetentionFloor(coin, network);
+    if(cfg.rootKeepBlocks >= floor) return Object.assign({}, cfg, { floorApplied: false });
+    return Object.assign({}, cfg, {
+        rootKeepBlocks: floor, requestedRootKeepBlocks: cfg.rootKeepBlocks, floorApplied: true
+    });
 }
 
 // Phase 1 planner (read-only). Returns which state_tree_roots rows fall outside
@@ -224,6 +272,12 @@ async function runSweep(db, chain, network, cfg, opts){
 module.exports = {
     EMPTY_CONSTANTS,
     parseRetentionConfig,
+    resolveSweepIntervalMs,
+    MIN_SWEEP_INTERVAL_MS,
+    ROOT_RETENTION_REORG_FLOOR,
+    LTC_TESTNET_ROOT_RETENTION_REORG_FLOOR,
+    resolveRootRetentionFloor,
+    applyReorgSafeFloor,
     planStateRootPrune,
     pruneStateRoots,
     computeReachable,

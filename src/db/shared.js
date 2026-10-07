@@ -117,8 +117,9 @@ const AUTO_DEDUP_TABLES = new Set(['balances']);
 // per-table warnings never depend on a collector existing.
 function recordShapeDrift(store, table, kind, items){
     if(!store || !items || !items.length) return;
-    const entry = store.get(table) || { columns: [], indexes: [] };
-    entry[kind] = entry[kind].concat(items);
+    const entry = store.get(table) || { columns: [], indexes: [], indexKinds: [] };
+    // Tolerate an entry built before a kind existed (indexKinds joined columns and indexes later).
+    entry[kind] = (entry[kind] || []).concat(items);
     store.set(table, entry);
 }
 

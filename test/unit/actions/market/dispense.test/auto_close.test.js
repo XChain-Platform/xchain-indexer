@@ -182,8 +182,9 @@ describe('Dispense action handler @regression @tier2', function () {
 
     // ── MAX_DISPENSES cap (dispenser_caps_activation.js). The dispense that
     //    reaches the cap still executes; then the dispenser auto-closes with reason
-    //    'max_dispenses_reached' and refunds remaining escrow (DISPENSER_CLOSE routes to
-    //    SOURCE for an auto-close). Count is derived since the last refill. Gated on the
+    //    'max_dispenses_reached' and refunds remaining escrow (DISPENSER_CLOSE routes sweep >
+    //    canceller > SOURCE: SOURCE when 'open', the sweep or canceller when already
+    //    'cancelling'). Count is derived since the last refill. Gated on the
     //    dispenser-family cohort (mainnet block_time 1786060800, testnet/regtest genesis).
     describe('MAX_DISPENSES cap auto-close', function () {
 

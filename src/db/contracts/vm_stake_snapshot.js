@@ -21,8 +21,6 @@
  *
  ********************************************************************/
 
-const protocolChanges = require('../../protocol_changes.js');
-
 module.exports = {
 
     // Snapshot the contract's stake state at blockIndex into an in-memory accessor
@@ -45,7 +43,7 @@ module.exports = {
     // contract_delegations in HERE instead would hand the contract a key the SLASH path cannot
     // find, and the emitted punishment would silently no-op at the zero-slashed guard in
     // processSlashEmission (actions/execute/slash_emission.js).
-    async getContractStakeDataForVM(targetContractIndex, blockIndex){
+    async getContractStakeDataForVM(targetContractIndex, blockIndex, slashWindowActive){
         let valid_id = await this.getStatusId('valid');
         let stakes = [];
         if(valid_id !== null){
@@ -58,7 +56,7 @@ module.exports = {
                            AND cs.activation_block <= ?
                            AND (cs.deactivation_block IS NULL OR cs.deactivation_block > ?)`;
             stakes = await this.doQuery(query, [Number(targetContractIndex), valid_id, blockIndex, blockIndex]);
-            if(await slashWindow.isActive(this, blockIndex))
+            if(slashWindowActive === true)
                 stakes = await slashWindow.capInWindowRows(this, stakes, Number(targetContractIndex), valid_id);
         }
         // Aggregate (pubkey, tick) → amount; also build per-tick stakers map for getStakers/getTotalStaked.
@@ -101,16 +99,11 @@ module.exports = {
 // the contract_stakes row keeps its full amount until the block-end sweep. Once armed, the
 // snapshot counts a (pubkey, tick)'s in-window rows only up to what that pair's open
 // cooldown rows still hold, so a slash is visible to the contract that issued it.
+//
+// The callers decide activation with ProtocolChanges.isEnabled('STAKE_SNAPSHOT_SLASH_WINDOW')
+// at the block being processed, which reads the decoder DB's time for it. This DB cannot
+// answer that: its blocks row for the current height is written only by finalizeBlock.
 const slashWindow = {
-
-    async isActive(db, blockIndex){
-        let network = db.config['NETWORK'];
-        if(network !== 'mainnet' && network !== 'testnet' && network !== 'regtest') return false;
-        let threshold = protocolChanges.get('protocol_changes.changes.STAKE_SNAPSHOT_SLASH_WINDOW')[network + '_time'];
-        if(threshold >= protocolChanges.UNARMED) return false;
-        let blockTime = await db.getBlockTime(blockIndex);
-        return Number(blockTime) >= threshold;
-    },
 
     async capInWindowRows(db, stakes, targetContractIndex, valid_id){
         if(!stakes.some(r => r.deactivation_block !== null && r.deactivation_block !== undefined)) return stakes;
