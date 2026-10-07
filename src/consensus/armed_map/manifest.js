@@ -29,7 +29,7 @@
  * (test/unit/consensus/armed_map/manifest.test.js): it scans src/ for a map
  * declared outside the registry's part files and fails on any hit.
  *
- * THE THIRTEEN VM MIRROR ROWS are the one thing beside the registry: the bundled
+ * THE FOURTEEN VM MIRROR ROWS are the one thing beside the registry: the bundled
  * xchain-vm resolves its own gate heights and instants inside this process, so
  * they are read from the loaded module, as `xchain-vm.<EXPORT>`, and a vm that
  * does not load poisons the fingerprint rather than dropping out of it.
@@ -74,14 +74,15 @@ const VM_EXPORT_NAMES = [
     'STATE_KEY_TYPE_GATE_BLOCK_TIME',
     'VM_LINT_HARDENING_GATE_BLOCK_TIME',
     'JSON_STRINGIFY_HOOK_ACTIVATION',
+    'APPLY_LENGTH_METER_ACTIVATION',
 ];
 
 const VM_ACCESSORS_EXPORT_NAMES = ['ACCESSOR_OWN_KEY_ACTIVATION'];
 
-// Reads one own property, refusing a missing one outright: an absent export
-// read as undefined would say "renamed away" in a way nobody sees.
-function ownValue(holder, name, where) {
-    if (!Object.prototype.hasOwnProperty.call(holder, name)) {
+// Reads one exposed property, refusing a missing one outright. The VM preserves
+// its frozen own-static surface by exposing additive statics through a prototype.
+function exportedValue(holder, name, where) {
+    if (!(name in Object(holder))) {
         throw new Error(where + ' has no ' + name);
     }
     return holder[name];
@@ -89,12 +90,12 @@ function ownValue(holder, name, where) {
 
 function vmValue(name) {
     if (VM_LOAD_ERROR) throw VM_LOAD_ERROR;
-    return ownValue(VM_MODULE, name, 'xchain-vm');
+    return exportedValue(VM_MODULE, name, 'xchain-vm');
 }
 
 function vmAccessorsValue(name) {
     if (VM_ACCESSORS_ERROR) throw VM_ACCESSORS_ERROR;
-    return ownValue(VM_ACCESSORS_MODULE, name, 'xchain-vm readonly-accessors');
+    return exportedValue(VM_ACCESSORS_MODULE, name, 'xchain-vm readonly-accessors');
 }
 
 function buildEntries() {
