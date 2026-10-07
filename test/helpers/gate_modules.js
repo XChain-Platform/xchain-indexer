@@ -38,7 +38,7 @@ const SRC = path.resolve(__dirname, '..', '..', 'src');
 const GATE_MODULE_PATHS = Object.freeze({
     amount_representability_activation: 'utility/validation/amount_representability_gate.js',
     attest_broadcast_fee_activation: 'actions/attest/attest_broadcast_fee_gate.js',
-    attest_request_cap_activation: 'actions/attest/attest_request_cap_gate.js',
+    attest_request_cap_activation: 'actions/attest/gates/attest_request_cap_gate.js',
     caret_ref_strict_activation: 'db/database/caret_ref_strict_gate.js',
     dispense_payment_tally_scale_activation: 'actions/dispense/dispense_payment_tally_scale_gate.js',
     dispenser_send_amount_compare_activation: 'db/dispensers/dispenser_send_amount_compare_gate.js',

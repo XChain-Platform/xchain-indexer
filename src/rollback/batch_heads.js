@@ -67,7 +67,7 @@ module.exports = {
     // A chunked batch spans blocks: the v5 head in an early block, v6 continuations
     // after it. The chunk that COMPLETES the coverage reassembles the window and,
     // when the body or the quorum fails, stamps the verdict on the head
-    // (actions/attest/batch_absorb.js absorbCompletedBatch) - a direct UPDATE on a row created in an
+    // (actions/attest/batch/batch_absorb.js absorbCompletedBatch) - a direct UPDATE on a row created in an
     // earlier block, which therefore survives the bulk delete below. If that
     // completing chunk is in the orphaned range, the delete removes the chunk and
     // cannot undo the stamp, and the damage is worse than a stale verdict: the head

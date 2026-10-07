@@ -30,7 +30,7 @@ const pmsh      = require('../attestation/providerMinStakeHistory.js');
 // The rules-aware capability filter the live actions/attest/ path applies. The reorg
 // recompute must subtract the SAME keys or it charges missed_count to validators
 // the live expiry never held responsible.
-const rgf       = require('../actions/attest/rollcall_gates_filter.js');
+const rgf       = require('../actions/attest/gates/rollcall_gates_filter.js');
 const { parsePinnedResponsibleSet } = require('../actions/attest/responsible_set.js');
 const statsSql  = require('../db/rollback/attestation_stats.js');
 

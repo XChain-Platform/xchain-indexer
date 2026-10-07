@@ -33,6 +33,7 @@
 
 const assert = require('assert');
 const fs     = require('fs');
+const sinon  = require('sinon');
 
 const XChainIndexer = require('../../../src/XChainIndexer.js');
 const { buildHealthResponse } = require('../../../src/api/health');
@@ -52,11 +53,18 @@ describe('XChainIndexer#isPollSilent()', function () {
     });
 
     it('is false at the window edge and true past it', function () {
-        const indexer = new XChainIndexer();
-        indexer.lastPollAt = Date.now() - indexer.pollSilentMs;
-        assert.strictEqual(indexer.isPollSilent(), false, 'the edge is not yet silent');
-        indexer.lastPollAt = Date.now() - (indexer.pollSilentMs + 1000);
-        assert.strictEqual(indexer.isPollSilent(), true);
+        const now     = Date.now();
+        const dateNow = sinon.stub(Date, 'now').returns(now);
+
+        try {
+            const indexer = new XChainIndexer();
+            indexer.lastPollAt = Date.now() - indexer.pollSilentMs;
+            assert.strictEqual(indexer.isPollSilent(), false, 'the edge is not yet silent');
+            indexer.lastPollAt = Date.now() - (indexer.pollSilentMs + 1000);
+            assert.strictEqual(indexer.isPollSilent(), true);
+        } finally {
+            dateNow.restore();
+        }
     });
 
     it('sizes the window well above one barrier-timeout cycle', function () {

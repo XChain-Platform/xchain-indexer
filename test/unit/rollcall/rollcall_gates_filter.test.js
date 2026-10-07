@@ -27,7 +27,7 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 
-const FILTER_PATH = require.resolve('../../../src/actions/attest/rollcall_gates_filter.js');
+const FILTER_PATH = require.resolve('../../../src/actions/attest/gates/rollcall_gates_filter.js');
 const ACTIV_PATH  = require.resolve('../../../src/consensus/gates/rollcall_gates_gate.js');
 const ENV_KEY     = 'XC_ROLLCALL_GATES_REGTEST_ACTIVATION';
 

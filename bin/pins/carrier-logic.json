@@ -26,7 +26,7 @@
       "twins": []
     },
     "attest_request_cap_activation": {
-      "path": "src/actions/attest/attest_request_cap_gate.js",
+      "path": "src/actions/attest/gates/attest_request_cap_gate.js",
       "hash": "ed391a6acf41e9e647ecadd126409e75c3176827ef148290547097f46e51edbe",
       "twins": []
     },
