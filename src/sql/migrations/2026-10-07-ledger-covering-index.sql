@@ -1,3 +1,4 @@
+-- xchain:migration mode=auto
 -- Migration: covering index (tick_id, action_index, amount) on credits, debits and escrows.
 --
 -- WHY
