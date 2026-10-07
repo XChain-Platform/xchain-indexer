@@ -85,6 +85,7 @@ const batchPart          = require('./batch.js');
 const batchAbsorbPart    = require('./batch/batch_absorb.js');
 const responsibleSetPart = require('./responsible_set.js');
 const relayPart          = require('./relay/relay.js');
+const relayFeeCarvePart  = require('./relay/relay_fee_carve.js');
 const relayRequestPart   = require('./relay/relay_request.js');
 const relayResponsePart  = require('./relay/relay_response.js');
 const settlePart         = require('./settle.js');
@@ -222,8 +223,8 @@ class Attest {
 // silently add a method to the handler.
 const PARTS = [
     requestPart, feesPart, responsePart, mirrorApplyPart, expirePart, batchPart,
-    batchAbsorbPart, responsibleSetPart, relayPart, relayRequestPart, relayResponsePart,
-    settlePart, callbacksPart
+    batchAbsorbPart, responsibleSetPart, relayPart, relayFeeCarvePart, relayRequestPart,
+    relayResponsePart, settlePart, callbacksPart
 ];
 
 // Installed NON-ENUMERABLE, which is what the class body they came from produced: an
