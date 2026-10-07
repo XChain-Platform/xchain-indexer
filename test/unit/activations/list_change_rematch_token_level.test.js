@@ -53,7 +53,7 @@ function referencesRoot(value){
 
 // Neither market carries its own list. The order token's allow list names an edit of an
 // edit, while the swap token's block list names the first edit.
-function setup(armed){
+function setup(armed, duplicateDirect = false){
     const { indexer, actionsCtx, handler } = makeListContext();
     stubGate(sinon, GATE_KEY, armed);
 
@@ -63,15 +63,24 @@ function setup(armed){
     indexer.indexerDb.getList.resolves([...members]);
     indexer.indexerDb.getListRootIndex.resolves(TOKEN_LIST);
     indexer.indexerDb.createListItem.callsFake(async (data, item) => members.add(item));
+    indexer.indexerDb.getOrderEdits.resolves({ allow_list: false, block_list: false });
+    indexer.indexerDb.getSwapEdits.resolves({ allow_list: false, block_list: false });
     indexer.indexerDb.doQuery.callsFake(async (sql, args) => {
-        if(!sql.includes('INNER JOIN tokens tk')) return [];
-        assertTokenListQuery(sql, args);
-        const kind = sql.includes('FROM orders m') ? 'order' : 'swap';
-        const tokenList = kind === 'order' ? { allow_list: SECOND_EDIT, block_list: null }
-            : { allow_list: null, block_list: FIRST_EDIT };
-        const affected = referencesRoot(tokenList.allow_list) || referencesRoot(tokenList.block_list);
-        if(book[kind].status !== 'open' || !affected) return [];
-        return [{ action_index: kind === 'order' ? 10 : 5 }];
+        if(sql.includes('INNER JOIN tokens tk')){
+            assertTokenListQuery(sql, args);
+            const kind = sql.includes('FROM orders m') ? 'order' : 'swap';
+            const tokenList = kind === 'order' ? { allow_list: SECOND_EDIT, block_list: null }
+                : { allow_list: null, block_list: FIRST_EDIT };
+            const affected = referencesRoot(tokenList.allow_list) || referencesRoot(tokenList.block_list);
+            if(book[kind].status !== 'open' || !affected) return [];
+            return [{ action_index: kind === 'order' ? 10 : 5 }];
+        }
+        if(!duplicateDirect || /FROM\s+lists\s/.test(sql)) return [];
+        if(/FROM\s+orders o/.test(sql))
+            return [{ action_index: 10, allow_list: TOKEN_LIST, block_list: null }];
+        if(/FROM\s+swaps s/.test(sql))
+            return [{ action_index: 5, allow_list: TOKEN_LIST, block_list: null }];
+        return [];
     });
     actionsCtx.processAction.callsFake(async (action) => {
         if(!members.has(ADDR2)) return;
@@ -90,7 +99,7 @@ describe('LIST change rematch for token-level lists @regression @tier2', functio
     afterEach(function () { sinon.restore(); });
 
     it('re-matches open markets whose token allow or block list names any edit generation', async function () {
-        const { actionsCtx, handler, book } = setup(true);
+        const { actionsCtx, handler, book } = setup(true, true);
 
         const data = await addMember(handler);
 

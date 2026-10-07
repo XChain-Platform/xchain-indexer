@@ -199,8 +199,14 @@ class List {
            !gateRegistry.activeAt('list_change_rematch_activation.LIST_CHANGE_REMATCH_ACTIVATION', this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null))
             return;
         let listRoot = this.isCreateFormat(format) ? data['ACTION_INDEX'] : data['LIST_ACTION_INDEX'];
-        let orders = [...await getOpenOrdersByList(this.indexerDb, listRoot), ...await this.getOpenMarketsByTokenList('order', listRoot)];
-        let swaps = [...await getOpenSwapsByList(this.indexerDb, listRoot), ...await this.getOpenMarketsByTokenList('swap', listRoot)];
+        let orders = [...new Set([
+            ...await getOpenOrdersByList(this.indexerDb, listRoot),
+            ...await this.getOpenMarketsByTokenList('order', listRoot)
+        ])];
+        let swaps = [...new Set([
+            ...await getOpenSwapsByList(this.indexerDb, listRoot),
+            ...await this.getOpenMarketsByTokenList('swap', listRoot)
+        ])];
         for(let step of planListRematch(data, orders, swaps))
             await this.actions.processAction(step.action, null, step.data, null);
     }
