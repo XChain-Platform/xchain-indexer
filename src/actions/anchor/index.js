@@ -115,7 +115,6 @@ function foldOrderReason(handler, data, sections, error){
 }
 
 class Anchor {
-
     constructor(action){
         this.actions   = action;
         this.config    = action.config;
@@ -123,6 +122,7 @@ class Anchor {
         this.indexerDb = action.indexerDb;
         this.util      = action.util;
         this.mapper    = action.mapper;
+        settle.installLegacyRewardCredits(this);
 
         // The whole ANCHOR wire set. Membership here is what makes a version byte
         // parseable at all (the unknown-version check in parse() reads this object), so
