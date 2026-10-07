@@ -324,3 +324,77 @@ const transportMethods = {
 };
 
 module.exports = { WebSocket, transportMethods };
+
+if (require.main === module) {
+    const assert = require('node:' + 'assert'), test = require('node:' + 'test'),
+          HubDbSync = require('../' + 'hub_db_sync.js');
+    const PAGE_LIMIT = 10000;
+    function rows(first, count) {
+        return Array.from({ length: count }, (_, offset) => ({ id: first + offset }));
+    }
+    function makeDrain() {
+        let applied = 0;
+        const sync = new HubDbSync({ doQuery: async () => [] }, {
+            hubUrl: 'http://hub.test', coin: 'DOGE', network: 'regtest'
+        });
+        sync.running = true;
+        sync.ws = { terminate() { sync.resetOnSocketClose(); } };
+        sync.localColumns = async () => new Set(['id']);
+        sync.applyRow = async () => { applied++; return true; };
+        sync.applyRowsBatched = async () => false;
+        sync.scheduleBootstrapRetry = () => {};
+        const bootstrapTable = sync.bootstrapTable.bind(sync);
+        sync.bootstrapTable = table => table === 'price_snapshots'
+            ? bootstrapTable(table) : Promise.resolve(9000);
+        sync._readyMaxIds = { price_snapshots: (PAGE_LIMIT * 3) + 5 };
+        return { sync, applied: () => applied };
+    }
+    function deferPages(sync) {
+        const pending = [];
+        sync.httpGet = () => new Promise(resolve => pending.push(resolve));
+        return pending;
+    }
+    async function waitForPage(pending, count) {
+        while (pending.length < count) await new Promise(resolve => setImmediate(resolve));
+    }
+    test('progress-aware ceiling keeps a moving RDOGE drain and replaces a stalled drain', async () => {
+        const wallNow = Date.now;
+        let now = 1800000000000;
+        Date.now = () => now;
+        try {
+            const moving = makeDrain();
+            const movingPages = deferPages(moving.sync);
+            const movingBoot = moving.sync.bootstrapAll();
+            await waitForPage(movingPages, 1);
+            for (let page = 0; page < 3; page++) {
+                now += moving.sync.barrierHoldCeilingMs - 1;
+                assert.strictEqual(moving.sync.requestResync('barrier still held'), false);
+                movingPages[page]({ rows: rows((page * PAGE_LIMIT) + 1, PAGE_LIMIT), watermark: 7000 + page });
+                await waitForPage(movingPages, page + 2);
+            }
+            now += moving.sync.barrierHoldCeilingMs - 1;
+            assert.strictEqual(moving.sync.requestResync('barrier still held'), false);
+            movingPages[3]({ rows: rows((3 * PAGE_LIMIT) + 1, 5), watermark: 7003 });
+            await movingBoot;
+            assert.strictEqual(moving.sync._wsEpoch, 0);
+            assert.strictEqual(moving.sync._bootstrapDrained, true);
+            assert.strictEqual(moving.sync.streamWatermark, 7003);
+            assert.strictEqual(moving.applied(), (3 * PAGE_LIMIT) + 5);
+            const stalled = makeDrain();
+            const stalledPages = deferPages(stalled.sync);
+            const stalledBoot = stalled.sync.bootstrapAll();
+            await waitForPage(stalledPages, 1);
+            stalledPages[0]({ rows: rows(1, PAGE_LIMIT), watermark: 1 });
+            await waitForPage(stalledPages, 2);
+            now += stalled.sync.barrierHoldCeilingMs + 1;
+            assert.strictEqual(stalled.sync.requestResync('bootstrap stopped'), true);
+            assert.strictEqual(stalled.sync._wsEpoch, 1);
+            stalledPages[1]({ rows: rows(PAGE_LIMIT + 1, 5), watermark: 2 });
+            await stalledBoot;
+            assert.strictEqual(stalled.sync._bootstrapDrained, false);
+            assert.strictEqual(stalled.sync.forcedResyncCount, 1);
+        } finally {
+            Date.now = wallNow;
+        }
+    });
+}
