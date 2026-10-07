@@ -84,8 +84,8 @@ describe('consensus identity GATES field and pin comparison', function () {
     });
 
     it('exits zero with an arming lever left set in this process', function () {
-        // A cold comparison measured 1.2s; 10s allows for a loaded CI host while keeping the case bounded.
-        this.timeout(10000);
+        // Match the guard suite's CLI budget: loaded hosts can make the comparison take over 20s.
+        this.timeout(30000);
         // One lever of the pair, which is what a hook that throws between arming and
         // restoring leaves behind. The child must not see it.
         const key = 'XC_ROLLCALL_REGTEST_ACTIVATION';
