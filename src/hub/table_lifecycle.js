@@ -188,7 +188,7 @@ const CONTENT_PARITY_CARVE_OUTS = Object.freeze([
     Object.freeze({ table: 'markets', dbType: 'indexer',
         reason: 'Derived full-snapshot OHLCV aggregate with no clean block bound (operator ruling 2026-08-11); converges through the snapshot upsert.' }),
     Object.freeze({ table: 'dispensers', dbType: 'decoder',
-        reason: 'Decoder in-place UPDATEs (soft-expire, un-expire, expiration extend) plus reorg and deferred hard-purge DELETEs ride no per-block channel (operator ruling 2026-08-11); converges through the periodic full-table reconcile.' }),
+        reason: 'Decoder in-place UPDATEs (soft-expire, un-expire, expiration extend, and the reorg rewind of expiration and expired_block_index through dispenser_extension_undo) plus reorg and deferred hard-purge DELETEs ride no per-block channel (operator ruling 2026-08-11); converges through the periodic full-table reconcile.' }),
 ]);
 
 // Columns dropped from the content-parity preimage because the follower is not

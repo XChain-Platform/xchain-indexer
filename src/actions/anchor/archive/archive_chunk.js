@@ -18,12 +18,12 @@
  *
  ********************************************************************/
 
-const gateRegistry = require('../../consensus/gate_registry');
-const diag       = require('./diagnostic_events.js');
-const validate   = require('./validate.js');
-const reassembly = require('./reassembly.js');
+const gateRegistry = require('../../../consensus/gate_registry');
+const diag       = require('../diagnostic_events.js');
+const validate   = require('../validate.js');
+const reassembly = require('../reassembly.js');
 
-const { getLogger } = require('../../observability/index.js');
+const { getLogger } = require('../../../observability/index.js');
 
 // The parent v1 must exist with matching chunk geometry; its absence makes
 // this an orphan (stored, but recovery ignores batches that never assemble).

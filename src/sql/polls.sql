@@ -78,3 +78,7 @@ CREATE        INDEX tick_id      ON polls (tick_id);
 CREATE        INDEX end_block    ON polls (end_block);
 CREATE        INDEX poll_status  ON polls (poll_status, end_block);
 CREATE        INDEX block_index  ON polls (block_index);
+-- Per-block state-hash POLL_FINALIZE collector and the reorg re-open (resolved_block).
+CREATE        INDEX resolved_block ON polls (resolved_block);
+-- Per-block deferred-callback due query and its reorg reset (callback_due_block).
+CREATE        INDEX callback_due_block ON polls (callback_due_block);

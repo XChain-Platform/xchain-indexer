@@ -189,7 +189,7 @@ describe('a contract stake locks tokens rather than destroying them', function()
         // identifier, so neither half can be dropped or swapped without failing here. The
         // amount is no longer inlined into the call because a second same-token slash in the
         // same EXECUTE overwrites the first row rather than accumulating, so the write now
-        // carries the execution's running total (slash_ledger_consolidation_activation.js);
+        // carries the execution's running total (the slash_ledger_consolidation_activation gate row);
         // what must not change is that the value entering it is bcsub(0, r.amount, 64).
         assert.ok(/let release = this\.util\.bcsub\(0, r\.amount, 64\);[\s\S]{0,400}createEscrow\(data\['ACTION_INDEX'\], token, release, r\.address\)/.test(fn),
             'the VM slash credits the destination without releasing the staker escrow: a mint');

@@ -203,11 +203,42 @@ function assertConsensusRuntime(vmModule){
         throw new Error(vmModule.describeRuntimeMismatch(rt));
 }
 
+// The VM consensus epoch this indexer runs contracts under; the one copy the boot gate
+// below and the CI coupling test both read. It moves only with a coordinated xchain-vm
+// CONSENSUS_VERSION bump, together with the frozen surface digests in vm_coupling.test.js.
+// Epoch 4: REST_PATTERN_METER added the `banned-rest` deploy rule VM-side.
+// Epoch 5: JSON_STRINGIFY_HOOK closes the JSON.stringify value-hook depth bypass.
+const EXPECTED_VM_CONSENSUS_VERSION = '5';
+
+// VM epoch gate: refuse to run contracts on a VM whose consensus epoch is not this indexer's.
+//
+// The engine gate above compares only V8/ICU/ABI, so a correctly pinned Node carrying a stale
+// or wrong-ref vendored xchain-vm passed it and executed contracts under another epoch's rules,
+// committing state the fleet does not. CI asserts the same equality, but CI runs on a build
+// host and cannot protect a running validator. A loaded VM that declares no epoch at all is
+// refused too, unlike the engine gate's skip for a VM that predates its checker: an unknown
+// epoch is not a match. No bypass flag, for the reason the engine gate gives.
+function assertVmConsensusEpoch(vmModule, expected = EXPECTED_VM_CONSENSUS_VERSION){
+    // A VM that failed to load is assertVmRuntimeLoadable's refusal, not this one.
+    if(!vmModule)
+        return;
+    const actual = vmModule.CONSENSUS_VERSION;
+    if(actual !== expected)
+        throw new Error('VM CONSENSUS EPOCH MISMATCH: the loaded xchain-vm declares CONSENSUS_VERSION ' +
+            (actual === undefined ? 'undefined (missing)' : JSON.stringify(actual)) +
+            ' but this indexer runs contracts under epoch ' + JSON.stringify(expected) + '. Executing ' +
+            'contracts under a different epoch commits different state and would FORK this node from ' +
+            'the fleet. Re-vendor the VM (npm run vendor:vm, or bash bin/vendor-vm.sh); if the fleet is ' +
+            'deliberately moving epochs, bump EXPECTED_VM_CONSENSUS_VERSION with that coordinated release.');
+}
+
 module.exports = {
     bindingObjectFormat,
     bindingPathFromError,
     collectVmRuntimeEnv,
     describeVmLoadFailure,
     assertVmRuntimeLoadable,
-    assertConsensusRuntime
+    assertConsensusRuntime,
+    EXPECTED_VM_CONSENSUS_VERSION,
+    assertVmConsensusEpoch
 };

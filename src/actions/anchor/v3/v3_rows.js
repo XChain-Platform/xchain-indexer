@@ -14,7 +14,7 @@
 
 'use strict';
 
-const { canonicalBatchCrc } = require('./v3_canonical.js');
+const { canonicalBatchCrc } = require('../v3_canonical.js');
 
 const ARCHIVE_FIELDS = [
     'MATCH_BATCH_SEQ', 'MATCH_COUNT', 'BATCH_CRC32', 'TOTAL_CHUNKS', 'ARCHIVE_B64'

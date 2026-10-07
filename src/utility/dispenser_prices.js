@@ -27,7 +27,7 @@ module.exports = {
 
     // True when a dispenser's LATEST lifecycle status says a settlement already ran.
     //
-    // Guards the escrow refund in dispenser_close.js / dispenser_expire.js. GIVE_REMAINING is
+    // Guards the escrow refund in actions/dispenser_close/settle.js and actions/dispenser_expire/settle.js. GIVE_REMAINING is
     // DERIVED (give_escrow + edits - valid dispenses) and a close/expire writes no row that
     // reduces it, so a second settlement of the same dispenser recomputes the identical non-zero
     // remaining and refunds it AGAIN: the recipient is double-credited and the global escrow sum
