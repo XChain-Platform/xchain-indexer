@@ -228,6 +228,17 @@ addGate('protocol/constants.ORACLE_VM_ROUND_WINDOW', 'constant', 1200);
 // payload does not have.
 addGate('protocol/constants.ORACLE_VM_MAX_ROWS', 'constant', 50000);
 
+// send_caret_pack_key_activation
+// Per-network activation, interpreted against the block's consensus timestamp
+// (data['BLOCK_TIME']). At/after it a caret-id SEND looks up the gated packs of the tick
+// the id resolves to, so it needs the key handoff like a named-tick SEND. Mainnet stays
+// unarmed until the replay is measured.
+addGate('send_caret_pack_key_activation.SEND_CARET_PACK_KEY_ACTIVATION', 'time', {
+    mainnet: null,
+    testnet: 0,
+    regtest: 0,
+});
+
 // slash_grid_activation
 // Scale the per-row deduction runs at once the rule is live. 18 is
 // MAX_TOKEN_DECIMALS (src/config/token_limits.js), the finest precision any tick can be
@@ -243,8 +254,8 @@ addGate('slash_grid_activation.SLASH_GRID_ACTIVATION', 'height', {
     'BTC:mainnet':  0,
     'LTC:mainnet':  0,
     'DOGE:mainnet': 0,
-    // Unpinned: testnet carries stake history, so its heights are pinned at
-    // flag-day assembly with the replay evidence that step requires.
+    // ARMED by the v0.21.3 cut at these heights rather than at genesis, because testnet
+    // carries stake history; testnet blocks below them keep the legacy arithmetic.
     'BTC:testnet':  155001,
     'LTC:testnet':  4906040,
     'DOGE:testnet': 67962387,
@@ -261,8 +272,9 @@ addGate('slash_ledger_consolidation_activation.SLASH_LEDGER_CONSOLIDATION_ACTIVA
     'BTC:mainnet':  0,
     'LTC:mainnet':  0,
     'DOGE:mainnet': 0,
-    // Unpinned: testnet carries stake history, so its heights are pinned at
-    // flag-day assembly with the replay evidence that step requires.
+    // ARMED by the v0.21.3 cut at these heights rather than at genesis, because testnet
+    // carries stake history; testnet blocks below them keep the legacy per-emission
+    // overwrite.
     'BTC:testnet':  155001,
     'LTC:testnet':  4906040,
     'DOGE:testnet': 67962387,
@@ -279,9 +291,9 @@ addGate('stake_key_reuse_activation.STAKE_KEY_REUSE_ACTIVATION', 'height', {
     'LTC:mainnet':  null,         // INERT: capability STAKE is BTC-only; carried for shape
     'DOGE:mainnet': null,         // INERT: capability STAKE is BTC-only; carried for shape
     mainnet:        null,         // INERT: a coin with no entry above inherits the unarmed posture
-    'BTC:testnet':  156000,       // SIZED 2026-09-11: chain_tip 151,991 + 3,024 (21d @144/day) = 155,015, rounded up
-    'LTC:testnet':  4897000,      // SIZED 2026-09-11: chain_tip 4,883,971 + 12,096 (21d @576/day) = 4,896,067, rounded up
-    'DOGE:testnet': 67920000,     // SIZED 2026-09-11: chain_tip 67,887,900 + 30,240 (21d @1440/day) = 67,918,140, rounded up
+    'BTC:testnet':  156000,       // SIZED 2026-09-11 from chain_tip 151,991
+    'LTC:testnet':  4897000,      // SIZED 2026-09-11 from chain_tip 4,883,971
+    'DOGE:testnet': 67920000,     // SIZED 2026-09-11 from chain_tip 67,887,900
     testnet:        null,         // INERT: a testnet coin with no entry above stays on the legacy refusal
     regtest:        0,            // genesis-active so the e2e venue exercises the armed rule
 });
@@ -296,9 +308,9 @@ addGate('sweep_zero_leg_activation.SWEEP_ZERO_LEG_ACTIVATION', 'height', {
     'LTC:mainnet':  null,         // INERT: operator-owned, sized above the deploy tip on the arming train
     'DOGE:mainnet': null,         // INERT: operator-owned, sized above the deploy tip on the arming train
     mainnet:        null,         // INERT: a coin with no entry above inherits the unarmed posture
-    'BTC:testnet':  156000,       // SIZED 2026-09-11: chain_tip 151,994 + 3,024 (21d @144/day) = 155,018, rounded up; shared with STAKE_KEY_REUSE_ACTIVATION
-    'LTC:testnet':  4897000,      // SIZED 2026-09-11: chain_tip 4,883,984 + 12,096 (21d @576/day) = 4,896,080, rounded up; shared with STAKE_KEY_REUSE_ACTIVATION
-    'DOGE:testnet': 67920000,     // SIZED 2026-09-11: chain_tip 67,888,041 + 30,240 (21d @1440/day) = 67,918,281, rounded up; shared with STAKE_KEY_REUSE_ACTIVATION
+    'BTC:testnet':  156000,       // SIZED 2026-09-11 from chain_tip 151,994; shared with STAKE_KEY_REUSE_ACTIVATION
+    'LTC:testnet':  4897000,      // SIZED 2026-09-11 from chain_tip 4,883,984; shared with STAKE_KEY_REUSE_ACTIVATION
+    'DOGE:testnet': 67920000,     // SIZED 2026-09-11 from chain_tip 67,888,041; shared with STAKE_KEY_REUSE_ACTIVATION
     testnet:        null,         // INERT: a testnet coin with no entry above keeps writing the legs
     regtest:        0,            // genesis-active so the e2e venue exercises the armed rule
 });
@@ -314,8 +326,8 @@ addGate('sweep_zero_leg_activation.SWEEP_ZERO_LEG_ACTIVATION', 'height', {
 // exists there (XCP appears only in unit-test mocks, and every scenario ticker is four
 // characters or longer).
 //
-// Testnet holds at the house sentinel until the train that arms it sizes a dated instant
-// above the fleet's deploy tip. Mainnet is a genesis-arm candidate under the genesis-arm
+// Testnet BTC, LTC and DOGE are pinned at the heights the v0.21.0 freeze height plan set;
+// only the bare `testnet` fallback, for a coin with no entry, stays at the sentinel. Mainnet is a genesis-arm candidate under the genesis-arm
 // method and stays at the sentinel until the mainnet replicas measure zero mined
 // ISSUEs of a short or listed name, valid OR invalid: an armed height below a real one
 // would re-verdict it and move that chain's hashes.

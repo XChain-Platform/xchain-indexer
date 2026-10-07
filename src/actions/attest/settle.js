@@ -158,8 +158,8 @@ module.exports = {
             splitPool = this.util.bcsub(feeAmount, broadcastFee, feeCap);
             // The broadcaster is a responsible-set member, so it collects this row
             // ON TOP of its equal share below ("additionally receives").
-            // A distinct reward_type keeps the two rows apart under the
-            // (source, pubkey, type, round_reference) unique key.
+            // A distinct reward_type keeps the two rows apart under the reward_unique key
+            // (source, pubkey, type, round_reference, round_qualifier); both rows use qualifier 0.
             await this.indexerDb.createValidatorReward(
                 responsible[0], Number(request.action_index), 'attest_bcast', broadcastFee, data['BLOCK_INDEX'], true
             );
@@ -223,8 +223,14 @@ module.exports = {
             return responsible;
         }
 
-        keys.sort((a, b) => (a < b) ? -1 : (a > b ? 1 : 0));
-        return keys;
+        let canonical = this.canonicalSignerSet(keys.map(pubkey => ({ pubkey, sig: '' })), responsible, request.redundancy);
+        if(canonical.length === 0){
+            getLogger().warn('Attestation fee settle: no stored signer is in the responsible set for request ' +
+                         String(request.request_id).substring(0,16) +
+                         '..., splitting among the recomputed responsible set instead');
+            return responsible;
+        }
+        return canonical.map(s => s.pubkey);
     },
 
     // The XCHAIN-denominated broadcast-fee reimbursement owed to the leader for this

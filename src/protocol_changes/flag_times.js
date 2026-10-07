@@ -205,13 +205,14 @@ const CONTRACT_META_REQUIRED_TESTNET_TIME = 1789257600;
 
 // BROADCAST_FEE_LENGTH mainnet stays inert until the operator arms it.
 const BROADCAST_FEE_LENGTH_MAINNET_TIME = UNARMED;
-// BROADCAST_FEE_LENGTH testnet stays inert until the operator arms it.
+// BROADCAST_FEE_LENGTH testnet: ARMED by the v0.21.3 cut at 1791061097 = 2026-10-03T20:58:17Z.
 const BROADCAST_FEE_LENGTH_TESTNET_TIME = 1791061097;
 
 // D1: mainnet ships inert under the write hold and joins the genesis-arm set
 // only when that hold lifts after a fresh history count.
 const CONTROLLER_CUSTODY_GUARD_MAINNET_TIME = UNARMED;
-// D2: testnet ships inert until a release cut pins a future fleet-wide instant.
+// D2: testnet ARMED by the v0.21.3 cut at 1791061097 = 2026-10-03T20:58:17Z, the
+// fleet-wide instant that cut pinned.
 const CONTROLLER_CUSTODY_GUARD_TESTNET_TIME = 1791061097;
 
 // Arms for OWNER_WITHDRAW_OPT_IN, the rule that makes owner WITHDRAW something a
@@ -231,6 +232,22 @@ const OWNER_WITHDRAW_OPT_IN_MAINNET_TIME = UNARMED;
 // replay than on a node that indexed it live.
 const OWNER_WITHDRAW_OPT_IN_TESTNET_TIME = 1790492400;
 
+// Arms for READONLY_ACCESSOR_OWN_KEY, the rule that makes a readonly accessor
+// lookup resolve a snapshot key that names an inherited member ('constructor',
+// '__proto__') as absent. xchain-vm's ACCESSOR_OWN_KEY_ACTIVATION is the source
+// and these mirror it per network, so both repos judge a block alike.
+//
+// Mainnet ships inert so history replays unchanged.
+const READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME = UNARMED;
+
+// Testnet is active from genesis in the VM table, so the mirror is 0.
+const READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME = 0;
+// DISPENSER_REFILL: a refill that adds escrow to a dispenser consults the token's trade
+// controller (actions/dispenser/controller_guard.js). Inert on every network until a
+// release cut arms it; mainnet in particular stays null until the operator arms it.
+const DISPENSER_REFILL_MAINNET_TIME = UNARMED;
+const DISPENSER_REFILL_TESTNET_TIME = UNARMED;
+
 module.exports = {
     VM_BANNED_ASYNC_MAINNET_TIME,
     NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME,
@@ -249,4 +266,8 @@ module.exports = {
     CONTROLLER_CUSTODY_GUARD_TESTNET_TIME,
     OWNER_WITHDRAW_OPT_IN_MAINNET_TIME,
     OWNER_WITHDRAW_OPT_IN_TESTNET_TIME,
+    READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME,
+    READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME,
+    DISPENSER_REFILL_MAINNET_TIME,
+    DISPENSER_REFILL_TESTNET_TIME,
 };

@@ -59,16 +59,16 @@ const FEE_QUOTE_STATIC = new Set(['DEPLOY', 'EXECUTE']);
 // Used only by the BATCH sub-command pre-flight (isBatchProbeForbiddenSubAction): the batch probe
 // dispatches REAL sub-handlers, so "denied at top level" is not a wide enough net - an action the
 // top-level gate lets through for its own reasons still enters the VM when a batch runs it.
-//   ATTEST - v1 response injects a callback EXECUTE (attest.js injectCallbackExecute).
+//   ATTEST - v1 response injects a callback EXECUTE (attest/callbacks.js injectCallbackExecute).
 //   VOTE   - a v0 binding create at or above VOTE_CALLBACK_BINDING_REQUIRES_USABLE_METHOD
 //            reaches contract code in the callback probe VM through readManifest
 //            (binding_callback.js isCallbackMethodUsable) wherever that gate is active. A v2
 //            finalize on a binding poll injects a callback EXECUTE (vote.js
 //            injectCallbackExecute), but that reach stays closed: vote.js refuses a v2 whose
 //            data is not IS_SYNTHETIC, which no probe sets. VOTE is 'quotable', so its public
-//            fee-quote dry-run dispatches the real handler, but that handler refuses the callback
-//            probe when GUARD_INERT is set and reports the create as guard-inert (unjudged), so
-//            the public path never enters the probe VM. It is deliberately kept in this set
+//            fee-quote dry-run answers a guard-inert VOTE v0 binding create (withVoteBindingDryRunRefusal)
+//            as guard-inert (unjudged) before any transaction or mutex is taken, so the public
+//            path runs neither the real handler nor the probe VM. It is deliberately kept in this set
 //            because the v0 create probe still reaches the VM in block processing and on the
 //            API-key dry-run, and because relaxing the v2 refusal would silently open another
 //            VM door. The cost is named honestly: a batch of legitimate VOTE v0/v1
@@ -92,7 +92,7 @@ const PROBE_VM_REACHING_ACTIONS = new Set(['ATTEST', 'VOTE', 'XCALL']);
 // what the quote reports, not what a handler charges on-chain.
 // ATTEST is exempt (not denylisted) because it stages no wallet-priceable fee AND must never
 // dry-run on the public path: ATTEST v0 is VM-emission-only, and ATTEST v1 (validator response)
-// injects a contract callback EXECUTE (attest.js injectCallbackExecute) that enters the VM while
+// injects a contract callback EXECUTE (attest/callbacks.js injectCallbackExecute) that enters the VM while
 // the dry-run holds the block-loop mutex. Its protocol fee is charged at the v0 request origin and
 // settled by settleRequestFee, so there is nothing for feequote to price; exempting it short-
 // circuits classifyFeeQuoteAction before dryRunAction, closing the unauthenticated VM-compute-
@@ -155,6 +155,37 @@ function isBatchProbeForbiddenSubAction(action){
     return FEE_QUOTE_DENYLIST.has(a) || PROBE_VM_REACHING_ACTIONS.has(a);
 }
 
+// Position of CALLBACK_CONTRACT in a VOTE v0 create's params (VERSION is index 0).
+const VOTE_CALLBACK_CONTRACT_PARAM = 13;
+
+// The callback contract a guard-inert VOTE v0 create names, or null for any other request. Such a
+// create is answered without a transaction: its only unjudged check is the callback probe, so
+// running the real handler would hold the block-loop mutex for a verdict it cannot give.
+function guardInertVoteBindingContract(request){
+    if(!request || request.guardInert !== true || !Array.isArray(request.params)) return null;
+    if(String(request.action == null ? '' : request.action).trim().toUpperCase() !== 'VOTE') return null;
+    let version = String(request.params[0] == null ? '' : request.params[0]).trim();
+    if(version !== '' && !/^0+$/.test(version)) return null;
+    let contract = String(request.params[VOTE_CALLBACK_CONTRACT_PARAM] == null ? '' : request.params[VOTE_CALLBACK_CONTRACT_PARAM]).trim();
+    return contract === '' ? null : contract;
+}
+
+// Wrap the quote surfaces' dryRunAction so a public guard-inert VOTE binding create returns the
+// guard-inert refusal before any transaction or mutex is taken.
+function withVoteBindingDryRunRefusal(methods){
+    let dryRunAction = methods.dryRunAction;
+    methods.dryRunAction = async function(request){
+        let contract = guardInertVoteBindingContract(request);
+        if(contract === null) return dryRunAction.call(this, request);
+        let blockIndex = await this.indexerDb.getLatestBlockIndex();
+        let blockTime  = await this.indexerDb.getBlockTime(blockIndex);
+        let status = 'invalid: ' + this.util.guardInertContractProbeError(contract, 'as a VOTE binding-poll callback');
+        return dryRunOutcome(blockIndex, blockTime,
+            { status: status, feeRecord: null, subCommands: null, oracleFeesOwed: null }, null, null);
+    };
+    return methods;
+}
+
 // Load indexer actions: every handler class, constructed onto the instance by the two
 // wiring runs in actions_class/handler_wiring.js.
 const { wireCoreHandlers, wireProtocolHandlers } = require('./actions_class/handler_wiring.js');
@@ -188,6 +219,7 @@ const installMethods     = require('./actions_class/install_methods.js');
 
 // The dry-run engine and both public read-only surfaces, bound below to the fee-quote policy above.
 const quoteSurfaceMethods = require('./actions_class/quote_surfaces.js');
+const { dryRunOutcome }   = require('./actions_class/dry_run_support.js');
 const voteCallbackProbeVm = require('./vote/callback_probe_vm.js');
 
 const PreflightMemo      = require('../chain/preflight_memo.js');
@@ -310,7 +342,8 @@ class Actions {
 // Install the split-out method families on the prototype NON-ENUMERABLE, the shape the class
 // body they came from produced (see actions_class/install_methods.js).
 installMethods(Actions.prototype, [transactionMethods, addressPrePass, feePricingMethods, feeViewMethods, dispatchMethods,
-    quoteSurfaceMethods({ classifyFeeQuoteAction, isBatchProbeForbiddenSubAction, FEE_QUOTE_STATIC, CONFIG_ENV })]);
+    withVoteBindingDryRunRefusal(
+        quoteSurfaceMethods({ classifyFeeQuoteAction, isBatchProbeForbiddenSubAction, FEE_QUOTE_STATIC, CONFIG_ENV }))]);
 
 // Static members ride on the class, so module.exports keeps one shape: the class itself.
 Object.assign(Actions, {

@@ -57,7 +57,7 @@
  * admitted below the height never widens and one admitted above always may, so
  * the rule for a given request is fixed the moment it is admitted and cannot
  * change under it mid-window. Evaluated on BTC heights; the responsible set is
- * BTC-only (attest.js returns [] off BTC before any of this is consulted).
+ * BTC-only (actions/attest/responsible_set.js returns [] off BTC before any of this is consulted).
  *
  * LOCAL COPY of the canonical map in xchain-documentation/protocol/constants.js
  * and the byte-twin of xchain-hub/src/attest_responsible_widening_activation.js; kept

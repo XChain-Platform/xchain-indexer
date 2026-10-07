@@ -28,11 +28,13 @@
  * INDEXER_COIN, INDEXER_NETWORK). Run it from the indexer root with the same
  * .env in place.
  *
+ * missed_count is charged by the reorg recompute's countExpiredMisses (pinned
+ * responsible set first, else the weighted, buried, floor-filtered re-derive).
+ *
  * Usage:  node scripts/repair-validator-stats.js
  *
  ********************************************************************/
 
-const crypto   = require('crypto');
 const dotenv   = require('dotenv');
 const path     = require('path');
 
@@ -43,19 +45,18 @@ dotenv.config();
 const config   = require('../src/config.js');
 const Database = require('../src/db');
 const Utility  = require('../src/utility.js');
+const ProviderRegistry  = require('../src/attestation/provider_registry.js');
+const attestationStats  = require('../src/rollback/attestation_stats.js');
 
-// Deterministic responsible validator set (mirrors attest.js
-// computeResponsibleSet: sort the capability validators by
-// SHA256(request_id || pubkey), take the top REDUNDANCY.
-function responsibleSet(requestId, validators, redundancy){
-    if(!validators || validators.length === 0)
-        return [];
-    let withHash = validators.map(pk => ({
-        pubkey: pk,
-        hash:   crypto.createHash('sha256').update(String(requestId), 'utf8').update(pk, 'utf8').digest('hex')
-    }));
-    withHash.sort((a, b) => (a.hash < b.hash) ? -1 : (a.hash > b.hash ? 1 : 0));
-    return withHash.slice(0, Math.max(1, Number(redundancy) || 1)).map(v => v.pubkey);
+// The missed_count charge is the reorg recompute's own routine, borrowed whole so
+// the pinned set, the stake-weighted dedup, the provider floor and the burial of the
+// snapshot height can never drift from the live expiry path.
+function missChargeContext(parent){
+    return Object.assign({}, attestationStats, {
+        config:           parent.config,
+        indexerDb:        parent.indexerDb,
+        providerRegistry: new ProviderRegistry(parent.config)
+    });
 }
 
 async function main(){
@@ -137,7 +138,7 @@ async function main(){
     let tip     = await db.getLatestBlockIndex();
     let validId = await db.getStatusId('valid');
     let expiredReqs = await db.doQuery(
-        `SELECT ar.request_id, ar.provider_id, ar.redundancy, ar.block_index, ar.deadline_block
+        `SELECT ar.request_id, ar.provider_id, ar.redundancy, ar.block_index, ar.deadline_block, ar.responsible_set_json
          FROM attests ar
          WHERE ar.version = 0
            AND ar.deadline_block < ?
@@ -151,24 +152,7 @@ async function main(){
            )`,
         [tip, validId]
     );
-    let validatorsByBlock = new Map();
-    for(let req of expiredReqs){
-        let reqBlock   = Number(req.block_index);
-        let validators = validatorsByBlock.get(reqBlock);
-        if(validators === undefined){
-            let vs     = await db.getValidatorsByCapability('attestation', reqBlock);
-            validators = (vs || []).map(v => String(v.pubkey).toLowerCase());
-            validatorsByBlock.set(reqBlock, validators);
-        }
-        let responsible = responsibleSet(String(req.request_id), validators, Number(req.redundancy));
-        let provider    = String(req.provider_id);
-        let expiryBlock  = Number(req.deadline_block) + 1;
-        for(let pubkey of responsible){
-            let s = ensure(pubkey, provider);
-            s.missed   += 1;
-            s.lastBlock = Math.max(s.lastBlock, expiryBlock);
-        }
-    }
+    await missChargeContext(parent).countExpiredMisses(expiredReqs, ensure);
 
     // Atomically swap in the recomputed table. slashed_count/quality_score are
     // Phase 4 (no producer yet) and recompute to 0.
@@ -202,9 +186,13 @@ async function main(){
     if(db.pool) await db.pool.end();
 }
 
-main().then(() => {
-    process.exit(0);
-}).catch(err => {
-    console.error('repair-validator-stats failed:', err && err.message ? err.message : err);
-    process.exit(1);
-});
+if(require.main === module){
+    main().then(() => {
+        process.exit(0);
+    }).catch(err => {
+        console.error('repair-validator-stats failed:', err && err.message ? err.message : err);
+        process.exit(1);
+    });
+}
+
+module.exports = { missChargeContext };
