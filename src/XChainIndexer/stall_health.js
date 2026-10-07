@@ -122,32 +122,31 @@ function atProcessableTip(isSynced, stallReason, stallClearsAtMs, now){
 // the whole rule is testable without a block loop. It returns the new record, or null
 // when there is no hold to carry.
 //
-// Three things reset it, and each is a case where the wait is NOT open-ended:
+// Four things reset it, and each is a case where the mirror wait is NOT open-ended:
 //   - no stall reason at all (the loop is advancing),
 //   - a different block at the head of the queue (the previous one committed),
 //   - a future-stamped block (waitingOnFutureBlock). That wait already has its own named
 //     bound, the block's own timestamp, it is consensus working as designed, and no
 //     mirror action can shorten it by one second. Accumulating it here would fire the
 //     ceiling on the healthiest case there is.
+//   - a bridge proof wait. It clears on a quorum checkpoint or origin endpoint, so a
+//     hub-mirror resync cannot shorten it either.
 function nextBarrierHold(prev, block, stallReason, stallClearsAtMs, now){
     if(!stallReason || block == null) return null;
+    if(stallReason === BRIDGE_PROOF_BARRIER) return null;
     if(waitingOnFutureBlock(stallReason, stallClearsAtMs, now)) return null;
     if(prev && prev.block === block)
         return { block: block, reason: stallReason, since: prev.since, notified: prev.notified };
     return { block: block, reason: stallReason, since: now, notified: false };
 }
 
-// True for the stall reasons a hub-mirror resubscribe could actually clear. Every mirror
-// barrier's reason ends in '_barrier' (price/oracle/match/call/call_presence/anchor_attest/
-// snapshot). The bridge proof barrier is the exception: it waits for a quorum checkpoint
-// or an origin endpoint, neither of which a local hub-mirror resync can produce. The host
-// faults deliberately do not use the suffix (vm_executor_unavailable,
-// anchor_reward_proof_unavailable, rollcall_proof_unavailable). A suffix rule plus that
-// exception keeps barriers added later covered by the shared naming convention.
+// True for the stall reasons named as hub-mirror barriers. Every mirror barrier's reason
+// ends in '_barrier' (price/oracle/match/call/call_presence/anchor_attest/snapshot); the
+// host faults deliberately do not (vm_executor_unavailable,
+// anchor_reward_proof_unavailable, rollcall_proof_unavailable). Proof waits opt out in
+// nextBarrierHold before the hold-ceiling remedy can request a mirror resync.
 function isMirrorBarrierReason(stallReason){
-    return typeof stallReason === 'string'
-        && stallReason !== BRIDGE_PROOF_BARRIER
-        && /_barrier$/.test(stallReason);
+    return typeof stallReason === 'string' && /_barrier$/.test(stallReason);
 }
 
 // Milliseconds the current hold has lasted, or 0 when nothing is held.
