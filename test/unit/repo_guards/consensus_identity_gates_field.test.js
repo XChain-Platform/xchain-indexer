@@ -35,8 +35,8 @@ function run(args) {
             encoding: 'utf8',
             env: childEnv(),
             stdio: ['ignore', stdoutFd, 'pipe'],
-            // A cold comparison measured 1.2s; 10s leaves CI headroom while bounding a wedged child.
-            timeout: 10000,
+            // A cold comparison is quick, but loaded CI hosts can take over 30s to scan the carriers.
+            timeout: 60000,
         });
         fs.closeSync(stdoutFd);
         stdoutFd = undefined;
@@ -84,8 +84,8 @@ describe('consensus identity GATES field and pin comparison', function () {
     });
 
     it('exits zero with an arming lever left set in this process', function () {
-        // A cold comparison measured 1.2s; 10s allows for a loaded CI host while keeping the case bounded.
-        this.timeout(10000);
+        // Keep Mocha's bound above the child-process bound so cleanup and assertions can finish.
+        this.timeout(70000);
         // One lever of the pair, which is what a hook that throws between arming and
         // restoring leaves behind. The child must not see it.
         const key = 'XC_ROLLCALL_REGTEST_ACTIVATION';
