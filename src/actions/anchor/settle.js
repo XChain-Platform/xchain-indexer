@@ -21,10 +21,18 @@
  *
  ********************************************************************/
 
-// Archive leg (v1): no DOGE-side reward write.
-async function creditArchiveReward(){}
+const { getLogger } = require('../../observability/index.js');
 
-// Bundle leg (v0): no DOGE-side reward write.
-async function creditBundleReward(){}
+function warnRewardSkipped(format){
+    getLogger().warn('\t ANCHOR v' + format + ' : DOGE-side reward is derived on BTC; reward skipped');
+}
+
+async function creditArchiveReward(handler, data, attQuorumMet, snapPubkeys, format){
+    warnRewardSkipped(format);
+}
+
+async function creditBundleReward(){
+    warnRewardSkipped(0);
+}
 
 module.exports = { creditArchiveReward, creditBundleReward };

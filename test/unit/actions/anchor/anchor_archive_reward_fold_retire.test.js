@@ -20,10 +20,12 @@ const sinon = require('sinon');
 
 const settle = require('../../../../src/actions/anchor/settle.js');
 const ar = require('../../../../src/consensus/gates/anchor_reward_gate.js');
+const observability = require('../../../../src/observability/index.js');
 const { stubActiveAt } = require('../../../helpers/gate_modules.js');
 
 const FOLD_GATE_KEY = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
 const PUBLISHER = '02'.repeat(33);
+const SKIP_WARNING = '\t ANCHOR v1 : DOGE-side reward is derived on BTC; reward skipped';
 
 function makeContext() {
     const indexerDb = {
@@ -48,15 +50,18 @@ describe('ANCHOR archive reward settlement writes nothing', function () {
 
     for(const deriveActive of [false, true]){
         for(const foldActive of [false, true]){
-            it('writes no reward with derive ' + deriveActive + ' and fold ' + foldActive, async function () {
+            it('warns and writes no reward with derive ' + deriveActive + ' and fold ' + foldActive, async function () {
                 sinon.stub(ar, 'isAnchorRewardDeriveActive').returns(deriveActive);
-                stubActiveAt(sinon, FOLD_GATE_KEY, foldActive);
+                const foldGate = stubActiveAt(sinon, FOLD_GATE_KEY, foldActive);
+                const warn = sinon.stub(observability.getLogger(), 'warn');
                 const { handler, indexerDb, data, snapPubkeys } = makeContext();
 
                 await settle.creditArchiveReward(handler, data, true, snapPubkeys, 1);
 
+                assert.strictEqual(foldGate.called, false);
                 assert.strictEqual(indexerDb.createValidatorReward.called, false);
                 assert.strictEqual(indexerDb.reconcileAnchorRewardWinner.called, false);
+                assert.ok(warn.calledOnceWithExactly(SKIP_WARNING));
             });
         }
     }

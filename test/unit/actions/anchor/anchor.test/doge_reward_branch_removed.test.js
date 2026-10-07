@@ -21,6 +21,10 @@ const { createBaseData } = require('../../../../fixtures/mocks');
 const { v0Params, THREE_CHAINS, armAnchor, disarmAnchor } = require('./helpers/anchor_fixtures.js');
 const arMod = require('../../../../../src/consensus/gates/anchor_reward_gate.js');
 const settle = require('../../../../../src/actions/anchor/settle.js');
+const observability = require('../../../../../src/observability/index.js');
+
+const BUNDLE_SKIP_WARNING = '\t ANCHOR v0 : DOGE-side reward is derived on BTC; reward skipped';
+const ARCHIVE_SKIP_WARNING = '\t ANCHOR v1 : DOGE-side reward is derived on BTC; reward skipped';
 
 describe('ANCHOR DOGE-side reward branch removed @regression @tier3', function () {
     let ctx;
@@ -42,9 +46,11 @@ describe('ANCHOR DOGE-side reward branch removed @regression @tier3', function (
         let db = { createValidatorReward: sinon.stub().resolves(true), reconcileAnchorRewardWinner: sinon.stub().resolves() };
         let handler = { indexerDb: db, config: { NETWORK: 'regtest', COIN: 'DOGE' } };
         let data = { PUBLISHER: 'a'.repeat(64), SNAPSHOT_BLOCK: 10, BLOCK_INDEX: 20, ACTION_INDEX: 0, MATCH_BATCH_SEQ: 1, NETWORK: 'regtest' };
+        let warn = sinon.stub(observability.getLogger(), 'warn');
         await settle.creditBundleReward(handler, data, true, { snapPubkeys: new Set([data.PUBLISHER]) });
         await settle.creditArchiveReward(handler, data, true, new Set([data.PUBLISHER]), 1);
         assert.ok(db.createValidatorReward.notCalled);
         assert.ok(db.reconcileAnchorRewardWinner.notCalled);
+        assert.deepStrictEqual(warn.args, [[BUNDLE_SKIP_WARNING], [ARCHIVE_SKIP_WARNING]]);
     });
 });
