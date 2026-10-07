@@ -26,7 +26,7 @@ module.exports = {
 
     // Sets ctx.guardFee, which settlement bills to SOURCE in GAS.
     async runControllerGuard(ctx){
-    let { data, error, format, isOwnershipGive, giveTokenInfo, balances } = ctx;
+    let { data, error, format, isOwnershipGive, giveTokenInfo, balances, dispenserInfo } = ctx;
 
         // Controller-bound GIVE token: the bound contract's `guard` must approve
         // opening a dispenser that sells this token before it opens. This guard is
@@ -46,6 +46,33 @@ module.exports = {
         // dedicated design for a per-buy split/veto over native-coin proceeds; it is
         // NOT implemented today. Do not read this comment as an enforced invariant.
         let guardFee = 0;
+
+        // A refill (format-2 edit that tops up GIVE_ESCROW) moves more of the bound
+        // token into escrow, so from the DISPENSER_REFILL activation it consults the
+        // same `trade` controller as the create. Below it the refill is unguarded,
+        // byte-identically; the protocol change is absent from the table until armed.
+        let isRefill = format==2 && dispenserInfo && giveTokenInfo &&
+                       !this.util.isNull(data['GIVE_ESCROW']) && this.util.bcgt(data['GIVE_ESCROW'], 0);
+        if(!error && isRefill && await this.actions.protocolChanges.isEnabled('DISPENSER_REFILL', data['BLOCK_INDEX'])){
+            let gasInfo = await this.indexerDb.getTokenInfo(this.config['GAS'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
+            let result  = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {
+                actionType:   'DISPENSER_REFILL',
+                tick:         dispenserInfo['GIVE_TICK'],
+                from:         data['SOURCE'],
+                to:           '',
+                amount:       data['GIVE_ESCROW'],
+                price:        dispenserInfo['GET_AMOUNT'],
+                proceedsTick: dispenserInfo['GET_TICK'],
+                data:         data,
+                gasInfo:      gasInfo,
+                gasBalances:  balances
+            });
+            if(result.error)
+                error = 'invalid: ' + result.error;
+            else
+                guardFee = result.guardFee;
+        }
+
         if(!error && format==0 && giveTokenInfo){
             let gasInfo = await this.indexerDb.getTokenInfo(this.config['GAS'], data['BLOCK_INDEX'], data['ACTION_INDEX']);
             let result  = await this.util.maybeRunControllerGuard(this.actions, this.indexerDb, {

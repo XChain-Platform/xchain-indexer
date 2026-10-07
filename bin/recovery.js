@@ -943,6 +943,18 @@ class AnchorRecovery {
         report.tombstones  += delta.tombstones;
     }
 
+    // Admission heights ride the archive row only when the hub serialized them;
+    // an absent or null value leaves the column at its legacy NULL.
+    async writeAdmitBlocks(table, keyColumns, keyValues, row){
+        let heights = ['admit_block_btc', 'admit_block_ltc', 'admit_block_doge']
+            .map(name => row[name] == null ? null : Number(row[name]));
+        if(heights.every(height => height === null)) return;
+        await this.db.doQuery(
+            `UPDATE ${table} SET admit_block_btc = ?, admit_block_ltc = ?, admit_block_doge = ?
+             WHERE ${keyColumns.map(column => column + ' = ?').join(' AND ')}`,
+            [...heights, ...keyValues]);
+    }
+
     async writeBatch(archive, report, network, anchorTxid, rewards){
         // Parity carve-out (documented): unlike cross_chain_matches/calls below,
         // capability_snapshots is rebuilt WITHOUT an id, deliberately. The archive
@@ -994,6 +1006,7 @@ class AnchorRecovery {
                          WHERE match_id = ?`,
                         [m.status, Number(m.effective_time), Number(m.finalizing_view) || 0,
                          m.validator_signatures, anchorTxid, m.match_id]);
+                    await this.writeAdmitBlocks('cross_chain_matches', ['match_id'], [m.match_id], m);
                 } else {
                     // Non-finalized incoming (a later batch retracts): only the lifecycle
                     // status moves. Content upgrades happen on the revive branch above,
@@ -1030,6 +1043,7 @@ class AnchorRecovery {
                      m.a_chain, Number(m.a_action_index), m.a_kind, m.a_tick, m.a_amount, m.a_filled_before, Number(m.a_ownership), m.a_payout_addr, (m.a_payout_legs != null ? String(m.a_payout_legs) : null),
                      m.b_chain, Number(m.b_action_index), m.b_kind, m.b_tick, m.b_amount, m.b_filled_before, Number(m.b_ownership), m.b_payout_addr, (m.b_payout_legs != null ? String(m.b_payout_legs) : null),
                      Number(m.effective_time), m.validator_signatures, m.status, Number(m.finalizing_view) || 0, anchorTxid]);
+                await this.writeAdmitBlocks('cross_chain_matches', ['match_id'], [m.match_id], m);
                 // Parity carve-out (documented, not recoverable): a/b_push_generation and
                 // cross_chain_calls.push_generation are reorg fences the archive does not
                 // serialize (MATCH_KEYS/CALL_KEYS omit them); recovered rows keep the
@@ -1144,6 +1158,7 @@ class AnchorRecovery {
                          Number(c.gas_limit), Number(c.cross_hops), Number(c.effective_time), c.result_status,
                          c.return_payload_b64, c.validator_signatures, Number(c.finalizing_view) || 0,
                          c.call_id, c.phase]);
+                    await this.writeAdmitBlocks('cross_chain_calls', ['call_id', 'phase'], [c.call_id, c.phase], c);
                 } else {
                     // Non-finalized incoming (e.g. a later batch retracts): only the
                     // lifecycle status moves; content upgrades happen on the finalized
@@ -1176,6 +1191,7 @@ class AnchorRecovery {
                      c.target_chain, Number(c.target_contract_index), c.method, c.params_json,
                      Number(c.gas_limit), Number(c.cross_hops), Number(c.effective_time), c.status,
                      c.result_status, c.return_payload_b64, c.validator_signatures, Number(c.finalizing_view) || 0]);
+                await this.writeAdmitBlocks('cross_chain_calls', ['call_id', 'phase'], [c.call_id, c.phase], c);
             }
             report.calls++;
         }

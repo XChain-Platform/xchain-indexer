@@ -125,6 +125,12 @@ module.exports = {
         return null;
     },
 
+    // The landing shortfall a block would wait on, or null when the barrier does not apply.
+    priceLandingShortfall(blockHeight, blockTime){
+        if(!this.enabled || !this.landingActiveAt(Number(blockHeight))) return null;
+        return this.landingShortfall(Number(blockHeight), Number(blockTime));
+    },
+
     landingSyncSatisfied(blockHeight, blockTime){
         if(!this.enabled) return true;
         if(!this.landingActiveAt(blockHeight)) return true;

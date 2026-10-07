@@ -248,6 +248,25 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
         assert.strictEqual(gate.regtest, row.regtest_time, 'regtest_time');
     });
 
+    it('the bundled VM ACCESSOR_OWN_KEY_ACTIVATION matches the indexer READONLY_ACCESSOR_OWN_KEY row per network', function(){
+        const { vm, full, pkgErr, refused } = resolveVmConsensus();
+        if(!vm || !full){
+            if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                assert.fail('XCHAIN_REQUIRE_SIBLINGS=1 but xchain-vm did not resolve to its full package surface (stale/absent vendored VM): ' + (pkgErr ? String(pkgErr.message) : 'package not present') + (refused ? '; sibling fallback refused: ' + refused.reason : ''));
+            this.skip(); return;
+        }
+        const { ACCESSOR_OWN_KEY_ACTIVATION: gate } = require('xchain-vm/src/readonly-accessors.js');
+        assert.notStrictEqual(gate, undefined,
+            'xchain-vm did not declare ACCESSOR_OWN_KEY_ACTIVATION (stale vendored copy? run npm run vendor:vm)');
+        const pc = require('../../../../src/protocol_changes.js');
+        const row = pc.get('protocol_changes.changes.READONLY_ACCESSOR_OWN_KEY');
+        // The VM spells an unarmed network null; the indexer spells it UNARMED.
+        const asRow = (t) => (t === null ? pc.UNARMED : t);
+        assert.strictEqual(asRow(gate.mainnet), row.mainnet_time, 'mainnet_time');
+        assert.strictEqual(asRow(gate.testnet), row.testnet_time, 'testnet_time');
+        assert.strictEqual(asRow(gate.regtest), row.regtest_time, 'regtest_time');
+    });
+
     it('the indexer NATIVE_FEE_PRICE_TIME_GATE flag-day matches the coordinated 2.0.0 timestamp', function(){
         // Deterministic (time-gated) price_snapshots selection for native-coin fee
         // validation on non-reference chains flips at this flag-day. It is an indexer-internal

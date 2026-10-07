@@ -124,10 +124,17 @@ module.exports = {
             lastId = 0;
             this._drainPositions[table] = 0;
         }
-        let readyCeiling = (this._readyMaxIds && this._readyMaxIds[table] != null)
-            ? Number(this._readyMaxIds[table]) : NaN;
+        let readyCeiling = this.readyCeilingFor(table);
         lastId = await this.restartCursorAboveHubCeiling(table, scope, lastId, readyCeiling);
         return { lastId: lastId, readyCeiling: readyCeiling };
+    },
+
+    // The ceiling the hub advertised for a table in its ready frame, or NaN when it named
+    // none that can be trusted. Only a non-negative integer counts: a null, a string, a
+    // boolean or a negative number must not coerce to a real id and reposition a drain.
+    readyCeilingFor(table) {
+        let ceiling = this._readyMaxIds ? this._readyMaxIds[table] : undefined;
+        return (typeof ceiling === 'number' && Number.isInteger(ceiling) && ceiling >= 0) ? ceiling : NaN;
     },
 
     // A position above the source's advertised ceiling cannot belong to its current id
@@ -255,7 +262,7 @@ module.exports = {
         if ((now - drain.lastProgressAt) < this.bootstrapProgressMs) return;   // short drains stay silent
         drain.lastProgressAt = now;
         let elapsedS = Math.max(1, Math.round((now - drain.drainStartedAt) / 1000));
-        let ceiling  = Number(this._readyMaxIds && this._readyMaxIds[drain.table]);
+        let ceiling  = this.readyCeilingFor(drain.table);
         let share    = (Number.isFinite(ceiling) && ceiling > 0 && drain.lastId > 0)
                          ? ' (~' + Math.min(99, Math.floor((drain.lastId / ceiling) * 100)) + '% of the hub id space)'
                          : '';
@@ -273,7 +280,7 @@ module.exports = {
         // One line up front for a table big enough to take a while, so a cold start shows
         // the drain BEGINNING rather than only its result. The counter above then reports
         // every bootstrapProgressMs until it lands.
-        let announcedCeiling = Number(this._readyMaxIds && this._readyMaxIds[table]);
+        let announcedCeiling = this.readyCeilingFor(table);
         if (Number.isFinite(announcedCeiling) && announcedCeiling > PAGE_LIMIT)
             getLogger().info('HubDbSync: draining ' + table + ' from id ' + drain.lastId +
                 ' (the hub reports ' + announcedCeiling + ' as its highest id)');
