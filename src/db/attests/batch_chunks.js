@@ -54,10 +54,12 @@ module.exports = {
     // before the partition is emptied by junk filling the low slots and the honest
     // publisher's own head and chunks fall outside the window. That is the reverse of the
     // archive rail's content-addressed read, where a copy is made from bytes already
-    // on-chain and so can never sort ahead of the original it copied. After the partition
-    // the bound is free: one publisher's valid rows under one key are their head plus one
-    // row per slot (a second head and a refilled slot are both stamped invalid, and this
-    // query returns only 'valid'), which the wire geometry ceiling already bounds.
+    // on-chain and so can never sort ahead of the original it copied.
+    //
+    // THE LIMIT ALSO NEEDS THE ENCODING FILTER (`geometry`): a failed head leaves its
+    // continuations valid, so per (key, author) a republish adds a second valid row per
+    // slot. Per (key, author, encoding) one valid head plus one row per slot fits
+    // ATTEST_BATCH_MAX_CHUNKS; heads of every encoding stay for the duplicate-head test.
     //
     // ORDER BY slot then action_index makes the head pick and the duplicate resolution
     // deterministic across nodes: within a slot the EARLIEST action wins, matching
@@ -67,9 +69,13 @@ module.exports = {
     // @param {string} batchKey the 64-hex batch key (attests.request_id on a batch row)
     // @param {string} [author] broadcaster address to scope to; omitted returns every
     //                          publisher's rows unbounded, the legacy shape
+    // @param {{totalChunks:number, batchCrc32:string}} [geometry] the landing wire's
+    //                          encoding; with an author, limits continuations to it and
+    //                          is the only form that carries the row limit
     // @returns {Object[]} rows shaped for attest_batch_wire's coverage and reassembly
-    async getAttestBatchChunks(batchKey, author){
-        let scoped = (author !== undefined && author !== null && String(author).length > 0);
+    async getAttestBatchChunks(batchKey, author, geometry){
+        let scoped  = (author !== undefined && author !== null && String(author).length > 0);
+        let encoded = scoped && geometry != null && geometry.totalChunks != null && geometry.batchCrc32 != null;
         let query = `SELECT c.action_index, c.version, c.request_id,
                             c.batch_window_start     AS window_start,
                             c.batch_window_end       AS window_end,
@@ -88,12 +94,42 @@ module.exports = {
                        AND c.version IN (${abw.ATTEST_BATCH_HEAD_VERSION}, ${abw.ATTEST_BATCH_CONTINUATION_VERSION})
                        AND c.batch_chunk_index IS NOT NULL
                        AND s.status = 'valid'` +
-                     (scoped ? ` AND cadr.address = ?` : ``) + `
+                     (scoped ? ` AND cadr.address = ?` : ``) +
+                     // The predicate of actions/attest/batch.js continuationsOfHead, plus every head.
+                     (encoded ? ` AND (c.version = ${abw.ATTEST_BATCH_HEAD_VERSION}` +
+                                ` OR (c.batch_total_chunks = ? AND c.batch_crc32 = ?))` : ``) + `
                      ORDER BY c.batch_chunk_index ASC, c.action_index ASC` +
-                     (scoped ? ` LIMIT ${ATTEST_BATCH_CHUNK_ROW_LIMIT}` : ``);
+                     (encoded ? ` LIMIT ${ATTEST_BATCH_CHUNK_ROW_LIMIT}` : ``);
         let params = [String(batchKey || '').toLowerCase()];
         if(scoped) params.push(String(author));
+        if(encoded) params.push(Number(geometry.totalChunks), String(geometry.batchCrc32));
         return await this.doQuery(query, params);
+    },
+
+    // Report whether a publisher holds a valid continuation in this slot in ANY encoding,
+    // the no-head duplicate rule the encoding-filtered read cannot answer. An unresolvable
+    // author holds nothing, as actions/attest/batch.js authoredBy scopes it.
+    //
+    // @param {string} batchKey the 64-hex batch key
+    // @param {string} author the broadcaster address
+    // @param {number} chunkIndex the slot
+    // @returns {Promise<boolean>}
+    async attestBatchSlotTaken(batchKey, author, chunkIndex){
+        if(author === undefined || author === null || String(author).length === 0) return false;
+        let rows = await this.doQuery(
+            `SELECT c.action_index
+             FROM attests c
+             JOIN index_statuses s ON s.id = c.status_id
+             LEFT JOIN actions         cact ON cact.action_index = c.action_index
+             LEFT JOIN index_addresses cadr ON cadr.id           = cact.source_id
+             WHERE c.request_id = ?
+               AND c.version = ${abw.ATTEST_BATCH_CONTINUATION_VERSION}
+               AND c.batch_chunk_index = ?
+               AND s.status = 'valid'
+               AND cadr.address = ?
+             LIMIT 1`,
+            [String(batchKey || '').toLowerCase(), Number(chunkIndex), String(author)]);
+        return Array.isArray(rows) && rows.length > 0;
     },
 
     // Stamp a verdict on a batch HEAD row after the fact, the ANCHOR archive rule

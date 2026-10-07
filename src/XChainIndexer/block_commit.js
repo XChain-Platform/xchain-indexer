@@ -22,25 +22,30 @@
  ********************************************************************/
 
 const { getLogger } = require('../observability/index.js');
+const AddressRetry  = require('../hub/hub_push_queue/address_retry.js');
 
 module.exports = {
 
     // Deliver the hub pushes staged (and durably written via enqueueHubPushTx) during the block
     // transaction that just committed. Each push_type maps to the same HubClient method the
-    // HubPushQueue drain uses; on success the durable pending_hub_pushes row is dropped, on any
-    // failure it is left for HubPushQueue to retry with backoff. Never throws into the block loop.
+    // HubPushQueue drain uses; on success the row is settled (dropped once every unpinned
+    // candidate hub has it, see settleLiveDelivery), on any failure it is left for
+    // HubPushQueue to retry with backoff. Never throws into the block loop.
     async deliverStagedHubPushes(){
         let staged = this.indexerDb.takeStagedHubPushes();
         if(!staged || staged.length === 0 || !this.hubClient) return;
+        let live = AddressRetry.liveFacade(this.hubPushQueue);
         for(let entry of staged){
+            let target = live ? live.liveDeliveryTarget(this.hubClient) : { client: this.hubClient, address: null };
+            let client = target.client;
             try {
                 if(entry.pushType === 'price_round'){
-                    await this.hubClient.pushPriceRound(entry.payload);
+                    await client.pushPriceRound(entry.payload);
                 } else if(entry.pushType === 'oracle_price'){
-                    await this.hubClient.pushOraclePrice(entry.payload);
+                    await client.pushOraclePrice(entry.payload);
                 } else if(entry.pushType === 'price_batch'){
                     // PRICE v0: a signed window of rounds, delivered to pushpricebatch.
-                    await this.hubClient.pushPriceBatch(entry.payload);
+                    await client.pushPriceBatch(entry.payload);
                 } else if(entry.pushType === 'attest_batch'){
                     // ATTEST v5: a signed window of finalized attestation responses parsed
                     // off the DOGE rail, delivered to the hub's `pushattestbatch`, which
@@ -53,12 +58,13 @@ module.exports = {
                     //   source_chain, network, window_start, window_end, row_count,
                     //   btc_block_height, rows[], sigs[], action_index, block_index,
                     //   block_time, push_generation
-                    await this.hubClient.pushAttestBatch(entry.payload);
+                    await client.pushAttestBatch(entry.payload);
                 } else {
                     // Unknown type: leave the durable row for HubPushQueue rather than guess.
                     continue;
                 }
-                if(entry.id != null) await this.indexerDb.markHubPushDelivered(entry.id);
+                if(entry.id != null && live) await live.settleLiveDelivery(entry.id, target.address);
+                else if(entry.id != null) await this.indexerDb.markHubPushDelivered(entry.id);
             } catch(err){
                 // Live delivery failed; the durable row stays for HubPushQueue's backoff retry.
                 getLogger().warn('Staged hub push ' + entry.pushType + ' row ' + entry.id +
