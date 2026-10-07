@@ -52,7 +52,7 @@
  * it. Pinning the collation on ONE side IS the fork this gate exists to
  * prevent, which is why this file is a byte-identical twin in both repos and
  * is listed in the cross-repo twin guard
- * (xchain-sync/test/unit/rollback-coverage.test.js). BOTH fleets must deploy
+ * (xchain-sync/test/unit/rollback_coverage.test.js). BOTH fleets must deploy
  * before any height is armed.
  *
  * The schema expectations the startup check enforces live here too, rather

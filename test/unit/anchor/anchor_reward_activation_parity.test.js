@@ -13,15 +13,16 @@
  **********************************************************************
  * test/unit/anchor/anchor_reward_activation_parity.test.js
  *
- * CONSENSUS-CRITICAL twin parity for anchor_reward_activation.js.
+ * CONSENSUS-CRITICAL twin parity for src/consensus/gates/anchor_reward_gate.js
+ * (registry key anchor_reward_activation).
  *
  * The hub SIGNS the anchor-publish reward into the XANCPUB attestation; the indexer
  * RE-DERIVES it (never from the wire) at/after the ANCHOR_REWARD flag-day. Both copies
  * must agree on the activation heights, the frozen reward amount, and the gate predicate,
  * or the two sides credit rewards on different anchors (fork). This suite enforces:
  *   1. export parity (map + amount + isAnchorRewardActive behavior), and
- *   2. source byte-identity APART FROM the single self-referential "twin lives in ..."
- *      header line, which legitimately names the OTHER copy and so differs per file.
+ *   2. full source byte-identity with no exempt line: the shared header names "the same
+ *      path in the hub" in both copies, so the twins carry no per-copy line at all.
  * The byte check is what catches accidental comment/logic drift between the twins.
  ********************************************************************/
 
@@ -34,13 +35,9 @@ const path   = require('path');
 const indexer = require('../../../src/consensus/gates/anchor_reward_gate.js');
 const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.js');
 
-// The self-reference line each copy carries naming its twin (the OTHER file). It is
-// intentionally different per copy and is the only permitted divergence.
-// Matched on the repo-qualified PATH, not on the prose that introduces it: the
-// sentence wraps, so "lives in" ends one line and the path begins the next, and a
-// pattern anchored to the prose matched neither line. It read as green only while
-// the hub copy still pointed at itself, i.e. exactly when the pointer was wrong.
-const TWIN_REF = /xchain-\S+\/src\/anchor_reward_activation\.js/;
+// Name the twin file once; the shared header names "the same path in the hub" in both
+// copies by design, so a hub copy pointing at the hub is correct, not a stale pointer.
+const GATE_REL = 'src/consensus/gates/anchor_reward_gate.js';
 
 describe('anchor_reward_activation twin parity @regression @tier1', function () {
     it('indexer exports the frozen reward amount and armed BTC mainnet height', function () {
@@ -129,6 +126,7 @@ describe('anchor_reward_activation twin parity @regression @tier1', function () 
             }
         });
 
+        // Keep this title verbatim (a suite-title pin holds it); the compare is raw, with no exempt line.
         it('hub and indexer source are byte-identical apart from the twin-reference line', function () {
             let hubFile;
             const sibling = siblingCheckout(__dirname, '../../../../xchain-hub/src/consensus/gates/anchor_reward_gate.js');
@@ -139,15 +137,15 @@ describe('anchor_reward_activation twin parity @regression @tier1', function () 
                     throw new Error('anchor-reward twin byte parity cannot run: xchain-hub sibling missing (' + e.message + ')');
                 return this.skip();
             }
-            const norm = (p) => fs.readFileSync(p, 'utf8')
-                .split(/\r?\n/)
-                .map(l => TWIN_REF.test(l) ? '<TWIN-REF>' : l)
-                .join('\n');
-            assert.strictEqual(
-                norm(path.join(__dirname, '../../../src/consensus/gates/anchor_reward_gate.js')),
-                norm(hubFile),
-                'anchor_reward_activation.js drifted between hub and indexer (only the "twin lives in ..." line may differ)'
-            );
+            // Report the differing line numbers, so a drift names where it is.
+            const mine   = fs.readFileSync(path.join(__dirname, '../../../', GATE_REL), 'utf8').split('\n');
+            const theirs = fs.readFileSync(hubFile, 'utf8').split('\n');
+            assert.strictEqual(mine.length, theirs.length,
+                GATE_REL + ' differs in line count between hub and indexer; something was added on one side only');
+            const differing = [];
+            for (let i = 0; i < mine.length; i++) if (mine[i] !== theirs[i]) differing.push(i + 1);
+            assert.deepStrictEqual(differing, [],
+                GATE_REL + ' drifted between hub and indexer; regenerate the hub copy from the indexer copy, never hand-edit it');
         });
     });
 });

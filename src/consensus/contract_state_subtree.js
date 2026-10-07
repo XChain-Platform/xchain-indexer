@@ -19,7 +19,7 @@
  * block paths stay in each repo's stateCommitment.js, which passes an `smt` in.
  * That is what lets this file be BYTE-IDENTICAL in xchain-indexer/src (SOURCE)
  * and xchain-sync/src (FOLLOWER), drift-guarded by the cross-repo twin loop in
- * xchain-sync/test/unit/rollback-coverage.test.js. The follower recomputes and
+ * xchain-sync/test/unit/rollback_coverage.test.js. The follower recomputes and
  * HALTs on divergence, so any drift here is a fleet halt rather than a fork,
  * and byte-identity is how it is prevented instead of detected.
  *
@@ -42,7 +42,7 @@
  *
  * Rollback needs no repair path for the same structural reason. Reorg deletes
  * contract_state AND state_tree_roots rows >= the orphan height (both are
- * rollback:'block' in tableLifecycle.js) while state_tree_nodes is
+ * rollback:'block' in table_lifecycle.js) while state_tree_nodes is
  * copy-on-write and rollback-exempt, so the surviving fork-point row still
  * anchors a complete tree. The next computed block threads from block-1's
  * STORED contract_state_root, which is by construction the root of the chain
