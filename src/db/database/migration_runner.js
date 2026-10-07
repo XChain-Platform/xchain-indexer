@@ -34,6 +34,7 @@ const { CONFIG_ENV } = require('../../config.js');
 // Object-level half of the backdating guard: plain functions over statement lists, so
 // they are required directly rather than installed on the prototype.
 const { reorderVerdict, describeReorder } = require('./migration_reorder.js');
+const { assertNoLiveColumnLoss } = require('./migration_live_schema_guard.js');
 // The class itself, for the statics these methods read. db/index.js publishes it before it
 // requires any part, so this resolves to the finished class rather than a half-built export.
 const Database = require('../index.js');
@@ -315,6 +316,7 @@ async function applyMigrationFile(self, conn, file, raw, checksum, mode, ctx){
                 offender.slice(0, 160) + (offender.length > 160 ? '...' : '') + '". ' +
                 'Re-tag the file `-- xchain:migration mode=manual` and apply it deliberately via `node src/db/migration/migrate.js`.');
         }
+        await assertNoLiveColumnLoss(conn, file, statements);
     }
     await ctx.activateQueryTimeout();
     // Marked before the first statement, so a file that fails partway still retires the connection.
