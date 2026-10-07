@@ -44,7 +44,7 @@ class Dispenser_Expire {
         // list overlay never applied. Behavior-neutral today (nothing below reads those
         // two fields) and set on every dispatch (utility.js processExpirations); see the
         // fuller note in dispenser_close.js.
-        let dispenser = await this.indexerDb.getDispenserInfo(this.config['COIN'], data['ACTION_INDEX'], data['BLOCK_TIME']);
+        let dispenser = await this.indexerDb.getDispenserInfo(this.config['COIN'], data['ACTION_INDEX'], data['BLOCK_TIME'], data['BLOCK_INDEX']);
 
         // Only proceed if we have a valid dispenser
         if(dispenser){
