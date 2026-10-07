@@ -351,8 +351,8 @@ addGate('stateHash.BET_STATUS_STATE_HASH_ACTIVATION', 'height', {
 // use this set: the invalid_archive stamp, its reorg reset, the forward
 // updated_rows class and the state-hash class below all target the same rows.
 // SINGLE SOURCE OF TRUTH for xchain-indexer rollback.js + this file's class 6,
-// and (via the byte-identical xchain-sync twin) ClientRollback.js +
-// updatedRows.js. db.js/recovery.js carry matching predicates.
+// and (via the byte-identical xchain-sync twin) src/client/rollback.js +
+// src/server/updated_rows.js. db.js/recovery.js carry matching predicates.
 addGate('stateHash.ARCHIVE_HEAD_VERSIONS', 'constant', [1]);
 
 // SQL fragment form, spliced as `p.version ` + ARCHIVE_HEAD_VERSIONS_SQL.
