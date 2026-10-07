@@ -25,6 +25,21 @@
 // name on Database.prototype.
 const writes           = require('./writes.js');
 const dispenseMatching = require('./dispense_matching.js');
+const gateRegistry     = require('../../consensus/gate_registry');
+
+const DELAY_PROTOCOL_TIME_GATE = 'dispenser_delay_protocol_time_activation.DISPENSER_DELAY_PROTOCOL_TIME_ACTIVATION';
+
+function delayUsesProtocolTime(db, block_index){
+    let height = (block_index !== undefined && block_index !== null) ? block_index : db.blockIndex;
+    return height !== undefined && height !== null && gateRegistry.activeAt(
+        DELAY_PROTOCOL_TIME_GATE, db.config['NETWORK'], db.config['COIN'], height, null);
+}
+
+async function dispenserDelayStart(db, row, useProtocolTime){
+    if(!useProtocolTime)
+        return row.block_time;
+    return db.protocolTimeForStoredBlock(row.block_index);
+}
 
 // The getDispenserInfo read: one dispenser by coin and action_index with every column
 // the caller exposes, its own status and the status of its latest dispenser_statuses row.
@@ -165,7 +180,7 @@ module.exports = {
     // sums the same refill rows itself at 64dp and is the single source for them. This
     // must not accumulate a give_escrow its only caller then drops, at 0dp, which would be a
     // lossy dead compute that a later refactor would have wired up as an accounting bug.
-    async getDispenserEdits(action_index, block_time){
+    async getDispenserEdits(action_index, block_time, block_index){
         // Define empty edit object
         let edit  = {
             expiration: false,
@@ -176,6 +191,7 @@ module.exports = {
                         e1.expiration,
                         e1.allow_list,
                         e1.block_list,
+                        b1.block_index,
                         b1.block_time
                     FROM 
                         dispenser_edits e1
@@ -189,13 +205,15 @@ module.exports = {
                         e1.action_index ASC`;
         let args  = [action_index, 'valid'];
         let results = await this.doQuery(query, args);
+        let useProtocolTime = delayUsesProtocolTime(this, block_index);
         if(results.length > 0){
             for(let row of results){
                 // updating expiration is immediately active
                 if(!this.util.isNull(row.expiration) && this.util.isNumeric(row.expiration))
                     edit.expiration  = Number(row.expiration);
                 // Determine if the list edits are active or not
-                let active = this.util.bcgt(block_time, this.util.bcadd(row.block_time, this.config['DISPENSER_LIST_DELAY']));
+                let delayStart = await dispenserDelayStart(this, row, useProtocolTime);
+                let active = delayStart !== false && this.util.bcgt(block_time, this.util.bcadd(delayStart, this.config['DISPENSER_LIST_DELAY']));
                 if(active){
                     if(!this.util.isNull(row.allow_list) && this.util.isNumeric(row.allow_list))   
                         edit.allow_list  = Number(row.allow_list);
@@ -247,12 +265,13 @@ module.exports = {
     },
 
     // Lookup items that need to be cancelled and return a list
-    async findCancelledDispensers(block_time){
+    async findCancelledDispensers(block_time, block_index){
         let cancels = [];
         // Find dispensers where latest status is 'cancelling`
         let args  = [];
         let query = `SELECT 
                         m.action_index,
+                        b1.block_index,
                         b1.block_time
                     FROM 
                         dispensers m
@@ -272,10 +291,13 @@ module.exports = {
                         s2.status='cancelling'
                     ORDER BY m.action_index ASC`
         let results = await this.doQuery(query, args);
+        let useProtocolTime = delayUsesProtocolTime(this, block_index);
         if(results.length > 0){
-            for(let row of results)
-                if(this.util.bcgt(block_time, this.util.bcadd(row.block_time, this.config['DISPENSER_CLOSE_DELAY'])))
+            for(let row of results){
+                let delayStart = await dispenserDelayStart(this, row, useProtocolTime);
+                if(delayStart !== false && this.util.bcgt(block_time, this.util.bcadd(delayStart, this.config['DISPENSER_CLOSE_DELAY'])))
                     cancels.push(Number(row.action_index));
+            }
         }
         return cancels;
     },
