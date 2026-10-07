@@ -143,22 +143,6 @@ module.exports = {
     // the pass (abandonBlock); `committed` stays true when only a post-commit step threw.
     async processBlock(blk, lastIndexerBlock, lastDecoderBlock, debugTimer){
         let blockToParse = blk.blockToParse;
-        try {
-            let result;
-            do {
-                result = await this.processBlockAttempt(blk, lastIndexerBlock, lastDecoderBlock, debugTimer);
-            } while(result.retry);
-            return result;
-        } finally {
-            this.clearRejectedMirroredRows(blockToParse);
-        }
-    },
-
-    // One pass at the block. A malformed mirrored row rolls the block back and returns
-    // { retry: true } once per distinct row, so the re-run skips it; a row rejected twice
-    // falls through to the ordinary abandon.
-    async processBlockAttempt(blk, lastIndexerBlock, lastDecoderBlock, debugTimer){
-        let blockToParse = blk.blockToParse;
         let stateCommitActive = await this.openBlockTransaction(blockToParse);
         let committed = false;
         try {
@@ -197,12 +181,6 @@ module.exports = {
             lastDecoderBlock = await this.afterBlockCommit(blk, [ledger, actions, contracts], lastDecoderBlock, debugTimer);
             return { committed: committed, stop: false, lastDecoderBlock: lastDecoderBlock };
         } catch(error){
-            if(!committed && error && error.name === 'MirroredRowError' &&
-               this.rejectMirroredRow(blockToParse, error)){
-                await this.indexerDb.rollbackTransaction();
-                this.priceBarrierSkipped = false;
-                return { committed: false, stop: false, retry: true, lastDecoderBlock: lastDecoderBlock };
-            }
             await this.abandonBlock(error, committed ? blockToParse : lastIndexerBlock);
 
             // Exit the inner catch-up loop on failure. lastIndexerBlock was not advanced
