@@ -121,3 +121,4 @@ describe('state_key binary-collation gate (contract_hash preimage + VM reload) @
         });
     });
 });
+
