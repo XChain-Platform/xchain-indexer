@@ -45,8 +45,11 @@
 const v0         = require('./v0.js');
 const batchSigs  = require('./batch_signatures.js');
 const v1         = require('./v1.js');
-// The trailing-data refusal is a new validity rule, so it arms on a flag day rather than
-// re-judging history: the mirror admission producer era, read on the batch's own anchor.
+const priceV2    = require('./price_batch_compression.js');
+const gateRegistry = require('../../consensus/gate_registry');
+const PRICE_WIRE_TRAILING_KEY = 'price_wire_trailing_activation.PRICE_WIRE_TRAILING_ACTIVATION';
+// The inflated-body trailing-data refusal is a new validity rule, so it arms on a flag day
+// rather than re-judging history: the mirror admission era, read on the batch's own anchor.
 const { isAdmissionEra } = require('../../consensus/gates/mirror_admission_gate.js');
 
 const { getLogger } = require('../../observability/index.js');
@@ -93,13 +96,14 @@ class Price {
     // Parse PRICE v0: validator BATCH snapshot, one signed action carrying an hourly
     // window of full round bodies.
     //
-    // THE ORDER OF THE STEPS BELOW IS ITSELF CONSENSUS: decompression, structure,
-    // straddle, signatures, storage, push. Each step's inputs are produced by the one
-    // before it, so reordering two of them changes which wires a node accepts.
+    // THE ORDER OF THE STEPS BELOW IS ITSELF CONSENSUS: decompression, compressed-wire
+    // framing, structure, straddle, signatures, storage, push. Each step's inputs are
+    // produced by the one before it, so reordering two of them changes which wires a
+    // node accepts.
     //
-    // There is no activation gate: a batch is valid on its own merits. Nothing pre-launch
-    // needs protecting (mainnet has no chain and the testnet chains carry no protocol
-    // transactions), so a gate here would only be machinery someone must remember to arm.
+    // There is no activation gate for the batch format itself: a canonically framed batch
+    // is valid on its own merits. Later validity tightenings still carry their own flag days
+    // so replay preserves the verdict older nodes gave historical non-canonical wires.
     //
     // This derives no rewards. The retired per-round wire carried an inline oracle_round
     // derivation that only ever fired for PRICE landing on BTC, which production never
@@ -110,6 +114,8 @@ class Price {
         data['VERSION'] = 0;
 
         let inflated = v0.inflateBatchFields(params, error);
+        if(!inflated.error)
+            inflated.error = this.validateCompressedWireFieldCount(params, data);
         // Parse the batch's window bounds and round list from the wire fields
         let batch    = v0.parseBatchBody(this.config, data, inflated.fields, inflated.error);
         error        = batch.error;
@@ -139,6 +145,20 @@ class Price {
         await this.pushBatch(data, batch, roundsWire, error);
 
         await this.mapper.createMappings(data);
+    }
+
+    // A compressed PRICE batch has exactly three decoder params: VERSION, Z and
+    // payload. inflateBatchFields consumes only the payload field, so without this
+    // check any later fields disappear before structural validation and create
+    // byte-distinct wire spellings for the same signed batch. The action's landing
+    // height selects the rule because these are outer action fields, not signed batch
+    // body fields. Historical wires keep their old verdict until the registry row arms.
+    validateCompressedWireFieldCount(params, data){
+        if(params[1] !== priceV2.PRICE_BATCH_COMPRESSION_MARKER || params.length <= 3)
+            return null;
+        const active = gateRegistry.activeAt(PRICE_WIRE_TRAILING_KEY, this.config['NETWORK'],
+            this.config['COIN'], data['BLOCK_INDEX'], null);
+        return active ? 'invalid: trailing data after compressed batch payload' : null;
     }
 
     // STRICT PARAMETER LENGTH. Nothing downstream checks whether the field list was
