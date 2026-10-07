@@ -10,7 +10,6 @@ const gateRegistry = require('../../../src/consensus/gate_registry');
 const ed25519 = require('../../../src/consensus/ed25519.js');
 const swq = require('../../../src/consensus/stake_weighted_quorum.js');
 const ar = require('../../../src/consensus/gates/anchor_reward_gate.js');
-const observability = require('../../../src/observability/index.js');
 const { deriveFoldWrapper } = require(
     '../../../src/actions/anchor/anchor_action_query/archive_query.js');
 const { v3Params, vectors } = require('../actions/anchor/anchor.test/helpers/anchor_v3_fixtures.js');
@@ -58,10 +57,9 @@ describe('ANCHOR v3 fold parse', function(){
         sinon.restore();
     });
 
-    it('parses the frozen wire, warns, and skips the DOGE-side bundle reward', async function(){
+    it('parses the frozen wire into chain rows and one archive row', async function(){
         const { indexer, handler } = fixture();
         const data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 3, COIN: 'DOGE' });
-        const warn = sinon.stub(observability.getLogger(), 'warn');
 
         await handler.parse(validV3Params().params, data, null);
 
@@ -71,10 +69,9 @@ describe('ANCHOR v3 fold parse', function(){
             ['BTC', 'DOGE', 'LTC']);
         assert.strictEqual(rows(indexer)[3].CHAIN, null);
         assert.strictEqual(rows(indexer)[3].MATCH_BATCH_SEQ, '42');
-        assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
-        assert.ok(indexer.indexerDb.reconcileAnchorRewardWinner.notCalled);
-        assert.ok(warn.calledOnceWithExactly(
-            '\t ANCHOR v0 : DOGE-side reward is derived on BTC; reward skipped'));
+        assert.ok(indexer.indexerDb.createValidatorReward.calledOnce);
+        assert.strictEqual(indexer.indexerDb.createValidatorReward.firstCall.args[2],
+            'anchor_bundle');
     });
 
     it('extends only the wrapper section canonical with the archive fields', async function(){
