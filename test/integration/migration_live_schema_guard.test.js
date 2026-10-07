@@ -40,15 +40,27 @@ process.env.INDEXER_COIN    = process.env.INDEXER_COIN    || 'BTC';
 process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const assert  = require('assert');
+const crypto  = require('crypto');
 const fs      = require('fs');
 const path    = require('path');
 const mariadb = require('mariadb');
 
 const Database = require('../../src/db');
-const dbc = require('./setup/db-connection');
-const { DB_HOST, DB_PORT, DB_USER, DB_PASS } = dbc;   // empty DB_PASS => self-skip
+const DB_HOST = process.env.TEST_DB_HOST || '127.0.0.1';
+const DB_PORT = parseInt(process.env.TEST_DB_PORT || '3306');
+const DB_USER = process.env.TEST_DB_USER || 'root';
+const DB_PASS = process.env.TEST_DB_PASS || '';
+const DB_BASE = process.env.TEST_INDEXER_DB || 'xchain_test_indexer';
 
-const DB_NAME = dbc.scopedDbName(dbc.INDEXER_DB, dbc.fileKey(__filename));
+function scopedDbName() {
+    const suffix = '_migration_guard_' + crypto.createHash('sha1')
+        .update(__filename).digest('hex').slice(0, 6);
+    if (DB_BASE.length + suffix.length <= 64) return DB_BASE + suffix;
+    const baseDigest = crypto.createHash('sha1').update(DB_BASE).digest('hex').slice(0, 6);
+    return DB_BASE.slice(0, 64 - suffix.length - 7) + '_' + baseDigest + suffix;
+}
+
+const DB_NAME = scopedDbName();
 const MIGRATIONS_DIR = path.join(__dirname, '../../src/sql/migrations');
 
 const PUBKEYS   = '2026-07-24-pubkeys-widen-uncompressed.sql';
@@ -234,7 +246,8 @@ function schemaHarness() {
     });
 
     before(async function () {
-        if (!DB_PASS) this.skip();
+        if (process.env.TEST_DB_PASS === undefined) this.skip();
+        assert.ok(DB_PASS, 'TEST_DB_PASS must be non-empty when the DB-backed suite is enabled');
         h.admin = await mariadb.createConnection({
             host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS,
         });
