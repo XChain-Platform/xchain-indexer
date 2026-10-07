@@ -21,7 +21,7 @@
 
 'use strict';
 
-const attestBcastFee  = require('./attest_broadcast_fee_gate.js');
+const attestBcastFee  = require('./gates/attest_broadcast_fee_gate.js');
 const wid     = require('../../consensus/gates/attest_responsible_widening_gate.js');
 // The zero-conf flip, keyed on the REQUEST's own block: a registry row read by literal
 // key (W5). Read here for the fulfilled fee split, which pays the verified signers

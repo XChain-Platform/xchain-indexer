@@ -28,7 +28,7 @@ const { createBaseData } = require('../../../../fixtures/mocks');
 
 const { stubActiveAt } = require('../../../../helpers/gate_modules.js');
 const RESPONSE_MIRROR_KEY = 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
-const attestBcastFee  = require('../../../../../src/actions/attest/attest_broadcast_fee_gate.js');
+const attestBcastFee  = require('../../../../../src/actions/attest/gates/attest_broadcast_fee_gate.js');
 
 const { PUBKEY_A, SIG_A, REQ_ID, BODY, BLOCK_TIME, requestRow } = require('./helpers/rows.js');
 const { applyData, setupEffects } = require('./helpers/effects_fixture.js');

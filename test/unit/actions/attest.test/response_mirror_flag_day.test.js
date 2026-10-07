@@ -25,7 +25,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const { createBaseData } = require('../../../fixtures/mocks');
-const attestBcastFee = require('../../../../src/actions/attest/attest_broadcast_fee_gate.js');
+const attestBcastFee = require('../../../../src/actions/attest/gates/attest_broadcast_fee_gate.js');
 // The response-mirror flag day is a registry row (W5), stubbed through activeAt()
 // by its key; the fixture's beforeEach holds it OFF and the cases below drive it.
 const { stubGate } = require('../../../helpers/gate_modules.js');
