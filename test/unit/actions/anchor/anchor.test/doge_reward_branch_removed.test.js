@@ -8,8 +8,8 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// The DOGE side of ANCHOR never writes a validator reward: the reward is
-// derived on the BTC indexer, so even with the derive gate pinned off the
+// A handler without a legacy credit path never writes a validator reward: the
+// reward is derived on the BTC indexer, so even with the derive gate pinned off the
 // settlement entry points leave the ledger untouched.
 
 process.env.INDEXER_COIN = 'BTC';
@@ -21,8 +21,8 @@ const arMod = require('../../../../../src/consensus/gates/anchor_reward_gate.js'
 const settle = require('../../../../../src/actions/anchor/settle.js');
 const observability = require('../../../../../src/observability/index.js');
 
-const BUNDLE_SKIP_WARNING = '\t ANCHOR v0 : DOGE-side reward is derived on BTC; reward skipped';
-const ARCHIVE_SKIP_WARNING = '\t ANCHOR v1 : DOGE-side reward is derived on BTC; reward skipped';
+const BUNDLE_SKIP_WARNING = '\t ANCHOR v0 : no legacy reward path applies; reward skipped';
+const ARCHIVE_SKIP_WARNING = '\t ANCHOR v1 : no legacy reward path applies; reward skipped';
 
 describe('ANCHOR DOGE-side reward branch removed @regression @tier3', function () {
     beforeEach(function () {

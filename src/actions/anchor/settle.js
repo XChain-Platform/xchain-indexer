@@ -27,7 +27,7 @@ const { rewardTypeFor } = require('./reward_family.js');
 const { getLogger } = require('../../observability/index.js');
 
 function warnRewardSkipped(format){
-    getLogger().warn('\t ANCHOR v' + format + ' : DOGE-side reward is derived on BTC; reward skipped');
+    getLogger().warn('\t ANCHOR v' + format + ' : no legacy reward path applies; reward skipped');
 }
 
 async function creditLegacyArchiveReward(data, attQuorumMet, snapPubkeys, format){
