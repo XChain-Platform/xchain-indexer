@@ -21,7 +21,7 @@ const { createMockIndexer, createBaseData } = require('../../../../../fixtures/m
 const Attest   = require('../../../../../../src/actions/attest/index.js');
 const swq     = require('../../../../../../src/consensus/stake_weighted_quorum.js');
 const { stubActiveAt } = require('../../../../../helpers/gate_modules.js');
-const attestBcastFee  = require('../../../../../../src/actions/attest/attest_broadcast_fee_gate.js');
+const attestBcastFee  = require('../../../../../../src/actions/attest/gates/attest_broadcast_fee_gate.js');
 const ed25519 = require('../../../../../../src/consensus/ed25519.js');
 
 const { PUBKEY_A, REQ_ID, BLOCK_TIME, mirrorRow, requestRow } = require('./rows.js');
