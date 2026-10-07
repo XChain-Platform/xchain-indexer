@@ -59,6 +59,7 @@ function batchHandler(coin = 'DOGE') {
     const db = ix.indexerDb;
     db.createAttestationBatchAction = sinon.stub().resolves();
     db.getAttestBatchChunks         = sinon.stub().resolves([]);
+    db.attestBatchSlotTaken         = sinon.stub().resolves(false);
     db.setAttestBatchStatus         = sinon.stub().resolves();
     db.getValidatorsByCapability    = sinon.stub().resolves([{ pubkey: PUBKEY_A }]);
     db.getStakeWeightsByCapability  = sinon.stub().resolves([{ pubkey: PUBKEY_A, source: 'SA', weight: '100' }]);
@@ -131,6 +132,11 @@ function chunkStore(db) {
     db.getAttestBatchChunks = sinon.stub().callsFake(async (key) => rows
         .filter(r => r.request_id === key && r.status === 'valid' && r.chunk_index != null)
         .sort((a, b) => (a.chunk_index - b.chunk_index) || (a.action_index - b.action_index)));
+    // The no-head duplicate-slot read has no JS partition after it, so this one scopes itself.
+    db.attestBatchSlotTaken = sinon.stub().callsFake(async (key, author, slot) =>
+        String(author || '').length > 0 && rows.some(r => r.request_id === key && r.status === 'valid' &&
+            r.version === abw.ATTEST_BATCH_CONTINUATION_VERSION && r.chunk_index === Number(slot) &&
+            r.source === author));
     db.setAttestBatchStatus = sinon.stub().callsFake(async (actionIndex, status) => {
         for (const r of rows) if (r.action_index === Number(actionIndex)) r.status = status;
     });

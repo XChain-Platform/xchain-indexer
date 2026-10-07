@@ -14,8 +14,10 @@
 // wires under it for one fee each. The read that answers "what is on chain for this
 // batch" therefore has to be bounded, and the bound has to sit AFTER the publisher
 // partition: taken before it, junk filling the low slots empties the window and the
-// honest publisher's own head and chunks fall outside it. These cases pin both halves:
-// the scoped read carries the author into the query and the limit after it, and the
+// honest publisher's own head and chunks fall outside it, and it has to follow the
+// encoding filter too, since a failed head leaves its continuations valid and a republish
+// adds more. These cases pin both halves: the scoped read carries the author and the
+// encoding into the query and the limit after them, and the
 // limit is above every chunk count the wire geometry can produce, so an honest chunk
 // set is never truncated.
 
@@ -32,6 +34,8 @@ const { isAdmissionEra } = require('../../../../src/consensus/gates/mirror_admis
 
 const AUTHOR  = 'nWbnkorpwGHrGQjaLo2rmyRQPPzn8CFrKQ';
 const FOREIGN = 'nUxUJZAhGwNyZDvqSHUFZ2NhVKAqZbnyDp';
+// A landing wire's encoding, as both batch handlers pass it.
+const GEOMETRY = { totalChunks: 3, batchCrc32: '0a1b2c3d' };
 
 // A Database with nothing but doQuery, which is all this read touches. The stub honours
 // the query's own LIMIT, so a case here fails when the constant moves rather than when
@@ -40,9 +44,12 @@ function readerFor(rows) {
     const db = Object.create(Database.prototype);
     db.doQuery = sinon.stub().callsFake(async (query, params) => {
         const authored = query.includes('cadr.address = ?') ? String(params[1]) : null;
+        const encoded  = query.includes('c.batch_total_chunks = ?') ? [Number(params[2]), String(params[3])] : null;
         let out = rows
             .filter(r => String(r.request_id) === String(params[0]))
             .filter(r => authored === null || String(r.source) === authored)
+            .filter(r => encoded === null || Number(r.version) === abw.ATTEST_BATCH_HEAD_VERSION ||
+                         (Number(r.total_chunks) === encoded[0] && String(r.batch_crc32) === encoded[1]))
             .sort((a, b) => (Number(a.chunk_index) - Number(b.chunk_index)) ||
                             (Number(a.action_index) - Number(b.action_index)));
         const limit = query.match(/LIMIT (\d+)/);
@@ -113,15 +120,26 @@ describe('ATTEST batch chunk read: the publisher partition and its row limit (ro
 
     it('puts the limit AFTER the author term, and binds the author rather than interpolating it', async function () {
         const db = readerFor([]);
-        await db.getAttestBatchChunks('A'.repeat(64), AUTHOR);
+        await db.getAttestBatchChunks('A'.repeat(64), AUTHOR, GEOMETRY);
         const [query, params] = db.doQuery.firstCall.args;
         assert.ok(query.includes('cadr.address = ?'), 'the partition moves into the query');
         assert.ok(/LIMIT \d+/.test(query), 'and the scoped read is bounded');
         assert.ok(query.indexOf('cadr.address = ?') < query.indexOf('LIMIT'),
             'the limit must apply to one publisher\'s rows, never to the whole key\'s');
+        assert.ok(query.indexOf('c.batch_total_chunks = ?') < query.indexOf('LIMIT'),
+            'and to one encoding\'s continuations, the only set the bound holds for');
         assert.strictEqual(query.includes(AUTHOR), false, 'the address is a bound parameter, never SQL text');
-        assert.deepStrictEqual(params, ['a'.repeat(64), AUTHOR],
+        assert.deepStrictEqual(params, ['a'.repeat(64), AUTHOR, GEOMETRY.totalChunks, GEOMETRY.batchCrc32],
             'and the key is lowercased on the way in, as the stored column is');
+    });
+
+    it('carries no limit when scoped by author alone, because that set is unbounded', async function () {
+        const db = readerFor([]);
+        await db.getAttestBatchChunks('a'.repeat(64), AUTHOR);
+        const [query] = db.doQuery.firstCall.args;
+        assert.ok(query.includes('cadr.address = ?'));
+        assert.strictEqual(/LIMIT/.test(query), false,
+            'a failed head leaves its continuations valid, so a republish grows this set past any fixed bound');
     });
 
     it('is bounded above every chunk count the wire geometry can produce', async function () {
@@ -137,7 +155,7 @@ describe('ATTEST batch chunk read: the publisher partition and its row limit (ro
         const worstChunks = Math.ceil(encoded / (abw.ATTEST_BATCH_WIRE_MAX_BYTES - PREFIX_MAX));
 
         const db = readerFor([]);
-        await db.getAttestBatchChunks('b'.repeat(64), AUTHOR);
+        await db.getAttestBatchChunks('b'.repeat(64), AUTHOR, GEOMETRY);
         const value = Number(db.doQuery.firstCall.args[0].match(/LIMIT (\d+)/)[1]);
 
         assert.ok(worstChunks > 1, 'sanity: the ceiling is a real chunk count, not a degenerate 1');
@@ -160,7 +178,7 @@ describe('ATTEST batch chunk read: the publisher partition and its row limit (ro
         // geometry the WIRE CONTRACT accepts, and one publisher's valid rows under one key
         // are their head plus at most one per slot, so that count is the parser ceiling.
         const db = readerFor([]);
-        return db.getAttestBatchChunks('b'.repeat(64), AUTHOR).then(() => {
+        return db.getAttestBatchChunks('b'.repeat(64), AUTHOR, GEOMETRY).then(() => {
             const value = Number(db.doQuery.firstCall.args[0].match(/LIMIT (\d+)/)[1]);
             assert.strictEqual(value, abw.ATTEST_BATCH_MAX_CHUNKS,
                 'the read bound and the parser ceiling are one number; drift between them is ' +
@@ -174,7 +192,8 @@ describe('ATTEST batch chunk read: the publisher partition and its row limit (ro
         const { head, rows } = storedRows(encoded, AUTHOR, 5000);
 
         const db = readerFor(rows);
-        const read = await db.getAttestBatchChunks(encoded.batchKey, AUTHOR);
+        const read = await db.getAttestBatchChunks(encoded.batchKey, AUTHOR,
+            { totalChunks: encoded.totalChunks, batchCrc32: encoded.batchCrc32 });
         assert.strictEqual(read.length, encoded.totalChunks,
             'the whole chunk set survives the bound; a limit that clipped it would deny the window');
 
