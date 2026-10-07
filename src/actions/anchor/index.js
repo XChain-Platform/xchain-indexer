@@ -72,6 +72,7 @@ const archiveHead  = require('./archive_head.js');
 const bundle       = require('./bundle.js');
 const archiveChunk = require('./archive_chunk.js');
 const quorum       = require('./quorum.js');
+const settle       = require('./settle.js');
 const reassembly   = require('./reassembly.js');
 const { splitV3Wire } = require('./v3_wire.js');
 const { walkFoldSections } = require('./v3_sections.js');
@@ -321,6 +322,11 @@ class Anchor {
         let verdict = await quorum.verifySections(this, data, sections, oracleSetFor, error);
         for(let section of sections) delete section.FOLD_ARCHIVE;
         error = verdict.error;
+
+        if(!error && sections.length > 0 && verdict.bundleSet && verdict.bundleSet.oracleN > 0){
+            let met = quorum.bundleAttestationMet(this, data, verdict.bundleSet, publisherSigs);
+            await settle.creditBundleReward(this, data, met, verdict.bundleSet);
+        }
 
         await recordFoldAction(this, data, sections, archive, publisherSigs, error);
         if(archive !== null){
