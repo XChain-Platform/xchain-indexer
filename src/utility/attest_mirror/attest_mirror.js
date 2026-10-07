@@ -27,11 +27,11 @@
 
 'use strict';
 
-const { getLogger } = require('../observability/index.js');
+const { getLogger } = require('../../observability/index.js');
 const { selectApplicableAttestationResponses } = require('./attest_mirror_select.js');
 // The per-block cap on mirror applies, from the same leaf constants module the binding rule
 // reads it from (see attest_mirror_select.js for why never from the ATTEST handler).
-const { ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK } = require('../actions/attest/constants.js');
+const { ATTEST_MAX_MIRROR_APPLIES_PER_BLOCK } = require('../../actions/attest/constants.js');
 // Page size the mirror applier walks its applicability read in. NOT consensus and
 // deliberately not exported: it shapes how many rows a node holds at once, never which
 // rows bind (the read's order is total and the pages are disjoint slices of it), so
