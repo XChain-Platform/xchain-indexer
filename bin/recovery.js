@@ -1208,6 +1208,8 @@ class AnchorRecovery {
                 String(cp.checkpoint_seq), String(cp.snapshot_block)].join('|');
     }
 
+    // A copy of the hub's gated canonicalCheckpoint (root suffix on CHECKPOINT_COMMITMENT, then
+    // EQUIV); test/unit/recovery/recovery_checkpoint_canonical_parity.test.js pins it.
     checkpointCanonical(cp){
         let raw = this.rawCheckpointCanonical(cp);
         let rootsActive = gateRegistry.activeAt(CHECKPOINT_COMMITMENT_KEY,
@@ -1365,6 +1367,12 @@ AnchorRecovery.wrapperCanonicalForTest = function(v1){
 
 AnchorRecovery.foldWrapperCanonicalForTest = function(head, section){
     return AnchorRecovery.prototype.foldWrapperCanonical.call(AnchorRecovery.prototype, head, section);
+};
+
+// Test-only export of the gated checkpoint canonical that verifyCheckpoints re-verifies
+// archived state_checkpoints rows with; pinned by recovery_checkpoint_canonical_parity.
+AnchorRecovery.checkpointCanonicalForTest = function(cp){
+    return AnchorRecovery.prototype.checkpointCanonical.call(AnchorRecovery.prototype, cp);
 };
 
 module.exports = AnchorRecovery;

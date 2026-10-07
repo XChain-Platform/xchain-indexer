@@ -172,9 +172,9 @@ class Anchor {
                     canonicalBatchCrc(d['BATCH_CRC32']) + '|' + String(d['TOTAL_CHUNKS']);
             roundId += '|' + d['MATCH_BATCH_SEQ'];
         } else if(Number(d['FORMAT']) === 0){
-            // Append the root suffix UNCONDITIONALLY. Of the six checkpoint-family
+            // Append the root suffix UNCONDITIONALLY. Of the seven checkpoint-family
             // builders, this one and bridge_proof_client/checkpoint_source.js do; the hub
-            // (checkpointRootSuffix), SDK, sync and explorer gate it on
+            // (checkpointRootSuffix), SDK, sync, explorer and bin/recovery.js gate it on
             // CHECKPOINT_COMMITMENT. The divergence is deliberate: the roots this parse
             // stores are then always inside the signed bytes.
             //

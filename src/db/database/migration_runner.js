@@ -60,6 +60,15 @@ async function restoreRuntimeTimeoutAndReleaseLock(conn, lockName, runtimeTimeou
     return restored;
 }
 
+// A migration file may SET any session variable (sql_mode, foreign_key_checks, ...), and the
+// pool re-applies its pinned initSql only to a NEW connection, never on release. So a
+// connection that ran file statements is closed rather than handed back to the pool.
+async function retireMigrationConnection(conn, sessionDirty){
+    if(sessionDirty && typeof conn.destroy === 'function'){
+        try { await conn.destroy(); } catch(_){}
+    } else try { await conn.release(); } catch(_){}
+}
+
 async function releaseMigrationLock(conn, lockName){
     try { await conn.query('SELECT RELEASE_LOCK(?)', [lockName]); } catch(_){}
 }
@@ -308,6 +317,8 @@ async function applyMigrationFile(self, conn, file, raw, checksum, mode, ctx){
         }
     }
     await ctx.activateQueryTimeout();
+    // Marked before the first statement, so a file that fails partway still retires the connection.
+    if(ctx.markSessionDirty) ctx.markSessionDirty();
     getLogger().info('runMigrations: applying ' + file + ' (mode=' + mode + ', ' + statements.length + ' statement(s))...');
     try {
         for(const stmt of statements){ await conn.query(stmt); }
@@ -344,6 +355,7 @@ module.exports = {
         let conn = await this.getConnection();
         let returnToPool = true;
         let timeoutTouched = false;
+        let sessionDirty = false;
         try {
             // DB-scoped advisory lock so two processes don't apply concurrently. GET_LOCK
             // is server-global, so the name is namespaced by dbName (the shared MariaDB on
@@ -366,6 +378,7 @@ module.exports = {
                 if(!only) await activateQueryTimeout();
                 await applyPendingMigrations(this, conn, files, {
                     dir, only, includeManual, result, activateQueryTimeout,
+                    markSessionDirty: () => { sessionDirty = true; },
                 });
             } finally {
                 if(timeoutTouched){
@@ -374,7 +387,7 @@ module.exports = {
                 } else await releaseMigrationLock(conn, lockName);
             }
         } finally {
-            if(returnToPool) try { await conn.release(); } catch(_){}
+            if(returnToPool) await retireMigrationConnection(conn, sessionDirty);
         }
 
         if(result.applied.length) getLogger().info('runMigrations: ' + result.applied.length + ' migration(s) applied to ' + this.dbName + '.');

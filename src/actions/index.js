@@ -206,7 +206,7 @@ try {
 
 // VM boot gates and their diagnostics, pure so each is unit-testable (actions_class/vm_runtime.js).
 const vmRuntime = require('./actions_class/vm_runtime.js');
-const { assertVmRuntimeLoadable, assertConsensusRuntime } = vmRuntime;
+const { assertVmRuntimeLoadable, assertConsensusRuntime, assertVmConsensusEpoch } = vmRuntime;
 
 // Actions.prototype methods kept beside this loader, one file per concern, mixed in below
 // the class the way db/index.js assembles Database from its table-family mixins.
@@ -289,6 +289,9 @@ class Actions {
         // VM runtime: refuse at boot when it could not load (see assertVmRuntimeLoadable).
         assertVmRuntimeLoadable(XChainVM, vmLoadError);
 
+        // VM epoch gate: fail CLOSED before any executor exists on a wrong-epoch VM.
+        assertVmConsensusEpoch(XChainVM);
+
         this.vm = new XChainVM(vmOptions(this.config));
         this.voteCallbackProbeVm = null;
 
@@ -363,6 +366,9 @@ Object.assign(Actions, {
     // Pure consensus-runtime gate, exported so its fail-closed contract is unit-testable
     // without a real off-pin engine.
     assertConsensusRuntime: assertConsensusRuntime,
+    // Pure VM-epoch boot gate and the one copy of the epoch it expects, exported for the same reason.
+    assertVmConsensusEpoch:        assertVmConsensusEpoch,
+    EXPECTED_VM_CONSENSUS_VERSION: vmRuntime.EXPECTED_VM_CONSENSUS_VERSION,
     // Pure VM-load boot gate and its message builder, exported so the refusal (and the text that
     // names the binding/platform mismatch) is testable without a foreign binding on disk.
     assertVmRuntimeLoadable: assertVmRuntimeLoadable,

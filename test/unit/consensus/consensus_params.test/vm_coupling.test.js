@@ -26,13 +26,15 @@ const Utility = require('../../../../src/utility.js');
 const fs      = require('fs');
 const { siblingCheckout, skipOrFail } = require('../../../helpers/sibling_checkout.js');
 
+// Read the epoch from the boot gate's own constant so this CI check and the running
+// validator's refusal cannot disagree. That pin and the digests below are ONE unit;
+// bumping the epoch alone makes every assertion under it vacuous.
 // Epoch 4: REST_PATTERN_METER added the `banned-rest` deploy rule VM-side, and a
-// CONSENSUS_RULES change moves the epoch. This pin and the digests below are ONE
-// unit; bumping the integer alone makes every assertion under it vacuous.
+// CONSENSUS_RULES change moves the epoch.
 // Epoch 5: JSON_STRINGIFY_HOOK closes the JSON.stringify value-hook depth
 // bypass (a toJSON/replacer/getter presenting a shallow value to the native
 // depth guard and a deep one to the serializer); see the coupling check below.
-const EXPECTED_VM_CONSENSUS_VERSION = '5';
+const { EXPECTED_VM_CONSENSUS_VERSION } = require('../../../../src/actions/actions_class/vm_runtime.js');
 // Frozen digest of the bundled VM's deploy/execution contract surface, asserted in
 // lockstep with the version above. Any change to the sandbox strip set or the deploy
 // validator's CONSENSUS_RULES must bump EXPECTED_VM_CONSENSUS_VERSION (and the VM's
