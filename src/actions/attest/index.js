@@ -94,7 +94,7 @@ class Attest {
 
     // The action's constants, read off the class by requirers that predate constants.js
     // (unit suites read the mirror-apply cap and the stamp off the class, while the applier
-    // pass in utility/attest_mirror.js and utility/attest_mirror_select.js imports the cap
+    // pass in utility/attest_mirror/attest_mirror.js and utility/attest_mirror/attest_mirror_select.js imports the cap
     // from constants.js itself). constants.js is their home and these are the same
     // bindings, carried as statics so the module's one export is the class itself.
     static REQUEST_ID_PREIMAGE_FIELDS          = REQUEST_ID_PREIMAGE_FIELDS;

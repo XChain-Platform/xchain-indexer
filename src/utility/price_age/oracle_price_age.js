@@ -12,8 +12,8 @@
  *
  ********************************************************************/
 
-const gateRegistry = require('../consensus/gate_registry');
-const { pickMaxPriceAgeSeconds } = require('./price_age/pick.js');
+const gateRegistry = require('../../consensus/gate_registry');
+const { pickMaxPriceAgeSeconds } = require('./pick.js');
 
 const HOURLY_GATE = 'oracle_price_age_hourly_activation.ORACLE_PRICE_AGE_HOURLY_ACTIVATION';
 
