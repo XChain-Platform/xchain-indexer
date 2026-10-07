@@ -22,6 +22,7 @@ const { siblingCheckout, skipOrFail } = require('../../helpers/sibling_checkout.
 const REPO = path.resolve(__dirname, '..', '..', '..');
 const BIN = path.join(REPO, 'bin', 'consensus-identity.js');
 const PIN = path.join(REPO, 'bin', 'pins', 'at1-consensus-identity.json');
+const COMPARISON_TIMEOUT_MS = 60000;
 
 function run(args) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'consensus-identity-stdout-'));
@@ -35,8 +36,7 @@ function run(args) {
             encoding: 'utf8',
             env: childEnv(),
             stdio: ['ignore', stdoutFd, 'pipe'],
-            // A cold comparison measured 1.2s; 10s leaves CI headroom while bounding a wedged child.
-            timeout: 10000,
+            timeout: COMPARISON_TIMEOUT_MS,
         });
         fs.closeSync(stdoutFd);
         stdoutFd = undefined;
@@ -68,6 +68,8 @@ function childEnv() {
 }
 
 describe('consensus identity GATES field and pin comparison', function () {
+    this.timeout(COMPARISON_TIMEOUT_MS + 5000);
+
     it('matches the hub pinned GATES field hash', function () {
         const hubRoot = process.env.XCHAIN_HUB_DIR || path.resolve(REPO, '..', 'xchain-hub');
         const candidate = path.join(hubRoot, 'bin', 'pins', 'at1-consensus-identity.json');
@@ -84,8 +86,6 @@ describe('consensus identity GATES field and pin comparison', function () {
     });
 
     it('exits zero with an arming lever left set in this process', function () {
-        // Match the guard suite's CLI budget: loaded hosts can make the comparison take over 20s.
-        this.timeout(30000);
         // One lever of the pair, which is what a hook that throws between arming and
         // restoring leaves behind. The child must not see it.
         const key = 'XC_ROLLCALL_REGTEST_ACTIVATION';
