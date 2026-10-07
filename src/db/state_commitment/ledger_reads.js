@@ -109,7 +109,28 @@ async function ledgerKeysForBlock(db, blockIndex){
     return keys;
 }
 
+// The (address, tick) keys with the most credit and debit rows, hottest first, as
+// { address, tick, rows }. getNetBalance costs O(history per key), so the keys
+// with the longest history are the ones its cost is judged on. Read-only; the
+// address and tick tie-break keeps the order stable between runs.
+async function getHottestLedgerKeys(db, limit){
+    const n = Math.max(1, Math.min(10000, Math.floor(Number(limit)) || 1));
+    const rows = await db.doQueryStrict(
+        `SELECT a.address AS address, t.tick AS tick, SUM(s.n) AS \`rows\` FROM (
+            SELECT address_id, tick_id, COUNT(*) AS n FROM credits GROUP BY address_id, tick_id
+            UNION ALL
+            SELECT address_id, tick_id, COUNT(*) AS n FROM debits  GROUP BY address_id, tick_id
+         ) s
+         INNER JOIN index_addresses a ON a.id=s.address_id
+         INNER JOIN index_tickers   t ON t.id=s.tick_id
+         GROUP BY s.address_id, s.tick_id, a.address, t.tick
+         ORDER BY \`rows\` DESC, a.address, t.tick
+         LIMIT ${n}`, []);
+    return (rows || []).map(r => ({ address: r.address, tick: r.tick, rows: Number(r.rows) }));
+}
+
 module.exports = {
+    getHottestLedgerKeys,
     getNetBalance,
     getNonzeroNetBalances,
     ledgerKeysForBlock
