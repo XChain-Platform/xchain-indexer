@@ -34,8 +34,8 @@ module.exports = {
         //   1. Sweep destination: if the cancel was driven by a SWEEP, honor the chosen destination.
         //   2. Recorded canceller: per DISPENSER.md, escrow returns to whoever cancelled
         //      (GET_ADDRESS or SOURCE). Recorded by createDispenserStatus when status='cancelling'.
-        //   3. SOURCE: fallback for paths with no canceller (auto-expire reaches dispenser_expire,
-        //      not here, but covered for safety).
+        //   3. SOURCE: the destination when there is no sweep and no canceller, chiefly a
+        //      dispense.js auto-close of an 'open' dispenser (auto-expire reaches dispenser_expire).
         let sweepDest = await this.indexerDb.getSweepDestination(data['DISPENSER_ACTION_INDEX']);
         let canceller = (!this.util.isNull(sweepDest)) ? null : await this.indexerDb.getDispenserCanceller(data['DISPENSER_ACTION_INDEX']);
         let destination = (!this.util.isNull(sweepDest)) ? sweepDest

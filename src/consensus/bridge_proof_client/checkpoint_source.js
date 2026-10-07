@@ -47,9 +47,10 @@ function height(v){
 }
 
 /**
- * Rebuild the XCHECKPOINT v0 canonical for a mirrored state_checkpoints row. One of six
+ * Rebuild the XCHECKPOINT v0 canonical for a mirrored state_checkpoints row. One of seven
  * checkpoint-family copies: the hub's canonical_forms.js canonicalCheckpoint, the SDK's and
- * sync's checkpoint.js canonicalCheckpoint and the explorer's canonicalCheckpointString gate
+ * sync's checkpoint.js canonicalCheckpoint, the explorer's canonicalCheckpointString and
+ * bin/recovery.js checkpointCanonical (pinned to this copy by its own parity test) gate
  * the root suffix on CHECKPOINT_COMMITMENT at snapshot_block; this file and actions/anchor
  * `canonical` (FORMAT 0) append it UNCONDITIONALLY. The archive family (actions/anchor FORMAT 1,
  * bin/recovery.js wrapperCanonical, the hub's archiveCanonical) is rootless and separate.

@@ -174,10 +174,11 @@ function isRewardCandidateRow(a, network, publisher){
 // publisher under a node-class-dependent status, which is why identity is the fix and
 // this is the fallback.
 //
-// Consensus note: this changes which rewards derive, so it is deployed like the other
-// pre-arming remedies in anchor_reward_activation.js - remedy in code while
-// ANCHOR_REWARD_DERIVE_ACTIVATION.mainnet is inert (null), with the operator ratifying
-// a height only once the whole fleet carries it. It needs no gate of its own.
+// Consensus note: this decides which rewards derive, and the derive path is LIVE.
+// ANCHOR_REWARD_DERIVE_ACTIVATION is armed at 0 on mainnet, testnet and regtest (its row
+// in src/protocol_changes/shared_rows_1.js, read through src/consensus/gates/anchor_reward_gate.js),
+// so there is no inert window left: any change to what bundleHeaderBlocks or bindsToTuple
+// accept or reject is a consensus change and ships behind its own activation row.
 //
 // Returns { byAction: Map(action_index -> header block), filtered: old-peer maximum or null }.
 function bundleHeaderBlocks(anchors, network, publisher){
