@@ -80,7 +80,8 @@ function waitingOnFutureBlock(stallReason, stallClearsAtMs, now){
 //   'none'              - advancing normally, no stall.
 //   'future_block_wait' - waiting out a future-stamped block; healthy and self-clearing,
 //                         with stallClearsAt naming the instant it can first move.
-//   'bridge_proof_wait' - waiting for a quorum-established bridge checkpoint or proof.
+//   dedicated proof-wait class - waiting for a quorum-established bridge checkpoint
+//                                or proof.
 //   'barrier_defer'     - a real barrier defer (mirror behind, host fault), still
 //                         advancing inside the grace window.
 //   'wedged'            - stalled with no commit for longer than the grace window.
