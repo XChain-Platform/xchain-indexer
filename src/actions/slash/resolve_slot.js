@@ -57,10 +57,20 @@ function listShareSlashable(msgA, prefix, network){
         gateRegistry.activeAt(LIST_SHARE_PRODUCER_GATE, network, null, Number(field), null);
 }
 
+// XANCPUB|scope|round_reference|snapshot_block|publisher|amount: two attestations
+// are one slot's conflict when every field but the publisher agrees and the
+// publisher differs.
+function isPublisherOnlyPair(contentA, contentB){
+    let a = contentA.split('|'), b = contentB.split('|');
+    if(a.length !== 6 || b.length !== 6 || a[4] === b[4])
+        return false;
+    return [0, 1, 2, 3, 5].every(k => a[k] === b[k]);
+}
+
 // The field-indexed engines: the height rides the signed content itself, so the
 // pair is judged on one field of each canonical. Returns null when this engine
 // does not carry its block that way.
-function resolveFieldSlot(util, engineTag, contentA, contentB){
+function resolveFieldSlot(util, engineTag, contentA, contentB, publisherPairGate){
     if(FIELD[engineTag] !== undefined){
         let i  = FIELD[engineTag];
         // The CHECKPOINT engine tag carries TWO content families: the checkpoint
@@ -80,6 +90,8 @@ function resolveFieldSlot(util, engineTag, contentA, contentB){
         let fb = contentB.split('|')[i];
         if(util.isNull(fa) || fa !== fb || !/^[0-9]+$/.test(String(fa)))
             return { error: 'invalid: snapshot_block (mismatch or format)' };
+        if(publisherPairGate && i === 3 && contentA.startsWith('XANCPUB|') && !isPublisherOnlyPair(contentA, contentB))
+            return { error: 'invalid: XANCPUB pair differs beyond the publisher' };
         return { snapshotBlock: Number(fa) };
     }
     return null;
@@ -174,7 +186,7 @@ function resolveBatchSlot(engineTag, roundId, contentA, contentB){
 
 // XATTEST: nothing in the canonical carries the block, so it is read back off
 // indexed state. Returns null for any other engine.
-async function resolveAttestSlot(util, indexerDb, engineTag, roundId, contentA, contentB){
+async function resolveAttestSlot(util, indexerDb, engineTag, roundId, contentA, contentB, multiRoundGate){
     // XATTEST: the canonical is delimiter-less and carries no block. Recover it from
     // the mirrored request row keyed by the ROUND_ID (= request_id). Deterministic
     // (the request is indexed state present on every BTC indexer).
@@ -199,6 +211,16 @@ async function resolveAttestSlot(util, indexerDb, engineTag, roundId, contentA, 
                 return { error: 'invalid: snapshot_block (mismatch or format)' };
             return { snapshotBlock: Number(fa), capability: 'cross_chain' };
         }
+        // The base canonical is signed once per consensus round, and a request that
+        // does not finalize is re-run under the SAME header (ROUND_ID = request_id,
+        // VIEW = 0) with a fresh response hash, status or effective time. Two honest
+        // retry rounds therefore share the key and differ in content, which reads here
+        // as equivocation and burns the bond of a validator that did nothing wrong.
+        // Nothing in a delimiter-less canonical names its round, so no base pair can
+        // be told apart from a retry: once gated the base leg is not slashable, while
+        // the relay legs above stay slashable because each round id is hashed per phase.
+        if(multiRoundGate)
+            return { error: 'invalid: ATTEST multi-round (distinct rounds under one request_id, not equivocation)' };
         let request = await indexerDb.getAttestationRequestById(String(roundId).toLowerCase());
         if(!request || request.block_index == null)
             return { error: 'invalid: ATTEST request unknown (cannot resolve snapshot_block)' };
@@ -212,11 +234,11 @@ async function resolveAttestSlot(util, indexerDb, engineTag, roundId, contentA, 
 // it is carried in-content; for engines that don't carry it, derive from the round.
 // `deps` carries the handler state these layouts need: util for isNull, indexerDb
 // for the XATTEST request read.
-async function resolveSlot(deps, engineTag, roundId, contentA, contentB, oracleRoundGate){
-    return resolveFieldSlot(deps.util, engineTag, contentA, contentB)
+async function resolveSlot(deps, engineTag, roundId, contentA, contentB, oracleRoundGate, multiRoundGate, publisherPairGate){
+    return resolveFieldSlot(deps.util, engineTag, contentA, contentB, publisherPairGate)
         || resolveOracleSlot(engineTag, roundId, contentA, contentB, oracleRoundGate)
         || resolveBatchSlot(engineTag, roundId, contentA, contentB)
-        || await resolveAttestSlot(deps.util, deps.indexerDb, engineTag, roundId, contentA, contentB)
+        || await resolveAttestSlot(deps.util, deps.indexerDb, engineTag, roundId, contentA, contentB, multiRoundGate)
         || { error: 'invalid: ENGINE_TAG (no snapshot_block rule)' };
 }
 

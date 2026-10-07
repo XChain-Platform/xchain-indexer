@@ -21,6 +21,8 @@
  *
  ********************************************************************/
 
+const protocolChanges = require('../../protocol_changes.js');
+
 module.exports = {
 
     // Snapshot the contract's stake state at blockIndex into an in-memory accessor
@@ -47,7 +49,7 @@ module.exports = {
         let valid_id = await this.getStatusId('valid');
         let stakes = [];
         if(valid_id !== null){
-            let query = `SELECT cs.signing_pubkey_id, ip.pubkey AS pubkey, cs.tick_id, t.tick AS tick, cs.amount,
+            let query = `SELECT cs.action_index, cs.signing_pubkey_id, ip.pubkey AS pubkey, cs.tick_id, t.tick AS tick, cs.amount,
                                 cs.activation_block, cs.deactivation_block
                          FROM contract_stakes cs
                              LEFT JOIN index_pubkeys ip ON (ip.id = cs.signing_pubkey_id)
@@ -56,6 +58,8 @@ module.exports = {
                            AND cs.activation_block <= ?
                            AND (cs.deactivation_block IS NULL OR cs.deactivation_block > ?)`;
             stakes = await this.doQuery(query, [Number(targetContractIndex), valid_id, blockIndex, blockIndex]);
+            if(await slashWindow.isActive(this, blockIndex))
+                stakes = await slashWindow.capInWindowRows(this, stakes, Number(targetContractIndex), valid_id);
         }
         // Aggregate (pubkey, tick) → amount; also build per-tick stakers map for getStakers/getTotalStaked.
         let perPubkeyTick = new Map();      // key: pubkey + '|' + tick → string amount
@@ -88,6 +92,58 @@ module.exports = {
         // xchain-vm/src/readonly-accessors.js rebuilds the sync getStake/
         // getTotalStaked/getStakers accessors from this shape inside the worker.
         return snapshotShape.serialize(util, perPubkeyTick, perTickStakers, tickDecimals);
+    },
+
+};
+
+// Slash-window flag day. A row carrying a deactivation_block
+// is mid-UNSTAKE: its stake sits in contract_unstakes, which is where SLASH debits it, while
+// the contract_stakes row keeps its full amount until the block-end sweep. Once armed, the
+// snapshot counts a (pubkey, tick)'s in-window rows only up to what that pair's open
+// cooldown rows still hold, so a slash is visible to the contract that issued it.
+const slashWindow = {
+
+    async isActive(db, blockIndex){
+        let network = db.config['NETWORK'];
+        if(network !== 'mainnet' && network !== 'testnet' && network !== 'regtest') return false;
+        let threshold = protocolChanges.get('protocol_changes.changes.STAKE_SNAPSHOT_SLASH_WINDOW')[network + '_time'];
+        if(threshold >= protocolChanges.UNARMED) return false;
+        let blockTime = await db.getBlockTime(blockIndex);
+        return Number(blockTime) >= threshold;
+    },
+
+    async capInWindowRows(db, stakes, targetContractIndex, valid_id){
+        if(!stakes.some(r => r.deactivation_block !== null && r.deactivation_block !== undefined)) return stakes;
+        let pendingId = await db.getStatusId('pending');
+        let ids = [valid_id];
+        if(pendingId !== null) ids.push(pendingId);
+        let cooldownRows = await db.doQuery(
+            `SELECT cu.signing_pubkey_id, cu.tick_id, cu.amount
+             FROM contract_unstakes cu
+             WHERE cu.target_contract_index=? AND cu.status_id IN (${ids.map(() => '?').join(',')})`,
+            [targetContractIndex, ...ids]);
+        let held = new Map();
+        for(let c of cooldownRows){
+            let k = String(c.signing_pubkey_id) + '|' + String(c.tick_id);
+            held.set(k, db.util.bcadd(held.get(k) || '0', c.amount, 18));
+        }
+        let inWindow = new Map();
+        for(let r of stakes){
+            if(r.deactivation_block === null || r.deactivation_block === undefined) continue;
+            let k = String(r.signing_pubkey_id) + '|' + String(r.tick_id);
+            if(!inWindow.has(k)) inWindow.set(k, []);
+            inWindow.get(k).push(r);
+        }
+        for(let [k, rows] of inWindow){
+            let budget = held.get(k) || '0';
+            rows.sort((a, b) => Number(a.action_index) - Number(b.action_index));
+            for(let r of rows){
+                let take = db.util.bcgte(budget, r.amount) ? r.amount : budget;
+                budget = db.util.bcsub(budget, take, 18);
+                r.amount = take;
+            }
+        }
+        return stakes;
     },
 
 };

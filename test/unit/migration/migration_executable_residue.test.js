@@ -21,20 +21,26 @@
 
 const assert = require('assert');
 const fs     = require('fs');
+const os     = require('os');
+const path   = require('path');
 
 const pin = require('../../../bin/lib/migration_residue_pin.js');
-const { MIGRATION_CHECKSUM_REBASELINES } = require('../../../src/db/database/migration_tables.js');
+const { MIGRATION_CHECKSUM_REBASELINES } = require('../../../src/db/migration/checksum_rebaselines.js');
 
 describe('migration executable-residue pin @regression @tier1', function () {
     const fixture = JSON.parse(fs.readFileSync(pin.FIXTURE, 'utf8'));
 
     it('every pinned migration on disk still matches its pin', function () {
-        const bad = pin.findViolations({ files: pin.readTree(), fixture, rebaselines: MIGRATION_CHECKSUM_REBASELINES });
+        const bad = pin.findViolations({ files: pin.readTree(), fixture, rebaselines: pin.readRebaselines() });
         assert.deepStrictEqual(bad.map((v) => v.kind + ': ' + v.message), []);
     });
 
     it('pins at least the migrations the rebaseline table names', function () {
-        for (const file of Object.keys(MIGRATION_CHECKSUM_REBASELINES)) assert.ok(fixture[file], file + ' is not pinned');
+        for (const file of Object.keys(pin.readRebaselines())) assert.ok(fixture[file], file + ' is not pinned');
+    });
+
+    it('the data read equals the module export', function () {
+        assert.deepStrictEqual(pin.readRebaselines(), JSON.parse(JSON.stringify(MIGRATION_CHECKSUM_REBASELINES)));
     });
 });
 
@@ -78,5 +84,29 @@ describe('migration executable-residue pin: the guard bites @regression @tier1',
     it('a committed file that is pinned, or an empty committed list, adds no violation', function () {
         assert.deepStrictEqual(pin.findViolations({ files: { [FILE]: RAW }, fixture, rebaselines: {}, committed: [FILE] }), []);
         assert.deepStrictEqual(pin.findViolations({ files: { [FILE]: RAW, 'x.sql': 'SELECT 1;' }, fixture, rebaselines: {}, committed: [] }), []);
+    });
+});
+
+describe('migration executable-residue pin: a cloned rebaseline source is never executed @regression @tier1', function () {
+    let dir;
+    beforeEach(function () { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rebaseline-')); });
+    afterEach(function () { fs.rmSync(dir, { recursive: true, force: true }); });
+
+    it('parses the table as data and runs no code planted beside it', function () {
+        const marker = path.join(dir, 'executed');
+        const src = path.join(dir, 'checksum_rebaselines.js');
+        fs.writeFileSync(src, "require('fs').writeFileSync(" + JSON.stringify(marker) + ", 'x');\n" +
+            "const MIGRATION_CHECKSUM_REBASELINES = {\n  'a.sql': { from: ['" + 'a'.repeat(64) + "'], to: '" + 'b'.repeat(64) + "' },\n};\n");
+        assert.deepStrictEqual(pin.readRebaselines(src), { 'a.sql': { from: ['a'.repeat(64)], to: 'b'.repeat(64) } });
+        assert.strictEqual(fs.existsSync(marker), false);
+    });
+
+    it('rejects a table holding an expression instead of evaluating it', function () {
+        const marker = path.join(dir, 'executed');
+        const src = path.join(dir, 'checksum_rebaselines.js');
+        fs.writeFileSync(src, "const MIGRATION_CHECKSUM_REBASELINES = {\n  'a.sql': { from: require('fs').writeFileSync(" +
+            JSON.stringify(marker) + ", 'x'), to: 'b' },\n};\n");
+        assert.throws(() => pin.readRebaselines(src));
+        assert.strictEqual(fs.existsSync(marker), false);
     });
 });
