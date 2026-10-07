@@ -256,7 +256,8 @@ module.exports = {
 
     // Get the current state of a contract as a { key: value } object.
     // `blockIndex` is the block being processed and drives the state_key
-    // collation flag-day (state_key_collation_activation.js): contract_state is
+    // collation flag-day (the state_key_collation_activation registry row in
+    // src/protocol_changes/shared_rows_4.js): contract_state is
     // utf8_general_ci, so the legacy GROUP BY folds distinct keys like
     // "Key"/"key" into ONE group and the reload drops one of them - the key
     // vanishes on the next EXECUTE despite the null-prototype round-trip
