@@ -23,3 +23,4 @@ CREATE TABLE credits (
 CREATE INDEX action_index ON credits (action_index);
 CREATE INDEX address_id   ON credits (address_id);
 CREATE INDEX tick_id      ON credits (tick_id);
+CREATE INDEX credits_tick_action_amount ON credits (tick_id, action_index, amount);
