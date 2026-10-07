@@ -8,9 +8,9 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// A handler without a legacy credit path never writes a validator reward: the
-// reward is derived on the BTC indexer, so even with the derive gate pinned off the
-// settlement entry points leave the ledger untouched.
+// The DOGE side of ANCHOR never writes a validator reward: the reward is
+// derived on the BTC indexer, so even with the derive gate pinned off the
+// settlement entry points leave the ledger untouched and never read the gate.
 
 process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
@@ -40,7 +40,7 @@ describe('ANCHOR DOGE-side reward branch removed @regression @tier3', function (
         await settle.creditArchiveReward(handler, data, true, new Set([data.PUBLISHER]), 1);
         assert.ok(db.createValidatorReward.notCalled);
         assert.ok(db.reconcileAnchorRewardWinner.notCalled);
-        assert.strictEqual(arMod.isAnchorRewardDeriveActive.callCount, 3);
+        assert.strictEqual(arMod.isAnchorRewardDeriveActive.callCount, 1);
         assert.deepStrictEqual(warn.args, [[BUNDLE_SKIP_WARNING], [ARCHIVE_SKIP_WARNING]]);
     });
 });
