@@ -264,6 +264,32 @@ module.exports = {
         let guard = await actions.actionExecute.runControllerGuard(controllerGuardRequest(this, controllerIndex, opts, data));
         if(!guard.allow)
             return { error: guard.reason, guardFee: 0, payoutLegs: null };
-        return { error: null, guardFee: this.bcmul(guard.gasBilled, db.config['GAS_PRICE'], 8), payoutLegs: guard.payoutLegs || null };
+        let guardFee = this.bcmul(guard.gasBilled, db.config['GAS_PRICE'], 8);
+        // Off BTC the ceiling was not reserved above, so bill only what SOURCE can pay (why: clampGuardFeeToBalance).
+        if(!this.isGuardGasReserved(data))
+            guardFee = this.clampGuardFeeToBalance(guardFee, opts.gasInfo, opts.gasBalances);
+        return { error: null, guardFee: guardFee, payoutLegs: guard.payoutLegs || null };
+    },
+
+    // The most of `guardFee` SOURCE can actually pay from `gasBalances` (a tick_id keyed
+    // balance map as getAddressBalances builds it), floored at zero. With no GAS token row
+    // on this chain (gasInfo null) or no balance map there is nothing to bill against.
+    //
+    // Why: off BTC the ceiling is not reserved, so SOURCE may hold less GAS than the guard
+    // metered, or none at all. Every caller debits guardFee unconditionally, and the state
+    // commitment refuses a negative leaf (merkle.canonicalAmount), so an unclamped bill
+    // from a source without XCHAIN wedged the block loop for good: LTC testnet 4910040, an
+    // ORDER of a controller-bound token from a wallet holding no XCHAIN, "merkle:
+    // non-canonical amount -0.00659", 2026-10-07. The clamp changes no committed row: the
+    // running GAS balance never went below zero on any fleet ledger, so every historical
+    // bill was already fully covered and reproduces unchanged. gasBilled itself is not
+    // clamped: the VM record and the guard emission keep the metered figure.
+    clampGuardFeeToBalance(guardFee, gasInfo, gasBalances){
+        if(!this.bcgt(guardFee, 0)) return guardFee;
+        let tickId = gasInfo ? gasInfo['TICK_ID'] : null;
+        let held   = (tickId != null && gasBalances && Object.prototype.hasOwnProperty.call(gasBalances, tickId) && !this.isNull(gasBalances[tickId]))
+                   ? gasBalances[tickId] : 0;
+        if(!this.bcgt(held, 0)) return 0;
+        return this.bcgt(guardFee, held) ? held : guardFee;
     }
 };

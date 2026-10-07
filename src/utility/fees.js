@@ -108,6 +108,9 @@ module.exports = {
     // day widens XCHAIN-balance fees to every chain, and this predicate is the one line that
     // widens with it. Off BTC this is byte-identical to the behaviour before the bridge, so no
     // replayed verdict moves on any chain and no pre-activation hash moves.
+    // Where the reservation is skipped, the metered guard fee is clamped to what SOURCE holds
+    // (controller_guard.js clampGuardFeeToBalance), so an unreserved bill can never drive GAS
+    // negative and wedge the state commitment.
     // COIN resolution mirrors detectFeePaymentMode: the process config first, the action's own
     // stamped COIN as the fallback.
     isGuardGasReserved(data){

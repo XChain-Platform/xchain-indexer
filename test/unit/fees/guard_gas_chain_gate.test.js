@@ -127,14 +127,64 @@ describe('guard gas reservation: keyed on the chain, not on the XCHAIN row @regr
             assert.strictEqual(res.guardFee, 0);
         });
 
-        it('does not refuse on DOGE once the XCHAIN row exists and the source holds none', async function(){
+        it('does not refuse on DOGE once the XCHAIN row exists and the source holds none, and bills nothing', async function(){
             const cfg  = configFor('DOGE');
             const util = new Utility(cfg);
             const res  = await util.invokeController(actionsStub(GUARD_ALLOW), dbFor(cfg), 5, opts(), { actionClass: 'trade', subject: 'token TOK' });
             assert.strictEqual(res.error, null, 'the reservation is BTC-only, so the DOGE guard still runs');
-            // 1000 gas billed at the regtest GAS_PRICE of 0.00001. guardFee is a
+            // Nothing was reserved, so nothing the source does not hold may be billed: every
+            // handler debits guardFee unconditionally and a negative GAS leaf wedges the state
+            // commitment (LTC testnet 4910040, 2026-10-07). An empty balance map bills zero.
+            assert.strictEqual(util.bcstr(res.guardFee), '0', 'an unreserved guard bills nothing a source without XCHAIN cannot pay');
+        });
+    });
+});
+describe('guard gas off BTC is clamped to what the source holds @regression @tier1', function(){
+    describe('the bill in invokeController', function(){
+        it('off BTC bills the metered fee when the source covers it, and only what the source holds when it does not', async function(){
+            const cfg  = configFor('LTC');
+            const util = new Utility(cfg);
+            // 1000 gas billed at the regtest GAS_PRICE of 0.00001 is 0.01. guardFee is a
             // bignumber (bcmul), so compare through the same arithmetic the handlers use.
-            assert.strictEqual(util.bcstr(res.guardFee), '0.01', 'guard gas is still billed off BTC');
+            const covered = await util.invokeController(actionsStub(GUARD_ALLOW), dbFor(cfg), 5,
+                opts({ gasBalances: { 7: '5' } }), { actionClass: 'trade', subject: 'token TOK' });
+            assert.strictEqual(covered.error, null);
+            assert.strictEqual(util.bcstr(covered.guardFee), '0.01', 'a covered bill is the metered fee, unchanged from every committed block');
+            const partial = await util.invokeController(actionsStub(GUARD_ALLOW), dbFor(cfg), 5,
+                opts({ gasBalances: { 7: '0.004' } }), { actionClass: 'trade', subject: 'token TOK' });
+            assert.strictEqual(partial.error, null, 'a short source is not refused off BTC');
+            assert.strictEqual(util.bcstr(partial.guardFee), '0.004', 'the bill is clamped to the balance, never below zero after the debit');
+        });
+        it('off BTC with no GAS token row on the chain bills nothing', async function(){
+            const cfg  = configFor('LTC');
+            const util = new Utility(cfg);
+            const res  = await util.invokeController(actionsStub(GUARD_ALLOW), dbFor(cfg), 5,
+                opts({ gasInfo: null, gasBalances: { 7: '5' } }), { actionClass: 'trade', subject: 'token TOK' });
+            assert.strictEqual(res.error, null);
+            assert.strictEqual(util.bcstr(res.guardFee), '0', 'without a row there is no tick to bill against');
+        });
+        it('on BTC the bill is never clamped: the reservation already covers it', async function(){
+            const cfg  = configFor('BTC');
+            const util = new Utility(cfg);
+            const maxFee = util.bcmul(util.resolveGuardGasCeiling(cfg), cfg['GAS_PRICE'], 8);
+            const res = await util.invokeController(actionsStub(GUARD_ALLOW), dbFor(cfg), 5,
+                opts({ gasBalances: { 7: maxFee } }), { actionClass: 'trade', subject: 'token TOK' });
+            assert.strictEqual(util.bcstr(res.guardFee), '0.01');
+        });
+    });
+    describe('clampGuardFeeToBalance', function(){
+        const util = new Utility(configFor('LTC'));
+        const gas  = { TICK_ID: 7 };
+        it('returns the fee when the balance covers it, the balance when it does not, and zero past an empty or missing balance', function(){
+            assert.strictEqual(util.bcstr(util.clampGuardFeeToBalance('0.01', gas, { 7: '0.01' })), '0.01');
+            assert.strictEqual(util.bcstr(util.clampGuardFeeToBalance('0.01', gas, { 7: '0.00659' })), '0.00659');
+            assert.strictEqual(util.bcstr(util.clampGuardFeeToBalance('0.01', gas, { 7: '0' })), '0');
+            assert.strictEqual(util.bcstr(util.clampGuardFeeToBalance('0.01', gas, { 8: '5' })), '0');
+            assert.strictEqual(util.bcstr(util.clampGuardFeeToBalance('0.01', gas, null)), '0');
+            assert.strictEqual(util.bcstr(util.clampGuardFeeToBalance('0.01', null, { 7: '5' })), '0');
+        });
+        it('leaves a zero fee alone', function(){
+            assert.strictEqual(util.bcstr(util.clampGuardFeeToBalance(0, gas, {})), '0');
         });
     });
 });
