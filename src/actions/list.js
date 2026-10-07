@@ -48,7 +48,8 @@
 // which the SDK and the wallet read as the same map when they decide whether to offer
 // an edit form.
 const gateRegistry = require('../consensus/gate_registry');
-const { getOpenOrdersByList, getOpenSwapsByList } = require('../db/lists/rematch.js');
+const { getOpenOrdersByList, getOpenSwapsByList,
+        getOpenMarketsByTokenList } = require('../db/lists/rematch.js');
 const { planListRematch } = require('../consensus/list_rematch/plan.js');
 
 const addressRefPart = require('./list/address_ref.js');
@@ -201,30 +202,14 @@ class List {
         let listRoot = this.isCreateFormat(format) ? data['ACTION_INDEX'] : data['LIST_ACTION_INDEX'];
         let orders = [...new Set([
             ...await getOpenOrdersByList(this.indexerDb, listRoot),
-            ...await this.getOpenMarketsByTokenList('order', listRoot)
+            ...await getOpenMarketsByTokenList(this.indexerDb, listRoot, 'order')
         ])];
         let swaps = [...new Set([
             ...await getOpenSwapsByList(this.indexerDb, listRoot),
-            ...await this.getOpenMarketsByTokenList('swap', listRoot)
+            ...await getOpenMarketsByTokenList(this.indexerDb, listRoot, 'swap')
         ])];
         for(let step of planListRematch(data, orders, swaps))
             await this.actions.processAction(step.action, null, step.data, null);
-    }
-
-    // Open markets trading a token whose allow or block list is this list or an edit of it
-    async getOpenMarketsByTokenList(kind, root){
-        let rows = await this.indexerDb.doQuery(`WITH RECURSIVE list_refs(action_index) AS (
-                 SELECT ?
-                 UNION DISTINCT
-                 SELECT ed.action_index FROM lists ed
-                 INNER JOIN list_refs parent ON (ed.list_action_index=parent.action_index)
-             )
-             SELECT DISTINCT m.action_index FROM ${kind}s m
-             INNER JOIN ${kind}_statuses ms ON (ms.${kind}_action_index=m.action_index) INNER JOIN index_statuses st ON (st.id=ms.status_id)
-             INNER JOIN tokens tk ON (tk.tick_id IN (m.give_tick_id, m.get_tick_id))
-             WHERE ms.action_index=(SELECT MAX(l.action_index) FROM ${kind}_statuses l WHERE l.${kind}_action_index=m.action_index) AND st.status='open'
-             AND (tk.allow_list IN (SELECT action_index FROM list_refs) OR tk.block_list IN (SELECT action_index FROM list_refs))`, [root]);
-        return rows.map(row => Number(row.action_index));
     }
 
     isFormatActive(format, data){
