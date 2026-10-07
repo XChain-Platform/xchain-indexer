@@ -54,6 +54,17 @@ function batchContinuationGeometryError(headRow, chunk, error){
     return error;
 }
 
+function stampBatchContinuation(context, data, chunk, error){
+    data['REQUEST_ID'] = chunk && chunk.ok ? chunk.batchKey : '';
+    data['VERSION']    = abw.ATTEST_BATCH_CONTINUATION_VERSION;
+    data['STATUS']     = error || 'valid';
+    context.stampBatchColumns(data, chunk, chunk && chunk.ok ? chunk.chunkIndex : null);
+
+    getLogger().info("\t ATTEST v6 : batch=" + String(data['REQUEST_ID']).substring(0,16) + '...' +
+                (chunk && chunk.ok ? ' : chunk=' + chunk.chunkIndex + '/' + chunk.totalChunks : '') +
+                ' : ' + data['STATUS']);
+}
+
 module.exports = {
     // ATTEST v5: the response BATCH head.
     //
@@ -242,14 +253,7 @@ module.exports = {
             error = 'invalid: CHUNK_INDEX (duplicate)';
         }
 
-        data['REQUEST_ID'] = chunk && chunk.ok ? chunk.batchKey : '';
-        data['VERSION']    = abw.ATTEST_BATCH_CONTINUATION_VERSION;
-        data['STATUS']     = error || 'valid';
-        this.stampBatchColumns(data, chunk, chunk && chunk.ok ? chunk.chunkIndex : null);
-
-        getLogger().info("\t ATTEST v6 : batch=" + String(data['REQUEST_ID']).substring(0,16) + '...' +
-                    (chunk && chunk.ok ? ' : chunk=' + chunk.chunkIndex + '/' + chunk.totalChunks : '') +
-                    ' : ' + data['STATUS']);
+        stampBatchContinuation(this, data, chunk, error);
 
         await this.indexerDb.createAttestationBatchAction(data);
 
