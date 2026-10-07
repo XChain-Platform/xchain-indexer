@@ -8,11 +8,6 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 
-// test/unit/hub/barrier_hold_ceiling.test/drain_progress_across_windows.test.js
-//
-// Drives the real table drain through repeated hold-ceiling windows: a drain that keeps
-// applying rows keeps its connection, a drain that stops is replaced.
-
 const { assert, sinon, HubDbSync } = require('./helpers/barrier_hold_ceiling.js');
 
 const PAGE = 10000;
