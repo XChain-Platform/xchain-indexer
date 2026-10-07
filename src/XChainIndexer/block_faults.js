@@ -43,7 +43,6 @@ module.exports = {
         if(this._lastParseException === signature){
             this.stallReason = 'parse_exception: ' + errorText;
             this.stallClearsAt = null;
-            this._lastParseException = null;
         } else {
             this._lastParseException = signature;
         }
