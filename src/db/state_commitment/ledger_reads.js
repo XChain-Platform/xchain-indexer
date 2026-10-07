@@ -109,7 +109,25 @@ async function ledgerKeysForBlock(db, blockIndex){
     return keys;
 }
 
+// Return the longest credit/debit histories first, with stable tie-breaks.
+async function getHottestLedgerKeys(db, limit){
+    const n = Math.max(1, Math.min(10000, Math.floor(Number(limit)) || 1));
+    const rows = await db.doQueryStrict(
+        `SELECT a.address AS address, t.tick AS tick, SUM(s.n) AS \`rows\` FROM (
+            SELECT address_id, tick_id, COUNT(*) AS n FROM credits GROUP BY address_id, tick_id
+            UNION ALL
+            SELECT address_id, tick_id, COUNT(*) AS n FROM debits  GROUP BY address_id, tick_id
+         ) s
+         INNER JOIN index_addresses a ON a.id=s.address_id
+         INNER JOIN index_tickers   t ON t.id=s.tick_id
+         GROUP BY s.address_id, s.tick_id, a.address, t.tick
+         ORDER BY \`rows\` DESC, a.address, t.tick
+         LIMIT ${n}`, []);
+    return (rows || []).map(r => ({ address: r.address, tick: r.tick, rows: Number(r.rows) }));
+}
+
 module.exports = {
+    getHottestLedgerKeys,
     getNetBalance,
     getNonzeroNetBalances,
     ledgerKeysForBlock
