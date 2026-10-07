@@ -33,7 +33,7 @@ const crypto = require('crypto');
 const { resolveRootDiscriminator } = require('../../consensus/batch_root_discriminator.js');
 
 const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
-const { maxPriceAgeSecondsAt } = require('../../utility/oracle_price_age.js');
+const { maxPriceAgeSecondsAt } = require('../../utility/price_age/oracle_price_age.js');
 
 // Read-only data the gateway sees. Every member is loaded at the host block, and
 // each flag-day gated member stays null below its activation so a heterogeneous
