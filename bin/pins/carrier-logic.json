@@ -2,7 +2,7 @@
   "version": 1,
   "entries": {
     "amount_representability_activation": {
-      "path": "src/utility/amount_representability_gate.js",
+      "path": "src/utility/validation/amount_representability_gate.js",
       "hash": "8d0a7e4fbd7acbccde550e424dd4bdd5d04619992678e87f44e79eb849747e62",
       "twins": []
     },
@@ -26,7 +26,7 @@
       "twins": []
     },
     "attest_request_cap_activation": {
-      "path": "src/actions/attest/attest_request_cap_gate.js",
+      "path": "src/actions/attest/gates/attest_request_cap_gate.js",
       "hash": "ed391a6acf41e9e647ecadd126409e75c3176827ef148290547097f46e51edbe",
       "twins": []
     },
@@ -204,7 +204,7 @@
     },
     "train_activation": {
       "path": "src/consensus/gates/train_gate.js",
-      "hash": "0e52179db25e4ef767aa8f695604b37a4a8d7c2dcc70afafadbd40b5760ca9eb",
+      "hash": "4f82ea30b5120eb7fc0c9cf56f3c115781238255d5760dafb7d79ff5816577ee",
       "twins": [
         "xchain-sync"
       ]
@@ -1941,6 +1941,13 @@
       "date": "2026-10-05"
     },
     {
+      "id": "train_activation",
+      "from": "0e52179db25e4ef767aa8f695604b37a4a8d7c2dcc70afafadbd40b5760ca9eb",
+      "to": "4f82ea30b5120eb7fc0c9cf56f3c115781238255d5760dafb7d79ff5816577ee",
+      "reason": "resolveRuleSet picks the highest rule set among those active at the height",
+      "date": "2026-10-05"
+    },
+    {
       "id": "protocol_changes",
       "from": "b3202d580497fa273f3d18b617ba1b706bb45cf2a6b72f889b96cf1e8c5cbff1",
       "to": "91eecda92a5961138e245106b2ecd67c5014d7dc1048d1c495bdd71c36f6d69f",
@@ -1967,6 +1974,17 @@
       "to": "b7db67ba116bc4ec6649bf24c23c2affcfe4eccd8cf447480fe4f683d13ae12f",
       "reason": "bind the LTC and DOGE preload and price barrier on the signed admission height once the mirror admission consumer gate is armed",
       "date": "2026-10-06"
+    },
+    {
+      "id": "amount_representability_activation",
+      "from": "8d0a7e4fbd7acbccde550e424dd4bdd5d04619992678e87f44e79eb849747e62",
+      "to": "8d0a7e4fbd7acbccde550e424dd4bdd5d04619992678e87f44e79eb849747e62",
+      "path": {
+        "from": "src/utility/amount_representability_gate.js",
+        "to": "src/utility/validation/amount_representability_gate.js"
+      },
+      "date": "2026-10-06",
+      "reason": "move into utility/validation"
     },
     {
       "id": "protocol_changes",

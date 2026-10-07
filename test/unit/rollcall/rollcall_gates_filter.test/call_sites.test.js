@@ -42,7 +42,7 @@ const attestBcastFee  = require('../../../../src/actions/attest/attest_broadcast
 const RESPONSE_MIRROR_KEY = 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
 // The SAME module object actions/attest.js closed over at require time, which is
 // what makes a sinon stub here reach inside the handler.
-const rgf             = require('../../../../src/actions/attest/rollcall_gates_filter.js');
+const rgf             = require('../../../../src/actions/attest/gates/rollcall_gates_filter.js');
 
 const deriveReqId = (txHash, rootActionIndex, emitterPath, contractIndex, position) =>
     crypto.createHash('sha256')

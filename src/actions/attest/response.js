@@ -25,7 +25,7 @@
 // same module, so an artifact cannot be judged differently by delivery route.
 const avr     = require('./attest_response_verify.js');
 // The response-mirror flag day, keyed on the REQUEST's own block: a registry row
-// read by literal key (W5). utility/attest_mirror_select.js reads the same row for the
+// read by literal key (W5). utility/attest_mirror/attest_mirror_select.js reads the same row for the
 // applier pass's selection.
 const gateRegistry = require('../../consensus/gate_registry');
 const RESPONSE_MIRROR_KEY = 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
@@ -313,7 +313,7 @@ module.exports = {
     // the chain-handler gate above in this file that makes an on-chain v1 for such a request
     // `invalid`, and the broadcast-fee retirement above the height (settle.js). All three must
     // agree about which era a request is in, and the only way to guarantee that is one predicate.
-    // The applier pass's selection (utility/attest_mirror_select.js) reads the same row inline
+    // The applier pass's selection (utility/attest_mirror/attest_mirror_select.js) reads the same row inline
     // with the same arguments; test/unit/attestation/attest_mirror_era_parity.test.js holds
     // the two to one verdict.
     // For a relayed request the local row IS the BTC v3 materialization, so

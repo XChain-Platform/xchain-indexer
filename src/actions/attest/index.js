@@ -82,11 +82,11 @@ const responsePart       = require('./response.js');
 const mirrorApplyPart    = require('./mirror_apply.js');
 const expirePart         = require('./expire.js');
 const batchPart          = require('./batch.js');
-const batchAbsorbPart    = require('./batch_absorb.js');
+const batchAbsorbPart    = require('./batch/batch_absorb.js');
 const responsibleSetPart = require('./responsible_set.js');
-const relayPart          = require('./relay.js');
-const relayRequestPart   = require('./relay_request.js');
-const relayResponsePart  = require('./relay_response.js');
+const relayPart          = require('./relay/relay.js');
+const relayRequestPart   = require('./relay/relay_request.js');
+const relayResponsePart  = require('./relay/relay_response.js');
 const settlePart         = require('./settle.js');
 const callbacksPart      = require('./callbacks.js');
 
@@ -94,7 +94,7 @@ class Attest {
 
     // The action's constants, read off the class by requirers that predate constants.js
     // (unit suites read the mirror-apply cap and the stamp off the class, while the applier
-    // pass in utility/attest_mirror.js and utility/attest_mirror_select.js imports the cap
+    // pass in utility/attest_mirror/attest_mirror.js and utility/attest_mirror/attest_mirror_select.js imports the cap
     // from constants.js itself). constants.js is their home and these are the same
     // bindings, carried as statics so the module's one export is the class itself.
     static REQUEST_ID_PREIMAGE_FIELDS          = REQUEST_ID_PREIMAGE_FIELDS;

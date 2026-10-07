@@ -48,7 +48,8 @@
 // which the SDK and the wallet read as the same map when they decide whether to offer
 // an edit form.
 const gateRegistry = require('../consensus/gate_registry');
-const { getOpenOrdersByList, getOpenSwapsByList } = require('../db/lists/rematch.js');
+const { getOpenOrdersByList, getOpenSwapsByList,
+        getOpenMarketsByTokenList } = require('../db/lists/rematch.js');
 const { planListRematch } = require('../consensus/list_rematch/plan.js');
 
 const addressRefPart = require('./list/address_ref.js');
@@ -198,12 +199,16 @@ class List {
            status!='valid' || data['TYPE']!=2 ||
            !gateRegistry.activeAt('list_change_rematch_activation.LIST_CHANGE_REMATCH_ACTIVATION', this.config['NETWORK'], this.config['COIN'], data['BLOCK_INDEX'], null))
             return;
-
         let listRoot = this.isCreateFormat(format) ? data['ACTION_INDEX'] : data['LIST_ACTION_INDEX'];
-        let orderIndexes = await getOpenOrdersByList(this.indexerDb, listRoot);
-        let swapIndexes = await getOpenSwapsByList(this.indexerDb, listRoot);
-        let plan = planListRematch(data, orderIndexes, swapIndexes);
-        for(let step of plan)
+        let orders = [...new Set([
+            ...await getOpenOrdersByList(this.indexerDb, listRoot),
+            ...await getOpenMarketsByTokenList(this.indexerDb, listRoot, 'order')
+        ])];
+        let swaps = [...new Set([
+            ...await getOpenSwapsByList(this.indexerDb, listRoot),
+            ...await getOpenMarketsByTokenList(this.indexerDb, listRoot, 'swap')
+        ])];
+        for(let step of planListRematch(data, orders, swaps))
             await this.actions.processAction(step.action, null, step.data, null);
     }
 

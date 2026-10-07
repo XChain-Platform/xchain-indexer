@@ -226,7 +226,7 @@ describe('Dispenser_Close action handler @regression @tier2', function () {
 
 // ── 1678: ownership cancel/expire routing flag-day ────────────────────────
 // Cancelling an OWNERSHIP dispenser must NOT hand the canceller (which may be
-// GET_ADDRESS) the token's issuer rights. Per DISPENSER.md:122 only a SWEEP
+// GET_ADDRESS) the token's issuer rights. Per dispenser.md (Token Ownership Dispensers) only a SWEEP
 // delivers ownership to a non-SOURCE destination; cancel/expire leave it with
 // SOURCE. Gated (the dispenser_ownership_cancel_activation registry row) so historical replay
 // stays byte-identical below the flag-day.

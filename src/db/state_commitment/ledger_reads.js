@@ -83,18 +83,24 @@ async function getNonzeroNetBalances(db){
 // throws and the block retries. A guard that reads through the fail-soft path
 // would see [] as "the ledger moved nothing" and pass every block, which is
 // worse than not having a guard at all (M-17).
+//
+// Each UNION ALL branch joins actions and filters by block itself: a block_index
+// predicate outside the derived table cannot be pushed into it, so the old shape
+// materialized every credits and debits row ever written on each call.
 async function ledgerKeysForBlock(db, blockIndex){
     const rows = await db.doQueryStrict(
         `SELECT DISTINCT ia.address AS address, it.tick AS tick
            FROM (
-                SELECT action_index, address_id, tick_id FROM credits
+                SELECT c.address_id, c.tick_id FROM credits c
+                  INNER JOIN actions a ON a.action_index = c.action_index
+                 WHERE a.block_index = ?
                 UNION ALL
-                SELECT action_index, address_id, tick_id FROM debits
+                SELECT d.address_id, d.tick_id FROM debits d
+                  INNER JOIN actions a ON a.action_index = d.action_index
+                 WHERE a.block_index = ?
            ) s
-           INNER JOIN actions a          ON a.action_index = s.action_index
            INNER JOIN index_addresses ia ON ia.id = s.address_id
-           INNER JOIN index_tickers   it ON it.id = s.tick_id
-          WHERE a.block_index = ?`, [blockIndex]);
+           INNER JOIN index_tickers   it ON it.id = s.tick_id`, [blockIndex, blockIndex]);
 
     const keys = new Set();
     for(const r of (rows || []))

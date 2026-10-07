@@ -59,6 +59,18 @@ module.exports = {
             'Recovery: rebuild decoder+indexer jointly (clean reindex), or restore a matching decoder DB.');
     },
 
+    // Resolve protocol time for an already stored block without reading or writing
+    // the hot-path protocol-time memo.
+    async protocolTimeForStoredBlock(block_index){
+        let key = Number(block_index);
+        let raw = await this.getRawBlockTime(block_index);
+        let network = (this.config) ? this.config['NETWORK'] : undefined;
+        if(!protocolTime.isProtocolTimeMtpActive(network) || raw === false)
+            return raw;
+        let previous = await this.getPreviousBlockTimes(key, protocolTime.MEDIAN_TIME_SPAN);
+        return protocolTime.protocolTime(network, raw, previous);
+    },
+
     // Handle getting block time for a given block. Memoized (last-block-wins, see
     // this._blockTimeCache in the constructor): block_time is constant per block_index, and
     // protocol_changes.isEnabled() calls this repeatedly per block under the hot per-action path.
@@ -88,16 +100,10 @@ module.exports = {
             this._protocolTimeCache = { block_index: null, block_time: null };
         if(this._protocolTimeCache.block_index === key)
             return this._protocolTimeCache.block_time;
-        let raw = await this.getRawBlockTime(block_index);
-        let network = (this.config) ? this.config['NETWORK'] : undefined;
-        let protocolTimeValue = raw;
-        if(protocolTime.isProtocolTimeMtpActive(network) && raw !== false){
-            let previous = await this.getPreviousBlockTimes(key, protocolTime.MEDIAN_TIME_SPAN);
-            protocolTimeValue = protocolTime.protocolTime(network, raw, previous);
-        }
+        let protocolTimeValue = await this.protocolTimeForStoredBlock(block_index);
         // Never memoize an unresolvable lookup, for the same reason the raw reader
         // does not: the retry must re-query against a healthy DB.
-        if(raw !== false){
+        if(protocolTimeValue !== false){
             this._protocolTimeCache.block_index = key;
             this._protocolTimeCache.block_time  = protocolTimeValue;
         }
