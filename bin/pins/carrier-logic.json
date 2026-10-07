@@ -2,7 +2,7 @@
   "version": 1,
   "entries": {
     "amount_representability_activation": {
-      "path": "src/utility/amount_representability_gate.js",
+      "path": "src/utility/validation/amount_representability_gate.js",
       "hash": "8d0a7e4fbd7acbccde550e424dd4bdd5d04619992678e87f44e79eb849747e62",
       "twins": []
     },
@@ -26,7 +26,7 @@
       "twins": []
     },
     "attest_request_cap_activation": {
-      "path": "src/actions/attest/attest_request_cap_gate.js",
+      "path": "src/actions/attest/gates/attest_request_cap_gate.js",
       "hash": "ed391a6acf41e9e647ecadd126409e75c3176827ef148290547097f46e51edbe",
       "twins": []
     },
@@ -1974,6 +1974,17 @@
       "to": "b7db67ba116bc4ec6649bf24c23c2affcfe4eccd8cf447480fe4f683d13ae12f",
       "reason": "bind the LTC and DOGE preload and price barrier on the signed admission height once the mirror admission consumer gate is armed",
       "date": "2026-10-06"
+    },
+    {
+      "id": "amount_representability_activation",
+      "from": "8d0a7e4fbd7acbccde550e424dd4bdd5d04619992678e87f44e79eb849747e62",
+      "to": "8d0a7e4fbd7acbccde550e424dd4bdd5d04619992678e87f44e79eb849747e62",
+      "path": {
+        "from": "src/utility/amount_representability_gate.js",
+        "to": "src/utility/validation/amount_representability_gate.js"
+      },
+      "date": "2026-10-06",
+      "reason": "move into utility/validation"
     },
     {
       "id": "protocol_changes",

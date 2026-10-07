@@ -13,7 +13,7 @@
  ********************************************************************/
 
 const assert = require('assert');
-const { maxPriceAgeSecondsAt } = require('../../../src/utility/oracle_price_age.js');
+const { maxPriceAgeSecondsAt } = require('../../../src/utility/price_age/oracle_price_age.js');
 
 describe('price age at block', function(){
     const config = {

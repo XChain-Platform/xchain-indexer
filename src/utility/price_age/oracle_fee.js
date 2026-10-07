@@ -25,8 +25,8 @@
 // it (through coins/to_indexer_config.js), so binding it here moves no module earlier in
 // load order. Held as the module object, not destructured, so getCoinConfig is looked up
 // per call.
-const coinRegistry = require('../coins');
-const { findFeeOutput } = require('./fee_output.js');
+const coinRegistry = require('../../coins');
+const { findFeeOutput } = require('../fee_output.js');
 
 // Batch-cumulative oracle-fee accounting (BATCH_ISSUANCE_LIMITS), the same
 // shape validateNativeCoinFee uses for the native fee pool.

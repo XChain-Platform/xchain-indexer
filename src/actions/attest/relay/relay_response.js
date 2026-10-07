@@ -24,11 +24,11 @@
 const crypto  = require('crypto');
 // The relay flag day is a registry row read by literal key (W5); it keys on the
 // BTC-anchored SNAPSHOT_BLOCK, never a local height.
-const gateRegistry = require('../../consensus/gate_registry');
+const gateRegistry = require('../../../consensus/gate_registry');
 const ATTEST_RELAY_KEY = 'attest_relay_activation.ATTEST_RELAY_ACTIVATION';
-const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
-const { getLogger } = require('../../observability/index.js');
-const { HOME_CHAIN } = require('./constants.js');
+const { rethrowIfInfraFault } = require('../../../consensus/fault_guard.js');
+const { getLogger } = require('../../../observability/index.js');
+const { HOME_CHAIN } = require('../constants.js');
 
 module.exports = {
     // ATTEST v4: relay response (federation-broadcast on the origin chain).

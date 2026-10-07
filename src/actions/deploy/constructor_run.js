@@ -27,7 +27,7 @@ const crypto = require('crypto');
 // with execute.js so a constructor's emissions derive ids the same way an EXECUTE's do.
 const { resolveRootDiscriminator } = require('../../consensus/batch_root_discriminator.js');
 const { GAS_CEILING } = require('./constants.js');
-const { maxPriceAgeSecondsAt } = require('../../utility/oracle_price_age.js');
+const { maxPriceAgeSecondsAt } = require('../../utility/price_age/oracle_price_age.js');
 
 /**
  * Decide whether the constructor runs and resolve its root discriminator.

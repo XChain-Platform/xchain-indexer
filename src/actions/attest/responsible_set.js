@@ -27,7 +27,7 @@ const srb     = require('../../consensus/snapshot_reorg_buffer.js');
 // The rules-aware capability filter: drops a validator whose last rolled ROLLCALL
 // gate list does not cover the gates active at the request block. Inert on every
 // network whose ROLLCALL_GATES_ACTIVATION is null, where it never queries.
-const rgf     = require('./rollcall_gates_filter.js');
+const rgf     = require('./gates/rollcall_gates_filter.js');
 const pmsh    = require('../../attestation/providerMinStakeHistory.js');
 const { getLogger } = require('../../observability/index.js');
 
