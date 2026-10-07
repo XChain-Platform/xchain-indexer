@@ -21,8 +21,10 @@ For commercial licensing, contact **legal@dankest.llc**.
 
 ## Attribution
 
-Any redistribution or modification of this software must retain the following
-attribution, per the AGPL and the project's trademark policy:
+As an additional term under section 7(b) of the GNU Affero General Public
+License v3.0, any redistribution or modification of this software must preserve
+the following author attribution in its source and in the Appropriate Legal
+Notices displayed by any work containing it:
 
 > Based on XChain Platform by Dankest, LLC - https://dankest.llc
 
