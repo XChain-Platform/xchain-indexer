@@ -130,7 +130,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "ebb3851ccbf61b5b3571fe83a95b191eb7ecdfa4ea6f1dfb3bc68c07699dde07",
+      "hash": "5b3e99fe1517becff35ab0c009a1a03fd88653c81a901564ac7953308ce46f1b",
       "twins": []
     },
     "rollcall_activation": {
@@ -2012,6 +2012,13 @@
       "from": "e904e6dafb4783b370a46837e75338dfc389d9825c82d14a7f8b7bc308b07d60",
       "to": "8a8265180a17ec18b607b1a397f3f64787878f07b81231ddafa9d4619ae2d111",
       "reason": "rename two private helpers, logic unchanged",
+      "date": "2026-10-07"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "ebb3851ccbf61b5b3571fe83a95b191eb7ecdfa4ea6f1dfb3bc68c07699dde07",
+      "to": "5b3e99fe1517becff35ab0c009a1a03fd88653c81a901564ac7953308ce46f1b",
+      "reason": "add APPLY_LENGTH_METER registry row and VM-aligned flag times",
       "date": "2026-10-07"
     },
     {
