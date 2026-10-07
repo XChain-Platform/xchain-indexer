@@ -158,6 +158,40 @@ describe('legacy migration rename: ledger remap + ordering @regression @tier1', 
     });
 });
 
+describe('testnet backdated migration retirements @regression @tier1', function () {
+    const RETIRED = [
+        '2026-09-12-state-tree-roots-block-index-idx.sql',
+        '2026-09-12-token-bridge-fields.sql',
+    ];
+
+    it('registers both historical ledger names', function () {
+        RETIRED.forEach(function (name) {
+            assert.ok(Database.RETIRED_MIGRATION_FILES.includes(name), name + ' must remain registered');
+        });
+    });
+
+    it('removes both backdated files from the runnable migration inventory', function () {
+        RETIRED.forEach(function (name) {
+            assert.ok(!fs.existsSync(path.join(MIG_DIR, name)), name + ' should have been retired');
+        });
+    });
+
+    it('does not rewrite historical ledger rows for files that no longer run', function () {
+        assert.deepStrictEqual(Database.planLedgerRenames(RETIRED), []);
+    });
+
+    it('keeps both retired schema changes in the fresh-schema definitions', function () {
+        const readSchema = function (name) {
+            return fs.readFileSync(path.join(MIG_DIR, '..', name + '.sql'), 'utf8');
+        };
+        assert.match(readSchema('state_tree_roots'), /CREATE INDEX block_index ON state_tree_roots \(block_index\)/);
+        assert.match(readSchema('issues'), /bridge_chains\s+VARCHAR\(250\)/);
+        assert.match(readSchema('issues'), /lock_bridge\s+VARCHAR\(1\)/);
+        assert.match(readSchema('tokens'), /min_depth\s+BIGINT UNSIGNED/);
+        assert.match(readSchema('tokens'), /bridged\s+TINYINT\(1\) NOT NULL DEFAULT 0/);
+    });
+});
+
 describe('fresh schema migration ledger @regression @tier1', function () {
     const INSERT_SQL = /^INSERT INTO schema_migrations \(name, checksum, mode, applied_at\) VALUES \(\?, \?, \?, NOW\(\)\) ON DUPLICATE KEY UPDATE name = name$/;
 

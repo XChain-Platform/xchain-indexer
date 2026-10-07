@@ -5058,8 +5058,6 @@
       "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-09-11-cross-chain-btc-chain-id.sql: if tagged mode=auto, passes the destructive-DDL scan",
       "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-09-11-price-snapshots-batch-block-time.sql: if tagged mode=auto, passes the destructive-DDL scan",
       "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-09-12-bridge-tables.sql: if tagged mode=auto, passes the destructive-DDL scan",
-      "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-09-12-state-tree-roots-block-index-idx.sql: if tagged mode=auto, passes the destructive-DDL scan",
-      "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-09-12-token-bridge-fields.sql: if tagged mode=auto, passes the destructive-DDL scan",
       "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-09-13-destroys-sends-leg-ordinal.sql: if tagged mode=auto, passes the destructive-DDL scan"
     ],
     "69b7814a5ee226de": [
@@ -10451,10 +10449,6 @@
       "committed migrations declare intent @regression @tier1 2026-09-11-price-snapshots-batch-block-time.sql: uses the dated YYYY-MM-DD- filename prefix (ordering convention)",
       "committed migrations declare intent @regression @tier1 2026-09-12-bridge-tables.sql: carries an explicit `-- xchain:migration mode=auto|manual` tag the runner sees",
       "committed migrations declare intent @regression @tier1 2026-09-12-bridge-tables.sql: uses the dated YYYY-MM-DD- filename prefix (ordering convention)",
-      "committed migrations declare intent @regression @tier1 2026-09-12-state-tree-roots-block-index-idx.sql: carries an explicit `-- xchain:migration mode=auto|manual` tag the runner sees",
-      "committed migrations declare intent @regression @tier1 2026-09-12-state-tree-roots-block-index-idx.sql: uses the dated YYYY-MM-DD- filename prefix (ordering convention)",
-      "committed migrations declare intent @regression @tier1 2026-09-12-token-bridge-fields.sql: carries an explicit `-- xchain:migration mode=auto|manual` tag the runner sees",
-      "committed migrations declare intent @regression @tier1 2026-09-12-token-bridge-fields.sql: uses the dated YYYY-MM-DD- filename prefix (ordering convention)",
       "committed migrations declare intent @regression @tier1 2026-09-13-destroys-sends-leg-ordinal.sql: carries an explicit `-- xchain:migration mode=auto|manual` tag the runner sees",
       "committed migrations declare intent @regression @tier1 2026-09-13-destroys-sends-leg-ordinal.sql: uses the dated YYYY-MM-DD- filename prefix (ordering convention)",
       "committed migrations declare intent @regression @tier1 migrations directory is present",
@@ -10464,7 +10458,11 @@
       "legacy migration rename: ledger remap + ordering @regression @tier1 planLedgerRenames is a no-op on a database already re-keyed (idempotent)",
       "legacy migration rename: ledger remap + ordering @regression @tier1 planLedgerRenames is a no-op on a fresh database (nothing applied yet)",
       "legacy migration rename: ledger remap + ordering @regression @tier1 planLedgerRenames re-keys an old-name-applied database",
-      "legacy migration rename: ledger remap + ordering @regression @tier1 the three legacy undated names are mapped to dated targets"
+      "legacy migration rename: ledger remap + ordering @regression @tier1 the three legacy undated names are mapped to dated targets",
+      "testnet backdated migration retirements @regression @tier1 does not rewrite historical ledger rows for files that no longer run",
+      "testnet backdated migration retirements @regression @tier1 keeps both retired schema changes in the fresh-schema definitions",
+      "testnet backdated migration retirements @regression @tier1 registers both historical ledger names",
+      "testnet backdated migration retirements @regression @tier1 removes both backdated files from the runnable migration inventory"
     ],
     "d6d993761e998d4a": [
       "the fee-quote dry run drops the SMT name memos it poisoned @regression a quote whose handler THROWS invalidates too (the teardown is in the finally)",

@@ -54,6 +54,11 @@ const MIGRATION_LEDGER_RENAMES = {
     '2026-09-09-destroys-sends-leg-ordinal.sql': '2026-09-13-destroys-sends-leg-ordinal.sql',
 };
 
+const RETIRED_MIGRATION_FILES = Object.freeze([
+    '2026-09-12-state-tree-roots-block-index-idx.sql',
+    '2026-09-12-token-bridge-fields.sql',
+]);
+
 // Pure planner for the one-time ledger rename heal. Given the names already recorded
 // in schema_migrations, return the {from,to} re-keys to apply: only for legacy names
 // that are present and whose dated target is not already recorded. Idempotent - a DB
@@ -193,6 +198,7 @@ const migrationDeclaresDeployPrecondition = function(raw){
 
 module.exports = {
     MIGRATION_LEDGER_RENAMES,
+    RETIRED_MIGRATION_FILES,
     planLedgerRenames,
     backdatedFrontierViolation,
     DEPLOY_PRECONDITION_TAG,
