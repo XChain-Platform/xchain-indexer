@@ -130,7 +130,8 @@ module.exports = {
             // after the author partition, because a batch key is a hash over the window it
             // names, so anyone can derive it and file wires under it ahead of the honest
             // publisher. The JS filter stays as a harmless second pass.
-            mine = this.authoredBy(await this.indexerDb.getAttestBatchChunks(head.batchKey, author), author);
+            mine = this.authoredBy(await this.indexerDb.getAttestBatchChunks(head.batchKey, author,
+                { totalChunks: head.totalChunks, batchCrc32: head.batchCrc32 }), author);
             if(this.canonicalBatchHead(mine))
                 error = 'invalid: BATCH_KEY (this publisher already has a head for the window)';
         }
@@ -194,15 +195,14 @@ module.exports = {
             if(!chunk.ok) error = chunk.status;
         }
 
-        // One read serves all three things this handler needs from the batch's stored rows:
-        // the head to verify against, the geometry to agree with, and the slots already
-        // taken. Rejected rows never appear in it, so junk neither occupies a slot nor
-        // contributes bytes, and the author partition makes the rest this publisher's own.
+        // One read, scoped to this author and this wire's encoding, serves the head, the
+        // geometry check and (once a head exists) the slots taken; rejected rows never appear,
+        // so junk neither occupies a slot nor contributes bytes.
         let stored = [], headRow = null;
         if(!error){
             let chunkAuthor = String(data['SOURCE'] || '');
-            stored  = this.authoredBy(await this.indexerDb.getAttestBatchChunks(chunk.batchKey, chunkAuthor),
-                                       chunkAuthor);
+            stored  = this.authoredBy(await this.indexerDb.getAttestBatchChunks(chunk.batchKey, chunkAuthor,
+                { totalChunks: chunk.totalChunks, batchCrc32: chunk.batchCrc32 }), chunkAuthor);
             headRow = this.canonicalBatchHead(stored);
         }
 
@@ -219,10 +219,17 @@ module.exports = {
         // which is what makes a replayed chunk inert instead of a second absorption.
         // With a head on chain the slots that count are the head's own: a chunk of another
         // encoding filed under the key is not this batch's, so it must not fill the slot.
-        const taken = headRow ? this.continuationsOfHead(this.headFromRow(headRow), stored) : stored;
-        if(!error && taken.some(r => Number(r.version) === abw.ATTEST_BATCH_CONTINUATION_VERSION &&
-                                      Number(r.chunk_index) === chunk.chunkIndex))
+        // With none, this publisher's slot in ANY encoding counts, asked directly because the
+        // read above holds only this wire's encoding.
+        if(!error && headRow){
+            const taken = this.continuationsOfHead(this.headFromRow(headRow), stored);
+            if(taken.some(r => Number(r.version) === abw.ATTEST_BATCH_CONTINUATION_VERSION &&
+                               Number(r.chunk_index) === chunk.chunkIndex))
+                error = 'invalid: CHUNK_INDEX (duplicate)';
+        } else if(!error &&
+                  await this.indexerDb.attestBatchSlotTaken(chunk.batchKey, String(data['SOURCE'] || ''), chunk.chunkIndex)){
             error = 'invalid: CHUNK_INDEX (duplicate)';
+        }
 
         data['REQUEST_ID'] = chunk && chunk.ok ? chunk.batchKey : '';
         data['VERSION']    = abw.ATTEST_BATCH_CONTINUATION_VERSION;

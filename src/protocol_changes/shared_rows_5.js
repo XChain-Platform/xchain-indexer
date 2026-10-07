@@ -38,7 +38,7 @@ const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
 
 // SHARED-GATES BEGIN
 // token_policy_activation
-// TOKEN_POLICY_INHERITANCE_ACTIVATION: the height (per network) on the chain being
+// TOKEN_POLICY_INHERITANCE_ACTIVATION: the height (keyed <COIN>:<network>, bare network as fallback) on the chain being
 // parsed at/above which policy inheritance is in effect. Keyed on the chain's OWN
 // block_index, never on a snapshot's snapshot_block or origin_block, because what it
 // gates is the verdict of an action mined here.
@@ -54,14 +54,14 @@ const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
 // Below it every milestone-1 verdict stands unchanged, so the replay corpus is
 // hash-identical on every chain with this code present.
 //
-// Mainnet and testnet are the house sentinel 9999999999: this rides the same MAJOR
+// Mainnet is the house sentinel 9999999999 and each testnet chain is armed below: this rides the same MAJOR
 // train as the two bridges and the operator sizes the dated instant at the cut. A
 // height in the map ahead of the fleet's deploy tip is the operator's act, not a
 // build's. Regtest is 0 so the e2e rail exercises the armed rule from genesis.
 //
 // TWO ORDERING INVARIANTS, asserted by test/unit/activationConstantsParity.test.js
 // over the canonical constants.js rather than over this copy:
-//   - >= TOKEN_BRIDGE_ACTIVATION per network. Inheritance has nothing to inherit onto
+//   - >= TOKEN_BRIDGE_ACTIVATION per coin and network. Inheritance has nothing to inherit onto
 //     before bridged copies can exist.
 //   - >= LIST_EDIT_RESOLUTION_ACTIVATION per chain and network. The snapshot read
 //     resolves a list AS OF origin_block through getListAtBlock, which walks the edit
