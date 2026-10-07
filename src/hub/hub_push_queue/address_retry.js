@@ -71,6 +71,27 @@ class AddressRetry {
     attempt(row, candidates){
         return this.deliveries.attempt(row, candidates);
     }
+
+    // Bind a live post-commit send to the selector's current hub when pushes fan out, so
+    // the hub later recorded in delivered_to is the hub that took it even if the selector
+    // moves mid-call. Pinned or single-hub nodes keep the shared client and record nothing.
+    liveDeliveryTarget(fallbackClient){
+        let address = this.currentSelectorAddress();
+        if(!address || this.candidateAddresses().length === 0)
+            return { client: fallbackClient, address: null };
+        return { client: this.deliveries.clientForAddress(address), address: address };
+    }
+
+    settleLiveDelivery(rowId, address){
+        return this.deliveries.settleLiveDelivery(rowId, address);
+    }
+
+    // The live-delivery facade of a running queue, or null when there is no queue (early
+    // boot, test doubles); a null facade means the caller keeps the plain delete on success.
+    static liveFacade(queue){
+        let facade = queue && queue.hubPushDeliveries;
+        return facade && typeof facade.settleLiveDelivery === 'function' ? facade : null;
+    }
 }
 
 module.exports = AddressRetry;

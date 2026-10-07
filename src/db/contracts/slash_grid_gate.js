@@ -21,7 +21,7 @@
  * from the same `take` but by two independent roundings, so they can disagree:
  * with a decimals=0 tick, a stake row of '1' and a slash of '0.5',
  * bcsub('1','0.5',0) is '1' - the row is written back UNCHANGED - while
- * bcadd('0','0.5',0) is '1', so actions/execute.js _processSlashEmission
+ * bcadd('0','0.5',0) is '1', so actions/execute/slash_emission.js processSlashEmission
  * releases a full unit of escrow and credits a full unit to the slash
  * destination against a stake that was never debited. The stake stays
  * slashable again and withdrawable. Both passes carry it, active

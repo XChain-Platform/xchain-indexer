@@ -220,16 +220,49 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', () => 
         });
 
         it('refuses to judge a partial set when the cursor is missing or does not advance', async function () {
+        // A missing cursor must be refused on the first page itself, so exactly one fetch.
+        for (const missing of [null, undefined, '', '  ', false, true, '41x', -1]) {
         const noCursor = client();
-        noCursor.fetch = async () => ({ exists: true, anchors: [sibling()], truncated: true,
-        next_after_action_index: null });
-        assert.strictEqual(await noCursor.proveMined(expectation()), 'unknown');
+        let calls = 0;
+        noCursor.fetch = async () => { calls++; return { exists: true, anchors: [sibling()], truncated: true,
+        next_after_action_index: missing }; };
+        assert.strictEqual(await noCursor.proveMined(expectation()), 'unknown', 'cursor ' + JSON.stringify(missing));
+        assert.strictEqual(calls, 1, 'cursor ' + JSON.stringify(missing) + ' must be refused on page one');
+        }
 
         const stuck = client();
         stuck.fetch = async () => ({ exists: true, anchors: [sibling()], truncated: true,
         next_after_action_index: 41 });
         assert.strictEqual(await stuck.proveMined(expectation()), 'unknown',
         'a cursor that never advances would loop forever; it is a half-spoken protocol, not a set');
+        });
+
+        it('never resumes from cursor 0 when a truncated first page carries no cursor', async function () {
+        // A peer answering the coerced cursor-0 request with a "complete" page must not
+        // get its overlapping, re-fetched set judged.
+        const c = client();
+        const seen = [];
+        c.fetch = async (txid, after) => {
+        seen.push(after);
+        return (after === null || after === undefined)
+        ? { exists: true, anchors: [sibling()], truncated: true, next_after_action_index: null }
+        : { exists: true, anchors: [anchor()], truncated: false, next_after_action_index: null };
+        };
+        assert.strictEqual(await c.proveMined(expectation()), 'unknown');
+        assert.deepStrictEqual(seen, [null], 'no second page may be requested without a cursor');
+        });
+
+        it('still follows a numeric-string cursor from a peer that serializes it as text', async function () {
+        const c = client();
+        const seen = [];
+        c.fetch = async (txid, after) => {
+        seen.push(after);
+        return (after === null || after === undefined)
+        ? { exists: true, anchors: [sibling()], truncated: true, next_after_action_index: '41' }
+        : { exists: true, anchors: [anchor()], truncated: false, next_after_action_index: null };
+        };
+        assert.strictEqual(await c.proveMined(expectation()), 'verified');
+        assert.deepStrictEqual(seen, [null, 41]);
         });
         });
 });
@@ -280,6 +313,7 @@ describe('AnchorProofClient (DOGE anchor visibility) @regression @tier2', () => 
     return { exists: true, anchors: [sibling()], truncated: true, next_after_action_index: null };
     };
     assert.strictEqual(await c.proveMined(expectation()), 'unknown');
+    assert.strictEqual(calls, 1, 'a truncated page with no cursor is refused on page one');
     const before = calls;
     assert.strictEqual(await c.proveMined(expectation()), 'unknown');
     assert.ok(calls > before, 'an undecided verdict must be re-asked, never cached');

@@ -17,8 +17,8 @@
  * every rule, table and halt message is carried verbatim, and the entry
  * re-exports all of it, so `require('escrow_journal_writer.js')` is unchanged.
  *
- * The two guards that read this text (test/unit/escrow_journal_writer.test.js
- * banned-identifier scan, test/unit/stake_escrow_conservation.test.js
+ * The two guards that read this text (test/unit/bridge/escrow_journal_writer.test.js
+ * banned-identifier scan, test/unit/bridge/stake_escrow_conservation.test.js
  * SELF_ATTRIBUTING slice) read the entry AND every part here as one text, in
  * name order, so nothing moved out from under them.
  *
@@ -55,7 +55,7 @@ const SELF_ATTRIBUTING = new Set([
 
 // The DISPENSER family resolves through the DISPENSER ROW for every action,
 // including the ones whose escrow row already carries an address. That is not
-// uniformity for its own sake: dispenser.js:350 admits a format-2 refill from
+// uniformity for its own sake: checkDispenserAuthority (actions/dispenser/index.js) admits a format-2 refill from
 // EITHER the owner OR the dispenser's GET_ADDRESS, so a DISPENSER_EDIT escrow
 // row can be keyed to an address that is NOT the lock's owner, while every
 // release (dispense, close, expire) still pays out against the dispenser's own

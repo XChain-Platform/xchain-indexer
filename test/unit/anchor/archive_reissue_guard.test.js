@@ -5,10 +5,10 @@ const sinon = require('sinon');
 
 const {
     ARCHIVE_REISSUE_RETRY_REASON
-} = require('../../../src/actions/anchor/archive_reissue.js');
+} = require('../../../src/actions/anchor/archive/archive_reissue.js');
 const {
     archiveReissueRefusal
-} = require('../../../src/actions/anchor/archive_reissue_guard.js');
+} = require('../../../src/actions/anchor/archive/archive_reissue_guard.js');
 
 const INCOMING = {
     author: 'DPublisher',

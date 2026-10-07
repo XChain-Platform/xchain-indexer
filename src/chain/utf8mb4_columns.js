@@ -89,8 +89,8 @@
  *   * list_metas.name and .description are born utf8mb4 on both schema paths.
  *
  * BYTE-ALIGNED TWIN: copied verbatim into xchain-sync/src/schema/utf8mb4_columns.js (sync has no
- * dependency on this package by design; same convention as tableLifecycle.js /
- * stateHash.js). Edit here, then `cp` to the twin; the sync suite asserts byte-identity.
+ * dependency on this package by design; same convention as table_lifecycle.js /
+ * state_hash.js). Edit here, then `cp` to the twin; the sync suite asserts byte-identity.
  *
  * Entry fields:
  *   table    table name (src/sql/<table>.sql)

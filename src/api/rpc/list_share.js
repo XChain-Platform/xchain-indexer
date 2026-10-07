@@ -17,7 +17,7 @@
 const { listMembershipHash, listMetaHash } = require('../../consensus/list_share_hash.js');
 const { getSharedLists, getListOwner } = require('../../db/lists/sharing.js');
 const { getLogger } = require('../../observability/index.js');
-const { qualifyTickMembers } = require('./list_share_tick_members.js');
+const { qualifyTickMembers } = require('./list_share/list_share_tick_members.js');
 
 const CANONICAL_NON_NEGATIVE_INTEGER = /^(0|[1-9][0-9]*)$/;
 

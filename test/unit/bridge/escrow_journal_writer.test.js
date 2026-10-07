@@ -108,7 +108,7 @@ describe('escrow journal writer: attribution exhaustiveness @regression', functi
 describe('escrow journal writer: attribution exhaustiveness @regression', function(){
 
     it('the whole DISPENSER family resolves through the dispenser row, never the row address', function(){
-        // dispenser.js:350 admits a format-2 refill from the owner OR the
+        // checkDispenserAuthority (actions/dispenser/index.js) admits a format-2 refill from the owner OR the
         // dispenser's GET_ADDRESS, so a DISPENSER_EDIT escrow row can carry an
         // address that is not the lock's owner, while every release pays out
         // against the dispenser's own SOURCE. Self-attributing any of them would
