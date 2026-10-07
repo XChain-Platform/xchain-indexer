@@ -30,12 +30,23 @@ const { getLogger } = require('../observability/index.js');
 
 module.exports = {
 
-    // Name the fault that ended a block: a host or proof fault sets its stall reason and
-    // is logged loudly; anything else is logged as a block error.
+    // Name a specialized fault immediately and a repeated generic fault on its second hit.
     noteBlockFault(error, lastIndexerBlock){
-        if(this.noteExecutorOrAnchorFault(error, lastIndexerBlock)) return;
-        if(this.noteBridgeOrRollcallFault(error, lastIndexerBlock)) return;
-        if(this.noteListShareFault(error, lastIndexerBlock)) return;
+        if(this.noteExecutorOrAnchorFault(error, lastIndexerBlock)
+            || this.noteBridgeOrRollcallFault(error, lastIndexerBlock)
+            || this.noteListShareFault(error, lastIndexerBlock)){
+            this._lastParseException = null;
+            return;
+        }
+        let errorText = error && error.message ? error.message : String(error);
+        let signature = String(lastIndexerBlock) + '\n' + errorText;
+        if(this._lastParseException === signature){
+            this.stallReason = 'parse_exception: ' + errorText;
+            this.stallClearsAt = null;
+            this._lastParseException = null;
+        } else {
+            this._lastParseException = signature;
+        }
         // Log the error
         this.util.logError(`Error while parsing block data at block ${lastIndexerBlock}:`, error);
     },
