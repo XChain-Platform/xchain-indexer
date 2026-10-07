@@ -38,7 +38,8 @@ function delayUsesProtocolTime(db, block_index){
 async function dispenserDelayStart(db, row, useProtocolTime){
     if(!useProtocolTime)
         return row.block_time;
-    return db.protocolTimeForStoredBlock(row.block_index);
+    let protocolTime = await db.protocolTimeForStoredBlock(row.block_index);
+    return db.util.isNull(protocolTime) ? false : protocolTime;
 }
 
 // The getDispenserInfo read: one dispenser by coin and action_index with every column

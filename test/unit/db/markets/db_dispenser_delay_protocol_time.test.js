@@ -34,7 +34,7 @@ function dbFor(rows, overrides = {}) {
             isNumeric: value => value !== null && value !== '' && !isNaN(Number(value)),
         },
         doQuery: sinon.stub().resolves(rows),
-        protocolTimeForStoredBlock: sinon.stub().callsFake(async index => index === 7 ? 500 : false),
+        protocolTimeForStoredBlock: sinon.stub().callsFake(async index => index === 7 ? 500 : null),
     }, overrides);
 }
 
@@ -90,7 +90,17 @@ describe('dispenser delay protocol-time gate @regression @tier1', function () {
         sinon.assert.notCalled(db.protocolTimeForStoredBlock);
     });
 
-    it('does not mature a delay when the gated stored block cannot be resolved', async function () {
+    it('does not mature a list delay when the gated stored block cannot be resolved', async function () {
+        const db = dbFor([{ expiration: null, allow_list: 5, block_list: null,
+            block_time: 1000, block_index: 8 }]);
+
+        const edit = await dispensers.getDispenserEdits.call(db, 1, 10000, 20);
+
+        assert.strictEqual(edit.allow_list, false);
+        sinon.assert.calledOnceWithExactly(db.protocolTimeForStoredBlock, 8);
+    });
+
+    it('does not mature a close delay when the gated stored block cannot be resolved', async function () {
         const db = dbFor([{ action_index: 9, block_time: 1000, block_index: 8 }]);
 
         assert.deepStrictEqual(await dispensers.findCancelledDispensers.call(db, 10000, 20), []);
