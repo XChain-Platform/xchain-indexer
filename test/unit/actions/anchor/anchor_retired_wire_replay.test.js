@@ -141,6 +141,19 @@ describe('ANCHOR retired wires on a from-genesis replay @regression', function (
         assert.strictEqual(args[args.length - 2], below, 'block_index_doge is the mined height');
     });
 
+    it('a v5 anchor below ANCHOR_ACTIVATION is recorded unverified and SQL-safe once the pre-activation status gate is active', async function () {
+        const below = ANCHOR_HEIGHTS.testnet - 1;
+        const real = gateRegistry.activeAt.bind(gateRegistry);
+        sinon.stub(gateRegistry, 'activeAt').callsFake((key, ...rest) =>
+            (key === 'anchor_preactivation_status_activation.ANCHOR_PREACTIVATION_STATUS_ACTIVATION' ? true : real(key, ...rest)));
+        const data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 5, COIN: 'DOGE', BLOCK_INDEX: below, ACTION_INDEX: 12 });
+        await handler.parse(v5Params(), data, null);
+        assert.strictEqual(data['STATUS'], 'unverified');
+        assert.ok(indexer.indexerDb.createAnchorAction.calledOnce, 'the wire is still recorded');
+        assertSqlSafe(await runCreate(makeDb(), indexer.indexerDb.createAnchorAction.lastCall.args[0]));
+        assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
+    });
+
     it('a v7 bundle below ANCHOR_ACTIVATION (three sections walked as one head) is recorded SQL-safe too', async function () {
         const below = ANCHOR_HEIGHTS.testnet - 1;
         // The old bundle: VERSION|NETWORK|SNAPSHOT_BLOCK|SECTION_COUNT|<sections...>|PUBLISHER|...

@@ -69,6 +69,10 @@ addGate('anchor_activation.ANCHOR_ACTIVATION', 'height', {
     regtest: 0,
 });
 
+// anchor_preactivation_status_activation: at/above it an ANCHOR below ANCHOR_ACTIVATION is stamped
+// 'unverified' (a node-class status) instead of invalid; unarmed until the cut sets it with the reindex.
+addGate('anchor_preactivation_status_activation.ANCHOR_PREACTIVATION_STATUS_ACTIVATION', 'height', { mainnet: UNARMED, testnet: UNARMED, regtest: 0 });
+
 // archive_batch_author_activation
 // Per-network activation, interpreted against the DOGE block_index of the batch's
 // canonical archive head. Every network is armed from genesis, so all three run the
