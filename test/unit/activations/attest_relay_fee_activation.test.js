@@ -1,0 +1,51 @@
+/*********************************************************************
+ *
+ * Copyright © 2025-2026 Dankest, LLC
+ * Based on XChain Platform by Dankest, LLC - https://dankest.llc
+ *
+ * SPDX-License-Identifier: AGPL-3.0-or-later
+ *
+ * This file is part of XChain Platform. Licensed under the GNU Affero
+ * General Public License v3.0 or later; see LICENSE.md. A commercial
+ * license (without AGPL source-disclosure terms) is available -
+ * contact legal@dankest.llc.
+ *
+ ********************************************************************/
+
+'use strict';
+
+const assert = require('assert');
+const ProtocolChanges = require('../../../src/protocol_changes.js');
+
+const KEYS = [
+    'attest_relay_fee_activation.ATTEST_RELAY_FEE_ACTIVATION',
+];
+
+const EXPECTED = {
+    mainnet: ProtocolChanges.UNARMED,
+    'BTC:testnet': ProtocolChanges.UNARMED,
+    'LTC:testnet': ProtocolChanges.UNARMED,
+    'DOGE:testnet': ProtocolChanges.UNARMED,
+    testnet: ProtocolChanges.UNARMED,
+    regtest: 0,
+};
+
+describe('relay fee activation row', function () {
+    for (const key of KEYS) {
+        it(key + ' is a frozen height row with explicit network defaults', function () {
+            assert.strictEqual(ProtocolChanges.registry.unitOf(key), 'height');
+            const row = ProtocolChanges.get(key);
+            assert.deepStrictEqual(row, EXPECTED);
+            assert.strictEqual(Object.isFrozen(row), true);
+        });
+
+        it(key + ' is inactive on launched networks and active from regtest genesis', function () {
+            assert.strictEqual(ProtocolChanges.activeAt(key, 'mainnet', 'BTC', ProtocolChanges.UNARMED - 1, null), false);
+            for (const coin of ['BTC', 'LTC', 'DOGE']) {
+                assert.strictEqual(ProtocolChanges.activeAt(key, 'testnet', coin, ProtocolChanges.UNARMED - 1, null), false, coin);
+            }
+            assert.strictEqual(ProtocolChanges.activeAt(key, 'regtest', 'BTC', 0, null), true);
+            assert.strictEqual(ProtocolChanges.activeAt(key, 'regtest', 'BTC', -1, null), false);
+        });
+    }
+});

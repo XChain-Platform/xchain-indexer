@@ -218,6 +218,7 @@ const GATES = [
     ['oracle_price_age_hourly_activation',  'ORACLE_PRICE_AGE_HOURLY_ACTIVATION'],
     ['oracle_hourly_window_activation',     'ORACLE_HOURLY_WINDOW_FIRST_ROUND'],
     ['oracle_round_time_activation',        'ORACLE_ROUND_TIME_ACTIVATION'],
+    ['attest_relay_fee_activation',         'ATTEST_RELAY_FEE_ACTIVATION'],
 ];
 // The canonical map, loaded by each block's before-all hook.
 let canon = null;
