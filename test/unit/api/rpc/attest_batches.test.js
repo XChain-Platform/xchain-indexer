@@ -18,7 +18,7 @@ const { DatabaseSync } = require('node:sqlite');
 
 const observability = require('../../../../src/observability/index.js');
 const batchHeads = require('../../../../src/db/attests/batch_heads.js');
-const { buildAttestBatchesRpc } = require('../../../../src/api/rpc/attest_batches.js');
+const { buildAttestBatchesRpc } = require('../../../../src/api/rpc/attest/attest_batches.js');
 const { recordingView, fakeIndexer } = require('./helpers/fake_indexer.js');
 
 function captureQuery(rows = []) {
