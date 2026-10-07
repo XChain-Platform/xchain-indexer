@@ -34,7 +34,15 @@
  *                                  bin/pins/carrier-logic.json, the token-stream
  *                                  pin of every gate carrier's LOGIC. Read from
  *                                  the pin, not the tree: the pin's own guard
- *                                  measures the tree. Answers "same logic?".
+ *                                  measures the tree. Answers "same logic?"
+ *                                  for THIS repo only: each repo pins its own
+ *                                  carrier membership (the rule in
+ *                                  bin/lib/carrier_logic_pin_ops.js, keyed by
+ *                                  package name), so the hub's and sync's
+ *                                  values differ from this one by design and
+ *                                  are never compared with it. Cross-repo
+ *                                  agreement is held per shared id by test (c)
+ *                                  of test/unit/repo_guards/carrier_logic_pin.test.js.
  *   consensus_rules_digest        sha256 over the DECIDED HEIGHTS of the gates
  *                                  the hub also evaluates. Comparable across
  *                                  repos, and it answers "same rules?".

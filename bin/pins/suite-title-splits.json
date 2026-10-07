@@ -61,7 +61,8 @@
       "test/unit/actions/attest.test/responsible_set_gates.test.js",
       "test/unit/actions/attest.test/response_mirror_flag_day.test.js",
       "test/unit/actions/attest.test/response_batch.test.js",
-      "test/unit/actions/attest.test/response_batch_chunks.test.js"
+      "test/unit/actions/attest.test/response_batch_chunks.test.js",
+      "test/unit/actions/attest.test/response_batch_republish.test.js"
     ],
     "test/unit/actions/attest_relay.test.js": [
       "test/unit/actions/attest_relay.test.js",
