@@ -153,6 +153,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'dispenser_delay_protocol_time_activation',
     'bridge_policy_refusal_record_activation',
     'price_wire_trailing_activation',
+    'oracle_snapshot_age_seconds_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));

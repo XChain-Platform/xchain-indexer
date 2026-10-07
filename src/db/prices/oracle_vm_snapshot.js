@@ -27,6 +27,7 @@
 // key (W4); the age key is the marker bin/check-flagday-deploy.sh greps this file for.
 const gateRegistry = require('../../consensus/gate_registry');
 const preloadCausality = require('./oracle_preload_causality_gate');
+const ageSeconds = require('./oracle_snapshot_age_seconds');
 const { getLogger } = require('../../observability/index.js');
 const { ORACLE_VM_ROUND_WINDOW,
         ORACLE_VM_MAX_ROWS } = require('../../protocol/constants.js');
@@ -269,7 +270,9 @@ module.exports = {
         let refTime = parseInt(blockTime);
         let maxAge  = parseInt(maxAgeSeconds);
         let win = preloadWindow(this, blockIndex, refTime);
-        let snapshotAge = await readSnapshotAge(this, blockIndex, win);
+        let snapshotAge = ageSeconds.secondsBasisActive(this, blockIndex)
+            ? await ageSeconds.readSnapshotAgeSeconds(this, blockIndex, refTime, win)
+            : await readSnapshotAge(this, blockIndex, win);
 
         // True when a snapshot is older than the configured max age relative to the
         // block being processed (stale ⇒ treated as no price). A future-stamped row
