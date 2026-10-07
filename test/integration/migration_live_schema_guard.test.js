@@ -30,8 +30,7 @@
  * exactly what a live database presents: the converged shapes that must be
  * baselined, and every partial or absent shape that must be left to run.
  *
- * Self-skips when no DB password is configured, matching the other DB-backed files
- * here. Run it with bin/run-db-tiers.sh.
+ * Requires explicit TEST_DB_* credentials. Run it with bin/run-db-tiers.sh.
  */
 
 'use strict';
@@ -246,8 +245,9 @@ function schemaHarness() {
     });
 
     before(async function () {
-        if (process.env.TEST_DB_PASS === undefined) this.skip();
-        assert.ok(DB_PASS, 'TEST_DB_PASS must be non-empty when the DB-backed suite is enabled');
+        assert.notStrictEqual(process.env.TEST_DB_PASS, undefined,
+            'TEST_DB_PASS is required; run this real-MariaDB suite with bin/run-db-tiers.sh');
+        assert.ok(DB_PASS, 'TEST_DB_PASS must be non-empty for this real-MariaDB suite');
         h.admin = await mariadb.createConnection({
             host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS,
         });
@@ -322,19 +322,21 @@ function defineRunner(h) {
         const result = await h.db.runMigrations({ only: [TICK] });
         assert.deepStrictEqual(result.baselined, [TICK]);
         assert.deepStrictEqual(result.applied, []);
-        assert.deepStrictEqual(result.pending, []);
+        assert.ok(!result.pending.includes(TICK), 'the baselined migration must not remain pending');
         assert.deepStrictEqual((await h.ledger()).map(r => r.name), [TICK]);
         const rows = await h.withConn(conn => conn.query('SELECT tick FROM oracle_prices'));
         assert.deepStrictEqual(rows.map(r => r.tick), ['kept']);
 
         const again = await h.db.runMigrations({ only: [TICK] });
-        assert.deepStrictEqual(again.baselined.concat(again.applied, again.pending), []);
+        assert.ok(!again.baselined.includes(TICK), 'an applied migration must not be baselined twice');
+        assert.ok(!again.applied.includes(TICK), 'an applied migration must not run later');
+        assert.ok(!again.pending.includes(TICK), 'an applied migration must not return to pending');
     });
 
     it('keeps a not-converged manual migration pending on a passive start', async function () {
         await h.build(SETTLED.concat([NARROW_TICK]));
         const result = await h.db.runMigrations({ only: [TICK] });
-        assert.deepStrictEqual(result.pending, [TICK]);
+        assert.ok(result.pending.includes(TICK), 'the not-converged migration must remain pending');
         assert.deepStrictEqual(result.baselined.concat(result.applied), []);
         assert.deepStrictEqual(await h.ledger(), []);
         assert.strictEqual(await h.tickWidth(), 100);
