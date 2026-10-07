@@ -18,7 +18,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const { buildRpcController } = require('../../../../src/api/rpc/index.js');
-const { buildListShareMirrorRpc } = require('../../../../src/api/rpc/list_share_mirror.js');
+const { buildListShareMirrorRpc } = require('../../../../src/api/rpc/list_share/list_share_mirror.js');
 const { recordingView, fakeIndexer } = require('./helpers/fake_indexer.js');
 const { readApiSource } = require('../../../helpers/api_source.js');
 
