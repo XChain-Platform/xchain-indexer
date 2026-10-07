@@ -78,7 +78,7 @@ describe('JSON-RPC system family: getlatestblock @regression @tier1', function (
         const rpc = buildSystemRpc({ indexer, liveness: {} });
         assert.deepStrictEqual(await rpc.getlatestblock(),
             { block_index: 100, in_flight_block: 101, decoder_block: 104, lag: 4,
-              hub_push_delivered: null });
+              hub_push_delivered: null, price_landing_clear: null });
         // A block that committed while reading is no longer in flight.
         indexer.indexerDb.blockIndex = 100;
         assert.strictEqual((await rpc.getlatestblock()).in_flight_block, null);
