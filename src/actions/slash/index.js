@@ -192,7 +192,7 @@ class Slash {
                 resolveBlock  = srb.buriedSnapshotBlock(snapshotBlock, this.config['NETWORK']);
                 // One engine tag can host content families locked under DIFFERENT
                 // capabilities: XATTEST's relay legs are verified against `cross_chain`
-                // (attest/relay.js verifyRelayQuorum), not `attestation`. The slot
+                // (attest/relay/relay.js verifyRelayQuorum), not `attestation`. The slot
                 // resolver names the governing one, so the derived-CAPABILITY check runs
                 // HERE, after the family is known, rather than off the tag alone.
                 if(slot.capability) capability = slot.capability;
