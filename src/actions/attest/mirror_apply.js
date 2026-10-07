@@ -60,6 +60,7 @@ module.exports = {
         let skip = (why) => {
             getLogger().info("\t ATTEST mirror : id=" + requestId.substring(0,16) + '...' +
                         ' : block=' + data['BLOCK_INDEX'] + ' : SKIPPED (' + why + ')');
+            return { rejected: true, source: 'attestation_responses', row: requestId, code: why };
         };
 
         let gate = this.mirrorRowSkipReason(row, request);
