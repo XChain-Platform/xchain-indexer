@@ -109,10 +109,7 @@ async function ledgerKeysForBlock(db, blockIndex){
     return keys;
 }
 
-// The (address, tick) keys with the most credit and debit rows, hottest first, as
-// { address, tick, rows }. getNetBalance costs O(history per key), so the keys
-// with the longest history are the ones its cost is judged on. Read-only; the
-// address and tick tie-break keeps the order stable between runs.
+// Return the longest credit/debit histories first, with stable tie-breaks.
 async function getHottestLedgerKeys(db, limit){
     const n = Math.max(1, Math.min(10000, Math.floor(Number(limit)) || 1));
     const rows = await db.doQueryStrict(
