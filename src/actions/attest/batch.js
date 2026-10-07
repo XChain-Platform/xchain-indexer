@@ -30,6 +30,30 @@ const { isAdmissionEra } = require('../../consensus/gates/mirror_admission_gate.
 const { getLogger } = require('../../observability/index.js');
 const { BATCH_CHAIN } = require('./constants.js');
 
+function batchContinuationWire(config, params, error){
+    if(!error && String(config['COIN']) !== BATCH_CHAIN)
+        error = 'invalid: ATTEST v6 (batches ride the ' + BATCH_CHAIN + ' rail)';
+
+    let chunk = null;
+    if(!error){
+        chunk = abw.parseAttestBatchContinuation(params);
+        if(!chunk.ok) error = chunk.status;
+    }
+    return { chunk, error };
+}
+
+// Geometry must agree with the head that owns the batch. Both fields are signed
+// into neither wire, so this is not a security check: it stops two DIFFERENT
+// encodings of one window (a republish at a different chunk size, say) from
+// interleaving into a body no publisher ever produced.
+function batchContinuationGeometryError(headRow, chunk, error){
+    if(!error && headRow && Number(headRow.total_chunks) !== chunk.totalChunks)
+        return 'invalid: TOTAL_CHUNKS (does not match the batch head)';
+    if(!error && headRow && String(headRow.batch_crc32) !== chunk.batchCrc32)
+        return 'invalid: BATCH_CRC32 (does not match the batch head)';
+    return error;
+}
+
 module.exports = {
     // ATTEST v5: the response BATCH head.
     //
@@ -185,15 +209,9 @@ module.exports = {
     // owned it, so a junk chunk denied the window and a well-formed one for another
     // encoding forced the honest head `invalid`.
     async parseBatchContinuation(params, data, error){
-
-        if(!error && String(this.config['COIN']) !== BATCH_CHAIN)
-            error = 'invalid: ATTEST v6 (batches ride the ' + BATCH_CHAIN + ' rail)';
-
-        let chunk = null;
-        if(!error){
-            chunk = abw.parseAttestBatchContinuation(params);
-            if(!chunk.ok) error = chunk.status;
-        }
+        let wire  = batchContinuationWire(this.config, params, error);
+        let chunk = wire.chunk;
+        error     = wire.error;
 
         // One read, scoped to this author and this wire's encoding, serves the head, the
         // geometry check and (once a head exists) the slots taken; rejected rows never appear,
@@ -206,14 +224,7 @@ module.exports = {
             headRow = this.canonicalBatchHead(stored);
         }
 
-        // Geometry must agree with the head that owns the batch. Both fields are signed
-        // into neither wire, so this is not a security check: it stops two DIFFERENT
-        // encodings of one window (a republish at a different chunk size, say) from
-        // interleaving into a body no publisher ever produced.
-        if(!error && headRow && Number(headRow.total_chunks) !== chunk.totalChunks)
-            error = 'invalid: TOTAL_CHUNKS (does not match the batch head)';
-        if(!error && headRow && String(headRow.batch_crc32) !== chunk.batchCrc32)
-            error = 'invalid: BATCH_CRC32 (does not match the batch head)';
+        error = batchContinuationGeometryError(headRow, chunk, error);
 
         // Duplicate-slot guard, the ANCHOR continuation's: a filled slot cannot be refilled,
         // which is what makes a replayed chunk inert instead of a second absorption.
