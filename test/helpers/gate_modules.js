@@ -150,6 +150,9 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'oracle_hourly_window_activation',
     'oracle_round_time_activation',
     'send_caret_pack_key_activation',
+    'dispenser_delay_protocol_time_activation',
+    'bridge_policy_refusal_record_activation',
+    'price_wire_trailing_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));
