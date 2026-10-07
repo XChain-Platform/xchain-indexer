@@ -159,3 +159,7 @@ describe('getsharedlist JSON-RPC read', function(){
                 setName + ' must not gate getsharedlist');
     });
 });
+
+require('./list_share/list_share_meta_answer.test.js');
+require('./list_share/list_share_reads.test.js');
+require('./list_share/list_share_tick_members.test.js');
