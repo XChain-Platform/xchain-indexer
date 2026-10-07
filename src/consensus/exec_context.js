@@ -14,14 +14,15 @@
  *
  * Shared builder for system-injected EXECUTE contexts.
  *
- * Four injector sites synthesize an EXECUTE that runs a contract callback
+ * Five injector sites synthesize an EXECUTE with no transaction of its own
  * (actions/attest response + expiry callbacks, actions/vote poll-finalize callback,
- * actions/xcall result callback). Each used to hand-roll the identity tuple, and
+ * actions/xcall result callback, and actions/xexec, the mirror-driven cross-chain
+ * call on the target chain). Each used to hand-roll the identity tuple, and
  * two of them omitted TX_HASH: a contract that emitted ATTEST/XCALL from
  * inside such a callback got a request_id from the VM (which tolerates a
  * missing txHash), was charged gas, and then had the emission hard-rejected
  * by the indexer's TX_HASH check, stranding the contract on an id that never
- * resolves. This module is the single place the tuple is built, so a fifth
+ * resolves. This module is the single place the tuple is built, so a new
  * site cannot regress the class; execute.js additionally hard-asserts (post
  * flag-day) that every injected context carries a TX_HASH.
  *
@@ -58,6 +59,10 @@ const SYNTH_TAGS = {
     ATTEST_MIRROR_RESPONSE: 'ATTESTMIRROR',
     VOTE_CALLBACK:          'VOTECB',
     XCALL_CALLBACK:         'XCALLCB',
+    // The hub-mirror-driven cross-chain execution on the TARGET chain (actions/xexec),
+    // distinct from XCALLCB, the result callback back on the source chain. 'XCALL'
+    // predates this module and MUST stay byte-identical (live consensus).
+    XCALL_EXEC:             'XCALL',
 };
 
 /**
@@ -82,8 +87,11 @@ function synthesizeTxHash(tag, network, chain, uniqueId){
  *
  * @param {object} opts
  * @param {string} opts.chain          config CHAIN
+ * @param {string} [opts.sourceChain]  chain that names SOURCE/FEE_PAYER when the caller is
+ *        a contract on ANOTHER chain (cross-chain execution); defaults to opts.chain.
+ *        TX_HASH synthesis always namespaces by opts.chain
  * @param {string} [opts.network]      config NETWORK (required when synthesizing)
- * @param {number|string} opts.contractIndex  target contract action_index (SOURCE/FEE_PAYER = contract address)
+ * @param {number|string} opts.contractIndex  contract action_index (SOURCE/FEE_PAYER = contract address)
  * @param {number} opts.actionIndex    pre-created action index for the injected EXECUTE
  * @param {number} opts.blockIndex     injecting block
  * @param {number} [opts.blockTime]    injecting block time
@@ -118,7 +126,9 @@ function buildInjectedExecContext(opts){
         }
     }
 
-    const source = 'C:' + o.chain + ':' + o.contractIndex;
+    // Address the caller on its own chain; only a cross-chain execution differs from opts.chain.
+    const sourceChain = (o.sourceChain === undefined || o.sourceChain === null) ? o.chain : o.sourceChain;
+    const source = 'C:' + sourceChain + ':' + o.contractIndex;
     const context = {
         ACTION_INDEX: o.actionIndex,
         SOURCE:       source,
@@ -132,8 +142,8 @@ function buildInjectedExecContext(opts){
         // (EMISSION_ISSUANCE_LIMITS), consumed in issue.js. An injected callback has
         // no transaction of its own to draw from, and it IS a root execution, so it gets a
         // fresh budget rather than inheriting one - the same scope a real transaction has.
-        // Built here rather than at the four injector sites for the reason this module
-        // exists: a fifth site must not be able to omit it and reopen the hole.
+        // Built here rather than at each injector site for the reason this module
+        // exists: a new site must not be able to omit it and reopen the hole.
         ISSUANCE_LIMIT_LEDGER: { topLevel: 0 },
         ...(o.extra || {}),
     };
