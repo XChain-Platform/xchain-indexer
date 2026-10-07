@@ -23,7 +23,8 @@ const sinon = require('sinon');
 const { getTestConfig } = require('../../../fixtures/config');
 const Utility = require('../../../../src/utility');
 const Database = require('../../../../src/db');
-const { getOpenOrdersByList, getOpenSwapsByList } = require('../../../../src/db/lists/rematch');
+const { getOpenOrdersByList, getOpenSwapsByList,
+        getOpenMarketsByTokenList } = require('../../../../src/db/lists/rematch');
 
 const LIST_ROOT = 500;
 const LIST_EDIT = 501;
@@ -160,3 +161,44 @@ for(const testCase of [
         assert.ok(!editSpy.calledWith(60), 'a market whose latest status is not open must be excluded');
     });
 }
+
+for(const kind of ['order', 'swap']){
+    it(`finds and deduplicates open ${kind}s whose token lists resolve to the changed root`, async function () {
+        const db = { doQuery: sinon.stub().resolves([
+            { action_index: 20 },
+            { action_index: 10 },
+            { action_index: 20 }
+        ]) };
+
+        const indexes = await getOpenMarketsByTokenList(db, LIST_ROOT, kind);
+
+        assert.deepStrictEqual(indexes, [20, 10]);
+        sinon.assert.calledOnceWithExactly(db.doQuery, sinon.match((query) => {
+            const sql = query.replace(/\s+/g, ' ');
+            assert.match(sql, /WITH RECURSIVE list_refs\(action_index\) AS \( SELECT \?/);
+            assert.match(sql, /UNION DISTINCT SELECT ed\.action_index FROM lists ed/);
+            assert.match(sql, /INNER JOIN list_refs parent ON \(ed\.list_action_index=parent\.action_index\)/);
+            assert.match(sql, new RegExp(`FROM ${kind}s m`));
+            assert.match(sql, new RegExp(`INNER JOIN ${kind}_statuses ms`));
+            assert.match(sql, new RegExp(`ms\\.${kind}_action_index=m\\.action_index`));
+            assert.match(sql, new RegExp(`FROM ${kind}_statuses l`));
+            assert.match(sql, new RegExp(`l\\.${kind}_action_index=m\\.action_index`));
+            assert.match(sql, /st\.status='open'/);
+            assert.match(sql, /INNER JOIN tokens tk ON \(tk\.tick_id IN \(m\.give_tick_id, m\.get_tick_id\)\)/);
+            assert.match(sql, /tk\.allow_list IN \(SELECT action_index FROM list_refs\)/);
+            assert.match(sql, /tk\.block_list IN \(SELECT action_index FROM list_refs\)/);
+            return true;
+        }), [LIST_ROOT]);
+    });
+}
+
+it('rejects an unknown token-list market kind before querying', async function () {
+    const db = { doQuery: sinon.stub() };
+
+    await assert.rejects(
+        getOpenMarketsByTokenList(db, LIST_ROOT, 'trade'),
+        /invalid market kind/
+    );
+
+    sinon.assert.notCalled(db.doQuery);
+});

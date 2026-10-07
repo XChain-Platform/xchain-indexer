@@ -22,10 +22,10 @@
 'use strict';
 
 const crypto  = require('crypto');
-const ed25519 = require('../../consensus/ed25519.js');
-const swq     = require('../../consensus/stake_weighted_quorum.js');
-const eq      = require('../../consensus/equivocation_header.js');
-const srb     = require('../../consensus/snapshot_reorg_buffer.js');
+const ed25519 = require('../../../consensus/ed25519.js');
+const swq     = require('../../../consensus/stake_weighted_quorum.js');
+const eq      = require('../../../consensus/equivocation_header.js');
+const srb     = require('../../../consensus/snapshot_reorg_buffer.js');
 
 module.exports = {
     // Cross-chain relay helpers

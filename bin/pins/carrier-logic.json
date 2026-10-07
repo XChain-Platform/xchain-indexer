@@ -21,12 +21,12 @@
       ]
     },
     "attest_broadcast_fee_activation": {
-      "path": "src/actions/attest/attest_broadcast_fee_gate.js",
+      "path": "src/actions/attest/gates/attest_broadcast_fee_gate.js",
       "hash": "8a8265180a17ec18b607b1a397f3f64787878f07b81231ddafa9d4619ae2d111",
       "twins": []
     },
     "attest_request_cap_activation": {
-      "path": "src/actions/attest/attest_request_cap_gate.js",
+      "path": "src/actions/attest/gates/attest_request_cap_gate.js",
       "hash": "ed391a6acf41e9e647ecadd126409e75c3176827ef148290547097f46e51edbe",
       "twins": []
     },
@@ -1397,7 +1397,7 @@
       "to": "e904e6dafb4783b370a46837e75338dfc389d9825c82d14a7f8b7bc308b07d60",
       "path": {
         "from": "src/attest_broadcast_fee_activation.js",
-        "to": "src/actions/attest/attest_broadcast_fee_gate.js"
+        "to": "src/actions/attest/gates/attest_broadcast_fee_gate.js"
       },
       "date": "2026-09-16",
       "reason": "W4 consolidation (row 18)"

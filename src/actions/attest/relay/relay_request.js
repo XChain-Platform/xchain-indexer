@@ -25,11 +25,11 @@
 // (whether a refused v3 withholds its row so the id it named stays free for the
 // honest relay; block-TIME plane, armed at genesis on every network) are registry
 // rows read by literal key (W5).
-const gateRegistry = require('../../consensus/gate_registry');
+const gateRegistry = require('../../../consensus/gate_registry');
 const ATTEST_RELAY_KEY = 'attest_relay_activation.ATTEST_RELAY_ACTIVATION';
 const RELAY_REJECT_SLOT_KEY = 'attest_relay_reject_slot_activation.ATTEST_RELAY_REJECT_SLOT_ACTIVATION';
-const { getLogger } = require('../../observability/index.js');
-const { HOME_CHAIN, ALLOWED_ORIGIN_CHAINS } = require('./constants.js');
+const { getLogger } = require('../../../observability/index.js');
+const { HOME_CHAIN, ALLOWED_ORIGIN_CHAINS } = require('../constants.js');
 
 module.exports = {
     // ATTEST v3: relay request (federation-broadcast on the home chain).

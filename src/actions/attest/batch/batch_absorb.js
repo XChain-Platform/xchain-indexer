@@ -21,18 +21,18 @@
 
 'use strict';
 
-const ed25519 = require('../../consensus/ed25519.js');
-const swq     = require('../../consensus/stake_weighted_quorum.js');
+const ed25519 = require('../../../consensus/ed25519.js');
+const swq     = require('../../../consensus/stake_weighted_quorum.js');
 // The v5/v6 wire: layout, chunking, caps and reassembly. Pure, and byte-twinned
 // into xchain-hub so the publisher that BUILDS a batch and this parser cannot
 // disagree about its bytes.
-const abw     = require('./attest_batch_wire.js');
+const abw     = require('../attest_batch_wire.js');
 // The era predicate the wire takes to pick a batch's row field set from its own
 // signed anchor: admit_block_btc is signed and required only at or above the BTC
 // mirror-admission producer activation, so history keeps the bytes it was signed over.
-const { isAdmissionEra } = require('../../consensus/gates/mirror_admission_gate.js');
-const { getLogger } = require('../../observability/index.js');
-const { ATTEST_BATCH_COMPLETION_STAMP } = require('./constants.js');
+const { isAdmissionEra } = require('../../../consensus/gates/mirror_admission_gate.js');
+const { getLogger } = require('../../../observability/index.js');
+const { ATTEST_BATCH_COMPLETION_STAMP } = require('../constants.js');
 
 module.exports = {
     // Absorb the batch on the continuation that completes its coverage, or do nothing when
