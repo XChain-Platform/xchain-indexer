@@ -324,3 +324,115 @@ describe('retention: full sweep', () => {
         assert.deepStrictEqual(db.nodes.map(n => n.node_hash).sort(), [A, B].sort());
     });
 });
+
+describe('retention: sweep interval bounds', () => {
+    const on = extra => R.parseRetentionConfig(Object.assign({ STATE_ROOT_RETENTION_BLOCKS: '50' }, extra));
+
+    it('keeps the 6h default, unflagged, when the interval is unset', () => {
+        const cfg = on({});
+        assert.strictEqual(cfg.intervalMs, 21600000);
+        assert.strictEqual(cfg.intervalAdjusted, false);
+    });
+
+    it('falls back to 6h for zero, negative or unparseable values, and flags it', () => {
+        for(const raw of ['0', '-1', 'abc']){
+            const cfg = on({ STATE_RETENTION_INTERVAL_MS: raw });
+            assert.strictEqual(cfg.intervalMs, 21600000, raw);
+            assert.strictEqual(cfg.intervalAdjusted, true, raw);
+        }
+    });
+
+    it('raises a sub-minute value to the 60s floor', () => {
+        for(const raw of ['1', '59999']){
+            const cfg = on({ STATE_RETENTION_INTERVAL_MS: raw });
+            assert.strictEqual(cfg.intervalMs, R.MIN_SWEEP_INTERVAL_MS, raw);
+            assert.strictEqual(cfg.intervalAdjusted, true, raw);
+        }
+        assert.strictEqual(R.MIN_SWEEP_INTERVAL_MS, 60000);
+    });
+
+    it('caps a value setInterval would overflow back to 1ms', () => {
+        const cfg = on({ STATE_RETENTION_INTERVAL_MS: '3000000000' });
+        assert.strictEqual(cfg.intervalMs, 2147483647);
+        assert.strictEqual(cfg.intervalAdjusted, true);
+    });
+
+    it('passes an in-range value through unchanged', () => {
+        for(const [raw, want] of [['60000', 60000], ['3600000', 3600000]]){
+            const cfg = on({ STATE_RETENTION_INTERVAL_MS: raw });
+            assert.strictEqual(cfg.intervalMs, want);
+            assert.strictEqual(cfg.intervalAdjusted, false);
+        }
+    });
+});
+
+describe('retention: reorg-safe floor on the root window', () => {
+    it('raises N=1 to 126 on a standard chain and records the request', () => {
+        const cfg = R.applyReorgSafeFloor(R.parseRetentionConfig({ STATE_ROOT_RETENTION_BLOCKS: '1' }), 'BTC', 'mainnet');
+        assert.strictEqual(cfg.rootKeepBlocks, 126);
+        assert.strictEqual(cfg.requestedRootKeepBlocks, 1);
+        assert.strictEqual(cfg.floorApplied, true);
+    });
+
+    it('uses 5006 on Litecoin testnet only, whatever the case', () => {
+        const base = R.parseRetentionConfig({ STATE_ROOT_RETENTION_BLOCKS: '1' });
+        for(const [coin, net] of [['LTC', 'testnet'], ['ltc', 'TESTNET']])
+            assert.strictEqual(R.applyReorgSafeFloor(base, coin, net).rootKeepBlocks, 5006);
+        assert.strictEqual(R.applyReorgSafeFloor(base, 'LTC', 'mainnet').rootKeepBlocks, 126);
+        assert.strictEqual(R.applyReorgSafeFloor(base, 'DOGE', 'testnet').rootKeepBlocks, 126);
+    });
+
+    it('passes a window at or above the floor through unchanged', () => {
+        for(const n of [126, 500]){
+            const cfg = R.applyReorgSafeFloor(R.parseRetentionConfig({ STATE_ROOT_RETENTION_BLOCKS: String(n) }), 'BTC', 'mainnet');
+            assert.strictEqual(cfg.rootKeepBlocks, n);
+            assert.strictEqual(cfg.floorApplied, false);
+        }
+    });
+
+    it('returns a disabled config untouched and never mutates its input', () => {
+        const off = R.parseRetentionConfig({});
+        assert.strictEqual(R.applyReorgSafeFloor(off, 'BTC', 'mainnet'), off);
+        const input = R.parseRetentionConfig({ STATE_ROOT_RETENTION_BLOCKS: '7' });
+        const snapshot = JSON.stringify(input);
+        R.applyReorgSafeFloor(input, 'BTC', 'mainnet');
+        assert.strictEqual(JSON.stringify(input), snapshot);
+    });
+
+    it('never lets the local floors fall below the decoder safe depths', () => {
+        assert.ok(R.ROOT_RETENTION_REORG_FLOOR >= 126);
+        assert.ok(R.LTC_TESTNET_ROOT_RETENTION_REORG_FLOOR >= 5006);
+    });
+});
+
+describe('retention: startStateRetention arms the bounded config', () => {
+    const jobs = require('../../../src/XChainIndexer/background_jobs.js');
+    const { getLogger } = require('../../../src/observability/index.js');
+
+    it('sweeps with the floored window on a clamped cadence and warns about both', async () => {
+        const saved = { parse: R.parseRetentionConfig, sweep: R.runSweep, setInterval: global.setInterval,
+                        warn: getLogger().warn, info: getLogger().info };
+        const warnings = [];
+        let armedDelay = null, armedFn = null, sweptCfg = null;
+        R.parseRetentionConfig = () => saved.parse({ STATE_ROOT_RETENTION_BLOCKS: '1', STATE_RETENTION_INTERVAL_MS: '0' });
+        R.runSweep = async (db, coin, network, cfg) => { sweptCfg = cfg; return { roots: {}, nodes: {} }; };
+        global.setInterval = (fn, ms) => { armedFn = fn; armedDelay = ms; return { unref(){} }; };
+        getLogger().warn = msg => { warnings.push(String(msg)); };
+        getLogger().info = () => {};
+        try {
+            const host = { config: { COIN: 'BTC', NETWORK: 'mainnet' }, indexerDb: {} };
+            jobs.startStateRetention.call(host);
+            assert.strictEqual(armedDelay, 60000 * 360);   // 0 falls back to the 6h default
+            await armedFn();
+            assert.strictEqual(sweptCfg.rootKeepBlocks, 126);
+            assert.ok(warnings.some(w => /STATE_ROOT_RETENTION_BLOCKS=1 is below the reorg-safe floor 126/.test(w)), warnings.join('\n'));
+            assert.ok(warnings.some(w => /sweeping every 21600000ms instead/.test(w)), warnings.join('\n'));
+        } finally {
+            R.parseRetentionConfig = saved.parse;
+            R.runSweep = saved.sweep;
+            global.setInterval = saved.setInterval;
+            getLogger().warn = saved.warn;
+            getLogger().info = saved.info;
+        }
+    });
+});

@@ -332,7 +332,7 @@ class Utility {
 // The capability half of processCooldownCompletions: credit each matured capability unstake's
 // GAS back to its source under the action_index completionAttribution resolves, and record every
 // address and tick it touched for the sweep's rebalance. Kept in this file beside the contract
-// half, whose release test/unit/stake_escrow_conservation.test.js reads by text.
+// half, whose release test/unit/bridge/stake_escrow_conservation.test.js reads by text.
 async function releaseCapabilityCooldowns(util, db, capabilityRows, completionAttribution,
                                           addressesToRebalance, ticksToRebalance){
     let rows = await db.getMaturedUnstakeCreditRows(capabilityRows);

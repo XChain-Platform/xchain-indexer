@@ -133,9 +133,9 @@ async function applyGuardEmissions(ctx, guardCtxData, basePosition){
     let hostData = ctx.hostData;
     for(let i = 0; i < ctx.vmResult.emittedActions.length; i++){
         let emission = ctx.vmResult.emittedActions[i];
-        // A guard may not emit asynchronous (ATTEST/XCALL, already blocked
-        // at VM emit time) or stake-slashing (SLASH) actions. Re-check
-        // host-side as defense in depth against an older bundled VM.
+        // A guard may not emit asynchronous (ATTEST/XCALL) or stake-slashing (SLASH)
+        // actions. The VM already rejects ATTEST/XCALL from a guard; it has no guard
+        // check on contract.slash, so this host check is the ONLY barrier for SLASH.
         if(emission.action === 'ATTEST' || emission.action === 'XCALL' || emission.action === 'SLASH')
             throw new Error('guard emission not allowed: ' + emission.action);
         // Use the host-action-global position (basePosition + i), not the

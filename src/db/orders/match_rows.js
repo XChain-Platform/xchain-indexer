@@ -120,6 +120,10 @@ module.exports = {
         let status_id    = await this.createStatus('valid');
         let exists = await this.doQuery(`SELECT action_index FROM order_matches WHERE action_index=?`, [settlement_action_index]);
         if(exists.length > 0) return;                          // idempotent (one fill per settlement)
+        // Store fixed notation, as the local matcher does: a hub string or a clamped bignumber
+        // can render as "5e-8". Non-numeric values pass through untouched (bcstr would zero them).
+        if(this.util.isNumeric(give_amount)) give_amount = this.util.bcstr(give_amount);
+        if(this.util.isNumeric(get_amount))  get_amount  = this.util.bcstr(get_amount);
         await this.doQuery(
             `INSERT INTO order_matches (give_coin_id, give_tick_id, give_amount, give_action_index, get_coin_id, get_tick_id, get_amount, get_action_index, settlement_type, status_id, action_index)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'instant', ?, ?)`,

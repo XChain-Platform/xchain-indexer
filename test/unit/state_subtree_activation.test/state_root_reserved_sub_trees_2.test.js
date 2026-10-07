@@ -108,7 +108,7 @@ describe('state_root reserved sub-trees: gateSubRoots @regression', function(){
     });
 
     it('a bare-network key arms nothing (coin-qualified keys are the only lookup)', function(){
-        // The gate deliberately drops state_commitment_activation.js's
+        // The gate deliberately drops state_commitment_gate.js's
         // bare-network fallback: one bare key arming three chains at one
         // number is near-certainly wrong on two of them.
         const map = SUB.STATE_SUBTREE_ACTIVATION.tokens_root;

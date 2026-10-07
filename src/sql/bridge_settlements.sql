@@ -13,7 +13,7 @@
 --********************************************************************
 
 -- Idempotency + rollback record for every APPLIED bridge leg, classified in
--- tableLifecycle.js verbatim as cross_chain_settlements (stream:action / action / mirror /
+-- table_lifecycle.js verbatim as cross_chain_settlements (stream:action / action / mirror /
 -- DERIVED). One row per (transfer_id, kind): the XBRIDGE pass skips a row already present
 -- here, and a local reorg below the applying block drops the row by action_index so the
 -- leg re-applies on replay.
