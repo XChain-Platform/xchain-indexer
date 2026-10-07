@@ -62,9 +62,6 @@
 const zlib    = require('zlib');
 const eq      = require('../../consensus/equivocation_header.js');
 const ar      = require('../../consensus/gates/anchor_reward_gate.js');
-const arKey   = require('./anchor_reward_key.js');
-const { rewardTypeFor } = require('./reward_family.js');
-const { getLogger } = require('../../observability/index.js');
 // The ANCHOR and archive-author gates are registry rows read by literal key
 // (W4): no predicate module stands between this file and the row it judges by.
 const gateRegistry = require('../../consensus/gate_registry');
@@ -152,46 +149,6 @@ class Anchor {
         this.formats[1] = 'VERSION|CHAIN|NETWORK|BLOCK_INDEX|BLOCK_HASH|LEDGER_HASH|ACTIONS_HASH|CONTRACT_HASH|CHECKPOINT_SEQ|SNAPSHOT_BLOCK|MATCH_BATCH_SEQ|MATCH_COUNT|BATCH_CRC32|TOTAL_CHUNKS|ARCHIVE_B64|SIG_COUNT|PUBKEY|SIG|...|PUBLISHER|ATTEST_SIG_COUNT|APUBKEY|ASIG|...';
         this.formats[2] = 'VERSION|MATCH_BATCH_SEQ|CHUNK_INDEX|TOTAL_CHUNKS|ARCHIVE_B64_CHUNK';
         this.formats[3] = 'VERSION|NETWORK|SNAPSHOT_BLOCK|SECTION_COUNT|...|ARCHIVE_COUNT|...|PUBLISHER|ATTEST_SIG_COUNT|...';
-    }
-
-    async creditLegacyArchiveReward(data, attQuorumMet, snapPubkeys, format){
-        if(attQuorumMet && snapPubkeys.has(String(data['PUBLISHER']))){
-            let foldActive = gateRegistry.activeAt(
-                'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION',
-                this.config.NETWORK, this.config.COIN, Number(data.BLOCK_INDEX), null);
-            let rewardType = rewardTypeFor(format, foldActive);
-            if(rewardType === null){
-                getLogger().warn('\t ANCHOR v' + format + ' : archive reward is retired at the fold; reward skipped');
-                return;
-            }
-            let rewardRound = Number(data['MATCH_BATCH_SEQ']);
-            let rewardQual = arKey.rewardRoundQualifier(rewardType, data['SNAPSHOT_BLOCK']);
-            let ok = await this.indexerDb.createValidatorReward(
-                data['PUBLISHER'], rewardRound, rewardType,
-                ar.ARCHIVE_REWARD_AMOUNT, Number(data['SNAPSHOT_BLOCK']), true, null, rewardQual);
-            if(ok)
-                await this.indexerDb.reconcileAnchorRewardWinner(
-                    rewardRound, rewardType,
-                    Number(data['BLOCK_INDEX']), Number(data['ACTION_INDEX']), rewardQual);
-        } else {
-            getLogger().warn('\t ANCHOR v' + format + ' : publisher-attestation quorum not met or PUBLISHER not in oracle_publish set; reward skipped (anchor still valid)');
-        }
-    }
-
-    async creditLegacyBundleReward(data, attQuorumMet, bundleSet){
-        if(attQuorumMet && bundleSet.snapPubkeys.has(String(data['PUBLISHER']))){
-            let rewardRound = Number(data['SNAPSHOT_BLOCK']);
-            let rewardQual = arKey.rewardRoundQualifier('anchor_bundle', data['SNAPSHOT_BLOCK']);
-            let ok = await this.indexerDb.createValidatorReward(
-                data['PUBLISHER'], rewardRound, 'anchor_bundle',
-                ar.ANCHOR_REWARD_AMOUNT, Number(data['SNAPSHOT_BLOCK']), true, null, rewardQual);
-            if(ok)
-                await this.indexerDb.reconcileAnchorRewardWinner(
-                    rewardRound, 'anchor_bundle',
-                    Number(data['BLOCK_INDEX']), Number(data['ACTION_INDEX']), rewardQual);
-        } else {
-            getLogger().warn('\t ANCHOR v0 : publisher-attestation quorum not met or PUBLISHER not in oracle_publish set; reward skipped (bundle still valid)');
-        }
     }
 
     // Canonical signing string: MUST byte-match the hub's

@@ -17,6 +17,8 @@ process.env.INDEXER_NETWORK = 'regtest';
 
 const assert = require('assert');
 const sinon = require('sinon');
+const { createBaseData } = require('../../../../fixtures/mocks');
+const { v0Params, THREE_CHAINS, armAnchor, disarmAnchor } = require('./helpers/anchor_fixtures.js');
 const arMod = require('../../../../../src/consensus/gates/anchor_reward_gate.js');
 const settle = require('../../../../../src/actions/anchor/settle.js');
 const observability = require('../../../../../src/observability/index.js');
@@ -25,11 +27,20 @@ const BUNDLE_SKIP_WARNING = '\t ANCHOR v0 : DOGE-side reward is derived on BTC; 
 const ARCHIVE_SKIP_WARNING = '\t ANCHOR v1 : DOGE-side reward is derived on BTC; reward skipped';
 
 describe('ANCHOR DOGE-side reward branch removed @regression @tier3', function () {
+    let ctx;
     beforeEach(function () {
-        sinon.stub(arMod, 'isAnchorRewardDeriveActive').returns(false);
+        ctx = armAnchor();
         assert.strictEqual(arMod.isAnchorRewardDeriveActive(10, 'regtest'), false);
     });
-    afterEach(function () { sinon.restore(); });
+    afterEach(function () { disarmAnchor(ctx); });
+
+    it('a valid v0 bundle writes no validator reward with the derive gate off', async function () {
+        let data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE' });
+        await ctx.handler.parse(v0Params({ sections: THREE_CHAINS }), data, null);
+        assert.strictEqual(data['STATUS'], 'valid');
+        assert.ok(ctx.indexer.indexerDb.createValidatorReward.notCalled);
+        assert.ok(ctx.indexer.indexerDb.reconcileAnchorRewardWinner.notCalled);
+    });
 
     it('the settlement entry points never touch the reward ledger with the derive gate off', async function () {
         let db = { createValidatorReward: sinon.stub().resolves(true), reconcileAnchorRewardWinner: sinon.stub().resolves() };
@@ -40,7 +51,7 @@ describe('ANCHOR DOGE-side reward branch removed @regression @tier3', function (
         await settle.creditArchiveReward(handler, data, true, new Set([data.PUBLISHER]), 1);
         assert.ok(db.createValidatorReward.notCalled);
         assert.ok(db.reconcileAnchorRewardWinner.notCalled);
-        assert.strictEqual(arMod.isAnchorRewardDeriveActive.callCount, 3);
+        assert.strictEqual(arMod.isAnchorRewardDeriveActive.callCount, 1);
         assert.deepStrictEqual(warn.args, [[BUNDLE_SKIP_WARNING], [ARCHIVE_SKIP_WARNING]]);
     });
 });
