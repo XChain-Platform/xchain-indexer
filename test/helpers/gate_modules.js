@@ -37,7 +37,7 @@ const SRC = path.resolve(__dirname, '..', '..', 'src');
 // the logic pin and the v2 fingerprint know the module by; only the file moved.
 const GATE_MODULE_PATHS = Object.freeze({
     amount_representability_activation: 'utility/validation/amount_representability_gate.js',
-    attest_broadcast_fee_activation: 'actions/attest/attest_broadcast_fee_gate.js',
+    attest_broadcast_fee_activation: 'actions/attest/gates/attest_broadcast_fee_gate.js',
     attest_request_cap_activation: 'actions/attest/gates/attest_request_cap_gate.js',
     caret_ref_strict_activation: 'db/database/caret_ref_strict_gate.js',
     dispense_payment_tally_scale_activation: 'actions/dispense/dispense_payment_tally_scale_gate.js',
