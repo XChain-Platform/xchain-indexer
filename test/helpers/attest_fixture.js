@@ -20,7 +20,7 @@ const { createMockIndexer, createBaseData } = require('../fixtures/mocks');
 const Attest          = require('../../src/actions/attest/index.js');
 const swq             = require('../../src/consensus/stake_weighted_quorum.js');
 const { stubActiveAt } = require('./gate_modules.js');
-const attestBcastFee  = require('../../src/actions/attest/attest_broadcast_fee_gate.js');
+const attestBcastFee  = require('../../src/actions/attest/gates/attest_broadcast_fee_gate.js');
 // The response-mirror flag day is a registry row (W5); its key, for the stubs below.
 const RESPONSE_MIRROR_KEY = 'attest_response_mirror_activation.ATTEST_RESPONSE_MIRROR_ACTIVATION';
 // Same module instance Attest holds a reference to (Node module cache); stubbing
