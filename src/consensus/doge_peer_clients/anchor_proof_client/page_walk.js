@@ -60,12 +60,16 @@ async function walkAnchorPages(client, txid){
         }
         anchors = anchors.concat(result.anchors);
         if(result.truncated !== true){ walking = false; break; }
-        let next = Number(result.next_after_action_index);
+        let raw = result.next_after_action_index;
+        // Accept only a number or a digit string as the cursor; Number() would turn null,
+        // '' or false into 0 and resume a cursor-less first page from the start.
+        let next = (typeof raw === 'number' || (typeof raw === 'string' && /^[0-9]+$/.test(raw)))
+                 ? Number(raw) : NaN;
         // A peer that says "truncated" and then cannot say where to resume, or hands
         // back a cursor that does not advance, is answering a protocol it only half
         // speaks. Judging the partial set it gave us is exactly the silent forfeit this
         // walk exists to remove, so treat it as the malformed reply it is.
-        if(!Number.isInteger(next) || (after !== null && next <= after)){
+        if(!Number.isInteger(next) || next < 0 || (after !== null && next <= after)){
             getLogger().warn('AnchorProofClient: ' + txid + ' reported truncated with an unusable ' +
                          'page cursor (' + result.next_after_action_index + '); cannot complete the walk');
             return null;

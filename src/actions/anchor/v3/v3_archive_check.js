@@ -14,8 +14,8 @@
 
 'use strict';
 
-const gateRegistry = require('../../consensus/gate_registry');
-const validate = require('./validate.js');
+const gateRegistry = require('../../../consensus/gate_registry');
+const validate = require('../validate.js');
 
 const ZERO_HASH = '0'.repeat(64);
 

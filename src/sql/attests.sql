@@ -58,7 +58,7 @@ CREATE TABLE attests (
     meta                          VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,                    -- opaque provider-defined metadata (e.g. http status, model id)
     validator_signatures          MEDIUMTEXT,                      -- JSON array of verified federation sigs: [{"pubkey","sig"}, ...]
     callback_execute_action_index BIGINT UNSIGNED,                 -- action_index of the system-injected EXECUTE that fired the callback
-    batch_action_index            BIGINT UNSIGNED,                 -- ATTEST v5/v6 batch that carried this response's body on chain; NULL until that batch lands, and NULL forever for a legacy-era response that was itself an on-chain v1
+    batch_action_index            BIGINT UNSIGNED,                 -- display link to the ATTEST v5 batch head that carried this body, stamped best effort via the hub mirror and cleared on reorg; NULL forever on a legacy-era v1, and on a mirror-era v1 no coverage signal (complete valid v5/v6 batches prove a window published)
     -- batch (version 5 head / version 6 continuation) fields
     -- A batch action row is a CHUNK TABLE entry, on the ANCHOR archive precedent
     -- (anchor_actions.total_chunks/chunk_index/archive_b64): the head holds slot 0 plus the
@@ -107,3 +107,5 @@ CREATE        INDEX version_status  ON attests (version, request_status, deadlin
 CREATE        INDEX contract_index  ON attests (contract_index);
 CREATE        INDEX provider_id     ON attests (provider_id);
 CREATE        INDEX block_index     ON attests (block_index);
+-- Per-block state-hash request_status collector and the reorg reset (version = 0 AND resolved_block).
+CREATE        INDEX version_resolved ON attests (version, resolved_block);

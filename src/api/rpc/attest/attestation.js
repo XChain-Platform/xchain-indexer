@@ -20,7 +20,7 @@
  *
  ********************************************************************/
 
-const { getLogger } = require('../../observability/index.js');
+const { getLogger } = require('../../../observability/index.js');
 
 function buildAttestationRpc(ctx){
     return Object.assign({}, pendingAttestationRpc(ctx), relayedAttestationRpc(ctx), actionConfirmationsRpc(ctx));

@@ -181,3 +181,47 @@ describe('migration-scoped query timeout cleanup @regression @tier1', function (
         assert.ok(restore < releaseLock);
     });
 });
+
+// A migration file can SET session variables the pool never resets on release, so a
+// connection that ran file statements must not go back to the pool.
+describe('migration connection retirement @regression @tier1', function () {
+    it('closes, never pools, a connection that applied a migration file, after unlocking', async function () {
+        const { calls, lifecycle, result, error } = await runAgainst(Database);
+        assert.strictEqual(error, null);
+        assert.deepStrictEqual(result.applied, [PENDING_MIGRATION]);
+        assert.ok(calls.some(call => /^SET time_zone/i.test(call.sql.trim())),
+            'the fixture must actually send a session SET for this case to mean anything');
+        assert.strictEqual(lifecycle.destroyed, 1);
+        assert.strictEqual(lifecycle.released, 0);
+        assert.ok(calls.some(call => /RELEASE_LOCK/i.test(call.sql)), 'the lock is still released first');
+    });
+
+    it('closes the connection when a file fails partway through its statements', async function () {
+        const { lifecycle, error } = await runAgainst(Database, { throwMigration: true });
+        assert.match(error && error.message, /migration failed/);
+        assert.strictEqual(lifecycle.destroyed, 1);
+        assert.strictEqual(lifecycle.released, 0);
+    });
+
+    it('returns the connection to the pool when no file ran', async function () {
+        const ledger = ledgerMissingLast();
+        ledger.set(PENDING_MIGRATION, crypto.createHash('sha256')
+            .update(fs.readFileSync(path.join(MIG_DIR, PENDING_MIGRATION), 'utf8')).digest('hex'));
+        const nothingPending = await runAgainst(Database, { ledger });
+        assert.strictEqual(nothingPending.error, null);
+        assert.deepStrictEqual(nothingPending.result.applied, []);
+        assert.strictEqual(nothingPending.lifecycle.destroyed, 0);
+        assert.strictEqual(nothingPending.lifecycle.released, 1);
+
+        const lockSkipped = await runAgainst(Database, { lockResult: 0 });
+        assert.strictEqual(lockSkipped.lifecycle.destroyed, 0);
+        assert.strictEqual(lockSkipped.lifecycle.released, 1);
+    });
+
+    it('closes the connection exactly once when the timeout restore also fails', async function () {
+        const { lifecycle, error } = await runAgainst(Database, { throwRestore: true });
+        assert.strictEqual(error, null);
+        assert.strictEqual(lifecycle.destroyed, 1);
+        assert.strictEqual(lifecycle.released, 0);
+    });
+});

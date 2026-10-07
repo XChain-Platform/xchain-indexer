@@ -25,7 +25,8 @@
 'use strict';
 
 const assert = require('assert');
-const { assertConsensusRuntime } = require('../../../../src/actions/index.js');
+const { assertConsensusRuntime, assertVmConsensusEpoch, EXPECTED_VM_CONSENSUS_VERSION } = require('../../../../src/actions/index.js');
+const { skipOrFail } = require('../../../helpers/sibling_checkout.js');
 
 describe('consensus-runtime gate: fail closed on an off-pin engine @regression @tier1', function () {
 
@@ -51,6 +52,42 @@ describe('consensus-runtime gate: fail closed on an off-pin engine @regression @
     it('is inert when the bundled VM predates the checker (no gate to run)', function () {
         assertConsensusRuntime({});
         assertConsensusRuntime(null);
+    });
+
+});
+
+describe('VM consensus-epoch gate: fail closed on a wrong-epoch VM @regression @tier1', function () {
+
+    it('throws when the loaded VM declares another epoch, naming both epochs', function () {
+        assert.notStrictEqual(EXPECTED_VM_CONSENSUS_VERSION, '4', 'the stale-epoch fixture must differ from the pin');
+        assert.throws(() => assertVmConsensusEpoch({ CONSENSUS_VERSION: '4' }), function (err) {
+            assert.match(err.message, /VM CONSENSUS EPOCH MISMATCH/);
+            assert.ok(err.message.indexOf('"4"') !== -1, 'the message must name the loaded epoch');
+            assert.ok(err.message.indexOf(JSON.stringify(EXPECTED_VM_CONSENSUS_VERSION)) !== -1,
+                'the message must name the expected epoch');
+            return true;
+        });
+    });
+
+    it('throws when a loaded VM declares no epoch at all, rather than skipping', function () {
+        assert.throws(() => assertVmConsensusEpoch({}), /undefined \(missing\)/);
+    });
+
+    it('compares strictly, so a numeric epoch is not the string pin', function () {
+        assert.throws(() => assertVmConsensusEpoch({ CONSENSUS_VERSION: Number(EXPECTED_VM_CONSENSUS_VERSION) }),
+            /VM CONSENSUS EPOCH MISMATCH/);
+    });
+
+    it('passes a VM on the expected epoch, and leaves an unloaded VM to the load gate', function () {
+        assertVmConsensusEpoch({ CONSENSUS_VERSION: EXPECTED_VM_CONSENSUS_VERSION });
+        assertVmConsensusEpoch(null);
+    });
+
+    it('passes the VM this checkout actually bundles, when one is present', function () {
+        let vm;
+        try { vm = require('xchain-vm'); }
+        catch (e) { return skipOrFail(this, { usable: false, reason: 'xchain-vm did not load: ' + e.message }, 'the bundled-VM epoch check'); }
+        assertVmConsensusEpoch(vm);
     });
 
 });

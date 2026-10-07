@@ -93,7 +93,7 @@ describe('state_root reserved sub-trees: gate is inert EXCEPT the armed set @reg
     it('every populated activation key is coin-qualified (<COIN>:<network>)', function(){
         // These heights are chain-local block indexes and the chains differ by
         // orders of magnitude, so a bare-network key arms three chains at one
-        // number. Unlike state_commitment_activation.js there is NO bare-network
+        // number. Unlike state_commitment_gate.js there is NO bare-network
         // fallback in this gate at all; this pins the key shape.
         const maps = Object.values(SUB.STATE_SUBTREE_ACTIVATION).concat([SUB.ESCROW_LOCKED_LEAF_ACTIVATION]);
         for(const map of maps)

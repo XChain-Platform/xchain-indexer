@@ -154,9 +154,10 @@ module.exports = {
             } else if(status=='valid' && this.isDispenseCapsActive(block_time)){
                 // MAX_DISPENSES cap (see dispenser_caps_activation.js). The dispense
                 // that reaches the cap already executed above; now the dispenser auto-closes
-                // and refunds remaining escrow to the owner. DISPENSER_CLOSE routes the refund
-                // sweep > canceller > SOURCE, which resolves to SOURCE for this auto-close (no
-                // sweep, no canceller). The count is derived from valid dispenses since the last
+                // and refunds remaining escrow. DISPENSER_CLOSE routes the refund sweep >
+                // canceller > SOURCE: SOURCE for an 'open' dispenser, the sweep destination or
+                // recorded canceller for one already 'cancelling' (matched in its close-delay
+                // window). The count is derived from valid dispenses since the last
                 // refill (a refill resets it), matching Counterparty dispense.py. Gated with the
                 // dispenser-family cohort so historical replay stays byte-identical below it.
                 let dispenseCount = await this.indexerDb.getDispenserDispenseCount(dispenser['ACTION_INDEX']);

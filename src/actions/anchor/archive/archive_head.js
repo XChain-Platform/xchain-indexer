@@ -20,15 +20,15 @@
  *
  ********************************************************************/
 
-const diag       = require('./diagnostic_events.js');
-const validate   = require('./validate.js');
-const quorum     = require('./quorum.js');
-const settle     = require('./settle.js');
-const reassembly = require('./reassembly.js');
-const gateRegistry = require('../../consensus/gate_registry');
+const diag       = require('../diagnostic_events.js');
+const validate   = require('../validate.js');
+const quorum     = require('../quorum.js');
+const settle     = require('../settle.js');
+const reassembly = require('../reassembly.js');
+const gateRegistry = require('../../../consensus/gate_registry');
 const { archiveReissueRefusal } = require('./archive_reissue_guard.js');
 
-const { getLogger } = require('../../observability/index.js');
+const { getLogger } = require('../../../observability/index.js');
 
 async function checkReplayGuards(handler, data, error){
     // Replay guards: never accept a seq BELOW the recorded max. Equal is allowed: a v0

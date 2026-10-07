@@ -45,12 +45,13 @@
  *   - the preimage object's key order is fixed in code; the caller hashes it with
  *     the shared util.getDataHash (JSON.stringify + bigint replacer + sha256).
  *
- * BYTE-ALIGNED TWIN: this file is copied verbatim into xchain-sync/src/stateHash.js
+ * BYTE-ALIGNED TWIN: this file is copied verbatim into xchain-sync/src/consensus/state_hash.js
  * (the source computes+stores from here; the follower recomputes from the identical
  * copy at apply-time and HALTS on mismatch). Keep them identical; the
  * state-hash-vectors golden + the xchain-e2e recompute-conformance scenario guard
- * the pair. The selection predicates also mirror xchain-sync/src/updatedRows.js +
- * cooldownCredits.js (forward) and ClientRollback.js + rollback.js (reverse).
+ * the pair. The selection predicates also mirror xchain-sync/src/server/updated_rows.js +
+ * server/cooldown_credits.js (forward) and client/rollback.js + the indexer's
+ * src/rollback/ (reverse).
  *
  * MODULE MAP (the facade owns only the composition and the public surface):
  *   state_hash/activation.js            flag-day gates, archive-head predicates and
