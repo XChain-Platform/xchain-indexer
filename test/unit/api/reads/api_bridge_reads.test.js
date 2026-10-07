@@ -36,14 +36,14 @@ process.env.INDEXER_NETWORK = 'regtest';
 const assert = require('assert');
 const sinon  = require('sinon');
 
-const { getTestConfig } = require('../../fixtures/config');
-const Utility  = require('../../../src/utility');
-const Database = require('../../../src/db');
-const SC  = require('../../../src/state_commitment/index.js');
-const M   = require('../../../src/consensus/merkle.js');
-const CHK = require('../../../src/consensus/bridge_checkpoint_check.js');
+const { getTestConfig } = require('../../../fixtures/config');
+const Utility  = require('../../../../src/utility');
+const Database = require('../../../../src/db');
+const SC  = require('../../../../src/state_commitment/index.js');
+const M   = require('../../../../src/consensus/merkle.js');
+const CHK = require('../../../../src/consensus/bridge_checkpoint_check.js');
 
-const { readApiSource } = require('../../helpers/api_source');
+const { readApiSource } = require('../../../helpers/api_source');
 const API_SRC = readApiSource();
 
 function newDb(){
@@ -216,7 +216,7 @@ async function buildEnvelope(opts){
     const stakesRoot   = M.toHex(M.EMPTY_SMT_ROOT);
     const subRoots     = { balances_root: balancesRoot, stakes_root: stakesRoot };
     const stateRoot    = M.toHex(M.stateRoot(subRoots));
-    const SUB = require('../../../src/consensus/gates/state_subtree_gate.js');
+    const SUB = require('../../../../src/consensus/gates/state_subtree_gate.js');
     const version = SUB.stateRootVersion(HEIGHT, NETWORK, CHAIN);
     const checkpointRow = { checkpoint_seq: 7, snapshot_block: HEIGHT, state_root: stateRoot, state_root_version: version };
     const checkpointRows = checkpointSeqs.map((seq) => ({ ...checkpointRow, checkpoint_seq: seq }));
@@ -322,8 +322,8 @@ describe('db.getBridgeEscrowProof, driven through CHK.verifyEscrowAgainstCheckpo
 
 describe('db.getBridgeEscrowProof, driven through CHK.verifyEscrowAgainstCheckpoint @regression @tier1', function(){
     it('state_root_version is DERIVED via state_subtree_activation.stateRootVersion, never the static merkle constant', async function(){
-        const SUB = require('../../../src/consensus/gates/state_subtree_gate.js');
-        const M2  = require('../../../src/consensus/merkle.js');
+        const SUB = require('../../../../src/consensus/gates/state_subtree_gate.js');
+        const M2  = require('../../../../src/consensus/merkle.js');
         const realVersion = SUB.stateRootVersion(HEIGHT, NETWORK, CHAIN);
         // The static constant and the derived value happen to agree at this fixture's
         // height (both 1); assert that fact so the next assertion's contrast is real.

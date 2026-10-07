@@ -3,9 +3,9 @@
 const assert  = require('assert')
 const http    = require('http')
 const express = require('express')
-const observability = require('../../../src/observability/index.js')
-const { installMiddleware } = require('../../../src/api/middleware.js')
-const { fakeIndexer } = require('./rpc/helpers/fake_indexer.js')
+const observability = require('../../../../src/observability/index.js')
+const { installMiddleware } = require('../../../../src/api/middleware.js')
+const { fakeIndexer } = require('../rpc/helpers/fake_indexer.js')
 
 function post(port, body){
     return new Promise((resolve, reject) => {

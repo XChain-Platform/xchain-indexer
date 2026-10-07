@@ -25,12 +25,12 @@ const assert  = require('assert');
 const express = require('express');
 const sinon   = require('sinon');
 
-const observability = require('../../../src/observability/index.js');
-const XChainIndexer = require('../../../src/XChainIndexer');
-const { keyEquals, apiKeyGate } = require('../../../src/api/auth_gate.js');
-const { installMiddleware } = require('../../../src/api/middleware.js');
-const { mountStatusRoute } = require('../../../src/api/status_endpoint.js');
-const { recordingView, fakeIndexer } = require('./rpc/helpers/fake_indexer.js');
+const observability = require('../../../../src/observability/index.js');
+const XChainIndexer = require('../../../../src/XChainIndexer');
+const { keyEquals, apiKeyGate } = require('../../../../src/api/auth_gate.js');
+const { installMiddleware } = require('../../../../src/api/middleware.js');
+const { mountStatusRoute } = require('../../../../src/api/status_endpoint.js');
+const { recordingView, fakeIndexer } = require('../rpc/helpers/fake_indexer.js');
 
 const SETS = {
     WRITE_METHODS: new Set([]),

@@ -30,7 +30,7 @@ const gateRegistry = require('../../consensus/gate_registry');
 const ZERO_CONF_KEY = 'attest_zero_conf_activation.ATTEST_ZERO_CONF_ACTIVATION';
 const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
 const { getLogger } = require('../../observability/index.js');
-const { maxPriceAgeSecondsAt } = require('../../utility/oracle_price_age.js');
+const { maxPriceAgeSecondsAt } = require('../../utility/price_age/oracle_price_age.js');
 
 module.exports = {
     // Settle the request fee escrowed at v0 (paid attestations). Runs at the
