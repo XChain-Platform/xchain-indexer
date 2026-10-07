@@ -297,9 +297,26 @@ describe('execContext (injected-execution TX_HASH seam) @regression @tier2', fun
                 ATTEST_MIRROR_RESPONSE: 'ATTESTMIRROR',
                 VOTE_CALLBACK:          'VOTECB',
                 XCALL_CALLBACK:         'XCALLCB',
+                XCALL_EXEC:             'XCALL',
             });
             assert.strictEqual(synthesizeTxHash('XCALLCB', 'regtest', 'BTC', 'x'),
                 sha256hex('XCALLCB:regtest:BTC:x'));
+            // XEXEC's tag predates the builder; its preimage must stay byte-identical.
+            assert.strictEqual(synthesizeTxHash(SYNTH_TAGS.XCALL_EXEC, 'regtest', 'BTC', 'x'),
+                sha256hex('XCALL:regtest:BTC:x'));
+        });
+
+        it('addresses a cross-chain caller on its source chain while TX_HASH stays namespaced by this chain', function () {
+            const base = { chain: 'BTC', network: 'regtest', contractIndex: 7, actionIndex: 1,
+                           blockIndex: 2, emitter: 3, synthTag: 'T', synthId: 'id' };
+            const local = buildInjectedExecContext(base);
+            assert.strictEqual(local.SOURCE, 'C:BTC:7');
+            assert.strictEqual(local.FEE_PAYER, 'C:BTC:7');
+            const cross = buildInjectedExecContext(Object.assign({ sourceChain: 'DOGE' }, base));
+            assert.strictEqual(cross.SOURCE, 'C:DOGE:7');
+            assert.strictEqual(cross.FEE_PAYER, 'C:DOGE:7');
+            assert.strictEqual(cross.TX_HASH, sha256hex('T:regtest:BTC:id'));
+            assert.strictEqual(cross.TX_HASH, local.TX_HASH);
         });
     });
 });
