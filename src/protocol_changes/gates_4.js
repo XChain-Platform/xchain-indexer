@@ -21,7 +21,7 @@
 
 'use strict';
 
-const { addGate, UNARMED } = require('./shared_rows.js');
+const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
 
 // dispenser_freshness_proven_use_activation
 // DISPENSER_FRESHNESS_PROVEN_USE_ACTIVATION: at/after this block time the local
@@ -345,12 +345,12 @@ addGate('price_wire_trailing_activation.PRICE_WIRE_TRAILING_ACTIVATION', 'height
 // Per-chain activation height, interpreted as the processing chain's OWN
 // block_index. At/after the height getSnapshotAge() reports consensus seconds
 // since the latest admitted finalized snapshot; below it the legacy block-count
-// query stays. Unarmed on mainnet and testnet, genesis-active on regtest.
+// query stays. Every venue stays inert until a release pins its height.
 addGate('oracle_snapshot_age_seconds_activation.ORACLE_SNAPSHOT_AGE_SECONDS_ACTIVATION', 'height', {
-    mainnet: UNARMED,
-    'BTC:testnet': UNARMED,
-    'LTC:testnet': UNARMED,
-    'DOGE:testnet': UNARMED,
-    testnet: UNARMED,
-    regtest: 0,
+    mainnet: UNPINNED,
+    'BTC:testnet': UNPINNED,
+    'LTC:testnet': UNPINNED,
+    'DOGE:testnet': UNPINNED,
+    testnet: UNPINNED,
+    regtest: UNPINNED,
 });

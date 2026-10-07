@@ -69,14 +69,13 @@ afterEach(function () { sinon.restore(); });
 describe('VM oracle snapshot-age causality gate (getOracleDataForVM age query) @regression @tier1', function () {
     describe('gate: which age query is emitted', function () {
 
-        it('regtest (genesis-armed, seconds basis) causally caps its age query at the processing block', async function () {
+        it('regtest (genesis-armed) causally caps the age query at the processing block', async function () {
             const db = dbFor('regtest');
             await db.getOracleDataForVM(500, 1700000000, 0);
-            const hit = db._calls.find(c => /MAX\(block_timestamp\)\s+AS\s+latest_time/i.test(c.query));
-            assert.ok(hit, 'regtest arms the seconds-basis age query from genesis');
-            assert.match(hit.query.replace(/\s+/g, ' '), /WHERE status = 'finalized' .*AND reference_block <= \?/,
-                'active: the seconds age query must carry the causal cap');
-            assert.strictEqual(hit.args[0], 500, 'cap bound to the block being processed (blockCap = blockIndex)');
+            const c = ageCall(db);
+            assert.match(c.query.replace(/\s+/g, ' '), /WHERE status = 'finalized' AND reference_block <= \?/,
+                'active: age query must carry the causal cap');
+            assert.deepStrictEqual(c.args, [500], 'cap bound to the block being processed (blockCap = blockIndex)');
         });
 
         it('mainnet BELOW its per-coin height is INERT: age query stays uncapped (byte-identical replay)', async function () {
@@ -96,7 +95,7 @@ describe('VM oracle snapshot-age causality gate (getOracleDataForVM age query) @
             assert.deepStrictEqual(c.args, [961000], 'cap bound to the block being processed');
         });
 
-        it('testnet below the seconds basis stays genesis-capped: age query is capped', async function () {
+        it('testnet is genesis-active (armed from 0): age query is capped', async function () {
             const db = dbFor('testnet');
             await db.getOracleDataForVM(500, 1700000000, 0);
             const c = ageCall(db);

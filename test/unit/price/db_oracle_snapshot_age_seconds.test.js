@@ -30,8 +30,15 @@ const sinon  = require('sinon');
 const { getTestConfig } = require('../../fixtures/config');
 const Utility           = require('../../../src/utility');
 const Database          = require('../../../src/db');
+const gateRegistry      = require('../../../src/consensus/gate_registry');
+const ageSeconds        = require('../../../src/db/prices/oracle_snapshot_age_seconds');
 
-function dbFor(network, latestRows) {
+function dbFor(network, latestRows, secondsActive = false) {
+    if(secondsActive){
+        const activeAt = gateRegistry.activeAt.bind(gateRegistry);
+        sinon.stub(gateRegistry, 'activeAt').callsFake((key, ...args) =>
+            key === ageSeconds.SECONDS_ACTIVATION ? true : activeAt(key, ...args));
+    }
     const config   = getTestConfig();
     config.NETWORK = network;
     config.COIN    = 'BTC';
@@ -56,8 +63,8 @@ const blocksCall  = (db) => db._calls.find(c => /MAX\(reference_block\)\s+AS\s+l
 afterEach(function () { sinon.restore(); });
 
 describe('VM oracle snapshot age in seconds (getOracleDataForVM) @regression @tier1', function () {
-    it('regtest (armed from genesis) returns block time minus the newest snapshot time', async function () {
-        const db = dbFor('regtest', [{ latest_time: 1699999900 }]);
+    it('an armed row returns block time minus the newest snapshot time', async function () {
+        const db = dbFor('regtest', [{ latest_time: 1699999900 }], true);
         const out = await db.getOracleDataForVM(500, 1700000000, 0);
         assert.strictEqual(out.snapshotAge, 100);
         assert.ok(!blocksCall(db), 'the block-count query must not run once armed');
@@ -66,7 +73,7 @@ describe('VM oracle snapshot age in seconds (getOracleDataForVM) @regression @ti
     });
 
     it('clamps a snapshot stamped after the block to 0', async function () {
-        const db = dbFor('regtest', [{ latest_time: 1700000050 }]);
+        const db = dbFor('regtest', [{ latest_time: 1700000050 }], true);
         const out = await db.getOracleDataForVM(500, 1700000000, 0);
         assert.strictEqual(out.snapshotAge, 0);
     });
@@ -74,20 +81,29 @@ describe('VM oracle snapshot age in seconds (getOracleDataForVM) @regression @ti
     it('reports MAX_SAFE_INTEGER with no admitted snapshot', async function () {
         for (const rows of [[], [{ latest_time: null }]]) {
             sinon.restore();
-            const db = dbFor('regtest', rows);
+            const db = dbFor('regtest', rows, true);
             const out = await db.getOracleDataForVM(500, 1700000000, 0);
             assert.strictEqual(out.snapshotAge, Number.MAX_SAFE_INTEGER);
         }
     });
 
     it('reports MAX_SAFE_INTEGER when the block time is unknown', async function () {
-        const db = dbFor('regtest', [{ latest_time: 1699999900 }]);
+        const db = dbFor('regtest', [{ latest_time: 1699999900 }], true);
         const out = await db.getOracleDataForVM(500, NaN, 0);
         assert.strictEqual(out.snapshotAge, Number.MAX_SAFE_INTEGER);
     });
 
-    it('mainnet and testnet are unarmed: the legacy block-count query runs', async function () {
-        for (const network of ['mainnet', 'testnet']) {
+    it('every network is unpinned: the legacy block-count query runs', async function () {
+        const row = gateRegistry.registry.get(ageSeconds.SECONDS_ACTIVATION);
+        assert.deepStrictEqual(row, {
+            mainnet: null,
+            'BTC:testnet': null,
+            'LTC:testnet': null,
+            'DOGE:testnet': null,
+            testnet: null,
+            regtest: null,
+        });
+        for (const network of ['mainnet', 'testnet', 'regtest']) {
             sinon.restore();
             const db = dbFor(network);
             await db.getOracleDataForVM(1000000000, 1700000000, 0);
