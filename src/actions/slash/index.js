@@ -173,7 +173,7 @@ class Slash {
         // (declared - 6, declared]. That gap cuts both ways here: it can leave a genuine
         // equivocator out of the set (a real proof that burns nothing) and it can put a key
         // in a set it never signed under. Same fix, same shared constant, same flag day as
-        // the existing consumers (attest.js, recovery.js, sdk light.js); below the gate this
+        // the existing consumers (actions/attest/, recovery.js, sdk light.js); below the gate this
         // is the declared height unchanged, so pre-flag-day acceptance is byte-identical.
         let snapshotBlock = null, resolveBlock = null;
         if(!error){
@@ -181,15 +181,18 @@ class Slash {
             // must agree on the oracle round carried in-content. Gated, not unconditional,
             // because narrowing which proofs burn a bond is a consensus acceptance rule.
             let oracleRoundGate = await this.actions.protocolChanges.isEnabled('SLASH_ORACLE_ROUND_DISCRIMINATED', data['BLOCK_INDEX']);
+            // Same reasoning for XATTEST base-leg pairs: honest retry rounds share one key.
+            let multiRoundGate = await this.actions.protocolChanges.isEnabled('SLASH_ATTEST_MULTIROUND_EXEMPT', data['BLOCK_INDEX']);
+            let publisherPairGate = await this.actions.protocolChanges.isEnabled('SLASH_XANCPUB_PUBLISHER_PAIR', data['BLOCK_INDEX']);
             let slot = await this.resolveSlot(key.engineTag, key.roundId, wire.msgA.substring(key.prefix.length),
-                wire.msgB.substring(key.prefix.length), oracleRoundGate);
+                wire.msgB.substring(key.prefix.length), oracleRoundGate, multiRoundGate, publisherPairGate);
             if(slot.error) error = slot.error;
             else {
                 snapshotBlock = slot.snapshotBlock;
                 resolveBlock  = srb.buriedSnapshotBlock(snapshotBlock, this.config['NETWORK']);
                 // One engine tag can host content families locked under DIFFERENT
                 // capabilities: XATTEST's relay legs are verified against `cross_chain`
-                // (attest.js verifyRelayQuorum), not `attestation`. The slot
+                // (attest/relay.js verifyRelayQuorum), not `attestation`. The slot
                 // resolver names the governing one, so the derived-CAPABILITY check runs
                 // HERE, after the family is known, rather than off the tag alone.
                 if(slot.capability) capability = slot.capability;
@@ -208,7 +211,7 @@ class Slash {
             // XCONFIG is authorized by the WHOLE federation (getActiveValidators), every other
             // engine by its capability-scoped snapshot. Both return [{pubkey,...}] at the block.
             // Read at the BURIED height (see above); the message still names the declared one,
-            // matching attest.js, so the reject bytes do not move with the buffer.
+            // matching actions/attest/, so the reject bytes do not move with the buffer.
             let validators = (capability === CONFIG_CAPABILITY)
                 ? await this.indexerDb.getActiveValidators(slot.resolveBlock)
                 : await this.indexerDb.getValidatorsByCapability(capability, slot.resolveBlock);
@@ -324,8 +327,8 @@ class Slash {
     // Recover the slot's snapshot_block from the proof. The per-engine layouts live
     // in slash/resolve_slot.js; this handler only needs the answer, and hands those
     // readers the state they need (util for isNull, indexerDb for the XATTEST read).
-    async resolveSlot(engineTag, roundId, contentA, contentB, oracleRoundGate){
-        return await resolveProofSlot(this, engineTag, roundId, contentA, contentB, oracleRoundGate);
+    async resolveSlot(engineTag, roundId, contentA, contentB, oracleRoundGate, multiRoundGate, publisherPairGate){
+        return await resolveProofSlot(this, engineTag, roundId, contentA, contentB, oracleRoundGate, multiRoundGate, publisherPairGate);
     }
 
     // The payout policy lives in slash/bounty.js. The method stays because it is the

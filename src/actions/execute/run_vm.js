@@ -68,8 +68,10 @@ async function loadVmSnapshot(ctx){
     // Pre-load contract-stake snapshot scoped to THIS contract. Backs the
     // xchain.contract.{getStake,getTotalStaked,getStakers,slash} APIs synchronously.
     // Implicit slash authorization: the accessor only knows this contract's stakes.
+    // The slash-window cap is decided here, on the decoder's time for this block.
+    let slashWindowActive = await this.actions.protocolChanges.isEnabled('STAKE_SNAPSHOT_SLASH_WINDOW', data['BLOCK_INDEX']);
     snapshot.contractStakeData = await this.indexerDb.getContractStakeDataForVM(
-        data['CONTRACT_ACTION_INDEX'], data['BLOCK_INDEX']
+        data['CONTRACT_ACTION_INDEX'], data['BLOCK_INDEX'], slashWindowActive
     );
 
     // Balance + token-info snapshot backing xchain.getBalance / getTokenInfo.
@@ -237,7 +239,7 @@ async function commitVmEffects(ctx, vmResult){
         // Every slash in this frame writes its credit and escrow rows under the same
         // action_index, and createLedgerChangeRecord overwrites a same-key row rather
         // than accumulating, so a second same-token slash would erase the first
-        // (slash_ledger_consolidation_activation.js). Owned by the frame that owns the
+        // (the slash_ledger_consolidation_activation gate row). Owned by the frame that owns the
         // action_index: a nested EXECUTE builds its own and never merges into this one,
         // and a savepoint rollback abandons it with the frame.
         let slashLedger = { credits: new Map(), escrows: new Map() };

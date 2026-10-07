@@ -64,8 +64,9 @@ module.exports = {
         // transaction, so doQuery would collapse any read fault to [] - indistinguishable
         // from "no unprocessed reorgs". That silently suppresses the rollback trigger and
         // lets the catch-up loop commit and publish blocks on un-rolled-back old-chain
-        // state. Throwing instead aborts the pass with no block committed; the loop retries
-        // on the next tick. Mirrors the throwing sibling read on the indexer side.
+        // state. Throwing instead aborts the pass with no block committed; runBlockLoop does
+        // not catch it, so the process exits and the supervisor restart retries from the
+        // committed cursor. Mirrors the throwing sibling read on the indexer side.
         let results = await this.doQueryStrict(query, args);
         // Incarnation guard (/ RE-1): an empty read under a cursor above the decoder's newest
         // REORG id means an out-of-band decoder rebuild, and it throws (see the guard's header).

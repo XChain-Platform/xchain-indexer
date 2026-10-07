@@ -20,6 +20,8 @@
  *
  ********************************************************************/
 
+const gateRegistry = require('../../consensus/gate_registry');
+
 // Installed onto Send.prototype by index.js; each method runs with `this` bound to the
 // handler, exactly as the class method it was.
 module.exports = {
@@ -48,11 +50,22 @@ module.exports = {
         // needs O(distinct ticks) queries, not one per leg. Same dedupe pattern as
         // `ticks` and `preferences` above; SEND runs on every ~5s index tick, so the
         // per-leg form scaled per-block DB work with recipient count.
+        //
+        // A gated FILE stores the tick NAME as its gate ticker, so a caret id (^12) never
+        // matches it and the SEND would skip the handoff rule. Once the caret pack-key row
+        // is active the lookup is keyed by the name the id resolves to; the result stays
+        // stored under the spelling the leg carries, which is what the later phases read.
+        let caretKeyed = gateRegistry.activeAt('send_caret_pack_key_activation.SEND_CARET_PACK_KEY_ACTIVATION', this.config['NETWORK'], null, null, data['BLOCK_TIME']);
         let gatedPacks = {};
         for(let send of sends){
             let tick = send[0];
-            if(gatedPacks[tick] === undefined)
-                gatedPacks[tick] = await this.indexerDb.getGatedPackThresholds(tick);
+            if(gatedPacks[tick] !== undefined) continue;
+            let packTick = tick;
+            if(caretKeyed && String(tick).substring(0,1) === '^'){
+                let info = ticks[tick];
+                packTick = (info && info['TICK']) ? info['TICK'] : null;
+            }
+            gatedPacks[tick] = packTick === null ? [] : await this.indexerDb.getGatedPackThresholds(packTick);
         }
 
         return { ticks, preferences, gatedPacks };

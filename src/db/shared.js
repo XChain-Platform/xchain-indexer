@@ -117,8 +117,9 @@ const AUTO_DEDUP_TABLES = new Set(['balances']);
 // per-table warnings never depend on a collector existing.
 function recordShapeDrift(store, table, kind, items){
     if(!store || !items || !items.length) return;
-    const entry = store.get(table) || { columns: [], indexes: [] };
-    entry[kind] = entry[kind].concat(items);
+    const entry = store.get(table) || { columns: [], indexes: [], indexKinds: [] };
+    // Tolerate an entry built before a kind existed (indexKinds joined columns and indexes later).
+    entry[kind] = (entry[kind] || []).concat(items);
     store.set(table, entry);
 }
 
@@ -182,7 +183,7 @@ const CANONICAL_CARET_ID = /^[1-9][0-9]*$/;
 // the identical shape PRICE batching already hit.
 //
 // It widens ONLY who is capable, never who is responsible. The per-row responsible set is
-// resolved by actions/attest.js computeResponsibleSet, which returns [] off BTC before it
+// resolved by actions/attest/responsible_set.js computeResponsibleSet, which returns [] off BTC before it
 // reads anything, and that filter stays the binding gate on the on-chain v1 path: an ATTEST
 // v1 landing off BTC is refused for the same reason after this change as before it. That is
 // deliberate, and it is why per-row responsible-set verification happens on the BTC indexer
@@ -217,14 +218,42 @@ function usesCapabilitySnapshot(config, capability){
 // runMigrations' callers build partial `this` objects, and a prototype hop would break
 // the guard on those (see the comment at that closure).
 //
-// Holds only while sql_mode omits NO_BACKSLASH_ESCAPES. Nothing in this tree sets
-// sql_mode and the pool params below set none; if that ever changes, every caller of
-// this helper must be revisited.
+// Holds only while sql_mode omits NO_BACKSLASH_ESCAPES. SESSION_SQL_MODE below is the
+// mode withPinnedSqlMode requests and it never carries that flag; sqlModeAllowsBackslashEscapes
+// is the probe to run against what the server actually reports.
 function opensBackslashEscape(str, i, quote){
     return str[i] === '\\' && quote !== '`' && i + 1 < str.length;
 }
 
+// The sql_mode a pool is asked to pin through withPinnedSqlMode, spelled out so the outcome of an oversized or
+// out-of-range write (errno 1406 and a retried block, rather than a silent clamp) and the
+// backslash handling of opensBackslashEscape never depend on the server's own default.
+const SESSION_SQL_MODE = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION';
+const SESSION_INIT_SQL = `SET sql_mode='${SESSION_SQL_MODE}'`;
+
+// Adds the pinned-mode statement to a mariadb pool or connection parameter object.
+function withPinnedSqlMode(params){
+    return Object.assign({}, params, { initSql: SESSION_INIT_SQL });
+}
+
+// Whether a reported sql_mode string is the pinned one, flag for flag and order aside.
+function sqlModeIsPinned(reported){
+    const have = String(reported || '').split(',').map(f => f.trim()).filter(Boolean).sort();
+    const want = SESSION_SQL_MODE.split(',').sort();
+    return have.length === want.length && have.every((f, k) => f === want[k]);
+}
+
+// Whether a reported sql_mode leaves a backslash as an escape inside a string literal.
+function sqlModeAllowsBackslashEscapes(reported){
+    return !String(reported || '').split(',').some(f => f.trim().toUpperCase() === 'NO_BACKSLASH_ESCAPES');
+}
+
 module.exports = {
+    SESSION_SQL_MODE,
+    SESSION_INIT_SQL,
+    withPinnedSqlMode,
+    sqlModeIsPinned,
+    sqlModeAllowsBackslashEscapes,
     ATTEST_BATCH_CHUNK_ROW_LIMIT,
     STAKE_WEIGHT_NUMERIC,
     requireStakeWeight,

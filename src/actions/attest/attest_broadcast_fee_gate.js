@@ -118,7 +118,7 @@ const _CAP_SATS_PER_COIN = 100000000n;
 // out of the AUTHOR's escrow and paid to the leader, so rounding a ninth decimal up
 // over-pays out of someone else's escrow. Same reason bcmulfloor / bcmuldivfloor in
 // utility.js floor rather than round.
-function _parseCap(value){
+function parseCap(value){
     if(value === null || value === undefined) return null;
     let s = String(value).trim();
     let m = /^(\d+)(?:\.(\d*))?$/.exec(s);
@@ -128,7 +128,7 @@ function _parseCap(value){
 }
 
 // Render a satoshi count as the fixed 8dp decimal string nodes compare byte-for-byte.
-function _renderCap(sats){
+function renderCap(sats){
     return (sats / _CAP_SATS_PER_COIN).toString()
          + '.' + (sats % _CAP_SATS_PER_COIN).toString().padStart(8, '0');
 }
@@ -144,16 +144,16 @@ function _renderCap(sats){
 // already folds any ATTESTATION.PROVIDERS overlay in. Pass null when the provider cannot be
 // resolved; the shipped DEFAULT applies.
 function broadcastFeeCapNative(providerId, providerDef){
-    let hardMax = _parseCap(ATTEST_BROADCAST_FEE_CAP.HARD_MAX);
-    let overlay = _parseCap(providerDef && providerDef.broadcast_fee_cap_native);
-    let shipped = _parseCap(ATTEST_BROADCAST_FEE_CAP.PROVIDERS[String(providerId)]);
+    let hardMax = parseCap(ATTEST_BROADCAST_FEE_CAP.HARD_MAX);
+    let overlay = parseCap(providerDef && providerDef.broadcast_fee_cap_native);
+    let shipped = parseCap(ATTEST_BROADCAST_FEE_CAP.PROVIDERS[String(providerId)]);
     let resolved = overlay !== null ? overlay
-                 : (shipped !== null ? shipped : _parseCap(ATTEST_BROADCAST_FEE_CAP.DEFAULT));
+                 : (shipped !== null ? shipped : parseCap(ATTEST_BROADCAST_FEE_CAP.DEFAULT));
     if(resolved === null) return '0';
     // BigInt compare: the clamp decides how much escrow the leader may take, so it is
     // exact rather than an IEEE-754 near-miss around HARD_MAX.
     if(hardMax !== null && resolved > hardMax) resolved = hardMax;
-    return _renderCap(resolved);
+    return renderCap(resolved);
 }
 
 module.exports = {

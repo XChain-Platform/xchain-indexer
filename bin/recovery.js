@@ -86,7 +86,7 @@ const { ARCHIVE_CHUNK_SET_SQL, ARCHIVE_CHUNK_SET_BY_AUTHOR_SQL,
 // ARCHIVE_HEAD_VERSIONS cannot reach one path and silently skip the other.
 const { ARCHIVE_HEAD_VERSIONS, ARCHIVE_HEAD_VERSIONS_SQL } = require('../src/consensus/state_hash.js');
 const { foldArchiveHeadFloor } = require('../src/db/anchors/archive_head_pick.js');
-const { canonicalBatchCrc } = require('../src/actions/anchor/v3_canonical.js');
+const { canonicalBatchCrc, archiveCanonicalSuffix } = require('../src/actions/anchor/v3_canonical.js');
 const bridgePolicy = require('./recovery/bridge_policy.js');
 const listShareRecovery = require('./recovery/list_share.js');
 const checkpointPrice = require('./recovery/checkpoint_price.js');
@@ -194,7 +194,8 @@ class AnchorRecovery {
              JOIN index_statuses s ON s.id = a.status_id
              LEFT JOIN actions         act ON act.action_index = a.action_index
              LEFT JOIN index_addresses adr ON adr.id           = act.source_id
-             WHERE a.version ${ARCHIVE_HEAD_VERSIONS_SQL} AND s.status IN ('valid', 'unverified')
+             WHERE a.version ${ARCHIVE_HEAD_VERSIONS_SQL} AND a.match_batch_seq IS NOT NULL
+               AND s.status IN ('valid', 'unverified')
              ORDER BY a.match_batch_seq ASC, a.action_index ASC`);
         if(!v1s || v1s.length === 0){
             // Name the versions the query actually scanned, so the operator reading this
@@ -349,10 +350,12 @@ class AnchorRecovery {
             await this.verifyCompleteness(snaps, v1.network);
 
         // 1. Wrapper signatures vs the ARCHIVED oracle_publish set.
-        let wrapperSet = setFor('oracle_publish', v1.snapshot_block);
-        let wrapperCanonical = this.wrapperCanonical(v1);
+        let foldWrapper = Number(v1.version) === 3 ? await this.foldWrapperSection(v1) : null;
+        let wrapperBlock = foldWrapper ? foldWrapper.snapshot_block : v1.snapshot_block;
+        let wrapperSet = setFor('oracle_publish', wrapperBlock);
+        let wrapperCanonical = foldWrapper ? this.foldWrapperCanonical(v1, foldWrapper) : this.wrapperCanonical(v1);
         let wrapperSigs = this.parseSigs(v1.validator_signatures);
-        if(!this.quorumVerified(wrapperCanonical, wrapperSigs, wrapperSet, swq.isStakeWeightedQuorumActive(v1.snapshot_block, v1.network)))
+        if(!this.quorumVerified(wrapperCanonical, wrapperSigs, wrapperSet, swq.isStakeWeightedQuorumActive(wrapperBlock, v1.network)))
             throw new Error('wrapper signatures fail quorum against the archived oracle_publish set');
 
         // 2. Every match's signatures vs the ARCHIVED cross_chain set.
@@ -940,6 +943,18 @@ class AnchorRecovery {
         report.tombstones  += delta.tombstones;
     }
 
+    // Admission heights ride the archive row only when the hub serialized them;
+    // an absent or null value leaves the column at its legacy NULL.
+    async writeAdmitBlocks(table, keyColumns, keyValues, row){
+        let heights = ['admit_block_btc', 'admit_block_ltc', 'admit_block_doge']
+            .map(name => row[name] == null ? null : Number(row[name]));
+        if(heights.every(height => height === null)) return;
+        await this.db.doQuery(
+            `UPDATE ${table} SET admit_block_btc = ?, admit_block_ltc = ?, admit_block_doge = ?
+             WHERE ${keyColumns.map(column => column + ' = ?').join(' AND ')}`,
+            [...heights, ...keyValues]);
+    }
+
     async writeBatch(archive, report, network, anchorTxid, rewards){
         // Parity carve-out (documented): unlike cross_chain_matches/calls below,
         // capability_snapshots is rebuilt WITHOUT an id, deliberately. The archive
@@ -991,6 +1006,7 @@ class AnchorRecovery {
                          WHERE match_id = ?`,
                         [m.status, Number(m.effective_time), Number(m.finalizing_view) || 0,
                          m.validator_signatures, anchorTxid, m.match_id]);
+                    await this.writeAdmitBlocks('cross_chain_matches', ['match_id'], [m.match_id], m);
                 } else {
                     // Non-finalized incoming (a later batch retracts): only the lifecycle
                     // status moves. Content upgrades happen on the revive branch above,
@@ -1027,6 +1043,7 @@ class AnchorRecovery {
                      m.a_chain, Number(m.a_action_index), m.a_kind, m.a_tick, m.a_amount, m.a_filled_before, Number(m.a_ownership), m.a_payout_addr, (m.a_payout_legs != null ? String(m.a_payout_legs) : null),
                      m.b_chain, Number(m.b_action_index), m.b_kind, m.b_tick, m.b_amount, m.b_filled_before, Number(m.b_ownership), m.b_payout_addr, (m.b_payout_legs != null ? String(m.b_payout_legs) : null),
                      Number(m.effective_time), m.validator_signatures, m.status, Number(m.finalizing_view) || 0, anchorTxid]);
+                await this.writeAdmitBlocks('cross_chain_matches', ['match_id'], [m.match_id], m);
                 // Parity carve-out (documented, not recoverable): a/b_push_generation and
                 // cross_chain_calls.push_generation are reorg fences the archive does not
                 // serialize (MATCH_KEYS/CALL_KEYS omit them); recovered rows keep the
@@ -1141,6 +1158,7 @@ class AnchorRecovery {
                          Number(c.gas_limit), Number(c.cross_hops), Number(c.effective_time), c.result_status,
                          c.return_payload_b64, c.validator_signatures, Number(c.finalizing_view) || 0,
                          c.call_id, c.phase]);
+                    await this.writeAdmitBlocks('cross_chain_calls', ['call_id', 'phase'], [c.call_id, c.phase], c);
                 } else {
                     // Non-finalized incoming (e.g. a later batch retracts): only the
                     // lifecycle status moves; content upgrades happen on the finalized
@@ -1173,6 +1191,7 @@ class AnchorRecovery {
                      c.target_chain, Number(c.target_contract_index), c.method, c.params_json,
                      Number(c.gas_limit), Number(c.cross_hops), Number(c.effective_time), c.status,
                      c.result_status, c.return_payload_b64, c.validator_signatures, Number(c.finalizing_view) || 0]);
+                await this.writeAdmitBlocks('cross_chain_calls', ['call_id', 'phase'], [c.call_id, c.phase], c);
             }
             report.calls++;
         }
@@ -1189,6 +1208,8 @@ class AnchorRecovery {
                 String(cp.checkpoint_seq), String(cp.snapshot_block)].join('|');
     }
 
+    // A copy of the hub's gated canonicalCheckpoint (root suffix on CHECKPOINT_COMMITMENT, then
+    // EQUIV); test/unit/recovery/recovery_checkpoint_canonical_parity.test.js pins it.
     checkpointCanonical(cp){
         let raw = this.rawCheckpointCanonical(cp);
         let rootsActive = gateRegistry.activeAt(CHECKPOINT_COMMITMENT_KEY,
@@ -1211,6 +1232,34 @@ class AnchorRecovery {
         if(eq.isEquivHeaderActive(v1.snapshot_block, v1.network))
             return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT,
                 v1.chain + '|' + v1.network + '|' + v1.block_index + '|' + v1.checkpoint_seq + '|' + v1.match_batch_seq, 0, raw);
+        return raw;
+    }
+
+    // A folded archive head carries no checkpoint fields: its signatures are the
+    // wrapper section's, stored verbatim, so the section is the sibling chain row of the
+    // same action whose signature list is byte-equal to the head's.
+    async foldWrapperSection(head){
+        let rows = await this.db.doQuery(
+            `SELECT * FROM anchor_actions
+             WHERE action_index = ? AND version = 3 AND chain IS NOT NULL
+             ORDER BY section_index ASC`, [Number(head.action_index)]);
+        let wrapper = (rows || []).find(r => String(r.validator_signatures) === String(head.validator_signatures));
+        if(!wrapper) throw new Error('folded archive head has no wrapper section');
+        return wrapper;
+    }
+
+    // The wrapper section signs its own v0 canonical (roots always appended) extended by
+    // the archive suffix, and its equivocation round id gains the batch seq. Byte-matches
+    // Anchor.canonical for a section whose index is WRAPPER_SECTION_INDEX.
+    foldWrapperCanonical(head, w){
+        let raw = this.rawCheckpointCanonical(w) + '|' +
+                [String(w.state_root || '').toLowerCase(), String(w.state_root_version),
+                 String(w.block_merkle_root || '').toLowerCase(), String(w.block_merkle_version)].join('|') +
+                archiveCanonicalSuffix({ MATCH_BATCH_SEQ: head.match_batch_seq, MATCH_COUNT: head.match_count,
+                                         BATCH_CRC32: head.batch_crc32, TOTAL_CHUNKS: head.total_chunks });
+        if(eq.isEquivHeaderActive(w.snapshot_block, w.network))
+            return eq.buildEquivCanonical(eq.ENGINE_TAGS.CHECKPOINT,
+                w.chain + '|' + w.network + '|' + w.block_index + '|' + w.checkpoint_seq + '|' + head.match_batch_seq, 0, raw);
         return raw;
     }
 
@@ -1314,6 +1363,16 @@ class AnchorRecovery {
 // Delegates to the real instance method; does not change its output.
 AnchorRecovery.wrapperCanonicalForTest = function(v1){
     return AnchorRecovery.prototype.wrapperCanonical.call(AnchorRecovery.prototype, v1);
+};
+
+AnchorRecovery.foldWrapperCanonicalForTest = function(head, section){
+    return AnchorRecovery.prototype.foldWrapperCanonical.call(AnchorRecovery.prototype, head, section);
+};
+
+// Test-only export of the gated checkpoint canonical that verifyCheckpoints re-verifies
+// archived state_checkpoints rows with; pinned by recovery_checkpoint_canonical_parity.
+AnchorRecovery.checkpointCanonicalForTest = function(cp){
+    return AnchorRecovery.prototype.checkpointCanonical.call(AnchorRecovery.prototype, cp);
 };
 
 module.exports = AnchorRecovery;

@@ -146,7 +146,7 @@ async function deriveEmissionRouting(executionData, position){
     // the root and propagated UNCHANGED: a top-level EXECUTE's executionData carries no
     // ROOT_ACTION_INDEX, so its own TX_VOUT (a pure on-chain output index, stable across reorgs)
     // IS the root; a nested/guard executionData already carries the inherited root value. Stamped
-    // onto emissionData so attest.js/xcall.js re-derive with it and nested EXECUTEs inherit it.
+    // onto emissionData so actions/attest and actions/xcall re-derive with it and nested EXECUTEs inherit it.
     // Inside a BATCH every subcommand is a root under the ONE TX_VOUT of the transaction, so
     // the subcommand's BATCH_POSITION is appended (flag-day gated); this MUST reproduce the
     // value the executing vm.execute was handed, or the host re-derives a request_id the VM
@@ -234,7 +234,7 @@ function buildEmissionData(executionData, position, prepared, bounds, routing, e
         // content-derived so it is byte-stable across nodes/reorgs ('' for the root).
         EMITTER_PATH:       routing.emitterPath,
         // Per-root discriminator: the on-chain output index TX_VOUT of the root that seeded
-        // this subtree, under the ROOT_ACTION_INDEX key attest.js/xcall.js read. Bound (with
+        // this subtree, under the ROOT_ACTION_INDEX key actions/attest and actions/xcall read. Bound (with
         // EMITTER_PATH) into the ATTEST request_id / XCALL call_id re-derivation, and inherited
         // unchanged by a nested EXECUTE emission.
         ROOT_ACTION_INDEX:  routing.rootActionIndex,

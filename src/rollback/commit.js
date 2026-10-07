@@ -24,6 +24,7 @@
 'use strict';
 
 const { getLogger } = require('../observability/index.js');
+const AddressRetry  = require('../hub/hub_push_queue/address_retry.js');
 
 module.exports = {
 
@@ -217,9 +218,10 @@ module.exports = {
     // durably staged in pending_hub_pushes inside the rollback transaction, so even a crash right
     // here loses nothing: HubPushQueue drains the surviving rows on restart. Here we just try an
     // IMMEDIATE live delivery to prune the hub's orphaned oracle_prices / cross_chain_calls /
-    // cross_chain_matches / bridge_transfers rows without waiting for the queue's backoff, and drop the durable row
-    // on success. Any failure simply leaves the row for the queue (retractions are idempotent and
-    // generation-fenced, so re-delivery is safe).
+    // cross_chain_matches / bridge_transfers rows without waiting for the queue's backoff, and settle the
+    // durable row on success (dropped once every unpinned candidate hub has it). Any failure simply
+    // leaves the row for the queue (retractions are idempotent and generation-fenced, so re-delivery
+    // is safe).
     //
     // The immediate delivery is OPEN-ENDED (last_action_index = null): it runs before any forward
     // replay re-publishes rows, so an open-ended delete hits only orphans. The durable fallback
@@ -236,20 +238,25 @@ module.exports = {
             try {
                 let coin       = this.config['COIN'];
                 let liveByType = {
-                    price_retraction: (last) => this.hubClient.retractPriceRange(coin, firstActionIndex, last, retractionGeneration),
-                    xcall_retraction: (last) => this.hubClient.retractXcallRange(coin, firstActionIndex, last, retractionGeneration),
-                    match_retraction: (last) => this.hubClient.retractMatchRange(coin, firstActionIndex, last, retractionGeneration),
-                    bridge_retraction: (last) => this.hubClient.retractBridgeRange(coin, firstActionIndex, last, retractionGeneration),
+                    price_retraction: (client, last) => client.retractPriceRange(coin, firstActionIndex, last, retractionGeneration),
+                    xcall_retraction: (client, last) => client.retractXcallRange(coin, firstActionIndex, last, retractionGeneration),
+                    match_retraction: (client, last) => client.retractMatchRange(coin, firstActionIndex, last, retractionGeneration),
+                    bridge_retraction: (client, last) => client.retractBridgeRange(coin, firstActionIndex, last, retractionGeneration),
                     // Takes the staged PAYLOAD rather than a range ceiling: this retraction names
                     // one batch, and the live and deferred deliveries are byte-identical because
                     // there is no open-ended form to narrow. It is the same payload the durable
                     // row carries, so a queued retry cannot diverge from what was tried here.
-                    attest_batch_retraction: (last, payload) => this.hubClient.retractAttestBatch(coin, payload),
+                    attest_batch_retraction: (client, last, payload) => client.retractAttestBatch(coin, payload),
                 };
+                // A success settles the row rather than dropping it: with an unpinned hub set the
+                // other candidates still need the (closed-range) retraction from the queue.
+                let live = AddressRetry.liveFacade(this.hubPushQueue || (this.indexer && this.indexer.hubPushQueue));
                 for(let r of stagedRetractions){
+                    let target = live ? live.liveDeliveryTarget(this.hubClient) : { client: this.hubClient, address: null };
                     try {
-                        await liveByType[r.pushType](null, r.payload);
-                        await this.indexerDb.markHubPushDelivered(r.id);
+                        await liveByType[r.pushType](target.client, null, r.payload);
+                        if(live) await live.settleLiveDelivery(r.id, target.address);
+                        else await this.indexerDb.markHubPushDelivered(r.id);
                     } catch(err) {
                         // Live delivery failed; the durable (closed-range) write-ahead row stays for
                         // HubPushQueue to retry with backoff. A dropped retraction would otherwise
@@ -257,7 +264,7 @@ module.exports = {
                         // relay rows eligible for re-injection, matches eligible for settlement,
                         // bridge transfers eligible to mint on the destination chain).
                         getLogger().warn('Rollback: live ' + r.pushType + ' failed; durable row ' + r.id +
-                            ' will be retried by HubPushQueue:', err && err.message);
+                            ' will be retried by HubPushQueue: ' + (err && err.message));
                     }
                 }
             } finally {

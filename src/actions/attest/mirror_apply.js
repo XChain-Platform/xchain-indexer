@@ -30,6 +30,7 @@ const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
 const { synthesizeTxHash, SYNTH_TAGS } = require('../../consensus/exec_context.js');
 const { getLogger } = require('../../observability/index.js');
 const { ATTEST_RESPONSE_BODY_MAX_BYTES, MIRROR_TERMINAL_STATUSES } = require('./constants.js');
+const wid     = require('../../consensus/gates/attest_responsible_widening_gate.js');
 
 module.exports = {
     // THE MIRROR APPLIER. Applies one finalized
@@ -59,6 +60,7 @@ module.exports = {
         let skip = (why) => {
             getLogger().info("\t ATTEST mirror : id=" + requestId.substring(0,16) + '...' +
                         ' : block=' + data['BLOCK_INDEX'] + ' : SKIPPED (' + why + ')');
+            return { rejected: true, source: 'attestation_responses', row: requestId, code: why };
         };
 
         let gate = this.mirrorRowSkipReason(row, request);
@@ -207,8 +209,18 @@ module.exports = {
         data['STATUS']           = 'valid';
         // Same inlined JSON the chain path stores, so a mirror-fed node's row and a
         // chain-fed node's row are byte-identical (a test asserts exactly that).
-        data['VALIDATOR_SIGNATURES'] = verdict.verifiedSigs.length
-            ? JSON.stringify(verdict.verifiedSigs.map(s => ({ pubkey: s.pubkey, sig: s.sig })))
+        // Only the rank-best `redundancy` verified signers are stored: the hub may send
+        // any verified superset, and storing it verbatim would give two indexers different
+        // rows and different fee splits for the same finalized response.
+        let responsible = await this.computeResponsibleSet(
+            requestId, request.redundancy, Number(request.block_index), request.provider_id,
+            wid.widenSlots(data['BLOCK_INDEX'], Number(request.block_index),
+                           request.deadline_block, this.config['NETWORK'])
+        );
+        let canonical = this.canonicalSignerSet(verdict.verifiedSigs, responsible, request.redundancy);
+        verdict.verifiedSigs = canonical;
+        data['VALIDATOR_SIGNATURES'] = canonical.length
+            ? JSON.stringify(canonical.map(s => ({ pubkey: s.pubkey, sig: s.sig })))
             : null;
 
         getLogger().info("\t ATTEST mirror : id=" + requestId.substring(0,16) + '...' +

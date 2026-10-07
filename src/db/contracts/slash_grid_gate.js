@@ -21,7 +21,7 @@
  * from the same `take` but by two independent roundings, so they can disagree:
  * with a decimals=0 tick, a stake row of '1' and a slash of '0.5',
  * bcsub('1','0.5',0) is '1' - the row is written back UNCHANGED - while
- * bcadd('0','0.5',0) is '1', so actions/execute.js _processSlashEmission
+ * bcadd('0','0.5',0) is '1', so actions/execute/slash_emission.js processSlashEmission
  * releases a full unit of escrow and credits a full unit to the slash
  * destination against a stake that was never debited. The stake stays
  * slashable again and withdrawable. Both passes carry it, active
@@ -68,10 +68,18 @@
  * another gate, which supplies no such measurement; this height carries its
  * own. The proof is a per-chain OLD-vs-ON replay witness, not this comment.
  *
- * TESTNET STAYS UNPINNED: it has been a live public ledger since 2026-09-01 and
- * carries stake history, so the empty-chain argument does not reach it. regtest
- * runs from genesis, matching stake_weight_collation_activation.js, the nearest
- * gate in this family.
+ * TESTNET IS ARMED AT HEIGHTS, NOT AT GENESIS: it has been a live public ledger
+ * since 2026-09-01 and carries stake history, so the empty-chain argument does
+ * not reach it. The v0.21.3 cut pinned BTC 155001, LTC 4906040 and DOGE
+ * 67962387 (the SLASH_GRID_ACTIVATION row in src/protocol_changes/gates_3.js).
+ * Testnet blocks below those heights keep the legacy arithmetic. The VM's slash
+ * amount precision gate (isSlashAmountPrecisionActive in xchain-vm/src/index.js)
+ * is on for all of testnet from genesis, so a slash in those blocks can arrive
+ * with up to 18 fractional digits and is rounded half-up at the tick's own
+ * decimals. The two gates run on different clocks: this one on the
+ * parsed chain's own block_index, the VM's on block time. regtest runs from
+ * genesis, matching src/consensus/gates/stake_weight_collation_gate.js, the
+ * nearest gate in this family.
  *
  * Indexer-only with no xchain-sync twin: xchain-sync replicates materialized
  * rows and never runs slashContractStake.
@@ -85,7 +93,7 @@ const SLASH_DEDUCTION_PRECISION = copy('slash_grid_activation.SLASH_DEDUCTION_PR
 const SLASH_GRID_ACTIVATION = copy('slash_grid_activation.SLASH_GRID_ACTIVATION');
 
 // Per-chain threshold with a network-wide fallback, byte-for-byte the lookup
-// stake_weight_collation_activation.js uses. A coin-less caller (unit fixtures)
+// src/consensus/gates/stake_weight_collation_gate.js uses. A coin-less caller (unit fixtures)
 // falls through to the bare network key and stays inert on mainnet/testnet,
 // which is the safe side.
 function _activationThreshold(network, coin){

@@ -16,7 +16,7 @@
 
 const assert = require('assert');
 const fixture = require('../../fixtures/anchor_canonical_vectors.json');
-const { splitV3Wire } = require('../../../src/actions/anchor/v3_wire.js');
+const { splitV3Wire } = require('../../../src/actions/anchor/v3/v3_wire.js');
 
 const SECTION_FIELDS = [
     'chain', 'block_index', 'block_hash', 'ledger_hash', 'actions_hash',

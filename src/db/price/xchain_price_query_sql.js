@@ -21,8 +21,9 @@
  * column, a new status table) is a one-file edit that the selection tests still
  * pin. The design notes on the trade predicate (spec §3) and the window (§4),
  * and the live-row evidence the predicates were verified against, are in the
- * header of src/consensus/xchain_price_query.js; this file carries only what
- * each statement itself needs to say.
+ * header of that module (xchain-indexer src/consensus/xchain_price_query.js,
+ * xchain-hub src/xchainPriceQuery.js); this file carries only what each
+ * statement itself needs to say.
  *
  * VENDORED BYTE-IDENTICALLY INTO xchain-hub beside the query module (the hub
  * derives the same price from a read-only connection to a validator's own

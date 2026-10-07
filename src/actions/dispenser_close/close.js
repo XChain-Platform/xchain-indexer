@@ -34,8 +34,8 @@ module.exports = {
         //   1. Sweep destination: if the cancel was driven by a SWEEP, honor the chosen destination.
         //   2. Recorded canceller: per DISPENSER.md, escrow returns to whoever cancelled
         //      (GET_ADDRESS or SOURCE). Recorded by createDispenserStatus when status='cancelling'.
-        //   3. SOURCE: fallback for paths with no canceller (auto-expire reaches dispenser_expire,
-        //      not here, but covered for safety).
+        //   3. SOURCE: the destination when there is no sweep and no canceller, chiefly a
+        //      dispense.js auto-close of an 'open' dispenser (auto-expire reaches dispenser_expire).
         let sweepDest = await this.indexerDb.getSweepDestination(data['DISPENSER_ACTION_INDEX']);
         let canceller = (!this.util.isNull(sweepDest)) ? null : await this.indexerDb.getDispenserCanceller(data['DISPENSER_ACTION_INDEX']);
         let destination = (!this.util.isNull(sweepDest)) ? sweepDest
@@ -53,7 +53,7 @@ module.exports = {
         // and route the ownership record. If the escrow has already been cleared
         // (because DISPENSE settled and triggered the auto-close), no action.
         //
-        // Ownership routing (DISPENSER.md:122): a cancel or expire returns the
+        // Ownership routing (dispenser.md, Token Ownership Dispensers): a cancel or expire returns the
         // token's issuer rights to SOURCE; ONLY a SWEEP-closure delivers them to
         // a non-SOURCE destination. The legacy path transferred to the computed
         // `destination` (sweep > canceller > SOURCE), and cancel authority

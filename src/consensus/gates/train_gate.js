@@ -137,10 +137,15 @@ function resolveRuleSet(height, network, activation){
     if(h === null) return null;
     let map = activation || TRAIN_ACTIVATION;
     let best = null;
+    let bestAt = null;
     for(const version of implementedRuleSets(map)){
         let at = activationHeightFor(version, network, map);
         if(at === null || at > h) continue;
-        if(best === null || compareRuleSetVersions(version, best) > 0) best = version;
+        if(bestAt === null || at > bestAt ||
+                (at === bestAt && compareRuleSetVersions(version, best) > 0)){
+            best = version;
+            bestAt = at;
+        }
     }
     return best;
 }
