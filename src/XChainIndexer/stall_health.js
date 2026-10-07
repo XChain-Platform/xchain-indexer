@@ -21,6 +21,8 @@
  *
  ********************************************************************/
 
+const BRIDGE_PROOF_BARRIER = 'bridge_proof_barrier';
+
 // Discriminate a genuinely WEDGED indexer from one that is merely deferring the
 // newest block behind a sync barrier that is itself advancing. A set stallReason
 // alone is not a wedge: a BTC-mainnet indexer's price mirror sits perpetually ~1
@@ -47,6 +49,7 @@
 // hashed value and no barrier waits any differently for it.
 function stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null){
     if(!stallReason) return false;
+    if(stallReason === BRIDGE_PROOF_BARRIER) return false;
     if(lastBlockCommittedAt == null) return false;
     if(Number.isFinite(stallClearsAtMs) && now < stallClearsAtMs) return false;
     return (now - lastBlockCommittedAt) > graceMs;
@@ -77,6 +80,7 @@ function waitingOnFutureBlock(stallReason, stallClearsAtMs, now){
 //   'none'              - advancing normally, no stall.
 //   'future_block_wait' - waiting out a future-stamped block; healthy and self-clearing,
 //                         with stallClearsAt naming the instant it can first move.
+//   'bridge_proof_wait' - waiting for a quorum-established bridge checkpoint or proof.
 //   'barrier_defer'     - a real barrier defer (mirror behind, host fault), still
 //                         advancing inside the grace window.
 //   'wedged'            - stalled with no commit for longer than the grace window.
@@ -84,6 +88,7 @@ function waitingOnFutureBlock(stallReason, stallClearsAtMs, now){
 // wedge a stall whose clear instant is still ahead.
 function stallClassOf(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs = null){
     if(!stallReason) return 'none';
+    if(stallReason === BRIDGE_PROOF_BARRIER) return 'bridge_proof_wait';
     if(waitingOnFutureBlock(stallReason, stallClearsAtMs, now)) return 'future_block_wait';
     if(stallWedged(stallReason, lastBlockCommittedAt, graceMs, now, stallClearsAtMs)) return 'wedged';
     return 'barrier_defer';
@@ -133,12 +138,15 @@ function nextBarrierHold(prev, block, stallReason, stallClearsAtMs, now){
 
 // True for the stall reasons a hub-mirror resubscribe could actually clear. Every mirror
 // barrier's reason ends in '_barrier' (price/oracle/match/call/call_presence/anchor_attest/
-// snapshot); the host faults deliberately do not (vm_executor_unavailable,
-// anchor_reward_proof_unavailable, rollcall_proof_unavailable). A suffix rule rather than
-// a list, so a barrier added later is covered by naming it the way every existing one is
-// named.
+// snapshot). The bridge proof barrier is the exception: it waits for a quorum checkpoint
+// or an origin endpoint, neither of which a local hub-mirror resync can produce. The host
+// faults deliberately do not use the suffix (vm_executor_unavailable,
+// anchor_reward_proof_unavailable, rollcall_proof_unavailable). A suffix rule plus that
+// exception keeps barriers added later covered by the shared naming convention.
 function isMirrorBarrierReason(stallReason){
-    return typeof stallReason === 'string' && /_barrier$/.test(stallReason);
+    return typeof stallReason === 'string'
+        && stallReason !== BRIDGE_PROOF_BARRIER
+        && /_barrier$/.test(stallReason);
 }
 
 // Milliseconds the current hold has lasted, or 0 when nothing is held.
