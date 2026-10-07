@@ -24,10 +24,13 @@
 
 const decoderBlockData = require('./decoder_block_data.js');
 const actionData       = require('./action_data.js');
+const priceLandingScan = require('./price_landing_scan.js');
 
 module.exports = {
 
     ...decoderBlockData,
+
+    ...priceLandingScan,
 
     // Handles returning the highest tx_index from transactions table
     async getNextTxIndex(){

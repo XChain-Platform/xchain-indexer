@@ -74,6 +74,7 @@ function addAttestationDbStubs(db) {
     db.setAttestationResponseCallbackIndex = sinon.stub().resolves();
     db.getValidatorsByCapability         = sinon.stub().resolves([{ pubkey: PUBKEY_A }]);
     db.getStakeWeightsByCapability       = sinon.stub().resolves([{ pubkey: PUBKEY_A, source: 'SA', weight: '100' }]);
+    db.getCapabilitySnapshotWeights      = sinon.stub().resolves([]);
     db.createValidatorReward             = sinon.stub().resolves(true);
     db.createSavepoint                   = sinon.stub().resolves('sp1');
     db.releaseSavepoint                  = sinon.stub().resolves();

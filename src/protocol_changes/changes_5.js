@@ -31,6 +31,8 @@ const {
     OWNER_WITHDRAW_OPT_IN_TESTNET_TIME,
     READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME,
     READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME,
+    APPLY_LENGTH_METER_MAINNET_TIME,
+    APPLY_LENGTH_METER_TESTNET_TIME,
     DISPENSER_REFILL_MAINNET_TIME,
     DISPENSER_REFILL_TESTNET_TIME,
 } = require('./flag_times.js');
@@ -78,6 +80,8 @@ const CHANGES = [
     // key that names an inherited member as absent from the flag day on.
     ['READONLY_ACCESSOR_OWN_KEY', '0.2.0', READONLY_ACCESSOR_OWN_KEY_MAINNET_TIME,
         READONLY_ACCESSOR_OWN_KEY_TESTNET_TIME, 0, 0, 0, 0],
+    ['APPLY_LENGTH_METER', '0.2.0', APPLY_LENGTH_METER_MAINNET_TIME,
+        APPLY_LENGTH_METER_TESTNET_TIME, 0, 0, 0, 0],
     // DISPENSER_REFILL: a refill that adds escrow consults the token's trade controller.
     // Unarmed on mainnet and testnet; regtest is genesis-active unless a venue sets
     // DISPENSER_REFILL_REGTEST_TIME.
