@@ -18,11 +18,11 @@ const assert = require('assert');
 const crypto = require('crypto');
 const sinon = require('sinon');
 
-const observability = require('../../../../../src/observability/index.js');
-const { buildListShareRpc } = require('../../../../../src/api/rpc/list_share.js');
-const Database = require('../../../../../src/db/index.js');
-const { recordingView, fakeIndexer } = require('../helpers/fake_indexer.js');
-const { readApiSource } = require('../../../../helpers/api_source.js');
+const observability = require('../../../../src/observability/index.js');
+const { buildListShareRpc } = require('../../../../src/api/rpc/list_share.js');
+const Database = require('../../../../src/db/index.js');
+const { recordingView, fakeIndexer } = require('./helpers/fake_indexer.js');
+const { readApiSource } = require('../../../helpers/api_source.js');
 
 function sha256(value){
     return crypto.createHash('sha256').update(value, 'utf8').digest('hex');
