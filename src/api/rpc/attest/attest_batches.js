@@ -12,8 +12,8 @@
 
 'use strict';
 
-const batchQuery = require('../price_batch_query.js');
-const { getLogger } = require('../../observability/index.js');
+const batchQuery = require('../../price_batch_query.js');
+const { getLogger } = require('../../../observability/index.js');
 
 function attestBatchesRpc({ indexer }) {
     return {

@@ -14,9 +14,9 @@
 
 'use strict';
 
-const { isListShared } = require('../../db/lists/sharing.js');
-const { getLogger } = require('../../observability/index.js');
-const { parseSharedListParams, sharedListRecord } = require('./shared_list/params.js');
+const { isListShared } = require('../../../db/lists/sharing.js');
+const { getLogger } = require('../../../observability/index.js');
+const { parseSharedListParams, sharedListRecord } = require('../shared_list/params.js');
 
 function buildListShareMirrorRpc({ indexer }){
     return {
