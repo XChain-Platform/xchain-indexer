@@ -82,11 +82,11 @@ const responsePart       = require('./response.js');
 const mirrorApplyPart    = require('./mirror_apply.js');
 const expirePart         = require('./expire.js');
 const batchPart          = require('./batch.js');
-const batchAbsorbPart    = require('./batch_absorb.js');
+const batchAbsorbPart    = require('./batch/batch_absorb.js');
 const responsibleSetPart = require('./responsible_set.js');
-const relayPart          = require('./relay.js');
-const relayRequestPart   = require('./relay_request.js');
-const relayResponsePart  = require('./relay_response.js');
+const relayPart          = require('./relay/relay.js');
+const relayRequestPart   = require('./relay/relay_request.js');
+const relayResponsePart  = require('./relay/relay_response.js');
 const settlePart         = require('./settle.js');
 const callbacksPart      = require('./callbacks.js');
 
