@@ -65,6 +65,11 @@
       "state_hash source: ACTIVATION_DELAY_BLOCKS resolution LTC: the source resolves a NON-NULL delay matching the follower constant",
       "state_hash source: ACTIVATION_DELAY_BLOCKS resolution LTC: the top-level ACTIVATION_DELAY_BLOCKS key is unset (the bug precondition)"
     ],
+    "03b23c2323a0d95c": [
+      "protocol_changes CROSS_CHAIN_OFFER_LIST_EXPORT row @regression @tier1 is registry-only and keeps its part within the size limit",
+      "protocol_changes CROSS_CHAIN_OFFER_LIST_EXPORT row @regression @tier1 registers a frozen height map that is unarmed on launched networks",
+      "protocol_changes CROSS_CHAIN_OFFER_LIST_EXPORT row @regression @tier1 stays inactive below the sentinel and is active from regtest genesis"
+    ],
     "042ba37ba9e1f69f": [
       "train activation: resolution @regression orders rule sets numerically, not lexically",
       "train activation: resolution @regression refuses to coerce a missing height into genesis",
@@ -12397,8 +12402,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 790,
-      "titleCount": 9813,
+      "fileCount": 791,
+      "titleCount": 9816,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -13092,6 +13097,7 @@
         "test/unit/protocol/protocol_changes.test/vm_activation_gates.test.js": "9f55cc89b32cedc0",
         "test/unit/protocol_changes/assembler.test.js": "029dcc62ea3da5b3",
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
+        "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
         "test/unit/protocol_changes/predicate_parity.test.js": "05fd31b975520d80",
         "test/unit/protocol_changes/regtest_arming_at_read.test.js": "58771768f678d263",
         "test/unit/protocol_changes/rows_parity.test.js": "c3b1f02a88f1153b",
@@ -14317,8 +14323,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 708,
-      "titleCount": 8502,
+      "fileCount": 709,
+      "titleCount": 8505,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -14950,6 +14956,7 @@
         "test/unit/protocol/protocol_changes.test/vm_activation_gates.test.js": "9f55cc89b32cedc0",
         "test/unit/protocol_changes/assembler.test.js": "029dcc62ea3da5b3",
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
+        "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
         "test/unit/protocol_changes/predicate_parity.test.js": "05fd31b975520d80",
         "test/unit/protocol_changes/regtest_arming_at_read.test.js": "58771768f678d263",
         "test/unit/protocol_changes/rows_parity.test.js": "c3b1f02a88f1153b",
@@ -15031,8 +15038,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 281,
-      "titleCount": 4141,
+      "fileCount": 282,
+      "titleCount": 4144,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/utxo_tracker.test.js": "5c9d499784cf2193",
@@ -15284,6 +15291,7 @@
         "test/unit/protocol/protocol_change_registry_prototype.test.js": "9227d0e83b5535c1",
         "test/unit/protocol_changes/assembler.test.js": "029dcc62ea3da5b3",
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
+        "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
         "test/unit/protocol_changes/predicate_parity.test.js": "05fd31b975520d80",
         "test/unit/protocol_changes/regtest_arming_at_read.test.js": "58771768f678d263",
         "test/unit/protocol_changes/rows_parity.test.js": "c3b1f02a88f1153b",
@@ -15318,8 +15326,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 708,
-      "titleCount": 8502,
+      "fileCount": 709,
+      "titleCount": 8505,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -15951,6 +15959,7 @@
         "test/unit/protocol/protocol_changes.test/vm_activation_gates.test.js": "9f55cc89b32cedc0",
         "test/unit/protocol_changes/assembler.test.js": "029dcc62ea3da5b3",
         "test/unit/protocol_changes/core.test.js": "901e921887deb380",
+        "test/unit/protocol_changes/cross_chain_offer_list_export_row.test.js": "03b23c2323a0d95c",
         "test/unit/protocol_changes/predicate_parity.test.js": "05fd31b975520d80",
         "test/unit/protocol_changes/regtest_arming_at_read.test.js": "58771768f678d263",
         "test/unit/protocol_changes/rows_parity.test.js": "c3b1f02a88f1153b",
