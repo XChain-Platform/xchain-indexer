@@ -159,6 +159,9 @@ function alterTableDestroys(stmt){
     if(/\bRENAME\b(?!\s+(INDEX|KEY)\b)/i.test(stmt)) return true;
     // CHANGE [COLUMN] renames and retypes in one clause - manual only.
     if(/\bCHANGE\b/i.test(stmt))                     return true;
+    // CONVERT TO CHARACTER SET rewrites every text column of the table and can truncate or
+    // re-encode row data.
+    if(/\bCONVERT\s+TO\b/i.test(stmt))               return true;
     // MODIFY that adds NOT NULL narrows the column domain - except an
     // AUTO_INCREMENT attribute repair: an AUTO_INCREMENT column is
     // definitionally NOT NULL, so no domain is narrowed (see the
@@ -178,6 +181,10 @@ function alterTableDestroys(stmt){
     mClauses.push(stmt.slice(mStart));
     for(const clause of mClauses){
         if(/\bMODIFY\b[\s\S]*\bNOT\s+NULL\b/i.test(clause) &&
+           !/\bAUTO_INCREMENT\b/i.test(clause))      return true;
+        // A MODIFY restates the whole column, so restating id without AUTO_INCREMENT strips
+        // the attribute and every later insert loses its generated key.
+        if(/^\s*(?:ALTER\s+(?:ONLINE\s+)?TABLE\s+(?:`[^`]+`|[A-Za-z0-9_$.]+)\s+)?MODIFY\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?`?id`?(?=[\s,]|$)/i.test(clause) &&
            !/\bAUTO_INCREMENT\b/i.test(clause))      return true;
     }
     return false;
