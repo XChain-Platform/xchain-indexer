@@ -255,10 +255,18 @@ describe('Anchor frozen canonical wire vectors (parser side) @regression', funct
         });
     });
 
-    it('v0: writes no DOGE-side reward and preserves the exact reward canonical bytes', async function () {
+    it('v0: exactly ONE anchor_bundle reward per bundle, over the exact canonical bytes', async function () {
         const data = await parseV0();
-        assert.ok(indexer.indexerDb.createValidatorReward.notCalled);
-        assert.ok(indexer.indexerDb.reconcileAnchorRewardWinner.notCalled);
+        assert.ok(indexer.indexerDb.createValidatorReward.calledOnce,
+            'a bundle earns ONE reward, not one per section');
+        const [publisher, round, type, amount, earnBlock, , , qualifier] =
+            indexer.indexerDb.createValidatorReward.firstCall.args;
+        assert.strictEqual(publisher, BUNDLE.publisher);
+        assert.strictEqual(type, 'anchor_bundle');
+        assert.strictEqual(round, BUNDLE.snapshot_block, 'round_reference IS the snapshot block');
+        assert.strictEqual(amount, require('../../../src/consensus/gates/anchor_reward_gate.js').ANCHOR_REWARD_AMOUNT);
+        assert.strictEqual(earnBlock, BUNDLE.snapshot_block);
+        assert.strictEqual(qualifier, 0, 'a bundle round_reference only advances, so qualifier is 0');
 
         // The bytes the attestation quorum signed, six positional fields with
         // round_reference repeated as the snapshot block field.

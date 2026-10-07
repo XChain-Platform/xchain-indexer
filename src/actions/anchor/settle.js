@@ -21,6 +21,7 @@
  *
  ********************************************************************/
 
+const ar = require('../../consensus/gates/anchor_reward_gate.js');
 const { getLogger } = require('../../observability/index.js');
 
 function warnRewardSkipped(format){
@@ -28,10 +29,16 @@ function warnRewardSkipped(format){
 }
 
 async function creditArchiveReward(handler, data, attQuorumMet, snapPubkeys, format){
+    if(!ar.isAnchorRewardDeriveActive(Number(data['SNAPSHOT_BLOCK']), data['NETWORK']) &&
+        typeof handler.creditLegacyArchiveReward === 'function')
+        return await handler.creditLegacyArchiveReward(data, attQuorumMet, snapPubkeys, format);
     warnRewardSkipped(format);
 }
 
-async function creditBundleReward(){
+async function creditBundleReward(handler, data, attQuorumMet, bundleSet){
+    if(!ar.isAnchorRewardDeriveActive(Number(data['SNAPSHOT_BLOCK']), data['NETWORK']) &&
+        typeof handler.creditLegacyBundleReward === 'function')
+        return await handler.creditLegacyBundleReward(data, attQuorumMet, bundleSet);
     warnRewardSkipped(0);
 }
 
