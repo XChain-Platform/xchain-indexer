@@ -179,8 +179,10 @@ module.exports = {
     // the head stores slot 0 plus the window header its quorum signed over, each continuation
     // stores one later slot, and batch_chunk_b64 is this action's slice of the deflated body.
     // getAttestBatchChunks (db/attests/batch_chunks.js) reads them back for forward reassembly
-    // (actions/attest/batch.js), and the reorg rollback reads them through its own queries
-    // (db/rollback/read_phase.js, batch_heads.js); keep every reader in step with this writer.
+    // (actions/attest/batch.js), the reorg rollback reads them through its own queries
+    // (db/rollback/read_phase.js, db/rollback/batch_heads.js), and the getattestbatches
+    // completeness read the hub's coverage reconcile trusts lives in db/attests/batch_heads.js
+    // (getCompleteAttestBatchesByWindowStart); keep every reader in step with this writer.
     async createAttestationBatchAction(data){
         data             = this.normalizeDataValues(data);
         let status_id    = await this.createStatus(data['STATUS']);

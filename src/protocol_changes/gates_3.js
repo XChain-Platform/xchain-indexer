@@ -53,9 +53,9 @@ addGate('protocol/constants.EQUIV_HEADER_ACTIVATION', 'height', {
 // the xchain-sync follower recomputes and HALTS on if they diverge. UNLIKE the two maps above,
 // this gates on the chain's OWN local block_index (each chain starts committing its own per-block
 // root at its own height); the Phase 2 checkpoint/ANCHOR extension that SIGNS these roots gates on
-// snapshot_block. Kept byte-identical to the local copies in xchain-indexer/src/
-// state_commitment_activation.js + xchain-sync/src/state_commitment_activation.js (and xchain-hub
-// at Phase 2) by the cross-service regression suite. ARMED MID-CHAIN 2026-07-07 with per-chain
+// snapshot_block. Kept byte-identical to the local copy, the state_commitment_activation row in
+// shared_rows_4.js that src/consensus/gates/state_commitment_gate.js reads in xchain-indexer and
+// xchain-sync (and xchain-hub at Phase 2), by the cross-service regression suite. ARMED MID-CHAIN 2026-07-07 with per-chain
 // '<COIN>:<network>' keys (one shared height cannot fit BTC ~957k and DOGE ~6.28M at once; bare
 // network key remains for regtest; coin-less mainnet/testnet lookups stay inert). Same heights
 // as the two state-hash gate maps, so ONE deploy-by date governs all Cohort-C flips; each height

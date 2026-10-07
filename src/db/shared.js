@@ -39,11 +39,9 @@ const abw = require('../actions/attest/attest_batch_wire.js');
 // returned `chunk-coverage`, and a complete on-chain batch never absorbed.
 // ATTEST_BATCH_MAX_CHUNKS is now the one number both sides read, so the two cannot drift.
 //
-// The bound is safe AFTER the author partition and only there (getAttestBatchChunks
-// explains why the unscoped read cannot carry a limit at all): one publisher's valid rows
-// under one key are their head plus at most one row per slot, because this read returns
-// only 'valid' rows and a second head or a refilled slot is stamped invalid at parse. So
-// the row count cannot exceed the declared chunk count, which the parser now bounds.
+// Bound only AFTER the author partition AND the encoding filter (getAttestBatchChunks):
+// a failed head leaves its continuations valid, so per (key, author) a republish adds a
+// second valid row per slot, while per (key, author, encoding) it is one head plus one per slot.
 const ATTEST_BATCH_CHUNK_ROW_LIMIT = abw.ATTEST_BATCH_MAX_CHUNKS;
 
 // A stake weight, as stake_weighted_quorum.bcnum accepts one (plain decimal string).
@@ -117,8 +115,9 @@ const AUTO_DEDUP_TABLES = new Set(['balances']);
 // per-table warnings never depend on a collector existing.
 function recordShapeDrift(store, table, kind, items){
     if(!store || !items || !items.length) return;
-    const entry = store.get(table) || { columns: [], indexes: [] };
-    entry[kind] = entry[kind].concat(items);
+    const entry = store.get(table) || { columns: [], indexes: [], indexKinds: [] };
+    // Tolerate an entry built before a kind existed (indexKinds joined columns and indexes later).
+    entry[kind] = (entry[kind] || []).concat(items);
     store.set(table, entry);
 }
 

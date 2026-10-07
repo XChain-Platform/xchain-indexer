@@ -217,8 +217,109 @@ describe('startup drift detection sees shape the SQL source does NOT declare @re
     });
 });
 
+// A live index STRICTER than its declaration (UNIQUE or FULLTEXT where the source declares
+// a plain B-tree index) is drift a fresh install does not carry: a stale UNIQUE rejects rows
+// a fresh install accepts, which is the destroys multi-leg shape. Reported, never healed.
+const KIND_DRIFT = /is live (UNIQUE|FULLTEXT) but declared/;
+
+// The table's declared shape with one index swapped for a stricter live kind.
+function withLiveKind(table, name, patch) {
+    return declaredIndexes(table).map(i => i.name === name ? Object.assign({}, i, patch) : i);
+}
+
+describe('startup drift detection sees an index of a stricter kind than declared @regression', function () {
+    describe('indexes', function () {
+
+        for (const [table, name] of [['destroys', 'action_index'], ['attests', 'request_id_version']]) {
+            it('reports a live UNIQUE ' + table + '.' + name + ' the source declares non-unique', async function () {
+                const { warns, alters, ctx } = await runIndexes(table,
+                    withLiveKind(table, name, { unique: true }), { schemaShapeDrift: new Map() });
+                const hit = warns.find(w => new RegExp('Schema shape drift on ' + table + ':').test(w) && KIND_DRIFT.test(w));
+                assert.ok(hit, 'a stricter live kind must be reported; warnings were: ' + JSON.stringify(warns));
+                assert.ok(hit.includes(name) && /live UNIQUE but declared non-unique/.test(hit), hit);
+                const entry = ctx.schemaShapeDrift.get(table);
+                assert.ok(entry && entry.indexKinds.some(k => k.name === name && k.live === 'UNIQUE'),
+                    'the drift must reach the boot summary store: ' + JSON.stringify(entry));
+                assert.deepStrictEqual(alters, [], 'kind drift is reported, never DROPped or rebuilt');
+            });
+        }
+
+        it('reports a live FULLTEXT index the source declares as a B-tree', async function () {
+            const { warns, alters, ctx } = await runIndexes('destroys',
+                withLiveKind('destroys', 'action_index', { fulltext: true }), { schemaShapeDrift: new Map() });
+            assert.ok(warns.some(w => /action_index/.test(w) && /live FULLTEXT but declared B-tree/.test(w)), JSON.stringify(warns));
+            assert.ok(ctx.schemaShapeDrift.get('destroys').indexKinds.some(k => k.live === 'FULLTEXT'));
+            assert.deepStrictEqual(alters, []);
+        });
+
+        it('reports a renamed UNIQUE standing in for a declared plain index', async function () {
+            // The declared name is absent live, and an undeclared UNIQUE on the same column set
+            // satisfies the column match; neither detector saw it before.
+            const live = declaredIndexes('destroys').filter(i => i.name !== 'action_index')
+                .concat([{ name: 'uq_old_action_index', unique: true, fulltext: false, columns: ['action_index'] }]);
+            const { warns, alters } = await runIndexes('destroys', live, { schemaShapeDrift: new Map() });
+            assert.ok(warns.some(w => /destroys/.test(w) && KIND_DRIFT.test(w)), JSON.stringify(warns));
+            assert.deepStrictEqual(alters, []);
+        });
+
+        // A synthetic definition: plain standalone `idx_a (a)` beside an inline `UNIQUE uq_a (a)`.
+        const SHARED_COLUMNS = {
+            parseExpectedIndexes: () => [{ name: 'idx_a', columns: ['a'], unique: false, fulltext: false }],
+            parseInlineIndexes:   () => [{ name: 'uq_a', columns: ['a'] }],
+        };
+
+        it('stays silent when the declared plain index is absent but a declared UNIQUE covers its columns', async function () {
+            // The aged shape the column-set satisfaction leaves behind: only uq_a is live, and
+            // uq_a is its own declaration, so its uniqueness is intended rather than drift.
+            const { warns } = await runIndexes('destroys',
+                [{ name: 'uq_a', unique: true, fulltext: false, columns: ['a'] }],
+                Object.assign({ schemaShapeDrift: new Map() }, SHARED_COLUMNS));
+            assert.deepStrictEqual(warns.filter(w => KIND_DRIFT.test(w)), [], JSON.stringify(warns));
+        });
+
+        it('reports the declared plain index itself live UNIQUE even when a declared UNIQUE shares its columns', async function () {
+            // Judged by its own name first, so the neighbouring declaration cannot excuse it.
+            const { warns } = await runIndexes('destroys', [
+                { name: 'idx_a', unique: true, fulltext: false, columns: ['a'] },
+                { name: 'uq_a',  unique: true, fulltext: false, columns: ['a'] },
+            ], Object.assign({ schemaShapeDrift: new Map() }, SHARED_COLUMNS));
+            assert.ok(warns.some(w => /idx_a/.test(w) && KIND_DRIFT.test(w)), JSON.stringify(warns));
+        });
+
+        it('no definition under src/sql reports kind drift when its live shape matches it', async function () {
+            // Worst case for false positives: every INLINE key (PRIMARY, UNIQUE, plain) is
+            // made UNIQUE live, so any standalone plain index sharing its columns is tested
+            // against a stricter neighbour that its own declaration accounts for.
+            const tables = fs.readdirSync(SQL_DIR).filter(f => f.endsWith('.sql')).map(f => f.slice(0, -4));
+            assert.ok(tables.length > 10, 'fixture assumption: the real definitions are present');
+            const ctx = makeCtx();
+            for (const table of tables) {
+                const raw    = fs.readFileSync(path.join(SQL_DIR, table + '.sql'), 'utf8');
+                const inline = new Set(ctx.parseInlineIndexes.call(ctx, raw, table).filter(i => i.name).map(i => i.name));
+                const live   = declaredIndexes(table).map(i => inline.has(i.name) ? Object.assign({}, i, { unique: true }) : i);
+                const { warns, ctx: run } = await runIndexes(table, live, { schemaShapeDrift: new Map() });
+                assert.deepStrictEqual(warns.filter(w => KIND_DRIFT.test(w)), [], table + ' must not report kind drift');
+                const entry = run.schemaShapeDrift.get(table);
+                assert.ok(!entry || !(entry.indexKinds || []).length, table + ': ' + JSON.stringify(entry));
+            }
+        });
+    });
+});
+
 describe('startup drift detection sees shape the SQL source does NOT declare @regression', function () {
     describe('the boot summary', function () {
+
+        it('counts and names an index of a stricter kind than declared', function () {
+            const inst = Object.create(Database.prototype);
+            inst.schemaShapeDrift = new Map([
+                ['destroys', { columns: [], indexes: [], indexKinds: [
+                    { name: 'action_index', columns: ['action_index'], live: 'UNIQUE', declared: 'non-unique' }] }],
+            ]);
+            const summary = inst.schemaShapeSummary();
+            assert.ok(/^SCHEMA SHAPE DRIFT: 1 table\(s\)/.test(summary), summary);
+            assert.ok(/1 index\(es\) of a stricter kind than declared/.test(summary), summary);
+            assert.ok(/destroys: index kinds action_index \(live UNIQUE, declared non-unique\)/.test(summary), summary);
+        });
 
         it('names every drifted table once, so one line per DB is the fleet comparison', function () {
             const inst = Object.create(Database.prototype);

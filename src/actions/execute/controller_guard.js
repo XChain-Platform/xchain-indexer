@@ -85,7 +85,9 @@ async function loadGuardSnapshot(ctx){
     // Expose each poll's electorate TICK in the VM snapshot at/after the flag-day.
     let pollTickVisible = await this.actions.protocolChanges.isEnabled('VOTE_POLL_TICK_VISIBLE', hostData['BLOCK_INDEX']);
     snapshot.pollData       = await this.indexerDb.getPollResultsForVM(hostData['BLOCK_INDEX'], pollTickVisible);
-    snapshot.contractStakeData = await this.indexerDb.getContractStakeDataForVM(ctx.contractIndex, hostData['BLOCK_INDEX']);
+    // The slash-window cap is decided here, on the decoder's time for the host block.
+    let slashWindowActive = await this.actions.protocolChanges.isEnabled('STAKE_SNAPSHOT_SLASH_WINDOW', hostData['BLOCK_INDEX']);
+    snapshot.contractStakeData = await this.indexerDb.getContractStakeDataForVM(ctx.contractIndex, hostData['BLOCK_INDEX'], slashWindowActive);
     // Gated on the VM_BALANCE_TOKENINFO flag-day (see primary EXECUTE path).
     snapshot.guardLedger = { balances: null, tokenInfo: null };
     if(await this.actions.protocolChanges.isEnabled('VM_BALANCE_TOKENINFO', hostData['BLOCK_INDEX'])){

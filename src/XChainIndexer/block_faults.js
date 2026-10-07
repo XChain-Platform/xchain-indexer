@@ -19,6 +19,11 @@
  * epoch) sets its stall reason and halts or defers loudly; anything else is logged as a
  * block error. Installed onto XChainIndexer.prototype by ../XChainIndexer.js.
  *
+ * Mirrored-row rejection clause: malformed hub-mirrored rows are row-local input
+ * failures. Every follower MUST derive the same rejection, continue with later rows,
+ * and finish the block pass. Such a rejection MUST NOT reach processBlock's catch,
+ * abandon the transaction, stop the catch-up loop, or turn into a block retry.
+ *
  ********************************************************************/
 
 const { getLogger } = require('../observability/index.js');

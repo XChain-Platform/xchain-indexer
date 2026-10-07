@@ -11,7 +11,7 @@ const ed25519 = require('../../../src/consensus/ed25519.js');
 const swq = require('../../../src/consensus/stake_weighted_quorum.js');
 const ar = require('../../../src/consensus/gates/anchor_reward_gate.js');
 const { ARCHIVE_REISSUE_RETRY_REASON } = require(
-    '../../../src/actions/anchor/archive_reissue.js');
+    '../../../src/actions/anchor/archive/archive_reissue.js');
 const { v3Params, vectors } = require(
     '../actions/anchor/anchor.test/helpers/anchor_v3_fixtures.js');
 const { crc32Hex } = require(
