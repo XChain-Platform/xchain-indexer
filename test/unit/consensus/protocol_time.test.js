@@ -54,18 +54,20 @@ function rows() {
 describe('protocol_time', () => {
 
     describe('#medianTimePast', () => {
-        it('takes the median of the newest 11, not of everything handed over', () => {
-            // 24 values; only the newest 11 may participate. If the whole array were
-            // medianed the answer would sit far lower.
-            const many = [];
-            for(let i = 0; i < 24; i++) many.push(1000 + i * 100);
-            const newest11 = many.slice(-11).sort((a, b) => a - b);
-            assert.strictEqual(medianTimePast(many), newest11[5]);
+        it('takes the first 11 height-descending entries before sorting by timestamp', () => {
+            // The first 11 are newest by height but deliberately not ordered by time.
+            // The final value is older and future-dated; selecting by timestamp value
+            // would admit it, drop 100, and incorrectly move the median from 600 to 700.
+            const newestFirst = [
+                100, 900, 200, 800, 300, 700, 400, 600, 500, 1000, 1100,
+                999999
+            ];
+            assert.strictEqual(medianTimePast(newestFirst), 600);
         });
 
-        it('does not care what order the caller supplies', () => {
-            const shuffled = TESTNET4.slice(0, 11).slice().reverse();
-            assert.strictEqual(medianTimePast(shuffled), medianTimePast(TESTNET4.slice(0, 11)));
+        it('does not replace an unusable entry inside the 11-block window with an older entry', () => {
+            const newestFirst = [100, 200, 300, 400, 500, NaN, 700, 800, 900, 1000, 1100, 999999];
+            assert.strictEqual(medianTimePast(newestFirst), 700);
         });
 
         it('medians a short window rather than refusing, so a fresh chain still advances', () => {
