@@ -42,6 +42,10 @@ describe('coverage ratchet floors', () => {
   });
 
   for (const scriptName of ['coverage', 'coverage:check']) {
+    it(`${scriptName} loads the shared Mocha bootstrap`, () => {
+      assert.match(pkg.scripts[scriptName], /--require\s+\.\/test\/helpers\/setup\.js(?:\s|$)/);
+    });
+
     it(`${scriptName} includes files not loaded by the test suite`, () => {
       assert.match(pkg.scripts[scriptName], /(?:^|\s)c8\s+--all(?:\s|$)/);
     });
