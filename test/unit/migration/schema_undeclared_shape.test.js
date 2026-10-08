@@ -338,7 +338,7 @@ describe('startup drift detection sees shape the SQL source does NOT declare @re
         it('a converged DB says so explicitly rather than printing nothing', function () {
             const inst = Object.create(Database.prototype);
             inst.schemaShapeDrift = new Map();
-            assert.strictEqual(inst.schemaShapeSummary(), 'Schema shape: no undeclared columns or indexes.');
+            assert.strictEqual(inst.schemaShapeSummary(), 'Schema shape: no undeclared tables, columns or indexes.');
         });
     });
 });

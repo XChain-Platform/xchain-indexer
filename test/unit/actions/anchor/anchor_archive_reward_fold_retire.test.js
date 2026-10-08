@@ -25,7 +25,7 @@ const { stubActiveAt } = require('../../../helpers/gate_modules.js');
 
 const FOLD_GATE_KEY = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
 const PUBLISHER = '02'.repeat(33);
-const SKIP_WARNING = '\t ANCHOR v1 : DOGE-side reward is derived on BTC; reward skipped';
+const SKIP_WARNING = '\t ANCHOR v1 : no legacy reward path applies; reward skipped';
 
 function makeContext() {
     const indexerDb = {

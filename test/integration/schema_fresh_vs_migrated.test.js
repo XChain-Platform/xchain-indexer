@@ -15,7 +15,8 @@
  *
  * Builds the current schema through its two supported paths in a real
  * MariaDB: current table definitions for a fresh install, and the frozen
- * pre-ledger table shapes followed by every dated migration. The resulting
+ * pre-ledger table shapes followed by every dated migration, applied by
+ * running src/db/migration/migrate.js as an operator would. The resulting
  * table, column, and index metadata must be identical.
  */
 
@@ -26,12 +27,14 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 
 const assert  = require('assert');
 const crypto  = require('crypto');
+const { spawnSync } = require('child_process');
 const fs      = require('fs');
 const path    = require('path');
 const mariadb = require('mariadb');
 
 const Database = require('../../src/db');
 
+const MIGRATE_CLI = path.join(__dirname, '../../src/db/migration/migrate.js');
 const SQL_DIR = path.join(__dirname, '../../src/sql');
 const MIGRATIONS_DIR = path.join(SQL_DIR, 'migrations');
 const COLUMN_BASELINE = require('../fixtures/schema-baseline-origin.json').baseline;
@@ -89,7 +92,9 @@ function agedColumnSpec(table, column) {
         })));
     }
     const currentSpec = CURRENT_COLUMN_SPECS.get(table).get(column.name.toLowerCase());
-    assert.ok(currentSpec, table + '.' + column.name + ' must still exist in the current definition');
+    // Keep a retired column in the aged DB as the anchor froze it: the replay below must
+    // then carry its dated DROP, or the fresh-vs-migrated comparison fails on the leftover.
+    if (!currentSpec) return column.spec;
     const currentLiterals = new Map(
         (currentSpec.match(/'(?:''|\\\\.|[^'])*'/g) || []).map(literal => [literal.toUpperCase(), literal]));
     return column.spec.replace(/'(?:''|\\\\.|[^'])*'/g,
@@ -176,6 +181,24 @@ async function schemaSnapshot(conn, database) {
     };
 }
 
+function runMigrateCli(args) {
+    const result = spawnSync(process.execPath, [MIGRATE_CLI, ...args], {
+        encoding: 'utf8',
+        timeout: 100000,
+        env: {
+            ...process.env,
+            INDEXER_DB_HOST: DB_HOST,
+            INDEXER_DB_PORT: String(DB_PORT),
+            INDEXER_DB_NAME: MIGRATED_DB,
+            INDEXER_DB_USER: DB_USER,
+            INDEXER_DB_PASS: DB_PASS,
+        },
+    });
+    assert.strictEqual(result.status, 0,
+        'migrate.js exited ' + result.status + ': ' + result.stderr + result.stdout);
+    return result.stdout;
+}
+
 async function ledgerNames(conn) {
     const rows = await conn.query('SELECT name FROM schema_migrations ORDER BY name');
     return rows.map(row => row.name);
@@ -235,10 +258,11 @@ describe('fresh and migrated schema convergence against a real MariaDB @tier3', 
             'the frozen pre-ledger indexes must differ from the fresh schema');
     });
 
-    it('converges after replaying every migration through the production runner', async function () {
-        const result = await ctx.migratedDb.runMigrations({ includeManual: true });
-        assert.strictEqual(result.lockSkipped, false, 'the migration replay must hold its advisory lock');
-        assert.deepStrictEqual(result.pending, [], 'includeManual must leave no migration pending');
+    it('converges after replaying every migration through the operator CLI', async function () {
+        const output = runMigrateCli([]);
+        assert.ok(/still-pending=\[\]/.test(output), 'the CLI run must leave no migration pending: ' + output);
+        const status = JSON.parse(runMigrateCli(['--status', '--json']));
+        assert.strictEqual(status.pending, 0, 'the CLI must report nothing pending after the run');
 
         const migrationFiles = fs.readdirSync(MIGRATIONS_DIR)
             .filter(file => file.endsWith('.sql')).sort();

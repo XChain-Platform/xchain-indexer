@@ -13,7 +13,7 @@
  * contact legal@dankest.llc.
  *
  **********************************************************************
- * Cross-repo VALUE-EQUALITY gate for the four XCALL/VM protocol
+ * Cross-repo VALUE-EQUALITY gate for the six XCALL/VM protocol
  * constants.
  *
  * MAX_CODE_SIZE, XCALL_MAX_GAS, XCALL_MAX_HOPS and XCALL_MIN_DEADLINE_BLOCKS
@@ -65,7 +65,9 @@ const GOLDEN = {
     MAX_CODE_SIZE:             65536,
     XCALL_MAX_GAS:             200000,
     XCALL_MAX_HOPS:            2,
-    XCALL_MIN_DEADLINE_BLOCKS: 10
+    XCALL_MIN_DEADLINE_BLOCKS: 10,
+    XCALL_MAX_CALLS_PER_BLOCK: 25,
+    ATTEST_MAX_EXPIRIES_PER_BLOCK: 25
 };
 const GATED = Object.keys(GOLDEN);
 
@@ -133,7 +135,7 @@ describe('XCALL/VM protocol constants agree across vm/indexer/sdk', function () 
             'expected to run from one of ' + REPOS.join(', ') + ', resolved repo root ' + REPO_ROOT);
     });
 
-    it('this repo pins the four constants at the frozen values', function () {
+    it('this repo pins the six constants at the frozen values', function () {
         const local = loadConstants(path.join(REPO_ROOT, CONSTANTS_REL));
         for (const name of GATED) {
             assert.strictEqual(local[name], GOLDEN[name],
@@ -143,7 +145,7 @@ describe('XCALL/VM protocol constants agree across vm/indexer/sdk', function () 
     });
 
     for (const peer of REPOS) {
-        it('sibling ' + peer + ' declares the same four values', function () {
+        it('sibling ' + peer + ' declares the same six values', function () {
             if (peer === SELF) this.skip();
             const peerRoot = path.join(PLATFORM_ROOT, peer);
             if (!siblingOrSkip(this, path.join(peerRoot, CONSTANTS_REL), peer + ' ' + CONSTANTS_REL)) return;
@@ -157,7 +159,7 @@ describe('XCALL/VM protocol constants agree across vm/indexer/sdk', function () 
         });
     }
 
-    it('the canonical xchain-documentation copy pins the same four values', function () {
+    it('the canonical xchain-documentation copy pins the same six values', function () {
         // Nothing at runtime requires the documentation copy, so it cannot rot
         // loudly on its own. It is the published protocol contract; hold it to
         // the same values as the code.
