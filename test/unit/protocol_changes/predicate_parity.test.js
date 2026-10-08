@@ -30,6 +30,8 @@ const ProtocolChanges = require('../../../src/protocol_changes.js');
 const { TABLE, compareAll } = require('./helpers/predicate_parity.js');
 const { SRC, REPLACED_STEMS, REGISTRY_ONLY_STEMS, modulePathFor } = require('../../helpers/gate_modules.js');
 
+const ANCHOR_ARCHIVE_FOLD_TERM = 'anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION';
+
 // The rows whose predicate W4 (row 18) and W5 (row 21) replaced with activeAt()
 // itself: the callers spell the key at the call site, so there is no predicate
 // to compare.
@@ -87,7 +89,7 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
 
     it('every replaced row is still a registry row and has no module left in src/ to read it through', function () {
         assert.strictEqual(REPLACED.size, 38, 'the W4 census of 25 predicate-only shims plus the 13 predicate-only twins of W5');
-        assert.strictEqual(REGISTRY_ONLY.size, 38, 'the registry-only gate census moved');
+        assert.strictEqual(REGISTRY_ONLY.size, 39, 'the registry-only gate census moved');
         for (const key of [...REPLACED, ...REGISTRY_ONLY]) {
             assert.ok(['height', 'time', 'constant'].includes(ProtocolChanges.registry.unitOf(key)),
                 key + ' is a height, time or constant row');
@@ -122,5 +124,13 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
 
     it('activeAt() refuses the ruleset row rather than guessing a version', function () {
         assert.throws(() => ProtocolChanges.activeAt('train_activation.TRAIN_ACTIVATION', 'mainnet', null, 0, 0), /unsupported unit ruleset/);
+    });
+
+    it('keeps anchor archive folding inactive on live networks and active at regtest genesis', function () {
+        for (const coin of ['BTC', 'LTC', 'DOGE']) {
+            assert.strictEqual(ProtocolChanges.activeAt(ANCHOR_ARCHIVE_FOLD_TERM, 'testnet', coin, 9999999998, null), false);
+        }
+        assert.strictEqual(ProtocolChanges.activeAt(ANCHOR_ARCHIVE_FOLD_TERM, 'mainnet', 'BTC', 9999999998, null), false);
+        assert.strictEqual(ProtocolChanges.activeAt(ANCHOR_ARCHIVE_FOLD_TERM, 'regtest', 'BTC', 0, null), true);
     });
 });
