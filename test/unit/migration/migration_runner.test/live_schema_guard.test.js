@@ -89,3 +89,28 @@ describe('migration live-schema MODIFY guard @regression @tier1', function () {
         assert.strictEqual(await verdict({ len: 130 }, 'ALTER TABLE t MODIFY n INT;'), null);
     });
 });
+
+describe('migration live-schema MODIFY guard: block comments @regression @tier1', function () {
+    it('still finds a MODIFY behind a block comment anywhere before the column', async function () {
+        const live = liveRow({ COLUMN_TYPE: 'int(11)', COLUMN_DEFAULT: '0' });
+        for (const sql of [
+            '/* widen */ ALTER TABLE t MODIFY n INT;',
+            'ALTER TABLE t /* note */ MODIFY n INT;',
+            'ALTER TABLE t ADD COLUMN c INT, /* note */ MODIFY n INT;',
+            'ALTER TABLE t MODIFY /* x */ n INT;',
+        ]) {
+            assert.match(await verdict(live, sql), /strips DEFAULT 0/, sql);
+        }
+    });
+
+    it('does not read a keyword inside a block comment as a restated attribute', async function () {
+        const m = await verdict(liveRow({ COLUMN_TYPE: 'int(11)', COLUMN_DEFAULT: '0' }), 'ALTER TABLE t MODIFY n INT /* DEFAULT dropped */;');
+        assert.match(m, /strips DEFAULT 0/);
+    });
+
+    it('leaves comment markers inside a quoted literal and executable comments alone', function () {
+        const got = modifyClauses(statementsOf("ALTER TABLE t MODIFY s VARCHAR(10) DEFAULT '/* x */' COMMENT 'a*/b';"));
+        assert.strictEqual(got[0].definition, "VARCHAR(10) DEFAULT '/* x */' COMMENT 'a*/b'");
+        assert.match(modifyClauses(statementsOf('ALTER TABLE t MODIFY n INT /*!50000 NULL */;'))[0].definition, /\/\*!50000 NULL \*\//);
+    });
+});
