@@ -65,7 +65,15 @@ function archiveReward(overrides = {}) {
 describe('anchor archive fold-term gate', function () {
     describe('BTC reward derivation', function () {
         it('refuses an archive reward at the regtest term height', function () {
-            assert.strictEqual(derive.rowGatesActive(rewardRow()), false);
+            withFoldHeight(0, function () {
+                assert.strictEqual(derive.rowGatesActive(rewardRow()), false);
+            });
+        });
+
+        it('keeps a pre-fold archive reward eligible when only the term is active', function () {
+            withFoldHeight(1, function () {
+                assert.strictEqual(derive.rowGatesActive(rewardRow()), true);
+            });
         });
 
         it('keeps an archive reward eligible where the term is unarmed', function () {

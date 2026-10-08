@@ -69,6 +69,7 @@ const { recordLateDerive } = require('./anchor_reward_derive/late_derive_counter
 
 const ANCHOR_ARCHIVE_FOLD_TERM =
     'anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION';
+const ANCHOR_FOLD = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
 
 // Rebuild the XANCPUB canonical for a mirrored attestation row. MUST byte-match
 // anchor.js.rewardCanonical (DOGE parse side) and the hub's publisher canonical, or the
@@ -174,8 +175,13 @@ function rowGatesActive(row){
     // known reward types instead would silently stop paying a family added later, which
     // is a worse failure than the one this closes.
     if(String(row.reward_type) === 'anchor_archive'){
-        if(gateRegistry.activeAt(ANCHOR_ARCHIVE_FOLD_TERM, String(row.network), 'BTC',
-                                 row.snapshot_block, null)) return false;
+        let network = String(row.network);
+        let snapshotBlock = row.snapshot_block;
+        let termActive = gateRegistry.activeAt(
+            ANCHOR_ARCHIVE_FOLD_TERM, network, 'BTC', snapshotBlock, null);
+        let foldActive = gateRegistry.activeAt(
+            ANCHOR_FOLD, network, 'BTC', snapshotBlock, null);
+        if(termActive && foldActive) return false;
         return ar.isArchiveRewardActive(Number(row.snapshot_block), String(row.network));
     }
     return ar.isAnchorRewardActive(Number(row.snapshot_block), String(row.network));
