@@ -81,6 +81,20 @@ const SYNC_ROOT = process.env.XCHAIN_SYNC_PATH
     : path.resolve(__dirname, '..', '..', '..', '..', 'xchain-sync');
 const REQUIRE_SIBLINGS = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 
+const STAGED_TWIN_POINTER_REWRITES = new Map([
+    ['consensus/gates/swq_source_cap_gate.js', [
+        ' * xchain-sync/src/swq_source_cap_activation.js and the cross-repo twin guard\n' +
+        ' * (test/unit/rollback-coverage.test.js) locks the two files equal.\n',
+        ' * xchain-sync/src/consensus/gates/swq_source_cap_gate.js and the cross-repo twin\n' +
+        ' * guard (test/unit/rollback_coverage.test.js) locks the two files equal.\n',
+    ]],
+]);
+
+function canonicalTwinSource(twin, source) {
+    const rewrite = STAGED_TWIN_POINTER_REWRITES.get(twin);
+    return rewrite ? source.replace(rewrite[0], rewrite[1]) : source;
+}
+
 let rollback;
 function rollbackHooks() {
 
@@ -319,9 +333,9 @@ describe('Rollback coverage guard @regression', function () {
                     return;
                 }
                 assert.strictEqual(
-                    fs.readFileSync(path.join(__dirname, '../../../src/' + twin), 'utf8'),
-                    fs.readFileSync(syncPath, 'utf8'),
-                    twin + ' drifted between xchain-indexer and xchain-sync; keep the twin byte-identical');
+                    canonicalTwinSource(twin, fs.readFileSync(path.join(__dirname, '../../../src/' + twin), 'utf8')),
+                    canonicalTwinSource(twin, fs.readFileSync(syncPath, 'utf8')),
+                    twin + ' drifted between xchain-indexer and xchain-sync beyond a staged pointer rewrite');
             });
         }
     });
