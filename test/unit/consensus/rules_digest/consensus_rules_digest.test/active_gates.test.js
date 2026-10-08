@@ -137,10 +137,9 @@ describe('consensus_rules_digest: knownGateKeys() and activeGatesAt() (D88)', fu
             'the family must follow the bridge gate, then the later shared gates must remain appended');
     });
 
-    // The 2026-09-09 genesis-arm ruling left no SHIPPED gate on the far-future sentinel,
-    // so the exclusion branch is driven against a stubbed registry row instead of riding
-    // whichever map happened to be unarmed. PRICE_PAIR_WIDEN_ACTIVATION, the last live
-    // example before the arm, is the row stubbed here.
+    // TOKEN_BRIDGE_ACTIVATION.mainnet and LIST_META_ACTIVATION.mainnet are shipped on the
+    // far-future sentinel. The exclusion branch uses a stubbed PRICE_PAIR_WIDEN_ACTIVATION
+    // row so the test isolates sentinel handling from changes to those production maps.
     it('excludes a far-future sentinel height, however high the chain climbs', function () {
         const CRD     = require.resolve('../../../../../src/consensus_rules_digest.js');
         const realCrd = require.cache[CRD];

@@ -18,19 +18,40 @@
 
 const assert = require('assert');
 
-const XChainIndexer    = require('../../../src/XChainIndexer');
 const blockParseMethods = require('../../../src/XChainIndexer/block_parse');
 const blockCommitMethods = require('../../../src/XChainIndexer/block_commit');
 const blockFaultMethods = require('../../../src/XChainIndexer/block_faults');
+const stallHealth = require('../../../src/XChainIndexer/stall_health');
+const { hubConfigStaleness } = require('../../../src/XChainIndexer/hub_config_poll');
 const { statusVerdict, statusBody } = require('../../../src/api/status_route');
+
+const STATUS_CONTRACT = Object.assign({ hubConfigStaleness }, stallHealth);
+const WATCH_STATUS_FIELDS = [
+    'indexerBlock',
+    'inFlightBlock',
+    'decoderBlock',
+    'lag',
+    'isSynced',
+    'atProcessableTip',
+    'stallReason',
+    'stallClearsAt',
+    'degraded',
+    'waitingOnFutureBlock',
+    'stallClass',
+    'lastBlockCommittedAt',
+    'pollSilent',
+    'lastPollAt'
+];
 
 function makeIndexer(error) {
     let rollbacks = 0;
+    let finalizeCalls = 0;
     const indexer = Object.assign({}, blockParseMethods, blockCommitMethods, blockFaultMethods, {
-        config: {},
+        config: { BLOCK_CHECK_INTERVAL: 6000 },
         stallReason: null,
         stallClearsAt: null,
-        lastBlockCommittedAt: Date.now() - 600000,
+        lastBlockCommittedAt: 1791417600000,
+        lastPollAt: 1791417610000,
         healthStallGraceMs: 60000,
         lastHubConfigFetchAt: null,
         util: {
@@ -46,11 +67,15 @@ function makeIndexer(error) {
         runBlockPasses: async function (blk) {
             return this.finalizeBlock(blk);
         },
-        finalizeBlock: async () => { throw error; },
+        finalizeBlock: async () => {
+            finalizeCalls++;
+            throw error;
+        },
         isSynced: () => false,
         isPollSilent: () => false
     });
     indexer.rollbackCount = () => rollbacks;
+    indexer.finalizeCallCount = () => finalizeCalls;
     return indexer;
 }
 
@@ -61,38 +86,62 @@ async function failBlock(indexer) {
 }
 
 describe('repeated finalizeBlock exception status', function () {
-    it('latches the repeated failure and reports it as a wedged status', async function () {
-        const failure = new Error('supply sanity mismatch');
+    it('promotes the second consecutive finalizeBlock exception and keeps it latched', async function () {
+        const failure = new Error('Cannot read properties of undefined');
         const indexer = makeIndexer(failure);
 
         const first = await failBlock(indexer);
         assert.strictEqual(first.committed, false);
         assert.strictEqual(first.stop, true);
+        assert.strictEqual(indexer.finalizeCallCount(), 1);
         assert.strictEqual(indexer.stallReason, null,
             'one transient block failure must not be promoted to a stall');
 
         await failBlock(indexer);
+        assert.strictEqual(indexer.finalizeCallCount(), 2);
         assert.strictEqual(indexer.rollbackCount(), 2);
-        assert.strictEqual(indexer.stallReason, 'parse_exception: supply sanity mismatch');
+        assert.strictEqual(indexer.stallReason, 'parse_exception: Cannot read properties of undefined');
         assert.strictEqual(indexer.stallClearsAt, null);
 
-        const verdict = statusVerdict(XChainIndexer, indexer);
+        await failBlock(indexer);
+        assert.strictEqual(indexer.finalizeCallCount(), 3);
+        assert.strictEqual(indexer.stallReason, 'parse_exception: Cannot read properties of undefined',
+            'later identical retries must keep the confirmed failure latched');
+    });
+
+    it('emits the exact wedged status fixture consumed by xchain-watch', async function () {
+        const indexer = makeIndexer(new Error('Cannot read properties of undefined'));
+        await failBlock(indexer);
+        await failBlock(indexer);
+
+        const verdict = statusVerdict(STATUS_CONTRACT, indexer);
         assert.strictEqual(verdict.stalled, true);
         assert.strictEqual(verdict.wedged, true);
         assert.strictEqual(verdict.stallClass, 'wedged');
 
-        const body = statusBody(XChainIndexer, indexer, {
-            indexerBlock: 42,
+        const body = statusBody(STATUS_CONTRACT, indexer, {
+            indexerBlock: 328013,
             inFlightBlock: null,
-            decoderBlock: 43,
+            decoderBlock: 328014,
             verdict,
             hubMirror: { configured: false }
         });
-        assert.strictEqual(body.stallReason, 'parse_exception: supply sanity mismatch');
-        assert.strictEqual(body.stallClass, 'wedged');
-
-        await failBlock(indexer);
-        assert.strictEqual(indexer.stallReason, 'parse_exception: supply sanity mismatch',
-            'later identical retries must keep the confirmed failure latched');
+        const watchStatus = Object.fromEntries(WATCH_STATUS_FIELDS.map(key => [key, body[key]]));
+        assert.deepStrictEqual(watchStatus, {
+            indexerBlock: 328013,
+            inFlightBlock: null,
+            decoderBlock: 328014,
+            lag: 1,
+            isSynced: false,
+            atProcessableTip: false,
+            stallReason: 'parse_exception: Cannot read properties of undefined',
+            stallClearsAt: null,
+            degraded: false,
+            waitingOnFutureBlock: false,
+            stallClass: 'wedged',
+            lastBlockCommittedAt: 1791417600000,
+            pollSilent: false,
+            lastPollAt: 1791417610000
+        });
     });
 });

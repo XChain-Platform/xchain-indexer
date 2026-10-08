@@ -21,7 +21,7 @@
 
 'use strict';
 
-const { addGate, UNARMED } = require('./shared_rows.js');
+const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
 
 // dispenser_freshness_proven_use_activation
 // DISPENSER_FRESHNESS_PROVEN_USE_ACTIVATION: at/after this block time the local
@@ -339,6 +339,15 @@ addGate('price_wire_trailing_activation.PRICE_WIRE_TRAILING_ACTIVATION', 'height
     'DOGE:testnet': UNARMED,
     testnet: UNARMED,
     regtest: 0,
+});
+
+addGate('oracle_snapshot_age_seconds_activation.ORACLE_SNAPSHOT_AGE_SECONDS_ACTIVATION', 'height', {
+    mainnet: UNPINNED,
+    'BTC:testnet': UNPINNED,
+    'LTC:testnet': UNPINNED,
+    'DOGE:testnet': UNPINNED,
+    testnet: UNPINNED,
+    regtest: UNPINNED,
 });
 
 // bet_feed_list_edit_activation

@@ -14,7 +14,7 @@
 
 const assert = require('assert');
 const derive = require('../../../../src/consensus/anchor_reward_derive.js');
-const binding = require('../../../../src/consensus/doge_peer_clients/anchor_proof_client/binding.js');
+const AnchorProofClient = require('../../../../src/consensus/doge_peer_clients/anchor_proof_client.js');
 
 const PUBLISHER = 'aa'.repeat(32);
 const FOLD_ENV = 'XC_ANCHOR_FOLD_REGTEST_ACTIVATION';
@@ -62,6 +62,12 @@ function archiveReward(overrides = {}) {
     }, overrides);
 }
 
+function proofClient() {
+    return new AnchorProofClient(
+        { COIN: 'BTC', NETWORK: 'regtest' },
+        { url: 'http://doge.invalid/' });
+}
+
 describe('anchor archive fold-term gate', function () {
     describe('BTC reward derivation', function () {
         it('refuses an archive reward at the regtest term height', function () {
@@ -92,18 +98,18 @@ describe('anchor archive fold-term gate', function () {
     describe('DOGE proof binding', function () {
         it('refuses an archive anchor at the regtest term height', function () {
             withFoldHeight(0, function () {
-                assert.strictEqual(binding.judgeAnchors([archiveAnchor()], archiveReward()), 'rejected');
+                assert.strictEqual(proofClient().judge([archiveAnchor()], archiveReward()), 'rejected');
             });
         });
 
         it('keeps a pre-fold archive anchor eligible when only the term is active', function () {
             withFoldHeight(1, function () {
-                assert.strictEqual(binding.judgeAnchors([archiveAnchor()], archiveReward()), 'verified');
+                assert.strictEqual(proofClient().judge([archiveAnchor()], archiveReward()), 'verified');
             });
         });
 
         it('keeps archive proof valid where the term is unarmed', function () {
-            assert.strictEqual(binding.judgeAnchors([
+            assert.strictEqual(proofClient().judge([
                 archiveAnchor({ checkpoint_network: 'mainnet' }),
             ], archiveReward({ network: 'mainnet' })), 'verified');
         });
@@ -120,7 +126,7 @@ describe('anchor archive fold-term gate', function () {
                 rewardType: 'anchor_bundle',
                 roundReference: 12,
             });
-            assert.strictEqual(binding.judgeAnchors([anchor], reward), 'verified');
+            assert.strictEqual(proofClient().judge([anchor], reward), 'verified');
         });
     });
 });
