@@ -257,8 +257,8 @@ class Anchor {
         // checkpointed height, which belong to other chains. activeAt fails closed on
         // a non-numeric height or an unknown network.
         if(!error && !gateRegistry.activeAt('anchor_activation.ANCHOR_ACTIVATION', this.config['NETWORK'], null, Number(data['BLOCK_INDEX']), null))
-            error = gateRegistry.activeAt('anchor_activation.ANCHOR_ACTIVATION', this.config['NETWORK'], 'PREACTIVATION_STATUS',
-                Number(data['BLOCK_INDEX']), null) ? 'unverified' : 'invalid: ANCHOR before activation';
+            error = gateRegistry.activeAt('anchor_preactivation_status_activation.ANCHOR_PREACTIVATION_STATUS_ACTIVATION',
+                this.config['NETWORK'], null, Number(data['BLOCK_INDEX']), null) ? 'unverified' : 'invalid: ANCHOR before activation';
         let foldActive = format === 3 && gateRegistry.activeAt(
             'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION', this.config['NETWORK'],
             this.config['COIN'], Number(data['BLOCK_INDEX']), null);
