@@ -397,3 +397,4 @@ addGate('protocol/constants.STAKE_WEIGHTED_QUORUM_ACTIVATION', 'height', {
     testnet: 0,
     regtest: 0,
 });
+addGate('attest_relay_fee_activation.ATTEST_RELAY_FEE_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': UNARMED, 'LTC:testnet': UNARMED, 'DOGE:testnet': UNARMED, testnet: UNARMED, regtest: 0 });
