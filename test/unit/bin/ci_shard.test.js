@@ -109,17 +109,20 @@ describe('bin/ci_shard: options and runs', function(){
         assert.deepStrictEqual(words("mocha --timeout 5 'test/a b/*.js' x"), ['mocha', '--timeout', '5', 'test/a b/*.js', 'x']);
     });
 
-    it('takes CI_SHARDS when it is sane and half the cores, at most four, otherwise', function(){
+    it('takes CI_SHARDS when sane and otherwise bounds shards by cores and file count', function(){
         assert.strictEqual(shardCount({ CI_SHARDS: '3' }, 32), 3);
         assert.strictEqual(shardCount({ CI_SHARDS: '0' }, 32), 4);
         assert.strictEqual(shardCount({ CI_SHARDS: 'lots' }, 2), 1);
         assert.strictEqual(shardCount({}, 6), 3);
+        assert.strictEqual(shardCount({}, 8, 1220), 13);
+        assert.strictEqual(shardCount({}, 8, 2000), 16);
     });
 
     it('caps concurrent shard jobs by available memory or an explicit override', function(){
         const GiB = 1024 ** 3;
         assert.strictEqual(shardJobs({}, 4, GiB / 2), 1);
         assert.strictEqual(shardJobs({}, 4, 3 * GiB), 3);
+        assert.strictEqual(shardJobs({}, 8, 8 * GiB), 4);
         assert.strictEqual(shardJobs({ CI_SHARD_JOBS: '2' }, 4, GiB / 2), 2);
         assert.strictEqual(shardJobs({ CI_SHARD_JOBS: '8' }, 3, GiB / 2), 3);
     });

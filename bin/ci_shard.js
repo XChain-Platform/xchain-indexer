@@ -36,6 +36,7 @@ const { spawn, spawnSync } = require('node:child_process');
 
 const MAIN_STEP = /^mocha\s/;
 const MAX_SHARDS = 16;
+const MAX_FILES_PER_SHARD = 100;
 
 /** @returns {{before: string[], main: string, after: string[]}|null} the ci chain around its one main mocha step. */
 function splitChain(ciScript) {
@@ -51,11 +52,13 @@ function words(step) {
   return [...step.matchAll(/'([^']*)'|(\S+)/g)].map((m) => (m[1] !== undefined ? m[1] : m[2]));
 }
 
-/** @returns {number} the shard count: CI_SHARDS when it is a sane integer, else half the cores, at most 4. */
-function shardCount(env = process.env, cpus = os.cpus().length) {
+/** @returns {number} the shard count, bounded by CPU count and files per process. */
+function shardCount(env = process.env, cpus = os.cpus().length, files = 0) {
   const asked = Number(env.CI_SHARDS);
   if (Number.isInteger(asked) && asked >= 1 && asked <= MAX_SHARDS) return asked;
-  return Math.max(1, Math.min(4, Math.floor(cpus / 2)));
+  const cpuShards = Math.max(1, Math.min(4, Math.floor(cpus / 2)));
+  const fileShards = Math.max(1, Math.ceil(files / MAX_FILES_PER_SHARD));
+  return Math.min(MAX_SHARDS, Math.max(cpuShards, fileShards));
 }
 
 /** @returns {number} the number of shard processes allowed to run concurrently. */
@@ -63,7 +66,7 @@ function shardJobs(env = process.env, total = 1, freeMem = os.freemem()) {
   const asked = Number(env.CI_SHARD_JOBS);
   if (Number.isInteger(asked) && asked >= 1 && asked <= MAX_SHARDS) return Math.min(asked, total);
   const memoryJobs = Math.max(1, Math.floor(freeMem / (1024 ** 3)));
-  return Math.min(total, memoryJobs);
+  return Math.min(total, memoryJobs, 4);
 }
 
 /** @returns {string[][]} files dealt round-robin, each shard keeping mocha's own order. */
@@ -169,7 +172,7 @@ async function runMain(mainStep, cwd, env) {
     console.log(`ci:shard: cannot collect the files (${error.message}); running the step whole`);
     return runStep(mainStep, env);
   }
-  const shards = dealShards(plan.files, shardCount());
+  const shards = dealShards(plan.files, shardCount(env, os.cpus().length, plan.files.length));
   const bad = partitionError(plan.files, shards);
   if (bad) {
     console.log(`ci:shard: the shards are not an exact partition (${bad}); running the step whole`);
