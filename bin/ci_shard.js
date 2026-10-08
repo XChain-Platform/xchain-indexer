@@ -137,12 +137,19 @@ async function runShards(shards, args, env, spawnShard = spawn, jobs = shards.le
   const started = Date.now();
   const results = new Array(shards.length);
   let next = 0;
+  let active = 0;
+  let completed = 0;
   const runOne = (files, i) => new Promise((resolve) => {
     let out = '';
+    active += 1;
     const child = spawnShard(path.join('node_modules', '.bin', 'mocha'), [...args, ...files], { env, stdio: ['ignore', 'pipe', 'pipe'] });
     child.stdout.on('data', (chunk) => { out += chunk; });
     child.stderr.on('data', (chunk) => { out += chunk; });
-    child.on('close', (code, signal) => resolve({ i, files, out, ok: code === 0 && !signal, secs: Math.round((Date.now() - started) / 1000) }));
+    child.on('close', (code, signal) => {
+      active -= 1;
+      completed += 1;
+      resolve({ i, files, out, ok: code === 0 && !signal, secs: Math.round((Date.now() - started) / 1000) });
+    });
   });
   async function worker() {
     while (next < shards.length) {
@@ -151,7 +158,15 @@ async function runShards(shards, args, env, spawnShard = spawn, jobs = shards.le
       results[i] = await runOne(shards[i], i);
     }
   }
-  await Promise.all(Array.from({ length: Math.max(1, Math.min(jobs, shards.length)) }, worker));
+  const heartbeat = setInterval(() => {
+    console.log(`ci:shard: ${completed}/${shards.length} complete, ${active} running`);
+  }, 1000);
+  heartbeat.unref();
+  try {
+    await Promise.all(Array.from({ length: Math.max(1, Math.min(jobs, shards.length)) }, worker));
+  } finally {
+    clearInterval(heartbeat);
+  }
   for (const r of results) {
     console.log(`ci:shard ===== shard ${r.i + 1}/${shards.length} (${r.files.length} files) =====`);
     process.stdout.write(r.out);
