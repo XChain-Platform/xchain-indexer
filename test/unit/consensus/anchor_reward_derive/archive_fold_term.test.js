@@ -17,6 +17,18 @@ const derive = require('../../../../src/consensus/anchor_reward_derive.js');
 const binding = require('../../../../src/consensus/doge_peer_clients/anchor_proof_client/binding.js');
 
 const PUBLISHER = 'aa'.repeat(32);
+const FOLD_ENV = 'XC_ANCHOR_FOLD_REGTEST_ACTIVATION';
+
+function withFoldHeight(height, fn) {
+    const before = process.env[FOLD_ENV];
+    process.env[FOLD_ENV] = String(height);
+    try {
+        return fn();
+    } finally {
+        if (before === undefined) delete process.env[FOLD_ENV];
+        else process.env[FOLD_ENV] = before;
+    }
+}
 
 function rewardRow(overrides = {}) {
     return Object.assign({
@@ -71,7 +83,15 @@ describe('anchor archive fold-term gate', function () {
 
     describe('DOGE proof binding', function () {
         it('refuses an archive anchor at the regtest term height', function () {
-            assert.strictEqual(binding.judgeAnchors([archiveAnchor()], archiveReward()), 'rejected');
+            withFoldHeight(0, function () {
+                assert.strictEqual(binding.judgeAnchors([archiveAnchor()], archiveReward()), 'rejected');
+            });
+        });
+
+        it('keeps a pre-fold archive anchor eligible when only the term is active', function () {
+            withFoldHeight(1, function () {
+                assert.strictEqual(binding.judgeAnchors([archiveAnchor()], archiveReward()), 'verified');
+            });
         });
 
         it('keeps archive proof valid where the term is unarmed', function () {
