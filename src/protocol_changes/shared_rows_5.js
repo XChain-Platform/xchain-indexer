@@ -226,4 +226,11 @@ addGate('oracle_round_time_activation.ORACLE_ROUND_TIME_ACTIVATION', 'height', {
     'DOGE:testnet': 67966647,
     regtest: 0,
 });
+// stateHash: the state_hash class for the batch-completion stamp on a surviving v5 attest head.
+// Inert on mainnet and testnet until a flag day is sized; regtest is armed from genesis.
+addGate('stateHash.ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
 // SHARED-GATES END

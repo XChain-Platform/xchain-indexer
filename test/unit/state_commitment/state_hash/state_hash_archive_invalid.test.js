@@ -57,7 +57,7 @@ const {
     ARCHIVE_INVALID_HEIGHT_KEY_ACTIVATION, isArchiveInvalidHeightKeyActive,
     ARCHIVE_CHUNK_HEIGHT_COL, ARCHIVE_CHUNK_HEIGHT_COL_LEGACY,
     POLL_FINALIZE_STATE_HASH_ACTIVATION, TOKEN_SUPPLY_STATE_HASH_ACTIVATION,
-    INDEX_MAP_STATE_HASH_ACTIVATION, BET_STATUS_STATE_HASH_ACTIVATION,
+    INDEX_MAP_STATE_HASH_ACTIVATION, BET_STATUS_STATE_HASH_ACTIVATION, ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION,
 } = require('../../../../src/consensus/state_hash');
 
 const util = new Utility();
@@ -107,6 +107,8 @@ function anchorSqlOf(captured){
     return captured.find(sql => sql.indexOf('anchor_actions p') !== -1);
 };
 
+let abhPrev;
+
 describe('state_hash anchor_invalid class: archive-head coverage and chunk-height key @regression', () => {
     let pollPrev, tokenPrev, indexPrev, betPrev;
     before(function(){
@@ -114,12 +116,14 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
     tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest;   TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = 999999999;
     indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;      INDEX_MAP_STATE_HASH_ACTIVATION.regtest      = 999999999;
     betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = 999999999;
+    abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
     });
     after(function(){
     POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest  = pollPrev;
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = tokenPrev;
     INDEX_MAP_STATE_HASH_ACTIVATION.regtest      = indexPrev;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = betPrev;
+    ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
     });
 
     it('shared constant: ARCHIVE_HEAD_VERSIONS is [1] and renders IN (1)', function(){
@@ -140,12 +144,14 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
     tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest;   TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = 999999999;
     indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;      INDEX_MAP_STATE_HASH_ACTIVATION.regtest      = 999999999;
     betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = 999999999;
+    abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
     });
     after(function(){
     POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest  = pollPrev;
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = tokenPrev;
     INDEX_MAP_STATE_HASH_ACTIVATION.regtest      = indexPrev;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = betPrev;
+    ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
     });
 
     it('version gate: regtest, every testnet chain AND every mainnet chain armed from genesis; fail-inert paths', function(){
@@ -194,12 +200,14 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
     tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest;   TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = 999999999;
     indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;      INDEX_MAP_STATE_HASH_ACTIVATION.regtest      = 999999999;
     betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = 999999999;
+    abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
     });
     after(function(){
     POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest  = pollPrev;
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = tokenPrev;
     INDEX_MAP_STATE_HASH_ACTIVATION.regtest      = indexPrev;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = betPrev;
+    ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
     });
 
     it('height-key gate: regtest and mainnet armed at genesis, testnet at real future flag days; fail-inert paths', function(){
@@ -249,12 +257,14 @@ describe('state_hash anchor_invalid class: archive-head coverage and chunk-heigh
     tokenPrev = TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest;   TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = 999999999;
     indexPrev = INDEX_MAP_STATE_HASH_ACTIVATION.regtest;      INDEX_MAP_STATE_HASH_ACTIVATION.regtest      = 999999999;
     betPrev   = BET_STATUS_STATE_HASH_ACTIVATION.regtest;     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = 999999999;
+    abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
     });
     after(function(){
     POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest  = pollPrev;
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest   = tokenPrev;
     INDEX_MAP_STATE_HASH_ACTIVATION.regtest      = indexPrev;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest     = betPrev;
+    ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
     });
 
     it('the schema premise, checked against the real DDL: a v2 chunk row carries NULL block_index and a real block_index_doge', function(){

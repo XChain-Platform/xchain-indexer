@@ -196,6 +196,8 @@ async function buildStateHashData(db, blockIndex, opts){
     let token_supply       = tokenSupplyActive ? await G.collectTokenSupply(db, B) : null;
     let betStatusActive    = A.isBetStatusStateHashActive(B, network, coin);
     let bet                = betStatusActive ? await G.collectBetStatus(db, B) : null;
+    let attestBatchHeadActive = A.isAttestBatchHeadStateHashActive(B, network, coin);
+    let attest_batch_head  = attestBatchHeadActive ? await G.collectAttestBatchHead(db, B) : null;
 
     // Fixed key order: the hash preimage. NOT chained on a previous state_hash
     // (the adjacent three hashes already carry chain-continuity; a chain would only
@@ -213,6 +215,7 @@ async function buildStateHashData(db, blockIndex, opts){
         preimage.bet_feed_status = bet.bet_feed_status;
         preimage.bet_status      = bet.bet_status;
     }
+    if(attestBatchHeadActive) preimage.attest_batch_head = attest_batch_head;
     preimage.block_index        = B;
     preimage.state_hash_version = STATE_HASH_VERSION;
     return preimage;
@@ -229,6 +232,8 @@ module.exports = { buildStateHashData, STATE_HASH_VERSION,
                    isTokenSupplyStateHashActive: A.isTokenSupplyStateHashActive,
                    BET_STATUS_STATE_HASH_ACTIVATION: A.BET_STATUS_STATE_HASH_ACTIVATION,
                    isBetStatusStateHashActive: A.isBetStatusStateHashActive,
+                   ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION: A.ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION,
+                   isAttestBatchHeadStateHashActive: A.isAttestBatchHeadStateHashActive,
                    ARCHIVE_HEAD_VERSIONS: A.ARCHIVE_HEAD_VERSIONS,
                    ARCHIVE_HEAD_VERSIONS_SQL: A.ARCHIVE_HEAD_VERSIONS_SQL,
                    archiveHeadPredicate: A.archiveHeadPredicate,
