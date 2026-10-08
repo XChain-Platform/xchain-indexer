@@ -195,6 +195,8 @@ describe('ci fast selector', function () {
     assert(script.includes('ci_fast_select.js --plan'));
     assert(script.includes('CI_TIER'));
     assert(script.includes('run_tier "integration (test:integration:ci)"'));
+    assert(script.includes('run_tier "suite title pin (test)"'));
+    assert(script.includes('--script test --compare bin/pins/at1-suite-titles.json'));
   });
 
   it('runs source-only VM staging in Linux fast mode', function () {
