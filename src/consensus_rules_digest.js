@@ -140,7 +140,7 @@ const SHARED_GATES = [
 ];
 
 // A per-network height at or above this value is a far-future placeholder, not an
-// activation (PRICE_PAIR_WIDEN_ACTIVATION.mainnet is the live example), and activeGatesAt
+// activation (TOKEN_BRIDGE_ACTIVATION.mainnet and LIST_META_ACTIVATION.mainnet are the live examples), and activeGatesAt
 // must never report such a gate as active however high the chain climbs.
 const FAR_FUTURE_HEIGHT_SENTINEL = 9999999999;
 

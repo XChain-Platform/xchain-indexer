@@ -32,12 +32,37 @@ const { rethrowIfInfraFault } = require('../../consensus/fault_guard.js');
 const { getLogger } = require('../../observability/index.js');
 const { maxPriceAgeSecondsAt } = require('../../utility/price_age/oracle_price_age.js');
 
+async function splitRelayFulfilledFee(handler, request, data, feeAmount, gas, credits, validSigners){
+    let rewardPool = handler.config['ADDRESS']['REWARD'];
+    let rewardAmount = feeAmount;
+
+    let gasDecimals = await handler.indexerDb.getTokenDecimalPrecision(
+        await handler.indexerDb.getTickerId(gas)
+    );
+    let feeCap = Math.min(8, gasDecimals);
+    let allowance = await handler.relayFeeAllowance(request, data, feeAmount, feeCap);
+
+    if(handler.util.bcgt(allowance, '0')){
+        let payee = handler.relayFeePayee(request.request_id, validSigners);
+        let payoutAddress = await handler.relayFeePayoutAddress(payee, data['SNAPSHOT_BLOCK']);
+        if(payoutAddress){
+            rewardAmount = handler.util.bcsub(feeAmount, allowance, feeCap);
+            handler.util.addAddressTicker(payoutAddress, gas);
+            credits.push([gas, allowance, payoutAddress]);
+        }
+    }
+
+    handler.util.addAddressTicker(rewardPool, gas);
+    if(handler.util.bcgt(rewardAmount, '0'))
+        credits.push([gas, rewardAmount, rewardPool]);
+}
+
 module.exports = {
     // Settle the request fee escrowed at v0 (paid attestations). Runs at the
     // terminal flip and writes ledger rows at the SETTLING action's action_index
     // (the v1 response or the synthesized v2 expire), so a reorg of the settle
     // action removes them generically while the v0 escrow row survives.
-    //   'fulfilled'          → escrow → REWARD pool + equal validator_rewards
+    //   'fulfilled' local    → escrow → REWARD pool + equal validator_rewards
     //                          split across the responsible set (floor to GAS
     //                          decimals; remainder dust stays in the pool;
     //                          COLLECT only ever pays what validator_rewards
@@ -54,9 +79,13 @@ module.exports = {
     //                          widened set (signerPaySet); the pool credit,
     //                          the carve-out and the solvency argument are
     //                          unchanged, since the paid set is a subset.
+    //   'fulfilled' relay    → escrow → selected verified relay signer allowance
+    //                          + REWARD pool remainder. If the relay fee gate is
+    //                          inactive or no payout source resolves, the full
+    //                          escrow goes to REWARD.
     //   'errored'/'expired'  → escrow → refund to FEE_PAYER.
     // Feeless requests (fee_amount NULL/0) are a no-op.
-    async settleRequestFee(request, data, terminalStatus){
+    async settleRequestFee(request, data, terminalStatus, relaySigners){
         let feeAmount = String((request && request.fee_amount) || '0');
         if(!this.util.bcgt(feeAmount, '0')) return;
 
@@ -74,7 +103,11 @@ module.exports = {
         this.util.addAddressTicker(feePayer, gas);
 
         if(terminalStatus === 'fulfilled'){
-            await this.splitFulfilledFee(request, data, feeAmount, gas, credits);
+            if(Array.isArray(relaySigners))
+                await splitRelayFulfilledFee(
+                    this, request, data, feeAmount, gas, credits, relaySigners);
+            else
+                await this.splitFulfilledFee(request, data, feeAmount, gas, credits);
         } else {
             // errored / expired: service not rendered, refund the payer
             credits.push([gas, feeAmount, feePayer]);

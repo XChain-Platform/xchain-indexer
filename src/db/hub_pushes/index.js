@@ -97,15 +97,15 @@ module.exports = {
     // @param {Object} payload the HubClient argument object, serialized to JSON
     // @param {number} [rollbackActionIndex] the action whose rollback must un-land this
     //                 push; omitted means the payload's own action_index
+    //
+    // There is no pooled outbox writer: this name delegates to enqueueHubPushTx, so inside a
+    // block or rollback the row rides that open transaction and can never outlive a
+    // rolled-back block or go missing for a committed one.
     async enqueueHubPush(pushType, payload, rollbackActionIndex){
-        let actionIndex = (rollbackActionIndex != null) ? rollbackActionIndex
-                        : ((payload && payload.action_index != null) ? payload.action_index : 0);
-        let query = `INSERT INTO pending_hub_pushes (push_type, action_index, payload, status, attempts, created_at)
-                     VALUES (?, ?, ?, 'pending', 0, NOW())`;
-        await this.poolQuery(query, [pushType, actionIndex, JSON.stringify(payload)]);
+        await this.enqueueHubPushTx(pushType, payload, rollbackActionIndex);
     },
 
-    // Like enqueueHubPush, but routes through the OPEN transaction connection (doQuery, not
+    // The one outbox writer. Routes through the OPEN transaction connection (doQuery, not
     // poolQuery) so the row commits atomically with the caller's transaction, and returns the new
     // row id. Used by rollback.js to write-ahead its hub retractions inside the rollback transaction
     // (HUB-RETRACT-2): the durable row survives a crash between commit and live delivery, and the id
@@ -113,9 +113,8 @@ module.exports = {
     // transaction open (getConnection() then returns transactionConnection); otherwise it would land
     // on a pooled connection and not be atomic with the rollback.
     //
-    // `rollbackActionIndex` carries the same meaning it carries on enqueueHubPush: the
-    // action whose rollback must un-land this push, which is the payload's own
-    // action_index for every caller but the ATTEST v6 batch absorb.
+    // `rollbackActionIndex` is the action whose rollback must un-land this push, which is
+    // the payload's own action_index for every caller but the ATTEST v6 batch absorb.
     async enqueueHubPushTx(pushType, payload, rollbackActionIndex){
         let actionIndex = (rollbackActionIndex != null) ? rollbackActionIndex
                         : ((payload && payload.action_index != null) ? payload.action_index : 0);

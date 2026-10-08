@@ -54,7 +54,8 @@ module.exports = {
             credits.push([dispenser['GIVE_TICK'],  dispenser['GIVE_REMAINING'], destination]);
         }
 
-        // Add SOURCE and GET_ADDRESS addresses and GET_TICK to addresses list
+        // Add GET_ADDRESS and the refund destination to the GIVE_TICK refresh list
+        // (destination, not SOURCE, is whose escrow and credit moved above)
         this.util.addAddressTicker(dispenser['GET_ADDRESS'], dispenser['GIVE_TICK']);
         this.util.addAddressTicker(destination,              dispenser['GIVE_TICK']);
 

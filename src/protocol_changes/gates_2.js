@@ -81,11 +81,11 @@ addGate('ledger_amount_precision_activation.LEDGER_AMOUNT_PRECISION_ACTIVATION',
 // remains as the fallback for callers without a coin. Regtest is 0 so the e2e rail
 // exercises the armed rule from genesis.
 addGate('list_owner_activation.LIST_OWNER_ACTIVATION', 'height', {
-    mainnet: 9999999999,
+    mainnet: UNARMED,
     'BTC:testnet': 155001,
     'LTC:testnet': 4906040,
     'DOGE:testnet': 67962387,
-    testnet: 9999999999,
+    testnet: UNARMED,
     regtest: 0,
 });
 
@@ -397,3 +397,4 @@ addGate('protocol/constants.STAKE_WEIGHTED_QUORUM_ACTIVATION', 'height', {
     testnet: 0,
     regtest: 0,
 });
+addGate('attest_relay_fee_activation.ATTEST_RELAY_FEE_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': UNARMED, 'LTC:testnet': UNARMED, 'DOGE:testnet': UNARMED, testnet: UNARMED, regtest: 0 });

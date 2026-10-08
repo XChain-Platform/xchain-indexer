@@ -32,6 +32,7 @@ const path    = require('path');
 const crypto  = require('crypto');
 const stakeWeightCollation = require('../../consensus/gates/stake_weight_collation_gate');
 const { getLogger } = require('../../observability/index.js');
+const { recordShapeDrift } = require('../shared.js');
 // The class itself, for the statics these methods read. db/index.js publishes it before it
 // requires any part, so this resolves to the finished class rather than a half-built export.
 const Database = require('../index.js');
@@ -51,6 +52,39 @@ async function declaredTableExistence(self, db, tableFiles){
         }
     }
     return exists;
+}
+
+// Tables an indexer DB holds with no src/sql definition, each owned by named code, so the
+// undeclared-table check below reports drift rather than the services sharing this DB.
+const UNDECLARED_INFRASTRUCTURE_TABLES = new Set([
+    'schema_migrations',            // the migration ledger (migration_scan.js ensureMigrationsLedger)
+    'sync_meta', 'merkle_epochs',   // the sync service's own src/sql, created in this DB at its boot
+    'merkle_reorgs', 'sync_halt',
+    'sync_state',                   // the sync service's key/value store, created on first use
+]);
+
+// The live table names that neither a src/sql definition nor an infrastructure role explains.
+function undeclaredLiveTables(liveNames, declaredNames){
+    const declared = new Set(declaredNames.map(n => String(n).toLowerCase()));
+    return liveNames.map(n => String(n))
+        .filter(n => !declared.has(n.toLowerCase()) && !UNDECLARED_INFRASTRUCTURE_TABLES.has(n.toLowerCase()))
+        .sort();
+}
+
+// Record every live table no src/sql file declares as shape drift. Detection only: nothing
+// is dropped, and a listing that cannot be read records nothing rather than guessing.
+async function recordUndeclaredTables(self, db, tableFiles){
+    let rows;
+    try {
+        rows = await db.query("SELECT table_name AS name FROM information_schema.tables " +
+                              "WHERE table_schema = ? AND table_type = 'BASE TABLE'", [self.dbName]);
+    } catch(e){
+        getLogger().warn('Undeclared-table check skipped for ' + self.dbName + ': ' + e.message);
+        return;
+    }
+    const declared = tableFiles.map(f => f.substring(0, f.indexOf('.sql')));
+    for(const name of undeclaredLiveTables(Array.from(rows || [], r => r.name), declared))
+        recordShapeDrift(self.schemaShapeDrift, name, 'tables', ['undeclared table']);
 }
 
 module.exports = {
@@ -174,6 +208,7 @@ module.exports = {
                 return false;
             }
         }
+        await recordUndeclaredTables(this, db, tableFiles);
         await db.release();
         getLogger().info('Database and tables verified (' + checked + ' tables, ' + created + ' created).');
         getLogger().info(this.schemaShapeSummary());
@@ -223,19 +258,22 @@ module.exports = {
     },
 
     // One line (plus a per-table breakdown when there is one) naming everything live that
-    // no SQL source declares, or declares in a laxer index kind. Printed at the end of verifyTables so the fleet-wide
+    // no SQL source declares (whole tables included), or declares in a laxer index kind. Printed at the end of verifyTables so the fleet-wide
     // "does every indexer DB carry the same shape?" question is answered by comparing one
     // boot line per DB rather than by a hand schema diff across nine databases.
     schemaShapeSummary(){
         const store = this.schemaShapeDrift;
-        if(!store || !store.size) return 'Schema shape: no undeclared columns or indexes.';
+        if(!store || !store.size) return 'Schema shape: no undeclared tables, columns or indexes.';
         const lines = [];
+        let tables  = 0;
         let columns = 0;
         let indexes = 0;
         let kinds   = 0;
         for(const [table, entry] of store){
             const parts = [];
             const tableKinds = entry.indexKinds || [];
+            // A whole live table with no src/sql file: a fresh install of this release never has it.
+            if((entry.tables || []).length){ tables++; parts.push('undeclared table (no src/sql/' + table + '.sql)'); }
             if(entry.columns.length){ columns += entry.columns.length; parts.push('columns ' + entry.columns.join(', ')); }
             if(entry.indexes.length){ indexes += entry.indexes.length; parts.push('indexes ' + entry.indexes.map(i => i.name).join(', ')); }
             // A declared index whose live kind is stricter (UNIQUE or FULLTEXT) is drift too,
@@ -246,9 +284,9 @@ module.exports = {
             }
             lines.push('  ' + table + ': ' + parts.join('; '));
         }
-        const counts = kinds
+        const counts = (tables ? tables + ' undeclared table(s), ' : '') + (kinds
             ? columns + ' undeclared column(s), ' + indexes + ' undeclared index(es) and ' + kinds + ' index(es) of a stricter kind than declared'
-            : columns + ' undeclared column(s) and ' + indexes + ' undeclared index(es)';
+            : columns + ' undeclared column(s) and ' + indexes + ' undeclared index(es)');
         return 'SCHEMA SHAPE DRIFT: ' + store.size + ' table(s) carry ' + counts +
                '; this DB does not match a fresh install of this release.\n' + lines.join('\n');
     },

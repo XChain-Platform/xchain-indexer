@@ -55,7 +55,7 @@ const EXPECTED_VM_STRIPPED_GLOBAL_NAMES = [
 // reach and which therefore copy O(n) elements for a flat 1 gas.
 const EXPECTED_VM_CONSENSUS_RULES = [
     'banned-async', 'banned-generator', 'banned-literal', 'banned-math',
-    'banned-rest', 'banned-wasm', 'invalid-type', 'reserved-identifier',
+    'banned-rest', 'banned-wasm', 'banned-with', 'invalid-type', 'reserved-identifier',
     'unsupported-syntax'
 ];
 // The sandbox neuters more than the global strip set: prototype-method strips
@@ -263,6 +263,24 @@ describe('consensus parameters are frozen (track 8 guard) @regression', function
         const pc = require('../../../../src/protocol_changes.js');
         const row = pc.get('protocol_changes.changes.READONLY_ACCESSOR_OWN_KEY');
         // The VM spells an unarmed network null; the indexer spells it UNARMED.
+        const asRow = (t) => (t === null ? pc.UNARMED : t);
+        assert.strictEqual(asRow(gate.mainnet), row.mainnet_time, 'mainnet_time');
+        assert.strictEqual(asRow(gate.testnet), row.testnet_time, 'testnet_time');
+        assert.strictEqual(asRow(gate.regtest), row.regtest_time, 'regtest_time');
+    });
+
+    it('the bundled VM APPLY_LENGTH_METER_ACTIVATION matches the indexer APPLY_LENGTH_METER row per network', function(){
+        const { vm, full, pkgErr, refused } = resolveVmConsensus();
+        if(!vm || !full){
+            if(process.env.XCHAIN_REQUIRE_SIBLINGS === '1')
+                assert.fail('XCHAIN_REQUIRE_SIBLINGS=1 but xchain-vm did not resolve to its full package surface (stale/absent vendored VM): ' + (pkgErr ? String(pkgErr.message) : 'package not present') + (refused ? '; sibling fallback refused: ' + refused.reason : ''));
+            this.skip(); return;
+        }
+        const gate = vm.APPLY_LENGTH_METER_ACTIVATION;
+        assert.notStrictEqual(gate, undefined,
+            'xchain-vm did not export APPLY_LENGTH_METER_ACTIVATION (stale vendored copy? run npm run vendor:vm)');
+        const pc = require('../../../../src/protocol_changes.js');
+        const row = pc.get('protocol_changes.changes.APPLY_LENGTH_METER');
         const asRow = (t) => (t === null ? pc.UNARMED : t);
         assert.strictEqual(asRow(gate.mainnet), row.mainnet_time, 'mainnet_time');
         assert.strictEqual(asRow(gate.testnet), row.testnet_time, 'testnet_time');

@@ -192,3 +192,30 @@ describe('Emission Params Arity (MANDATORY) @regression @tier1', function() {
         }
     });
 });
+
+describe('EXECUTE host bounds accept edge @regression @tier1', function() {
+    // Accept side of the bounds above, pinning the exact edge against an off-by-one. A context
+    // whose every property read throws lets the call prove it got PAST the bounds checks
+    // (the routing step reads `this` next) without standing up a DB.
+    it('EXECUTE: processEmission accepts the depth and gasLimit bounds at their exact edges', async function() {
+        const processEmission = Execute.prototype.processEmission;
+        const PROTO = require('../../../src/protocol/constants.js');
+        assert.strictEqual(PROTO.VM_MAX_CALL_DEPTH, 4);
+        assert.strictEqual(PROTO.VM_MIN_CALL_GAS, 5000);
+        const pastBounds = new Proxy({}, { get(_, prop) { throw new Error('PAST_BOUNDS:' + String(prop)); } });
+        const cases = [
+            [{ CALL_DEPTH: PROTO.VM_MAX_CALL_DEPTH - 1 }, PROTO.VM_MIN_CALL_GAS],
+            [{}, PROTO.VM_MIN_CALL_GAS],
+            [{ CALL_DEPTH: 0 }, PROTO.VM_MIN_CALL_GAS],
+            [{ CALL_DEPTH: 0 }, 1000000]
+        ];
+        for(const [executionData, gasLimit] of cases){
+            await assert.rejects(
+                () => processEmission.call(pastBounds,
+                    { action: 'EXECUTE', params: { contractIndex: 1, method: 'm', gasLimit } },
+                    executionData, 0),
+                /PAST_BOUNDS/,
+                JSON.stringify(executionData) + ' gasLimit=' + gasLimit + ' must pass the host bounds');
+        }
+    });
+});
