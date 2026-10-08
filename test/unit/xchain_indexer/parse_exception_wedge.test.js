@@ -24,6 +24,7 @@ const blockFaultMethods = require('../../../src/XChainIndexer/block_faults');
 const stallHealth = require('../../../src/XChainIndexer/stall_health');
 const { hubConfigStaleness } = require('../../../src/XChainIndexer/hub_config_poll');
 const { statusVerdict, statusBody } = require('../../../src/api/status_route');
+const watchRules = require('../../../../xchain-dashboard/monitor/src/lib/alerts/rules');
 
 const STATUS_CONTRACT = Object.assign({ hubConfigStaleness }, stallHealth);
 const WATCH_STATUS_FIELDS = [
@@ -143,5 +144,16 @@ describe('repeated finalizeBlock exception status', function () {
             pollSilent: false,
             lastPollAt: 1791417610000
         });
+
+        const conditions = watchRules.conditionsFromIndexerHealth([
+            { coin: 'TLTC', ok: true, data: watchStatus }
+        ], 50);
+        assert.deepStrictEqual(conditions, [{
+            rule_key: 'indexer:TLTC',
+            entity: 'TLTC indexer',
+            severity: 'crit',
+            summary: 'TLTC indexer stalled: parse_exception: Cannot read properties of undefined '
+                + '(1 blocks behind)'
+        }]);
     });
 });
