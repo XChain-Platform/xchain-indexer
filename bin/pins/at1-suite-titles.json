@@ -4819,13 +4819,6 @@
       "stake_weighted_quorum fail-closed on truncation (SWQ-TRUNC-1) @regression @security meetsStakeThreshold returns false when the snapshot array is marked truncated",
       "stake_weighted_quorum fail-closed on truncation (SWQ-TRUNC-1) @regression @security totalStake throws on a truncated snapshot (its sum is meaningless)"
     ],
-    "533d6a868160af87": [
-      "anchor archive recovery registry coverage @regression @tier1 classifies every quorum-class hub mirror with a valid recovery policy",
-      "anchor archive recovery registry coverage @regression @tier1 derives the recovery run header from anchorRecoveryTables()",
-      "anchor archive recovery registry coverage @regression @tier1 exports the archive policy rows through anchorRecoveryTables()",
-      "anchor archive recovery registry coverage @regression @tier1 has an INSERT writer for every archive recovery table",
-      "anchor archive recovery registry coverage @regression @tier1 the xchain-sync registry copy declares the same recovery policies"
-    ],
     "534e6d3195bb81fd": [
       "list_metas holds a 4-byte character in name and description @regression createListMeta stores a 4-byte name and description against the strict server",
       "list_metas holds a 4-byte character in name and description @regression list_metas.sql declares name and description CHARACTER SET utf8mb4",
@@ -14740,6 +14733,15 @@
       "ROLLCALL handler (\u00a73.3) - AT7 reason falsification v1 (GATES) keeps the DOGE-only guard and the first-seen semantics",
       "ROLLCALL handler (\u00a73.3) - AT7 reason falsification v1 (GATES) the handler advertises formats[1] with GATES between PUBLISHER and SIG_COUNT"
     ],
+    "e66b0c886d519c64": [
+      "anchor archive recovery registry coverage @regression @tier1 classifies every hub mirror with a valid recovery policy, hashed or not",
+      "anchor archive recovery registry coverage @regression @tier1 classifies every quorum-class hub mirror with a valid recovery policy",
+      "anchor archive recovery registry coverage @regression @tier1 derives the recovery run header from anchorRecoveryTables()",
+      "anchor archive recovery registry coverage @regression @tier1 exports the archive policy rows through anchorRecoveryTables()",
+      "anchor archive recovery registry coverage @regression @tier1 has an INSERT writer for every archive recovery table",
+      "anchor archive recovery registry coverage @regression @tier1 reports an unhashed hub mirror that declares no recovery policy",
+      "anchor archive recovery registry coverage @regression @tier1 the xchain-sync registry copy declares the same recovery policies"
+    ],
     "e6aed40fa235b3b4": [
       "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^1.0\" is rejected as invalid: TICK (caret dot) when the flag is active",
       "Issue: caret-dot TICK rejection and ticker-intern gating @regression @tier1 Defect A: caret TICK containing \".\" (at/above the flag) \"^1.0\" reproduces the PRE-FLAG (defective) valid verdict when the flag is off",
@@ -17155,7 +17157,7 @@
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
         "test/unit/protocol_changes/vm_lint_optional_chain_row.test.js": "2f7a8d1891a47dae",
-        "test/unit/recovery/anchor_recovery_coverage.test.js": "533d6a868160af87",
+        "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
@@ -18464,7 +18466,7 @@
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
-        "test/unit/recovery/anchor_recovery_coverage.test.js": "533d6a868160af87",
+        "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
@@ -18923,7 +18925,7 @@
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
-        "test/unit/recovery/anchor_recovery_coverage.test.js": "533d6a868160af87",
+        "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",
         "test/unit/recovery/recovery_checkpoint_canonical_parity.test.js": "8085cf5c188208d1",
@@ -19777,7 +19779,7 @@
         "test/unit/protocol_changes/regtest_overlay/anchor_stake_slash_overlay.test.js": "67b4dad324d7d14b",
         "test/unit/protocol_changes/regtest_overlay/lists_market_overlay.test.js": "559af133a7b48138",
         "test/unit/protocol_changes/rows_parity.test.js": "df2e8799cf3685dc",
-        "test/unit/recovery/anchor_recovery_coverage.test.js": "533d6a868160af87",
+        "test/unit/recovery/anchor_recovery_coverage.test.js": "e66b0c886d519c64",
         "test/unit/recovery/list_share_recovery.test.js": "4952d3db984cc3ce",
         "test/unit/recovery/list_share_rows.test.js": "2ad1561ef8e230b9",
         "test/unit/recovery/list_share_verify.test.js": "a3ecaa042dc5bed4",

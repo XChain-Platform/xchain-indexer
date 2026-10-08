@@ -63,8 +63,9 @@ const ATTESTED_VERSIONS = [0, 1, 3, 4, 5, 6, 7];
 // identically, and the deterministic-invalid filter in judge drops the row as evidence.
 //
 // The fold wire (3) joins the bundle family only: a fold-era archive head earns no reward
-// (reward_family.rewardTypeFor), and isBundleSectionRow below keeps a fold's archive row
-// from standing in for one of its chain sections.
+// once the archive fold-term gate arms (the indexer proof client's archiveRowTerminated and
+// the BTC derive's rowGatesActive enforce it), and isBundleSectionRow below keeps a fold's
+// archive row from standing in for one of its chain sections.
 const REWARD_FAMILY_VERSIONS = {
     archive: [1, 6],
     bundle:  [0, 3, 7]

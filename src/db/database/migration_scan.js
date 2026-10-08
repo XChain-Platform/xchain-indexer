@@ -125,14 +125,38 @@ function keywordDestroys(self, stmt){
     return false;
 }
 
-// destructiveAutoStatement, the CREATE allow-list: true for any CREATE other than a table or
-// an index. A trigger, event, routine or view carries SQL this classifier never reads, and the
-// server runs it later (a trigger on every row write), the same blind spot as CALL above.
+// destructiveAutoStatement, the CREATE TABLE engine check: true when any ENGINE option names
+// an engine other than InnoDB. MEMORY loses every row on restart, and MyISAM or Aria sit
+// outside the transaction a reorg rollback undoes.
+function createNamesNonInnoDb(stmt){
+    const engineRe = /\bENGINE\b\s*=?\s*[`'"]?(\w*)/gi;
+    let m;
+    while((m = engineRe.exec(stmt)) !== null){
+        if(m[1].toLowerCase() !== 'innodb') return true;
+    }
+    return false;
+}
+
+// destructiveAutoStatement, the CREATE allow-list: true for any CREATE other than an InnoDB
+// table or an index. A trigger, event, routine or view carries SQL this classifier never reads,
+// and the server runs it later (a trigger on every row write), the same blind spot as CALL above.
 function createOutsideAllowList(stmt){
     if(!/^CREATE\b/i.test(stmt))                                      return false;
     // Allow the additive forms committed auto migrations use: [TEMPORARY] TABLE and INDEX.
-    if(/^CREATE\s+(?:TEMPORARY\s+)?TABLE\b/i.test(stmt))              return false;
+    if(/^CREATE\s+(?:TEMPORARY\s+)?TABLE\b/i.test(stmt))              return createNamesNonInnoDb(stmt);
     return !/^CREATE\s+(?:(?:UNIQUE|FULLTEXT|SPATIAL)\s+)?INDEX\b/i.test(stmt);
+}
+
+// destructiveAutoStatement, the ALTER TABLE DROP check: true unless every DROP is followed by a
+// bare, unquoted metadata keyword. A quoted name is always a column to the server, a word that
+// only starts with a keyword (key1) is a column, and a token the scan cannot read is not safe.
+function dropTargetDestroys(stmt, safeDrop){
+    const dropRe = /\bDROP\b/gi;
+    while(dropRe.exec(stmt) !== null){
+        const next = /^\s+([A-Za-z_]+)(?=[\s,;()`]|$)/.exec(stmt.slice(dropRe.lastIndex));
+        if(!next || !safeDrop.has(next[1].toUpperCase())) return true;
+    }
+    return false;
 }
 
 // destructiveAutoStatement, the ALTER TABLE clause checks: true when any clause can lose or
@@ -147,13 +171,11 @@ function alterTableDestroys(stmt){
     // so the whole class is non-auto-eligible - re-tag mode=manual to run one.
     if(/\bPARTITION(?:ING)?\b/i.test(stmt))          return true;
     if(/\bTABLESPACE\b/i.test(stmt))                 return true;
+    // Any ENGINE option rebuilds the whole table by copy, and a non-InnoDB engine loses rows on
+    // restart (MEMORY) or escapes the reorg rollback (MyISAM, Aria), so it runs manual only.
+    if(/\bENGINE\b/i.test(stmt))                     return true;
     // Every DROP inside the ALTER must target a safe (metadata-only) object.
-    let m;
-    const dropRe = /\bDROP\s+([A-Za-z_]+|`[^`]+`)/gi;
-    while((m = dropRe.exec(stmt)) !== null){
-        const target = m[1].replace(/`/g, '').toUpperCase();
-        if(!SAFE_ALTER_DROP.has(target)) return true;
-    }
+    if(dropTargetDestroys(stmt, SAFE_ALTER_DROP))    return true;
     // RENAME TO / RENAME COLUMN / bare RENAME lose the old name; only
     // RENAME INDEX/KEY is a metadata-only rename.
     if(/\bRENAME\b(?!\s+(INDEX|KEY)\b)/i.test(stmt)) return true;
@@ -233,16 +255,18 @@ module.exports = {
     // ALTER TABLE ... RENAME (except RENAME INDEX/KEY), ALTER TABLE ... CHANGE
     // (rename+retype), MODIFY ... NOT NULL (the statically detectable
     // narrowing; a width reduction cannot be seen without the live schema and
-    // stays covered by the manual-tag convention), any ALTER TABLE PARTITION or
-    // TABLESPACE clause, ALTER IGNORE TABLE (deletes duplicate-key rows), any other
-    // ALTER than ALTER [ONLINE] TABLE, and any CREATE other than [TEMPORARY] TABLE and
+    // stays covered by the manual-tag convention), any ALTER TABLE PARTITION,
+    // TABLESPACE or ENGINE clause, ALTER IGNORE TABLE (deletes duplicate-key rows), any other
+    // ALTER than ALTER [ONLINE] TABLE, a CREATE TABLE naming an engine other than InnoDB,
+    // and any CREATE other than [TEMPORARY] TABLE and
     // [UNIQUE|FULLTEXT|SPATIAL] INDEX (triggers, events, routines and views run SQL
     // the scanner cannot read), and any SET other than SET NAMES or a single UTC
     // time_zone (session variables relax strict mode; SET STATEMENT ... FOR hides a statement).
     //
     // Deliberately NOT flagged (legitimate existing auto patterns): DROP INDEX/KEY,
-    // DROP FOREIGN KEY/CONSTRAINT/CHECK/DEFAULT/PRIMARY KEY (structural, no row
-    // data lost), ADD ..., plain CREATE TABLE / CREATE TABLE IF NOT EXISTS (additive;
+    // DROP FOREIGN KEY/CONSTRAINT/CHECK/DEFAULT/PRIMARY KEY with the keyword bare and
+    // unquoted (structural, no row data lost), ADD ..., plain InnoDB or engine-less
+    // CREATE TABLE / CREATE TABLE IF NOT EXISTS (additive;
     // but CREATE OR REPLACE TABLE IS flagged - it is an atomic DROP+CREATE), CREATE
     // [UNIQUE] INDEX, MODIFY that widens/nullables a column, and ALTER ONLINE TABLE
     // under the same clause rules as plain ALTER TABLE.

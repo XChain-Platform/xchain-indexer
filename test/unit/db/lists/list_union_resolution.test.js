@@ -34,7 +34,8 @@ const rows = [
   { action_index: 40, list_action_index: null, type: 3, status: 'valid', block_index: 40 },
   { action_index: 50, list_action_index: null, type: 3, status: 'invalid: TYPE (unknown)', block_index: 50 },
   { action_index: 60, list_action_index: null, type: 3, status: 'valid', block_index: 60 },
-  { action_index: 61, list_action_index: 60, type: 3, status: 'valid', block_index: 61 }
+  { action_index: 61, list_action_index: 60, type: 3, status: 'valid', block_index: 61 },
+  { action_index: 70, list_action_index: null, type: 3, status: 'valid', block_index: 70 }
 ];
 
 const items = {
@@ -46,7 +47,9 @@ const items = {
   32: ['beta', 'ALPHA'],
   40: [30, 32],
   60: [10],
-  61: [10, 12]
+  61: [10, 12],
+  // Mixed member types, which admission refuses: only row order can pick the member type.
+  70: [12, 32]
 };
 
 function makeDb() {
@@ -84,7 +87,11 @@ function makeDb() {
         : [];
     }
     if (/SELECT item_id AS action_index FROM list_items/i.test(normalized)) {
-      return (items[String(args[0])] || []).map((action_index) => ({ action_index }));
+      // Model an engine with no row-order guarantee: an unordered read gets reverse order.
+      const memberRoots = [...(items[String(args[0])] || [])];
+      if (/ORDER BY/i.test(normalized)) memberRoots.sort((a, b) => Number(a) - Number(b));
+      else memberRoots.reverse();
+      return memberRoots.map((action_index) => ({ action_index }));
     }
     if (/FROM lists l INNER JOIN index_statuses/i.test(normalized)) {
       const children = rows
@@ -143,5 +150,10 @@ describe('database union list resolution @regression @tier1', function () {
     assert.deepStrictEqual(await db.getList(50), []);
     assert.strictEqual(await db.getListType(50, 100), false);
     assert.strictEqual(await db.getList(50, 100), null);
+  });
+
+  it('takes the union member type from the lowest member root, whatever the row order', async function () {
+    const db = makeDb();
+    assert.strictEqual(await db.getListType(70, 100), 2);
   });
 });
