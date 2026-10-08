@@ -172,7 +172,7 @@ const liveColumn = (name, ddl, modify, refuses) => ({ name, ddl, modify, refuses
 const LIVE_COLUMN_CASES = [
     liveColumn('AUTO_INCREMENT', AUTO_COLUMN, 'BIGINT UNSIGNED NOT NULL', /strips AUTO_INCREMENT/),
     liveColumn('DEFAULT', 'CREATE TABLE guard_probe (value INT NOT NULL DEFAULT 7)',
-        'INT NOT NULL', /strips DEFAULT 7/),
+        'INT NOT NULL /* DEFAULT 7 */', /strips DEFAULT 7/),
     liveColumn('ON UPDATE', TIMESTAMP_COLUMN, 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP', /strips ON UPDATE/),
     liveColumn('COMMENT', "CREATE TABLE guard_probe (value BIGINT UNSIGNED COMMENT 'kept')",
         'BIGINT UNSIGNED', /strips COMMENT/),
@@ -202,7 +202,7 @@ const LIVE_COLUMN_CASES = [
     liveColumn('expanded enum', "CREATE TABLE guard_probe (value ENUM('a') NOT NULL)", "ENUM('a','b') NOT NULL"),
 ];
 function guardSql(definition) {
-    return 'ALTER TABLE guard_probe MODIFY COLUMN value ' + definition;
+    return '/* live metadata probe */ ALTER TABLE guard_probe MODIFY COLUMN value ' + definition;
 }
 function schemaHarness() {
     const h = { admin: null, db: null };
