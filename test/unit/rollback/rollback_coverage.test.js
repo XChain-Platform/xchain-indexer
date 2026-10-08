@@ -318,10 +318,9 @@ describe('Rollback coverage guard @regression', function () {
                     this.skip();
                     return;
                 }
-                const indexerSource = fs.readFileSync(path.join(__dirname, '../../../src/' + twin), 'utf8');
-                const syncSource = fs.readFileSync(syncPath, 'utf8');
-                assert.ok(
-                    syncSource === indexerSource,
+                assert.strictEqual(
+                    fs.readFileSync(path.join(__dirname, '../../../src/' + twin), 'utf8'),
+                    fs.readFileSync(syncPath, 'utf8'),
                     twin + ' drifted between xchain-indexer and xchain-sync; keep the twin byte-identical');
             });
         }
