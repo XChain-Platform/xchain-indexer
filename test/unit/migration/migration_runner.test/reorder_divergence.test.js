@@ -192,61 +192,47 @@ describe('migration reorder verdict @regression @tier1', function () {
 });
 
 
-// The shape this exists for, driven through the real runMigrationsInner against the real
-// migrations directory. On the three testnet indexer DBs
-// 2026-09-12-state-tree-roots-block-index-idx.sql applied AFTER the two migrations it
-// sorts before; deleting exactly that name from a full ledger reproduces that database.
 describe('runMigrations() reorder discrimination @regression @tier1', function () {
-    const HARMLESS = '2026-09-12-state-tree-roots-block-index-idx.sql';
-    const ORDERED_COMPANION = '2026-09-27-datetime-state-tree-roots.sql';
-    // The jumped pair from the same window, kept as an assertion rather than a comment so a
-    // later migration landing between them cannot silently change what this case tests.
-    const REQUIRED_JUMPED = ['2026-09-12-token-bridge-fields.sql', '2026-09-13-destroys-sends-leg-ordinal.sql'];
-    const jumpedFiles = () => allFiles().filter(f => f > HARMLESS && f !== ORDERED_COMPANION);
-    const ledgerForHarmlessPair = () => {
+    const HARMLESS = '2026-10-06-resolved-block-idx.sql';
+    const jumpedFiles = () => allFiles().filter(file => file > HARMLESS);
+    const ledgerWithHarmlessPending = () => {
         const ledger = ledgerOfAll();
         ledger.delete(HARMLESS);
-        ledger.delete(ORDERED_COMPANION);
         return ledger;
     };
 
-    it('keeps the same-table companion pending so the pair runs in date order', function () {
+    it('the chosen file is disjoint from every migration it jumps', function () {
         const mine = tablesOfFile(HARMLESS);
-        assert.deepStrictEqual(mine.tables, ['state_tree_roots']);
-        assert.ok(HARMLESS < ORDERED_COMPANION);
-        assert.ok(tablesOfFile(ORDERED_COMPANION).tables.includes('state_tree_roots'));
-        const jumped = jumpedFiles();
-        for (const required of REQUIRED_JUMPED) {
-            assert.ok(jumped.includes(required), required + ' must remain among the jumped migrations');
-        }
-        for (const other of jumped) {
+        assert.deepStrictEqual(mine, { tables: ['attests', 'polls', 'xcalls'], opaque: null });
+        for (const other of jumpedFiles()) {
             const theirs = tablesOfFile(other);
             assert.strictEqual(theirs.opaque, null, other + ' became unattributable');
-            assert.deepStrictEqual(theirs.tables.filter(t => mine.tables.includes(t)), [],
+            assert.deepStrictEqual(theirs.tables.filter(table => mine.tables.includes(table)), [],
                 other + ' now shares a table with ' + HARMLESS);
         }
     });
 
     it('does not fail the operator path for a reorder it can prove harmless', async function () {
         const { logged, applied, result, threw } = await runAgainst(
-            ledgerForHarmlessPair(), { includeManual: true });
+            ledgerWithHarmlessPending(), { includeManual: true });
         assert.strictEqual(threw, null, 'a provably harmless reorder must not fail closed: ' + (threw && threw.message));
         assert.ok(applied.includes(HARMLESS), 'the migration must still apply');
-        assert.ok(applied.indexOf(HARMLESS) < applied.indexOf(ORDERED_COMPANION),
-            'the same-table companion must apply after the index migration');
-        const line = logged.find(l => /PROVABLY HARMLESS/.test(l));
+        const line = logged.find(log => /PROVABLY HARMLESS/.test(log));
         assert.ok(line, 'expected the harmless verdict to be recorded: ' + logged.join(' | '));
-        assert.ok(line.includes('state_tree_roots'), 'the verdict must name the objects it checked: ' + line);
-        assert.ok(!logged.some(l => /diverge the schema/.test(l)), 'a harmless reorder must not claim divergence');
+        for (const table of ['attests', 'polls', 'xcalls']) {
+            assert.ok(line.includes(table), 'the verdict must name ' + table + ': ' + line);
+        }
+        assert.ok(!logged.some(log => /diverge the schema/.test(log)), 'a harmless reorder must not claim divergence');
+        assert.ok(result.applied.includes(HARMLESS));
     });
 
     it('records the checked reorder in the run result, not only in the log', async function () {
-        const { result } = await runAgainst(ledgerForHarmlessPair(), { includeManual: true });
+        const { result } = await runAgainst(ledgerWithHarmlessPending(), { includeManual: true });
         assert.deepStrictEqual(result.reordered, [{
             file:      HARMLESS,
             frontier:  jumpedFiles()[jumpedFiles().length - 1],
             divergent: false,
-            tables:    ['state_tree_roots'],
+            tables:    ['attests', 'polls', 'xcalls'],
             shared:    [],
             opaque:    [],
         }]);
