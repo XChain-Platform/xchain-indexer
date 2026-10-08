@@ -301,7 +301,7 @@ module.exports = {
 
     GAS_PRICE:                        '0.00001', // XCHAIN per gas unit
     UNIFIED_EXPIRATION_FEE_FREE_DAYS: 90,
-    FEE_PAYMENT_MODE:                 'xchain',   // informational only; not read at runtime (see detectFeePaymentMode)
+    FEE_PAYMENT_MODE:                 'xchain',   // declared mode; the indexer classifies by coin (BTC xchain) and a registry test pins the two together
     FEE_TOLERANCE_MIN:                '0.95',
     FEE_TOLERANCE_MAX:                '1.10',
     ORACLE_MAX_PRICE_AGE_SECONDS:     1800,
