@@ -73,7 +73,8 @@ function stripBlockComments(text){
             continue;
         }
         if(ch === "'" || ch === '"' || ch === '`'){ quote = ch; out += ch; continue; }
-        const end = ch === '/' && text[i + 1] === '*' && !/^(?:!|M!)/i.test(text.slice(i + 2, i + 4)) ? text.indexOf('*/', i + 2) : -1;
+        const executable = /^(?:!|M!)/i.test(text.slice(i + 2, i + 4));
+        const end = ch === '/' && text[i + 1] === '*' && !executable ? text.indexOf('*/', i + 2) : -1;
         if(end !== -1){ out += ' '; i = end + 1; continue; }
         out += ch;
     }
