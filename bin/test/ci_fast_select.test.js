@@ -197,6 +197,12 @@ describe('ci fast selector', function () {
     assert(script.includes('run_tier "integration (test:integration:ci)"'));
   });
 
+  it('uses source-only VM staging away from Linux', function () {
+    const script = fs.readFileSync('bin/ci-full.sh', 'utf8');
+    assert(script.includes('if [ "$(uname -s)" = "Linux" ]'));
+    assert(script.includes('npm run vendor:vm -- check'));
+  });
+
   it('replays develop history, compares narrowing, and checks required selections', function () {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-fast-select-replay-'));
     try {
