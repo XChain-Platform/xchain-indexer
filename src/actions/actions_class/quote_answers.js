@@ -37,6 +37,18 @@ function normalizeQuoteRequest(aliases, action, params){
     return { action, params };
 }
 
+// The shape a quotable action name must have, the same rule the explorer proxy applies.
+// The dry-run re-joins action and params on '|' and dispatch re-splits them, so a name
+// carrying '|' or whitespace would be classified as one action and dispatched as another.
+const QUOTE_ACTION_NAME = /^[A-Z0-9_]{1,32}$/;
+
+// The refusal for a normalized action name outside QUOTE_ACTION_NAME, or null to proceed.
+function malformedActionAnswer(base, action, valid){
+    if(QUOTE_ACTION_NAME.test(action)) return null;
+    return Object.assign(base, { supported: false, valid: valid,
+        error: 'invalid action name (expected 1 to 32 characters of A-Z, 0-9 or _)' });
+}
+
 // The fields every computeFeeQuote answer starts from.
 function feeQuoteBase(actions, action, feeDestination){
     let toleranceMin = actions.util.bcnum(actions.config['FEE_TOLERANCE_MIN'] || '0.95');
@@ -128,6 +140,9 @@ function resolvePreflightFeeMode(actions, feeMode, probeDest){
 
 // The pre-flight refusal for an action this surface will not dry-run, or null to proceed.
 function preflightGateAnswer(actions, base, action, params, feeClass){
+    // Refuse a name dispatch would re-split into another action (the classifier denies it)
+    let malformed = malformedActionAnswer(base, action, null);
+    if(malformed) return malformed;
     // BATCH gets a SUB-COMMAND-LEVEL pre-flight rather than the flat refusal, which is
     // the whole point: a wallet composing a batch could get no chain verdict at all, so
     // every batch-only rule (the per-payee COINPAY resolution, the cumulative fee ledger,
@@ -243,6 +258,8 @@ function preflightResult(actions, base, run, resolvedMode, feeTick){
 
 module.exports = {
     normalizeQuoteRequest,
+    QUOTE_ACTION_NAME,
+    malformedActionAnswer,
     feeQuoteBase,
     exemptFeeQuote,
     feeQuoteLockBusy,

@@ -52,12 +52,33 @@ const url   = require('url');
 
 const { getLogger } = require('../../observability/index.js');
 const { CONFIG_ENV } = require('../../config.js');
+const gateRegistry = require('../gate_registry.js');
 // The binding rule judge applies (the attested versions, the reward families, the
 // node-class-dependent statuses and the bundle header reconstruction) lives in
 // anchor_proof_client/binding.js; the getanchorconfirmations page walk proveMined runs
 // before it judges lives in anchor_proof_client/page_walk.js.
-const { ATTESTED_VERSIONS, judgeAnchors } = require('./anchor_proof_client/binding.js');
+const {
+    ATTESTED_VERSIONS, REWARD_FAMILY_VERSIONS, isRewardCandidateRow, judgeAnchors
+} = require('./anchor_proof_client/binding.js');
 const { walkAnchorPages } = require('./anchor_proof_client/page_walk.js');
+
+const ANCHOR_ARCHIVE_FOLD_TERM =
+    'anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION';
+const ANCHOR_FOLD = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
+
+function archiveRowTerminated(a, e){
+    if(String(e.rewardType) !== 'anchor_archive') return false;
+    if(!REWARD_FAMILY_VERSIONS.archive.includes(Number(a.version))) return false;
+    let network = String(e.network || '');
+    let publisher = String(e.publisher || '').toLowerCase();
+    if(!isRewardCandidateRow(a, network, publisher)) return false;
+    let dogeHeight = a.block_index_doge;
+    let termActive = gateRegistry.activeAt(
+        ANCHOR_ARCHIVE_FOLD_TERM, network, 'DOGE', dogeHeight, null);
+    let foldActive = gateRegistry.activeAt(
+        ANCHOR_FOLD, network, 'DOGE', dogeHeight, null);
+    return termActive && foldActive;
+}
 
 class AnchorProofClient {
 
@@ -195,11 +216,19 @@ class AnchorProofClient {
                 Number(e.minConfirmations)].join('|');
     }
 
-    // Bind the anchors a txid carries to the reward tuple. Pure, so the whole binding rule
-    // is unit-testable without a DOGE indexer. The rule itself is judgeAnchors in
-    // anchor_proof_client/binding.js.
+    // Apply the indexer-only archive gate before the shared binding.
     judge(anchors, e){
-        return judgeAnchors(anchors, e);
+        let rejectedArchiveRow = false;
+        let proofRows = anchors.filter((a) => {
+            if(!archiveRowTerminated(a, e)) return true;
+            rejectedArchiveRow = true;
+            return false;
+        });
+        let verdict = judgeAnchors(proofRows, e);
+        // Screened archive rows still count as attested evidence.
+        if(rejectedArchiveRow && verdict === 'unknown' &&
+           !proofRows.some(a => ATTESTED_VERSIONS.includes(Number(a.version)))) return 'rejected';
+        return verdict;
     }
 }
 

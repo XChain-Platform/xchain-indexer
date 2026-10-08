@@ -53,6 +53,7 @@ describe('snapshot-age caller inventory @regression @tier1', function () {
 
         assert.deepStrictEqual(callers, [
             'src/db/prices/oracle_preload_causality_gate.js',
+            'src/db/prices/oracle_snapshot_age_seconds.js',
             'src/db/prices/oracle_vm_snapshot.js'
         ], 'A new snapshot-age caller must be added to the consensus-seconds migration as well as to this list.');
     });

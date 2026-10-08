@@ -64,6 +64,10 @@ const FIRST_ORPHANED = 250;
 const BATCH_KEY = 'ab'.repeat(32);
 const OTHER_KEY = 'cd'.repeat(32);
 
+// Two encodings of one window: the body CRC a head declares and its continuations repeat.
+const CRC_A = '0a1b2c3d';
+const CRC_B = '4e5f6a7b';
+
 // A verdict as absorbCompletedBatch stamps it, and the same verdict text as a
 // head that was already terminal when it was WRITTEN carries it.
 const STAMPED   = 'invalid: ATTEST_BATCH (reassembly CRC mismatch)' + ATTEST_BATCH_COMPLETION_STAMP;
@@ -133,7 +137,8 @@ function head(db, actionIndex, statusId, sourceId, opts){
         provider_id:       '',
         request_id:        opts.key || BATCH_KEY,
         batch_chunk_index: (opts.chunkIndex === undefined ? 0 : opts.chunkIndex),
-        batch_total_chunks: 2,
+        batch_total_chunks: (opts.totalChunks === undefined ? 2 : opts.totalChunks),
+        batch_crc32:       opts.crc32 || CRC_A,
         status_id:         statusId,
         block_index:       10,
     }, sourceId === undefined ? 11 : sourceId);
@@ -149,7 +154,8 @@ function chunk(db, actionIndex, statusId, sourceId, opts){
         provider_id:       '',
         request_id:        opts.key || BATCH_KEY,
         batch_chunk_index: (opts.chunkIndex === undefined ? 1 : opts.chunkIndex),
-        batch_total_chunks: 2,
+        batch_total_chunks: (opts.totalChunks === undefined ? 2 : opts.totalChunks),
+        batch_crc32:       opts.crc32 || CRC_A,
         status_id:         statusId,
         block_index:       30,
     }, sourceId === undefined ? 11 : sourceId);
@@ -319,6 +325,47 @@ describe('ATTEST v5 batch head: the reorg reset for an orphaned completion stamp
             chunk(db, 300, validId, 11, { key: OTHER_KEY });
             const { sql, args } = await captureResetQuery();
             assert.deepStrictEqual(db.resetTargets(sql, args), []);
+        });
+    });
+});
+
+// One publisher can file two encodings of one window under the same key. A stamped
+// head's verdict is undone only when a chunk of ITS OWN encoding is orphaned, the
+// same (key, author, encoding) identity the forward reassembly reads.
+describe('ATTEST v5 batch head: the reorg reset is scoped to the head\'s own encoding @regression', function(){
+    afterEach(function(){ sinon.restore(); });
+
+    describe('against a real SQL engine', function(){
+        beforeEach(function(){ db = makeDb(); validId = db.status('valid'); });
+        afterEach(function(){ db.close(); });
+
+        // Stamped head X whose completing chunk lands at `xChunkAt`, and a valid
+        // republished head Y of another encoding whose continuation is orphaned.
+        function stampedXRepublishedY(xChunkAt, yOpts){
+            const x = head(db, 100, db.status(STAMPED));
+            chunk(db, xChunkAt, validId);
+            head(db, 130, validId, 11, yOpts);
+            chunk(db, 300, validId, 11, yOpts);
+            return x;
+        }
+
+        it('an orphaned chunk of a republished encoding leaves the stamped head stamped', async function(){
+            stampedXRepublishedY(120, { totalChunks: 3, crc32: CRC_B });
+            const { sql, args } = await captureResetQuery();
+            assert.deepStrictEqual(db.resetTargets(sql, args), [],
+                'the stamped head kept its own completing chunk, so its failure verdict still stands');
+        });
+
+        it('a republished encoding that differs only in body CRC restores nothing', async function(){
+            stampedXRepublishedY(120, { crc32: CRC_B });
+            const { sql, args } = await captureResetQuery();
+            assert.deepStrictEqual(db.resetTargets(sql, args), []);
+        });
+
+        it('an orphaned chunk of the head\'s own encoding still restores it beside a republish', async function(){
+            const x = stampedXRepublishedY(310, { totalChunks: 3, crc32: CRC_B });
+            const { sql, args } = await captureResetQuery();
+            assert.deepStrictEqual(db.resetTargets(sql, args), [x]);
         });
     });
 });

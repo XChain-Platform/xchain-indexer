@@ -81,7 +81,6 @@ const SYNC_ROOT = process.env.XCHAIN_SYNC_PATH
     : path.resolve(__dirname, '..', '..', '..', '..', 'xchain-sync');
 const REQUIRE_SIBLINGS = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
 
-
 let rollback;
 function rollbackHooks() {
 
@@ -244,6 +243,12 @@ describe('Rollback coverage guard @regression', function () {
             `Non-index_* tables classified as inert lookups: ${offenders.join(', ')}. ` +
             `The inert-lookup argument (ids only ever referenced by id, never hashed) is a ` +
             `property of the dedup lookup tables; anything else needs a real rollback mode.`);
+    });
+
+    it('names every validator_rewards derive_block_index writer in the registry note', function () {
+        const note = lifecycle.entry('validator_rewards').note;
+        for (const writer of ['anchor/archive', 'recovery re-materialization', 'rollcall_publish'])
+            assert.ok(note.includes(writer), `validator_rewards note omits ${writer}`);
     });
 });
 describe('Rollback coverage guard @regression', function () {
