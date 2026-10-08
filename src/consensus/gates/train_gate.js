@@ -175,29 +175,15 @@ function readManifestTrainActivation(manifest){
     };
 }
 
-// THE PRE-APPLY VERDICT. Called before a block is applied, and the only thing that
-// may stop it. Three outcomes:
-//
-//   clear   - nothing requires a rule set this build does not implement. Apply.
-//   pending - the manifest requires one, and the boundary is still ahead. Apply, and
-//             say so loudly on every observability surface until it is resolved.
-//   halt    - the boundary is reached, or cannot be proven to be ahead. Do not apply.
-//
-// `required` is the manifest block from readManifestTrainActivation (or a raw
-// manifest, which is read here for convenience). `height` is the BTC height of the
-// block about to be applied, or null when this service has no BTC clock.
-function evaluateTrainActivation(opts){
-    let o = opts || {};
-    let network = (o.network === null || o.network === undefined) ? null : String(o.network);
-    let activation = o.activation || TRAIN_ACTIVATION;
-    let clock = asHeight(o.height);
-    let active = resolveRuleSet(clock, network, activation);
-
+function normalizeTrainRequirement(o){
     let required = o.required !== undefined ? o.required : readManifestTrainActivation(o.manifest);
     if(required && required.ruleSetVersion === undefined && required.malformed === undefined)
         required = readManifestTrainActivation(required);
+    return required;
+}
 
-    const base = {
+function baseTrainVerdict(active, network, clock){
+    return {
         status: 'clear',
         activeRuleSet: active,
         requiredRuleSet: null,
@@ -207,30 +193,12 @@ function evaluateTrainActivation(opts){
         classification: null,
         reason: null
     };
+}
 
-    if(!required) return base;
-
-    // A manifest block this code cannot read is fail-closed. The alternative is
-    // treating an unreadable requirement as no requirement, which is the silent
-    // fork the whole section exists to prevent.
-    if(required.malformed){
-        return Object.assign(base, {
-            status: 'halt',
-            reason: 'train_activation: the release manifest carries a trainActivation block this build ' +
-                    'cannot read (' + required.malformed + '), so the required rule set cannot be ' +
-                    'determined; refusing to advance'
-        });
-    }
-
+// The build does NOT implement the required rule set, so everything here is about
+// whether the boundary has been crossed yet.
+function unsupportedTrainVerdict(base, required, network, clock){
     const wanted = required.ruleSetVersion;
-    base.classification = required.classification || null;
-
-    // The manifest requires a rule set this build implements. Nothing to do, at any
-    // height, with or without a clock: this node can apply both sides of the boundary.
-    if(implementedRuleSets(activation).indexOf(wanted) !== -1) return base;
-
-    // From here the build does NOT implement the required rule set. Everything below
-    // is about whether the boundary has been crossed yet.
     let at = required.heights ? asHeight(required.heights[network]) : null;
 
     const carries = 'platform version ' + wanted + ' carries it; recover with the node update command, ' +
@@ -278,6 +246,48 @@ function evaluateTrainActivation(opts){
                 at + ' on ' + network + ', which this build does not implement. This node will HALT at that ' +
                 'height, in ' + (at - clock) + ' block(s). ' + carries
     });
+}
+
+// THE PRE-APPLY VERDICT. Called before a block is applied, and the only thing that
+// may stop it. Three outcomes:
+//
+//   clear   - nothing requires a rule set this build does not implement. Apply.
+//   pending - the manifest requires one, and the boundary is still ahead. Apply, and
+//             say so loudly on every observability surface until it is resolved.
+//   halt    - the boundary is reached, or cannot be proven to be ahead. Do not apply.
+//
+// `required` is the manifest block from readManifestTrainActivation (or a raw
+// manifest, which is read here for convenience). `height` is the BTC height of the
+// block about to be applied, or null when this service has no BTC clock.
+function evaluateTrainActivation(opts){
+    let o = opts || {};
+    let network = (o.network === null || o.network === undefined) ? null : String(o.network);
+    let activation = o.activation || TRAIN_ACTIVATION;
+    let clock = asHeight(o.height);
+    let required = normalizeTrainRequirement(o);
+    const base = baseTrainVerdict(resolveRuleSet(clock, network, activation), network, clock);
+
+    if(!required) return base;
+
+    // A manifest block this code cannot read is fail-closed. The alternative is
+    // treating an unreadable requirement as no requirement, which is the silent
+    // fork the whole section exists to prevent.
+    if(required.malformed){
+        return Object.assign(base, {
+            status: 'halt',
+            reason: 'train_activation: the release manifest carries a trainActivation block this build ' +
+                    'cannot read (' + required.malformed + '), so the required rule set cannot be ' +
+                    'determined; refusing to advance'
+        });
+    }
+
+    base.classification = required.classification || null;
+
+    // The manifest requires a rule set this build implements. Nothing to do, at any
+    // height, with or without a clock: this node can apply both sides of the boundary.
+    if(implementedRuleSets(activation).indexOf(required.ruleSetVersion) !== -1) return base;
+
+    return unsupportedTrainVerdict(base, required, network, clock);
 }
 
 module.exports = {
