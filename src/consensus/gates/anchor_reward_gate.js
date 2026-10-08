@@ -12,17 +12,17 @@
  *
  * Anchor-reward re-derivation flag-day.
  *
- * Gates when the validator anchor reward stops being trusted from the hub's
- * `pushvalidatorrewards` JSON-RPC and is instead derived by every indexer from
- * on-chain ANCHOR bytes. At/above this height the hub emits a publisher-bearing
+ * Gates when the validator anchor reward stops being trusted from the hub over
+ * a key-authenticated JSON-RPC (since retired) and is instead derived by every
+ * indexer from on-chain ANCHOR bytes. At/above this height the hub emits a publisher-bearing
  * ANCHOR bundle (v0 since the version restart, root-bearing by construction;
  * the retired v4/v5 pair is what split rootless from root-bearing) carrying
  * the elected publisher pubkey
  * plus a 2f+1 `oracle_publish` attestation (XANCPUB) over the reward tuple; the
  * indexer verifies that quorum and credits the publisher with
  * ANCHOR_REWARD_AMOUNT, a frozen consensus constant never taken from the wire.
- * Below the threshold the old push path stands and a publisher-bearing bundle
- * is rejected.
+ * Below the threshold the legacy anchor wire applies and a publisher-bearing
+ * bundle is rejected.
  *
  * The credited reward is a COLLECT-spendable `validator_rewards` row, so this
  * is consensus-relevant and must deploy to the hub and every indexer

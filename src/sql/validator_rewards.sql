@@ -43,7 +43,8 @@ CREATE TABLE validator_rewards (
     -- orphans the block that MINTED the row while leaving block_index = S below the delete's
     -- scope: the reward survives a reorg a clean replay would not yet have derived, and it stays
     -- COLLECT-spendable. Stamping the creating block here gives rollback a second, correct
-    -- scoping key (DELETE ... WHERE derive_block_index >= H). NULL for every reward whose
+    -- scoping key (DELETE ... WHERE derive_block_index >= H). rollcall_publish is the third
+    -- writer to stamp it (earn = epoch height, materialized at the epoch close block). NULL for every reward whose
     -- earn-block IS its materialization block (oracle_*, attest_fee, attest_bcast, the legacy hub push, and
     -- the DOGE-side anchor write below the derive flag-day), so the column changes nothing until
     -- ANCHOR_REWARD_DERIVE_ACTIVATION arms.

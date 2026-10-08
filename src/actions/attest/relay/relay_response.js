@@ -59,7 +59,8 @@ module.exports = {
         let request = lookup.request;
         error       = lookup.error;
 
-        error = await this.relayResponseQuorumError(f, request, wire, error);
+        let quorum = await this.relayResponseQuorumError(f, request, wire, error);
+        error = quorum.error;
 
         this.stampRelayResponseRow(data, f, request, wire, error);
 
@@ -72,7 +73,8 @@ module.exports = {
         await this.indexerDb.createAttestationResponse(data);
 
         if(data['STATUS'] === 'valid')
-            await this.settleRelayResponse(request, data, requestId, responseStatus);
+            await this.settleRelayResponse(
+                request, data, requestId, responseStatus, quorum.validSigners);
 
         await this.mapper.createMappings(data);
     },
@@ -155,6 +157,7 @@ module.exports = {
     async relayResponseQuorumError(f, request, wire, error){
         let { requestId, homeResponseIdx, responseStatus, meta, snapshotBlock } = f;
         let { sigs, responseHash } = wire;
+        let validSigners = [];
         if(!error){
             let canonical = this.relayResponseCanonical({
                 requestId, snapshotBlock, network: this.config['NETWORK'],
@@ -166,13 +169,15 @@ module.exports = {
             let quorum = await this.verifyRelayQuorum(canonical, sigs, snapshotBlock, this.config['NETWORK']);
             if(!quorum.ok)
                 error = 'invalid: cross_chain quorum (' + quorum.detail + ')';
+            else
+                validSigners = quorum.validSigners;
         }
 
-        return error;
+        return { error, validSigners };
     },
 
     stampRelayResponseRow(data, f, request, wire, error){
-        let { requestId, homeResponseIdx, responseStatus, meta } = f;
+        let { requestId, homeResponseIdx, responseStatus, meta, snapshotBlock } = f;
         let { responsePayload, responseHash } = wire;
         data['REQUEST_ID']       = requestId;
         // attests.provider_id is NOT NULL, and a v4 does not carry the provider on the
@@ -184,6 +189,7 @@ module.exports = {
         data['RESPONSE_STATUS']  = responseStatus;
         data['META']             = meta;
         data['RESPONSE_HASH']    = responseHash;
+        data['SNAPSHOT_BLOCK']   = snapshotBlock;
         data['VALID_SIGS']       = 0;
         data['STATUS']           = (error) ? error : 'valid';
         // The signatures on this row are cross_chain relay signatures, not the
@@ -194,17 +200,11 @@ module.exports = {
     },
 
     // The terminal flip, the origin-side fee settle and the contract callback.
-    async settleRelayResponse(request, data, requestId, responseStatus){
+    async settleRelayResponse(request, data, requestId, responseStatus, validSigners){
         let newRequestStatus = (responseStatus === 'ok') ? 'fulfilled' : 'errored';
         await this.indexerDb.updateAttestationRequestStatus(requestId, newRequestStatus, data['BLOCK_INDEX']);
 
-        // Settle the fee the origin v0 escrowed, on the same terms a local
-        // fulfillment would. The responsible set it splits to is the ORIGIN row's,
-        // which is empty off BTC, so the fee lands in the REWARD pool and no
-        // per-validator reward row is written; paying the BTC-staked validators
-        // out of an origin-chain pool is Phase 3 economics work, not something
-        // this relay leg needs to solve.
-        await this.settleRequestFee(request, data, newRequestStatus);
+        await this.settleRequestFee(request, data, newRequestStatus, validSigners);
 
         // Fire the contract callback here, on the chain the contract lives on.
         // Same savepoint discipline as the v1 path: a failing callback must not
