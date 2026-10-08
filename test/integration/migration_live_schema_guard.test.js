@@ -30,7 +30,7 @@
  * exactly what a live database presents: the converged shapes that must be
  * baselined, and every partial or absent shape that must be left to run.
  *
- * Requires explicit TEST_DB_* credentials. Run it with bin/run-db-tiers.sh.
+ * Requires an explicit TEST_DB_* endpoint. Run it with bin/run-db-tiers.sh.
  */
 
 'use strict';
@@ -62,6 +62,7 @@ function scopedDbName() {
 const DB_NAME = scopedDbName();
 const MIGRATIONS_DIR = path.join(__dirname, '../../src/sql/migrations');
 
+const MIRROR    = '2026-06-10-mirror-id-autoincrement-repair.sql';
 const PUBKEYS   = '2026-07-24-pubkeys-widen-uncompressed.sql';
 const DERIVE    = '2026-08-12-validator-rewards-derive-block-index.sql';
 const QUALIFIER = '2026-08-24-validator-rewards-round-qualifier.sql';
@@ -86,10 +87,23 @@ const LOG_TABLE = (extra) =>
     'CREATE TABLE anchor_reward_reconcile_log (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, ' +
     'note VARCHAR(20) NULL' + extra + ') ENGINE=InnoDB';
 const simpleTable = (name) => 'CREATE TABLE `' + name + '` (id INT NOT NULL PRIMARY KEY) ENGINE=InnoDB';
+const MIRROR_TABLES = ['price_snapshots', 'cross_chain_matches', 'capability_snapshots', 'state_checkpoints'];
+const mirrorTable = (name, type = 'BIGINT', extra = ' AUTO_INCREMENT') =>
+    'CREATE TABLE `' + name + '` (id ' + type + ' NOT NULL' + extra + ' PRIMARY KEY) ENGINE=InnoDB';
 
 // Each case: the migration it is evaluated for, the DDL that builds the live shape,
 // and whether the guard must baseline it (true) or leave it to run (false).
 const CASES = [
+    { name: 'all mirror ids carry BIGINT AUTO_INCREMENT', file: MIRROR, baseline: true,
+      ddl: MIRROR_TABLES.map(name => mirrorTable(name)) },
+    { name: 'one mirror id lacks AUTO_INCREMENT', file: MIRROR, baseline: false,
+      ddl: MIRROR_TABLES.map(name => mirrorTable(name, 'BIGINT', name === 'state_checkpoints' ? '' : ' AUTO_INCREMENT')) },
+    { name: 'one mirror id is not BIGINT', file: MIRROR, baseline: false,
+      ddl: MIRROR_TABLES.map(name => mirrorTable(name, name === 'state_checkpoints' ? 'INT' : 'BIGINT')) },
+    { name: 'one mirror table is absent', file: MIRROR, baseline: false,
+      ddl: MIRROR_TABLES.slice(0, 3).map(name => mirrorTable(name)) },
+    { name: 'all mirror tables are absent', file: MIRROR, baseline: false, ddl: [] },
+
     { name: 'pubkeys at the full uncompressed width', file: PUBKEYS, baseline: true,
       ddl: ['CREATE TABLE pubkeys (pubkey VARCHAR(130) NOT NULL PRIMARY KEY)'] },
     { name: 'pubkeys wider than the target', file: PUBKEYS, baseline: true,
@@ -245,9 +259,6 @@ function schemaHarness() {
     });
 
     before(async function () {
-        assert.notStrictEqual(process.env.TEST_DB_PASS, undefined,
-            'TEST_DB_PASS is required; run this real-MariaDB suite with bin/run-db-tiers.sh');
-        assert.ok(DB_PASS, 'TEST_DB_PASS must be non-empty for this real-MariaDB suite');
         h.admin = await mariadb.createConnection({
             host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS,
         });
