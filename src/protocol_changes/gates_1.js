@@ -68,6 +68,10 @@ addGate('anchor_activation.ANCHOR_ACTIVATION', 'height', {
     testnet: 67858600,
     regtest: 0,
 });
+// Below-activation anchors become 'unverified'; unarmed until the cut sets it with the reindex.
+addGate('anchor_preactivation_status_activation.ANCHOR_PREACTIVATION_STATUS_ACTIVATION', 'height', { mainnet: UNARMED, testnet: UNARMED, regtest: 0 });
+// anchor_archive_fold_term_activation
+addGate('anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': UNARMED, 'LTC:testnet': UNARMED, 'DOGE:testnet': UNARMED, testnet: UNARMED, regtest: 0 });
 
 // archive_batch_author_activation
 // Per-network activation, interpreted against the DOGE block_index of the batch's

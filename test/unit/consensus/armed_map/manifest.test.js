@@ -124,7 +124,8 @@ describe('armed_map/manifest: completeness guard', function () {
         // A row nobody exports is read only through activeAt() by its literal
         // key: that is exactly the W4 census plus the registry-only rows, one row
         // per stem, and a new row that no module and no list names still reds here.
-        const stems = REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS, ['price_landed_strict_activation']);
+        const stems = REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS,
+            ['price_landed_strict_activation', 'anchor_preactivation_status_activation']);
         const unexported = [...keys].filter((k) => !k.startsWith('protocol_changes.') && !k.startsWith('xchain-vm.') && !exported.has(k));
         const replaced = [...keys].filter((k) => stems.includes(k.slice(0, k.lastIndexOf('.'))));
         assert.strictEqual(replaced.length, stems.length + 1,
@@ -174,17 +175,30 @@ describe('armed_map/manifest: collectRows', function () {
         assert.strictEqual(res.ok, true, res.reason);
         assert.deepStrictEqual(res.rows.map((r) => r[0]), manifest.ENTRIES.map((e) => e[0]));
         for (const [, value] of res.rows) canonicalValue(value);
-        assert.strictEqual(res.rows.length, 375);
+        assert.strictEqual(res.rows.length, 379);
     });
 
     it('carries the three row families the design names', function () {
         const keys = rowKeys();
         assert.ok(keys.has('state_commitment_activation.STATE_COMMITMENT_ACTIVATION'), 'an activation map');
+        assert.ok(keys.has('anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION'), 'the anchor archive fold-term activation map');
         assert.ok(keys.has('protocol/constants.XBRIDGE_MAX_PER_BLOCK'), 'a fixed-carrier constant');
         assert.ok(keys.has('stateHash.DEACTIVATION_TABLES'), 'a fixed-carrier array');
         assert.ok(keys.has('protocol_changes.changes.SEND'), 'a ProtocolChanges row');
         assert.ok(keys.has('protocol_changes.CONSENSUS_VERSION'), 'the registry\'s own constant');
         assert.ok(keys.has('mirror_admission_activation.CHAIN_CODE_RE'), 'a RegExp row');
+    });
+
+    it('carries the anchor archive fold-term heights', function () {
+        const byKey = new Map(manifest.collectRows().rows);
+        assert.deepStrictEqual(byKey.get('anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION'), {
+            mainnet: 9999999999,
+            'BTC:testnet': 9999999999,
+            'LTC:testnet': 9999999999,
+            'DOGE:testnet': 9999999999,
+            testnet: 9999999999,
+            regtest: 0,
+        });
     });
 
     it('carries the per-chain LIST owner testnet heights', function () {

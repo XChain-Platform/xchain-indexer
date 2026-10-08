@@ -67,11 +67,11 @@ addGate('anchor_reward_activation.ANCHOR_REWARD_AMOUNT', 'constant', '10.0000000
 // restart, which always carries the PUBLISHER|ATTEST_SIG_COUNT|... tail; the
 // retired v6 was that tail bolted onto a tail-less v1), attested
 // over an 'anchor_archive' XANCPUB canonical) and the indexer derives the
-// anchor_archive reward from those bytes; the key-authenticated
-// pushvalidatorrewards rail is rejected for anchor_archive, closing the
-// insider-with-key forge surface the per-chain flag-day left open. Below the
-// threshold the legacy tail-less archive wire and the push path stand, and a
-// publisher-bearing archive head is rejected.
+// anchor_archive reward from those bytes; the retired key-authenticated
+// hub rail no longer feeds anchor_archive, closing the insider-with-key forge
+// surface the per-chain flag-day left open. Below the threshold the legacy
+// tail-less archive wire applies, and a publisher-bearing archive head is
+// rejected.
 addGate('anchor_reward_activation.ARCHIVE_REWARD_ACTIVATION', 'height', {
     mainnet: 963000,      // ARMED 2026-07-16, RE-PINNED 2026-08-12 off block 969500 onto the mainnet pre-freeze deploy-train boundary (tip 959,853 on 07-27 at ~144 blocks/day + 21d); deploy every consumer before this height
     testnet: 0,

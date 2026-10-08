@@ -14,7 +14,8 @@
     "validator": "validator-broadcast on-chain action: decoded + indexed but NOT user-encodable (ANCHOR/ATTEST/NODEPROOF/ROLLCALL/SLASH)",
     "mirror-injected": "indexer-injected from the hub mirror, NOT chain-decoded (XCALL/XEXEC/CROSS_SETTLE)",
     "lifecycle": "system-generated sub-action, never a decoded wire tx (matches/expiries/dispense)",
-    "explorer-legacy-render": "render-only in the explorer (legacy order/dispenser cancel+edit views); no decoder/indexer twin"
+    "explorer-legacy-render": "render-only in the explorer (legacy order/dispenser cancel+edit views); no decoder/indexer twin",
+    "settlement-anchor": "indexer-minted anchor row for a bridge-policy or shared-list settlement record (XPOLICY/LIST_SHARE); never a decoded wire tx and never dispatched, only rendered by the explorer"
   },
   "notes": [
     "The indexer protocol_changes registry ALSO holds non-action feature-gate flags: any this.addChange(...) entry whose name is NOT a key in this manifest's 'actions' map is a feature gate, not an action, and is excluded here. As of this pass that set is CONTROLLER_GUARD, CROSS_CHAIN_DEX, ISSUANCE_FEE, ISSUANCE_FEE_EMISSION_EXEMPT, LOCK_MAX_SUPPLY_EXACT, UNIFIED_FEES, VM_ACTIONS, VM_BALANCE_TOKENINFO, VM_BANNED_ASYNC, DEPLOY_BASE64_CODE, CROSS_CHAIN_ROYALTY, ISSUE_MINT_SUPPLY_CUMULATIVE_CAP, SLEEP_RESPECTS_LOCK_SLEEP, COINPAY_EXPIRE_TOKEN_AMOUNT, UNSTAKE_COOLDOWN_COMPLETION_ACTION, DELEGATE_REVOKE_NO_REINSERT, CONTRACT_INDEX_CANONICAL, SLASH_BURNS_PENDING_STAKE, NATIVE_FEE_PRICE_TIME_GATE, DEPLOY_INIT_STRICT, but the enumeration is illustrative, not authoritative: trust the exclusion RULE above it, not this list, since new flag-days are added to the registry without a manifest update. The indexer conformance guard compares the dispatch switch, not the registry.",
@@ -252,6 +253,10 @@
       "explorerRender": true,
       "walletForm": true
     },
+    "LIST_SHARE": {
+      "category": "settlement-anchor",
+      "explorerRender": true
+    },
     "MESSAGE": {
       "category": "wire-user",
       "wireDecoded": true,
@@ -431,6 +436,10 @@
     "XEXEC": {
       "category": "mirror-injected",
       "indexerHandled": true,
+      "explorerRender": true
+    },
+    "XPOLICY": {
+      "category": "settlement-anchor",
       "explorerRender": true
     }
   }

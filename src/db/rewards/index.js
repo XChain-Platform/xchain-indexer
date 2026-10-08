@@ -206,6 +206,8 @@ module.exports = {
         // Insert the reward (idempotent via UNIQUE INDEX on
         // source_id+signing_pubkey_id+reward_type+round_reference+round_qualifier).
         // Deterministic writers upsert so their amount/block_index always win.
+        // deriveBlockIndex comes from the three materialize-later writers: the anchor/archive
+        // derivation, recovery-restored rewards and rollcall_publish.
         let derive_block_index = (deriveBlockIndex === undefined || deriveBlockIndex === null)
             ? null : Number(deriveBlockIndex);
         // NEVER NULL. MariaDB treats NULLs as distinct in a UNIQUE index, so a nullable
