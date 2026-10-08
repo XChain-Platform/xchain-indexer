@@ -271,7 +271,7 @@ module.exports = {
         let maxAge  = parseInt(maxAgeSeconds);
         let win = preloadWindow(this, blockIndex, refTime);
         let snapshotAge = ageSeconds.secondsBasisActive(this, blockIndex)
-            ? await ageSeconds.readSnapshotAgeSeconds(this, blockIndex, refTime, win)
+            ? await ageSeconds.readAgeSeconds(this, blockIndex, refTime, win)
             : await readSnapshotAge(this, blockIndex, win);
 
         // True when a snapshot is older than the configured max age relative to the

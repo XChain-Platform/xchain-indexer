@@ -341,11 +341,6 @@ addGate('price_wire_trailing_activation.PRICE_WIRE_TRAILING_ACTIVATION', 'height
     regtest: 0,
 });
 
-// oracle_snapshot_age_seconds_activation
-// Per-chain activation height, interpreted as the processing chain's OWN
-// block_index. At/after the height getSnapshotAge() reports consensus seconds
-// since the latest admitted finalized snapshot; below it the legacy block-count
-// query stays. Every venue stays inert until a release pins its height.
 addGate('oracle_snapshot_age_seconds_activation.ORACLE_SNAPSHOT_AGE_SECONDS_ACTIVATION', 'height', {
     mainnet: UNPINNED,
     'BTC:testnet': UNPINNED,

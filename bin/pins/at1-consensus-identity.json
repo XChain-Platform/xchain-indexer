@@ -393,7 +393,7 @@
       "xchain-vm.VM_LINT_HARDENING_GATE_BLOCK_TIME": "4881c98cf6a1bd69e24e05861fb488a51a4a95dc793e7edb1aed9fa17026147c",
       "xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION": "1f839923f9a872c529fa301b98f3eeead1487d96912e6220d4dba8a8100e946f"
     },
-    "armed_map_row_count": 374,
+    "armed_map_row_count": 375,
     "gates_field_hash": "7563e42d72a80c0a9fdf36096f171efd59fa1449a7b443041705bc2d0d1278ed",
     "carrier_logic_digest": "356bbe95b46839f5806e611a76031eddd14fe74e0001e75c37ee695c8fad4f0a",
     "consensus_rules_digest": "227f96529070d083038a3695fb863c4ab08611864b9dfcc1b619f75ec67c91d8",
@@ -835,7 +835,7 @@
       "xchain-vm.VM_LINT_HARDENING_GATE_BLOCK_TIME": "4881c98cf6a1bd69e24e05861fb488a51a4a95dc793e7edb1aed9fa17026147c",
       "xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION": "1f839923f9a872c529fa301b98f3eeead1487d96912e6220d4dba8a8100e946f"
     },
-    "armed_map_row_count": 374,
+    "armed_map_row_count": 375,
     "gates_field_hash": "7563e42d72a80c0a9fdf36096f171efd59fa1449a7b443041705bc2d0d1278ed",
     "carrier_logic_digest": "356bbe95b46839f5806e611a76031eddd14fe74e0001e75c37ee695c8fad4f0a",
     "consensus_rules_digest": "8568e6221e83de9d7f3a43281368257c78d88caa6ed55b1c3c371aa4d4e6ccae",
@@ -914,6 +914,6 @@
   "unarmed_flag_days_2026_10_07_note": "Re-pinned after three indexer-only height rows joined the registry for the dispenser delay clock, policy refusal records and price wire trailing-byte refusal. Both readings gained the same three UNARMED mainnet and testnet rows with regtest active from genesis; only armed_map_fingerprint, armed_map_rows and armed_map_row_count (366 to 369) moved.",
   "train_rule_set_resolution_note": "Re-pinned after train rule-set resolution began selecting the reached activation with the greatest height: only carrier_logic_digest moved, through the train_activation entry of bin/pins/carrier-logic.json; every other stored field re-read byte-identical in both the bare and armed blocks.",
   "apply_length_meter_note": "2026-10-07: both code readings were regenerated after adding the APPLY_LENGTH_METER protocol row, its two flag-time constants, and the xchain-vm activation mirror. The armed map grows from 369 to 373 rows; its fingerprint and the protocol_changes carrier digest move, while the coin registry, rules digest, and GATES field remain unchanged.",
-  "oracle_snapshot_age_seconds_note": "Re-pinned after the UNPINNED seconds-basis snapshot age row joined the registry. Both readings gained the same null-valued row on every network; only armed_map_fingerprint, armed_map_rows and armed_map_row_count (373 to 374) moved.",
+  "oracle_snapshot_age_seconds_note": "Re-pinned after the UNPINNED seconds-basis snapshot age row joined the merged registry. Both readings gained the same null-valued row on every network; only armed_map_fingerprint, armed_map_rows and armed_map_row_count (374 to 375) moved.",
   "cross_chain_offer_list_export_note": "2026-10-07: both code readings were regenerated after adding the registry-only CROSS_CHAIN_OFFER_LIST_EXPORT height row. The armed map grows from 373 to 374 rows; only its row map, row count, and fingerprint move."
 }
