@@ -55,7 +55,7 @@ const EXPECTED_VM_STRIPPED_GLOBAL_NAMES = [
 // reach and which therefore copy O(n) elements for a flat 1 gas.
 const EXPECTED_VM_CONSENSUS_RULES = [
     'banned-async', 'banned-generator', 'banned-literal', 'banned-math',
-    'banned-rest', 'banned-wasm', 'invalid-type', 'reserved-identifier',
+    'banned-rest', 'banned-wasm', 'banned-with', 'invalid-type', 'reserved-identifier',
     'unsupported-syntax'
 ];
 // The sandbox neuters more than the global strip set: prototype-method strips
