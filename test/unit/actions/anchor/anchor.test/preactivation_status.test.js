@@ -8,9 +8,9 @@
 // license (without AGPL source-disclosure terms) is available -
 // contact legal@dankest.llc.
 //
-// ANCHOR_PREACTIVATION_STATUS_ACTIVATION: an anchor mined below ANCHOR_ACTIVATION
-// is stamped with the node-class status 'unverified' once the gate is active, so
-// the BTC reward derivation reads the row as a candidate on every node.
+// An anchor mined below ANCHOR_ACTIVATION is stamped with the node-class status
+// 'unverified' once the table's PREACTIVATION_STATUS selector is active, so the
+// BTC reward derivation reads the row as a candidate on every node.
 
 process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
@@ -23,7 +23,8 @@ const Anchor = require('../../../../../src/actions/anchor/index.js');
 const gateRegistry = require('../../../../../src/consensus/gate_registry');
 const binding = require('../../../../../src/consensus/doge_peer_clients/anchor_proof_client/binding.js');
 
-const GATE = 'anchor_preactivation_status_activation.ANCHOR_PREACTIVATION_STATUS_ACTIVATION';
+const GATE = 'anchor_activation.ANCHOR_ACTIVATION';
+const SELECTOR = 'PREACTIVATION_STATUS';
 const ANCHOR_HEIGHTS = gateRegistry.get('anchor_activation.ANCHOR_ACTIVATION');
 
 describe('Anchor pre-activation status gate @regression @tier3', function () {
@@ -34,7 +35,8 @@ describe('Anchor pre-activation status gate @regression @tier3', function () {
             { config: Object.assign({}, indexer.config, { NETWORK: network }) }));
     }
     function gateOn(height) {
-        activeAt.callsFake((key, ...rest) => (key === GATE ? Number(rest[2]) >= height : realActiveAt(key, ...rest)));
+        activeAt.callsFake((key, ...rest) =>
+            (key === GATE && rest[1] === SELECTOR ? Number(rest[2]) >= height : realActiveAt(key, ...rest)));
     }
     async function parseAt(height) {
         const data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 0, COIN: 'DOGE', BLOCK_INDEX: height });
@@ -53,9 +55,9 @@ describe('Anchor pre-activation status gate @regression @tier3', function () {
 
     it('is registered unarmed on mainnet and testnet and armed from genesis on regtest', function () {
         const heights = gateRegistry.get(GATE);
-        assert.ok(heights.mainnet >= 9999999999);
-        assert.ok(heights.testnet >= 9999999999);
-        assert.strictEqual(heights.regtest, 0);
+        assert.ok(heights[SELECTOR + ':mainnet'] >= 9999999999);
+        assert.ok(heights[SELECTOR + ':testnet'] >= 9999999999);
+        assert.strictEqual(heights[SELECTOR + ':regtest'], 0);
     });
 
     it('keeps the old text byte for byte while the gate is inactive', async function () {

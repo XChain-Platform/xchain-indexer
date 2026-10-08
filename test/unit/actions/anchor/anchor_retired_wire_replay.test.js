@@ -145,7 +145,8 @@ describe('ANCHOR retired wires on a from-genesis replay @regression', function (
         const below = ANCHOR_HEIGHTS.testnet - 1;
         const real = gateRegistry.activeAt.bind(gateRegistry);
         sinon.stub(gateRegistry, 'activeAt').callsFake((key, ...rest) =>
-            (key === 'anchor_preactivation_status_activation.ANCHOR_PREACTIVATION_STATUS_ACTIVATION' ? true : real(key, ...rest)));
+            (key === 'anchor_activation.ANCHOR_ACTIVATION' && rest[1] === 'PREACTIVATION_STATUS'
+                ? true : real(key, ...rest)));
         const data = createBaseData({ ACTION: 'ANCHOR', FORMAT: 5, COIN: 'DOGE', BLOCK_INDEX: below, ACTION_INDEX: 12 });
         await handler.parse(v5Params(), data, null);
         assert.strictEqual(data['STATUS'], 'unverified');
