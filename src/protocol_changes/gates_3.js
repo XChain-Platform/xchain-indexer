@@ -96,12 +96,12 @@ addGate('protocol/constants.CHECKPOINT_COMMITMENT_ACTIVATION', 'height', {
 });
 
 // ANCHOR_REWARD_ACTIVATION (anchor-reward re-derivation): the flag-day at/above which the validator
-// anchor reward stops being TRUSTED from the hub's `pushvalidatorrewards` JSON-RPC and is instead
+// anchor reward stops being TRUSTED from the hub over a key-authenticated JSON-RPC (since retired) and is instead
 // DERIVED by every indexer from the on-chain ANCHOR bytes. Post-flag-day the hub emits a publisher-
 // bearing ANCHOR (v4 rootless / v5 root-bearing) carrying the elected publisher pubkey plus a 2f+1
 // `oracle_publish` attestation (XANCPUB) over the reward tuple; the indexer verifies that quorum and
 // credits the publisher with ANCHOR_REWARD_AMOUNT (a frozen consensus constant, NEVER from the wire).
-// Below the flag-day the old push path stands and v4/v5 anchors are rejected. Consensus-relevant (the
+// Below the flag-day the legacy anchor wire applies and v4/v5 anchors are rejected. Consensus-relevant (the
 // credited reward becomes a COLLECT-spendable per-block ledger row), so it must deploy hub + ALL
 // indexers atomically. Like CHECKPOINT_COMMITMENT_ACTIVATION / STAKE_WEIGHTED_QUORUM_ACTIVATION it gates
 // on the BTC-anchored `snapshot_block` carried by every ANCHOR canonical. Kept equal to the local
@@ -120,11 +120,11 @@ addGate('protocol/constants.ANCHOR_REWARD_ACTIVATION', 'height', {
 addGate('protocol/constants.ANCHOR_REWARD_AMOUNT', 'constant', '10.00000000');
 
 // ARCHIVE_REWARD_ACTIVATION (archive-reward re-derivation): the flag-day at/above which the
-// anchor_archive reward stops riding the key-authenticated `pushvalidatorrewards` rail and is instead
+// anchor_archive reward stops riding the key-authenticated hub JSON-RPC rail (since retired) and is instead
 // DERIVED by every indexer from the on-chain ANCHOR v6 bytes (the v1 archive anchor plus the same
 // PUBLISHER + 2f+1 XANCPUB attestation tail as v4/v5, attested over an 'anchor_archive' canonical
 // keyed on MATCH_BATCH_SEQ). This retires the last insider-with-key reward-forge surface the
-// per-chain ANCHOR_REWARD flag-day left open. Below the flag-day the legacy v1 + push path stands
+// per-chain ANCHOR_REWARD flag-day left open. Below the flag-day the legacy v1 anchor wire applies
 // and v6 anchors are rejected. Consensus-relevant, same deploy rules and snapshot_block gating as
 // ANCHOR_REWARD_ACTIVATION; kept equal to the local anchor_reward_activation.* rows of the
 // registry part shared_rows_1.js (hub and indexer) by the activation-constants parity suite.
