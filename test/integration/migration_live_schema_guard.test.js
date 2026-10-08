@@ -45,6 +45,7 @@ const path    = require('path');
 const mariadb = require('mariadb');
 
 const Database = require('../../src/db');
+const { assertNoLiveColumnLoss } = require('../../src/db/database/migration_live_schema_guard.js');
 const DB_HOST = process.env.TEST_DB_HOST || '127.0.0.1';
 const DB_PORT = parseInt(process.env.TEST_DB_PORT || '3306');
 const DB_USER = process.env.TEST_DB_USER || 'root';
@@ -69,6 +70,7 @@ const QUALIFIER = '2026-08-24-validator-rewards-round-qualifier.sql';
 const BRIDGE    = '2026-09-12-bridge-tables.sql';
 const LISTS     = '2026-09-30-list-share-tables.sql';
 const TICK      = '2026-09-22-oracle-prices-widen-tick.sql';
+const NULLABLE  = '2026-07-05-contract-index-columns-nullable.sql';
 
 function testIndexer() {
     return {
@@ -232,6 +234,62 @@ const ASSERTIONS = [
 const SETTLED = BRIDGE_TABLES.concat(LIST_TABLES).map(simpleTable);
 const NARROW_TICK = 'CREATE TABLE oracle_prices (id INT NOT NULL PRIMARY KEY, tick VARCHAR(100) NOT NULL)';
 
+const LIVE_COLUMN_CASES = [
+    { name: 'AUTO_INCREMENT',
+      ddl: 'CREATE TABLE guard_probe (value BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY)',
+      modify: 'BIGINT UNSIGNED NOT NULL', refuses: /strips AUTO_INCREMENT/ },
+    { name: 'DEFAULT', ddl: 'CREATE TABLE guard_probe (value INT NOT NULL DEFAULT 7)',
+      modify: 'INT NOT NULL', refuses: /strips DEFAULT 7/ },
+    { name: 'ON UPDATE',
+      ddl: 'CREATE TABLE guard_probe (value TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)',
+      modify: 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP', refuses: /strips ON UPDATE/ },
+    { name: 'COMMENT', ddl: "CREATE TABLE guard_probe (value BIGINT UNSIGNED COMMENT 'kept')",
+      modify: 'BIGINT UNSIGNED', refuses: /strips COMMENT/ },
+    { name: 'generation expression',
+      ddl: 'CREATE TABLE guard_probe (base INT NOT NULL, value INT AS (base + 1) VIRTUAL)',
+      modify: 'INT', refuses: /strips the generation expression/ },
+    { name: 'integer width', ddl: 'CREATE TABLE guard_probe (value BIGINT NOT NULL)',
+      modify: 'INT NOT NULL', refuses: /narrows the type \(bigint -> int\)/ },
+    { name: 'integer signedness', ddl: 'CREATE TABLE guard_probe (value BIGINT NOT NULL)',
+      modify: 'BIGINT UNSIGNED NOT NULL', refuses: /narrows the type \(bigint -> bigint unsigned\)/ },
+    { name: 'character width',
+      ddl: 'CREATE TABLE guard_probe (value VARCHAR(250) CHARACTER SET utf8mb4 NOT NULL)',
+      modify: 'VARCHAR(100) CHARACTER SET utf8mb4 NOT NULL',
+      refuses: /narrows the type \(varchar\(250\) -> varchar\(100\)\)/ },
+    { name: 'decimal precision', ddl: 'CREATE TABLE guard_probe (value DECIMAL(10,4) NOT NULL)',
+      modify: 'DECIMAL(8,3) NOT NULL', refuses: /narrows the type \(decimal\(10,4\) -> decimal\(8,3\)\)/ },
+    { name: 'enum members', ddl: "CREATE TABLE guard_probe (value ENUM('a','b') NOT NULL)",
+      modify: "ENUM('a') NOT NULL", refuses: /narrows the type \(enum drops b\)/ },
+    { name: 'character set',
+      ddl: 'CREATE TABLE guard_probe (value VARCHAR(100) CHARACTER SET utf8mb4 NOT NULL)',
+      modify: 'VARCHAR(100) CHARACTER SET utf8 NOT NULL',
+      refuses: /changes the charset \(utf8mb4 -> utf8\)/ },
+
+    { name: 'restated AUTO_INCREMENT',
+      ddl: 'CREATE TABLE guard_probe (value BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY)',
+      modify: 'BIGINT UNSIGNED NOT NULL AUTO_INCREMENT' },
+    { name: 'restated DEFAULT and COMMENT',
+      ddl: "CREATE TABLE guard_probe (value INT NOT NULL DEFAULT 7 COMMENT 'kept')",
+      modify: "INT NOT NULL DEFAULT 7 COMMENT 'kept'" },
+    { name: 'restated ON UPDATE',
+      ddl: 'CREATE TABLE guard_probe (value TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)',
+      modify: 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP' },
+    { name: 'restated generation expression',
+      ddl: 'CREATE TABLE guard_probe (base INT NOT NULL, value INT AS (base + 1) VIRTUAL)',
+      modify: 'INT AS (base + 1) VIRTUAL' },
+    { name: 'wider integer', ddl: 'CREATE TABLE guard_probe (value INT NOT NULL)',
+      modify: 'BIGINT NOT NULL' },
+    { name: 'wider character column and character set',
+      ddl: 'CREATE TABLE guard_probe (value VARCHAR(100) CHARACTER SET utf8 NOT NULL)',
+      modify: 'VARCHAR(250) CHARACTER SET utf8mb4 NOT NULL' },
+    { name: 'expanded enum', ddl: "CREATE TABLE guard_probe (value ENUM('a') NOT NULL)",
+      modify: "ENUM('a','b') NOT NULL" },
+];
+
+function guardSql(definition) {
+    return 'ALTER TABLE guard_probe MODIFY COLUMN value ' + definition;
+}
+
 // The scratch schema and the helpers that act on it, shared by every suite below.
 function schemaHarness() {
     const h = { admin: null, db: null };
@@ -323,6 +381,44 @@ function defineAssertions(h) {
     }
 }
 
+function defineLiveColumnLosses(h) {
+    it('covers every refusal category emitted by the live-column guard', function () {
+        const refused = LIVE_COLUMN_CASES.filter(c => c.refuses).map(c => c.refuses.source).join(' ');
+        for (const category of [
+            'strips AUTO_INCREMENT', 'strips DEFAULT', 'strips ON UPDATE', 'strips COMMENT',
+            'strips the generation expression', 'narrows the type', 'changes the charset',
+        ]) assert.ok(refused.includes(category), category + ' needs a real-server case');
+        assert.ok(LIVE_COLUMN_CASES.some(c => !c.refuses), 'the guard needs allowed real-server shapes');
+    });
+
+    for (const c of LIVE_COLUMN_CASES) {
+        it((c.refuses ? 'refuses: ' : 'allows: ') + c.name + ' from server metadata', async function () {
+            await h.reset();
+            await h.build([c.ddl]);
+            const run = () => h.withConn(conn => assertNoLiveColumnLoss(
+                conn, 'server-metadata.sql', [guardSql(c.modify)]));
+            if (c.refuses) {
+                await assert.rejects(run, (err) => {
+                    assert.match(err.message, c.refuses);
+                    assert.match(err.message, /guard_probe\.value/);
+                    return true;
+                });
+            } else {
+                await run();
+            }
+        });
+    }
+
+    it('allows a MODIFY when the live table or column is absent', async function () {
+        await h.reset();
+        await h.withConn(conn => assertNoLiveColumnLoss(
+            conn, 'absent.sql', [guardSql('INT NOT NULL')]));
+        await h.build(['CREATE TABLE guard_probe (other INT NOT NULL)']);
+        await h.withConn(conn => assertNoLiveColumnLoss(
+            conn, 'absent.sql', [guardSql('INT NOT NULL')]));
+    });
+}
+
 function defineRunner(h) {
     beforeEach(() => h.reset());
 
@@ -376,6 +472,34 @@ function defineRunner(h) {
         await h.build(SETTLED.filter(sql => !sql.includes('xbridges')));
         await assert.rejects(() => h.db.runMigrations({ only: [TICK] }), /bridge tables xbridges are absent/);
     });
+
+    it('refuses a lossy auto MODIFY before DDL or ledger insertion', async function () {
+        await h.build(SETTLED.concat([
+            'CREATE TABLE deposits (id INT NOT NULL PRIMARY KEY, contract_index BIGINT UNSIGNED DEFAULT 7)',
+        ]));
+        await assert.rejects(() => h.db.runMigrations({ only: [NULLABLE] }), /strips DEFAULT 7/);
+        const rows = await h.withConn(conn => conn.query(
+            "SELECT COLUMN_DEFAULT AS value FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? " +
+            "AND TABLE_NAME = 'deposits' AND COLUMN_NAME = 'contract_index'", [DB_NAME]));
+        assert.strictEqual(String(rows[0].value), '7', 'the refused MODIFY must leave the live default intact');
+        assert.deepStrictEqual(await h.ledger(), [], 'the refused migration must not be recorded');
+    });
+
+    it('applies and records an auto MODIFY whose live columns carry no extra attributes', async function () {
+        const columns = [
+            ['deposits', 'contract_index'],
+            ['withdrawals', 'contract_index'],
+            ['contract_executions', 'contract_index'],
+            ['contract_stakes', 'target_contract_index'],
+            ['contract_unstakes', 'target_contract_index'],
+        ];
+        await h.build(SETTLED.concat(columns.map(([table, column]) =>
+            'CREATE TABLE `' + table + '` (id INT NOT NULL PRIMARY KEY, `' + column + '` BIGINT UNSIGNED)')));
+        const result = await h.db.runMigrations({ only: [NULLABLE] });
+        assert.deepStrictEqual(result.applied, [NULLABLE]);
+        assert.deepStrictEqual(result.baselined, []);
+        assert.deepStrictEqual((await h.ledger()).map(r => r.name), [NULLABLE]);
+    });
 }
 
 describe('migration live-schema guard against a real MariaDB @tier3', function () {
@@ -385,5 +509,6 @@ describe('migration live-schema guard against a real MariaDB @tier3', function (
     defineCoverage();
     describe('precondition verdict per live shape', () => defineVerdicts(h));
     describe('startup assertions refuse a drifted live schema', () => defineAssertions(h));
+    describe('MODIFY loss detection from live information_schema rows', () => defineLiveColumnLosses(h));
     describe('through the production runner', () => defineRunner(h));
 });
