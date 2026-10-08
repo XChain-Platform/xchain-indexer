@@ -12045,6 +12045,10 @@
       "getArchiveReplayWatermarks() returns nulls on an empty result set rather than throwing",
       "getArchiveReplayWatermarks() returns nulls when no archive row exists, leaving the guard inert"
     ],
+    "c42ed8ba04b55a79": [
+      "consensus rules digest sentinel comments does not claim the shipped registry has no far-future sentinel",
+      "consensus rules digest sentinel comments names the shipped mainnet sentinel examples at the canonical constant"
+    ],
     "c4308b650669ed74": [
       "Chaos: Block Processing Resilience BK-09: @regression a failing block is NOT skipped; the loop halts at it instead of advancing",
       "Chaos: Block Processing Resilience BK-10: @regression a transient failure is retried on the next pass with no gap in committed blocks"
@@ -16085,8 +16089,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1190,
-      "titleCount": 12527,
+      "fileCount": 1191,
+      "titleCount": 12529,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16705,6 +16709,7 @@
         "test/unit/consensus/rules_digest/consensus_rules_digest.test.js": "7f39aa26f210b97a",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/active_gates.test.js": "7f837d8e9e793661",
         "test/unit/consensus/rules_digest/consensus_rules_digest.test/coin_keyed_bridge.test.js": "9bc7d8a011e583d1",
+        "test/unit/consensus/rules_digest/consensus_rules_digest.test/sentinel_comments.test.js": "c42ed8ba04b55a79",
         "test/unit/consensus/stake_weighted_quorum.test.js": "2f17c3a84dababed",
         "test/unit/consensus/state_hash.test/anchor_fold_predicates.test.js": "4db50e18ffcab3aa",
         "test/unit/consensus/vm_lint_optional_chain_matches_vm.test/matches_vm.test.js": "df674cd2b0f33ed5",
