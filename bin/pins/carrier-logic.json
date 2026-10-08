@@ -1941,13 +1941,6 @@
       "date": "2026-10-05"
     },
     {
-      "id": "train_activation",
-      "from": "0e52179db25e4ef767aa8f695604b37a4a8d7c2dcc70afafadbd40b5760ca9eb",
-      "to": "4f82ea30b5120eb7fc0c9cf56f3c115781238255d5760dafb7d79ff5816577ee",
-      "reason": "resolveRuleSet picks the highest rule set among those active at the height",
-      "date": "2026-10-05"
-    },
-    {
       "id": "protocol_changes",
       "from": "b3202d580497fa273f3d18b617ba1b706bb45cf2a6b72f889b96cf1e8c5cbff1",
       "to": "91eecda92a5961138e245106b2ecd67c5014d7dc1048d1c495bdd71c36f6d69f",
