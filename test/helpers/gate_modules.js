@@ -154,6 +154,7 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'bridge_policy_refusal_record_activation',
     'price_wire_trailing_activation',
     'attest_relay_fee_activation',
+    'cross_chain_offer_list_export_activation',
 ]);
 
 const REPLACED = new Set(REPLACED_STEMS.concat(REGISTRY_ONLY_STEMS));
