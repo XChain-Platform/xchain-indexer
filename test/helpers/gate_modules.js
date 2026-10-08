@@ -117,6 +117,7 @@ const REPLACED_STEMS = Object.freeze([
 // callers read the row through activeAt() by its literal key from the start.
 // Kept apart from REPLACED_STEMS so that list stays the W4 and W5 census.
 const REGISTRY_ONLY_STEMS = Object.freeze([
+    'anchor_archive_fold_term_activation',
     'dispenser_settlement_price_activation',
     'dispenser_freshness_proven_use_activation',
     'empty_allow_list_denies_activation',
@@ -154,6 +155,8 @@ const REGISTRY_ONLY_STEMS = Object.freeze([
     'bridge_policy_refusal_record_activation',
     'price_wire_trailing_activation',
     'oracle_snapshot_age_seconds_activation',
+    'attest_relay_fee_activation',
+    'bet_feed_list_edit_activation',
     'cross_chain_offer_list_export_activation',
 ]);
 

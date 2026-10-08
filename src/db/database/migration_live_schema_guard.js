@@ -59,11 +59,33 @@ function splitTopLevel(text){
 
 const unquote = (id) => id.replace(/^`|`$/g, '');
 
+// Replace each block comment outside a quoted literal with a space, so a comment can neither
+// hide a MODIFY nor stand in for a restated attribute. Executable `/*!` and `/*M!` comments
+// stay: the server runs them, and the destructive-DDL scan already refuses them.
+function stripBlockComments(text){
+    let out = '', quote = null;
+    for(let i = 0; i < text.length; i++){
+        const ch = text[i];
+        if(quote){
+            out += ch;
+            if(ch === '\\'){ out += text[++i] || ''; }
+            else if(ch === quote) quote = null;
+            continue;
+        }
+        if(ch === "'" || ch === '"' || ch === '`'){ quote = ch; out += ch; continue; }
+        const executable = /^(?:!|M!)/i.test(text.slice(i + 2, i + 4));
+        const end = ch === '/' && text[i + 1] === '*' && !executable ? text.indexOf('*/', i + 2) : -1;
+        if(end !== -1){ out += ' '; i = end + 1; continue; }
+        out += ch;
+    }
+    return out;
+}
+
 // Every `ALTER TABLE t ... MODIFY [COLUMN] c <definition>` clause in a statement list.
 function modifyClauses(statements){
     const found = [];
     for(const stmt of statements){
-        const head = /^ALTER\s+(?:ONLINE\s+)?(?:IGNORE\s+)?TABLE\s+(?:IF\s+EXISTS\s+)?((?:`[^`]+`|\w+)(?:\s*\.\s*(?:`[^`]+`|\w+))?)\s+([\s\S]*)$/i.exec(stmt.trim());
+        const head = /^ALTER\s+(?:ONLINE\s+)?(?:IGNORE\s+)?TABLE\s+(?:IF\s+EXISTS\s+)?((?:`[^`]+`|\w+)(?:\s*\.\s*(?:`[^`]+`|\w+))?)\s+([\s\S]*)$/i.exec(stripBlockComments(stmt).trim());
         if(!head) continue;
         const table = unquote(head[1].split('.').pop().trim());
         for(const clause of splitTopLevel(head[2])){
