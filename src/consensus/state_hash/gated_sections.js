@@ -23,6 +23,14 @@
 
 const { tolerantQuery } = require('./tolerant_query');
 
+// Literal twins of the attest wire constants (ATTEST_BATCH_HEAD_VERSION,
+// ATTEST_BATCH_CONTINUATION_VERSION, ATTEST_BATCH_COMPLETION_STAMP): this module is
+// twinned into the follower, which cannot require the action handlers. A test pins
+// each against the canonical value.
+const ATTEST_BATCH_HEAD_VERSION         = 5;
+const ATTEST_BATCH_CONTINUATION_VERSION = 6;
+const ATTEST_BATCH_COMPLETION_STAMP     = ' (stamped on batch completion)';
+
 // Index-map delta (id-determinism P4): the (id, string) pairs whose
 // deterministic id was first assigned at block B. Deliberately hashes the
 // surrogate id (the value under protection); sound only because every
@@ -95,4 +103,26 @@ async function collectBetStatus(db, B){
     return { bet_feed_status, bet_status };
 }
 
-module.exports = { collectIndexMapDelta, collectPollFinalize, collectTokenSupply, collectBetStatus };
+// Attest batch-head completion stamps: v5 heads whose verdict was re-stamped when
+// the completing v6 continuation landed at block B. The head's own action_index is
+// in an earlier block, so no action-scoped hash sees the flip. The completing
+// continuation is the author's last valid chunk, the same author and validity
+// scope restoreStampedAttestHeads resets by; the status is hashed as its resolved
+// string, never its surrogate id, and action_index is a total order.
+function collectAttestBatchHead(db, B){
+    return tolerantQuery(db,
+        "SELECT p.action_index, s.status AS status FROM attests p " +
+        "JOIN index_statuses s ON s.id = p.status_id AND s.status LIKE ? " +
+        "JOIN actions pa ON pa.action_index = p.action_index " +
+        "WHERE p.version = ? AND p.batch_chunk_index = 0 AND ( " +
+            "SELECT ca.block_index FROM attests c " +
+            "JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid' " +
+            "JOIN actions ca ON ca.action_index = c.action_index AND ca.source_id = pa.source_id " +
+            "WHERE c.request_id = p.request_id AND c.version = ? AND c.batch_chunk_index IS NOT NULL " +
+            "ORDER BY c.action_index DESC LIMIT 1 " +
+        ") = ? ORDER BY p.action_index ASC",
+        ['%' + ATTEST_BATCH_COMPLETION_STAMP, ATTEST_BATCH_HEAD_VERSION, ATTEST_BATCH_CONTINUATION_VERSION, B]);
+}
+
+module.exports = { collectIndexMapDelta, collectPollFinalize, collectTokenSupply, collectBetStatus, collectAttestBatchHead,
+                   ATTEST_BATCH_HEAD_VERSION, ATTEST_BATCH_CONTINUATION_VERSION, ATTEST_BATCH_COMPLETION_STAMP };

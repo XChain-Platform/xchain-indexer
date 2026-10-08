@@ -26,7 +26,7 @@ process.env.INDEXER_NETWORK = process.env.INDEXER_NETWORK || 'regtest';
 const assert  = require('assert');
 const Utility = require('../../../../src/utility');
 const {
-    buildStateHashData, isBetStatusStateHashActive, BET_STATUS_STATE_HASH_ACTIVATION,
+    buildStateHashData, isBetStatusStateHashActive, BET_STATUS_STATE_HASH_ACTIVATION, ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION,
     POLL_FINALIZE_STATE_HASH_ACTIVATION, TOKEN_SUPPLY_STATE_HASH_ACTIVATION,
     INDEX_MAP_STATE_HASH_ACTIVATION,
 } = require('../../../../src/consensus/state_hash');
@@ -57,6 +57,8 @@ async function withArmed(height, fn){
     try { return await fn(); } finally { BET_STATUS_STATE_HASH_ACTIVATION.regtest = prev; }
 }
 
+let abhPrev;
+
 describe('state_hash BET status-flip class (P4) @regression', () => {
     let pollPrev, tokenPrev, indexPrev, betPrev;
     before(function(){
@@ -68,12 +70,14 @@ describe('state_hash BET status-flip class (P4) @regression', () => {
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest  = 999999999;
     INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = 999999999;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest    = 999999999;
+    abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
     });
     after(function(){
     POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = pollPrev;
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest  = tokenPrev;
     INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = indexPrev;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest    = betPrev;
+    ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
     });
 
     it('gate: below/at/above threshold, coin-keyed first, unknown network inert', function(){
@@ -124,12 +128,14 @@ describe('state_hash BET status-flip class (P4) @regression', () => {
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest  = 999999999;
     INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = 999999999;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest    = 999999999;
+    abhPrev = ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest; ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = 999999999;
     });
     after(function(){
     POLL_FINALIZE_STATE_HASH_ACTIVATION.regtest = pollPrev;
     TOKEN_SUPPLY_STATE_HASH_ACTIVATION.regtest  = tokenPrev;
     INDEX_MAP_STATE_HASH_ACTIVATION.regtest     = indexPrev;
     BET_STATUS_STATE_HASH_ACTIVATION.regtest    = betPrev;
+    ATTEST_BATCH_HEAD_STATE_HASH_ACTIVATION.regtest = abhPrev;
     });
 
     it('armed: a settlement flip folds into bet_status and changes the hash', async function(){
