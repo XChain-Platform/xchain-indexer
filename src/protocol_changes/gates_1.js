@@ -254,7 +254,7 @@ addGate('consolidation_leg_amount_activation.CONSOLIDATION_LEG_AMOUNT_ACTIVATION
     testnet: 0,
     regtest: 0,
 });
-
+addGate('cross_chain_remote_token_activation.CROSS_CHAIN_REMOTE_TOKEN_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': UNARMED, 'LTC:testnet': UNARMED, 'DOGE:testnet': UNARMED, testnet: UNARMED, regtest: 0 });
 // dispense_cancelling_match_activation
 // Per-network activation, interpreted against the block's consensus timestamp
 // (data['BLOCK_TIME']). Mainnet flips at the coordinated 2.0.0 contract-era
