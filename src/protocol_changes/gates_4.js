@@ -21,7 +21,7 @@
 
 'use strict';
 
-const { addGate, UNARMED } = require('./shared_rows.js');
+const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
 
 // dispenser_freshness_proven_use_activation
 // DISPENSER_FRESHNESS_PROVEN_USE_ACTIVATION: at/after this block time the local
@@ -333,6 +333,37 @@ addGate('bridge_policy_refusal_record_activation.BRIDGE_POLICY_REFUSAL_RECORD_AC
 });
 
 addGate('price_wire_trailing_activation.PRICE_WIRE_TRAILING_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+addGate('oracle_snapshot_age_seconds_activation.ORACLE_SNAPSHOT_AGE_SECONDS_ACTIVATION', 'height', {
+    mainnet: UNPINNED,
+    'BTC:testnet': UNPINNED,
+    'LTC:testnet': UNPINNED,
+    'DOGE:testnet': UNPINNED,
+    testnet: UNPINNED,
+    regtest: UNPINNED,
+});
+
+// bet_feed_list_edit_activation
+// At or above this height BET format 4 may edit an open feed's allow and
+// block list references. Production networks remain inert until a release
+// names per-chain activation heights.
+addGate('bet_feed_list_edit_activation.BET_FEED_LIST_EDIT_ACTIVATION', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
+
+addGate('cross_chain_offer_list_export_activation.CROSS_CHAIN_OFFER_LIST_EXPORT', 'height', {
     mainnet: UNARMED,
     'BTC:testnet': UNARMED,
     'LTC:testnet': UNARMED,

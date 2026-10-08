@@ -51,7 +51,9 @@ const MIGRATION_LEDGER_RENAMES = {
     // it out of its dated position. Renamed past every migration in the tree today so
     // it cannot land behind a frontier again; the fleet already recorded it applied
     // under the old name, so the re-key is required, not optional.
-    '2026-09-09-destroys-sends-leg-ordinal.sql': '2026-09-13-destroys-sends-leg-ordinal.sql',
+    '2026-09-09-destroys-sends-leg-ordinal.sql':       '2026-09-13-destroys-sends-leg-ordinal.sql',
+    '2026-09-12-state-tree-roots-block-index-idx.sql': '2026-10-08-state-tree-roots-block-index-idx.sql',
+    '2026-09-12-token-bridge-fields.sql':              '2026-10-08-token-bridge-fields.sql',
 };
 
 // Pure planner for the one-time ledger rename heal. Given the names already recorded

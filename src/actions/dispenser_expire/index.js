@@ -49,7 +49,7 @@ class Dispenser_Expire {
         // Only proceed if we have a valid dispenser
         if(dispenser){
 
-            // Add SOURCE and GET_ADDRESS addresses and GET_TICK to addresses list
+            // Add SOURCE (the expiry refund recipient) and GET_ADDRESS to the GIVE_TICK refresh list
             this.util.addAddressTicker(dispenser['SOURCE'],      dispenser['GIVE_TICK']);
             this.util.addAddressTicker(dispenser['GET_ADDRESS'], dispenser['GIVE_TICK']);
 

@@ -179,6 +179,12 @@ function collect(scriptName, script) {
         sorted[rel] = files[rel].slice().sort();
         titles += sorted[rel].length;
     }
+    const forbidden = [REPO_ROOT, '/Users/', '/home/'];
+    for (const [rel, collectedTitles] of Object.entries(sorted)) {
+        const leaked = [rel, ...collectedTitles].find((value) =>
+            forbidden.some((fragment) => value.includes(fragment)));
+        if (leaked) throw new Error(`suite identity contains a local absolute path: ${leaked}`);
+    }
     return { fileCount: Object.keys(sorted).length, titleCount: titles, files: sorted };
 }
 

@@ -373,10 +373,8 @@ describe('activation-gate constant parity to canonical constants.js @regression'
     before(function () { canon = loadCanon(); });
 
     GATES.forEach(function ([file, exportName]) {
-        const title = canonExists
-            ? file + ' ' + exportName + ' is value-identical to xchain-documentation/protocol/constants.js'
-            : 'SKIPPED: documentation checkout absent at ' + CONSTANTS_PATH + '; ' + file + ' ' +
-              exportName + ' parity not verified this run';
+        const title = file + ' ' + exportName +
+            ' is value-identical to xchain-documentation/protocol/constants.js';
         (canonExists ? it : it.skip)(title, function () {
             const local = localExport(file, exportName);
             // Presence, not shape: the list carries scalar consensus constants as well as
