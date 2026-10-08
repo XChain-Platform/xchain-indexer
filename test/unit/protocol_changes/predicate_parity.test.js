@@ -89,7 +89,7 @@ describe('protocol_changes/predicate_parity: every gate predicate against active
 
     it('every replaced row is still a registry row and has no module left in src/ to read it through', function () {
         assert.strictEqual(REPLACED.size, 38, 'the W4 census of 25 predicate-only shims plus the 13 predicate-only twins of W5');
-        assert.strictEqual(REGISTRY_ONLY.size, 36, 'the registry-only gate census moved');
+        assert.strictEqual(REGISTRY_ONLY.size, 37, 'the registry-only gate census moved');
         for (const key of [...REPLACED, ...REGISTRY_ONLY]) {
             assert.ok(['height', 'time', 'constant'].includes(ProtocolChanges.registry.unitOf(key)),
                 key + ' is a height, time or constant row');
