@@ -132,7 +132,9 @@ need_sib xchain-vm xchain-decoder xchain-sdk xchain-hub
 # runs: the ci tier's own unit suite requires xchain-vm too (actions_class),
 # so staging it only ahead of integration left a from-scratch checkout's ci
 # tier dying on `Cannot find module 'xchain-vm'` before vendor:vm ever ran.
-if [ "$(uname -s)" = "Linux" ]; then
+# Fast gates verify or source-stage the copy without rebuilding native modules.
+# Full Linux sweeps also reconcile dependencies for the integration tiers.
+if [ "${CI_TIER:-full}" = "full" ] && [ "$(uname -s)" = "Linux" ]; then
   run_tier "vendor:vm (stage from ../xchain-vm)" npm run vendor:vm
 else
   run_tier "vendor:vm (stage sources from ../xchain-vm)" npm run vendor:vm -- check

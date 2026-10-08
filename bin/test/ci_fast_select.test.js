@@ -197,10 +197,31 @@ describe('ci fast selector', function () {
     assert(script.includes('run_tier "integration (test:integration:ci)"'));
   });
 
-  it('uses source-only VM staging away from Linux', function () {
-    const script = fs.readFileSync('bin/ci-full.sh', 'utf8');
-    assert(script.includes('if [ "$(uname -s)" = "Linux" ]'));
-    assert(script.includes('npm run vendor:vm -- check'));
+  it('runs source-only VM staging in Linux fast mode', function () {
+    const fakeBin = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-fast-linux-'));
+    try {
+      writeScratchFile(fakeBin, 'uname', '#!/bin/sh\nprintf "Linux\\n"\n');
+      writeScratchFile(fakeBin, 'npm', '#!/bin/sh\nprintf "npm-args:%s\\n" "$*"\nexit 23\n');
+      fs.chmodSync(path.join(fakeBin, 'uname'), 0o755);
+      fs.chmodSync(path.join(fakeBin, 'npm'), 0o755);
+
+      const result = spawnSync('bash', ['bin/ci-full.sh'], {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          CI_TIER: 'fast',
+          PATH: `${fakeBin}:${process.env.PATH}`
+        }
+      });
+
+      assert.strictEqual(result.status, 1, result.stderr);
+      const invocation = result.stdout.match(/^npm-args:(.*)$/m);
+      assert(invocation, result.stdout);
+      assert.strictEqual(invocation[1], 'run vendor:vm -- check');
+      assert(result.stdout.includes('vendor:vm (stage sources from ../xchain-vm)'));
+    } finally {
+      fs.rmSync(fakeBin, { recursive: true, force: true });
+    }
   });
 
   it('replays develop history, compares narrowing, and checks required selections', function () {
