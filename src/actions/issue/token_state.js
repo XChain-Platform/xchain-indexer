@@ -23,19 +23,22 @@
 
 'use strict';
 
-// The TICK row, the distribution probe, the merge into empty PARAMS and the
-// CALLBACK_TICK row. Leaves ctx.tokenInfo, ctx.isDistributed and ctx.cbInfo.
+// The TICK row, the lazy distribution probe, the merge into empty PARAMS and the
+// CALLBACK_TICK row. Leaves ctx.tokenInfo, ctx.distributionProbe and ctx.cbInfo.
 async function loadTokenState(ctx){
     let { data, error, issue, format, batchIssuanceLimitsV2, policyListDetach } = ctx;
 
-    // Get information on token, then check distribution passing tokenInfo to avoid a second getTokenInfo call
-    let tokenInfo     = await this.gatedGetTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX'], error, batchIssuanceLimitsV2);
-    // Genesis creates name ownership only (no balances/holders), so a genesis token is
-    // never distributed; isDistributed only feeds CALLBACK edits, which carry null fields
-    // at genesis anyway. Skip the holders read.
-    let isDistributed = data['IS_GENESIS']
-        ? false
-        : await this.indexerDb.isDistributed(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX'], tokenInfo);
+    // Get information on the token. Distribution is only needed by changed CALLBACK
+    // fields, so defer its holder scan and cache the first result for the whole action.
+    let tokenInfo = await this.gatedGetTokenInfo(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX'], error, batchIssuanceLimitsV2);
+    let distributionResult;
+    let distributionProbe = () => {
+        if(distributionResult === undefined)
+            distributionResult = data['IS_GENESIS']
+                ? false
+                : this.indexerDb.isDistributed(data['TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX'], tokenInfo);
+        return distributionResult;
+    };
 
     // Populate empty PARAMS with current setting
     if(tokenInfo){
@@ -58,7 +61,7 @@ async function loadTokenState(ctx){
     if(data['CALLBACK_TICK'])
         cbInfo = await this.gatedGetTokenInfo(data['CALLBACK_TICK'], data['BLOCK_INDEX'], data['ACTION_INDEX'], error, batchIssuanceLimitsV2);
 
-    Object.assign(ctx, { tokenInfo, isDistributed, cbInfo });
+    Object.assign(ctx, { tokenInfo, distributionProbe, cbInfo });
 }
 
 // FORMAT Validations: every AMOUNT field against its tick's decimals, and every LOCK
