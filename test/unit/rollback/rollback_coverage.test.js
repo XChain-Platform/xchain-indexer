@@ -245,6 +245,12 @@ describe('Rollback coverage guard @regression', function () {
             `The inert-lookup argument (ids only ever referenced by id, never hashed) is a ` +
             `property of the dedup lookup tables; anything else needs a real rollback mode.`);
     });
+
+    it('names every validator_rewards derive_block_index writer in the registry note', function () {
+        const note = lifecycle.entry('validator_rewards').note;
+        for (const writer of ['anchor/archive', 'recovery re-materialization', 'rollcall_publish'])
+            assert.ok(note.includes(writer), `validator_rewards note omits ${writer}`);
+    });
 });
 describe('Rollback coverage guard @regression', function () {
     rollbackHooks();
