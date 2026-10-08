@@ -32,11 +32,11 @@ const { addGate, UNARMED, UNPINNED } = require('./shared_rows.js');
 // Per-network activation, interpreted against the block's consensus timestamp
 // (data['BLOCK_TIME']).
 addGate('amount_representability_activation.AMOUNT_REPRESENTABILITY_ACTIVATION', 'time', {
-    mainnet: 9999999999,    // UNARMED (house sentinel, year 2286): mainnet writes are held
+    mainnet: UNARMED,       // UNARMED (house sentinel, year 2286): mainnet writes are held
     'BTC:testnet': 1791061097,
     'LTC:testnet': 1791061097,
     'DOGE:testnet': 1791061097,
-    testnet: 9999999999,    // UNARMED (house sentinel): live launched history, arm needs a measured replay witness
+    testnet: UNARMED,       // UNARMED (house sentinel): live launched history, arm needs a measured replay witness
     regtest: 0,
 });
 
@@ -68,6 +68,10 @@ addGate('anchor_activation.ANCHOR_ACTIVATION', 'height', {
     testnet: 67858600,
     regtest: 0,
 });
+// Below-activation anchors become 'unverified'; unarmed until the cut sets it with the reindex.
+addGate('anchor_preactivation_status_activation.ANCHOR_PREACTIVATION_STATUS_ACTIVATION', 'height', { mainnet: UNARMED, testnet: UNARMED, regtest: 0 });
+// anchor_archive_fold_term_activation
+addGate('anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION', 'height', { mainnet: UNARMED, 'BTC:testnet': UNARMED, 'LTC:testnet': UNARMED, 'DOGE:testnet': UNARMED, testnet: UNARMED, regtest: 0 });
 
 // archive_batch_author_activation
 // Per-network activation, interpreted against the DOGE block_index of the batch's
@@ -321,10 +325,10 @@ addGate('dispenser_freshness_activation.DISPENSER_FRESHNESS_ACTIVATION', 'height
 // block_index. At/after the height a shape-violating non-null get_first_seen
 // result throws; below it the legacy fail-open null is returned.
 addGate('dispenser_freshness_shape_activation.DISPENSER_FRESHNESS_SHAPE_ACTIVATION', 'height', {
-    'BTC:mainnet':  null,   // UNARMED: operator-owned, sized below 961000 on the arming train
-    'LTC:mainnet':  null,   // UNARMED: operator-owned, sized below 3154250 on the arming train
-    'DOGE:mainnet': null,   // UNARMED: operator-owned, sized below 6319000 on the arming train
-    mainnet:        null,   // UNARMED: a coin with no entry above inherits the inert posture
+    'BTC:mainnet':  null,   // INERT: operator-owned, sized below 961000 on the arming train
+    'LTC:mainnet':  null,   // INERT: operator-owned, sized below 3154250 on the arming train
+    'DOGE:mainnet': null,   // INERT: operator-owned, sized below 6319000 on the arming train
+    mainnet:        null,   // INERT: a coin with no entry above inherits the inert posture
     testnet:        0,      // genesis-active: the tracker path is unreachable there, nothing replays differently
     regtest:        0,      // genesis-active so the venue exercises the strict path
 });
