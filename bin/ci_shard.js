@@ -27,7 +27,8 @@
 // package.json this script cannot read the same way runs the plain `npm run ci`,
 // so a shape it does not know can only cost time, never tests.
 //
-// Usage: node bin/ci_shard.js --run|--list   (CI_SHARDS=<1..16> overrides the count)
+// Usage: node bin/ci_shard.js --run|--list
+// CI_SHARDS=<1..16> overrides the count; CI_SHARD_JOBS=<1..16> caps concurrency.
 
 const os = require('node:os');
 const path = require('node:path');
@@ -55,6 +56,14 @@ function shardCount(env = process.env, cpus = os.cpus().length) {
   const asked = Number(env.CI_SHARDS);
   if (Number.isInteger(asked) && asked >= 1 && asked <= MAX_SHARDS) return asked;
   return Math.max(1, Math.min(4, Math.floor(cpus / 2)));
+}
+
+/** @returns {number} the number of shard processes allowed to run concurrently. */
+function shardJobs(env = process.env, total = 1, freeMem = os.freemem()) {
+  const asked = Number(env.CI_SHARD_JOBS);
+  if (Number.isInteger(asked) && asked >= 1 && asked <= MAX_SHARDS) return Math.min(asked, total);
+  const memoryJobs = Math.max(1, Math.floor(freeMem / (1024 ** 3)));
+  return Math.min(total, memoryJobs);
 }
 
 /** @returns {string[][]} files dealt round-robin, each shard keeping mocha's own order. */
@@ -120,16 +129,26 @@ function runStep(step, env) {
   });
 }
 
-/** Runs every shard at once, prints each shard's whole output as one block, resolves true when all passed. */
-async function runShards(shards, args, env, spawnShard = spawn) {
+/** Runs every shard with bounded concurrency and prints each shard's output as one block. */
+async function runShards(shards, args, env, spawnShard = spawn, jobs = shards.length) {
   const started = Date.now();
-  const results = await Promise.all(shards.map((files, i) => new Promise((resolve) => {
+  const results = new Array(shards.length);
+  let next = 0;
+  const runOne = (files, i) => new Promise((resolve) => {
     let out = '';
     const child = spawnShard(path.join('node_modules', '.bin', 'mocha'), [...args, ...files], { env, stdio: ['ignore', 'pipe', 'pipe'] });
     child.stdout.on('data', (chunk) => { out += chunk; });
     child.stderr.on('data', (chunk) => { out += chunk; });
     child.on('close', (code, signal) => resolve({ i, files, out, ok: code === 0 && !signal, secs: Math.round((Date.now() - started) / 1000) }));
-  })));
+  });
+  async function worker() {
+    while (next < shards.length) {
+      const i = next;
+      next += 1;
+      results[i] = await runOne(shards[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(jobs, shards.length)) }, worker));
   for (const r of results) {
     console.log(`ci:shard ===== shard ${r.i + 1}/${shards.length} (${r.files.length} files) =====`);
     process.stdout.write(r.out);
@@ -156,8 +175,9 @@ async function runMain(mainStep, cwd, env) {
     console.log(`ci:shard: the shards are not an exact partition (${bad}); running the step whole`);
     return runStep(mainStep, env);
   }
-  console.log(`ci:shard: ${plan.files.length} files of \`${mainStep.slice(0, 60)}...\` in ${shards.length} shards`);
-  return (await runShards(shards, plan.args, env)) ? 0 : 1;
+  const jobs = shardJobs(env, shards.length);
+  console.log(`ci:shard: ${plan.files.length} files of \`${mainStep.slice(0, 60)}...\` in ${shards.length} shards (${jobs} at a time)`);
+  return (await runShards(shards, plan.args, env, spawn, jobs)) ? 0 : 1;
 }
 
 /** @returns {Promise<number>} the chain's exit status, stopping at the first red step as `&&` does. */
@@ -200,6 +220,6 @@ async function main() {
   return runChain(chain);
 }
 
-module.exports = { splitChain, words, shardCount, dealShards, partitionError, shardArgs, collectMain, runShards, exitOf };
+module.exports = { splitChain, words, shardCount, shardJobs, dealShards, partitionError, shardArgs, collectMain, runShards, exitOf };
 
 if (require.main === module) main().then((code) => { process.exitCode = code; });
