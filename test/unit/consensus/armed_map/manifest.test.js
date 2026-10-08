@@ -188,6 +188,18 @@ describe('armed_map/manifest: collectRows', function () {
         assert.ok(keys.has('mirror_admission_activation.CHAIN_CODE_RE'), 'a RegExp row');
     });
 
+    it('carries the anchor archive fold-term heights', function () {
+        const byKey = new Map(manifest.collectRows().rows);
+        assert.deepStrictEqual(byKey.get('anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION'), {
+            mainnet: 9999999999,
+            'BTC:testnet': 9999999999,
+            'LTC:testnet': 9999999999,
+            'DOGE:testnet': 9999999999,
+            testnet: 9999999999,
+            regtest: 0,
+        });
+    });
+
     it('carries the per-chain LIST owner testnet heights', function () {
         const byKey = new Map(manifest.collectRows().rows);
         assert.deepStrictEqual(byKey.get('list_owner_activation.LIST_OWNER_ACTIVATION'), {
