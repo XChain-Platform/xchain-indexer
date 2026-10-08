@@ -5063,9 +5063,9 @@
       "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-09-11-cross-chain-btc-chain-id.sql: if tagged mode=auto, passes the destructive-DDL scan",
       "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-09-11-price-snapshots-batch-block-time.sql: if tagged mode=auto, passes the destructive-DDL scan",
       "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-09-12-bridge-tables.sql: if tagged mode=auto, passes the destructive-DDL scan",
-      "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-09-12-state-tree-roots-block-index-idx.sql: if tagged mode=auto, passes the destructive-DDL scan",
-      "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-09-12-token-bridge-fields.sql: if tagged mode=auto, passes the destructive-DDL scan",
-      "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-09-13-destroys-sends-leg-ordinal.sql: if tagged mode=auto, passes the destructive-DDL scan"
+      "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-09-13-destroys-sends-leg-ordinal.sql: if tagged mode=auto, passes the destructive-DDL scan",
+      "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-10-08-state-tree-roots-block-index-idx.sql: if tagged mode=auto, passes the destructive-DDL scan",
+      "committed mode=auto migrations contain no destructive DDL @regression @tier1 2026-10-08-token-bridge-fields.sql: if tagged mode=auto, passes the destructive-DDL scan"
     ],
     "69b7814a5ee226de": [
       "Order_Match escrow/credit precision parity @regression @tier1 escrow release is the bit-exact negation of the paired credit on an 18-dp fill",
@@ -10456,12 +10456,12 @@
       "committed migrations declare intent @regression @tier1 2026-09-11-price-snapshots-batch-block-time.sql: uses the dated YYYY-MM-DD- filename prefix (ordering convention)",
       "committed migrations declare intent @regression @tier1 2026-09-12-bridge-tables.sql: carries an explicit `-- xchain:migration mode=auto|manual` tag the runner sees",
       "committed migrations declare intent @regression @tier1 2026-09-12-bridge-tables.sql: uses the dated YYYY-MM-DD- filename prefix (ordering convention)",
-      "committed migrations declare intent @regression @tier1 2026-09-12-state-tree-roots-block-index-idx.sql: carries an explicit `-- xchain:migration mode=auto|manual` tag the runner sees",
-      "committed migrations declare intent @regression @tier1 2026-09-12-state-tree-roots-block-index-idx.sql: uses the dated YYYY-MM-DD- filename prefix (ordering convention)",
-      "committed migrations declare intent @regression @tier1 2026-09-12-token-bridge-fields.sql: carries an explicit `-- xchain:migration mode=auto|manual` tag the runner sees",
-      "committed migrations declare intent @regression @tier1 2026-09-12-token-bridge-fields.sql: uses the dated YYYY-MM-DD- filename prefix (ordering convention)",
       "committed migrations declare intent @regression @tier1 2026-09-13-destroys-sends-leg-ordinal.sql: carries an explicit `-- xchain:migration mode=auto|manual` tag the runner sees",
       "committed migrations declare intent @regression @tier1 2026-09-13-destroys-sends-leg-ordinal.sql: uses the dated YYYY-MM-DD- filename prefix (ordering convention)",
+      "committed migrations declare intent @regression @tier1 2026-10-08-state-tree-roots-block-index-idx.sql: carries an explicit `-- xchain:migration mode=auto|manual` tag the runner sees",
+      "committed migrations declare intent @regression @tier1 2026-10-08-state-tree-roots-block-index-idx.sql: uses the dated YYYY-MM-DD- filename prefix (ordering convention)",
+      "committed migrations declare intent @regression @tier1 2026-10-08-token-bridge-fields.sql: carries an explicit `-- xchain:migration mode=auto|manual` tag the runner sees",
+      "committed migrations declare intent @regression @tier1 2026-10-08-token-bridge-fields.sql: uses the dated YYYY-MM-DD- filename prefix (ordering convention)",
       "committed migrations declare intent @regression @tier1 migrations directory is present",
       "legacy migration rename: ledger remap + ordering @regression @tier1 apply order is now lexical = chronological (renamed files land in date order)",
       "legacy migration rename: ledger remap + ordering @regression @tier1 does not re-key a legacy row when its dated target is already present",
@@ -12398,12 +12398,20 @@
       "dispense value accounting: recorded GET_AMOUNT @regression @tier1 the recorded amount is a plain 8dp decimal STRING",
       "dispense value accounting: recorded GET_AMOUNT @regression @tier1 the recorded amounts sum to exactly what the pool was drained by",
       "dispense value accounting: recorded GET_AMOUNT @regression @tier1 the v0 FIAT path records its fill price too"
+    ],
+    "596a4924f6807b64": [
+      "backdated testnet migration renames @regression @tier1 moves both migrations after the frontier they were applied behind",
+      "backdated testnet migration renames @regression @tier1 plans both ledger re-keys without re-keying an already healed ledger",
+      "backdated testnet migration renames @regression @tier1 preserves each applied migration checksum across the rename",
+      "backdated testnet migration renames @regression @tier1 re-keys a rolled ledger and neither warns nor re-applies either migration",
+      "backdated testnet migration renames @regression @tier1 registers both old-to-new filename pairs",
+      "backdated testnet migration renames @regression @tier1 ships both new files and removes both old filenames"
     ]
   },
   "scripts": {
     "test": {
       "fileCount": 791,
-      "titleCount": 9816,
+      "titleCount": 9819,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -13047,6 +13055,7 @@
         "test/unit/migration/migration_precondition_baseline.test/runner_branches.test.js": "ad9b4cab9e7d3566",
         "test/unit/migration/migration_preconditions.test.js": "aa04a3f3774b7b4c",
         "test/unit/migration/migration_runner.test.js": "d69093a180093a1b",
+        "test/unit/migration/migration_runner.test/backdated_rename.test.js": "596a4924f6807b64",
         "test/unit/migration/migration_runner.test/checksum_guards.test.js": "1ab53f21a30a8c89",
         "test/unit/migration/migration_runner.test/destructive_guard.test.js": "25d5a606ad0d9085",
         "test/unit/migration/migration_runner.test/leg_ordinal_rename.test.js": "5ebd6301ce711263",
@@ -15039,7 +15048,7 @@
     },
     "test:regression:fast": {
       "fileCount": 282,
-      "titleCount": 4144,
+      "titleCount": 4147,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/utxo_tracker.test.js": "5c9d499784cf2193",
@@ -15266,6 +15275,7 @@
         "test/unit/migration/migration_precondition_baseline.test/runner_branches.test.js": "ad9b4cab9e7d3566",
         "test/unit/migration/migration_preconditions.test.js": "aa04a3f3774b7b4c",
         "test/unit/migration/migration_runner.test.js": "d69093a180093a1b",
+        "test/unit/migration/migration_runner.test/backdated_rename.test.js": "596a4924f6807b64",
         "test/unit/migration/migration_runner.test/checksum_guards.test.js": "1ab53f21a30a8c89",
         "test/unit/migration/migration_runner.test/destructive_guard.test.js": "25d5a606ad0d9085",
         "test/unit/migration/migration_runner.test/leg_ordinal_rename.test.js": "5ebd6301ce711263",
