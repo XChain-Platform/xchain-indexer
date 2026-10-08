@@ -354,3 +354,12 @@ addGate('oracle_snapshot_age_seconds_activation.ORACLE_SNAPSHOT_AGE_SECONDS_ACTI
     testnet: UNPINNED,
     regtest: UNPINNED,
 });
+
+addGate('cross_chain_offer_list_export_activation.CROSS_CHAIN_OFFER_LIST_EXPORT', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
