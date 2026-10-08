@@ -32,6 +32,7 @@
 const RETRACTION_COLUMNS = {
     price_snapshots: 'source_action_index',
     oracle_prices:   'action_index',
+    remote_token_snapshots: 'source_action_index',
     // bridge_transfers is ONE-SIDED: a transfer is retracted when the single source leg
     // (the v0 lock or the v1 burn named by src_chain/src_action_index) is reorged away, so
     // one column names the range. cross_chain_matches is two-sided and has its own branch
@@ -54,7 +55,8 @@ const RETRACTION_COLUMNS = {
 // mirrored forever. Kept local, like RETRACTION_COLUMNS, so no column name ever comes
 // from the wire. A table absent from this map keeps `source_chain`.
 const RETRACTION_CHAIN_COLUMNS = {
-    bridge_transfers: 'src_chain'
+    bridge_transfers:       'src_chain',
+    remote_token_snapshots: 'coin'
 };
 
 // Tables mirrored for the cross-chain DEX + cross-chain contract calls.
@@ -78,18 +80,20 @@ const RETRACTION_CHAIN_COLUMNS = {
 // list_snapshots are never retracted, so deletion events naming them are skipped rather
 // than applied.
 const CROSS_CHAIN_TABLES = ['cross_chain_matches', 'cross_chain_calls', 'capability_snapshots',
-                            'bridge_transfers', 'policy_snapshots', 'list_snapshots'];
+                            'bridge_transfers', 'policy_snapshots', 'list_snapshots',
+                            'remote_token_snapshots'];
 
 const MIRRORED_TABLES = ['price_snapshots', 'oracle_prices', 'cross_chain_matches', 'cross_chain_calls',
                          'capability_snapshots', 'bridge_transfers', 'policy_snapshots', 'list_snapshots',
-                         'state_checkpoints', 'anchor_reward_attestations', 'attestation_responses'];
+                         'remote_token_snapshots', 'state_checkpoints', 'anchor_reward_attestations',
+                         'attestation_responses'];
 
 // These tables historically copied the serving hub's id. Their existing local tables must
 // have AUTO_INCREMENT before id-less writes are enabled, or a deployment with an older
 // hand-built schema would fail every insert after startup.
 const AUTO_INCREMENT_ID_TABLES = ['price_snapshots', 'oracle_prices', 'cross_chain_matches', 'cross_chain_calls',
                                   'bridge_transfers', 'policy_snapshots', 'list_snapshots',
-                                  'state_checkpoints', 'anchor_reward_attestations'];
+                                  'remote_token_snapshots', 'state_checkpoints', 'anchor_reward_attestations'];
 
 // Hub federation state tables. state_checkpoints carries quorum-signed per-chain
 // state-hash commitments (the explorer/SDK verification source). Append-only,
@@ -130,6 +134,7 @@ const HUB_STATE_TABLES = ['state_checkpoints', 'anchor_reward_attestations', 'at
 // or a rail drill that greps a family for an id finds the refusal wherever it happened. Each
 // column is that table's UNIQUE natural key; a table not listed is named by its hub id.
 const REFUSED_ROW_NAMES = Object.freeze({
+    remote_token_snapshots: Object.freeze({ column: 'snapshot_id', tag: null }),
     list_snapshots:        Object.freeze({ column: 'snapshot_id', tag: 'XLISTSHARE' }),
     policy_snapshots:      Object.freeze({ column: 'snapshot_id', tag: 'XPOLICY' }),
     bridge_transfers:      Object.freeze({ column: 'transfer_id', tag: 'XBRIDGE' }),
