@@ -18,6 +18,12 @@
 
 'use strict';
 
+const gateRegistry = require('../../gate_registry.js');
+
+const ANCHOR_ARCHIVE_FOLD_TERM =
+    'anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION';
+const ANCHOR_FOLD = 'anchor_fold_activation.ANCHOR_FOLD_ACTIVATION';
+
 // Attestation-bearing ANCHOR versions. A reward exists only for these; anything else on
 // the txid is a different anchor and cannot stand in as proof of this one.
 //
@@ -228,6 +234,14 @@ function bindsToTuple(a, t, headers){
     // the BUNDLE and names no chain at all. The retired per-chain family was the only one
     // that needed the term, and it can no longer be proven at all (see rewardFamily).
     if(!isRewardCandidateRow(a, t.network, t.publisher)) return false;
+    if(t.family === 'archive'){
+        let dogeHeight = a.block_index_doge;
+        let termActive = gateRegistry.activeAt(
+            ANCHOR_ARCHIVE_FOLD_TERM, t.network, 'DOGE', dogeHeight, null);
+        let foldActive = gateRegistry.activeAt(
+            ANCHOR_FOLD, t.network, 'DOGE', dogeHeight, null);
+        if(termActive && foldActive) return false;
+    }
     // On a v0 section row this column is the SECTION's own snapshot block, not the
     // bundle header's, because a lagging chain rides a bundle at its own block. So the
     // bundle leg holds the row to BOTH values: the reward's snapshot block and the
