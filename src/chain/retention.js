@@ -118,8 +118,8 @@ function resolveSweepIntervalMs(raw){
 }
 
 // The shallowest retention window a chain may run with: the decoder's reorg-safe depth
-// (DISPENSER_EXPIRE_SAFE_DEPTH in xchain-decoder's constants.js), the deepest rollback
-// the decoder recovers from. These copies must stay >= the decoder's values.
+// (DISPENSER_EXPIRE_SAFE_DEPTH in xchain-decoder's constants.js), the deepest rollback it
+// recovers from. Must stay >= the decoder's values; retention.test.js reads them to check.
 const ROOT_RETENTION_REORG_FLOOR = 126;
 const LTC_TESTNET_ROOT_RETENTION_REORG_FLOOR = 5006;
 

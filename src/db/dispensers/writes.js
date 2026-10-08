@@ -101,7 +101,7 @@ module.exports = {
         // Normalize data
         let status_id       = await this.createStatus(status);
         let cancelled_by_id = (!this.util.isNull(cancelled_by)) ? await this.createAddress(cancelled_by) : null;
-        // Check if record already exists for this in order_statuses table
+        // Check if record already exists for this in dispenser_statuses table
         let query  = `SELECT
                             action_index
                         FROM
@@ -250,14 +250,14 @@ module.exports = {
         results = await this.doQuery(query, args);
     },
 
-    // Create/Update record in `order_expires` table
-    // @param {action_index}          integer Action index of action
-    // @param {dispenser_action_tick} integer Action index of dispenser
-    // @param {status}                string  Status of the expire (valid/invalid)
+    // Create/Update record in `dispenser_expires` table
+    // @param {action_index}           integer Action index of action
+    // @param {dispenser_action_index} integer Action index of dispenser
+    // @param {status}                 string  Status of the expire (valid/invalid)
     async createDispenserExpire(action_index, dispenser_action_index, status){
         // Normalize data
         let status_id = await this.createStatus(status);
-        // Check if record already exists for this in order_expires table
+        // Check if record already exists for this in dispenser_expires table
         let query  = `SELECT
                             action_index
                         FROM
