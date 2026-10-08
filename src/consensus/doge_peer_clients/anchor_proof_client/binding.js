@@ -18,6 +18,11 @@
 
 'use strict';
 
+const gateRegistry = require('../../gate_registry.js');
+
+const ANCHOR_ARCHIVE_FOLD_TERM =
+    'anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION';
+
 // Attestation-bearing ANCHOR versions. A reward exists only for these; anything else on
 // the txid is a different anchor and cannot stand in as proof of this one.
 //
@@ -228,6 +233,9 @@ function bindsToTuple(a, t, headers){
     // the BUNDLE and names no chain at all. The retired per-chain family was the only one
     // that needed the term, and it can no longer be proven at all (see rewardFamily).
     if(!isRewardCandidateRow(a, t.network, t.publisher)) return false;
+    if(t.family === 'archive' &&
+       gateRegistry.activeAt(ANCHOR_ARCHIVE_FOLD_TERM, t.network, 'DOGE',
+                             a.block_index_doge, null)) return false;
     // On a v0 section row this column is the SECTION's own snapshot block, not the
     // bundle header's, because a lagging chain rides a bundle at its own block. So the
     // bundle leg holds the row to BOTH values: the reward's snapshot block and the

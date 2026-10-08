@@ -56,6 +56,7 @@ const ed25519 = require('./ed25519.js');
 const swq     = require('./stake_weighted_quorum.js');
 const eq      = require('./equivocation_header.js');
 const ar      = require('./gates/anchor_reward_gate.js');
+const gateRegistry = require('./gate_registry.js');
 const arKey   = require('../actions/anchor/anchor_reward_key.js');
 const { getLogger } = require('../observability/index.js');
 // The proof-and-mint step and the logical-reward grouping live beside this file in
@@ -65,6 +66,9 @@ const { groupByLogicalReward } = require('./anchor_reward_derive/reward_groups.j
 const { recordLateDerive } = require('./anchor_reward_derive/late_derive_counter.js');
 // No coin-registry require here on purpose: nothing inside the block transaction may read a
 // field the registry advertises as operator-tunable (see minConfirmations below).
+
+const ANCHOR_ARCHIVE_FOLD_TERM =
+    'anchor_archive_fold_term_activation.ANCHOR_ARCHIVE_FOLD_TERM_ACTIVATION';
 
 // Rebuild the XANCPUB canonical for a mirrored attestation row. MUST byte-match
 // anchor.js.rewardCanonical (DOGE parse side) and the hub's publisher canonical, or the
@@ -144,7 +148,7 @@ async function verifyAttestation(indexerDb, row){
         : (attSigners.length >= ((oracleN <= 1) ? 1 : Math.max(2 * Math.floor((oracleN - 1) / 3) + 1, Math.ceil((oracleN + 1) / 2))));
 }
 
-// The two flag-days a mirrored row must be past before it may mint, each read at the
+// The flag-days a mirrored row must be past before it may mint, each read at the
 // row's own snapshot_block and network.
 function rowGatesActive(row){
     // Gate PER ROW on its own snapshot_block so an inert mainnet/testnet placeholder
@@ -169,9 +173,12 @@ function rowGatesActive(row){
     // per-chain anchor_<CHAIN>) rides the anchor flag-day. Keying it off a whitelist of
     // known reward types instead would silently stop paying a family added later, which
     // is a worse failure than the one this closes.
-    return (String(row.reward_type) === 'anchor_archive')
-        ? ar.isArchiveRewardActive(Number(row.snapshot_block), String(row.network))
-        : ar.isAnchorRewardActive(Number(row.snapshot_block), String(row.network));
+    if(String(row.reward_type) === 'anchor_archive'){
+        if(gateRegistry.activeAt(ANCHOR_ARCHIVE_FOLD_TERM, String(row.network), 'BTC',
+                                 row.snapshot_block, null)) return false;
+        return ar.isArchiveRewardActive(Number(row.snapshot_block), String(row.network));
+    }
+    return ar.isAnchorRewardActive(Number(row.snapshot_block), String(row.network));
 }
 
 // Derive all matured, not-yet-derived anchor/archive rewards from the mirrored
@@ -247,4 +254,7 @@ async function deriveAnchorRewards(indexerDb, config, blockIndex, proof){
     return derived;
 }
 
-module.exports = { deriveAnchorRewards, verifyAttestation, rewardCanonical, AnchorProofUnavailableError };
+module.exports = {
+    deriveAnchorRewards, verifyAttestation, rewardCanonical, rowGatesActive,
+    AnchorProofUnavailableError
+};
