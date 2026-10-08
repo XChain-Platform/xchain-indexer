@@ -807,6 +807,8 @@
       "src/sql/migrations/2026-09-11-price-snapshots-batch-block-time.sql",
       "src/sql/migrations/2026-09-12-bridge-tables.sql",
       "src/sql/migrations/2026-09-13-destroys-sends-leg-ordinal.sql",
+      "src/sql/migrations/2026-10-08-state-tree-roots-block-index-idx.sql",
+      "src/sql/migrations/2026-10-08-token-bridge-fields.sql",
       "src/sql/mints.sql",
       "src/sql/oracle_prices.sql",
       "src/sql/order_cancels.sql",
