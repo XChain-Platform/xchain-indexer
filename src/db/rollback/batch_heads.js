@@ -96,6 +96,9 @@ module.exports = {
             // a JOIN that matches nothing silently no-ops the reset. index_statuses ids
             // are never hashed, so an in-rollback intern is byte-neutral.
             await db.createStatus('valid');
+            // Scope the chunk to the head's own encoding (chunk count and body CRC), the
+            // identity the forward reassembly reads: one publisher can file several
+            // encodings of a window, and only an orphaned chunk of this one undoes its stamp.
             query = `UPDATE attests p
                         JOIN index_statuses ps ON ps.id = p.status_id AND ps.status LIKE ?
                         JOIN actions        pa ON pa.action_index = p.action_index
@@ -104,6 +107,8 @@ module.exports = {
                          AND c.version = ${abw.ATTEST_BATCH_CONTINUATION_VERSION}
                          AND c.batch_chunk_index IS NOT NULL
                          AND c.action_index >= ?
+                         AND c.batch_total_chunks = p.batch_total_chunks
+                         AND c.batch_crc32 = p.batch_crc32
                         JOIN index_statuses cs ON cs.id = c.status_id AND cs.status = 'valid'
                         JOIN actions        ca ON ca.action_index = c.action_index
                                               AND ca.source_id    = pa.source_id

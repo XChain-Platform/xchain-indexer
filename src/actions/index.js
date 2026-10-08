@@ -118,6 +118,9 @@ const ACTION_ALIASES = {
     'MSG':  'MESSAGE'
 };
 
+// The public quote surfaces' action-name shape (actions_class/quote_answers.js)
+const { QUOTE_ACTION_NAME } = require('./actions_class/quote_answers.js');
+
 // Pure classifier bound to the fee-quote deny/exempt sets. Applies the SAME normalization
 // computeFeeQuote uses (trim, uppercase, single-pass de-alias), then returns exactly one of
 // 'denied' | 'exempt' | 'quotable'. Deny-before-exempt ordering is preserved so this is the one
@@ -126,6 +129,8 @@ function classifyFeeQuoteAction(action){
     let a = String(action == null ? '' : action).trim().toUpperCase();
     if(Object.prototype.hasOwnProperty.call(ACTION_ALIASES, a))
         a = ACTION_ALIASES[a];
+    // Fail closed on a name dispatch would re-split into another action (quote_answers.js)
+    if(!QUOTE_ACTION_NAME.test(a)) return 'denied';
     if(FEE_QUOTE_DENYLIST.has(a)) return 'denied';
     if(FEE_QUOTE_EXEMPT.has(a))   return 'exempt';
     return 'quotable';

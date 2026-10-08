@@ -184,11 +184,11 @@ async function callConstructor(deploy, run, blockHash, vmLedger){
  */
 function settleConstructorOutcome(run){
     let constructorResult = run.constructorResult;
-    // Defense-in-depth (consensus): mirror the gasUsed clamp in actions/execute/index.js so a
+    // Defense-in-depth (consensus): mirror the gasUsed clamp in actions/execute/settle.js so a
     // resource termination in the constructor can never cause totalGas (hashed via
     // contract_executions.gas_used into contract_hash) to diverge across validators. The
     // VM already clamps these; this guards a VM regression. Keep the family regex
-    // identical to util.vmFailureStatus and execute.js (out_of_gas included so the
+    // identical to util.vmFailureStatus and execute/settle.js (out_of_gas included so the
     // regexes never drift; it is a no-op for the fee since out_of_gas == ceiling already).
     let constructorGas = constructorResult.gasUsed;
     if(!constructorResult.success && /^(out_of_gas|timeout|out_of_memory|out_of_stack|out_of_resource)\b/.test(String(constructorResult.error)))

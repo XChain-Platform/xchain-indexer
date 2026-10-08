@@ -35,9 +35,9 @@ const ProviderRegistry = require('../../attestation/provider_registry.js');
 // while actions/attest/ validated against the overlay, letting the VM accept a request
 // the indexer then rejects.
 
-// Gas ceiling for a top-level EXECUTE. Must match the gasCeiling the VM is
-// constructed with in actions/index.js. Module-scoped rather than local to parse(),
-// because processEmission validates against the same ceiling.
+// Gas ceiling for a top-level EXECUTE; module-scoped because processEmission re-checks against it.
+// Must match the VM's gasCeiling in actions/index.js and the deploy clamp in deploy/constants.js;
+// test/unit/actions/gas_ceiling_parity.test.js enforces that, so keep this one-literal shape.
 const GAS_CEILING = 1000000;
 
 // Cross-contract call protocol constants. Vendored single source of truth:

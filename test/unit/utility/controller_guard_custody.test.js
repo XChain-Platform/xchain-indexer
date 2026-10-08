@@ -176,4 +176,18 @@ describe('Utility maybeRunCustodyGuard() @regression @tier1', function () {
         assertNoGuardValue(result);
         sinon.assert.notCalled(db.getAddressBalances);
     });
+
+    it('runs the guard one call level below the host action', async function () {
+        const actions = makeActions(true);
+        const db = makeDb();
+        db.getEffectiveTokenControllerForGuard.resolves({ contract_index: 7 });
+        actions.actionExecute.runControllerGuard.resolves({ allow: false, reason: 'denied' });
+        const opts = makeOpts();
+        opts.data.CALL_DEPTH = 3;
+
+        await util.maybeRunCustodyGuard(actions, db, opts);
+
+        sinon.assert.calledOnce(actions.actionExecute.runControllerGuard);
+        assert.strictEqual(actions.actionExecute.runControllerGuard.firstCall.args[0].callDepth, 4);
+    });
 });
