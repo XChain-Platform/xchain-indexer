@@ -3029,6 +3029,11 @@
       "Cross_Settle action handler @regression @tier1 cross-chain royalty at settlement (CROSS_CHAIN_ROYALTY) below the flag-day the split is not applied (legacy full credit)",
       "Cross_Settle action handler @regression @tier1 cross-chain royalty at settlement (CROSS_CHAIN_ROYALTY) fail-closed: a leg that does not re-encode yields NO split (full proceeds credit)"
     ],
+    "489e8a6cb9e1177e": [
+      "FEE_PAYMENT_MODE source declarations BTC.js keeps its declaration line byte for byte",
+      "FEE_PAYMENT_MODE source declarations DOGE.js keeps its declaration line byte for byte",
+      "FEE_PAYMENT_MODE source declarations LTC.js keeps its declaration line byte for byte"
+    ],
     "49c8ba1c94fbc37e": [
       "XBRIDGE escrow keylessness (consensus) decodes every escrow literal as a valid P2PKH address on its own network",
       "XBRIDGE escrow keylessness (consensus) decodes to high-entropy bytes, NOT to the readable label as ASCII",
@@ -12415,8 +12420,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 791,
-      "titleCount": 9819,
+      "fileCount": 792,
+      "titleCount": 9822,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -12812,6 +12817,7 @@
         "test/unit/coins/bridge_escrow_addresses.test.js": "e53e052972bf94f7",
         "test/unit/coins/bridge_escrow_keylessness.test.js": "49c8ba1c94fbc37e",
         "test/unit/coins/coins_conformance.test.js": "2442df610ebb6911",
+        "test/unit/coins/fee_payment_mode_comment_twin.test.js": "489e8a6cb9e1177e",
         "test/unit/coins/fee_payment_mode_registry.test.js": "04f3052dcfe1e047",
         "test/unit/config/config.test.js": "ca901868920fa051",
         "test/unit/config/config.test/env_overrides.test.js": "09dab1f1abfabefd",
