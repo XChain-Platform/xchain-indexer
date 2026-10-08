@@ -124,7 +124,9 @@ module.exports = {
 
     // Second scoping key for validator_rewards: the MATERIALIZATION block. The
     // loop above deletes on block_index, which for a reward is its EARN block.
-    // That is the same block for every writer except the BTC-side anchor/archive
+    // That is the same block for every writer except the three materialize-later ones:
+    // recovery-restored rewards, rollcall_publish (earned at the epoch height, written at
+    // the epoch close block) and the BTC-side anchor/archive
     // derivation, which earns at the checkpoint's SNAPSHOT_BLOCK S but
     // creates the row while processing a later BTC block B (stamped derive_block_index).
     // A reorg to any H in (S, B] orphans the block that MINTED the reward while leaving
