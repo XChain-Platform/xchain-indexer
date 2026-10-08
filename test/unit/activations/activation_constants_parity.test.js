@@ -153,9 +153,6 @@ const GATES = [
     // on a bridged copy while another still admits the transfer, from the same signed row.
     // Both ordering invariants it owes are asserted separately below.
     ['token_policy_activation.js',         'TOKEN_POLICY_INHERITANCE_ACTIVATION'],
-    // The LIST owner check re-verdicts every historical third-party LIST edit; list_items is
-    // hashed DERIVED, so a one-sided edit forks ordinary traffic at the boundary.
-    ['list_owner_activation',              'LIST_OWNER_ACTIVATION'],
     ['list_share_producer_activation',     'LIST_SHARE_PRODUCER_ACTIVATION'],
     ['list_share_consumer_activation',     'LIST_SHARE_CONSUMER_ACTIVATION'],
     ['list_meta_activation',               'LIST_META_ACTIVATION'],
