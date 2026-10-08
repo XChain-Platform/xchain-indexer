@@ -10,7 +10,7 @@
 //
 // The DOGE side of ANCHOR never writes a validator reward: the reward is
 // derived on the BTC indexer, so even with the derive gate pinned off the
-// settlement entry points leave the ledger untouched.
+// settlement entry points leave the ledger untouched and never read the gate.
 
 process.env.INDEXER_COIN = 'BTC';
 process.env.INDEXER_NETWORK = 'regtest';
@@ -21,8 +21,8 @@ const arMod = require('../../../../../src/consensus/gates/anchor_reward_gate.js'
 const settle = require('../../../../../src/actions/anchor/settle.js');
 const observability = require('../../../../../src/observability/index.js');
 
-const BUNDLE_SKIP_WARNING = '\t ANCHOR v0 : DOGE-side reward is derived on BTC; reward skipped';
-const ARCHIVE_SKIP_WARNING = '\t ANCHOR v1 : DOGE-side reward is derived on BTC; reward skipped';
+const BUNDLE_SKIP_WARNING = '\t ANCHOR v0 : no legacy reward path applies; reward skipped';
+const ARCHIVE_SKIP_WARNING = '\t ANCHOR v1 : no legacy reward path applies; reward skipped';
 
 describe('ANCHOR DOGE-side reward branch removed @regression @tier3', function () {
     beforeEach(function () {
@@ -40,7 +40,7 @@ describe('ANCHOR DOGE-side reward branch removed @regression @tier3', function (
         await settle.creditArchiveReward(handler, data, true, new Set([data.PUBLISHER]), 1);
         assert.ok(db.createValidatorReward.notCalled);
         assert.ok(db.reconcileAnchorRewardWinner.notCalled);
-        assert.strictEqual(arMod.isAnchorRewardDeriveActive.callCount, 3);
+        assert.strictEqual(arMod.isAnchorRewardDeriveActive.callCount, 1);
         assert.deepStrictEqual(warn.args, [[BUNDLE_SKIP_WARNING], [ARCHIVE_SKIP_WARNING]]);
     });
 });
