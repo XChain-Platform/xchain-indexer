@@ -130,7 +130,7 @@
     },
     "protocol_changes": {
       "path": "src/protocol_changes.js",
-      "hash": "5b3e99fe1517becff35ab0c009a1a03fd88653c81a901564ac7953308ce46f1b",
+      "hash": "88b00386768cb815fc0c3749c087cd9e73576b9e37d692ea96fc5ea8b731f586",
       "twins": []
     },
     "rollcall_activation": {
@@ -2013,6 +2013,13 @@
       "to": "5b3e99fe1517becff35ab0c009a1a03fd88653c81a901564ac7953308ce46f1b",
       "reason": "add APPLY_LENGTH_METER registry row and VM-aligned flag times",
       "date": "2026-10-07"
+    },
+    {
+      "id": "protocol_changes",
+      "from": "5b3e99fe1517becff35ab0c009a1a03fd88653c81a901564ac7953308ce46f1b",
+      "to": "88b00386768cb815fc0c3749c087cd9e73576b9e37d692ea96fc5ea8b731f586",
+      "reason": "register the gas ceiling success protocol row",
+      "date": "2026-10-08"
     }
   ]
 }

@@ -14,7 +14,7 @@
       "LTC": "16dd43ca2299880704e076e5f7c262eae6b5e32823ad49c9748c33f014f44c36",
       "DOGE": "d7bd53f527d961f1cf0cfc7de725d61e625975f7086532976c777a04c08988f6"
     },
-    "armed_map_fingerprint": "7d98e024384c7c6c92eb92d2edb98a6b99dc0f8867be9ab7230419a160b9ae79",
+    "armed_map_fingerprint": "91b16f5bd2976bf8eb3f2acc51dbe334bca916ad4c5108eb38e2cd1780a22de0",
     "armed_map_fingerprint_version": 2,
     "armed_map_rows": {
       "amount_representability_activation.AMOUNT_MAX_INTEGER_DIGITS": "73475cb40a568e8da8a045ced110137e159f890ac4da883b6b17dc651b3a8049",
@@ -200,6 +200,8 @@
       "protocol_changes.DISPENSER_REFILL_MAINNET_TIME": "ce3a598687c8d2e5aa6bedad20e059b4a78cca0adad7e563b07998d5cd226b8c",
       "protocol_changes.DISPENSER_REFILL_TESTNET_TIME": "ce3a598687c8d2e5aa6bedad20e059b4a78cca0adad7e563b07998d5cd226b8c",
       "protocol_changes.EMISSION_ISSUANCE_LIMITS_MAINNET_TIME": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+      "protocol_changes.GAS_CEILING_SUCCESS_MAINNET_TIME": "ce3a598687c8d2e5aa6bedad20e059b4a78cca0adad7e563b07998d5cd226b8c",
+      "protocol_changes.GAS_CEILING_SUCCESS_TESTNET_TIME": "ce3a598687c8d2e5aa6bedad20e059b4a78cca0adad7e563b07998d5cd226b8c",
       "protocol_changes.ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
       "protocol_changes.ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME": "0c85ef63113363d1b619d56035b284cdea63ba1c1e8389fe0153fe42730fd20b",
       "protocol_changes.NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME": "4881c98cf6a1bd69e24e05861fb488a51a4a95dc793e7edb1aed9fa17026147c",
@@ -263,6 +265,7 @@
       "protocol_changes.changes.FIAT_DISPENSER_PRICING": "0110b8b0513d33d619ab732d5418ab57aef380179f7704732bd08441e561f065",
       "protocol_changes.changes.FILE": "ba72f3b6e93b65d8b08fb96b057365543980664ad91aa559cf82e2132fdae769",
       "protocol_changes.changes.FIX_OUTPUT_FANOUT": "a0083dbff50be0f3b8703a8e37e8836f92b53a7e13a1a9ed07a8c2ed539ead38",
+      "protocol_changes.changes.GAS_CEILING_SUCCESS": "a9ef44846372dad5ff93c9d863a9210e5cc420ce66cd74262776ef0dd6e5fc00",
       "protocol_changes.changes.ISSUANCE_FEE": "af74025510ab26e48cd462d1b24b2d6b29beb15fc0df845b02c1967a83d57e75",
       "protocol_changes.changes.ISSUANCE_FEE_EMISSION_EXEMPT": "a0083dbff50be0f3b8703a8e37e8836f92b53a7e13a1a9ed07a8c2ed539ead38",
       "protocol_changes.changes.ISSUE": "ba72f3b6e93b65d8b08fb96b057365543980664ad91aa559cf82e2132fdae769",
@@ -387,6 +390,7 @@
       "xchain-vm.BINARY_ALLOC_GATE_BLOCK_TIME": "4881c98cf6a1bd69e24e05861fb488a51a4a95dc793e7edb1aed9fa17026147c",
       "xchain-vm.CALL_SPREAD_METER_GATE_BLOCK_TIME": "4881c98cf6a1bd69e24e05861fb488a51a4a95dc793e7edb1aed9fa17026147c",
       "xchain-vm.EXEC_LINT_ACTIVATION": "faa28d5c2f7d3797b47e24044f55af7f7c14d3d682125c8b372fe354be1e6807",
+      "xchain-vm.GAS_CEILING_SUCCESS_ACTIVATION": "2f271814e1ca61b118bf15fc918e0150dd87ad2b7ac7a95f6571a10c2e390d1f",
       "xchain-vm.JSON_STRINGIFY_HOOK_ACTIVATION": "7ee285c122dfe85efc733e0ef80415bbb77b300e73ea34f58759594ff50748ff",
       "xchain-vm.LINT_GLOBAL_ALIAS_ACTIVATION": "faa28d5c2f7d3797b47e24044f55af7f7c14d3d682125c8b372fe354be1e6807",
       "xchain-vm.METERING_EVAL_ORDER_GATE_BLOCK_TIME": "4881c98cf6a1bd69e24e05861fb488a51a4a95dc793e7edb1aed9fa17026147c",
@@ -397,9 +401,9 @@
       "xchain-vm.VM_LINT_HARDENING_GATE_BLOCK_TIME": "4881c98cf6a1bd69e24e05861fb488a51a4a95dc793e7edb1aed9fa17026147c",
       "xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION": "1f839923f9a872c529fa301b98f3eeead1487d96912e6220d4dba8a8100e946f"
     },
-    "armed_map_row_count": 379,
+    "armed_map_row_count": 383,
     "gates_field_hash": "7563e42d72a80c0a9fdf36096f171efd59fa1449a7b443041705bc2d0d1278ed",
-    "carrier_logic_digest": "4aacac709acc96a9f4d98cc68e5c1dfc4afab0c3305e38c410e749553068f062",
+    "carrier_logic_digest": "d5b04280af629d984dc6d91e9dab37bd4095a04a74924bac17471958619d8362",
     "consensus_rules_digest": "227f96529070d083038a3695fb863c4ab08611864b9dfcc1b619f75ec67c91d8",
     "gate_key_count": 43,
     "consensus_rules_gates": {
@@ -460,7 +464,7 @@
       "LTC": "16dd43ca2299880704e076e5f7c262eae6b5e32823ad49c9748c33f014f44c36",
       "DOGE": "d7bd53f527d961f1cf0cfc7de725d61e625975f7086532976c777a04c08988f6"
     },
-    "armed_map_fingerprint": "382fb31d3c732c59563f916168342c379221aed8756fa29d797210b824da0e2d",
+    "armed_map_fingerprint": "05c5d8e51cf69d3201a756e80fc55469bbc6349eacf75722fe473c015d80d5e5",
     "armed_map_fingerprint_version": 2,
     "armed_map_rows": {
       "amount_representability_activation.AMOUNT_MAX_INTEGER_DIGITS": "73475cb40a568e8da8a045ced110137e159f890ac4da883b6b17dc651b3a8049",
@@ -646,6 +650,8 @@
       "protocol_changes.DISPENSER_REFILL_MAINNET_TIME": "ce3a598687c8d2e5aa6bedad20e059b4a78cca0adad7e563b07998d5cd226b8c",
       "protocol_changes.DISPENSER_REFILL_TESTNET_TIME": "ce3a598687c8d2e5aa6bedad20e059b4a78cca0adad7e563b07998d5cd226b8c",
       "protocol_changes.EMISSION_ISSUANCE_LIMITS_MAINNET_TIME": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+      "protocol_changes.GAS_CEILING_SUCCESS_MAINNET_TIME": "ce3a598687c8d2e5aa6bedad20e059b4a78cca0adad7e563b07998d5cd226b8c",
+      "protocol_changes.GAS_CEILING_SUCCESS_TESTNET_TIME": "ce3a598687c8d2e5aa6bedad20e059b4a78cca0adad7e563b07998d5cd226b8c",
       "protocol_changes.ISSUE_INHERITED_MINT_WINDOW_MAINNET_TIME": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
       "protocol_changes.ISSUE_INHERITED_MINT_WINDOW_TESTNET_TIME": "0c85ef63113363d1b619d56035b284cdea63ba1c1e8389fe0153fe42730fd20b",
       "protocol_changes.NATIVE_FEE_PRICE_TIME_GATE_MAINNET_TIME": "4881c98cf6a1bd69e24e05861fb488a51a4a95dc793e7edb1aed9fa17026147c",
@@ -709,6 +715,7 @@
       "protocol_changes.changes.FIAT_DISPENSER_PRICING": "0110b8b0513d33d619ab732d5418ab57aef380179f7704732bd08441e561f065",
       "protocol_changes.changes.FILE": "ba72f3b6e93b65d8b08fb96b057365543980664ad91aa559cf82e2132fdae769",
       "protocol_changes.changes.FIX_OUTPUT_FANOUT": "a0083dbff50be0f3b8703a8e37e8836f92b53a7e13a1a9ed07a8c2ed539ead38",
+      "protocol_changes.changes.GAS_CEILING_SUCCESS": "a9ef44846372dad5ff93c9d863a9210e5cc420ce66cd74262776ef0dd6e5fc00",
       "protocol_changes.changes.ISSUANCE_FEE": "af74025510ab26e48cd462d1b24b2d6b29beb15fc0df845b02c1967a83d57e75",
       "protocol_changes.changes.ISSUANCE_FEE_EMISSION_EXEMPT": "a0083dbff50be0f3b8703a8e37e8836f92b53a7e13a1a9ed07a8c2ed539ead38",
       "protocol_changes.changes.ISSUE": "ba72f3b6e93b65d8b08fb96b057365543980664ad91aa559cf82e2132fdae769",
@@ -833,6 +840,7 @@
       "xchain-vm.BINARY_ALLOC_GATE_BLOCK_TIME": "4881c98cf6a1bd69e24e05861fb488a51a4a95dc793e7edb1aed9fa17026147c",
       "xchain-vm.CALL_SPREAD_METER_GATE_BLOCK_TIME": "4881c98cf6a1bd69e24e05861fb488a51a4a95dc793e7edb1aed9fa17026147c",
       "xchain-vm.EXEC_LINT_ACTIVATION": "faa28d5c2f7d3797b47e24044f55af7f7c14d3d682125c8b372fe354be1e6807",
+      "xchain-vm.GAS_CEILING_SUCCESS_ACTIVATION": "2f271814e1ca61b118bf15fc918e0150dd87ad2b7ac7a95f6571a10c2e390d1f",
       "xchain-vm.JSON_STRINGIFY_HOOK_ACTIVATION": "7ee285c122dfe85efc733e0ef80415bbb77b300e73ea34f58759594ff50748ff",
       "xchain-vm.LINT_GLOBAL_ALIAS_ACTIVATION": "faa28d5c2f7d3797b47e24044f55af7f7c14d3d682125c8b372fe354be1e6807",
       "xchain-vm.METERING_EVAL_ORDER_GATE_BLOCK_TIME": "4881c98cf6a1bd69e24e05861fb488a51a4a95dc793e7edb1aed9fa17026147c",
@@ -843,9 +851,9 @@
       "xchain-vm.VM_LINT_HARDENING_GATE_BLOCK_TIME": "4881c98cf6a1bd69e24e05861fb488a51a4a95dc793e7edb1aed9fa17026147c",
       "xchain_bridge_activation.XCHAIN_BRIDGE_ACTIVATION": "1f839923f9a872c529fa301b98f3eeead1487d96912e6220d4dba8a8100e946f"
     },
-    "armed_map_row_count": 379,
+    "armed_map_row_count": 383,
     "gates_field_hash": "7563e42d72a80c0a9fdf36096f171efd59fa1449a7b443041705bc2d0d1278ed",
-    "carrier_logic_digest": "4aacac709acc96a9f4d98cc68e5c1dfc4afab0c3305e38c410e749553068f062",
+    "carrier_logic_digest": "d5b04280af629d984dc6d91e9dab37bd4095a04a74924bac17471958619d8362",
     "consensus_rules_digest": "8568e6221e83de9d7f3a43281368257c78d88caa6ed55b1c3c371aa4d4e6ccae",
     "gate_key_count": 43,
     "consensus_rules_gates": {
@@ -927,5 +935,6 @@
   "bet_feed_list_edit_note": "2026-10-07: both code readings were regenerated after adding the registry-only BET_FEED_LIST_EDIT_ACTIVATION height row. Together with the CROSS_CHAIN_OFFER_LIST_EXPORT row merged from develop, the armed map grows from 373 to 375 rows; its fingerprint and row map move, while the coin registry, rules digest, GATES field and carrier logic digest remain unchanged.",
   "cross_chain_offer_list_export_note": "2026-10-07: both code readings were regenerated after adding the registry-only CROSS_CHAIN_OFFER_LIST_EXPORT height row. Together with the BET_FEED_LIST_EDIT_ACTIVATION row retained by the merge, the armed map grows from 373 to 375 rows; only its row map, row count, and fingerprint move.",
   "attest_relay_fee_row_note": "Re-pinned after the indexer-only ATTEST_RELAY_FEE_ACTIVATION height row joined the registry. Both readings gained the same UNARMED mainnet and testnet row with regtest active from genesis; after the apply-length-meter, cross-chain offer list export, bet feed list edit and anchor archive fold term rows from trunk, only armed_map_fingerprint, armed_map_rows and armed_map_row_count (377 to 378) moved.",
-  "preactivation_status_gate_note": "Re-pinned after the indexer-only anchor_preactivation_status_activation.ANCHOR_PREACTIVATION_STATUS_ACTIVATION row joined the registry, UNARMED on mainnet and testnet and active from genesis on regtest. ANCHOR_ACTIVATION returns to its canonical three-network shape. Retaining develop's ANCHOR_ARCHIVE_FOLD_TERM row makes both readings 378 rows alongside the ATTEST_RELAY_FEE_ACTIVATION row."
+  "preactivation_status_gate_note": "Re-pinned after the indexer-only anchor_preactivation_status_activation.ANCHOR_PREACTIVATION_STATUS_ACTIVATION row joined the registry, UNARMED on mainnet and testnet and active from genesis on regtest. ANCHOR_ACTIVATION returns to its canonical three-network shape. Retaining develop's ANCHOR_ARCHIVE_FOLD_TERM row makes both readings 378 rows alongside the ATTEST_RELAY_FEE_ACTIVATION row.",
+  "gas_ceiling_success_note": "Both code readings were regenerated after adding the GAS_CEILING_SUCCESS protocol row, its two UNARMED flag-time constants, and the xchain-vm activation mirror. The armed map grows from 379 to 383 rows; its fingerprint and the protocol_changes carrier digest move, while the coin registry, rules digest, and GATES field remain unchanged."
 }
