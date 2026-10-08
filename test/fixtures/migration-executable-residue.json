@@ -315,14 +315,6 @@
     "residue": "0123a996d8f66783b15aa7f8cfc2b0545844d3d8579cc50df66c79a6334a6a2e",
     "sha256": "e4ef50910ca9ebc4582b1fbf1e3c6a151cb0b342c76a3949c7d0704729d8a6a7"
   },
-  "2026-09-12-state-tree-roots-block-index-idx.sql": {
-    "residue": "cb5c930ccfc59040a01db825833db29ab447943a03911246da9e21b376a8cfac",
-    "sha256": "12823f2f2c80bc6a864ab931367a615f9abf308bf2e0cfd6da0085f28c8fe22c"
-  },
-  "2026-09-12-token-bridge-fields.sql": {
-    "residue": "54620667c5ff1aa2276a60683d248023cb8427ec9bb577b7616bcd874e32f1f8",
-    "sha256": "64127c01e9b417496f324fa8c54393b811679b0550e16e5b9d4b5f44e428692b"
-  },
   "2026-09-13-destroys-sends-leg-ordinal.sql": {
     "residue": "007ae93c02c0dd960e92d898d95215cba7e7fa10c40a97667e0d7704d990d61e",
     "sha256": "40f12736a5444a9efc328e49dbf360e38ff76c3320ac59e541d51a05c58dc4a4"
@@ -378,5 +370,13 @@
   "2026-10-03-pending-hub-pushes-delivered-to.sql": {
     "residue": "3497a1a8ddf21025b78e2eb4bcd7a7f4df479bda859485bed47eaa29deb94f8a",
     "sha256": "adb1242dcb10057486435e6331804a005d7ce008e19b6696c6000d6fab460eff"
+  },
+  "2026-10-08-state-tree-roots-block-index-idx.sql": {
+    "residue": "cb5c930ccfc59040a01db825833db29ab447943a03911246da9e21b376a8cfac",
+    "sha256": "12823f2f2c80bc6a864ab931367a615f9abf308bf2e0cfd6da0085f28c8fe22c"
+  },
+  "2026-10-08-token-bridge-fields.sql": {
+    "residue": "54620667c5ff1aa2276a60683d248023cb8427ec9bb577b7616bcd874e32f1f8",
+    "sha256": "64127c01e9b417496f324fa8c54393b811679b0550e16e5b9d4b5f44e428692b"
   }
 }
