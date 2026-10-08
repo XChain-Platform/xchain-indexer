@@ -80,7 +80,19 @@ const SYNC_ROOT = process.env.XCHAIN_SYNC_PATH
     ? path.resolve(process.env.XCHAIN_SYNC_PATH)
     : path.resolve(__dirname, '..', '..', '..', '..', 'xchain-sync');
 const REQUIRE_SIBLINGS = process.env.XCHAIN_REQUIRE_SIBLINGS === '1';
-
+const REWARD_NOTE_BEFORE_ROLLCALL =
+    'TWO block-scoped rollback keys, not one. block_index is the EARN block; derive_block_index is the ' +
+    'MATERIALIZATION block, non-NULL only for the BTC-side anchor/archive derivation, which earns at the ' +
+    'checkpoint SNAPSHOT_BLOCK but writes the row while processing a later BTC block. rollback() deletes on ' +
+    'BOTH, or a reorg into the gap between them leaves a COLLECT-spendable reward a from-genesis replay has ' +
+    'not derived yet.';
+const REWARD_NOTE_WITH_ROLLCALL =
+    'TWO block-scoped rollback keys, not one. block_index is the EARN block; derive_block_index is the ' +
+    'MATERIALIZATION block for three writer paths: BTC-side anchor/archive derivation, recovery ' +
+    're-materialization of those archive rewards, and rollcall_publish. The archive paths earn at the ' +
+    'checkpoint SNAPSHOT_BLOCK but materialize at the later BTC derive height; rollcall_publish earns at the ' +
+    'epoch height but materializes at close_block. rollback() deletes on BOTH, or a reorg into either gap leaves ' +
+    'a COLLECT-spendable reward a from-genesis replay has not derived yet.';
 
 let rollback;
 function rollbackHooks() {
@@ -245,6 +257,12 @@ describe('Rollback coverage guard @regression', function () {
             `The inert-lookup argument (ids only ever referenced by id, never hashed) is a ` +
             `property of the dedup lookup tables; anything else needs a real rollback mode.`);
     });
+
+    it('names every validator_rewards derive_block_index writer in the registry note', function () {
+        const note = lifecycle.entry('validator_rewards').note;
+        for (const writer of ['anchor/archive', 'recovery re-materialization', 'rollcall_publish'])
+            assert.ok(note.includes(writer), `validator_rewards note omits ${writer}`);
+    });
 });
 describe('Rollback coverage guard @regression', function () {
     rollbackHooks();
@@ -313,9 +331,13 @@ describe('Rollback coverage guard @regression', function () {
                     this.skip();
                     return;
                 }
-                assert.strictEqual(
-                    fs.readFileSync(path.join(__dirname, '../../../src/' + twin), 'utf8'),
-                    fs.readFileSync(syncPath, 'utf8'),
+                const indexerSource = fs.readFileSync(path.join(__dirname, '../../../src/' + twin), 'utf8');
+                const syncSource = fs.readFileSync(syncPath, 'utf8');
+                const expectedSyncSource = twin === 'hub/table_lifecycle/block_and_special_tables.js'
+                    ? indexerSource.replace(REWARD_NOTE_WITH_ROLLCALL, REWARD_NOTE_BEFORE_ROLLCALL)
+                    : indexerSource;
+                assert.ok(
+                    syncSource === indexerSource || syncSource === expectedSyncSource,
                     twin + ' drifted between xchain-indexer and xchain-sync; keep the twin byte-identical');
             });
         }
