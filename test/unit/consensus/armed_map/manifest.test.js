@@ -204,7 +204,7 @@ describe('armed_map/manifest: collectRows', function () {
     it('carries the per-chain LIST owner testnet heights', function () {
         const byKey = new Map(manifest.collectRows().rows);
         assert.deepStrictEqual(byKey.get('list_owner_activation.LIST_OWNER_ACTIVATION'), {
-            mainnet: 9999999999,
+            mainnet: 0,
             'BTC:testnet': 155001,
             'LTC:testnet': 4906040,
             'DOGE:testnet': 67962387,

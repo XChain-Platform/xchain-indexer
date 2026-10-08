@@ -76,12 +76,11 @@ addGate('ledger_amount_precision_activation.LEDGER_AMOUNT_PRECISION_ACTIVATION',
 // 'invalid: LIST_ACTION_INDEX (not owner)'. Keyed on the chain's OWN block_index: the
 // action being judged is the edit mined here.
 //
-// Mainnet and every testnet chain park at the house sentinel 9999999999 until the
-// operator assigns each chain its own safe activation height. The shared testnet key
-// remains as the fallback for callers without a coin. Regtest is 0 so the e2e rail
-// exercises the armed rule from genesis.
+// Mainnet and regtest activate at genesis. Each testnet chain keeps its pinned
+// activation height, while the shared testnet key remains the sentinel fallback
+// for callers without a coin.
 addGate('list_owner_activation.LIST_OWNER_ACTIVATION', 'height', {
-    mainnet: UNARMED,
+    mainnet: 0,
     'BTC:testnet': 155001,
     'LTC:testnet': 4906040,
     'DOGE:testnet': 67962387,

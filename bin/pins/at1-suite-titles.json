@@ -10152,6 +10152,9 @@
       "native coin fee quote @regression @tier1 _priceFeeQuote() chain-time anchoring getFeeSchedule() discloses where it read the prices withholds the database name on mainnet but still reports the boolean",
       "native coin fee quote @regression @tier1 _priceFeeQuote() chain-time anchoring getFeeSchedule() prices off the tip block time too, and reports it"
     ],
+    "a148644af845b9ca": [
+      "LIST owner activation @regression @tier1 arms mainnet and regtest at genesis while preserving the per-chain testnet heights"
+    ],
     "a1b64106c03d5856": [
       "genesis airdrop pass accepts a fully-pinned bucket set on mainnet",
       "genesis airdrop pass accepts a matching set-hash pin, case-insensitively",
@@ -16089,8 +16092,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1191,
-      "titleCount": 12529,
+      "fileCount": 1192,
+      "titleCount": 12530,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16466,6 +16469,7 @@
         "test/unit/activations/list/list_union_activation.test.js": "de3ac83b630fe7d7",
         "test/unit/activations/list_change_rematch_activation.test.js": "6e46a49590c985ce",
         "test/unit/activations/list_change_rematch_token_level.test.js": "3cd15f47b0f9b91e",
+        "test/unit/activations/list_owner_activation_armed.test.js": "a148644af845b9ca",
         "test/unit/activations/market_list_source_activation.test.js": "1b49059dee906137",
         "test/unit/activations/mirror_admission_activation.test.js": "718b1a8900dc316c",
         "test/unit/activations/mirror_admission_replay_witness.test.js": "4675f3133a96b7c1",
@@ -17645,8 +17649,8 @@
       }
     },
     "test:regression": {
-      "fileCount": 906,
-      "titleCount": 9922,
+      "fileCount": 907,
+      "titleCount": 9923,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -18015,6 +18019,7 @@
         "test/unit/activations/list/list_union_activation.test.js": "de3ac83b630fe7d7",
         "test/unit/activations/list_change_rematch_activation.test.js": "6e46a49590c985ce",
         "test/unit/activations/list_change_rematch_token_level.test.js": "3cd15f47b0f9b91e",
+        "test/unit/activations/list_owner_activation_armed.test.js": "a148644af845b9ca",
         "test/unit/activations/market_list_source_activation.test.js": "1b49059dee906137",
         "test/unit/activations/mirror_admission_activation.test.js": "718b1a8900dc316c",
         "test/unit/activations/price_pair_activation.test.js": "ec6404e13c7335df",
@@ -18557,8 +18562,8 @@
       }
     },
     "test:regression:fast": {
-      "fileCount": 395,
-      "titleCount": 4912,
+      "fileCount": 396,
+      "titleCount": 4913,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/utxo_tracker.test.js": "5c9d499784cf2193",
@@ -18640,6 +18645,7 @@
         "test/unit/activations/list/list_address_ref_activation.test.js": "53655c2e28eca03d",
         "test/unit/activations/list/list_tick_coin_activation.test.js": "1dfe94a52f7f8c52",
         "test/unit/activations/list/list_transfer_activation.test.js": "bed80573a8ffe8fa",
+        "test/unit/activations/list_owner_activation_armed.test.js": "a148644af845b9ca",
         "test/unit/activations/testnet_arm/dispenser_collation_arm.test.js": "0bf881f235cb766f",
         "test/unit/anchor/anchor_archive_sql_columns.test.js": "bab9c054a0998db8",
         "test/unit/anchor/anchor_fold_sql_family.test.js": "20703ba8a82c0437",
@@ -18958,8 +18964,8 @@
       }
     },
     "test:regression:full": {
-      "fileCount": 906,
-      "titleCount": 9922,
+      "fileCount": 907,
+      "titleCount": 9923,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -19328,6 +19334,7 @@
         "test/unit/activations/list/list_union_activation.test.js": "de3ac83b630fe7d7",
         "test/unit/activations/list_change_rematch_activation.test.js": "6e46a49590c985ce",
         "test/unit/activations/list_change_rematch_token_level.test.js": "3cd15f47b0f9b91e",
+        "test/unit/activations/list_owner_activation_armed.test.js": "a148644af845b9ca",
         "test/unit/activations/market_list_source_activation.test.js": "1b49059dee906137",
         "test/unit/activations/mirror_admission_activation.test.js": "718b1a8900dc316c",
         "test/unit/activations/price_pair_activation.test.js": "ec6404e13c7335df",
