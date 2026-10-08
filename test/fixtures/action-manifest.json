@@ -75,7 +75,7 @@
       "category": "wire-user",
       "wireDecoded": true,
       "userEncodable": true,
-      "userEncodableVersions": [0, 1, 2, 3],
+      "userEncodableVersions": [0, 1, 2, 3, 4],
       "indexerHandled": true,
       "explorerRender": true,
       "walletForm": true

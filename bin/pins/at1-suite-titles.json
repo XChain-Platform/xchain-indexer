@@ -1124,16 +1124,6 @@
       "SQL schema column parity (definition path vs ledger path) @regression sanity: the migration-created-table composition applies a later MODIFY",
       "SQL schema column parity (definition path vs ledger path) @regression sanity: the parser finds migration-created tables (CREATE TABLE guard is not vacuous)"
     ],
-    "16b97d743a5e5c99": [
-      "BET decision-F fee arithmetic @regression @tier2 BET_FEED_PER_DAY defaults equal to EXPIRATION_PER_DAY, so the two families price alike today",
-      "BET decision-F fee arithmetic @regression @tier2 bcmuldivfloor (parimutuel payout primitive) computes the worked-example payouts exactly",
-      "BET decision-F fee arithmetic @regression @tier2 bcmuldivfloor (parimutuel payout primitive) floors (never rounds up) and conserves: sum of floored payouts <= pot",
-      "BET decision-F fee arithmetic @regression @tier2 bcmuldivfloor (parimutuel payout primitive) returns 0 on a zero divisor (bcdiv convention)",
-      "BET decision-F fee arithmetic @regression @tier2 bcmuldivfloor (parimutuel payout primitive) zero-floors a dust winning stake in the rake case",
-      "BET decision-F fee arithmetic @regression @tier2 day count rounds to nearest (the consensus trap): 90.4d free, 90.5d charges one day",
-      "BET decision-F fee arithmetic @regression @tier2 matches the spec section-10 value table",
-      "BET decision-F fee arithmetic @regression @tier2 shares the ORDER duration arithmetic exactly across the free-window boundary"
-    ],
     "16d0936e86678331": [
       "state_checkpoints split-brain fence parity (#3096) @regression @tier1 all present holders agree with one another, not merely with the constant",
       "state_checkpoints split-brain fence parity (#3096) @regression @tier1 explorer hub-mirror: block_index is NOT part of the fence",
@@ -14909,6 +14899,17 @@
       "VM snapshot memo: poll snapshot @regression @tier1 builds once per block pass and per tick variant",
       "VM snapshot memo: poll snapshot @regression @tier1 serves exactly what an uncached build returns"
     ],
+    "e955ab7e05789ddd": [
+      "BET decision-F fee arithmetic @regression @tier2 BET_FEED_PER_DAY defaults equal to EXPIRATION_PER_DAY, so the two families price alike today",
+      "BET decision-F fee arithmetic @regression @tier2 bcmuldivfloor (parimutuel payout primitive) computes the worked-example payouts exactly",
+      "BET decision-F fee arithmetic @regression @tier2 bcmuldivfloor (parimutuel payout primitive) floors (never rounds up) and conserves: sum of floored payouts <= pot",
+      "BET decision-F fee arithmetic @regression @tier2 bcmuldivfloor (parimutuel payout primitive) returns 0 on a zero divisor (bcdiv convention)",
+      "BET decision-F fee arithmetic @regression @tier2 bcmuldivfloor (parimutuel payout primitive) zero-floors a dust winning stake in the rake case",
+      "BET decision-F fee arithmetic @regression @tier2 day count rounds to nearest (the consensus trap): 90.4d free, 90.5d charges one day",
+      "BET decision-F fee arithmetic @regression @tier2 keeps list edits free like cancel and resolve",
+      "BET decision-F fee arithmetic @regression @tier2 matches the spec section-10 value table",
+      "BET decision-F fee arithmetic @regression @tier2 shares the ORDER duration arithmetic exactly across the free-window boundary"
+    ],
     "e984d925c06ceb59": [
       "strict same-chain price landings @regression @tier1 advances the own landing block when protocol time is unchanged",
       "strict same-chain price landings @regression @tier1 excludes a DOGE round stamped at exactly T(B) when strict landing is armed",
@@ -16090,7 +16091,7 @@
   "scripts": {
     "test": {
       "fileCount": 1191,
-      "titleCount": 12529,
+      "titleCount": 12530,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16890,7 +16891,7 @@
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_shadow_thread.test.js": "6aff270db2df60a7",
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_the.test.js": "6f3bf3f9c5f1d95a",
         "test/unit/fees/batch_cost_weighting_gate.test.js": "e33fc8ed4328d720",
-        "test/unit/fees/bet_duration_fee.test.js": "16b97d743a5e5c99",
+        "test/unit/fees/bet_duration_fee.test.js": "e955ab7e05789ddd",
         "test/unit/fees/execution_fee.test.js": "929048c81769242e",
         "test/unit/fees/fee_probe_batched_coinpay_parity.test.js": "d5ffba080ba796c3",
         "test/unit/fees/fee_quote.test.js": "80c8410771963ebc",
@@ -17646,7 +17647,7 @@
     },
     "test:regression": {
       "fileCount": 906,
-      "titleCount": 9922,
+      "titleCount": 9923,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -18283,7 +18284,7 @@
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_shadow_thread.test.js": "6aff270db2df60a7",
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_the.test.js": "6f3bf3f9c5f1d95a",
         "test/unit/fees/batch_cost_weighting_gate.test.js": "e33fc8ed4328d720",
-        "test/unit/fees/bet_duration_fee.test.js": "16b97d743a5e5c99",
+        "test/unit/fees/bet_duration_fee.test.js": "e955ab7e05789ddd",
         "test/unit/fees/execution_fee.test.js": "929048c81769242e",
         "test/unit/fees/fee_probe_batched_coinpay_parity.test.js": "d5ffba080ba796c3",
         "test/unit/fees/fee_quote.test.js": "80c8410771963ebc",
@@ -18959,7 +18960,7 @@
     },
     "test:regression:full": {
       "fileCount": 906,
-      "titleCount": 9922,
+      "titleCount": 9923,
       "files": {
         "test/boundary/utxo_tracker_heights.test.js": "cc69dc79f84383cb",
         "test/chaos/suites/block_resilience.test.js": "c4308b650669ed74",
@@ -19596,7 +19597,7 @@
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_shadow_thread.test.js": "6aff270db2df60a7",
         "test/unit/escrow_leaf_subtree.test/xchain_esc_locked_leaf_the.test.js": "6f3bf3f9c5f1d95a",
         "test/unit/fees/batch_cost_weighting_gate.test.js": "e33fc8ed4328d720",
-        "test/unit/fees/bet_duration_fee.test.js": "16b97d743a5e5c99",
+        "test/unit/fees/bet_duration_fee.test.js": "e955ab7e05789ddd",
         "test/unit/fees/execution_fee.test.js": "929048c81769242e",
         "test/unit/fees/fee_probe_batched_coinpay_parity.test.js": "d5ffba080ba796c3",
         "test/unit/fees/fee_quote.test.js": "80c8410771963ebc",

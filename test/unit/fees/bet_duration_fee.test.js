@@ -26,6 +26,14 @@ const util = new Utility();
 const T0 = 1800000000;
 
 describe('BET decision-F fee arithmetic @regression @tier2', function () {
+    it('keeps list edits free like cancel and resolve', async function () {
+        const fees = { AMOUNT: '9' };
+        const applyFees = require('../../../src/actions/bet/fees.js').applyFees;
+        const error = await applyFees.call({ util }, {}, 4, fees, {}, null, null);
+        assert.strictEqual(error, null);
+        assert.strictEqual(String(fees.AMOUNT), '0');
+    });
+
     it('shares the ORDER duration arithmetic exactly across the free-window boundary', function () {
         for (const days of [1, 14, 44, 89, 90, 90.4, 90.5, 90.6, 91, 120, 365, 730]) {
             const until = T0 + Math.round(days * 86400);
