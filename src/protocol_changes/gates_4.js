@@ -353,3 +353,12 @@ addGate('bet_feed_list_edit_activation.BET_FEED_LIST_EDIT_ACTIVATION', 'height',
     testnet: UNARMED,
     regtest: 0,
 });
+
+addGate('cross_chain_offer_list_export_activation.CROSS_CHAIN_OFFER_LIST_EXPORT', 'height', {
+    mainnet: UNARMED,
+    'BTC:testnet': UNARMED,
+    'LTC:testnet': UNARMED,
+    'DOGE:testnet': UNARMED,
+    testnet: UNARMED,
+    regtest: 0,
+});
