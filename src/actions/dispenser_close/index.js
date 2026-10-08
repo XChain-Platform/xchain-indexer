@@ -44,7 +44,7 @@ class Dispenser_Close {
 
         // Get info on the dispenser.
         //
-        // BLOCK_TIME is the third argument on purpose: getDispenserInfo threads it into
+        // BLOCK_TIME and BLOCK_INDEX are passed through getDispenserInfo into
         // getDispenserEdits, whose ALLOW_LIST / BLOCK_LIST activation compare is
         // bcgt(block_time, edit.block_time + DISPENSER_LIST_DELAY). Omitted, it coerced
         // to 0 (bcnum) and that compare silently read false, so this path alone held a
@@ -56,7 +56,7 @@ class Dispenser_Close {
         // dispenser.js get, and so a future reader of the list fields here is not handed
         // a stale view by a NaN-as-zero compare. Every dispatch path sets BLOCK_TIME
         // (utility.js processCancellations, both dispense.js auto-closes).
-        let dispenser = await this.indexerDb.getDispenserInfo(this.config['COIN'], data['DISPENSER_ACTION_INDEX'], data['BLOCK_TIME']);
+        let dispenser = await this.indexerDb.getDispenserInfo(this.config['COIN'], data['DISPENSER_ACTION_INDEX'], data['BLOCK_TIME'], data['BLOCK_INDEX']);
 
         // Only proceed if we have a valid dispenser
         if(dispenser){
