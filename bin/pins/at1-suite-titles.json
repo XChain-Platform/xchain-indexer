@@ -4111,6 +4111,11 @@
     "489112fc1f59fbf6": [
       "anchor archive status helpers keeps the action-wide update and scopes the row update to the archive head"
     ],
+    "489e8a6cb9e1177e": [
+      "FEE_PAYMENT_MODE source declarations BTC.js keeps its declaration line byte for byte",
+      "FEE_PAYMENT_MODE source declarations DOGE.js keeps its declaration line byte for byte",
+      "FEE_PAYMENT_MODE source declarations LTC.js keeps its declaration line byte for byte"
+    ],
     "48ec89675a1f39f8": [
       "consensus block-hash conformance twins (static drift-lock) @regression state_key collation gate and splice match across xchain-indexer and xchain-sync"
     ],
@@ -7409,6 +7414,16 @@
       "bin/suite-title-map pure helpers mochaArgsFor identifies a non-mocha command in the skip reason",
       "bin/suite-title-map pure helpers splitCommand keeps quoted grep patterns and globs as single tokens"
     ],
+    "7b26338ac8262f8c": [
+      "anchor archive fold-term gate BTC reward derivation does not terminate the bundle family",
+      "anchor archive fold-term gate BTC reward derivation keeps a pre-fold archive reward eligible when only the term is active",
+      "anchor archive fold-term gate BTC reward derivation keeps an archive reward eligible where the term is unarmed",
+      "anchor archive fold-term gate BTC reward derivation refuses an archive reward at the regtest term height",
+      "anchor archive fold-term gate DOGE proof binding does not terminate the bundle family",
+      "anchor archive fold-term gate DOGE proof binding keeps a pre-fold archive anchor eligible when only the term is active",
+      "anchor archive fold-term gate DOGE proof binding keeps archive proof valid where the term is unarmed",
+      "anchor archive fold-term gate DOGE proof binding refuses an archive anchor at the regtest term height"
+    ],
     "7b28ef47eda24e27": [
       "public quote surfaces refuse piped action names @regression @security a well-formed quotable name still reaches the dry-run on both surfaces",
       "public quote surfaces refuse piped action names @regression @security feequote never dry-runs a piped action name and never claims a verdict",
@@ -9246,6 +9261,10 @@
       "db.insertRollcallSigners carries the gates column @regression @tier1 passes the signed GATES string as the 8th bound value",
       "db.insertRollcallSigners carries the gates column @regression @tier1 stores NULL for a v0 roll call, which carries no gates field"
     ],
+    "981dc6a195e515a0": [
+      "relay fee activation row attest_relay_fee_activation.ATTEST_RELAY_FEE_ACTIVATION is a frozen height row with explicit network defaults",
+      "relay fee activation row attest_relay_fee_activation.ATTEST_RELAY_FEE_ACTIVATION is inactive on launched networks and active from regtest genesis"
+    ],
     "983e3e8b65387695": [
       "a fee quote answers for the action it was asked about [REGRESSION] reads the fee row of the ORDER, not of the match",
       "a fee quote answers for the action it was asked about [REGRESSION] reports the ORDER's verdict, not the match it triggered",
@@ -10111,6 +10130,11 @@
       "Anchor pre-activation status gate @regression @tier3 leaves the gate inert for an anchor below its own height",
       "Anchor pre-activation status gate @regression @tier3 reads the old spelling as a non-candidate, so the stamp is what changes the verdict",
       "Anchor pre-activation status gate @regression @tier3 stamps unverified below ANCHOR_ACTIVATION once the gate is active"
+    ],
+    "a0a533092c7a2e98": [
+      "stakeSnapshotStrings fresh output does not mutate or reuse input objects, arrays, entries, or amounts",
+      "stakeSnapshotStrings fresh output returns three fresh empty objects for an empty snapshot",
+      "stakeSnapshotStrings returns plain decimal strings while preserving keys and staker order"
     ],
     "a0bc803cef02fb85": [
       "db.getFullNodeParticipation counts an epoch once per source even if two of its keys passed it",
@@ -16061,8 +16085,8 @@
   },
   "scripts": {
     "test": {
-      "fileCount": 1186,
-      "titleCount": 12511,
+      "fileCount": 1190,
+      "titleCount": 12527,
       "files": {
         "test/regression/ledger_amount_precision_activation.test.js": "3d1a432093a239c4",
         "test/regression/mariadb_node_floor_falsified_regression.test.js": "b40470008f637181",
@@ -16417,6 +16441,7 @@
         "test/unit/activations/activation_constants_parity.test/sentinel_coin_isolation.test.js": "d27e69ca0f3eb0d0",
         "test/unit/activations/activation_ladder_constraints.test.js": "018402ee475c49ef",
         "test/unit/activations/anchor_reward_null_threshold.test.js": "86e3b95c0a42a9c6",
+        "test/unit/activations/attest_relay_fee_activation.test.js": "981dc6a195e515a0",
         "test/unit/activations/capability_min_stake_history.test.js": "a1bc8adce48d1864",
         "test/unit/activations/dispenser_oracle_price_activation.test.js": "bbf4d90405bf6e71",
         "test/unit/activations/dispenser_settlement_price_activation.test.js": "91fb11e60f21efba",
@@ -16622,6 +16647,7 @@
         "test/unit/coins/bridge_escrow_addresses.test.js": "e53e052972bf94f7",
         "test/unit/coins/bridge_escrow_keylessness.test.js": "49c8ba1c94fbc37e",
         "test/unit/coins/coins_conformance.test.js": "2442df610ebb6911",
+        "test/unit/coins/fee_payment_mode_comment_twin.test.js": "489e8a6cb9e1177e",
         "test/unit/coins/fee_payment_mode_registry.test.js": "04f3052dcfe1e047",
         "test/unit/config/config.test.js": "ca901868920fa051",
         "test/unit/config/config.test/env_overrides.test.js": "09dab1f1abfabefd",
@@ -16642,6 +16668,7 @@
         "test/unit/consensus/admission_binding.test/attest_response_canonical.test.js": "daaa06423dba0a37",
         "test/unit/consensus/admission_binding.test/call_presence.test.js": "e5cbf116f2dffcb9",
         "test/unit/consensus/admission_binding.test/mirrored_selects.test.js": "fd03a37494ac54b9",
+        "test/unit/consensus/anchor_reward_derive/archive_fold_term.test.js": "7b26338ac8262f8c",
         "test/unit/consensus/anchor_reward_derive/reward_groups.test.js": "67c89e84e7aba170",
         "test/unit/consensus/armed_map/canonical.test.js": "217c172ce31951f5",
         "test/unit/consensus/armed_map/fingerprint.test.js": "fd59b42becdb62ff",
@@ -16709,6 +16736,7 @@
         "test/unit/contracts/controller_royalty.test.js": "73fc5728c637c06b",
         "test/unit/contracts/emission_params.test.js": "f90ea488f5c00411",
         "test/unit/contracts/execute_emission_truncation.test.js": "bc4d187734183319",
+        "test/unit/contracts/stake_snapshot_strings.test.js": "a0a533092c7a2e98",
         "test/unit/contracts/vm_failure_status.test.js": "8bc4406923749285",
         "test/unit/contracts/vm_failure_status.test/family_regex_parity.test.js": "e2bacd7a22184df6",
         "test/unit/cross_chain/cross_chain_call_id_case_insensitive.test.js": "9be5c1935b63e470",
