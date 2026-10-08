@@ -2020,13 +2020,6 @@
       "to": "5b3e99fe1517becff35ab0c009a1a03fd88653c81a901564ac7953308ce46f1b",
       "reason": "add APPLY_LENGTH_METER registry row and VM-aligned flag times",
       "date": "2026-10-07"
-    },
-    {
-      "id": "train_activation",
-      "from": "4f82ea30b5120eb7fc0c9cf56f3c115781238255d5760dafb7d79ff5816577ee",
-      "to": "ce3a9989904471c34cc525539c736cdec90687009cde9abdfbb475994c9a970f",
-      "reason": "split evaluateTrainActivation into named helpers, logic unchanged",
-      "date": "2026-10-07"
     }
   ]
 }
