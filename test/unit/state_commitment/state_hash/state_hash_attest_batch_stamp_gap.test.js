@@ -1,6 +1,7 @@
 /*
- * Document the known attest batch head re-stamp gap.
- * Rewrite this characterization test when the flag-day state-hash class lands.
+ * The attest batch head re-stamp gap, closed by the flag-day state-hash class.
+ * On regtest the class is armed from genesis, so the surviving v5 batch head
+ * stamp now reaches the preimage through its own read beside the v0 class.
  */
 'use strict';
 
@@ -19,8 +20,8 @@ function recordingDb(sqlReads){
     };
 }
 
-describe('state_hash attest batch head stamp known gap @regression', () => {
-    it('omits the surviving v5 batch head stamp from SQL reads and the preimage', async function(){
+describe('state_hash attest batch head stamp gap closed @regression', () => {
+    it('reads the surviving v5 batch head stamp into the preimage once the class is armed', async function(){
         const sqlReads = [];
         const data = await buildStateHashData(recordingDb(sqlReads), 41, {
             activationDelay: null,
@@ -33,22 +34,10 @@ describe('state_hash attest batch head stamp known gap @regression', () => {
             .map(sql => sql.replace(/\s+/g, ' ').trim())
             .filter(sql => /\b(?:FROM|JOIN)\s+`?attests`?\b/i.test(sql));
 
-        // Confirm attests are read only through the existing v0 request_status class.
-        assert.strictEqual(attestReads.length, 1, 'only the v0 request_status class may read attests');
-        assert.match(attestReads[0], /\bWHERE\s+version\s*=\s*0\b/i);
-        assert.ok(attestReads.every(sql => !/\bversion\s*=\s*5\b/i.test(sql)));
-        assert.ok(attestReads.every(sql => !/\bversion\s+IN\s*\(/i.test(sql)));
+        // The v0 request_status read stays, and the head class adds exactly one more.
+        assert.strictEqual(attestReads.length, 2, 'the v0 request_status class and the batch head class read attests');
+        assert.strictEqual(attestReads.filter(sql => /\bWHERE\s+version\s*=\s*0\b/i.test(sql)).length, 1);
         assert.deepStrictEqual(data.request_status.attests, []);
-
-        const preimageKeys = [];
-        JSON.stringify(data, (key, value) => {
-            if(key) preimageKeys.push(key);
-            return value;
-        });
-        // Confirm no preimage key identifies the omitted attest batch class.
-        assert.deepStrictEqual(
-            preimageKeys.filter(key => /attest/i.test(key) && /batch/i.test(key)),
-            []
-        );
+        assert.deepStrictEqual(data.attest_batch_head, []);
     });
 });
